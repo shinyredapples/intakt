@@ -94,16 +94,16 @@ flowchart LR
   c1[Cycle 1] -- changes --> c2[Cycle 2] -- changes --> c3[Cycle 3]
   c3 -- still not approved --> g2[Generation 2:<br/>a stronger model,<br/>fresh cycles]
   g2 -- still not approved --> m[The maintainer agent decides]
-  c3 -. "planned: third send-back" .-> s[Split into smaller tasks, once]
+  sb([Third send-back,<br/>counted across cycles]) -. planned .-> s[Split into smaller tasks, once]
   s -. "no way to split" .-> r[Rewrite the task, or one more try<br/>with a stronger model]
 ```
 
-Today the task moves on to generation 2 after its last cycle. The dotted arrows are planned: from the third send-back the task is split once instead, as the last bullet below says.
+Today the task moves on to generation 2 after its last cycle. The dotted arrows are planned: at the third send-back, whichever cycle that falls in, the task is split once instead, as the last bullet below says.
 
 - A task gets a **limited number of cycles**, so a change that keeps failing doesn't burn the budget forever.
 - A **generation** is a set of cycles with one kind of builder. Generation 1 uses the normal model; if it runs out of cycles, **generation 2** starts with a stronger model.
 - If that doesn't work either, the **maintainer agent** decides: split the task, rewrite it, or ask you.
-- *(Planned:)* the third time a task is sent back (by reviewers, or by failing checks), it gets no further rebuild: the maintainer agent splits it into smaller tasks, once. If its open problems give no way to split it, the maintainer agent rewrites what the task must do or gives it one more try with a stronger model. A task that was already split this way is never split by this rule again.
+- *(Planned:)* the third time a task is sent back (by reviewers asking for changes, or by failing checks; within one cycle the first two failing-check returns in a row do not count, the third counts as one, and bringing in the newest project is never a send-back), it gets no further rebuild: the maintainer agent splits it into smaller tasks, once. If its open problems give no way to split it, the maintainer agent rewrites what the task must do or gives it one more try with a stronger model. A task that was already split this way is never split by this rule again.
 
 A cycle that changes nothing (the builder couldn't fix the problem because it needs something outside the task) doesn't loop: the task goes **on hold** instead ([holds](how-intakt-works.md#when-something-gets-stuck)).
 

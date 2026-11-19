@@ -36,7 +36,7 @@ Only behaviors the switch needs ([plan](../plan.md), M6 to M8). Each line: the r
 - [ ] A head with pending CI holds nothing; heads with finished CI go first. `test_lanes_cap2.py::test_admission_prefers_a_head_whose_ci_finished_over_an_older_one_still_running` [T38, T57]
 - [ ] Red CI goes back before any reviewer and uses no cycle; the third bounce in a row counts. `test_round.py::test_red_ci_sends_the_head_back_without_using_up_a_review_cycle`, `test_lanes.py::test_the_third_red_ci_bounce_in_a_row_on_a_cycle_counts_as_a_cycle` [T57]
 - [ ] The CI excerpt is redacted, fenced and capped. `test_ci_log.py` [T57]
-- [ ] A missed CI start is nudged once; an unreadable workflow fails closed. `test_lanes_cap2.py::test_a_stale_pull_request_head_is_nudged_even_when_github_reports_a_conflict`, `test_lanes_cap2.py::test_an_unreadable_ci_workflow_fails_closed_without_a_nudge` [T57]
+- [ ] A missed CI start is nudged once; a pull request the forge reports in conflict with main is not nudged but goes to Intakt's checked registry-file merge, or to a builder as a merge-main rework; an unreadable workflow fails closed. `test_lanes_cap2.py::test_an_unreadable_ci_workflow_fails_closed_without_a_nudge`; the existing loop nudges even a conflicting head (`test_lanes_cap2.py::test_a_stale_pull_request_head_is_nudged_even_when_github_reports_a_conflict`), so that test shows only the nudge and its conflict case is not carried over [T57]
 
 ## Reviews
 - [ ] An approval counts only for the exact head and pull request text. `test_round.py::test_an_approval_does_not_survive_a_rewritten_pr_md`, `test_review_binding_race.py` [T59]
