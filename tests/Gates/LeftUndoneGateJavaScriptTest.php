@@ -6,9 +6,9 @@ namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\AddedLines;
 use Intakt\Gates\CommentLanguages;
-use Intakt\Gates\JavaScriptComments;
 use Intakt\Gates\JavaScriptBracket;
 use Intakt\Gates\JavaScriptCode;
+use Intakt\Gates\JavaScriptComments;
 use Intakt\Gates\JavaScriptContext;
 use Intakt\Gates\JavaScriptPosition;
 use Intakt\Gates\LeftUndoneCode;
