@@ -4,4 +4,4 @@
 
 ## Symfony components
 
-| RateLimiter | per-account cooldown windows aligned to the vendor's reset: a `fixed_window` of one call anchored (`anchor_at`) at the reset, in a cache pool every worker shares, with Lock around each window; for an account whose pinned provider cools down, a running window that ends earlier is replaced (`reset()`, then a window anchored at the pin's end) | in progress | T14 (#19, part #414), #2860 (part of #2833), `src/Core/Ai/Infrastructure/AccountCooldownWindows.php`, `config/packages/cache.yaml` |
+| RateLimiter | per-account cooldown windows aligned to the vendor's reset: a `fixed_window` of one call anchored (`anchor_at`) at the reset, in a cache pool every worker shares, with Lock around each window; for an account whose pinned provider cools down, a running window that ends earlier is replaced in one save by a window anchored at the pin's end (a limiter over a storage that fetches nothing, never `reset()` first, so no reader sees the account free in between) | in progress | T14 (#19, part #414), #2860 (part of #2833), `src/Core/Ai/Infrastructure/AccountCooldownWindows.php`, `config/packages/cache.yaml` |
