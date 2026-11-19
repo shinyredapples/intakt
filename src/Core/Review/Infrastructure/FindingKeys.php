@@ -18,8 +18,13 @@ final readonly class FindingKeys
     private const string FRAGMENT = '/^[^\/\p{Cc}]+$/u';
     private const string FILE_EXTENSION = '/\.[\p{L}\p{N}]+$/u';
     private const string WORD_EDGES = '/^[("\'\[<{*]+|[)"\'\]>},;:!?.*]+$/u';
+    private const string NAME_END = '/[^\p{L}\p{N}]/u';
     private const string CITATION = '/^(.+?)(?::\d+(?:[-:]\d+)?)?\.?$/u';
     private const string QUOTED_OR_SPACE = '/((?<!`)(`+)(?!`)[^\n]+?(?<!`)\2(?!`)|"[^"]*")|\s+/u';
+
+    public function __construct(private NamesCutAtASpace $namesCutAtASpace = new NamesCutAtASpace())
+    {
+    }
 
     public function of(Finding $finding, string $checkoutRoot): ?FindingKey
     {
@@ -29,7 +34,13 @@ final readonly class FindingKeys
             return null;
         }
 
-        $files = $this->namedFiles(new Checkout($root), $root, $finding);
+        $fileNames = CheckoutFileNames::in($root);
+
+        if (!$fileNames instanceof CheckoutFileNames) {
+            return null;
+        }
+
+        $files = $this->namedFiles(new Checkout($root), $fileNames, $finding);
 
         return null === $files || [] === $files ? null : FindingKey::of($this->normalized($finding->text), $files);
     }
@@ -37,16 +48,16 @@ final readonly class FindingKeys
     /**
      * @return list<array{string, string}>|null
      */
-    private function namedFiles(Checkout $checkout, string $root, Finding $finding): ?array
+    private function namedFiles(Checkout $checkout, CheckoutFileNames $fileNames, Finding $finding): ?array
     {
         $words = $this->wordsOf($finding->text);
         $citations = array_values(array_filter(array_unique([...$this->codeSpansOf($finding->text), ...$words]), $this->mayNameAFile(...)));
 
         $found = [
             $this->fileOfTheFileField($checkout, $finding->file),
-            new NamesCutAtASpace()->anyIn($checkout, [...$words, ...$this->rawWordsOf($finding->text)]) ? false : [],
+            $this->namesCutAtASpace->anyIn($checkout, $fileNames, [...$words, ...$this->rawWordsOf($finding->text)]) ? false : [],
             ...array_map(fn (string $path): array|false => $this->fileAtPath($checkout, $path), $this->withDirectory($citations)),
-            $this->filesWithNames($checkout, $root, $this->namesWithoutDirectory($checkout, $citations)),
+            ...array_map(fn (string $name): array|false => $this->fileCarrying($checkout, $fileNames, $name), $this->withoutDirectory($citations)),
         ];
 
         if (in_array(false, $found, true)) {
@@ -127,7 +138,7 @@ final readonly class FindingKeys
         return array_values(array_filter($citations, static fn (string $citation): bool => str_contains($citation, '/')));
     }
 
-    // A path with a directory and a file extension that names no regular file most likely names a file the key cannot hash.
+    // A path that names no regular file gives no key when it has a file extension or its parent is in the checkout, because it most likely cites a file there in a form the key cannot read (src/B.php::run(), src/B.php#L12); only a word pointing nowhere (and/or) or an existing directory is skipped.
     /**
      * @return list<array{string, string}>|false
      */
@@ -135,64 +146,64 @@ final readonly class FindingKeys
     {
         $hashed = $this->hashOf($checkout, $path);
 
-        if (null === $hashed) {
-            return $this->hasFileExtension($path) ? false : [];
+        if (null !== $hashed) {
+            return false === $hashed ? false : [$hashed];
         }
 
-        return false === $hashed ? false : [$hashed];
+        if ($this->hasFileExtension($path)) {
+            return false;
+        }
+
+        return true === $this->isInCheckout($checkout, $path) || false === $this->isInCheckout($checkout, dirname($path)) ? [] : false;
     }
 
-    // A name without a directory counts when it has a file extension or a file of the checkout root carries it, because a root file such as Makefile has no extension.
+    // Null for a place that may not be looked at (a link out of the checkout), so its caller can stay on the safe side.
+    private function isInCheckout(Checkout $checkout, string $path): ?bool
+    {
+        try {
+            $checkout->resolve($path);
+        } catch (PathNotInCheckout) {
+            return false;
+        } catch (PathOutsideCheckout) {
+            return null;
+        }
+
+        return true;
+    }
+
     /**
      * @param list<string> $citations
      *
      * @return list<string>
      */
-    private function namesWithoutDirectory(Checkout $checkout, array $citations): array
+    private function withoutDirectory(array $citations): array
     {
-        return array_values(array_filter(
-            $citations,
-            fn (string $citation): bool => !str_contains($citation, '/') && ($this->hasFileExtension($citation) || null !== $this->hashOf($checkout, $citation)),
-        ));
+        return array_values(array_filter($citations, static fn (string $citation): bool => !str_contains($citation, '/')));
     }
 
+    // A name without a directory stands for every file of the checkout that carries it: several give no key, because the name alone cannot tell which of them the finding means.
     /**
-     * @param list<string> $names
-     *
      * @return list<array{string, string}>|false
      */
-    private function filesWithNames(Checkout $checkout, string $root, array $names): array|false
+    private function fileCarrying(Checkout $checkout, CheckoutFileNames $fileNames, string $name): array|false
     {
-        if ([] === $names) {
-            return [];
-        }
+        $paths = $fileNames->pathsNamed($name);
 
-        $fileNames = CheckoutFileNames::in($root);
-
-        if (!$fileNames instanceof CheckoutFileNames) {
-            return false;
-        }
-
-        $found = array_map(fn (string $name): array|false => $this->fileCarrying($checkout, $fileNames->pathsNamed($name)), $names);
-
-        return in_array(false, $found, true) ? false : array_merge(...$found);
-    }
-
-    // Several files with the name give no key, because the name alone cannot tell which of them the finding means.
-    /**
-     * @param list<string> $paths
-     *
-     * @return list<array{string, string}>|false
-     */
-    private function fileCarrying(Checkout $checkout, array $paths): array|false
-    {
         if ([] === $paths) {
-            return [];
+            return $this->startsWithAFileName($fileNames, $name) ? false : [];
         }
 
         $hashed = 1 === count($paths) ? $this->hashOf($checkout, $paths[0]) : false;
 
         return null === $hashed || false === $hashed ? false : [$hashed];
+    }
+
+    // A name no file carries that starts with a file's name and goes on with a character that is no letter or digit (B.php::run(), B.php#L12) most likely cites that file in a form the key cannot read.
+    private function startsWithAFileName(CheckoutFileNames $fileNames, string $name): bool
+    {
+        preg_match_all(self::NAME_END, $name, $ends, PREG_OFFSET_CAPTURE);
+
+        return array_any($ends[0], static fn (array $end): bool => $end[1] > 0 && [] !== $fileNames->pathsNamed(substr($name, 0, $end[1])));
     }
 
     // Null when nothing regular is at the path, false when a file is there that cannot be hashed for sure (unreadable, or a link out of the checkout).

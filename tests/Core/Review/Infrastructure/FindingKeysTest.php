@@ -16,6 +16,7 @@ use Intakt\Core\Review\Infrastructure\FindingKeys;
 use Intakt\Core\Review\Infrastructure\NamesCutAtASpace;
 use Intakt\Tests\Core\Git\TemporaryRepository;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
@@ -325,6 +326,114 @@ final class FindingKeysTest extends TestCase
     public function testSpacingInsideSingleQuotesKeepsTheKey(): void
     {
         self::assertEquals($this->keyOf($this->finding("src/A.php prints 'Admin User'.")), $this->keyOf($this->finding("src/A.php prints 'Admin  User'.")));
+    }
+
+    #[DataProvider('citationsOfAFileInAFormTheKeyCannotRead')]
+    public function testAPathThatNamesNothingInADirectoryOfTheCheckoutGetsNoKey(string $text): void
+    {
+        self::assertNull($this->keyOf($this->finding($text)));
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function citationsOfAFileInAFormTheKeyCannotRead(): iterable
+    {
+        yield 'a method in backticks' => ['See `src/B.php::run()` and src/A.php.'];
+        yield 'a method in plain text' => ['See src/B.php::run() and src/A.php.'];
+        yield 'a line anchor' => ['See src/B.php#L12 and src/A.php.'];
+        yield 'a span with words after the path' => ['See `src/B.php line 12` and src/A.php.'];
+        yield 'a line in parentheses' => ['See src/B.php(12) and src/A.php.'];
+        yield 'a line with a letter' => ['See src/B.php:L12 and src/A.php.'];
+        yield 'a word left by an unclosed backtick' => ['See `docs/x and `src/B.php` and src/A.php.'];
+        yield 'a name without a file extension' => ['See src/Gone and src/A.php.'];
+        yield 'a path below a file' => ['See src/B.php/run and src/A.php.'];
+    }
+
+    public function testAPathWithALineNumberNextToAnotherFileStillChangesTheKeyWhenItsFileIsEdited(): void
+    {
+        $this->assertKeyFollowsEditsOf('src/B.php', 'See `src/B.php:12` and src/A.php.');
+    }
+
+    public function testAPathBelowALinkOutOfTheCheckoutGetsNoKey(): void
+    {
+        symlink(dirname($this->repository->path), $this->repository->path.'/out');
+
+        self::assertNull($this->keyOf($this->finding('See out/nothing and src/A.php.')));
+    }
+
+    public function testABareNameWithASpaceInPlainTextGetsNoKeyWhereverItsFileIs(): void
+    {
+        $this->write('docs/Release Notes.md', "# Notes\n");
+
+        self::assertNull($this->keyOf($this->finding('src/A.php is wrong, see Release Notes.md:3.')));
+        self::assertNull($this->keyOf($this->finding('See Release Notes.md and src/A.php.')));
+    }
+
+    public function testABareWordThatStartsADirectoryNameWithASpaceGetsNoKeyWhereverThatDirectoryIs(): void
+    {
+        $this->write('docs/My Notes/Rule.md', "# Rule\n");
+
+        self::assertNull($this->keyOf($this->finding('src/A.php breaks My Notes/Rule.md.')));
+    }
+
+    public function testABareWordThatStartsNoNameWithASpaceKeepsTheKey(): void
+    {
+        $this->write('docs/Release Notes.md', "# Notes\n");
+
+        self::assertNotNull($this->keyOf($this->finding('src/A.php is wrong in the notes.')));
+    }
+
+    public function testABareNameWithoutAFileExtensionChangesTheKeyWhenTheOneFileWithThatNameIsEdited(): void
+    {
+        $this->assertKeyFollowsEditsOf('docker/Dockerfile', 'See `Dockerfile` and src/A.php.');
+    }
+
+    #[DataProvider('bareCitationsOfAFileInAFormTheKeyCannotRead')]
+    public function testABareNameThatStartsWithAFileNameAndGoesOnGetsNoKey(string $text): void
+    {
+        self::assertNull($this->keyOf($this->finding($text)));
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function bareCitationsOfAFileInAFormTheKeyCannotRead(): iterable
+    {
+        yield 'a method in backticks' => ['See `B.php::run()` and src/A.php.'];
+        yield 'a method in plain text' => ['See B.php::run() and src/A.php.'];
+        yield 'a line anchor' => ['See B.php#L12 and src/A.php.'];
+        yield 'a span with words after the name' => ['See `B.php line 12` and src/A.php.'];
+    }
+
+    public function testABareWordThatOnlySharesItsFirstLettersWithAFileNameIsNotAFile(): void
+    {
+        $this->write('bin/check', "#!/bin/sh\n");
+
+        self::assertNotNull($this->keyOf($this->finding('src/A.php is checked twice, and checkpoints are lost.')));
+    }
+
+    public function testACheckoutThatCannotBeListedGetsNoKey(): void
+    {
+        chmod($this->repository->path, 0o000);
+
+        try {
+            self::assertNull($this->keyOf($this->finding('See src/A.php and `B.php:3`.')));
+            self::assertNull($this->keyOf($this->finding('See src/A.php.')));
+        } finally {
+            chmod($this->repository->path, 0o755);
+        }
+    }
+
+    public function testADirectoryOfTheCheckoutThatCannotBeListedGetsNoKey(): void
+    {
+        mkdir($this->repository->path.'/closed', 0o000);
+
+        try {
+            self::assertNull($this->keyOf($this->finding('See src/A.php.')));
+        } finally {
+            chmod($this->repository->path.'/closed', 0o755);
+        }
     }
 
     private function assertKeyFollowsEditsOf(string $path, string $text): void

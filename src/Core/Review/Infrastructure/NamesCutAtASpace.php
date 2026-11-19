@@ -14,18 +14,25 @@ final readonly class NamesCutAtASpace
     private const string FIRST_WORD = '/^(\S+)\s/u';
     private const string FIRST_WORD_IN_BYTES = '/^(\S+)\s/';
 
+    // A word without a directory may name a file anywhere, so it is checked against the names of every directory of the checkout.
     /**
      * @param list<string> $words
      */
-    public function anyIn(Checkout $checkout, array $words): bool
+    public function anyIn(Checkout $checkout, CheckoutFileNames $fileNames, array $words): bool
     {
+        $firstWordsAnywhere = null;
         $firstWordsByDirectory = [];
 
         foreach (array_unique($words) as $word) {
-            [$directory, $name] = $this->directoryAndNameOf($word);
-            $firstWords = $firstWordsByDirectory[$directory] ??= $this->firstWordsOfNamesWithASpaceIn($checkout, $directory);
+            if (!str_contains($word, '/')) {
+                $firstWords = $firstWordsAnywhere ??= $this->firstWordsOf($fileNames->names());
+            } else {
+                [$directory, $name] = $this->directoryAndNameOf($word);
+                $firstWords = $firstWordsByDirectory[$directory] ??= $this->firstWordsOfNamesWithASpaceIn($checkout, $directory);
+                $word = $name;
+            }
 
-            if (null === $firstWords || in_array($name, $firstWords, true)) {
+            if (null === $firstWords || isset($firstWords[$word])) {
                 return true;
             }
         }
@@ -38,14 +45,14 @@ final readonly class NamesCutAtASpace
      */
     private function directoryAndNameOf(string $word): array
     {
-        $cut = strrpos($word, '/');
+        $cut = (int) strrpos($word, '/');
 
-        return false === $cut ? ['.', $word] : [substr($word, 0, $cut), substr($word, $cut + 1)];
+        return [substr($word, 0, $cut), substr($word, $cut + 1)];
     }
 
     // Null for a directory that cannot be listed, because it may hold such a name.
     /**
-     * @return list<string>|null
+     * @return array<string, true>|null
      */
     private function firstWordsOfNamesWithASpaceIn(Checkout $checkout, string $directory): ?array
     {
@@ -55,9 +62,29 @@ final readonly class NamesCutAtASpace
             return [];
         }
 
-        $entries = scandir($real);
+        $entries = is_readable($real) ? scandir($real) : false;
 
-        return false === $entries ? null : array_values(array_filter(array_map($this->firstWordOf(...), $entries), static fn (?string $firstWord): bool => null !== $firstWord));
+        return false === $entries ? null : $this->firstWordsOf($entries);
+    }
+
+    /**
+     * @param list<string> $names
+     *
+     * @return array<string, true>
+     */
+    private function firstWordsOf(array $names): array
+    {
+        $firstWords = [];
+
+        foreach ($names as $name) {
+            $firstWord = $this->firstWordOf($name);
+
+            if (null !== $firstWord) {
+                $firstWords[$firstWord] = true;
+            }
+        }
+
+        return $firstWords;
     }
 
     // A file name need not be UTF-8, so one that is not is split by bytes.
