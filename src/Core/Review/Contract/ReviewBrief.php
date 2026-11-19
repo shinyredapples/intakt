@@ -13,6 +13,8 @@ final readonly class ReviewBrief
     public function __construct(
         public ChangeUnderReview $change,
         public array $open,
+        // The round's number, because from the second round on the goalpost rule lowers severities, and the guards that refuse an approval must see a verdict as the round will count it; required, so no caller can leave the rule unapplied by leaving it out.
+        public int $round,
     ) {
     }
 }
