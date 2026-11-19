@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\Domain;
 
+use DateTimeImmutable;
 use Intakt\Core\Budget\Contract\Cost;
 
 // Each figure is null when the ledger holds nothing it could be read from, so the page shows "No data" instead of a zero nobody measured (D7 of #2858).
@@ -122,7 +123,7 @@ final readonly class ReviewTrends
      */
     private function judgedRounds(): array
     {
-        return array_values(array_filter($this->rounds, static fn (ReviewedRound $round): bool => null !== $round->judgedAt));
+        return array_values(array_filter($this->rounds, static fn (ReviewedRound $round): bool => $round->judgedAt instanceof DateTimeImmutable));
     }
 
     /**
