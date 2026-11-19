@@ -51,8 +51,8 @@ final class DashboardShellTest extends DashboardPageTestCase
     {
         $rail = $this->browser->request('GET', '/reviews')->filter('.rail a.nav');
 
-        self::assertSame(['Waiting on you', 'Board', 'Projects'], $rail->each(static fn (Crawler $item): string => trim($item->text())));
-        self::assertSame(['/waiting', '/', '/projects'], $rail->each(static fn (Crawler $item): string => (string) $item->attr('href')));
+        self::assertSame(['Waiting on you', 'Board', 'Projects', 'Trends'], $rail->each(static fn (Crawler $item): string => trim($item->text())));
+        self::assertSame(['/waiting', '/', '/projects', '/trends'], $rail->each(static fn (Crawler $item): string => (string) $item->attr('href')));
         self::assertCount(0, $rail->filter('.count'));
     }
 
