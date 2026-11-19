@@ -38,8 +38,8 @@ final readonly class ClaudeCodeJobEvents
     // A Read call of a file under the checkout that the CLI answered without a tool error, because a call that failed or read elsewhere showed the reviewer nothing of the change.
     public function readACheckoutFile(): bool
     {
-        $reads = array_map(static fn (array $block): mixed => $block['id'] ?? null, array_filter($this->blocksOf('assistant'), self::readsInTheCheckout(...)));
-        $answered = array_map(static fn (array $block): mixed => $block['tool_use_id'] ?? null, array_filter($this->blocksOf('user'), self::succeeded(...)));
+        $reads = array_map(static fn (array $block): mixed => $block['id'] ?? null, array_filter($this->blocksOf('assistant'), $this->readsInTheCheckout(...)));
+        $answered = array_map(static fn (array $block): mixed => $block['tool_use_id'] ?? null, array_filter($this->blocksOf('user'), $this->succeeded(...)));
 
         return [] !== array_intersect(array_filter($reads, is_string(...)), array_filter($answered, is_string(...)));
     }
@@ -66,24 +66,24 @@ final readonly class ClaudeCodeJobEvents
     /**
      * @param array<mixed> $block
      */
-    private static function readsInTheCheckout(array $block): bool
+    private function readsInTheCheckout(array $block): bool
     {
         $input = 'tool_use' === ($block[self::TYPE] ?? null) && self::READ_TOOL === ($block['name'] ?? null) ? $block['input'] ?? null : null;
         $path = is_array($input) ? $input['file_path'] ?? null : null;
 
-        return is_string($path) && self::inTheCheckout($path);
+        return is_string($path) && $this->inTheCheckout($path);
     }
 
     /**
      * @param array<mixed> $block
      */
-    private static function succeeded(array $block): bool
+    private function succeeded(array $block): bool
     {
         return 'tool_result' === ($block[self::TYPE] ?? null) && true !== ($block['is_error'] ?? false);
     }
 
     // Under the mount point and without a step up, because the CLI resolves a dotted path itself and could leave the checkout.
-    private static function inTheCheckout(string $path): bool
+    private function inTheCheckout(string $path): bool
     {
         return str_starts_with($path, ReviewJob::CHECKOUT.'/') && !in_array('..', explode('/', $path), true);
     }
@@ -95,7 +95,7 @@ final readonly class ClaudeCodeJobEvents
     {
         $blocks = [];
         foreach ($this->events as $event) {
-            $blocks = [...$blocks, ...self::contentOf($type === ($event[self::TYPE] ?? null) ? $event['message'] ?? null : null)];
+            $blocks = [...$blocks, ...$this->contentOf($type === ($event[self::TYPE] ?? null) ? $event['message'] ?? null : null)];
         }
 
         return $blocks;
@@ -104,7 +104,7 @@ final readonly class ClaudeCodeJobEvents
     /**
      * @return list<array<mixed>>
      */
-    private static function contentOf(mixed $message): array
+    private function contentOf(mixed $message): array
     {
         $content = is_array($message) ? $message['content'] ?? null : null;
 

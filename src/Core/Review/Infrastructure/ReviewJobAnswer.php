@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\Infrastructure;
 
 use Intakt\Core\Ai\Contract\Provider;
-use Symfony\AI\Platform\Bridge\Codex\TokenUsageExtractor as CodexUsage;
+use Symfony\AI\Platform\Bridge\Codex\TokenUsageExtractor;
 use Symfony\AI\Platform\TokenUsage\TokenUsageInterface;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
@@ -58,7 +58,7 @@ final readonly class ReviewJobAnswer
      */
     private static function codexUsage(array $events): array
     {
-        return ReportedUsage::in(new CodexUsage(), array_filter($events, static fn (array $event): bool => 'turn.completed' === ($event[self::TYPE] ?? null)));
+        return ReportedUsage::in(new TokenUsageExtractor(), array_filter($events, static fn (array $event): bool => 'turn.completed' === ($event[self::TYPE] ?? null)));
     }
 
     // The last message answers only once its own turn completed, because a turn that failed or was cut off may end on a message the reviewer had not finished, and a later turn's turn.completed says nothing about it.
