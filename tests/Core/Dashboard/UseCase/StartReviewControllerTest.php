@@ -386,7 +386,7 @@ final class StartReviewControllerTest extends DashboardPageTestCase
     /**
      * @param array<string, string> $form
      *
-     * @return array<string, list<string>>
+     * @return array<mixed>
      */
     // A kernel of its own, as another worker of the install would be, on the browser's session; the lines are read from its session, because the first press saves the session after it.
     private function pressInAnotherWorker(string $path, array $form): array
