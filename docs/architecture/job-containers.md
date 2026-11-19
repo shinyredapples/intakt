@@ -12,7 +12,7 @@
 
 ## The container
 
-`Infrastructure/JobContainerDefinition` builds the create request:
+`Infrastructure/JobContainerDefinition::of()` builds the create request and returns it with its start check's mark as a `JobContainerRequest`:
 
 | Setting | Value | Why |
 |---|---|---|

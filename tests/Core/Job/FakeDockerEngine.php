@@ -303,7 +303,7 @@ final class FakeDockerEngine
         $id = $this->nextId();
         $this->containers[$id] = new FakeContainer($name, $job, $output);
         $this->containers[$id]->networks = $networks;
-        $this->containers[$id]->startCheckMark = (string) ($definition['Entrypoint'][4] ?? '');
+        $this->containers[$id]->startCheckMark = $definition['Entrypoint'][4] ?? '';
         $this->definitions[$name] = $definition;
 
         return $this->json(['Id' => $id], 201);

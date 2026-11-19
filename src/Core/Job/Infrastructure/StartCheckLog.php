@@ -4,8 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Job\Infrastructure;
 
-// Reads what docker/job/start-check.sh wrote to the container's standard error before it ran the job with exec, so only the lines up to the first mode line count: the job can print anything after them, and it cannot change what came before.
-// Only lines carrying the run's mark count, because the script drops the mark before exec, so a line the job forges cannot carry it, even when the engine's log rotation dropped the script's own lines.
+// Only the lines with the run's mark up to the first mode line count, because the script logs them before it runs the job with exec and drops the mark first, so the job can neither change them nor forge one, even after log rotation dropped them.
 final readonly class StartCheckLog
 {
     // Only the head of the log is read, because the check's lines come first and the job could flood its standard error after them.
@@ -18,7 +17,7 @@ final readonly class StartCheckLog
     private const string FULL_MODE = 'full mode';
     private const string REDUCED_MODE = 'reduced mode: ';
 
-    private static function prefixOf(string $mark): string
+    private function prefixOf(string $mark): string
     {
         return sprintf('intakt-start-check %s: ', $mark);
     }
@@ -28,7 +27,7 @@ final readonly class StartCheckLog
      */
     public function failuresIn(string $standardError, string $mark): array
     {
-        $lines = $this->checkLinesOf($standardError, self::prefixOf($mark));
+        $lines = $this->checkLinesOf($standardError, $this->prefixOf($mark));
         $modeAt = array_find_key($lines, $this->isModeLine(...));
         $before = array_filter($lines, static fn (int $index): bool => null === $modeAt || $index < $modeAt, ARRAY_FILTER_USE_KEY);
         $failures = array_values(array_filter(array_map($this->failureOn(...), $before, array_keys($before))));

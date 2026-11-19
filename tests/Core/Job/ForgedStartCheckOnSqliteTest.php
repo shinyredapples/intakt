@@ -25,6 +25,7 @@ use Intakt\Core\Job\Infrastructure\EgressProxyDefinition;
 use Intakt\Core\Job\Infrastructure\EgressRoute;
 use Intakt\Core\Job\Infrastructure\EngineAnswer;
 use Intakt\Core\Job\Infrastructure\JobContainerDefinition;
+use Intakt\Core\Job\Infrastructure\JobContainerRequest;
 use Intakt\Core\Job\Infrastructure\JobContainers;
 use Intakt\Core\Job\Infrastructure\JobLedger;
 use Intakt\Core\Job\Infrastructure\JobLocks;
@@ -59,6 +60,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[UsesClass(EgressLog::class)]
 #[UsesClass(EgressRoute::class)]
 #[UsesClass(ContainerEnd::class)]
+#[UsesClass(JobContainerRequest::class)]
 #[UsesClass(ContainerState::class)]
 #[UsesClass(StartCheck::class)]
 #[UsesClass(StartCheckFailure::class)]

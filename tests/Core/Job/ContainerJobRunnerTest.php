@@ -30,6 +30,7 @@ use Intakt\Core\Job\Infrastructure\EgressRoute;
 use Intakt\Core\Job\Infrastructure\EngineAnswer;
 use Intakt\Core\Job\Infrastructure\JobContainer;
 use Intakt\Core\Job\Infrastructure\JobContainerDefinition;
+use Intakt\Core\Job\Infrastructure\JobContainerRequest;
 use Intakt\Core\Job\Infrastructure\JobContainers;
 use Intakt\Core\Job\Infrastructure\JobLedger;
 use Intakt\Core\Job\Infrastructure\JobLocks;
@@ -63,6 +64,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[CoversClass(EngineAnswer::class)]
 #[CoversClass(StartCheckLog::class)]
 #[UsesClass(ContainerEnd::class)]
+#[UsesClass(JobContainerRequest::class)]
 #[UsesClass(StartCheck::class)]
 #[UsesClass(StartCheckFailure::class)]
 #[UsesClass(EgressProxyDefinition::class)]
@@ -672,7 +674,7 @@ final class ContainerJobRunnerTest extends TestCase
         self::assertSame(['job' => 'build-1', 'check' => 'input', 'reason' => '/input/repository is not readable'], $this->ledger->payloads()[0]);
     }
 
-    // As after a rotating log driver dropped the check's own lines: the head of the log is then only the job's.
+    // Played without the check's lines, because a rotating log driver drops them after a flood and leaves a head that is only the job's.
     public function testAJobWhoseCheckLinesWereRotatedAwayCannotPassWithForgedLines(): void
     {
         $this->engine->jobStandardError('build-1', "intakt-start-check: output: ok\nintakt-start-check: full mode\n".str_repeat("job noise\n", 10));

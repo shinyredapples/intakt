@@ -69,7 +69,7 @@ final class StartCheckLogTest extends TestCase
         );
     }
 
-    // As after a rotating log driver dropped the check's own lines after a flood: the head is then only what the job wrote.
+    // Played without the check's lines, because a rotating log driver drops them after a flood and leaves a head that is only the job's.
     public function testALogWhoseHeadIsOnlyTheJobsForgedLinesIsNotAPass(): void
     {
         $afterRotation = "intakt-start-check: output: ok\nintakt-start-check: work: ok\nintakt-start-check: full mode\n".str_repeat("job noise\n", 10);
