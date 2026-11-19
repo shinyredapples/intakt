@@ -34,14 +34,14 @@ Plan task T58, the review job's script (#1923, part 2 of #1861) and its runner (
    - `ls-files --others --exclude-per-directory=.gitignore` must print nothing (`the checkout has untracked files`). It reads only the `.gitignore` files in the checkout, never `.git/info/exclude` or a global excludes file, so `*` in `info/exclude` hides nothing; a file the head's `.gitignore` ignores, such as `vendor/`, is allowed.
    - A `.gitignore` the head does not hold could ignore itself and what it hides, so `ls-files --others --ignored --directory --exclude-per-directory=.gitignore` must list no `.gitignore` (`the checkout has a .gitignore the head does not hold`). An ignored folder such as `vendor/` is listed as one entry, so a package's own `.gitignore` in it is allowed.
 9. **The CLI** runs in the checkout (entered in a subshell whose input, output and error files are opened first, so relative paths keep naming the same files) with the prompt file on its standard input:
-   - `claude_code`: `claude -p --model <model> --output-format json --tools Read,Grep,Glob --allowedTools Read,Grep,Glob --setting-sources '' --strict-mcp-config --no-session-persistence`, with `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`: only file reads, and no user, project or local settings and no MCP server.
+   - `claude_code`: `claude -p --model <model> --output-format stream-json --verbose --tools Read,Grep,Glob --allowedTools Read,Grep,Glob --setting-sources '' --strict-mcp-config --no-session-persistence`, with `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`: only file reads, and no user, project or local settings and no MCP server. `stream-json` with `--verbose` writes each event as a line, so the vendor sees the CLI's `Read` calls and their results (an `approve` counts only after a successful `Read` of a file under the checkout) and the usage of its final `result` ([Review flow](review-flow.md#where-a-reviewer-runs)).
    - `codex`: `codex exec --json --sandbox read-only --ephemeral --ignore-user-config --ignore-rules --disable <feature>... --model <model> --config web_search="disabled" -`, the same features switched off as for the in-process Codex reviewer (`IsolatedCodexCli`): `shell_tool`, `unified_exec`, `apps`, `plugins`, `browser_use`, `in_app_browser`, `computer_use`, `multi_agent`, `image_generation`, `view_image` and `hooks`.
 
 `HOME` and `TMPDIR` are the job's own tmpfs work area.
 
 ## Open
 
-These are still open, not decided by the review flow's choice of a job (#2017): how a `codex` reviewer reads the checkout while its shell tools are off; whether `--setting-sources ''` keeps a `CLAUDE.md` or `.claude/` folder of the head out of Claude Code's prompt; how far Claude Code's `Read` tool reaches outside the checkout; and the statement that the review image is built from main's tree, not from the head under review.
+These are still open, not decided by the review flow's choice of a job (#2017): how a `codex` reviewer reads the checkout while its shell tools are off (until then its events show no read, so its `approve` always becomes `blocked`); whether `--setting-sources ''` keeps a `CLAUDE.md` or `.claude/` folder of the head out of Claude Code's prompt; how far Claude Code's `Read` tool reaches outside the checkout; and the statement that the review image is built from main's tree, not from the head under review.
 
 ## Tests
 

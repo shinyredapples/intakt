@@ -18,6 +18,7 @@ use Intakt\Core\Review\Contract\ChangeUnderReview;
 use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\JobReview;
+use Intakt\Core\Review\Contract\JobVerdict;
 use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewJobRequest;
@@ -61,6 +62,7 @@ use Symfony\Component\Validator\Validation;
 #[UsesClass(ReviewerPrompt::class)]
 #[UsesClass(Checkout::class)]
 #[UsesClass(JobReview::class)]
+#[UsesClass(JobVerdict::class)]
 #[UsesClass(CommitId::class)]
 #[UsesClass(ResolvedModel::class)]
 #[UsesClass(VerdictParser::class)]
@@ -119,6 +121,36 @@ final class ReviewerInJobTest extends TestCase
         $verdict = $this->reviewInJob($this->answering("Looks right.\n\n```json\n".self::APPROVE."\n```"));
 
         self::assertSame(Decision::Approve, $verdict->verdict);
+    }
+
+    public function testAJobWhoseCliReadAFileOfTheCheckoutReportsTheRead(): void
+    {
+        $answer = $this->jobVerdictOf($this->answering("```json\n".self::APPROVE."\n```", $this->readOf(ReviewJob::CHECKOUT.'/src/Cart.php')));
+
+        self::assertTrue($answer->readTheCheckout);
+    }
+
+    public function testAJobWhoseCliOnlyHadTheCheckoutMountedReportsNoRead(): void
+    {
+        $answer = $this->jobVerdictOf($this->answering("```json\n".self::APPROVE."\n```"));
+
+        self::assertFalse($answer->readTheCheckout);
+        self::assertSame(Decision::Approve, $answer->verdict->verdict);
+    }
+
+    public function testTheUsageTheJobsCliReportedIsHandedOn(): void
+    {
+        $answer = $this->jobVerdictOf($this->answering("```json\n".self::APPROVE."\n```", usage: ['input_tokens' => 300, 'output_tokens' => 40, 'cache_read_input_tokens' => 1000]));
+
+        self::assertCount(1, $answer->usage);
+        self::assertSame([300, 40, 1000], [$answer->usage[0]->getPromptTokens(), $answer->usage[0]->getCompletionTokens(), $answer->usage[0]->getCachedTokens()]);
+    }
+
+    public function testAJobWhoseCliReportedNoUsageHandsOnNone(): void
+    {
+        $answer = $this->jobVerdictOf($this->answering("```json\n".self::APPROVE."\n```"));
+
+        self::assertSame([], $answer->usage);
     }
 
     public function testTheJobsScriptAcceptsTheCloneAsAReadOnlyCheckoutOfTheExactHead(): void
@@ -210,10 +242,14 @@ final class ReviewerInJobTest extends TestCase
     }
 
     // The real job script on the mounted clone, read-only, so the clone is held to the checks a job makes; claude is scripted because no test reaches a vendor.
-    private function answering(string $text): JobRunner
+    /**
+     * @param list<array<string, mixed>> $before the CLI's events before its result
+     * @param array<string, int>         $usage
+     */
+    private function answering(string $text, array $before = [], array $usage = []): JobRunner
     {
         $runner = self::createStub(JobRunner::class);
-        $runner->method('run')->willReturnCallback(function (JobSpec $spec) use ($text): JobResult {
+        $runner->method('run')->willReturnCallback(function (JobSpec $spec) use ($text, $before, $usage): JobResult {
             $clone = $spec->inputs[0]->hostPath;
             $this->mounted[] = $clone;
             $this->seen['prompt'] = (string) file_get_contents($spec->inputs[1]->hostPath);
@@ -221,7 +257,8 @@ final class ReviewerInJobTest extends TestCase
             $this->seen['config'] = (string) file_get_contents($clone.'/.git/config');
             $this->seen['commits'] = trim($this->git($clone, 'rev-list', '--all'));
             $this->changeModes($clone, static fn (int $mode): int => $mode & ~0o222);
-            file_put_contents($this->folder.'/answer.txt', json_encode(['type' => 'result', 'is_error' => false, 'result' => $text], JSON_THROW_ON_ERROR));
+            $result = ['type' => 'result', 'is_error' => false, 'result' => $text] + ([] === $usage ? [] : ['usage' => $usage]);
+            file_put_contents($this->folder.'/answer.txt', implode("\n", array_map(static fn (array $event): string => json_encode($event, JSON_THROW_ON_ERROR), [...$before, $result]))."\n");
             $this->givenClaude('git rev-parse HEAD > "$RECORD/head"; cat "$RECORD/answer.txt"');
             $run = $this->runTheScript($clone, $spec->inputs[1]->hostPath);
             $this->changeModes($clone, static fn (int $mode): int => $mode | 0o200);
@@ -235,7 +272,24 @@ final class ReviewerInJobTest extends TestCase
         return $runner;
     }
 
+    // A Read call of Claude Code and its successful result, as its stream-json output shows them.
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function readOf(string $path): array
+    {
+        return [
+            ['type' => 'assistant', 'message' => ['content' => [['type' => 'tool_use', 'id' => 'toolu_1', 'name' => 'Read', 'input' => ['file_path' => $path]]]]],
+            ['type' => 'user', 'message' => ['content' => [['type' => 'tool_result', 'tool_use_id' => 'toolu_1', 'content' => "1\t<?php\n"]]]],
+        ];
+    }
+
     private function reviewInJob(JobRunner $runner, ?string $head = null): Verdict
+    {
+        return $this->jobVerdictOf($runner, $head)->verdict;
+    }
+
+    private function jobVerdictOf(JobRunner $runner, ?string $head = null): JobVerdict
     {
         $reviewer = new ReviewerInJob(
             RemembersNothing::prompt(),
@@ -246,7 +300,7 @@ final class ReviewerInJobTest extends TestCase
             Validation::createValidatorBuilder()->enableAttributeMapping()->getValidator(),
             StoredSerializerFactory::create(),
         );
-        $brief = new ReviewBrief(new ChangeUnderReview('alpha', 'Add a cart.', 'diff --git a/src/Cart.php b/src/Cart.php'), []);
+        $brief = new ReviewBrief(new ChangeUnderReview('alpha', 'Add a cart.', 'diff --git a/src/Cart.php b/src/Cart.php'), [], 1);
         $request = new ReviewRequest(new Checkout($this->worktree), $brief, new ReviewerConversation('You review for correctness.', new UuidV7()));
 
         return $reviewer->review($request, new JobReview(new CommitId($head ?? $this->head), 'correctness'), new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'));

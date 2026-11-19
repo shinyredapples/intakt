@@ -11,6 +11,7 @@ use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierInvoker;
 use Intakt\Core\Ai\Contract\TierNotMapped;
 use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
+use Intakt\Core\Review\Contract\JobReviewer;
 use Intakt\Core\Review\Contract\Judge;
 use Intakt\Core\Review\Contract\Reviewer;
 use Intakt\Core\Review\Contract\ReviewServerAccesses;
@@ -71,6 +72,6 @@ final class SymfonyAiVendorTierMappingTest extends TestCase
         $usage = new UsageLedger(new InMemoryLedger(), $clock, new NullLogger(), StoredSerializerFactory::create());
         $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
 
-        return new SymfonyAiVendor(self::createStub(TierInvoker::class), $resolver, self::createStub(Reviewer::class), self::createStub(Judge::class), $usage, $limit, $clock, self::createStub(ReviewServerAccesses::class));
+        return new SymfonyAiVendor(self::createStub(TierInvoker::class), $resolver, self::createStub(Reviewer::class), self::createStub(Judge::class), $usage, $limit, $clock, self::createStub(ReviewServerAccesses::class), self::createStub(JobReviewer::class));
     }
 }
