@@ -47,9 +47,7 @@ final readonly class JavaScriptLiterals
 
     public function separatorAt(int $offset): bool
     {
-        $bytes = substr($this->source, $offset, 3);
-
-        return self::LINE_SEPARATOR === $bytes || self::PARAGRAPH_SEPARATOR === $bytes;
+        return in_array(substr($this->source, $offset, 3), [self::LINE_SEPARATOR, self::PARAGRAPH_SEPARATOR], true);
     }
 
     public function lineEndsAt(int $offset): bool
@@ -68,9 +66,7 @@ final readonly class JavaScriptLiterals
 
     public function numberStartsAt(int $offset): bool
     {
-        $char = $this->source[$offset];
-
-        return ctype_digit($char) || ('.' === $char && ctype_digit($this->source[$offset + 1] ?? ''));
+        return 1 === preg_match('/\G\.?[0-9]/', $this->source, offset: $offset);
     }
 
     public function afterWord(int $offset): int
@@ -103,9 +99,7 @@ final readonly class JavaScriptLiterals
     // Because a `#!` line is an interpreter directive only at the very start of the source (a byte order mark may precede it), it is skipped there and is no comment.
     public function afterHashbang(): int
     {
-        $start = str_starts_with($this->source, self::BYTE_ORDER_MARK) ? strlen(self::BYTE_ORDER_MARK) : 0;
-
-        return '#!' === substr($this->source, $start, 2) ? $this->lineCommentEnd($start) : 0;
+        return 1 === preg_match('/\A(?:'.self::BYTE_ORDER_MARK.')?#!/', $this->source) ? $this->lineCommentEnd(0) : 0;
     }
 
     // Because a pattern over a long run of spaces can exhaust the pattern engine and then read none of them, the run is read with plain string functions.
