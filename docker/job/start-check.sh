@@ -8,16 +8,14 @@ set -f
 
 output="${INTAKT_JOB_OUTPUT:-/output}"
 failed=''
-lines=''
 
+# Standard error only, because the orchestrator reads the result from the container's log up to the mode line, which the job runs after and cannot rewrite.
 log() {
     printf 'intakt-start-check: %s\n' "$1" >&2
 }
 
 fail() {
     log "$1: $2"
-    lines="$lines$1: $2
-"
     case " $failed " in
         *" $1 "*) ;;
         *) failed="${failed:+$failed }$1" ;;
@@ -79,11 +77,6 @@ done
 for host in ${INTAKT_JOB_EGRESS:-}; do
     egress "$host"
 done
-
-# The report ends with a line of its own, so the orchestrator can tell a whole report from a cut one.
-if ! (printf '%send\n' "$lines" > "$output/.intakt-start-check") 2>/dev/null; then
-    log "output: cannot write the report"
-fi
 
 if [ -n "$failed" ]; then
     INTAKT_REDUCED_MODE="$failed"

@@ -53,6 +53,9 @@ final class FakeDockerEngine
     /** @var array<string, string> */
     private array $proxyLogs = [];
 
+    /** @var array<string, string> */
+    private array $standardErrors = [];
+
     /** @var list<string> */
     private array $brokenLogs = [];
 
@@ -142,6 +145,12 @@ final class FakeDockerEngine
     public function proxyLogs(string $job, string $log): void
     {
         $this->proxyLogs[$job] = $log;
+    }
+
+    // Everything the job's container wrote to its standard error, the start check's lines and the job's own, so a test plays a failed check or a job that forges one.
+    public function jobStandardError(string $job, string $log): void
+    {
+        $this->standardErrors[$job] = $log;
     }
 
     // Each state read of the job's proxy takes the next status ('exited' for a proxy that stopped) and the last one stays, so a test plays a proxy that starts slowly, stops or never gets healthy.
@@ -258,10 +267,20 @@ final class FakeDockerEngine
             'POST' === $method && 'containers/create' === $path => $this->create($url, $options),
             'GET' === $method && 'containers/json' === $path => $this->json($this->listing()),
             'GET' === $method && 1 === preg_match('#^images/(.+)/json$#', $path, $call) => $this->image(rawurldecode($call[1])),
-            1 === preg_match('#^containers/([\w.-]+)/(start|wait|json|kill|logs)$#', $path, $call) => $this->onContainer($call[1], $call[2], $options),
+            1 === preg_match('#^containers/([\w.-]+)/(start|wait|json|kill|logs)$#', $path, $call) => $this->onContainer($call[1], $call[2], [...$options, 'query' => $this->queryOf($url)]),
             'DELETE' === $method && 1 === preg_match('#^containers/([\w.-]+)$#', $path, $call) => $this->remove($call[1]),
             default => $this->json(['message' => 'page not found'], 404),
         };
+    }
+
+    /**
+     * @return array<int|string, mixed>
+     */
+    private function queryOf(string $url): array
+    {
+        parse_str((string) parse_url($url, PHP_URL_QUERY), $query);
+
+        return $query;
     }
 
     /**
@@ -269,7 +288,7 @@ final class FakeDockerEngine
      */
     private function create(string $url, array $options): MockResponse
     {
-        parse_str((string) parse_url($url, PHP_URL_QUERY), $query);
+        $query = $this->queryOf($url);
         /** @var array{Labels: array<string, string>, HostConfig: array{NetworkMode: string, Mounts?: list<array{Source: string, Target: string}>}, NetworkingConfig?: array{EndpointsConfig: array<string, mixed>}} $definition */
         $definition = json_decode(is_string($options['body'] ?? null) ? $options['body'] : '{}', true, flags: JSON_THROW_ON_ERROR);
         $job = $definition['Labels']['intakt.job'];
@@ -311,7 +330,7 @@ final class FakeDockerEngine
             'start' => $this->start($container),
             'wait' => $this->wait($container, $options),
             'kill' => $this->kill($container),
-            'logs' => $this->logs($container),
+            'logs' => $this->logs($container, $options),
             default => $this->state($container),
         };
     }
@@ -327,17 +346,31 @@ final class FakeDockerEngine
         return $idOrName;
     }
 
-    // Framed as the engine frames the log of a container without a terminal (stream 1, three zero bytes, the length, the chunk), so the client's frame reading is exercised.
-    private function logs(FakeContainer $container): MockResponse
+    /**
+     * @param array<string, mixed> $options
+     */
+    // Framed as the engine frames the log of a container without a terminal (the stream, three zero bytes, the length, the chunk), so the client's frame reading is exercised; only the streams the call asks for are sent, as the engine does.
+    private function logs(FakeContainer $container, array $options): MockResponse
     {
-        $lines = preg_split('/(?<=\n)/', $this->proxyLogs[$container->job] ?? '', flags: PREG_SPLIT_NO_EMPTY);
-        $framed = implode('', array_map(static fn (string $line): string => pack('CxxxN', 1, strlen($line)).$line, false === $lines ? [] : $lines));
+        $query = is_array($options['query'] ?? null) ? $options['query'] : [];
+        $proxy = str_starts_with($container->name, 'intakt-egress-');
+        // A passed start check, as docker/job/start-check.sh logs it, so a test that plays no log plays only the job after it.
+        $standardError = $this->standardErrors[$container->job] ?? "intakt-start-check: full mode\n";
+        $framed = ('true' === ($query['stdout'] ?? null) && $proxy ? $this->framed(1, $this->proxyLogs[$container->job] ?? '') : '')
+            .('true' === ($query['stderr'] ?? null) && !$proxy ? $this->framed(2, $standardError) : '');
 
         if (in_array($container->job, $this->brokenLogs, true)) {
             $framed = pack('CxxxN', 1, 100).'short';
         }
 
         return new MockResponse($framed, ['http_code' => 200, 'response_headers' => ['content-type' => 'application/vnd.docker.multiplexed-stream']]);
+    }
+
+    private function framed(int $stream, string $log): string
+    {
+        $lines = preg_split('/(?<=\n)/', $log, flags: PREG_SPLIT_NO_EMPTY);
+
+        return implode('', array_map(static fn (string $line): string => pack('CxxxN', $stream, strlen($line)).$line, false === $lines ? [] : $lines));
     }
 
     private function start(FakeContainer $container): MockResponse
@@ -347,9 +380,6 @@ final class FakeDockerEngine
 
             return new MockResponse('', ['http_code' => 204]);
         }
-
-        // A passed start check, as docker/job/start-check.sh leaves it, so a behavior plays only the job after it.
-        file_put_contents($container->outputDirectory.'/.intakt-start-check', "end\n");
 
         if (in_array($container->job, $this->hanging, true)) {
             $container->running = true;

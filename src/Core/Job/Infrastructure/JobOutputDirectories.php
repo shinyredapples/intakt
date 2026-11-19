@@ -98,10 +98,9 @@ final readonly class JobOutputDirectories
         return $this->root.'/'.$job->value;
     }
 
-    // The start check's report is read on its own, so the job's output holds only what the job handed back.
     private function isNoOutput(DirectoryIterator $entry): bool
     {
-        return $entry->isDot() || StartCheckReport::FILE === $entry->getFilename();
+        return $entry->isDot();
     }
 
     // The job wrote this directory, so a link could point the orchestrator at a file of its own.

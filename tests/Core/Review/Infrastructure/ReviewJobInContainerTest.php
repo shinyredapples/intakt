@@ -19,7 +19,7 @@ use Intakt\Core\Job\Infrastructure\JobLedger;
 use Intakt\Core\Job\Infrastructure\JobLocks;
 use Intakt\Core\Job\Infrastructure\JobOutputDirectories;
 use Intakt\Core\Job\Infrastructure\OrphanedJobs;
-use Intakt\Core\Job\Infrastructure\StartCheckReport;
+use Intakt\Core\Job\Infrastructure\StartCheckLog;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Review\Contract\ReviewJobRequest;
 use Intakt\Core\Review\Infrastructure\ReviewJob;
@@ -52,7 +52,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[UsesClass(JobLocks::class)]
 #[UsesClass(JobOutputDirectories::class)]
 #[UsesClass(OrphanedJobs::class)]
-#[UsesClass(StartCheckReport::class)]
+#[UsesClass(StartCheckLog::class)]
 final class ReviewJobInContainerTest extends TestCase
 {
     private const string SCRIPT = __DIR__.'/../../../../docker/job/review.sh';
@@ -179,7 +179,7 @@ final class ReviewJobInContainerTest extends TestCase
                 $this->engine->clock,
             ),
             $ledger,
-            new StartCheckReport(),
+            new StartCheckLog(),
         );
     }
 }
