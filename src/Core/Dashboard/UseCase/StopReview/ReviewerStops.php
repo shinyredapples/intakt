@@ -9,10 +9,12 @@ use Intakt\Core\Dashboard\Domain\ReviewerOutcome;
 use Intakt\Core\Dashboard\Domain\ReviewerProgress;
 use Intakt\Core\Dashboard\Domain\ReviewState;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
+use Intakt\Core\Dashboard\Infrastructure\RoundLock;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use NoDiscard;
+use Symfony\Component\Lock\LockInterface;
 
 final readonly class ReviewerStops
 {
@@ -22,6 +24,7 @@ final readonly class ReviewerStops
     public function __construct(
         private LedgerReviewPages $reviews,
         private Ledger $ledger,
+        private RoundLock $rounds,
     ) {
     }
 
@@ -36,9 +39,20 @@ final readonly class ReviewerStops
             return null;
         }
 
-        return $this->recorded($round, $reviewer)
-            ? [self::FLASH_SUCCESS, 'Asked the reviewer to stop.']
-            : [self::FLASH_ERROR, 'The stop request could not be recorded in the ledger.'];
+        // Taken only now, for a round the ledger knows, with the key of the start press, so a start and a stop of one round never run at once.
+        $lock = $this->rounds->tryHolding($round);
+
+        if (!$lock instanceof LockInterface) {
+            return [self::FLASH_ERROR, 'Another press for this round is still running, so nothing was stopped.'];
+        }
+
+        try {
+            return $this->recorded($round, $reviewer)
+                ? [self::FLASH_SUCCESS, 'Asked the reviewer to stop.']
+                : [self::FLASH_ERROR, 'The stop request could not be recorded in the ledger.'];
+        } finally {
+            $lock->release();
+        }
     }
 
     /**

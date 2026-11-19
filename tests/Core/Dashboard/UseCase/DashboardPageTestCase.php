@@ -58,12 +58,10 @@ abstract class DashboardPageTestCase extends WebTestCase
         return $kernel;
     }
 
-    // Taken through the attribute's own factory, so it stands for a press of another worker that still runs.
+    // Taken through the application's factory on the same file store, so it stands for a press of another worker that still runs.
     protected function holdRoundLock(string $round): LockInterface
     {
-        $factory = self::getContainer()->get('lock.default.factory');
-        assert($factory instanceof LockFactory);
-        $lock = $factory->createLock(str_replace('{round}', $round, RoundLock::KEY));
+        $lock = self::getContainer()->get(LockFactory::class)->createLock(RoundLock::KEY_PREFIX.$round);
         self::assertTrue($lock->acquire());
 
         return $lock;

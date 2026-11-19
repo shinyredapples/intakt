@@ -51,7 +51,7 @@ use Symfony\Component\Messenger\Stamp\HandledStamp;
 #[UsesClass(RoundPlace::class)]
 #[UsesClass(RoundSource::class)]
 #[UsesClass(ShowReviewController::class)]
-#[UsesClass(RoundLock::class)]
+#[CoversClass(RoundLock::class)]
 final class StartReviewControllerTest extends DashboardPageTestCase
 {
     // The container keeps the ledger double and the bus mock across the page that hands out the token and the post that uses it.
@@ -273,16 +273,34 @@ final class StartReviewControllerTest extends DashboardPageTestCase
 
         self::assertSelectorTextSame('.toast', 'Started round 2.');
         self::assertSame(['error' => ['Another press for this round is still running, so nothing was started.']], $secondLines);
+        self::assertSame(1, $presses);
         self::assertSame([1, 2], $this->numbersStartedFor('feat/thing'));
     }
 
-    public function testARefusedPressForAnUnknownRoundLeavesNoLockFileBehind(): void
+    // A round of its own, because the file of a round another test locked stays in the directory.
+    public function testAStartWithoutATokenLeavesNoLockFileBehind(): void
     {
+        $round = 'fresh-'.bin2hex(random_bytes(8));
+        $this->ledger->startRecordedRoundOf('feat/thing', $round, 1);
         $before = self::roundLockFiles();
 
-        $this->browser->request('POST', '/reviews/unknown-'.bin2hex(random_bytes(8)).'/start');
+        $this->browser->request('POST', '/reviews/'.$round.'/start', ['number' => '2']);
 
         self::assertResponseStatusCodeSame(400);
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so nothing was started."', BadRequestHttpException::class));
+        self::assertSame([], array_values(array_diff(self::roundLockFiles(), $before)));
+    }
+
+    public function testAStartForARoundTheLedgerDoesNotKnowLeavesNoLockFileBehind(): void
+    {
+        $this->commandBus()->expects(self::never())->method('dispatch');
+        $token = $this->token();
+        $before = self::roundLockFiles();
+
+        $this->browser->request('POST', '/reviews/unknown-'.bin2hex(random_bytes(8)).'/start', ['_token' => $token, 'number' => '2']);
+
+        self::assertResponseStatusCodeSame(404);
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The ledger holds no review with this round that can be started again."', NotFoundHttpException::class));
         self::assertSame([], array_values(array_diff(self::roundLockFiles(), $before)));
     }
 

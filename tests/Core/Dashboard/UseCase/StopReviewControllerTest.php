@@ -111,21 +111,42 @@ final class StopReviewControllerTest extends DashboardPageTestCase
         self::assertSelectorTextContains('.flash-error', 'Another press for this round is still running, so nothing was stopped.');
     }
 
-    public function testARefusedStopForAnUnknownRoundLeavesNoLockFileBehind(): void
+    // A round of its own, because the file of a round another test locked stays in the directory.
+    public function testAStopWithoutATokenLeavesNoLockFileBehind(): void
     {
+        $round = 'fresh-'.bin2hex(random_bytes(8));
+        $this->ledger->startRecordedRoundOf('feat/thing', $round, 1);
+        $this->ledger->startReviewer($round, 'security');
         $before = self::roundLockFiles();
 
-        $this->browser->request('POST', '/reviews/unknown-'.bin2hex(random_bytes(8)).'/reviewers/unknown-security/stop');
+        $this->browser->request('POST', '/reviews/'.$round.'/reviewers/'.$round.'-security/stop');
 
         self::assertResponseStatusCodeSame(400);
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so nothing was stopped."', BadRequestHttpException::class));
+        self::assertSame([], array_values(array_diff(self::roundLockFiles(), $before)));
+    }
+
+    public function testAStopForARoundTheLedgerDoesNotKnowLeavesNoLockFileBehind(): void
+    {
+        $token = $this->token();
+        $before = self::roundLockFiles();
+        $round = 'unknown-'.bin2hex(random_bytes(8));
+
+        $this->browser->request('POST', '/reviews/'.$round.'/reviewers/'.$round.'-security/stop', ['_token' => $token]);
+
+        self::assertResponseStatusCodeSame(404);
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The ledger shows no running reviewer with this id in an unjudged round."', NotFoundHttpException::class));
         self::assertSame([], array_values(array_diff(self::roundLockFiles(), $before)));
     }
 
     public function testARefusedStopLeavesTheRoundFreeForTheNextPress(): void
     {
+        $this->runningReviewer();
+
         $this->browser->request('POST', '/reviews/round-1/reviewers/round-1-security/stop');
 
         self::assertResponseStatusCodeSame(400);
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so nothing was stopped."', BadRequestHttpException::class));
         $this->holdRoundLock('round-1')->release();
     }
 

@@ -7,12 +7,14 @@ namespace Intakt\Core\Dashboard\UseCase\StartReview;
 use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\RoundSource;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
+use Intakt\Core\Dashboard\Infrastructure\RoundLock;
 use Intakt\Core\Dashboard\Infrastructure\SampleChangeSource;
 use Intakt\Core\Platform\Contract\ReportableFailure;
 use Intakt\Core\Review\Contract\ChangeSource;
 use Intakt\Core\Review\Contract\RequestedRound;
 use Intakt\Core\Review\Contract\SampleChange;
 use Intakt\Core\Review\Contract\StartReview;
+use Symfony\Component\Lock\LockInterface;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Messenger\Stamp\HandledStamp;
 
@@ -25,6 +27,7 @@ final readonly class ReviewStarts
         private LedgerReviewPages $reviews,
         private MessageBusInterface $commands,
         private SampleChangeSource $sample,
+        private RoundLock $rounds,
     ) {
     }
 
@@ -50,7 +53,18 @@ final readonly class ReviewStarts
             return null;
         }
 
-        return $this->started($this->commandFor($review, $source, $number));
+        // Taken only now, for a round the ledger knows; it keeps two presses that arrive together apart, and RoundNotNext still refuses a second press that comes later.
+        $lock = $this->rounds->tryHolding($round);
+
+        if (!$lock instanceof LockInterface) {
+            return new StartAnswer([self::FLASH_ERROR, 'Another press for this round is still running, so nothing was started.']);
+        }
+
+        try {
+            return $this->started($this->commandFor($review, $source, $number));
+        } finally {
+            $lock->release();
+        }
     }
 
     // Built from the ledger and not from the form, because the repository path of a request would be an input to read the disk with; the number is only checked against the one the round gets.
