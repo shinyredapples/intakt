@@ -27,7 +27,7 @@ final readonly class ParkedTasks
     public function park(BuildTaskRequest $request, BuildQuestion $question, Closure $recordParking): void
     {
         // Refused before anything is written, because PostgreSQL stores no NUL in a text column and the record must read back as it was checked.
-        if (self::holdsNul($question)) {
+        if ($this->holdsNul($question)) {
             throw TaskNotParked::holdingNul($request);
         }
 
@@ -44,7 +44,7 @@ final readonly class ParkedTasks
         }
     }
 
-    private static function holdsNul(BuildQuestion $question): bool
+    private function holdsNul(BuildQuestion $question): bool
     {
         return array_any([$question->question, $question->recommendation, ...$question->choices], static fn (string $text): bool => str_contains($text, "\0"));
     }

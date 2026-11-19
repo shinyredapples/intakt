@@ -44,7 +44,7 @@ final class ParkedTasksTest extends KernelTestCase
 
     public function testAParkedTaskStoresItsQuestionChoicesRecommendationAndParkingTime(): void
     {
-        $this->parked()->park($this->request(7), $this->question('Which store?', 'SQLite'), self::recorded(...));
+        $this->parked()->park($this->request(7), $this->question('Which store?', 'SQLite'), $this->recorded(...));
 
         self::assertSame(
             ['project' => 'alpha', 'task' => 7, 'question' => 'Which store?', 'choices' => ['SQLite', 'Postgres'], 'recommendation' => 'SQLite', 'parked_at' => '2026-11-19T10:00:00+00:00'],
@@ -54,10 +54,10 @@ final class ParkedTasksTest extends KernelTestCase
 
     public function testParkingTheSameTaskAgainKeepsOneRecordWithTheLatestQuestion(): void
     {
-        $this->parked()->park($this->request(7), $this->question('Which store?', 'SQLite'), self::recorded(...));
+        $this->parked()->park($this->request(7), $this->question('Which store?', 'SQLite'), $this->recorded(...));
         $this->clock->modify('+1 hour');
 
-        $this->parked()->park($this->request(7), $this->question('Which store now?', 'Postgres'), self::recorded(...));
+        $this->parked()->park($this->request(7), $this->question('Which store now?', 'Postgres'), $this->recorded(...));
 
         self::assertSame(1, $this->entities->getConnection()->fetchOne('SELECT COUNT(*) FROM '.ParkedTaskRecord::TABLE));
         self::assertSame(['Which store now?', 'Postgres', '2026-11-19T11:00:00+00:00'], [$this->storedRow(7)['question'], $this->storedRow(7)['recommendation'], $this->storedRow(7)['parked_at']]);
@@ -65,9 +65,9 @@ final class ParkedTasksTest extends KernelTestCase
 
     public function testAnotherTaskOfTheSameProjectIsParkedBesideTheFirst(): void
     {
-        $this->parked()->park($this->request(7), $this->question('Which store?', 'SQLite'), self::recorded(...));
+        $this->parked()->park($this->request(7), $this->question('Which store?', 'SQLite'), $this->recorded(...));
 
-        $this->parked()->park($this->request(8), $this->question('Which queue?', 'Postgres'), self::recorded(...));
+        $this->parked()->park($this->request(8), $this->question('Which queue?', 'Postgres'), $this->recorded(...));
 
         self::assertSame(['Which store?', 'Which queue?'], [$this->storedRow(7)['question'], $this->storedRow(8)['question']]);
     }
@@ -77,7 +77,7 @@ final class ParkedTasksTest extends KernelTestCase
         $this->entities->getConnection()->executeStatement('DROP TABLE '.ParkedTaskRecord::TABLE);
 
         try {
-            $this->parked()->park($this->request(7), $this->question('PLANT-question', 'SQLite'), self::recorded(...));
+            $this->parked()->park($this->request(7), $this->question('PLANT-question', 'SQLite'), $this->recorded(...));
             self::fail('A task without its table was parked.');
         } catch (TaskNotParked $unparked) {
             self::assertSame('issue 7 of project "alpha" could not be parked', $unparked->getMessage());
@@ -87,7 +87,7 @@ final class ParkedTasksTest extends KernelTestCase
 
     public function testAParkingWhoseEventIsNotRecordedTakesTheNewQuestionBackAndKeepsTheEarlierOne(): void
     {
-        $this->parked()->park($this->request(7), $this->question('Which store?', 'SQLite'), self::recorded(...));
+        $this->parked()->park($this->request(7), $this->question('Which store?', 'SQLite'), $this->recorded(...));
 
         try {
             $this->parked()->park($this->request(7), $this->question('Which store now?', 'Postgres'), static fn (): never => throw new RuntimeException('the ledger is down'));
@@ -130,7 +130,7 @@ final class ParkedTasksTest extends KernelTestCase
         self::assertSame([false, 0], [$recorded, $this->entities->getConnection()->fetchOne('SELECT COUNT(*) FROM '.ParkedTaskRecord::TABLE)]);
     }
 
-    private static function recorded(): void
+    private function recorded(): void
     {
     }
 

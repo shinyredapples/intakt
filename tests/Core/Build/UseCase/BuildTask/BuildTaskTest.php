@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Build\UseCase\BuildTask;
 
 use Closure;
-use Throwable;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\ConnectionException;
 use Intakt\Core\Ai\Contract\Provider;
@@ -130,6 +129,7 @@ use Symfony\Component\Lock\PersistingStoreInterface;
 use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Process\Exception\ProcessTimedOutException;
 use Symfony\Component\Process\Process;
+use Throwable;
 
 #[CoversClass(BuildTask::class)]
 #[CoversClass(BuildTaskOutcome::class)]
