@@ -78,7 +78,7 @@ final class CiDefinitionTest extends TestCase
 
     public function testAnIssueFormAWorkflowNamesOrReadsThroughAFolderIsStillACiChange(): void
     {
-        foreach (['bug_report.yml', '.github/ISSUE_TEMPLATE/*.yml', '.github/*', '.github/ci/../*', 'ISSUE_TEMPLATE', '-r .github x'] as $run) {
+        foreach (['bug_report.yml', '.github/ISSUE_TEMPLATE/*.yml', '.github/*', '.github/ci/../*', '.github/./*/*.yml', '.github/ci/x/../../*/*.yml', '.github/c$D/*', 'ISSUE_TEMPLATE', '-r .github x'] as $run) {
             self::assertSame(['.github/ISSUE_TEMPLATE/bug_report.yml'], $this->ciPathsOf("jobs:\n  t:\n    steps:\n      - run: cat {$run}\n", ['.github/ISSUE_TEMPLATE/bug_report.yml']), $run);
         }
     }

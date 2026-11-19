@@ -12,7 +12,7 @@ final class IssueFormsTest extends TestCase
 {
     public function testBlankIssuesAreOffAndTheOnlyLinkIsPrivateReporting(): void
     {
-        self::assertMatchesRegularExpression('#\Ablank_issues_enabled: false\ncontact_links:\n  - name: Report a security problem\n    url: https://github\.com/shinyredapples/intakt/security/advisories/new\n    about: [^\n]+\n\z#', $this->read('ISSUE_TEMPLATE/config.yml'));
+        self::assertMatchesRegularExpression('#\Ablank_issues_enabled: false\ncontact_links:\n  - name: Report a security problem\n    url: https://github\.com/shinyredapples/intakt/security/advisories/new\n    about: .+\n\z#', $this->read('ISSUE_TEMPLATE/config.yml'));
     }
 
     public function testEachFormAsksForItsFieldsLinksTheGuideAndAppliesNoLabel(): void
@@ -22,7 +22,7 @@ final class IssueFormsTest extends TestCase
             preg_match_all('/^    id: (\S+)$/m', $text, $found);
 
             self::assertSame($ids, implode('|', $found[1]));
-            self::assertStringContainsString('docs/guide/writing-a-good-task.md', $text);
+            self::assertMatchesRegularExpression('#docs/guide/writing-a-good-task\.md#', $text);
             self::assertDoesNotMatchRegularExpression('/^labels:/m', $text);
         }
     }
