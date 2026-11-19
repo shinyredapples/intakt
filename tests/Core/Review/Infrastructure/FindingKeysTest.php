@@ -146,6 +146,15 @@ final class FindingKeysTest extends TestCase
         $this->assertKeyFollowsEditsOf('docs/Q&A (draft), v2.md', 'The step in `docs/Q&A (draft), v2.md` is out of date.');
     }
 
+    public function testALinkToAFileWithADigitsOnlyNameChangesTheKeyWhenThatFileIsEdited(): void
+    {
+        $this->write('123', "first\n");
+        mkdir($this->repository->path.'/docs');
+        symlink('../123', $this->repository->path.'/docs/Link.md');
+
+        $this->assertKeyFollowsEditsOf('docs/Link.md', 'The step in docs/Link.md is out of date.');
+    }
+
     public function testAPlainTextPathWithASpaceInItsDirectoryGetsNoKey(): void
     {
         $this->write('docs/My Notes/Rule.md', "# Rule\n");

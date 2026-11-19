@@ -13,16 +13,17 @@ final readonly class FindingKey
     {
     }
 
+    // Each file as its checkout-relative path and content hash, sorted here, so the order a finding names its files in does not matter.
     /**
-     * @param array<string, string> $fileHashes content hash by checkout-relative path
+     * @param list<array{string, string}> $files
      */
-    public static function of(string $text, array $fileHashes): self
+    public static function of(string $text, array $files): self
     {
-        ksort($fileHashes, SORT_STRING);
+        usort($files, static fn (array $one, array $other): int => strcmp($one[0], $other[0]));
         $parts = [self::part($text)];
 
-        foreach ($fileHashes as $path => $hash) {
-            $parts[] = self::part((string) $path).self::part($hash);
+        foreach ($files as [$path, $hash]) {
+            $parts[] = self::part($path).self::part($hash);
         }
 
         return new self(hash(self::ALGORITHM, implode('', $parts)));

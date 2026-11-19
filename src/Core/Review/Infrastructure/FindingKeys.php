@@ -26,9 +26,9 @@ final readonly class FindingKeys
             return null;
         }
 
-        $fileHashes = $this->hashesOfNamedFiles(new Checkout($checkoutRoot), $this->candidatesIn($finding));
+        $files = $this->namedFiles(new Checkout($checkoutRoot), $this->candidatesIn($finding));
 
-        return null === $fileHashes || [] === $fileHashes ? null : FindingKey::of($this->normalized($finding->text), $fileHashes);
+        return null === $files || [] === $files ? null : FindingKey::of($this->normalized($finding->text), $files);
     }
 
     /**
@@ -83,33 +83,47 @@ final readonly class FindingKeys
     /**
      * @param list<string> $candidates
      *
-     * @return array<string, string>|null
+     * @return list<array{string, string}>|null
      */
-    private function hashesOfNamedFiles(Checkout $checkout, array $candidates): ?array
+    private function namedFiles(Checkout $checkout, array $candidates): ?array
     {
-        $fileHashes = [];
+        $files = [];
 
         foreach ($candidates as $candidate) {
-            $real = $this->realPathOf($checkout, $candidate);
+            $file = $this->namedFile($checkout, $candidate);
 
-            if (null !== $real && is_file($real)) {
-                $hash = is_readable($real) ? hash_file(FindingKey::ALGORITHM, $real) : false;
-
-                if (false === $hash) {
-                    return null;
-                }
-
-                $fileHashes[$checkout->relative($real)] = $hash;
-
-                continue;
+            if (false === $file) {
+                return null;
             }
 
-            if ($this->isPath($candidate) || (null === $real && $this->directoryIsInCheckout($checkout, $candidate))) {
-                return null;
+            if (null !== $file) {
+                $files[$file[0]] = $file;
             }
         }
 
-        return $fileHashes;
+        return array_values($files);
+    }
+
+    // False when the candidate may name a file the key cannot hash, null when it names no file.
+    /**
+     * @return array{string, string}|false|null
+     */
+    private function namedFile(Checkout $checkout, string $candidate): array|false|null
+    {
+        $real = $this->realPathOf($checkout, $candidate);
+
+        if (null !== $real && is_file($real)) {
+            $hash = is_readable($real) ? hash_file(FindingKey::ALGORITHM, $real) : false;
+
+            return false === $hash ? false : [$checkout->relative($real), $hash];
+        }
+
+        return $this->mayNameAFileNotHashed($checkout, $candidate, $real) ? false : null;
+    }
+
+    private function mayNameAFileNotHashed(Checkout $checkout, string $candidate, ?string $real): bool
+    {
+        return $this->isPath($candidate) || (null === $real && $this->directoryIsInCheckout($checkout, $candidate));
     }
 
     private function realPathOf(Checkout $checkout, string $path): ?string
