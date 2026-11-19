@@ -223,7 +223,7 @@ final readonly class FindingKeys
 
         $fileNames = CheckoutFileNames::in($root);
 
-        if (null === $fileNames) {
+        if (!$fileNames instanceof CheckoutFileNames) {
             return false;
         }
 
