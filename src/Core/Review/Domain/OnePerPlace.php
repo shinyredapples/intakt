@@ -129,11 +129,15 @@ final readonly class OnePerPlace
         return array_values($entries);
     }
 
+    // The entry's own note first, then the first one of a finding it merged, because a P1 the judge rejected may be reported second at a place and its reason must not be lost.
     private function merged(Finding $entry, Finding $finding): Finding
     {
-        return $entry
+        $merged = $entry
             ->withSeverity($this->higher($entry->severity, $finding->severity))
             ->withMerged([...$entry->merged, $finding->id, ...$finding->merged]);
+        $note = $finding->judgeNote();
+
+        return null === $entry->judgeNote() && null !== $note ? $merged->withJudgeNote($note) : $merged;
     }
 
     private function higher(Severity $one, Severity $other): Severity

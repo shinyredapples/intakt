@@ -95,7 +95,7 @@ Once CI is green, the **review panel** reads the change: a fixed core panel for 
 flowchart TD
   pr[Pull request, CI green] --> panel[Each reviewer reads it,<br/>on its own]
   panel --> probes[Planned: reviewers may run small tests<br/>in a sealed sandbox]
-  probes --> verdicts[Each returns a verdict:<br/>approve, changes with findings,<br/>or blocked]
+  probes --> verdicts[Each returns a verdict:<br/>approve, or changes with findings;<br/>blocked only when Intakt holds it back]
   verdicts --> judge[A quick judge step sorts each finding:<br/>fix now, later, or not needed]
   judge -- something to fix now --> build[Back to the builder]
   judge -- nothing to fix now --> pass[The panel approves]
@@ -136,7 +136,7 @@ flowchart TD
 ## 7. Afterwards
 
 - **Polish round (planned):** when every reviewer approves but small "fix now" notes remain, the builder gets one short extra pass to fix just those before the merge, and one reviewer checks only that pass. If it fails, the approved change merges without it and the notes become one follow-up task, unless the task is itself a follow-up: then the notes are listed in the merge note and dropped. A project setting turns it off.
-- **Follow-ups:** P3 notes that need their own design, tests or files outside the change become a follow-up task. The maintainer agent checks each note against the code, drops what's already fixed, and turns the rest into small buildable tasks. Planned: such a follow-up waits for the next stage (milestone) instead of the one being finished, unless it fixes something that blocked the original or no later stage is open; it says which stage it came from, so you can move it back. Planned: a task that is itself a follow-up files no further follow-ups for its own nice-to-have notes. They are listed in the merge note and dropped, so follow-ups stop breeding follow-ups. A real problem it deferred (not a nice-to-have) is still filed.
+- **Follow-ups:** P3 notes that need their own design, tests or files outside the change become a follow-up task. The maintainer agent checks each note against the code, drops what's already fixed, and turns the rest into small buildable tasks. Planned: such a follow-up waits for the next stage (milestone) instead of the one being finished, unless it fixes something that blocked the original or no later stage is open; it says which stage it came from, so you can move it back. That is the default: you can list it as a setting the maintainer agent's weekly review may try other values for, within limits you set. Planned: a task that is itself a follow-up files no further follow-ups for its own nice-to-have notes. They are listed in the merge note and dropped, so follow-ups stop breeding follow-ups. A real problem it deferred (not a nice-to-have) is still filed.
 - **Project memory:** what was learned (a fixed finding, a recurring failure and its cause) goes into the project memory, so the next builder and reviewers are briefed.
 - **Unblocking:** tasks that said `Waits for` this one become eligible.
 - **Tidying up:** the task's branch is cleaned up.
