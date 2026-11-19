@@ -16,7 +16,10 @@ use Intakt\Core\Build\Domain\GatesByDefault;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildVerdict;
+use Intakt\Core\Build\Domain\QuestionRefused;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
+use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJobCommand;
+use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJobInput;
 use Intakt\Core\Job\Contract\JobEgress;
 use Intakt\Core\Job\Contract\JobEnd;
 use Intakt\Core\Job\Contract\JobId;
@@ -26,13 +29,19 @@ use Intakt\Core\Job\Contract\JobOutput;
 use Intakt\Core\Job\Contract\JobResult;
 use Intakt\Core\Job\Contract\JobSpec;
 use Intakt\Core\Review\Contract\Fence;
+use Intakt\Core\Review\Contract\FencedText;
+use Intakt\Core\Review\Contract\PromptAssembly;
 use Intakt\Core\Review\Contract\PromptCut;
+use Intakt\Core\Review\Contract\PromptPart;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
 use Intakt\Tests\Core\Build\ScriptedJobRunner;
 use Intakt\Tests\Core\HandBack\BuildHistory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Console\Application;
+use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Tester\CommandTester;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Process\Process;
 
@@ -40,6 +49,12 @@ use Symfony\Component\Process\Process;
 #[CoversClass(RunBuildJob::class)]
 #[CoversClass(BuildJobOutcome::class)]
 #[CoversClass(BuildQuestion::class)]
+#[UsesClass(RunBuildJobCommand::class)]
+#[UsesClass(RunBuildJobInput::class)]
+#[UsesClass(QuestionRefused::class)]
+#[UsesClass(PromptAssembly::class)]
+#[UsesClass(PromptPart::class)]
+#[UsesClass(FencedText::class)]
 #[UsesClass(BuilderPrompt::class)]
 #[UsesClass(GatesAtOnce::class)]
 #[UsesClass(GatesByDefault::class)]
@@ -105,6 +120,44 @@ final class ScriptedQuestionTest extends TestCase
         self::assertNull($outcome->question);
     }
 
+    public function testTheBuildCommandPrintsAScriptedQuestion(): void
+    {
+        $this->givenTheBuildScriptRanWithTheCli(<<<'SH'
+            printf '{"question":"Which store should the ledger use?","choices":["SQLite","PostgreSQL"],"recommendation":"SQLite"}' > QUESTION.json
+            SH);
+
+        $tester = $this->whenTheBuildCommandReadsTheScriptsOutput();
+
+        self::assertSame(
+            [Command::SUCCESS, "question: Which store should the ledger use?\nchoice: SQLite\nchoice: PostgreSQL\nrecommendation: SQLite\n"],
+            [$tester->getStatusCode(), $tester->getDisplay()],
+        );
+    }
+
+    public function testTheBuildCommandRefusesAScriptedQuestionWithTwoChoicesTheSameOnceTrimmed(): void
+    {
+        $this->givenTheBuildScriptRanWithTheCli(<<<'SH'
+            printf '{"question":"Keep it?","choices":["Keep"," Keep "],"recommendation":"Keep"}' > QUESTION.json
+            SH);
+
+        $tester = $this->whenTheBuildCommandReadsTheScriptsOutput();
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString("question refused: two choices are the same\n", $tester->getDisplay());
+        self::assertStringContainsString('failed: '.BuildVerdict::QuestionRefused->reason(), (string) preg_replace('/\s+/', ' ', $tester->getDisplay()));
+    }
+
+    public function testTheBuildCommandPrintsAnInvisibleCharacterOfAScriptedQuestionAsItsCodePoint(): void
+    {
+        $this->givenTheBuildScriptRanWithTheCli(<<<'SH'
+            printf '{"question":"Which\\u034f store?","choices":["SQLite\\u034f","SQLite"],"recommendation":"SQLite"}' > QUESTION.json
+            SH);
+
+        $tester = $this->whenTheBuildCommandReadsTheScriptsOutput();
+
+        self::assertSame("question: Which\\u{34F} store?\nchoice: SQLite\\u{34F}\nchoice: SQLite\nrecommendation: SQLite\n", $tester->getDisplay());
+    }
+
     private function givenTheBuildScriptRanWithTheCli(string $script): void
     {
         $folder = $this->history->folder;
@@ -123,10 +176,24 @@ final class ScriptedQuestionTest extends TestCase
 
     private function whenTheBuildJobReadsTheScriptsOutput(): BuildJobOutcome
     {
+        return $this->builds()->run(new BuildJob('demo', $this->history->work, 'task', new BuildBrief('task', [], null), Tier::Standard, 'intakt-job-demo:1'));
+    }
+
+    private function whenTheBuildCommandReadsTheScriptsOutput(): CommandTester
+    {
+        file_put_contents($this->history->folder.'/task.md', "task\n");
+        $application = new Application();
+        $application->addCommand(new RunBuildJobCommand($this->builds(), new Filesystem()));
+        $tester = new CommandTester($application->find('intakt:build:run'));
+        $tester->execute(['project' => 'demo', 'clone' => $this->history->work, 'branch' => 'task', 'task' => $this->history->folder.'/task.md', 'image' => 'intakt-job-demo:1', 'bundle' => $this->history->folder.'/out.bundle']);
+        return $tester;
+    }
+
+    private function builds(): RunBuildJob
+    {
         $tiers = self::createStub(TierResolver::class);
         $tiers->method('resolve')->willReturn(new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'));
-        $builds = new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), new ScriptedJobRunner($this->output), new PhpGate(), new GatesAtOnce(12, 1), new Filesystem(), self::SCRIPT, $this->history->folder.'/prompts');
 
-        return $builds->run(new BuildJob('demo', $this->history->work, 'task', new BuildBrief('task', [], null), Tier::Standard, 'intakt-job-demo:1'));
+        return new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), new ScriptedJobRunner($this->output), new PhpGate(), new GatesAtOnce(12, 1), new Filesystem(), self::SCRIPT, $this->history->folder.'/prompts');
     }
 }
