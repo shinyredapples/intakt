@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\Infrastructure;
 
 use Closure;
-use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\ReadAnswer;
 use Intakt\Core\Review\Contract\ReviewBrief;
@@ -14,6 +13,7 @@ use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictUnreadable;
+use Intakt\Core\Review\Domain\GoalpostRule;
 use Override;
 use Symfony\AI\Agent\Agent;
 use Symfony\AI\Agent\Exception\MaxIterationsExceededException;
@@ -66,22 +66,43 @@ final readonly class ReviewerAgent implements Reviewer
 
         $verdict = $this->canStream($platform, $model) ? $this->answeredStreaming($agent, $conversation, $request->conversation) : $this->answeredUnstreamed($agent, $conversation, $request->conversation);
 
-        // A stop wins over an earlier malformed call, because only a stopped verdict lets the stop be recorded; a model naming the id itself gains nothing, since its verdict still blocks.
+        // A stop wins over an earlier malformed call, because only a stopped verdict lets the stop be recorded; a model naming the id itself gains nothing, since refuseClaimedFailureIds() refuses a forged stop.
         if ($tools->seen() && !$verdict->isStopped()) {
             throw VerdictUnreadable::becauseKeySafe('the reviewer made a malformed tool call.');
         }
 
-        if ($this->approvesCutText($verdict, $request->brief, $fenced)) {
+        // Before the cut approval is put in its place, because a reviewer that names a reserved id has given an unreadable answer whatever it decided, and is asked once more.
+        $this->refuseClaimedFailureIds($verdict);
+
+        $counted = $this->asTheRoundCounts($request->brief, $verdict);
+
+        if ($this->approvesCutText($counted, $request->brief, $fenced)) {
             return Verdict::cutApproval();
         }
 
-        return $this->checkedAgainst($request->brief, $verdict);
+        return $this->checkedAgainst($request->brief, $counted);
+    }
+
+    // Lowered here as the round lowers it before storing, because the cut-input guard below and the vendor's read guard refuse what can count as approval, and a P2 the goalpost rule turns into a P3 can.
+    private function asTheRoundCounts(ReviewBrief $brief, Verdict $verdict): Verdict
+    {
+        return new GoalpostRule()->applyToVerdict($brief->round, $verdict, $brief->open);
+    }
+
+    // Refused like unreadable output, because a counted vote under a reserved id would send the head back with findings the ledger drops; key-safe, because only Intakt's own ids are named.
+    private function refuseClaimedFailureIds(Verdict $verdict): void
+    {
+        $claimed = $verdict->claimedFailureIds();
+
+        if ([] !== $claimed) {
+            throw VerdictUnreadable::becauseKeySafe(sprintf('the verdict names finding ids reserved for failed reviews: %s.', implode(', ', $claimed)));
+        }
     }
 
     // Plain code refuses it, because the note asking the reviewer to read the rest is only prompt text, and a steered or lazy reviewer could approve code it never saw.
     private function approvesCutText(Verdict $verdict, ReviewBrief $brief, FencedToolbox $fenced): bool
     {
-        return Decision::Approve === $verdict->verdict && ($this->prompt->cutsInputOf($brief) || $fenced->cutAnAnswer());
+        return $verdict->mayCountAsApproval() && ($this->prompt->cutsInputOf($brief) || $fenced->cutAnAnswer());
     }
 
     // Plain code checks the ids, because only the request knows which findings were open; an id the reviewer invented would otherwise close or revive a finding that never existed.

@@ -151,6 +151,76 @@ final class StoredJsonTest extends KernelTestCase
         $this->serializer()->deserialize($row, Finding::class.'[]', JsonEncoder::FORMAT);
     }
 
+    public function testAFindingWithAJudgeNoteReadsBackWithIt(): void
+    {
+        $finding = $this->finding()->withJudgeNote('Rejected: covered by F2.');
+
+        $read = $this->serializer()->deserialize($this->serializer()->serialize([$finding], JsonEncoder::FORMAT), Finding::class.'[]', JsonEncoder::FORMAT);
+
+        self::assertEquals([$finding], $read);
+    }
+
+    public function testATrackedFindingWithAJudgeNoteReadsBackWithIt(): void
+    {
+        $tracked = [new TrackedFinding('a', $this->finding()->withJudgeNote('Deferred: needs #12.'), [1], FindingStatus::Open)];
+
+        $read = $this->serializer()->deserialize($this->serializer()->serialize($tracked, JsonEncoder::FORMAT), TrackedFinding::class.'[]', JsonEncoder::FORMAT);
+
+        self::assertEquals($tracked, $read);
+    }
+
+    public function testAFindingIsWrittenWithItsJudgeNoteUnderTheKeyJudgeNote(): void
+    {
+        $json = $this->serializer()->serialize($this->finding()->withJudgeNote('Deferred.'), JsonEncoder::FORMAT);
+
+        self::assertStringEndsWith(',"merged":[],"judge_note":"Deferred."}', $json);
+    }
+
+    public function testAFindingWithoutAJudgeNoteIsWrittenWithoutTheKey(): void
+    {
+        $json = $this->serializer()->serialize($this->finding(), JsonEncoder::FORMAT);
+
+        self::assertStringNotContainsString('judge_note', $json);
+    }
+
+    public function testAFindingRowWithoutAJudgeNoteReadsWithNone(): void
+    {
+        $read = $this->serializer()->deserialize('['.self::TODAYS_FINDING.']', Finding::class.'[]', JsonEncoder::FORMAT);
+
+        self::assertInstanceOf(Finding::class, $read[0]);
+        self::assertNull($read[0]->judgeNote());
+    }
+
+    public function testAFindingRowWithANullJudgeNoteReadsWithNone(): void
+    {
+        $row = '['.substr(self::TODAYS_FINDING, 0, -1).',"judge_note":null}]';
+
+        $read = $this->serializer()->deserialize($row, Finding::class.'[]', JsonEncoder::FORMAT);
+
+        self::assertEquals([$this->finding()], $read);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function brokenJudgeNotes(): iterable
+    {
+        yield 'a number' => ['3'];
+        yield 'a list' => ['["Deferred."]'];
+        yield 'an object' => ['{"note":"Deferred."}'];
+        yield 'a boolean' => ['true'];
+    }
+
+    #[DataProvider('brokenJudgeNotes')]
+    public function testAFindingRowWhoseJudgeNoteIsNotAStringFailsToRead(string $note): void
+    {
+        $row = '['.substr(self::TODAYS_FINDING, 0, -1).',"judge_note":'.$note.'}]';
+
+        $this->expectException(UnexpectedValueException::class);
+
+        $this->serializer()->deserialize($row, Finding::class.'[]', JsonEncoder::FORMAT);
+    }
+
     private function finding(): Finding
     {
         return new Finding('a', Severity::P2, 'src/A.php', 7, null, 'Broken.', FixableBy::Builder, false, null, new Evidence('php -l', 'ok'), true);

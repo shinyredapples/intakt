@@ -5,7 +5,7 @@
 # Each of the session's tool calls may run up to <tool time limit seconds>, so the builder's own bin/check ends inside its call instead of going to the background.
 # The builder's bin/check runs <gates at once> gates at the same time, a count the orchestrator hands over only when it is below what bin/check picks from the job's limits; when it is empty, INTAKT_GATE_SLOTS is left as the job's environment has it (unset unless the image sets it), so bin/check uses the job's limits (its CPUs and memory) to size its gates at once itself.
 # The session ends at its turn limit or when the allowance is used up, and the script outlives it, so what it committed before is still bundled.
-# Writes build.log, handback.bundle (only when the branch has new commits) and pull-request.md (only when PR.md is a regular file) into INTAKT_JOB_OUTPUT.
+# Writes build.log, handback.bundle (only when the branch has new commits), pull-request.md (only when PR.md is a regular file) and question.json (only when QUESTION.json is a regular file) into INTAKT_JOB_OUTPUT.
 set -u
 
 source="$1"
@@ -39,6 +39,17 @@ fi
 
 cd "$clone" || exit 1
 base="$(git rev-parse HEAD)"
+# The bytes of a QUESTION.json the checkout already holds, read before the session and kept in a variable the builder cannot write:
+# the checkout's bytes and not the commit's, because a checkout that converts line endings holds other bytes than the commit.
+# Hashed by sha256sum and not by git, because git's hash follows the clone's settings (its object format, its filters), which the builder can write.
+# A hash that could not be taken is no baseline, because an empty one would make any question count as written, so none is handed back then.
+question_before=''
+question_hashed=1
+if [ -f QUESTION.json ] && [ ! -L QUESTION.json ]; then
+    if ! question_before="$(sha256sum 2>/dev/null < QUESTION.json)" || [ -z "$question_before" ]; then
+        question_hashed=0
+    fi
+fi
 
 # The egress allowlist lets only the vendor's API through, so the CLI's telemetry and update checks would only fail.
 CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1
@@ -95,16 +106,17 @@ export GIT_CONFIG_GLOBAL GIT_CONFIG_NOSYSTEM
 # The builder can write to the output folder too, and take its permissions away, so only what this script writes after the session is handed back.
 # chmod follows a link, so a link the builder left is removed without being touched.
 chmod u+rwx -- "$output"
-for planted in "$output/pull-request.md" "$output/handback.bundle"; do
+for planted in "$output/pull-request.md" "$output/handback.bundle" "$output/question.json"; do
     if [ -d "$planted" ] && [ ! -L "$planted" ]; then
         chmod -R u+rwx -- "$planted"
     fi
 done
-rm -rf -- "$output/pull-request.md" "$output/handback.bundle"
+rm -rf -- "$output/pull-request.md" "$output/handback.bundle" "$output/question.json"
 
 # The orchestrator reads this exit code as no result, because a planted file left here would otherwise be handed back.
 if [ -e "$output/pull-request.md" ] || [ -L "$output/pull-request.md" ] \
-    || [ -e "$output/handback.bundle" ] || [ -L "$output/handback.bundle" ]; then
+    || [ -e "$output/handback.bundle" ] || [ -L "$output/handback.bundle" ] \
+    || [ -e "$output/question.json" ] || [ -L "$output/question.json" ]; then
     echo 'the output folder could not be cleared' >> "$log"
     exit 3
 fi
@@ -112,6 +124,21 @@ fi
 # A link is not followed, because it could point the text at any file the job can read.
 if [ -f PR.md ] && [ ! -L PR.md ]; then
     cp PR.md "$output/pull-request.md"
+fi
+
+# The same for the question, which says the builder stopped to ask instead of building;
+# a QUESTION.json the checkout already held when the session started is not this builder's question, so it is handed back only when the session wrote it or changed its bytes.
+# The same sha256sum of the file's bytes as before the session, so no git setting the builder wrote in the clone reaches the comparison.
+# A hash that fails after the session is no change either, because only a hash that was taken can show other bytes.
+# The failed baseline is logged whether or not the file is still there, because the builder can remove it.
+if [ "$question_hashed" -eq 0 ]; then
+    echo 'QUESTION.json is not handed back: it could not be hashed before the session' >> "$log"
+elif [ -f QUESTION.json ] && [ ! -L QUESTION.json ]; then
+    if ! question_after="$(sha256sum 2>/dev/null < QUESTION.json)" || [ -z "$question_after" ]; then
+        echo 'QUESTION.json is not handed back: it could not be hashed after the session' >> "$log"
+    elif [ "$question_after" != "$question_before" ]; then
+        cp QUESTION.json "$output/question.json"
+    fi
 fi
 
 # The branch by its full name, so a branch the builder checked out instead is never what is handed back; git refuses an empty bundle.

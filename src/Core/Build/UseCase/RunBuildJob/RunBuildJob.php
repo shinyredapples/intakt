@@ -9,7 +9,9 @@ use Intakt\Core\Ai\Contract\TierResolutionFailure;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Build\Contract\BuildServices;
 use Intakt\Core\Build\Domain\BuilderPrompt;
+use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\Domain\GatesAtOnce;
+use Intakt\Core\Build\Domain\QuestionRefused;
 use Intakt\Core\Job\Contract\DockerEngineFailed;
 use Intakt\Core\Job\Contract\JobCause;
 use Intakt\Core\Job\Contract\JobEgress;
@@ -38,6 +40,8 @@ final readonly class RunBuildJob
     public const string BUNDLE = 'handback.bundle';
 
     public const string PULL_REQUEST_TEXT = 'pull-request.md';
+
+    public const string QUESTION = 'question.json';
 
     public const string LOG = 'build.log';
 
@@ -193,6 +197,12 @@ final readonly class RunBuildJob
 
     private function handedBack(JobOutput $output, string $log): BuildJobOutcome
     {
+        $question = $output->contents(self::QUESTION);
+
+        if (null !== $question) {
+            return $this->asked($question, $log);
+        }
+
         $bundle = $output->contents(self::BUNDLE);
         $text = $output->contents(self::PULL_REQUEST_TEXT);
 
@@ -209,5 +219,18 @@ final readonly class RunBuildJob
         }
 
         return new BuildJobOutcome(BuildVerdict::Built, $bundle, $text, $log);
+    }
+
+    private function asked(string $text, string $log): BuildJobOutcome
+    {
+        try {
+            return new BuildJobOutcome(
+                BuildVerdict::Asked,
+                log: $log,
+                question: BuildQuestion::fromHandedBack($text),
+            );
+        } catch (QuestionRefused $refusal) {
+            return new BuildJobOutcome(BuildVerdict::QuestionRefused, log: $log.'question refused: '.$refusal->getMessage()."\n");
+        }
     }
 }

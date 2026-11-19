@@ -55,8 +55,27 @@ final class GeneratedDockerfileTest extends TestCase
         yield 'range' => ['>=8.4.3 <8.5', '8.4'];
         yield 'alternatives' => ['8.2.* || 8.3.*', '8.3'];
         yield 'exact patch' => ['8.4.1', '8.4.1'];
-        yield 'capped inside a minor' => ['>=8.4.1 <8.4.5', '8.4.1'];
-        yield 'capped with an excluded lower bound' => ['>8.4.1 <8.4.5', '8.4.2'];
+        yield 'capped inside a minor' => ['>=8.4.1 <8.4.5', '8.4.4'];
+        yield 'capped with an excluded lower bound' => ['>8.4.1 <8.4.5', '8.4.4'];
+        yield 'the patch after the released one excluded' => ['>=8.4.0 <8.5 !=8.4.26', '8.4.25'];
+        yield 'gaps around the released patch' => ['>=8.4.1 <8.4.20 || 8.4.25 || >=8.4.30 <8.5', '8.4.25'];
+    }
+
+    #[DataProvider('rulesOnATwoPartPlatformVersion')]
+    public function testATwoPartPlatformVersionGetsTheMovingTagOnlyWithoutAGapAboveTheReleasedPatch(string $constraint, string $base): void
+    {
+        $dockerfile = GeneratedDockerfile::for(PhpProfile::fromComposerJson(sprintf('{"require": {"php": "%s"}, "config": {"platform": {"php": "8.4"}}}', $constraint)));
+
+        self::assertStringStartsWith(sprintf('FROM php:%s-cli', $base)."\n", $dockerfile);
+    }
+
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function rulesOnATwoPartPlatformVersion(): iterable
+    {
+        yield 'caret' => ['^8.4', '8.4'];
+        yield 'a future patch excluded' => ['^8.4 !=8.4.9999', '8.4.25'];
     }
 
     public function testATwoPartPlatformVersionWithAnExactRequirePhpIsBuiltOnThatPatch(): void

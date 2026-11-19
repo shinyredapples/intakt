@@ -18,6 +18,14 @@ final class BoardStylesTest extends TestCase
         self::assertMatchesRegularExpression('/flex:\s*1 1 0;\s*min-width:\s*176px/', $rules['.board .col'] ?? '');
     }
 
+    // Asserted, because an absolute .sr-only label of a folded strip escaped the static scroller and widened the page at 1440 (#2659).
+    public function testTheBoardScrollerHoldsItsScreenReaderLabelsSoTheyNeverWidenThePage(): void
+    {
+        $rules = $this->rulesOf($this->sheet());
+
+        self::assertMatchesRegularExpression('/overflow-x:\s*auto;.*position:\s*relative/s', $rules['.board'] ?? '');
+    }
+
     public function testTheWaitingOnYouColumnTakesTheMocksLargerShareAndMinimumWidth(): void
     {
         $rules = $this->rulesOf($this->sheet());
@@ -59,21 +67,27 @@ final class BoardStylesTest extends TestCase
         self::assertArrayNotHasKey('.board .col.collapsed', $this->rulesOf($this->sheetOutside('min-width: 761px')));
     }
 
-    public function testOnAPhoneTheHeadsOctopusShrinksTo96PxAndKeepsTheTitleBesideIt(): void
+    public function testTheFirstDayPanelStacksItsOctopusAboveItsTextAtMost144PxHigh(): void
+    {
+        self::assertMatchesRegularExpression('/\n\.firstday \{[^}]*flex-direction:\s*column;/', $this->sheet());
+        self::assertMatchesRegularExpression('/\n\.firstday > \.character \{\s*max-height:\s*144px;\s*width:\s*auto;/', $this->sheet());
+    }
+
+    public function testOnAPhoneTheFirstDayPanelsOctopusIsAtMost120PxHigh(): void
     {
         preg_match_all('/@media \(max-width: 760px\) \{(.*?)\n\}/s', $this->sheet(), $blocks);
         $rules = $this->rulesOf(implode("\n", $blocks[1]));
 
-        self::assertMatchesRegularExpression('/max-height:\s*96px;\s*width:\s*auto;/', $rules['.page-head > .head-character > .character'] ?? '');
-        self::assertMatchesRegularExpression('/flex:\s*1 1 0;/', $rules['.page-head > .head-character + div'] ?? '');
+        self::assertMatchesRegularExpression('/max-height:\s*120px;/', $rules['.firstday > .character'] ?? '');
     }
 
-    public function testABoardWithACardKeepsTheWrapRuleOnTheTitleColumnBehindTheHiddenOctopusTarget(): void
+    // The first-day headline is a link alone in its line, so no sentence exempts it from the phone's 44 px touch target (DESIGN.md).
+    public function testOnAPhoneTheFirstDayHeadlineLinkIsAtLeast44PxTall(): void
     {
-        $rules = $this->rulesOf($this->sheet());
-        $selector = '.page-head > #board-octopus[hidden] + div';
+        preg_match_all('/@media \(max-width: 760px\) \{(.*?)\n\}/s', $this->sheet(), $blocks);
+        $rules = $this->rulesOf(implode("\n", $blocks[1]));
 
-        self::assertMatchesRegularExpression('/min-width:\s*0;\s*overflow-wrap:\s*anywhere;/', $rules[$selector] ?? '');
+        self::assertMatchesRegularExpression('/^\s*display:\s*inline-block;\s*min-height:\s*44px;\s*$/', $rules['.page-head .lead .headline-setup'] ?? '');
     }
 
     public function testAt1700WideAndUpThePagePaddingGrowsTo48(): void

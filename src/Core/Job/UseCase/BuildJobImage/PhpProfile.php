@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Job\UseCase\BuildJobImage;
 
+use Closure;
 use Composer\Semver\Constraint\Constraint;
 use Composer\Semver\Constraint\ConstraintInterface;
 use Composer\Semver\Constraint\MultiConstraint;
+use Composer\Semver\Interval;
 use Composer\Semver\Intervals;
 use Composer\Semver\VersionParser;
 use JsonException;
@@ -20,8 +22,6 @@ final readonly class PhpProfile
     private const string FILE = 'composer.json';
     private const string PLATFORM_VERSION = '/^\d+\.\d+(?:\.\d+)?$/D';
     private const string EXTENSION = '/^[a-z0-9][a-z0-9_-]*$/D';
-    // Above any patch PHP will release, so a rule that allows it allows whatever patch a moving minor tag holds.
-    private const int NEWEST_PATCH = 9999;
 
     /**
      * @param list<string> $extensions
@@ -62,41 +62,72 @@ final readonly class PhpProfile
         }
     }
 
-    // The minor's moving tag only when its newest patches meet the rule, otherwise the lowest patch the rule admits in it, so an exact or capped rule gets an image whose PHP meets it.
-    public function imageVersionIn(string $minor): ?string
+    // The moving tag only when one admitted range runs from the released patch (or, unknown, any range) to the minor's end, because the patches it will hold later are unknown; otherwise a pinned patch that meets the rule.
+    public function imageVersionIn(string $minor, ?string $released): ?string
     {
-        $parser = new VersionParser();
-        $intervals = Intervals::get(MultiConstraint::create([$parser->parseConstraints($minor.'.*'), $this->constraint]))['numeric'];
+        $intervals = $this->intervalsIn($minor.'.*');
 
         if ([] === $intervals) {
             return null;
         }
 
-        if ($this->allows($minor.'.'.self::NEWEST_PATCH)) {
+        if ($this->movingTagFits($minor, $intervals, $released)) {
             return $minor;
         }
 
-        foreach ($intervals as $interval) {
-            $lowest = $this->lowestPatchFrom($interval->getStart()->getVersion());
-
-            if (null !== $lowest) {
-                return $lowest;
-            }
-        }
-
-        return null;
+        return $this->highestPatchIn($this->intervalsIn($minor.'.*', null === $released ? '*' : '<='.$released)) ?? $this->lowestPatchIn($intervals);
     }
 
-    // The patch after the start too, because a start the rule excludes (">8.4.1") or a fourth part ("8.4.1.5") admits only the next patch.
-    private function lowestPatchFrom(string $start): ?string
+    /**
+     * @return list<Interval>
+     */
+    private function intervalsIn(string ...$bounds): array
     {
-        [$major, $minor, $patch] = array_map(intval(...), array_slice(explode('.', explode('-', $start)[0]), 0, 3));
+        $parser = new VersionParser();
 
-        foreach ([$patch, $patch + 1] as $candidate) {
-            $version = sprintf('%d.%d.%d', $major, $minor, $candidate);
+        return array_values(Intervals::get(MultiConstraint::create([...array_map($parser->parseConstraints(...), $bounds), $this->constraint]))['numeric']);
+    }
 
-            if ($this->allows($version)) {
-                return $version;
+    /**
+     * @param list<Interval> $intervals
+     */
+    private function movingTagFits(string $minor, array $intervals, ?string $released): bool
+    {
+        $minorEnd = (string) array_last(Intervals::get(new VersionParser()->parseConstraints($minor.'.*'))['numeric'])?->getEnd();
+
+        return array_any($intervals, fn (Interval $interval): bool => (string) $interval->getEnd() === $minorEnd
+            && (null === $released || $interval->getStart()->matches(new Constraint('==', new VersionParser()->normalize($released)))));
+    }
+
+    /**
+     * @param list<Interval> $intervals
+     */
+    private function highestPatchIn(array $intervals): ?string
+    {
+        return $this->firstPatchNear(array_reverse($intervals), fn (Interval $interval): Constraint => $interval->getEnd(), -1);
+    }
+
+    /**
+     * @param list<Interval> $intervals
+     */
+    private function lowestPatchIn(array $intervals): ?string
+    {
+        return $this->firstPatchNear($intervals, fn (Interval $interval): Constraint => $interval->getStart(), 1);
+    }
+
+    /**
+     * @param list<Interval>                $intervals
+     * @param Closure(Interval): Constraint $edge
+     */
+    private function firstPatchNear(array $intervals, Closure $edge, int $step): ?string
+    {
+        foreach ($intervals as $interval) {
+            [$major, $minor, $patch] = array_map(intval(...), array_slice(explode('.', explode('-', $edge($interval)->getVersion())[0]), 0, 3));
+            // The neighbor too, because an edge the rule excludes ("<8.4.20", ">8.4.1") or a fourth part ("8.4.1.5") admits only the patch next to it.
+            $near = array_find([sprintf('%d.%d.%d', $major, $minor, $patch), sprintf('%d.%d.%d', $major, $minor, $patch + $step)], $this->allows(...));
+
+            if (null !== $near) {
+                return $near;
             }
         }
 

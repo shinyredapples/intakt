@@ -108,6 +108,11 @@ final class DashboardLedger implements Ledger
         $this->add(LedgerEventKind::ReviewerFailed, $this->reviewer($round, $role) + ['failure' => $failure]);
     }
 
+    public function blockReviewer(string $round, string $role, string $reason): void
+    {
+        $this->add(LedgerEventKind::ReviewerBlocked, $this->reviewer($round, $role) + ['reason' => $reason]);
+    }
+
     public function owesCatchUp(string $round, string $role): void
     {
         $this->add(LedgerEventKind::CatchUpOwed, $this->reviewer($round, $role) + ['substitute' => 'openai']);

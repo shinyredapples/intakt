@@ -11,6 +11,7 @@ use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
+use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\DroppedFinding;
 use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\QuorumPolicy;
@@ -37,20 +38,27 @@ final readonly class RoundLedgerReading implements RoundCosts
     ) {
     }
 
-    /**
-     * @return list<string>
-     */
-    public function actIdsOf(string $roundId): array
+    // Null until the judge has answered; the act list is built from the whole record, because its act ids, cause links and notes belong together.
+    public function judgeDoneOf(string $roundId): ?JudgeDone
     {
-        return $this->judgeDoneOf($roundId)->act ?? [];
+        foreach ($this->ledger->readOfKind(LedgerEventKind::JudgeDone) as $recorded) {
+            $judged = $this->payloads->of($recorded, JudgeDone::class);
+
+            if ($roundId === $judged?->round) {
+                return $judged;
+            }
+        }
+
+        return null;
     }
 
+    // All of the round's votes at once, because a read per reviewer would scan the judge events once for each; none for a round judged before votes were counted, so its reviewers vote as their verdicts were given.
     /**
-     * @return array<string, string>
+     * @return array<string, Decision>
      */
-    public function sameCauseOf(string $roundId): array
+    public function votesOf(string $roundId): array
     {
-        return $this->judgeDoneOf($roundId)->sameCause ?? [];
+        return $this->judgeDoneOf($roundId)->votes ?? [];
     }
 
     /**
@@ -129,19 +137,6 @@ final readonly class RoundLedgerReading implements RoundCosts
         $models = $this->callsStartedFor($roundId, $recorded);
 
         return array_reduce($recorded, fn (Cost $sum, RecordedEvent $row): Cost => $sum->plus($this->costOfEnding($row, $models)), Cost::none());
-    }
-
-    private function judgeDoneOf(string $roundId): ?JudgeDone
-    {
-        foreach ($this->ledger->readOfKind(LedgerEventKind::JudgeDone) as $recorded) {
-            $judged = $this->payloads->of($recorded, JudgeDone::class);
-
-            if ($roundId === $judged?->round) {
-                return $judged;
-            }
-        }
-
-        return null;
     }
 
     /**

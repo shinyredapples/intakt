@@ -16,7 +16,7 @@ use Symfony\Component\Serializer\Normalizer\NormalizerAwareInterface;
 use Symfony\Component\Serializer\Normalizer\NormalizerAwareTrait;
 use Symfony\Component\Serializer\Normalizer\NormalizerInterface;
 
-// Only on the stored serializer, because Finding::$merged is ignored for the model's schema and answer but must survive in stored JSON.
+// Only on the stored serializer, because Finding::$merged and Finding::judgeNote() are ignored for the model's schema and answer but must survive in stored JSON.
 #[AutoconfigureTag('serializer.normalizer', ['serializer' => 'stored'])]
 final class StoredFindingNormalizer implements NormalizerInterface, DenormalizerInterface, NormalizerAwareInterface, DenormalizerAwareInterface
 {
@@ -24,6 +24,7 @@ final class StoredFindingNormalizer implements NormalizerInterface, Denormalizer
     use NormalizerAwareTrait;
 
     private const string MERGED = 'merged';
+    private const string JUDGE_NOTE = 'judge_note';
     private const string INNER = 'intakt_stored_finding_inner';
 
     /**
@@ -42,11 +43,17 @@ final class StoredFindingNormalizer implements NormalizerInterface, Denormalizer
             throw new LogicException(sprintf('A "%s" did not normalize to an array.', Finding::class));
         }
 
-        if (!$this->writesMerged($context)) {
-            return $normalized;
+        if ($this->writes(self::MERGED, $context)) {
+            $normalized[self::MERGED] = $data->merged;
         }
 
-        return [...$normalized, self::MERGED => $data->merged];
+        // Left out when there is none, so a finding without a note is written as before the note existed.
+        $note = $data->judgeNote();
+        if (null !== $note && $this->writes(self::JUDGE_NOTE, $context)) {
+            $normalized[self::JUDGE_NOTE] = $note;
+        }
+
+        return $normalized;
     }
 
     /**
@@ -68,12 +75,15 @@ final class StoredFindingNormalizer implements NormalizerInterface, Denormalizer
 
         // Read as none when the key is missing, because every row stored before merged ids existed lacks it.
         $merged = array_key_exists(self::MERGED, $data) ? $this->idsIn($data[self::MERGED]) : [];
-        unset($data[self::MERGED]);
+        $note = $this->noteIn($data[self::JUDGE_NOTE] ?? null);
+        unset($data[self::MERGED], $data[self::JUDGE_NOTE]);
 
-        return $this->denormalizer->denormalize($data, Finding::class, $format, [...$context, self::INNER => true])->withMerged($merged);
+        $finding = $this->denormalizer->denormalize($data, Finding::class, $format, [...$context, self::INNER => true])->withMerged($merged);
+
+        return null === $note ? $finding : $finding->withJudgeNote($note);
     }
 
-    // Arrays only, because the reviewer's answer is decoded into objects and must stay refused when it names merged ids.
+    // Arrays only, because the reviewer's answer is decoded into objects and must stay refused when it names merged ids or a judge note.
     /**
      * @param array<string, mixed> $context
      */
@@ -91,13 +101,13 @@ final class StoredFindingNormalizer implements NormalizerInterface, Denormalizer
     /**
      * @param array<string, mixed> $context
      */
-    private function writesMerged(array $context): bool
+    private function writes(string $field, array $context): bool
     {
         $only = $context[AbstractNormalizer::ATTRIBUTES] ?? null;
         $left = $context[AbstractNormalizer::IGNORED_ATTRIBUTES] ?? [];
 
-        return (!is_array($only) || in_array(self::MERGED, $only, true) || array_key_exists(self::MERGED, $only))
-            && (!is_array($left) || !in_array(self::MERGED, $left, true));
+        return (!is_array($only) || in_array($field, $only, true) || array_key_exists($field, $only))
+            && (!is_array($left) || !in_array($field, $left, true));
     }
 
     // A stored row is read back as data, so merged ids that are not a list of strings fail instead of reading as none.
@@ -125,5 +135,15 @@ final class StoredFindingNormalizer implements NormalizerInterface, Denormalizer
     private function notIds(): UnexpectedValueException
     {
         return new UnexpectedValueException('The merged ids of a stored finding must be a list of strings.');
+    }
+
+    // A missing or null note reads as none, because every row stored before the note existed lacks it; any other value fails instead of reading as none.
+    private function noteIn(mixed $note): ?string
+    {
+        if (null === $note || is_string($note)) {
+            return $note;
+        }
+
+        throw new UnexpectedValueException('The judge note of a stored finding must be a string.');
     }
 }

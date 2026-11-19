@@ -19,6 +19,7 @@ use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\IgnoredProgress;
 use Intakt\Core\Review\Contract\JudgedFinding;
+use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\Judgement;
 use Intakt\Core\Review\Contract\Mark;
 use Intakt\Core\Review\Contract\Panel;
@@ -123,7 +124,7 @@ final class MergedActEntryPageTest extends WebTestCase
     public function testThreeReviewersReportingOnePlaceShowTheEntryTheStoredActListHolds(): void
     {
         $review = $this->reviewed([$this->findingAt('A', Severity::P2), $this->findingAt('B', Severity::P2), $this->findingAt('C', Severity::P1)]);
-        $act = $this->fixture->findingStore()->actListOf($this->fixture->round($review->roundId), $this->actIdsOf($review), []);
+        $act = $this->fixture->findingStore()->actListOf($this->fixture->round($review->roundId), $this->judgeDoneOf($review));
 
         $page = $this->browser->request('GET', '/reviews/'.$review->roundId);
 
@@ -188,12 +189,9 @@ final class MergedActEntryPageTest extends WebTestCase
         return $reviewChange->review($this->request(count($findings), $diff), new IgnoredProgress());
     }
 
-    /**
-     * @return list<string>
-     */
-    private function actIdsOf(ChangeReview $review): array
+    private function judgeDoneOf(ChangeReview $review): ?JudgeDone
     {
-        return new RoundLedgerReading($this->fixture->ledger(), $this->fixture->ledgerPayloads(), new ConfiguredPrices([]))->actIdsOf($review->roundId);
+        return new RoundLedgerReading($this->fixture->ledger(), $this->fixture->ledgerPayloads(), new ConfiguredPrices([]))->judgeDoneOf($review->roundId);
     }
 
     private function findingAt(string $id, Severity $severity): Finding
