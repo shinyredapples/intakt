@@ -44,11 +44,27 @@ final readonly class Verdict
         return clone ($this, ['findings' => $findings]);
     }
 
-    // By the finding ids the failure verdicts carry, because a reviewer that uses one of them itself gains nothing: its verdict then adds no finding and closes none.
+    // By the finding ids the failure verdicts carry, because stored verdicts hold no origin; a reviewer's answer naming one never gets here, since the reviewer refuses it (claimedFailureIds()).
     #[Ignore]
     public function isFailedReview(): bool
     {
         return array_any($this->findings, static fn (Finding $finding): bool => in_array($finding->id, self::FAILED_REVIEWS, true));
+    }
+
+    // Only a reviewer's answer can claim one, because Intakt's failure verdicts carry these ids by right and a claimed one would make a counted vote whose findings the ledger drops.
+    /**
+     * @return list<string>
+     */
+    #[Ignore]
+    public function claimedFailureIds(): array
+    {
+        if (VerdictOrigin::Intakt === $this->origin) {
+            return [];
+        }
+
+        $ids = array_map(static fn (Finding $finding): string => $finding->id, $this->findings);
+
+        return array_values(array_unique(array_intersect($ids, self::FAILED_REVIEWS)));
     }
 
     // A reviewer's own blocked that names findings asks for changes, because every view and the quorum read the stored decision; Intakt's failure verdicts stay blocked.
@@ -61,11 +77,28 @@ final readonly class Verdict
         return clone ($this, ['verdict' => Decision::Changes]);
     }
 
-    // A model can name the id too, so a caller that answers a stop request also checks the ledger for one.
+    // The first finding of a blocked verdict says why, because a recorded blocked verdict is one Intakt gave, and each of those holds its reason in its one finding.
+    #[Ignore]
+    public function blockedReason(): ?string
+    {
+        return Decision::Blocked === $this->verdict ? array_first($this->findings)?->text : null;
+    }
+
+    // The id alone proves no stop, so a caller that answers a stop request also checks the ledger for one.
     #[Ignore]
     public function isStopped(): bool
     {
         return Decision::Blocked === $this->verdict && array_any($this->findings, static fn (Finding $finding): bool => self::REVIEWER_STOPPED === $finding->id);
+    }
+
+    // An approval, or a changes verdict of P3 findings only, which the quorum counts as approval when the judge defers or rejects them all; the guards that refuse an approval refuse both, because the judge's marks come only after them. It reads the verdict as recorded, because a reviewer's blocked with findings is recorded as changes after the guards ran.
+    #[Ignore]
+    public function mayCountAsApproval(): bool
+    {
+        $recorded = $this->asRecorded();
+
+        return Decision::Approve === $recorded->verdict
+            || (Decision::Changes === $recorded->verdict && [] !== $recorded->findings && !$recorded->isFailedReview() && array_all($recorded->findings, static fn (Finding $finding): bool => Severity::P3 === $finding->severity));
     }
 
     // A verdict that withholds approval names at least one finding, so a changes or blocked verdict that names none is not a valid verdict.
@@ -106,7 +139,7 @@ final readonly class Verdict
             file: null,
             line: null,
             symbol: null,
-            text: 'The reviewer approved a change it could not read: its provider gives it no access to the checkout, so the approval is refused and the review is blocked.',
+            text: 'The reviewer approved a change it could not read, or asked only for P3 changes, which can count as approval: its provider gives it no access to the checkout, so the approval is refused and the review is blocked.',
             fixable_by: FixableBy::Owner,
             repeat: false,
             requirement: 'An approval counts only from a reviewer that could read the change.',
@@ -124,7 +157,7 @@ final readonly class Verdict
             file: null,
             line: null,
             symbol: null,
-            text: 'The reviewer approved a change whose task, diff or a tool answer Intakt cut to its size limit, and nothing shows that it read the part left out, so the approval is refused and the review is blocked.',
+            text: 'The reviewer approved, or asked only for P3 changes, which can count as approval, on a change whose task, diff or a tool answer Intakt cut to its size limit, and nothing shows that it read the part left out, so the approval is refused and the review is blocked.',
             fixable_by: FixableBy::Owner,
             repeat: false,
             requirement: 'An approval counts only from a reviewer that was shown the whole change.',
