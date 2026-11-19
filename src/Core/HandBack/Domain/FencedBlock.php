@@ -41,6 +41,20 @@ final readonly class FencedBlock
         return substr($text, $start, $lineEnd - $start);
     }
 
+    // A fence is indented up to three columns from where its container's content starts, so inside a list item it may sit further right, while four or more past that column make indented code.
+    public static function opensAt(string $text, int $start): bool
+    {
+        $indent = strspn($text, ' ', $start);
+
+        if ($indent <= self::MOST_INDENT) {
+            return true;
+        }
+
+        $column = MarkdownText::lineStartAt($text, $start) === $start ? self::columnOfTheItemAbove($text, $start, $indent) : null;
+
+        return null !== $column && $indent - $column <= self::MOST_INDENT;
+    }
+
     private static function isLeftOf(?int $column, string $text, int $line): bool
     {
         $isBlank = "\n" === ($text[$line + strspn($text, self::BLANK, $line)] ?? "\n");

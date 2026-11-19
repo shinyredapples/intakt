@@ -35,6 +35,8 @@ final class ParagraphEndTest extends TestCase
     #[TestWith(["*\tb"], 'a bullet item with a tab')]
     #[TestWith(['2) b'], 'an ordered item')]
     #[TestWith(['123456789. b'], 'an ordered item with the longest number')]
+    #[TestWith(['<!-- b -->'], 'an HTML comment')]
+    #[TestWith(['  <!--'], 'an indented HTML comment that runs on')]
     public function testAParagraphEndsBeforeALineThatStartsABlock(string $line): void
     {
         self::assertSame(strlen(self::FIRST_LINE), ParagraphEnd::after(self::FIRST_LINE."\n".$line."\nrest", strlen(self::FIRST_LINE)));
@@ -51,6 +53,8 @@ final class ParagraphEndTest extends TestCase
     #[TestWith(['-b'], 'a dash without a blank after it')]
     #[TestWith(['2)b'], 'a number without a blank after it')]
     #[TestWith(['1234567890. b'], 'a number of ten digits')]
+    #[TestWith(['<!- b'], 'an opening angle bracket that is no comment')]
+    #[TestWith(['<b>'], 'an inline HTML tag')]
     public function testAParagraphRunsOnOverALineThatStartsNoBlock(string $line): void
     {
         $text = self::FIRST_LINE."\n".$line;

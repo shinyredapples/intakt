@@ -88,4 +88,20 @@ final class FencedBlockTest extends TestCase
     {
         self::assertSame("  ```\ncode\n  ```", FencedBlock::at("- one\n\ntext\n  ```\ncode\n  ```\nafter", 12));
     }
+
+    #[TestWith(["   ```", 0], 'three spaces outside any item')]
+    #[TestWith(["10. a\n\n    ```", 7], 'at the content column of a two-digit item')]
+    #[TestWith(["10. a\n\n       ```", 7], 'three spaces past the content column of a two-digit item')]
+    public function testAFenceIndentedUpToThreeColumnsPastItsContainersContentOpens(string $text, int $start): void
+    {
+        self::assertTrue(FencedBlock::opensAt($text, $start));
+    }
+
+    #[TestWith(["    ```", 0], 'four spaces outside any item')]
+    #[TestWith(["- a\n\n      ```", 5], 'four spaces past the content column of an item')]
+    #[TestWith(["a\n\n    ```", 3], 'four spaces below a paragraph')]
+    public function testAFenceIndentedFourColumnsPastItsContainersContentOpensNone(string $text, int $start): void
+    {
+        self::assertFalse(FencedBlock::opensAt($text, $start));
+    }
 }

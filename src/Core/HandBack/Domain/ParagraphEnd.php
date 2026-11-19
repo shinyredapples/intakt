@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Intakt\Core\HandBack\Domain;
 
-// A code span cannot run past its paragraph, and a paragraph ends not only at a blank line: a heading, a setext underline, a fence, a thematic break and a list item each start a block of their own (https://spec.commonmark.org/0.31.2/#paragraphs). Such a line counts at any indent, because inside a list item it is indented to the item's content, and ending a span too early only hides more.
+// A code span cannot run past its paragraph, and a paragraph ends not only at a blank line: a heading, a setext underline, a fence, a thematic break, a list item and an HTML comment each start a block of their own (https://spec.commonmark.org/0.31.2/#paragraphs, https://spec.commonmark.org/0.31.2/#html-blocks). Such a line counts at any indent, because inside a list item it is indented to the item's content, and ending a span too early only hides more.
 final readonly class ParagraphEnd
 {
     private const string BLANK = " \t";
+
+    private const string COMMENT_START = '<!--';
 
     private const int LONGEST_HEADING_RUN = 6;
 
@@ -43,6 +45,7 @@ final readonly class ParagraphEnd
             '-' => self::isRule($text, $at, 1) || self::markerLengthAt($text, $at) > 0,
             '*' => self::isRule($text, $at, 3) || self::markerLengthAt($text, $at) > 0,
             '_' => self::isRule($text, $at, 3),
+            '<' => 0 === substr_compare($text, self::COMMENT_START, $at, strlen(self::COMMENT_START)),
             default => self::markerLengthAt($text, $at) > 0,
         };
     }

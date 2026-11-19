@@ -206,6 +206,32 @@ final class PullRequestTextRuleTest extends TestCase
         self::assertSame([1], PullRequestTextRule::judge("## Evidence\n- E1. output", "10. ```\n    Example\n    ```\n    <!-- E1 -->")->missingItems);
     }
 
+    public function testACommentLineAfterAStrayBacktickIsHidden(): void
+    {
+        self::assertSame([1], PullRequestTextRule::judge("## Evidence\n- E1. output", "Intro `\n<!-- E1 -->\n`")->missingItems);
+    }
+
+    #[TestWith(['```'], 'backticks')]
+    #[TestWith(['~~~'], 'tildes')]
+    public function testAReferenceInAFenceAtTheContentColumnOfATwoDigitItemCounts(string $fence): void
+    {
+        self::assertSame([], PullRequestTextRule::judge("## Evidence\n- E1. output", "10. Example\n\n    {$fence}\n    <!-- E1 -->\n    {$fence}")->missingItems);
+    }
+
+    #[TestWith(['```'], 'backticks')]
+    #[TestWith(['~~~'], 'tildes')]
+    public function testAFenceIndentedFourColumnsPastItsItemsContentOpensNoFence(string $fence): void
+    {
+        self::assertSame([1], PullRequestTextRule::judge("## Evidence\n- E1. output", "- Example\n\n      {$fence}\n  <!-- E1 -->")->missingItems);
+    }
+
+    #[TestWith(['```'], 'backticks')]
+    #[TestWith(['~~~'], 'tildes')]
+    public function testAFenceIndentedFourSpacesOutsideAnyItemOpensNoFence(string $fence): void
+    {
+        self::assertSame([1], PullRequestTextRule::judge("## Evidence\n- E1. output", "Intro\n\n    {$fence}\n\n<!-- E1 -->")->missingItems);
+    }
+
     public function testAReferenceInAFenceOpenedAfterATabbedMarkerCounts(): void
     {
         self::assertSame([], PullRequestTextRule::judge("## Evidence\n- E1. output", "-\t```\n\t<!-- E1 -->\n\n\t```")->missingItems);
