@@ -41,7 +41,7 @@ The words used across Intakt's guides and dashboard, in plain terms. Each entry 
 | **Lock** | a "one at a time" sign on something two jobs must not use together | [engine room](the-engine-room.md#locks-one-at-a-time) |
 | **Log** | Intakt's own record of its warnings and errors, one line each, with the secrets Intakt knows about written as `[redacted]` | [why isn't anything happening](why-isnt-anything-happening.md#reading-intakts-log) |
 | **Main** | the official version of your project | |
-| **Maintainer agent** | the AI agent that settles stuck work, so it rarely reaches you | [how it works](how-intakt-works.md#what-needs-you-and-what-doesnt) |
+| **Maintainer agent** | the AI agent that settles stuck work, so it rarely reaches you, and looks at speed and quality every week (planned) | [how it works](how-intakt-works.md#what-needs-you-and-what-doesnt) |
 | **MCP** | a standard way for AI assistants to use tools | [assistant](using-intakt-from-your-assistant.md) |
 | **Memory limit** | how much memory a job and the programs it runs may use before they are stopped | [containers](containers-and-services.md#when-a-job-runs-out-of-memory) |
 | **Merge** | adding a pull request's change to main | [journey](the-journey-of-a-task.md#6-merging) |
