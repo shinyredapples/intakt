@@ -1,0 +1,17 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+final class Mailer
+{
+    private static int $sent = 0;
+
+    public function send(string $body): string
+    {
+        ++self::$sent;
+
+        return strtoupper($body);
+    }
+}

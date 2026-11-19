@@ -1,0 +1,12 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+abstract class Shape
+{
+    protected static int $drawn = 0;
+
+    abstract public function area(): float;
+}
