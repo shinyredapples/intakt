@@ -66,7 +66,7 @@ Intakt's own checks run on GitHub's machines by default. Whoever maintains a cop
 
 `CI_RUNS_ON` also leaves alone the job that builds and starts the demo on an ARM machine after every merge: it stays on GitHub's ARM machine unless the separate variable `CI_ARM_RUNS_ON` names another one.
 
-If CI never starts (GitHub occasionally misses an update), Intakt notices after a few minutes, nudges GitHub once, and alerts the maintainer agent if that didn't help. A wait for CI never blocks a bench: the work is parked and the bench takes the next job.
+If CI never starts (GitHub occasionally misses an update), Intakt notices after a few minutes, nudges GitHub once, and alerts the maintainer agent if that didn't help. *(Planned:)* first it looks at the pull request once: if the change clashes with the newest main, it goes back to a builder to join the two, except a clash only in the project's shared lists (such as the lock file), which Intakt joins itself and checks before it sends the result. A wait for CI never blocks a bench: the work is parked and the bench takes the next job.
 
 ## Locks: one at a time
 
@@ -99,6 +99,7 @@ flowchart LR
 - A task gets a **limited number of cycles**, so a change that keeps failing doesn't burn the budget forever.
 - A **generation** is a set of cycles with one kind of builder. Generation 1 uses the normal model; if it runs out of cycles, **generation 2** starts with a stronger model.
 - If that doesn't work either, the **maintainer agent** decides: split the task, rewrite it, or ask you.
+- *(Planned:)* the third time a task is sent back (by reviewers, or by failing checks), it gets no further rebuild: the maintainer agent splits it into smaller tasks, once. If its open problems give no way to split it, the maintainer agent rewrites what the task must do or gives it one more try with a stronger model. A task that was already split this way is never split by this rule again.
 
 A cycle that changes nothing (the builder couldn't fix the problem because it needs something outside the task) doesn't loop: the task goes **on hold** instead ([holds](how-intakt-works.md#when-something-gets-stuck)).
 
