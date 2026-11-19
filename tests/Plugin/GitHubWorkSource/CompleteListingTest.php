@@ -193,7 +193,7 @@ final class CompleteListingTest extends KernelTestCase
         $this->reads->lists([Issues::task(1)]);
 
         self::assertInstanceOf(OpenItems::class, $this->tick());
-        self::assertSame(0, (int) $this->entities->getConnection()->fetchOne('SELECT COUNT(*) FROM work_source_failure WHERE project = ?', ['beta']));
+        self::assertSame([], $this->entities->getConnection()->fetchFirstColumn('SELECT number FROM work_source_failure WHERE project = ?', ['beta']));
     }
 
     public function testAListingWhileAnotherOfTheSameProjectRunsReadsNothing(): void

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\GitHubWorkSource\Infrastructure;
 
+use Doctrine\Common\EventManager;
 use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
@@ -79,14 +80,16 @@ final readonly class IntakeSnapshots
     // Its own unit of work for every tick, so the tick writes only its listing, a short listing leaves the caller's pending work for the caller's flush, and a worker that keeps its entity manager between ticks never answers from rows another listing has replaced since.
     private function ownUnitOfWork(): EntityManagerInterface
     {
-        return new EntityManager($this->entities->getConnection(), $this->entities->getConfiguration(), $this->entities->getEventManager());
+        $events = $this->entities->getEventManager();
+
+        return new EntityManager($this->entities->getConnection(), $this->entities->getConfiguration(), $events instanceof EventManager ? $events : null);
     }
 
     private function namesEachItemOnce(IssueListing $listing): bool
     {
         $numbers = array_map(static fn (ListedIssue $issue): int => $issue->number, $listing->issues());
 
-        return \count($numbers) === \count(array_unique($numbers));
+        return count($numbers) === count(array_unique($numbers));
     }
 
     /**
@@ -101,7 +104,15 @@ final readonly class IntakeSnapshots
 
         $kept = [];
         foreach ($listing->issues() as $listed) {
-            $kept[$listed->number] = $this->seen($project, $rows[$listed->number] ?? null, $listed, $entities);
+            $row = $rows[$listed->number] ?? null;
+            if (!$row instanceof StoredItem) {
+                $row = new StoredItem($project, $listed->number, $listed);
+                $entities->persist($row);
+            } else {
+                $this->seen($row, $listed);
+            }
+
+            $kept[$listed->number] = $row;
         }
 
         // The failure of a closed task stays in its own table, so its dependents stay held.
@@ -114,24 +125,15 @@ final readonly class IntakeSnapshots
         return array_values($kept);
     }
 
-    private function seen(string $project, ?StoredItem $row, ListedIssue $listed, EntityManagerInterface $entities): StoredItem
+    private function seen(StoredItem $row, ListedIssue $listed): void
     {
-        if (!$row instanceof StoredItem) {
-            $row = new StoredItem($project, $listed->number, $listed);
-            $entities->persist($row);
-
-            return $row;
-        }
-
         if ($row->isStillAt($listed)) {
             $row->dueOn($listed->milestoneDue);
 
-            return $row;
+            return;
         }
 
         $row->see($listed);
-
-        return $row;
     }
 
     // Read again from the text on every tick and never stored, so the eligibility label and the reference rules of today apply to rows stored before.
