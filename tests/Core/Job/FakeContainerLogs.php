@@ -42,9 +42,11 @@ final class FakeContainerLogs
     // Framed as the engine frames the log of a container without a terminal (the stream, three zero bytes, the length, the chunk), so the client's frame reading is exercised; only the stream the call asks for is sent, as the engine does.
     public function answer(FakeContainer $container, array $query): MockResponse
     {
-        $framed = str_starts_with($container->name, 'intakt-egress-')
-            ? $this->framedIf('stdout', $query, 1, $this->proxyLogs[$container->job] ?? '')
-            : $this->framedIf('stderr', $query, 2, $this->standardErrors[$container->job] ?? self::PASSED_START_CHECK);
+        $proxy = str_starts_with($container->name, 'intakt-egress-');
+        $stream = $proxy ? 1 : 2;
+        $asked = 'true' === ($query[$proxy ? 'stdout' : 'stderr'] ?? null);
+        $log = $proxy ? $this->proxyLogs[$container->job] ?? '' : $this->standardErrors[$container->job] ?? self::PASSED_START_CHECK;
+        $framed = $asked ? $this->framed($stream, $log) : '';
 
         if (in_array($container->job, $this->broken, true)) {
             $framed = pack('CxxxN', 1, 100).'short';
@@ -53,15 +55,8 @@ final class FakeContainerLogs
         return new MockResponse($framed, ['http_code' => 200, 'response_headers' => ['content-type' => 'application/vnd.docker.multiplexed-stream']]);
     }
 
-    /**
-     * @param array<int|string, mixed> $query
-     */
-    private function framedIf(string $asked, array $query, int $stream, string $log): string
+    private function framed(int $stream, string $log): string
     {
-        if ('true' !== ($query[$asked] ?? null)) {
-            return '';
-        }
-
         $lines = preg_split('/(?<=\n)/', $log, flags: PREG_SPLIT_NO_EMPTY);
 
         return implode('', array_map(static fn (string $line): string => pack('CxxxN', $stream, strlen($line)).$line, false === $lines ? [] : $lines));
