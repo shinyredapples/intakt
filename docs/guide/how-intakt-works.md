@@ -112,8 +112,8 @@ You never approve a merge whose checks are failing: Intakt asks you to approve t
 ## Updates from a dependency bot
 
 A dependency bot is a helper on GitHub (such as Dependabot) that opens pull requests to update the packages your project uses. Intakt handles these updates on their own path, not as tasks (planned: not built yet):
-- **No label needed.** Intakt picks up the bot's pull requests by itself. It only changes the package list and the files that pin the exact versions; a pull request that changes anything else gets one comment and is left alone.
-- **Checked like any change.** Your project's checks and the review panel look at it as usual, but the builder never edits it. When the update falls behind the newest project, the bot brings it up to date itself.
+- **No label needed.** Intakt picks up the bot's pull requests by itself. It may only change the package list, the files that pin the exact package versions, and the lines of your CI setup that pin the versions of the CI's own building blocks (GitHub calls them actions); a pull request that changes anything else gets one comment and is left alone.
+- **Checked like any change.** Your project's checks and the review panel look at it as usual, but the builder never edits it. When the update falls behind your project's latest version, the bot brings it up to date itself.
 - **You approve it once.** No person asked for this change, so your approval is always needed before it merges, once the checks are green and every reviewer agrees. Your answer still counts for a newer version of the bot's pull request that updates the same packages in the same way.
 - **A failing check becomes an urgent task.** If the update breaks a check, Intakt writes one urgent task to fix it, and looks at the update again once that fix is merged.
 - **It lands through GitHub's own merge button.** Intakt merges it the way you would by hand, so GitHub shows it as merged and the bot keeps the credit, and Intakt records the merge as its own.
