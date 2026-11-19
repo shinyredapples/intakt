@@ -123,12 +123,81 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         self::assertSame('0', $this->browser->request('GET', '/')->filter('.board')->attr('tabindex'));
     }
 
-    public function testABoardAfterAReviewShowsNoOctopus(): void
+    public function testAnIdleBoardShowsTheAsleepOctopusInEachThemeAsDecoration(): void
     {
         $this->ledger->startRoundOf('42', 'round-1', 1);
         $this->ledger->judgeRound('round-1');
 
+        $images = $this->browser->request('GET', '/')->filter('div.asleep#board-octopus:not([hidden]) > img.character');
+
+        self::assertSame([['', '144'], ['', '144']], $images->each(static fn (Crawler $image): array => [$image->attr('alt'), $image->attr('height')]));
+        self::assertSame(1, preg_match('~octopus-asleep-light[^"]*\.webp$~', $images->eq(0)->attr('src') ?? ''));
+        self::assertSame(1, preg_match('~octopus-asleep-dark[^"]*\.webp$~', $images->eq(1)->attr('src') ?? ''));
+    }
+
+    public function testABoardWithARunningReviewShowsNoOctopus(): void
+    {
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+
         self::assertSame(0, $this->browser->request('GET', '/')->filter('img[src*="octopus-"]')->count());
+    }
+
+    public function testABuildInFlightShowsNoOctopus(): void
+    {
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+        $this->ledger->judgeRound('round-1');
+        $this->ledger->passBuildStep('alpha', 'task-7', 'build_job');
+
+        self::assertSame(0, $this->browser->request('GET', '/')->filter('img[src*="octopus-"]')->count());
+    }
+
+    public function testABuildInFlightKeepsTheHeadlineFromSayingNothingIsRunning(): void
+    {
+        $this->ledger->passBuildStep('alpha', 'task-7', 'task');
+
+        self::assertSame('A build is running. Nothing needs you.', $this->browser->request('GET', '/')->filter('.page-head .lead')->text());
+    }
+
+    public function testATaskWhoseLatestStepFailedWithNoCardShowsTheAsleepOctopus(): void
+    {
+        $this->ledger->passBuildStep('alpha', 'task-7', 'task');
+        $this->ledger->failBuildStep('task-7', 'mirror', 'The mirror could not fetch.');
+
+        self::assertSame(2, $this->browser->request('GET', '/')->filter('#board-octopus img[src*="octopus-asleep-"]')->count());
+    }
+
+    public function testATaskWhosePushPassedWithNoCardShowsTheAsleepOctopus(): void
+    {
+        $this->ledger->passBuildStep('alpha', 'task-7', 'pre_push_check');
+        $this->ledger->passBuildStep('alpha', 'task-7', 'push');
+
+        self::assertSame(2, $this->browser->request('GET', '/')->filter('#board-octopus img[src*="octopus-asleep-"]')->count());
+    }
+
+    public function testAnInstallWithRecordedBuildWorkIsPastItsFirstDay(): void
+    {
+        $this->ledger->failBuildStep('task-7', 'task', 'The task could not be read.');
+
+        $page = $this->browser->request('GET', '/');
+
+        self::assertSame([0, 0], [$page->filter('.firstday')->count(), $page->filter('#board-setup:not([hidden])')->count()]);
+        self::assertSame('Nothing is running. Nothing needs you.', $page->filter('.page-head .lead')->text());
+        self::assertSame(2, $page->filter('#board-octopus img[src*="octopus-asleep-"]')->count());
+    }
+
+    public function testAnIdleProjectBesideABusyOneCarriesTheAsleepOctopusHiddenForTheProjectFilter(): void
+    {
+        $this->ledger->startRound('round-1', 'alpha');
+        $this->ledger->judgeRound('round-1');
+        $this->ledger->startRound('round-2', 'beta');
+        $this->ledger->startRound('round-3', 'gamma');
+        $this->ledger->judgeRound('round-3');
+        $this->ledger->passBuildStep('gamma', 'task-7', 'clone');
+
+        $octopus = $this->browser->request('GET', '/')->filter('div.asleep#board-octopus[hidden]');
+
+        self::assertSame('["alpha"]', $octopus->attr('data-idle-projects'));
+        self::assertSame(2, $octopus->filter('img[src*="octopus-asleep-"]')->count());
     }
 
     public function testADemoInstallWithoutAReviewOpensOnTheFirstRunPage(): void

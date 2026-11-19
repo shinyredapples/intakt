@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\Infrastructure;
 
+use Intakt\Core\Build\Contract\BuildStep;
+use Intakt\Core\Build\Contract\BuildStepOutcome;
 use Intakt\Core\Dashboard\Domain\Board;
+use Intakt\Core\Dashboard\Domain\BuildTask;
 use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\ReviewerOutcome;
@@ -27,6 +30,7 @@ final readonly class LedgerReviewPages
         private FailureInWords $failures,
         private RoundEndings $endings,
         private ReplayMarks $marks,
+        private LedgerBuildSteps $buildSteps = new LedgerBuildSteps(),
     ) {
     }
 
@@ -89,7 +93,19 @@ final readonly class LedgerReviewPages
 
     public function boardOf(RecordedEvents $events): Board
     {
-        return new Board($this->rounds($events)->reviews());
+        return new Board($this->rounds($events)->reviews(), $this->tasks($events));
+    }
+
+    // A task is in flight while its latest step passed short of the push, because a build run stops at its first failed step and ends with its push, so either leaves the task at rest (#2732).
+    /**
+     * @return list<BuildTask>
+     */
+    private function tasks(RecordedEvents $events): array
+    {
+        return array_map(
+            static fn (array $step): BuildTask => new BuildTask($step['project'], $step['task'], BuildStepOutcome::Passed->value === $step['outcome'] && BuildStep::Push->value !== $step['step']),
+            $this->buildSteps->in($events),
+        );
     }
 
     private function rounds(RecordedEvents $events): LedgerRounds

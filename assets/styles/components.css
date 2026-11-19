@@ -495,6 +495,10 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
 .firstday > .character { max-height: 144px; width: auto; }
 .firstday h2 { margin: 0 0 var(--s8); }
 .firstday ol { margin: 0; padding-left: var(--s24); display: grid; gap: var(--s4); }
+/* The idle board's asleep octopus, decorative and capped under the 160 px the mascot decision allows on a desktop. */
+.asleep { margin: var(--s8) 0 var(--s16); }
+.asleep[hidden] { display: none; }
+.asleep > .character { max-height: 144px; width: auto; }
 /* The mock's phone head: a closer gap under the headline, so the board's first lane stays in view. */
 @media (max-width: 760px) {
   .page-head { margin-bottom: var(--s16); }
@@ -502,6 +506,7 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
   /* Smaller on a phone, so the steps start in the first screen under the head. */
   .firstday { padding: var(--s16); }
   .firstday > .character { max-height: 120px; }
+  .asleep > .character { max-height: 120px; }
   .headline-long { display: none; }
   .headline-short { display: inline; }
   /* The first-day headline is a link alone in its line, so no sentence exempts it from the phone's 44 px touch target (DESIGN.md). */
