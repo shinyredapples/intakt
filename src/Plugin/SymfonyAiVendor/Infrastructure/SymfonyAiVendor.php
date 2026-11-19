@@ -17,7 +17,6 @@ use Intakt\Core\Ai\Contract\TierInvoker;
 use Intakt\Core\Ai\Contract\TierNotMapped;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Review\Contract\ChangesWithoutFindings;
-use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Contract\Judge;
 use Intakt\Core\Review\Contract\Judgement;
@@ -303,7 +302,7 @@ final readonly class SymfonyAiVendor implements Vendor
     // Decided here in plain code, because a reviewer that never saw the change can still answer approve; per call, because a subscription CLI reads the change only through the review server this call gave it.
     private function readOrRefused(TierRoutedPlatform $platform, Verdict $verdict): Verdict
     {
-        if (Decision::Approve !== $verdict->verdict || $platform->answering->provider->readsTheCheckout()) {
+        if (!$verdict->mayCountAsApproval() || $platform->answering->provider->readsTheCheckout()) {
             return $verdict;
         }
 
