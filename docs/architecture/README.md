@@ -11,7 +11,7 @@ Code and conventions:
 - [Build clone](build-clone.md)
 - [Branch push](branch-push.md)
 - [Hand-back checks](hand-back.md): the bundle a build returns, refused when it touches main, is not a fast-forward, holds a merge or a secret, stripped of attribution and redacted of mounted credentials; the pull request text scanned too, and a failure sent back once, then handed over
-- [Check job](check-job.md): the pre-push check of an accepted bundle in a fresh clone through the gate plugin, the lost-content rule, and the verdict read from the job's output directory only
+- [Check job](check-job.md): the pre-push check of an accepted bundle in a fresh clone through the gate plugin, the lost-content rule, the verdict read from the job's output directory only, and the pull request text rule (Evidence references, body cap)
 - [Protected paths of a head](protected-paths.md): the owner's list per project, read from the whole change and each commit; unreadable counts as protected
 - [Upstream reproductions](upstream-reproductions.md)
 - [The published highlights page](highlights-page.md): where the assembled `docs/highlights.md` is published
