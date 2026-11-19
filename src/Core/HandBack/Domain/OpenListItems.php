@@ -33,7 +33,7 @@ final readonly class OpenListItems
 
         while ($nextLine < $position && $nextLine <= strlen($this->text)) {
             $lineEnd = MarkdownText::lineEndAt($this->text, $nextLine);
-            $columns = self::afterLine($columns, MarkdownText::withSpacesForTabs(substr($this->text, $nextLine, $lineEnd - $nextLine)));
+            $columns = $this->afterLine($columns, MarkdownText::withSpacesForTabs(substr($this->text, $nextLine, $lineEnd - $nextLine)));
             $nextLine = $lineEnd + 1;
         }
 
@@ -70,7 +70,7 @@ final readonly class OpenListItems
      *
      * @return list<int>
      */
-    private static function afterLine(array $columns, string $line): array
+    private function afterLine(array $columns, string $line): array
     {
         if ('' === trim($line)) {
             return $columns;
