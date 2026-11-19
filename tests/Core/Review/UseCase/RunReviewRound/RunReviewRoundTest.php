@@ -5,8 +5,12 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Review\UseCase\RunReviewRound;
 
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Evidence;
+use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\RoundOpened;
+use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\ReviewerState;
 use Intakt\Core\Review\Domain\ReviewerTransition;
@@ -184,6 +188,31 @@ final class RunReviewRoundTest extends KernelTestCase
         self::assertSame('blocked', $verdict['verdict']);
         self::assertSame(Verdict::INCOMPLETE_STREAM, $verdict['findings'][0]['id']);
         self::assertStringContainsString('The stream ended before its terminal event.', $verdict['findings'][0]['text']);
+    }
+
+    public function testAReviewerAnsweringBlockedWithFindingsIsStoredAsChanges(): void
+    {
+        $round = $this->fixture->start(1);
+        $blocked = new ScriptedVendor(verdict: new Verdict(Decision::Blocked, [new Finding(
+            id: 'F1',
+            severity: Severity::P1,
+            file: 'src/Cart.php',
+            line: 12,
+            symbol: null,
+            text: 'The total adds the discount.',
+            fixable_by: FixableBy::Builder,
+            repeat: false,
+            requirement: 'Storytelling',
+            evidence: null,
+        )], [], []));
+
+        $this->fixture->deliver($this->fixture->bus->messages[0], $blocked);
+
+        $stored = $this->fixture->round($round->id()->toRfc4122());
+        /** @var array{verdict: string, findings: list<array{id: string}>} $verdict */
+        $verdict = json_decode((string) $stored->reviewers()[0]->verdictJson(), true, 16, JSON_THROW_ON_ERROR);
+        self::assertSame('changes', $verdict['verdict']);
+        self::assertSame('F1', $verdict['findings'][0]['id']);
     }
 
     public function testAVendorFailureOutsideTheContractIsRecordedAsThatFailureAndTheRoundStillCompletes(): void

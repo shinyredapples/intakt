@@ -9,6 +9,8 @@ use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\JudgeDone;
+use Intakt\Core\Review\Contract\JudgeDoneFinding;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\ChangeFindings;
 use Intakt\Core\Review\Domain\ChangeRound;
@@ -71,16 +73,20 @@ final readonly class StoredFindings
         return $this->findingsIn($round->reportedFindingsJson());
     }
 
-    // One entry per place and per cause, because two reviewers reporting one file and line, or one change the judge linked, send the builder one fix; the act ids and the links are the judge's.
+    // One entry per place and per cause, because two reviewers reporting one file and line, or one change the judge linked, send the builder one fix; the act ids, the links and the notes are the judge's as recorded, so a note is read already redacted. None before the judge has answered.
     /**
-     * @param list<string>          $actIds
-     * @param array<string, string> $sameCause
-     *
      * @return list<Finding>
      */
-    public function actListOf(ReviewRound $round, array $actIds, array $sameCause): array
+    public function actListOf(ReviewRound $round, ?JudgeDone $judged): array
     {
-        return new OnePerPlace()->actList($this->reportedIn($round), $actIds, $sameCause);
+        if (!$judged instanceof JudgeDone) {
+            return [];
+        }
+
+        $notes = array_filter(array_column(array_map(static fn (JudgeDoneFinding $finding): array => [$finding->id, $finding->judgeNote], $judged->findings), 1, 0), static fn (?string $note): bool => null !== $note);
+        $reported = array_map(static fn (Finding $finding): Finding => isset($notes[$finding->id]) ? $finding->withJudgeNote($notes[$finding->id]) : $finding, $this->reportedIn($round));
+
+        return new OnePerPlace()->actList($reported, $judged->act, $judged->sameCause);
     }
 
     /**

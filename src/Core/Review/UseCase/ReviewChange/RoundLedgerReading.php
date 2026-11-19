@@ -37,20 +37,18 @@ final readonly class RoundLedgerReading implements RoundCosts
     ) {
     }
 
-    /**
-     * @return list<string>
-     */
-    public function actIdsOf(string $roundId): array
+    // Null until the judge has answered; the act list is built from the whole record, because its act ids, cause links and notes belong together.
+    public function judgeDoneOf(string $roundId): ?JudgeDone
     {
-        return $this->judgeDoneOf($roundId)->act ?? [];
-    }
+        foreach ($this->ledger->readOfKind(LedgerEventKind::JudgeDone) as $recorded) {
+            $judged = $this->payloads->of($recorded, JudgeDone::class);
 
-    /**
-     * @return array<string, string>
-     */
-    public function sameCauseOf(string $roundId): array
-    {
-        return $this->judgeDoneOf($roundId)->sameCause ?? [];
+            if ($roundId === $judged?->round) {
+                return $judged;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -129,19 +127,6 @@ final readonly class RoundLedgerReading implements RoundCosts
         $models = $this->callsStartedFor($roundId, $recorded);
 
         return array_reduce($recorded, fn (Cost $sum, RecordedEvent $row): Cost => $sum->plus($this->costOfEnding($row, $models)), Cost::none());
-    }
-
-    private function judgeDoneOf(string $roundId): ?JudgeDone
-    {
-        foreach ($this->ledger->readOfKind(LedgerEventKind::JudgeDone) as $recorded) {
-            $judged = $this->payloads->of($recorded, JudgeDone::class);
-
-            if ($roundId === $judged?->round) {
-                return $judged;
-            }
-        }
-
-        return null;
     }
 
     /**
