@@ -32,7 +32,6 @@ final class ReviewTrendsTest extends TestCase
         self::assertFalse($trends->anyReview);
         self::assertSame(0, $trends->roundsRun());
         self::assertNull($trends->seriousActFindings());
-        self::assertNull($trends->caughtByOneReviewerOnlyPercent());
         self::assertNull($trends->medianTimeToVerdict());
         self::assertNull($trends->costPerRound());
     }
@@ -61,23 +60,26 @@ final class ReviewTrendsTest extends TestCase
         self::assertNull(ReviewTrends::counting([$this->round('r-1', 'alpha')])->seriousActFindings());
     }
 
-    public function testAFindingThatMergedAnotherReviewersIsNotCaughtByOneReviewerOnly(): void
+    public function testAnActEntryKeptOnlyAsTheJudgesMarkGivesNoDataOnSeriousFindings(): void
     {
-        $judged = $this->judgedWith([$this->act('F1', 'P1', ['F5']), $this->act('F2', 'P2'), $this->act('F3', 'P3'), $this->act('F4', 'P2', ['F6'])]);
+        $judged = $this->judgedWith([new RoundFinding('F1', null, null)->calledBy(JudgeCall::Act)]);
 
-        self::assertSame(50, ReviewTrends::counting([$judged])->caughtByOneReviewerOnlyPercent());
+        self::assertNull(ReviewTrends::counting([$judged])->seriousActFindings());
     }
 
-    public function testAFindingKeptOnlyAsTheJudgesMarkIsLeftOutOfTheOneReviewerShare(): void
+    public function testARoundJudgedFromMarksOnlyGivesNoDataOnSeriousFindings(): void
     {
-        $judged = $this->judgedWith([$this->act('F1', 'P1'), new RoundFinding('F2', null, null)->calledBy(JudgeCall::Act)]);
+        $judged = $this->round('r-1', 'alpha')->judgedFromMarksOnly([new RoundFinding('F1', null, null)->calledBy(JudgeCall::Act)], new DateTimeImmutable('2026-10-28T11:10:00+00:00'));
 
-        self::assertSame(100, ReviewTrends::counting([$judged])->caughtByOneReviewerOnlyPercent());
+        self::assertNull(ReviewTrends::counting([$judged])->seriousActFindings());
     }
 
-    public function testWithoutActFindingsTheOneReviewerShareHasNoData(): void
+    public function testARoundWithAnUnknownSeverityOnItsActListIsLeftOutOfTheSeriousCount(): void
     {
-        self::assertNull(ReviewTrends::counting([$this->judgedWith([])])->caughtByOneReviewerOnlyPercent());
+        $known = $this->judgedWith([$this->act('F1', 'P1'), $this->act('F2', 'P2', ['F5'])]);
+        $partly = $this->round('r-2', 'alpha')->judgedWith([$this->act('F3', 'P1'), new RoundFinding('F4', null, null)->calledBy(JudgeCall::Act)], new DateTimeImmutable('2026-10-28T11:10:00+00:00'));
+
+        self::assertSame(2, ReviewTrends::counting([$known, $partly])->seriousActFindings());
     }
 
     public function testTheMedianTimeRunsFromRoundStartToTheVerdictAndSkipsUnjudgedRounds(): void

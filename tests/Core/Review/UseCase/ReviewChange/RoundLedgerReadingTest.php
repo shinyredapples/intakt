@@ -137,6 +137,19 @@ final class RoundLedgerReadingTest extends KernelTestCase
         self::assertEqualsWithDelta(2 * (100 * 2.0 + 20 * 10.0) / 1_000_000, $this->reading()->costOf(self::ROUND)->usd, 1e-12);
     }
 
+    public function testSeveralRoundsArePricedTogetherEachByItsOwnCallsAsEachAlone(): void
+    {
+        $this->recordCall('c1', self::ROUND, 'settled');
+        $this->recordCall('c2', self::OTHER_ROUND, 'settled');
+        $this->recordCall('c3', self::OTHER_ROUND, 'unsettled');
+
+        $costs = $this->reading()->costsOf([self::ROUND, self::OTHER_ROUND, 'r-without-calls']);
+
+        self::assertSame([self::ROUND, self::OTHER_ROUND, 'r-without-calls'], array_keys($costs));
+        self::assertEquals([$this->reading()->costOf(self::ROUND), $this->reading()->costOf(self::OTHER_ROUND), Cost::none()], array_values($costs));
+        self::assertEqualsWithDelta(2 * (100 * 2.0 + 20 * 10.0) / 1_000_000, $costs[self::OTHER_ROUND]->usd, 1e-12);
+    }
+
     public function testARoundWithACallOfAModelWithoutAPriceHasAnUnknownCostNamingTheModel(): void
     {
         $this->recordCall('c1', self::ROUND, 'settled');

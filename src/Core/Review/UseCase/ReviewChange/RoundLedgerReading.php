@@ -123,10 +123,39 @@ final readonly class RoundLedgerReading implements RoundCosts
     // Priced per call by the model its tier resolved to, because a round's reviewers and its judge may each run on another model, and the vendor's answer names none (Claude Code, Codex) or a dated snapshot. A call without usages is still priced, because its model's price may be unknown, and that must not read as zero. A usage without input tokens makes the cost unknown, because the output alone would read as the whole cost.
     public function costOf(string $roundId): Cost
     {
-        $recorded = $this->usageRows();
-        $models = $this->callsStartedFor($roundId, $recorded);
+        return $this->costsOf([$roundId])[$roundId];
+    }
 
-        return array_reduce($recorded, fn (Cost $sum, RecordedEvent $row): Cost => $sum->plus($this->costOfEnding($row, $models)), Cost::none());
+    /**
+     * @param list<string> $roundIds
+     *
+     * @return array<string, Cost>
+     */
+    public function costsOf(array $roundIds): array
+    {
+        $recorded = $this->usageRows();
+        $costs = array_fill_keys($roundIds, Cost::none());
+        $models = [];
+        $rounds = [];
+
+        foreach ($recorded as $row) {
+            $started = $this->payloads->of($row, UsageStarted::class);
+
+            if ('started' === $started?->phase && null !== $started->round && array_key_exists($started->round, $costs)) {
+                $models[$started->call] = $started->model;
+                $rounds[$started->call] = $started->round;
+            }
+        }
+
+        foreach ($recorded as $row) {
+            $call = $this->endingOf($row)?->call;
+
+            if (null !== $call && isset($rounds[$call])) {
+                $costs[$rounds[$call]] = $costs[$rounds[$call]]->plus($this->costOfEnding($row, $models));
+            }
+        }
+
+        return $costs;
     }
 
     /**

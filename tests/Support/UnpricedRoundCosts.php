@@ -13,4 +13,9 @@ final readonly class UnpricedRoundCosts implements RoundCosts
     {
         return Cost::none();
     }
+
+    public function costsOf(array $roundIds): array
+    {
+        return array_fill_keys($roundIds, Cost::none());
+    }
 }

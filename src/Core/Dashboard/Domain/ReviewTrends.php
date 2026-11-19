@@ -59,30 +59,16 @@ final readonly class ReviewTrends
         return count($this->rounds);
     }
 
-    // Null before any judge has ruled, because only a judged round has an act list.
+    // Counted over the judged rounds whose every act entry has a recorded severity, because an entry kept only as the judge's mark may have been a P1, and a count that skipped it would read as measured; null when no such round is left.
     public function seriousActFindings(): ?int
     {
-        $judged = $this->judgedRounds();
+        $known = array_values(array_filter($this->judgedRounds(), static fn (ReviewedRound $round): bool => array_all($round->actFindings(), static fn (RoundFinding $finding): bool => null !== $finding->severity)));
 
-        if ([] === $judged) {
+        if ([] === $known) {
             return null;
         }
 
-        return count(array_filter($this->actFindingsOf($judged), static fn (RoundFinding $finding): bool => in_array($finding->severity, self::SERIOUS, true)));
-    }
-
-    // An act entry that merged no other finding was reported once; a finding kept only as the judge's mark is left out, because without its record nobody can tell what it merged.
-    public function caughtByOneReviewerOnlyPercent(): ?int
-    {
-        $recorded = array_filter($this->actFindingsOf($this->judgedRounds()), static fn (RoundFinding $finding): bool => null !== $finding->severity);
-
-        if ([] === $recorded) {
-            return null;
-        }
-
-        $alone = array_filter($recorded, static fn (RoundFinding $finding): bool => [] === $finding->merged);
-
-        return (int) round(100 * count($alone) / count($recorded));
+        return count(array_filter($this->actFindingsOf($known), static fn (RoundFinding $finding): bool => in_array($finding->severity, self::SERIOUS, true)));
     }
 
     public function medianSecondsToVerdict(): ?int

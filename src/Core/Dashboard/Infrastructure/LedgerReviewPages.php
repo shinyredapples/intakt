@@ -70,13 +70,13 @@ final readonly class LedgerReviewPages
         return $this->rounds($this->ledger->readInOrder())->listedInStartOrder();
     }
 
-    // Read through the reviews rather than the list, because the trends count each round's cost and replay mark, which the list leaves out.
+    // Not the list's rounds, because the trends count each round's cost and replay mark, which the list leaves out.
     /**
      * @return list<ReviewedRound>
      */
     public function everyRound(): array
     {
-        return array_merge([], ...array_map(static fn (Review $review): array => $review->rounds, $this->rounds($this->ledger->readInOrder())->reviews()));
+        return $this->rounds($this->ledger->readInOrder())->everyRound();
     }
 
     // Read from the rows that name the round alone, because a live update goes out for each streamed text and must not read every start the ledger holds; the latest start wins, as on the page, and null means the reviewer has not started in that round.

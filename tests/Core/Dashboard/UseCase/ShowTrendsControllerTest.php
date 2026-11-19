@@ -70,11 +70,35 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
         self::assertSame([
             'Review rounds run' => '2',
             'P1 and P2 findings on act lists' => '2',
-            'Caught by one reviewer only' => '50%',
+            'Caught by one reviewer only' => 'No data',
             'Median time from round start to verdict' => '0 s',
             'Cost per round' => 'No data',
         ], $this->tiles($page));
         self::assertSame('2 review rounds over every project', $page->filter('.page-head .meta span')->text());
+    }
+
+    public function testTheOneReviewerTileReadsNoDataEvenWhenAnEntryMergedNoOtherFinding(): void
+    {
+        $this->ledger->startRound('r-1', 'alpha');
+        $this->ledger->judgeFindings('r-1', ['F1' => 'act']);
+
+        $page = $this->browser->request('GET', '/trends');
+
+        self::assertSame('No data', $this->tiles($page)['Caught by one reviewer only']);
+        self::assertStringContainsString('The ledger does not record which reviewer reported each finding', $page->filter('.tiles-note')->text());
+    }
+
+    public function testTheCostTileIsTheMeanOverEveryPricedRound(): void
+    {
+        self::getContainer()->set(Prices::class, new ConfiguredPrices(['model-a' => ['input' => 2.0, 'output' => 10.0, 'cache_read' => 0.2, 'cache_write' => 2.5]], '2026-11-13'));
+        $this->ledger->startRound('r-1', 'alpha');
+        $this->ledger->startRound('r-2', 'alpha');
+        $this->ledger->useTokens('r-1', 1000, 100);
+        $this->ledger->useTokens('r-2', 3000, 300);
+
+        $page = $this->browser->request('GET', '/trends');
+
+        self::assertSame(['2', '0.0060 USD'], [$this->tiles($page)['Review rounds run'], $this->tiles($page)['Cost per round']]);
     }
 
     public function testAFigureWithoutDataReadsNoDataNeverZero(): void
@@ -97,7 +121,7 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
 
         self::assertSame('0.0030 USD', $this->tiles($page)['Cost per round']);
         self::assertSame('estimated', $page->filter('.tile dt .figure-kind')->attr('data-kind'));
-        self::assertSame('Cost per round is the mean of the rounds with a known estimate, prices of 2026-11-13.', $page->filter('.tiles-note')->text());
+        self::assertStringStartsWith('Cost per round is the mean of the rounds with a known estimate, prices of 2026-11-13.', $page->filter('.tiles-note')->text());
     }
 
     public function testAReplayedReviewIsNamedInTheMetaLineAndTheChipLeavesItOut(): void

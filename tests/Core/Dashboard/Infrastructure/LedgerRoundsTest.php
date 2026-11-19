@@ -788,6 +788,18 @@ final class LedgerRoundsTest extends TestCase
         self::assertSame(0.5, $review?->rounds[0]->cost->usd);
     }
 
+    public function testEveryRoundIsPricedInOneReadOfTheReviewModulesCosts(): void
+    {
+        $costs = $this->createMock(RoundCosts::class);
+        $costs->expects($this->once())->method('costsOf')->with(['r1', 'r2'])->willReturn(['r1' => Cost::inUsd(0.5), 'r2' => Cost::inUsd(0.25)]);
+        $costs->expects($this->never())->method('costOf');
+        $this->costs = $costs;
+
+        $rounds = $this->roundsOf($this->event(LedgerEventKind::ReviewStarted, self::START), $this->event(LedgerEventKind::ReviewStarted, str_replace('"r1"', '"r2"', self::START)));
+
+        self::assertSame([['r1', 0.5], ['r2', 0.25]], array_map(static fn (ReviewedRound $round): array => [$round->round, $round->cost->usd], $rounds->everyRound()));
+    }
+
     public function testARoundTheJudgeHasNotJudgedTakesTheEndingTheReviewModuleNamesForIt(): void
     {
         $ending = new RoundEnding(RoundEnds::NoOutcomeInTime, 'no outcome in time');
@@ -820,13 +832,18 @@ final class LedgerRoundsTest extends TestCase
 
     private function reviewOf(string $round, RecordedEvent ...$events): ?Review
     {
+        return $this->roundsOf(...$events)->reviewOf($round);
+    }
+
+    private function roundsOf(RecordedEvent ...$events): LedgerRounds
+    {
         $rounds = new LedgerRounds(new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $this->costs ?? $this->noCosts(), new ChangeDecision(), new FailureInWords(), $this->endings ?? new FixedRoundEndings(), new ReplayMarks(new ReplayMarkBus()));
 
         foreach ($events as $event) {
             $rounds->add($event);
         }
 
-        return $rounds->reviewOf($round);
+        return $rounds;
     }
 
     private function quorumStart(int $reviewers, QuorumPolicy $quorum): RecordedEvent
