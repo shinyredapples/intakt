@@ -22,4 +22,12 @@ final readonly class LedgerReviews
     {
         return array_reverse(array_map(static fn (ReviewedRound $round): ReviewSummary => new ReviewSummary($round), $this->pages->listedRoundsInStartOrder()));
     }
+
+    /**
+     * @return list<string>
+     */
+    public function builtProjects(): array
+    {
+        return $this->pages->builtProjects();
+    }
 }

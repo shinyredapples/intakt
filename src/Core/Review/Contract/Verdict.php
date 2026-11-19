@@ -61,6 +61,13 @@ final readonly class Verdict
         return clone ($this, ['verdict' => Decision::Changes]);
     }
 
+    // The first finding of a blocked verdict says why, because a recorded blocked verdict is one Intakt gave, and each of those holds its reason in its one finding.
+    #[Ignore]
+    public function blockedReason(): ?string
+    {
+        return Decision::Blocked === $this->verdict ? array_first($this->findings)?->text : null;
+    }
+
     // A model can name the id too, so a caller that answers a stop request also checks the ledger for one.
     #[Ignore]
     public function isStopped(): bool
