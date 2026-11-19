@@ -181,7 +181,7 @@ final class JavaScriptCommentsTest extends TestCase
         yield 'a comment opener in a class of a pattern returned from a default case' => ["switch (n) { default: return /[// TODO inside]/.test(s); }\n"];
         yield 'a comment opener in a class of a pattern after an async function declaration with a no-break space' => ["async\u{00A0}function f() {}\n/[// TODO inside]/.test(text);\n"];
         yield 'a comment opener in a class of a pattern after an async function declaration with an ideographic space' => ["async\u{3000}function f() {}\n/[// TODO inside]/.test(text);\n"];
-        yield 'a marker after the comment start' =>["// see the TODO list\n"];
+        yield 'a marker after the comment start' => ["// see the TODO list\n"];
         yield 'a reasoned exception' => ["// TODO(#123): show the total once the forge sends it\n"];
         yield 'a marker behind a hash, which is no JavaScript comment' => ["/* # TODO is shell syntax */\n"];
         yield 'a marker in code' => ["const TODO = 1;\n"];
