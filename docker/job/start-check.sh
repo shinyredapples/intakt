@@ -4,6 +4,8 @@
 # Reads INTAKT_JOB_OUTPUT (the output directory) and INTAKT_JOB_EGRESS (the allowlisted hosts, space-separated).
 # Only shell built-ins, rm and curl, so it runs in any job image with a POSIX shell.
 set -u
+# Before any assignment, because bash as the image's sh turns allexport on when the image's environment sets SHELLOPTS=allexport, and would export the mark.
+set +a
 set -f
 
 # Kept in an unexported variable and shifted off, so the job's command never sees it and cannot forge a line that carries it.

@@ -170,6 +170,26 @@ final class StartCheckScriptTest extends TestCase
         self::assertStringNotContainsString(self::MARK, $run->getOutput());
     }
 
+    public function testAJobWhoseImageRunsBashAsItsShellWithEveryVariableExportedStillCannotSeeTheMark(): void
+    {
+        $bash = new ExecutableFinder()->find('bash');
+
+        if (null === $bash) {
+            self::markTestSkipped('This case needs bash, because only bash reads SHELLOPTS from its environment.');
+        }
+
+        // Bash under the name sh, as in an image whose /bin/sh is bash: the host's own /bin/sh may be a shell that ignores SHELLOPTS.
+        symlink($bash, $this->root.'/sh');
+        $environment = [...$this->environment(null, (string) getenv('PATH')), 'SHELLOPTS' => 'allexport'];
+
+        $run = $this->startCheckWith(['/missing', '--', '/bin/sh', '-c', 'env'], $environment, $this->root.'/sh');
+
+        self::assertSame(0, $run->getExitCode());
+        self::assertStringContainsString(self::CHECK.'reduced mode: input', $run->getErrorOutput());
+        self::assertStringContainsString('SHELLOPTS=', $run->getOutput());
+        self::assertStringNotContainsString(self::MARK, $run->getOutput());
+    }
+
     public function testEveryLineOfTheCheckCarriesTheMark(): void
     {
         $run = $this->whenTheCheckRuns([$this->root.'/input']);
@@ -192,9 +212,9 @@ final class StartCheckScriptTest extends TestCase
      * @param list<string>                $arguments
      * @param array<string, string|false> $environment
      */
-    private function startCheckWith(array $arguments, array $environment): Process
+    private function startCheckWith(array $arguments, array $environment, string $shell = '/bin/sh'): Process
     {
-        $run = new Process(['/bin/sh', '-c', $this->script(), 'intakt-start-check', self::MARK, ...$arguments], null, $environment);
+        $run = new Process([$shell, '-c', $this->script(), 'intakt-start-check', self::MARK, ...$arguments], null, $environment);
         $run->run();
 
         return $run;
