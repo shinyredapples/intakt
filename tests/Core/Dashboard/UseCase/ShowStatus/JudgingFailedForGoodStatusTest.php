@@ -4,6 +4,34 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase\ShowStatus;
 
+use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Budget\Infrastructure\ConfiguredPrices;
+use Intakt\Core\Review\Contract\ChangeDecision;
+use Intakt\Core\Review\Contract\FailureInWords;
+use Intakt\Core\Review\Contract\Panel;
+use Intakt\Core\Review\Contract\PanelReviewer;
+use Intakt\Core\Review\Contract\Panels;
+use Intakt\Core\Review\Contract\QuorumPolicy;
+use Intakt\Core\Review\Contract\ReviewerModel;
+use Intakt\Core\Review\Contract\ReviewerRole;
+use Intakt\Core\Review\UseCase\ReadVerdicts\StoredVerdicts;
+use Intakt\Core\Review\UseCase\ReviewChange\ReviewChange;
+use Intakt\Core\Review\UseCase\ReviewChange\RoundEndReasons;
+use Intakt\Core\Review\UseCase\ReviewChange\RoundLedgerReading;
+use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRound;
+use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
+use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\LocalChangeReview;
+use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\ReviewChangeCommand;
+use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\ReviewExit;
+use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\ReviewReport;
+use Intakt\Tests\Core\Git\TemporaryRepository;
+use Intakt\Tests\Core\Review\UseCase\ReviewChange\WorkerOnSleep;
+use Intakt\Tests\Support\StoredSerializerFactory;
+use Symfony\Component\Console\Application as ConsoleApplication;
+use Symfony\Component\Messenger\Handler\HandlersLocator;
+use Symfony\Component\Messenger\MessageBus;
+use Symfony\Component\Messenger\Middleware\HandleMessageMiddleware;
 use Intakt\Core\Dashboard\Domain\BoardColumn;
 use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewOutcome;
@@ -44,6 +72,10 @@ use Symfony\Component\Messenger\Stamp\RedeliveryStamp;
 #[UsesClass(LedgerReviewPages::class)]
 #[UsesClass(JudgeRound::class)]
 #[UsesClass(JudgeRoundHandler::class)]
+#[UsesClass(ReviewChange::class)]
+#[UsesClass(ReviewChangeCommand::class)]
+#[UsesClass(LocalChangeReview::class)]
+#[UsesClass(ReviewReport::class)]
 final class JudgingFailedForGoodStatusTest extends KernelTestCase
 {
     private const string TRANSPORT_DSN = 'MESSENGER_TRANSPORT_DSN';
@@ -51,6 +83,8 @@ final class JudgingFailedForGoodStatusTest extends KernelTestCase
 
     private ?string $configuredDsn;
     private RoundFixture $fixture;
+
+    private string $reviewedRound = '';
 
     protected function setUp(): void
     {
@@ -94,10 +128,95 @@ final class JudgingFailedForGoodStatusTest extends KernelTestCase
         self::assertSame(0, $this->transport('messenger.transport.failed')->getMessageCount());
     }
 
-    private function roundWhoseJudgingFailedForGood(): string
+    public function testTheReviewCommandEndsARoundWhoseJudgingFailedForGoodAsBlockedAndTheStatusShowsItFailed(): void
+    {
+        $console = $this->reviewedByTheCommand();
+
+        $lines = explode("\n", rtrim($console->getDisplay(), "\n"));
+
+        self::assertSame(ReviewExit::Blocked->value, $console->getStatusCode());
+        self::assertSame('blocked (round 1 counted)', $lines[0]);
+        self::assertContains('reason: '.RoundEndReasons::JUDGING_FAILED, $lines);
+        self::assertSame([[$this->reviewedRound, 'judging_failed']], array_map(static fn (array $outcome): array => [$outcome['round'], $outcome['end']], $this->projectInStatus('alpha')['last_outcomes']));
+    }
+
+    // Runs intakt:review on a branch of a temporary repository, with the workers answering and the judge failing for good while the command waits.
+    private function reviewedByTheCommand(): CommandTester
+    {
+        $repository = new TemporaryRepository();
+        $repository->commitFile('README.md', "base\n");
+        $repository->checkoutNewBranch(RoundFixture::CHANGE);
+        $repository->commitFile('src/Thing.php', "<?php\n");
+        $panels = self::createStub(Panels::class);
+        $panels->method('panelForChange')->willReturn($this->panel());
+        $application = new ConsoleApplication();
+        $application->addCommand(new ReviewChangeCommand(new LocalChangeReview($panels, $this->reviewChange()), new ReviewReport(StoredSerializerFactory::create())));
+        $tester = new CommandTester($application->find('intakt:review'));
+
+        try {
+            $tester->execute(['change' => RoundFixture::CHANGE, '--project' => 'alpha', '--task' => RoundFixture::TASK, '--repository' => $repository->path]);
+        } finally {
+            $repository->remove();
+        }
+
+        return $tester;
+    }
+
+    private function reviewChange(): ReviewChange
+    {
+        $fixture = $this->fixture;
+        $vendor = $this->panelAskingForChanges();
+        $work = function () use ($fixture, $vendor): void {
+            foreach ($fixture->bus->messages as $message) {
+                $fixture->deliver($message, $vendor);
+            }
+
+            foreach ($this->transport('messenger.transport.async')->all() as $queued) {
+                $judging = $queued->getMessage();
+
+                if ($judging instanceof JudgeRound && '' === $this->reviewedRound) {
+                    $this->reviewedRound = $judging->roundId;
+                    $this->giveUpJudging($judging->roundId);
+                }
+            }
+        };
+        $serializer = self::getContainer()->get('serializer.stored');
+
+        return new ReviewChange(
+            new MessageBus([new HandleMessageMiddleware(new HandlersLocator([RunReviewRound::class => [$fixture->startHandlerOn($fixture->bus)]]))]),
+            $fixture->transactions(),
+            new StoredFindings($fixture->entities, $serializer, $fixture->machine('state_machine.review_round')),
+            new RoundLedgerReading($fixture->ledger(), $fixture->ledgerPayloads(), new ConfiguredPrices([])),
+            new ChangeDecision(),
+            new StoredVerdicts($serializer),
+            new WorkerOnSleep($fixture->clock, $work),
+            new FailureInWords(),
+            $vendor,
+            $fixture->noFailedJudgings(),
+        );
+    }
+
+    private function panel(): Panel
+    {
+        $members = array_map(
+            static fn (int $number): PanelReviewer => new PanelReviewer(new ReviewerRole('role-'.$number, 'Look at part '.$number.'.'), new ReviewerModel(Tier::Standard, Provider::Anthropic), 1),
+            [1, 2],
+        );
+
+        return new Panel($members, QuorumPolicy::All);
+    }
+
+    // A finding for the judge to call, because a round whose reviewers all approve is judged without asking the judge.
+    private function panelAskingForChanges(): VerdictPerRole
     {
         $finding = new Finding('A', Severity::P1, null, null, null, 'Text of A.', FixableBy::Builder, false, null, null);
-        $panel = new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, [$finding], [], [])]);
+
+        return new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, [$finding], [], [])]);
+    }
+
+    private function roundWhoseJudgingFailedForGood(): string
+    {
+        $panel = $this->panelAskingForChanges();
         $roundId = $this->fixture->startOn($this->fixture->bus, 2);
 
         foreach ($this->fixture->bus->messages as $message) {
