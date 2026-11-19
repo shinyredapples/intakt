@@ -6,6 +6,7 @@ namespace Intakt\Tests\Plugin\PhpGate;
 
 use Composer\InstalledVersions;
 use Intakt\Plugin\Gate\Contract\DependencyStep;
+use Intakt\Plugin\PhpGate\Contract\PhpGateSteps;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -166,6 +167,128 @@ final class PhpGateDependencyStepTest extends TestCase
         self::assertStringEqualsFile($this->directory.'/vendor/fixture/git/contents.txt', 'first');
     }
 
+    public function testTheLockedInstallRefusesABranchNamedLikeASha256CommitIdInASha1RepositoryAfterTheBranchAdvanced(): void
+    {
+        $branch = str_repeat('a', 64);
+        $this->mustRun('git init -q --object-format=sha1 -b '.$branch.' package');
+        $this->gitPackage('first');
+        $this->projectWithGitSource($branch);
+        $this->mustRun('composer update --no-interaction --no-plugins --no-scripts --no-install');
+        $this->gitPackage('second');
+
+        $install = $this->runInProject($this->step->install);
+
+        self::assertFalse($install->isSuccessful());
+        self::assertStringContainsString('fixture/git was installed from source', $install->getErrorOutput());
+    }
+
+    public function testTheLockedInstallRefusesABranchNamedLikeASha1CommitIdInASha256RepositoryAfterTheBranchAdvanced(): void
+    {
+        $branch = str_repeat('b', 40);
+        $this->mustRun('git init -q --object-format=sha256 -b '.$branch.' package');
+        $this->gitPackage('first');
+        $this->projectWithGitSource($branch);
+        $this->mustRun('composer update --no-interaction --no-plugins --no-scripts --no-install');
+        $this->gitPackage('second');
+
+        $install = $this->runInProject($this->step->install);
+
+        self::assertFalse($install->isSuccessful());
+        self::assertStringContainsString('fixture/git was installed from source', $install->getErrorOutput());
+    }
+
+    public function testTheLockedInstallOfASha256GitSourceLockedToACommitStaysOnThatCommitWhenTheBranchAdvances(): void
+    {
+        $this->mustRun('git init -q --object-format=sha256 -b fixture-branch package');
+        $this->gitPackage('first');
+        $this->projectWithGitSource(trim($this->mustRun('git -C package rev-parse HEAD')));
+        $this->mustRun('composer update --no-interaction --no-plugins --no-scripts --no-install');
+        $this->gitPackage('second');
+
+        $this->mustRun($this->step->install);
+
+        self::assertStringEqualsFile($this->directory.'/vendor/fixture/git/contents.txt', 'first');
+    }
+
+    public function testTheLockedInstallComparesTheSourcesInAVendorFolderTheManifestRenamed(): void
+    {
+        $branch = str_repeat('a', 64);
+        $this->mustRun('git init -q --object-format=sha1 -b '.$branch.' package');
+        $this->gitPackage('first');
+        $this->projectWithGitSource($branch, ['vendor-dir' => 'packages']);
+        $this->mustRun('composer update --no-interaction --no-plugins --no-scripts --no-install');
+
+        $install = $this->runInProject($this->step->install);
+
+        self::assertFalse($install->isSuccessful());
+        self::assertStringContainsString('fixture/git was installed from source', $install->getErrorOutput());
+    }
+
+    public function testTheLockGuardRefusesARemoteArchiveOfABranchWithoutAChecksumBecauseTheBranchCanMove(): void
+    {
+        $this->lockFileWith(['name' => 'fixture/remote', 'version' => '1.0.0', 'dist' => [
+            'type' => 'zip', 'url' => 'https://api.github.com/repos/fixture/remote/zipball/main', 'reference' => 'main',
+        ]]);
+
+        $guard = $this->runInProject(PhpGateSteps::LOCK_GUARD);
+
+        self::assertFalse($guard->isSuccessful());
+        self::assertStringContainsString('fixture/remote', $guard->getErrorOutput());
+    }
+
+    public function testAPinnedSourceDoesNotExcuseARemoteArchiveOfABranchBecauseComposerInstallsTheArchive(): void
+    {
+        $this->lockFileWith([
+            'name' => 'fixture/remote', 'version' => '1.0.0',
+            'dist' => ['type' => 'zip', 'url' => 'https://api.github.com/repos/fixture/remote/zipball/main'],
+            'source' => ['type' => 'git', 'url' => 'https://github.com/fixture/remote.git', 'reference' => str_repeat('a', 40)],
+        ]);
+
+        $guard = $this->runInProject(PhpGateSteps::LOCK_GUARD);
+
+        self::assertFalse($guard->isSuccessful());
+        self::assertStringContainsString('fixture/remote', $guard->getErrorOutput());
+    }
+
+    public function testARemoteArchiveWhoseUrlOnlyMentionsItsCommitIdInTheQueryIsRefused(): void
+    {
+        $commit = str_repeat('a', 40);
+        $this->lockFileWith(['name' => 'fixture/remote', 'version' => '1.0.0', 'dist' => [
+            'type' => 'zip', 'url' => 'https://api.github.com/repos/fixture/remote/zipball/main?pin=/'.$commit, 'reference' => $commit,
+        ]]);
+
+        self::assertFalse($this->runInProject(PhpGateSteps::LOCK_GUARD)->isSuccessful());
+    }
+
+    public function testARemoteArchiveOverPlainHttpWithoutAChecksumIsRefused(): void
+    {
+        $commit = str_repeat('a', 40);
+        $this->lockFileWith(['name' => 'fixture/remote', 'version' => '1.0.0', 'dist' => [
+            'type' => 'zip', 'url' => 'http://api.github.com/repos/fixture/remote/zipball/'.$commit, 'reference' => $commit,
+        ]]);
+
+        self::assertFalse($this->runInProject(PhpGateSteps::LOCK_GUARD)->isSuccessful());
+    }
+
+    public function testTheLockGuardAcceptsARemoteArchiveWhoseUrlEndsInItsLockedCommitId(): void
+    {
+        $commit = str_repeat('a', 40);
+        $this->lockFileWith(['name' => 'fixture/remote', 'version' => '1.0.0', 'dist' => [
+            'type' => 'zip', 'url' => 'https://api.github.com/repos/fixture/remote/zipball/'.$commit, 'reference' => $commit, 'shasum' => '',
+        ]]);
+
+        $this->mustRun(PhpGateSteps::LOCK_GUARD);
+    }
+
+    public function testTheLockGuardAcceptsARemoteArchiveOfATagWhoseChecksumIsInTheLockFile(): void
+    {
+        $this->lockFileWith(['name' => 'fixture/remote', 'version' => '1.0.0', 'dist' => [
+            'type' => 'zip', 'url' => 'https://codeload.github.com/fixture/remote/zip/v1.0.0', 'reference' => 'v1.0.0', 'shasum' => sha1('archive'),
+        ]]);
+
+        $this->mustRun(PhpGateSteps::LOCK_GUARD);
+    }
+
     public function testTheLockedInstallAcceptsALockFileWithOnlyPinnedPackages(): void
     {
         $this->project([
@@ -223,10 +346,25 @@ final class PhpGateDependencyStepTest extends TestCase
         $this->mustRun('git -C package add contents.txt && git -C package commit -qm '.$contents);
     }
 
-    private function projectWithGitSource(string $reference): void
+    /**
+     * @param array<string, mixed> $package
+     */
+    private function lockFileWith(array $package): void
+    {
+        $this->project(['require' => [$package['name'] => '1.0.0']]);
+        new Filesystem()->dumpFile(
+            $this->directory.'/composer.lock',
+            json_encode(['packages' => [$package], 'packages-dev' => []], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES),
+        );
+    }
+
+    /**
+     * @param array<string, string> $config
+     */
+    private function projectWithGitSource(string $reference, array $config = []): void
     {
         $this->project([
-            'config' => ['preferred-install' => 'source'],
+            'config' => ['preferred-install' => 'source', ...$config],
             'repositories' => [['packagist.org' => false], ['type' => 'package', 'package' => [
                 'name' => 'fixture/git', 'version' => '1.0.0',
                 'source' => ['type' => 'git', 'url' => $this->directory.'/package', 'reference' => $reference],

@@ -44,8 +44,8 @@ final class PhpGateTest extends TestCase
 
     public function testTheCleanInstallTakesOnlyTheLockedPackagesWithScriptsPluginsAndTheAutoloaderOff(): void
     {
-        self::assertStringEndsWith(
-            "' && composer install --no-interaction --no-progress --no-scripts --no-plugins --no-autoloader",
+        self::assertStringContainsString(
+            "' && composer install --no-interaction --no-progress --no-scripts --no-plugins --no-autoloader && php -r '",
             $this->composerStep(null)->install,
         );
     }
