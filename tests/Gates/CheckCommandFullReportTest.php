@@ -79,7 +79,8 @@ final class CheckCommandFullReportTest extends SandboxTestCase
         try {
             $result = new ProcessRunner()->run(['php', '-d', 'sys_temp_dir='.$temp, $home->root.'/bin/check', '--only=dashes', '--root='.$tree->root], $home->root);
         } finally {
-            array_map(static fn (string $stuck): bool => chmod($stuck, 0o700), glob($temp.'/*/stuck') ?: []);
+            $stuck = glob($temp.'/*/stuck');
+            array_map(static fn (string $folder): bool => chmod($folder, 0o700), false === $stuck ? [] : $stuck);
         }
 
         $run = new CheckRun($result);
