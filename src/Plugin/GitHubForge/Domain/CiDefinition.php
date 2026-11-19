@@ -12,7 +12,7 @@ final readonly class CiDefinition
     private const string GITHUB_FOLDER = '.github/';
     // Not CI by folder, because GitHub only shows these templates.
     private const string TEMPLATE = '#^\.github/(?:ISSUE_TEMPLATE/[^/\n]+\.(?:ya?ml|md)|pull_request_template\.md)\z#';
-    // A bare .github, a glob or a .. may read the templates.
+    // Counts them again, because a bare .github, a glob or a .. may read them.
     private const string TEMPLATE_READ = '#(?<![\w-])\.github(?!/(?!ISSUE_TEMPLATE\b|pull_request_template|\.\.)[\w.-]+(?![\w.*?\[{$-]|/\.\.))|ISSUE_TEMPLATE#i';
     // Every Dockerfile counts, because a workflow can build an image from one in its build context without naming it.
     private const string DOCKERFILE = '/(?:^|\/)(?:Dockerfile(?:\..+)?|[^\/]+\.Dockerfile)$/i';
