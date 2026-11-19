@@ -24,9 +24,8 @@ final readonly class RunBuildJobCommand
     // The end of the log, because that is where a failed session says why.
     private const int LOG_LINES = 40;
 
+    // Listed by hand, because PCRE has no class for the property; the ranges are Unicode's Default_Ignorable_Code_Point from DerivedCoreProperties.txt (Unicode 16.0).
     /**
-     * Listed by hand, because PCRE has no class for the property; the ranges are Unicode's Default_Ignorable_Code_Point from DerivedCoreProperties.txt (Unicode 16.0).
-     *
      * @var list<array{int, int}>
      */
     public const array DEFAULT_IGNORABLE = [
