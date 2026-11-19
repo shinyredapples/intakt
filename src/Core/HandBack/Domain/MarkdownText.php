@@ -63,8 +63,7 @@ final readonly class MarkdownText
 
         // An unreadable text must stop the check, because reading it as empty would pass a task's Evidence list unseen.
         return false === $found
-            ? throw new RuntimeException('the Markdown text cannot be read: '.preg_last_error_msg())
-            : $read.substr($text, $offset);
+            ? throw new RuntimeException('the Markdown text cannot be read: '.preg_last_error_msg()) : $read.substr($text, $offset);
     }
 
     // A fence opened inside a list item ends with that item, closed or not, so the first line indented less than the item's content is outside it and is read again.

@@ -54,7 +54,7 @@ final class MarkdownTextTest extends TestCase
     public function testAnUnclosedFenceInsideAListItemEndsWithTheItem(): void
     {
         self::assertSame("- one\n\n\n\n- two  y", MarkdownText::visibleProse("- one\n\n  ```\n  code\n- two <!-- x --> y"));
-        self::assertSame("1. one\n   text\n\n\n\n\n  after",MarkdownText::visibleProse("1. one\n   text\n\n   ```\n\n   code\n  after"));
+        self::assertSame("1. one\n   text\n\n\n\n\n  after", MarkdownText::visibleProse("1. one\n   text\n\n   ```\n\n   code\n  after"));
     }
 
     public function testAClosedFenceInsideAListItemKeepsItsLessIndentedLinesOutside(): void
