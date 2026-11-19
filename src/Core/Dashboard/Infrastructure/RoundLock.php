@@ -12,8 +12,7 @@ use Symfony\Component\HttpKernel\Event\FinishRequestEvent;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\LockInterface;
 
-// One key for every press that acts on a round, so a start and a stop of the same round, or two of either, never run at once (#2703, D2).
-// The held locks live on the main request and not in this shared service, so a worker serving many requests keeps no per-request state here.
+// One key for every press that acts on a round, so a start and a stop of the same round, or two of either, never run at once (#2703, D2); the held locks live on the main request and not in this shared service, so a worker serving many requests keeps no per-request state here.
 #[AsEventListener]
 final readonly class RoundLock
 {
