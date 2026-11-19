@@ -92,17 +92,66 @@ final class FullReportTest extends SandboxTestCase
         $name = $fullReport->writeTo($tree->root, self::SUMMARY, [$this->failingLine('dashes', $findings)]);
 
         self::assertNull($name);
-        self::assertSame([], glob($tree->root.'/report-*.json'));
+        self::assertSame([], glob($tree->root.'/'.FullReport::FOLDER.'/report-*.json'));
     }
 
-    public function testTheReportNameCarriesTheHashOfItsContent(): void
+    public function testNoReportIsNamedWhenTheOnlyLineCutAFindingTheChildFailedToKeep(): void
+    {
+        $tree = $this->emptySandbox();
+        $finding = str_repeat('x', GateResult::MAXIMUM_FINDING_LENGTH + 1);
+
+        $name = $this->startedReport()->writeTo($tree->root, self::SUMMARY, [$this->failingLine('dashes', [$finding])]);
+
+        self::assertNull($name);
+    }
+
+    public function testAKeptResultWithFewerFindingsThanItsLineAccountsForNamesNoReport(): void
+    {
+        $tree = $this->emptySandbox();
+        $fullReport = $this->startedReport();
+        $this->keepFor($fullReport, GateResult::withFindings('dashes', ['only one']));
+
+        $name = $fullReport->writeTo($tree->root, self::SUMMARY, [$this->failingLine('dashes', array_map(strval(...), range(1, 12)))]);
+
+        self::assertNull($name);
+    }
+
+    public function testEachReportGetsANewNameInTheReportFolder(): void
+    {
+        $tree = $this->emptySandbox();
+        $line = $this->failingLine('dashes', ['x']);
+
+        $first = $this->startedReport()->writeTo($tree->root, self::SUMMARY, [$line]);
+        $second = $this->startedReport()->writeTo($tree->root, self::SUMMARY, [$line]);
+
+        self::assertIsString($first);
+        self::assertMatchesRegularExpression('#\Avar/check/report-[0-9a-f]{16}\.json\z#', $first);
+        self::assertNotSame($first, $second);
+    }
+
+    public function testAReportNeverWritesThroughALinkLeftAtTheNameOfAnEarlierReport(): void
+    {
+        $tree = $this->emptySandbox();
+        $line = $this->failingLine('dashes', ['x']);
+        $earlier = $this->startedReport()->writeTo($tree->root, self::SUMMARY, [$line]);
+        self::assertIsString($earlier);
+        unlink($tree->root.'/'.$earlier);
+        $tree->write('sentinel', 'keep this');
+        symlink($tree->root.'/sentinel', $tree->root.'/'.$earlier);
+
+        $this->startedReport()->writeTo($tree->root, self::SUMMARY, [$line]);
+
+        self::assertSame('keep this', file_get_contents($tree->root.'/sentinel'));
+    }
+
+    public function testTheReportHoldsOnlyAsciiSoAQuotedDashNeverFailsTheDashesGate(): void
     {
         $tree = $this->emptySandbox();
 
-        $name = $this->startedReport()->writeTo($tree->root, self::SUMMARY, [$this->failingLine('dashes', ['x'])]);
+        $name = $this->startedReport()->writeTo($tree->root, self::SUMMARY, [$this->failingLine('dashes', ["notes.md:1: \u{2014}"])]);
 
-        self::assertIsString($name);
-        self::assertSame('report-'.substr(hash('sha256', (string) file_get_contents($tree->root.'/'.$name)), 0, 16).'.json', $name);
+        self::assertSame(["notes.md:1: \u{2014}"], $this->findingsIn($tree->root.'/'.$name));
+        self::assertSame(1, preg_match('/\A[\x00-\x7f]*\z/', (string) file_get_contents($tree->root.'/'.$name)));
     }
 
     public function testAGateWhoseChildKeptNothingIsReportedByItsLine(): void

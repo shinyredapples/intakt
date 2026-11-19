@@ -76,7 +76,7 @@ final readonly class CheckRun
      */
     public function linesWithoutTheReportName(): array
     {
-        return array_map(static fn (string $line): string => (string) preg_replace('/,"report":"report-[0-9a-f]{16}\.json"}$/', '}', $line), $this->lines());
+        return array_map(static fn (string $line): string => (string) preg_replace('#,"report":"var/check/report-[0-9a-f]{16}\.json"}$#', '}', $line), $this->lines());
     }
 
     private function gateLine(string $gate): ?JsonNode

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Intakt\Gates;
 
 use JsonException;
+use RuntimeException;
+use SplFileObject;
 use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
 
@@ -12,10 +14,13 @@ final readonly class FullReport
 {
     public const string VARIABLE = 'INTAKT_GATE_FULL_RESULT';
 
+    // Under var/, which every checked tree's .gitignore already leaves out, so a report never shows up as a change and the gates need no rule of their own to skip it.
+    public const string FOLDER = 'var/check';
+
     private const string PREFIX = 'intakt-check-report';
 
-    // \A and \z, because $ also matches before a final newline, which a file name may end in.
-    private const string NAME = '/\Areport-[0-9a-f]{16}\.json\z/';
+    // Without JSON_UNESCAPED_UNICODE, so a report holds only ASCII and a dash quoted in a finding never fails the dashes gate of a tree that does scan var/.
+    private const int REPORT_FLAGS = JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT;
 
     private function __construct(private ?ScratchDirectory $scratch)
     {
@@ -44,20 +49,6 @@ final readonly class FullReport
         } catch (IOException|JsonException) {
             return;
         }
-    }
-
-    // Because a tree without Git or without the ignore rule would make an earlier report input of the next check, while an ordinary file that only shares the name must stay input: the name carries the hash of what the runner wrote.
-    public static function isReport(string $root, string $path): bool
-    {
-        $file = $root.'/'.$path;
-
-        if (1 !== preg_match(self::NAME, $path) || !is_file($file) || is_link($file)) {
-            return false;
-        }
-
-        $content = file_get_contents($file);
-
-        return false !== $content && self::nameOf($content) === $path;
     }
 
     // Because without a scratch folder no child may keep a path it inherited.
@@ -102,42 +93,56 @@ final readonly class FullReport
         return $this->scratch?->path.'/'.$gate.'.json';
     }
 
-    private static function nameOf(string $content): string
-    {
-        return 'report-'.substr(hash('sha256', $content), 0, 16).'.json';
-    }
-
-    // Because a named report holds every finding: a line that dropped findings cannot stand in for a result the child failed to keep.
+    // Because a named report holds every finding whole: a kept result must account for every finding of its line, and a line may stand in only when it cut nothing.
     /**
      * @return array<array-key, mixed>|null
      */
     private function wholeResultOf(GateReport $report): ?array
     {
-        $kept = is_file($this->resultFileOf($report->gate)) ? json_decode((string) file_get_contents($this->resultFileOf($report->gate)), true) : null;
+        $line = (array) json_decode($report->line, true);
+        $file = $this->resultFileOf($report->gate);
+        $kept = is_file($file) && is_readable($file) ? json_decode((string) file_get_contents($file), true) : null;
 
-        if (is_array($kept) && $this->agreesWith($kept, $report)) {
+        if (is_array($kept) && $this->agreesWith($kept, $report, $line)) {
             return $kept;
         }
 
-        $line = (array) json_decode($report->line, true);
-
-        return 0 === ($line['omitted'] ?? 0) ? $line : null;
+        return $this->isWhole($line) ? $line : null;
     }
 
-    // Because only a kept result of the same gate and verdict as the line the verdict came from may stand in for that line.
+    // Because only a kept result of the same gate, verdict and number of findings as the line the verdict came from may stand in for that line.
     /**
      * @param array<array-key, mixed> $kept
+     * @param array<array-key, mixed> $line
      */
-    private function agreesWith(array $kept, GateReport $report): bool
+    private function agreesWith(array $kept, GateReport $report, array $line): bool
     {
         $findings = $kept['findings'] ?? null;
+        $shown = $line['findings'] ?? null;
+        $omitted = $line['omitted'] ?? null;
 
         return $report->gate === ($kept['gate'] ?? null)
             && $report->isPassing() === ($kept['ok'] ?? null)
             && is_array($findings)
             && array_is_list($findings)
             && array_all($findings, static fn (mixed $finding): bool => is_string($finding))
-            && $report->isPassing() === ([] === $findings);
+            && $report->isPassing() === ([] === $findings)
+            && is_array($shown)
+            && is_int($omitted)
+            && count($findings) === count($shown) + $omitted;
+    }
+
+    // Because a finding cut to the line's length cannot be told from one that is exactly that long, both count as cut.
+    /**
+     * @param array<array-key, mixed> $line
+     */
+    private function isWhole(array $line): bool
+    {
+        $findings = $line['findings'] ?? null;
+
+        return 0 === ($line['omitted'] ?? null)
+            && is_array($findings)
+            && array_all($findings, static fn (mixed $finding): bool => is_string($finding) && preg_match_all('/./su', $finding) < GateResult::MAXIMUM_FINDING_LENGTH);
     }
 
     /**
@@ -146,22 +151,24 @@ final readonly class FullReport
     private function encoded(array $report): ?string
     {
         try {
-            return json_encode($report, GateResult::JSON_FLAGS | JSON_PRETTY_PRINT)."\n";
+            return json_encode($report, self::REPORT_FLAGS)."\n";
         } catch (JsonException) {
             return null;
         }
     }
 
+    // A fresh random name, created only when no file or link of that name exists ('x'), so a report never overwrites a file or writes through a link.
     private function writtenAs(string $root, string $content): ?string
     {
-        $name = self::nameOf($content);
+        $name = self::FOLDER.'/report-'.bin2hex(random_bytes(8)).'.json';
 
         try {
-            new Filesystem()->dumpFile($root.'/'.$name, $content);
-        } catch (IOException) {
+            new Filesystem()->mkdir($root.'/'.self::FOLDER);
+            $file = new SplFileObject($root.'/'.$name, 'x');
+        } catch (IOException|RuntimeException) {
             return null;
         }
 
-        return $name;
+        return strlen($content) === $file->fwrite($content) ? $name : null;
     }
 }

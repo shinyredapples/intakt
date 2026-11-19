@@ -40,7 +40,7 @@ final class CheckCommandFullReportTest extends SandboxTestCase
         self::assertSame(['dashes'], $summary['failed'] ?? null);
         $name = $summary['report'] ?? null;
         self::assertIsString($name, $run->output());
-        self::assertMatchesRegularExpression('/^report-[0-9a-f]{16}\.json$/', $name);
+        self::assertMatchesRegularExpression('#\Avar/check/report-[0-9a-f]{16}\.json\z#', $name);
         self::assertSame('2', $run->omittedOf('dashes'));
         $report = JsonNode::parse((string) file_get_contents($tree->root.'/'.$name));
         self::assertInstanceOf(JsonNode::class, $report);
@@ -66,7 +66,7 @@ final class CheckCommandFullReportTest extends SandboxTestCase
         self::assertSame(1, $run->exitCode(), $run->output());
         self::assertSame(['dashes'], $summary['failed'] ?? null);
         self::assertArrayNotHasKey('report', $summary);
-        self::assertSame([], glob($tree->root.'/report-*.json'));
+        self::assertDirectoryDoesNotExist($tree->root.'/'.FullReport::FOLDER);
     }
 
     public function testAScratchEntryThatCannotBeRemovedStillLeavesTheReportAndItsVerdict(): void

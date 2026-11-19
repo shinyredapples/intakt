@@ -62,9 +62,7 @@ final readonly class Scope
      */
     public function untrackedPaths(): array
     {
-        $untracked = $this->gitLines(['ls-files', '-z', '--others', self::GITIGNORE_ONLY]);
-
-        return array_values(array_filter($untracked, fn (string $path): bool => !$this->isLeftOverReport($path)));
+        return $this->gitLines(['ls-files', '-z', '--others', self::GITIGNORE_ONLY]);
     }
 
     public function includes(string $path): bool
@@ -100,13 +98,7 @@ final readonly class Scope
             return $this->walkDirectory();
         }
 
-        return array_values(array_unique([...$this->gitLines(['ls-files', '-z', '--cached']), ...$this->untrackedPaths()]));
-    }
-
-    // Because a checked tree's .gitignore may lack the rule for the reports, and an earlier report would otherwise be input of the next check; a committed file of that name stays input.
-    private function isLeftOverReport(string $path): bool
-    {
-        return FullReport::isReport($this->root, $path);
+        return $this->gitLines(['ls-files', '-z', '--cached', '--others', self::GITIGNORE_ONLY]);
     }
 
     /**
@@ -131,7 +123,7 @@ final readonly class Scope
             }
         }
 
-        return array_values(array_filter($files, fn (string $path): bool => !str_starts_with($path, 'vendor/') && !$this->isLeftOverReport($path)));
+        return array_values(array_filter($files, static fn (string $path): bool => !str_starts_with($path, 'vendor/')));
     }
 
     /**
