@@ -72,7 +72,7 @@ final readonly class ReviewTrends
     }
 
     // Null until the ledger records which reviewer reported each finding: the judge also merges two findings of one reviewer at one place, so a merged entry proves no second reviewer, and D1 of #2858 rules out an estimate.
-    public function caughtByOneReviewerOnlyPercent(): ?int
+    public function caughtByOneReviewerOnlyPercent(): null
     {
         return null;
     }

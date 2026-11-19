@@ -89,13 +89,6 @@ final class ReviewTrendsTest extends TestCase
         self::assertSame(1, ReviewTrends::counting([$this->judgedWith([$this->act('F1', 'P2')]), $marks])->seriousActFindings());
     }
 
-    public function testCaughtByOneReviewerOnlyHasNoDataEvenWhenActEntriesHaveMerges(): void
-    {
-        $judged = $this->judgedWith([$this->act('F1', 'P1', ['F2']), $this->act('F3', 'P2')]);
-
-        self::assertNull(ReviewTrends::counting([$judged])->caughtByOneReviewerOnlyPercent());
-    }
-
     public function testTheMedianTimeRunsFromRoundStartToTheVerdictAndSkipsUnjudgedRounds(): void
     {
         $trends = ReviewTrends::counting([$this->judgedAfter('r-1', 60), $this->judgedAfter('r-2', 252), $this->judgedAfter('r-3', 4000), $this->round('r-4', 'alpha')]);
