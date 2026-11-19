@@ -134,6 +134,16 @@ final class StatusReadModelTest extends TestCase
         self::assertSame([], $this->schemaErrorsOf($json));
     }
 
+    public function testAStoredAskedBuildStepIsLeftOutSoTheStatusStillValidatesAgainstTheSchema(): void
+    {
+        $this->ledger->passBuildStep('alpha', '12', 'task');
+        $this->ledger->recordBuildStep(['project' => 'alpha', 'task' => '12', 'step' => 'build_job', 'outcome' => 'asked', 'failure' => null]);
+
+        $json = $this->readModel()->json();
+
+        self::assertSame([], $this->schemaErrorsOf($json));
+    }
+
     public function testAStoppedConsumerStillYieldsAStatusWithTheRoundWaitingForItsReviewers(): void
     {
         $this->receivers = ['async' => $this->queueHolding(2)];
