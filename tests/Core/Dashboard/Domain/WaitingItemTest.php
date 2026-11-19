@@ -51,7 +51,6 @@ final class WaitingItemTest extends TestCase
         self::assertStringContainsString('none while its last reading shows the limit reached', $item->choices[0]->outcome);
     }
 
-    // Once the window of that reading resets, the guard admits a first call again although the notice still shows.
     public function testAnOutageItemSaysTheLimitOfTheLastReadingHoldsOnlyUntilItsWindowResets(): void
     {
         $item = WaitingItem::ofOutage($this->outage(), null);
