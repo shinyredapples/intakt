@@ -1,6 +1,6 @@
 # Work intake from GitHub issues
 
-Plan task T47. `Plugin/WorkSource` is the contract. No implementation exists yet and nothing calls it. The rules are those of [Choosing work](../design/05-architecture/03-choosing-work.md) (step 1, eligible, and step 5, prioritized) and [Labels](../design/05-architecture/04-labels.md).
+Plan task T47. `Plugin/WorkSource` is the contract. No implementation of it exists yet and nothing calls it. `Plugin/GitHubWorkSource` holds the rules and the stored state with the listing sync below, which the pick (part 3 of #1602) will call; nothing calls the sync yet. The rules are those of [Choosing work](../design/05-architecture/03-choosing-work.md) (step 1, eligible, and step 5, prioritized) and [Labels](../design/05-architecture/04-labels.md).
 
 ## Contract (`Plugin/WorkSource/Contract`)
 
@@ -10,4 +10,18 @@ Plan task T47. `Plugin/WorkSource` is the contract. No implementation exists yet
 
 ## The `eligibility_label` key
 
-The `watch` section of a project takes the optional `eligibility_label`: the issue label that makes a task eligible; when the key is left out it is unset, and no code reads it yet (the implementation arrives in part 2 of #1602). `WatchConfiguration` refuses a blank value, including one of only Unicode whitespace such as a no-break space, with the same check as the `repository`, `base` and `task` keys. Test: `tests/Core/Watcher/Infrastructure/WatchConfigurationTest.php`.
+The `watch` section of a project takes the optional `eligibility_label`: the issue label that makes a task eligible; when the key is left out it is unset, and no code reads it yet (the pick, part 3 of #1602, will hand it to `IntakeRules`). `WatchConfiguration` refuses a blank value, including one of only Unicode whitespace such as a no-break space, with the same check as the `repository`, `base` and `task` keys. Test: `tests/Core/Watcher/Infrastructure/WatchConfigurationTest.php`.
+
+## Stored state and the complete listing (`Plugin/GitHubWorkSource`)
+
+`Infrastructure\IntakeSnapshots::current(project)` makes the tick's one listing of a project: a single `IssueReads::listOpen` call with the stored validator, which reads every page or fails. It answers `Domain\OpenItems` (every open issue and pull request as a `QueuedIssue`, and every failure of the project), or null for a listing that came back short.
+
+- **Tables** (migration `Version20261119100000`): `work_source_validator` (the listing validator per project), `work_source_issue` (`Domain\StoredItem`: number, title, body, labels, author, `updated_at`, milestone due date and whether it is a pull request, per open item of the last complete listing) and `work_source_failure` (`Domain\TaskFailure`: the reason a task failed for good). The two moments are stored as UTC text with microseconds, as the watcher's rows are.
+- **Unchanged items:** a `304` is answered from the stored rows. In a listing, an item whose `updated_at` matches its row keeps the row, except for the milestone due date, which is taken from every listing because GitHub changes it without moving `updated_at`. A changed item rewrites its row, a new one gets a row, and a row the listing no longer shows (a closed item) is removed. A listing without a validator removes the stored one.
+- **Nothing derived is stored:** the `Waits for` and closing references are read again from the stored body on every tick, and eligibility is not stored at all: `IntakeRules` judges every row with the eligibility label of the moment, so after the label changes, rows stored before count by the new one.
+- **Failures** live apart from the rows, so removing the row of a closed task keeps its failed-for-good reason and its dependents stay held. Nothing writes a failure yet (`failedForGood` is part 3).
+- **Waits** are answered from the listing or the stored rows only; no read is made per referenced issue.
+- **Short listing:** a `ForgeReadFailed` or `ForgeRateLimited` from the listing returns null and logs `The open issues of the project were not listed completely, so no task is picked and no wait is closed.` at error level with the project and the exception. Nothing of that listing is written: it fails before any row or the validator changes, and the project's rows are detached on every way out, so the stored state of every waited-for issue stays as the last complete listing left it.
+- **Concurrency:** the sync holds a Symfony Lock per project (`work-source-listing-<sha256 of the project>`) across the listing, taken without waiting; a second listing of the same project while one runs reads nothing, logs a warning and returns null. Each call first detaches the project's rows from the entity manager, so a worker that keeps it between ticks reads what another listing stored.
+
+Test: `tests/Plugin/GitHubWorkSource/CompleteListingTest.php` (`persistence` group), over `RecordedIssueReads` and over `GitHubIssueReads` with the recorded GitHub pages.
