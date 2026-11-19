@@ -28,7 +28,7 @@
 | `NanoCpus` | CPUs times 10^9, rounded; `JobLimits` refuses a value that is not finite, rounds to less than 1 or does not fit a PHP integer | 0 would turn the engine's CPU limit off |
 | `NetworkMode`, `NetworkDisabled` | `none`, `true` for `JobEgress::none()`; with an allowlist the job's own internal network `intakt-job-<id>`, `false` | no network at all, or one whose only way out is the job's proxy |
 | `CapDrop`, `SecurityOpt` | `ALL`, `no-new-privileges` | |
-| `LogConfig` | `json-file`, `mode=blocking` | the engine can read the start check's lines back and drops none of them, whatever log driver and mode the daemon defaults to |
+| `LogConfig` | `json-file`, `mode=blocking`, `max-size=10m`, `max-file=3` | the engine can read the start check's lines back and drops none of them, whatever log driver and mode the daemon defaults to; the cap keeps a job's log at 30 MB at most, so a chatty job cannot fill the daemon's disk, and a job that writes past it rotates the check's lines away, which counts as a failure |
 | `Labels` | `intakt.job=<id>` | finds the job's containers after a crash |
 
 The container is named `intakt-job-<id>`. Before it is created, the image is inspected (`GET /images/<name>/json`, the name URL-encoded into the path) and a job whose image declares volumes (`Config.Volumes`) is refused with `JobRefused`: a volume the image declares stays writable under `ReadonlyRootfs`, so the job could write outside its work area and output directory. An absent or `null` `Config.Volumes` means none.

@@ -83,7 +83,8 @@ final readonly class JobContainerDefinition
             'CapDrop' => ['ALL'],
             'SecurityOpt' => ['no-new-privileges'],
             // A driver the engine can read back and blocking delivery, so the start check's lines are neither unreadable nor dropped, whatever the daemon's defaults are.
-            'LogConfig' => ['Type' => 'json-file', 'Config' => ['mode' => 'blocking']],
+            // The size cap keeps a chatty job from filling the daemon's disk; a job that writes past it rotates the check's lines away, which reads as a failure, never a pass.
+            'LogConfig' => ['Type' => 'json-file', 'Config' => ['mode' => 'blocking', 'max-size' => '10m', 'max-file' => '3']],
         ];
     }
 
