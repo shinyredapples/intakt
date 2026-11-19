@@ -28,7 +28,11 @@ $events = match ($argv[1] ?? '') {
         [LedgerEventKind::ReviewStarted, ['round' => 'round-2', 'project' => 'beta', 'reviewers' => 2, 'change' => '43', 'number' => 1]],
         [LedgerEventKind::BuildStepEnded, ['project' => 'gamma', 'task' => 'task-9', 'step' => 'clone', 'outcome' => 'passed', 'failure' => null]],
     ],
-    default => throw new InvalidArgumentException('Usage: seed.php idle|filter'),
+    // A project whose only work is a pushed build, because the filter must list it to show its asleep octopus while others work (#2732, F1).
+    'buildonly' => [
+        [LedgerEventKind::BuildStepEnded, ['project' => 'delta', 'task' => 'task-10', 'step' => 'push', 'outcome' => 'passed', 'failure' => null]],
+    ],
+    default => throw new InvalidArgumentException('Usage: seed.php idle|filter|buildonly'),
 };
 
 foreach ($events as [$kind, $payload]) {
