@@ -42,6 +42,7 @@ use Intakt\Core\Review\Domain\TrackedFinding;
 use Intakt\Core\Review\Infrastructure\ChangeText;
 use Intakt\Core\Review\Infrastructure\DiffHunks;
 use Intakt\Core\Review\Infrastructure\DiffPaths;
+use Intakt\Core\Review\Infrastructure\FindingKeys;
 use Intakt\Core\Review\Infrastructure\StopRequests;
 use Intakt\Core\Review\UseCase\IndexResolvedFindings\IndexResolvedFindings;
 use Intakt\Core\Review\UseCase\IndexResolvedFindings\IndexResolvedFindingsHandler;
@@ -377,7 +378,7 @@ final readonly class RoundFixture
 
     private function roundLedger(Ledger $ledger): RoundLedger
     {
-        return new RoundLedger($ledger, $this->modes, $this->serializer, new ConfiguredTierResolver(['alpha' => ['tiers' => ['standard' => ['provider' => 'anthropic', 'model' => self::MODEL, 'substitutes' => [['provider' => 'openai', 'model' => self::SUBSTITUTE_MODEL]]]]]], []), $this->container->get(Redactor::class));
+        return new RoundLedger($ledger, $this->modes, $this->serializer, new ConfiguredTierResolver(['alpha' => ['tiers' => ['standard' => ['provider' => 'anthropic', 'model' => self::MODEL, 'substitutes' => [['provider' => 'openai', 'model' => self::SUBSTITUTE_MODEL]]]]]], []), $this->container->get(Redactor::class), new FindingKeys());
     }
 
     private function startWith(RunReviewRound $command, MessageBusInterface $queue): string
