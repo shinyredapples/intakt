@@ -105,18 +105,16 @@ final readonly class BuildTask
         return new BuildTaskOutcome(array_last(BuildStep::cases()), null, $task);
     }
 
-    // The run ends at the build job, neither passed nor failed, because the task waits for a decision; a record that cannot be stored fails the step instead, so the task never looks parked without its question.
+    // The run ends at the build job, neither passed nor failed, because the task waits for a decision; the record and its asked event are written together, so the task never looks parked without its question and no question stays stored without its event.
     private function park(BuildTaskRequest $request, ListedIssue $task, BuildQuestion $question): BuildTaskOutcome
     {
         try {
-            $this->parkedTasks->park($request, $question);
+            $this->parkedTasks->park($request, $question, fn () => $this->append($request, BuildStep::BuildJob, ['outcome' => BuildStepOutcome::Asked->value, 'failure' => null]));
         } catch (TaskNotParked $unparked) {
             $this->record($request, BuildStep::BuildJob, $unparked->getMessage());
 
             return new BuildTaskOutcome(BuildStep::BuildJob, $unparked->getMessage(), $task);
         }
-
-        $this->append($request, BuildStep::BuildJob, ['outcome' => BuildStepOutcome::Asked->value, 'failure' => null]);
 
         return new BuildTaskOutcome(BuildStep::BuildJob, null, $task, $question);
     }

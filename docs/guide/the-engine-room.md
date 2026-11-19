@@ -76,6 +76,8 @@ Intakt's own checks run on GitHub's machines by default. Whoever maintains a cop
 
 If CI never starts (GitHub occasionally misses an update), Intakt notices after a few minutes, nudges GitHub once, and alerts the maintainer agent if that didn't help. A wait for CI never blocks a bench: the work is parked and the bench takes the next job.
 
+A build that needs a decision ends the same way: instead of a change, the builder hands back a question with a few choices and its recommendation, and the task waits, parked, with that question kept until someone decides. (Planned:) The question is posted on the issue for you to answer.
+
 ## Locks: one at a time
 
 A **lock** is a "one at a time" sign on something that must not be used by two jobs at once:

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Build\UseCase\BuildTask;
 
 use Closure;
+use Throwable;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\ConnectionException;
 use Intakt\Core\Ai\Contract\Provider;
@@ -657,6 +658,20 @@ final class BuildTaskTest extends TestCase
         self::assertStringNotContainsString('PLANT', (string) json_encode($ledger->payloads()));
     }
 
+    public function testAnAskedStepTheLedgerDoesNotRecordStopsTheRunAndTakesTheParkedRecordBack(): void
+    {
+        new Filesystem()->dumpFile($this->output.'/'.RunBuildJob::QUESTION, '{"question":"Which store?","choices":["SQLite","Postgres"],"recommendation":"SQLite"}');
+
+        try {
+            (void) $this->taskOf(new InMemoryLedger(3), [Issues::task(7)])->run($this->request(7, $this->remote->path));
+            self::fail('the run must stop');
+        } catch (BuildStepNotRecorded $failure) {
+            self::assertStringContainsString('did not record the build_job step of issue 7', $failure->getMessage());
+        }
+
+        self::assertSame([], $this->parkedRows);
+    }
+
     public function testABuildThatEndsWithARefusedQuestionFailsTheBuildJobStepAndParksNothing(): void
     {
         new Filesystem()->dumpFile($this->output.'/'.RunBuildJob::QUESTION, '{"question":"Which store?","choices":["SQLite"],"recommendation":"Postgres"}');
@@ -1036,7 +1051,7 @@ final class BuildTaskTest extends TestCase
     private function parkedTasks(): ParkedTasks
     {
         $connection = self::createStub(Connection::class);
-        $connection->method('transactional')->willReturnCallback(fn (Closure $work): mixed => $this->parkingFails ? throw new ConnectionException('PLANT-question') : $work($connection));
+        $connection->method('transactional')->willReturnCallback(fn (Closure $work): mixed => $this->parkingFails ? throw new ConnectionException('PLANT-question') : $this->rolledBackOnFailure($work, $connection));
         $connection->method('insert')->willReturnCallback(function (string $table, array $row): int {
             $this->parkedRows[] = $row;
 
@@ -1044,6 +1059,20 @@ final class BuildTaskTest extends TestCase
         });
 
         return new ParkedTasks($connection, new MockClock('2026-11-19T10:00:00+00:00'));
+    }
+
+    // Drops the rows the work inserted when it throws, as a real transaction rolls them back.
+    private function rolledBackOnFailure(Closure $work, Connection $connection): mixed
+    {
+        $before = $this->parkedRows;
+
+        try {
+            return $work($connection);
+        } catch (Throwable $failure) {
+            $this->parkedRows = $before;
+
+            throw $failure;
+        }
     }
 
     // Records in the run's own ledger, as the container wires it, so the push's events sit between the steps' events.

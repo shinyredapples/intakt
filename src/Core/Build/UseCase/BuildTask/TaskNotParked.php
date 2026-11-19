@@ -15,4 +15,9 @@ final class TaskNotParked extends RuntimeException implements ReportableFailure
     {
         return new self(sprintf('issue %d of project "%s" could not be parked', $request->issue, $request->project), previous: $cause);
     }
+
+    public static function holdingNul(BuildTaskRequest $request): self
+    {
+        return new self(sprintf('issue %d of project "%s" could not be parked: its question holds a NUL character', $request->issue, $request->project));
+    }
 }
