@@ -12,7 +12,7 @@ final readonly class JavaScriptBracket
         public int $enclosingTernaries,
         public JavaScriptPosition $after,
         public JavaScriptOpening $opensAfter,
-        public bool $isExpressionAfter,
+        public JavaScriptForm $formAfter,
     ) {
     }
 }

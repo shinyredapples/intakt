@@ -8,6 +8,7 @@ use Intakt\Gates\JavaScriptBracket;
 use Intakt\Gates\JavaScriptCode;
 use Intakt\Gates\JavaScriptComments;
 use Intakt\Gates\JavaScriptContext;
+use Intakt\Gates\JavaScriptForm;
 use Intakt\Gates\JavaScriptFrame;
 use Intakt\Gates\JavaScriptOpening;
 use Intakt\Gates\JavaScriptPosition;
@@ -23,6 +24,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(JavaScriptCode::class)]
 #[CoversClass(JavaScriptBracket::class)]
 #[CoversClass(JavaScriptFrame::class)]
+#[CoversClass(JavaScriptForm::class)]
 #[CoversClass(JavaScriptOpening::class)]
 final class JavaScriptCommentsTest extends TestCase
 {

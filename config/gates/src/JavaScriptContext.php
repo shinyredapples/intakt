@@ -4,8 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Gates;
 
-// Because JavaScript reads a slash as division or as the start of a regular expression by the code before it, the scanner carries that code's context.
-// Because copying the bracket stack on every bracket made deep nesting quadratic, one context per scan changes in place.
+// Because JavaScript reads a slash by the code before it, the scanner carries that code's context, changed in place so deep nesting stays linear.
 final class JavaScriptContext
 {
     // Because after these words an expression starts, so a slash there opens a regular expression, while after any other word it divides.
@@ -16,7 +15,7 @@ final class JavaScriptContext
     private const array KEYWORDS_BEFORE_A_CONDITION = ['if', 'while', 'with', 'switch', 'catch'];
 
     private JavaScriptOpening $opening = JavaScriptOpening::Nothing;
-    private bool $isExpression = false;
+    private JavaScriptForm $form = JavaScriptForm::Declaration;
     private bool $afterDot = false;
     private ?JavaScriptPosition $beforeAsync = null;
     private int $ternaries = 0;
@@ -93,7 +92,7 @@ final class JavaScriptContext
         $this->ternaries = $bracket->enclosingTernaries;
         $this->position = $bracket->after;
         $this->opening = $bracket->opensAfter;
-        $this->isExpression = $bracket->isExpressionAfter;
+        $this->form = $bracket->formAfter;
         $this->afterDot = false;
         $this->beforeAsync = null;
     }
@@ -128,7 +127,7 @@ final class JavaScriptContext
         $this->afterDot = '.' === $token || '?.' === $token;
 
         if ('=>' === $token) {
-            $this->expect(JavaScriptOpening::ArrowBody, true);
+            $this->expect(JavaScriptOpening::ArrowBody, JavaScriptForm::Declaration);
         } elseif ('*' !== $token || JavaScriptOpening::FunctionHead !== $this->opening) {
             $this->moveTo($position);
         }
@@ -137,14 +136,14 @@ final class JavaScriptContext
     private function word(string $word, ?JavaScriptPosition $beforeAsync): void
     {
         $before = $beforeAsync ?? $this->position;
-        $atStatementStart = JavaScriptPosition::StatementStart === $before;
+        $form = JavaScriptPosition::StatementStart === $before ? JavaScriptForm::Declaration : JavaScriptForm::Expression;
 
         match (true) {
             JavaScriptOpening::FunctionHead === $this->opening => $this->position = JavaScriptPosition::AfterOperand,
-            'function' === $word => $this->expect(JavaScriptOpening::FunctionHead, !$atStatementStart),
-            'class' === $word => $this->expect(JavaScriptOpening::ClassBody, !$atStatementStart),
-            'for' === $word => $this->expect(JavaScriptOpening::ForHead, false),
-            in_array($word, self::KEYWORDS_BEFORE_A_CONDITION, true) => $this->expect(JavaScriptOpening::Condition, false),
+            'function' === $word => $this->expect(JavaScriptOpening::FunctionHead, $form),
+            'class' === $word => $this->expect(JavaScriptOpening::ClassBody, $form),
+            'for' === $word => $this->expect(JavaScriptOpening::ForHead, JavaScriptForm::Declaration),
+            in_array($word, self::KEYWORDS_BEFORE_A_CONDITION, true) => $this->expect(JavaScriptOpening::Condition, JavaScriptForm::Declaration),
             in_array($word, self::KEYWORDS_BEFORE_A_STATEMENT, true) => $this->moveTo(JavaScriptPosition::StatementStart),
             in_array($word, self::KEYWORDS_BEFORE_AN_EXPRESSION, true), 'of' === $word && JavaScriptFrame::ForHead === $this->frame => $this->moveTo(JavaScriptPosition::ExpressionStart),
             default => $this->moveTo(JavaScriptPosition::AfterOperand),
@@ -174,11 +173,11 @@ final class JavaScriptContext
         return JavaScriptPosition::ExpressionStart;
     }
 
-    private function expect(JavaScriptOpening $opening, bool $isExpression): void
+    private function expect(JavaScriptOpening $opening, JavaScriptForm $form): void
     {
         $this->position = JavaScriptPosition::ExpressionStart;
         $this->opening = $opening;
-        $this->isExpression = $isExpression;
+        $this->form = $form;
     }
 
     // Because a class heritage such as `extends mixin(a).b` may stand between `class` and its body, the class body stays expected until its brace.
@@ -202,7 +201,7 @@ final class JavaScriptContext
             return [JavaScriptFrame::Expression, $this->bracket(JavaScriptPosition::AfterOperand, JavaScriptOpening::Nothing)];
         }
 
-        $isValue = $isBody && $this->isExpression && JavaScriptOpening::ArrowBody !== $this->opening;
+        $isValue = $isBody && JavaScriptForm::Expression === $this->form && JavaScriptOpening::ArrowBody !== $this->opening;
 
         return [JavaScriptFrame::Statements, $this->bracket($isValue ? JavaScriptPosition::AfterOperand : JavaScriptPosition::StatementStart, JavaScriptOpening::Nothing)];
     }
@@ -231,6 +230,6 @@ final class JavaScriptContext
 
     private function bracket(JavaScriptPosition $after, JavaScriptOpening $opensAfter): JavaScriptBracket
     {
-        return new JavaScriptBracket($this->frame, $this->ternaries, $after, $opensAfter, $this->isExpression);
+        return new JavaScriptBracket($this->frame, $this->ternaries, $after, $opensAfter, $this->form);
     }
 }
