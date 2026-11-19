@@ -62,6 +62,41 @@ final class PinnedProviderCooldownWindowsTest extends TestCase
         self::assertTrue($cooldowns->isCoolingDown($this->deepinfra()));
     }
 
+    public function testAPinnedProviderThatWasNeverCooledDownIsFreeAtOnce(): void
+    {
+        self::assertSame(0, $this->cooldowns()->secondsUntilFree($this->deepinfra()));
+    }
+
+    public function testAPinnedProviderIsFreeAfterTheSecondsLeftInItsWindow(): void
+    {
+        $cooldowns = $this->cooldowns();
+        $cooldowns->coolDown($this->deepinfra(), 300);
+
+        $this->clock->sleep(120);
+
+        self::assertSame(180, $cooldowns->secondsUntilFree($this->deepinfra()));
+    }
+
+    public function testAPinnedProviderWithLessThanASecondLeftWaitsAWholeSecond(): void
+    {
+        $cooldowns = $this->cooldowns();
+        $cooldowns->coolDown($this->deepinfra(), 300);
+
+        $this->clock->sleep(299.5);
+
+        self::assertSame(1, $cooldowns->secondsUntilFree($this->deepinfra()));
+    }
+
+    public function testAPinnedProviderIsFreeAtOnceWhenTheClockReachesTheEndOfItsWindow(): void
+    {
+        $cooldowns = $this->cooldowns();
+        $cooldowns->coolDown($this->deepinfra(), 300);
+
+        $this->clock->sleep(300);
+
+        self::assertSame(0, $cooldowns->secondsUntilFree($this->deepinfra()));
+    }
+
     public function testAPinnedProviderIsUsableAgainOnceTheClockReachesTheEndOfItsWindow(): void
     {
         $cooldowns = $this->cooldowns();

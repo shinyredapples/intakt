@@ -21,4 +21,10 @@ final readonly class NoPinnedProviderCooldowns implements PinnedProviderCooldown
     {
         return false;
     }
+
+    #[Override]
+    public function secondsUntilFree(PinnedProvider $provider): int
+    {
+        return 0;
+    }
 }

@@ -54,7 +54,7 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         $routerProvider = $this->routerProviderOf($model);
         $free = $this->freeAccounts($failures, $routerProvider);
         if ([] === $free) {
-            throw $this->outOfAccounts($failures);
+            throw $this->outOfAccounts($failures, $routerProvider);
         }
 
         $this->recordSwitch($free);
@@ -134,17 +134,35 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
             return $everyAccountFailed;
         }
 
-        return $this->outOfAccounts($failures);
+        return $this->outOfAccounts($failures, $routerProvider);
     }
 
     // When every account of the provider rejected its key, in this call or in an earlier one it still cools down from, there is nothing to wait for, so a rejection is thrown; never the provider's own, because its message can echo a key and the judging's failure listener logs what it gets.
-    private function outOfAccounts(SendFailures $failures): Throwable
+    private function outOfAccounts(SendFailures $failures, ?string $routerProvider): Throwable
     {
         if ($this->isEveryKeyRejected($failures)) {
             return new EveryKeyRejected($this->provider);
         }
 
+        $this->coolDownAccountsWhosePinCools($routerProvider);
+
         return new EveryAccountCoolingDown($this->provider, $this->cooldowns->secondsUntilAnAccountIsFree($this->provider));
+    }
+
+    // The pinned window can outlive the account's own (a later 429 in flight extends only the pinned one, and an account waits a day at most), and AccountLimitedVendor reads its wait from the account cooldowns alone, so the account waits out its pin; otherwise the caller would be told to start again at once for as long as the pin cools. A running account cooldown is kept as it is by the store.
+    private function coolDownAccountsWhosePinCools(?string $routerProvider): void
+    {
+        if (null === $routerProvider) {
+            return;
+        }
+
+        foreach (array_keys($this->platforms) as $name) {
+            $account = new Account($this->provider, $name);
+            $pinnedWait = $this->pinnedCooldowns->secondsUntilFree(new PinnedProvider($account, $routerProvider));
+            if (0 < $pinnedWait) {
+                $this->cooldowns->coolDown($account, $pinnedWait);
+            }
+        }
     }
 
     // Judged across calls through the shared cooldowns, because two accounts whose rejections land a moment apart would otherwise each be free in turn and the call would wait forever (one worker's rejection beside another's).
@@ -181,7 +199,7 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
             return new KeyRejected($this->accountThatAnswered($answer));
         }
 
-        return $this->outOfAccounts($failures);
+        return $this->outOfAccounts($failures, $routerProvider);
     }
 
     // Matched against the provider's accounts rather than parsed, so the shape of an account key stays Account's own.

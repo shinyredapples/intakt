@@ -64,6 +64,17 @@ final readonly class PinnedProviderCooldownWindows implements PinnedProviderCool
         return $until instanceof DateTimeImmutable && $this->clock->now() < $until;
     }
 
+    public function secondsUntilFree(PinnedProvider $provider): int
+    {
+        $until = $this->endOf($this->keyOf($provider));
+        $now = $this->clock->now();
+        if (!$until instanceof DateTimeImmutable || $now >= $until) {
+            return 0;
+        }
+
+        return max(1, $until->getTimestamp() - $now->getTimestamp());
+    }
+
     private function endOf(string $key): ?DateTimeImmutable
     {
         $until = $this->pool->getItem($key)->get();

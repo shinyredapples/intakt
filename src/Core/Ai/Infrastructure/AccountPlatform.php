@@ -50,6 +50,11 @@ final readonly class AccountPlatform implements PlatformInterface
     #[Override]
     public function invoke(string|Model $model, array|string|object $input, array $options = []): DeferredResult
     {
+        // Asked again as the call is sent, because another worker can cool the pinned provider down after the failover chose this account; not counted as tried, so the call ends as every account cooling down, not as unreachable.
+        if ($this->pinned instanceof PinnedProvider && $this->pinnedCooldowns->isCoolingDown($this->pinned)) {
+            throw new PinnedProviderSkipped($this->pinned);
+        }
+
         $sentAt = $this->clock->now();
         $this->failures->tried($this->account);
 

@@ -14,6 +14,7 @@ use Intakt\Core\Ai\Infrastructure\AccountCooldownWindows;
 use Intakt\Core\Ai\Infrastructure\AccountFailoverPlatform;
 use Intakt\Core\Ai\Infrastructure\AccountPlatform;
 use Intakt\Core\Ai\Infrastructure\PinnedProviderCooldownWindows;
+use Intakt\Core\Ai\Infrastructure\PinnedProviderSkipped;
 use Intakt\Core\Ai\Infrastructure\SendFailures;
 use Intakt\Core\Ai\Infrastructure\TypedRejectionConverter;
 use Intakt\Tests\Core\Budget\ReadingsInMemory;
@@ -26,6 +27,7 @@ use Psr\Log\NullLogger;
 use Symfony\AI\Platform\Exception\RateLimitExceededException;
 use Symfony\AI\Platform\Model;
 use Symfony\AI\Platform\PlatformInterface;
+use Symfony\AI\Platform\Result\DeferredResult;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
 use Symfony\Component\Cache\Adapter\ArrayAdapter;
 use Symfony\Component\Clock\MockClock;
@@ -33,11 +35,13 @@ use Symfony\Component\Clock\NativeClock;
 use Symfony\Component\ErrorHandler\BufferingLogger;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
+use RuntimeException;
 
 // The pinned windows run on a mocked clock so a test moves past their end; the account windows stay on the native clock, because RateLimiter reads the system time itself.
 #[CoversClass(AccountFailoverPlatform::class)]
 #[CoversClass(AccountPlatform::class)]
 #[UsesClass(PinnedProviderCooldownWindows::class)]
+#[UsesClass(PinnedProviderSkipped::class)]
 #[UsesClass(PinnedProviderCooldownNotSaved::class)]
 #[UsesClass(PinnedProvider::class)]
 #[UsesClass(AccountCooldownWindows::class)]
@@ -59,7 +63,7 @@ final class PinnedProviderCooldownTest extends TestCase
     protected function setUp(): void
     {
         $this->clock = new MockClock('2026-11-19T12:00:00+00:00');
-        $this->cooldowns = new AccountCooldownWindows(new ReadingsInMemory(new NativeClock()), new ArrayAdapter(), new LockFactory(new InMemoryStore()), new NativeClock(), new InMemoryLedger(), new NullLogger(), StoredSerializerFactory::create(), [Provider::OpenAiCompatible->value => [Account::DEFAULT, 'team']]);
+        $this->cooldowns = $this->accountWindows(Account::DEFAULT, 'team');
         $this->pinned = new PinnedProviderCooldownWindows(new ArrayAdapter(), $this->clock, new LockFactory(new InMemoryStore()));
     }
 
@@ -109,15 +113,76 @@ final class PinnedProviderCooldownTest extends TestCase
         self::assertSame('second', $result->asText());
     }
 
-    public function testAPinnedProviderIsCalledAgainOnceItsCooldownEnded(): void
+    // The accounts never cool down here, so the pinned window alone decides and the mocked clock can move past it.
+    public function testAScripted429CoolsThePinTheNextCallSendsItNothingAndTheFirstCallAfterItsCooldownReachesItAgain(): void
     {
-        $this->pinned->coolDown($this->deepinfra(Account::DEFAULT), 120);
-        $during = $this->accounts($this->answering('first'), $this->answering('second'))->invoke(self::PINNED, 'Review.')->asText();
+        $requests = 0;
+        $default = MockPlatformFactory::createPlatform(static function () use (&$requests): string {
+            if (1 === ++$requests) {
+                throw new RateLimitExceededException(120);
+            }
+
+            return 'first';
+        });
+        $platform = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $default, 'team' => $this->answering('second')], new NoCooldowns(), new NativeClock(), new NullLogger(), $this->pinned);
+
+        $limited = $platform->invoke(self::PINNED, 'Review.')->asText();
+        $during = $platform->invoke(self::PINNED, 'Review.')->asText();
+        $requestsDuring = $requests;
         $this->clock->sleep(120);
+        $after = $platform->invoke(self::PINNED, 'Review.')->asText();
 
-        $after = $this->accounts($this->answering('first'), $this->answering('second'))->invoke(self::PINNED, 'Review.')->asText();
+        self::assertSame([['second', 'second', 'first'], 1, 2], [[$limited, $during, $after], $requestsDuring, $requests]);
+    }
 
-        self::assertSame(['second', 'first'], [$during, $after]);
+    public function testAFallbackWhosePinAnotherWorkerCoolsDownDuringTheCallIsSentNothing(): void
+    {
+        $first = MockPlatformFactory::createPlatform(function (): never {
+            $this->pinned->coolDown($this->deepinfra('team'), 60);
+
+            throw new RuntimeException('The first account failed.');
+        });
+        $fallback = $this->createMock(PlatformInterface::class);
+        $fallback->expects(self::never())->method('invoke');
+        $platform = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $first, 'team' => $fallback], new NoCooldowns(), new NativeClock(), new NullLogger(), $this->pinned);
+
+        $this->expectException(RuntimeException::class);
+
+        $platform->invoke(self::PINNED, 'Review.');
+    }
+
+    // A second store stands for the account windows once they ended, because they run on the native clock, which a test cannot move.
+    public function testAPinnedWindowThatTwoAnswersInFlightMadeOutliveTheAccountWindowKeepsTheCallerWaiting(): void
+    {
+        $short = $this->onlyDefault(new FailingWhenRead(new RateLimitExceededException(60)), $this->cooldowns)->invoke(self::PINNED, 'Review.');
+        $long = $this->onlyDefault(new FailingWhenRead(new RateLimitExceededException(600)), $this->cooldowns)->invoke(self::PINNED, 'Review.');
+        $this->read($short);
+        $this->read($long);
+        $this->clock->sleep(60);
+        $ended = $this->accountWindows(Account::DEFAULT);
+
+        $wait = $this->waitAfterEveryAccountIsOut($this->onlyDefault($this->answering('first'), $ended));
+
+        self::assertSame([true, true], [in_array($wait, [539, 540], true), 0 < $ended->secondsUntilAnAccountIsFree(Provider::OpenAiCompatible)]);
+    }
+
+    public function testAPinnedWindowLongerThanTheAccountsLongestWaitKeepsTheCallerWaitingAfterTheAccountWindow(): void
+    {
+        $this->read($this->onlyDefault(new FailingWhenRead(new RateLimitExceededException(90000)), $this->cooldowns)->invoke(self::PINNED, 'Review.'));
+        $this->clock->sleep(86400);
+
+        $wait = $this->waitAfterEveryAccountIsOut($this->onlyDefault($this->answering('first'), $this->accountWindows(Account::DEFAULT)));
+
+        self::assertContains($wait, [3599, 3600]);
+    }
+
+    public function testAnAccountWhosePinCoolsIsNotCooledDownWhileAnotherAccountTakesTheCall(): void
+    {
+        $this->pinned->coolDown($this->deepinfra(Account::DEFAULT), 300);
+
+        $this->accounts($this->answering('first'), $this->answering('second'))->invoke(self::PINNED, 'Review.')->asText();
+
+        self::assertFalse($this->cooldowns->isCoolingDown(new Account(Provider::OpenAiCompatible, Account::DEFAULT)));
     }
 
     public function testAPinnedProviderThatCoolsDownLeavesTheAccountFreeForAnotherPin(): void
@@ -188,6 +253,36 @@ final class PinnedProviderCooldownTest extends TestCase
     private function accounts(PlatformInterface $default, PlatformInterface $team, ?PinnedProviderCooldowns $pinned = null): AccountFailoverPlatform
     {
         return new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $default, 'team' => $team], $this->cooldowns, new NativeClock(), new NullLogger(), $pinned ?? $this->pinned);
+    }
+
+    private function onlyDefault(PlatformInterface $default, AccountCooldownWindows $cooldowns): AccountFailoverPlatform
+    {
+        return new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $default], $cooldowns, new NativeClock(), new NullLogger(), $this->pinned);
+    }
+
+    private function accountWindows(string ...$accounts): AccountCooldownWindows
+    {
+        return new AccountCooldownWindows(new ReadingsInMemory(new NativeClock()), new ArrayAdapter(), new LockFactory(new InMemoryStore()), new NativeClock(), new InMemoryLedger(), new NullLogger(), StoredSerializerFactory::create(), [Provider::OpenAiCompatible->value => array_values($accounts)]);
+    }
+
+    private function read(DeferredResult $answer): void
+    {
+        try {
+            $answer->asText();
+            self::fail('The answer was expected to fail when read.');
+        } catch (RateLimitExceededException) {
+        }
+    }
+
+    private function waitAfterEveryAccountIsOut(AccountFailoverPlatform $platform): int
+    {
+        try {
+            $platform->invoke(self::PINNED, 'Review.');
+        } catch (EveryAccountCoolingDown $out) {
+            return $out->secondsUntilAnAccountIsFree;
+        }
+
+        self::fail('Every account was expected to be out.');
     }
 
     private function limited(?int $retryAfter): PlatformInterface

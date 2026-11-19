@@ -13,4 +13,7 @@ interface PinnedProviderCooldowns
     public function coolDown(PinnedProvider $provider, int $seconds): void;
 
     public function isCoolingDown(PinnedProvider $provider): bool;
+
+    // At least a second while the window runs, so a cooling pinned provider is never reported free and retried at once; 0 once it is usable.
+    public function secondsUntilFree(PinnedProvider $provider): int;
 }
