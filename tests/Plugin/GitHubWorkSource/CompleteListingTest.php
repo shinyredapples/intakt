@@ -159,6 +159,43 @@ final class CompleteListingTest extends KernelTestCase
         self::assertSame([], $this->entities->getRepository(StoredItem::class)->findAll());
     }
 
+    public function testAListingWhosePagesOverlapIsShortAndKeepsTheStoredWaitTarget(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->pageOf([$this->issue(1, body: 'Waits for #101'), $this->issue(101)])];
+        $this->tickOver($api->reads());
+        $api->pages = [1 => $this->page(1, 100), 2 => $this->pageOf([$this->issue(100), $this->issue(102)])];
+        $api->namingNext = [1];
+
+        $overlapping = $this->tickOver($api->reads());
+
+        self::assertNull($overlapping);
+        self::assertLoggedError('error', self::NOT_COMPLETE);
+        self::assertInstanceOf(StoredItem::class, $this->entities->find(StoredItem::class, ['project' => 'alpha', 'number' => 101]));
+        self::assertNull($this->entities->find(StoredItem::class, ['project' => 'alpha', 'number' => 102]));
+    }
+
+    public function testAShortListingLeavesTheCallersPendingWorkForTheCallersFlush(): void
+    {
+        $this->entities->persist(new TaskFailure('alpha', 42, 'the build failed'));
+
+        self::assertNull($this->tick());
+        self::assertLoggedError('error', self::NOT_COMPLETE);
+        $this->entities->flush();
+        $this->entities->clear();
+
+        self::assertInstanceOf(TaskFailure::class, $this->entities->find(TaskFailure::class, ['project' => 'alpha', 'number' => 42]));
+    }
+
+    public function testAListingWritesNoneOfTheCallersPendingWork(): void
+    {
+        $this->entities->persist(new TaskFailure('beta', 42, 'the build failed'));
+        $this->reads->lists([Issues::task(1)]);
+
+        self::assertInstanceOf(OpenItems::class, $this->tick());
+        self::assertSame(0, (int) $this->entities->getConnection()->fetchOne('SELECT COUNT(*) FROM work_source_failure WHERE project = ?', ['beta']));
+    }
+
     public function testAListingWhileAnotherOfTheSameProjectRunsReadsNothing(): void
     {
         $this->reads->lists([Issues::task(1)]);
