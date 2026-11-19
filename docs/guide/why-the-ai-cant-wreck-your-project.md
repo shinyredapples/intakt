@@ -132,7 +132,7 @@ On top, the **Security engineer** runs two separate sessions that never see what
 ## Layer 7: merging exactly what was checked
 
 - Intakt merges **exactly the version that was reviewed and passed CI**. If anything was pushed in between, the merge refuses. The only shortcut: a merge of main without conflicts, or a change that touches only documentation, keeps the reviews for the parts it did not touch, and the touched parts are reviewed again.
-- Main is **protected on GitHub**: no force-pushes, no deletion, required checks. A watchdog also checks that main's history was never rewritten, and flags a commit on main that is unsigned or signed by a key other than yours (planned: the check is built, but no command runs it yet).
+- Main is **protected on GitHub**: no force-pushes, no deletion, required checks. A watchdog also checks that main's history was never rewritten, and flags a commit on main that is unsigned or signed by a key other than yours. A commit that is the head of a merge Intakt recorded passes before any signature is looked at (planned: the check is built, but no command runs it yet).
 - If a CI change could reach more than a throwaway machine with read-only access, Intakt **asks you before pushing it**, because GitHub runs a pushed CI setup straight away.
 
 ## When something still goes wrong
