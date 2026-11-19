@@ -13,7 +13,6 @@ use Intakt\Core\Build\UseCase\BuildTask\ParkedTasks;
 use Intakt\Core\Build\UseCase\BuildTask\TaskNotParked;
 use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Support\KernelTestCase;
-use PDO;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\TestWith;
@@ -60,7 +59,7 @@ final class ParkedTasksTest extends KernelTestCase
 
         $this->parked()->park($this->request(7), $this->question('Which store now?', 'Postgres'), $this->recorded(...));
 
-        self::assertSame(1, $this->entities->getConnection()->fetchOne('SELECT COUNT(*) FROM '.ParkedTaskRecord::TABLE));
+        self::assertSame(1, $this->storedCount());
         self::assertSame(['Which store now?', 'Postgres', '2026-11-19T11:00:00+00:00'], [$this->storedRow(7)['question'], $this->storedRow(7)['recommendation'], $this->storedRow(7)['parked_at']]);
     }
 
@@ -112,32 +111,6 @@ final class ParkedTasksTest extends KernelTestCase
         self::assertSame([true, 'Which store?'], $seen);
     }
 
-    public function testAParkingWhoseCommitIsRefusedByAReaderLeavesNoTransactionOpenAndKeepsTheEarlierQuestion(): void
-    {
-        $connection = $this->entities->getConnection();
-        $this->parked()->park($this->request(7), $this->question('Which store?', 'SQLite'), $this->recorded(...));
-        $connection->executeStatement('PRAGMA busy_timeout = 0');
-        $file = $connection->fetchAssociative('PRAGMA database_list');
-        self::assertIsArray($file);
-        self::assertIsString($file['file']);
-        $reader = new PDO('sqlite:'.$file['file']);
-        $reader->beginTransaction();
-        $reader->query('SELECT COUNT(*) FROM '.ParkedTaskRecord::TABLE);
-
-        try {
-            $this->parked()->park($this->request(7), $this->question('Which store now?', 'Postgres'), $this->recorded(...));
-            self::fail('A parking whose commit a reader blocked went through.');
-        } catch (TaskNotParked $unparked) {
-            self::assertSame('issue 7 of project "alpha" could not be parked', $unparked->getMessage());
-        } finally {
-            $reader->rollBack();
-        }
-
-        $native = $connection->getNativeConnection();
-        self::assertInstanceOf(PDO::class, $native);
-        self::assertSame([false, false, 'Which store?'], [$connection->isTransactionActive(), $native->inTransaction(), $this->storedRow(7)['question']]);
-    }
-
     #[TestWith(['{"question":"Which\u0000 store?","choices":["SQLite","Postgres"],"recommendation":"SQLite"}'])]
     #[TestWith(['{"question":"Which store?","choices":["SQLite","Post\u0000gres"],"recommendation":"SQLite"}'])]
     #[TestWith(['{"question":"Which store?","choices":["SQL\u0000ite","Postgres"],"recommendation":"SQL\u0000ite"}'])]
@@ -154,7 +127,16 @@ final class ParkedTasksTest extends KernelTestCase
             self::assertSame('issue 7 of project "alpha" could not be parked: its question holds a NUL character', $unparked->getMessage());
         }
 
-        self::assertSame([false, 0], [$recorded, $this->entities->getConnection()->fetchOne('SELECT COUNT(*) FROM '.ParkedTaskRecord::TABLE)]);
+        self::assertSame([false, 0], [$recorded, $this->storedCount()]);
+    }
+
+    // Read as a number, because PostgreSQL and MySQL may hand a count back as a string.
+    private function storedCount(): int
+    {
+        $count = $this->entities->getConnection()->fetchOne('SELECT COUNT(*) FROM '.ParkedTaskRecord::TABLE);
+        self::assertIsNumeric($count);
+
+        return (int) $count;
     }
 
     private function recorded(): void

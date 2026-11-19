@@ -1047,7 +1047,7 @@ final class BuildTaskTest extends TestCase
         return new BuildTask($issues, $checkout, $this->routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files), new PushStep($this->branchPush($ledger), $checkout), $ledger, $this->parkedTasks());
     }
 
-    // Keeps the rows the store inserts, because ParkedTasksTest proves the database side on SQLite.
+    // Keeps the rows the store inserts, because ParkedTasksTest proves the database side on each engine.
     private function parkedTasks(): ParkedTasks
     {
         $connection = self::createStub(Connection::class);
@@ -1061,7 +1061,7 @@ final class BuildTaskTest extends TestCase
         return new ParkedTasks($connection, new MockClock('2026-11-19T10:00:00+00:00'));
     }
 
-    // Because a real transaction rolls back what the work inserted when it throws, and ParkedTasksTest proves that on SQLite.
+    // Because a real transaction rolls back what the work inserted when it throws, and ParkedTasksTest proves that on each engine.
     private function rolledBackOnFailure(Closure $work, Connection $connection): mixed
     {
         $before = $this->parkedRows;
