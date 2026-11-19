@@ -46,10 +46,18 @@ final readonly class FullReport
         }
     }
 
-    // Because in a tree without Git no .gitignore leaves the reports out, and a report would otherwise be input of the next check.
-    public static function isReport(string $path): bool
+    // Because a tree without Git or without the ignore rule would make an earlier report input of the next check, while an ordinary file that only shares the name must stay input: the name carries the hash of what the runner wrote.
+    public static function isReport(string $root, string $path): bool
     {
-        return 1 === preg_match(self::NAME, $path);
+        $file = $root.'/'.$path;
+
+        if (1 !== preg_match(self::NAME, $path) || !is_file($file) || is_link($file)) {
+            return false;
+        }
+
+        $content = file_get_contents($file);
+
+        return false !== $content && self::nameOf($content) === $path;
     }
 
     // Because without a scratch folder no child may keep a path it inherited.
@@ -71,9 +79,10 @@ final readonly class FullReport
             return null;
         }
 
-        $name = 'report-'.bin2hex(random_bytes(8)).'.json';
-        $report = $summary + ['gates' => array_map($this->wholeResultOf(...), $reports)];
-        $written = $this->written($root.'/'.$name, $report);
+        $gates = array_map($this->wholeResultOf(...), $reports);
+        $content = in_array(null, $gates, true) ? null : $this->encoded($summary + ['gates' => $gates]);
+        $name = null === $content ? null : self::nameOf($content);
+        $written = null !== $name && $this->written($root.'/'.$name, (string) $content);
         $this->discard();
 
         return $written ? $name : null;
@@ -94,10 +103,16 @@ final readonly class FullReport
         return $this->scratch?->path.'/'.$gate.'.json';
     }
 
+    private static function nameOf(string $content): string
+    {
+        return 'report-'.substr(hash('sha256', $content), 0, 16).'.json';
+    }
+
+    // Because a named report holds every finding: a line that dropped findings cannot stand in for a result the child failed to keep.
     /**
-     * @return array<array-key, mixed>
+     * @return array<array-key, mixed>|null
      */
-    private function wholeResultOf(GateReport $report): array
+    private function wholeResultOf(GateReport $report): ?array
     {
         $kept = is_file($this->resultFileOf($report->gate)) ? json_decode((string) file_get_contents($this->resultFileOf($report->gate)), true) : null;
 
@@ -105,7 +120,9 @@ final readonly class FullReport
             return $kept;
         }
 
-        return (array) json_decode($report->line, true);
+        $line = (array) json_decode($report->line, true);
+
+        return 0 === ($line['omitted'] ?? 0) ? $line : null;
     }
 
     // Because only a kept result of the same gate and verdict as the line the verdict came from may stand in for that line.
@@ -127,11 +144,20 @@ final readonly class FullReport
     /**
      * @param array<string, mixed> $report
      */
-    private function written(string $file, array $report): bool
+    private function encoded(array $report): ?string
     {
         try {
-            new Filesystem()->dumpFile($file, json_encode($report, GateResult::JSON_FLAGS | JSON_PRETTY_PRINT)."\n");
-        } catch (IOException|JsonException) {
+            return json_encode($report, GateResult::JSON_FLAGS | JSON_PRETTY_PRINT)."\n";
+        } catch (JsonException) {
+            return null;
+        }
+    }
+
+    private function written(string $file, string $content): bool
+    {
+        try {
+            new Filesystem()->dumpFile($file, $content);
+        } catch (IOException) {
             return false;
         }
 

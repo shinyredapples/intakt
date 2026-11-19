@@ -106,7 +106,7 @@ final readonly class Scope
     // Because a checked tree's .gitignore may lack the rule for the reports, and an earlier report would otherwise be input of the next check; a committed file of that name stays input.
     private function isLeftOverReport(string $path): bool
     {
-        return FullReport::isReport($path) && is_file($this->root.'/'.$path) && !is_link($this->root.'/'.$path);
+        return FullReport::isReport($this->root, $path);
     }
 
     /**

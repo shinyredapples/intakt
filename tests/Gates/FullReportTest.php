@@ -81,6 +81,30 @@ final class FullReportTest extends SandboxTestCase
         self::assertSame([...array_slice($findings, 0, 10), "tool output \u{FFFD}\u{FFFD}"], $this->findingsIn($tree->root.'/'.$name));
     }
 
+    public function testNoReportIsNamedWhenAChildFailedToKeepFindingsItsLineOmits(): void
+    {
+        $tree = $this->emptySandbox();
+        $fullReport = $this->startedReport();
+        $findings = array_map(strval(...), range(1, 12));
+        mkdir((string) $fullReport->environmentFor('dashes')[FullReport::VARIABLE]);
+        $this->keepFor($fullReport, GateResult::withFindings('dashes', $findings));
+
+        $name = $fullReport->writeTo($tree->root, self::SUMMARY, [$this->failingLine('dashes', $findings)]);
+
+        self::assertNull($name);
+        self::assertSame([], glob($tree->root.'/report-*.json') ?: []);
+    }
+
+    public function testTheReportNameCarriesTheHashOfItsContent(): void
+    {
+        $tree = $this->emptySandbox();
+
+        $name = $this->startedReport()->writeTo($tree->root, self::SUMMARY, [$this->failingLine('dashes', ['x'])]);
+
+        self::assertIsString($name);
+        self::assertSame('report-'.substr(hash_file('sha256', $tree->root.'/'.$name) ?: '', 0, 16).'.json', $name);
+    }
+
     public function testAGateWhoseChildKeptNothingIsReportedByItsLine(): void
     {
         $tree = $this->emptySandbox();
