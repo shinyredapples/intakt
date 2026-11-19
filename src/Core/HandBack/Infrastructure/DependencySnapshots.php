@@ -161,7 +161,7 @@ final readonly class DependencySnapshots
      */
     private function treeOf(string $directory): iterable
     {
-        /** @var iterable<SplFileInfo> */
+        /* @var iterable<SplFileInfo> */
         return new RecursiveIteratorIterator(
             new RecursiveDirectoryIterator($directory, FilesystemIterator::SKIP_DOTS),
             RecursiveIteratorIterator::SELF_FIRST,
