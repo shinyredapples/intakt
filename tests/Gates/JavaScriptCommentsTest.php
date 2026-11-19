@@ -193,7 +193,7 @@ final class JavaScriptCommentsTest extends TestCase
         yield 'a comment opener in a class of a pattern after a hashbang ended by a carriage return' => ["#!/usr/bin/env node\rfunction f() {}\r/[// TODO inside]/.test(text);\r"];
         yield 'a comment opener in a class of a pattern after a byte order mark, a hashbang and a function declaration' => ["\u{FEFF}#!/usr/bin/env node\nfunction f() {}\n/[// TODO inside]/.test(text);\n"];
         yield 'a marker in a hashbang, which is no JavaScript comment' => ["#!/usr/bin/env node // TODO later\n"];
-        yield 'a marker after the comment start' =>["// see the TODO list\n"];
+        yield 'a marker after the comment start' => ["// see the TODO list\n"];
         yield 'a reasoned exception' => ["// TODO(#123): show the total once the forge sends it\n"];
         yield 'a marker behind a hash, which is no JavaScript comment' => ["/* # TODO is shell syntax */\n"];
         yield 'a marker in code' => ["const TODO = 1;\n"];
