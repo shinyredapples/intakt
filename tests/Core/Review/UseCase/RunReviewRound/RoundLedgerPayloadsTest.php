@@ -29,6 +29,7 @@ use Intakt\Core\Review\Contract\ReviewerStarted;
 use Intakt\Core\Review\Contract\ReviewerStopped;
 use Intakt\Core\Review\Contract\ReviewStarted;
 use Intakt\Core\Review\Contract\Severity;
+use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictReceived;
 use Intakt\Core\Review\Domain\OnePerPlace;
 use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
@@ -53,6 +54,7 @@ use Symfony\Component\Serializer\SerializerInterface;
 #[CoversClass(DroppedFinding::class)]
 #[CoversClass(RoundLedger::class)]
 #[UsesClass(OnePerPlace::class)]
+#[UsesClass(Verdict::class)]
 #[UsesClass(JudgedFindings::class)]
 #[UsesClass(ResolvedModel::class)]
 #[UsesClass(ProjectNotConfigured::class)]
@@ -143,6 +145,24 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
         $received = new VerdictReceived(self::ROUND, self::REVIEWER, 'security', Tier::Strong, Decision::Changes, 2, ProjectMode::ReviewerForLoop);
 
         self::assertSame(self::IDENTITY.',"decision":"changes","findings":2,"mode":"reviewer-for-loop"}', $this->written($received));
+    }
+
+    public function testABlockedVerdictIntaktGaveIsWrittenWithItsReason(): void
+    {
+        $reviewer = new RoundFixture(self::getContainer())->start(1)->reviewers()[0];
+        $ledger = new InMemoryLedger();
+
+        $this->roundLedger($ledger)->verdictReceived($reviewer, Verdict::noTools());
+
+        self::assertSame(Verdict::noTools()->findings[0]->text, $ledger->payloads()[0]['reason']);
+    }
+
+    public function testAReceivedVerdictWrittenBeforeReasonsWereRecordedReadsWithNoReason(): void
+    {
+        $received = $this->serializer()->deserialize(self::IDENTITY.',"decision":"blocked","findings":1,"mode":"live"}', VerdictReceived::class, JsonEncoder::FORMAT);
+
+        self::assertInstanceOf(VerdictReceived::class, $received);
+        self::assertNull($received->reason);
     }
 
     public function testAnOwedCatchUpIsWrittenWithItsSubstitute(): void
