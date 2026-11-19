@@ -10,7 +10,6 @@ use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use Intakt\Tests\Support\WebTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
-use Symfony\Bridge\Doctrine\Middleware\Debug\DebugDataHolder;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Component\HttpKernel\Profiler\Profile;
 
@@ -34,9 +33,7 @@ final class ListReviewsQueriesTest extends WebTestCase
         }
 
         // The seeding ran before any request, so nothing reset the query log yet; a worker starts each request with an empty one.
-        $queryLog = self::getContainer()->get('doctrine.debug_data_holder');
-        assert($queryLog instanceof DebugDataHolder);
-        $queryLog->reset();
+        self::getContainer()->get('doctrine.debug_data_holder')->reset();
     }
 
     public function testTheReviewsPageOfThreeRoundsReadsTheDatabaseAFixedNumberOfTimes(): void

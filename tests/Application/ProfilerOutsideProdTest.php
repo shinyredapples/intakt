@@ -28,10 +28,9 @@ final class ProfilerOutsideProdTest extends KernelTestCase
         self::assertArrayNotHasKey('profiler_listener', $services);
     }
 
+    // Asked in a process of its own as `debug:container` does, because a kernel cannot be booted in two environments in one process.
     /**
-     * Asked in a process of its own as `debug:container` does, because a kernel cannot be booted in two environments in one process.
-     *
-     * @return array<string, mixed>
+     * @return array<mixed>
      */
     private function servicesOfTheProductionContainer(): array
     {

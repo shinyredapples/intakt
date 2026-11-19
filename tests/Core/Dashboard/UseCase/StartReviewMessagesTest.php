@@ -25,7 +25,6 @@ use PHPUnit\Framework\Attributes\Group;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Component\HttpKernel\Profiler\Profile;
 use Symfony\Component\Messenger\DataCollector\MessengerDataCollector;
-use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Messenger\Stamp\HandledStamp;
 use Symfony\Component\VarDumper\Cloner\Data;
 
@@ -85,7 +84,6 @@ final class StartReviewMessagesTest extends WebTestCase
     private function firstRound(): string
     {
         $commands = self::getContainer()->get('command.bus');
-        assert($commands instanceof MessageBusInterface);
         $start = new StartReview('alpha', RoundFixture::TASK, new RequestedRound('sample', 1, new ChangeSource($this->repository->path, 'main')));
         $round = $commands->dispatch($start)->last(HandledStamp::class)?->getResult();
         assert(is_string($round));
@@ -103,6 +101,23 @@ final class StartReviewMessagesTest extends WebTestCase
         $collector = $profile->getCollector('messenger');
         self::assertInstanceOf(MessengerDataCollector::class, $collector);
 
-        return array_map(static fn (Data $dispatch): string => sprintf('%s %s', $dispatch['bus'], $dispatch['message']['type']), $collector->getMessages());
+        $dispatched = [];
+
+        foreach ($collector->getMessages() as $dispatch) {
+            self::assertInstanceOf(Data::class, $dispatch);
+            $dispatched[] = $this->busAndType($dispatch->getValue(true));
+        }
+
+        return $dispatched;
+    }
+
+    private function busAndType(mixed $dispatch): string
+    {
+        self::assertIsArray($dispatch);
+        self::assertIsString($dispatch['bus']);
+        self::assertIsArray($dispatch['message']);
+        self::assertIsString($dispatch['message']['type']);
+
+        return $dispatch['bus'].' '.$dispatch['message']['type'];
     }
 }
