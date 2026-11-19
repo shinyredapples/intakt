@@ -26,8 +26,8 @@ enum BoardColumn: string
         };
     }
 
-    // What the column will hold and when, because on a fresh install "Nothing here" tells a newcomer nothing about the board (#2067, D7).
-    public function firstDayLine(): string
+    // What the column will hold and when, because "Nothing here" tells a newcomer nothing about the board, on the first day or after (#2067, D7; #2731).
+    public function emptyLine(): string
     {
         return match ($this) {
             self::WaitingOnYou => 'What only you can decide appears here when Intakt asks you',
