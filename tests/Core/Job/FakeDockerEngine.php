@@ -50,14 +50,7 @@ final class FakeDockerEngine
 
     private readonly FakeNetworks $networks;
 
-    /** @var array<string, string> */
-    private array $proxyLogs = [];
-
-    /** @var array<string, string> */
-    private array $standardErrors = [];
-
-    /** @var list<string> */
-    private array $brokenLogs = [];
+    private readonly FakeContainerLogs $logs;
 
     /** @var array<string, non-empty-list<string>> */
     private array $proxyHealth = [];
@@ -73,6 +66,7 @@ final class FakeDockerEngine
     {
         $this->clock = new MockClock();
         $this->networks = new FakeNetworks(fn (): array => $this->containers);
+        $this->logs = new FakeContainerLogs();
     }
 
     public function client(): MockHttpClient
@@ -144,13 +138,13 @@ final class FakeDockerEngine
     // What the job's proxy wrote to its standard output, so a test plays the requests the proxy refused.
     public function proxyLogs(string $job, string $log): void
     {
-        $this->proxyLogs[$job] = $log;
+        $this->logs->proxyLogs($job, $log);
     }
 
     // Everything the job's container wrote to its standard error, the start check's lines and the job's own, so a test plays a failed check or a job that forges one.
     public function jobStandardError(string $job, string $log): void
     {
-        $this->standardErrors[$job] = $log;
+        $this->logs->jobStandardError($job, $log);
     }
 
     // Each state read of the job's proxy takes the next status ('exited' for a proxy that stopped) and the last one stays, so a test plays a proxy that starts slowly, stops or never gets healthy.
@@ -162,7 +156,7 @@ final class FakeDockerEngine
     // The first frame claims more bytes than the body holds, so a test plays a log the engine framed wrongly.
     public function breakLogFrames(string $job): void
     {
-        $this->brokenLogs[] = $job;
+        $this->logs->breakFrames($job);
     }
 
     public function leaveRunning(string $job, string $prefix = 'intakt-job-'): string
@@ -330,7 +324,7 @@ final class FakeDockerEngine
             'start' => $this->start($container),
             'wait' => $this->wait($container, $options),
             'kill' => $this->kill($container),
-            'logs' => $this->logs($container, $options),
+            'logs' => $this->logs->answer($container, is_array($options['query'] ?? null) ? $options['query'] : []),
             default => $this->state($container),
         };
     }
@@ -344,33 +338,6 @@ final class FakeDockerEngine
         }
 
         return $idOrName;
-    }
-
-    /**
-     * @param array<string, mixed> $options
-     */
-    // Framed as the engine frames the log of a container without a terminal (the stream, three zero bytes, the length, the chunk), so the client's frame reading is exercised; only the streams the call asks for are sent, as the engine does.
-    private function logs(FakeContainer $container, array $options): MockResponse
-    {
-        $query = is_array($options['query'] ?? null) ? $options['query'] : [];
-        $proxy = str_starts_with($container->name, 'intakt-egress-');
-        // A passed start check, as docker/job/start-check.sh logs it, so a test that plays no log plays only the job after it.
-        $standardError = $this->standardErrors[$container->job] ?? "intakt-start-check: full mode\n";
-        $framed = ('true' === ($query['stdout'] ?? null) && $proxy ? $this->framed(1, $this->proxyLogs[$container->job] ?? '') : '')
-            .('true' === ($query['stderr'] ?? null) && !$proxy ? $this->framed(2, $standardError) : '');
-
-        if (in_array($container->job, $this->brokenLogs, true)) {
-            $framed = pack('CxxxN', 1, 100).'short';
-        }
-
-        return new MockResponse($framed, ['http_code' => 200, 'response_headers' => ['content-type' => 'application/vnd.docker.multiplexed-stream']]);
-    }
-
-    private function framed(int $stream, string $log): string
-    {
-        $lines = preg_split('/(?<=\n)/', $log, flags: PREG_SPLIT_NO_EMPTY);
-
-        return implode('', array_map(static fn (string $line): string => pack('CxxxN', $stream, strlen($line)).$line, false === $lines ? [] : $lines));
     }
 
     private function start(FakeContainer $container): MockResponse

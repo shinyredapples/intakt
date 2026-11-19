@@ -199,7 +199,7 @@ final class StartCheckScriptTest extends TestCase
         return (string) file_get_contents(self::SCRIPT);
     }
 
-    // Without the prefix, which every line of the check carries.
+    // Stripped, because every line of the check carries the prefix and the expected lines read clearer without it.
     private function logOf(Process $run): string
     {
         return str_replace('intakt-start-check: ', '', $run->getErrorOutput());

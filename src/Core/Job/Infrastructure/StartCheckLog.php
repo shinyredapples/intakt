@@ -32,9 +32,9 @@ final readonly class StartCheckLog
     }
 
     /**
-     * @return array<int, string> the check's lines without their prefix, keyed by their index in the log
+     * @return array<int, string>
      */
-    // A last part without its line end is left out, because the read limit or the end of the check may have cut it.
+    // Keyed by the line's index in the log, so a failure can name it; a last part without its line end is left out, because the read limit may have cut it.
     private function checkLinesOf(string $standardError): array
     {
         $lines = array_slice(explode("\n", $standardError), 0, -1);
@@ -69,7 +69,7 @@ final readonly class StartCheckLog
      *
      * @return list<StartCheckFailure>
      */
-    // A log without a mode line never passes, and a mode line that disagrees with the checks before it is not trusted either.
+    // A log without a mode line never passes, and a disagreeing mode line fails too, because the script logs it from the same failures, so the log was not the script's alone.
     private function modeFailures(?string $modeLine, array $failures): array
     {
         if (null === $modeLine) {
