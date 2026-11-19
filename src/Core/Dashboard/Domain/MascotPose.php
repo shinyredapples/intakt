@@ -10,4 +10,5 @@ enum MascotPose: string
     case Waiting = 'waiting';
     case Conducting = 'conducting';
     case Bowing = 'bowing';
+    case Asleep = 'asleep';
 }
