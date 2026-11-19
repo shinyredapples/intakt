@@ -170,6 +170,22 @@ abstract class JourneyTestCase extends TestCase
         );
     }
 
+    // A service of a kernel of the journey's own on the instance's database, with the settings given, so a journey queues a round and presses the dashboard's Stop as the dashboard does and a console process reads it.
+    /**
+     * @template T of object
+     *
+     * @param class-string<T>      $service
+     * @param array<string,string> $environment
+     *
+     * @return T
+     */
+    final protected function serviceWith(string $service, array $environment): object
+    {
+        $found = $this->bootDriverKernel($environment)->getContainer()->get('test.service_container')->get($service);
+
+        return $found instanceof $service ? $found : self::fail($service.' is not a service of the test container');
+    }
+
     // The instance's pages served by a kernel of the journey's own on its database, because bin/instance hands its server only an allowlist of variables, so a page that reads one the journey sets (the sample repository) needs this kernel.
     /**
      * @param array<string,string> $environment
