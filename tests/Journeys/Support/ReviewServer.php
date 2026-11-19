@@ -20,7 +20,7 @@ final readonly class ReviewServer
     public static function start(): self
     {
         $port = self::freePort();
-        // Without E in variables_order the runtime never sees the instance's environment, as in bin/instance's built-in server.
+        // E in variables_order, because without it the runtime would never see the instance's environment (as in bin/instance's built-in server).
         $process = new Process([PHP_BINARY, '-d', 'variables_order=EGPCS', '-S', '127.0.0.1:'.$port, '-t', self::ROOT.'/public', self::ROOT.'/public/index.php'], self::ROOT, ['DASHBOARD_PORT' => (string) $port]);
         $process->start();
         $server = new self($process, $port);
