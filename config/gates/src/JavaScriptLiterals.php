@@ -17,7 +17,8 @@ final readonly class JavaScriptLiterals
     private const string SPACE_LEADS = "\xC2\xE1\xE2\xE3\xEF";
     private const string WORD_ASCII = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_$\\';
     private const string DECIMAL_DIGITS = '0123456789_';
-    private const string RADIX_DIGITS = '0123456789abcdefABCDEF_';    private const array RADIX_PREFIXES = ['x', 'X', 'o', 'O', 'b', 'B'];
+    private const string RADIX_DIGITS = '0123456789abcdefABCDEF_';
+    private const array RADIX_PREFIXES = ['x', 'X', 'o', 'O', 'b', 'B'];
     private const array EXPONENTS = ['e', 'E'];
     private const string BIGINT_SUFFIX = 'n';
 
