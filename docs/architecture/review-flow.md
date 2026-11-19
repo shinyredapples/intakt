@@ -1,6 +1,6 @@
 ## Review flow
 
-One review from a door to the act list. The pages [Review rounds](review-rounds.md), [Judge](vendor.md#judge) and [Quorum policies](quorum-policies.md) hold the details; this page only shows how they connect.
+One review from a door to the act list. The pages [Review rounds](review-rounds.md), [Judge](vendor.md#judge) and [Quorum policies](quorum-policies.md) hold the details; this page only shows how they connect. The round's states (collecting, complete, judged) are the `review_round` state machine, declared by the Workflow attributes on `src/Core/Review/Infrastructure/ReviewRoundStateMachine.php`; each reviewer's states are the `reviewer` state machine in `config/packages/workflow.php` ([Review rounds](review-rounds.md)).
 
 ```mermaid
 flowchart TD
