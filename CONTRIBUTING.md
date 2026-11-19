@@ -16,10 +16,10 @@ Open an issue. The guide [writing a good task](docs/guide/writing-a-good-task.md
 
 People with write access to the repository decide what gets built. Opening an issue or a pull request asks them; it does not start any work by itself.
 
-- **An issue is built only after someone with write access labels it `ready`** (the label this repository uses; Intakt's own default is `intakt`). If someone without write access edits it after that, it waits until a person with write access edits or confirms it again.
+- **An issue is built only when its author and the last person who saved its text both have write access, and someone with write access labeled it `ready`** (the label this repository uses; Intakt's own default is `intakt`). An issue you open is therefore not built as it stands, even with a maintainer's label: a maintainer can open a task of their own from it, with your text copied inside an `<!-- external -->` block. Having Intakt take over your issue directly (the `take-over` label) is planned. If someone without write access edits a task, it waits until a person with write access saves its text again.
 - **Labels count only when someone with write access added them.** A label you add, or one added by an issue template or a workflow, has no effect on what Intakt does. Bot accounts never steer, even with write access, except Intakt's own and its maintainer agent's, and those two only while they have write access themselves.
-- **A pull request from outside is reviewed by Intakt's review panel after a maintainer labels it.** The findings come back as one comment. For now a maintainer merges it by hand. Having Intakt rework it (the `take-over` label) is planned.
-- **CI does not run on a pull request from a fork:** every CI job runs only for branches of this repository and for main. Run `bin/check` yourself before you open it (see below).
+- **Intakt's review panel reviews every open pull request of a repository it watches once CI on its head is green**; no label is needed. It only reads a pull request whose author has no write access: it never boots its code. The findings come back as one comment. For now a maintainer merges it by hand. Having Intakt rework it (the `take-over` label) is planned.
+- **CI checks nothing on a pull request from a fork:** every CI job runs only for branches of this repository and for main, and skips on a fork's pull request even after a maintainer approves the workflow run. Run `bin/check` yourself before you open it (see below).
 
 The full rules are in [steering Intakt](docs/guide/steering-intakt.md).
 
