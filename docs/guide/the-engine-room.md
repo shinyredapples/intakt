@@ -7,7 +7,8 @@ The dashboard and the logs use a handful of words for the loop's machinery: lane
 Think of a workshop with workbenches. Each bench does one job at a time.
 
 - A **build slot** is a bench where a builder works on one task. A project can have one or more.
-- The **review lane** is the bench where finished work is reviewed and merged.
+- The **review lane** is where finished work is reviewed, then handed to the landing step. It has as many **review workers** as your settings allow, so reviews keep up with the builders: each worker reviews a different piece of work, and two workers never review the same one.
+- The **landing step** merges approved work into main, one piece at a time for the whole install, whichever worker approved it.
 
 The benches work **independently**: while one task is being reviewed, the next one is already being built. They hand work to each other, like an assembly line.
 
@@ -17,9 +18,13 @@ flowchart LR
   q --> s2[Build slot 2]
   s1 -- finished work --> rq[(Waiting for review)]
   s2 -- finished work --> rq
-  rq --> rl[Review lane]
-  rl -- approved --> main[(Main)]
-  rl -- changes needed --> q
+  rq --> r1[Review worker 1]
+  rq --> r2[Review worker 2]
+  r1 -- approved --> land[Landing step: one at a time]
+  r2 -- approved --> land
+  land --> main[(Main)]
+  r1 -- changes needed --> q
+  r2 -- changes needed --> q
 ```
 
 How many build slots run at the same time depends on the budget (below): when the week's allowance is tight, only one does.
@@ -28,11 +33,13 @@ Builders on one machine share its processors. What keeps them apart today is eac
 
 ## Queues: who is next
 
-There are two queues: tasks **waiting to be built** and finished work **waiting to be reviewed**. They are sorted differently. *(Planned:)* The build queue will go milestone by milestone. Today it puts priority before the milestone's due date (`urgent`, then priority, then milestone, then the oldest task); the order described next is designed and arrives with the work-intake task. In it, `urgent` tasks come first, then the tasks of the milestone due soonest (tasks with no milestone, or a milestone without a due date, come last), and only within one milestone does priority decide (`high`, then `normal`, then `low`; a task with no priority counts as `normal`), then the oldest task. So a later milestone only gets build time when every ready task of the earlier one is taken or blocked. One exception in the build queue: a task whose pull request is already open (it needs a fix or an update) goes before any task not started yet, unless that task is `urgent`, so open work lands before new work begins. A task held back because its files are in use never lets a later milestone go ahead (see [the journey of a task](the-journey-of-a-task.md)). Today the review queue goes priority first (`urgent`, `high`, `normal`, `low`), then age. One exception in the review queue: a change that is approved, has green checks and needs nothing else is merged before any new review starts, whatever its priority, because waiting only creates more work.
+There are two queues: tasks **waiting to be built** and finished work **waiting to be reviewed**. They are sorted differently. *(Planned:)* The build queue will go milestone by milestone. Today it puts priority before the milestone's due date (`urgent`, then priority, then milestone, then the oldest task); the order described next is designed and arrives with the work-intake task. In it, `urgent` tasks come first, then the tasks of the milestone due soonest (tasks with no milestone, or a milestone without a due date, come last), and only within one milestone does priority decide (`high`, then `normal`, then `low`; a task with no priority counts as `normal`), then the oldest task. So a later milestone only gets build time when every ready task of the earlier one is taken or blocked. One exception in the build queue: a task whose pull request is already open (it needs a fix or an update) goes before any task not started yet, unless that task is `urgent`, so open work lands before new work begins. *(Planned:)* A task or open pull request that has waited counts one priority step higher every few days (5 by default, per project), never up to `urgent` and never into another milestone; [the journey of a task](the-journey-of-a-task.md) explains it. A task held back because its files are in use never lets a later milestone go ahead (see [the journey of a task](the-journey-of-a-task.md)). Today the review queue goes priority first (`urgent`, `high`, `normal`, `low`), then age. *(Planned:)* Pull requests waiting for review move up the same way, one priority step every few days, never up to `urgent`. One exception in the review queue: a change that is approved, has green checks and needs nothing else is merged before any new review starts, whatever its priority, because waiting only creates more work.
 
 Planned: within one priority and milestone, a task that more other tasks wait on, counted down the whole chain, goes before an older one; among finished changes waiting for review, the same holds within one priority (the review queue does not look at milestones). For builds it never moves a task ahead of a higher priority or an earlier milestone; for reviews it never moves one ahead of a higher priority. A follow-up made from a reviewer's nice-to-have note joins the next milestone instead of its original's, unless it fixes something that blocked the original or no later milestone is open.
 
 **The review cap** (planned: the rule is written, but the build lane does not use it yet) stops the builders from running too far ahead: when a few pieces of finished work are already waiting for a reviewer, the builders pause. Work that waits too long goes stale (main moves on and it needs updating), so building more of it would only create waste. An `urgent` task may still start, one at a time. Only work that is waiting for a reviewer, or being read by one, counts. Work that is waiting for its checks (CI), for a machine to run them, or to be merged doesn't count towards the cap, and neither does work waiting for *you* or on hold, because no reviewer can move it: otherwise the builders would pause while the reviewers have nothing to read.
+
+**The in-flight limit** (planned: the rule is written, but the build lane does not use it yet) is a second, higher bound beside the review cap. It counts every piece of finished work that is pushed but not merged yet, whatever it waits for: a reviewer, a review in progress, its checks, a machine to run them, or the merge. When that count reaches the limit, the builders pause too, even if the review cap is not full. Two exceptions are planned: one urgent build may start when the review cap is full (but not when this limit is full), and a rework of work already pushed is never held by this limit, because it replaces work that is already counted. By default the limit is twice the review cap. The two limits do different jobs: the review cap keeps builders from outrunning the reviewers, and the in-flight limit keeps the pile of unmerged work small, because every piece of it may clash with the others when they are merged, and each one needs its checks run.
 
 ## Ticks, events and deadlines: what makes things move
 
@@ -51,7 +58,9 @@ Everything that waits has a **deadline** that wakes it, for example "check again
 
 ## CI: the second opinion
 
-**CI** (continuous integration) is GitHub running the project's checks on its own machines after every push. Intakt has already run the same checks before pushing, so CI is a second, independent opinion, and the reviewers only start once it is green.
+**CI** (continuous integration) is the project's full check run again on the pushed version after every push, on a machine the builder does not control. Today that is GitHub running the project's checks on its own machines; Intakt runs the same checks (`bin/check --fast` for a PHP project) before pushing, so CI is a second, independent opinion, and the reviewers only start once it is green.
+
+*(Planned; this is the decided design:)* CI is the project's full check, tests included, run on the pushed version after every push: by default a fresh container that Intakt starts itself, or the forge's CI (GitHub's machines) where the project sets it, or both. That run is the builder's check. It is a second, independent opinion, and the reviewers only start once it is green. While it runs, the build slot is already free for the next task. For Intakt's own repository it is GitHub's CI, and the checks before the push are only the quick ones that do not run the change's code. Another project runs before the push whatever pre-push command it configures, and its whole check when it configures none.
 
 Intakt's own checks run on GitHub's machines by default. Whoever maintains a copy of the Intakt repository can move them to a machine of their own by setting the repository variable `CI_RUNS_ON`, but only to a machine that is wiped back to a clean state before every job and cannot reach their home or office network: a change under review runs its own code there, and a machine that keeps anything between jobs would let it leave something behind for the next one. The machine also needs Docker and a few system settings; the [setup page](../user/self-hosted-ci.md) lists them. A paid runner service that hands out a fresh machine for every job works too; the same page says which two settings it needs. One job always stays on GitHub's machines: the one that files the urgent task when the nightly journeys fail, because it needs GitHub's own command-line tool.
 
@@ -62,7 +71,7 @@ If CI never starts (GitHub occasionally misses an update), Intakt notices after 
 ## Locks: one at a time
 
 A **lock** is a "one at a time" sign on something that must not be used by two jobs at once:
-- the review lane, so two reviews don't merge into main at the same moment;
+- the landing step, so two approved changes never merge into main at the same moment, even while several reviews run side by side;
 - an AI account, so too many calls don't hit the same company at once (a *semaphore*: a lock that lets a set number through);
 - the moment of an update, so no job starts while Intakt is being replaced.
 
@@ -97,12 +106,17 @@ A cycle that changes nothing (the builder couldn't fix the problem because it ne
 
 AI subscriptions come with allowances that refill over time, usually a **five-hour window** and a **weekly window**. Intakt reads how much of each is used, as the AI company measures it, and compares that with how much of the week has passed. Today Intakt can keep the latest reading of each window per account and decide from it whether one more job may start on that account: not at a window's ceiling (90% unless you set another), with the five-hour ceiling lowered while the week is used faster than its pace, and a second job at once only on a reading of the last few minutes with room to spare. The same decision also knows an account's **cooldown** (after the AI company said its limit is reached, that account waits until the reset the company named; other accounts carry on) and holds that stop every account: a budget back-off and a pause still let approved work merge, while a failure back-off and a drain stop merges too. Intakt starts a failure back-off by itself, for 15 minutes, only when something no single pull request causes goes wrong: GitHub refuses Intakt's credentials, the disk is full, the lock store fails while a pull request is being locked or unlocked, two different pull requests fail with the same error within an hour, or a hand-over cannot be recorded; one pull request that keeps failing only waits itself. When an account sends no reading for three hours, Intakt warns you once in its log. `intakt:budget:replay` shows these decisions over a made-up day without changing anything ([user guide](../user/README.md#cooldowns-pauses-and-outage-notices)). Reading the windows from the AI companies, asking that decision before each job, the controls that set a pause or a back-off, and the slots and models of the pace below are planned.
 
-Two rules in one sentence each: an extra builder starts whenever its own AI company's allowance would otherwise expire, whatever the reviewers' company has left; and a window is recognized by how long it lasts and when it resets, never by the name the company gives it.
+Three rules in one sentence each (the first two planned): an extra builder starts only while your accounts together would still have more than one build's worth of the week left over when they refill, and no other AI company that reviews the work is about to use up its own week; while there is such room left over, a task's first attempt gets a stronger model, unless its label asks for a tier, except for a few tasks picked at random that start on a cheaper model instead to show what the stronger one gains, and when the room is short the extra builder gives way first; and a window is recognized by how long it lasts and when it resets, never by the name the company gives it.
 
 ```mermaid
 flowchart LR
   read[Measured use<br/>vs. time passed] --> pace{Pace}
-  pace -- "behind: room to spare" --> up[More slots,<br/>stronger models]
+  pace -- "behind: room would go unused" --> left{"More than one build's worth<br/>left over at the refill?"}
+  left -- no --> same
+  left -- yes --> strong["Stronger first attempts<br/>(planned)"]
+  strong --> extra{"Room for an extra slot too,<br/>and the reviewers' companies<br/>keep enough of their week?"}
+  extra -- yes --> up["One more slot<br/>(planned)"]
+  extra -- no --> same[The usual slots]
   pace -- "on track" --> keep[As planned]
   pace -- "ahead: spending fast" --> down[One slot,<br/>a cheaper model]
   read --> ceiling{Window nearly full?}
@@ -150,4 +164,5 @@ While a slot drains, the dashboard says "draining" on that slot; it usually take
 | **Hand-over** | the task goes to the maintainer agent, which decides what happens next |
 | **Owner cap** | at most a few things wait for you at once, so you're never flooded; more work of that kind waits its turn |
 | **Review cap** (planned) | at most a few pieces of finished work wait for a reviewer (or are being reviewed) before the builders pause; work waiting for its checks or to be merged doesn't count |
+| **In-flight limit** (planned) | at most a few more pieces of finished but unmerged work exist, whatever they wait for, before the builders pause; twice the review cap by default |
 | **Parked** | a job that is waiting for something outside (CI, you) and has given its bench back |

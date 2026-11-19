@@ -19,6 +19,11 @@ final readonly class NoCooldowns implements AccountCooldowns
     }
 
     #[Override]
+    public function coolDownUntilPlanResets(Account $account): void
+    {
+    }
+
+    #[Override]
     public function coolDownRejected(Account $account): void
     {
     }

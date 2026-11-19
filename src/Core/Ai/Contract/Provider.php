@@ -39,6 +39,12 @@ enum Provider: string
         return !in_array($this, [self::ClaudeCode, self::Codex], true);
     }
 
+    // Only the subscription CLIs, because their accounts spend a plan's usage windows, so a limit without a reset means the plan is spent until a window resets.
+    public function spendsAPlan(): bool
+    {
+        return !$this->readsTheCheckout();
+    }
+
     // Not the subscription CLIs, because their bridges take no output limit option.
     public function limitsOutput(): bool
     {

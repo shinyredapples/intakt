@@ -12,6 +12,7 @@ use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierNotMapped;
 use Intakt\Core\Ai\Contract\TierResolver;
+use Intakt\Core\Review\Contract\PromptAssembly;
 use Intakt\Core\Review\Contract\SampleProjectData;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\AnthropicDescriptor;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\HuggingFaceDescriptor;
@@ -40,6 +41,7 @@ use Uri\Rfc3986\Uri;
 #[UsesClass(Provider::class)]
 #[UsesClass(TierNotMapped::class)]
 #[UsesClass(SampleProjectData::class)]
+#[UsesClass(PromptAssembly::class)]
 final class SymfonyAiKeyCheckTest extends TestCase
 {
     private const string BODY = 'abcdefgh12345678';
@@ -135,6 +137,22 @@ final class SymfonyAiKeyCheckTest extends TestCase
         self::assertCount(1, $calls);
         $request = $calls[0][2];
         self::assertSame($expected, array_map(static fn (string $field): mixed => $request[$field] ?? null, array_combine(array_keys($expected), array_keys($expected))));
+    }
+
+    /**
+     * @param array<string, int|string> $expected
+     * @param array<string, mixed>      $answer
+     */
+    #[DataProvider('requests')]
+    public function testEachProviderIsAskedOnlyTheFixedCheckPrompt(string $key, array $expected, array $answer): void
+    {
+        $calls = $this->callsMadeFor($key, $answer);
+
+        self::assertCount(1, $calls);
+        $body = json_encode($calls[0][2], JSON_THROW_ON_ERROR);
+        self::assertSame(1, substr_count($body, '"role":"user"'));
+        self::assertSame(1, substr_count($body, '"Answer with the single word: ok"'));
+        self::assertStringNotContainsString('"system"', $body);
     }
 
     /**

@@ -19,6 +19,7 @@ use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Ledger\Infrastructure\DoctrineLedger;
 use Intakt\Core\Memory\Contract\MemoryIndex;
+use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Review\Contract\ChangeSource;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\Panel;
@@ -369,7 +370,7 @@ final readonly class RoundFixture
 
     private function roundLedger(Ledger $ledger): RoundLedger
     {
-        return new RoundLedger($ledger, $this->modes, $this->serializer, new ConfiguredTierResolver(['alpha' => ['tiers' => ['standard' => ['provider' => 'anthropic', 'model' => self::MODEL, 'substitutes' => [['provider' => 'openai', 'model' => self::SUBSTITUTE_MODEL]]]]]], []));
+        return new RoundLedger($ledger, $this->modes, $this->serializer, new ConfiguredTierResolver(['alpha' => ['tiers' => ['standard' => ['provider' => 'anthropic', 'model' => self::MODEL, 'substitutes' => [['provider' => 'openai', 'model' => self::SUBSTITUTE_MODEL]]]]]], []), $this->container->get(Redactor::class));
     }
 
     private function startWith(RunReviewRound $command, MessageBusInterface $queue): string

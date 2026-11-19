@@ -20,7 +20,6 @@ use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Core\Review\Contract\ReviewerOutcome;
 use Intakt\Core\Review\Contract\ReviewProgress;
 use Intakt\Core\Review\Contract\RoundEnds;
-use Intakt\Core\Review\Contract\RoundNotNext;
 use Intakt\Core\Review\Contract\RoundTierNotMapped;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\ReviewRound;
@@ -35,8 +34,6 @@ use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRound;
 use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
 use Intakt\Plugin\Vendor\Contract\Vendor;
 use Symfony\Component\Clock\ClockInterface;
-use Symfony\Component\Messenger\Envelope;
-use Symfony\Component\Messenger\Exception\HandlerFailedException;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Messenger\Stamp\HandledStamp;
 
@@ -73,7 +70,7 @@ final readonly class ReviewChange implements ChangeReviews
     {
         $this->refuseUnmappedTiers($request);
         $target = new ReviewTarget(new ReviewSubject($request->project, $request->checkoutRoot, $request->task, $request->diff), $request->identity);
-        $handled = $this->dispatched(new RunReviewRound($target, $request->panel, $request->round))->last(HandledStamp::class);
+        $handled = $this->commands->dispatch(new RunReviewRound($target, $request->panel, $request->round))->last(HandledStamp::class);
         $roundId = $handled?->getResult();
         assert(is_string($roundId));
 
@@ -98,16 +95,6 @@ final readonly class ReviewChange implements ChangeReviews
         $reviewerTiers = array_map(static fn (PanelReviewer $reviewer): Tier => $reviewer->model->tier, $panel->reviewers);
 
         return [...$reviewerTiers, Vendor::JUDGE_TIER];
-    }
-
-    // Unwrapped, because a round another caller opened first is the caller's to report in its own words, not a failed handler.
-    private function dispatched(RunReviewRound $command): Envelope
-    {
-        try {
-            return $this->commands->dispatch($command);
-        } catch (HandlerFailedException $failed) {
-            throw array_first($failed->getWrappedExceptions(RoundNotNext::class, true)) ?? $failed;
-        }
     }
 
     // The last state seen is returned at the upper wait, so what the reviewers did finish is still reported.
@@ -200,9 +187,7 @@ final readonly class ReviewChange implements ChangeReviews
      */
     private function actListOf(ReviewRound $round): array
     {
-        $id = $round->id()->toRfc4122();
-
-        return $this->findings->actListOf($round, $this->ledger->actIdsOf($id), $this->ledger->sameCauseOf($id));
+        return $this->findings->actListOf($round, $this->ledger->judgeDoneOf($round->id()->toRfc4122()));
     }
 
     /**

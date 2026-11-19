@@ -576,12 +576,12 @@ final class ReviewChangeTest extends KernelTestCase
         return $transport;
     }
 
-    // Messenger's own handling, so a refusal reaches the caller wrapped as the application's command bus wraps it; the reviewers' messages go to the test's workers.
+    // Messenger's own handling, so a refusal reaches the caller unwrapped as the application's command bus unwraps it; the reviewers' messages go to the test's workers.
     private function commandBus(): MessageBusInterface
     {
         $handler = $this->fixture->startHandlerOn($this->fixture->bus);
 
-        return new MessageBus([new HandleMessageMiddleware(new HandlersLocator([RunReviewRound::class => [$handler]]))]);
+        return new MessageBus([new HandleMessageMiddleware(new HandlersLocator([RunReviewRound::class => [$handler]]))], unwrapExceptions: true);
     }
 
     private function serializer(): SerializerInterface

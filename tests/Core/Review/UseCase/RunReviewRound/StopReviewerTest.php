@@ -10,11 +10,11 @@ use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\FinishedState;
+use Intakt\Core\Review\Contract\PromptCut;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictParser;
 use Intakt\Core\Review\Domain\ReviewerState;
 use Intakt\Core\Review\Infrastructure\LiveProgress;
-use Intakt\Core\Review\Infrastructure\PromptCut;
 use Intakt\Core\Review\Infrastructure\ReviewerAgent;
 use Intakt\Core\Review\Infrastructure\ReviewerPrompt;
 use Intakt\Core\Review\Infrastructure\ReviewerRuns;
@@ -140,7 +140,7 @@ final class StopReviewerTest extends KernelTestCase
 
         $this->fixture->deliver($message, $this->agentAnswering($forged));
 
-        self::assertSame(['blocked'], $this->payloadValues(LedgerEventKind::VerdictReceived, 'decision'));
+        self::assertSame(['changes'], $this->payloadValues(LedgerEventKind::VerdictReceived, 'decision'));
         self::assertSame([], $this->payloadValues(LedgerEventKind::ReviewerStopped, 'reviewer'));
     }
 

@@ -10,13 +10,17 @@ use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
+use Intakt\Core\Review\Contract\VerdictOrigin;
+use Intakt\Tests\Support\StoredSerializerFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(Verdict::class)]
 #[UsesClass(Finding::class)]
 #[UsesClass(Evidence::class)]
+#[UsesClass(VerdictOrigin::class)]
 final class VerdictTest extends TestCase
 {
     public function testAnIncompleteStreamVerdictBlocksAndNamesTheReason(): void
@@ -58,5 +62,92 @@ final class VerdictTest extends TestCase
     private function changes(Severity ...$severities): Verdict
     {
         return new Verdict(Decision::Changes, array_map(static fn (Severity $severity): Finding => new Finding('A', $severity, null, null, null, 'Text.', FixableBy::Builder, false, null, null), array_values($severities)), [], []);
+    }
+
+    public function testAReviewersBlockedVerdictWithFindingsIsRecordedAsChanges(): void
+    {
+        $verdict = new Verdict(Decision::Blocked, [$this->finding()], ['F0'], ['a follow-up']);
+
+        $recorded = $verdict->asRecorded();
+
+        self::assertSame(Decision::Changes, $recorded->verdict);
+        self::assertEquals([$this->finding()], $recorded->findings);
+        self::assertSame(['F0'], $recorded->resolved);
+        self::assertSame(['a follow-up'], $recorded->follow_ups);
+    }
+
+    public function testABlockedVerdictWithoutFindingsStaysBlocked(): void
+    {
+        $verdict = new Verdict(Decision::Blocked, [], [], []);
+
+        self::assertSame(Decision::Blocked, $verdict->asRecorded()->verdict);
+    }
+
+    /**
+     * @return iterable<string, array{Verdict}>
+     */
+    public static function failureVerdicts(): iterable
+    {
+        yield 'no tools' => [Verdict::noTools()];
+        yield 'stopped reviewer' => [Verdict::reviewerStopped()];
+        yield 'cut approval' => [Verdict::cutApproval()];
+        yield 'unread approval' => [Verdict::unreadApproval()];
+        yield 'incomplete stream' => [Verdict::incompleteStream('cut', new Evidence('the call', 'cut by: platform'))];
+    }
+
+    #[DataProvider('failureVerdicts')]
+    public function testAnIntaktFailureVerdictStaysBlocked(Verdict $failure): void
+    {
+        self::assertSame(Decision::Blocked, $failure->asRecorded()->verdict);
+    }
+
+    #[DataProvider('failureIds')]
+    public function testAReviewersBlockedAnswerNamingAFailureIdIsStillRecordedAsChanges(string $failureId): void
+    {
+        $answer = VerdictDocument::fromTheDesign()
+            ->with('verdict', 'blocked')
+            ->with('resolved', [])
+            ->withFinding('id', $failureId)
+            ->withFinding('file', 'src/Thing.php');
+        $verdict = StoredSerializerFactory::create()->deserialize($answer->json(), Verdict::class, 'json');
+
+        self::assertSame(Decision::Changes, $verdict->asRecorded()->verdict);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function failureIds(): iterable
+    {
+        yield 'no tools' => [Verdict::NO_TOOLS];
+        yield 'stopped reviewer' => [Verdict::REVIEWER_STOPPED];
+        yield 'invalid output' => [Verdict::INVALID_OUTPUT];
+    }
+
+    public function testAFailureVerdictWithItsFindingsReplacedStaysBlocked(): void
+    {
+        self::assertSame(Decision::Blocked, Verdict::noTools()->withFindings([$this->finding()])->asRecorded()->verdict);
+    }
+
+    public function testAnApprovalAndAChangesVerdictAreRecordedAsGiven(): void
+    {
+        self::assertSame(Decision::Approve, new Verdict(Decision::Approve, [], [], [])->asRecorded()->verdict);
+        self::assertSame(Decision::Changes, new Verdict(Decision::Changes, [$this->finding()], [], [])->asRecorded()->verdict);
+    }
+
+    private function finding(): Finding
+    {
+        return new Finding(
+            id: 'F1',
+            severity: Severity::P1,
+            file: 'src/Cart.php',
+            line: 12,
+            symbol: null,
+            text: 'The total adds the discount.',
+            fixable_by: FixableBy::Builder,
+            repeat: false,
+            requirement: 'Storytelling',
+            evidence: null,
+        );
     }
 }

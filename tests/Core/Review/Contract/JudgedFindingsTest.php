@@ -117,6 +117,36 @@ final class JudgedFindingsTest extends TestCase
         self::assertEquals([$finding], JudgedFindings::of($this->marks([]), [$finding])->actList);
     }
 
+    public function testTheJudgesNoteOnARejectedP1IsKeptAsTheJudgeGaveIt(): void
+    {
+        $judged = JudgedFindings::of(new Judgement([new JudgedFinding('a', Mark::Reject, null, "  Not reachable.\n")]), [$this->finding('a', Severity::P1)]);
+
+        self::assertSame(['a' => "  Not reachable.\n"], $judged->notes);
+    }
+
+    public function testTheJudgesNoteOnADeferredP2IsKept(): void
+    {
+        $judged = JudgedFindings::of(new Judgement([new JudgedFinding('a', Mark::Defer, null, 'Needs its own design.')]), [$this->finding('a', Severity::P2)]);
+
+        self::assertSame(['a' => 'Needs its own design.'], $judged->notes);
+    }
+
+    public function testANoteOnAP1MarkedActOrOnAP3IsNotKept(): void
+    {
+        $judgement = new Judgement([new JudgedFinding('a', Mark::Act, null, 'Real.'), new JudgedFinding('b', Mark::Reject, null, 'A nit.'), new JudgedFinding('c', Mark::Defer, null, 'Later.')]);
+
+        $judged = JudgedFindings::of($judgement, [$this->finding('a', Severity::P1), $this->finding('b', Severity::P3), $this->finding('c', Severity::P3)]);
+
+        self::assertSame([], $judged->notes);
+    }
+
+    public function testARejectedP1WithoutANoteHasNone(): void
+    {
+        $judged = JudgedFindings::of($this->marks(['a' => Mark::Reject]), [$this->finding('a', Severity::P1)]);
+
+        self::assertSame([], $judged->notes);
+    }
+
     /**
      * @param array<string, Mark> $marks
      */

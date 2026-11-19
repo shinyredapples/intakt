@@ -67,6 +67,7 @@ use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageLedger;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageReservation;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\VendorAccountLimit;
 use Intakt\Tests\Core\Ai\Infrastructure\NoCooldowns;
+use Intakt\Tests\Core\Budget\ReadingsInMemory;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\Infrastructure\RemembersNothing;
 use Intakt\Tests\Core\Review\RecordedRoundUpdates;
@@ -247,7 +248,7 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
     public function testAnAnswerIntaktCouldNotReadLeavesTheAccountUsable(string $recording): void
     {
         $logger = new BufferingLogger();
-        $cooldowns = new AccountCooldownWindows(new ArrayAdapter(), new LockFactory(new InMemoryStore()), new MockClock(self::NOW), new InMemoryLedger(), new NullLogger(), StoredSerializerFactory::create(), [Provider::ClaudeCode->value => [Account::DEFAULT]]);
+        $cooldowns = new AccountCooldownWindows(new ReadingsInMemory(new MockClock(self::NOW)), new ArrayAdapter(), new LockFactory(new InMemoryStore()), new MockClock(self::NOW), new InMemoryLedger(), new NullLogger(), StoredSerializerFactory::create(), [Provider::ClaudeCode->value => [Account::DEFAULT]]);
         $accounts = new AccountFailoverPlatform(Provider::ClaudeCode, [Account::DEFAULT => $this->claudeCodePlatform(RecordedClaudeCodeCli::replaying($recording))], $cooldowns, new MockClock(self::NOW), $logger);
 
         try {
@@ -351,6 +352,23 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
         yield 'a read without its result' => ['review-server-read-unanswered'];
         yield 'a read through another server' => ['other-server-read'];
         yield 'a read embedded in the answer text' => ['review-server-read-in-text'];
+        yield 'a read from a stream that never reports the server connected' => ['review-server-read-without-status'];
+    }
+
+    public function testAnApprovalFromACliWhoseReviewServerConnectedButReadNothingIsRefused(): void
+    {
+        $verdict = $this->vendor(RecordedClaudeCodeCli::replaying('review-server-connected-unread'), servers: $this->servers())->review('alpha', Tier::Strong, $this->request())->verdict;
+
+        self::assertSame(Decision::Blocked, $verdict->verdict);
+        self::assertSame(Verdict::UNREAD_APPROVAL, $verdict->findings[0]->id);
+    }
+
+    public function testAnApprovalFromACliWhoseReviewServerNeverConnectedIsRefused(): void
+    {
+        $verdict = $this->vendor(RecordedClaudeCodeCli::replaying('review-server-not-connected'), servers: $this->servers())->review('alpha', Tier::Strong, $this->request())->verdict;
+
+        self::assertSame(Decision::Blocked, $verdict->verdict);
+        self::assertSame(Verdict::UNREAD_APPROVAL, $verdict->findings[0]->id);
     }
 
     public function testAnApprovalFromACliStartedWithoutTheReviewServerForWantOfARoundIsStillRefused(): void
