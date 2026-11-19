@@ -337,6 +337,18 @@
       <div class="title">${esc(t.t)}</div>${t.needs ? `<p class="blocker ask">${esc(t.needs)}</p>` : ""}${block}
       <p class="meta">${meta.join("")}</p></a>`;
   }
+  /* An empty column says what lands there and when, on the first day and after (DESIGN.md, First day). */
+  const EMPTY_LINES = {
+    "Waiting on you": "What only you can decide appears here when Intakt asks you",
+    Backlog: "Tasks appear here when Intakt takes in an issue",
+    Ready: "Tasks appear here once they are ready to plan",
+    Planned: "Tasks appear here once their plan is made",
+    Building: "Tasks appear here while an agent builds them",
+    Checking: "Tasks appear here while their checks run",
+    "In review": "Reviews appear here while a panel reviews a change",
+    Merging: "Tasks appear here while they wait to merge",
+    Done: "Reviews appear here once the judge has decided them",
+  };
   function renderBoard() {
     const lanes = document.getElementById("lanes");
     if (lanes) lanes.innerHTML = LANES.map((l) => l.idle
@@ -348,7 +360,7 @@
     const wd = document.getElementById("wdots");
     if (wd) {
       wd.innerHTML = LANES.map((l) => `<span class="dot ${l.idle ? "idle" : "ok"}"></span>`).join("");
-      document.getElementById("wsum").innerHTML = busy.length ? `${busy.length} working, ${idle} idle<span class="w-detail">: building #612 and #208, reviewing #598</span>` : "Nobody is working yet";
+      document.getElementById("wsum").innerHTML = busy.length ? `${busy.length} working, ${idle} idle<span class="w-detail">: building #612 and #208, reviewing #598</span>` : "Nobody is working yet: reviewers appear here while they review a change";
     }
     const board = document.getElementById("board");
     if (!board) return;
@@ -359,7 +371,7 @@
       return `<section class="col${needs ? " col-needs" : ""}${fold ? " collapsed" : ""}" id="col-${slug(c)}" aria-label="${c}">
         <button type="button" class="col-fold" aria-expanded="false" aria-controls="cards-${slug(c)}" aria-label="Show ${c}, ${ts.length} tasks"><span>${c}</span><span class="count">${ts.length}</span></button>
         <div class="col-head"><h3>${c}</h3><span class="count${needs && ts.length ? " needs" : ""}">${ts.length}</span>${fold ? `<button type="button" class="btn quiet sm col-hide" aria-label="Collapse ${c}">Hide</button>` : ""}</div>
-        ${needs ? '<a class="also" href="waiting.html#w-login">Also waiting: 1 account login</a>' : ""}<div class="col-cards" id="cards-${slug(c)}">${ts.map(cardHTML).join("") || `<p class="col-empty">${needs ? "Nothing needs you" : "Nothing here"}</p>`}</div></section>`;
+        ${needs ? '<a class="also" href="waiting.html#w-login">Also waiting: 1 account login</a>' : ""}<div class="col-cards" id="cards-${slug(c)}">${ts.map(cardHTML).join("") || `<p class="col-empty">${EMPTY_LINES[c]}</p>`}</div></section>`;
     }).join("");
     const sw = document.getElementById("colswitch");
     if (sw) {
@@ -513,13 +525,19 @@
     if (DEMO === "firstday") {
       document.querySelectorAll(".rail .count.needs").forEach((c) => c.remove());
       document.querySelectorAll(".banner").forEach((b) => b.remove());
-      lead.textContent = "Intakt is ready. Nothing to build yet.";
-      main.querySelector(".page-head .actions")?.remove();
-      document.getElementById("working").insertAdjacentHTML("beforebegin", `<section class="firstday"><img src="assets/favicon-32.png" alt=""><div><h2>Give Intakt its first task</h2>
-        <ol><li>In <span class="mono">acme/field-notes</span>, add the label <strong>intakt</strong> to an issue that says what you want.</li>
-        <li>Intakt picks it up within a minute. It shows up in Ready, then Planned.</li>
-        <li>If the issue leaves a real choice open, the Tech lead asks you here and on your phone.</li></ol>
-        <p class="muted small">14 open issues in field-notes, none labeled yet. <a href="#">Open the issues</a></p></div></section>`);
+      lead.innerHTML = '<a href="setup.html">Nothing is running yet. Start the first review.</a>';
+      // Phones keep the first day's actions: Set up Intakt is the only way forward from an empty board.
+      const actions = main.querySelector(".page-head .actions");
+      actions.classList.remove("hide-phone");
+      actions.innerHTML = '<a class="btn primary" href="setup.html">Set up Intakt</a><a class="btn secondary" href="history.html">Open the review list</a>';
+      const files = { light: "assets/octopus-waiting-light-144.webp", dark: "assets/octopus-waiting-dark-144.webp" };
+      const octopus = (theme) => `<img class="octopus-${theme}" src="${files[theme]}" alt="" width="144" height="144">`;
+      document.getElementById("working").insertAdjacentHTML("beforebegin", `<section class="firstday" aria-labelledby="firstday-h">${octopus("light")}${octopus("dark")}<div><h2 id="firstday-h">Give Intakt its first task</h2>
+        <ol><li>Choose <strong>Set up Intakt</strong> and add an AI provider and a project.</li>
+        <li>Start the first review there. It shows up in In review while the panel reviews the change, then in Done once the judge decides.</li>
+        <li>Reviewers show up under Who is working while they review it.</li></ol></div></section>`);
+      // With no lane the strip would open to nothing, so it is a plain line without a chevron, as the built board renders it.
+      document.getElementById("working").outerHTML = '<p class="working working-none" id="working">Nobody is working yet: reviewers appear here while they review a change</p>';
     }
     if (DEMO === "loading") {
       document.querySelectorAll(".banner").forEach((b) => b.remove());
