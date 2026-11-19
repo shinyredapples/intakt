@@ -41,7 +41,7 @@ final class JourneyVendorTest extends TestCase
 {
     public function testEveryReviewApprovesWithoutFindings(): void
     {
-        $request = new ReviewRequest(new Checkout(__DIR__), new ReviewBrief(new ChangeUnderReview('sample', 'Add a cart.', 'diff --git a/a b/a'), []), new ReviewerConversation('You review for correctness.', new UuidV7()));
+        $request = new ReviewRequest(new Checkout(__DIR__), new ReviewBrief(new ChangeUnderReview('sample', 'Add a cart.', 'diff --git a/a b/a'), [], 1), new ReviewerConversation('You review for correctness.', new UuidV7()));
 
         $review = new JourneyVendor()->review('sample', Tier::Standard, $request);
 

@@ -295,6 +295,17 @@ final class FindingLedgerTest extends TestCase
         self::assertSame([1], $ledger->all()[0]->rounds);
     }
 
+    public function testAnotherReviewersFindingBesideAStoredChangesVerdictWithAReservedIdStaysOpen(): void
+    {
+        $ledger = new FindingLedger();
+
+        $ledger->recordVerdict(1, new Verdict(Decision::Changes, Verdict::noTools()->findings, [], []));
+        $ledger->recordVerdict(1, $this->verdict([], [$this->finding('cart-total')]));
+
+        self::assertCount(1, $ledger->open());
+        self::assertSame('F1', $ledger->open()[0]->id);
+    }
+
     public function testAFindingThatOnlySharesItsTextWithAFailedReviewIsRecorded(): void
     {
         $ledger = new FindingLedger();

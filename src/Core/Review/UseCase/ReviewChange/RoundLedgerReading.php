@@ -11,6 +11,7 @@ use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
+use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\DroppedFinding;
 use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\QuorumPolicy;
@@ -49,6 +50,15 @@ final readonly class RoundLedgerReading implements RoundCosts
         }
 
         return null;
+    }
+
+    // All of the round's votes at once, because a read per reviewer would scan the judge events once for each; none for a round judged before votes were counted, so its reviewers vote as their verdicts were given.
+    /**
+     * @return array<string, Decision>
+     */
+    public function votesOf(string $roundId): array
+    {
+        return $this->judgeDoneOf($roundId)->votes ?? [];
     }
 
     /**
