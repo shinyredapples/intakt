@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\PhpStan\FinalClassRule;
+use Intakt\Gates\PhpStan\RepositoryCode;
 use Intakt\Gates\StaticAnalysisGate;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -31,6 +32,7 @@ final class FinalClassRuleTest extends PhpStanRuleTestCase
     {
         return self::casesOfOnePhpstanRun([
             'AFinalDoctrineEntityPassesStaticAnalysis' => ['final-entity'],
+            'AnAnonymousClassInAClosurePassesStaticAnalysis' => ['anonymous-class-in-closure'],
             'ANonFinalReadonlyServiceFailsStaticAnalysis' => ['non-final-service', 'src/Mailer.php:7 intakt.finalClass Class Mailer is not final: declare it final'],
         ], 'src/');
     }
