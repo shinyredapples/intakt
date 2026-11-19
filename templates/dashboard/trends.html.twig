@@ -1,0 +1,65 @@
+{% extends 'dashboard/base.html.twig' %}
+
+{% block title %}Trends - Intakt{% endblock %}
+
+{#- An estimated figure carries the same label as the review page's cost, so a guess never reads as a reading (decision D5 of #2206). -#}
+{% macro tile(label, figure, estimated) %}
+<div class="tile"{% if figure is null %} data-no-data{% endif %}>
+    <dt>{{ label }}{% if estimated and figure is not null %} {{ include('dashboard/components/figure_kind.html.twig', {kind: enum('Intakt\\Core\\Platform\\Contract\\FigureKind').Estimated, at: 'trends-cost'}, with_context = false) }}{% endif %}</dt>
+    <dd>{{ figure ?? 'No data' }}</dd>
+</div>
+{% endmacro %}
+
+{% block body %}
+{% set route = constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_TRENDS') %}
+<div class="page-head">
+    <div>
+        <h1>Trends</h1>
+        <p class="lead">How the reviews went, over every project. The figures fill in as reviews add up.</p>
+        {% if trends.anyReview %}
+        {{ include('dashboard/components/meta.html.twig', {facts: [
+            {icon: 'rounds', text: trends.roundsRun ~ (trends.roundsRun == 1 ? ' review round' : ' review rounds') ~ ' over every project'},
+        ]|merge(trends.includesTheDemo ? [{text: 'Includes the recorded demo review'}] : [])
+         |merge(trends.demoLeftOut and trends.canLeaveOutTheDemo ? [{text: 'Leaves out the recorded demo review'}] : [])}, with_context = false) }}
+        {% endif %}
+    </div>
+    {# A link, not a stored choice, so the address says what the figures count (D1 of #2858). #}
+    {% if trends.canLeaveOutTheDemo %}
+    <div class="actions">
+        {% if trends.demoLeftOut %}
+        <a class="fchip" href="{{ path(route) }}">Count the demo review</a>
+        {% else %}
+        <a class="fchip" href="{{ path(route, {(constant('Intakt\\Core\\Dashboard\\UseCase\\ShowTrends\\ShowTrendsController::LEAVE_OUT_DEMO')): '0'}) }}">Leave out the demo review</a>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% if not trends.anyReview %}
+{# The same start as step 3 of the setup page; an install without the sample change has nothing to start here, so the action opens that step, which says what is missing (D8 of #2858). #}
+<div class="empty">
+    {{ include('dashboard/components/character.html.twig', {character: enum('Intakt\\Core\\Dashboard\\Domain\\MascotPose').Waiting, size: 144}, with_context = false) }}
+    <h2>No reviews yet</h2>
+    <p class="muted">Trends show once the first review has run.</p>
+    {% if sample_can_start %}
+    <form method="post" action="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::START_FIRST_REVIEW')) }}" class="start-first-review">
+        <input type="hidden" name="_token" value="{{ csrf_token(constant('Intakt\\Core\\Dashboard\\UseCase\\StartReview\\StartFirstReviewController::TOKEN_ID')) }}">
+        {{ include('dashboard/components/button.html.twig', {kind: 'primary', type: 'submit', label: 'Start the first review'}, with_context = false) }}
+    </form>
+    {% else %}
+    <a class="btn primary" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::FIRST_RUN')) }}#step-first-review">Start the first review</a>
+    {% endif %}
+</div>
+{% else %}
+{% set cost = trends.costPerRound %}
+<dl class="tiles" aria-label="Review figures">
+    {{ _self.tile('Review rounds run', trends.roundsRun, false) }}
+    {{ _self.tile('P1 and P2 findings on act lists', trends.seriousActFindings, false) }}
+    {{ _self.tile('Caught by one reviewer only', trends.caughtByOneReviewerOnlyPercent is null ? null : trends.caughtByOneReviewerOnlyPercent ~ '%', false) }}
+    {{ _self.tile('Median time from round start to verdict', trends.medianTimeToVerdict, false) }}
+    {{ _self.tile('Cost per round', cost is null ? null : cost.reading, true) }}
+</dl>
+{% if cost is not null %}
+<p class="tiles-note muted">Cost per round is the mean of the rounds with a known estimate, {{ cost.priceDateReading }}.</p>
+{% endif %}
+{% endif %}
+{% endblock %}
