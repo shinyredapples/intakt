@@ -7,6 +7,7 @@ namespace Intakt\Core\Build\UseCase\RunBuildJob;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierResolutionFailure;
 use Intakt\Core\Build\Contract\BuildBrief;
+use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Platform\Contract\ReportableFailure;
 use InvalidArgumentException;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -39,6 +40,10 @@ final readonly class RunBuildJobCommand
             return Command::FAILURE;
         }
 
+        if ($outcome->question instanceof BuildQuestion) {
+            return $this->asked($io, $outcome->question);
+        }
+
         if (!$outcome->built()) {
             return $this->failed($io, $outcome);
         }
@@ -67,6 +72,19 @@ final readonly class RunBuildJobCommand
         $io->error('failed: '.$outcome->verdict->reason());
 
         return Command::FAILURE;
+    }
+
+    private function asked(SymfonyStyle $io, BuildQuestion $question): int
+    {
+        $io->writeln('question: '.OutputFormatter::escape($question->question));
+
+        foreach ($question->choices as $choice) {
+            $io->writeln('choice: '.OutputFormatter::escape($choice));
+        }
+
+        $io->writeln('recommendation: '.OutputFormatter::escape($question->recommendation));
+
+        return Command::SUCCESS;
     }
 
     private function handedBack(SymfonyStyle $io, BuildJobOutcome $outcome, string $path): int

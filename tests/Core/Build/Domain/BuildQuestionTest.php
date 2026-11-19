@@ -1,0 +1,61 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Tests\Core\Build\Domain;
+
+use Intakt\Core\Build\Domain\BuildQuestion;
+use Intakt\Core\Build\Domain\QuestionRefused;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\TestWith;
+use PHPUnit\Framework\TestCase;
+
+#[CoversClass(BuildQuestion::class)]
+#[CoversClass(QuestionRefused::class)]
+final class BuildQuestionTest extends TestCase
+{
+    public function testAQuestionWithChoicesAndARecommendationAmongThemIsAccepted(): void
+    {
+        $question = BuildQuestion::fromHandedBack('{"question":" Which store? ","choices":["SQLite","Postgres"],"recommendation":"SQLite"}');
+
+        self::assertSame(['Which store?', ['SQLite', 'Postgres'], 'SQLite'], [$question->question, $question->choices, $question->recommendation]);
+    }
+
+    #[TestWith(['{"question":"Q","choices":["a","b"],"recommendation":"c"}', 'the recommendation is not one of the choices'])]
+    #[TestWith(['{"question":"Q","choices":["a"]}', 'the recommendation is not one of the choices'])]
+    #[TestWith(['{"question":"Q","choices":[],"recommendation":"a"}', 'the question has no list of choices'])]
+    #[TestWith(['{"question":"Q","recommendation":"a"}', 'the question has no list of choices'])]
+    #[TestWith(['{"question":"Q","choices":{"x":"a"},"recommendation":"a"}', 'the question has no list of choices'])]
+    #[TestWith(['{"question":"Q","choices":"a","recommendation":"a"}', 'the question has no list of choices'])]
+    #[TestWith(['{"question":["Q"],"choices":["a"],"recommendation":"a"}', 'the question text is empty'])]
+    #[TestWith(['{"question":"Q","choices":["a"," "],"recommendation":"a"}', 'a choice is not a non-empty text'])]
+    #[TestWith(['{"question":"Q","choices":["a",3],"recommendation":"a"}', 'a choice is not a non-empty text'])]
+    #[TestWith(['{"question":" ","choices":["a"],"recommendation":"a"}', 'the question text is empty'])]
+    #[TestWith(['not json', 'the question is not a JSON object'])]
+    #[TestWith(['["a"]', 'the question is not a JSON object'])]
+    #[TestWith(['"a"', 'the question is not a JSON object'])]
+    public function testAQuestionThatBreaksTheRuleIsRefusedWithItsReason(string $text, string $reason): void
+    {
+        $this->expectExceptionObject(new QuestionRefused($reason));
+
+        BuildQuestion::fromHandedBack($text);
+    }
+
+    public function testAQuestionLongerThanTheLimitIsRefused(): void
+    {
+        $text = json_encode(['question' => str_repeat('q', BuildQuestion::MAX_BYTES), 'choices' => ['a'], 'recommendation' => 'a']);
+
+        $this->expectExceptionObject(QuestionRefused::tooLong(BuildQuestion::MAX_BYTES));
+
+        BuildQuestion::fromHandedBack((string) $text);
+    }
+
+    public function testAQuestionExactlyAtTheLimitIsAccepted(): void
+    {
+        $base = (string) json_encode(['question' => '', 'choices' => ['a'], 'recommendation' => 'a']);
+        $text = (string) json_encode(['question' => str_repeat('q', BuildQuestion::MAX_BYTES - strlen($base)), 'choices' => ['a'], 'recommendation' => 'a']);
+
+        self::assertSame(BuildQuestion::MAX_BYTES, strlen($text));
+        self::assertSame(['a'], BuildQuestion::fromHandedBack($text)->choices);
+    }
+}

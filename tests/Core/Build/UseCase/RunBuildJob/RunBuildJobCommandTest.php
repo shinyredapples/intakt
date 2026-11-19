@@ -11,6 +11,8 @@ use Intakt\Core\Ai\Contract\TierNotMapped;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Build\Contract\BuildBrief;
 use Intakt\Core\Build\Domain\BuilderPrompt;
+use Intakt\Core\Build\Domain\BuildQuestion;
+use Intakt\Core\Build\Domain\QuestionRefused;
 use Intakt\Core\Build\Domain\GatesAtOnce;
 use Intakt\Core\Build\Domain\GatesByDefault;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuilderNotOnClaudeCode;
@@ -51,6 +53,8 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(BuilderNotOnClaudeCode::class)]
 #[UsesClass(BuildBrief::class)]
 #[UsesClass(BuilderPrompt::class)]
+#[UsesClass(BuildQuestion::class)]
+#[UsesClass(QuestionRefused::class)]
 #[UsesClass(GatesAtOnce::class)]
 #[UsesClass(GatesByDefault::class)]
 #[UsesClass(Fence::class)]
@@ -120,6 +124,24 @@ final class RunBuildJobCommandTest extends TestCase
         self::assertStringStartsWith("claude exited with 1\n", $tester->getDisplay());
         self::assertStringContainsString('failed: '.BuildVerdict::NoCommits->reason(), $this->flat($tester));
         self::assertFileDoesNotExist($this->folder.'/out.bundle');
+    }
+
+    public function testAnAskedJobPrintsTheQuestionItsChoicesAndItsRecommendationAndWritesNoBundle(): void
+    {
+        $tester = $this->executed(new JobOutput(['question.json' => '{"question":"Which <b>store</b>?","choices":["SQLite","Postgres"],"recommendation":"SQLite"}']), []);
+
+        self::assertSame(Command::SUCCESS, $tester->getStatusCode());
+        self::assertSame("question: Which <b>store</b>?\nchoice: SQLite\nchoice: Postgres\nrecommendation: SQLite\n", $tester->getDisplay());
+        self::assertFileDoesNotExist($this->folder.'/out.bundle');
+    }
+
+    public function testARefusedQuestionIsPrintedAsAFailedBuildWithItsReason(): void
+    {
+        $tester = $this->executed(new JobOutput(['question.json' => 'not json']), []);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringStartsWith("question refused: the question is not a JSON object\n", $tester->getDisplay());
+        self::assertStringContainsString('failed: '.BuildVerdict::QuestionRefused->reason(), $this->flat($tester));
     }
 
     public function testAnUnknownTierIsPrintedAndFails(): void

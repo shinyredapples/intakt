@@ -4,7 +4,7 @@
 # Copies the build clone's branches into TMPDIR, runs Claude Code there with the prompt on its input, then bundles the branch's new commits.
 # The builder's bin/check runs <gates at once> gates at the same time, a count the orchestrator hands over only when it is below what bin/check picks from the job's limits; when it is empty, INTAKT_GATE_SLOTS is left as the job's environment has it (unset unless the image sets it), so bin/check uses the job's limits (its CPUs and memory) to size its gates at once itself.
 # The session ends at its turn limit or when the allowance is used up, and the script outlives it, so what it committed before is still bundled.
-# Writes build.log, handback.bundle (only when the branch has new commits) and pull-request.md (only when PR.md is a regular file) into INTAKT_JOB_OUTPUT.
+# Writes build.log, handback.bundle (only when the branch has new commits), pull-request.md (only when PR.md is a regular file) and question.json (only when QUESTION.json is a regular file) into INTAKT_JOB_OUTPUT.
 set -u
 
 source="$1"
@@ -87,16 +87,17 @@ export GIT_CONFIG_GLOBAL GIT_CONFIG_NOSYSTEM
 # The builder can write to the output folder too, and take its permissions away, so only what this script writes after the session is handed back.
 # chmod follows a link, so a link the builder left is removed without being touched.
 chmod u+rwx -- "$output"
-for planted in "$output/pull-request.md" "$output/handback.bundle"; do
+for planted in "$output/pull-request.md" "$output/handback.bundle" "$output/question.json"; do
     if [ -d "$planted" ] && [ ! -L "$planted" ]; then
         chmod -R u+rwx -- "$planted"
     fi
 done
-rm -rf -- "$output/pull-request.md" "$output/handback.bundle"
+rm -rf -- "$output/pull-request.md" "$output/handback.bundle" "$output/question.json"
 
 # The orchestrator reads this exit code as no result, because a planted file left here would otherwise be handed back.
 if [ -e "$output/pull-request.md" ] || [ -L "$output/pull-request.md" ] \
-    || [ -e "$output/handback.bundle" ] || [ -L "$output/handback.bundle" ]; then
+    || [ -e "$output/handback.bundle" ] || [ -L "$output/handback.bundle" ] \
+    || [ -e "$output/question.json" ] || [ -L "$output/question.json" ]; then
     echo 'the output folder could not be cleared' >> "$log"
     exit 3
 fi
@@ -104,6 +105,11 @@ fi
 # A link is not followed, because it could point the text at any file the job can read.
 if [ -f PR.md ] && [ ! -L PR.md ]; then
     cp PR.md "$output/pull-request.md"
+fi
+
+# The same for the question, which says the builder stopped to ask instead of building.
+if [ -f QUESTION.json ] && [ ! -L QUESTION.json ]; then
+    cp QUESTION.json "$output/question.json"
 fi
 
 # The branch by its full name, so a branch the builder checked out instead is never what is handed back; git refuses an empty bundle.

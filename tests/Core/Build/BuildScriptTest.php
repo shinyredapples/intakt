@@ -431,6 +431,35 @@ final class BuildScriptTest extends TestCase
         self::assertFileDoesNotExist($this->output.'/pull-request.md');
     }
 
+    public function testAQuestionTheCliWritesInTheCheckoutIsHandedBack(): void
+    {
+        $this->givenTheCli(<<<'SH'
+            printf '{"question":"Which store?","choices":["SQLite"],"recommendation":"SQLite"}' > QUESTION.json
+            SH);
+
+        $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertSame('{"question":"Which store?","choices":["SQLite"],"recommendation":"SQLite"}', $this->outputFile('question.json'));
+    }
+
+    public function testAQuestionThatIsALinkIsNotHandedBack(): void
+    {
+        $this->givenTheCli('ln -s "$RECORD/prompt.md" QUESTION.json');
+
+        $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertFileDoesNotExist($this->output.'/question.json');
+    }
+
+    public function testAQuestionTheCliWritesIntoTheOutputIsNotHandedBack(): void
+    {
+        $this->givenTheCli('echo planted > "$INTAKT_JOB_OUTPUT/question.json"');
+
+        $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertFileDoesNotExist($this->output.'/question.json');
+    }
+
     public function testTheClisOutputGoesToTheLog(): void
     {
         $this->givenTheCli('echo "{\"type\":\"result\"}"; echo "warning" >&2');

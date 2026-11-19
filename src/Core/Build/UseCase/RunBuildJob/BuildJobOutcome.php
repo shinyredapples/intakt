@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Build\UseCase\RunBuildJob;
 
+use Intakt\Core\Build\Domain\BuildQuestion;
+
 // Untrusted, because the builder wrote both: the hand-back check reads the bundle before anything trusts it.
 final readonly class BuildJobOutcome
 {
@@ -12,6 +14,7 @@ final readonly class BuildJobOutcome
         public ?string $bundle = null,
         public ?string $pullRequestText = null,
         public string $log = '',
+        public ?BuildQuestion $question = null,
     ) {
     }
 
