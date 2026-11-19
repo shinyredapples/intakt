@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Job\UseCase\BuildJobImage;
 
+use Closure;
 use Composer\Semver\Constraint\Constraint;
 use Composer\Semver\Constraint\ConstraintInterface;
 use Composer\Semver\Constraint\MultiConstraint;
@@ -84,7 +85,7 @@ final readonly class PhpProfile
     {
         $parser = new VersionParser();
 
-        return Intervals::get(MultiConstraint::create([...array_map($parser->parseConstraints(...), $bounds), $this->constraint]))['numeric'];
+        return array_values(Intervals::get(MultiConstraint::create([...array_map($parser->parseConstraints(...), $bounds), $this->constraint]))['numeric']);
     }
 
     /**
@@ -103,17 +104,7 @@ final readonly class PhpProfile
      */
     private function highestPatchIn(array $intervals): ?string
     {
-        foreach (array_reverse($intervals) as $interval) {
-            [$major, $minor, $patch] = $this->patchOf($interval->getEnd()->getVersion());
-            // The patch below the end too, because an end the rule excludes ("<8.4.20") admits only the one before it.
-            $highest = $this->firstAllowed($major, $minor, [$patch, $patch - 1]);
-
-            if (null !== $highest) {
-                return $highest;
-            }
-        }
-
-        return null;
+        return $this->firstPatchNear(array_reverse($intervals), fn (Interval $interval): Constraint => $interval->getEnd(), -1);
     }
 
     /**
@@ -121,43 +112,26 @@ final readonly class PhpProfile
      */
     private function lowestPatchIn(array $intervals): ?string
     {
+        return $this->firstPatchNear($intervals, fn (Interval $interval): Constraint => $interval->getStart(), 1);
+    }
+
+    /**
+     * @param list<Interval>                $intervals
+     * @param Closure(Interval): Constraint $edge
+     */
+    private function firstPatchNear(array $intervals, Closure $edge, int $step): ?string
+    {
         foreach ($intervals as $interval) {
-            [$major, $minor, $patch] = $this->patchOf($interval->getStart()->getVersion());
-            // The patch after the start too, because a start the rule excludes (">8.4.1") or a fourth part ("8.4.1.5") admits only the next patch.
-            $lowest = $this->firstAllowed($major, $minor, [$patch, $patch + 1]);
+            [$major, $minor, $patch] = array_map(intval(...), array_slice(explode('.', explode('-', $edge($interval)->getVersion())[0]), 0, 3));
+            // The neighbor too, because an edge the rule excludes ("<8.4.20", ">8.4.1") or a fourth part ("8.4.1.5") admits only the patch next to it.
+            $near = array_find([sprintf('%d.%d.%d', $major, $minor, $patch), sprintf('%d.%d.%d', $major, $minor, $patch + $step)], $this->allows(...));
 
-            if (null !== $lowest) {
-                return $lowest;
+            if (null !== $near) {
+                return $near;
             }
         }
 
         return null;
-    }
-
-    /**
-     * @param list<int> $patches
-     */
-    private function firstAllowed(int $major, int $minor, array $patches): ?string
-    {
-        foreach ($patches as $patch) {
-            $version = sprintf('%d.%d.%d', $major, $minor, $patch);
-
-            if ($patch >= 0 && $this->allows($version)) {
-                return $version;
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * @return array{int, int, int}
-     */
-    private function patchOf(string $normalized): array
-    {
-        [$major, $minor, $patch] = array_map(intval(...), array_slice(explode('.', explode('-', $normalized)[0]), 0, 3));
-
-        return [$major, $minor, $patch];
     }
 
     /**
