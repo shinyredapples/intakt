@@ -13,8 +13,9 @@ final readonly class DependencySnapshotKey
     {
     }
 
+    // A missing file is hashed as absent, not as empty, because a tree without the file and a tree with an empty one are different lock inputs.
     /**
-     * @param array<string, string|null> $contents each lock file's contents by name; a missing name or null is a file the tree lacks
+     * @param array<string, string|null> $contents
      */
     public static function of(DependencyStep $step, array $contents, string $platformVersion): self
     {

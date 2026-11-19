@@ -131,7 +131,8 @@ final readonly class DependencySnapshots
     private function leastRecentlyUsedFirst(): array
     {
         clearstatcache();
-        $names = array_values(array_filter(scandir($this->root) ?: [], DependencySnapshotKey::isValue(...)));
+        $entries = scandir($this->root);
+        $names = array_values(array_filter(false === $entries ? [] : $entries, DependencySnapshotKey::isValue(...)));
         $lastUse = array_map(fn (string $name): int => (int) filemtime($this->root.'/'.$name), $names);
         array_multisort($lastUse, SORT_ASC, $names, SORT_ASC, SORT_STRING);
 
@@ -161,7 +162,6 @@ final readonly class DependencySnapshots
      */
     private function treeOf(string $directory): iterable
     {
-        /* @var iterable<SplFileInfo> */
         return new RecursiveIteratorIterator(
             new RecursiveDirectoryIterator($directory, FilesystemIterator::SKIP_DOTS),
             RecursiveIteratorIterator::SELF_FIRST,

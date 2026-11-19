@@ -660,7 +660,9 @@ final class PhpGateDependencyStepTest extends TestCase
      */
     private function lockFileWith(array $package): void
     {
-        $this->project(['require' => [(string) $package['name'] => '*']]);
+        $name = $package['name'] ?? null;
+        self::assertIsString($name);
+        $this->project(['require' => [$name => '*']]);
         new Filesystem()->dumpFile(
             $this->directory.'/composer.lock',
             json_encode(['packages' => [$package], 'packages-dev' => []], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES),
