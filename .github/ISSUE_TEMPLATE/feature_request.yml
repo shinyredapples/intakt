@@ -1,0 +1,18 @@
+name: Feature request
+description: Suggest something Intakt should do differently.
+body:
+  - type: markdown
+    attributes:
+      value: See [writing a good task](https://github.com/shinyredapples/intakt/blob/main/docs/guide/writing-a-good-task.md).
+  - type: textarea
+    id: what-should-be-different
+    attributes:
+      label: What should be different, and why
+    validations:
+      required: true
+  - type: textarea
+    id: how-to-tell-it-is-done
+    attributes:
+      label: How to tell it is done
+    validations:
+      required: true

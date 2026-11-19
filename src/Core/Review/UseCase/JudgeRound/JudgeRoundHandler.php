@@ -43,8 +43,10 @@ final readonly class JudgeRoundHandler
         [$findings, $dropped] = $this->sortedByQuotes($round, $this->rounds->findingsOf($round));
         $judgement = new CausesInOneHunk()->checked($this->judgementOf($round, $findings), $findings, $this->rounds->hunksOf($round));
         $judged = JudgedFindings::of($judgement, $findings, $dropped);
-        $this->rounds->record($round, $judged);
-        $this->events->dispatch(new RoundJudged($command->roundId, $round->checkoutRoot()));
+        // Only after a committed judge transition, because a listener drops what an unjudged round still needs, such as its kept snapshot.
+        if ($this->rounds->record($round, $judged)) {
+            $this->events->dispatch(new RoundJudged($command->roundId, $round->checkoutRoot()));
+        }
     }
 
     // Before the judge and the act list, so a finding quoting code the change does not hold is neither judged nor merged with a real one at its place; its reason goes with the round.
