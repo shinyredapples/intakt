@@ -70,8 +70,7 @@ final readonly class JudgedRounds
         return $this->change->of($round->diff(), $round->checkoutRoot());
     }
 
-    // Checked again under the round's lock, because another worker may have judged the round while this one waited for the model, or recorded its judging as failed for good and queued its publication already, before a restart handed the judging out again.
-    // False when the round was not judged here, so the caller announces only a judge transition that committed.
+    // Checked again under the round's lock, because another worker may have judged the round while this one waited for the model, or recorded its judging as failed for good and queued its publication already, before a restart handed the judging out again; false then, so the caller announces only a judge transition that committed.
     public function record(ReviewRound $round, JudgedFindings $judged): bool
     {
         $recorded = false;
