@@ -31,7 +31,7 @@ final class RoundLockTest extends TestCase
         $first = new RoundLock($locks);
         $first->tryHolding('round-1');
 
-        $first($this->finished(HttpKernelInterface::SUB_REQUEST));
+        $first(self::finished(HttpKernelInterface::SUB_REQUEST));
 
         self::assertFalse(new RoundLock($locks)->tryHolding('round-1'));
     }
@@ -42,7 +42,7 @@ final class RoundLockTest extends TestCase
         $first = new RoundLock($locks);
         $first->tryHolding('round-1');
 
-        $first($this->finished(HttpKernelInterface::MAIN_REQUEST));
+        $first(self::finished(HttpKernelInterface::MAIN_REQUEST));
 
         self::assertTrue(new RoundLock($locks)->tryHolding('round-1'));
     }
@@ -61,8 +61,8 @@ final class RoundLockTest extends TestCase
         self::assertTrue($second->tryHolding('round-2'));
     }
 
-    private function finished(int $type): FinishRequestEvent
+    private static function finished(int $type): FinishRequestEvent
     {
-        return new FinishRequestEvent($this->createStub(HttpKernelInterface::class), new Request(), $type);
+        return new FinishRequestEvent(self::createStub(HttpKernelInterface::class), new Request(), $type);
     }
 }
