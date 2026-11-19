@@ -31,6 +31,11 @@
 /.evidence/
 ###< build loop ###
 
+###> bin/check ###
+# The full report each run writes beside the tree it checked; it would otherwise show up as a change and be scanned by the next run.
+/report-*.json
+###< bin/check ###
+
 ###> symfony/framework-bundle (generated config reference) ###
 # A debug kernel, as in tests/Application/KernelTest.php, writes it on every boot.
 /config/reference.php

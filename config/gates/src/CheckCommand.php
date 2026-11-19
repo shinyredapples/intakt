@@ -6,6 +6,7 @@ namespace Intakt\Gates;
 
 use InvalidArgumentException;
 use Symfony\Component\Clock\NativeClock;
+use Throwable;
 
 final readonly class CheckCommand
 {
@@ -79,6 +80,7 @@ final readonly class CheckCommand
         }
 
         $result = $this->resultOf($gate, new Workspace($options->root ?? $this->home, $this->home, $options->mode, $options->base));
+        FullReport::keep($result, getenv());
         fwrite(STDOUT, $result->toJson()."\n");
 
         return $result->isPassing() ? 0 : 1;
@@ -101,18 +103,30 @@ final readonly class CheckCommand
 
         $runningTheChangesCode = array_map(static fn (Gate $gate): string => $gate->name(), array_values(array_filter($selected, static fn (Gate $gate): bool => $gate instanceof RunsTheChangesCode)));
 
-        return $this->runGates($names, $arguments, new GateChildren($this->home, $options->root ?? $this->home, $slots, $runningTheChangesCode));
+        $root = $options->root ?? $this->home;
+        $fullReport = FullReport::start();
+
+        // Because a child that cannot start leaves the scratch folder behind otherwise.
+        try {
+            $reports = new GateChildren($this->home, $root, $slots, $runningTheChangesCode, $fullReport)->reportsOf($names, $arguments);
+        } catch (Throwable $failure) {
+            $fullReport->discard();
+
+            throw $failure;
+        }
+
+        return $this->reportOn($reports, $fullReport, $root);
     }
 
+    // Because the verdict, the failed list and the exit code come from the gate lines alone, before the full report is written, the report can never change them.
     /**
-     * @param list<string> $names
-     * @param list<string> $arguments
+     * @param list<GateReport> $reports
      */
-    private function runGates(array $names, array $arguments, GateChildren $children): int
+    private function reportOn(array $reports, FullReport $fullReport, string $root): int
     {
         $failed = [];
 
-        foreach ($children->reportsOf($names, $arguments) as $report) {
+        foreach ($reports as $report) {
             fwrite(STDOUT, $report->line."\n");
 
             if (!$report->isPassing()) {
@@ -120,9 +134,12 @@ final readonly class CheckCommand
             }
         }
 
-        $this->print(['result' => [] === $failed ? 'pass' : 'fail', 'failed' => $failed]);
+        $summary = ['result' => [] === $failed ? 'pass' : 'fail', 'failed' => $failed];
+        $exitCode = [] === $failed ? 0 : 1;
+        $name = $fullReport->writeTo($root, $summary, $reports);
+        $this->print(null === $name ? $summary : $summary + ['report' => $name]);
 
-        return [] === $failed ? 0 : 1;
+        return $exitCode;
     }
 
     // Because the test workers count against the same processors as the gates, the parent sizes them as the tests gate will; a refused count fails that gate, so it counts as one.

@@ -46,7 +46,7 @@ final class GateChildrenTest extends SandboxTestCase
             '{"gate":"cs","ok":true,"findings":[],"omitted":0}',
             '{"gate":"secrets","ok":false,"findings":["src/Report.php:3 broken"],"omitted":0}',
             '{"result":"fail","failed":["secrets"]}',
-        ], $run->lines());
+        ], $run->linesWithoutTheReportName());
         self::assertSame(1, $run->exitCode());
     }
 
@@ -58,7 +58,7 @@ final class GateChildrenTest extends SandboxTestCase
             '{"gate":"cs","ok":true,"findings":[],"omitted":0}',
             '{"gate":"secrets","ok":false,"findings":["src/Report.php:3 broken"],"omitted":0}',
             '{"result":"fail","failed":["secrets"]}',
-        ], $run->lines());
+        ], $run->linesWithoutTheReportName());
         self::assertSame(1, $run->exitCode());
     }
 
@@ -125,7 +125,7 @@ final class GateChildrenTest extends SandboxTestCase
             '{"gate":"audit","ok":true,"findings":[],"omitted":0}',
             '{"gate":"tests","ok":true,"findings":[],"omitted":0}',
             '{"result":"pass","failed":[]}',
-        ], $run->lines());
+        ], $run->linesWithoutTheReportName());
     }
 
     public function testTheContainerGateAlsoWaitsForTheStaticGates(): void
@@ -145,7 +145,7 @@ final class GateChildrenTest extends SandboxTestCase
             '{"gate":"comments","ok":true,"findings":[],"omitted":0}',
             '{"gate":"audit","ok":true,"findings":[],"omitted":0}',
             '{"result":"pass","failed":[]}',
-        ], $run->lines());
+        ], $run->linesWithoutTheReportName());
     }
 
     public function testAnOverrideThatNamesNoNumberOfGatesStopsBeforeAnyGateStarts(): void

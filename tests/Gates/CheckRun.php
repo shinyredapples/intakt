@@ -70,6 +70,15 @@ final readonly class CheckRun
         return array_values(array_filter(explode("\n", $this->result->output), static fn (string $line): bool => '' !== $line));
     }
 
+    // Because each run names a report file of its own, lines compare exactly only without that name.
+    /**
+     * @return list<string>
+     */
+    public function linesWithoutTheReportName(): array
+    {
+        return array_map(static fn (string $line): string => (string) preg_replace('/,"report":"report-[0-9a-f]{16}\.json"}$/', '}', $line), $this->lines());
+    }
+
     private function gateLine(string $gate): ?JsonNode
     {
         foreach ($this->lines() as $line) {
