@@ -80,7 +80,7 @@ final readonly class Headline
         };
     }
 
-    // The first card of Waiting on you, because the Waiting on you page (#911) does not exist yet.
+    // The first card of Waiting on you, because the headline names it and the Waiting on you page lists only owner notices so far.
     public function firstWaiting(): ?Review
     {
         return array_first($this->waiting);
