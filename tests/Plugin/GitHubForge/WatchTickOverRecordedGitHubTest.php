@@ -87,6 +87,8 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
 
     private EntityManagerInterface $entities;
 
+    private string $firstHeadRuns = 'runs_in_progress.json';
+
     protected function setUp(): void
     {
         $entities = self::getContainer()->get('doctrine.orm.entity_manager');
@@ -108,6 +110,19 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         self::assertSame(1, preg_match_all('/ head_pending \{[^}]*pull\\\\\/7/', $events));
         self::assertSame(1, preg_match_all('/ round_queued \{[^}]*pull\\\\\/8/', $events));
         self::assertStringContainsString('2 events', $events);
+    }
+
+    public function testATickQueuesTheRoundOfAHeadWhoseQueuedRunANewerGreenRunOfTheSameOriginReplaced(): void
+    {
+        $this->firstHeadRuns = 'runs_queued_and_newer_green.json';
+        $commands = new RecordingCommandBus();
+
+        $this->handler($commands)(new WatchPullRequests('alpha'));
+
+        self::assertCount(2, $commands->started);
+        $events = $this->recordedEvents();
+        self::assertSame(0, preg_match_all('/ head_pending /', $events));
+        self::assertSame(1, preg_match_all('/ round_queued \{[^}]*pull\\\\\/7/', $events));
     }
 
     private function recordedEvents(): string
@@ -168,7 +183,7 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         return match (true) {
             str_contains($url, '/pulls') => new MockResponse($this->fixture('pulls_open.json'), ['response_headers' => ['ETag' => 'W/"recorded"']]),
             str_contains($url, 'head_sha='.self::GREEN) => new MockResponse($this->fixture('runs_green_head_2.json')),
-            str_contains($url, '/actions/runs') => new MockResponse($this->fixture('runs_in_progress.json')),
+            str_contains($url, '/actions/runs') => new MockResponse($this->fixture($this->firstHeadRuns)),
             default => new MockResponse($this->fixture('suites_none.json')),
         };
     }
