@@ -1,3 +1,4 @@
+seeded 6 projects: 38 events
 board (six projects) light 1440: filter 6 projects, 265 px of a 1200 px bar, projects on the page 6, card project names 6, cut with an ellipsis 1 ("customer-portal-legacy-migration" title "customer-portal-legacy-migration"), banners 2; overflow {"boardScrolls":true,"before":1440,"atEdge":1440,"viewport":1440}
 board (six projects) light 1440 filter selected "acme-shop": 1 of 18 cards shown
 board (six projects) light 1920: filter 6 projects, 265 px of a 1680 px bar, projects on the page 6, card project names 6, cut with an ellipsis 1 ("customer-portal-legacy-migration" title "customer-portal-legacy-migration"), banners 2; overflow {"boardScrolls":true,"before":1920,"atEdge":1920,"viewport":1920}

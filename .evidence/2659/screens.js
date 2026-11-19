@@ -50,9 +50,17 @@ const SIZES = [{ width: 1440, height: 900 }, { width: 1920, height: 1080 }, { wi
       if (overflow.before > overflow.viewport || overflow.atEdge > overflow.viewport) errors.push(`page overflows: ${JSON.stringify(overflow)}`);
       console.log(`board (six projects) ${theme} ${size.width}: ${seen}; overflow ${JSON.stringify(overflow)}`);
       await page.evaluate(() => { document.querySelector('.board').scrollLeft = 0; });
-      // The first column holding cards is brought into view, so the shot shows the review cards and not only empty columns.
-      await page.evaluate(() => { const col = [...document.querySelectorAll('.board .col')].find((c) => c.querySelector('.card')); if (col) col.scrollIntoView({ inline: 'center', block: 'nearest' }); });
+      // The board shot stays at the page's initial position (heading, banners and sticky header as a visitor sees them), beside the mock's.
+      await page.evaluate(() => window.scrollTo(0, 0));
       await page.screenshot({ path: path.join(__dirname, `board-six-${theme}-${size.width}.png`), fullPage: size.width !== 390 });
+      // A separate card view: the card with the longest project name, brought to the middle of the screen, so its truncated label shows.
+      await page.evaluate(() => {
+        const names = [...document.querySelectorAll('.board .card .pname')].filter((n) => n.offsetParent !== null);
+        const longest = names.sort((a, b) => b.textContent.length - a.textContent.length)[0];
+        if (longest) longest.closest('.card').scrollIntoView({ inline: 'center', block: 'center' });
+      });
+      await page.screenshot({ path: path.join(__dirname, `board-six-card-${theme}-${size.width}.png`) });
+      await page.evaluate(() => { document.querySelector('.board').scrollLeft = 0; window.scrollTo(0, 0); });
       if (size.width !== 390) {
         const filterSeen = await page.evaluate(() => {
           const filter = document.querySelector('#projfilter');
