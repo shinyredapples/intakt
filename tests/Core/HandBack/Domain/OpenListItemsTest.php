@@ -20,51 +20,53 @@ final class OpenListItemsTest extends TestCase
 
     public function testALineBelongsToTheInnermostItemWhoseContentColumnItsIndentReaches(): void
     {
-        self::assertSame(4, new OpenListItems(self::NESTED)->columnFor(self::AFTER_NESTED, 4));
-        self::assertSame(2, new OpenListItems(self::NESTED)->columnFor(self::AFTER_NESTED, 3));
-        self::assertNull(new OpenListItems(self::NESTED)->columnFor(self::AFTER_NESTED, 1));
+        $items = OpenListItems::of(self::NESTED)->readUpTo(self::AFTER_NESTED);
+
+        self::assertSame([4, 2, null], [$items->columnFor(4), $items->columnFor(3), $items->columnFor(1)]);
     }
 
     public function testALessIndentedLineThatIsNoItemEndsTheItemsAboveIt(): void
     {
-        self::assertNull(new OpenListItems("- a\ntext\n  y")->columnFor(9, 2));
+        self::assertNull(OpenListItems::of("- a\ntext\n  y")->readUpTo(9)->columnFor(2));
     }
 
     public function testABlankLineEndsNoItem(): void
     {
-        self::assertSame(2, new OpenListItems("- a\n\n  y")->columnFor(5, 2));
+        self::assertSame(2, OpenListItems::of("- a\n\n  y")->readUpTo(5)->columnFor(2));
     }
 
     public function testAMarkerOnALinePassedOverStartsNoItem(): void
     {
-        $text = "- a\n  ~~~\n  - b\n  ~~~\n    y";
-        $items = new OpenListItems($text);
-        $items->passOver(4, 21);
+        $text = "- a\n  ~~~\n  - b\n    ~~~\n    y";
 
-        self::assertSame(2, $items->columnFor(22, 4));
-        self::assertSame(4, new OpenListItems($text)->columnFor(22, 4));
+        self::assertSame(2, OpenListItems::of($text)->passOver(4, 23)->readUpTo(24)->columnFor(4));
+        self::assertSame(4, OpenListItems::of($text)->readUpTo(24)->columnFor(4));
     }
 
     public function testTheFirstLineOfAPartPassedOverIsStillRead(): void
     {
-        $items = new OpenListItems("- ~~~\n  - b\n  ~~~\n  y");
-        $items->passOver(2, 17);
+        self::assertSame(2, OpenListItems::of("- ~~~\n  - b\n  ~~~\n  y")->passOver(2, 17)->readUpTo(18)->columnFor(2));
+    }
 
-        self::assertSame(2, $items->columnFor(18, 2));
+    public function testReadingUpToALineAlreadyReadChangesNothing(): void
+    {
+        $items = OpenListItems::of("- a\nb\n  c")->readUpTo(6);
+
+        self::assertSame($items->columnFor(2), $items->readUpTo(4)->columnFor(2));
     }
 
     public function testAMarkerFourColumnsPastItsContainersContentStartsNoItem(): void
     {
-        self::assertNull(new OpenListItems("    - a\n      y")->columnFor(8, 6));
+        self::assertNull(OpenListItems::of("    - a\n      y")->readUpTo(8)->columnFor(6));
     }
 
     public function testATabAfterTheMarkerPutsTheContentAtTheNextTabStop(): void
     {
-        self::assertSame(4, new OpenListItems("1.\ta\n    y")->columnFor(5, 4));
+        self::assertSame(4, OpenListItems::of("1.\ta\n    y")->readUpTo(5)->columnFor(4));
     }
 
     public function testAThematicBreakIsNoItem(): void
     {
-        self::assertNull(new OpenListItems("* * *\n  y")->columnFor(6, 2));
+        self::assertNull(OpenListItems::of("* * *\n  y")->readUpTo(6)->columnFor(2));
     }
 }

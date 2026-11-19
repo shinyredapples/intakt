@@ -84,10 +84,11 @@ final readonly class MarkdownText
         $read = '';
         $offset = 0;
         $codeSpans = CodeSpans::of($text);
-        $items = new OpenListItems($text);
+        $items = OpenListItems::of($text);
 
         while (null !== ($match = self::firstMatch(self::OPENING, $text, $offset))) {
-            $kind = self::kindOf($text, $match[0][1], $match, $items);
+            $items = $items->readUpTo(self::lineStartAt($text, $match[0][1]));
+            $kind = self::kindOf($text, $match, $items);
             $start = self::startOf($kind, $text, $match[0][1]);
             $part = match ($kind) {
                 self::FENCE, self::FENCE_AFTER_A_MARKER => FencedBlock::at($text, $start, $items),
@@ -100,7 +101,7 @@ final readonly class MarkdownText
 
             // A code span or a literal run shows its lines as text, so only the lines of a fence or a comment hold no list items.
             if (self::CODE !== $kind && self::LITERAL !== $kind) {
-                $items->passOver($start, $offset);
+                $items = $items->passOver($start, $offset);
             }
         }
 
@@ -123,8 +124,9 @@ final readonly class MarkdownText
     /**
      * @param array<array{string, int}> $match
      */
-    private static function kindOf(string $text, int $start, array $match, OpenListItems $items): string
+    private static function kindOf(string $text, array $match, OpenListItems $items): string
     {
+        $start = $match[0][1];
         $fence = $match['fence'][0] ?? '';
 
         return match (true) {

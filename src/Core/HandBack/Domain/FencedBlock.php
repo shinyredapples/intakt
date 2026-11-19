@@ -17,7 +17,7 @@ final readonly class FencedBlock
         $indent = strspn($text, self::BLANK, $start);
         $character = $text[$start + $indent];
         $run = strspn($text, $character, $start + $indent);
-        $column = self::columnOfItsListItem($text, $start, $items ?? new OpenListItems($text));
+        $column = self::columnOfItsListItem($text, $start, $items ?? OpenListItems::of($text));
         $lineEnd = MarkdownText::lineEndAt($text, $start);
 
         while ($lineEnd < strlen($text)) {
@@ -51,7 +51,7 @@ final readonly class FencedBlock
             return true;
         }
 
-        $column = ($items ?? new OpenListItems($text))->columnFor($start, $indent);
+        $column = ($items ?? OpenListItems::of($text))->readUpTo($start)->columnFor($indent);
 
         return null !== $column && $indent - $column <= self::MOST_INDENT;
     }
@@ -90,7 +90,7 @@ final readonly class FencedBlock
         $lineStart = MarkdownText::lineStartAt($text, $start);
 
         return $lineStart === $start
-            ? $items->columnFor($start, self::indentColumnsAt($text, $start))
+            ? $items->readUpTo($start)->columnFor(self::indentColumnsAt($text, $start))
             : strlen(MarkdownText::withSpacesForTabs(substr($text, $lineStart, $start - $lineStart)));
     }
 }
