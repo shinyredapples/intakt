@@ -13,6 +13,7 @@ use Intakt\Core\Dashboard\Infrastructure\LedgerPayload;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\LedgerTokens;
+use Intakt\Core\Dashboard\Infrastructure\RoundLock;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
 use Intakt\Core\Dashboard\UseCase\StartReview\ReviewStarts;
 use Intakt\Core\Dashboard\UseCase\StartReview\StartReviewController;
@@ -27,6 +28,8 @@ use Psr\Log\LogLevel;
 use RuntimeException;
 use stdClass;
 use Symfony\Component\DomCrawler\Crawler;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Session\FlashBagAwareSessionInterface;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -46,6 +49,7 @@ use Symfony\Component\Messenger\Stamp\HandledStamp;
 #[UsesClass(RoundPlace::class)]
 #[UsesClass(RoundSource::class)]
 #[UsesClass(ShowReviewController::class)]
+#[UsesClass(RoundLock::class)]
 final class StartReviewControllerTest extends DashboardPageTestCase
 {
     // The container keeps the ledger double and the bus mock across the page that hands out the token and the post that uses it.
@@ -244,6 +248,68 @@ final class StartReviewControllerTest extends DashboardPageTestCase
         self::assertLoggedError(LogLevel::CRITICAL, sprintf('Uncaught PHP Exception %s: "the review store is gone"', RuntimeException::class));
     }
 
+    // The second press arrives while the first one's command runs, so the order is forced and not left to timing.
+    public function testTwoPressesForTheSameRoundArrivingTogetherStartOneRoundAndRefuseTheOther(): void
+    {
+        $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+        $commands = $this->commandBus();
+        $token = $this->token();
+        $secondLines = [];
+        $commands->expects(self::once())->method('dispatch')
+            ->willReturnCallback(function () use ($token, &$secondLines): Envelope {
+                $secondLines = $this->pressInAnotherWorker('/reviews/round-1/start', ['_token' => $token, 'number' => '2']);
+
+                return new Envelope(new stdClass(), [new HandledStamp('round-2', 'handler')]);
+            });
+
+        $this->browser->request('POST', '/reviews/round-1/start', ['_token' => $token, 'number' => '2']);
+        $this->browser->followRedirect();
+
+        self::assertSelectorTextSame('.toast', 'Started round 2.');
+        self::assertSame(['error' => ['Another press for this round is still running, so nothing was started.']], $secondLines);
+    }
+
+    public function testAStartWhileAnotherPressForTheRoundRunsDispatchesNothingAndSaysSo(): void
+    {
+        $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+        $this->commandBus()->expects(self::never())->method('dispatch');
+        $token = $this->token();
+        $held = $this->holdRoundLock('round-1');
+
+        $this->browser->request('POST', '/reviews/round-1/start', ['_token' => $token, 'number' => '2']);
+        $held->release();
+
+        self::assertResponseRedirects('/reviews/round-1', 303);
+        $this->browser->followRedirect();
+        self::assertSelectorTextContains('.flash-error', 'Another press for this round is still running, so nothing was started.');
+    }
+
+    public function testAStartIsNotHeldBackByAPressForAnotherRound(): void
+    {
+        $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+        $this->commandBus()->expects(self::once())->method('dispatch')->willReturn(new Envelope(new stdClass(), [new HandledStamp('round-2', 'handler')]));
+        $token = $this->token();
+        $held = $this->holdRoundLock('round-9');
+
+        $this->browser->request('POST', '/reviews/round-1/start', ['_token' => $token, 'number' => '2']);
+        $held->release();
+        $this->browser->followRedirect();
+
+        self::assertSelectorTextSame('.toast', 'Started round 2.');
+    }
+
+    public function testAStartWithoutATokenIsRefusedAlsoWhileTheRoundIsBusy(): void
+    {
+        $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+        $held = $this->holdRoundLock('round-1');
+
+        $this->browser->request('POST', '/reviews/round-1/start', ['number' => '2']);
+        $held->release();
+
+        self::assertResponseStatusCodeSame(400);
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so nothing was started."', BadRequestHttpException::class));
+    }
+
     public function testARefusedStartShowsNoToast(): void
     {
         $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
@@ -315,6 +381,32 @@ final class StartReviewControllerTest extends DashboardPageTestCase
         self::getContainer()->set('command.bus', $commands);
 
         return $commands;
+    }
+
+    /**
+     * @param array<string, string> $form
+     *
+     * @return array<string, list<string>>
+     */
+    // A kernel of its own, as another worker of the install would be, on the browser's session; the lines are read from its session, because the first press saves the session after it.
+    private function pressInAnotherWorker(string $path, array $form): array
+    {
+        $kernel = self::createKernel();
+        $kernel->boot();
+        $request = Request::create('http://localhost:7780'.$path, 'POST', $form);
+        foreach ($this->browser->getCookieJar()->all() as $cookie) {
+            $request->cookies->set($cookie->getName(), $cookie->getValue());
+        }
+
+        try {
+            $kernel->handle($request);
+            $session = $request->getSession();
+            assert($session instanceof FlashBagAwareSessionInterface);
+
+            return $session->getFlashBag()->peekAll();
+        } finally {
+            $kernel->shutdown();
+        }
     }
 
     // Read from a page's form, because the token belongs to the browser's session.

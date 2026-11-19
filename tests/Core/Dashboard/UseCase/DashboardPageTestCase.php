@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
 use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
+use Intakt\Core\Dashboard\Infrastructure\RoundLock;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Tests\Support\ReplayMarkBus;
 use Intakt\Tests\Support\WebTestCase;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\LockInterface;
 
 abstract class DashboardPageTestCase extends WebTestCase
 {
@@ -35,6 +38,15 @@ abstract class DashboardPageTestCase extends WebTestCase
         // Answered without the database, because these pages read every other fact from the ledger in memory and a page test creates no schema.
         $this->replayMarks = new ReplayMarkBus();
         self::getContainer()->set(ReplayMarks::class, new ReplayMarks($this->replayMarks));
+    }
+
+    // Taken through the application's factory on the same file store, so it stands for a press of another worker that still runs.
+    protected function holdRoundLock(string $round): LockInterface
+    {
+        $lock = self::getContainer()->get(LockFactory::class)->createLock(str_replace('{round}', $round, RoundLock::KEY));
+        self::assertTrue($lock->acquire());
+
+        return $lock;
     }
 
     protected function flagAsReplay(string $project): void

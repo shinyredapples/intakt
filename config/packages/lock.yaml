@@ -1,0 +1,11 @@
+# The factory of the #[Lock] attribute on the directory of the file locks the semaphores already use, because every worker runs on this host (#2703, D3).
+# A DSN and not the FlockStore service, because a resource names a store by a DSN or a service holding a connection, never by a store service.
+lock:
+    resources:
+        default: 'flock://%kernel.project_dir%/var/locks'
+
+when@test:
+    lock:
+        resources:
+            # In the worker's own cache directory, for the reason config/services.yaml gives for the FlockStore of the tests.
+            default: 'flock://%kernel.cache_dir%/locks'

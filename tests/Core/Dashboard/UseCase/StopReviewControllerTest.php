@@ -13,6 +13,7 @@ use Intakt\Core\Dashboard\Infrastructure\LedgerPayload;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\LedgerTokens;
+use Intakt\Core\Dashboard\Infrastructure\RoundLock;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
 use Intakt\Core\Dashboard\UseCase\StopReview\ReviewerStops;
 use Intakt\Core\Dashboard\UseCase\StopReview\StopReviewController;
@@ -36,6 +37,7 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 #[UsesClass(RoundStart::class)]
 #[UsesClass(RoundPlace::class)]
 #[UsesClass(ShowReviewController::class)]
+#[UsesClass(RoundLock::class)]
 final class StopReviewControllerTest extends DashboardPageTestCase
 {
     // The container keeps the ledger double across the page that hands out the token and the post that uses it.
@@ -92,6 +94,33 @@ final class StopReviewControllerTest extends DashboardPageTestCase
         self::assertSame(['round' => 'round-1', 'reviewer' => 'round-1-security'], json_decode($recorded[0]->event->payload, true));
         $this->browser->followRedirect();
         self::assertSelectorTextContains('.flash-success', 'Asked the reviewer to stop.');
+    }
+
+    public function testAStopWhileAnotherPressForTheRoundRunsRecordsNothingAndSaysSo(): void
+    {
+        $this->runningReviewer();
+        $token = $this->token();
+        $held = $this->holdRoundLock('round-1');
+
+        $this->browser->request('POST', '/reviews/round-1/reviewers/round-1-security/stop', ['_token' => $token]);
+        $held->release();
+
+        self::assertResponseRedirects('/reviews/round-1', 303);
+        $this->assertNothingRequested();
+        $this->browser->followRedirect();
+        self::assertSelectorTextContains('.flash-error', 'Another press for this round is still running, so nothing was stopped.');
+    }
+
+    public function testAStopIsNotHeldBackByAPressForAnotherRound(): void
+    {
+        $this->runningReviewer();
+        $token = $this->token();
+        $held = $this->holdRoundLock('round-9');
+
+        $this->browser->request('POST', '/reviews/round-1/reviewers/round-1-security/stop', ['_token' => $token]);
+        $held->release();
+
+        self::assertCount(1, iterator_to_array($this->ledger->readOfKind(LedgerEventKind::ReviewerStopRequested), false));
     }
 
     public function testASecondPressForAStillRunningReviewerRecordsASecondRequestAndAnswersLikeTheFirst(): void
