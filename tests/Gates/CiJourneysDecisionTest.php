@@ -9,10 +9,8 @@ use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Component\Yaml\Yaml;
 
-/**
- * Runs the steps themselves from the workflow files, so the tests break when the steps change: the journeys job's decision
- * step of ci.yml and the load step of the CI image action, with a fake git and docker.
- */
+// Runs the steps themselves from the workflow files, so the tests break when the steps change: the journeys job's decision
+// step of ci.yml and the load step of the CI image action, with a fake git and docker.
 #[CoversNothing]
 final class CiJourneysDecisionTest extends SandboxTestCase
 {
@@ -36,21 +34,30 @@ final class CiJourneysDecisionTest extends SandboxTestCase
         esac
         SH;
 
-    /** @return iterable<string, array{string, string, int, string}> */
-    public static function decisions(): iterable
+    public function testAPushToMainAlwaysRunsTheJourneys(): void
     {
-        yield 'a push to main' => ['push', 'no', 0, 'yes'];
-        yield 'a pull request that needs the app image' => ['pull_request', 'yes', 0, 'yes'];
-        yield 'a docs-only pull request' => ['pull_request', 'no', 0, 'no'];
-        yield 'a pull request that touches the journeys\' test code' => ['pull_request', 'no', 1, 'yes'];
+        $sandbox = $this->decisionSandbox('no', 0);
+
+        $result = $this->decide($sandbox, 'push');
+
+        self::assertTrue($result->succeeded(), $result->errors);
+        self::assertSame("needed=yes\n", file_get_contents($sandbox->root.'/output'));
     }
 
-    #[DataProvider('decisions')]
-    public function testTheJourneysRunOnAPushOrWhenTheirInputsChanged(string $event, string $imageNeeded, int $diffStatus, string $expected): void
+    /** @return iterable<string, array{string, int, string}> */
+    public static function pullRequests(): iterable
+    {
+        yield 'a pull request that needs the app image' => ['yes', 0, 'yes'];
+        yield 'a docs-only pull request' => ['no', 0, 'no'];
+        yield 'a pull request that touches the journeys\' test code' => ['no', 1, 'yes'];
+    }
+
+    #[DataProvider('pullRequests')]
+    public function testAPullRequestRunsTheJourneysWhenTheirInputsChanged(string $imageNeeded, int $diffStatus, string $expected): void
     {
         $sandbox = $this->decisionSandbox($imageNeeded, $diffStatus);
 
-        $result = $this->decide($sandbox, $event);
+        $result = $this->decide($sandbox, 'pull_request');
 
         self::assertTrue($result->succeeded(), $result->errors);
         self::assertSame("needed={$expected}\n", file_get_contents($sandbox->root.'/output'));
@@ -78,18 +85,18 @@ final class CiJourneysDecisionTest extends SandboxTestCase
         self::assertFileDoesNotExist($sandbox->root.'/output');
     }
 
-    /** @return iterable<string, array{string, bool, bool, bool}> */
+    /** @return iterable<string, array{string, bool, bool}> */
     public static function images(): iterable
     {
-        yield 'the image on the runner' => ['present', true, true, true];
-        yield 'a cache tar with the image\'s tag' => ['tar with tag', true, true, true];
-        yield 'a cache tar without the image\'s tag' => ['tar without tag', true, false, false];
-        yield 'no image and no cache tar' => ['nothing', true, false, false];
-        yield 'no image after a good login' => ['nothing', false, true, true];
+        yield 'the image on the runner' => ['present', true, true];
+        yield 'a cache tar with the image\'s tag' => ['tar with tag', true, true];
+        yield 'a cache tar without the image\'s tag' => ['tar without tag', true, false];
+        yield 'no image and no cache tar' => ['nothing', true, false];
+        yield 'no image after a good login' => ['nothing', false, true];
     }
 
     #[DataProvider('images')]
-    public function testAfterAFailedLoginOnlyAnImageAlreadyThereIsBuiltOn(string $image, bool $loginFailed, bool $succeeds, bool $built): void
+    public function testAfterAFailedLoginOnlyAnImageAlreadyThereIsBuiltOn(string $image, bool $loginFailed, bool $goesAhead): void
     {
         $sandbox = $this->emptySandbox();
         $sandbox->write('bin/docker', self::FAKE_DOCKER);
@@ -110,8 +117,8 @@ final class CiJourneysDecisionTest extends SandboxTestCase
             ['KEY' => 'intakt-ci-image-abc', 'RUNNER_TEMP' => $sandbox->root.'/tmp', 'DOCKERHUB_LOGIN_FAILED' => $loginFailed ? '1' : ''],
         );
 
-        self::assertSame($succeeds, $result->succeeded(), $result->errors.$result->output);
-        self::assertSame($built, is_file($sandbox->root.'/built'));
+        self::assertSame($goesAhead, $result->succeeded(), $result->errors.$result->output);
+        self::assertSame($goesAhead, is_file($sandbox->root.'/built'));
         self::assertFileDoesNotExist($sandbox->root.'/tmp/intakt-ci-image.tar');
     }
 
