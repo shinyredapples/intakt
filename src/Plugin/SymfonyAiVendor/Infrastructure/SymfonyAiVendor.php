@@ -195,8 +195,9 @@ final readonly class SymfonyAiVendor implements Vendor
 
     private function verdictOn(ResolvedModel $answering, UsageReservation $reservation, ReviewRequest $request): Verdict
     {
-        if ($request->job instanceof JobReview) {
-            return $this->jobVerdictOn($answering, $reservation, $request, $request->job);
+        $job = $request->job;
+        if ($job instanceof JobReview) {
+            return $this->jobVerdictOn($reservation, fn (): JobVerdict => $this->jobs->review($request, $job, $answering));
         }
 
         try {
@@ -240,10 +241,13 @@ final readonly class SymfonyAiVendor implements Vendor
     }
 
     // The job's own usage settles the call, because the platform is never called for it; a job that reported none, or whose answer is no verdict, is left unsettled, never settled as zero.
-    private function jobVerdictOn(ResolvedModel $answering, UsageReservation $reservation, ReviewRequest $request, JobReview $job): Verdict
+    /**
+     * @param Closure(): JobVerdict $review
+     */
+    private function jobVerdictOn(UsageReservation $reservation, Closure $review): Verdict
     {
         try {
-            $answer = $this->jobs->review($request, $job, $answering);
+            $answer = $review();
         } catch (VerdictUnreadable $unreadable) {
             $this->usage->leaveUnsettled($reservation, $unreadable);
 

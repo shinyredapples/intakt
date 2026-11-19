@@ -243,7 +243,7 @@ final class ReviewerInJobTest extends TestCase
 
     // The real job script on the mounted clone, read-only, so the clone is held to the checks a job makes; claude is scripted because no test reaches a vendor.
     /**
-     * @param list<array<string, mixed>> $before the CLI's events before its result
+     * @param list<array<string, mixed>> $before
      * @param array<string, int>         $usage
      */
     private function answering(string $text, array $before = [], array $usage = []): JobRunner
@@ -272,7 +272,7 @@ final class ReviewerInJobTest extends TestCase
         return $runner;
     }
 
-    // A Read call of Claude Code and its successful result, as its stream-json output shows them.
+    // Shaped as Claude Code's stream-json output shows them, because the job counts only those events as a read.
     /**
      * @return list<array<string, mixed>>
      */

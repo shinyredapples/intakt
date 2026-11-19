@@ -16,8 +16,8 @@ use Intakt\Core\Review\Contract\JobReview;
 use Intakt\Core\Review\Contract\JobReviewer;
 use Intakt\Core\Review\Contract\JobVerdict;
 use Intakt\Core\Review\Contract\Judge;
-use Intakt\Core\Review\Contract\Reviewer;
 use Intakt\Core\Review\Contract\ReviewBrief;
+use Intakt\Core\Review\Contract\Reviewer;
 use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Contract\ReviewServerAccesses;
@@ -74,7 +74,7 @@ final class JobReviewVendorTest extends TestCase
 
     public function testAJobApproveWithoutAReadOfTheCheckoutIsBlockedAsAnUnreadApproval(): void
     {
-        $verdict = $this->reviewed(new JobVerdict($this->approve(), false, [new TokenUsage(promptTokens: 10, completionTokens: 2)]));
+        $verdict = $this->reviewed(new JobVerdict($this->approve(), false, [$this->spent()]));
 
         self::assertSame(Decision::Blocked, $verdict->verdict);
         self::assertEquals(Verdict::unreadApproval(), $verdict);
@@ -82,19 +82,28 @@ final class JobReviewVendorTest extends TestCase
 
     public function testAJobApproveAfterAReadOfTheCheckoutCounts(): void
     {
-        $verdict = $this->reviewed(new JobVerdict($this->approve(), true, [new TokenUsage(promptTokens: 10, completionTokens: 2)]));
+        $verdict = $this->reviewed(new JobVerdict($this->approve(), true, [$this->spent()]));
 
         self::assertSame(Decision::Approve, $verdict->verdict);
     }
 
     public function testAJobsReportedUsageSettlesTheCall(): void
     {
-        $this->reviewed(new JobVerdict($this->approve(), true, [new TokenUsage(promptTokens: 1200, completionTokens: 80, cachedTokens: 900)]));
+        $spent = new TokenUsage(
+            promptTokens: 1200,
+            completionTokens: 80,
+            cachedTokens: 900,
+        );
+
+        $this->reviewed(new JobVerdict($this->approve(), true, [$spent]));
 
         $settled = $this->ledger->payloads()[1];
         self::assertSame('settled', $settled['phase']);
-        self::assertIsArray($settled['usages']);
-        self::assertSame([1200, 80, 900], [$settled['usages'][0]['prompt'], $settled['usages'][0]['completion'], $settled['usages'][0]['cached']]);
+        $usages = $settled['usages'];
+        self::assertIsArray($usages);
+        $row = $usages[0];
+        self::assertIsArray($row);
+        self::assertSame([1200, 80, 900], [$row['prompt'], $row['completion'], $row['cached']]);
     }
 
     public function testAJobThatReportedNoUsageLeavesTheCallUnsettledInsteadOfSettlingZero(): void
@@ -103,6 +112,14 @@ final class JobReviewVendorTest extends TestCase
 
         $unsettled = $this->ledger->payloads()[1];
         self::assertSame(['unsettled', JobReportedNoUsage::class, []], [$unsettled['phase'], $unsettled['failure'], $unsettled['usages']]);
+    }
+
+    private function spent(): TokenUsage
+    {
+        return new TokenUsage(
+            promptTokens: 10,
+            completionTokens: 2,
+        );
     }
 
     private function approve(): Verdict

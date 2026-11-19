@@ -101,7 +101,7 @@ final readonly class UsageLedger
      */
     public function settleReported(UsageReservation $reservation, array $usage): void
     {
-        $this->record(new UsageSettled($reservation->call, 'settled', array_values(array_map(fn (TokenUsageInterface $part): TokenUsageRow => $this->asRow($part, null), $usage))));
+        $this->record(new UsageSettled($reservation->call, 'settled', array_map(fn (TokenUsageInterface $part): TokenUsageRow => $this->asRow($part, null), $usage)));
     }
 
     /**
