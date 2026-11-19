@@ -20,19 +20,24 @@ use Intakt\Core\Budget\Domain\OutageWatch;
 use Intakt\Core\Budget\Domain\UsageReadingsStayedAway;
 use Intakt\Core\Budget\Domain\WindowReadingRecord;
 use Intakt\Core\Budget\Infrastructure\DoctrineMeasuredUse;
+use Intakt\Core\Budget\Infrastructure\DoctrineOutageNotices;
 use Intakt\Core\Budget\Infrastructure\DoctrineOwnerNotices;
 use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\EventDispatcher\EventDispatcher;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
 
 #[Group('persistence')]
 #[CoversClass(DoctrineOwnerNotices::class)]
 #[UsesClass(DoctrineMeasuredUse::class)]
+#[UsesClass(DoctrineOutageNotices::class)]
 #[UsesClass(OutageWatch::class)]
 #[UsesClass(UsageReadingsStayedAway::class)]
 #[UsesClass(WindowUse::class)]
@@ -166,6 +171,45 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
         self::assertSame([], $this->notices()->stillRunningOldestFirst());
     }
 
+    // Each window's age is sampled at its own clock reading, so a pause between the lookups must not make the older reading look newer.
+    public function testAnOutageNoticedWhileTheClockAdvancesBetweenWindowLookupsIsStoredOnceAndListed(): void
+    {
+        $account = new Account(Provider::ClaudeCode, 'main');
+        $clock = new MockClock('2026-11-02 08:00:00 UTC');
+        $use = new DoctrineMeasuredUse($this->entities, $clock);
+        $use->record(new WindowReading($account, UsageWindow::FiveHour, new Usage(12.0, null)));
+        $clock->sleep(1);
+        $use->record(new WindowReading($account, UsageWindow::Weekly, new Usage(5.0, null)));
+        $clock->modify('+4 hours');
+        $slowLookups = self::createStub(MeasuredUse::class);
+        $slowLookups->method('of')->willReturnCallback(static function (Account $account, UsageWindow $window) use ($clock, $use): ?WindowUse {
+            $snapshot = $use->of($account, $window);
+            $clock->sleep(2);
+
+            return $snapshot;
+        });
+        $logger = $this->createMock(LoggerInterface::class);
+        $logger->expects($this->once())->method('warning')->with(self::anything(), ['account' => 'claude_code.main', 'since' => '2026-11-02T08:00:01+00:00']);
+        $dispatcher = new EventDispatcher();
+        $dispatcher->addListener(UsageReadingsStayedAway::class, new DoctrineOutageNotices($this->entities, new LockFactory(new InMemoryStore()), $logger)->noticeOnce(...));
+
+        new OutageWatch($slowLookups, $clock, $dispatcher)->watch($account);
+
+        self::assertCount(1, $this->entities->getRepository(OutageNoticeRecord::class)->findAll());
+        self::assertCount(1, $this->notices()->stillRunningOldestFirst());
+    }
+
+    public function testOfTwoOutagesOfOneAccountWithAReadingBetweenThemOnlyTheLaterNoticeIsListed(): void
+    {
+        $this->store('main', new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
+        $this->read('main', new DateTimeImmutable('2026-11-02T12:00:00+00:00'));
+        $this->store('main', new DateTimeImmutable('2026-11-02T15:00:00+00:00'), new DateTimeImmutable('2026-11-02T12:00:00+00:00'));
+
+        $noticedAt = array_map(static fn (OutageNotice $notice): string => $notice->noticedAt->format('H:i'), $this->notices()->stillRunningOldestFirst());
+
+        self::assertSame(['15:00'], $noticedAt);
+    }
+
     public function testTheReadingTheOutageStartedFromKeepsItsNoticeListed(): void
     {
         $this->store('main', new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
@@ -202,9 +246,9 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
         $this->entities->flush();
     }
 
-    private function store(string $account, DateTimeImmutable $noticedAt): void
+    private function store(string $account, DateTimeImmutable $noticedAt, DateTimeImmutable $lastReadingAt = new DateTimeImmutable('2026-11-02T08:00:00+00:00')): void
     {
-        $this->entities->persist(new OutageNoticeRecord(new Account(Provider::ClaudeCode, $account), new DateTimeImmutable('2026-11-02T08:00:00+00:00'), $noticedAt));
+        $this->entities->persist(new OutageNoticeRecord(new Account(Provider::ClaudeCode, $account), $lastReadingAt, $noticedAt));
         $this->entities->flush();
     }
 }
