@@ -17,7 +17,7 @@ Think of it as a small software team that works around the clock:
 | **Checks** | your project's own tests and rules | catch mistakes no one has to argue about |
 | **AI engineer** (planned) | an AI agent that reports once a week and looks at the worst-scored tasks once a day | looks at where model tokens go and how the agents work, and tries better prompts, skills or model choices as experiments against the old ones. After every merge, Intakt scores how that task went (how often checks and tests ran, repeated runs, wordiness, rounds and send-backs) without any AI, and shows the scorecard on the dashboard and on the pull request within a minute (the pull request comment waits only in the rare hour when the forge refuses every call, and is posted as soon as it allows calls again). Intakt keeps a change by itself only on numbers it records itself, not on what an agent's own log says. On a subscription account the token counts come from the agent's own log, so there Intakt can still undo a change by itself but asks the owner before keeping one. Once a day the AI engineer reads the worst few of these in depth and proposes changes, citing what happened. Intakt itself, not the AI engineer, compares the numbers: it keeps a change only if it improves what it aimed at (fewer tokens, fewer check runs or less check CPU per merged task) without more tokens, send-backs, escaped defects or broken main, and undoes it otherwise. It decides only after enough merged tasks on each side, so one unlucky task never decides. The AI engineer never loosens checks or reviews to save work, and cannot change its own settings (how often it reviews, how many tasks it reads), which have defaults that need no setup. A change to a prompt goes through the same checks and approval as any change to protected files, so it cannot drop a safety rule |
 | **Test engineer** (planned, optional) | an AI agent that audits the tests on a schedule | a new project starts without it. It looks at how long the tests take, which ones repeat each other and whether the CI runs are slow, and files a task for each finding; a person with write access labels a task before it is built. It never changes a test itself, and a task that removes a test must name the test that still proves the same thing, so nothing the tests prove is lost |
-| **Maintainer agent** | an AI agent working for the orchestrator | sorts out anything that gets stuck, so it rarely reaches you |
+| **Maintainer agent** | an AI agent working for the orchestrator | sorts out anything that gets stuck, so it rarely reaches you, and looks at speed and quality every week (planned) |
 
 ```mermaid
 flowchart LR
@@ -100,9 +100,11 @@ flowchart TD
 
 | The change... | Who approves it |
 |---|---|
-| passes the mechanical checks, the Security engineer's security review and penetration test, and every reviewer with a blocking vote classes it as tightening or neutral on the current head (this includes new checks, edited tests of a check with the proof that it got no weaker, and the start-up scripts; a CI edit or a change to the agents' instructions that no check covers still comes to you) | Intakt approves it itself, and lists it on the dashboard for a week |
+| passes the mechanical checks, the Security engineer's security review and penetration test, and every reviewer with a blocking vote classes it as tightening or neutral on the current head (this includes new checks, edited tests of a check with the proof that it got no weaker, and the start-up scripts; a CI edit or a change to the agents' instructions that no check covers still comes to you) | Intakt approves it itself, and lists it on the dashboard for a week (only once automatic approval is switched on for the project; until then it still comes to you, with Intakt's answer) |
 | changes how Intakt approves (the list of protected files, the limits, the checks that apply them, the Security engineer's instructions, the known bad changes), or touches secrets and permissions (how secrets are kept or scanned, a workflow that reads a secret, more workflow permissions, new triggers, other machines) | always you |
 | fails a check, the security review or penetration test finds a way around it, or a reviewer with a blocking vote classes it as loosening or gives it no class on the current head | you |
+
+If either Security engineer session cannot run, the decision waits, whichever row applies and whether or not automatic approval is on, until it runs. The known bad changes Intakt tries on a schedule resume after an outage too, and each must still reach you, or automatic approval turns off (before it is switched on, it stays off).
 
 You never approve a merge whose checks are failing: Intakt asks you to approve the merge only once the checks are green and the review panel has approved. (Planned:) A decision only you can make, such as a new package from an outside company, is asked as soon as it shows up, so you can answer while the checks are still being fixed.
 
@@ -130,13 +132,24 @@ Holds are for reasons outside the change. If a change grows too big while it is 
 
 A finished pull request is never kept waiting for a much bigger task. If only one part of it needs that task (say, a screenshot of a screen not built yet), that part becomes its own follow-up task, and the rest is reviewed and merged now.
 
+## A weekly look at speed and quality (planned)
+
+Besides sorting out stuck work, the maintainer agent looks at the whole loop once a week, and sooner when a milestone falls behind or a number moves too far. Intakt first counts, without any AI: how long tasks take at each step, how often work is sent back and why, how often a builder seat sat empty and why, how long things waited, how many tasks came in and went out, what one finished task costs, which checks fail only in CI (the second, independent run of the checks), and for each milestone whether it will be done by its date. Next to speed it counts quality: fixes to code that was merged recently, changes taken back, a broken main, problems a later review found, and bugs filed against merged tasks. A bug report only counts once someone allowed to change the repository has confirmed it on the forge against a merged task, and only if they were already allowed when Intakt first saw the confirmation and are still allowed when Intakt counts it, so a stranger's report does not move the numbers. Once a month it also looks at whether the code is getting harder to change. The maintainer agent reads these numbers and, for each thing it finds, says the cause, what to change and how to tell whether it helped.
+
+It changes nothing itself: everything it finds becomes a task, with the cause, the change and how to check it written in, marked as the agent's words for the builders to read as data. A finding that looks like it holds a password or key, or that Intakt could not check for one, is not filed at all, and the dashboard shows that one was left out. Which AI model does what, and the instructions the agents get, are not its to look after. It never makes the reviews or checks easier, never changes who approves what, never lowers the limits you set, and never gives itself more power. When a milestone will miss its date, Intakt itself puts up one card for you to decide: drop some work, move the date, or add capacity, with the maintainer agent's advice on it. If that advice looks like it holds a password or key, or Intakt could not check it for one, the advice is left off: the card stays open with its forecast, and the dashboard shows that the advice is missing. Lines inside the agent's words that would make a task wait for another or replace another have no effect: Intakt only follows such lines when they stand outside the marked text.
+
 ## Spending wisely
 
 AI agents cost money, usually as a subscription with a weekly allowance. Intakt watches how much of the week's allowance is used against how much of the week has passed:
 
 ```mermaid
 flowchart LR
-  pace{Ahead of pace or behind?} -- behind: room to spare --> more[More builders,<br/>stronger models]
+  pace{Ahead of pace or behind?} -- "behind: room would go unused" --> left{"More than one build's worth<br/>left over at the refill?"}
+  left -- no --> same
+  left -- yes --> strong["First attempts on a stronger model<br/>(planned)"]
+  strong --> extra{"Room for an extra builder too,<br/>and the reviewers' companies<br/>keep enough of their week?"}
+  extra -- yes --> more["One more builder<br/>(planned)"]
+  extra -- no --> same[The usual builders]
   pace -- ahead: spending fast --> less[One builder,<br/>a cheaper model]
   pace -- at the limit --> stop[New work waits<br/>until the allowance resets]
 ```
@@ -158,7 +171,7 @@ It also avoids waste on purpose: it keeps descriptions and reviews short, doesn'
 | **Main** | the official version of your project |
 | **Merge** | adding a pull request's change to main |
 | **Checks / CI** | the automatic tests that run on every change |
-| **Review** | a reviewer's verdict: approve, changes needed with a list of findings, or blocked (held for a person) |
+| **Review** | a reviewer's verdict: approve, or changes needed with a list of findings; blocked (held for a person) only when Intakt holds the review back, and a reviewer that answers blocked with findings counts as changes |
 | **Protected files** | the project's rules: the checks that judge the code, the CI setup, the agents' instructions |
 | **Hold** | a pause that lifts by itself when its reason is gone |
 | **Priority** | `urgent`, `high`, `normal` or `low`, set as a label on the task |

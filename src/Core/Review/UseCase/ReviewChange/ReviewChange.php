@@ -181,9 +181,7 @@ final readonly class ReviewChange implements ChangeReviews
      */
     private function actListOf(ReviewRound $round): array
     {
-        $id = $round->id()->toRfc4122();
-
-        return $this->findings->actListOf($round, $this->ledger->actIdsOf($id), $this->ledger->sameCauseOf($id));
+        return $this->findings->actListOf($round, $this->ledger->judgeDoneOf($round->id()->toRfc4122()));
     }
 
     /**

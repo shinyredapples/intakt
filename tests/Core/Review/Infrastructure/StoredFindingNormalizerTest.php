@@ -48,14 +48,41 @@ final class StoredFindingNormalizerTest extends TestCase
         self::assertSame('F1', $normalized['id']);
     }
 
+    public function testAFindingWithAJudgeNoteIsWrittenWithIt(): void
+    {
+        $normalized = $this->normalized([], $this->finding()->withJudgeNote('Rejected: covered by F2.'));
+
+        self::assertSame('Rejected: covered by F2.', $normalized['judge_note']);
+    }
+
+    public function testAFindingWithoutAJudgeNoteIsWrittenWithoutTheKey(): void
+    {
+        self::assertArrayNotHasKey('judge_note', $this->normalized([]));
+    }
+
+    public function testACallerThatNamesItsFieldsWithoutJudgeNoteGetsNoJudgeNote(): void
+    {
+        $normalized = $this->normalized([AbstractNormalizer::ATTRIBUTES => ['id']], $this->finding()->withJudgeNote('Deferred.'));
+
+        self::assertSame(['id' => 'F1'], $normalized);
+    }
+
+    public function testACallerThatLeavesJudgeNoteOutGetsNoJudgeNote(): void
+    {
+        $normalized = $this->normalized([AbstractNormalizer::IGNORED_ATTRIBUTES => ['judge_note']], $this->finding()->withJudgeNote('Deferred.'));
+
+        self::assertArrayNotHasKey('judge_note', $normalized);
+        self::assertSame(['F2'], $normalized['merged']);
+    }
+
     /**
      * @param array<string, mixed> $context
      *
      * @return array<mixed>
      */
-    private function normalized(array $context): array
+    private function normalized(array $context, ?Finding $finding = null): array
     {
-        $finding = new Finding('F1', Severity::P1, 'src/A.php', 7, null, 'Broken.', FixableBy::Builder, false, null, null, merged: ['F2']);
+        $finding ??= $this->finding();
         $serializer = StoredSerializerFactory::create();
         self::assertInstanceOf(NormalizerInterface::class, $serializer);
 
@@ -63,5 +90,10 @@ final class StoredFindingNormalizerTest extends TestCase
         self::assertIsArray($normalized);
 
         return $normalized;
+    }
+
+    private function finding(): Finding
+    {
+        return new Finding('F1', Severity::P1, 'src/A.php', 7, null, 'Broken.', FixableBy::Builder, false, null, null, merged: ['F2']);
     }
 }

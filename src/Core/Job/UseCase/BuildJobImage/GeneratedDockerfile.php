@@ -8,6 +8,8 @@ final readonly class GeneratedDockerfile
 {
     // The minors with an official image that still get fixes, newest first, so a constraint gets the newest one it admits.
     private const array MINORS = ['8.5', '8.4', '8.3', '8.2'];
+    // A known released patch of each minor, so a rule that refuses some later patch is pinned to one that exists instead of a moving tag that may break.
+    private const array RELEASED_PATCHES = ['8.5' => '8.5.12', '8.4' => '8.4.25', '8.3' => '8.3.36', '8.2' => '8.2.35'];
     // The release image's Composer pin, so the jobs of every project install with the Composer Intakt itself is built with.
     private const string COMPOSER = 'composer:2.11.1@sha256:8de2184c6de224f4689e8f80ed5f5edaf0030b6b8b7839a22a2bcb6722ac87d0';
     private const string EXTENSION_INSTALLER = 'mlocati/php-extension-installer:2.13.2';
@@ -33,7 +35,7 @@ final readonly class GeneratedDockerfile
         $minors = null === $php->platform ? self::MINORS : [implode('.', array_slice(explode('.', $php->platform), 0, 2))];
 
         foreach ($minors as $minor) {
-            $version = $php->imageVersionIn($minor);
+            $version = $php->imageVersionIn($minor, self::RELEASED_PATCHES[$minor] ?? null);
 
             if (null !== $version) {
                 return $version;
