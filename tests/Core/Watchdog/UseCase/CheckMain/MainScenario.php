@@ -18,11 +18,28 @@ final readonly class MainScenario
     public TemporaryRepository $main;
     public string $folder;
 
-    public function __construct()
+    public function __construct(string $objectFormat = 'sha1')
     {
         $this->folder = sys_get_temp_dir().'/intakt-watchdog-'.bin2hex(random_bytes(6));
         mkdir($this->folder);
-        $this->main = new TemporaryRepository();
+        $this->main = new TemporaryRepository($objectFormat);
+    }
+
+    // A folder put first on PATH with an ssh-keygen that only exits, because the watchdog must not read a failed check as a verdict.
+    public function sshKeygenExitingWith(int $exit): string
+    {
+        $folder = $this->folder.'/bin';
+        mkdir($folder);
+        file_put_contents($folder.'/ssh-keygen', "#!/bin/sh\nexit ".$exit."\n");
+        chmod($folder.'/ssh-keygen', 0o755);
+
+        return $folder;
+    }
+
+    public function corruptObject(string $hash): void
+    {
+        $this->main->removeObject($hash);
+        file_put_contents($this->main->path.'/.git/objects/'.substr($hash, 0, 2).'/'.substr($hash, 2), 'corrupt');
     }
 
     public function check(): CheckMain

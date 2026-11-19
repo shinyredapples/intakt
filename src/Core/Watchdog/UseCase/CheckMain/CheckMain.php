@@ -37,6 +37,9 @@ final readonly class CheckMain
         return new CheckedMain($head, array_map(fn (string $commit): CommitClassification => $this->classified($main, $commit), $commits));
     }
 
+    /**
+     * @throws MainNotRead
+     */
     private function wasRewritten(WatchedMain $main, string $head): bool
     {
         return null !== $main->lastSeenHead && !$this->history->isAncestor($main->repository, $main->lastSeenHead, $head);
@@ -53,7 +56,7 @@ final readonly class CheckMain
 
         $text = $this->history->commitText($main->repository, $commit);
 
-        return new CommitClassification($commit, Verdict::ofSignature($this->signatures->of($text, $main->ownerKeys)));
+        return new CommitClassification($commit, Verdict::ofSignature($this->signatures->of($commit, $text, $main->ownerKeys)));
     }
 
     private function isRecordedHead(WatchedMain $main, string $commit): bool

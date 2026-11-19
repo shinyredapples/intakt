@@ -17,6 +17,7 @@ use Intakt\Core\Watchdog\UseCase\CheckMain\CommitSignature;
 use Intakt\Core\Watchdog\UseCase\CheckMain\MainHistory;
 use Intakt\Tests\Core\Git\TemporaryRepository;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Filesystem\Filesystem;
@@ -113,6 +114,84 @@ final class CheckMainTest extends TestCase
         self::assertSame([Verdict::UnknownKey], $this->verdicts($checked));
     }
 
+    public function testACommitSignedByTheOwnersKeyInASha256RepositoryIsClean(): void
+    {
+        $scenario = new MainScenario('sha256');
+
+        try {
+            $base = $scenario->main->commitFile('a.txt', "one\n");
+            $owner = $scenario->newKey('owner');
+            $scenario->commitSignedBy('owner');
+
+            $checked = $scenario->check()->of(new WatchedMain($scenario->main->path, $base, [], [$owner]));
+
+            self::assertSame([Verdict::OwnerSigned], $this->verdicts($checked));
+        } finally {
+            $scenario->remove();
+        }
+    }
+
+    public function testACommitSignedByAForeignKeyInASha256RepositoryIsAViolation(): void
+    {
+        $scenario = new MainScenario('sha256');
+
+        try {
+            $base = $scenario->main->commitFile('a.txt', "one\n");
+            $owner = $scenario->newKey('owner');
+            $scenario->newKey('stranger');
+            $scenario->commitSignedBy('stranger');
+
+            $checked = $scenario->check()->of(new WatchedMain($scenario->main->path, $base, [], [$owner]));
+
+            self::assertSame([Verdict::UnknownKey], $this->verdicts($checked));
+        } finally {
+            $scenario->remove();
+        }
+    }
+
+    /**
+     * @return iterable<string, array{int}>
+     */
+    public static function exitsThatAreNeitherSuccessNorRefusal(): iterable
+    {
+        yield 'a general error' => [1];
+        yield 'a usage error' => [2];
+        yield 'the program is not found' => [127];
+    }
+
+    #[DataProvider('exitsThatAreNeitherSuccessNorRefusal')]
+    public function testASignatureCheckThatEndsWithNeitherSuccessNorRefusalLeavesMainNotRead(int $exit): void
+    {
+        $base = $this->scenario->main->commitFile('a.txt', "one\n");
+        $owner = $this->scenario->newKey('owner');
+        $this->scenario->commitSignedBy('owner');
+        $path = (string) getenv('PATH');
+        $this->usePath($this->scenario->sshKeygenExitingWith($exit).':'.$path);
+
+        try {
+            (void) $this->scenario->check()->of($this->watching($base, [], [$owner]));
+            self::fail('A failed signature check gave a verdict.');
+        } catch (MainNotRead $refused) {
+            self::assertSame('Main was not read: ssh-keygen could not check the signature', $refused->getMessage());
+        } finally {
+            $this->usePath($path);
+        }
+    }
+
+    public function testALastSeenCommitThatIsThereButUnreadableLeavesMainNotRead(): void
+    {
+        $seen = $this->scenario->main->commitFile('a.txt', "one\n");
+        $this->scenario->main->commitFile('b.txt', "two\n");
+        $this->scenario->corruptObject($seen);
+
+        try {
+            (void) $this->scenario->check()->of($this->watching($seen, [], []));
+            self::fail('Unreadable history gave a verdict.');
+        } catch (MainNotRead $refused) {
+            self::assertSame('Main was not read: git merge-base could not read the history', $refused->getMessage());
+        }
+    }
+
     public function testOnlyTheCommitsAfterTheLastSeenHeadAreListedOldestFirst(): void
     {
         $this->scenario->main->commitFile('a.txt', "one\n");
@@ -191,6 +270,16 @@ final class CheckMainTest extends TestCase
         $checked = $this->scenario->check()->of(new WatchedMain(rtrim($relative, '/'), $head, [], []));
 
         self::assertSame($head, $checked->head);
+    }
+
+    // Symfony Process hands a child the variables of getenv() and $_ENV, so both carry the changed PATH.
+    private function usePath(string $path): void
+    {
+        putenv('PATH='.$path);
+        $_SERVER['PATH'] = $path;
+        if (array_key_exists('PATH', $_ENV)) {
+            $_ENV['PATH'] = $path;
+        }
     }
 
     /**

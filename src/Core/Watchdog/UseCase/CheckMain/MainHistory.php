@@ -12,6 +12,8 @@ use Symfony\Component\Process\Process;
 final readonly class MainHistory
 {
     private const string MAIN = 'refs/heads/main';
+    private const int ANSWERS_YES = 0;
+    private const int ANSWERS_NO = 1;
 
     public function __construct(
         private HardenedGit $hardened,
@@ -29,10 +31,31 @@ final readonly class MainHistory
         return trim($this->mustRun($repository, ['rev-parse', '--verify', '--end-of-options', self::MAIN.'^{commit}']));
     }
 
-    // Because a commit that is no ancestor, or is not there at all, means main was rewritten.
+    /**
+     * A commit that is no ancestor, or is not there at all, means main was rewritten.
+     *
+     * @throws MainNotRead
+     */
     public function isAncestor(string $repository, string $earlier, string $head): bool
     {
-        return $this->run($repository, ['merge-base', '--is-ancestor', $earlier, $head])->isSuccessful();
+        return match ($this->run($repository, ['merge-base', '--is-ancestor', $earlier, $head])->getExitCode()) {
+            self::ANSWERS_YES => true,
+            self::ANSWERS_NO => false,
+            // Because a commit that is there but cannot be read says nothing about a rewrite.
+            default => $this->holds($repository, $earlier) ? throw MainNotRead::because('git merge-base could not read the history') : false,
+        };
+    }
+
+    /**
+     * @throws MainNotRead
+     */
+    private function holds(string $repository, string $object): bool
+    {
+        return match ($this->run($repository, ['cat-file', '-e', $object])->getExitCode()) {
+            self::ANSWERS_YES => true,
+            self::ANSWERS_NO => false,
+            default => throw MainNotRead::because('git cat-file failed'),
+        };
     }
 
     /**

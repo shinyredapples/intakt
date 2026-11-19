@@ -62,10 +62,30 @@ final class WatchedMainTest extends TestCase
         new WatchedMain('/repository', '--output=x', [], []);
     }
 
-    public function testAWatchedMainWithAnOwnerKeyThatIsNoPublicKeyLineIsRefused(): void
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function ownerKeysThatAreNoPublicKeyLine(): iterable
+    {
+        yield 'one field' => ['justonefield'];
+        yield 'a second line' => ["ssh-ed25519 AAAAkey\nowner ssh-ed25519 AAAAother"];
+        yield 'a trailing newline' => ["ssh-ed25519 AAAAkey\n"];
+        yield 'a control character' => ["ssh-ed25519 AAAA\x07key"];
+        yield 'a third field' => ['ssh-ed25519 AAAAkey comment'];
+    }
+
+    #[DataProvider('ownerKeysThatAreNoPublicKeyLine')]
+    public function testAWatchedMainWithAnOwnerKeyThatIsNoPublicKeyLineIsRefused(string $key): void
     {
         $this->expectException(InvalidArgumentException::class);
 
-        new WatchedMain('/repository', null, [], ['justonefield']);
+        new WatchedMain('/repository', null, [], [$key]);
+    }
+
+    public function testAWatchedMainKeepsAnOwnerKeyOfTypeAndBody(): void
+    {
+        $main = new WatchedMain('/repository', null, [], ['ssh-ed25519 AAAAkey']);
+
+        self::assertSame(['ssh-ed25519 AAAAkey'], $main->ownerKeys);
     }
 }

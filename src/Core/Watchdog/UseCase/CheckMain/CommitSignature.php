@@ -16,12 +16,14 @@ final readonly class CommitSignature
     private const string PROGRAM = 'ssh-keygen';
     private const string NAMESPACE = 'git';
     private const string PRINCIPAL = 'owner';
-    private const string HEADER = 'gpgsig';
+    private const string SHA1_HEADER = 'gpgsig';
+    private const string SHA256_HEADER = 'gpgsig-sha256';
+    private const int SHA256_NAME_LENGTH = 64;
     private const int REFUSED = 255;
+    private const float TIMEOUT_SECONDS = 60;
 
     public function __construct(
         private Filesystem $filesystem,
-        private float $timeoutSeconds = 60,
     ) {
     }
 
@@ -30,9 +32,9 @@ final readonly class CommitSignature
      *
      * @throws MainNotRead
      */
-    public function of(string $commitText, array $ownerKeys): SignatureStatus
+    public function of(string $commit, string $commitText, array $ownerKeys): SignatureStatus
     {
-        [$signature, $payload] = $this->split($commitText);
+        [$signature, $payload] = $this->split($commitText, $this->headerFor($commit));
 
         if (null === $signature) {
             return SignatureStatus::Unsigned;
@@ -41,29 +43,43 @@ final readonly class CommitSignature
         return $this->signedBy($ownerKeys, $signature, $payload) ? SignatureStatus::Good : SignatureStatus::UnknownKey;
     }
 
+    // Because git signs a commit of a SHA-256 repository under its own header and keeps the plain one for the SHA-1 form.
+    private function headerFor(string $commit): string
+    {
+        return self::SHA256_NAME_LENGTH === strlen($commit) ? self::SHA256_HEADER : self::SHA1_HEADER;
+    }
+
     /**
      * @return array{?string, string}
      */
-    private function split(string $commitText): array
+    private function split(string $commitText, string $header): array
     {
         [$headers, $message] = array_pad(explode("\n\n", $commitText, 2), 2, '');
         $signature = null;
         $kept = [];
 
         $inSignature = false;
+        $isWanted = false;
 
         foreach (explode("\n", $headers) as $line) {
             // Because git folds a multi-line signature into continuation lines that start with a space.
             if ($inSignature && str_starts_with($line, ' ')) {
-                $signature .= "\n".substr($line, 1);
+                if ($isWanted) {
+                    $signature .= "\n".substr($line, 1);
+                }
 
                 continue;
             }
             $inSignature = false;
 
-            if (null === $signature && str_starts_with($line, self::HEADER.' ')) {
-                $signature = substr($line, strlen(self::HEADER) + 1);
+            // Every signature header leaves the signed payload, as git leaves them all out when it signs.
+            $name = $this->signatureHeaderOf($line);
+            if (null !== $name) {
                 $inSignature = true;
+                $isWanted = $name === $header && null === $signature;
+                if ($isWanted) {
+                    $signature = substr($line, strlen($name) + 1);
+                }
 
                 continue;
             }
@@ -71,6 +87,11 @@ final readonly class CommitSignature
         }
 
         return [null === $signature ? null : $signature."\n", implode("\n", $kept)."\n\n".$message];
+    }
+
+    private function signatureHeaderOf(string $line): ?string
+    {
+        return array_find([self::SHA1_HEADER, self::SHA256_HEADER], static fn (string $name): bool => str_starts_with($line, $name.' '));
     }
 
     /**
@@ -104,7 +125,7 @@ final readonly class CommitSignature
      */
     private function verify(string $allowed, string $signatureFile, string $payload): ?int
     {
-        $check = new Process([self::PROGRAM, '-Y', 'verify', '-f', $allowed, '-I', self::PRINCIPAL, '-n', self::NAMESPACE, '-s', $signatureFile], null, ['SSH_ASKPASS' => false, 'SSH_ASKPASS_REQUIRE' => 'never'], $payload, $this->timeoutSeconds);
+        $check = new Process([self::PROGRAM, '-Y', 'verify', '-f', $allowed, '-I', self::PRINCIPAL, '-n', self::NAMESPACE, '-s', $signatureFile], null, ['SSH_ASKPASS' => false, 'SSH_ASKPASS_REQUIRE' => 'never'], $payload, self::TIMEOUT_SECONDS);
 
         try {
             $check->run();

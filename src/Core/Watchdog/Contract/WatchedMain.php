@@ -25,7 +25,7 @@ final readonly class WatchedMain
         $this->lastSeenHead = null === $lastSeenHead ? null : CommitName::must($lastSeenHead);
 
         foreach ($ownerKeys as $key) {
-            if (1 !== preg_match('/\A\S+ \S+/', $key)) {
+            if (1 !== preg_match('/\A[!-~]+ [!-~]+\z/', $key)) {
                 throw new InvalidArgumentException('An owner key is a public key line: its type, then its base64 body.');
             }
         }
