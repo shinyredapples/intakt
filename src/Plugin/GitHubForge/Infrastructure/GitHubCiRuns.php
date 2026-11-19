@@ -16,6 +16,7 @@ use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 final readonly class GitHubCiRuns
 {
     private const string CHECK_SUITE_EVENT = 'check_suite';
+    private const string LINKED_SUITE_PREFIX = 'suite-of-workflow:';
 
     public function __construct(private GitHubMoments $moments)
     {
@@ -112,7 +113,10 @@ final readonly class GitHubCiRuns
         }
 
         // The run's whole origin, because GitHub often leaves a suite's own pull requests empty and two pull requests must not look like one.
-        return new CiRun($this->workflowOriginOf($repository, $run), $this->linkedSuiteStateOf($suite, $run), $this->createdAt($suite));
+        $origin = $this->workflowOriginOf($repository, $run);
+
+        // Named apart from the runs, so that only a newer suite replaces a suite and a run never replaces its own suite; numbered by its run to order a same-second tie.
+        return new CiRun(new CiRunOrigin(self::LINKED_SUITE_PREFIX.$origin->name, $origin->event, $origin->change), $this->linkedSuiteStateOf($suite, $run), $this->createdAt($suite), $this->runNumberOf($run));
     }
 
     /**

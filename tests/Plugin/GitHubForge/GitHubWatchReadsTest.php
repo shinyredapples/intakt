@@ -406,7 +406,7 @@ final class GitHubWatchReadsTest extends TestCase
 
         $suite = $this->state()->runs[2];
 
-        self::assertSame('10|pull_request|https://github.com/acme/widgets/pull/7|queued|2026-11-11T20:30:00+00:00', $suite->origin->name.'|'.$suite->origin->event.'|'.$suite->origin->change?->value.'|'.$suite->state->value.'|'.$suite->startedAt->format('c'));
+        self::assertSame('suite-of-workflow:10|pull_request|https://github.com/acme/widgets/pull/7|queued|2026-11-11T20:30:00+00:00|1', $suite->origin->name.'|'.$suite->origin->event.'|'.$suite->origin->change?->value.'|'.$suite->state->value.'|'.$suite->startedAt->format('c').'|'.$suite->number);
     }
 
     public function testAQueuedLinkedCheckSuiteWithoutCheckRunsIsReplacedByTheNewerSuiteOfARunForTheSamePullRequest(): void
@@ -467,6 +467,22 @@ final class GitHubWatchReadsTest extends TestCase
     {
         $this->runs = 'runs_linked_queued_and_newer_green.json';
         $this->suites = 'suites_linked_queued_and_newer_green.json';
+
+        self::assertSame(HeadAdmission::Green, new AdmissionDecision()->admissionOf($this->state()));
+    }
+
+    public function testAGreenRunCreatedAfterItsOwnQueuedSuiteDoesNotReplaceThatSuite(): void
+    {
+        $this->runs = 'runs_green_created_after_its_queued_suite.json';
+        $this->suites = 'suites_linked_queued_and_newer_green.json';
+
+        self::assertSame(HeadAdmission::Pending, new AdmissionDecision()->admissionOf($this->state()));
+    }
+
+    public function testAHeadWhoseQueuedRunAndSuiteANewerRunAndSuiteOfTheSameSecondReplacedIsGreen(): void
+    {
+        $this->runs = 'runs_linked_queued_and_newer_green_in_one_second.json';
+        $this->suites = 'suites_linked_queued_and_newer_green_in_one_second.json';
 
         self::assertSame(HeadAdmission::Green, new AdmissionDecision()->admissionOf($this->state()));
     }
