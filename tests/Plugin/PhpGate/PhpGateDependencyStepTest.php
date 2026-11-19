@@ -196,34 +196,35 @@ final class PhpGateDependencyStepTest extends TestCase
     public function testTheFixtureGitCommandsStayInTheFixtureWhenTheCallerPointsGitAtAnotherRepository(): void
     {
         $other = $this->directory.'-other';
-        $git = ['GIT_DIR' => false, 'GIT_WORK_TREE' => false, 'GIT_CONFIG_GLOBAL' => '/dev/null', 'GIT_CONFIG_NOSYSTEM' => '1'];
+        $objects = $this->directory.'-objects';
         new Filesystem()->mkdir($other);
 
         try {
-            Process::fromShellCommandline('git init -q -b main', $other, $git)->mustRun();
-            new Filesystem()->dumpFile($other.'/unrelated', 'unrelated change');
-            $this->project([]);
-
             $inherited = [
                 'GIT_DIR' => $other.'/.git',
                 'GIT_WORK_TREE' => $other,
+                'GIT_OBJECT_DIRECTORY' => $objects,
                 'COMPOSER_NO_DEV' => '1',
                 'GIT_CONFIG_COUNT' => '1',
                 'GIT_CONFIG_KEY_0' => 'commit.gpgsign',
                 'GIT_CONFIG_VALUE_0' => 'true',
             ];
             $noDev = null;
-            $this->withInherited($inherited, function () use (&$noDev): void {
+            $this->withInherited($inherited, function () use ($other, &$noDev): void {
+                self::assertTrue($this->runInProject('git init -q -b main', $other)->isSuccessful());
+                new Filesystem()->dumpFile($other.'/unrelated', 'unrelated change');
+                $this->project([]);
                 $this->mustRun('git init -q -b main && git add -A && git commit -qm fixture');
                 $noDev = $this->mustRun('php -r \'var_export(getenv("COMPOSER_NO_DEV"));\'');
             });
 
             self::assertSame('false', $noDev);
             self::assertDirectoryExists($this->directory.'/.git');
-            self::assertNotSame(0, Process::fromShellCommandline('git rev-parse --verify --quiet HEAD', $other, $git)->run());
-            self::assertSame('', Process::fromShellCommandline('git diff --cached --name-only', $other, $git)->mustRun()->getOutput());
+            self::assertDirectoryDoesNotExist($objects);
+            self::assertNotSame(0, $this->runInProject('git rev-parse --verify --quiet HEAD', $other)->getExitCode());
+            self::assertSame('', $this->runInProject('git diff --cached --name-only', $other)->getOutput());
         } finally {
-            new Filesystem()->remove($other);
+            new Filesystem()->remove([$other, $objects]);
         }
     }
 
@@ -335,14 +336,14 @@ final class PhpGateDependencyStepTest extends TestCase
         $variables[$name] = $value;
     }
 
-    private function runInProject(string $command): Process
+    private function runInProject(string $command, ?string $directory = null): Process
     {
         // Every Composer and Git variable of whoever runs the test is removed, read at run time because a typed list has missed one each time: such a setting points the fixtures at another manifest, repository or index, changes which packages install or makes the fixture commits ask for a signature.
         $inherited = array_filter(
             array_map(strval(...), array_keys([...getenv(), ...$_ENV, ...$_SERVER])),
             static fn (string $name): bool => str_starts_with($name, 'COMPOSER') || str_starts_with($name, 'GIT_'),
         );
-        $process = Process::fromShellCommandline($command, $this->directory, [
+        $process = Process::fromShellCommandline($command, $directory ?? $this->directory, [
             ...array_fill_keys($inherited, false),
             ...self::OFFLINE,
             'COMPOSER_HOME' => $this->directory.'/.composer-home',
