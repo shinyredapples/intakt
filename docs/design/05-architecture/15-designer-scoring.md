@@ -35,7 +35,7 @@ Some choices are visible but not wrong either way (a layout, an emphasis, a tone
 - **Variant builds are isolated:** a variant build job gets none of the project's credentials, even when the owner opted in for build jobs, and no external dependency's address on its egress allowlist; a dependency the page needs runs as a bundled sidecar of that job only ([Threat model](14-threat-model.md#external-dependencies)). A render job, for a head or a variant, is isolated the same way, so code written for a variant reaches no shared instance.
 - **The owner votes blind** on a sample of those pairs: the owner sees two variants' screenshots, in an order plain code picks at random, without knowing which one the Designer preferred.
 - **Agreement is measured and shown:** how often the Designer's ranking matches the owner's votes, shown on the [dashboard](13-dashboard.md#designer-scores).
-- **Asking follows agreement.** While agreement is low, choices with character go to the owner as options; as it rises, fewer are asked.
+- **Asking follows agreement.** While agreement is low, choices with character go to the owner as options; as it rises, fewer are asked. With no votes yet, or without the headless browser, agreement is not measured and counts as low.
 
 ## Tools
 
