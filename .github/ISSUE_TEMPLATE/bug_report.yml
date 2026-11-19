@@ -16,7 +16,6 @@ body:
     id: what-you-expected
     attributes:
       label: What you expected
-      description: What should have happened instead.
     validations:
       required: true
   - type: textarea

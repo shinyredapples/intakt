@@ -12,6 +12,8 @@ final readonly class CiDefinition
     private const string GITHUB_FOLDER = '.github/';
     // Not CI by folder, because GitHub only shows these templates.
     private const string TEMPLATE = '#^\.github/(?:ISSUE_TEMPLATE/[^/\n]+\.(?:ya?ml|md)|pull_request_template\.md)\z#';
+    // A bare .github, a glob or a .. may read the templates.
+    private const string TEMPLATE_READ = '#(?<![\w-])\.github(?!/(?!ISSUE_TEMPLATE\b|pull_request_template|\.\.)[\w.-]+(?![\w.*?\[{$-]|/\.\.))|ISSUE_TEMPLATE#i';
     // Every Dockerfile counts, because a workflow can build an image from one in its build context without naming it.
     private const string DOCKERFILE = '/(?:^|\/)(?:Dockerfile(?:\..+)?|[^\/]+\.Dockerfile)$/i';
     // A quoted key or a space before the colon is the same YAML key, so both still name an action.
@@ -42,7 +44,8 @@ final readonly class CiDefinition
     /** @param list<WorkflowFile> $workflows */
     private function isPartOf(array $workflows, string $path): bool
     {
-        if ((str_starts_with($path, self::GITHUB_FOLDER) && 1 !== preg_match(self::TEMPLATE, $path)) || 1 === preg_match(self::DOCKERFILE, $path)) {
+        $template = 1 === preg_match(self::TEMPLATE, $path) && !array_any($workflows, static fn (WorkflowFile $workflow): bool => 0 !== preg_match(self::TEMPLATE_READ, (string) $workflow->content));
+        if ((str_starts_with($path, self::GITHUB_FOLDER) && !$template) || 1 === preg_match(self::DOCKERFILE, $path)) {
             return true;
         }
 
