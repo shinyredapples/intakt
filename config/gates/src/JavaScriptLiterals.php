@@ -11,6 +11,7 @@ final readonly class JavaScriptLiterals
     public const string PARAGRAPH_SEPARATOR = "\u{2029}";
     private const string SEPARATOR_LEAD = "\xE2";
     private const string NO_BREAK_SPACE = "\u{00A0}";
+    private const string BYTE_ORDER_MARK = "\u{FEFF}";
     private const array THREE_BYTE_SPACES = [
         self::LINE_SEPARATOR, self::PARAGRAPH_SEPARATOR, "\u{1680}", "\u{2000}", "\u{2001}", "\u{2002}", "\u{2003}", "\u{2004}", "\u{2005}",
         "\u{2006}", "\u{2007}", "\u{2008}", "\u{2009}", "\u{200A}", "\u{202F}", "\u{205F}", "\u{3000}", "\u{FEFF}",
@@ -25,13 +26,11 @@ final readonly class JavaScriptLiterals
 
     public int $length;
     private string $wordBytes;
-    private string $spaces;
 
     public function __construct(
         public string $source,
     ) {
         $this->length = strlen($source);
-        $this->spaces = '/\G(?:['.preg_quote(self::WHITESPACE, '/').']|'.implode('|', array_map(static fn (string $space): string => preg_quote($space, '/'), [self::NO_BREAK_SPACE, ...self::THREE_BYTE_SPACES])).')*/';
         // Because any byte of a multibyte character may be part of an identifier, except the lead bytes that Unicode spaces and line ends start with, which are checked on their own.
         $this->wordBytes = self::WORD_ASCII.implode('', array_map(chr(...), array_diff(range(0x80, 0xFF), array_map(ord(...), str_split(self::SPACE_LEADS)))));
     }
@@ -101,13 +100,24 @@ final readonly class JavaScriptLiterals
         return ':' === ($this->source[$this->afterSpaces($offset)] ?? '');
     }
 
-    // Because the lexer reads these spaces again as tokens, a lookahead over them reads each byte at most twice.
+    // Because a `#!` line is an interpreter directive only at the very start of the source (a byte order mark may precede it), it is skipped there and is no comment.
+    public function afterHashbang(): int
+    {
+        $start = str_starts_with($this->source, self::BYTE_ORDER_MARK) ? strlen(self::BYTE_ORDER_MARK) : 0;
+
+        return '#!' === substr($this->source, $start, 2) ? $this->lineCommentEnd($start) : 0;
+    }
+
+    // Because a pattern over a long run of spaces can exhaust the pattern engine and then read none of them, the run is read with plain string functions.
     private function afterSpaces(int $offset): int
     {
-        $spaces = [];
-        preg_match($this->spaces, $this->source, $spaces, offset: $offset);
+        do {
+            $offset += strspn($this->source, self::WHITESPACE, $offset);
+            $space = $this->multibyteSpaceLengthAt($offset);
+            $offset += $space;
+        } while (0 < $space);
 
-        return $offset + strlen($spaces[0] ?? '');
+        return $offset;
     }
 
     public function afterNumber(int $offset): int

@@ -102,6 +102,11 @@ final class JavaScriptCommentsTest extends TestCase
         yield 'a division in an object exported as default' => ["export default {a: 1 / 2 + '/'}; // TODO real\n", [1 => 'TODO']];
         yield 'a division after an object beside a key named class' => ["const o = {class: 1, b: {c: {} / 2 + '/'}}; // TODO later\n", [1 => 'TODO']];
         yield 'a division after an object beside a key named function' => ["const o = {function : 1, b: {c: {} / 2 + '/'}}; // TODO later\n", [1 => 'TODO']];
+        yield 'a division after an object beside a key named class with a long run of spaces before its colon' => ['const o = {class'.str_repeat(' ', 20000).": 1, b: {c: {} / 2 + '/'}}; // TODO real\n", [1 => 'TODO']];
+        yield 'a comment on the line after a hashbang' => ["#!/usr/bin/env node\n// TODO real\nfunction f() {}\n", [2 => 'TODO']];
+        yield 'a comment on the line after a hashbang holding a quote' => ["#!/usr/bin/env -S node --title='a\n// TODO real\n", [2 => 'TODO']];
+        yield 'a comment on the line after a hashbang ended by a line separator' => ['#!/usr/bin/env node'.self::LINE_SEPARATOR."// TODO real\n", [1 => 'TODO']];
+        yield 'a comment after a hashbang that does not start the source' => ["\n#!/usr/bin/env node // TODO real\n", [2 => 'TODO']];
     }
 
     /**
@@ -181,7 +186,14 @@ final class JavaScriptCommentsTest extends TestCase
         yield 'a comment opener in a class of a pattern returned from a default case' => ["switch (n) { default: return /[// TODO inside]/.test(s); }\n"];
         yield 'a comment opener in a class of a pattern after an async function declaration with a no-break space' => ["async\u{00A0}function f() {}\n/[// TODO inside]/.test(text);\n"];
         yield 'a comment opener in a class of a pattern after an async function declaration with an ideographic space' => ["async\u{3000}function f() {}\n/[// TODO inside]/.test(text);\n"];
-        yield 'a marker after the comment start' => ["// see the TODO list\n"];
+        yield 'a comment opener in a class of a pattern after an async function declaration with a long run of spaces' => ['async'.str_repeat(' ', 20000)."function f() {}\n/[// TODO inside]/.test(text);\n"];
+        yield 'a comment opener in a class of a pattern after a hashbang and a function declaration' => ["#!/usr/bin/env node\nfunction f() {}\n/[// TODO inside]/.test(text);\n"];
+        yield 'a comment opener in a class of a pattern after a hashbang and an async function declaration' => ["#!/usr/bin/env node\nasync function f() {}\n/[// TODO inside]/.test(text);\n"];
+        yield 'a comment opener in a class of a pattern after a hashbang and a class declaration' => ["#!/usr/bin/env node\nclass C {}\n/[// TODO inside]/.test(text);\n"];
+        yield 'a comment opener in a class of a pattern after a hashbang ended by a carriage return' => ["#!/usr/bin/env node\rfunction f() {}\r/[// TODO inside]/.test(text);\r"];
+        yield 'a comment opener in a class of a pattern after a byte order mark, a hashbang and a function declaration' => ["\u{FEFF}#!/usr/bin/env node\nfunction f() {}\n/[// TODO inside]/.test(text);\n"];
+        yield 'a marker in a hashbang, which is no JavaScript comment' => ["#!/usr/bin/env node // TODO later\n"];
+        yield 'a marker after the comment start' =>["// see the TODO list\n"];
         yield 'a reasoned exception' => ["// TODO(#123): show the total once the forge sends it\n"];
         yield 'a marker behind a hash, which is no JavaScript comment' => ["/* # TODO is shell syntax */\n"];
         yield 'a marker in code' => ["const TODO = 1;\n"];

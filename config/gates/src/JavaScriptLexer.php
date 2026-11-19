@@ -75,7 +75,7 @@ final class JavaScriptLexer
      */
     public function comments(): array
     {
-        $offset = 0;
+        $offset = $this->literals->afterHashbang();
 
         while ($offset < $this->literals->length) {
             $offset = $this->afterToken($offset);
