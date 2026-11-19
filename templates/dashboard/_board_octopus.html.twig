@@ -1,7 +1,9 @@
-{#- One home for the empty board's first-day panel, because the page renders it on load and the pushed board replaces it, so the first review takes it away without a reload. The waiting octopus sits above the panel's words (DESIGN.md, First day). The steps name only what this install does: the head's Set up Intakt (`_board_setup.html.twig`, pushed with this panel) stays the one setup action (#2067, D3). -#}
+{#- One home for the board's octopus, because the page renders it on load and the pushed board replaces it, so the first review takes the first-day panel away and an idle board gets the asleep octopus without a reload. The waiting octopus sits above the panel's words (DESIGN.md, First day). The steps name only what this install does: the head's Set up Intakt (`_board_setup.html.twig`, pushed with this panel) stays the one setup action (#2067, D3). -#}
+{%- set pose = board.mascot -%}
+{%- set idle = board.idleProjects -%}
 {%- if board.firstDay -%}
 <section class="firstday" id="board-octopus" aria-labelledby="board-octopus-h">
-    {{- include('dashboard/components/character.html.twig', {character: enum('Intakt\\Core\\Dashboard\\Domain\\MascotPose').Waiting, size: 144}, with_context = false) -}}
+    {{- include('dashboard/components/character.html.twig', {character: pose, size: 144}, with_context = false) -}}
     <div>
         <h2 id="board-octopus-h">Give Intakt its first task</h2>
         <ol>
@@ -11,7 +13,13 @@
         </ol>
     </div>
 </section>
+{%- elseif pose is not null -%}
+{#- Decoration only, on the empty board with nothing running, because the empty-column lines already say what lands where (2026-11-14 mascot decision; #2732). -#}
+<div class="asleep" id="board-octopus">{{ include('dashboard/components/character.html.twig', {character: pose, size: 144}, with_context = false) }}</div>
+{%- elseif idle is not empty -%}
+{#- Some projects are at rest while another works, so the asleep octopus waits hidden and assets/board-octopus.js shows it while the project filter shows one of them (#2732). -#}
+<div class="asleep" id="board-octopus" data-idle-projects="{{ idle|json_encode }}" hidden>{{ include('dashboard/components/character.html.twig', {character: enum('Intakt\\Core\\Dashboard\\Domain\\MascotPose').Asleep, size: 144}, with_context = false) }}</div>
 {%- else -%}
-{#- An empty hidden target stays, so a board that becomes empty again gets its panel back on the next push (#2437). -#}
+{#- An empty hidden target stays, so a board that becomes empty again gets its octopus back on the next push (#2437). -#}
 <span id="board-octopus" hidden></span>
 {%- endif -%}

@@ -20,6 +20,7 @@ The words used across Intakt's guides and dashboard, in plain terms. Each entry 
 | **CI** | the project's full check run again on the pushed version, on a machine the builder does not control: today GitHub's machines; planned: a fresh container Intakt starts by default, or GitHub's machines where the project sets it | [engine room](the-engine-room.md#ci-the-second-opinion) |
 | **Core panel** | the reviewers every change gets | [how it works](how-intakt-works.md#which-reviewers-look-at-a-change) |
 | **Cycle** | one round of build, check and review | [engine room](the-engine-room.md#cycles-and-generations-second-chances) |
+| **Designer** (planned) | an AI agent that plans and judges your project's screens: automatic checks, scores with a reason, and your taste learned by choosing between two versions | [how it works](how-intakt-works.md#the-idea-in-one-sentence) |
 | **Draining** | stopping new work so running jobs can finish before an update; planned: an update drains only the builder slots it is moving to the new version (first one slot, then the remaining builder slots together, so several can show draining while reviews go on), and all of them only when it changes stored data the old version could not read | [engine room](the-engine-room.md#draining-and-updates) |
 | **Evidence** | what a finished change must show, numbered E1, E2, ... | [writing a good task](writing-a-good-task.md) |
 | **Finding** | one problem a reviewer reports, with a severity | [journey](the-journey-of-a-task.md#5-reviewing) |
@@ -35,7 +36,7 @@ The words used across Intakt's guides and dashboard, in plain terms. Each entry 
 | **Issue / task** | one piece of work; on GitHub it is an issue | [writing a good task](writing-a-good-task.md) |
 | **Job** | one build, one check or one review, in its own container | [containers](containers-and-services.md) |
 | **Journey check** | a run that starts a fresh copy of Intakt and walks one path a person takes, to prove the whole product still works | [checking the whole product](checking-the-whole-product.md) |
-| **Judge step** | a quick call that sorts findings into fix now, later, or not needed | [journey](the-journey-of-a-task.md#5-reviewing) |
+| **Judge step** | a quick call that sorts the findings: a serious one (P1 or P2) is always fixed now, with the judge's doubt written beside it, and a small one (P3) is fixed now, later, or not at all | [journey](the-journey-of-a-task.md#5-reviewing) |
 | **Lane** | a line of work: the build slots and the review lane | [engine room](the-engine-room.md#lanes-and-slots-the-workbenches) |
 | **Lock** | a "one at a time" sign on something two jobs must not use together | [engine room](the-engine-room.md#locks-one-at-a-time) |
 | **Log** | Intakt's own record of its warnings and errors, one line each, with the secrets Intakt knows about written as `[redacted]` | [why isn't anything happening](why-isnt-anything-happening.md#reading-intakts-log) |
@@ -77,6 +78,6 @@ The words used across Intakt's guides and dashboard, in plain terms. Each entry 
 | **Take-over** | a label that hands Intakt an issue or pull request it did not create (planned) | [steering](steering-intakt.md#taking-an-item-over-by-hand-and-giving-it-back) |
 | **Test engineer** (planned, optional) | an AI agent that keeps the tests fast without losing what they prove | [how it works](how-intakt-works.md) |
 | **Tier** | `strong`, `standard` or `light`: a kind of AI model, mapped to each company's models | [costs](accounts-and-costs.md) |
-| **Verdict** | a reviewer's answer: approve, or changes with findings; blocked (held for a person) only when Intakt holds the review back, and a reviewer that answers blocked with findings counts as changes | [journey](the-journey-of-a-task.md#5-reviewing) |
+| **Verdict** | a reviewer's answer: approve, or changes with findings; blocked (held for a person) only when Intakt holds the review back, and a reviewer that answers blocked with findings counts as changes, unless it names a finding like one of Intakt's own failures, which counts as an answer that could not be read | [journey](the-journey-of-a-task.md#5-reviewing) |
 | **Waiting on you** | the dashboard column with only what needs a person | [dashboard](a-tour-of-the-dashboard.md#waiting-on-you) |
 | **Window** | an AI allowance that refills: five-hour and weekly | [costs](accounts-and-costs.md) |
