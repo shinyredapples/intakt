@@ -12,7 +12,7 @@ use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Formatter\OutputFormatter;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
-#[AsCommand(name: 'intakt:build:task', description: 'Read one issue of a project as the task, update the project\'s mirror, make the build clone, run the build job in it, check the bundle it hands back, run the pre-push check on it and push the branch signed, recording each step in the ledger')]
+#[AsCommand(name: 'intakt:build:task', description: 'Read one issue of a project as the task, update the project\'s mirror, make the build clone, run the build job in it, check the bundle it hands back, run the pre-push check on it and push the branch signed, recording each step in the ledger; a build that ends with a question parks the task')]
 final readonly class BuildTaskCommand
 {
     public function __construct(private BuildTask $buildTask)
