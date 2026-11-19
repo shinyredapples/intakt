@@ -189,7 +189,7 @@ final class JudgingPublicationTest extends KernelTestCase
         }
     }
 
-    // The worker stopped after the failure was recorded and before it removed the judging, and the judge answers when the judging comes back.
+    // Judged straight after the record, because that is the order a worker stopping before it removes the judging leaves behind when the judge answers on redelivery.
     public function testAJudgingThatSucceedsAfterItsFailureWasRecordedQueuesNoSecondPublication(): void
     {
         $roundId = $this->completedRound();
