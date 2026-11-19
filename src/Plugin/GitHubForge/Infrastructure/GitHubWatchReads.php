@@ -69,10 +69,8 @@ final readonly class GitHubWatchReads implements OpenChanges, HeadChecks
         $workflowRuns = $this->read($repository->path().'/actions/runs', ['head_sha' => $head->hash, 'per_page' => self::PAGE_SIZE]);
         $suites = $this->read($repository->path().'/commits/'.$head->hash.'/check-suites', ['per_page' => self::PAGE_SIZE]);
 
-        return new CiState($head, [
-            ...$this->runs->ofWorkflowRuns($repository, $head, $this->decode($workflowRuns['body'])),
-            ...$this->runs->ofCheckSuites($repository, $head, $this->decode($suites['body'])),
-        ]);
+        // Mapped together, because a check suite takes the origin of the workflow run it belongs to.
+        return new CiState($head, $this->runs->ofHead($repository, $head, ['workflow_runs' => $this->decode($workflowRuns['body']), 'check_suites' => $this->decode($suites['body'])]));
     }
 
     /**
