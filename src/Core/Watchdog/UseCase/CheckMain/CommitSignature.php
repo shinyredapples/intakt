@@ -18,6 +18,7 @@ final readonly class CommitSignature
     private const string PRINCIPAL = 'owner';
     private const string SHA1_HEADER = 'gpgsig';
     private const string SHA256_HEADER = 'gpgsig-sha256';
+    private const array SIGNATURE_HEADERS = [self::SHA1_HEADER, self::SHA256_HEADER];
     private const int SHA256_NAME_LENGTH = 64;
     private const int REFUSED = 255;
     private const float TIMEOUT_SECONDS = 60;
@@ -55,43 +56,21 @@ final readonly class CommitSignature
     private function split(string $commitText, string $header): array
     {
         [$headers, $message] = array_pad(explode("\n\n", $commitText, 2), 2, '');
+        // Because git folds a multi-line header value into continuation lines that start with a space.
+        preg_match_all('/^(\S+) (.*(?:\n .*)*)$/m', $headers, $entries, PREG_SET_ORDER);
         $signature = null;
         $kept = [];
 
-        $inSignature = false;
-        $isWanted = false;
-
-        foreach (explode("\n", $headers) as $line) {
-            // Because git folds a multi-line signature into continuation lines that start with a space.
-            if ($inSignature && str_starts_with($line, ' ')) {
-                if ($isWanted) {
-                    $signature .= "\n".substr($line, 1);
-                }
-
-                continue;
+        foreach ($entries as [$entry, $name, $value]) {
+            // Because git leaves every signature header out of the text it signs, whichever one it reads.
+            if (!in_array($name, self::SIGNATURE_HEADERS, true)) {
+                $kept[] = $entry;
+            } elseif ($name === $header) {
+                $signature ??= str_replace("\n ", "\n", $value)."\n";
             }
-            $inSignature = false;
-
-            // Every signature header leaves the signed payload, as git leaves them all out when it signs.
-            $name = $this->signatureHeaderOf($line);
-            if (null !== $name) {
-                $inSignature = true;
-                $isWanted = $name === $header && null === $signature;
-                if ($isWanted) {
-                    $signature = substr($line, strlen($name) + 1);
-                }
-
-                continue;
-            }
-            $kept[] = $line;
         }
 
-        return [null === $signature ? null : $signature."\n", implode("\n", $kept)."\n\n".$message];
-    }
-
-    private function signatureHeaderOf(string $line): ?string
-    {
-        return array_find([self::SHA1_HEADER, self::SHA256_HEADER], static fn (string $name): bool => str_starts_with($line, $name.' '));
+        return [$signature, implode("\n", $kept)."\n\n".$message];
     }
 
     /**

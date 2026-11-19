@@ -31,9 +31,8 @@ final readonly class MainHistory
         return trim($this->mustRun($repository, ['rev-parse', '--verify', '--end-of-options', self::MAIN.'^{commit}']));
     }
 
+    // Because a commit that is no ancestor, or is not there at all, means main was rewritten.
     /**
-     * A commit that is no ancestor, or is not there at all, means main was rewritten.
-     *
      * @throws MainNotRead
      */
     public function isAncestor(string $repository, string $earlier, string $head): bool
