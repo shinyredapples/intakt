@@ -12,16 +12,26 @@ use Intakt\Core\Build\Contract\BuildBrief;
 use Intakt\Core\Build\Domain\BuilderPrompt;
 use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\Domain\GatesAtOnce;
+use Intakt\Core\Build\Domain\GatesByDefault;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildVerdict;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
+use Intakt\Core\Job\Contract\JobEgress;
+use Intakt\Core\Job\Contract\JobEnd;
+use Intakt\Core\Job\Contract\JobId;
+use Intakt\Core\Job\Contract\JobInput;
+use Intakt\Core\Job\Contract\JobLimits;
+use Intakt\Core\Job\Contract\JobOutput;
+use Intakt\Core\Job\Contract\JobResult;
+use Intakt\Core\Job\Contract\JobSpec;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\PromptCut;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
 use Intakt\Tests\Core\Build\ScriptedJobRunner;
 use Intakt\Tests\Core\HandBack\BuildHistory;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Process\Process;
@@ -30,6 +40,24 @@ use Symfony\Component\Process\Process;
 #[CoversClass(RunBuildJob::class)]
 #[CoversClass(BuildJobOutcome::class)]
 #[CoversClass(BuildQuestion::class)]
+#[UsesClass(BuilderPrompt::class)]
+#[UsesClass(GatesAtOnce::class)]
+#[UsesClass(GatesByDefault::class)]
+#[UsesClass(BuildJob::class)]
+#[UsesClass(BuildVerdict::class)]
+#[UsesClass(BuildBrief::class)]
+#[UsesClass(ResolvedModel::class)]
+#[UsesClass(Fence::class)]
+#[UsesClass(PromptCut::class)]
+#[UsesClass(PhpGate::class)]
+#[UsesClass(JobSpec::class)]
+#[UsesClass(JobId::class)]
+#[UsesClass(JobInput::class)]
+#[UsesClass(JobLimits::class)]
+#[UsesClass(JobEgress::class)]
+#[UsesClass(JobResult::class)]
+#[UsesClass(JobEnd::class)]
+#[UsesClass(JobOutput::class)]
 final class ScriptedQuestionTest extends TestCase
 {
     private const string SCRIPT = __DIR__.'/../../../../../docker/job/build.sh';

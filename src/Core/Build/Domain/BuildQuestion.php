@@ -98,6 +98,7 @@ final readonly class BuildQuestion
             $choices[] = '' === $text ? throw QuestionRefused::emptyChoice() : $text;
         }
 
-        return $choices;
+        // Compared after trimming, because two choices that print alike leave the reader unable to tell which one the recommendation names.
+        return count(array_unique($choices)) === count($choices) ? $choices : throw QuestionRefused::duplicateChoice();
     }
 }

@@ -508,6 +508,31 @@ final class BuildScriptTest extends TestCase
         self::assertFileExists($this->output.'/handback.bundle');
     }
 
+    public function testAnUntouchedQuestionInACloneWhoseGitConfigTheCliBrokeIsNotHandedBack(): void
+    {
+        $this->history->commitFile('QUESTION.json', '{"question":"Old?","choices":["a"],"recommendation":"a"}', 'docs: keep an old question');
+        $this->givenTheCli("echo '[broken' >> .git/config");
+
+        $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertFileDoesNotExist($this->output.'/question.json');
+        self::assertStringContainsString("QUESTION.json is not handed back: git could not hash it after the session\n", $this->outputFile('build.log'));
+    }
+
+    public function testAQuestionWhoseHashFailedBeforeTheSessionIsNotHandedBackEvenWhenTheCliRewritesIt(): void
+    {
+        $this->history->commitFile('QUESTION.json', '{"question":"Old?","choices":["a"],"recommendation":"a"}', 'docs: keep an old question');
+        $this->givenGitFailsItsFirstHash();
+        $this->givenTheCli(<<<'SH'
+            printf '{"question":"New?","choices":["b"],"recommendation":"b"}' > QUESTION.json
+            SH);
+
+        $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertFileDoesNotExist($this->output.'/question.json');
+        self::assertStringContainsString("QUESTION.json is not handed back: git could not hash it before the session\n", $this->outputFile('build.log'));
+    }
+
     public function testAQuestionThatIsALinkIsNotHandedBack(): void
     {
         $this->givenTheCli('ln -s "$RECORD/prompt.md" QUESTION.json');
@@ -647,6 +672,20 @@ final class BuildScriptTest extends TestCase
             #!/bin/sh
             if [ "\$1" = bundle ]; then
                 echo partial > "\$4"
+                exit 128
+            fi
+            exec '{$git}' "\$@"
+            SH);
+        chmod($this->bin.'/git', 0o755);
+    }
+
+    private function givenGitFailsItsFirstHash(): void
+    {
+        $git = (string) new ExecutableFinder()->find('git');
+        file_put_contents($this->bin.'/git', <<<SH
+            #!/bin/sh
+            if [ "\$1" = hash-object ] && [ ! -e "\$RECORD/hashed-once" ]; then
+                : > "\$RECORD/hashed-once"
                 exit 128
             fi
             exec '{$git}' "\$@"

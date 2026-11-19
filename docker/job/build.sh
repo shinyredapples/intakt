@@ -39,9 +39,13 @@ cd "$clone" || exit 1
 base="$(git rev-parse HEAD)"
 # The bytes of a QUESTION.json the checkout already holds, read before the session and kept in a variable the builder cannot write:
 # the checkout's bytes and not the commit's, because a checkout that converts line endings holds other bytes than the commit.
+# A hash git could not take is no baseline, because an empty one would make any question count as written, so none is handed back then.
 question_before=''
+question_hashed=1
 if [ -f QUESTION.json ] && [ ! -L QUESTION.json ]; then
-    question_before="$(git hash-object --no-filters -- QUESTION.json 2>/dev/null)"
+    if ! question_before="$(git hash-object --no-filters -- QUESTION.json 2>/dev/null)" || [ -z "$question_before" ]; then
+        question_hashed=0
+    fi
 fi
 
 # The egress allowlist lets only the vendor's API through, so the CLI's telemetry and update checks would only fail.
@@ -116,9 +120,15 @@ fi
 # The same for the question, which says the builder stopped to ask instead of building;
 # a QUESTION.json the checkout already held when the session started is not this builder's question, so it is handed back only when the session wrote it or changed its bytes.
 # Without filters, because the builder can write the clone's git settings, and a clean filter named there would run here.
-if [ -f QUESTION.json ] && [ ! -L QUESTION.json ] \
-    && [ "$(git hash-object --no-filters -- QUESTION.json 2>/dev/null)" != "$question_before" ]; then
-    cp QUESTION.json "$output/question.json"
+# A hash that fails after the session is no change either, because the builder can break the clone's git settings, and the bundle then fails the same way.
+if [ -f QUESTION.json ] && [ ! -L QUESTION.json ]; then
+    if [ "$question_hashed" -eq 0 ]; then
+        echo 'QUESTION.json is not handed back: git could not hash it before the session' >> "$log"
+    elif ! question_after="$(git hash-object --no-filters -- QUESTION.json 2>/dev/null)" || [ -z "$question_after" ]; then
+        echo 'QUESTION.json is not handed back: git could not hash it after the session' >> "$log"
+    elif [ "$question_after" != "$question_before" ]; then
+        cp QUESTION.json "$output/question.json"
+    fi
 fi
 
 # The branch by its full name, so a branch the builder checked out instead is never what is handed back; git refuses an empty bundle.

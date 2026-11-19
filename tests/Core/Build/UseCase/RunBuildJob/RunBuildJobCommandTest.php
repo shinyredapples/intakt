@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Build\UseCase\RunBuildJob;
 
+use IntlChar;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
@@ -156,6 +157,36 @@ final class RunBuildJobCommandTest extends TestCase
             $lines,
         );
         self::assertCount(count($lines), array_unique($lines));
+    }
+
+    public function testADefaultIgnorableCharacterOutsideTheControlsIsPrintedAsItsCodePoint(): void
+    {
+        $question = json_encode(['question' => "Which\u{34F}?", 'choices' => ["a\u{FE0E}b", "a\u{115F}b", "a\u{3164}b", "a\u{FFA0}b", 'ab'], 'recommendation' => 'ab'], JSON_THROW_ON_ERROR);
+
+        $tester = $this->executed(new JobOutput(['question.json' => $question]), []);
+
+        self::assertSame(
+            "question: Which\\u{34F}?\nchoice: a\\u{FE0E}b\nchoice: a\\u{115F}b\nchoice: a\\u{3164}b\nchoice: a\\u{FFA0}b\nchoice: ab\nrecommendation: ab\n",
+            $tester->getDisplay(),
+        );
+    }
+
+    public function testVisibleLettersOutsideAsciiArePrintedAsTheyAre(): void
+    {
+        $tester = $this->executed(new JobOutput(['question.json' => '{"question":"Café or 한글?","choices":["é","한"],"recommendation":"é"}']), []);
+
+        self::assertSame("question: Café or 한글?\nchoice: é\nchoice: 한\nrecommendation: é\n", $tester->getDisplay());
+    }
+
+    public function testTheDefaultIgnorableRangesAreExactlyThoseOfUnicodesDataAsIntlKnowsThem(): void
+    {
+        $listed = [];
+        foreach (RunBuildJobCommand::DEFAULT_IGNORABLE as [$first, $last]) {
+            array_push($listed, ...range($first, $last));
+        }
+        $known = array_values(array_filter(range(0, 0x10FFFF), static fn (int $point): bool => true === IntlChar::hasBinaryProperty($point, IntlChar::PROPERTY_DEFAULT_IGNORABLE_CODE_POINT)));
+
+        self::assertSame($known, $listed);
     }
 
     public function testARefusedQuestionIsPrintedAsAFailedBuildWithItsReason(): void

@@ -28,6 +28,11 @@ final class QuestionRefused extends RuntimeException
         return new self('a choice is not a non-empty text');
     }
 
+    public static function duplicateChoice(): self
+    {
+        return new self('two choices are the same');
+    }
+
     public static function recommendationNotAChoice(): self
     {
         return new self('the recommendation is not one of the choices');

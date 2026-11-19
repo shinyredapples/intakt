@@ -43,6 +43,8 @@ final class BuildQuestionTest extends TestCase
     #[TestWith(['{"question":"Q","choices":[{"\u0000":"a"}],"recommendation":"a"}', 'a choice is not a non-empty text'])]
     #[TestWith(['{"\u0000question":"Q","choices":["a"],"recommendation":"a"}', 'the question text is empty'])]
     #[TestWith(['{"\u0000note":1,"question":"Q","choices":["a"],"recommendation":"a"', 'the question is not a JSON object'])]
+    #[TestWith(['{"question":"Q","choices":["Keep"," Keep "],"recommendation":"Keep"}', 'two choices are the same'])]
+    #[TestWith(['{"question":"Q","choices":["a","b","a"],"recommendation":"b"}', 'two choices are the same'])]
     #[TestWith(['{"question":"Q","choices":["a","b"],"recommendation":"c"}', 'the recommendation is not one of the choices'])]
     #[TestWith(['{"question":"Q","choices":["a"]}', 'the recommendation is not one of the choices'])]
     #[TestWith(['{"question":"Q","choices":[],"recommendation":"a"}', 'the question has no list of choices'])]
