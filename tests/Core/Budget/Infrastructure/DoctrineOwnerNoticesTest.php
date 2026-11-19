@@ -108,7 +108,7 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
         self::assertCount(1, $this->entities->getRepository(OutageNoticeRecord::class)->findAll());
     }
 
-    // The watch reads the old snapshot, a fresh reading lands, and only then is the notice stamped with a later moment.
+    // A fresh reading can land after the watch read the old snapshot but before it stamps the notice, so the notice's own moment is later than that reading.
     public function testAReadingThatLandsWhileTheOutageIsBeingNoticedTakesItOffTheList(): void
     {
         $account = new Account(Provider::ClaudeCode, 'main');
@@ -117,7 +117,7 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
         $reading = new WindowReading($account, UsageWindow::FiveHour, new Usage(12.0, null));
         $use->record($reading);
         $clock->modify('+4 hours');
-        $snapshots = $this->createStub(MeasuredUse::class);
+        $snapshots = self::createStub(MeasuredUse::class);
         $snapshots->method('of')->willReturnCallback(
             static function (Account $account, UsageWindow $window) use ($clock, $reading, $use): ?WindowUse {
                 $snapshot = $use->of($account, $window);
@@ -152,7 +152,7 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
         $this->entities->persist(new OutageNoticeRecord($account, new DateTimeImmutable('2026-11-02T08:00:00+00:00'), $clock->now()));
         $this->entities->flush();
         $reading = new WindowReading($account, UsageWindow::FiveHour, new Usage(12.0, null));
-        $slowClock = $this->createStub(ClockInterface::class);
+        $slowClock = self::createStub(ClockInterface::class);
         $slowClock->method('now')->willReturnCallback(static function () use ($clock, $use, $reading): DateTimeImmutable {
             $stampedAt = $clock->now()->modify('-1 second');
             $clock->modify('+1 second');
