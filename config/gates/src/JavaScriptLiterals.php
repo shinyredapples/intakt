@@ -18,6 +18,7 @@ final readonly class JavaScriptLiterals
     private const string WORD_ASCII = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_$\\';
     private const string DECIMAL_DIGITS = '0123456789_';
     private const string RADIX_DIGITS = '0123456789abcdefABCDEF_';
+    private const string HEX_DIGITS = '0123456789abcdefABCDEF';
     private const array RADIX_PREFIXES = ['x', 'X', 'o', 'O', 'b', 'B'];
     private const array EXPONENTS = ['e', 'E'];
     private const string BIGINT_SUFFIX = 'n';
@@ -75,11 +76,18 @@ final readonly class JavaScriptLiterals
     {
         $end = $offset + strspn($this->source, $this->wordBytes, $offset);
 
-        while ($this->wordContinuesAt($end)) {
-            $end += 1 + strspn($this->source, $this->wordBytes, $end + 1);
+        while (0 < $continuation = $this->wordContinuationLengthAt($offset, $end)) {
+            $end += $continuation + strspn($this->source, $this->wordBytes, $end + $continuation);
         }
 
         return $end;
+    }
+
+    public function functionFollows(int $offset): bool
+    {
+        $word = $offset + strspn($this->source, " \t", $offset);
+
+        return 'function' === substr($this->source, $word, 8) && !str_contains($this->wordBytes, $this->source[$word + 8] ?? ' ');
     }
 
     public function afterNumber(int $offset): int
@@ -123,7 +131,7 @@ final readonly class JavaScriptLiterals
             }
 
             $offset = match ($this->source[$offset]) {
-                '\\' => $this->afterEscape($offset),
+                '\\' => $this->afterPatternEscape($offset),
                 '[' => $this->afterCharacterClass($offset + 1),
                 default => $offset + 1,
             };
@@ -157,6 +165,22 @@ final readonly class JavaScriptLiterals
         $length = "\r\n" === substr($this->source, $offset + 1, 2) ? 3 : 2;
 
         return min($offset + $length, $this->length);
+    }
+
+    // Because a braced escape such as `\u{61}` is part of an identifier, its braces do not end the word.
+    private function wordContinuationLengthAt(int $start, int $offset): int
+    {
+        if ($this->wordContinuesAt($offset)) {
+            return 1;
+        }
+
+        if ($offset - 2 < $start || '\\u{' !== substr($this->source, $offset - 2, 3)) {
+            return 0;
+        }
+
+        $digits = strspn($this->source, self::HEX_DIGITS, $offset + 1);
+
+        return '}' === ($this->source[$offset + 1 + $digits] ?? '') ? 2 + $digits : 0;
     }
 
     private function wordContinuesAt(int $offset): bool
@@ -194,9 +218,15 @@ final readonly class JavaScriptLiterals
                 return $offset;
             }
 
-            $offset = '\\' === $this->source[$offset] ? $this->afterEscape($offset) : $offset + 1;
+            $offset = '\\' === $this->source[$offset] ? $this->afterPatternEscape($offset) : $offset + 1;
         }
 
         return $this->length;
+    }
+
+    // Because a backslash cannot escape a line end in a pattern, an unclosed pattern still ends at that line end.
+    private function afterPatternEscape(int $offset): int
+    {
+        return $this->lineEndsAt($offset + 1) ? $offset + 1 : min($offset + 2, $this->length);
     }
 }

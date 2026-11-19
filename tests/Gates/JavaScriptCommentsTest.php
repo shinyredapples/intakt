@@ -85,6 +85,48 @@ final class JavaScriptCommentsTest extends TestCase
         yield 'a division after a nested object' => ["const a = {b: {}} / 2 + '/'; // TODO later\n", [1 => 'TODO']];
         yield 'a division after an object returned by an arrow' => ["const f = () => ({}) / 2 + '/'; // TODO later\n", [1 => 'TODO']];
         yield 'a division after an identifier with multibyte letters sharing space lead bytes' => ["const a = \u{00B5}\u{3042}\u{1E00}\u{FB01} / 2 + '/'; // TODO later\n", [1 => 'TODO']];
+        yield 'a division after a variable named of in an if head' => ["if (of / 2) f('/'); // TODO later\n", [1 => 'TODO']];
+        yield 'a division after a variable named of in a while head' => ["while (of / 2) f('/'); // TODO later\n", [1 => 'TODO']];
+        yield 'a division after a variable named of in the condition of a classic for' => ["for (; of / 2; ) f('/'); // TODO later\n", [1 => 'TODO']];
+        yield 'a division after a variable named of declared in a for of head' => ["for (const of of xs) f(of / 2 + '/'); // TODO later\n", [1 => 'TODO']];
+        yield 'a pattern after of in a for head that declares a variable named of' => ["for (const of of /'/.exec(b)) f(of); // TODO later\n", [1 => 'TODO']];
+        yield 'a pattern after of in a for await head' => ["for await (const a of /'/.exec(b)) f(a); // TODO later\n", [1 => 'TODO']];
+        yield 'a division after a function expression' => ["const n = function () {} / 2 + '/'; // TODO later\n", [1 => 'TODO']];
+        yield 'a division after a class expression' => ["const n = class {} / 2 + '/'; // TODO later\n", [1 => 'TODO']];
+        yield 'a division after a class expression with a heritage' => ["const n = class extends f({}) {} / 2 + '/'; // TODO later\n", [1 => 'TODO']];
+        yield 'a division after a function expression with an object as a default' => ["const n = function (a = {}) {} / 2 + '/'; // TODO later\n", [1 => 'TODO']];
+        yield 'a division after an object in a ternary branch inside a block' => ["{ const a = b ? c : {} / 2 + '/'; /* TODO later */ }\n", [1 => 'TODO']];
+        yield 'a division after an object after optional chaining in a ternary' => ["{ const a = b?.c ? d : {} / 2 + '/'; /* TODO later */ }\n", [1 => 'TODO']];
+        yield 'a division after an identifier with a braced Unicode escape' => ["const n = \\u{0061} / 2 + '/'; // TODO later\n", [1 => 'TODO']];
+        yield 'a division after an identifier ending in a braced Unicode escape' => ["const n = a\\u{62} / 2 + '/'; // TODO later\n", [1 => 'TODO']];
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function lineEnds(): iterable
+    {
+        yield 'a line feed' => ["\n"];
+        yield 'a carriage return' => ["\r"];
+        yield 'a carriage return and line feed' => ["\r\n"];
+        yield 'a line separator' => [self::LINE_SEPARATOR];
+        yield 'a paragraph separator' => [self::PARAGRAPH_SEPARATOR];
+    }
+
+    #[DataProvider('lineEnds')]
+    public function testAnUnclosedPatternEndingInABackslashEndsAtTheLineEnd(string $lineEnd): void
+    {
+        $prefix = 'const pattern = /unclosed\\'.$lineEnd;
+
+        self::assertSame([[strlen($prefix), '// TODO later']], new JavaScriptComments()->commentsIn($prefix.'// TODO later'));
+    }
+
+    #[DataProvider('lineEnds')]
+    public function testAnUnclosedClassOfAPatternEndingInABackslashEndsAtTheLineEnd(string $lineEnd): void
+    {
+        $prefix = 'const pattern = /[unclosed\\'.$lineEnd;
+
+        self::assertSame([[strlen($prefix), '// TODO later']], new JavaScriptComments()->commentsIn($prefix.'// TODO later'));
     }
 
     /**
@@ -120,6 +162,13 @@ final class JavaScriptCommentsTest extends TestCase
         yield 'a comment opener in a class of a pattern after a no-break space' => ["const pattern =\u{00A0}/[// TODO later]/;\n"];
         yield 'a comment opener in a class of a pattern after return and an ideographic space' => ["return\u{3000}/[// TODO later]/;\n"];
         yield 'a comment opener in a class of a pattern after a byte order mark' => ["\u{FEFF}/[// TODO later]/.test(text);\n"];
+        yield 'a comment opener in a class of a pattern after a block in a case' => ["switch (n) { case 1: {} /[// TODO later]/.test(s); }\n"];
+        yield 'a comment opener in a class of a pattern after a block in a default case' => ["switch (n) { default: {} /[// TODO later]/.test(s); }\n"];
+        yield 'a comment opener in a class of a pattern after a labeled block' => ["outer: {} /[// TODO later]/.test(s);\n"];
+        yield 'a comment opener in a class of a pattern after an async function declaration' => ["async function f() {}\n/[// TODO later]/.test(text);\n"];
+        yield 'a comment opener in a class of a pattern after an exported function declaration' => ["export function f() {}\n/[// TODO later]/.test(text);\n"];
+        yield 'a comment opener in a class of a pattern after a class declaration' => ["class C { f() {} }\n/[// TODO later]/.test(text);\n"];
+        yield 'a comment opener in a class of a pattern after a block in a function expression' => ["const f = function () { {} /[// TODO later]/.test(s); };\n"];
         yield 'a marker after the comment start' => ["// see the TODO list\n"];
         yield 'a reasoned exception' => ["// TODO(#123): show the total once the forge sends it\n"];
         yield 'a marker behind a hash, which is no JavaScript comment' => ["/* # TODO is shell syntax */\n"];

@@ -14,6 +14,7 @@ final class JavaScriptLexer
     private const int HEAD_KEYWORD = 3;
     private const int CLOSING_PARENTHESIS = 4;
     private const int STATEMENT_END = 5;
+    private const int FOR_KEYWORD = 6;
     private const array ENDS_AN_OPERAND = [self::OPERAND, self::CLOSING_PARENTHESIS];
     private const array OPENS_A_BLOCK = [self::OPERAND, self::CLOSING_PARENTHESIS, self::STATEMENT_END];
     private const int PARENTHESIS = 0;
@@ -22,9 +23,13 @@ final class JavaScriptLexer
     private const int BRACE = 3;
     private const int TEMPLATE_EXPRESSION = 4;
     private const int BLOCK = 5;
-    private const array HEAD_KEYWORDS = ['if', 'while', 'for', 'with'];
-    private const array BLOCK_KEYWORDS = ['do', 'else', 'try', 'finally'];
-    private const array KEYWORDS_BEFORE_AN_OPERAND = ['return', 'typeof', 'case', 'default', 'in', 'of', 'new', 'delete', 'void', 'throw', 'instanceof', 'yield', 'await'];
+    private const int FOR_HEAD = 6;
+    private const int EXPRESSION_BODY = 7;
+    private const array HOLDS_STATEMENTS = [self::BLOCK, self::EXPRESSION_BODY, null];
+    private const array HEAD_KEYWORDS = ['if', 'while', 'with'];
+    private const array BODY_KEYWORDS = ['function', 'class'];
+    private const array BLOCK_KEYWORDS = ['do', 'else', 'try', 'finally', 'export'];
+    private const array KEYWORDS_BEFORE_AN_OPERAND = ['return', 'typeof', 'case', 'default', 'in', 'of', 'new', 'delete', 'void', 'throw', 'instanceof', 'yield', 'await', 'const', 'let', 'var'];
 
     private readonly JavaScriptLiterals $literals;
     private int $previous = self::STATEMENT_END;
@@ -33,6 +38,18 @@ final class JavaScriptLexer
      * @var list<int>
      */
     private array $frames = [];
+
+    /**
+     * Because a function or class in an expression is an operand once its body closes, the depth at which that body's `{` will open is kept until it does.
+     *
+     * @var array<int, true>
+     */
+    private array $expressionBodies = [];
+
+    /**
+     * @var array<int, int>
+     */
+    private array $openTernaries = [];
 
     /**
      * @var list<array{int, string}>
@@ -157,10 +174,14 @@ final class JavaScriptLexer
         return match (true) {
             self::DOT === $this->previous => $this->after(self::OPERAND, $end),
             // Because `for await (` heads a loop like `for (`, the keyword between them keeps the head.
-            'await' === $word && self::HEAD_KEYWORD === $this->previous => $end,
-            // Because `of` is a keyword only between the parentheses of a `for` head, elsewhere it names a variable.
-            'of' === $word && self::HEAD_PARENTHESIS !== array_last($this->frames) => $this->after(self::OPERAND, $end),
+            'await' === $word && self::FOR_KEYWORD === $this->previous => $end,
+            // Because `async function` is read like `function`, the word before it keeps the position it stands in.
+            'async' === $word && $this->literals->functionFollows($end) => $end,
+            // Because `of` is a keyword only right after the binding of a `for` head that has no `;`, elsewhere it names a variable.
+            'of' === $word && !$this->bindingOfAForOfHeadEnded() => $this->after(self::OPERAND, $end),
+            'for' === $word => $this->after(self::FOR_KEYWORD, $end),
             in_array($word, self::HEAD_KEYWORDS, true) => $this->after(self::HEAD_KEYWORD, $end),
+            in_array($word, self::BODY_KEYWORDS, true) => $this->afterBodyKeyword($end),
             in_array($word, self::BLOCK_KEYWORDS, true) => $this->after(self::STATEMENT_END, $end),
             in_array($word, self::KEYWORDS_BEFORE_AN_OPERAND, true) => $this->after(self::OPERATOR, $end),
             default => $this->after(self::OPERAND, $end),
@@ -170,45 +191,130 @@ final class JavaScriptLexer
     private function afterPunctuator(int $offset, string $char): int
     {
         return match ($char) {
-            '(' => $this->open(self::HEAD_KEYWORD === $this->previous ? self::HEAD_PARENTHESIS : self::PARENTHESIS, $offset),
+            '(' => $this->open(match ($this->previous) {
+                self::FOR_KEYWORD => self::FOR_HEAD,
+                self::HEAD_KEYWORD => self::HEAD_PARENTHESIS,
+                default => self::PARENTHESIS,
+            }, $offset),
             '[' => $this->open(self::BRACKET, $offset),
-            // Because in ordinary code a brace after an operator opens an object and any other brace opens a block or a class or function body.
-            '{' => $this->open(in_array($this->previous, self::OPENS_A_BLOCK, true) ? self::BLOCK : self::BRACE, $offset),
+            '{' => $this->afterOpeningBrace($offset),
             ')', ']' => $this->afterClosingBracket($offset),
             '}' => $this->afterClosingBrace($offset),
             '.' => $this->afterDot($offset),
             '+', '-' => $this->afterPlusOrMinus($offset, $char),
+            '?' => $this->afterQuestionMark($offset),
+            ':' => $this->afterColon($offset),
             // Because the name after `#` is a private property, it is never a keyword, as after a `.`.
             '#' => $this->after(self::DOT, $offset + 1),
-            ';' => $this->after(self::STATEMENT_END, $offset + 1),
+            ';' => $this->afterSemicolon($offset),
             '=' => '>' === ($this->literals->source[$offset + 1] ?? '') ? $this->after(self::STATEMENT_END, $offset + 2) : $this->after(self::OPERATOR, $offset + 1),
             default => $this->after(self::OPERATOR, $offset + 1),
         };
+    }
+
+    private function bindingOfAForOfHeadEnded(): bool
+    {
+        return self::FOR_HEAD === array_last($this->frames) && in_array($this->previous, self::ENDS_AN_OPERAND, true);
+    }
+
+    // Because a function or class that stands where an operand is expected is an expression, while one at the start of a statement is a declaration.
+    private function afterBodyKeyword(int $end): int
+    {
+        if (self::STATEMENT_END !== $this->previous) {
+            $this->expressionBodies[count($this->frames)] = true;
+        }
+
+        return $this->after(self::OPERAND, $end);
+    }
+
+    // Because in ordinary code a brace after an operator opens an object and any other brace opens a block or a class or function body.
+    private function afterOpeningBrace(int $offset): int
+    {
+        $depth = count($this->frames);
+
+        if (isset($this->expressionBodies[$depth])) {
+            unset($this->expressionBodies[$depth]);
+
+            return $this->open(self::EXPRESSION_BODY, $offset);
+        }
+
+        return $this->open(in_array($this->previous, self::OPENS_A_BLOCK, true) ? self::BLOCK : self::BRACE, $offset);
+    }
+
+    // Because `?.` and `??` are no conditional, only a lone `?` waits for its `:`.
+    private function afterQuestionMark(int $offset): int
+    {
+        $next = $this->literals->source[$offset + 1] ?? '';
+
+        if ('?' === $next) {
+            return $this->after(self::OPERATOR, $offset + 2);
+        }
+
+        if ('.' === $next && !ctype_digit($this->literals->source[$offset + 2] ?? '')) {
+            return $this->after(self::DOT, $offset + 2);
+        }
+
+        $depth = count($this->frames);
+        $this->openTernaries[$depth] = ($this->openTernaries[$depth] ?? 0) + 1;
+
+        return $this->after(self::OPERATOR, $offset + 1);
+    }
+
+    // Because a `:` among statements that answers no `?` ends a `case`, a `default` or a label, a statement follows it.
+    private function afterColon(int $offset): int
+    {
+        $depth = count($this->frames);
+
+        if (0 < ($this->openTernaries[$depth] ?? 0)) {
+            --$this->openTernaries[$depth];
+
+            return $this->after(self::OPERATOR, $offset + 1);
+        }
+
+        return $this->after(in_array(array_last($this->frames), self::HOLDS_STATEMENTS, true) ? self::STATEMENT_END : self::OPERATOR, $offset + 1);
+    }
+
+    // Because a `;` in a `for` head makes it a classic loop, `of` in it names a variable.
+    private function afterSemicolon(int $offset): int
+    {
+        if (self::FOR_HEAD === array_last($this->frames)) {
+            $this->frames[array_key_last($this->frames)] = self::HEAD_PARENTHESIS;
+        }
+
+        return $this->after(self::STATEMENT_END, $offset + 1);
     }
 
     private function open(int $frame, int $offset): int
     {
         $this->frames[] = $frame;
 
-        return $this->after(self::BLOCK === $frame ? self::STATEMENT_END : self::OPERATOR, $offset + 1);
+        return $this->after(in_array($frame, [self::BLOCK, self::EXPRESSION_BODY], true) ? self::STATEMENT_END : self::OPERATOR, $offset + 1);
+    }
+
+    private function close(): ?int
+    {
+        $depth = count($this->frames);
+        unset($this->expressionBodies[$depth], $this->openTernaries[$depth]);
+
+        return array_pop($this->frames);
     }
 
     // Because the parenthesis that closes an `if`, `while`, `for` or `with` head ends no operand, a slash after it starts a pattern.
     private function afterClosingBracket(int $offset): int
     {
-        $frame = self::TEMPLATE_EXPRESSION === array_last($this->frames) ? null : array_pop($this->frames);
+        $frame = self::TEMPLATE_EXPRESSION === array_last($this->frames) ? null : $this->close();
 
         return $this->after(match ($frame) {
-            self::HEAD_PARENTHESIS => self::STATEMENT_END,
+            self::HEAD_PARENTHESIS, self::FOR_HEAD => self::STATEMENT_END,
             self::PARENTHESIS => self::CLOSING_PARENTHESIS,
             default => self::OPERAND,
         }, $offset + 1);
     }
 
-    // Because a statement may follow the brace that closes a block, a slash after it starts a pattern, while after an object it divides.
+    // Because a statement may follow the brace that closes a block, a slash after it starts a pattern, while after an object or a function or class expression it divides.
     private function afterClosingBrace(int $offset): int
     {
-        return match (array_pop($this->frames)) {
+        return match ($this->close()) {
             self::TEMPLATE_EXPRESSION => $this->afterTemplateText($offset + 1),
             self::BLOCK => $this->after(self::STATEMENT_END, $offset + 1),
             default => $this->after(self::OPERAND, $offset + 1),
