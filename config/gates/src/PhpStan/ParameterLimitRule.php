@@ -23,10 +23,11 @@ final readonly class ParameterLimitRule implements Rule
 {
     private const int LIMIT = 3;
 
-    private const array REPOSITORY_CODE = ['/src/', '/tests/', '/bin/', '/config/gates/src/'];
+    private RepositoryCode $repositoryCode;
 
-    public function __construct(private string $root)
+    public function __construct(string $root)
     {
+        $this->repositoryCode = new RepositoryCode($root);
     }
 
     public function getNodeType(): string
@@ -96,12 +97,7 @@ final readonly class ParameterLimitRule implements Rule
 
         $file = $prototype->getDeclaringClass()->getFileName();
 
-        return false !== $file && $this->isRepositoryCode($file) ? 0 : $prototype->getNumberOfParameters();
-    }
-
-    private function isRepositoryCode(string $file): bool
-    {
-        return array_any(self::REPOSITORY_CODE, fn (string $folder): bool => str_starts_with($file, $this->root.$folder));
+        return false !== $file && $this->repositoryCode->contains($file) ? 0 : $prototype->getNumberOfParameters();
     }
 
     private function describe(FunctionLike $node): string
