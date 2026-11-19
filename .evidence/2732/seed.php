@@ -2,8 +2,7 @@
 
 declare(strict_types=1);
 
-// Evidence for #2732: appends the ledger events of one board state to the running instance's database (DATABASE_URL from bin/instance).
-// Usage: php .evidence/2732/seed.php idle|filter
+// Writes straight to the ledger, because the board only reads it and no console command records a build step without a real build run (#2732).
 
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
@@ -17,14 +16,14 @@ $kernel->boot();
 $ledger = $kernel->getContainer()->get('test.service_container')->get(Ledger::class);
 
 $events = match ($argv[1] ?? '') {
-    // A review ran and was judged, a task failed and another pushed: nothing is running.
+    // Every task at rest (a failed step, a passed push), because the asleep octopus shows only while nothing runs (#2732, D1).
     'idle' => [
         [LedgerEventKind::ReviewStarted, ['round' => 'round-1', 'project' => 'alpha', 'reviewers' => 2, 'change' => '42', 'number' => 1]],
         [LedgerEventKind::JudgeDone, ['round' => 'round-1', 'act' => [], 'follow_ups' => []]],
         [LedgerEventKind::BuildStepEnded, ['project' => 'alpha', 'task' => 'task-7', 'step' => 'task', 'outcome' => 'failed', 'failure' => 'The task could not be read.']],
         [LedgerEventKind::BuildStepEnded, ['project' => 'alpha', 'task' => 'task-8', 'step' => 'push', 'outcome' => 'passed', 'failure' => null]],
     ],
-    // alpha is at rest, beta has a review running and gamma a build in flight.
+    // A review and a build in flight beside alpha, because the project filter shows the asleep octopus only for a project at rest while others work (#2732, D3).
     'filter' => [
         [LedgerEventKind::ReviewStarted, ['round' => 'round-2', 'project' => 'beta', 'reviewers' => 2, 'change' => '43', 'number' => 1]],
         [LedgerEventKind::BuildStepEnded, ['project' => 'gamma', 'task' => 'task-9', 'step' => 'clone', 'outcome' => 'passed', 'failure' => null]],
