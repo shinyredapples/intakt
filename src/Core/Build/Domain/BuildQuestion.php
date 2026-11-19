@@ -6,13 +6,13 @@ namespace Intakt\Core\Build\Domain;
 
 use JsonException;
 
-// Untrusted until the named constructor accepts it: the builder wrote the text, and it is posted to people later.
+// Checked by plain code before anything trusts it, because the builder wrote the text and people read it later.
 final readonly class BuildQuestion
 {
-    // The file a builder writes in the checkout root, next to PR.md, when it needs a decision the task does not cover.
+    // In the checkout root next to PR.md, because the build script copies only what the builder leaves there.
     public const string FILE = 'QUESTION.json';
 
-    // Bounds what a steered builder can make the forge comment hold; a real question is a few sentences.
+    // A limit, because a steered builder could otherwise fill the comment people read; a real question is a few sentences.
     public const int MAX_BYTES = 8192;
 
     /**
