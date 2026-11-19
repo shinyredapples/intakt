@@ -66,6 +66,18 @@ final class HighlightsWorkflowTest extends TestCase
         self::assertSame(['actions/deploy-pages'], array_map(static fn (array $step): string => explode('@', $step['uses'] ?? '')[0], $publish['steps'] ?? []));
     }
 
+    public function testTheBuildJobLogsInToDockerHubBeforeItBuildsTheCiImage(): void
+    {
+        $steps = array_map(static fn (array $step): string => $step['run'] ?? $step['uses'] ?? '', $this->workflow()['jobs']['build']['steps'] ?? []);
+
+        $login = array_search('.github/ci/docker-hub-login.sh', $steps, true);
+        $image = array_find_key($steps, static fn (string $step): bool => str_ends_with($step, '/.github/actions/ci-image'));
+
+        self::assertIsInt($login);
+        self::assertIsInt($image);
+        self::assertLessThan($image, $login);
+    }
+
     public function testTheAssembledPageTurnsEveryLiquidOpeningOfTheHighlightsIntoALiquidStringThatPrintsIt(): void
     {
         $page = $this->assembledPage("# Highlights\n\nA code span `{{ x }}`, `{% if y %}` and `{{{%`.\n");

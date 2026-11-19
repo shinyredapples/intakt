@@ -32,6 +32,11 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Log in to Docker Hub
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: .github/ci/docker-hub-login.sh
       - name: Build or restore the CI image
         uses: $/.github/actions/ci-image
       - name: Assemble the page
