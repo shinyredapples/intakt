@@ -100,6 +100,19 @@ final class ImportMapPolicyTest extends KernelTestCase
         self::assertNotSame($this->sha384Of('export const answer = 43;'), $importMap['integrity']['/assets/app-1.js']);
     }
 
+    public function testAMapRenderedWithoutTheCompiledImportMapCarriesTheHashOfTheChangedModule(): void
+    {
+        $this->compileTheImportMapOf(self::MODULE);
+        $pinned = $this->sha384Of(self::MODULE);
+        new Filesystem()->remove($this->directory.'/public/assets/importmap.json');
+
+        $importMap = $this->renderedImportMap($this->generator($this->assetMapperServing('export const answer = 43;')));
+
+        self::assertIsArray($importMap['integrity'] ?? null);
+        self::assertSame($this->sha384Of('export const answer = 43;'), $importMap['integrity']['/assets/app-1.js'] ?? null);
+        self::assertNotSame($pinned, $importMap['integrity']['/assets/app-1.js']);
+    }
+
     public function testTheUpdateCommandKeepsThePinnedVersionWhenTheNewerOneIsYoungerThanTheMinimumReleaseAge(): void
     {
         $this->importMapPinning(self::PINNED);
