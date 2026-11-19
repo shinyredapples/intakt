@@ -81,11 +81,10 @@ final readonly class FullReport
 
         $gates = array_map($this->wholeResultOf(...), $reports);
         $content = in_array(null, $gates, true) ? null : $this->encoded($summary + ['gates' => $gates]);
-        $name = null === $content ? null : self::nameOf($content);
-        $written = null !== $name && $this->written($root.'/'.$name, (string) $content);
+        $name = null === $content ? null : $this->writtenAs($root, $content);
         $this->discard();
 
-        return $written ? $name : null;
+        return $name;
     }
 
     // Because a scratch folder left in the system temp directory costs nothing, while a failed cleanup must never cost the verdict.
@@ -153,14 +152,16 @@ final readonly class FullReport
         }
     }
 
-    private function written(string $file, string $content): bool
+    private function writtenAs(string $root, string $content): ?string
     {
+        $name = self::nameOf($content);
+
         try {
-            new Filesystem()->dumpFile($file, $content);
+            new Filesystem()->dumpFile($root.'/'.$name, $content);
         } catch (IOException) {
-            return false;
+            return null;
         }
 
-        return true;
+        return $name;
     }
 }

@@ -92,7 +92,7 @@ final class FullReportTest extends SandboxTestCase
         $name = $fullReport->writeTo($tree->root, self::SUMMARY, [$this->failingLine('dashes', $findings)]);
 
         self::assertNull($name);
-        self::assertSame([], glob($tree->root.'/report-*.json') ?: []);
+        self::assertSame([], glob($tree->root.'/report-*.json'));
     }
 
     public function testTheReportNameCarriesTheHashOfItsContent(): void
@@ -102,7 +102,7 @@ final class FullReportTest extends SandboxTestCase
         $name = $this->startedReport()->writeTo($tree->root, self::SUMMARY, [$this->failingLine('dashes', ['x'])]);
 
         self::assertIsString($name);
-        self::assertSame('report-'.substr(hash_file('sha256', $tree->root.'/'.$name) ?: '', 0, 16).'.json', $name);
+        self::assertSame('report-'.substr(hash('sha256', (string) file_get_contents($tree->root.'/'.$name)), 0, 16).'.json', $name);
     }
 
     public function testAGateWhoseChildKeptNothingIsReportedByItsLine(): void
