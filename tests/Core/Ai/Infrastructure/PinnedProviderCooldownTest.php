@@ -136,6 +136,33 @@ final class PinnedProviderCooldownTest extends TestCase
         self::assertSame([['second', 'second', 'first'], 1, 2], [[$limited, $during, $after], $requestsDuring, $requests]);
     }
 
+    public function testA429ForANativeModelIdWithColonsCoolsNoPinnedProviderAndKeepsARunningAccountWindow(): void
+    {
+        $accounts = new AccountWindowsOnAClock($this->clock, [Account::DEFAULT], 0);
+        $default = new Account(Provider::OpenAiCompatible, Account::DEFAULT);
+        $inFlight = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => new FailingWhenRead(new RateLimitExceededException(600))], $accounts, new NativeClock(), new NullLogger(), $this->pinned)->invoke('ft:gpt-4o-mini:acme:review:abc123', 'Review.');
+        $accounts->coolDown($default, 30);
+
+        $this->read($inFlight);
+
+        self::assertFalse($this->pinned->isCoolingDown(new PinnedProvider($default, 'abc123')));
+        self::assertEquals($this->clock->now()->modify('+30 seconds'), $accounts->endOf($default));
+    }
+
+    public function testA429ForAModelTagWithoutAnOwnerCoolsNoPinnedProvider(): void
+    {
+        $this->accounts($this->limited(120), $this->answering('second'))->invoke('llama3:8b', 'Review.')->asText();
+
+        self::assertFalse($this->pinned->isCoolingDown(new PinnedProvider(new Account(Provider::OpenAiCompatible, Account::DEFAULT), '8b')));
+    }
+
+    public function testA429ForARouterModelWithOptionsCoolsItsPinnedProvider(): void
+    {
+        $this->accounts($this->limited(120), $this->answering('second'))->invoke(self::PINNED.'?temperature=0', 'Review.')->asText();
+
+        self::assertTrue($this->pinned->isCoolingDown($this->deepinfra(Account::DEFAULT)));
+    }
+
     public function testAFallbackWhosePinAnotherWorkerCoolsDownDuringTheCallIsSentNothing(): void
     {
         $first = MockPlatformFactory::createPlatform(function (): never {
@@ -164,7 +191,7 @@ final class PinnedProviderCooldownTest extends TestCase
 
         $wait = $this->waitAfterEveryAccountIsOut($this->onlyDefault($this->answering('first'), $ended));
 
-        self::assertSame([true, true], [in_array($wait, [539, 540], true), 0 < $ended->secondsUntilAnAccountIsFree(Provider::OpenAiCompatible)]);
+        self::assertSame([true, true], [in_array($wait, [540, 541], true), 0 < $ended->secondsUntilAnAccountIsFree(Provider::OpenAiCompatible)]);
     }
 
     public function testAPinnedCooldownLongerThanADayIsCappedAtTheAccountsLongestWindow(): void
@@ -257,7 +284,7 @@ final class PinnedProviderCooldownTest extends TestCase
 
         $wait = $this->waitAfterEveryAccountIsOut($this->onlyDefault($this->answering('first'), $accounts));
 
-        self::assertContains($wait, [119, 120]);
+        self::assertContains($wait, [120, 121]);
     }
 
     public function testARunningAccountWindowLongerThanItsPinIsNotShortened(): void
@@ -268,7 +295,7 @@ final class PinnedProviderCooldownTest extends TestCase
 
         $wait = $this->waitAfterEveryAccountIsOut($this->onlyDefault($this->answering('first'), $accounts));
 
-        self::assertContains($wait, [599, 600]);
+        self::assertContains($wait, [600, 601]);
     }
 
     // The pin cools only while the send guard asks, so the account is chosen, skipped, and free again when the failover's error is judged.

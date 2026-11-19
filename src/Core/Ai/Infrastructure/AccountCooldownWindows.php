@@ -138,9 +138,9 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
             return;
         }
 
-        $until = $this->clock->now()->modify(sprintf('+%d seconds', $seconds));
+        $until = $this->endAfter($seconds);
 
-        // Under the write lock coolDownAtLeast() takes, so a window it replaces is never started between its reset and its own window.
+        // Under the write lock coolDownAtLeast() takes, so a window it replaces is never started between its read and its own window.
         $lock = $this->locks->createLock($this->writeKey($account));
         $lock->acquire(true);
 
@@ -163,22 +163,22 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
             return;
         }
 
-        $until = $this->clock->now()->modify(sprintf('+%d seconds', $seconds));
+        $until = $this->endAfter($seconds);
 
-        // The running end is read and replaced under the lock every writer of the window takes, so no other window starts between the reset and the new one.
+        // The running end is read and replaced under the lock every writer of the window takes, so no other window starts between the read and the new one.
         $lock = $this->locks->createLock($this->writeKey($account));
         $lock->acquire(true);
 
         try {
             $running = $this->window($account);
-            // In whole seconds, the precision a pin's wait and the ledger's record have, so a window ending in the same second is kept and not recorded twice.
-            if (0 === $running->getRemainingTokens() && $running->getRetryAfter()->getTimestamp() >= $until->getTimestamp()) {
+            // Exact, because every window ends on a whole second, so a window ending with the new one is kept and not recorded twice.
+            if (0 === $running->getRemainingTokens() && $running->getRetryAfter() >= $until) {
                 return;
             }
 
-            $windows = $this->windowsEndingAt($until)->create($account->key());
-            $windows->reset();
-            if (!$windows->consume()->isAccepted()) {
+            // Written over the running window in one save, never reset first, because readers take no lock and would see the account free in between.
+            $replacing = new RateLimiterFactory($this->windowConfig($until), new ReplacingWindowStorage(new CacheStorage($this->pool)), $this->locks);
+            if (!$replacing->create($account->key())->consume()->isAccepted()) {
                 return;
             }
         } finally {
@@ -199,6 +199,14 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
         return max(1, $window->getRetryAfter()->getTimestamp() - $this->clock->now()->getTimestamp());
     }
 
+    // Rounded up to the whole second, the precision of the RateLimiter's retry time and of the ledger's record, so a kept window never ends before the end asked for and a pin's wait in whole seconds never outlives it.
+    private function endAfter(int $seconds): DateTimeImmutable
+    {
+        $end = $this->clock->now()->modify(sprintf('+%d seconds', $seconds));
+
+        return 0 === (int) $end->format('u') ? $end : $end->setTime((int) $end->format('G'), (int) $end->format('i'), (int) $end->format('s'))->modify('+1 second');
+    }
+
     // No token, so reading the window never starts or saves one.
     private function window(Account $account): RateLimit
     {
@@ -208,9 +216,15 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
     // Anchored at the end so the fixed window closes at the vendor's reset; one month because it is the shortest interval the RateLimiter anchors.
     private function windowsEndingAt(DateTimeImmutable $end): RateLimiterFactory
     {
-        $config = ['id' => self::LIMITER, 'policy' => 'fixed_window', 'limit' => 1, 'interval' => '1 month', 'anchor_at' => $end];
+        return new RateLimiterFactory($this->windowConfig($end), new CacheStorage($this->pool), $this->locks);
+    }
 
-        return new RateLimiterFactory($config, new CacheStorage($this->pool), $this->locks);
+    /**
+     * @return array{id: string, policy: string, limit: int, interval: string, anchor_at: DateTimeImmutable}
+     */
+    private function windowConfig(DateTimeImmutable $end): array
+    {
+        return ['id' => self::LIMITER, 'policy' => 'fixed_window', 'limit' => 1, 'interval' => '1 month', 'anchor_at' => $end];
     }
 
     // Beside the window in the same pool, so every worker sees why the account cools down; the account key holds a provider name and an account name the owner configured, never outside input.

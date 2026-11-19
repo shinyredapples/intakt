@@ -74,18 +74,12 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         return array_first($this->platforms)->getModelCatalog();
     }
 
-    // Read without the options after a question mark, because Symfony AI's catalog takes them from the model name too, and a pin is the part after the last colon (`deepinfra` in `moonshotai/Kimi-K3.1-Pro:deepinfra`).
+    // Read without the options after a question mark, because Symfony AI's catalog takes them from the model name too. Only a router's `owner/model:provider` shape pins (`deepinfra` in `moonshotai/Kimi-K3.1-Pro:deepinfra`): one colon after a slash, so a native id with colons (`ft:gpt-4o-mini:org::id`) or a tag without an owner (`llama3:8b`) pins nothing.
     private function routerProviderOf(string|Model $model): ?string
     {
         $name = explode('?', $model instanceof Model ? $model->getName() : $model, 2)[0];
-        $colon = strrpos($name, ':');
-        if (false === $colon) {
-            return null;
-        }
 
-        $routerProvider = substr($name, $colon + 1);
-
-        return '' === $routerProvider ? null : $routerProvider;
+        return 1 === preg_match('~^[^:]+/[^:/]+:([^:/]+)$~', $name, $pin) ? $pin[1] : null;
     }
 
     // An account whose pinned provider for this model cools down is left out like a cooling account, so it costs no call.

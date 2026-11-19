@@ -77,6 +77,28 @@ final class PinnedProviderCooldownWindowsTest extends TestCase
         self::assertSame(180, $cooldowns->secondsUntilFree($this->deepinfra()));
     }
 
+    public function testAPinnedProviderWithAFractionOfASecondLeftWaitsTheWholeSecondsRoundedUp(): void
+    {
+        $clock = new MockClock('2026-11-19T12:00:00.900+00:00');
+        $cooldowns = new PinnedProviderCooldownWindows($this->pool, $clock, $this->locks);
+        $cooldowns->coolDown($this->deepinfra(), 120);
+
+        $clock->sleep(118.2);
+
+        self::assertSame(2, $cooldowns->secondsUntilFree($this->deepinfra()));
+    }
+
+    public function testAPinnedProviderWithWholeSecondsLeftFromWithinASecondWaitsExactlyThoseSeconds(): void
+    {
+        $clock = new MockClock('2026-11-19T12:00:00.900+00:00');
+        $cooldowns = new PinnedProviderCooldownWindows($this->pool, $clock, $this->locks);
+        $cooldowns->coolDown($this->deepinfra(), 120);
+
+        $clock->sleep(118);
+
+        self::assertSame(2, $cooldowns->secondsUntilFree($this->deepinfra()));
+    }
+
     public function testAPinnedProviderWithLessThanASecondLeftWaitsAWholeSecond(): void
     {
         $cooldowns = $this->cooldowns();

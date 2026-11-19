@@ -8,6 +8,7 @@ use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Infrastructure\AccountCooldownWindows;
 use Intakt\Core\Ai\Infrastructure\AccountErrorReported;
+use Intakt\Core\Ai\Infrastructure\ReplacingWindowStorage;
 use Intakt\Core\Budget\Contract\ReadingOutcome;
 use Intakt\Core\Budget\Contract\Usage;
 use Intakt\Core\Budget\Contract\UsageWindow;
@@ -30,6 +31,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 
 // On the native clock, because the RateLimiter reads the system time itself (symfony/rate-limiter has no clock option), so a mocked moment would not match its windows.
 #[CoversClass(AccountCooldownWindows::class)]
+#[CoversClass(ReplacingWindowStorage::class)]
 #[UsesClass(Account::class)]
 #[UsesClass(Provider::class)]
 #[UsesClass(AccountErrorReported::class)]
@@ -372,6 +374,40 @@ final class AccountCooldownWindowsTest extends TestCase
         $cooldowns->coolDown($this->default(), 60);
 
         self::assertEqualsWithDelta(600, $this->secondsUntilFree($this->default()), 1);
+    }
+
+    public function testAReaderNeverSeesTheAccountFreeWhileARunningWindowIsReplaced(): void
+    {
+        $locks = new ReadingOnEveryRelease();
+        $cooldowns = new AccountCooldownWindows($this->readings, $this->pool, new LockFactory($locks), new NativeClock(), $this->ledger, new NullLogger(), StoredSerializerFactory::create(), [Provider::Anthropic->value => [Account::DEFAULT]]);
+        $cooldowns->coolDown($this->default(), 30);
+        $waits = [];
+        $locks->read = static function () use ($cooldowns, &$waits): void {
+            $waits[] = $cooldowns->secondsUntilAnAccountIsFree(Provider::Anthropic);
+        };
+
+        $cooldowns->coolDownAtLeast($this->default(), 600);
+
+        self::assertNotContains(0, $waits);
+        self::assertNotSame([], $waits);
+    }
+
+    public function testACooldownFromAMomentWithinASecondEndsOnTheNextWholeSecond(): void
+    {
+        $cooldowns = new AccountCooldownWindows($this->readings, $this->pool, new LockFactory(new InMemoryStore()), new MockClock('2026-11-19T12:00:00.400+00:00'), $this->ledger, new NullLogger(), StoredSerializerFactory::create(), $this->accounts());
+
+        $cooldowns->coolDownAtLeast($this->default(), 120);
+
+        self::assertSame('2026-11-19T12:02:01+00:00', $this->ledger->payloads()[0]['until']);
+    }
+
+    public function testACooldownFromAWholeSecondEndsExactlyItsSecondsLater(): void
+    {
+        $cooldowns = new AccountCooldownWindows($this->readings, $this->pool, new LockFactory(new InMemoryStore()), new MockClock('2026-11-19T12:00:00+00:00'), $this->ledger, new NullLogger(), StoredSerializerFactory::create(), $this->accounts());
+
+        $cooldowns->coolDown($this->default(), 120);
+
+        self::assertSame('2026-11-19T12:02:00+00:00', $this->ledger->payloads()[0]['until']);
     }
 
     public function testCoolingDownAtLeastOneAccountLeavesTheOtherAccountFree(): void

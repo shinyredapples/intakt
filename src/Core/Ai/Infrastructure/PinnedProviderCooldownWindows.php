@@ -72,7 +72,15 @@ final readonly class PinnedProviderCooldownWindows implements PinnedProviderCool
             return 0;
         }
 
-        return max(1, $until->getTimestamp() - $now->getTimestamp());
+        return max(1, $this->wholeSecondsUpTo($until, $now));
+    }
+
+    // Rounded up, because an account cooled for this wait must not end before the pin: 1.8 seconds left is a wait of 2.
+    private function wholeSecondsUpTo(DateTimeImmutable $until, DateTimeImmutable $now): int
+    {
+        $seconds = $until->getTimestamp() - $now->getTimestamp();
+
+        return (int) $until->format('u') > (int) $now->format('u') ? $seconds + 1 : $seconds;
     }
 
     private function endOf(string $key): ?DateTimeImmutable
