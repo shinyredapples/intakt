@@ -14,7 +14,8 @@ final readonly class FullReport
 
     private const string PREFIX = 'intakt-check-report';
 
-    private const string NAME = '/^report-[0-9a-f]{16}\.json$/';
+    // \A and \z, because $ also matches before a final newline, which a file name may end in.
+    private const string NAME = '/\Areport-[0-9a-f]{16}\.json\z/';
 
     private function __construct(private ?ScratchDirectory $scratch)
     {

@@ -92,6 +92,22 @@ final class CheckCommandFullReportTest extends SandboxTestCase
         self::assertFileExists($tree->root.'/'.$name);
     }
 
+    public function testTheReportOfAnEarlierRunInAGitCheckoutWithoutTheIgnoreRuleDoesNotFailTheNextRun(): void
+    {
+        $tree = $this->emptySandbox();
+        $tree->startRepository();
+        $tree->commitAll('Base');
+        $tree->write('note'.self::EM_DASH.'.md', 'A line '.self::EM_DASH.' with a long dash.'."\n");
+        $first = $tree->check('--base=HEAD', '--only=dashes');
+        self::assertSame(1, $first->exitCode(), $first->output());
+        self::assertIsString($this->summaryOf($first)['report'] ?? null, $first->output());
+        unlink($tree->root.'/note'.self::EM_DASH.'.md');
+
+        $second = $tree->check('--base=HEAD', '--only=dashes');
+
+        self::assertSame(0, $second->exitCode(), $second->output());
+    }
+
     // Because the children run the home's own child entry, a home whose entry makes the scratch folder unremovable fails the cleanup of a real run.
     private function homeWhoseGateLeavesAStuckScratchEntry(): Sandbox
     {
