@@ -20,8 +20,11 @@ final readonly class WorkflowMapping
         return array_find($this->entries, static fn (WorkflowEntry $entry): bool => $entry->key === $key);
     }
 
-    public function entryInAnotherCase(string $key): ?WorkflowEntry
+    /**
+     * @return list<WorkflowEntry>
+     */
+    public function entriesInAnotherCase(string $key): array
     {
-        return array_find($this->entries, static fn (WorkflowEntry $entry): bool => $entry->key !== $key && 0 === strcasecmp($entry->key, $key));
+        return array_values(array_filter($this->entries, static fn (WorkflowEntry $entry): bool => $entry->key !== $key && 0 === strcasecmp($entry->key, $key)));
     }
 }

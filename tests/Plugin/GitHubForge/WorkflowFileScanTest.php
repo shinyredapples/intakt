@@ -235,6 +235,13 @@ final class WorkflowFileScanTest extends TestCase
         self::assertSame([['unreadable', 7]], $this->kindsAndLines($findings));
     }
 
+    public function testEveryCaseVariantOfAKeyIsUnreadableOnItsOwnLine(): void
+    {
+        $findings = $this->scan($this->withJob("runs-on: ubuntu-latest\npermissions: read-all\nPermissions: read-all\nPERMISSIONS: read-all"));
+
+        self::assertSame([['unreadable', 7], ['unreadable', 8]], $this->kindsAndLines($findings));
+    }
+
     public function testKeysTheScanDoesNotReadByNameMayUseAnyCase(): void
     {
         $findings = $this->scan("Name: checks\non: push\npermissions: read-all\njobs:\n  Check:\n    runs-on: ubuntu-latest\n    Timeout-Minutes: 5\n");

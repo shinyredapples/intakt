@@ -48,8 +48,7 @@ final readonly class WorkflowFileScan
     {
         $findings = [];
         foreach ($keys as $key) {
-            $written = $mapping->entryInAnotherCase($key);
-            if ($written instanceof WorkflowEntry) {
+            foreach ($mapping->entriesInAnotherCase($key) as $written) {
                 $findings[] = new WorkflowFinding(WorkflowRisk::Unreadable, $written->line, sprintf('the key %s matches %s only when case is ignored, and the scan does not settle how GitHub compares case', $written->key, $key));
             }
         }
@@ -64,7 +63,7 @@ final readonly class WorkflowFileScan
     {
         $on = $workflow->entry('on');
         $findings = match (true) {
-            !$on instanceof WorkflowEntry && $workflow->entryInAnotherCase('on') instanceof WorkflowEntry => [],
+            !$on instanceof WorkflowEntry && [] !== $workflow->entriesInAnotherCase('on') => [],
             !$on instanceof WorkflowEntry => [new WorkflowFinding(WorkflowRisk::Unreadable, $workflow->line, 'the workflow names no trigger (on)')],
             $on->value instanceof WorkflowMapping => array_map(fn (WorkflowEntry $event): ?WorkflowFinding => $this->trigger($event->key, $event->line), $on->value->entries),
             $on->value instanceof WorkflowSequence => array_map($this->listedTrigger(...), $on->value->items),
@@ -96,7 +95,7 @@ final readonly class WorkflowFileScan
     private function jobs(WorkflowMapping $workflow): array
     {
         $jobs = $workflow->entry('jobs');
-        if (!$jobs instanceof WorkflowEntry && $workflow->entryInAnotherCase('jobs') instanceof WorkflowEntry) {
+        if (!$jobs instanceof WorkflowEntry && [] !== $workflow->entriesInAnotherCase('jobs')) {
             return [];
         }
 
@@ -143,7 +142,7 @@ final readonly class WorkflowFileScan
 
         $runsOn = $definition->entry('runs-on');
         $findings = match (true) {
-            !$runsOn instanceof WorkflowEntry && $definition->entryInAnotherCase('runs-on') instanceof WorkflowEntry => [],
+            !$runsOn instanceof WorkflowEntry && [] !== $definition->entriesInAnotherCase('runs-on') => [],
             !$runsOn instanceof WorkflowEntry => [new WorkflowFinding(WorkflowRisk::Unreadable, $definition->line, sprintf('the job %s names no runner (runs-on)', $job))],
             $runsOn->value instanceof WorkflowMapping => [new WorkflowFinding(WorkflowRisk::Runner, $runsOn->line, sprintf('the job %s picks its runner by group or labels', $job)), ...$this->expressions($job, $runsOn->value)],
             $runsOn->value instanceof WorkflowSequence => array_map(fn (WorkflowScalar|WorkflowMapping|WorkflowSequence $label): ?WorkflowFinding => $this->label($job, $label), $runsOn->value->items),
