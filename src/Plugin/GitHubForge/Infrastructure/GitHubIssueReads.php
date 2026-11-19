@@ -31,6 +31,7 @@ final readonly class GitHubIssueReads implements IssueReads
         private WatchedRepositories $repositories,
         private GitHubMoments $moments,
         private BudgetReserve $reserve,
+        private ChangedWhileServed $changedWhileServed,
     ) {
     }
 
@@ -78,7 +79,7 @@ final readonly class GitHubIssueReads implements IssueReads
                 throw new ForgeReadFailed('GitHub lists more open issues than this forge reads.');
             }
 
-            new ChangedWhileServed($this->moments)->refuse($listed, $answer['date'], $page);
+            $this->changedWhileServed->refuse($listed, $answer['date'], $page);
             $validators[$page] = $answer['etag'];
             $answer = $this->get($path, $this->page($page + 1));
         }

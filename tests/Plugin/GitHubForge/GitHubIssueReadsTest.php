@@ -55,7 +55,7 @@ final class GitHubIssueReadsTest extends TestCase
         self::assertCount(5, $api->requests);
         self::assertStringContainsString('page=1', $api->requests[3]);
         self::assertStringContainsString('page=2', $api->requests[4]);
-        self::assertSame(['W/"issues-1"', 'W/"issues-1"'], $api->conditions);
+        self::assertSame(['W/"issues-1"', 'W/"issues-1.p2"'], $api->conditions);
     }
 
     public function testAnEarlierPageThatIsNotConfirmedUnchangedFailsTheListing(): void

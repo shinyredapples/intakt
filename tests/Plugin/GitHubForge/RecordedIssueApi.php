@@ -7,6 +7,7 @@ namespace Intakt\Tests\Plugin\GitHubForge;
 use Intakt\Plugin\GitHubForge\Domain\ExpectedInstallation;
 use Intakt\Plugin\GitHubForge\Infrastructure\AppJwt;
 use Intakt\Plugin\GitHubForge\Infrastructure\BudgetReserve;
+use Intakt\Plugin\GitHubForge\Infrastructure\ChangedWhileServed;
 use Intakt\Plugin\GitHubForge\Infrastructure\CheckedInstallationTokens;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubCalls;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubIssueHistories;
@@ -53,7 +54,7 @@ final class RecordedIssueApi
     {
         [$calls, $checked] = $this->wiring();
 
-        return new GitHubIssueReads($calls, $checked, new WatchedRepositories(['alpha' => ['github' => 'acme/widgets'], 'beta' => []]), new GitHubMoments(), $this->reserve);
+        return new GitHubIssueReads($calls, $checked, new WatchedRepositories(['alpha' => ['github' => 'acme/widgets'], 'beta' => []]), new GitHubMoments(), $this->reserve, new ChangedWhileServed(new GitHubMoments()));
     }
 
     public function histories(): GitHubIssueHistories
@@ -128,22 +129,28 @@ final class RecordedIssueApi
             return $this->answerHistory($options);
         }
 
-        if ($this->notModified || ($this->stable && $condition === $this->etag)) {
+        $page = 1 === preg_match('/[?&]page=(\d+)/', $url, $found) ? (int) $found[1] : 1;
+        if ($this->notModified || ($this->stable && $condition === $this->etagOf($page))) {
             return new MockResponse('', ['http_code' => 304]);
         }
 
-        $page = 1 === preg_match('/[?&]page=(\d+)/', $url, $found) ? (int) $found[1] : 1;
         $body = $this->pages[$page] ?? '[]';
 
         if (1 === preg_match('/^\d{3}$/', $body)) {
             return new MockResponse('{}', ['http_code' => (int) $body, 'response_headers' => ['Retry-After' => '60']]);
         }
 
-        $headers = ['ETag' => $this->etag, ...(null === $this->served ? [] : ['Date' => $this->served])];
+        $headers = ['ETag' => $this->etagOf($page), ...(null === $this->served ? [] : ['Date' => $this->served])];
         if (in_array($page, $this->namingNext, true)) {
             $headers['Link'] = sprintf('<https://api.github.com/repositories/1/issues?page=%d>; rel="next", <https://api.github.com/repositories/1/issues?page=9>; rel="last"', $page + 1);
         }
 
         return new MockResponse($body, ['response_headers' => $headers]);
+    }
+
+    // A validator of its own for every page after the first, as GitHub sends, so a test sees that each page is asked again with its own.
+    private function etagOf(int $page): string
+    {
+        return 1 === $page ? $this->etag : substr($this->etag, 0, -1).'.p'.$page.'"';
     }
 }
