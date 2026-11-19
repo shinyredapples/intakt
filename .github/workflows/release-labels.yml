@@ -5,15 +5,14 @@ name: release-labels
 on:
   pull_request:
     types: [opened, reopened, edited]
+concurrency:
+  group: release-labels-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
   label:
     if: github.event.pull_request.head.repo.full_name == github.repository && (github.event.action != 'edited' || github.event.changes.title)
-    # On the job, not the workflow: a skipped edit without a title change must not cancel a labeling run.
-    concurrency:
-      group: release-labels-${{ github.event.pull_request.number }}
-      cancel-in-progress: true
     # GitHub's image has gh; a CI_RUNS_ON runner need not.
     runs-on: ubuntu-24.04
     timeout-minutes: 5
