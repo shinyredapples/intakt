@@ -11,14 +11,17 @@ use Intakt\Plugin\Forge\Contract\CiRunOrigin;
 use Intakt\Plugin\Forge\Contract\CiRunState;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
+use Symfony\Component\Clock\ClockInterface;
 
 // Maps what GitHub answered to runs and nothing else, because folding them into pending, red or green is the caller's rule.
 final readonly class GitHubCiRuns
 {
     private const string CHECK_SUITE_EVENT = 'check_suite';
     private const string LINKED_SUITE_PREFIX = 'suite-of-workflow:';
+    // The set time after which the design admits a pending head by age (docs/design/05-architecture/08-merge.md#waiting-for-ci), because an app that started nothing by then is not coming.
+    private const string ABANDONED_AFTER = '30 minutes';
 
-    public function __construct(private GitHubMoments $moments)
+    public function __construct(private GitHubMoments $moments, private ClockInterface $clock)
     {
     }
 
@@ -30,8 +33,9 @@ final readonly class GitHubCiRuns
     public function ofHead(RepositoryAddress $repository, CommitId $head, array $answers): array
     {
         $workflowRuns = $this->onHead($head, $this->entries($answers['workflow_runs'], 'workflow_runs'));
-        $suites = $this->onHead($head, $this->entries($answers['check_suites'], 'check_suites'));
         $runsBySuite = $this->runsBySuite($workflowRuns);
+        // An installed app that never starts its suite would keep every head pending forever; Actions' own queued workflows stay covered by their workflow runs, so only unlinked suites age out.
+        $suites = $this->withoutAbandonedSuites($this->onHead($head, $this->entries($answers['check_suites'], 'check_suites')), $runsBySuite);
 
         return [
             ...array_map(fn (array $run): CiRun => $this->workflowRunOf($repository, $run), $workflowRuns),
@@ -89,6 +93,31 @@ final readonly class GitHubCiRuns
         }
 
         return $bySuite;
+    }
+
+    /**
+     * @param list<array<mixed>>       $suites
+     * @param array<int, array<mixed>> $runsBySuite
+     *
+     * @return list<array<mixed>>
+     */
+    private function withoutAbandonedSuites(array $suites, array $runsBySuite): array
+    {
+        $ceiling = $this->clock->now()->modify('-'.self::ABANDONED_AFTER);
+
+        return array_values(array_filter($suites, fn (array $suite): bool => !$this->abandoned($suite, $runsBySuite, $ceiling)));
+    }
+
+    /**
+     * @param array<mixed>             $suite
+     * @param array<int, array<mixed>> $runsBySuite
+     */
+    private function abandoned(array $suite, array $runsBySuite, DateTimeImmutable $ceiling): bool
+    {
+        return !isset($runsBySuite[$this->positive($suite, 'id')])
+            && 'queued' === $this->text($suite, 'status')
+            && 0 === ($suite['latest_check_runs_count'] ?? null)
+            && $this->createdAt($suite) < $ceiling;
     }
 
     /**

@@ -98,6 +98,8 @@ final class GitHubWatchReadsTest extends TestCase
     private int $failWith = 0;
     private ?int $remaining = null;
     private MockClock $clock;
+    // Close after the recorded runs' creation, because a queued suite past the ceiling is left out.
+    private string $ciNow = '2026-11-02 09:10:00 UTC';
 
     protected function setUp(): void
     {
@@ -210,6 +212,17 @@ final class GitHubWatchReadsTest extends TestCase
 
         self::assertCount(101, $listing->changes());
         self::assertNull($listing->validator);
+    }
+
+    public function testAPullRequestRepeatedOnPageOneAndPageTwoIsListedOnce(): void
+    {
+        $this->listing = 'pulls_page_shifted.json';
+
+        $ids = array_map(static fn (OpenChange $change): string => $change->id->value, $this->reads()->listOpen('alpha', null)->changes());
+
+        self::assertCount(101, $ids);
+        self::assertSame(array_values(array_unique($ids)), $ids);
+        self::assertSame('https://github.com/acme/widgets/pull/101', array_last($ids));
     }
 
     public function testAFullFirstPageFollowedByAnEmptyOneReturnsNoValidator(): void
@@ -367,6 +380,41 @@ final class GitHubWatchReadsTest extends TestCase
         $this->suites = 'suites_empty_queue.json';
 
         self::assertSame([CiRunState::Succeeded, CiRunState::Succeeded, CiRunState::Unfinished], $this->statesOfHead());
+    }
+
+    public function testAQueuedCheckSuiteOfNoWorkflowRunWithoutCheckRunsIsLeftOutOnceItIsOlderThanTheCeiling(): void
+    {
+        $this->suites = 'suites_empty_queue.json';
+        $this->ciNow = '2026-11-02 09:31:01 UTC';
+
+        self::assertSame([CiRunState::Succeeded, CiRunState::Succeeded], $this->statesOfHead());
+        self::assertSame(HeadAdmission::Green, new AdmissionDecision()->admissionOf($this->state()));
+    }
+
+    public function testAQueuedCheckSuiteOfNoWorkflowRunWithoutCheckRunsStaysUnfinishedAtTheCeiling(): void
+    {
+        $this->suites = 'suites_empty_queue.json';
+        $this->ciNow = '2026-11-02 09:31:00 UTC';
+
+        self::assertSame([CiRunState::Succeeded, CiRunState::Succeeded, CiRunState::Unfinished], $this->statesOfHead());
+    }
+
+    public function testAQueuedCheckSuiteOfNoWorkflowRunThatHasCheckRunsIsKeptPastTheCeiling(): void
+    {
+        $this->runs = 'runs_none.json';
+        $this->suites = 'suites_queued.json';
+        $this->ciNow = '2026-11-25 10:00:00 UTC';
+
+        self::assertSame([CiRunState::Unfinished], $this->statesOfHead());
+    }
+
+    public function testAQueuedLinkedCheckSuiteWithoutCheckRunsIsKeptPastTheCeilingWhileAnUnlinkedOneIsLeftOut(): void
+    {
+        $this->runs = 'runs_linked_queued_and_newer_green.json';
+        $this->suites = 'suites_empty_queue_and_linked_queued.json';
+        $this->ciNow = '2026-11-25 10:00:00 UTC';
+
+        self::assertSame(['10', '10', 'suite-of-workflow:10'], array_map(static fn (CiRun $run): string => $run->origin->name, $this->state()->runs));
     }
 
     public function testARunKeepsItsOriginAndStartTime(): void
@@ -720,7 +768,7 @@ final class GitHubWatchReadsTest extends TestCase
         $readings = FreshReadings::at($clock);
         $readBack = new InstallationReadBack(new InstallationReader($jwt, $tokens, new GitHubCalls($identity, $readings, $tokens)), $expected, new NullLogger());
 
-        return new GitHubWatchReads(new GitHubCalls($http, $readings, $tokens), new CheckedInstallationTokens($readBack, $tokens), new WatchedRepositories(['alpha' => ['github' => 'acme/widgets'], 'beta' => []]), new GitHubCiRuns(new GitHubMoments()), new GitHubMoments(), FreshReadings::reserveOf($readings, $tokens, $clock));
+        return new GitHubWatchReads(new GitHubCalls($http, $readings, $tokens), new CheckedInstallationTokens($readBack, $tokens), new WatchedRepositories(['alpha' => ['github' => 'acme/widgets'], 'beta' => []]), new GitHubCiRuns(new GitHubMoments(), new MockClock($this->ciNow)), new GitHubMoments(), FreshReadings::reserveOf($readings, $tokens, $clock));
     }
 
     private function answer(string $url): ResponseInterface
@@ -763,6 +811,7 @@ final class GitHubWatchReadsTest extends TestCase
 
         return match ($this->listing) {
             'pulls_page_full.json' => new MockResponse($this->fixture(1 === $page ? 'pulls_page_full.json' : 'pulls_page_last.json'), $headers),
+            'pulls_page_shifted.json' => new MockResponse($this->fixture(1 === $page ? 'pulls_page_full.json' : 'pulls_page_shifted.json'), $headers),
             'pulls_page_full_only.json' => new MockResponse(1 === $page ? $this->fixture('pulls_page_full.json') : '[]', $headers),
             'pulls_endless.json' => new MockResponse($this->fixture('pulls_page_full.json'), $headers),
             default => new MockResponse($this->fixture($this->listing), $headers),
