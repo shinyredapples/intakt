@@ -123,7 +123,7 @@ final readonly class Scope
             }
         }
 
-        return array_values(array_filter($files, static fn (string $path): bool => !str_starts_with($path, 'vendor/')));
+        return array_values(array_filter($files, static fn (string $path): bool => !str_starts_with($path, 'vendor/') && !FullReport::isReport($path)));
     }
 
     /**

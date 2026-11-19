@@ -1,0 +1,16 @@
+<?php
+
+declare(strict_types=1);
+
+$gate = $argv[1] ?? '';
+$kept = (string) getenv('INTAKT_GATE_FULL_RESULT');
+
+// Because an entry the owner may not remove from the scratch folder makes the parent's cleanup fail, the only way a real run reaches that path.
+if ('' !== $kept) {
+    mkdir(dirname($kept).'/stuck');
+    touch(dirname($kept).'/stuck/entry');
+    chmod(dirname($kept).'/stuck', 0o500);
+}
+
+echo json_encode(['gate' => $gate, 'ok' => false, 'findings' => [$gate.' failed on purpose'], 'omitted' => 0], JSON_UNESCAPED_SLASHES), "\n";
+exit(1);

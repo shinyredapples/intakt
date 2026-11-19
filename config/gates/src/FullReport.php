@@ -14,6 +14,8 @@ final readonly class FullReport
 
     private const string PREFIX = 'intakt-check-report';
 
+    private const string NAME = '/^report-[0-9a-f]{16}\.json$/';
+
     private function __construct(private ?ScratchDirectory $scratch)
     {
     }
@@ -35,11 +37,18 @@ final readonly class FullReport
             return;
         }
 
+        // Because keeping the result must never cost the gate line the child prints next.
         try {
             new Filesystem()->dumpFile($file, $result->toFullJson());
-        } catch (IOException) {
+        } catch (IOException|JsonException) {
             return;
         }
+    }
+
+    // Because in a tree without Git no .gitignore leaves the reports out, and a report would otherwise be input of the next check.
+    public static function isReport(string $path): bool
+    {
+        return 1 === preg_match(self::NAME, $path);
     }
 
     // Because without a scratch folder no child may keep a path it inherited.

@@ -33,7 +33,7 @@
 
 ###> bin/check ###
 # The full report each run writes beside the tree it checked; it would otherwise show up as a change and be scanned by the next run.
-/report-*.json
+/report-[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f].json
 ###< bin/check ###
 
 ###> symfony/framework-bundle (generated config reference) ###

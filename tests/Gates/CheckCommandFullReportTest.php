@@ -6,6 +6,8 @@ namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\CheckCommand;
 use Intakt\Gates\FullReport;
+use Intakt\Gates\GateChildren;
+use Intakt\Gates\GateReport;
 use Intakt\Gates\GateResult;
 use Intakt\Gates\JsonNode;
 use Intakt\Gates\ProcessRunner;
@@ -16,6 +18,8 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[CoversClass(CheckCommand::class)]
 #[CoversClass(FullReport::class)]
 #[CoversClass(ScratchDirectory::class)]
+#[UsesClass(GateChildren::class)]
+#[UsesClass(GateReport::class)]
 #[UsesClass(GateResult::class)]
 #[UsesClass(JsonNode::class)]
 #[UsesClass(ProcessRunner::class)]
@@ -63,6 +67,39 @@ final class CheckCommandFullReportTest extends SandboxTestCase
         self::assertSame(['dashes'], $summary['failed'] ?? null);
         self::assertArrayNotHasKey('report', $summary);
         self::assertSame([], glob($tree->root.'/report-*.json'));
+    }
+
+    public function testAScratchEntryThatCannotBeRemovedStillLeavesTheReportAndItsVerdict(): void
+    {
+        $this->skipWhenPermissionsAreIgnored();
+        $home = $this->homeWhoseGateLeavesAStuckScratchEntry();
+        $tree = $this->emptySandbox();
+        $temp = $this->emptySandbox()->root;
+
+        try {
+            $result = new ProcessRunner()->run(['php', '-d', 'sys_temp_dir='.$temp, $home->root.'/bin/check', '--only=dashes', '--root='.$tree->root], $home->root);
+        } finally {
+            array_map(static fn (string $stuck): bool => chmod($stuck, 0o700), glob($temp.'/*/stuck') ?: []);
+        }
+
+        $run = new CheckRun($result);
+        self::assertNotSame([], glob($temp.'/*/stuck/entry'), 'the scratch folder was removed, so the cleanup never failed');
+        self::assertSame(['{"gate":"dashes","ok":false,"findings":["dashes failed on purpose"],"omitted":0}', '{"result":"fail","failed":["dashes"]}'], $run->linesWithoutTheReportName());
+        self::assertSame(1, $run->exitCode(), $run->output());
+        $name = $this->summaryOf($run)['report'] ?? null;
+        self::assertIsString($name, $run->output());
+        self::assertFileExists($tree->root.'/'.$name);
+    }
+
+    // Because the children run the home's own child entry, a home whose entry makes the scratch folder unremovable fails the cleanup of a real run.
+    private function homeWhoseGateLeavesAStuckScratchEntry(): Sandbox
+    {
+        $real = dirname(__DIR__, 2);
+        $home = $this->sandboxWith('stuck-scratch');
+        $home->write('bin/check', (string) file_get_contents($real.'/bin/check'));
+        $home->symlink('vendor', $real.'/vendor');
+
+        return $home;
     }
 
     private function treeWithDashedLines(): Sandbox

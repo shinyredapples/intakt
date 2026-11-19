@@ -39,7 +39,7 @@ final class FullReportTest extends SandboxTestCase
         parent::tearDown();
     }
 
-    public function testAScratchEntryThatCannotBeRemovedStillLeavesTheReportAndItsVerdict(): void
+    public function testAScratchEntryThatCannotBeRemovedStillLeavesTheReportFile(): void
     {
         $this->skipWhenPermissionsAreIgnored();
         $tree = $this->emptySandbox();
@@ -66,6 +66,19 @@ final class FullReportTest extends SandboxTestCase
         $name = $fullReport->writeTo($tree->root, self::SUMMARY, [$this->failingLine('dashes', $findings)]);
 
         self::assertSame($findings, $this->findingsIn($tree->root.'/'.$name));
+    }
+
+    public function testAFindingTheLineOmitsWithInvalidUtf8IsStillKeptInTheReport(): void
+    {
+        $tree = $this->emptySandbox();
+        $fullReport = $this->startedReport();
+        $findings = [...array_map(static fn (int $number): string => 'finding '.$number, range(1, 10)), "tool output \xff\xfe"];
+        $result = GateResult::withFindings('dashes', $findings);
+        $this->keepFor($fullReport, $result);
+
+        $name = $fullReport->writeTo($tree->root, self::SUMMARY, [$this->failingLine('dashes', $findings)]);
+
+        self::assertSame([...array_slice($findings, 0, 10), "tool output \u{FFFD}\u{FFFD}"], $this->findingsIn($tree->root.'/'.$name));
     }
 
     public function testAGateWhoseChildKeptNothingIsReportedByItsLine(): void

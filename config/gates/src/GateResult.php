@@ -79,14 +79,14 @@ final readonly class GateResult
         return json_encode($report, self::JSON_FLAGS);
     }
 
-    // Because the full report keeps what the gate line shortens: every finding, whole.
+    // Because the full report keeps what the gate line shortens: every finding, whole, with bytes a tool printed that are no UTF-8 replaced so that one finding the line leaves out cannot stop the rest.
     public function toFullJson(): string
     {
         $report = ['gate' => $this->gate, 'ok' => $this->isPassing(), 'findings' => $this->findings];
         $report += isset($this->extras['note']) ? ['note' => $this->extras['note']] : [];
         $report += [] === ($this->extras['slowest'] ?? []) ? [] : ['slowest' => $this->slowestList()];
 
-        return json_encode($report, self::JSON_FLAGS);
+        return json_encode($report, self::JSON_FLAGS | JSON_INVALID_UTF8_SUBSTITUTE);
     }
 
     /**
