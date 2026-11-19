@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
+use Closure;
 use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Dashboard\Infrastructure\RoundLock;
 use Intakt\Core\Ledger\Contract\Ledger;
@@ -14,6 +15,8 @@ use Intakt\Tests\Support\WebTestCase;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\TestContainer;
 use Symfony\Component\Clock\ClockInterface;
+use Symfony\Component\HttpKernel\Event\ResponseEvent;
+use Symfony\Component\HttpKernel\KernelEvents;
 use Symfony\Component\HttpKernel\KernelInterface;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\LockInterface;
@@ -64,6 +67,29 @@ abstract class DashboardPageTestCase extends WebTestCase
         self::assertTrue($lock->acquire());
 
         return $lock;
+    }
+
+    /**
+     * @return Closure(): ?bool
+     */
+    // Asked by the first listener of the main response, so it tells whether a press arriving while the answer is still built would find the round free.
+    protected function roundFreeWhileAnswering(string $round): Closure
+    {
+        $free = null;
+        $locks = self::getContainer()->get(LockFactory::class);
+        self::getContainer()->get('event_dispatcher')->addListener(KernelEvents::RESPONSE, static function (ResponseEvent $event) use ($locks, $round, &$free): void {
+            if (!$event->isMainRequest()) {
+                return;
+            }
+
+            $lock = $locks->createLock(RoundLock::KEY_PREFIX.$round);
+            $free = $lock->acquire();
+            $lock->release();
+        }, PHP_INT_MAX);
+
+        return static function () use (&$free): ?bool {
+            return $free;
+        };
     }
 
     /**

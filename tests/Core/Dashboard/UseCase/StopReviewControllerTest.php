@@ -111,6 +111,19 @@ final class StopReviewControllerTest extends DashboardPageTestCase
         self::assertSelectorTextContains('.flash-error', 'Another press for this round is still running, so nothing was stopped.');
     }
 
+    public function testTheRoundStaysLockedUntilTheStopAnswerIsBuilt(): void
+    {
+        $this->runningReviewer();
+        $token = $this->token();
+        $freeWhileAnswering = $this->roundFreeWhileAnswering('round-1');
+
+        $this->browser->request('POST', '/reviews/round-1/reviewers/round-1-security/stop', ['_token' => $token]);
+
+        self::assertResponseStatusCodeSame(303);
+        self::assertFalse($freeWhileAnswering());
+        $this->holdRoundLock('round-1')->release();
+    }
+
     // A round of its own, because the file of a round another test locked stays in the directory.
     public function testAStopWithoutATokenLeavesNoLockFileBehind(): void
     {

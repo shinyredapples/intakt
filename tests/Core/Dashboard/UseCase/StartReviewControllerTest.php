@@ -320,6 +320,20 @@ final class StartReviewControllerTest extends DashboardPageTestCase
         self::assertSelectorTextContains('.flash-error', 'Another press for this round is still running, so nothing was started.');
     }
 
+    public function testTheRoundStaysLockedUntilTheStartAnswerIsBuilt(): void
+    {
+        $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+        $this->commandBus()->expects(self::once())->method('dispatch')->willReturn(new Envelope(new stdClass(), [new HandledStamp('round-2', 'handler')]));
+        $token = $this->token();
+        $freeWhileAnswering = $this->roundFreeWhileAnswering('round-1');
+
+        $this->browser->request('POST', '/reviews/round-1/start', ['_token' => $token, 'number' => '2']);
+
+        self::assertResponseRedirects('/reviews/round-1', 303);
+        self::assertFalse($freeWhileAnswering());
+        $this->holdRoundLock('round-1')->release();
+    }
+
     public function testAStartIsNotHeldBackByAPressForAnotherRound(): void
     {
         $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
