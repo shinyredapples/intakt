@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Job\Infrastructure;
 
+use Closure;
 use Intakt\Core\Job\Contract\DockerEngineFailed;
 use Intakt\Core\Job\Contract\JobId;
 use Intakt\Core\Job\Contract\JobServices;
@@ -43,8 +44,11 @@ final readonly class DockerEngine
         return $this->containerIdOf($answer['Id'] ?? null, 'containers/create');
     }
 
-    // With rm and forcerm, so no container of a step is left behind, also after a failed one.
-    public function build(string $context, string $tag, string $dockerfile): ImageBuild
+    /**
+     * @param Closure(int): string $context
+     */
+    // With rm and forcerm, so no container of a step is left behind, also after a failed one; the context is sent in chunks it hands out, so a large repository does not have to fit in memory.
+    public function build(Closure $context, string $tag, string $dockerfile): ImageBuild
     {
         return $this->send('POST', 'build', [
             'query' => ['t' => $tag, 'dockerfile' => $dockerfile, 'rm' => 'true', 'forcerm' => 'true'],
