@@ -8,6 +8,9 @@ use Closure;
 use DateTimeImmutable;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\AccountCooldowns;
+use Intakt\Core\Ai\Contract\PinnedProvider;
+use Intakt\Core\Ai\Contract\PinnedProviderCooldownNotSaved;
+use Intakt\Core\Ai\Contract\PinnedProviderCooldowns;
 use Override;
 use Psr\Log\LoggerInterface;
 use Symfony\AI\Platform\Exception\AuthenticationException;
@@ -36,6 +39,9 @@ final readonly class AccountPlatform implements PlatformInterface
         private ClockInterface $clock,
         private LoggerInterface $logger,
         private SendFailures $failures,
+        private PinnedProviderCooldowns $pinnedCooldowns,
+        // The router provider this call's model id pins on this account, null when it pins none.
+        private ?PinnedProvider $pinned,
     ) {
     }
 
@@ -125,6 +131,8 @@ final readonly class AccountPlatform implements PlatformInterface
     // A spent subscription plan is raised as a limit without a reset (CodexAccountFailure), so only that limit waits for the plan's measured reset; any other failure keeps its own wait.
     private function coolDownLimited(?int $retryAfter): void
     {
+        $this->coolDownPinned($retryAfter);
+
         if (null === $retryAfter && $this->account->provider->spendsAPlan()) {
             $this->cooldowns->coolDownUntilPlanResets($this->account);
 
@@ -132,5 +140,19 @@ final readonly class AccountPlatform implements PlatformInterface
         }
 
         $this->cooldowns->coolDown($this->account, $retryAfter);
+    }
+
+    // The pinned provider keeps its own window, which alone says how long the call waits for it (AccountFailoverPlatform); logged instead of thrown, because the provider's 429 must still reach the caller and the account still cools down.
+    private function coolDownPinned(?int $retryAfter): void
+    {
+        if (!$this->pinned instanceof PinnedProvider) {
+            return;
+        }
+
+        try {
+            $this->pinnedCooldowns->coolDown($this->pinned, $retryAfter ?? AccountCooldowns::SECONDS_WITHOUT_RESET);
+        } catch (PinnedProviderCooldownNotSaved $notSaved) {
+            $this->logger->warning('The cooldown of pinned provider {pinned} could not be saved.', ['pinned' => $this->pinned->key(), 'exception' => $notSaved]);
+        }
     }
 }

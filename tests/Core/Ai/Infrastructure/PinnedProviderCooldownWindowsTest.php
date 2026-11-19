@@ -52,6 +52,29 @@ final class PinnedProviderCooldownWindowsTest extends TestCase
         self::assertFalse($this->cooldowns()->isCoolingDown($this->deepinfra()));
     }
 
+    public function testThePinsWaitIsRoundedUpToAWholeSecondAndIsZeroOnceItsWindowHasEnded(): void
+    {
+        $cooldowns = $this->cooldowns();
+        $cooldowns->coolDown($this->deepinfra(), 3);
+
+        $this->clock->sleep(1.8);
+        $whileCooling = $cooldowns->secondsUntilFree($this->deepinfra());
+        $this->clock->sleep(1.2);
+
+        self::assertSame([2, 0], [$whileCooling, $cooldowns->secondsUntilFree($this->deepinfra())]);
+    }
+
+    public function testAPinCooledForADayOrLongerAtAFractionalSecondReadsBackAtMostADay(): void
+    {
+        $this->clock->sleep(0.4);
+        $cooldowns = $this->cooldowns();
+        $cooldowns->coolDown($this->deepinfra(), 86400);
+        $cooledADay = $cooldowns->secondsUntilFree($this->deepinfra());
+        $cooldowns->coolDown($this->deepinfra(), 200000);
+
+        self::assertSame([86400, 86400], [$cooledADay, $cooldowns->secondsUntilFree($this->deepinfra())]);
+    }
+
     public function testAPinnedProviderIsCoolingDownWhileItsWindowLasts(): void
     {
         $cooldowns = $this->cooldowns();

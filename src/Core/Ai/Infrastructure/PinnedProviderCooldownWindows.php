@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Ai\Infrastructure;
 
 use DateTimeImmutable;
+use Intakt\Core\Ai\Contract\AccountCooldowns;
 use Intakt\Core\Ai\Contract\AiServices;
 use Intakt\Core\Ai\Contract\PinnedProvider;
 use Intakt\Core\Ai\Contract\PinnedProviderCooldownNotSaved;
@@ -21,6 +22,8 @@ final readonly class PinnedProviderCooldownWindows implements PinnedProviderCool
 {
     private const string PREFIX = 'pinned-provider-cooldown-';
 
+    private const int MICROSECONDS = 1000000;
+
     public function __construct(
         #[Autowire(service: AiServices::ACCOUNT_COOLDOWNS)]
         private CacheItemPoolInterface $pool,
@@ -36,7 +39,7 @@ final readonly class PinnedProviderCooldownWindows implements PinnedProviderCool
         }
 
         $key = $this->keyOf($provider);
-        $until = $this->clock->now()->modify(sprintf('+%d seconds', $seconds));
+        $until = $this->clock->now()->modify(sprintf('+%d seconds', min(AccountCooldowns::LONGEST_SECONDS, $seconds)));
 
         // Under the lock every worker takes, because two answers in flight could otherwise replace a later end with an earlier one.
         $lock = $this->locks->createLock($key);
@@ -62,6 +65,21 @@ final readonly class PinnedProviderCooldownWindows implements PinnedProviderCool
         $until = $this->endOf($this->keyOf($provider));
 
         return $until instanceof DateTimeImmutable && $this->clock->now() < $until;
+    }
+
+    // Rounded up from the stored end, so 1.2 seconds left is a wait of 2 and a full day read at once is still at most AccountCooldowns::LONGEST_SECONDS.
+    public function secondsUntilFree(PinnedProvider $provider): int
+    {
+        $until = $this->endOf($this->keyOf($provider));
+        if (!$until instanceof DateTimeImmutable) {
+            return 0;
+        }
+
+        // In whole microseconds, because a float of the timestamp loses them and could round a full day up to a second more.
+        $now = $this->clock->now();
+        $left = ($until->getTimestamp() - $now->getTimestamp()) * self::MICROSECONDS + (int) $until->format('u') - (int) $now->format('u');
+
+        return 0 < $left ? intdiv($left + self::MICROSECONDS - 1, self::MICROSECONDS) : 0;
     }
 
     private function endOf(string $key): ?DateTimeImmutable

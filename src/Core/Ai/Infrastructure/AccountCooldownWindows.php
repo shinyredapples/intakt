@@ -34,12 +34,6 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
 {
     private const string LIMITER = 'account-cooldown';
 
-    // One minute because a provider that sends no reset still gets a pause, and it is the async transport's longest wait between two tries.
-    private const int SECONDS_WITHOUT_RESET = 60;
-
-    // At most a day, so a huge reset never puts an account out of reach and the window stays inside its one-month period.
-    private const int LONGEST_SECONDS = 86400;
-
     private const float SPENT_PERCENT = 100.0;
 
     /**
@@ -112,6 +106,16 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
         return [] === $waits ? 0 : min($waits);
     }
 
+    public function secondsUntilFree(Account $account): int
+    {
+        $window = $this->window($account);
+        if (0 < $window->getRemainingTokens()) {
+            return 0;
+        }
+
+        return max(1, $window->getRetryAfter()->getTimestamp() - $this->clock->now()->getTimestamp());
+    }
+
     // Asked only for a spent plan's limit, which comes without a reset (issue #1749), so the account's measured readings say when it is usable again: the latest reset of a spent window still ahead.
     private function secondsUntilSpentWindowResets(Account $account): ?int
     {
@@ -146,17 +150,6 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
         }
 
         $this->record($account, $until);
-    }
-
-    // At least a second while the window runs, so a cooling account is never reported free and retried at once.
-    private function secondsUntilFree(Account $account): int
-    {
-        $window = $this->window($account);
-        if (0 < $window->getRemainingTokens()) {
-            return 0;
-        }
-
-        return max(1, $window->getRetryAfter()->getTimestamp() - $this->clock->now()->getTimestamp());
     }
 
     // No token, so reading the window never starts or saves one.
