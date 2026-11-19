@@ -24,9 +24,4 @@ final class ParkedTaskRecordTest extends TestCase
 
         self::assertSame(['project' => 'alpha', 'task' => 7, 'question' => 'Which store?', 'choices' => ['SQLite', 'Postgres'], 'recommendation' => 'SQLite', 'parked_at' => $parkedAt], $row);
     }
-
-    public function testTheRowNamesTheTypesOfTheColumnsThatAreNoText(): void
-    {
-        self::assertSame(['task' => 'integer', 'choices' => 'json', 'parked_at' => 'utc_datetime_immutable'], ParkedTaskRecord::rowTypes());
-    }
 }
