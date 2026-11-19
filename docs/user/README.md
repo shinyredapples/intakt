@@ -876,6 +876,7 @@ Two things to know when you set up Hugging Face yourself, for example as `openai
 
 - The base URL is `https://router.huggingface.co`, without `/v1` at the end. Intakt adds `/v1/chat/completions` itself; with `/v1` in the base URL the call goes to `/v1/v1/chat/completions` and fails with a plain "Bad Request".
 - Name the router provider after the model, as the seeded models do (`:deepinfra`). Every reviewer call uses tools together with structured output, and some router providers refuse that combination: Groq and Cerebras did. DeepInfra accepted it for `moonshotai/Kimi-K3.1-Pro` and `deepseek-ai/DeepSeek-V4-Pro-0813`. The router's default provider may be one that refuses, and the error then says only "Bad Request".
+- A rate limit from the router provider you named (an answer of 429) does not yet pause that provider: Intakt has a place to remember such a pause for each router provider and account, but no call sets or checks it yet, so the call is still retried as before. Skipping a router provider that is cooling down comes in a later change.
 
 Project memory still needs an OpenAI key: a Hugging Face token alone gives no embeddings.
 
