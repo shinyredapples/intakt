@@ -41,6 +41,23 @@ final class WaitingItemTest extends TestCase
         self::assertStringContainsString('paid call', $item->choices[1]->outcome);
     }
 
+    // The budget guard refuses even the first call while the last reading is at its ceiling, so no line may promise that builds go on.
+    public function testAnOutageItemPromisesNoRunningBuildsWhileTheLastReadingIsAtItsLimit(): void
+    {
+        $item = WaitingItem::ofOutage($this->outage(), null);
+
+        self::assertStringNotContainsString('keep running', $item->consequence.' '.$item->choices[0]->outcome);
+        self::assertStringContainsString('none while its last reading is at its limit', $item->consequence);
+        self::assertStringContainsString('none while its last reading is at its limit', $item->choices[0]->outcome);
+    }
+
+    public function testTheProbeChoiceSaysItMayNotReachThisAccountsProvider(): void
+    {
+        $item = WaitingItem::ofOutage($this->outage(), null);
+
+        self::assertStringContainsString('one paid call per provider in your projects\' tiers, which may not include this account\'s provider', $item->choices[1]->outcome);
+    }
+
     public function testAnOutageItemLinksToTheStatusPageItIsGiven(): void
     {
         $item = WaitingItem::ofOutage($this->outage(), 'https://status.example');

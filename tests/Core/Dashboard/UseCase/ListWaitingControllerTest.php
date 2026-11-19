@@ -37,14 +37,46 @@ final class ListWaitingControllerTest extends DashboardPageTestCase
         self::assertResponseIsSuccessful();
         $item = $page->filter('.wait-item');
         self::assertCount(1, $item);
-        self::assertSame('No usage of account claude_code.main has been read since 2026-11-02 08:00 UTC', $item->filter('h3')->text());
+        self::assertSame('No usage of account claude_code.main has been read since 2026-11-02 08:00 UTC', $item->filter('h2.wait-lead')->text());
         self::assertSame('All projects', $item->filter('.meta span')->first()->text());
         self::assertStringContainsString('Waiting', $item->filter('.meta')->text());
-        self::assertStringContainsString('only one call at a time', $item->filter('.conseq')->text());
+        self::assertStringContainsString('at most one call at a time', $item->filter('.conseq')->text());
         self::assertSame('php bin/console intakt:vendor:probe', $item->filter('.act .copy code')->text());
         self::assertSame('Recommended', $item->filter('.act li')->first()->filter('.recommended')->text());
-        self::assertNotNull($item->filter('details.why')->attr('open'));
         self::assertSame('Why', $item->filter('details.why summary')->text());
+    }
+
+    // The page has only its h1 above the items, so a lower level would skip one in the outline.
+    public function testEachItemHeadingIsAnH2UnderThePageTitle(): void
+    {
+        $this->noticesAre($this->notice('main', new DateTimeImmutable('2026-11-02T08:00:00+00:00'), new DateTimeImmutable('2026-11-02T11:00:00+00:00')));
+
+        $page = $this->browser->request('GET', '/waiting');
+
+        self::assertCount(1, $page->filter('.wait-item > h2'));
+        self::assertCount(0, $page->filter('.wait-item h3'));
+    }
+
+    // The phone's form; the copy script opens it on a wide screen, so a phone shows it closed.
+    public function testTheWhyIsRenderedClosedForThePhone(): void
+    {
+        $this->noticesAre($this->notice('main', new DateTimeImmutable('2026-11-02T08:00:00+00:00'), new DateTimeImmutable('2026-11-02T11:00:00+00:00')));
+
+        $page = $this->browser->request('GET', '/waiting');
+
+        self::assertCount(1, $page->filter('.wait-item details.why'));
+        self::assertNull($page->filter('.wait-item details.why')->attr('open'));
+    }
+
+    // The link opens in the same tab, so it leaves no opener to guard.
+    public function testTheStatusPageLinkOpensInTheSameTabWithoutRel(): void
+    {
+        $this->noticesAre($this->notice('main', new DateTimeImmutable('2026-11-02T08:00:00+00:00'), new DateTimeImmutable('2026-11-02T11:00:00+00:00')));
+
+        $page = $this->browser->request('GET', '/waiting');
+
+        self::assertNull($page->filter('.wait-item a[href]')->attr('rel'));
+        self::assertNull($page->filter('.wait-item a[href]')->attr('target'));
     }
 
     // Turbo runs a body script again on every visit, so a binding in the body would leave the document's listeners twice.
@@ -68,8 +100,8 @@ final class ListWaitingControllerTest extends DashboardPageTestCase
 
         $page = $this->browser->request('GET', '/waiting');
 
-        self::assertStringContainsString('claude_code.first', $page->filter('.wait-item h3')->first()->text());
-        self::assertStringContainsString('claude_code.second', $page->filter('.wait-item h3')->last()->text());
+        self::assertStringContainsString('claude_code.first', $page->filter('.wait-item h2')->first()->text());
+        self::assertStringContainsString('claude_code.second', $page->filter('.wait-item h2')->last()->text());
     }
 
     public function testTheWaitingPageSaysNothingNeedsYouWhenNoNoticeWaits(): void

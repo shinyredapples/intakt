@@ -22,7 +22,7 @@
 <div class="wait-list">
 {% for item in items %}
 <article class="wait-item" aria-labelledby="wait-{{ loop.index }}">
-    <h3 id="wait-{{ loop.index }}"><span class="dot needs"></span>{{ item.lead }}</h3>
+    <h2 class="wait-lead" id="wait-{{ loop.index }}"><span class="dot needs"></span>{{ item.lead }}</h2>
     {{ include('dashboard/components/meta.html.twig', {facts: [
         {text: 'All projects'},
         {icon: 'clock', text: item.waitingFor(now)},
@@ -36,9 +36,10 @@
             <span class="outcome">{{ choice.outcome }}</span>
         </li>
     {% endfor %}
-        <li><a class="btn secondary sm" href="{{ item.link ?? path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_BOARD')) }}"{% if item.link is not null %} rel="noopener noreferrer"{% endif %}>{{ item.linkLabel }}</a></li>
+        <li><a class="btn secondary sm" href="{{ item.link ?? path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_BOARD')) }}">{{ item.linkLabel }}</a></li>
     </ul>
-    <details class="why" open><summary>Why</summary>
+    {# Closed, the phone's form; `copy-command.js` opens it on a wide screen. #}
+    <details class="why"><summary>Why</summary>
         <p>{{ item.why }}</p>
     </details>
 </article>

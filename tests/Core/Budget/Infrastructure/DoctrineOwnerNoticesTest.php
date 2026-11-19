@@ -102,14 +102,23 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
         self::assertCount(1, $this->notices()->stillRunningOldestFirst());
     }
 
+    // An account is its provider and its name together, so the same name at another provider is another account.
+    public function testAReadingOfTheSameAccountNameAtAnotherProviderKeepsTheNoticeListed(): void
+    {
+        $this->store('main', new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
+        $this->read('main', new DateTimeImmutable('2026-11-02T12:00:00+00:00'), Provider::Codex);
+
+        self::assertCount(1, $this->notices()->stillRunningOldestFirst());
+    }
+
     private function notices(): DoctrineOwnerNotices
     {
         return new DoctrineOwnerNotices($this->entities);
     }
 
-    private function read(string $account, DateTimeImmutable $takenAt): void
+    private function read(string $account, DateTimeImmutable $takenAt, Provider $provider = Provider::ClaudeCode): void
     {
-        $this->entities->persist(new WindowReadingRecord(new WindowReading(new Account(Provider::ClaudeCode, $account), UsageWindow::FiveHour, new Usage(10.0, null)), $takenAt));
+        $this->entities->persist(new WindowReadingRecord(new WindowReading(new Account($provider, $account), UsageWindow::FiveHour, new Usage(10.0, null)), $takenAt));
         $this->entities->flush();
     }
 

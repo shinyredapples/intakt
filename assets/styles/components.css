@@ -741,8 +741,9 @@ details.ev > summary time { margin-left: auto; color: var(--muted); font-size: v
   display: grid; grid-template-columns: minmax(0, 1fr) 340px; grid-template-areas: "title act" "meta act" "conseq act" "why act";
   grid-template-rows: auto auto auto 1fr; gap: var(--s4) var(--s32); align-items: start; margin-bottom: var(--s12); padding: calc(var(--s16) + var(--s4)); border-radius: var(--r-card); background: var(--amber-tint);
 }
-.wait-item h3 { grid-area: title; display: flex; align-items: baseline; gap: var(--s8); font-size: var(--t17); overflow-wrap: anywhere; }
-.wait-item h3 .dot { position: relative; top: -2px; }
+/* An h2 for the outline, with the mock's h3 size. */
+.wait-item .wait-lead { grid-area: title; display: flex; align-items: baseline; gap: var(--s8); font-size: var(--t17); overflow-wrap: anywhere; }
+.wait-item .wait-lead .dot { position: relative; top: -2px; }
 .wait-item > .meta { grid-area: meta; padding-left: var(--s16); }
 .wait-item .conseq { grid-area: conseq; margin-top: var(--s4); padding-left: var(--s16); font-weight: 500; }
 .wait-item .act { grid-area: act; display: flex; flex-direction: column; gap: var(--s12); align-self: center; margin: 0; padding: 0; list-style: none; }

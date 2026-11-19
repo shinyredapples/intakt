@@ -67,6 +67,9 @@ class FakePage {
         if (selector === 'button[data-copy]') {
             return this.buttons;
         }
+        if (selector === 'details.why') {
+            return this.whys;
+        }
         assert.equal(selector, 'details.why[open]');
 
         return this.whys.filter((why) => why.open);
@@ -135,8 +138,9 @@ class FakeSlowClipboard {
     }
 }
 
-function pageWithACommand({ clipboard = new FakeClipboard(), phone = false } = {}) {
+function pageWithACommand({ clipboard = new FakeClipboard(), phone = false, whys = [] } = {}) {
     const page = new FakePage();
+    page.whys.push(...whys);
     const timers = new FakeTimers();
     const view = {
         navigator: clipboard === null ? {} : { clipboard },
@@ -348,6 +352,34 @@ test('another key or a closed Why changes nothing', () => {
 
     assert.equal(open.open, true);
     assert.equal(open.summary.focused, false);
+});
+
+test('on a phone every Why stays closed as the server rendered it', () => {
+    const why = new FakeWhy(false);
+
+    const { page } = pageWithACommand({ phone: true, whys: [why] });
+    page.dispatch('turbo:load');
+    page.dispatch('turbo:render');
+
+    assert.equal(why.open, false);
+});
+
+test('on a wide screen every Why opens when the page loads', () => {
+    const why = new FakeWhy(false);
+
+    pageWithACommand({ whys: [why] });
+
+    assert.equal(why.open, true);
+});
+
+test('on a wide screen a Why a visit puts in again opens too', () => {
+    const { page } = pageWithACommand();
+    const why = new FakeWhy(false);
+    page.whys.push(why);
+
+    page.dispatch('turbo:render');
+
+    assert.equal(why.open, true);
 });
 
 test('Escape on a phone with every Why closed moves no focus', () => {

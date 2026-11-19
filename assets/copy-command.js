@@ -5,7 +5,7 @@ const MESSAGE = 'data-copy-message';
 const COPIED = 'Copied';
 const FAILED = 'Copy failed';
 const WHY = 'details.why';
-// A wide screen shows every Why, so only a phone has one to close.
+// The server renders every Why closed, the phone's form, and a wide screen opens them, so only a phone has one to close.
 const PHONE = '(max-width: 760px)';
 
 const labels = new WeakMap();
@@ -31,6 +31,20 @@ export function copyCommands(page, view) {
         if (event.key === 'Escape' && view.matchMedia(PHONE).matches) {
             closeWhys(page, event.target);
         }
+    });
+    // A visit or a refresh puts the items in again as the server rendered them, with every Why closed.
+    const open = () => openWhysOnAWideScreen(page, view);
+    page.addEventListener('turbo:load', open);
+    page.addEventListener('turbo:render', open);
+    open();
+}
+
+function openWhysOnAWideScreen(page, view) {
+    if (view.matchMedia(PHONE).matches) {
+        return;
+    }
+    page.querySelectorAll(WHY).forEach((why) => {
+        why.open = true;
     });
 }
 
