@@ -59,7 +59,7 @@ const SIZES = [{ width: 1440, height: 900 }, { width: 1920, height: 1080 }, { wi
           const name = filter.options[1].value;
           filter.value = name;
           filter.dispatchEvent(new Event('change', { bubbles: true }));
-          const cards = [...document.querySelectorAll('.card[data-project]')];
+          const cards = [...document.querySelectorAll('.board article[data-project]')];
           return `selected "${name}": ${cards.filter((c) => c.offsetParent !== null).length} of ${cards.length} cards shown`;
         });
         console.log(`board (six projects) ${theme} ${size.width} filter ${filterSeen}`);
