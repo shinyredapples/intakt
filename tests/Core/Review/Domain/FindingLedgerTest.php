@@ -175,6 +175,22 @@ final class FindingLedgerTest extends TestCase
         self::assertSame([5, 9], $ledger->all()[0]->rounds);
     }
 
+    private function recordRefusedRound(FindingLedger $ledger, int $round): void
+    {
+        self::assertInstanceOf(RoundNotAfterLatest::class, $this->refusalOf($ledger, $round), 'Round '.$round.' was recorded out of order.');
+    }
+
+    private function refusalOf(FindingLedger $ledger, int $round): ?RoundNotAfterLatest
+    {
+        try {
+            $ledger->recordRound($round, [$this->finding('F1'), $this->finding('new')]);
+        } catch (RoundNotAfterLatest $refusal) {
+            return $refusal;
+        }
+
+        return null;
+    }
+
     public function testAVerdictWithResolvedIdsClosesThoseFindings(): void
     {
         $ledger = new FindingLedger();
@@ -279,6 +295,17 @@ final class FindingLedgerTest extends TestCase
         self::assertSame([1], $ledger->all()[0]->rounds);
     }
 
+    public function testAnotherReviewersFindingBesideAStoredChangesVerdictWithAReservedIdStaysOpen(): void
+    {
+        $ledger = new FindingLedger();
+
+        $ledger->recordVerdict(1, new Verdict(Decision::Changes, Verdict::noTools()->findings, [], []));
+        $ledger->recordVerdict(1, $this->verdict([], [$this->finding('cart-total')]));
+
+        self::assertCount(1, $ledger->open());
+        self::assertSame('F1', $ledger->open()[0]->id);
+    }
+
     public function testAFindingThatOnlySharesItsTextWithAFailedReviewIsRecorded(): void
     {
         $ledger = new FindingLedger();
@@ -350,22 +377,6 @@ final class FindingLedgerTest extends TestCase
         $ledger->recordVerdict(2, $this->verdict([], [$this->finding('b', severity: Severity::P1)]));
 
         self::assertSame([Severity::P2, Severity::P3], array_map(static fn (TrackedFinding $tracked): Severity => $tracked->latest->severity, $ledger->all()));
-    }
-
-    private function recordRefusedRound(FindingLedger $ledger, int $round): void
-    {
-        self::assertInstanceOf(RoundNotAfterLatest::class, $this->refusalOf($ledger, $round), 'Round '.$round.' was recorded out of order.');
-    }
-
-    private function refusalOf(FindingLedger $ledger, int $round): ?RoundNotAfterLatest
-    {
-        try {
-            $ledger->recordRound($round, [$this->finding('F1'), $this->finding('new')]);
-        } catch (RoundNotAfterLatest $refusal) {
-            return $refusal;
-        }
-
-        return null;
     }
 
     /**

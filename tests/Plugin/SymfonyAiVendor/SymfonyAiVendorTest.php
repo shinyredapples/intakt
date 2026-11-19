@@ -222,6 +222,18 @@ final class SymfonyAiVendorTest extends KernelTestCase
         parent::tearDownAfterClass();
     }
 
+    #[Override]
+    protected function setUp(): void
+    {
+        $this->limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
+        $container = self::$platformKernel->getContainer();
+        // Reset before each test, because a listener of the shared kernel would otherwise carry what the previous test left.
+        $resetter = $container->get('services_resetter');
+        self::assertInstanceOf(ResetInterface::class, $resetter);
+        $resetter->reset();
+        $this->dispatcher = ScriptedReviewer::in($container)->dispatcher;
+    }
+
     public function testAStructuredCallReturnsTheVerdictTheModelAnswered(): void
     {
         $vendor = $this->vendorAnswering(VerdictDocument::fromTheDesign()->json());
@@ -341,7 +353,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
         };
         $updates = new RecordedRoundUpdates();
         $reviewerId = new UuidV7();
-        $request = new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$this->openFinding('F1'), $this->openFinding('F2')]), new ReviewerConversation('You review for correctness.', new UuidV7(), new UuidV7(), $reviewerId));
+        $request = new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$this->openFinding('F1'), $this->openFinding('F2')], 1), new ReviewerConversation('You review for correctness.', new UuidV7(), new UuidV7(), $reviewerId));
 
         $verdict = $this->vendorWithOutputLimit($answer, new InMemoryLedger(), $updates)->review('alpha', Tier::Strong, $request)->verdict;
 
@@ -437,6 +449,11 @@ final class SymfonyAiVendorTest extends KernelTestCase
         self::assertCount(2, $reviewer->ids);
         self::assertSame($request->conversation->id->toRfc4122(), $reviewer->ids[0]);
         self::assertNotSame($reviewer->ids[0], $reviewer->ids[1]);
+    }
+
+    private function vendorAnswering(string $output): SymfonyAiVendor
+    {
+        return $this->vendor(static fn (): string => $output);
     }
 
     public function testAnAnsweredCallIsRecordedOnceAsStartedThenSettledWithItsTokens(): void
@@ -551,6 +568,69 @@ final class SymfonyAiVendorTest extends KernelTestCase
         self::assertInstanceOf(ProviderFailedTransiently::class, $failure);
         self::assertSame(['started', 'unsettled'], array_column($ledger->payloads(), 'phase'));
         self::assertSame(ServerException::class, $ledger->payloads()[1]['failure']);
+    }
+
+    private function thrownBy(Closure $call): ?Throwable
+    {
+        try {
+            $call();
+        } catch (Throwable $thrown) {
+            return $thrown;
+        }
+
+        return null;
+    }
+
+    /**
+     * @param callable(): Generator<mixed, DeltaInterface, mixed, mixed> $lastRound
+     */
+    private function toolRoundThen(callable $lastRound): Closure
+    {
+        /** @var list<callable(): Generator<mixed, DeltaInterface, mixed, mixed>> $rounds */
+        $rounds = [$this->toolRound(...), $lastRound];
+
+        // A call after the script is the unstreamed retry of a stream cut without a provider outage, and it is cut again, so the reviewer still ends blocked.
+        return static function () use (&$rounds): StreamResult {
+            $round = array_shift($rounds) ?? self::cutAgain();
+
+            return new StreamResult($round());
+        };
+    }
+
+    private function toolRound(): Generator
+    {
+        yield new ToolCallComplete([new ToolCall('1', 'read_file', ['path' => 'missing.txt'])]);
+        yield new TokenUsage(
+            promptTokens: 110,
+            model: 'big',
+        );
+    }
+
+    private function cutMidText(): Generator
+    {
+        yield new TokenUsage(
+            promptTokens: 120,
+            model: 'big',
+        );
+        yield new TextDelta('{"verdict":"approve",');
+
+        throw new IncompleteStreamException('The stream ended before its terminal event.');
+    }
+
+    /**
+     * @return Closure(): Generator<mixed, DeltaInterface, mixed, mixed>
+     */
+    private function brokenMidText(Throwable $outage): Closure
+    {
+        return static function () use ($outage): Generator {
+            yield new TokenUsage(
+                promptTokens: 120,
+                model: 'big',
+            );
+            yield new TextDelta('{"verdict":');
+
+            throw $outage;
+        };
     }
 
     public function testACallThatFailsIsLeftUnsettledOnce(): void
@@ -723,7 +803,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
     {
         $ledger = new InMemoryLedger();
         $reviewerId = new UuidV7();
-        $request = new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$this->openFinding('F1'), $this->openFinding('F2')]), new ReviewerConversation('You review for correctness.', new UuidV7(), new UuidV7(), $reviewerId));
+        $request = new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$this->openFinding('F1'), $this->openFinding('F2')], 1), new ReviewerConversation('You review for correctness.', new UuidV7(), new UuidV7(), $reviewerId));
 
         $this->vendor(static fn (): TextResult => self::withUsage(VerdictDocument::fromTheDesign()->json()), $ledger)->review('alpha', Tier::Strong, $request);
 
@@ -779,6 +859,51 @@ final class SymfonyAiVendorTest extends KernelTestCase
 
         self::assertNull($review->substitute);
         self::assertSame(Verdict::UNREAD_APPROVAL, $review->verdict->findings[0]->id);
+    }
+
+    public function testABlindOwnProviderCannotApproveThroughChangesOfOnlyP3Findings(): void
+    {
+        $changes = static fn (): string => VerdictDocument::fromTheDesign()->withFinding('severity', 'P3')->json();
+
+        $review = $this->substitutedVendor($changes, $changes, new NoCooldowns())->review('alpha', Tier::Strong, $this->request());
+
+        self::assertSame([Decision::Blocked, Verdict::UNREAD_APPROVAL], [$review->verdict->verdict, $review->verdict->findings[0]->id]);
+    }
+
+    public function testABlindOwnProviderCannotApproveThroughAP2TheSecondRoundLowersToP3(): void
+    {
+        $changes = static fn (): string => VerdictDocument::fromTheDesign()->withFinding('severity', 'P2')->withFinding('requirement', null)->json();
+
+        $review = $this->substitutedVendor($changes, $changes, new NoCooldowns())->review('alpha', Tier::Strong, $this->requestInRound(2));
+
+        self::assertSame([Decision::Blocked, Verdict::UNREAD_APPROVAL], [$review->verdict->verdict, $review->verdict->findings[0]->id]);
+    }
+
+    public function testABlindOwnProviderAskingForChangesWithAP2ThatNamesARequirementKeepsItsVerdictInTheSecondRound(): void
+    {
+        $changes = static fn (): string => VerdictDocument::fromTheDesign()->withFinding('severity', 'P2')->json();
+
+        $review = $this->substitutedVendor($changes, $changes, new NoCooldowns())->review('alpha', Tier::Strong, $this->requestInRound(2));
+
+        self::assertSame(Decision::Changes, $review->verdict->verdict);
+    }
+
+    public function testABlindOwnProviderAskingForChangesWithAP2WithoutARequirementKeepsItsVerdictInTheFirstRound(): void
+    {
+        $changes = static fn (): string => VerdictDocument::fromTheDesign()->withFinding('severity', 'P2')->withFinding('requirement', null)->json();
+
+        $review = $this->substitutedVendor($changes, $changes, new NoCooldowns())->review('alpha', Tier::Strong, $this->requestInRound(1));
+
+        self::assertSame(Decision::Changes, $review->verdict->verdict);
+    }
+
+    public function testABlindOwnProviderAskingForChangesWithAP1KeepsItsVerdict(): void
+    {
+        $changes = static fn (): string => VerdictDocument::fromTheDesign()->json();
+
+        $review = $this->substitutedVendor($changes, $changes, new NoCooldowns())->review('alpha', Tier::Strong, $this->request());
+
+        self::assertSame(Decision::Changes, $review->verdict->verdict);
     }
 
     public function testARoundWhoseUsageCannotBeReadBeforeAFailureIsLoggedAndTheFailureStillRecorded(): void
@@ -1127,60 +1252,29 @@ final class SymfonyAiVendorTest extends KernelTestCase
         self::assertSame([], $this->dispatcher->getCalledListeners());
     }
 
-    #[Override]
-    protected function setUp(): void
+    private static function cutAgain(): never
     {
-        $this->limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
-        $container = self::$platformKernel->getContainer();
-        // Reset before each test, because a listener of the shared kernel would otherwise carry what the previous test left.
-        $resetter = $container->get('services_resetter');
-        self::assertInstanceOf(ResetInterface::class, $resetter);
-        $resetter->reset();
-        $this->dispatcher = ScriptedReviewer::in($container)->dispatcher;
-    }
-
-    private function vendorAnswering(string $output): SymfonyAiVendor
-    {
-        return $this->vendor(static fn (): string => $output);
+        throw new IncompleteStreamException('The answer ended before it was complete.');
     }
 
     private function request(?Uuid $round = null): ReviewRequest
     {
-        return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$this->openFinding('F1'), $this->openFinding('F2')]), new ReviewerConversation('You review for correctness.', new UuidV7(), $round));
+        return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$this->openFinding('F1'), $this->openFinding('F2')], 1), new ReviewerConversation('You review for correctness.', new UuidV7(), $round));
     }
 
-    private function vendor(Closure $answer, InMemoryLedger $ledger = new InMemoryLedger(), LoggerInterface $logger = new NullLogger()): SymfonyAiVendor
+    private function requestInRound(int $round): ReviewRequest
     {
-        $resolver = new ConfiguredTierResolver([
-            'alpha' => ['tiers' => ['strong' => ['provider' => 'anthropic', 'model' => 'big']]],
-        ], []);
-        $platform = MockPlatformFactory::createPlatform($answer, eventDispatcher: $this->dispatcher);
-        $platforms = new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => $platform]);
-        $usage = new UsageLedger($ledger, new MockClock(self::NOW), $logger, StoredSerializerFactory::create());
-
-        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms, new NoCooldowns(), new NullLogger()), $resolver, $this->reviewer(), new JudgeAgent(new JudgePrompt(new Fence())), $usage, $this->limit, new MockClock(self::NOW), self::createStub(ReviewServerAccesses::class));
-    }
-
-    private function reviewer(RecordedRoundUpdates $updates = new RecordedRoundUpdates()): ReviewerAgent
-    {
-        return new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress($updates), new ReviewerStopping(new StopRequests(new InMemoryLedger(), new LedgerPayloads(StoredSerializerFactory::create())))));
-    }
-
-    private function vendorWithOutputLimit(Closure $answer, InMemoryLedger $ledger, RecordedRoundUpdates $updates = new RecordedRoundUpdates()): SymfonyAiVendor
-    {
-        $resolver = new ConfiguredTierResolver([
-            'alpha' => ['tiers' => ['strong' => ['provider' => 'anthropic', 'model' => 'big', 'max_output' => self::OUTPUT_LIMIT]]],
-        ], []);
-        $platform = MockPlatformFactory::createPlatform($answer, eventDispatcher: $this->dispatcher);
-        $platforms = new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => $platform]);
-        $usage = new UsageLedger($ledger, new MockClock(self::NOW), new NullLogger(), StoredSerializerFactory::create());
-
-        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms, new NoCooldowns(), new NullLogger()), $resolver, $this->reviewer($updates), new JudgeAgent(new JudgePrompt(new Fence())), $usage, $this->limit, new MockClock(self::NOW), self::createStub(ReviewServerAccesses::class));
+        return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$this->openFinding('F1'), $this->openFinding('F2')], $round), new ReviewerConversation('You review for correctness.', new UuidV7()));
     }
 
     private function openFinding(string $id): Finding
     {
         return new Finding($id, Severity::P2, null, null, null, 'Earlier.', FixableBy::Builder, false, null, null);
+    }
+
+    private function reviewer(RecordedRoundUpdates $updates = new RecordedRoundUpdates()): ReviewerAgent
+    {
+        return new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress($updates), new ReviewerStopping(new StopRequests(new InMemoryLedger(), new LedgerPayloads(StoredSerializerFactory::create())))));
     }
 
     private static function withUsage(string $json, TokenUsageInterface $usage = new TokenUsage(
@@ -1217,60 +1311,6 @@ final class SymfonyAiVendorTest extends KernelTestCase
         })());
     }
 
-    private function cutMidText(): Generator
-    {
-        yield new TokenUsage(
-            promptTokens: 120,
-            model: 'big',
-        );
-        yield new TextDelta('{"verdict":"approve",');
-
-        throw new IncompleteStreamException('The stream ended before its terminal event.');
-    }
-
-    /**
-     * @param callable(): Generator<mixed, DeltaInterface, mixed, mixed> $lastRound
-     */
-    private function toolRoundThen(callable $lastRound): Closure
-    {
-        /** @var list<callable(): Generator<mixed, DeltaInterface, mixed, mixed>> $rounds */
-        $rounds = [$this->toolRound(...), $lastRound];
-
-        // A call after the script is the unstreamed retry of a stream cut without a provider outage, and it is cut again, so the reviewer still ends blocked.
-        return static function () use (&$rounds): StreamResult {
-            $round = array_shift($rounds) ?? self::cutAgain();
-
-            return new StreamResult($round());
-        };
-    }
-
-    /**
-     * @return Closure(): Generator<mixed, DeltaInterface, mixed, mixed>
-     */
-    private function brokenMidText(Throwable $outage): Closure
-    {
-        return static function () use ($outage): Generator {
-            yield new TokenUsage(
-                promptTokens: 120,
-                model: 'big',
-            );
-            yield new TextDelta('{"verdict":');
-
-            throw $outage;
-        };
-    }
-
-    private function thrownBy(Closure $call): ?Throwable
-    {
-        try {
-            $call();
-        } catch (Throwable $thrown) {
-            return $thrown;
-        }
-
-        return null;
-    }
-
     /**
      * @template T of ResultInterface
      *
@@ -1283,6 +1323,30 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $result->getMetadata()->add('token_usage', $usage);
 
         return $result;
+    }
+
+    private function vendor(Closure $answer, InMemoryLedger $ledger = new InMemoryLedger(), LoggerInterface $logger = new NullLogger()): SymfonyAiVendor
+    {
+        $resolver = new ConfiguredTierResolver([
+            'alpha' => ['tiers' => ['strong' => ['provider' => 'anthropic', 'model' => 'big']]],
+        ], []);
+        $platform = MockPlatformFactory::createPlatform($answer, eventDispatcher: $this->dispatcher);
+        $platforms = new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => $platform]);
+        $usage = new UsageLedger($ledger, new MockClock(self::NOW), $logger, StoredSerializerFactory::create());
+
+        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms, new NoCooldowns(), new NullLogger()), $resolver, $this->reviewer(), new JudgeAgent(new JudgePrompt(new Fence())), $usage, $this->limit, new MockClock(self::NOW), self::createStub(ReviewServerAccesses::class));
+    }
+
+    private function vendorWithOutputLimit(Closure $answer, InMemoryLedger $ledger, RecordedRoundUpdates $updates = new RecordedRoundUpdates()): SymfonyAiVendor
+    {
+        $resolver = new ConfiguredTierResolver([
+            'alpha' => ['tiers' => ['strong' => ['provider' => 'anthropic', 'model' => 'big', 'max_output' => self::OUTPUT_LIMIT]]],
+        ], []);
+        $platform = MockPlatformFactory::createPlatform($answer, eventDispatcher: $this->dispatcher);
+        $platforms = new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => $platform]);
+        $usage = new UsageLedger($ledger, new MockClock(self::NOW), new NullLogger(), StoredSerializerFactory::create());
+
+        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms, new NoCooldowns(), new NullLogger()), $resolver, $this->reviewer($updates), new JudgeAgent(new JudgePrompt(new Fence())), $usage, $this->limit, new MockClock(self::NOW), self::createStub(ReviewServerAccesses::class));
     }
 
     // The tier's own provider is the subscription CLI, which cannot read the checkout, and its one substitute reads it.
@@ -1298,19 +1362,5 @@ final class SymfonyAiVendorTest extends KernelTestCase
         ]);
 
         return new SymfonyAiVendor(new TierPlatform($resolver, $platforms, $cooldowns, new NullLogger()), $resolver, $this->reviewer(), new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger(new InMemoryLedger(), new MockClock(self::NOW), new NullLogger(), StoredSerializerFactory::create()), $this->limit, new MockClock(self::NOW), self::createStub(ReviewServerAccesses::class));
-    }
-
-    private function toolRound(): Generator
-    {
-        yield new ToolCallComplete([new ToolCall('1', 'read_file', ['path' => 'missing.txt'])]);
-        yield new TokenUsage(
-            promptTokens: 110,
-            model: 'big',
-        );
-    }
-
-    private static function cutAgain(): never
-    {
-        throw new IncompleteStreamException('The answer ended before it was complete.');
     }
 }

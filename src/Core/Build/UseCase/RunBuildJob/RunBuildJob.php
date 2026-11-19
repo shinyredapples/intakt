@@ -8,7 +8,9 @@ use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\TierResolutionFailure;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Build\Domain\BuilderPrompt;
+use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\Domain\GatesAtOnce;
+use Intakt\Core\Build\Domain\QuestionRefused;
 use Intakt\Core\Job\Contract\DockerEngineFailed;
 use Intakt\Core\Job\Contract\JobCause;
 use Intakt\Core\Job\Contract\JobEgress;
@@ -37,6 +39,8 @@ final readonly class RunBuildJob
     public const string BUNDLE = 'handback.bundle';
 
     public const string PULL_REQUEST_TEXT = 'pull-request.md';
+
+    public const string QUESTION = 'question.json';
 
     public const string LOG = 'build.log';
 
@@ -128,6 +132,16 @@ final readonly class RunBuildJob
         return $file;
     }
 
+    private function ranJob(JobSpec $spec): ?JobResult
+    {
+        try {
+            return $this->jobs->run($spec);
+        } catch (JobOutputRefused) {
+            // No result, because the job wrote what the runner refuses to read.
+            return null;
+        }
+    }
+
     /**
      * @param list<JobInput> $inputs
      */
@@ -143,14 +157,10 @@ final readonly class RunBuildJob
         );
     }
 
-    private function ranJob(JobSpec $spec): ?JobResult
+    // Length-prefixed, so no project and branch pair names another pair's job; one id per pair, so the runner refuses a second build of a branch while one runs.
+    private function idOf(BuildJob $job): JobId
     {
-        try {
-            return $this->jobs->run($spec);
-        } catch (JobOutputRefused) {
-            // No result, because the job wrote what the runner refuses to read.
-            return null;
-        }
+        return new JobId('build-'.substr(hash('sha256', strlen($job->project).':'.$job->project.$job->branch), 0, 40));
     }
 
     private function outcomeOf(?JobResult $result): BuildJobOutcome
@@ -171,14 +181,14 @@ final readonly class RunBuildJob
         };
     }
 
-    // Length-prefixed, so no project and branch pair names another pair's job; one id per pair, so the runner refuses a second build of a branch while one runs.
-    private function idOf(BuildJob $job): JobId
-    {
-        return new JobId('build-'.substr(hash('sha256', strlen($job->project).':'.$job->project.$job->branch), 0, 40));
-    }
-
     private function handedBack(JobOutput $output, string $log): BuildJobOutcome
     {
+        $question = $output->contents(self::QUESTION);
+
+        if (null !== $question) {
+            return $this->asked($question, $log);
+        }
+
         $bundle = $output->contents(self::BUNDLE);
         $text = $output->contents(self::PULL_REQUEST_TEXT);
 
@@ -195,5 +205,18 @@ final readonly class RunBuildJob
         }
 
         return new BuildJobOutcome(BuildVerdict::Built, $bundle, $text, $log);
+    }
+
+    private function asked(string $text, string $log): BuildJobOutcome
+    {
+        try {
+            return new BuildJobOutcome(
+                BuildVerdict::Asked,
+                log: $log,
+                question: BuildQuestion::fromHandedBack($text),
+            );
+        } catch (QuestionRefused $refusal) {
+            return new BuildJobOutcome(BuildVerdict::QuestionRefused, log: $log.'question refused: '.$refusal->getMessage()."\n");
+        }
     }
 }

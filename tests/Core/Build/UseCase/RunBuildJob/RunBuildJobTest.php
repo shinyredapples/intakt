@@ -10,8 +10,10 @@ use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Build\Contract\BuildBrief;
 use Intakt\Core\Build\Domain\BuilderPrompt;
+use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\Domain\GatesAtOnce;
 use Intakt\Core\Build\Domain\GatesByDefault;
+use Intakt\Core\Build\Domain\QuestionRefused;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuilderNotOnClaudeCode;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
@@ -47,6 +49,8 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(BuildJob::class)]
 #[UsesClass(BuildBrief::class)]
 #[UsesClass(BuilderPrompt::class)]
+#[UsesClass(BuildQuestion::class)]
+#[UsesClass(QuestionRefused::class)]
 #[UsesClass(GatesAtOnce::class)]
 #[UsesClass(GatesByDefault::class)]
 #[UsesClass(Fence::class)]
@@ -72,6 +76,18 @@ final class RunBuildJobTest extends TestCase
     private string $promptSeen = '';
 
     private GatesAtOnce $gatesAtOnce;
+
+    protected function setUp(): void
+    {
+        $this->gatesAtOnce = new GatesAtOnce(12, 1);
+        $this->folder = sys_get_temp_dir().'/intakt-build-'.bin2hex(random_bytes(6));
+        new Filesystem()->mkdir($this->folder.'/clone');
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->folder);
+    }
 
     public function testAJobThatLeavesABundleAndTheTextIsBuilt(): void
     {
@@ -200,6 +216,29 @@ final class RunBuildJobTest extends TestCase
         self::assertNull($outcome->bundle);
     }
 
+    public function testAJobThatLeavesAValidQuestionEndsAsAskedCarryingTheQuestion(): void
+    {
+        $question = '{"question":"Which store?","choices":["SQLite","Postgres"],"recommendation":"SQLite"}';
+
+        $outcome = $this->runBuilds(new JobOutput(['question.json' => $question, 'handback.bundle' => 'BUNDLE', 'pull-request.md' => "feat: x\n"]))->run($this->job());
+
+        self::assertSame(BuildVerdict::Asked, $outcome->verdict);
+        self::assertSame(['Which store?', ['SQLite', 'Postgres'], 'SQLite'], [$outcome->question?->question, $outcome->question?->choices, $outcome->question?->recommendation]);
+        self::assertNull($outcome->bundle);
+        self::assertFalse($outcome->built());
+    }
+
+    public function testAJobThatLeavesARefusedQuestionEndsAsRefusedWithTheReasonInItsLog(): void
+    {
+        $question = '{"question":"Which store?","choices":["SQLite"],"recommendation":"Postgres"}';
+
+        $outcome = $this->runBuilds(new JobOutput(['question.json' => $question, 'build.log' => "log\n"]))->run($this->job());
+
+        self::assertSame(BuildVerdict::QuestionRefused, $outcome->verdict);
+        self::assertNull($outcome->question);
+        self::assertSame("log\nquestion refused: the recommendation is not one of the choices\n", $outcome->log);
+    }
+
     public function testAJobWithoutThePullRequestTextIsNotBuilt(): void
     {
         $outcome = $this->runBuilds(new JobOutput(['handback.bundle' => 'BUNDLE']))->run($this->job());
@@ -247,16 +286,9 @@ final class RunBuildJobTest extends TestCase
         self::assertSame(BuildVerdict::NoResult, $outcome->verdict);
     }
 
-    protected function setUp(): void
+    private function job(Tier $tier = Tier::Standard): BuildJob
     {
-        $this->gatesAtOnce = new GatesAtOnce(12, 1);
-        $this->folder = sys_get_temp_dir().'/intakt-build-'.bin2hex(random_bytes(6));
-        new Filesystem()->mkdir($this->folder.'/clone');
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->folder);
+        return new BuildJob('demo', $this->folder.'/clone', 'task', new BuildBrief('PLANT-task', [], null), $tier, 'intakt-job-demo:1');
     }
 
     private function runBuilds(JobOutput $output, ?ResolvedModel $model = null, JobEnd $end = new JobEnd(JobCause::Exited, 0)): RunBuildJob
@@ -270,11 +302,6 @@ final class RunBuildJobTest extends TestCase
         });
 
         return $this->useCase($runner, $model ?? new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'));
-    }
-
-    private function job(Tier $tier = Tier::Standard): BuildJob
-    {
-        return new BuildJob('demo', $this->folder.'/clone', 'task', new BuildBrief('PLANT-task', [], null), $tier, 'intakt-job-demo:1');
     }
 
     private function useCase(JobRunner $runner, ResolvedModel $model): RunBuildJob

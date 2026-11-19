@@ -10,6 +10,7 @@ use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
+use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Review\Contract\CatchUpOwed;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\DroppedFinding;
@@ -28,6 +29,7 @@ use Intakt\Core\Review\Contract\ReviewerStarted;
 use Intakt\Core\Review\Contract\ReviewerStopped;
 use Intakt\Core\Review\Contract\ReviewStarted;
 use Intakt\Core\Review\Contract\Severity;
+use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictReceived;
 use Intakt\Core\Review\Domain\OnePerPlace;
 use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
@@ -52,6 +54,7 @@ use Symfony\Component\Serializer\SerializerInterface;
 #[CoversClass(DroppedFinding::class)]
 #[CoversClass(RoundLedger::class)]
 #[UsesClass(OnePerPlace::class)]
+#[UsesClass(Verdict::class)]
 #[UsesClass(JudgedFindings::class)]
 #[UsesClass(ResolvedModel::class)]
 #[UsesClass(ProjectNotConfigured::class)]
@@ -110,7 +113,7 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
         $tiers->method('resolve')->willReturn(new ResolvedModel(Provider::Anthropic, 'resolved-model'));
         $ledger = new InMemoryLedger();
 
-        new RoundLedger($ledger, new ConfiguredProjectModes([]), $this->serializer(), $tiers)->reviewerStarted($reviewer);
+        new RoundLedger($ledger, new ConfiguredProjectModes([]), $this->serializer(), $tiers, $this->redactor())->reviewerStarted($reviewer);
 
         self::assertSame('resolved-model', $ledger->payloads()[0]['model']);
     }
@@ -122,7 +125,7 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
         $tiers->method('resolve')->willThrowException(new ProjectNotConfigured('alpha'));
         $ledger = new InMemoryLedger();
 
-        new RoundLedger($ledger, new ConfiguredProjectModes([]), $this->serializer(), $tiers)->reviewerStarted($reviewer);
+        new RoundLedger($ledger, new ConfiguredProjectModes([]), $this->serializer(), $tiers, $this->redactor())->reviewerStarted($reviewer);
 
         self::assertSame(['round', 'reviewer', 'role', 'tier'], array_keys($ledger->payloads()[0]));
     }
@@ -142,6 +145,24 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
         $received = new VerdictReceived(self::ROUND, self::REVIEWER, 'security', Tier::Strong, Decision::Changes, 2, ProjectMode::ReviewerForLoop);
 
         self::assertSame(self::IDENTITY.',"decision":"changes","findings":2,"mode":"reviewer-for-loop"}', $this->written($received));
+    }
+
+    public function testABlockedVerdictIntaktGaveIsWrittenWithItsReason(): void
+    {
+        $reviewer = new RoundFixture(self::getContainer())->start(1)->reviewers()[0];
+        $ledger = new InMemoryLedger();
+
+        $this->roundLedger($ledger)->verdictReceived($reviewer, Verdict::noTools());
+
+        self::assertSame(Verdict::noTools()->findings[0]->text, $ledger->payloads()[0]['reason']);
+    }
+
+    public function testAReceivedVerdictWrittenBeforeReasonsWereRecordedReadsWithNoReason(): void
+    {
+        $received = $this->serializer()->deserialize(self::IDENTITY.',"decision":"blocked","findings":1,"mode":"live"}', VerdictReceived::class, JsonEncoder::FORMAT);
+
+        self::assertInstanceOf(VerdictReceived::class, $received);
+        self::assertNull($received->reason);
     }
 
     public function testAnOwedCatchUpIsWrittenWithItsSubstitute(): void
@@ -173,7 +194,7 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
         $tiers->method('substitutes')->willReturn([new ResolvedModel(Provider::ClaudeCode, 'code-model'), new ResolvedModel(Provider::OpenAi, 'openai-model'), new ResolvedModel(Provider::OpenAi, 'later-model')]);
         $ledger = new InMemoryLedger();
 
-        new RoundLedger($ledger, new ConfiguredProjectModes([]), $this->serializer(), $tiers)->catchUpOwed($reviewer, Provider::OpenAi);
+        new RoundLedger($ledger, new ConfiguredProjectModes([]), $this->serializer(), $tiers, $this->redactor())->catchUpOwed($reviewer, Provider::OpenAi);
 
         self::assertSame(['openai', 'openai-model'], [$ledger->payloads()[0]['substitute'], $ledger->payloads()[0]['model']]);
     }
@@ -185,7 +206,7 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
         $tiers->method('substitutes')->willReturn([new ResolvedModel(Provider::ClaudeCode, 'code-model')]);
         $ledger = new InMemoryLedger();
 
-        new RoundLedger($ledger, new ConfiguredProjectModes([]), $this->serializer(), $tiers)->catchUpOwed($reviewer, Provider::OpenAi);
+        new RoundLedger($ledger, new ConfiguredProjectModes([]), $this->serializer(), $tiers, $this->redactor())->catchUpOwed($reviewer, Provider::OpenAi);
 
         self::assertArrayNotHasKey('model', $ledger->payloads()[0]);
     }
@@ -197,7 +218,7 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
         $tiers->method('substitutes')->willThrowException(new ProjectNotConfigured('alpha'));
         $ledger = new InMemoryLedger();
 
-        new RoundLedger($ledger, new ConfiguredProjectModes([]), $this->serializer(), $tiers)->catchUpOwed($reviewer, Provider::OpenAi);
+        new RoundLedger($ledger, new ConfiguredProjectModes([]), $this->serializer(), $tiers, $this->redactor())->catchUpOwed($reviewer, Provider::OpenAi);
 
         self::assertSame(['round', 'reviewer', 'role', 'tier', 'substitute'], array_keys($ledger->payloads()[0]));
     }
@@ -225,7 +246,7 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
     {
         $done = new JudgeDone(self::ROUND, ['f1'], ['f2'], [new JudgeDoneFinding('f1', Severity::P1, 'A bug.'), new JudgeDoneFinding('f2', Severity::P3, 'A nit.')]);
 
-        self::assertSame('{"round":"'.self::ROUND.'","act":["f1"],"follow_ups":["f2"],"findings":[{"id":"f1","severity":"P1","text":"A bug.","merged":[],"file":null,"line":null},{"id":"f2","severity":"P3","text":"A nit.","merged":[],"file":null,"line":null}],"dropped":[],"same_cause":[]}', $this->written($done));
+        self::assertSame('{"round":"'.self::ROUND.'","act":["f1"],"follow_ups":["f2"],"findings":[{"id":"f1","severity":"P1","text":"A bug.","merged":[],"file":null,"line":null,"judge_note":null},{"id":"f2","severity":"P3","text":"A nit.","merged":[],"file":null,"line":null,"judge_note":null}],"dropped":[],"same_cause":[],"votes":[]}', $this->written($done));
     }
 
     public function testADoneJudgeListsEachDroppedFindingWithItsIdPlaceAndReason(): void
@@ -234,7 +255,7 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
         $ledger = new InMemoryLedger();
         $dropped = DroppedFinding::of($this->findingAt('F1', Severity::P1, 7), 'none of its 1 quoted code fragments is in the change');
 
-        $this->roundLedger($ledger)->judgeDone($round, JudgedFindings::of(new Judgement([]), [], [$dropped]));
+        $this->roundLedger($ledger)->judgeDone($round, JudgedFindings::of(new Judgement([]), [], [$dropped]), []);
 
         self::assertSame(
             [['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of F1.', 'file' => 'src/A.php', 'line' => 7, 'reason' => 'none of its 1 quoted code fragments is in the change']],
@@ -265,14 +286,14 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
         $findings = [$this->findingAt('F1', Severity::P2, 7), $this->findingAt('F2', Severity::P1, 7), $this->findingAt('F3', Severity::P3, 8)];
         $judgement = new Judgement([new JudgedFinding('F1', Mark::Act), new JudgedFinding('F2', Mark::Act), new JudgedFinding('F3', Mark::Defer)]);
 
-        $this->roundLedger($ledger)->judgeDone($round, JudgedFindings::of($judgement, $findings));
+        $this->roundLedger($ledger)->judgeDone($round, JudgedFindings::of($judgement, $findings), []);
 
         $payload = $ledger->payloads()[0];
         self::assertSame(['F1', 'F2'], $payload['act']);
         self::assertSame([
-            ['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of F1.', 'merged' => ['F2'], 'file' => 'src/A.php', 'line' => 7],
-            ['id' => 'F2', 'severity' => 'P1', 'text' => 'Text of F2.', 'merged' => [], 'file' => 'src/A.php', 'line' => 7],
-            ['id' => 'F3', 'severity' => 'P3', 'text' => 'Text of F3.', 'merged' => [], 'file' => 'src/A.php', 'line' => 8],
+            ['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of F1.', 'merged' => ['F2'], 'file' => 'src/A.php', 'line' => 7, 'judge_note' => null],
+            ['id' => 'F2', 'severity' => 'P1', 'text' => 'Text of F2.', 'merged' => [], 'file' => 'src/A.php', 'line' => 7, 'judge_note' => null],
+            ['id' => 'F3', 'severity' => 'P3', 'text' => 'Text of F3.', 'merged' => [], 'file' => 'src/A.php', 'line' => 8, 'judge_note' => null],
         ], $payload['findings']);
     }
 
@@ -283,9 +304,40 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
         self::assertSame([null, null], [$finding->file, $finding->line]);
     }
 
+    public function testAJudgeRowWrittenWithoutAJudgesNoteReadsWithANullNote(): void
+    {
+        $finding = self::getContainer()->get('serializer.stored')->deserialize('{"id":"f1","severity":"P1","text":"A bug.","merged":[],"file":null,"line":null}', JudgeDoneFinding::class, JsonEncoder::FORMAT);
+
+        self::assertNull($finding->judgeNote);
+    }
+
+    public function testAJudgeRowWithAJudgesNoteReadsBackWithIt(): void
+    {
+        $finding = self::getContainer()->get('serializer.stored')->deserialize('{"id":"f1","severity":"P1","text":"A bug.","judge_note":"Not reachable."}', JudgeDoneFinding::class, JsonEncoder::FORMAT);
+
+        self::assertSame('Not reachable.', $finding->judgeNote);
+    }
+
     public function testADoneJudgeWithoutFollowUpsStillWritesTheKey(): void
     {
-        self::assertSame('{"round":"'.self::ROUND.'","act":[],"follow_ups":[],"findings":[],"dropped":[],"same_cause":[]}', $this->written(new JudgeDone(self::ROUND, [], [], [])));
+        self::assertSame('{"round":"'.self::ROUND.'","act":[],"follow_ups":[],"findings":[],"dropped":[],"same_cause":[],"votes":[]}', $this->written(new JudgeDone(self::ROUND, [], [], [])));
+    }
+
+    public function testADoneJudgeRecordsEachReviewersCountedVoteAndReadsItBack(): void
+    {
+        $written = $this->written(new JudgeDone(self::ROUND, [], [], [], votes: ['reviewer-a' => Decision::Approve, 'reviewer-b' => Decision::Blocked]));
+
+        $done = $this->serializer()->deserialize($written, JudgeDone::class, JsonEncoder::FORMAT);
+
+        self::assertStringEndsWith('"votes":{"reviewer-a":"approve","reviewer-b":"blocked"}}', $written);
+        self::assertSame(['reviewer-a' => Decision::Approve, 'reviewer-b' => Decision::Blocked], $done->votes);
+    }
+
+    public function testAJudgeRowWrittenBeforeVotesWereCountedReadsWithNoVotes(): void
+    {
+        $done = $this->serializer()->deserialize('{"round":"'.self::ROUND.'","act":[],"follow_ups":[],"findings":[]}', JudgeDone::class, JsonEncoder::FORMAT);
+
+        self::assertSame([], $done->votes);
     }
 
     public function testTheLedgerSpreadsTheReviewerIdentityBeforeTheEventsOwnKeys(): void
@@ -302,7 +354,12 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
 
     private function roundLedger(InMemoryLedger $ledger): RoundLedger
     {
-        return new RoundLedger($ledger, new ConfiguredProjectModes([]), $this->serializer(), new ConfiguredTierResolver(['alpha' => ['tiers' => ['standard' => ['provider' => 'anthropic', 'model' => 'standard-model']]]], []));
+        return new RoundLedger($ledger, new ConfiguredProjectModes([]), $this->serializer(), new ConfiguredTierResolver(['alpha' => ['tiers' => ['standard' => ['provider' => 'anthropic', 'model' => 'standard-model']]]], []), $this->redactor());
+    }
+
+    private function redactor(): Redactor
+    {
+        return self::getContainer()->get(Redactor::class);
     }
 
     private function written(object $payload): string

@@ -65,6 +65,20 @@ final class ReviewerMemoryTest extends TestCase
     private StoreMemoryIndex $index;
     private ReviewerMemory $memory;
 
+    protected function setUp(): void
+    {
+        $store = new Store();
+        // Every text embeds to the same vector, so only the project, the file match and the cap decide what is retrieved.
+        $platform = MockPlatformFactory::createPlatform(static fn (Model $model, array|string|object $input): VectorResult => new VectorResult(
+            array_map(static fn (): Vector => new Vector([1.0, 0.0]), is_array($input) ? $input : [$input]),
+        ));
+        $vectorizer = new Vectorizer($platform, 'embedder');
+        $documents = new MemoryDocuments();
+
+        $this->index = new StoreMemoryIndex(new DocumentIndexer(new DocumentProcessor($vectorizer, $store)), $documents);
+        $this->memory = new ReviewerMemory(new StoreProjectMemory(new Retriever($store, $vectorizer), $documents), new Fence(), new DiffPaths());
+    }
+
     public function testTheBriefingGivesTheReviewerTheEntriesThatDescribeTheFilesUnderReview(): void
     {
         $this->remember('Cart totals were rounded twice.', 'src/Cart.php');
@@ -80,7 +94,7 @@ final class ReviewerMemoryTest extends TestCase
     {
         $this->index->index(new MemoryEntry('beta', 'Resolved finding: beta private billing secret leaked in composer.json scripts.', ['composer.json']));
 
-        $briefing = $this->memory->briefingOn(new ReviewBrief(new ChangeUnderReview(self::PROJECT, 'Task.', "diff --git a/composer.json b/composer.json\n"), []));
+        $briefing = $this->memory->briefingOn(new ReviewBrief(new ChangeUnderReview(self::PROJECT, 'Task.', "diff --git a/composer.json b/composer.json\n"), [], 1));
 
         self::assertNull($briefing);
     }
@@ -238,20 +252,6 @@ final class ReviewerMemoryTest extends TestCase
         self::assertStringNotContainsString('Cart totals', (string) $last->asText());
     }
 
-    protected function setUp(): void
-    {
-        $store = new Store();
-        // Every text embeds to the same vector, so only the project, the file match and the cap decide what is retrieved.
-        $platform = MockPlatformFactory::createPlatform(static fn (Model $model, array|string|object $input): VectorResult => new VectorResult(
-            array_map(static fn (): Vector => new Vector([1.0, 0.0]), is_array($input) ? $input : [$input]),
-        ));
-        $vectorizer = new Vectorizer($platform, 'embedder');
-        $documents = new MemoryDocuments();
-
-        $this->index = new StoreMemoryIndex(new DocumentIndexer(new DocumentProcessor($vectorizer, $store)), $documents);
-        $this->memory = new ReviewerMemory(new StoreProjectMemory(new Retriever($store, $vectorizer), $documents), new Fence(), new DiffPaths());
-    }
-
     private function remember(string $text, string $file): void
     {
         $this->index->index(new MemoryEntry(self::PROJECT, $text, [$file]));
@@ -259,7 +259,7 @@ final class ReviewerMemoryTest extends TestCase
 
     private function brief(string $diff): ReviewBrief
     {
-        return new ReviewBrief(new ChangeUnderReview(self::PROJECT, 'Task.', $diff), []);
+        return new ReviewBrief(new ChangeUnderReview(self::PROJECT, 'Task.', $diff), [], 1);
     }
 
     private function briefing(string $diff): string

@@ -59,6 +59,29 @@ final class BoardHeadlineLiveUpdatesTest extends DashboardPageTestCase
      */
     private array $published = [];
 
+    #[Override]
+    protected function setUp(): void
+    {
+        $before = $_SERVER['MERCURE_JWT_SECRET'] ?? null;
+        $this->secretBefore = is_string($before) ? $before : null;
+        // A fresh random key, because a committed one would be a secret; the page only signs a listener's token with it.
+        $_SERVER['MERCURE_JWT_SECRET'] = $_ENV['MERCURE_JWT_SECRET'] = bin2hex(random_bytes(16));
+        parent::setUp();
+        // One kernel for the whole test, because the page, the pushed update and the page loaded again read the same ledger.
+        $this->browser->disableReboot();
+        $this->givenTheHubRecordsWhatIsPublished();
+        $this->givenTheDownloadedScriptsExist();
+    }
+
+    #[Override]
+    protected function tearDown(): void
+    {
+        $secret = $this->secretBefore ?? '';
+        $_SERVER['MERCURE_JWT_SECRET'] = $_ENV['MERCURE_JWT_SECRET'] = $secret;
+        $this->removeTheStandIns();
+        parent::tearDown();
+    }
+
     public function testTheBoardListensToTheShellTopicWhenLiveUpdatesAreOn(): void
     {
         $source = $this->browser->request('GET', '/')->filter('turbo-mercure-stream-source');
@@ -152,7 +175,7 @@ final class BoardHeadlineLiveUpdatesTest extends DashboardPageTestCase
     public function testTheFirstReviewPushedToAFreshBoardTakesTheWaitingOctopusAway(): void
     {
         $page = $this->browser->request('GET', '/');
-        self::assertCount(2, $page->filter('.page-head img[src*="octopus-waiting-"]'));
+        self::assertCount(2, $page->filter('#board-octopus img[src*="octopus-waiting-"]'));
 
         $updated = $this->replaced($page, $this->pushedHeadlineAfterAReviewerStarted());
 
@@ -171,13 +194,14 @@ final class BoardHeadlineLiveUpdatesTest extends DashboardPageTestCase
         self::assertSame($page->filter('#board-octopus')->outerHtml(), trim($pushed->html()));
     }
 
-    public function testTheFirstReviewPushedToAFreshBoardKeepsAnEmptyOctopusTargetInTheHead(): void
+    public function testTheFirstReviewPushedToAFreshBoardKeepsAnEmptyOctopusTarget(): void
     {
         $page = $this->browser->request('GET', '/');
 
         $updated = $this->replaced($page, $this->pushedHeadlineAfterAReviewerStarted());
 
-        self::assertCount(1, $updated->filter('.page-head > #board-octopus[hidden]:empty'));
+        self::assertCount(1, $updated->filter('main > #board-octopus[hidden]:empty'));
+        self::assertCount(0, $updated->filter('.firstday'));
     }
 
     public function testABoardPushedEmptyAfterAReviewBringsTheWaitingOctopusBackWithoutAReload(): void
@@ -189,7 +213,88 @@ final class BoardHeadlineLiveUpdatesTest extends DashboardPageTestCase
 
         $updated = $this->replaced($this->replaced($page, $afterAReview), $empty);
 
-        self::assertCount(2, $updated->filter('.page-head > #board-octopus img[src*="octopus-waiting-"]'));
+        self::assertCount(2, $updated->filter('main > #board-octopus.firstday img[src*="octopus-waiting-"]'));
+    }
+
+    public function testABoardPushedEmptyToAPageLoadedAfterAReviewBringsBackTheSetUpActionItsPanelAsksFor(): void
+    {
+        $this->roundUpdates()->reviewerStarted(Uuid::fromString(self::ROUND), 'security');
+        $empty = $this->lastShellUpdate();
+        $this->ledger->startRoundOf('feat/a', self::ROUND, 1);
+        $page = $this->browser->request('GET', '/');
+        self::assertCount(0, $page->filter('.page-head .actions a[href="/setup"]'));
+
+        $updated = $this->replaced($page, $empty);
+
+        self::assertStringContainsString('Choose Set up Intakt', $updated->filter('.firstday ol > li')->first()->text());
+        self::assertCount(1, $updated->filter('.page-head .actions a[href="/setup"]'));
+        self::assertCount(1, $updated->filter('.page-head .actions a[href="/reviews"]'));
+    }
+
+    public function testTheFirstReviewPushedToAFreshBoardTakesTheSetUpActionOutOfTheHead(): void
+    {
+        $page = $this->browser->request('GET', '/');
+        self::assertCount(1, $page->filter('.page-head .actions a[href="/setup"]'));
+
+        $updated = $this->replaced($page, $this->pushedHeadlineAfterAReviewerStarted());
+
+        self::assertCount(0, $updated->filter('.page-head .actions a[href="/setup"]'));
+        self::assertCount(1, $updated->filter('.page-head .actions a[href="/reviews"]'));
+    }
+
+    public function testThePushedSetUpSlotIsTheSameMarkupAsTheSlotOfAPageLoadedAfterIt(): void
+    {
+        $this->roundUpdates()->reviewerStarted(Uuid::fromString(self::ROUND), 'security');
+
+        $pushed = new Crawler($this->lastShellUpdate())->filter('turbo-stream[action="replace"][target="board-setup"] template');
+
+        $page = $this->browser->request('GET', '/');
+        self::assertCount(1, $pushed);
+        self::assertSame($page->filter('#board-setup')->outerHtml(), trim($pushed->html()));
+    }
+
+    public function testABoardPushedEmptyToAnEmptyBoardMorphsTheSetUpSlotInsteadOfReplacingItsLink(): void
+    {
+        $this->roundUpdates()->reviewerStarted(Uuid::fromString(self::ROUND), 'security');
+
+        $streams = new Crawler($this->lastShellUpdate());
+
+        self::assertCount(1, $streams->filter('turbo-stream[action="replace"][method="morph"][target="board-setup"] template a[href="/setup"]'));
+        self::assertCount(0, $streams->filter('turbo-stream[action="replace"][target="board-setup"]:not([method="morph"])'));
+    }
+
+    public function testABoardPushedEmptyToAnEmptyBoardMorphsTheHeadlineSoItsFirstDayLinkKeepsTheKeyboardFocus(): void
+    {
+        $this->roundUpdates()->reviewerStarted(Uuid::fromString(self::ROUND), 'security');
+
+        $streams = new Crawler($this->lastShellUpdate());
+
+        self::assertCount(1, $streams->filter('turbo-stream[action="update"][method="morph"][target="board-headline"] template a[href="/setup"]'));
+        self::assertCount(0, $streams->filter('turbo-stream[action="update"][target="board-headline"]:not([method="morph"])'));
+    }
+
+    public function testABoardPushedEmptyToAnEmptyBoardLeavesTheSetUpLinkInPlaceSoItKeepsTheKeyboardFocus(): void
+    {
+        $page = $this->browser->request('GET', '/');
+        $link = $page->filter('.page-head .actions a#board-setup[href="/setup"]')->getNode(0);
+        self::assertNotNull($link);
+        $this->roundUpdates()->reviewerStarted(Uuid::fromString(self::ROUND), 'security');
+
+        $updated = $this->replaced($page, $this->lastShellUpdate());
+
+        self::assertSame($link, $updated->filter('.page-head .actions a#board-setup[href="/setup"]')->getNode(0));
+    }
+
+    public function testThePushedBoardLeavesTheReviewListLinkInPlaceSoItKeepsTheKeyboardFocus(): void
+    {
+        $page = $this->browser->request('GET', '/');
+        $link = $page->filter('.page-head .actions a[href="/reviews"]')->getNode(0);
+        self::assertNotNull($link);
+
+        $updated = $this->replaced($page, $this->pushedHeadlineAfterAReviewerStarted());
+
+        self::assertSame($link, $updated->filter('.page-head .actions a[href="/reviews"]')->getNode(0));
+        self::assertStringNotContainsString('href="/reviews"', $this->lastShellUpdate());
     }
 
     public function testABoardPageLoadedAfterAReviewHoldsAnEmptyHiddenOctopusTarget(): void
@@ -198,8 +303,8 @@ final class BoardHeadlineLiveUpdatesTest extends DashboardPageTestCase
 
         $page = $this->browser->request('GET', '/');
 
-        self::assertCount(1, $page->filter('.page-head > #board-octopus[hidden]:empty'));
-        self::assertCount(0, $page->filter('.page-head > .head-character'));
+        self::assertCount(1, $page->filter('main > #board-octopus[hidden]:empty'));
+        self::assertCount(0, $page->filter('.firstday'));
     }
 
     public function testTheBoardShowsTheCurrentHeadlineWithoutAStreamSourceWhenLiveUpdatesAreOff(): void
@@ -213,29 +318,6 @@ final class BoardHeadlineLiveUpdatesTest extends DashboardPageTestCase
         self::assertResponseIsSuccessful();
         self::assertCount(0, $page->filter('turbo-mercure-stream-source'));
         self::assertSame(self::REVIEWING, $page->filter('#board-headline')->text());
-    }
-
-    #[Override]
-    protected function setUp(): void
-    {
-        $before = $_SERVER['MERCURE_JWT_SECRET'] ?? null;
-        $this->secretBefore = is_string($before) ? $before : null;
-        // A fresh random key, because a committed one would be a secret; the page only signs a listener's token with it.
-        $_SERVER['MERCURE_JWT_SECRET'] = $_ENV['MERCURE_JWT_SECRET'] = bin2hex(random_bytes(16));
-        parent::setUp();
-        // One kernel for the whole test, because the page, the pushed update and the page loaded again read the same ledger.
-        $this->browser->disableReboot();
-        $this->givenTheHubRecordsWhatIsPublished();
-        $this->givenTheDownloadedScriptsExist();
-    }
-
-    #[Override]
-    protected function tearDown(): void
-    {
-        $secret = $this->secretBefore ?? '';
-        $_SERVER['MERCURE_JWT_SECRET'] = $_ENV['MERCURE_JWT_SECRET'] = $secret;
-        $this->removeTheStandIns();
-        parent::tearDown();
     }
 
     // Without a hub key no listener can be authorized, as when the hub is not set up; read when the kernel boots, so it takes a new one.
@@ -326,7 +408,11 @@ final class BoardHeadlineLiveUpdatesTest extends DashboardPageTestCase
             $template = $stream->filter('template')->getNode(0);
             self::assertNotNull($template);
 
-            foreach ($page->filter('[id="'.$stream->attr('target').'"]')->each(static fn (Crawler $old): ?DOMNode => $old->getNode(0)) as $target) {
+            // Turbo morphs a `method="morph"` stream into the shown element, so an element pushed with the markup it already has stays the same node.
+            $shownAlready = 'morph' === $stream->attr('method') ? trim($stream->filter('template')->html()) : null;
+            $targets = $page->filter('[id="'.$stream->attr('target').'"]')->reduce(static fn (Crawler $old): bool => $old->outerHtml() !== $shownAlready);
+
+            foreach ($targets->each(static fn (Crawler $old): ?DOMNode => $old->getNode(0)) as $target) {
                 self::assertNotNull($target);
                 $parent = $target->parentNode;
                 $document = $target->ownerDocument;

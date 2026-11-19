@@ -48,34 +48,13 @@ final readonly class ImportFormRule implements Rule
     /**
      * @param array<Node> $nodes
      *
-     * @return list<Import>
+     * @return list<array<Node>>
      */
-    private function importsIn(array $nodes): array
+    private function namespaceScopes(array $nodes): array
     {
-        $finder = new NodeFinder();
+        $namespaces = array_values(array_filter($nodes, static fn (Node $node): bool => $node instanceof Namespace_));
 
-        return [
-            ...array_merge(...array_map($this->useImports(...), $finder->findInstanceOf($nodes, Use_::class))),
-            ...array_merge(...array_map($this->groupImports(...), $finder->findInstanceOf($nodes, GroupUse::class))),
-        ];
-    }
-
-    /**
-     * @param list<Import> $imports
-     *
-     * @return list<IdentifierRuleError>
-     */
-    private function functionAndConstantImports(array $imports): array
-    {
-        $functionsAndConstants = array_filter($imports, static fn (array $import): bool => Use_::TYPE_NORMAL !== $import['type']);
-
-        return array_values(array_map(
-            static fn (array $import): IdentifierRuleError => RuleErrorBuilder::message("Import of the function or constant {$import['name']}: write global functions and constants plain (count(), PHP_EOL), without a leading backslash or a use function or use const.")
-                ->identifier('intakt.functionOrConstantImport')
-                ->line($import['line'])
-                ->build(),
-            $functionsAndConstants,
-        ));
+        return [] === $namespaces ? [$nodes] : array_map(static fn (Namespace_ $namespace): array => $namespace->stmts, $namespaces);
     }
 
     /**
@@ -91,13 +70,16 @@ final readonly class ImportFormRule implements Rule
     /**
      * @param array<Node> $nodes
      *
-     * @return list<array<Node>>
+     * @return list<Import>
      */
-    private function namespaceScopes(array $nodes): array
+    private function importsIn(array $nodes): array
     {
-        $namespaces = array_values(array_filter($nodes, static fn (Node $node): bool => $node instanceof Namespace_));
+        $finder = new NodeFinder();
 
-        return [] === $namespaces ? [$nodes] : array_map(static fn (Namespace_ $namespace): array => $namespace->stmts, $namespaces);
+        return [
+            ...array_merge(...array_map($this->useImports(...), $finder->findInstanceOf($nodes, Use_::class))),
+            ...array_merge(...array_map($this->groupImports(...), $finder->findInstanceOf($nodes, GroupUse::class))),
+        ];
     }
 
     /**
@@ -123,6 +105,24 @@ final readonly class ImportFormRule implements Rule
     }
 
     /**
+     * @param list<Import> $imports
+     *
+     * @return list<IdentifierRuleError>
+     */
+    private function functionAndConstantImports(array $imports): array
+    {
+        $functionsAndConstants = array_filter($imports, static fn (array $import): bool => Use_::TYPE_NORMAL !== $import['type']);
+
+        return array_values(array_map(
+            static fn (array $import): IdentifierRuleError => RuleErrorBuilder::message("Import of the function or constant {$import['name']}: write global functions and constants plain (count(), PHP_EOL), without a leading backslash or a use function or use const.")
+                ->identifier('intakt.functionOrConstantImport')
+                ->line($import['line'])
+                ->build(),
+            $functionsAndConstants,
+        ));
+    }
+
+    /**
      * @param array<Node> $nodes
      *
      * @return list<string>
@@ -131,7 +131,8 @@ final readonly class ImportFormRule implements Rule
     {
         $classes = new NodeFinder()->findInstanceOf($nodes, ClassLike::class);
 
-        return array_values(array_filter(array_map(static fn (ClassLike $class): ?string => $class->namespacedName?->toLowerString(), $classes), is_string(...)));
+        // isset because the name resolver leaves namespacedName uninitialized on an anonymous class inside a closure, where ?-> throws instead of giving null
+        return array_values(array_filter(array_map(static fn (ClassLike $class): ?string => isset($class->namespacedName) ? $class->namespacedName->toLowerString() : null, $classes), is_string(...)));
     }
 
     /**

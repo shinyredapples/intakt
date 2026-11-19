@@ -57,7 +57,7 @@ final class BoardHeadlineRoundUpdatesTest extends KernelTestCase
 {
     private const string ROUND = '0199a5b4-0000-7000-8000-000000000001';
 
-    private const string STREAM_START = '<turbo-stream action="update" target="board-headline"><template>';
+    private const string STREAM_START = '<turbo-stream action="update" method="morph" target="board-headline"><template>';
 
     private DashboardLedger $ledger;
 
@@ -68,6 +68,15 @@ final class BoardHeadlineRoundUpdatesTest extends KernelTestCase
     private BufferingLogger $log;
 
     private LockFactory $locks;
+
+    protected function setUp(): void
+    {
+        $this->ledger = new DashboardLedger();
+        $this->round = new RecordedRoundUpdates();
+        $this->live = new PublishedLiveEvents();
+        $this->log = new BufferingLogger();
+        $this->locks = new LockFactory(new InMemoryStore());
+    }
 
     public function testAStartedReviewerPublishesTheBoardHeadlineOnTheShellTopic(): void
     {
@@ -190,15 +199,6 @@ final class BoardHeadlineRoundUpdatesTest extends KernelTestCase
 
         self::assertCount(2, $this->live->events);
         self::assertSame('The Code reviewers are reviewing change feat/a of alpha and change feat/b of alpha. The Code reviewers are reviewing 2 changes. Nothing needs you.', $this->headlineIn(1));
-    }
-
-    protected function setUp(): void
-    {
-        $this->ledger = new DashboardLedger();
-        $this->round = new RecordedRoundUpdates();
-        $this->live = new PublishedLiveEvents();
-        $this->log = new BufferingLogger();
-        $this->locks = new LockFactory(new InMemoryStore());
     }
 
     private function updates(): BoardHeadlineRoundUpdates

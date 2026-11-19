@@ -22,6 +22,7 @@ use Intakt\Core\Review\Contract\ReviewProgress;
 use Intakt\Core\Review\Contract\RoundEnds;
 use Intakt\Core\Review\Contract\RoundTierNotMapped;
 use Intakt\Core\Review\Contract\Verdict;
+use Intakt\Core\Review\Domain\ReviewerState;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\ReviewSubject;
 use Intakt\Core\Review\Domain\ReviewTarget;
@@ -77,6 +78,26 @@ final readonly class ReviewChange implements ChangeReviews
         return $roundId;
     }
 
+    // Asked before the round opens, so a tier without a model refuses the round instead of failing the judge after every reviewer answered.
+    private function refuseUnmappedTiers(ChangeReviewRequest $request): void
+    {
+        foreach ($this->tiersNeeded($request->panel) as $tier) {
+            if (!$this->vendor->mapsAModelTo($request->project, $tier)) {
+                throw new RoundTierNotMapped($request->project, $tier);
+            }
+        }
+    }
+
+    /**
+     * @return list<Tier>
+     */
+    private function tiersNeeded(Panel $panel): array
+    {
+        $reviewerTiers = array_map(static fn (PanelReviewer $reviewer): Tier => $reviewer->model->tier, $panel->reviewers);
+
+        return [...$reviewerTiers, Vendor::JUDGE_TIER];
+    }
+
     // The last state seen is returned at the upper wait, so what the reviewers did finish is still reported.
     private function awaitJudged(string $roundId, int $seconds, ReviewProgress $progress): ReviewRound
     {
@@ -93,6 +114,17 @@ final readonly class ReviewChange implements ChangeReviews
         return $round;
     }
 
+    private function hasEnded(ReviewRound $round): bool
+    {
+        return RoundState::Judged === $round->state() || $this->judgingFailed($round);
+    }
+
+    // Only a complete round is judged, so the failure transport is not read while reviewers still work.
+    private function judgingFailed(ReviewRound $round): bool
+    {
+        return RoundState::Complete === $round->state() && $this->failedJudgings->hasFailed($round->id()->toRfc4122());
+    }
+
     private function conclude(ChangeReviewRequest $request, ReviewRound $round, int $seconds): ChangeReview
     {
         $review = $this->readFrom($request, $round);
@@ -102,21 +134,6 @@ final readonly class ReviewChange implements ChangeReviews
             $this->judgingFailed($round) => $review->blockedFor(RoundEnds::JudgingFailed, $this->reasons->judgingFailed()),
             default => $this->unfinished($review, $seconds),
         };
-    }
-
-    // Asked before the round opens, so a tier without a model refuses the round instead of failing the judge after every reviewer answered.
-    private function refuseUnmappedTiers(ChangeReviewRequest $request): void
-    {
-        foreach ($this->tiersNeeded($request->panel) as $tier) {
-            if (!$this->vendor->mapsAModelTo($request->project, $tier)) {
-                throw new RoundTierNotMapped($request->project, $tier);
-            }
-        }
-    }
-
-    private function hasEnded(ReviewRound $round): bool
-    {
-        return RoundState::Judged === $round->state() || $this->judgingFailed($round);
     }
 
     private function readFrom(ChangeReviewRequest $request, ReviewRound $round): ChangeReview
@@ -137,27 +154,6 @@ final readonly class ReviewChange implements ChangeReviews
         );
     }
 
-    // Only a complete round is judged, so the failure transport is not read while reviewers still work.
-    private function judgingFailed(ReviewRound $round): bool
-    {
-        return RoundState::Complete === $round->state() && $this->failedJudgings->hasFailed($round->id()->toRfc4122());
-    }
-
-    private function unfinished(ChangeReview $review, int $seconds): ChangeReview
-    {
-        return $review->blockedFor(RoundEnds::NoOutcomeInTime, $this->reasons->noOutcomeInTime($seconds));
-    }
-
-    /**
-     * @return list<Tier>
-     */
-    private function tiersNeeded(Panel $panel): array
-    {
-        $reviewerTiers = array_map(static fn (PanelReviewer $reviewer): Tier => $reviewer->model->tier, $panel->reviewers);
-
-        return [...$reviewerTiers, Vendor::JUDGE_TIER];
-    }
-
     // A replay plays a recorded review back, so its verdicts were never given on this change and help no quorum.
     private function decisionOf(ChangeReviewRequest $request, ReviewRound $round): Decision
     {
@@ -165,7 +161,26 @@ final readonly class ReviewChange implements ChangeReviews
             return Decision::Blocked;
         }
 
-        return $this->decision->of($request->panel->quorum, array_map($this->voteOf(...), $round->reviewers()));
+        $counted = $this->ledger->votesOf($round->id()->toRfc4122());
+
+        return $this->decision->of($request->panel->quorum, array_map(fn (RoundReviewer $reviewer): PanelVerdict => $this->voteOf($reviewer, $counted), $round->reviewers()));
+    }
+
+    private function unfinished(ChangeReview $review, int $seconds): ChangeReview
+    {
+        return $review->blockedFor(RoundEnds::NoOutcomeInTime, $this->reasons->noOutcomeInTime($seconds));
+    }
+
+    // A reviewer without a verdict votes as blocked, so a failed review can never help a quorum; a verdict counts as the judge step recorded it, and as it was given when that step recorded no vote for it (a round judged before votes were counted).
+    /**
+     * @param array<string, Decision> $counted
+     */
+    private function voteOf(RoundReviewer $reviewer, array $counted): PanelVerdict
+    {
+        $given = $this->verdicts->ofReviewer($reviewer)?->verdict;
+        $vote = $given instanceof Decision ? $counted[$reviewer->id()->toRfc4122()] ?? $given : Decision::Blocked;
+
+        return new PanelVerdict($reviewer->tier(), new Verdict($vote, [], [], []));
     }
 
     /**
@@ -173,25 +188,7 @@ final readonly class ReviewChange implements ChangeReviews
      */
     private function actListOf(ReviewRound $round): array
     {
-        $id = $round->id()->toRfc4122();
-
-        return $this->findings->actListOf($round, $this->ledger->actIdsOf($id), $this->ledger->sameCauseOf($id));
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function reasonsOf(ReviewRound $round): array
-    {
-        $reasons = ReplayMark::Replay === $round->replayMark() ? [$this->reasons->replay()] : [];
-
-        foreach ($round->reviewers() as $reviewer) {
-            if (null !== $reviewer->failure()) {
-                $reasons[] = $reviewer->roleName().' reviewer failed, '.$this->failures->of($reviewer->failure());
-            }
-        }
-
-        return $reasons;
+        return $this->findings->actListOf($round, $this->ledger->judgeDoneOf($round->id()->toRfc4122()));
     }
 
     /**
@@ -200,14 +197,6 @@ final readonly class ReviewChange implements ChangeReviews
     private function outcomesOf(string $roundId, ReviewRound $round): array
     {
         return array_map(fn (RoundReviewer $reviewer): ReviewerOutcome => $this->outcomeOf($roundId, $reviewer), $round->reviewers());
-    }
-
-    // A reviewer without a verdict votes as blocked, so a failed review can never help a quorum.
-    private function voteOf(RoundReviewer $reviewer): PanelVerdict
-    {
-        $verdict = $this->verdicts->ofReviewer($reviewer) ?? new Verdict(Decision::Blocked, [], [], []);
-
-        return new PanelVerdict($reviewer->tier(), $verdict);
     }
 
     private function outcomeOf(string $roundId, RoundReviewer $reviewer): ReviewerOutcome
@@ -224,5 +213,37 @@ final readonly class ReviewChange implements ChangeReviews
             $this->ledger->millisecondsOfReviewer($reviewerId),
             $this->ledger->modelsOfReviewer($roundId, $reviewerId),
         );
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function reasonsOf(ReviewRound $round): array
+    {
+        $reasons = ReplayMark::Replay === $round->replayMark() ? [$this->reasons->replay()] : [];
+
+        foreach ($round->reviewers() as $reviewer) {
+            $reason = $this->reasonOf($reviewer);
+
+            if (null !== $reason) {
+                $reasons[] = $reviewer->roleName().' reviewer '.$reason;
+            }
+        }
+
+        return $reasons;
+    }
+
+    // Blocked and failed are named apart, so the line says what the dashboard's chip says for the same reviewer.
+    private function reasonOf(RoundReviewer $reviewer): ?string
+    {
+        $failure = $reviewer->failure();
+
+        if (null !== $failure) {
+            return (ReviewerState::Blocked === $reviewer->state() ? 'blocked, ' : 'failed, ').$this->failures->of($failure);
+        }
+
+        $blocked = $this->verdicts->ofReviewer($reviewer)?->blockedReason();
+
+        return null === $blocked ? null : 'blocked, '.$blocked;
     }
 }

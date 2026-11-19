@@ -84,6 +84,22 @@ final class ReviewerOverMcpTest extends KernelTestCase
 
     private ?Kernel $server = null;
 
+    protected function setUp(): void
+    {
+        $kernel = self::bootKernel();
+        self::assertInstanceOf(Kernel::class, $kernel);
+        $this->round = new RoundFixture(self::getContainer())->start(1);
+        $credential = self::getContainer()->get(ReviewCredential::class);
+        self::assertInstanceOf(ReviewCredential::class, $credential);
+        $this->credential = $credential;
+    }
+
+    protected function tearDown(): void
+    {
+        $this->server?->shutdown();
+        parent::tearDown();
+    }
+
     public function testAReviewWithToolsOverMcpReachesTheSameVerdictAsWithTheToolsInProcess(): void
     {
         $inProcess = $this->review(new ReviewerToolboxFactory()->create(...), 'read_file');
@@ -133,7 +149,7 @@ final class ReviewerOverMcpTest extends KernelTestCase
 
     public function testAReviewWithoutARoundIsRefusedBecauseNoCredentialCouldNameItsHead(): void
     {
-        $request = new ReviewRequest(new Checkout($this->round->checkoutRoot()), new ReviewBrief(new ChangeUnderReview('alpha', 'Add a cart.', 'diff --git a/a b/a'), []), new ReviewerConversation('You review for correctness.', new UuidV7()));
+        $request = new ReviewRequest(new Checkout($this->round->checkoutRoot()), new ReviewBrief(new ChangeUnderReview('alpha', 'Add a cart.', 'diff --git a/a b/a'), [], 1), new ReviewerConversation('You review for correctness.', new UuidV7()));
 
         $this->expectException(LogicException::class);
 
@@ -227,20 +243,24 @@ final class ReviewerOverMcpTest extends KernelTestCase
         $client->sendRequest(new Psr18Client()->createRequest('POST', 'http://localhost/mcp/review'));
     }
 
-    protected function setUp(): void
+    // Through the container, so the configured mcp_server entry and its connection are what the test exercises.
+    private function mcpToolboxes(?ClientInterface $http = null): ReviewerMcpToolboxFactory
     {
-        $kernel = self::bootKernel();
-        self::assertInstanceOf(Kernel::class, $kernel);
-        $this->round = new RoundFixture(self::getContainer())->start(1);
-        $credential = self::getContainer()->get(ReviewCredential::class);
-        self::assertInstanceOf(ReviewCredential::class, $credential);
-        $this->credential = $credential;
+        $this->http = new RecordingHttpClient($http ?? new KernelHttpClient($this->server()));
+        self::getContainer()->set(ReviewServerHttpClient::class, new ReviewServerHttpClient($this->credential, $this->http));
+        $factory = self::getContainer()->get(ReviewerMcpToolboxFactory::class);
+        self::assertInstanceOf(ReviewerMcpToolboxFactory::class, $factory);
+
+        return $factory;
     }
 
-    protected function tearDown(): void
+    // A kernel of its own, as the web server is a process of its own: the kernel under test resets its services before each request it handles, which would end the reviewer's call mid-way.
+    private function server(): Kernel
     {
-        $this->server?->shutdown();
-        parent::tearDown();
+        $this->server = new Kernel('test', false);
+        $this->server->boot();
+
+        return $this->server;
     }
 
     /**
@@ -259,22 +279,6 @@ final class ReviewerOverMcpTest extends KernelTestCase
         return $reviewer->review($this->request(), $platform, 'reviewer-model');
     }
 
-    // Through the container, so the configured mcp_server entry and its connection are what the test exercises.
-    private function mcpToolboxes(?ClientInterface $http = null): ReviewerMcpToolboxFactory
-    {
-        $this->http = new RecordingHttpClient($http ?? new KernelHttpClient($this->server()));
-        self::getContainer()->set(ReviewServerHttpClient::class, new ReviewServerHttpClient($this->credential, $this->http));
-        $factory = self::getContainer()->get(ReviewerMcpToolboxFactory::class);
-        self::assertInstanceOf(ReviewerMcpToolboxFactory::class, $factory);
-
-        return $factory;
-    }
-
-    private function request(): ReviewRequest
-    {
-        return new ReviewRequest(new Checkout($this->round->checkoutRoot()), new ReviewBrief(new ChangeUnderReview('alpha', 'Add a cart.', 'diff --git a/a b/a'), []), new ReviewerConversation('You review for correctness.', new UuidV7(), $this->round->id()));
-    }
-
     /**
      * @param Closure(ReviewRequest): ToolboxInterface $toolboxes
      */
@@ -289,12 +293,8 @@ final class ReviewerOverMcpTest extends KernelTestCase
         self::fail('The answer after a call without its argument was not refused.');
     }
 
-    // A kernel of its own, as the web server is a process of its own: the kernel under test resets its services before each request it handles, which would end the reviewer's call mid-way.
-    private function server(): Kernel
+    private function request(): ReviewRequest
     {
-        $this->server = new Kernel('test', false);
-        $this->server->boot();
-
-        return $this->server;
+        return new ReviewRequest(new Checkout($this->round->checkoutRoot()), new ReviewBrief(new ChangeUnderReview('alpha', 'Add a cart.', 'diff --git a/a b/a'), [], 1), new ReviewerConversation('You review for correctness.', new UuidV7(), $this->round->id()));
     }
 }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\PhpStan\ParameterLimitRule;
+use Intakt\Gates\PhpStan\RepositoryCode;
 use Intakt\Gates\StaticAnalysisGate;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -14,9 +15,15 @@ use PHPUnit\Framework\Attributes\UsesClass;
  * @extends PhpStanRuleTestCase<ParameterLimitRule>
  */
 #[CoversClass(ParameterLimitRule::class)]
+#[UsesClass(RepositoryCode::class)]
 #[UsesClass(StaticAnalysisGate::class)]
 final class ParameterLimitRuleTest extends PhpStanRuleTestCase
 {
+    protected function ruleFor(string $root): ParameterLimitRule
+    {
+        return new ParameterLimitRule($root);
+    }
+
     /**
      * @return iterable<string, non-empty-list<CheckRun|string>>
      */
@@ -72,10 +79,5 @@ final class ParameterLimitRuleTest extends PhpStanRuleTestCase
     public function testAMethodNamedLikeAPrivateVendorMethodFailsStaticAnalysis(): void
     {
         $this->assertRuleRejects('method-named-like-a-private-vendor-method', 'src/ReportWorkflow.php:16 intakt.parameterLimit Method leave() takes 4 parameters, at most 3 allowed');
-    }
-
-    protected function ruleFor(string $root): ParameterLimitRule
-    {
-        return new ParameterLimitRule($root);
     }
 }

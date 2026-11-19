@@ -2,20 +2,17 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Tests\Core\Dashboard\Infrastructure;
+namespace Intakt\Tests\Core\Watcher\Contract;
 
-use Intakt\Core\Dashboard\Domain\FailingMain;
-use Intakt\Core\Dashboard\Infrastructure\LedgerFailingMains;
-use Intakt\Core\Dashboard\Infrastructure\LedgerPayload;
+use Intakt\Core\Watcher\Contract\FailingMain;
+use Intakt\Core\Watcher\Contract\FailingMains;
 use Intakt\Tests\Core\Dashboard\UseCase\DashboardLedger;
 use PHPUnit\Framework\Attributes\CoversClass;
-use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
-#[CoversClass(LedgerFailingMains::class)]
+#[CoversClass(FailingMains::class)]
 #[CoversClass(FailingMain::class)]
-#[UsesClass(LedgerPayload::class)]
-final class LedgerFailingMainsTest extends TestCase
+final class FailingMainsTest extends TestCase
 {
     private DashboardLedger $ledger;
 
@@ -78,6 +75,44 @@ final class LedgerFailingMainsTest extends TestCase
         self::assertSame(['B fails.'], array_map(static fn (FailingMain $main): string => $main->reason, $this->failing()));
     }
 
+    public function testAFailedMainReadFromTheStoreAfterABootedOneShowsTheItemAgainWithItsReason(): void
+    {
+        $this->ledger->failMainBoot('alpha', 'A fails.', 'a');
+        $this->ledger->bootMain('alpha', 'b');
+
+        $this->ledger->readFailedMainFromStore('alpha', 'a', 'A fails.');
+
+        self::assertSame([['a', 'A fails.']], array_map(static fn (FailingMain $main): array => [$main->main, $main->reason], $this->failing()));
+    }
+
+    public function testABootedMainReadFromTheStoreClearsTheItemThoughItsPairWasSeen(): void
+    {
+        $this->ledger->bootMain('alpha', 'b');
+        $this->ledger->failMainBoot('alpha', 'A fails.', 'a');
+
+        $this->ledger->readMainFromStore('alpha', 'b', 'booted');
+
+        self::assertSame([], $this->failing());
+    }
+
+    public function testAComputedFailedLineThatWasNotReadFromTheStoreRaisesNoItem(): void
+    {
+        $this->ledger->bootMain('alpha', 'b');
+
+        $this->ledger->computeFailedMain('alpha', 'a', 'A fails.');
+
+        self::assertSame([], $this->failing());
+    }
+
+    public function testACrashReadFromTheStoreNeitherRaisesNorClearsTheItem(): void
+    {
+        $this->ledger->failMainBoot('alpha', 'A fails.', 'a');
+
+        $this->ledger->readMainFromStore('alpha', 'b', 'crashed');
+
+        self::assertSame(['A fails.'], array_map(static fn (FailingMain $main): string => $main->reason, $this->failing()));
+    }
+
     public function testALedgerWithoutAMainFailureListsNothing(): void
     {
         $this->ledger->bootMain('alpha');
@@ -95,6 +130,6 @@ final class LedgerFailingMainsTest extends TestCase
      */
     private function failing(): array
     {
-        return new LedgerFailingMains()->in($this->ledger->readInOrder());
+        return new FailingMains()->in($this->ledger->readInOrder());
     }
 }

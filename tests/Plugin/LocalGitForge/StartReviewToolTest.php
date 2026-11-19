@@ -7,10 +7,13 @@ namespace Intakt\Tests\Plugin\LocalGitForge;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Budget\Contract\Cost;
+use Intakt\Core\Review\Contract\ActEntryAnswer;
 use Intakt\Core\Review\Contract\ChangeReview;
 use Intakt\Core\Review\Contract\ChangeReviewRequest;
 use Intakt\Core\Review\Contract\ChangeReviews;
 use Intakt\Core\Review\Contract\Decision;
+use Intakt\Core\Review\Contract\Fence;
+use Intakt\Core\Review\Contract\FencedText;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\Panel;
@@ -23,6 +26,7 @@ use Intakt\Core\Review\Contract\RoundEnds;
 use Intakt\Core\Review\Contract\RoundNotNext;
 use Intakt\Core\Review\Contract\RoundTokens;
 use Intakt\Core\Review\Contract\Severity;
+use Intakt\Core\Review\Contract\UntrustedSource;
 use Intakt\Plugin\LocalGitForge\Contract\LocalRepository;
 use Intakt\Plugin\LocalGitForge\Infrastructure\LocalGitForge;
 use Intakt\Plugin\LocalGitForge\Infrastructure\NameStatusParser;
@@ -50,9 +54,25 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(CleanupOnStop::class)]
 #[UsesClass(LocalGitForge::class)]
 #[UsesClass(LocalRepository::class)]
+#[UsesClass(ActEntryAnswer::class)]
+#[UsesClass(Fence::class)]
+#[UsesClass(FencedText::class)]
 final class StartReviewToolTest extends TestCase
 {
     private TemporaryRepository $repository;
+
+    protected function setUp(): void
+    {
+        $this->repository = new TemporaryRepository();
+        $this->repository->commitFile('README.md', "base\n");
+        $this->repository->checkoutNewBranch('sample');
+        $this->repository->commitFile('src/Feature.php', "<?php\n");
+    }
+
+    protected function tearDown(): void
+    {
+        $this->repository->remove();
+    }
 
     public function testTheToolReviewsTheNamedBranchAndAnswersWithTheActList(): void
     {
@@ -63,6 +83,21 @@ final class StartReviewToolTest extends TestCase
         self::assertSame(['F1'], array_column($answer->act, 'id'));
         self::assertSame('Add the thing.', $seen?->task);
         self::assertSame('sample', $seen->round->change);
+    }
+
+    // Through json_encode, because that is how the MCP SDK writes a tool's answer.
+    public function testTheAnswerShowsTheJudgesNoteOfAnActEntryFenced(): void
+    {
+        $finding = new Finding('F1', Severity::P1, 'src/Feature.php', 1, null, 'Broken.', FixableBy::Builder, false, null, null);
+        $answer = StartedReview::of(new ChangeReview('0192a000-0000-7000-8000-000000000000', 1, Decision::Changes, [], [$finding->withJudgeNote('Rejected: unreachable.')], new RoundTokens(0, 0, 0, 0, 0, 0, 0), Cost::none()));
+
+        /** @var array{act: list<array<string, mixed>>} $data */
+        $data = json_decode(json_encode($answer, JSON_THROW_ON_ERROR), true, flags: JSON_THROW_ON_ERROR);
+
+        $note = $data['act'][0]['judge_note'] ?? null;
+        self::assertIsString($note);
+        self::assertSame('Rejected: unreachable.', new Fence()->contentOf(UntrustedSource::ActList, $note));
+        self::assertSame(['roundId', 'round', 'decision', 'act', 'reasons', 'end'], array_keys($data));
     }
 
     public function testAJudgedRoundIsShownAsEndedJudged(): void
@@ -115,41 +150,6 @@ final class StartReviewToolTest extends TestCase
         $this->tool(self::createStub(ChangeReviews::class))($this->gateway(), $this->review(round: 0));
     }
 
-    protected function setUp(): void
-    {
-        $this->repository = new TemporaryRepository();
-        $this->repository->commitFile('README.md', "base\n");
-        $this->repository->checkoutNewBranch('sample');
-        $this->repository->commitFile('src/Feature.php', "<?php\n");
-    }
-
-    protected function tearDown(): void
-    {
-        $this->repository->remove();
-    }
-
-    private function reviewing(?ChangeReviewRequest &$seen): ChangeReviews
-    {
-        $finding = new Finding('F1', Severity::P1, 'src/Feature.php', 3, null, 'Missing check.', FixableBy::Builder, false, null, null);
-        $reviews = self::createStub(ChangeReviews::class);
-        $reviews->method('review')->willReturnCallback(static function (ChangeReviewRequest $request) use (&$seen, $finding): ChangeReview {
-            $seen = $request;
-
-            return new ChangeReview('0192a000-0000-7000-8000-000000000000', 1, Decision::Changes, [], [$finding], new RoundTokens(1, 10, 0, 0, 0, 2, 12), Cost::none());
-        });
-
-        return $reviews;
-    }
-
-    private function tool(ChangeReviews $reviews): StartReviewTool
-    {
-        $reviewer = new PanelReviewer(new ReviewerRole('core', 'Review the change.'), new ReviewerModel(Tier::Strong, Provider::Anthropic), 10);
-        $panels = self::createStub(Panels::class);
-        $panels->method('panelForChange')->willReturn(new Panel([$reviewer], QuorumPolicy::All));
-
-        return new StartReviewTool(new LocalChangeReview($panels, $reviews));
-    }
-
     private function gateway(): ClientGateway
     {
         return new ClientGateway(self::createStub(SessionInterface::class));
@@ -163,11 +163,33 @@ final class StartReviewToolTest extends TestCase
         return ['project' => 'alpha', 'task' => $task, 'change' => 'sample', 'repository' => $this->repository->path, 'round' => $round];
     }
 
+    private function tool(ChangeReviews $reviews): StartReviewTool
+    {
+        $reviewer = new PanelReviewer(new ReviewerRole('core', 'Review the change.'), new ReviewerModel(Tier::Strong, Provider::Anthropic), 10);
+        $panels = self::createStub(Panels::class);
+        $panels->method('panelForChange')->willReturn(new Panel([$reviewer], QuorumPolicy::All));
+
+        return new StartReviewTool(new LocalChangeReview($panels, $reviews));
+    }
+
     private function ending(RoundEnds $end, string $reason): ChangeReviews
     {
         $blocked = new ChangeReview('0192a000-0000-7000-8000-000000000000', 1, Decision::Approve, [], [], new RoundTokens(0, 0, 0, 0, 0, 0, 0), Cost::none());
         $reviews = self::createStub(ChangeReviews::class);
         $reviews->method('review')->willReturn($blocked->blockedFor($end, $reason));
+
+        return $reviews;
+    }
+
+    private function reviewing(?ChangeReviewRequest &$seen): ChangeReviews
+    {
+        $finding = new Finding('F1', Severity::P1, 'src/Feature.php', 3, null, 'Missing check.', FixableBy::Builder, false, null, null);
+        $reviews = self::createStub(ChangeReviews::class);
+        $reviews->method('review')->willReturnCallback(static function (ChangeReviewRequest $request) use (&$seen, $finding): ChangeReview {
+            $seen = $request;
+
+            return new ChangeReview('0192a000-0000-7000-8000-000000000000', 1, Decision::Changes, [], [$finding], new RoundTokens(1, 10, 0, 0, 0, 2, 12), Cost::none());
+        });
 
         return $reviews;
     }

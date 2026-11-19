@@ -72,6 +72,11 @@ final class FindingsAcrossRoundsTest extends KernelTestCase
 
     private RoundFixture $fixture;
 
+    protected function setUp(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer());
+    }
+
     public function testTheFirstRoundTellsNoReviewerOfOpenFindings(): void
     {
         $vendor = $this->round(self::CHANGE, [self::FIRST => $this->changes([], [$this->finding('a')])]);
@@ -185,6 +190,15 @@ final class FindingsAcrossRoundsTest extends KernelTestCase
         self::assertSame(['F1', 'F2'], $this->openIds($vendor->briefs[self::FIRST]));
         self::assertSame(['F1', 'F2'], $this->openIds($vendor->briefs[self::SECOND]));
         self::assertSame('Text a', $vendor->briefs[self::FIRST]->open[0]->text);
+    }
+
+    public function testEveryReviewerIsToldTheNumberOfItsRound(): void
+    {
+        $first = $this->round(self::CHANGE, [self::FIRST => $this->changes([], [$this->finding('a')])]);
+
+        $second = $this->round(self::CHANGE, []);
+
+        self::assertSame([1, 2, 2], [$first->briefs[self::FIRST]->round, $second->briefs[self::FIRST]->round, $second->briefs[self::SECOND]->round]);
     }
 
     public function testAVerdictWithResolvedIdsClosesThemAndARepeatKeepsItsId(): void
@@ -333,25 +347,6 @@ final class FindingsAcrossRoundsTest extends KernelTestCase
         self::assertSame([], $this->fixture->openFindingsOf($round));
     }
 
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-    }
-
-    private function finding(string $id, bool $repeat = false, Severity $severity = Severity::P2): Finding
-    {
-        return new Finding($id, $severity, 'src/A.php', 3, null, 'Text '.$id, FixableBy::Builder, $repeat, null, null);
-    }
-
-    /**
-     * @param list<string>  $resolved
-     * @param list<Finding> $findings
-     */
-    private function changes(array $resolved, array $findings): Verdict
-    {
-        return new Verdict(Decision::Changes, $findings, $resolved, []);
-    }
-
     /**
      * @param array<string, Verdict> $verdicts
      */
@@ -360,18 +355,12 @@ final class FindingsAcrossRoundsTest extends KernelTestCase
         return $this->deliver($this->started($change), $verdicts);
     }
 
-    // The message of SQLite's stale snapshot, because that is the failure a retry is for.
-    private static function databaseLocked(): LockWaitTimeoutException
+    private function started(string $change): RecordingBus
     {
-        return new LockWaitTimeoutException(Exception::new(new PDOException('SQLSTATE[HY000]: General error: 5 database is locked')), null);
-    }
+        $queue = new RecordingBus();
+        $this->fixture->startFor($change, $queue, 2);
 
-    /**
-     * @return list<string>
-     */
-    private function openIds(ReviewBrief $brief): array
-    {
-        return array_map(static fn (Finding $finding): string => $finding->id, $brief->open);
+        return $queue;
     }
 
     /**
@@ -388,11 +377,31 @@ final class FindingsAcrossRoundsTest extends KernelTestCase
         return $vendor;
     }
 
-    private function started(string $change): RecordingBus
+    /**
+     * @return list<string>
+     */
+    private function openIds(ReviewBrief $brief): array
     {
-        $queue = new RecordingBus();
-        $this->fixture->startFor($change, $queue, 2);
+        return array_map(static fn (Finding $finding): string => $finding->id, $brief->open);
+    }
 
-        return $queue;
+    /**
+     * @param list<string>  $resolved
+     * @param list<Finding> $findings
+     */
+    private function changes(array $resolved, array $findings): Verdict
+    {
+        return new Verdict(Decision::Changes, $findings, $resolved, []);
+    }
+
+    private function finding(string $id, bool $repeat = false, Severity $severity = Severity::P2): Finding
+    {
+        return new Finding($id, $severity, 'src/A.php', 3, null, 'Text '.$id, FixableBy::Builder, $repeat, null, null);
+    }
+
+    // The message of SQLite's stale snapshot, because that is the failure a retry is for.
+    private static function databaseLocked(): LockWaitTimeoutException
+    {
+        return new LockWaitTimeoutException(Exception::new(new PDOException('SQLSTATE[HY000]: General error: 5 database is locked')), null);
     }
 }

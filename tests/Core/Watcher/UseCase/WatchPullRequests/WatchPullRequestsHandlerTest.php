@@ -92,6 +92,7 @@ use Symfony\Component\Lock\Exception\LockReleasingException;
 use Symfony\Component\Lock\Exception\LockStorageException;
 use Symfony\Component\Lock\Key;
 use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
 
 #[Group('persistence')]
 #[CoversClass(WatchPullRequestsHandler::class)]
@@ -159,6 +160,25 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
     private WatchPullRequestsHandler $handler;
     private bool $authorTrusted = true;
     private bool $trustCheckDown = false;
+
+    protected function setUp(): void
+    {
+        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
+        self::assertInstanceOf(EntityManagerInterface::class, $entities);
+        $this->entities = $entities;
+        EmptyDatabase::in(self::getContainer());
+        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        $this->listing = new RecordedForge();
+        $this->checks = new RecordedChecks([str_repeat(self::PENDING, 40) => 'pending', str_repeat(self::GREEN, 40) => 'green', str_repeat(self::RED, 40) => 'red', str_repeat(self::NEXT_GREEN, 40) => 'rerun']);
+        $this->commands = new RecordingCommandBus();
+        $this->ledger = new InMemoryLedger();
+        $this->clock = new MockClock('2026-11-02T10:00:00+00:00');
+        $recorded = new VerdictIdentity(new CommitRange(new CommitId(str_repeat(self::BASE, 40)), new CommitId(str_repeat(self::GREEN, 40))), ReviewTerms::of('Review it.', 'bin/check', $this->panel()));
+        $this->queries = new StandingQueryBus($recorded, $entities);
+        $this->locks = new BeforeChangeLockStore();
+        $this->logger = new RecordingLogger();
+        $this->handler = $this->handler();
+    }
 
     public function testANewHeadWithPendingCiStartsNoRound(): void
     {
@@ -1333,123 +1353,26 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         self::assertTrue(array_any($this->logger->logged, static fn (array $line): bool => 'The boot gate failed, so the review starts without it.' === $line[0]));
     }
 
-    protected function setUp(): void
-    {
-        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
-        self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        $this->entities = $entities;
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
-        $this->listing = new RecordedForge();
-        $this->checks = new RecordedChecks([str_repeat(self::PENDING, 40) => 'pending', str_repeat(self::GREEN, 40) => 'green', str_repeat(self::RED, 40) => 'red', str_repeat(self::NEXT_GREEN, 40) => 'rerun']);
-        $this->commands = new RecordingCommandBus();
-        $this->ledger = new InMemoryLedger();
-        $this->clock = new MockClock('2026-11-02T10:00:00+00:00');
-        $recorded = new VerdictIdentity(new CommitRange(new CommitId(str_repeat(self::BASE, 40)), new CommitId(str_repeat(self::GREEN, 40))), ReviewTerms::of('Review it.', 'bin/check', $this->panel()));
-        $this->queries = new StandingQueryBus($recorded, $entities);
-        $this->locks = new BeforeChangeLockStore();
-        $this->logger = new RecordingLogger();
-        $this->handler = $this->handler();
-    }
-
-    private function tick(): void
-    {
-        ($this->handler)(new WatchPullRequests('alpha'));
-    }
-
-    // The waits may go to their own pending heads, so a test can break the wait for a forge pause and nothing else.
-    private function handler(?InstallWideFailures $installWide = null, ?PendingHeads $waits = null, ?PendingHeads $backOffs = null): WatchPullRequestsHandler
-    {
-        $locks = new LockFactory($this->locks);
-        $ledger = new WatcherLedger($this->ledger);
-        $logger = $this->logger;
-        $pending = new PendingHeads($this->entities, $this->clock);
-        $rounds = new StartedRounds($this->entities, $pending, new DiscardedRounds($this->commands, $logger));
-        $find = new FindChangedPullRequests($this->listing, new SeenListings($this->entities, $locks), $logger);
-        $doctrine = self::getContainer()->get('doctrine');
-        self::assertInstanceOf(ManagerRegistry::class, $doctrine);
-        $redactor = self::createStub(Redactor::class);
-        $redactor->method('redact')->willReturnArgument(0);
-        $installWide ??= new DoctrineInstallWideFailures($this->entities, $doctrine, new DoctrineHolds($this->entities, $this->clock), $this->clock, $logger);
-        $backOff = new HeadBackOff(new FailedHeads($backOffs ?? $pending, $ledger, $this->clock, $redactor, $this->entities->getConnection(), $installWide, $logger, $doctrine), $waits ?? $pending, $doctrine, $logger);
-        $decisions = new HeadDecisions(new AdmitHeads($this->checks, new AdmissionDecision(), $this->clock, $logger), new AdmissionDecision(), $backOff);
-        $starts = new RoundStarts($this->commands, $rounds, $ledger);
-        // Main's boot lines go to a ledger of their own, because each test reads only the lines of the heads it settles.
-        $authors = self::createStub(AuthorTrust::class);
-        $authors->method('isAuthorTrusted')->willReturnCallback(fn (): bool => $this->trustCheckDown ? throw new RuntimeException('The permission API is down.') : $this->authorTrusted);
-        $gate = new BootGate($this->queries, $authors, new BootResults($this->queries, $this->entities, $this->clock, new WatcherLedger(new InMemoryLedger()), $redactor, $logger, $doctrine), $ledger, $logger);
-        $settle = new SettleHeads(new SettleHead($gate, new StaleVerdicts($this->queries, $this->commands, $rounds, $ledger), new HeadsWithoutRound($ledger, $pending), $starts), $starts, $backOff);
-        $projects = new WatchedProjects(['alpha' => ['repository' => 'repo', 'base' => 'main', 'task' => 'Review it.']]);
-
-        return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $ledger, $this->entities->getConnection()), new LookAtHeads(new HeadLocks($pending, $locks, $installWide, $logger), $decisions, $settle));
-    }
-
-    private function useLedger(InMemoryLedger $ledger): void
-    {
-        $this->ledger = $ledger;
-        $this->handler = $this->handler();
-    }
-
-    private function tickExpectingFailure(): void
-    {
-        try {
-            $this->tick();
-            self::fail('The line the ledger refused was swallowed.');
-        } catch (WatcherEventNotRecorded) {
-            // Expected: a line the ledger cannot take fails the tick, so the step is tried again.
-        }
-    }
-
-    private function installWideThatCannotRecordAHold(): InstallWideFailures
-    {
-        $installWide = self::createStub(InstallWideFailures::class);
-        $installWide->method('lockStoreFailed')->willThrowException(new RuntimeException('the hold cannot be written'));
-
-        return $installWide;
-    }
-
-    private function loggedTheUnwrittenHold(): bool
-    {
-        return array_any($this->logger->logged, static function (array $line): bool {
-            $exception = $line[1]['exception'] ?? null;
-
-            return $exception instanceof RuntimeException && 'the hold cannot be written' === $exception->getMessage();
-        });
-    }
-
-    private function failAlways(): Closure
-    {
-        return static fn () => throw new RuntimeException('the bus is down');
-    }
-
-    private function tickEvery(string $interval, int $ticks): void
-    {
-        foreach (range(1, $ticks) as $ignored) {
-            $this->tick();
-            $this->clock->modify($interval);
-        }
-    }
-
-    private function startRoundOnGreenHead(): void
-    {
-        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T09:00:00Z'));
-        $this->tick();
-    }
-
-    // Read with plain SQL after a clear, because only what reached the database counts.
-    private function storedStale(string $head): bool
-    {
-        $this->entities->clear();
-
-        return (bool) $this->entities->getConnection()->fetchOne('SELECT stale FROM watcher_started_round WHERE head = ?', [str_repeat($head, 40)]);
-    }
-
     private function moveFromGreenToNextGreenAndBack(): void
     {
         $this->startRoundOnGreenHead();
         $this->queries->move = new HeadMove(HeadMoveKind::Commits, ['src/Feature.php']);
         $this->listing->opens('alpha', RecordedForge::change('7', self::NEXT_GREEN, '2026-11-02T10:05:00Z'));
         $this->tick();
+        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T10:10:00Z'));
+
+        $this->tick();
+    }
+
+    // A, then B, then A failing to boot while the repository cannot be read, so the stale check of B's open round throws in the tick that refuses A.
+    private function returnToAHeadThatFailsToBootWhileTheStaleCheckOfTheHeadBetweenFails(): void
+    {
+        $this->startRoundOnGreenHead();
+        $this->queries->move = new HeadMove(HeadMoveKind::Commits, ['src/Feature.php']);
+        $this->listing->opens('alpha', RecordedForge::change('7', self::NEXT_GREEN, '2026-11-02T10:05:00Z'));
+        $this->tick();
+        $this->queries->headBoot = BootOutcome::failed('The server did not start.');
+        $this->queries->fetched = false;
         $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T10:10:00Z'));
 
         $this->tick();
@@ -1478,18 +1401,96 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         return $lines;
     }
 
-    // A, then B, then A failing to boot while the repository cannot be read, so the stale check of B's open round throws in the tick that refuses A.
-    private function returnToAHeadThatFailsToBootWhileTheStaleCheckOfTheHeadBetweenFails(): void
+    private function startRoundOnGreenHead(): void
     {
-        $this->startRoundOnGreenHead();
-        $this->queries->move = new HeadMove(HeadMoveKind::Commits, ['src/Feature.php']);
-        $this->listing->opens('alpha', RecordedForge::change('7', self::NEXT_GREEN, '2026-11-02T10:05:00Z'));
+        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T09:00:00Z'));
         $this->tick();
-        $this->queries->headBoot = BootOutcome::failed('The server did not start.');
-        $this->queries->fetched = false;
-        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T10:10:00Z'));
+    }
 
-        $this->tick();
+    private function useLedger(InMemoryLedger $ledger): void
+    {
+        $this->ledger = $ledger;
+        $this->handler = $this->handler();
+    }
+
+    private function tick(): void
+    {
+        ($this->handler)(new WatchPullRequests('alpha'));
+    }
+
+    private function tickEvery(string $interval, int $ticks): void
+    {
+        foreach (range(1, $ticks) as $ignored) {
+            $this->tick();
+            $this->clock->modify($interval);
+        }
+    }
+
+    private function loggedTheUnwrittenHold(): bool
+    {
+        return array_any($this->logger->logged, static function (array $line): bool {
+            $exception = $line[1]['exception'] ?? null;
+
+            return $exception instanceof RuntimeException && 'the hold cannot be written' === $exception->getMessage();
+        });
+    }
+
+    private function installWideThatCannotRecordAHold(): InstallWideFailures
+    {
+        $installWide = self::createStub(InstallWideFailures::class);
+        $installWide->method('lockStoreFailed')->willThrowException(new RuntimeException('the hold cannot be written'));
+
+        return $installWide;
+    }
+
+    private function tickExpectingFailure(): void
+    {
+        try {
+            $this->tick();
+            self::fail('The line the ledger refused was swallowed.');
+        } catch (WatcherEventNotRecorded) {
+            // Expected: a line the ledger cannot take fails the tick, so the step is tried again.
+        }
+    }
+
+    private function failAlways(): Closure
+    {
+        return static fn () => throw new RuntimeException('the bus is down');
+    }
+
+    // Read with plain SQL after a clear, because only what reached the database counts.
+    private function storedStale(string $head): bool
+    {
+        $this->entities->clear();
+
+        return (bool) $this->entities->getConnection()->fetchOne('SELECT stale FROM watcher_started_round WHERE head = ?', [str_repeat($head, 40)]);
+    }
+
+    // The waits may go to their own pending heads, so a test can break the wait for a forge pause and nothing else.
+    private function handler(?InstallWideFailures $installWide = null, ?PendingHeads $waits = null, ?PendingHeads $backOffs = null): WatchPullRequestsHandler
+    {
+        $locks = new LockFactory($this->locks);
+        $ledger = new WatcherLedger($this->ledger);
+        $logger = $this->logger;
+        $pending = new PendingHeads($this->entities, $this->clock);
+        $rounds = new StartedRounds($this->entities, $pending, new DiscardedRounds($this->commands, $logger));
+        $find = new FindChangedPullRequests($this->listing, new SeenListings($this->entities, $locks), $logger);
+        $doctrine = self::getContainer()->get('doctrine');
+        self::assertInstanceOf(ManagerRegistry::class, $doctrine);
+        $redactor = self::createStub(Redactor::class);
+        $redactor->method('redact')->willReturnArgument(0);
+        $installWide ??= new DoctrineInstallWideFailures($this->entities, $doctrine, new DoctrineHolds($this->entities, $this->clock), $this->clock, $logger);
+        $backOff = new HeadBackOff(new FailedHeads($backOffs ?? $pending, $ledger, $this->clock, $redactor, $this->entities->getConnection(), $installWide, $logger, $doctrine), $waits ?? $pending, $doctrine, $logger);
+        $decisions = new HeadDecisions(new AdmitHeads($this->checks, new AdmissionDecision(), $this->clock, $logger), new AdmissionDecision(), $backOff);
+        $starts = new RoundStarts($this->commands, $rounds, $ledger);
+        // Main's boot lines go to a ledger of their own, because each test reads only the lines of the heads it settles.
+        $authors = self::createStub(AuthorTrust::class);
+        $authors->method('isAuthorTrusted')->willReturnCallback(fn (): bool => $this->trustCheckDown ? throw new RuntimeException('The permission API is down.') : $this->authorTrusted);
+        $gate = new BootGate($this->queries, $authors, new BootResults($this->queries, $this->entities, $this->clock, new WatcherLedger(new InMemoryLedger()), $redactor, $logger, $doctrine, new LockFactory(new InMemoryStore())), $ledger, $logger);
+        $settle = new SettleHeads(new SettleHead($gate, new StaleVerdicts($this->queries, $this->commands, $rounds, $ledger), new HeadsWithoutRound($ledger, $pending), $starts), $starts, $backOff);
+        $projects = new WatchedProjects(['alpha' => ['repository' => 'repo', 'base' => 'main', 'task' => 'Review it.']]);
+
+        return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $ledger, $this->entities->getConnection()), new LookAtHeads(new HeadLocks($pending, $locks, $installWide, $logger), $decisions, $settle));
     }
 
     private function panel(): Panel

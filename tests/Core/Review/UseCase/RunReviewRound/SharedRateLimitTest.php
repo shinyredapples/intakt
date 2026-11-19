@@ -61,9 +61,14 @@ use PHPUnit\Framework\Attributes\UsesClass;
 final class SharedRateLimitTest extends KernelTestCase
 {
     private const int RESET_SECONDS = 300;
-    private const string OUT_FOR_THE_RESET = '/^role-\d reviewer failed, Every provider of the tier is out: anthropic for \d+ s, openai for \d+ s\.$/';
+    private const string OUT_FOR_THE_RESET = '/^role-\d reviewer blocked, Every provider of the tier is out: anthropic for \d+ s, openai for \d+ s\.$/';
 
     private ScriptedRound $run;
+
+    protected function setUp(): void
+    {
+        $this->run = new ScriptedRound(new RoundFixture(self::getContainer()), self::getContainer());
+    }
 
     public function testReviewersLimitedTogetherOnTheTierAndItsSubstituteEndTheRoundBlockedWithTheReason(): void
     {
@@ -129,11 +134,6 @@ final class SharedRateLimitTest extends KernelTestCase
         $this->everyCallLimited();
 
         self::assertSame(['anthropic.default', 'openai.default'], $this->run->payloadValues(LedgerEventKind::AccountCooledDown, 'account'));
-    }
-
-    protected function setUp(): void
-    {
-        $this->run = new ScriptedRound(new RoundFixture(self::getContainer()), self::getContainer());
     }
 
     private function everyCallLimited(): ChangeReview

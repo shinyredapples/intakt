@@ -41,6 +41,11 @@ final class LongRunTest extends KernelTestCase
 
     private ScriptedRound $run;
 
+    protected function setUp(): void
+    {
+        $this->run = new ScriptedRound(new RoundFixture(self::getContainer()), self::getContainer());
+    }
+
     public function testAReviewerStillAskingForToolsAtTheRoundLimitOnItsRetryTooFailsAndBlocksTheRoundWithThatReason(): void
     {
         $review = $this->stillAskingForTools();
@@ -72,7 +77,7 @@ final class LongRunTest extends KernelTestCase
 
         self::assertSame(Decision::Blocked, $review->decision);
         self::assertCount(1, $review->reasons);
-        self::assertMatchesRegularExpression('/^role-1 reviewer failed, Every provider of the tier is out: anthropic for \d+ s, openai for \d+ s\.$/', $review->reasons[0]);
+        self::assertMatchesRegularExpression('/^role-1 reviewer blocked, Every provider of the tier is out: anthropic for \d+ s, openai for \d+ s\.$/', $review->reasons[0]);
     }
 
     public function testTheBlockedReviewerOfALongRunRecordsItsReasonInTheLedger(): void
@@ -110,11 +115,6 @@ final class LongRunTest extends KernelTestCase
         self::assertSame([], $review->reasons);
         self::assertSame([['started', 'settled']], array_values($this->run->usagePhasesByCall()));
         self::assertSame([self::TOOL_ROUNDS + 1], $this->usageRowsOfEndingEvents());
-    }
-
-    protected function setUp(): void
-    {
-        $this->run = new ScriptedRound(new RoundFixture(self::getContainer()), self::getContainer());
     }
 
     /**

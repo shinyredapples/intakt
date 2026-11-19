@@ -49,7 +49,8 @@ final readonly class VerdictForTheLoop
             return $this->unreviewed($round);
         }
 
-        $votes = array_map($this->voteOf(...), $round->reviewers());
+        $counted = $this->ledger->votesOf($round->id()->toRfc4122());
+        $votes = array_map(fn (RoundReviewer $reviewer): PanelVerdict => $this->voteOf($reviewer, $counted), $round->reviewers());
         $decision = $this->decisionOf($round, $votes);
         if (Decision::Blocked === $decision) {
             return $this->unreviewed($round);
@@ -70,21 +71,27 @@ final readonly class VerdictForTheLoop
         return new PublishedVerdict($round->identity()->commits->head, HeadStatus::Error, 'Intakt could not publish its review of this head.', null, $this->tokenOf($round));
     }
 
+    private function unreviewed(ReviewRound $round): PublishedVerdict
+    {
+        return new PublishedVerdict($round->identity()->commits->head, HeadStatus::Error, 'Intakt could not review this head.', null, $this->tokenOf($round));
+    }
+
     // The round's id, so a retried publication finds the comment an earlier attempt posted.
     private function tokenOf(ReviewRound $round): ReviewToken
     {
         return new ReviewToken($round->id()->toRfc4122());
     }
 
-    private function unreviewed(ReviewRound $round): PublishedVerdict
+    // A reviewer without a verdict votes as blocked, so a failed review can never help a quorum; a verdict counts as the judge step recorded it, and as it was given when that step recorded no vote for it (a round judged before votes were counted).
+    /**
+     * @param array<string, Decision> $counted
+     */
+    private function voteOf(RoundReviewer $reviewer, array $counted): PanelVerdict
     {
-        return new PublishedVerdict($round->identity()->commits->head, HeadStatus::Error, 'Intakt could not review this head.', null, $this->tokenOf($round));
-    }
+        $given = $this->verdicts->ofReviewer($reviewer)?->verdict;
+        $vote = $given instanceof Decision ? $counted[$reviewer->id()->toRfc4122()] ?? $given : Decision::Blocked;
 
-    // A reviewer without a verdict votes as blocked, so a failed review can never help a quorum.
-    private function voteOf(RoundReviewer $reviewer): PanelVerdict
-    {
-        return new PanelVerdict($reviewer->tier(), $this->verdicts->ofReviewer($reviewer) ?? new Verdict(Decision::Blocked, [], [], []));
+        return new PanelVerdict($reviewer->tier(), new Verdict($vote, [], [], []));
     }
 
     /**
@@ -114,8 +121,6 @@ final readonly class VerdictForTheLoop
      */
     private function actListOf(ReviewRound $round): array
     {
-        $id = $round->id()->toRfc4122();
-
-        return $this->findings->actListOf($round, $this->ledger->actIdsOf($id), $this->ledger->sameCauseOf($id));
+        return $this->findings->actListOf($round, $this->ledger->judgeDoneOf($round->id()->toRfc4122()));
     }
 }

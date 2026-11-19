@@ -496,32 +496,9 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
         self::assertSame(IncompleteStreamException::class, $ledger->payloads()[1]['failure']);
     }
 
-    private function vendor(ModelClientInterface $cli, InMemoryLedger $ledger = new InMemoryLedger(), ?ReviewServerAccesses $servers = null): SymfonyAiVendor
-    {
-        return $this->vendorOn($this->claudeCodePlatform($cli), $ledger, $servers);
-    }
-
     private function request(): ReviewRequest
     {
-        return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$this->openFinding('F1'), $this->openFinding('F2')]), new ReviewerConversation('You review for correctness.', new UuidV7(), new UuidV7()));
-    }
-
-    private function claudeCodePlatform(ModelClientInterface $cli): PlatformInterface
-    {
-        $models = new ProjectModelCatalog(['alpha' => ['tiers' => ['strong' => ['provider' => 'claude_code', 'model' => 'sonnet']]]])->models(Provider::ClaudeCode);
-
-        return new ClaudeCodePlatformFactory(ScriptedReviewer::in(self::getContainer())->dispatcher)->create($cli, $models);
-    }
-
-    private function vendorOn(PlatformInterface $platform, InMemoryLedger $ledger = new InMemoryLedger(), ?ReviewServerAccesses $servers = null): SymfonyAiVendor
-    {
-        $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['strong' => ['provider' => 'claude_code', 'model' => 'sonnet']]]], []);
-        $platforms = new ServiceLocator([Provider::ClaudeCode->value => static fn (): PlatformInterface => $platform]);
-        $reviewer = new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates()), new ReviewerStopping(new StopRequests(new InMemoryLedger(), new LedgerPayloads(StoredSerializerFactory::create())))));
-
-        $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
-
-        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms, new NoCooldowns(), new NullLogger()), $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($ledger, new MockClock(self::NOW), new NullLogger(), StoredSerializerFactory::create()), $limit, new MockClock(self::NOW), $servers ?? $this->servers());
+        return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$this->openFinding('F1'), $this->openFinding('F2')], 1), new ReviewerConversation('You review for correctness.', new UuidV7(), new UuidV7()));
     }
 
     private function requestWithoutRound(): ReviewRequest
@@ -531,17 +508,9 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
         return new ReviewRequest($request->checkout, $request->brief, new ReviewerConversation('You review for correctness.', new UuidV7()));
     }
 
-    private function verdictSchema(): string
+    private function openFinding(string $id): Finding
     {
-        return json_encode(new ResponseFormatFactory()->create(Verdict::class)['json_schema']['schema'], JSON_THROW_ON_ERROR);
-    }
-
-    private function stringOption(RecordedClaudeCodeCli $cli, string $name): string
-    {
-        $option = $cli->options[$name] ?? null;
-        self::assertIsString($option);
-
-        return $option;
+        return new Finding($id, Severity::P2, null, null, null, 'Earlier.', FixableBy::Builder, false, null, null);
     }
 
     /**
@@ -569,6 +538,26 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
         }
     }
 
+    private function claudeCodePlatform(ModelClientInterface $cli): PlatformInterface
+    {
+        $models = new ProjectModelCatalog(['alpha' => ['tiers' => ['strong' => ['provider' => 'claude_code', 'model' => 'sonnet']]]])->models(Provider::ClaudeCode);
+
+        return new ClaudeCodePlatformFactory(ScriptedReviewer::in(self::getContainer())->dispatcher)->create($cli, $models);
+    }
+
+    private function stringOption(RecordedClaudeCodeCli $cli, string $name): string
+    {
+        $option = $cli->options[$name] ?? null;
+        self::assertIsString($option);
+
+        return $option;
+    }
+
+    private function verdictSchema(): string
+    {
+        return json_encode(new ResponseFormatFactory()->create(Verdict::class)['json_schema']['schema'], JSON_THROW_ON_ERROR);
+    }
+
     private function servers(): ReviewServerAccesses
     {
         $servers = self::createStub(ReviewServerAccesses::class);
@@ -583,8 +572,19 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
         return new IssuedReviewServerAccesses(new ReviewCredential(''), 'http://localhost:7780/mcp/review');
     }
 
-    private function openFinding(string $id): Finding
+    private function vendor(ModelClientInterface $cli, InMemoryLedger $ledger = new InMemoryLedger(), ?ReviewServerAccesses $servers = null): SymfonyAiVendor
     {
-        return new Finding($id, Severity::P2, null, null, null, 'Earlier.', FixableBy::Builder, false, null, null);
+        return $this->vendorOn($this->claudeCodePlatform($cli), $ledger, $servers);
+    }
+
+    private function vendorOn(PlatformInterface $platform, InMemoryLedger $ledger = new InMemoryLedger(), ?ReviewServerAccesses $servers = null): SymfonyAiVendor
+    {
+        $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['strong' => ['provider' => 'claude_code', 'model' => 'sonnet']]]], []);
+        $platforms = new ServiceLocator([Provider::ClaudeCode->value => static fn (): PlatformInterface => $platform]);
+        $reviewer = new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates()), new ReviewerStopping(new StopRequests(new InMemoryLedger(), new LedgerPayloads(StoredSerializerFactory::create())))));
+
+        $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
+
+        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms, new NoCooldowns(), new NullLogger()), $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($ledger, new MockClock(self::NOW), new NullLogger(), StoredSerializerFactory::create()), $limit, new MockClock(self::NOW), $servers ?? $this->servers());
     }
 }

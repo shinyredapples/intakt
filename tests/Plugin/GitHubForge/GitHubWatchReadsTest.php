@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\GitHubForge;
 
+use Intakt\Core\Watcher\Domain\AdmissionDecision;
+use Intakt\Core\Watcher\Domain\HeadAdmission;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\ChangeNotFound;
 use Intakt\Plugin\Forge\Contract\CiRun;
@@ -51,6 +53,7 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
 #[CoversClass(RepositoryAddress::class)]
 #[CoversClass(GitHubMoments::class)]
 #[CoversClass(WatchedRepositories::class)]
+#[UsesClass(AdmissionDecision::class)]
 #[UsesClass(PullRequestAddress::class)]
 #[UsesClass(ChangeId::class)]
 #[UsesClass(ChangeNotFound::class)]
@@ -95,6 +98,11 @@ final class GitHubWatchReadsTest extends TestCase
     private int $failWith = 0;
     private ?int $remaining = null;
     private MockClock $clock;
+
+    protected function setUp(): void
+    {
+        $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
+    }
 
     public function testBelowTheReserveASecondListingInOneTickMakesNoRequestAndWaitsForTheReset(): void
     {
@@ -266,6 +274,59 @@ final class GitHubWatchReadsTest extends TestCase
         self::assertSame([CiRunState::Unfinished], $this->statesOfHead());
     }
 
+    public function testAQueuedWorkflowRunNextToANewerCompletedOneOnTheSameHeadIsQueued(): void
+    {
+        $this->runs = 'runs_queued_and_newer_green.json';
+
+        self::assertSame([CiRunState::Succeeded, CiRunState::Queued], $this->statesOfHead());
+    }
+
+    public function testAGreenRunOfAnotherWorkflowWithTheSameNameIsNotANewerRunOfAQueuedOne(): void
+    {
+        $this->runs = 'runs_queued_and_green_of_another_workflow_of_the_same_name.json';
+
+        [$queued, $green] = $this->state()->runs;
+
+        self::assertFalse($green->isNewerRunOf($queued));
+    }
+
+    public function testAQueuedRerunIsUnfinishedBecauseItKeepsTheCreationTimeOfItsFirstAttempt(): void
+    {
+        $this->runs = 'runs_green_and_queued_rerun.json';
+
+        self::assertSame([CiRunState::Succeeded, CiRunState::Unfinished], $this->statesOfHead());
+    }
+
+    public function testOfTwoRunsCreatedInTheSameSecondTheHigherRunNumberIsTheNewerRun(): void
+    {
+        $this->runs = 'runs_green_and_queued_in_the_same_second.json';
+
+        [$green, $queued] = $this->state()->runs;
+
+        self::assertTrue($green->isNewerRunOf($queued));
+    }
+
+    public function testACancelledAndAGreenPullRequestRunFromTheSameSecondWithoutTheirPullRequestLeaveTheHeadPending(): void
+    {
+        $this->runs = 'runs_cancelled_and_green_in_the_same_second_without_their_pull_request.json';
+
+        self::assertSame(HeadAdmission::Pending, new AdmissionDecision()->admissionOf($this->state()));
+    }
+
+    public function testAQueuedPullRequestRunWhosePullRequestGitHubLeftOutIsUnfinished(): void
+    {
+        $this->runs = 'runs_green_and_queued_without_their_pull_request.json';
+
+        self::assertSame([CiRunState::Succeeded, CiRunState::Unfinished], $this->statesOfHead());
+    }
+
+    public function testAQueuedPushRunWithoutAPullRequestIsQueued(): void
+    {
+        $this->runs = 'runs_queued_push_and_newer_green.json';
+
+        self::assertSame([CiRunState::Succeeded, CiRunState::Queued], $this->statesOfHead());
+    }
+
     public function testAFailedWorkflowRunIsFailed(): void
     {
         $this->runs = 'runs_failed.json';
@@ -314,7 +375,7 @@ final class GitHubWatchReadsTest extends TestCase
 
         $run = $this->state()->runs[0];
 
-        self::assertSame('ci|pull_request|https://github.com/acme/widgets/pull/7|2026-11-02T09:00:00+00:00', $run->origin->name.'|'.$run->origin->event.'|'.$run->origin->change?->value.'|'.$run->startedAt->format('c'));
+        self::assertSame('10|pull_request|https://github.com/acme/widgets/pull/7|2026-11-02T09:00:00+00:00|1', $run->origin->name.'|'.$run->origin->event.'|'.$run->origin->change?->value.'|'.$run->startedAt->format('c').'|'.$run->number);
     }
 
     public function testACheckSuiteIsNamedAfterItsAppAndItsEventIsCheckSuite(): void
@@ -423,6 +484,33 @@ final class GitHubWatchReadsTest extends TestCase
         $this->state();
     }
 
+    public function testAWorkflowRunWithoutItsWorkflowIdRaisesAReadFailure(): void
+    {
+        $this->runs = 'runs_without_workflow_id.json';
+
+        $this->expectExceptionObject(new ForgeReadFailed('GitHub answered without a positive "workflow_id".'));
+
+        $this->state();
+    }
+
+    public function testAQueuedWorkflowRunWithoutItsRunNumberRaisesAReadFailure(): void
+    {
+        $this->runs = 'runs_queued_without_run_number.json';
+
+        $this->expectExceptionObject(new ForgeReadFailed('GitHub answered without a positive "run_number".'));
+
+        $this->state();
+    }
+
+    public function testAQueuedWorkflowRunWithoutItsRunAttemptRaisesAReadFailure(): void
+    {
+        $this->runs = 'runs_queued_without_run_attempt.json';
+
+        $this->expectExceptionObject(new ForgeReadFailed('GitHub answered without a positive "run_attempt".'));
+
+        $this->state();
+    }
+
     public function testAnAnswerWithoutTheListOfRunsRaisesAReadFailure(): void
     {
         $this->runs = 'access_tokens_404.json';
@@ -469,9 +557,25 @@ final class GitHubWatchReadsTest extends TestCase
         }
     }
 
-    protected function setUp(): void
+    /**
+     * @return list<CiRunState>
+     */
+    private function statesOfHead(): array
     {
-        $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
+        return array_map(static fn (CiRun $run): CiRunState => $run->state, $this->state()->runs);
+    }
+
+    private function state(): CiState
+    {
+        return $this->reads()->ciStateOf('alpha', new CommitId(self::HEAD));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function listingRequests(): array
+    {
+        return array_values(array_filter($this->requested, static fn (string $request): bool => str_starts_with($request, self::PULLS)));
     }
 
     private function reads(): GitHubWatchReads
@@ -493,38 +597,6 @@ final class GitHubWatchReadsTest extends TestCase
         return new GitHubWatchReads(new GitHubCalls($http, $readings, $tokens), new CheckedInstallationTokens($readBack, $tokens), new WatchedRepositories(['alpha' => ['github' => 'acme/widgets'], 'beta' => []]), new GitHubCiRuns(new GitHubMoments()), new GitHubMoments(), FreshReadings::reserveOf($readings, $tokens, $clock));
     }
 
-    /**
-     * @return list<string>
-     */
-    private function listingRequests(): array
-    {
-        return array_values(array_filter($this->requested, static fn (string $request): bool => str_starts_with($request, self::PULLS)));
-    }
-
-    /**
-     * @param array<mixed> $options
-     */
-    private function header(array $options, string $name): string
-    {
-        $headers = $options['normalized_headers'] ?? [];
-        $values = is_array($headers) ? ($headers[$name] ?? []) : [];
-
-        return is_array($values) && is_string($values[0] ?? null) ? preg_replace('/^[^:]+: /', '', $values[0]) ?? '' : '';
-    }
-
-    /**
-     * @return list<CiRunState>
-     */
-    private function statesOfHead(): array
-    {
-        return array_map(static fn (CiRun $run): CiRunState => $run->state, $this->state()->runs);
-    }
-
-    private function state(): CiState
-    {
-        return $this->reads()->ciStateOf('alpha', new CommitId(self::HEAD));
-    }
-
     private function answer(string $url): ResponseInterface
     {
         if ($this->failWith > 0) {
@@ -540,6 +612,18 @@ final class GitHubWatchReadsTest extends TestCase
             str_contains($url, '/actions/runs') => new MockResponse($this->fixture($this->runs), ['response_headers' => $this->budget()]),
             default => new MockResponse($this->fixture($this->suites), ['response_headers' => $this->budget()]),
         };
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function budget(): array
+    {
+        return null === $this->remaining ? [] : [
+            'x-ratelimit-limit' => '5000',
+            'x-ratelimit-remaining' => (string) $this->remaining,
+            'x-ratelimit-reset' => (string) $this->clock->now()->modify('+30 minutes')->getTimestamp(),
+        ];
     }
 
     private function listingPage(string $url): MockResponse
@@ -559,22 +643,21 @@ final class GitHubWatchReadsTest extends TestCase
         };
     }
 
+    /**
+     * @param array<mixed> $options
+     */
+    private function header(array $options, string $name): string
+    {
+        $headers = $options['normalized_headers'] ?? [];
+        $values = is_array($headers) ? ($headers[$name] ?? []) : [];
+
+        return is_array($values) && is_string($values[0] ?? null) ? preg_replace('/^[^:]+: /', '', $values[0]) ?? '' : '';
+    }
+
     private function fixture(string $name): string
     {
         $content = file_get_contents(__DIR__.'/Fixtures/'.$name);
 
         return false === $content ? throw new LogicException('Missing fixture '.$name) : $content;
-    }
-
-    /**
-     * @return array<string, string>
-     */
-    private function budget(): array
-    {
-        return null === $this->remaining ? [] : [
-            'x-ratelimit-limit' => '5000',
-            'x-ratelimit-remaining' => (string) $this->remaining,
-            'x-ratelimit-reset' => (string) $this->clock->now()->modify('+30 minutes')->getTimestamp(),
-        ];
     }
 }

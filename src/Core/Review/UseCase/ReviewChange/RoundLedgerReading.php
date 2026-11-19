@@ -11,6 +11,7 @@ use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
+use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\DroppedFinding;
 use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\QuorumPolicy;
@@ -37,20 +38,27 @@ final readonly class RoundLedgerReading implements RoundCosts
     ) {
     }
 
-    /**
-     * @return list<string>
-     */
-    public function actIdsOf(string $roundId): array
+    // Null until the judge has answered; the act list is built from the whole record, because its act ids, cause links and notes belong together.
+    public function judgeDoneOf(string $roundId): ?JudgeDone
     {
-        return $this->judgeDoneOf($roundId)->act ?? [];
+        foreach ($this->ledger->readOfKind(LedgerEventKind::JudgeDone) as $recorded) {
+            $judged = $this->payloads->of($recorded, JudgeDone::class);
+
+            if ($roundId === $judged?->round) {
+                return $judged;
+            }
+        }
+
+        return null;
     }
 
+    // All of the round's votes at once, because a read per reviewer would scan the judge events once for each; none for a round judged before votes were counted, so its reviewers vote as their verdicts were given.
     /**
-     * @return array<string, string>
+     * @return array<string, Decision>
      */
-    public function sameCauseOf(string $roundId): array
+    public function votesOf(string $roundId): array
     {
-        return $this->judgeDoneOf($roundId)->sameCause ?? [];
+        return $this->judgeDoneOf($roundId)->votes ?? [];
     }
 
     /**
@@ -131,25 +139,30 @@ final readonly class RoundLedgerReading implements RoundCosts
         return array_reduce($recorded, fn (Cost $sum, RecordedEvent $row): Cost => $sum->plus($this->costOfEnding($row, $models)), Cost::none());
     }
 
-    private function judgeDoneOf(string $roundId): ?JudgeDone
-    {
-        foreach ($this->ledger->readOfKind(LedgerEventKind::JudgeDone) as $recorded) {
-            $judged = $this->payloads->of($recorded, JudgeDone::class);
-
-            if ($roundId === $judged?->round) {
-                return $judged;
-            }
-        }
-
-        return null;
-    }
-
     /**
      * @return list<RecordedEvent>
      */
     private function usageRows(): array
     {
         return iterator_to_array($this->ledger->readOfKind(LedgerEventKind::UsageRecorded), false);
+    }
+
+    /**
+     * @param class-string<ReviewerStarted|VerdictReceived|ReviewerFailed|ReviewerStopped> $payload
+     *
+     * @return list<DateTimeImmutable>
+     */
+    private function momentsOf(LedgerEventKind $kind, string $payload, string $reviewerId): array
+    {
+        $moments = [];
+
+        foreach ($this->ledger->readOfKind($kind) as $recorded) {
+            if ($reviewerId === $this->payloads->of($recorded, $payload)?->reviewer) {
+                $moments[] = $recorded->recordedAt;
+            }
+        }
+
+        return $moments;
     }
 
     /**
@@ -174,43 +187,6 @@ final readonly class RoundLedgerReading implements RoundCosts
     }
 
     /**
-     * @param list<string>        $calls
-     * @param list<RecordedEvent> $recorded
-     *
-     * @return list<TokenUsageRow>
-     */
-    private function usagesOf(array $calls, array $recorded): array
-    {
-        return array_merge([], ...array_map(fn (RecordedEvent $row): array => $this->usagesEndingOneOf($calls, $row), $recorded));
-    }
-
-    /**
-     * @param list<TokenUsageRow> $usages
-     */
-    private function figuresOf(array $usages): TokenFigures
-    {
-        return array_reduce($usages, static fn (TokenFigures $sum, TokenUsageRow $usage): TokenFigures => $sum->plus($usage->figures()), TokenFigures::none());
-    }
-
-    /**
-     * @param class-string<ReviewerStarted|VerdictReceived|ReviewerFailed|ReviewerStopped> $payload
-     *
-     * @return list<DateTimeImmutable>
-     */
-    private function momentsOf(LedgerEventKind $kind, string $payload, string $reviewerId): array
-    {
-        $moments = [];
-
-        foreach ($this->ledger->readOfKind($kind) as $recorded) {
-            if ($reviewerId === $this->payloads->of($recorded, $payload)?->reviewer) {
-                $moments[] = $recorded->recordedAt;
-            }
-        }
-
-        return $moments;
-    }
-
-    /**
      * @param array<string, string|null> $models
      */
     private function costOfEnding(RecordedEvent $row, array $models): Cost
@@ -224,6 +200,25 @@ final readonly class RoundLedgerReading implements RoundCosts
         $cost = $this->prices->costOf($models[$ended->call], $this->figuresOf($ended->usages));
 
         return array_any($ended->usages, static fn (TokenUsageRow $usage): bool => null === $usage->prompt) ? $cost->plus(Cost::unknown()) : $cost;
+    }
+
+    /**
+     * @param list<TokenUsageRow> $usages
+     */
+    private function figuresOf(array $usages): TokenFigures
+    {
+        return array_reduce($usages, static fn (TokenFigures $sum, TokenUsageRow $usage): TokenFigures => $sum->plus($usage->figures()), TokenFigures::none());
+    }
+
+    /**
+     * @param list<string>        $calls
+     * @param list<RecordedEvent> $recorded
+     *
+     * @return list<TokenUsageRow>
+     */
+    private function usagesOf(array $calls, array $recorded): array
+    {
+        return array_merge([], ...array_map(fn (RecordedEvent $row): array => $this->usagesEndingOneOf($calls, $row), $recorded));
     }
 
     /**

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Job\Infrastructure;
 
+use Closure;
 use Intakt\Core\Job\Contract\DockerEngineFailed;
 use Intakt\Core\Job\Contract\JobId;
 use Intakt\Core\Job\Contract\JobServices;
@@ -43,8 +44,11 @@ final readonly class DockerEngine
         return $this->containerIdOf($answer['Id'] ?? null, 'containers/create');
     }
 
-    // With rm and forcerm, so no container of a step is left behind, also after a failed one.
-    public function build(string $context, string $tag, string $dockerfile): ImageBuild
+    /**
+     * @param Closure(int): string $context
+     */
+    // With rm and forcerm, so no container of a step is left behind, also after a failed one; the context is sent in chunks it hands out, so a large repository does not have to fit in memory.
+    public function build(Closure $context, string $tag, string $dockerfile): ImageBuild
     {
         return $this->send('POST', 'build', [
             'query' => ['t' => $tag, 'dockerfile' => $dockerfile, 'rm' => 'true', 'forcerm' => 'true'],
@@ -76,6 +80,14 @@ final readonly class DockerEngine
         }
 
         return $this->holdsAnExitCode($body);
+    }
+
+    // The engine sends the 200 header before the wait ends and reports a wait that failed meanwhile as an Error in the body, so only a plain exit code counts.
+    private function holdsAnExitCode(string $body): bool
+    {
+        $answer = json_decode($body, true);
+
+        return is_array($answer) && is_int($answer['StatusCode'] ?? null) && null === ($answer['Error'] ?? null);
     }
 
     /**
@@ -185,65 +197,6 @@ final readonly class DockerEngine
         return array_values(array_filter(array_map($this->jobNetworkOf(...), $listed)));
     }
 
-    /**
-     * @return list<JobContainer>
-     */
-    public function jobContainers(): array
-    {
-        $filters = json_encode(['label' => [JobServices::JOB_LABEL]], JSON_THROW_ON_ERROR);
-        $listed = $this->send('GET', 'containers/json', ['query' => ['all' => 'true', 'filters' => $filters]])->accepting(200);
-
-        if (!array_is_list($listed)) {
-            throw DockerEngineFailed::unexpected('containers/json');
-        }
-
-        return array_values(array_filter(array_map($this->jobContainerOf(...), $listed)));
-    }
-
-    /**
-     * @param array<string, mixed> $options
-     */
-    private function send(string $method, string $path, array $options = []): EngineAnswer
-    {
-        try {
-            $response = $this->request($method, $path, $options);
-
-            return new EngineAnswer($path, $response->getStatusCode(), $response->getContent(false));
-        } catch (TransportExceptionInterface $failure) {
-            throw DockerEngineFailed::unreachable($this->socket, $failure);
-        }
-    }
-
-    private function containerIdOf(mixed $id, string $call): string
-    {
-        if (!is_string($id) || 1 !== preg_match(self::CONTAINER_ID, $id)) {
-            throw DockerEngineFailed::unexpected($call);
-        }
-
-        return $id;
-    }
-
-    /**
-     * @param array<string, mixed> $options
-     */
-    // Checked first, because without the socket file the curl client reads bindto as a network interface and reports that instead.
-    private function request(string $method, string $path, array $options): ResponseInterface
-    {
-        if (!file_exists($this->socket)) {
-            throw DockerEngineFailed::noSocket($this->socket);
-        }
-
-        return $this->client->request($method, $path, $options);
-    }
-
-    // The engine sends the 200 header before the wait ends and reports a wait that failed meanwhile as an Error in the body, so only a plain exit code counts.
-    private function holdsAnExitCode(string $body): bool
-    {
-        $answer = json_decode($body, true);
-
-        return is_array($answer) && is_int($answer['StatusCode'] ?? null) && null === ($answer['Error'] ?? null);
-    }
-
     private function jobNetworkOf(mixed $listed): ?JobNetwork
     {
         $job = is_array($listed) && is_array($listed['Labels'] ?? null) ? ($listed['Labels'][JobServices::JOB_LABEL] ?? null) : null;
@@ -262,6 +215,21 @@ final readonly class DockerEngine
         return new JobNetwork($name, new JobId($job));
     }
 
+    /**
+     * @return list<JobContainer>
+     */
+    public function jobContainers(): array
+    {
+        $filters = json_encode(['label' => [JobServices::JOB_LABEL]], JSON_THROW_ON_ERROR);
+        $listed = $this->send('GET', 'containers/json', ['query' => ['all' => 'true', 'filters' => $filters]])->accepting(200);
+
+        if (!array_is_list($listed)) {
+            throw DockerEngineFailed::unexpected('containers/json');
+        }
+
+        return array_values(array_filter(array_map($this->jobContainerOf(...), $listed)));
+    }
+
     private function jobContainerOf(mixed $listed): ?JobContainer
     {
         $job = is_array($listed) && is_array($listed['Labels'] ?? null) ? ($listed['Labels'][JobServices::JOB_LABEL] ?? null) : null;
@@ -272,5 +240,41 @@ final readonly class DockerEngine
         }
 
         return new JobContainer($this->containerIdOf($listed['Id'] ?? null, 'containers/json'), new JobId($job));
+    }
+
+    private function containerIdOf(mixed $id, string $call): string
+    {
+        if (!is_string($id) || 1 !== preg_match(self::CONTAINER_ID, $id)) {
+            throw DockerEngineFailed::unexpected($call);
+        }
+
+        return $id;
+    }
+
+    /**
+     * @param array<string, mixed> $options
+     */
+    private function send(string $method, string $path, array $options = []): EngineAnswer
+    {
+        try {
+            $response = $this->request($method, $path, $options);
+
+            return new EngineAnswer($path, $response->getStatusCode(), $response->getContent(false));
+        } catch (TransportExceptionInterface $failure) {
+            throw DockerEngineFailed::unreachable($this->socket, $failure);
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $options
+     */
+    // Checked first, because without the socket file the curl client reads bindto as a network interface and reports that instead.
+    private function request(string $method, string $path, array $options): ResponseInterface
+    {
+        if (!file_exists($this->socket)) {
+            throw DockerEngineFailed::noSocket($this->socket);
+        }
+
+        return $this->client->request($method, $path, $options);
     }
 }

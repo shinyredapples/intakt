@@ -91,6 +91,11 @@ final class JudgeRoundTest extends KernelTestCase
 {
     private RoundFixture $fixture;
 
+    protected function setUp(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer());
+    }
+
     public function testACompletedRoundIsQueuedForJudgingOnce(): void
     {
         $round = $this->completedRound();
@@ -118,6 +123,26 @@ final class JudgeRoundTest extends KernelTestCase
         self::assertSame([['round' => $round->id()->toRfc4122(), 'act' => ['F1', 'F2'], 'follow_ups' => ['F3']]], $this->judgeCalls());
     }
 
+    public function testJudgeDoneRecordsEachReviewersVoteAsTheQuorumCountsIt(): void
+    {
+        $round = $this->roundReporting([$this->finding('A', Severity::P3)]);
+        $reviewer = $round->reviewers()[0]->id()->toRfc4122();
+
+        $this->fixture->judge(new ScriptedJudgement(new Judgement([new JudgedFinding('F1', Mark::Defer)])))($this->judgingOf($round));
+
+        self::assertSame([$reviewer => 'approve'], $this->judgeDonePayloads()[0]['votes']);
+    }
+
+    public function testJudgeDoneRecordsAChangesVoteForAP3TheJudgeMarksAct(): void
+    {
+        $round = $this->roundReporting([$this->finding('A', Severity::P3)]);
+        $reviewer = $round->reviewers()[0]->id()->toRfc4122();
+
+        $this->fixture->judge(new ScriptedJudgement(new Judgement([new JudgedFinding('F1', Mark::Act)])))($this->judgingOf($round));
+
+        self::assertSame([$reviewer => 'changes'], $this->judgeDonePayloads()[0]['votes']);
+    }
+
     public function testAJudgeThatRejectsAP1AndDefersAP2LeavesBothOnTheActList(): void
     {
         $round = $this->completedRound();
@@ -135,9 +160,79 @@ final class JudgeRoundTest extends KernelTestCase
         $this->fixture->judge(new ScriptedJudgement(new Judgement([])))($this->judgingOf($round));
 
         self::assertSame(
-            [['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of A.', 'merged' => [], 'file' => null, 'line' => null], ['id' => 'F2', 'severity' => 'P2', 'text' => 'Text of B.', 'merged' => [], 'file' => null, 'line' => null], ['id' => 'F3', 'severity' => 'P3', 'text' => 'Text of C.', 'merged' => [], 'file' => null, 'line' => null]],
+            [['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of A.', 'merged' => [], 'file' => null, 'line' => null, 'judge_note' => null], ['id' => 'F2', 'severity' => 'P2', 'text' => 'Text of B.', 'merged' => [], 'file' => null, 'line' => null, 'judge_note' => null], ['id' => 'F3', 'severity' => 'P3', 'text' => 'Text of C.', 'merged' => [], 'file' => null, 'line' => null, 'judge_note' => null]],
             $this->judgeDonePayloads()[0]['findings'],
         );
+    }
+
+    public function testAJudgeAnswerThatRejectsAP1KeepsItsNoteWithTheStoredFinding(): void
+    {
+        $round = $this->completedRound();
+
+        $this->fixture->judge(new ScriptedJudgement(new Judgement([new JudgedFinding('F1', Mark::Reject, null, 'The branch is unreachable.')])))($this->judgingOf($round));
+
+        $payload = $this->judgeDonePayloads()[0];
+        self::assertSame(['F1', 'F2'], $payload['act']);
+        self::assertSame(['F1' => 'The branch is unreachable.', 'F2' => null, 'F3' => null], $this->notesOf($payload));
+    }
+
+    public function testAJudgeAnswerThatDefersAP2KeepsItsNoteWithTheStoredFinding(): void
+    {
+        $round = $this->completedRound();
+
+        $this->fixture->judge(new ScriptedJudgement(new Judgement([new JudgedFinding('F1', Mark::Act), new JudgedFinding('F2', Mark::Defer, null, 'Needs its own design.')])))($this->judgingOf($round));
+
+        $payload = $this->judgeDonePayloads()[0];
+        self::assertSame(['F1', 'F2'], $payload['act']);
+        self::assertSame(['F1' => null, 'F2' => 'Needs its own design.', 'F3' => null], $this->notesOf($payload));
+    }
+
+    public function testAP1TheJudgeDoesNotAnswerIsStoredWithoutANote(): void
+    {
+        $round = $this->completedRound();
+
+        $this->fixture->judge(new ScriptedJudgement(new Judgement([new JudgedFinding('F2', Mark::Reject, null, 'Not a bug.')])))($this->judgingOf($round));
+
+        self::assertNull($this->notesOf($this->judgeDonePayloads()[0])['F1']);
+    }
+
+    public function testAJudgesNoteOfOnlyWhitespaceIsStoredAsNoNote(): void
+    {
+        $round = $this->completedRound();
+
+        $this->fixture->judge(new ScriptedJudgement(new Judgement([new JudgedFinding('F1', Mark::Reject, null, " \n ")])))($this->judgingOf($round));
+
+        self::assertNull($this->notesOf($this->judgeDonePayloads()[0])['F1']);
+    }
+
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function notesQuotingAHeldCredential(): iterable
+    {
+        yield 'at the start' => ["probe-judge-secret-value is in the diff.\n", '[redacted] is in the diff.'];
+        yield 'in the middle' => ['The diff quotes probe-judge-secret-value in a test.', 'The diff quotes [redacted] in a test.'];
+        yield 'at the end' => [' The diff quotes probe-judge-secret-value', 'The diff quotes [redacted]'];
+    }
+
+    #[DataProvider('notesQuotingAHeldCredential')]
+    public function testAHeldCredentialInAJudgesNoteIsStoredRedactedAndTrimmed(string $note, string $stored): void
+    {
+        $round = $this->completedRound();
+        $previous = $_SERVER['APP_SECRET'] ?? null;
+        $_SERVER['APP_SECRET'] = " probe-judge-secret-value\n";
+
+        try {
+            $this->fixture->judge(new ScriptedJudgement(new Judgement([new JudgedFinding('F1', Mark::Reject, null, $note)])))($this->judgingOf($round));
+        } finally {
+            if (null === $previous) {
+                unset($_SERVER['APP_SECRET']);
+            } else {
+                $_SERVER['APP_SECRET'] = $previous;
+            }
+        }
+
+        self::assertSame($stored, $this->notesOf($this->judgeDonePayloads()[0])['F1']);
     }
 
     public function testJudgingARoundMovesItToJudged(): void
@@ -408,7 +503,7 @@ final class JudgeRoundTest extends KernelTestCase
 
         $this->fixture->judge(new ScriptedJudgement(new Judgement([])))($this->judgingOf($round));
 
-        self::assertSame([['id' => 'F2', 'severity' => 'P2', 'text' => '`old` is still read.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => 1]], $this->judgeDonePayloads()[0]['findings']);
+        self::assertSame([['id' => 'F2', 'severity' => 'P2', 'text' => '`old` is still read.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => 1, 'judge_note' => null]], $this->judgeDonePayloads()[0]['findings']);
     }
 
     public function testTwoFindingsTheJudgeGivesOneCauseAreRecordedAsOneEntryWithTheHigherSeverityAndTheLink(): void
@@ -419,7 +514,7 @@ final class JudgeRoundTest extends KernelTestCase
 
         $payload = $this->judgeDonePayloads()[0];
         self::assertSame(['F2' => 'F1'], $payload['same_cause']);
-        self::assertSame([['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of A.', 'merged' => ['F2'], 'file' => 'src/Thing.php', 'line' => 3], ['id' => 'F2', 'severity' => 'P1', 'text' => 'Text of B.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => 5]], $payload['findings']);
+        self::assertSame([['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of A.', 'merged' => ['F2'], 'file' => 'src/Thing.php', 'line' => 3, 'judge_note' => null], ['id' => 'F2', 'severity' => 'P1', 'text' => 'Text of B.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => 5, 'judge_note' => null]], $payload['findings']);
     }
 
     public function testTwoFindingsInOneHunkWithDifferentCausesAreRecordedAsTwoEntries(): void
@@ -530,11 +625,6 @@ final class JudgeRoundTest extends KernelTestCase
         self::assertSame('the judge saw [redacted] in the diff', $redacted);
     }
 
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-    }
-
     private function completedRound(): ReviewRound
     {
         $round = $this->fixture->start(2);
@@ -548,6 +638,39 @@ final class JudgeRoundTest extends KernelTestCase
         return $this->fixture->round($round->id()->toRfc4122());
     }
 
+    /**
+     * @param list<Finding> $findings
+     */
+    private function roundReporting(array $findings): ReviewRound
+    {
+        $round = $this->fixture->start(1);
+        $this->fixture->deliver($this->fixture->bus->messages[0], new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, $findings, [], [])]));
+
+        return $this->fixture->round($round->id()->toRfc4122());
+    }
+
+    // At one place, so a finding that is dropped would otherwise be merged with the other.
+    private function quoting(string $id, Severity $severity, string $text): Finding
+    {
+        return new Finding($id, $severity, 'src/Thing.php', 1, null, $text, FixableBy::Builder, false, null, null);
+    }
+
+    private function atLine(string $id, Severity $severity, int $line): Finding
+    {
+        return new Finding($id, $severity, 'src/Thing.php', $line, null, 'Text of '.$id.'.', FixableBy::Builder, false, null, null);
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function twoSeparateEntries(int $lineOfB): array
+    {
+        return [
+            ['id' => 'F1', 'severity' => 'P2', 'text' => 'Text of A.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => 3, 'judge_note' => null],
+            ['id' => 'F2', 'severity' => 'P1', 'text' => 'Text of B.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => $lineOfB, 'judge_note' => null],
+        ];
+    }
+
     private function judgingOf(ReviewRound $round): JudgeRound
     {
         return new JudgeRound($round->id()->toRfc4122());
@@ -558,7 +681,7 @@ final class JudgeRoundTest extends KernelTestCase
      */
     private function judgeCalls(): array
     {
-        return array_map(static fn (array $payload): array => array_diff_key($payload, ['findings' => true, 'dropped' => true, 'same_cause' => true]), $this->judgeDonePayloads());
+        return array_map(static fn (array $payload): array => array_diff_key($payload, ['findings' => true, 'dropped' => true, 'same_cause' => true, 'votes' => true]), $this->judgeDonePayloads());
     }
 
     /**
@@ -577,16 +700,16 @@ final class JudgeRoundTest extends KernelTestCase
     }
 
     /**
-     * @return list<array{string, string}>
+     * @param array<string, mixed> $payload
+     *
+     * @return array<mixed>
      */
-    private function idsAndTexts(JudgeRequest $request): array
+    private function notesOf(array $payload): array
     {
-        return array_map(static fn (Finding $finding): array => [$finding->id, $finding->text], $request->findings);
-    }
+        $findings = $payload['findings'];
+        self::assertIsArray($findings);
 
-    private function finding(string $id, Severity $severity): Finding
-    {
-        return new Finding($id, $severity, null, null, null, 'Text of '.$id.'.', FixableBy::Builder, false, null, null);
+        return array_column($findings, 'judge_note', 'id');
     }
 
     /**
@@ -602,36 +725,16 @@ final class JudgeRoundTest extends KernelTestCase
         return $this->idsAndTexts($asked);
     }
 
-    // At one place, so a finding that is dropped would otherwise be merged with the other.
-    private function quoting(string $id, Severity $severity, string $text): Finding
-    {
-        return new Finding($id, $severity, 'src/Thing.php', 1, null, $text, FixableBy::Builder, false, null, null);
-    }
-
     /**
-     * @param list<Finding> $findings
+     * @return list<array{string, string}>
      */
-    private function roundReporting(array $findings): ReviewRound
+    private function idsAndTexts(JudgeRequest $request): array
     {
-        $round = $this->fixture->start(1);
-        $this->fixture->deliver($this->fixture->bus->messages[0], new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, $findings, [], [])]));
-
-        return $this->fixture->round($round->id()->toRfc4122());
+        return array_map(static fn (Finding $finding): array => [$finding->id, $finding->text], $request->findings);
     }
 
-    private function atLine(string $id, Severity $severity, int $line): Finding
+    private function finding(string $id, Severity $severity): Finding
     {
-        return new Finding($id, $severity, 'src/Thing.php', $line, null, 'Text of '.$id.'.', FixableBy::Builder, false, null, null);
-    }
-
-    /**
-     * @return list<array<string, mixed>>
-     */
-    private function twoSeparateEntries(int $lineOfB): array
-    {
-        return [
-            ['id' => 'F1', 'severity' => 'P2', 'text' => 'Text of A.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => 3],
-            ['id' => 'F2', 'severity' => 'P1', 'text' => 'Text of B.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => $lineOfB],
-        ];
+        return new Finding($id, $severity, null, null, null, 'Text of '.$id.'.', FixableBy::Builder, false, null, null);
     }
 }

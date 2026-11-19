@@ -12,6 +12,7 @@ use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierNotMapped;
 use Intakt\Core\Ai\Contract\TierResolver;
+use Intakt\Core\Review\Contract\PromptAssembly;
 use Intakt\Core\Review\Contract\SampleProjectData;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\AnthropicDescriptor;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\HuggingFaceDescriptor;
@@ -40,6 +41,7 @@ use Uri\Rfc3986\Uri;
 #[UsesClass(Provider::class)]
 #[UsesClass(TierNotMapped::class)]
 #[UsesClass(SampleProjectData::class)]
+#[UsesClass(PromptAssembly::class)]
 final class SymfonyAiKeyCheckTest extends TestCase
 {
     private const string BODY = 'abcdefgh12345678';
@@ -63,6 +65,11 @@ final class SymfonyAiKeyCheckTest extends TestCase
     ];
 
     private BufferingLogger $log;
+
+    protected function setUp(): void
+    {
+        $this->log = new BufferingLogger();
+    }
 
     /**
      * @return iterable<string, array{string}>
@@ -130,6 +137,22 @@ final class SymfonyAiKeyCheckTest extends TestCase
         self::assertCount(1, $calls);
         $request = $calls[0][2];
         self::assertSame($expected, array_map(static fn (string $field): mixed => $request[$field] ?? null, array_combine(array_keys($expected), array_keys($expected))));
+    }
+
+    /**
+     * @param array<string, int|string> $expected
+     * @param array<string, mixed>      $answer
+     */
+    #[DataProvider('requests')]
+    public function testEachProviderIsAskedOnlyTheFixedCheckPrompt(string $key, array $expected, array $answer): void
+    {
+        $calls = $this->callsMadeFor($key, $answer);
+
+        self::assertCount(1, $calls);
+        $body = json_encode($calls[0][2], JSON_THROW_ON_ERROR);
+        self::assertSame(1, substr_count($body, '"role":"user"'));
+        self::assertSame(1, substr_count($body, '"Answer with the single word: ok"'));
+        self::assertStringNotContainsString('"system"', $body);
     }
 
     /**
@@ -302,9 +325,26 @@ final class SymfonyAiKeyCheckTest extends TestCase
         self::assertSame([], $this->log->cleanLogs());
     }
 
-    protected function setUp(): void
+    /**
+     * @param array<string, mixed> $body
+     */
+    private static function answer(int $status, array $body): MockResponse
     {
-        $this->log = new BufferingLogger();
+        return new MockResponse(json_encode($body, JSON_THROW_ON_ERROR), ['http_code' => $status, 'response_headers' => ['content-type: application/json']]);
+    }
+
+    // The model is "light-<project>", so a test sees which project's light tier gave it; by default one project per provider, so every key has one.
+    /**
+     * @param array<string, Provider>|null $lightTiers
+     */
+    private function tiers(?array $lightTiers = null): TierResolver
+    {
+        $lightTiers ??= array_combine(array_map(static fn (Provider $provider): string => $provider->value, Provider::cases()), Provider::cases());
+        $tiers = self::createStub(TierResolver::class);
+        $tiers->method('projects')->willReturn(array_map(strval(...), array_keys($lightTiers)));
+        $tiers->method('configured')->willReturnCallback(static fn (string $project): ResolvedModel => new ResolvedModel($lightTiers[$project], 'light-'.$project));
+
+        return $tiers;
     }
 
     /**
@@ -320,45 +360,6 @@ final class SymfonyAiKeyCheckTest extends TestCase
         $this->check($key, $calls, static fn (): MockResponse => self::answer(200, $answer));
 
         return array_values($calls->getArrayCopy());
-    }
-
-    /**
-     * @param array<string, mixed> $body
-     */
-    private static function answer(int $status, array $body): MockResponse
-    {
-        return new MockResponse(json_encode($body, JSON_THROW_ON_ERROR), ['http_code' => $status, 'response_headers' => ['content-type: application/json']]);
-    }
-
-    /**
-     * @param ArrayObject<int, array{string, string, array<mixed>}> $calls
-     * @param Closure(array<mixed>): MockResponse                   $answer
-     */
-    private function http(ArrayObject $calls, Closure $answer): MockHttpClient
-    {
-        return new MockHttpClient(static function (string $method, string $url, array $options) use ($calls, $answer): MockResponse {
-            $body = $options['body'] ?? null;
-            self::assertIsString($body);
-            $request = json_decode($body, true, flags: JSON_THROW_ON_ERROR);
-            self::assertIsArray($request);
-            $calls->append([$method, $url, $request]);
-
-            return $answer($request);
-        });
-    }
-
-    // The model is "light-<project>", so a test sees which project's light tier gave it; by default one project per provider, so every key has one.
-    /**
-     * @param array<string, Provider>|null $lightTiers
-     */
-    private function tiers(?array $lightTiers = null): TierResolver
-    {
-        $lightTiers ??= array_combine(array_map(static fn (Provider $provider): string => $provider->value, Provider::cases()), Provider::cases());
-        $tiers = self::createStub(TierResolver::class);
-        $tiers->method('projects')->willReturn(array_map(strval(...), array_keys($lightTiers)));
-        $tiers->method('configured')->willReturnCallback(static fn (string $project): ResolvedModel => new ResolvedModel($lightTiers[$project], 'light-'.$project));
-
-        return $tiers;
     }
 
     private function modelAsked(SymfonyAiProviderCatalog $providers, TierResolver $tiers): mixed
@@ -381,5 +382,22 @@ final class SymfonyAiKeyCheckTest extends TestCase
         $providers = new SymfonyAiProviderCatalog();
 
         return new SymfonyAiKeyCheck($this->http($calls, $answer), $providers, $this->tiers(), $this->log)->check(ProviderKey::recognise($key, $providers));
+    }
+
+    /**
+     * @param ArrayObject<int, array{string, string, array<mixed>}> $calls
+     * @param Closure(array<mixed>): MockResponse                   $answer
+     */
+    private function http(ArrayObject $calls, Closure $answer): MockHttpClient
+    {
+        return new MockHttpClient(static function (string $method, string $url, array $options) use ($calls, $answer): MockResponse {
+            $body = $options['body'] ?? null;
+            self::assertIsString($body);
+            $request = json_decode($body, true, flags: JSON_THROW_ON_ERROR);
+            self::assertIsArray($request);
+            $calls->append([$method, $url, $request]);
+
+            return $answer($request);
+        });
     }
 }

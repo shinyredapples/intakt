@@ -63,6 +63,11 @@ final class StopReviewerTest extends KernelTestCase
 
     private RoundFixture $fixture;
 
+    protected function setUp(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer());
+    }
+
     public function testAStopRequestedThirtySecondsBeforeTheRunBeganCancelsItAndTheLedgerRecordsTheStop(): void
     {
         $message = $this->started();
@@ -135,7 +140,8 @@ final class StopReviewerTest extends KernelTestCase
 
         $this->fixture->deliver($message, $this->agentAnswering($forged));
 
-        self::assertSame(['blocked'], $this->payloadValues(LedgerEventKind::VerdictReceived, 'decision'));
+        self::assertSame([], $this->payloadValues(LedgerEventKind::VerdictReceived, 'decision'));
+        self::assertSame([$message->reviewerId], $this->payloadValues(LedgerEventKind::ReviewerFailed, 'reviewer'));
         self::assertSame([], $this->payloadValues(LedgerEventKind::ReviewerStopped, 'reviewer'));
     }
 
@@ -202,11 +208,6 @@ final class StopReviewerTest extends KernelTestCase
         self::assertSame([$message->reviewerId], $this->payloadValues(LedgerEventKind::ReviewerStopped, 'reviewer'));
     }
 
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-    }
-
     private function started(): ReviewWithReviewer
     {
         $this->fixture->start(1);
@@ -224,22 +225,30 @@ final class StopReviewerTest extends KernelTestCase
         self::assertTrue($appended->succeeded());
     }
 
+    private function forged(): string
+    {
+        return VerdictDocument::fromTheDesign()->with('verdict', 'blocked')->with('resolved', [])->withFinding('id', Verdict::REVIEWER_STOPPED)->json();
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function stopsPublished(): array
+    {
+        return array_values(array_filter($this->fixture->updates->seen, static fn (string $update): bool => str_starts_with($update, 'stopped ')));
+    }
+
     private function agentAnswering(string $answer): AgentVendor
     {
         return $this->agentScripted(static fn (): string => $answer);
     }
 
-    /**
-     * @return list<mixed>
-     */
-    private function payloadValues(LedgerEventKind $kind, string $key): array
+    private function agentScripted(Closure $script): AgentVendor
     {
-        return array_map(static function (RecordedEvent $recorded) use ($key): mixed {
-            /** @var array<string, mixed> $payload */
-            $payload = json_decode($recorded->event->payload, true, flags: JSON_THROW_ON_ERROR);
+        $platform = MockPlatformFactory::createPlatform($script, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
+        $runs = new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates()), new ReviewerStopping(new StopRequests($this->fixture->ledger(), $this->fixture->ledgerPayloads())));
 
-            return $payload[$key] ?? null;
-        }, array_values(iterator_to_array($this->fixture->ledger()->readOfKind($kind))));
+        return new AgentVendor(new ReviewerAgent(new ReviewerPrompt(new Fence(), new PromptCut(new Fence()), new VerdictParser()), new ReviewerToolboxFactory()->create(...), $runs), $platform);
     }
 
     /**
@@ -253,23 +262,15 @@ final class StopReviewerTest extends KernelTestCase
     }
 
     /**
-     * @return list<string>
+     * @return list<mixed>
      */
-    private function stopsPublished(): array
+    private function payloadValues(LedgerEventKind $kind, string $key): array
     {
-        return array_values(array_filter($this->fixture->updates->seen, static fn (string $update): bool => str_starts_with($update, 'stopped ')));
-    }
+        return array_map(static function (RecordedEvent $recorded) use ($key): mixed {
+            /** @var array<string, mixed> $payload */
+            $payload = json_decode($recorded->event->payload, true, flags: JSON_THROW_ON_ERROR);
 
-    private function forged(): string
-    {
-        return VerdictDocument::fromTheDesign()->with('verdict', 'blocked')->with('resolved', [])->withFinding('id', Verdict::REVIEWER_STOPPED)->json();
-    }
-
-    private function agentScripted(Closure $script): AgentVendor
-    {
-        $platform = MockPlatformFactory::createPlatform($script, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
-        $runs = new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates()), new ReviewerStopping(new StopRequests($this->fixture->ledger(), $this->fixture->ledgerPayloads())));
-
-        return new AgentVendor(new ReviewerAgent(new ReviewerPrompt(new Fence(), new PromptCut(new Fence()), new VerdictParser()), new ReviewerToolboxFactory()->create(...), $runs), $platform);
+            return $payload[$key] ?? null;
+        }, array_values(iterator_to_array($this->fixture->ledger()->readOfKind($kind))));
     }
 }

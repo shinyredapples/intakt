@@ -43,6 +43,8 @@ use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use RuntimeException;
 use Symfony\Component\Clock\MockClock;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Messenger\Stamp\HandledStamp;
@@ -80,6 +82,19 @@ final class BootGateTest extends KernelTestCase
     private bool $authorTrusted = true;
     private bool $trustCheckDown = false;
     private Ledger $ledger;
+
+    protected function setUp(): void
+    {
+        $this->ledger = new DashboardLedger();
+        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
+        self::assertInstanceOf(EntityManagerInterface::class, $entities);
+        EmptyDatabase::in(self::getContainer());
+        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        $this->entities = $entities;
+        $this->main = BootOutcome::booted();
+        $this->head = BootOutcome::booted();
+        $this->mainCommit = new CommitId(str_repeat('f', 40));
+    }
 
     public function testAHeadThatFailsToBootWhileMainBootsIsSentBackAsAFailedBoot(): void
     {
@@ -229,19 +244,6 @@ final class BootGateTest extends KernelTestCase
         self::assertLoggedError('error', 'The boot gate failed, so the review starts without it.');
     }
 
-    protected function setUp(): void
-    {
-        $this->ledger = new DashboardLedger();
-        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
-        self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
-        $this->entities = $entities;
-        $this->main = BootOutcome::booted();
-        $this->head = BootOutcome::booted();
-        $this->mainCommit = new CommitId(str_repeat('f', 40));
-    }
-
     private function gate(): BootGate
     {
         $bus = self::createStub(MessageBusInterface::class);
@@ -251,19 +253,17 @@ final class BootGateTest extends KernelTestCase
         $doctrine = self::getContainer()->get('doctrine');
         self::assertInstanceOf(ManagerRegistry::class, $doctrine);
         $logger = new RecordingLogger(LogRecords::ofThisRun() ?? self::fail('No log records.'));
-        $results = new BootResults($bus, $this->entities, new MockClock('2026-11-13T10:00:00+00:00'), new WatcherLedger(new DashboardLedger()), $redactor, $logger, $doctrine);
+        $results = new BootResults($bus, $this->entities, new MockClock('2026-11-13T10:00:00+00:00'), new WatcherLedger(new DashboardLedger()), $redactor, $logger, $doctrine, new LockFactory(new InMemoryStore()));
 
         return new BootGate($bus, $this->authors(), $results, new WatcherLedger($this->ledger), $logger);
     }
 
-    private function project(): WatchedProject
+    private function authors(): AuthorTrust
     {
-        return new WatchedProject('alpha', new ChangeSource('/repos/alpha', 'main'), 'Review it.');
-    }
+        $authors = self::createStub(AuthorTrust::class);
+        $authors->method('isAuthorTrusted')->willReturnCallback(fn (): bool => $this->trustCheckDown ? throw new RuntimeException('The permission API is down.') : $this->authorTrusted);
 
-    private function green(): HeadDecision
-    {
-        return new HeadDecision(new OpenChange(new ChangeId('7'), new CommitId(str_repeat('b', 40)), new MockClock('2026-11-13T10:00:00+00:00')->now()), HeadAdmission::Green);
+        return $authors;
     }
 
     private function answer(object $query): CommitId|BootOutcome|string
@@ -281,11 +281,13 @@ final class BootGateTest extends KernelTestCase
         };
     }
 
-    private function authors(): AuthorTrust
+    private function project(): WatchedProject
     {
-        $authors = self::createStub(AuthorTrust::class);
-        $authors->method('isAuthorTrusted')->willReturnCallback(fn (): bool => $this->trustCheckDown ? throw new RuntimeException('The permission API is down.') : $this->authorTrusted);
+        return new WatchedProject('alpha', new ChangeSource('/repos/alpha', 'main'), 'Review it.');
+    }
 
-        return $authors;
+    private function green(): HeadDecision
+    {
+        return new HeadDecision(new OpenChange(new ChangeId('7'), new CommitId(str_repeat('b', 40)), new MockClock('2026-11-13T10:00:00+00:00')->now()), HeadAdmission::Green);
     }
 }

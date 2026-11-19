@@ -19,6 +19,7 @@ use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Ledger\Infrastructure\DoctrineLedger;
 use Intakt\Core\Memory\Contract\MemoryIndex;
+use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Review\Contract\ChangeSource;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\Panel;
@@ -231,7 +232,7 @@ final readonly class RoundFixture
 
     public function judge(Vendor $vendor): JudgeRoundHandler
     {
-        return new JudgeRoundHandler(new JudgedRounds($this->rounds($this->entities), $this->storedFindingsOn($this->entities), $this->roundLedger($this->ledger), new ChangeText(new DiffPaths()), new DiffHunks(new DiffPaths()), new DiffPaths()), $vendor, $this->events);
+        return new JudgeRoundHandler(new JudgedRounds($this->rounds($this->entities), $this->storedFindingsOn($this->entities), $this->roundLedger($this->ledger), new ChangeText(new DiffPaths()), new DiffHunks(new DiffPaths()), new DiffPaths(), new StoredVerdicts($this->serializer)), $vendor, $this->events);
     }
 
     // The application's queue, because the round's workflow, taken from the container, queues the judging through the application's bus.
@@ -360,6 +361,18 @@ final readonly class RoundFixture
         }
     }
 
+    private function leases(EntityManagerInterface $entities, ?Ledger $ledger = null): ReviewerLeases
+    {
+        $moves = new ReviewerMoves($this->machine('state_machine.reviewer'), $this->roundLedger($ledger ?? $this->ledger), $this->serializer, new StopRequests($ledger ?? $this->ledger, $this->ledgerPayloads()));
+
+        return new ReviewerLeases($entities, $moves, $this->clock);
+    }
+
+    private function roundLedger(Ledger $ledger): RoundLedger
+    {
+        return new RoundLedger($ledger, $this->modes, $this->serializer, new ConfiguredTierResolver(['alpha' => ['tiers' => ['standard' => ['provider' => 'anthropic', 'model' => self::MODEL, 'substitutes' => [['provider' => 'openai', 'model' => self::SUBSTITUTE_MODEL]]]]]], []), $this->container->get(Redactor::class));
+    }
+
     private function startWith(RunReviewRound $command, MessageBusInterface $queue): string
     {
         return $this->startHandlerOn($queue)($command);
@@ -370,19 +383,19 @@ final readonly class RoundFixture
         return new RunReviewRound(new ReviewTarget($this->subject(), $this->identityAt($head, $reviewers)), $this->panelOf($reviewers), new RequestedRound($change));
     }
 
+    private function subject(): ReviewSubject
+    {
+        return new ReviewSubject('alpha', __DIR__, self::TASK, self::DIFF);
+    }
+
     private function rounds(EntityManagerInterface $entities): ReviewRounds
     {
         return new ReviewRounds($entities, $this->clock, $this->storedFindingsOn($entities));
     }
 
-    private function roundLedger(Ledger $ledger): RoundLedger
+    private function storedFindingsOn(EntityManagerInterface $entities): StoredFindings
     {
-        return new RoundLedger($ledger, $this->modes, $this->serializer, new ConfiguredTierResolver(['alpha' => ['tiers' => ['standard' => ['provider' => 'anthropic', 'model' => self::MODEL, 'substitutes' => [['provider' => 'openai', 'model' => self::SUBSTITUTE_MODEL]]]]]], []));
-    }
-
-    private function subject(): ReviewSubject
-    {
-        return new ReviewSubject('alpha', __DIR__, self::TASK, self::DIFF);
+        return new StoredFindings($entities, $this->serializer, $this->machine('state_machine.review_round'));
     }
 
     private function panelOf(int $reviewers): Panel
@@ -393,17 +406,5 @@ final readonly class RoundFixture
         );
 
         return new Panel($members, QuorumPolicy::All);
-    }
-
-    private function leases(EntityManagerInterface $entities, ?Ledger $ledger = null): ReviewerLeases
-    {
-        $moves = new ReviewerMoves($this->machine('state_machine.reviewer'), $this->roundLedger($ledger ?? $this->ledger), $this->serializer, new StopRequests($ledger ?? $this->ledger, $this->ledgerPayloads()));
-
-        return new ReviewerLeases($entities, $moves, $this->clock);
-    }
-
-    private function storedFindingsOn(EntityManagerInterface $entities): StoredFindings
-    {
-        return new StoredFindings($entities, $this->serializer, $this->machine('state_machine.review_round'));
     }
 }

@@ -80,6 +80,17 @@ final class AnthropicToolUsingReviewerTest extends WebTestCase
 
     private ReviewCheckout $fixture;
 
+    protected function setUp(): void
+    {
+        $this->fixture = new ReviewCheckout();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->fixture->remove();
+        parent::tearDown();
+    }
+
     public function testAReviewerOnAnthropicThatReadsAFileBeforeAnsweringHasItsFinalAnswerRecordedAsTheTypedVerdict(): void
     {
         $answer = RecordedAnthropicTurns::answering()->thinking('The cart is read, so the answer follows.')->saying(VerdictDocument::fromTheDesign()->with('resolved', [])->json());
@@ -186,17 +197,6 @@ final class AnthropicToolUsingReviewerTest extends WebTestCase
         $this->review([$tool->asServerSentEvents(), $answer->asServerSentEvents()], new ModelCatalog());
     }
 
-    protected function setUp(): void
-    {
-        $this->fixture = new ReviewCheckout();
-    }
-
-    protected function tearDown(): void
-    {
-        $this->fixture->remove();
-        parent::tearDown();
-    }
-
     /**
      * @return list<MockResponse>
      */
@@ -219,7 +219,7 @@ final class AnthropicToolUsingReviewerTest extends WebTestCase
         $runs = new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks($ledger, new NullLogger()), new LiveProgress(new RecordedRoundUpdates()), new ReviewerStopping(new StopRequests($ledger, new LedgerPayloads(StoredSerializerFactory::create()))));
         $toolbox = new ReviewerToolboxFactory()->inCheckout($this->fixture->checkout);
         $reviewer = new ReviewerAgent(RemembersNothing::prompt(), static fn () => $toolbox, $runs);
-        $brief = new ReviewBrief(new ChangeUnderReview('alpha', 'Add a cart.', 'diff --git a/a b/a'), []);
+        $brief = new ReviewBrief(new ChangeUnderReview('alpha', 'Add a cart.', 'diff --git a/a b/a'), [], 1);
 
         return $reviewer->review(new ReviewRequest($this->fixture->checkout, $brief, new ReviewerConversation('You review for correctness.', new UuidV7(), new UuidV7())), $platform, 'claude-sonnet-5-5');
     }

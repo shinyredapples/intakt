@@ -108,6 +108,11 @@ final class DashboardLedger implements Ledger
         $this->add(LedgerEventKind::ReviewerFailed, $this->reviewer($round, $role) + ['failure' => $failure]);
     }
 
+    public function blockReviewer(string $round, string $role, string $reason): void
+    {
+        $this->add(LedgerEventKind::ReviewerBlocked, $this->reviewer($round, $role) + ['reason' => $reason]);
+    }
+
     public function owesCatchUp(string $round, string $role): void
     {
         $this->add(LedgerEventKind::CatchUpOwed, $this->reviewer($round, $role) + ['substitute' => 'openai']);
@@ -152,6 +157,14 @@ final class DashboardLedger implements Ledger
             ],
             'same_cause' => ['F4' => 'F1'],
         ]);
+    }
+
+    /**
+     * @return array<string, int|string>
+     */
+    private function inDiscount(string $id, string $severity, int $line): array
+    {
+        return ['id' => $id, 'severity' => $severity, 'text' => 'Text of '.$id.'.', 'file' => 'src/discount.js', 'line' => $line];
     }
 
     public function judgeToFixAtLine7OfA(string $round, string $text): void
@@ -262,6 +275,21 @@ final class DashboardLedger implements Ledger
         $this->add(LedgerEventKind::BootResultComputed, ['project' => $project, 'main' => $main, 'tool_fingerprint' => $toolFingerprint, 'state' => 'booted', 'reason' => '']);
     }
 
+    public function readMainFromStore(string $project, string $main, string $state): void
+    {
+        $this->add(LedgerEventKind::BootResultComputed, ['project' => $project, 'main' => $main, 'tool_fingerprint' => 'tools-1', 'state' => $state, 'reason' => '', 'read_from' => 'store']);
+    }
+
+    public function readFailedMainFromStore(string $project, string $main, string $reason): void
+    {
+        $this->add(LedgerEventKind::BootResultComputed, ['project' => $project, 'main' => $main, 'tool_fingerprint' => 'tools-1', 'state' => 'failed', 'reason' => $reason, 'read_from' => 'store']);
+    }
+
+    public function computeFailedMain(string $project, string $main, string $reason): void
+    {
+        $this->add(LedgerEventKind::BootResultComputed, ['project' => $project, 'main' => $main, 'tool_fingerprint' => 'tools-1', 'state' => 'failed', 'reason' => $reason]);
+    }
+
     public function failHeadWithoutCause(string $project, string $change): void
     {
         $this->add(LedgerEventKind::HeadFailed, ['project' => $project, 'change' => $change, 'head' => 'a', 'failures' => 1, 'retry_at' => '2026-10-28T12:01:00+00:00']);
@@ -283,14 +311,6 @@ final class DashboardLedger implements Ledger
     public function recordBuildStep(array $payload): void
     {
         $this->add(LedgerEventKind::BuildStepEnded, $payload);
-    }
-
-    /**
-     * @return array<string, int|string>
-     */
-    private function inDiscount(string $id, string $severity, int $line): array
-    {
-        return ['id' => $id, 'severity' => $severity, 'text' => 'Text of '.$id.'.', 'file' => 'src/discount.js', 'line' => $line];
     }
 
     /**

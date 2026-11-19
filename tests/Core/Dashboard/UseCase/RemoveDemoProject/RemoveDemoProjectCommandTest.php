@@ -60,6 +60,18 @@ final class RemoveDemoProjectCommandTest extends KernelTestCase
 
     private PublishedLiveEvents $live;
 
+    protected function setUp(): void
+    {
+        $container = self::getContainer();
+        EmptyDatabase::in($container);
+        $entities = $container->get('doctrine')->getManager();
+        self::assertInstanceOf(EntityManagerInterface::class, $entities);
+        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        AppendOnlyTriggers::in($entities->getConnection());
+        $this->locks = new InMemoryStore();
+        $this->live = new PublishedLiveEvents();
+    }
+
     public function testTheCommandDeletesTheDemoProjectsLedgerRowsAndItsReplayMark(): void
     {
         $this->givenTheDemoProjectWithAReplayedReview();
@@ -169,7 +181,7 @@ final class RemoveDemoProjectCommandTest extends KernelTestCase
 
         $this->removal('intakt');
 
-        self::assertCount(2, $this->lastPushedBoard()->filter('#board-octopus.head-character:not([hidden]) img[src*="octopus-waiting-"]'));
+        self::assertCount(2, $this->lastPushedBoard()->filter('#board-octopus.firstday:not([hidden]) img[src*="octopus-waiting-"]'));
     }
 
     public function testARemovalRefusedOutsideTheComposeDemoPushesNothing(): void
@@ -181,22 +193,36 @@ final class RemoveDemoProjectCommandTest extends KernelTestCase
         self::assertSame([], $this->live->events);
     }
 
-    protected function setUp(): void
+    private function lastPushedBoard(): Crawler
     {
-        $container = self::getContainer();
-        EmptyDatabase::in($container);
-        $entities = $container->get('doctrine')->getManager();
-        self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
-        AppendOnlyTriggers::in($entities->getConnection());
-        $this->locks = new InMemoryStore();
-        $this->live = new PublishedLiveEvents();
+        $last = array_last($this->live->events);
+        self::assertNotNull($last);
+
+        return new Crawler($last->turboStream);
     }
 
     private function givenTheDemoProjectWithAReplayedReview(): void
     {
         $this->commands()->dispatch(new FlagProjectAsReplay(CreateDemoProjectCommand::NAME));
         $this->givenAReview(CreateDemoProjectCommand::NAME, 'demo-round', 'demo-call');
+    }
+
+    // Shaped as a replay writes them, because only the start and the started usage name the project and the removal must find the others by round or call.
+    private function givenAReview(string $project, string $round, string $call): void
+    {
+        $this->append(LedgerEventKind::ReviewStarted, ['round' => $round, 'project' => $project, 'reviewers' => 1, 'change' => 'sample-change', 'number' => 1]);
+        $this->append(LedgerEventKind::ReviewerStarted, ['round' => $round, 'reviewer' => $round.'-correctness', 'role' => 'correctness', 'tier' => 'standard']);
+        $this->append(LedgerEventKind::UsageRecorded, ['call' => $call, 'phase' => 'started', 'project' => $project, 'tier' => 'standard', 'round' => $round, 'model' => 'claude-opus-5-5']);
+        $this->append(LedgerEventKind::UsageRecorded, ['call' => $call, 'phase' => 'settled', 'usages' => [['model' => 'claude-opus-5-5', 'total' => 10]]]);
+        $this->append(LedgerEventKind::VerdictReceived, ['round' => $round, 'reviewer' => $round.'-correctness', 'role' => 'correctness', 'tier' => 'standard', 'decision' => 'approve', 'findings' => 0]);
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function append(LedgerEventKind $kind, array $payload): void
+    {
+        self::assertTrue($this->ledger()->append(new LedgerEvent($kind, json_encode($payload, JSON_THROW_ON_ERROR)))->succeeded());
     }
 
     private function removal(string $composeService): CommandTester
@@ -212,6 +238,16 @@ final class RemoveDemoProjectCommandTest extends KernelTestCase
         $tester->execute([]);
 
         return $tester;
+    }
+
+    private function headline(): LiveBoardHeadline
+    {
+        $pages = self::getContainer()->get(LedgerReviewPages::class);
+        $twig = self::getContainer()->get(Environment::class);
+        self::assertInstanceOf(LedgerReviewPages::class, $pages);
+        self::assertInstanceOf(Environment::class, $twig);
+
+        return new LiveBoardHeadline($pages, $twig, $this->live, new LockFactory(new InMemoryStore()), new NullLogger());
     }
 
     /**
@@ -235,9 +271,12 @@ final class RemoveDemoProjectCommandTest extends KernelTestCase
         return $marks->ofProject($project);
     }
 
-    private function flat(CommandTester $tester): string
+    private function ledger(): Ledger
     {
-        return preg_replace('/\s+/', ' ', $tester->getDisplay()) ?? '';
+        $ledger = self::getContainer()->get(Ledger::class);
+        self::assertInstanceOf(Ledger::class, $ledger);
+
+        return $ledger;
     }
 
     private function commands(): MessageBusInterface
@@ -248,47 +287,8 @@ final class RemoveDemoProjectCommandTest extends KernelTestCase
         return $commands;
     }
 
-    // Shaped as a replay writes them, because only the start and the started usage name the project and the removal must find the others by round or call.
-    private function givenAReview(string $project, string $round, string $call): void
+    private function flat(CommandTester $tester): string
     {
-        $this->append(LedgerEventKind::ReviewStarted, ['round' => $round, 'project' => $project, 'reviewers' => 1, 'change' => 'sample-change', 'number' => 1]);
-        $this->append(LedgerEventKind::ReviewerStarted, ['round' => $round, 'reviewer' => $round.'-correctness', 'role' => 'correctness', 'tier' => 'standard']);
-        $this->append(LedgerEventKind::UsageRecorded, ['call' => $call, 'phase' => 'started', 'project' => $project, 'tier' => 'standard', 'round' => $round, 'model' => 'claude-opus-5-5']);
-        $this->append(LedgerEventKind::UsageRecorded, ['call' => $call, 'phase' => 'settled', 'usages' => [['model' => 'claude-opus-5-5', 'total' => 10]]]);
-        $this->append(LedgerEventKind::VerdictReceived, ['round' => $round, 'reviewer' => $round.'-correctness', 'role' => 'correctness', 'tier' => 'standard', 'decision' => 'approve', 'findings' => 0]);
-    }
-
-    /**
-     * @param array<string, mixed> $payload
-     */
-    private function append(LedgerEventKind $kind, array $payload): void
-    {
-        self::assertTrue($this->ledger()->append(new LedgerEvent($kind, json_encode($payload, JSON_THROW_ON_ERROR)))->succeeded());
-    }
-
-    private function ledger(): Ledger
-    {
-        $ledger = self::getContainer()->get(Ledger::class);
-        self::assertInstanceOf(Ledger::class, $ledger);
-
-        return $ledger;
-    }
-
-    private function lastPushedBoard(): Crawler
-    {
-        $last = array_last($this->live->events);
-        self::assertNotNull($last);
-
-        return new Crawler($last->turboStream);
-    }
-
-    private function headline(): LiveBoardHeadline
-    {
-        $pages = self::getContainer()->get(LedgerReviewPages::class);
-        $twig = self::getContainer()->get(Environment::class);
-        self::assertInstanceOf(LedgerReviewPages::class, $pages);
-        self::assertInstanceOf(Environment::class, $twig);
-
-        return new LiveBoardHeadline($pages, $twig, $this->live, new LockFactory(new InMemoryStore()), new NullLogger());
+        return preg_replace('/\s+/', ' ', $tester->getDisplay()) ?? '';
     }
 }

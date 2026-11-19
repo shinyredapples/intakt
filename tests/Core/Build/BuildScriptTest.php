@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Build;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
 use Intakt\Tests\Core\HandBack\BuildHistory;
 use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Process\ExecutableFinder;
@@ -28,6 +29,24 @@ final class BuildScriptTest extends TestCase
     private string $gates = '4';
     // False removes the variable, so a value the test run itself was started with never reaches the script.
     private string|false $inherited = false;
+
+    protected function setUp(): void
+    {
+        $this->history = new BuildHistory();
+        $this->output = $this->history->folder.'/output';
+        $this->work = $this->history->folder.'/job';
+        $this->bin = $this->history->folder.'/bin';
+        $this->prompt = $this->history->folder.'/prompt.md';
+        new Filesystem()->mkdir([$this->output, $this->work, $this->bin]);
+        file_put_contents($this->prompt, "Build the task.\n");
+    }
+
+    protected function tearDown(): void
+    {
+        // A scripted CLI may take the output's permissions away, which would stop the removal.
+        new Filesystem()->chmod($this->output, 0o700);
+        $this->history->remove();
+    }
 
     public function testACliThatCommitsAndWritesThePullRequestTextLeavesABundleOfTheBranchAndTheText(): void
     {
@@ -413,6 +432,194 @@ final class BuildScriptTest extends TestCase
         self::assertFileDoesNotExist($this->output.'/pull-request.md');
     }
 
+    public function testAQuestionTheCliWritesInTheCheckoutIsHandedBack(): void
+    {
+        $this->givenTheCli(<<<'SH'
+            printf '{"question":"Which store?","choices":["SQLite"],"recommendation":"SQLite"}' > QUESTION.json
+            SH);
+
+        $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertSame('{"question":"Which store?","choices":["SQLite"],"recommendation":"SQLite"}', $this->outputFile('question.json'));
+    }
+
+    public function testAQuestionTheBranchAlreadyHeldIsNotHandedBackWhenTheCliLeavesItUntouched(): void
+    {
+        $this->history->commitFile('QUESTION.json', '{"question":"Old?","choices":["a"],"recommendation":"a"}', 'docs: keep an old question');
+        $this->givenTheCli('true');
+
+        $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertFileDoesNotExist($this->output.'/question.json');
+    }
+
+    public function testAQuestionTheBranchAlreadyHeldIsHandedBackWhenTheCliRewritesIt(): void
+    {
+        $this->history->commitFile('QUESTION.json', '{"question":"Old?","choices":["a"],"recommendation":"a"}', 'docs: keep an old question');
+        $this->givenTheCli(<<<'SH'
+            printf '{"question":"New?","choices":["b"],"recommendation":"b"}' > QUESTION.json
+            SH);
+
+        $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertSame('{"question":"New?","choices":["b"],"recommendation":"b"}', $this->outputFile('question.json'));
+    }
+
+    // The checkout converts the line endings, so it holds other bytes than the commit: only the checkout's own bytes at the start tell an untouched question from a rewritten one.
+    #[TestWith(["QUESTION.json text eol=crlf\n"])]
+    #[TestWith(["* text=auto eol=crlf\n"])]
+    public function testAQuestionTheCheckoutConvertsTheLineEndingsOfIsNotHandedBackWhenTheCliLeavesItUntouched(string $attributes): void
+    {
+        $this->history->commitFile('.gitattributes', $attributes, 'chore: check the question out with other line endings');
+        $this->history->commitFile('QUESTION.json', "{\"question\":\"Old?\",\"choices\":[\"a\"],\"recommendation\":\"a\"}\n", 'docs: keep an old question');
+        $this->givenTheCli('cp QUESTION.json "$RECORD/checked-out.json"');
+
+        $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertStringEndsWith("}\r\n", (string) file_get_contents($this->history->folder.'/checked-out.json'));
+        self::assertFileDoesNotExist($this->output.'/question.json');
+    }
+
+    public function testAQuestionTheCheckoutConvertsTheLineEndingsOfIsHandedBackWhenTheCliRewritesIt(): void
+    {
+        $this->history->commitFile('.gitattributes', "QUESTION.json text eol=crlf\n", 'chore: check the question out with other line endings');
+        $this->history->commitFile('QUESTION.json', "{\"question\":\"Old?\",\"choices\":[\"a\"],\"recommendation\":\"a\"}\n", 'docs: keep an old question');
+        $this->givenTheCli(<<<'SH'
+            printf '{"question":"New?","choices":["b"],"recommendation":"b"}' > QUESTION.json
+            SH);
+
+        $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertSame('{"question":"New?","choices":["b"],"recommendation":"b"}', $this->outputFile('question.json'));
+    }
+
+    public function testAQuestionTheBranchAlreadyHeldIsNotHandedBackWhenTheCliOnlyCommitsItsCheckedOutBytes(): void
+    {
+        $this->history->commitFile('QUESTION.json', '{"question":"Old?","choices":["a"],"recommendation":"a"}', 'docs: keep an old question');
+        $this->givenTheCli(<<<'SH'
+            echo 'built' > built.txt
+            git add built.txt
+            git commit --quiet -m 'feat: build the task'
+            SH);
+
+        $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertFileDoesNotExist($this->output.'/question.json');
+        self::assertFileExists($this->output.'/handback.bundle');
+    }
+
+    public function testAnUntouchedQuestionInACloneWhoseGitConfigTheCliBrokeIsNotHandedBack(): void
+    {
+        $this->history->commitFile('QUESTION.json', '{"question":"Old?","choices":["a"],"recommendation":"a"}', 'docs: keep an old question');
+        $this->givenTheCli("echo '[broken' >> .git/config");
+
+        $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertFileDoesNotExist($this->output.'/question.json');
+    }
+
+    // A hash git takes in the clone follows the clone's object format, which the builder can write, so the same bytes would get another hash after the session.
+    public function testAnUntouchedQuestionInACloneWhoseObjectFormatTheCliSwitchedIsNotHandedBack(): void
+    {
+        $this->history->commitFile('QUESTION.json', '{"question":"Old?","choices":["a"],"recommendation":"a"}', 'docs: keep an old question');
+        $this->givenTheCli(<<<'SH'
+            git config core.repositoryformatversion 1
+            git config extensions.objectFormat sha256
+            git config extensions.objectFormat > "$RECORD/object-format"
+            SH);
+
+        $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertSame("sha256\n", (string) file_get_contents($this->history->folder.'/object-format'));
+        self::assertFileDoesNotExist($this->output.'/question.json');
+    }
+
+    public function testARewrittenQuestionInACloneWhoseObjectFormatTheCliSwitchedIsHandedBack(): void
+    {
+        $this->history->commitFile('QUESTION.json', '{"question":"Old?","choices":["a"],"recommendation":"a"}', 'docs: keep an old question');
+        $this->givenTheCli(<<<'SH'
+            git config core.repositoryformatversion 1
+            git config extensions.objectFormat sha256
+            printf '{"question":"New?","choices":["b"],"recommendation":"b"}' > QUESTION.json
+            SH);
+
+        $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertSame('{"question":"New?","choices":["b"],"recommendation":"b"}', $this->outputFile('question.json'));
+    }
+
+    public function testAQuestionWhoseDigestFailedBeforeTheSessionIsNotHandedBackEvenWhenTheCliRewritesIt(): void
+    {
+        $this->history->commitFile('QUESTION.json', '{"question":"Old?","choices":["a"],"recommendation":"a"}', 'docs: keep an old question');
+        $this->givenTheDigestFailsOnItsCall(1);
+        $this->givenTheCli(<<<'SH'
+            printf '{"question":"New?","choices":["b"],"recommendation":"b"}' > QUESTION.json
+            SH);
+
+        $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertFileDoesNotExist($this->output.'/question.json');
+        self::assertStringContainsString("QUESTION.json is not handed back: it could not be hashed before the session\n", $this->outputFile('build.log'));
+    }
+
+    public function testADigestThatFailedBeforeTheSessionIsLoggedEvenWhenTheCliRemovesTheQuestion(): void
+    {
+        $this->history->commitFile('QUESTION.json', '{"question":"Old?","choices":["a"],"recommendation":"a"}', 'docs: keep an old question');
+        $this->givenTheDigestFailsOnItsCall(1);
+        $this->givenTheCli('rm QUESTION.json');
+
+        $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertFileDoesNotExist($this->output.'/question.json');
+        self::assertStringContainsString("QUESTION.json is not handed back: it could not be hashed before the session\n", $this->outputFile('build.log'));
+    }
+
+    public function testAQuestionWhoseDigestFailsAfterTheSessionIsNotHandedBackEvenWhenTheCliRewritesIt(): void
+    {
+        $this->history->commitFile('QUESTION.json', '{"question":"Old?","choices":["a"],"recommendation":"a"}', 'docs: keep an old question');
+        $this->givenTheDigestFailsOnItsCall(2);
+        $this->givenTheCli(<<<'SH'
+            printf '{"question":"New?","choices":["b"],"recommendation":"b"}' > QUESTION.json
+            SH);
+
+        $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertFileDoesNotExist($this->output.'/question.json');
+        self::assertStringContainsString("QUESTION.json is not handed back: it could not be hashed after the session\n", $this->outputFile('build.log'));
+    }
+
+    public function testADigestThatPrintsNothingAfterTheSessionHandsNoQuestionBack(): void
+    {
+        $this->history->commitFile('QUESTION.json', '{"question":"Old?","choices":["a"],"recommendation":"a"}', 'docs: keep an old question');
+        $this->givenTheDigestFailsOnItsCall(2, 0);
+        $this->givenTheCli(<<<'SH'
+            printf '{"question":"New?","choices":["b"],"recommendation":"b"}' > QUESTION.json
+            SH);
+
+        $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertFileDoesNotExist($this->output.'/question.json');
+        self::assertStringContainsString("QUESTION.json is not handed back: it could not be hashed after the session\n", $this->outputFile('build.log'));
+    }
+
+    public function testAQuestionThatIsALinkIsNotHandedBack(): void
+    {
+        $this->givenTheCli('ln -s "$RECORD/prompt.md" QUESTION.json');
+
+        $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertFileDoesNotExist($this->output.'/question.json');
+    }
+
+    public function testAQuestionTheCliWritesIntoTheOutputIsNotHandedBack(): void
+    {
+        $this->givenTheCli('echo planted > "$INTAKT_JOB_OUTPUT/question.json"');
+
+        $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertFileDoesNotExist($this->output.'/question.json');
+    }
+
     public function testTheClisOutputGoesToTheLog(): void
     {
         $this->givenTheCli('echo "{\"type\":\"result\"}"; echo "warning" >&2');
@@ -443,53 +650,10 @@ final class BuildScriptTest extends TestCase
         self::assertFileDoesNotExist($this->history->folder.'/ran');
     }
 
-    protected function setUp(): void
-    {
-        $this->history = new BuildHistory();
-        $this->output = $this->history->folder.'/output';
-        $this->work = $this->history->folder.'/job';
-        $this->bin = $this->history->folder.'/bin';
-        $this->prompt = $this->history->folder.'/prompt.md';
-        new Filesystem()->mkdir([$this->output, $this->work, $this->bin]);
-        file_put_contents($this->prompt, "Build the task.\n");
-    }
-
-    protected function tearDown(): void
-    {
-        // A scripted CLI may take the output's permissions away, which would stop the removal.
-        new Filesystem()->chmod($this->output, 0o700);
-        $this->history->remove();
-    }
-
     private function givenTheCli(string $script): void
     {
         file_put_contents($this->bin.'/claude', "#!/bin/sh\n".$script."\n");
         chmod($this->bin.'/claude', 0o755);
-    }
-
-    private function whenTheBuildRuns(string $branch, string $model, int $allowance = 600): Process
-    {
-        $run = new Process(
-            ['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-build', $this->history->work, $this->prompt, $branch, $model, '7', (string) $allowance, $this->gates],
-            null,
-            $this->environment(),
-            timeout: 20,
-        );
-        $run->run();
-
-        return $run;
-    }
-
-    private function outputFile(string $name): string
-    {
-        return (string) file_get_contents($this->output.'/'.$name);
-    }
-
-    private function fileAtTheBundlesHead(string $branch, string $path): string
-    {
-        $this->history->inMirror('fetch', '--quiet', $this->output.'/handback.bundle', 'refs/heads/'.$branch.':refs/heads/fetched');
-
-        return $this->history->inMirror('show', 'refs/heads/fetched:'.$path)."\n";
     }
 
     // Each sleep reports its own process id, because the CI image has no procps to look it up with.
@@ -499,33 +663,6 @@ final class BuildScriptTest extends TestCase
         self::assertNotNull($sleep);
         file_put_contents($this->bin.'/sleep', "#!/bin/sh\necho \$\$ >> \"\$RECORD/sleeps\"\nexec ".escapeshellarg($sleep)." \"\$@\"\n");
         chmod($this->bin.'/sleep', 0o755);
-    }
-
-    /**
-     * @return list<int>
-     */
-    private function recordedSleeps(): array
-    {
-        $recorded = file($this->history->folder.'/sleeps', FILE_IGNORE_NEW_LINES);
-
-        return array_map(intval(...), false === $recorded ? [] : $recorded);
-    }
-
-    /**
-     * @param list<int> $processes
-     *
-     * @return list<int>
-     */
-    private function stillRunningAfter(array $processes, int $seconds): array
-    {
-        $deadline = hrtime(true) + $seconds * 1_000_000_000;
-        $running = array_values(array_filter($processes, $this->isRunning(...)));
-        while ([] !== $running && hrtime(true) < $deadline) {
-            usleep(20_000);
-            $running = array_values(array_filter($running, $this->isRunning(...)));
-        }
-
-        return $running;
     }
 
     // A stand-in that reports itself only once in a session of its own, so the group kill misses it and it runs until the build returned, as a killed sleep still in its exit does; it has no time limit a slow build could outlast, and also ends once tearDown removes the folder or the test runner's process is gone or a zombie, because a failed test must leave nothing and a killed runner never reaches tearDown, and its parent may not reap it.
@@ -556,6 +693,33 @@ final class BuildScriptTest extends TestCase
         chmod($this->bin.'/sleep', 0o755);
     }
 
+    /**
+     * @return list<int>
+     */
+    private function recordedSleeps(): array
+    {
+        $recorded = file($this->history->folder.'/sleeps', FILE_IGNORE_NEW_LINES);
+
+        return array_map(intval(...), false === $recorded ? [] : $recorded);
+    }
+
+    /**
+     * @param list<int> $processes
+     *
+     * @return list<int>
+     */
+    private function stillRunningAfter(array $processes, int $seconds): array
+    {
+        $deadline = hrtime(true) + $seconds * 1_000_000_000;
+        $running = array_values(array_filter($processes, $this->isRunning(...)));
+        while ([] !== $running && hrtime(true) < $deadline) {
+            usleep(20_000);
+            $running = array_values(array_filter($running, $this->isRunning(...)));
+        }
+
+        return $running;
+    }
+
     private function isRunning(int $process): bool
     {
         return $this->statShowsALiveProcess('/proc/'.$process.'/stat');
@@ -584,6 +748,34 @@ final class BuildScriptTest extends TestCase
         chmod($this->bin.'/git', 0o755);
     }
 
+    // Only the given call fails or prints nothing, because the script hashes once before the session and once after it, and each side has a rule of its own.
+    private function givenTheDigestFailsOnItsCall(int $call, int $status = 1): void
+    {
+        $digest = (string) new ExecutableFinder()->find('sha256sum');
+        file_put_contents($this->bin.'/sha256sum', <<<SH
+            #!/bin/sh
+            echo call >> "\$RECORD/digests"
+            if [ "\$(grep -c call "\$RECORD/digests")" -eq {$call} ]; then
+                exit {$status}
+            fi
+            exec '{$digest}' "\$@"
+            SH);
+        chmod($this->bin.'/sha256sum', 0o755);
+    }
+
+    private function whenTheBuildRuns(string $branch, string $model, int $allowance = 600): Process
+    {
+        $run = new Process(
+            ['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-build', $this->history->work, $this->prompt, $branch, $model, '7', (string) $allowance, $this->gates],
+            null,
+            $this->environment(),
+            timeout: 20,
+        );
+        $run->run();
+
+        return $run;
+    }
+
     /**
      * @return array<string, string|false>
      */
@@ -605,5 +797,17 @@ final class BuildScriptTest extends TestCase
         }
 
         return $environment;
+    }
+
+    private function fileAtTheBundlesHead(string $branch, string $path): string
+    {
+        $this->history->inMirror('fetch', '--quiet', $this->output.'/handback.bundle', 'refs/heads/'.$branch.':refs/heads/fetched');
+
+        return $this->history->inMirror('show', 'refs/heads/fetched:'.$path)."\n";
+    }
+
+    private function outputFile(string $name): string
+    {
+        return (string) file_get_contents($this->output.'/'.$name);
     }
 }

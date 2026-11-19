@@ -94,6 +94,17 @@ final class ReviewerAgentMemoryTest extends KernelTestCase
      */
     private array $sent = [];
 
+    protected function setUp(): void
+    {
+        $this->fixture = new ReviewCheckout();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->fixture->remove();
+        parent::tearDown();
+    }
+
     public function testASecondReviewIsSentTheFindingAnEarlierReviewResolvedOnTheSameFile(): void
     {
         [$index, $memory] = $this->memoryInAStore();
@@ -116,17 +127,6 @@ final class ReviewerAgentMemoryTest extends KernelTestCase
 
         self::assertStringEndsWith("\n\nYou review for correctness.", $this->systemSent());
         self::assertStringNotContainsString('Your answer must be changed to fit the given', $this->systemSent());
-    }
-
-    protected function setUp(): void
-    {
-        $this->fixture = new ReviewCheckout();
-    }
-
-    protected function tearDown(): void
-    {
-        $this->fixture->remove();
-        parent::tearDown();
     }
 
     /**
@@ -160,7 +160,7 @@ final class ReviewerAgentMemoryTest extends KernelTestCase
         $prompt = new ReviewerPrompt(new Fence(), new PromptCut(new Fence()), new VerdictParser(), new ReviewerMemory($memory, new Fence(), new DiffPaths()));
         $reviewer = new ReviewerAgent($prompt, new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates()), new ReviewerStopping(new StopRequests(new InMemoryLedger(), new LedgerPayloads(StoredSerializerFactory::create())))));
 
-        $reviewer->review(new ReviewRequest($this->fixture->checkout, new ReviewBrief(new ChangeUnderReview('alpha', 'Fix the cart.', self::DIFF), []), new ReviewerConversation('You review for correctness.', new UuidV7())), $platform, 'reviewer-model');
+        $reviewer->review(new ReviewRequest($this->fixture->checkout, new ReviewBrief(new ChangeUnderReview('alpha', 'Fix the cart.', self::DIFF), [], 1), new ReviewerConversation('You review for correctness.', new UuidV7())), $platform, 'reviewer-model');
     }
 
     private function systemSent(): string

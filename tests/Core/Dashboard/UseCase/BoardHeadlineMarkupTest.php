@@ -122,12 +122,9 @@ final class BoardHeadlineMarkupTest extends KernelTestCase
         self::assertSame('Nothing is running yet. Start the first review.', $link->text());
     }
 
-    private function review(string $round, string $change): Review
+    public function testAFreshInstallsHeadlineLinkCarriesTheClassThatSizesItsTouchTarget(): void
     {
-        $since = new DateTimeImmutable('2026-11-01T10:00:00+00:00');
-        $start = new RoundStart($round, 'sample', 2);
-
-        return new Review([new ReviewedRound($start, new RoundPlace($change, 1), $since, null)->withOutcomes([new ReviewerOutcome($round.'-correctness', 'correctness', 'standard', $since)])]);
+        self::assertCount(1, $this->rendered(new Headline(new WhoIsWorking([]), [], 0))->filter('a.headline-setup'));
     }
 
     private function rendered(Headline $headline): Crawler
@@ -136,5 +133,13 @@ final class BoardHeadlineMarkupTest extends KernelTestCase
         self::assertInstanceOf(Environment::class, $twig);
 
         return new Crawler('<p id="board-headline">'.$twig->render(self::PARTIAL, ['headline' => $headline]).'</p>')->filter('#board-headline');
+    }
+
+    private function review(string $round, string $change): Review
+    {
+        $since = new DateTimeImmutable('2026-11-01T10:00:00+00:00');
+        $start = new RoundStart($round, 'sample', 2);
+
+        return new Review([new ReviewedRound($start, new RoundPlace($change, 1), $since, null)->withOutcomes([new ReviewerOutcome($round.'-correctness', 'correctness', 'standard', $since)])]);
     }
 }

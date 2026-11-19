@@ -9,9 +9,10 @@ const path = require('path');
 const MOCKS = path.resolve(__dirname, '..');
 const OUT = path.join(MOCKS, 'screens');
 
-// The board, Waiting on you, task, settings and components pages land with the next part of the mocks.
+// The Waiting on you, task, settings and components pages land with the next part of the mocks.
 // Their jobs below stay; allJobs() drops them until their page is listed here.
 const PAGES = {
+  index: 'Board',
   projects: 'Projects',
   project: 'Project acme-shop',
   'add-project': 'Add a project',
@@ -57,8 +58,11 @@ function jobsFor(theme) {
   for (const demo of BOARD_EXAMPLES) {
     const example = { query: '?demo=' + demo, variant: demo, note: 'example: ' + demo };
     add('index', DESKTOP, { full: true, ...example });
-    add('index', PHONE, example);
+    // The first day's empty columns sit below the fold on a phone, so its capture is the full page.
+    add('index', PHONE, demo === 'firstday' ? { full: true, ...example } : example);
   }
+  // A full page draws the fixed phone navigation over the column selector, so the first day's Waiting on you also gets a scrolled capture.
+  add('index', PHONE, { query: '?demo=firstday', variant: 'firstday-waiting', note: 'example: firstday, scrolled to Waiting on you', scroll: '#colswitch' });
 
   return jobs;
 }
@@ -91,6 +95,10 @@ async function shoot(browser, job) {
   await page.evaluate(() => document.fonts.ready);
   if (job.click) {
     await page.click(job.click);
+    await page.waitForTimeout(300);
+  }
+  if (job.scroll) {
+    await page.evaluate((selector) => window.scrollTo(0, document.querySelector(selector).getBoundingClientRect().top + window.scrollY - 16), job.scroll);
     await page.waitForTimeout(300);
   }
   if (job.search !== undefined) {
