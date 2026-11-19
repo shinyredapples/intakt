@@ -13,10 +13,10 @@ use Intakt\Core\Build\Domain\BuilderPrompt;
 use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\Domain\GatesAtOnce;
 use Intakt\Core\Build\Domain\GatesByDefault;
+use Intakt\Core\Build\Domain\QuestionRefused;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildVerdict;
-use Intakt\Core\Build\Domain\QuestionRefused;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJobCommand;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJobInput;
@@ -186,6 +186,7 @@ final class ScriptedQuestionTest extends TestCase
         $application->addCommand(new RunBuildJobCommand($this->builds(), new Filesystem()));
         $tester = new CommandTester($application->find('intakt:build:run'));
         $tester->execute(['project' => 'demo', 'clone' => $this->history->work, 'branch' => 'task', 'task' => $this->history->folder.'/task.md', 'image' => 'intakt-job-demo:1', 'bundle' => $this->history->folder.'/out.bundle']);
+
         return $tester;
     }
 
