@@ -140,18 +140,19 @@
                         }
                     },
                     "last_outcomes": {
-                        "description": "The last judged round of each change, newest first, at most ten.",
+                        "description": "The last ended round of each change (judged, or ended without the judge's call), newest first by its judgment or else its start, at most ten.",
                         "type": "array",
                         "maxItems": 10,
                         "items": {
                             "type": "object",
                             "additionalProperties": false,
-                            "required": ["change", "mark", "round", "number", "decision", "judged_at"],
+                            "required": ["change", "mark", "round", "number", "end", "decision", "judged_at"],
                             "properties": {
                                 "change": {"$ref": "#/definitions/change"},
                                 "mark": {"$ref": "#/definitions/mark"},
                                 "round": {"$ref": "#/definitions/round"},
                                 "number": {"$ref": "#/definitions/number"},
+                                "end": {"description": "judged, judging_failed for a judging that failed for good, or no_outcome_in_time for a round neither judged nor failed in its judging at its upper wait; decision and judged_at are null unless judged.", "enum": ["judged", "judging_failed", "no_outcome_in_time"]},
                                 "decision": {"enum": ["approve", "changes", "blocked", null]},
                                 "judged_at": {"oneOf": [{"$ref": "#/definitions/moment"}, {"type": "null"}]}
                             }
