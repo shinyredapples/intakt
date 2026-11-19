@@ -220,7 +220,7 @@ final class MakeBuildCloneCommandTest extends TestCase
 
         $this->expectExceptionObject(new InvalidArgumentException('unexpected'));
 
-        $this->whenTheCommandRuns('alpha', 'feat/task', ['--task' => $this->mirrors.'-task.md'], $filesystem);
+        $this->commandReadingTasksWith($filesystem)->execute(['project' => 'alpha', 'branch' => 'feat/task', 'directory' => $this->clone, '--task' => $this->mirrors.'-task.md']);
     }
 
     private function givenTheSourceBranch(): string
@@ -263,13 +263,19 @@ final class MakeBuildCloneCommandTest extends TestCase
     /**
      * @param array<string, string|bool> $options
      */
-    private function whenTheCommandRuns(string $project, string $branch, array $options = [], Filesystem $taskFiles = new Filesystem()): CommandTester
+    private function whenTheCommandRuns(string $project, string $branch, array $options = []): CommandTester
     {
-        $application = new Application();
-        $application->addCommand(new MakeBuildCloneCommand(new MakeBuildClone(new HardenedGit(), new Filesystem(), new Mirrors($this->mirrors)), $taskFiles));
-        $tester = new CommandTester($application->find('intakt:build:clone'));
+        $tester = $this->commandReadingTasksWith(new Filesystem());
         $tester->execute(['project' => $project, 'branch' => $branch, 'directory' => $this->clone, ...$options]);
 
         return $tester;
+    }
+
+    private function commandReadingTasksWith(Filesystem $taskFiles): CommandTester
+    {
+        $application = new Application();
+        $application->addCommand(new MakeBuildCloneCommand(new MakeBuildClone(new HardenedGit(), new Filesystem(), new Mirrors($this->mirrors)), $taskFiles));
+
+        return new CommandTester($application->find('intakt:build:clone'));
     }
 }

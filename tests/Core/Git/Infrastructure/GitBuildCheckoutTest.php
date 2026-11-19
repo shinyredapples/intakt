@@ -67,7 +67,7 @@ final class GitBuildCheckoutTest extends TestCase
     public function testAProjectNameThatIsNoFolderNameFailsTheMirrorPathWithItsReason(): void
     {
         $this->expectException(BuildCheckoutFailed::class);
-        $this->expectExceptionMessage('"../alpha" is not a project name that can be a folder name');
+        $this->expectExceptionMessageIsOrContains('"../alpha" is not a project name that can be a folder name');
 
         $this->checkout(new Filesystem())->mirrorOf('../alpha');
     }
@@ -75,7 +75,7 @@ final class GitBuildCheckoutTest extends TestCase
     public function testAProjectNameThatIsNoFolderNameFailsTheMirrorUpdateWithItsReason(): void
     {
         $this->expectException(BuildCheckoutFailed::class);
-        $this->expectExceptionMessage('"../alpha" is not a project name that can be a folder name');
+        $this->expectExceptionMessageIsOrContains('"../alpha" is not a project name that can be a folder name');
 
         $this->checkout(new Filesystem())->updateMirror('../alpha', $this->remote->path);
     }
@@ -85,7 +85,7 @@ final class GitBuildCheckoutTest extends TestCase
         $this->checkout(new Filesystem())->updateMirror('alpha', $this->remote->path);
 
         $this->expectException(BuildCheckoutFailed::class);
-        $this->expectExceptionMessage('the task\'s branch "main" is main itself');
+        $this->expectExceptionMessageIsOrContains('the task\'s branch "main" is main itself');
 
         $this->checkout(new Filesystem())->makeClone('alpha', 'main', $this->mirrors.'-clone');
     }
