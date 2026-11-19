@@ -1,0 +1,185 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Tests\Gates;
+
+use Closure;
+use Intakt\Gates\JavaScriptComments;
+use Intakt\Gates\JavaScriptLexer;
+use Intakt\Gates\JavaScriptLiterals;
+use Intakt\Gates\LeftUndoneComments;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\TestCase;
+
+#[CoversClass(JavaScriptComments::class)]
+#[CoversClass(JavaScriptLexer::class)]
+#[CoversClass(JavaScriptLiterals::class)]
+#[CoversClass(LeftUndoneComments::class)]
+final class JavaScriptCommentsTest extends TestCase
+{
+    private const string LINE_SEPARATOR = "\u{2028}";
+    private const string PARAGRAPH_SEPARATOR = "\u{2029}";
+    // Because a linear scan grows about eightfold on eight times the input and a quadratic one about sixty-fourfold, this bound leaves room for a noisy machine.
+    private const float LINEAR_GROWTH_BOUND = 24.0;
+
+    /**
+     * @return iterable<string, array{string, array<int, string>}>
+     */
+    public static function scriptsWithAMarkerComment(): iterable
+    {
+        yield 'a line comment' => ["let total = 0; // TODO show the total\n", [1 => 'TODO']];
+        yield 'a block comment' => ["/* FIXME the total */\n", [1 => 'FIXME']];
+        yield 'the second line of a block comment' => ["/*\n * TODO show the total\n */\n", [2 => 'TODO']];
+        yield 'a documentation comment' => ["let a;\n/**\n * XXX breaks on empty orders\n */\n", [3 => 'XXX']];
+        yield 'a nested line comment marker' => ["// // TODO later\n", [1 => 'TODO']];
+        yield 'a lower-case marker' => ["// todo: later\n", [1 => 'todo']];
+        yield 'an unclosed block comment' => ["/*\n TODO later\n", [2 => 'TODO']];
+        yield 'a comment after carriage return line ends' => ["let a;\r\n\r\n// TODO later\r\n", [3 => 'TODO']];
+        yield 'a comment after a string holding a comment opener' => ["const a = '/*'; // TODO later\n", [1 => 'TODO']];
+        yield 'a comment after an escaped quote' => ["const a = \"\\\"//\"; // TODO later\n", [1 => 'TODO']];
+        yield 'a comment after a string continued on the next line' => ["const a = 'x\\\n// TODO inside'; // FIXME later\n", [2 => 'FIXME']];
+        yield 'a comment after a string continued after CR LF' => ["const a = 'x\\\r\n// TODO inside'; // FIXME later\n", [2 => 'FIXME']];
+        yield 'a comment after a template literal' => ["const a = `// \${b}`; // TODO later\n", [1 => 'TODO']];
+        yield 'a block comment in a template expression' => ["const a = `\${b /* TODO later */}`;\n", [1 => 'TODO']];
+        yield 'a line comment in a template expression' => ["const a = `\${b // TODO later\n}`;\n", [1 => 'TODO']];
+        yield 'a comment after nested templates' => ["const a = `\${`\${'`'}`}`; // TODO later\n", [1 => 'TODO']];
+        yield 'a comment after an object in a template expression' => ["const a = `\${ {b: {c: 1}}.b }`; // TODO later\n", [1 => 'TODO']];
+        yield 'a comment after a pattern with escaped slashes' => ["const a = /\\/\\//g; // TODO later\n", [1 => 'TODO']];
+        yield 'a comment after a pattern with a slash in a class' => ["const a = /[/]+/; // TODO later\n", [1 => 'TODO']];
+        yield 'a comment after a pattern holding a quote' => ["const a = /'/; // TODO later\n", [1 => 'TODO']];
+        yield 'a pattern after return' => ["return /'/.test(a); // TODO later\n", [1 => 'TODO']];
+        yield 'a pattern after typeof' => ["typeof /'/; // TODO later\n", [1 => 'TODO']];
+        yield 'a pattern after an opening parenthesis' => ["f(/'/); // TODO later\n", [1 => 'TODO']];
+        yield 'a pattern after an arrow' => ["const f = () => /'/; // TODO later\n", [1 => 'TODO']];
+        yield 'a pattern as the body of an if' => ["if (a) /'/.test(b); // TODO later\n", [1 => 'TODO']];
+        yield 'a pattern as the body of a while' => ["while (a) /'/.test(b); // TODO later\n", [1 => 'TODO']];
+        yield 'a pattern as the body of a for' => ["for (const a of b) /'/.test(a); // TODO later\n", [1 => 'TODO']];
+        yield 'a pattern as the body of a for await' => ["for await (const a of b) /'/.test(a); // TODO later\n", [1 => 'TODO']];
+        yield 'a division after an identifier' => ["const a = total / 2 + '/'; // TODO later\n", [1 => 'TODO']];
+        yield 'a division after a closing parenthesis' => ["const a = (total) / 2 + '/'; // TODO later\n", [1 => 'TODO']];
+        yield 'a division after a closing bracket' => ["const a = totals[0] / 2 + '/'; // TODO later\n", [1 => 'TODO']];
+        yield 'a division after a closing brace' => ["const a = {}\n/ 2 + '/'; // TODO later\n", [2 => 'TODO']];
+        yield 'a division after a number' => ["const a = 4 / 2 + '/'; // TODO later\n", [1 => 'TODO']];
+        yield 'a division after a trailing decimal point' => ["const a = 4. / 2 + '/'; // TODO later\n", [1 => 'TODO']];
+        yield 'a division after a leading decimal point' => ["const a = .5 / 2 + '/'; // TODO later\n", [1 => 'TODO']];
+        yield 'a division after an exponent' => ["const a = 1.5e-3 / 2 + '/'; // TODO later\n", [1 => 'TODO']];
+        yield 'a division after a hexadecimal number' => ["const a = 0xFF / 2 + '/'; // TODO later\n", [1 => 'TODO']];
+        yield 'a division after a big integer' => ["const a = 1_000n / 2n + '/'; // TODO later\n", [1 => 'TODO']];
+        yield 'a division after a string' => ["const a = '4' / 2 + '/'; // TODO later\n", [1 => 'TODO']];
+        yield 'a division after a template literal' => ["const a = `4` / 2 + '/'; // TODO later\n", [1 => 'TODO']];
+        yield 'a division after a pattern' => ["const a = /4/ / 2 + '/'; // TODO later\n", [1 => 'TODO']];
+        yield 'a division after an increment' => ["const a = b++ / 2 + '/'; // TODO later\n", [1 => 'TODO']];
+        yield 'a division after a property named like a keyword' => ["const a = order.return / 2 + '/'; // TODO later\n", [1 => 'TODO']];
+        yield 'a division after an identifier with a multibyte letter' => ["const a = größe / 2 + '/'; // TODO later\n", [1 => 'TODO']];
+        yield 'a division after an identifier with a multibyte letter sharing the separator lead byte' => ["const a = x\u{2160} / 2 + '/'; // TODO later\n", [1 => 'TODO']];
+        yield 'a division after a spread argument' => ["f(...a / 2 + '/'); // TODO later\n", [1 => 'TODO']];
+        yield 'code after a line comment ended by a line separator' => ['// note'.self::LINE_SEPARATOR."let a = 1; /* TODO later */\n", [1 => 'TODO']];
+        yield 'code after a line comment ended by a paragraph separator' => ['// note'.self::PARAGRAPH_SEPARATOR."let a = 1; /* TODO later */\n", [1 => 'TODO']];
+        yield 'a starred block comment line after a line separator' => ['/* note'.self::LINE_SEPARATOR." * TODO later */\n", [1 => 'TODO']];
+        yield 'a division after a line separator' => ['let a = b'.self::LINE_SEPARATOR."/ 2 + '/'; // TODO later\n", [1 => 'TODO']];
+    }
+
+    /**
+     * @param array<int, string> $markers
+     */
+    #[DataProvider('scriptsWithAMarkerComment')]
+    public function testAMarkerInAJavaScriptCommentIsReportedOnItsGitLine(string $script, array $markers): void
+    {
+        self::assertSame($markers, $this->markersOn($script));
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function scriptsWithoutAMarkerComment(): iterable
+    {
+        yield 'a line comment in a single-quoted string' => ["const a = '// TODO later';\n"];
+        yield 'a block comment in a double-quoted string' => ["const a = \"/* TODO later */\";\n"];
+        yield 'a line comment in a template literal' => ["const a = `\n// TODO later\n`;\n"];
+        yield 'a line comment in template text after an expression' => ["const a = `\${'`'} // TODO later`;\n"];
+        yield 'a line comment in a template nested in an expression' => ["const a = `\${`// TODO later`}`;\n"];
+        yield 'a line comment in a string after a line separator' => ["const a = '".self::LINE_SEPARATOR."// TODO later';\n"];
+        yield 'a quote in a pattern before a string holding a comment' => ["const a = /'/.test(b) && '// TODO later';\n"];
+        yield 'a quote in a class of a pattern before a string holding a comment' => ["const a = /[/']/.test(b) && '// TODO later';\n"];
+        yield 'a quote in a pattern as the body of a for await' => ["for await (const line of lines) /'/.test(line) && log('// TODO later');\n"];
+        yield 'a quote after a division before a string holding a comment' => ["const a = 4. / 2 + \"'\" + '// TODO later';\n"];
+        yield 'a marker after the comment start' => ["// see the TODO list\n"];
+        yield 'a reasoned exception' => ["// TODO(#123): show the total once the forge sends it\n"];
+        yield 'a marker behind a hash, which is no JavaScript comment' => ["/* # TODO is shell syntax */\n"];
+        yield 'a marker in code' => ["const TODO = 1;\n"];
+        yield 'an empty block comment' => ["/**/\n"];
+    }
+
+    #[DataProvider('scriptsWithoutAMarkerComment')]
+    public function testAJavaScriptSourceWithoutAMarkerCommentHasNoMarkers(string $script): void
+    {
+        self::assertSame([], $this->markersOn($script));
+    }
+
+    public function testABlockCommentSplitAtLineSeparatorsIsReportedPartByPartFromItsOwnOffsets(): void
+    {
+        $script = '/* a'.self::LINE_SEPARATOR.'b'.self::PARAGRAPH_SEPARATOR.'c */';
+
+        self::assertSame([[0, '/* a'], [7, 'b'], [11, 'c */']], new JavaScriptComments()->commentsIn($script));
+    }
+
+    public function testAMarkerOnALineThatWasNotAddedIsNotReported(): void
+    {
+        $markers = new LeftUndoneComments()->markersOn("let a;\n// TODO later\n", [1], new JavaScriptComments());
+
+        self::assertSame([], $markers);
+    }
+
+    public function testAnUnclosedStringTemplateOrPatternEndsTheScanWithoutAComment(): void
+    {
+        foreach (["'// TODO", '`// TODO', '`${"// TODO', 'a = /[// TODO', 'a = 1\\'] as $script) {
+            self::assertSame([], $this->markersOn($script), $script);
+        }
+    }
+
+    public function testABlockCommentSplitByManySeparatorsIsScannedInLinearTime(): void
+    {
+        $script = static fn (int $size): string => '/* a'.str_repeat(self::LINE_SEPARATOR.' * b', $size)." TODO */\n";
+
+        self::assertLessThan(self::LINEAR_GROWTH_BOUND, $this->growthOf($script));
+    }
+
+    public function testDeeplyNestedTemplateExpressionsAndBracketsAreScannedInLinearTime(): void
+    {
+        $script = static fn (int $size): string => str_repeat('`${[({', $size).'/* TODO */'.str_repeat('})]}`', $size)."\n";
+
+        self::assertLessThan(self::LINEAR_GROWTH_BOUND, $this->growthOf($script));
+        self::assertSame([1 => 'TODO'], $this->markersOn($script(1000)));
+    }
+
+    /**
+     * @param Closure(int): string $script
+     */
+    private function growthOf(Closure $script): float
+    {
+        return $this->fastestScanOf($script(16000)) / $this->fastestScanOf($script(2000));
+    }
+
+    private function fastestScanOf(string $script): float
+    {
+        $fastest = PHP_INT_MAX;
+
+        foreach (range(1, 5) as $ignored) {
+            $started = hrtime(true);
+            $this->markersOn($script);
+            $fastest = min($fastest, hrtime(true) - $started);
+        }
+
+        return (float) $fastest;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function markersOn(string $script): array
+    {
+        return new LeftUndoneComments()->markersOn($script, range(1, substr_count($script, "\n") + 1), new JavaScriptComments());
+    }
+}
