@@ -759,9 +759,13 @@ details.ev > summary time { margin-left: auto; color: var(--muted); font-size: v
 .wait-item .why summary::-webkit-details-marker { display: none; }
 .wait-item .why summary::after { content: ""; width: 7px; height: 7px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg) translateY(-2px); }
 .wait-item .why[open] summary::after { transform: rotate(-135deg); }
-/* The mock puts the Why below the choices on a phone; here it stays above them, in the order Tab reaches them (D6), so the keyboard never goes back up the card. */
-@media (max-width: 760px) {
-  .wait-item { grid-template-columns: minmax(0, 1fr); grid-template-areas: "title" "meta" "conseq" "why" "act"; grid-template-rows: none; gap: var(--s8); padding: var(--s16); }
+/* DESIGN.md's bridge is single column: beside the rail a 340 px choices column would leave the text about 45 px.
+   The mock puts the Why below the choices on a phone; here it stays above them, in the order Tab reaches them (D6), so the keyboard never goes back up the card. */
+@media (max-width: 1099px) {
+  .wait-item { grid-template-columns: minmax(0, 1fr); grid-template-areas: "title" "meta" "conseq" "why" "act"; grid-template-rows: none; gap: var(--s8); }
   .wait-item > .meta, .wait-item .why, .wait-item .conseq { padding-left: 0; }
+}
+@media (max-width: 760px) {
+  .wait-item { padding: var(--s16); }
   .wait-item .why summary { min-height: 44px; font-size: var(--t15); line-height: 1; }
 }
