@@ -16,7 +16,7 @@ final class MarkdownTextTest extends TestCase
         self::assertSame("a  b\nc", MarkdownText::visible("a <!-- hidden --> b\r\nc"));
     }
 
-    public function testAnHtmlCommentOverSeveralLinesIsHidden(): void
+    public function testAnHtmlCommentOverSeveralLinesIsHiddenKeepingItsLineBreaks(): void
     {
         self::assertSame("a \n\n b", MarkdownText::visible("a <!-- one\ntwo\nthree --> b"));
     }
@@ -26,24 +26,28 @@ final class MarkdownTextTest extends TestCase
         self::assertSame("a \n", MarkdownText::visible("a <!-- one\ntwo"));
     }
 
-    public function testFencedLinesAreMarkedAndKeepTheirCommentMarkers(): void
+    public function testAFencedBlockIsVisibleWithItsCommentMarkers(): void
     {
-        self::assertSame(
-            [['```', true], ['<!-- shown', true], ['```', true], ['after', false]],
-            MarkdownText::visibleLines("```\n<!-- shown\n```\nafter"),
-        );
+        self::assertSame("```\n<!-- shown\n```\nafter", MarkdownText::visible("```\n<!-- shown\n```\nafter"));
+    }
+
+    public function testAFencedBlockIsNoProse(): void
+    {
+        self::assertSame("before\n\n\n\nafter", MarkdownText::visibleProse("before\n```\n<!-- shown\n```\nafter"));
     }
 
     public function testAFenceInsideAnHtmlCommentOpensNoBlock(): void
     {
-        self::assertSame([['', false], ['', false], ['', false], ['after', false]], MarkdownText::visibleLines("<!--\n```\n-->\nafter"));
+        self::assertSame("\n\n\nafter", MarkdownText::visibleProse("<!--\n```\n-->\nafter"));
     }
 
     public function testAFenceClosesOnlyWithTheSameCharacterAtLeastAsLong(): void
     {
-        self::assertSame(
-            [true, true, true, true, true, false],
-            array_map(static fn (array $line): bool => $line[1], MarkdownText::visibleLines("````\n```\n~~~~\n``` x\n`````\nafter")),
-        );
+        self::assertSame("\n\n\n\n\nafter", MarkdownText::visibleProse("````\n```\n~~~~\n``` x\n`````\nafter"));
+    }
+
+    public function testAnUnclosedFenceRunsToTheEnd(): void
+    {
+        self::assertSame("before\n\n", MarkdownText::visibleProse("before\n~~~\n## Evidence"));
     }
 }

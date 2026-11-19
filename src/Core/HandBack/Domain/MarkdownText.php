@@ -4,79 +4,37 @@ declare(strict_types=1);
 
 namespace Intakt\Core\HandBack\Domain;
 
+use RuntimeException;
+
 // Both the task and the pull request text are judged by what the forge renders, so text a reader never sees (an HTML comment) must not count, while a fenced block is shown but is code, not structure.
 final readonly class MarkdownText
 {
-    private const string FENCE_OPEN = '/^ {0,3}(`{3,}(?=[^`]*$)|~{3,})/';
-
-    private const string COMMENT_OPEN = '<!--';
-
-    private const string COMMENT_CLOSE = '-->';
-
-    /**
-     * @return list<array{string, bool}> each line without its hidden parts, and whether it belongs to a fenced block
-     */
-    public static function visibleLines(string $markdown): array
-    {
-        $lines = [];
-        $fence = null;
-        $inComment = false;
-
-        foreach (explode("\n", str_replace(["\r\n", "\r"], "\n", $markdown)) as $line) {
-            if (null !== $fence) {
-                $fence = self::closes($fence, $line) ? null : $fence;
-                $lines[] = [$line, true];
-            } elseif (!$inComment && 1 === preg_match(self::FENCE_OPEN, $line, $match)) {
-                $fence = $match[1];
-                $lines[] = [$line, true];
-            } else {
-                [$visible, $inComment] = self::withoutComments($line, $inComment);
-                $lines[] = [$visible, false];
-            }
-        }
-
-        return $lines;
-    }
+    // One pass from left to right, because whichever of a fence and a comment opens first hides the other's markers (https://spec.commonmark.org/0.31.2/#fenced-code-blocks); a fence closes only with a run of its own character at least as long.
+    private const string HIDDEN_OR_FENCED = '/(?<fence>^ {0,3}(?:(?<tick>`{3,})[^`\n]*|(?<tilde>~{3,})[^\n]*)(?:\n[\s\S]*?)??(?:\n {0,3}(?:\k<tick>`*|\k<tilde>~*)[ \t]*(?=\n|\z)|\z))|(?<comment><!--[\s\S]*?(?:-->|\z))/m';
 
     public static function visible(string $markdown): string
     {
-        return implode("\n", array_map(static fn (array $line): string => $line[0], self::visibleLines($markdown)));
+        return self::replaced($markdown, static fn (array $match): string => '' !== $match['fence'] ? $match[0] : self::lineBreaksOf($match[0]));
     }
 
-    // CommonMark closes a fence only with a run of the same character, at least as long, and nothing after it.
-    private static function closes(string $fence, string $line): bool
+    public static function visibleProse(string $markdown): string
     {
-        return 1 === preg_match('/^ {0,3}'.preg_quote($fence[0], '/').'{'.strlen($fence).',}[ \t]*$/', $line);
+        return self::replaced($markdown, static fn (array $match): string => self::lineBreaksOf($match[0]));
     }
 
     /**
-     * @return array{string, bool}
+     * @param callable(array<array-key, string>): string $replacement
      */
-    private static function withoutComments(string $line, bool $inComment): array
+    private static function replaced(string $markdown, callable $replacement): string
     {
-        $visible = '';
-        $rest = $line;
+        // An unreadable text must stop the check, because reading it as empty would pass a task's Evidence list unseen.
+        return preg_replace_callback(self::HIDDEN_OR_FENCED, $replacement, str_replace(["\r\n", "\r"], "\n", $markdown))
+            ?? throw new RuntimeException('the Markdown text cannot be read: '.preg_last_error_msg());
+    }
 
-        while (true) {
-            if ($inComment) {
-                $end = strpos($rest, self::COMMENT_CLOSE);
-
-                if (false === $end) {
-                    return [$visible, true];
-                }
-
-                $rest = substr($rest, $end + strlen(self::COMMENT_CLOSE));
-            }
-
-            $start = strpos($rest, self::COMMENT_OPEN);
-
-            if (false === $start) {
-                return [$visible.$rest, false];
-            }
-
-            $visible .= substr($rest, 0, $start);
-            $rest = substr($rest, $start + strlen(self::COMMENT_OPEN));
-            $inComment = true;
-        }
+    // Hidden and fenced text keeps its line breaks, because the lines around it keep their place.
+    private static function lineBreaksOf(string $text): string
+    {
+        return str_repeat("\n", substr_count($text, "\n"));
     }
 }

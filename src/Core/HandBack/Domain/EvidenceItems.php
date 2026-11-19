@@ -25,32 +25,21 @@ final readonly class EvidenceItems
 
     public static function countIn(string $task): int
     {
-        $lines = self::unfencedLines($task);
+        $lines = array_map(self::withSpacesForTabs(...), explode("\n", MarkdownText::visibleProse($task)));
 
         foreach (array_keys($lines) as $index) {
             $heading = self::headingLines($lines, $index);
 
             if ($heading > 0 && 1 === preg_match(self::EVIDENCE_HEADING_TEXT, $lines[$index])) {
-                return self::countSection(array_slice($lines, $index + $heading), underLabel: false);
+                return self::topLevelItems(self::untilHeading(array_slice($lines, $index + $heading)));
             }
 
             if (1 === preg_match(self::EVIDENCE_LABEL, $lines[$index])) {
-                return self::countSection(array_slice($lines, $index + 1), underLabel: true);
+                return self::topLevelItems(self::untilTheLabelListEnds(array_slice($lines, $index + 1)));
             }
         }
 
         return 0;
-    }
-
-    /**
-     * @return list<string>
-     */
-    private static function unfencedLines(string $task): array
-    {
-        return array_map(
-            static fn (array $line): string => $line[1] ? '' : self::withSpacesForTabs($line[0]),
-            MarkdownText::visibleLines($task),
-        );
     }
 
     private static function withSpacesForTabs(string $line): string
@@ -58,53 +47,96 @@ final readonly class EvidenceItems
         return preg_replace_callback('/^[ \t]+/', static fn (array $match): string => str_replace("\t", '    ', $match[0]), $line) ?? $line;
     }
 
+    // A section under a heading runs to the next heading, as Markdown renders it, so an introduction line or a paragraph inside it ends nothing.
     /**
-     * A heading section runs to the next heading, as Markdown renders it; a plain `Evidence:` label has no such end, so its list ends where the text after it starts.
-     *
      * @param list<string> $lines
+     *
+     * @return list<string>
      */
-    private static function countSection(array $lines, bool $underLabel): int
+    private static function untilHeading(array $lines): array
+    {
+        $end = array_find_key($lines, static fn (string $line, int $index): bool => self::headingLines($lines, $index) > 0);
+
+        return null === $end ? $lines : array_slice($lines, 0, $end);
+    }
+
+    // A plain `Evidence:` label has no end of its own, so its list ends where the text after the first item starts.
+    /**
+     * @param list<string> $lines
+     *
+     * @return list<string>
+     */
+    private static function untilTheLabelListEnds(array $lines): array
+    {
+        $section = self::untilHeading($lines);
+        $first = array_find_key($section, static fn (string $line): bool => null !== self::contentColumnOf($line));
+
+        if (null === $first) {
+            return $section;
+        }
+
+        $end = array_find_key($section, static fn (string $line, int $index): bool => $index > $first && self::endsTheLabelList($section, $index));
+
+        return null === $end ? $section : array_slice($section, 0, $end);
+    }
+
+    // A lower-case line ending in a colon right after an item is kept, because it is the item wrapped onto a new line, not a label.
+    /**
+     * @param list<string> $section
+     */
+    private static function endsTheLabelList(array $section, int $index): bool
+    {
+        $line = $section[$index];
+
+        if (1 === preg_match(self::LABEL, $line)) {
+            return true;
+        }
+
+        return '' === trim($section[$index - 1]) && 1 === preg_match('/^\S/', $line) && null === self::contentColumnOf($line);
+    }
+
+    /**
+     * @param list<string> $section
+     */
+    private static function topLevelItems(array $section): int
     {
         $count = 0;
-        $contentColumn = null;
-        $previousBlank = false;
+        $column = null;
 
-        foreach (array_keys($lines) as $index) {
-            $line = $lines[$index];
+        foreach ($section as $index => $line) {
+            $column = self::endsTheList($section, $index, $column) ? null : $column;
 
-            if (self::headingLines($lines, $index) > 0 || ($underLabel && $count > 0 && self::endsTheLabelList($line, $previousBlank))) {
-                break;
-            }
-
-            $itemColumn = self::contentColumnOf($line);
-
-            if (null !== $itemColumn && self::indentOf($line) <= 3 && (null === $contentColumn || self::indentOf($line) < $contentColumn)) {
+            if (self::isTopLevelItem($line, $column)) {
                 ++$count;
-                $contentColumn = $itemColumn;
-            } elseif (null === $itemColumn && $previousBlank && '' !== trim($line) && self::indentOf($line) < ($contentColumn ?? 0)) {
-                $contentColumn = null;
+                $column = self::contentColumnOf($line);
             }
-
-            $previousBlank = '' === trim($line);
         }
 
         return $count;
     }
 
-    // A lower-case line ending in a colon right after an item is the item wrapped onto a new line, not a label.
-    private static function endsTheLabelList(string $line, bool $previousBlank): bool
+    // An item indented to the content of the item above is nested in it (https://spec.commonmark.org/0.31.2/#list-items).
+    private static function isTopLevelItem(string $line, ?int $column): bool
     {
-        if (1 === preg_match(self::LABEL, $line)) {
-            return true;
-        }
+        return null !== self::contentColumnOf($line) && self::indentOf($line) <= 3 && (null === $column || self::indentOf($line) < $column);
+    }
 
-        return $previousBlank && 1 === preg_match('/^\S/', $line) && null === self::contentColumnOf($line);
+    // A paragraph after a blank line, indented less than the item's content, is outside the list, because Markdown no longer reads it as part of the item.
+    /**
+     * @param list<string> $section
+     */
+    private static function endsTheList(array $section, int $index, ?int $column): bool
+    {
+        $line = $section[$index];
+
+        return $index > 0 && '' === trim($section[$index - 1]) && '' !== trim($line)
+            && null === self::contentColumnOf($line) && self::indentOf($line) < ($column ?? 0);
     }
 
     /**
      * @param list<string> $lines
      *
-     * @return int<0, 2> how many lines the heading at this line takes
+     * @return int<0, 2>
      */
     private static function headingLines(array $lines, int $index): int
     {
