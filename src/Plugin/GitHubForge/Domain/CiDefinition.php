@@ -11,7 +11,7 @@ final readonly class CiDefinition
 {
     private const string GITHUB_FOLDER = '.github/';
     // Not CI, because GitHub only shows issue forms and the pull request template and never runs them; a workflow that names one still counts it.
-    private const string TEMPLATE = '#^\.github/(?:ISSUE_TEMPLATE/[^/]+\.(?:ya?ml|md)|pull_request_template\.md)$#';
+    private const string TEMPLATE = '#^\.github/(?:ISSUE_TEMPLATE/[^/\n]+\.(?:ya?ml|md)|pull_request_template\.md)\z#';
     // Every Dockerfile counts, because a workflow can build an image from one in its build context without naming it.
     private const string DOCKERFILE = '/(?:^|\/)(?:Dockerfile(?:\..+)?|[^\/]+\.Dockerfile)$/i';
     // A quoted key or a space before the colon is the same YAML key, so both still name an action.

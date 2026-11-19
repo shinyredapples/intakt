@@ -76,6 +76,13 @@ final class CiDefinitionTest extends TestCase
         self::assertSame($paths, $this->ciPaths($paths));
     }
 
+    public function testATemplateNameWithANewlineInsideOrAtTheEndIsStillACiChange(): void
+    {
+        $paths = [".github/pull_request_template.md\n", ".github/ISSUE_TEMPLATE/bug_report.yml\n", ".github/ISSUE_TEMPLATE/run.sh\n.yml"];
+
+        self::assertSame($paths, $this->ciPaths($paths));
+    }
+
     public function testAnIssueFormAWorkflowNamesIsStillACiChange(): void
     {
         self::assertSame(['.github/ISSUE_TEMPLATE/bug_report.yml'], $this->ciPathsOf("jobs:\n  t:\n    steps:\n      - run: cat bug_report.yml\n", ['.github/ISSUE_TEMPLATE/bug_report.yml']));
