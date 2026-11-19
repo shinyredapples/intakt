@@ -257,7 +257,7 @@ final class BuildTaskTest extends TestCase
 
     private RecordingChangeOpening $changes;
 
-    /** @var list<array<string, mixed>> */
+    /** @var list<array<mixed>> */
     private array $parkedRows = [];
 
     private bool $parkingFails = false;
