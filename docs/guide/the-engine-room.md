@@ -58,7 +58,15 @@ Everything that waits has a **deadline** that wakes it, for example "check again
 
 ## CI: the second opinion
 
-**CI** (continuous integration) is the project's full check run again on the pushed version after every push, on a machine the builder does not control. Today that is GitHub running the project's checks on its own machines; Intakt runs the same checks (`bin/check --fast` for a PHP project) before pushing, so CI is a second, independent opinion, and the reviewers only start once it is green.
+**CI** (continuous integration) is the project's full check run again on the pushed version, on a machine the builder does not control. For Intakt's own repository it runs on every pull request from the same repository and on every push to main. Today that is GitHub running the project's checks on its own machines.
+
+Before pushing, Intakt runs the project's check itself (`bin/check --fast` for a PHP project, the quick version). CI repeats that check in full after the push and can add jobs of its own. For Intakt's own repository it also runs:
+- the journeys, which walk through a first install and the live review page;
+- the database tests on MySQL, MariaDB and PostgreSQL (the check before the push uses SQLite only), when a pull request touches the database layer, its migrations, the dependencies, the persistence tests or their setup, or the CI files;
+- building the app image, with a smoke test and a check that it starts on an empty volume, unless a pull request changes only files under `docs/`, `tests/` or `upstream/`;
+- an upgrade check, when a pull request touches migrations, mapped database classes, the `Dockerfile`, the `docker/` folder or the locked dependencies: the image starts on a copy of the data of the version the change starts from.
+
+On main, the database tests, the image build with its smoke test and first-start check, and the upgrade check run on every push. So CI is a second, independent opinion that can also catch what the check before the push never looks at, and the reviewers only start once it is green.
 
 *(Planned; this is the decided design:)* CI is the project's full check, tests included, run on the pushed version after every push: by default a fresh container that Intakt starts itself, or the forge's CI (GitHub's machines) where the project sets it, or both. That run is the builder's check. It is a second, independent opinion, and the reviewers only start once it is green. While it runs, the build slot is already free for the next task. For Intakt's own repository it is GitHub's CI, and the checks before the push are only the quick ones that do not run the change's code. Another project runs before the push whatever pre-push command it configures, and its whole check when it configures none.
 
@@ -87,7 +95,7 @@ Locks are short-lived: a job that waits for something outside (CI, you) gives it
 
 ## Cycles and generations: second chances
 
-A **cycle** is one round of *build, check, review*. When reviewers ask for changes, the task goes around again.
+A **cycle** is one round of *build, check, review*. When the reviewers leave something that must be fixed, the task goes around again.
 
 ```mermaid
 flowchart LR

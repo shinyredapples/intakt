@@ -134,6 +134,16 @@ final class StatusReadModelTest extends TestCase
         self::assertSame([], $this->schemaErrorsOf($json));
     }
 
+    public function testAStoredAskedBuildStepIsLeftOutSoTheStatusStillValidatesAgainstTheSchema(): void
+    {
+        $this->ledger->passBuildStep('alpha', '12', 'task');
+        $this->ledger->recordBuildStep(['project' => 'alpha', 'task' => '12', 'step' => 'build_job', 'outcome' => 'asked', 'failure' => null]);
+
+        $json = $this->readModel()->json();
+
+        self::assertSame([], $this->schemaErrorsOf($json));
+    }
+
     public function testAStoppedConsumerStillYieldsAStatusWithTheRoundWaitingForItsReviewers(): void
     {
         $this->receivers = ['async' => $this->queueHolding(2)];
@@ -528,7 +538,8 @@ final class StatusReadModelTest extends TestCase
         $build = ['properties', 'projects', 'items', 'properties', 'lanes', 'properties', 'build', 'items', 'properties'];
 
         self::assertSame(array_column(BuildStep::cases(), 'value'), $this->schemaAt(...$build, ...['step', 'enum']));
-        self::assertSame(array_column(BuildStepOutcome::cases(), 'value'), $this->schemaAt(...$build, ...['outcome', 'enum']));
+        // The schema is one case behind, because no step is written as asked yet and the published schema names it with the change that writes it.
+        self::assertSame(array_column(BuildStepOutcome::cases(), 'value'), [...(array) $this->schemaAt(...$build, ...['outcome', 'enum']), BuildStepOutcome::Asked->value]);
     }
 
     private function schemaAt(string ...$path): mixed
