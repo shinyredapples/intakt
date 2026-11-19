@@ -89,6 +89,7 @@ final class ListProtectedChangesCommandTest extends TestCase
         self::assertStringEndsWith("touches protected paths: yes\n", $tester->getDisplay());
     }
 
+    // No pass-through test here: the command calls only final classes and realpath() runs before any stream wrapper, so no collaborator can throw the SPL exception.
     public function testTheCommandRefusesAHeadThatIsNoFullCommitNameAndExitsWithOne(): void
     {
         $tester = $this->whenTheCommandRuns([], 'feat/side');

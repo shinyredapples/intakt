@@ -64,6 +64,7 @@ final class GitBuildCheckoutTest extends TestCase
         $this->remote->remove();
     }
 
+    // No pass-through test for mirrorOf: its try block only matches a name against a pattern, so nothing in it can throw the SPL exception.
     public function testAProjectNameThatIsNoFolderNameFailsTheMirrorPathWithItsReason(): void
     {
         $this->expectException(BuildCheckoutFailed::class);
