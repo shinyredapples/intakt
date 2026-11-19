@@ -81,6 +81,10 @@ final class JavaScriptCommentsTest extends TestCase
         yield 'a comment after a division of an object literal in a ternary' => ["const n = ok ? {} : {} / 2; // TODO round\n", [1 => 'TODO']];
         yield 'a comment after a division of an object literal as a property value' => ["const o = { a: {} / 2 }; // TODO round\n", [1 => 'TODO']];
         yield 'a comment after a regular expression behind a for-of head' => ["for (const x of /'/.exec(a)) {} // TODO later\n", [1 => 'TODO']];
+        yield 'a comment after a division of a number with a trailing decimal point' => ["const n = 4. / 2; // TODO round\n", [1 => 'TODO']];
+        yield 'a comment after a division of a number with a trailing decimal point and no space' => ["const n = 4./2; /* FIXME */\n", [1 => 'FIXME']];
+        yield 'a comment after a division of a number with a fraction' => ["const n = 4.5 / 2; // TODO round\n", [1 => 'TODO']];
+        yield 'a comment after a division of a method called on a number' => ["const n = 1..toString().length / 2; // TODO round\n", [1 => 'TODO']];
     }
 
     /**
@@ -127,7 +131,8 @@ final class JavaScriptCommentsTest extends TestCase
         yield 'a regular expression after a class declaration' => ["class A extends B {} /[/* TODO */]/.test(input);\n"];
         yield 'a regular expression after an arrow function body' => ["const f = () => {}\n/[/* TODO */]/.test(input);\n"];
         yield 'a regular expression after a catch block' => ["try {} catch (e) {} /[/* TODO */]/.test(input);\n"];
-    }
+        yield 'a regular expression as the body of a for await loop' => ["async function f() { for await (const x of y) /[/* TODO */]/.test(a); }\n"];
+        yield 'a regular expression in a for await head' => ["async function f() { for await (const x of /[/* TODO */]/.exec(a)) {} }\n"];    }
 
     #[DataProvider('scriptsWithoutAMarkerComment')]
     public function testAJavaScriptSourceWithoutAMarkerCommentHasNoMarkers(string $script): void
@@ -173,6 +178,28 @@ final class JavaScriptCommentsTest extends TestCase
         $comments = new JavaScriptComments()->commentsIn($script);
 
         self::assertSame([[180_003, '// TODO round']], $comments);
+        self::assertLessThan(1_000_000_000, hrtime(true) - $start);
+    }
+
+    public function testABlockCommentWithTensOfThousandsOfLineSeparatorsIsReadInUnderASecond(): void
+    {
+        $script = '/*'.str_repeat("a\u{2028}b\u{2029}", 30_000)."TODO finish */\n";
+        $start = hrtime(true);
+
+        $markers = $this->markersOn($script);
+
+        self::assertSame([1 => 'TODO'], $markers);
+        self::assertLessThan(1_000_000_000, hrtime(true) - $start);
+    }
+
+    public function testTensOfThousandsOfLineCommentsEndedByLineSeparatorsAreReadInUnderASecond(): void
+    {
+        $script = str_repeat("// a\u{2028}// b\u{2029}", 15_000)."/* TODO finish */\n";
+        $start = hrtime(true);
+
+        $markers = $this->markersOn($script);
+
+        self::assertSame([1 => 'TODO'], $markers);
         self::assertLessThan(1_000_000_000, hrtime(true) - $start);
     }
 

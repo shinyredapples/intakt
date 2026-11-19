@@ -142,7 +142,7 @@ final class JavaScriptContext
             JavaScriptOpening::FunctionHead === $this->opening => $this->position = JavaScriptPosition::AfterOperand,
             'function' === $word => $this->expect(JavaScriptOpening::FunctionHead, $form),
             'class' === $word => $this->expect(JavaScriptOpening::ClassBody, $form),
-            'for' === $word => $this->expect(JavaScriptOpening::ForHead, JavaScriptForm::Declaration),
+            'for' === $word, 'await' === $word && JavaScriptOpening::ForHead === $this->opening => $this->expect(JavaScriptOpening::ForHead, JavaScriptForm::Declaration),
             in_array($word, self::KEYWORDS_BEFORE_A_CONDITION, true) => $this->expect(JavaScriptOpening::Condition, JavaScriptForm::Declaration),
             in_array($word, self::KEYWORDS_BEFORE_A_STATEMENT, true) => $this->moveTo(JavaScriptPosition::StatementStart),
             in_array($word, self::KEYWORDS_BEFORE_AN_EXPRESSION, true), 'of' === $word && JavaScriptFrame::ForHead === $this->frame => $this->moveTo(JavaScriptPosition::ExpressionStart),

@@ -12,6 +12,7 @@ final readonly class JavaScriptComments implements CommentLanguage
     private const string LINE_ENDS = "\r\n";
     // Because JavaScript also ends a line at these two characters, a line comment stops there.
     private const array SEPARATOR_LINE_ENDS = ["\u{2028}", "\u{2029}"];
+    private const string SEPARATOR_LEAD = "\xE2";
     // Because JavaScript shares PHP's comment syntax except the hash, a marker behind nested comment syntax counts as it does in PHP.
     private const string LINE_SYNTAX = '~\G(?://++|/\*++|\*++(?!/))\s*+~';
 
@@ -118,17 +119,16 @@ final readonly class JavaScriptComments implements CommentLanguage
         }
     }
 
+    // Because a git line may hold many comments ended by U+2028 or U+2029, the scan stops at the first line end instead of reading the rest of the git line for each.
     private function afterLineComment(string $source, int $offset): int
     {
-        $length = strcspn($source, self::LINE_ENDS, $offset);
-        $line = substr($source, $offset, $length);
+        $length = strlen($source);
 
-        foreach (self::SEPARATOR_LINE_ENDS as $separator) {
-            $at = strpos($line, $separator);
-            $length = false === $at ? $length : min($length, $at);
+        while (($offset += strcspn($source, self::LINE_ENDS.self::SEPARATOR_LEAD, $offset)) < $length && self::SEPARATOR_LEAD === $source[$offset] && !in_array(substr($source, $offset, 3), self::SEPARATOR_LINE_ENDS, true)) {
+            ++$offset;
         }
 
-        return $offset + $length;
+        return min($offset, $length);
     }
 
     private function afterBlockComment(string $source, int $offset): int

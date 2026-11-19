@@ -44,6 +44,11 @@ final readonly class JavaScriptCode
             return $this->punctuatorAt($code, $at);
         }
 
+        // Because a number may end in its decimal point, as in `4.`, that point belongs to the number and is no member access.
+        if (ctype_digit($code[$at]) && '.' === ($code[$end] ?? '')) {
+            $end = $this->wordEnd($code, $end + 1);
+        }
+
         return substr($code, $at, $end - $at);
     }
 
