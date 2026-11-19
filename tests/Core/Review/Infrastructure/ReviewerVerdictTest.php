@@ -558,6 +558,17 @@ final class ReviewerVerdictTest extends WebTestCase
         self::assertSame('the reviewer\'s answer could not be read as a verdict: the verdict names finding ids reserved for failed reviews: no-tools.', $refused->keySafeInWords());
     }
 
+    public function testABlockedAnswerNamingTwoReservedFailureIdsOnACutDiffIsRefusedNamingBoth(): void
+    {
+        $this->diff = str_repeat('+x', PromptCut::CEILING_BYTES + 1);
+        $document = VerdictDocument::fromTheDesign()->with('verdict', 'blocked')->with('resolved', [])->withFinding('id', Verdict::INVALID_OUTPUT);
+        $finding = $document->decoded()['findings'][0];
+
+        $refused = $this->refused('Add a cart.', [], $document->with('findings', [$finding, [...$finding, 'id' => Verdict::NO_TOOLS]])->json());
+
+        self::assertSame('the reviewer\'s answer could not be read as a verdict: the verdict names finding ids reserved for failed reviews: invalid-output, no-tools.', $refused->keySafeInWords());
+    }
+
     public function testAChangesAnswerWithANewFindingIdIsAccepted(): void
     {
         $verdict = $this->review('Add a cart.', [], VerdictDocument::fromTheDesign()->with('verdict', 'changes')->with('resolved', [])->withFinding('id', 'cart-total')->json());
