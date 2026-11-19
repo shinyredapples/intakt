@@ -21,6 +21,6 @@ final class DashboardMockDesignCopyTest extends TestCase
 
         self::assertSame(1, preg_match('/"In review": "([^"]+)",/', $board, $lane));
         self::assertSame(1, preg_match('/^.*\*\*First day\*\*.*$/m', $design, $firstDay));
-        self::assertStringContainsString('"'.$lane[1].'"', $firstDay[0]);
+        self::assertStringContainsString('"'.($lane[1] ?? '').'"', $firstDay[0] ?? '');
     }
 }
