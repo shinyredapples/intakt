@@ -39,6 +39,8 @@ use Symfony\Component\DependencyInjection\Attribute\Exclude;
 #[Exclude]
 final class LedgerRounds
 {
+    private const string UNRECORDED_REASON = 'Reason not recorded: this verdict was written before Intakt kept the reason of a blocked verdict.';
+
     /** @var array<string, ReviewedRound> */
     private array $started = [];
 
@@ -263,12 +265,18 @@ final class LedgerRounds
     {
         return match (true) {
             $row instanceof ReviewerStarted => $outcome->restarted($at, $row->model),
-            $row instanceof VerdictReceived => $outcome->answered($row->decision, $row->findings, $row->mode)->because($row->reason),
+            $row instanceof VerdictReceived => $outcome->answered($row->decision, $row->findings, $row->mode)->because($row->reason ?? self::unrecordedReasonOf($row->decision)),
             $row instanceof ReviewerFailed => $outcome->failed($this->failures->of($row->failure)),
             $row instanceof ReviewerBlocked => $outcome->blocked($row->reason),
             $row instanceof ReviewerStopped => $outcome->stopped(),
             $row instanceof CatchUpOwed => $outcome->substitutedBy($row->substitute->value, $row->model),
         };
+    }
+
+    // A blocked verdict recorded before reasons were kept still says so, because Blocked must never show without a word on why.
+    private static function unrecordedReasonOf(Decision $decision): ?string
+    {
+        return Decision::Blocked === $decision ? self::UNRECORDED_REASON : null;
     }
 
     private function completed(ReviewedRound $round): ReviewedRound

@@ -697,6 +697,15 @@ final class LedgerRoundsTest extends TestCase
         self::assertSame([ReviewOutcome::Blocked, 'The reviewer stream ended before its verdict.'], [$review?->rounds[0]->outcomes[0]->outcome(), $review?->rounds[0]->outcomes[0]->note]);
     }
 
+    public function testABlockedVerdictRecordedBeforeReasonsWereKeptSaysItsReasonWasNotRecorded(): void
+    {
+        $older = $this->event(LedgerEventKind::VerdictReceived, '{"round":"r1","reviewer":"x","role":"security","tier":"strong","decision":"blocked","findings":1,"mode":"live"}');
+
+        $review = $this->reviewOf('r1', $this->quorumStart(2, QuorumPolicy::All), $older);
+
+        self::assertSame([ReviewOutcome::Blocked, 'Reason not recorded: this verdict was written before Intakt kept the reason of a blocked verdict.'], [$review?->rounds[0]->outcomes[0]->outcome(), $review?->rounds[0]->outcomes[0]->note]);
+    }
+
     public function testAnAnsweredReviewerWithoutAReasonHasNoNote(): void
     {
         $review = $this->reviewOf('r1', $this->quorumStart(2, QuorumPolicy::All), $this->approved('x'));
