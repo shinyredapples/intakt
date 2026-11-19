@@ -93,6 +93,9 @@ final class BuildJobImageCommandTest extends TestCase
     private string $probe = '{"version": "8.5.12", "extensions": ["core", "intl"]}';
     private string $context = '';
     private string $url = '';
+    private int $socketAnswersWithStatus = 200;
+    /** @var list<string> */
+    private array $contextFilesDuringTheRequest = [];
     private ?BuildJobImage $racing = null;
 
     /** @var list<MockResponse> */
@@ -232,6 +235,26 @@ final class BuildJobImageCommandTest extends TestCase
         self::assertSame([], $this->requests);
     }
 
+    public function testTheBuildContextIsStreamedFromAFileThatIsRemovedOnceTheRequestIsSent(): void
+    {
+        $this->whenTheCommandRuns(self::BUILT);
+
+        self::assertCount(1, $this->contextFilesDuringTheRequest);
+        self::assertFileDoesNotExist($this->contextFilesDuringTheRequest[0]);
+        self::assertDirectoryDoesNotExist(dirname($this->contextFilesDuringTheRequest[0]));
+    }
+
+    public function testTheBuildContextIsRemovedAlsoWhenTheEngineRefusesTheBuild(): void
+    {
+        $this->socketAnswersWithStatus = 400;
+
+        $this->whenTheCommandRuns('{"message":"invalid reference format"}');
+
+        self::assertCount(1, $this->contextFilesDuringTheRequest);
+        self::assertFileDoesNotExist($this->contextFilesDuringTheRequest[0]);
+        self::assertDirectoryDoesNotExist(dirname($this->contextFilesDuringTheRequest[0]));
+    }
+
     public function testATagThatIsNoImageReferenceIsRefused(): void
     {
         $tester = $this->whenTheCommandRuns(self::BUILT, 'Demo:main tag');
@@ -258,8 +281,10 @@ final class BuildJobImageCommandTest extends TestCase
         $client = new MockHttpClient(function (string $method, string $url, array $options) use ($stream): MockResponse {
             $this->url = $url;
             $this->context = sys_get_temp_dir().'/intakt-context-'.bin2hex(random_bytes(4)).'.tar';
-            new Filesystem()->dumpFile($this->context, is_string($options['body']) ? $options['body'] : self::fail('The build context is no string.'));
-            $response = new MockResponse($stream);
+            self::assertFalse(is_string($options['body']), 'The build context is streamed, not held as a string.');
+            $this->contextFilesDuringTheRequest = glob(sys_get_temp_dir().'/intakt-image-*/context.tar') ?: [];
+            new Filesystem()->dumpFile($this->context, $this->bodyRead($options['body']));
+            $response = new MockResponse($stream, ['http_code' => $this->socketAnswersWithStatus]);
             $this->requests[] = $response;
 
             return $response;
@@ -274,6 +299,22 @@ final class BuildJobImageCommandTest extends TestCase
         $tester->execute(['directory' => $this->repository->path, 'tag' => $tag, ...$options]);
 
         return $tester;
+    }
+
+    private function bodyRead(mixed $body): string
+    {
+        if (is_resource($body)) {
+            return (string) stream_get_contents($body);
+        }
+
+        self::assertInstanceOf(\Closure::class, $body);
+        $read = '';
+
+        while ('' !== ($chunk = $body(16372))) {
+            $read .= $chunk;
+        }
+
+        return $read;
     }
 
     private function fileInTheSentContext(string $name): string

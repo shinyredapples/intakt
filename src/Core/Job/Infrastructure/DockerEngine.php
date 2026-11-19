@@ -44,15 +44,26 @@ final readonly class DockerEngine
     }
 
     // With rm and forcerm, so no container of a step is left behind, also after a failed one.
-    public function build(string $context, string $tag, string $dockerfile): ImageBuild
+    // The context is sent as a stream read from its file, so a large repository does not have to fit in memory.
+    public function build(string $contextFile, string $tag, string $dockerfile): ImageBuild
     {
-        return $this->send('POST', 'build', [
-            'query' => ['t' => $tag, 'dockerfile' => $dockerfile, 'rm' => 'true', 'forcerm' => 'true'],
-            'headers' => ['Content-Type' => 'application/x-tar'],
-            'body' => $context,
-            'timeout' => self::BUILD_IDLE_SECONDS,
-            'max_duration' => self::BUILD_SECONDS,
-        ])->built(200);
+        $stream = fopen($contextFile, 'r');
+
+        if (false === $stream) {
+            throw DockerEngineFailed::unexpected('build');
+        }
+
+        try {
+            return $this->send('POST', 'build', [
+                'query' => ['t' => $tag, 'dockerfile' => $dockerfile, 'rm' => 'true', 'forcerm' => 'true'],
+                'headers' => ['Content-Type' => 'application/x-tar'],
+                'body' => $stream,
+                'timeout' => self::BUILD_IDLE_SECONDS,
+                'max_duration' => self::BUILD_SECONDS,
+            ])->built(200);
+        } finally {
+            fclose($stream);
+        }
     }
 
     public function start(string $container): void

@@ -6,6 +6,7 @@ namespace Intakt\Core\Job\UseCase\BuildJobImage;
 
 use PharData;
 use Symfony\Component\Filesystem\Filesystem;
+use Throwable;
 
 final readonly class BuildContext
 {
@@ -13,20 +14,29 @@ final readonly class BuildContext
     {
     }
 
-    // As a tar, because the engine takes the build context as one in the request body.
+    // As a tar in a folder only the owner can enter, because the engine takes the build context as one in the request body and the file is streamed from there.
     public function of(JobImagePlan $plan, string $directory): string
     {
-        // A name that does not exist yet, because PharData refuses an empty file as a broken archive.
-        $file = sys_get_temp_dir().'/intakt-image-'.bin2hex(random_bytes(8)).'.tar';
+        $folder = sys_get_temp_dir().'/intakt-image-'.bin2hex(random_bytes(8));
         $filesystem = new Filesystem();
+        $filesystem->mkdir($folder, 0o700);
+        // A name that does not exist yet, because PharData refuses an empty file as a broken archive.
+        $file = $folder.'/context.tar';
 
         try {
             $this->write($plan, $directory, $file);
+        } catch (Throwable $failure) {
+            $filesystem->remove($folder);
 
-            return $filesystem->readFile($file);
-        } finally {
-            $filesystem->remove($file);
+            throw $failure;
         }
+
+        return $file;
+    }
+
+    public function remove(string $file): void
+    {
+        new Filesystem()->remove(dirname($file));
     }
 
     private function write(JobImagePlan $plan, string $directory, string $file): void
