@@ -192,6 +192,15 @@ final class FindingsAcrossRoundsTest extends KernelTestCase
         self::assertSame('Text a', $vendor->briefs[self::FIRST]->open[0]->text);
     }
 
+    public function testEveryReviewerIsToldTheNumberOfItsRound(): void
+    {
+        $first = $this->round(self::CHANGE, [self::FIRST => $this->changes([], [$this->finding('a')])]);
+
+        $second = $this->round(self::CHANGE, []);
+
+        self::assertSame([1, 2, 2], [$first->briefs[self::FIRST]->round, $second->briefs[self::FIRST]->round, $second->briefs[self::SECOND]->round]);
+    }
+
     public function testAVerdictWithResolvedIdsClosesThemAndARepeatKeepsItsId(): void
     {
         $this->round(self::CHANGE, [self::FIRST => $this->changes([], [$this->finding('a'), $this->finding('b')])]);
