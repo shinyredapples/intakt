@@ -82,8 +82,7 @@ final readonly class JobContainerDefinition
             'NetworkMode' => $route->networkMode,
             'CapDrop' => ['ALL'],
             'SecurityOpt' => ['no-new-privileges'],
-            // A driver the engine can read back and blocking delivery, so the start check's lines are neither unreadable nor dropped, whatever the daemon's defaults are.
-            // The size cap keeps a chatty job from filling the daemon's disk; a job that writes past it rotates the check's lines away, which reads as a failure, never a pass.
+            // A readable driver, blocking delivery and a size cap: the check's lines are kept whatever the daemon's defaults, and a chatty job cannot fill its disk.
             'LogConfig' => ['Type' => 'json-file', 'Config' => ['mode' => 'blocking', 'max-size' => '10m', 'max-file' => '3']],
         ];
     }

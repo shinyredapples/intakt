@@ -131,16 +131,14 @@ final class ContainerJobRunnerTest extends TestCase
     {
         $this->whenJobRuns($this->spec('build-1'));
 
-        self::assertSame('json-file', $this->hostConfigOf('build-1')['LogConfig']['Type']);
-        self::assertSame('blocking', $this->hostConfigOf('build-1')['LogConfig']['Config']['mode']);
+        self::assertSame(['Type' => 'json-file', 'Config' => ['mode' => 'blocking', 'max-size' => '10m', 'max-file' => '3']], $this->hostConfigOf('build-1')['LogConfig']);
     }
 
     public function testAJobsLogIsCappedInSizeSoAChattyJobCannotFillTheDaemonsDisk(): void
     {
         $this->whenJobRuns($this->spec('build-1'));
 
-        $config = $this->hostConfigOf('build-1')['LogConfig']['Config'];
-        self::assertSame(['max-size' => '10m', 'max-file' => '3'], ['max-size' => $config['max-size'] ?? null, 'max-file' => $config['max-file'] ?? null]);
+        self::assertSame(['Type' => 'json-file', 'Config' => ['mode' => 'blocking', 'max-size' => '10m', 'max-file' => '3']], $this->hostConfigOf('build-1')['LogConfig'], 'Without max-size the json-file driver keeps every byte a job writes.');
     }
 
     public function testInputsAreMountedReadOnlyAndTheOutputDirectoryIsTheOnlyWritableMount(): void
