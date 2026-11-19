@@ -6,15 +6,13 @@
 
 {% block body %}
 <div class="page-head">
-    {{ include('dashboard/_board_octopus.html.twig', {board: board}, with_context = false) }}
     <div>
         <h1>Board</h1>
         {# The id is the target of the pushed headline (LiveBoardHeadline), which updates only the words inside, so the line rendered here stays when live updates are off. #}
         <p class="lead" id="board-headline">{{ include('dashboard/_board_headline.html.twig', {headline: board.headline}, with_context = false) }}</p>
     </div>
     <div class="actions">
-        {# Only while no review has run, because after that the Projects page carries the link (#2067, D3). #}
-        {% if board.firstDay %}<a class="btn primary" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::FIRST_RUN')) }}">Set up Intakt</a>{% endif %}
+        {{ include('dashboard/_board_setup.html.twig', {board: board}, with_context = false) }}
         <a class="btn secondary" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::LIST_REVIEWS')) }}">Open the review list</a>
     </div>
 </div>
@@ -30,9 +28,10 @@
         {% block action %}<a class="btn quiet sm" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::LIST_REVIEWS')) }}#failing-heads">See the failed pull requests</a>{% endblock %}
     {% endembed %}
 {% endfor %}
+{{ include('dashboard/_board_octopus.html.twig', {board: board}, with_context = false) }}
 {# A disclosure with no lane would open to nothing, so it is a plain line until a lane runs. #}
 {% if working.lanes is empty %}
-<p class="working working-none" id="working">{{ board.firstDay ? 'Nobody is working yet: reviewers appear here while they review a change' : 'Nobody is working' }}</p>
+<p class="working working-none" id="working">{{ board.nobodyWorkingLine }}</p>
 {% else %}
 <details class="working" id="working">
     <summary><span class="w-title">Who is working</span><span class="w-dots" aria-hidden="true">{% for lane in working.lanes %}<span class="dot ok"></span>{% endfor %}</span><span class="w-sum">{{ working.working }} working</span>{{ include('dashboard/components/icon.html.twig', {name: 'chevron', small: true, extra: 'chev'}, with_context = false) }}</summary>

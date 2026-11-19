@@ -55,6 +55,12 @@ final readonly class ReviewerOutcome
         return clone ($this, ['progress' => ReviewerProgress::Answered, 'decision' => $decision, 'findings' => $findings, 'mode' => $mode]);
     }
 
+    // An answer's own reason, so a blocked verdict Intakt gave is named like a reviewer blocked before it answered.
+    public function because(?string $reason): self
+    {
+        return clone ($this, ['note' => $reason]);
+    }
+
     public function failed(string $failure): self
     {
         return clone ($this, ['progress' => ReviewerProgress::Failed, 'note' => $failure]);

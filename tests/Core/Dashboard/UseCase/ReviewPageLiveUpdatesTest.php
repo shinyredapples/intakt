@@ -783,6 +783,21 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertSame(['Failed', 'the model did not answer in time'], [$state->filter('.chip.broken')->text(), $state->filter('.muted')->text()]);
     }
 
+    public function testAReviewerBlockedAfterThePageLoadedShowsBlockedWithItsReasonInItsRowAndTheNowBox(): void
+    {
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeAnyReviewerStarted();
+        $this->ledger->startReviewerOn($id, 'security', 'Kimi K3');
+        $this->ledger->blockReviewer($id, 'security', 'Every provider of the tier is out.');
+
+        $this->publishedUpdates()->roundChanged($round, new RoundProgress(1, 2, false, [$id.'-security' => FinishedState::Blocked]));
+
+        $replaced = $this->replaced($page, $this->publishedStreams());
+        $row = $replaced->filter('#round-'.$id.'-reviewer-'.$id.'-security-state');
+        $now = $replaced->filter('#round-'.$id.'-now-reviewer-'.$id.'-security-state');
+        self::assertSame(['Blocked', 'Every provider of the tier is out.'], [$row->filter('.chip')->text(), $row->filter('.muted')->text()]);
+        self::assertSame(['Blocked', 'Every provider of the tier is out.'], [$now->filter('.chip')->text(), $now->filter('.muted')->text()]);
+    }
+
     public function testAReviewerThatGaveNoApprovalWithoutNamingAFindingAfterThePageLoadedIsLabelledFailedAndNeverBlocked(): void
     {
         [$round, $id, $page] = $this->givenAPageLoadedBeforeAnyReviewerStarted();
