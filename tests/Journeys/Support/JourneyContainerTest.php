@@ -20,6 +20,8 @@ use Symfony\Component\Messenger\Bridge\Doctrine\Transport\DoctrineTransport;
 // A journey test case, because what it proves is that the instance's container and the journey agree on where the hub records.
 #[CoversClass(JourneyTestCase::class)]
 #[UsesClass(JourneyVendor::class)]
+#[UsesClass(ScriptedJourneyVendor::class)]
+#[UsesClass(ScriptedHttpClient::class)]
 #[UsesClass(JourneyKeyCheck::class)]
 #[UsesClass(RecordingHub::class)]
 #[UsesClass(JourneySteps::class)]
@@ -43,9 +45,9 @@ final class JourneyContainerTest extends JourneyTestCase
         return 'journey support';
     }
 
-    public function testTheTestContainerReviewsWithTheJourneyVendor(): void
+    public function testTheTestContainerReviewsWithTheScriptedJourneyVendor(): void
     {
-        self::assertInstanceOf(JourneyVendor::class, $this->container()->get(Vendor::class));
+        self::assertInstanceOf(ScriptedJourneyVendor::class, $this->container()->get(Vendor::class));
     }
 
     public function testTheTestContainerChecksPastedKeysWithTheJourneyKeyCheck(): void
