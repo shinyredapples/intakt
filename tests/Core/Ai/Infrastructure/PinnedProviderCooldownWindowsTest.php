@@ -6,15 +6,23 @@ namespace Intakt\Tests\Core\Ai\Infrastructure;
 
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\PinnedProvider;
+use Intakt\Core\Ai\Contract\PinnedProviderCooldownNotSaved;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Infrastructure\PinnedProviderCooldownWindows;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use Psr\Cache\CacheItemInterface;
+use Psr\Cache\CacheItemPoolInterface;
 use Symfony\Component\Cache\Adapter\ArrayAdapter;
+use Symfony\Component\Cache\Adapter\FilesystemAdapter;
 use Symfony\Component\Clock\MockClock;
+use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
 
 #[CoversClass(PinnedProviderCooldownWindows::class)]
+#[CoversClass(PinnedProviderCooldownNotSaved::class)]
 #[UsesClass(Account::class)]
 #[UsesClass(Provider::class)]
 #[UsesClass(PinnedProvider::class)]
@@ -22,11 +30,21 @@ final class PinnedProviderCooldownWindowsTest extends TestCase
 {
     private ArrayAdapter $pool;
     private MockClock $clock;
+    private LockFactory $locks;
+    private ?string $directory = null;
 
     protected function setUp(): void
     {
         $this->pool = new ArrayAdapter();
-        $this->clock = new MockClock();
+        $this->clock = new MockClock('2026-11-19T12:00:00Z');
+        $this->locks = new LockFactory(new InMemoryStore());
+    }
+
+    protected function tearDown(): void
+    {
+        if (null !== $this->directory) {
+            new Filesystem()->remove($this->directory);
+        }
     }
 
     public function testAPinnedProviderThatWasNeverCooledDownIsUsable(): void
@@ -54,11 +72,15 @@ final class PinnedProviderCooldownWindowsTest extends TestCase
         self::assertFalse($cooldowns->isCoolingDown($this->deepinfra()));
     }
 
-    public function testEveryWorkerOnTheSharedCacheSeesTheCooldown(): void
+    public function testAWorkerWithItsOwnCacheOnTheSharedDirectorySeesTheCooldown(): void
     {
-        $this->cooldowns()->coolDown($this->deepinfra(), 300);
+        $this->directory = sys_get_temp_dir().'/intakt-pinned-cooldown-'.bin2hex(random_bytes(6));
+        $one = new PinnedProviderCooldownWindows(new FilesystemAdapter('', 0, $this->directory), $this->clock, $this->locks);
+        $other = new PinnedProviderCooldownWindows(new FilesystemAdapter('', 0, $this->directory), $this->clock, $this->locks);
 
-        self::assertTrue($this->cooldowns()->isCoolingDown($this->deepinfra()));
+        $one->coolDown($this->deepinfra(), 300);
+
+        self::assertTrue($other->isCoolingDown($this->deepinfra()));
     }
 
     public function testTheCooldownOfOneRouterProviderLeavesAnotherOnTheSameAccountUsable(): void
@@ -108,7 +130,7 @@ final class PinnedProviderCooldownWindowsTest extends TestCase
         self::assertTrue($cooldowns->isCoolingDown($this->deepinfra()));
     }
 
-    public function testAShorterWindowSetWhileOneRunsReplacesIt(): void
+    public function testAShorterWindowSetWhileOneRunsLeavesTheRunningWindow(): void
     {
         $cooldowns = $this->cooldowns();
         $cooldowns->coolDown($this->deepinfra(), 600);
@@ -116,12 +138,102 @@ final class PinnedProviderCooldownWindowsTest extends TestCase
 
         $this->clock->sleep(60);
 
-        self::assertFalse($cooldowns->isCoolingDown($this->deepinfra()));
+        self::assertTrue($cooldowns->isCoolingDown($this->deepinfra()));
+    }
+
+    public function testALongerWindowSetWhileOneRunsExtendsIt(): void
+    {
+        $cooldowns = $this->cooldowns();
+        $cooldowns->coolDown($this->deepinfra(), 60);
+        $cooldowns->coolDown($this->deepinfra(), 600);
+
+        $this->clock->sleep(60);
+
+        self::assertTrue($cooldowns->isCoolingDown($this->deepinfra()));
+    }
+
+    public function testAnEarlierEndWrittenLateLeavesTheLaterWindowRunning(): void
+    {
+        $newer = $this->cooldowns();
+        $provider = $this->deepinfra();
+        $pool = $this->pool;
+        $clock = $this->clock;
+        $delayed = $this->createStub(CacheItemPoolInterface::class);
+        $delayed->method('getItem')->willReturnCallback(static function (string $key) use ($newer, $provider, $pool, $clock): CacheItemInterface {
+            static $once = false;
+            if (!$once) {
+                $once = true;
+                $clock->sleep(1);
+                $newer->coolDown($provider, 60);
+            }
+
+            return $pool->getItem($key);
+        });
+        $delayed->method('save')->willReturnCallback($pool->save(...));
+        $older = new PinnedProviderCooldownWindows($delayed, $clock, new LockFactory(new InMemoryStore()));
+
+        $older->coolDown($provider, 2);
+        $clock->sleep(2);
+
+        self::assertTrue($newer->isCoolingDown($provider));
+    }
+
+    public function testTheWindowIsSavedWhileTheLockEveryWorkerTakesIsHeld(): void
+    {
+        $locks = $this->locks;
+        $key = 'pinned-provider-cooldown-'.hash('xxh128', $this->deepinfra()->key());
+        $pool = $this->pool;
+        $heldBySomeoneElse = null;
+        $watched = $this->createStub(CacheItemPoolInterface::class);
+        $watched->method('getItem')->willReturnCallback($pool->getItem(...));
+        $watched->method('save')->willReturnCallback(static function (CacheItemInterface $item) use ($locks, $key, $pool, &$heldBySomeoneElse): bool {
+            $heldBySomeoneElse = !$locks->createLock($key)->acquire();
+
+            return $pool->save($item);
+        });
+
+        new PinnedProviderCooldownWindows($watched, $this->clock, $locks)->coolDown($this->deepinfra(), 60);
+
+        self::assertTrue($heldBySomeoneElse);
+    }
+
+    public function testTheLockIsReleasedOnceTheWindowIsSaved(): void
+    {
+        $this->cooldowns()->coolDown($this->deepinfra(), 60);
+
+        self::assertTrue($this->locks->createLock('pinned-provider-cooldown-'.hash('xxh128', $this->deepinfra()->key()))->acquire());
+    }
+
+    public function testAWindowTheCacheRefusesToSaveIsAnError(): void
+    {
+        $pool = $this->pool;
+        $refusing = $this->createStub(CacheItemPoolInterface::class);
+        $refusing->method('getItem')->willReturnCallback($pool->getItem(...));
+        $refusing->method('save')->willReturn(false);
+
+        $this->expectException(PinnedProviderCooldownNotSaved::class);
+
+        new PinnedProviderCooldownWindows($refusing, $this->clock, $this->locks)->coolDown($this->deepinfra(), 60);
+    }
+
+    public function testAWindowTheCacheRefusesToSaveReleasesTheLock(): void
+    {
+        $pool = $this->pool;
+        $refusing = $this->createStub(CacheItemPoolInterface::class);
+        $refusing->method('getItem')->willReturnCallback($pool->getItem(...));
+        $refusing->method('save')->willReturn(false);
+
+        try {
+            new PinnedProviderCooldownWindows($refusing, $this->clock, $this->locks)->coolDown($this->deepinfra(), 60);
+        } catch (PinnedProviderCooldownNotSaved) {
+        }
+
+        self::assertTrue($this->locks->createLock('pinned-provider-cooldown-'.hash('xxh128', $this->deepinfra()->key()))->acquire());
     }
 
     private function cooldowns(): PinnedProviderCooldownWindows
     {
-        return new PinnedProviderCooldownWindows($this->pool, $this->clock);
+        return new PinnedProviderCooldownWindows($this->pool, $this->clock, $this->locks);
     }
 
     private function deepinfra(): PinnedProvider

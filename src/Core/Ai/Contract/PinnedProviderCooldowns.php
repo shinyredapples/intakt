@@ -6,7 +6,11 @@ namespace Intakt\Core\Ai\Contract;
 
 interface PinnedProviderCooldowns
 {
-    // The latest window replaces a running one, because the provider's newest answer is the best word on when it takes calls again.
+    /**
+     * A window ending later than the running one extends it, one ending earlier leaves it, because answers in flight arrive in any order and the provider is not usable before every window it named has ended.
+     *
+     * @throws PinnedProviderCooldownNotSaved
+     */
     public function coolDown(PinnedProvider $provider, int $seconds): void;
 
     public function isCoolingDown(PinnedProvider $provider): bool;
