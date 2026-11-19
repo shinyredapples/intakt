@@ -72,14 +72,13 @@ final readonly class CommitSignature
     }
 
     /**
-     * Read line by line, because a pattern over the whole block runs out of stack on a long folded header and loses the signature.
-     *
      * @return list<array{string, non-empty-list<string>}>
      */
     private function entries(string $headers): array
     {
         $entries = [];
 
+        // Line by line, because a pattern over the whole block runs out of stack on a long folded header and loses the signature.
         foreach (explode("\n", $headers) as $line) {
             $last = array_key_last($entries);
 
