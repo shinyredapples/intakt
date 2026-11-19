@@ -6,6 +6,7 @@ namespace Intakt\Gates;
 
 final readonly class JavaScriptLiterals
 {
+    public const string WHITESPACE = " \t\n\r\v\f";
     public const string LINE_SEPARATOR = "\u{2028}";
     public const string PARAGRAPH_SEPARATOR = "\u{2029}";
     private const string SEPARATOR_LEAD = "\xE2";
@@ -84,7 +85,24 @@ final readonly class JavaScriptLiterals
 
     public function functionFollows(int $offset): bool
     {
-        return 1 === preg_match('/\G[ \t]*function(?![\w$\\\\])/', $this->source, offset: $offset);
+        return 1 === preg_match('/\Gfunction(?![\w$\\\\])/', $this->source, offset: $this->afterSpaces($offset));
+    }
+
+    public function colonFollows(int $offset): bool
+    {
+        return ':' === ($this->source[$this->afterSpaces($offset)] ?? '');
+    }
+
+    // Because the lexer reads these spaces again as tokens, a lookahead over them reads each byte at most twice.
+    private function afterSpaces(int $offset): int
+    {
+        do {
+            $offset += strspn($this->source, self::WHITESPACE, $offset);
+            $space = $this->multibyteSpaceLengthAt($offset);
+            $offset += $space;
+        } while (0 < $space);
+
+        return $offset;
     }
 
     public function afterNumber(int $offset): int

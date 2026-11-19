@@ -99,6 +99,9 @@ final class JavaScriptCommentsTest extends TestCase
         yield 'a division after an object after optional chaining in a ternary' => ["{ const a = b?.c ? d : {} / 2 + '/'; /* TODO later */ }\n", [1 => 'TODO']];
         yield 'a division after an identifier with a braced Unicode escape' => ["const n = \\u{0061} / 2 + '/'; // TODO later\n", [1 => 'TODO']];
         yield 'a division after an identifier ending in a braced Unicode escape' => ["const n = a\\u{62} / 2 + '/'; // TODO later\n", [1 => 'TODO']];
+        yield 'a division in an object exported as default' => ["export default {a: 1 / 2 + '/'}; // TODO real\n", [1 => 'TODO']];
+        yield 'a division after an object beside a key named class' => ["const o = {class: 1, b: {c: {} / 2 + '/'}}; // TODO later\n", [1 => 'TODO']];
+        yield 'a division after an object beside a key named function' => ["const o = {function : 1, b: {c: {} / 2 + '/'}}; // TODO later\n", [1 => 'TODO']];
     }
 
     /**
@@ -169,7 +172,16 @@ final class JavaScriptCommentsTest extends TestCase
         yield 'a comment opener in a class of a pattern after an exported function declaration' => ["export function f() {}\n/[// TODO later]/.test(text);\n"];
         yield 'a comment opener in a class of a pattern after a class declaration' => ["class C { f() {} }\n/[// TODO later]/.test(text);\n"];
         yield 'a comment opener in a class of a pattern after a block in a function expression' => ["const f = function () { {} /[// TODO later]/.test(s); };\n"];
-        yield 'a marker after the comment start' => ["// see the TODO list\n"];
+        yield 'a comment opener in a class of a pattern after a default exported function declaration' => ["export default function f() {}\n/[// TODO inside]/.test(text);\n"];
+        yield 'a comment opener in a class of a pattern after a default exported anonymous function declaration' => ["export default function () {}\n/[// TODO inside]/.test(text);\n"];
+        yield 'a comment opener in a class of a pattern after a default exported async function declaration' => ["export default async function f() {}\n/[// TODO inside]/.test(text);\n"];
+        yield 'a comment opener in a class of a pattern after a default exported class declaration' => ["export default class C {}\n/[// TODO inside]/.test(text);\n"];
+        yield 'a comment opener in a class of a pattern after a default exported class declaration with a heritage' => ["export default class extends f({}) {}\n/[// TODO inside]/.test(text);\n"];
+        yield 'a comment opener in a class of a pattern after an export list' => ["export { a }\n/[// TODO inside]/.test(text);\n"];
+        yield 'a comment opener in a class of a pattern returned from a default case' => ["switch (n) { default: return /[// TODO inside]/.test(s); }\n"];
+        yield 'a comment opener in a class of a pattern after an async function declaration with a no-break space' => ["async\u{00A0}function f() {}\n/[// TODO inside]/.test(text);\n"];
+        yield 'a comment opener in a class of a pattern after an async function declaration with an ideographic space' => ["async\u{3000}function f() {}\n/[// TODO inside]/.test(text);\n"];
+        yield 'a marker after the comment start' =>["// see the TODO list\n"];
         yield 'a reasoned exception' => ["// TODO(#123): show the total once the forge sends it\n"];
         yield 'a marker behind a hash, which is no JavaScript comment' => ["/* # TODO is shell syntax */\n"];
         yield 'a marker in code' => ["const TODO = 1;\n"];

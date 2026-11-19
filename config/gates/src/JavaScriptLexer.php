@@ -7,7 +7,6 @@ namespace Intakt\Gates;
 // Because whether a slash starts a pattern or divides depends on the token before it, the lexer keeps that token's kind and the open brackets for one source.
 final class JavaScriptLexer
 {
-    private const string WHITESPACE = " \t\n\r\v\f";
     private const int OPERAND = 0;
     private const int OPERATOR = 1;
     private const int DOT = 2;
@@ -15,8 +14,11 @@ final class JavaScriptLexer
     private const int CLOSING_PARENTHESIS = 4;
     private const int STATEMENT_END = 5;
     private const int FOR_KEYWORD = 6;
+    private const int EXPORT = 7;
+    private const int DEFAULT_EXPORT = 8;
     private const array ENDS_AN_OPERAND = [self::OPERAND, self::CLOSING_PARENTHESIS];
-    private const array OPENS_A_BLOCK = [self::OPERAND, self::CLOSING_PARENTHESIS, self::STATEMENT_END];
+    private const array OPENS_A_BLOCK = [self::OPERAND, self::CLOSING_PARENTHESIS, self::STATEMENT_END, self::EXPORT];
+    private const array STARTS_A_DECLARATION = [self::STATEMENT_END, self::EXPORT, self::DEFAULT_EXPORT];
     private const int PARENTHESIS = 0;
     private const int HEAD_PARENTHESIS = 1;
     private const int BRACKET = 2;
@@ -28,7 +30,7 @@ final class JavaScriptLexer
     private const array HOLDS_STATEMENTS = [self::BLOCK, self::EXPRESSION_BODY, null];
     private const array HEAD_KEYWORDS = ['if', 'while', 'with'];
     private const array BODY_KEYWORDS = ['function', 'class'];
-    private const array BLOCK_KEYWORDS = ['do', 'else', 'try', 'finally', 'export'];
+    private const array BLOCK_KEYWORDS = ['do', 'else', 'try', 'finally'];
     private const array KEYWORDS_BEFORE_AN_OPERAND = ['return', 'typeof', 'case', 'default', 'in', 'of', 'new', 'delete', 'void', 'throw', 'instanceof', 'yield', 'await', 'const', 'let', 'var'];
 
     private readonly JavaScriptLiterals $literals;
@@ -80,7 +82,7 @@ final class JavaScriptLexer
         $space = $this->literals->multibyteSpaceLengthAt($offset);
 
         return match (true) {
-            str_contains(self::WHITESPACE, $char) => $offset + strspn($this->literals->source, self::WHITESPACE, $offset),
+            str_contains(JavaScriptLiterals::WHITESPACE, $char) => $offset + strspn($this->literals->source, JavaScriptLiterals::WHITESPACE, $offset),
             0 < $space => $offset + $space,
             '/' === $char => $this->afterSlash($offset),
             "'" === $char, '"' === $char => $this->after(self::OPERAND, $this->literals->afterString($offset + 1, $char)),
@@ -179,6 +181,9 @@ final class JavaScriptLexer
             // Because `of` is a keyword only right after the binding of a `for` head that has no `;`, elsewhere it names a variable.
             'of' === $word && !$this->bindingOfAForOfHeadEnded() => $this->after(self::OPERAND, $end),
             'for' === $word => $this->after(self::FOR_KEYWORD, $end),
+            'export' === $word => $this->after(self::EXPORT, $end),
+            // Because after `export default` a `function` or `class` is a declaration, while a `default` in a `switch` precedes an operand.
+            'default' === $word && self::EXPORT === $this->previous => $this->after(self::DEFAULT_EXPORT, $end),
             in_array($word, self::HEAD_KEYWORDS, true) => $this->after(self::HEAD_KEYWORD, $end),
             in_array($word, self::BODY_KEYWORDS, true) => $this->afterBodyKeyword($end),
             in_array($word, self::BLOCK_KEYWORDS, true) => $this->after(self::STATEMENT_END, $end),
@@ -216,10 +221,10 @@ final class JavaScriptLexer
         return self::FOR_HEAD === array_last($this->frames) && in_array($this->previous, self::ENDS_AN_OPERAND, true);
     }
 
-    // Because a function or class that stands where an operand is expected is an expression, while one at the start of a statement is a declaration.
+    // Because a function or class that stands where an operand is expected is an expression, while one at the start of a statement or after `export` is a declaration, and one before a `:` is a property name.
     private function afterBodyKeyword(int $end): int
     {
-        if (self::STATEMENT_END !== $this->previous) {
+        if (!in_array($this->previous, self::STARTS_A_DECLARATION, true) && !$this->literals->colonFollows($end)) {
             $this->expressionBodies[count($this->frames)] = true;
         }
 
