@@ -54,11 +54,10 @@ final readonly class CheckoutFileNames
         return new self($pathsByName, $entryNames);
     }
 
-    // The names of the files and directories anywhere in the checkout.
     /**
      * @return list<string>
      */
-    public function names(): array
+    public function namesOfFilesAndDirectories(): array
     {
         return array_map(strval(...), array_keys($this->entryNames));
     }

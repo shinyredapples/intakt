@@ -25,7 +25,7 @@ final readonly class NamesCutAtASpace
 
         foreach (array_unique($words) as $word) {
             if (!str_contains($word, '/')) {
-                $firstWords = $firstWordsAnywhere ??= $this->firstWordsOf($fileNames->names());
+                $firstWords = $firstWordsAnywhere ??= $this->firstWordsOf($fileNames->namesOfFilesAndDirectories());
             } else {
                 [$directory, $name] = $this->directoryAndNameOf($word);
                 $firstWords = $firstWordsByDirectory[$directory] ??= $this->firstWordsOfNamesWithASpaceIn($checkout, $directory);
