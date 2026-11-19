@@ -4,8 +4,10 @@
 // with the idle project alpha chosen in the project filter while beta and gamma work) and components (the /components page,
 // whose Characters section shows the asleep pose). A phone has no project filter, so the filter state's 390 runs load with
 // alpha stored as the chosen project (key intakt-project) to show the phone ignores it and passes its floors, and an extra
-// 761 px run, the narrowest width that has the filter, gets axe with alpha chosen (the 390 px floors are a phone rule, and
-// 761 px already has the desktop layout). buildonly (after seed.php buildonly)
+// 761 px run, the narrowest width that has the filter, gets axe with alpha chosen. The selected-project state cannot be
+// reached on a phone, so a forced 390 px run (page "board (filter, forced)") makes the page's phone query report no match:
+// the scripts then apply the stored choice while the CSS still lays the page out for a phone, and the phone floors measure
+// that state. buildonly (after seed.php buildonly)
 // chooses delta, a project whose only work is a pushed build, at 1440.
 // Usage: bin/instance -- sh -c "bin/console doctrine:migrations:migrate -n -q && bin/console asset-map:compile -q && node .evidence/2732/octopus-check.js firstday && php .evidence/2732/seed.php idle && node .evidence/2732/octopus-check.js idle && php .evidence/2732/seed.php filter && node .evidence/2732/octopus-check.js filter && php .evidence/2732/seed.php buildonly && node .evidence/2732/octopus-check.js buildonly && node .evidence/2732/octopus-check.js components"
 const path = require('path');
@@ -16,7 +18,7 @@ const { measureFloors, report, failed } = require(path.join(root, 'bin', 'ui-che
 const state = process.argv[2];
 const address = process.env.INTAKT_INSTANCE_URL.replace(/\/+$/, '').replace('127.0.0.1', 'localhost');
 const chosen = state === 'buildonly' ? 'delta' : 'alpha';
-const SIZES = state === 'buildonly' ? [{ width: 1440, height: 900 }] : [{ width: 1440, height: 900 }, { width: 390, height: 844 }, ...(state === 'filter' ? [{ width: 761, height: 900 }] : [])];
+const SIZES = state === 'buildonly' ? [{ width: 1440, height: 900 }] : [{ width: 1440, height: 900 }, { width: 390, height: 844 }, ...(state === 'filter' ? [{ width: 761, height: 900 }, { width: 390, height: 844, forced: true }] : [])];
 const route = state === 'components' ? '/components' : '/';
 const name = state === 'components' ? 'components' : `board (${state})`;
 const file = state === 'components' ? 'components' : `board-${state}`;
@@ -31,6 +33,11 @@ const file = state === 'components' ? 'components' : `board-${state}`;
       // The dashboard answers only to Host localhost:7780, the instance listens on another port.
       await context.route(address + '/**', async (route) => route.fulfill({ response: await route.fetch({ headers: { ...route.request().headers(), host: 'localhost:7780' } }) }));
       if (state === 'filter' && size.width === 390) await context.addInitScript(() => localStorage.setItem('intakt-project', 'alpha'));
+      if (size.forced) await context.addInitScript(() => {
+        const real = window.matchMedia.bind(window);
+        window.matchMedia = (query) => (query === '(max-width: 760px)' ? { ...real(query), matches: false, media: query, addEventListener() {}, removeEventListener() {} } : real(query));
+      });
+      const shown = size.forced ? 'board (filter, forced)' : name;
       const page = await context.newPage();
       const errors = [];
       page.on('pageerror', (e) => errors.push(e.message));
@@ -52,9 +59,10 @@ const file = state === 'components' ? 'components' : `board-${state}`;
       await page.addScriptTag({ path: axe });
       const violations = await page.evaluate(async () => (await axe.run(document, { resultTypes: ['violations'] })).violations.map((v) => ({ id: v.id, impact: v.impact, help: v.help, nodes: v.nodes.map((n) => n.target.join(' ')) })));
       const floors = size.width === 390 ? await page.evaluate(measureFloors, { text: 15, target: 44 }) : [];
-      console.log(`${name} ${theme} ${size.width}: ${seen}`);
-      await page.screenshot({ path: path.join(__dirname, `${file}-${theme}-${size.width}.png`), fullPage: true });
-      runs.push({ page: name, theme, width: size.width, errors, violations, floors });
+      const hiddenCards = size.forced ? await page.evaluate(() => `, filter value "${document.querySelector('#projfilter').value}", items of other projects hidden ${document.querySelectorAll('[data-project][hidden]').length}`) : '';
+      console.log(`${shown} ${theme} ${size.width}: ${seen}${hiddenCards}`);
+      await page.screenshot({ path: path.join(__dirname, `${file}${size.forced ? '-forced' : ''}-${theme}-${size.width}.png`), fullPage: true });
+      runs.push({ page: shown, theme, width: size.width, errors, violations, floors });
       await context.close();
     }
   } finally {

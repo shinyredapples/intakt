@@ -21,16 +21,20 @@ seeded filter: 2 events
 board (filter) light 1440: headline "A build is running. Nothing needs you.", filter "alpha" (stored choice "alpha"), octopus octopus-asleep-light 144 px high alt="", empty-column lines shown 6
 board (filter) light 390: headline "A build is running. Nothing needs you.", filter not shown (stored choice "alpha"), octopus none, empty-column lines shown 7
 board (filter) light 761: headline "A build is running. Nothing needs you.", filter "alpha" (stored choice "alpha"), octopus octopus-asleep-light 144 px high alt="", empty-column lines shown 6
+board (filter, forced) light 390: headline "A build is running. Nothing needs you.", filter not shown (stored choice "alpha"), octopus octopus-asleep-light 120 px high alt="", empty-column lines shown 7, filter value "alpha", items of other projects hidden 1
 board (filter) dark 1440: headline "A build is running. Nothing needs you.", filter "alpha" (stored choice "alpha"), octopus octopus-asleep-dark 144 px high alt="", empty-column lines shown 6
 board (filter) dark 390: headline "A build is running. Nothing needs you.", filter not shown (stored choice "alpha"), octopus none, empty-column lines shown 7
 board (filter) dark 761: headline "A build is running. Nothing needs you.", filter "alpha" (stored choice "alpha"), octopus octopus-asleep-dark 144 px high alt="", empty-column lines shown 6
+board (filter, forced) dark 390: headline "A build is running. Nothing needs you.", filter not shown (stored choice "alpha"), octopus octopus-asleep-dark 120 px high alt="", empty-column lines shown 7, filter value "alpha", items of other projects hidden 1
 board (filter) light 1440: axe critical 0, serious 0, moderate 0, minor 0
 board (filter) light 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
 board (filter) light 761: axe critical 0, serious 0, moderate 0, minor 0
+board (filter, forced) light 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
 board (filter) dark 1440: axe critical 0, serious 0, moderate 0, minor 0
 board (filter) dark 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
 board (filter) dark 761: axe critical 0, serious 0, moderate 0, minor 0
-UI check: 6 runs, 0 serious or critical axe violations, 0 phone floor findings, 0 page errors.
+board (filter, forced) dark 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
+UI check: 8 runs, 0 serious or critical axe violations, 0 phone floor findings, 0 page errors.
 seeded buildonly: 1 events
 board (buildonly) light 1440: headline "A build is running. Nothing needs you.", filter "delta" (stored choice "delta"), octopus octopus-asleep-light 144 px high alt="", empty-column lines shown 6
 board (buildonly) dark 1440: headline "A build is running. Nothing needs you.", filter "delta" (stored choice "delta"), octopus octopus-asleep-dark 144 px high alt="", empty-column lines shown 6
