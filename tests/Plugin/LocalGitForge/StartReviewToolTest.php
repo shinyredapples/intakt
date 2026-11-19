@@ -7,10 +7,13 @@ namespace Intakt\Tests\Plugin\LocalGitForge;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Budget\Contract\Cost;
+use Intakt\Core\Review\Contract\ActEntryAnswer;
 use Intakt\Core\Review\Contract\ChangeReview;
 use Intakt\Core\Review\Contract\ChangeReviewRequest;
 use Intakt\Core\Review\Contract\ChangeReviews;
 use Intakt\Core\Review\Contract\Decision;
+use Intakt\Core\Review\Contract\Fence;
+use Intakt\Core\Review\Contract\FencedText;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\Panel;
@@ -23,6 +26,7 @@ use Intakt\Core\Review\Contract\RoundEnds;
 use Intakt\Core\Review\Contract\RoundNotNext;
 use Intakt\Core\Review\Contract\RoundTokens;
 use Intakt\Core\Review\Contract\Severity;
+use Intakt\Core\Review\Contract\UntrustedSource;
 use Intakt\Plugin\LocalGitForge\Contract\LocalRepository;
 use Intakt\Plugin\LocalGitForge\Infrastructure\LocalGitForge;
 use Intakt\Plugin\LocalGitForge\Infrastructure\NameStatusParser;
@@ -50,6 +54,9 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(CleanupOnStop::class)]
 #[UsesClass(LocalGitForge::class)]
 #[UsesClass(LocalRepository::class)]
+#[UsesClass(ActEntryAnswer::class)]
+#[UsesClass(Fence::class)]
+#[UsesClass(FencedText::class)]
 final class StartReviewToolTest extends TestCase
 {
     private TemporaryRepository $repository;
@@ -76,6 +83,21 @@ final class StartReviewToolTest extends TestCase
         self::assertSame(['F1'], array_column($answer->act, 'id'));
         self::assertSame('Add the thing.', $seen?->task);
         self::assertSame('sample', $seen->round->change);
+    }
+
+    // Through json_encode, because that is how the MCP SDK writes a tool's answer.
+    public function testTheAnswerShowsTheJudgesNoteOfAnActEntryFenced(): void
+    {
+        $finding = new Finding('F1', Severity::P1, 'src/Feature.php', 1, null, 'Broken.', FixableBy::Builder, false, null, null);
+        $answer = StartedReview::of(new ChangeReview('0192a000-0000-7000-8000-000000000000', 1, Decision::Changes, [], [$finding->withJudgeNote('Rejected: unreachable.')], new RoundTokens(0, 0, 0, 0, 0, 0, 0), Cost::none()));
+
+        /** @var array{act: list<array<string, mixed>>} $data */
+        $data = json_decode(json_encode($answer, JSON_THROW_ON_ERROR), true, flags: JSON_THROW_ON_ERROR);
+
+        $note = $data['act'][0]['judge_note'] ?? null;
+        self::assertIsString($note);
+        self::assertSame('Rejected: unreachable.', new Fence()->contentOf(UntrustedSource::ActList, $note));
+        self::assertSame(['roundId', 'round', 'decision', 'act', 'reasons', 'end'], array_keys($data));
     }
 
     public function testAJudgedRoundIsShownAsEndedJudged(): void
