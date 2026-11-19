@@ -120,7 +120,7 @@ final class JavaScriptCommentsTest extends TestCase
         yield 'a comment opener in a class of a pattern after a no-break space' => ["const pattern =\u{00A0}/[// TODO later]/;\n"];
         yield 'a comment opener in a class of a pattern after return and an ideographic space' => ["return\u{3000}/[// TODO later]/;\n"];
         yield 'a comment opener in a class of a pattern after a byte order mark' => ["\u{FEFF}/[// TODO later]/.test(text);\n"];
-        yield 'a marker after the comment start' =>["// see the TODO list\n"];
+        yield 'a marker after the comment start' => ["// see the TODO list\n"];
         yield 'a reasoned exception' => ["// TODO(#123): show the total once the forge sends it\n"];
         yield 'a marker behind a hash, which is no JavaScript comment' => ["/* # TODO is shell syntax */\n"];
         yield 'a marker in code' => ["const TODO = 1;\n"];
