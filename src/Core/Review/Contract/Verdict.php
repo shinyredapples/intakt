@@ -30,6 +30,9 @@ final readonly class Verdict
         public array $findings,
         public array $resolved,
         public array $follow_ups,
+        // Ignored by the serializer and the schema, so neither a model's answer nor its finding ids can claim Intakt's origin; only the failure constructors below set it.
+        #[Ignore]
+        private VerdictOrigin $origin = VerdictOrigin::Reviewer,
     ) {
     }
 
@@ -48,6 +51,16 @@ final readonly class Verdict
         return array_any($this->findings, static fn (Finding $finding): bool => in_array($finding->id, self::FAILED_REVIEWS, true));
     }
 
+    // A reviewer's own blocked that names findings asks for changes, because every view and the quorum read the stored decision; Intakt's failure verdicts stay blocked.
+    public function asRecorded(): self
+    {
+        if (Decision::Blocked !== $this->verdict || [] === $this->findings || VerdictOrigin::Intakt === $this->origin) {
+            return $this;
+        }
+
+        return clone ($this, ['verdict' => Decision::Changes]);
+    }
+
     // A model can name the id too, so a caller that answers a stop request also checks the ledger for one.
     #[Ignore]
     public function isStopped(): bool
@@ -60,6 +73,11 @@ final readonly class Verdict
     public function withholdsApprovalWithoutFinding(): bool
     {
         return Decision::Approve !== $this->verdict && [] === $this->findings;
+    }
+
+    private static function raisedByIntakt(Finding $finding): self
+    {
+        return new self(Decision::Blocked, [$finding], [], [], VerdictOrigin::Intakt);
     }
 
     public static function incompleteStream(string $reason, Evidence $evidence): self
@@ -77,7 +95,7 @@ final readonly class Verdict
             evidence: $evidence,
         );
 
-        return new self(Decision::Blocked, [$finding], [], []);
+        return self::raisedByIntakt($finding);
     }
 
     public static function unreadApproval(): self
@@ -95,7 +113,7 @@ final readonly class Verdict
             evidence: null,
         );
 
-        return new self(Decision::Blocked, [$finding], [], []);
+        return self::raisedByIntakt($finding);
     }
 
     public static function cutApproval(): self
@@ -113,7 +131,7 @@ final readonly class Verdict
             evidence: null,
         );
 
-        return new self(Decision::Blocked, [$finding], [], []);
+        return self::raisedByIntakt($finding);
     }
 
     public static function noTools(): self
@@ -131,7 +149,7 @@ final readonly class Verdict
             evidence: null,
         );
 
-        return new self(Decision::Blocked, [$finding], [], []);
+        return self::raisedByIntakt($finding);
     }
 
     public static function reviewerStopped(): self
@@ -149,6 +167,6 @@ final readonly class Verdict
             evidence: null,
         );
 
-        return new self(Decision::Blocked, [$finding], [], []);
+        return self::raisedByIntakt($finding);
     }
 }
