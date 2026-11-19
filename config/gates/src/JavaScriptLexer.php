@@ -18,6 +18,7 @@ final class JavaScriptLexer
     private const int DEFAULT_EXPORT = 8;
     private const array ENDS_AN_OPERAND = [self::OPERAND, self::CLOSING_PARENTHESIS];
     private const array OPENS_A_BLOCK = [self::OPERAND, self::CLOSING_PARENTHESIS, self::STATEMENT_END, self::EXPORT];
+    private const array PARENTHESES_AFTER = [self::FOR_KEYWORD => self::FOR_HEAD, self::HEAD_KEYWORD => self::HEAD_PARENTHESIS];
     private const array STARTS_A_DECLARATION = [self::STATEMENT_END, self::EXPORT, self::DEFAULT_EXPORT];
     private const int PARENTHESIS = 0;
     private const int HEAD_PARENTHESIS = 1;
@@ -197,11 +198,7 @@ final class JavaScriptLexer
     private function afterPunctuator(int $offset, string $char): int
     {
         return match ($char) {
-            '(' => $this->open(match ($this->previous) {
-                self::FOR_KEYWORD => self::FOR_HEAD,
-                self::HEAD_KEYWORD => self::HEAD_PARENTHESIS,
-                default => self::PARENTHESIS,
-            }, $offset),
+            '(' => $this->open(self::PARENTHESES_AFTER[$this->previous] ?? self::PARENTHESIS, $offset),
             '[' => $this->open(self::BRACKET, $offset),
             '{' => $this->afterOpeningBrace($offset),
             ')', ']' => $this->afterClosingBracket($offset),
@@ -213,9 +210,18 @@ final class JavaScriptLexer
             // Because the name after `#` is a private property, it is never a keyword, as after a `.`.
             '#' => $this->after(self::DOT, $offset + 1),
             ';' => $this->afterSemicolon($offset),
-            '=' => '>' === ($this->literals->source[$offset + 1] ?? '') ? $this->after(self::STATEMENT_END, $offset + 2) : $this->after(self::OPERATOR, $offset + 1),
+            '=' => $this->afterEquals($offset),
             default => $this->after(self::OPERATOR, $offset + 1),
         };
+    }
+
+    private function afterEquals(int $offset): int
+    {
+        if ('>' === ($this->literals->source[$offset + 1] ?? '')) {
+            return $this->after(self::STATEMENT_END, $offset + 2);
+        }
+
+        return $this->after(self::OPERATOR, $offset + 1);
     }
 
     private function bindingOfAForOfHeadEnded(): bool
@@ -256,7 +262,7 @@ final class JavaScriptLexer
             return $this->after(self::OPERATOR, $offset + 2);
         }
 
-        if ('.' === $next && !ctype_digit($this->literals->source[$offset + 2] ?? '')) {
+        if ($this->literals->optionalChainingAt($offset)) {
             return $this->after(self::DOT, $offset + 2);
         }
 

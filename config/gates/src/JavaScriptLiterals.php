@@ -88,6 +88,12 @@ final readonly class JavaScriptLiterals
         return 1 === preg_match('/\Gfunction(?![\w$\\\\])/', $this->source, offset: $this->afterSpaces($offset));
     }
 
+    // Because `a?.5:b` is a conditional with a decimal, `?.` chains only when no digit follows it.
+    public function optionalChainingAt(int $offset): bool
+    {
+        return '.' === ($this->source[$offset + 1] ?? '') && !ctype_digit($this->source[$offset + 2] ?? '');
+    }
+
     public function colonFollows(int $offset): bool
     {
         return ':' === ($this->source[$this->afterSpaces($offset)] ?? '');
