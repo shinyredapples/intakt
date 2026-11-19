@@ -107,8 +107,10 @@ if [ -f PR.md ] && [ ! -L PR.md ]; then
     cp PR.md "$output/pull-request.md"
 fi
 
-# The same for the question, which says the builder stopped to ask instead of building.
-if [ -f QUESTION.json ] && [ ! -L QUESTION.json ]; then
+# The same for the question, which says the builder stopped to ask instead of building;
+# a QUESTION.json the branch already held when the session started is not this builder's question, so it is handed back only when the session wrote it or changed it.
+if [ -f QUESTION.json ] && [ ! -L QUESTION.json ] \
+    && [ "$(git hash-object --no-filters -- QUESTION.json 2>/dev/null)" != "$(git rev-parse --quiet --verify "$base:QUESTION.json" 2>/dev/null)" ]; then
     cp QUESTION.json "$output/question.json"
 fi
 

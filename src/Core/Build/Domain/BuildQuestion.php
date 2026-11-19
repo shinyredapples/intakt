@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Build\Domain;
 
 use JsonException;
+use stdClass;
 
 // Checked by plain code before anything trusts it, because the builder wrote the text and people read it later.
 final readonly class BuildQuestion
@@ -56,13 +57,14 @@ final readonly class BuildQuestion
      */
     private static function decoded(string $text): array
     {
+        // Decoded to objects, because an associative decoding turns {"0":"a"} into a list and so an object into choices.
         try {
-            $data = json_decode($text, true, 8, JSON_THROW_ON_ERROR);
+            $data = json_decode($text, false, 8, JSON_THROW_ON_ERROR);
         } catch (JsonException) {
             throw QuestionRefused::notJson();
         }
 
-        return is_array($data) && !array_is_list($data) ? $data : throw QuestionRefused::notJson();
+        return $data instanceof stdClass ? get_object_vars($data) : throw QuestionRefused::notJson();
     }
 
     private static function textOf(mixed $value): string

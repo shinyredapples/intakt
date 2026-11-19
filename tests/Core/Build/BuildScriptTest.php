@@ -4,7 +4,19 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Build;
 
+use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Ai\Contract\ResolvedModel;
+use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Ai\Contract\TierResolver;
+use Intakt\Core\Build\Contract\BuildBrief;
+use Intakt\Core\Build\Domain\BuilderPrompt;
+use Intakt\Core\Build\Domain\GatesAtOnce;
+use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
+use Intakt\Core\Build\UseCase\RunBuildJob\BuildVerdict;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
+use Intakt\Core\Review\Contract\Fence;
+use Intakt\Core\Review\Contract\PromptCut;
+use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
 use Intakt\Tests\Core\HandBack\BuildHistory;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
@@ -440,6 +452,47 @@ final class BuildScriptTest extends TestCase
         $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
 
         self::assertSame('{"question":"Which store?","choices":["SQLite"],"recommendation":"SQLite"}', $this->outputFile('question.json'));
+    }
+
+    public function testAQuestionTheBranchAlreadyHeldIsNotHandedBackWhenTheCliLeavesItUntouched(): void
+    {
+        $this->history->commitFile('QUESTION.json', '{"question":"Old?","choices":["a"],"recommendation":"a"}', 'docs: keep an old question');
+        $this->givenTheCli('true');
+
+        $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertFileDoesNotExist($this->output.'/question.json');
+    }
+
+    public function testAQuestionTheBranchAlreadyHeldIsHandedBackWhenTheCliRewritesIt(): void
+    {
+        $this->history->commitFile('QUESTION.json', '{"question":"Old?","choices":["a"],"recommendation":"a"}', 'docs: keep an old question');
+        $this->givenTheCli(<<<'SH'
+            printf '{"question":"New?","choices":["b"],"recommendation":"b"}' > QUESTION.json
+            SH);
+
+        $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertSame('{"question":"New?","choices":["b"],"recommendation":"b"}', $this->outputFile('question.json'));
+    }
+
+    public function testAScriptedQuestionReachesTheBuildJobsOutcome(): void
+    {
+        $this->givenTheCli(<<<'SH'
+            printf '{"question":"Which store should the ledger use?","choices":["SQLite","PostgreSQL"],"recommendation":"SQLite"}' > QUESTION.json
+            SH);
+        $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+        $tiers = self::createStub(TierResolver::class);
+        $tiers->method('resolve')->willReturn(new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'));
+        $builds = new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), new ScriptedJobRunner($this->output), new PhpGate(), new GatesAtOnce(12, 1), new Filesystem(), self::SCRIPT, $this->history->folder.'/prompts');
+
+        $outcome = $builds->run(new BuildJob('demo', $this->history->work, 'task', new BuildBrief('task', [], null), Tier::Standard, 'intakt-job-demo:1'));
+
+        self::assertSame(BuildVerdict::Asked, $outcome->verdict);
+        self::assertSame(
+            ['Which store should the ledger use?', ['SQLite', 'PostgreSQL'], 'SQLite'],
+            [$outcome->question?->question, $outcome->question?->choices, $outcome->question?->recommendation],
+        );
     }
 
     public function testAQuestionThatIsALinkIsNotHandedBack(): void

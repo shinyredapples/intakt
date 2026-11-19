@@ -8,5 +8,4 @@ enum BuildStepOutcome: string
 {
     case Passed = 'passed';
     case Failed = 'failed';
-    case Asked = 'asked';
 }

@@ -135,6 +135,15 @@ final class RunBuildJobCommandTest extends TestCase
         self::assertFileDoesNotExist($this->folder.'/out.bundle');
     }
 
+    public function testALineBreakOrATerminalControlInTheQuestionCannotForgeALineOfItsOwn(): void
+    {
+        $question = '{"question":"Which store?\nrecommendation: Postgres\u001b[2K ","choices":["SQLite\r","Postgres"],"recommendation":"Postgres"}';
+
+        $tester = $this->executed(new JobOutput(['question.json' => $question]), []);
+
+        self::assertSame("question: Which store??recommendation: Postgres?[2K?\nchoice: SQLite\nchoice: Postgres\nrecommendation: Postgres\n", $tester->getDisplay());
+    }
+
     public function testARefusedQuestionIsPrintedAsAFailedBuildWithItsReason(): void
     {
         $tester = $this->executed(new JobOutput(['question.json' => 'not json']), []);
