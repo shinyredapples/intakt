@@ -16,6 +16,8 @@ final readonly class MarkdownText
 
     private const string FENCE = 'fence';
 
+    private const string FENCE_AFTER_A_MARKER = 'fence after a marker';
+
     private const string CODE = 'code';
 
     private const string COMMENT = 'comment';
@@ -84,21 +86,15 @@ final readonly class MarkdownText
         $codeSpans = CodeSpans::of($text);
 
         while (null !== ($match = self::firstMatch(self::OPENING, $text, $offset))) {
-            $start = $match[0][1];
-            $kind = self::kindOf($text, $start, $match);
-            // A backtick run indented too far to open a fence still opens or closes a code span.
-            $start += self::CODE === $kind ? strspn($text, ' ', $start) : 0;
+            $kind = self::kindOf($text, $match[0][1], $match);
+            $start = self::startOf($kind, $text, $match[0][1]);
             $part = match ($kind) {
-                self::FENCE => FencedBlock::at($text, $start),
+                self::FENCE, self::FENCE_AFTER_A_MARKER => FencedBlock::at($text, $start),
                 self::CODE => ($codeSpans = $codeSpans->inTheParagraphAt($start))->spanOrLiteralAt($start, $offset),
                 self::LITERAL => $match['fence'][0],
                 default => self::commentAt($text, $start),
             };
-            $read .= substr($text, $offset, $start - $offset).match ($kind) {
-                self::FENCE => $start > 0 && "\n" !== $text[$start - 1] ? self::afterTheOpeningLine($part, $fenced) : $fenced($part),
-                self::CODE, self::LITERAL => $part,
-                default => self::lineBreaksOf($part),
-            };
+            $read .= substr($text, $offset, $start - $offset).self::shown($kind, $part, $fenced);
             $offset = $start + strlen($part);
         }
 
@@ -127,9 +123,28 @@ final readonly class MarkdownText
 
         return match (true) {
             '' === $fence => '' !== ($match['code'][0] ?? '') ? self::CODE : self::COMMENT,
-            FencedBlock::opensAt($text, $start) => self::FENCE,
+            FencedBlock::opensAt($text, $start) => $start > 0 && "\n" !== $text[$start - 1] ? self::FENCE_AFTER_A_MARKER : self::FENCE,
             str_ends_with($fence, '`') => self::CODE,
             default => self::LITERAL,
+        };
+    }
+
+    // A backtick run indented too far to open a fence still opens or closes a code span, so the part starts at the run, not at the indent.
+    private static function startOf(string $kind, string $text, int $match): int
+    {
+        return $match + (self::CODE === $kind ? strspn($text, ' ', $match) : 0);
+    }
+
+    /**
+     * @param callable(string): string $fenced
+     */
+    private static function shown(string $kind, string $part, callable $fenced): string
+    {
+        return match ($kind) {
+            self::FENCE_AFTER_A_MARKER => self::afterTheOpeningLine($part, $fenced),
+            self::FENCE => $fenced($part),
+            self::CODE, self::LITERAL => $part,
+            default => self::lineBreaksOf($part),
         };
     }
 
