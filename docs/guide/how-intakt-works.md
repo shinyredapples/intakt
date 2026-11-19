@@ -109,6 +109,17 @@ If either Security engineer session cannot run, the decision waits, whichever ro
 
 You never approve a merge whose checks are failing: Intakt asks you to approve the merge only once the checks are green and the review panel has approved. (Planned:) A decision only you can make, such as a new package from an outside company, is asked as soon as it shows up, so you can answer while the checks are still being fixed.
 
+## Updates from a dependency bot
+
+A dependency bot is a helper on GitHub (such as Dependabot) that opens pull requests to update the packages your project uses. Intakt handles these updates on their own path, not as tasks (planned: not built yet):
+- **No label needed.** Intakt picks up the bot's pull requests by itself. It only changes the package list and the files that pin the exact versions; a pull request that changes anything else gets one comment and is left alone.
+- **Checked like any change.** Your project's checks and the review panel look at it as usual, but the builder never edits it. When the update falls behind the newest project, the bot brings it up to date itself.
+- **You approve it once.** No person asked for this change, so your approval is always needed before it merges, once the checks are green and every reviewer agrees. Your answer still counts for a newer version of the bot's pull request that updates the same packages in the same way.
+- **A failing check becomes an urgent task.** If the update breaks a check, Intakt writes one urgent task to fix it, and looks at the update again once that fix is merged.
+- **It lands through GitHub's own merge button.** Intakt merges it the way you would by hand, so GitHub shows it as merged and the bot keeps the credit, and Intakt records the merge as its own.
+
+Intakt also suggests telling the bot to wait a few days before offering a brand-new release (security fixes excepted), so a bad release is usually caught by others first. You cannot hand such a pull request to the builder with `take-over`; see [steering Intakt](steering-intakt.md#taking-an-item-over-by-hand-and-giving-it-back).
+
 ## When something gets stuck
 
 A task can stall for a reason the builder can't fix, for example it needs another task first, or a change to Intakt itself. Instead of trying again and again (which costs money and fixes nothing), Intakt puts it **on hold** and lets it go again on its own when the reason is gone.
