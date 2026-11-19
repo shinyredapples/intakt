@@ -7,9 +7,9 @@ namespace Intakt\Tests\Application;
 use DateInterval;
 use DateTimeImmutable;
 use Intakt\Tests\Support\KernelTestCase;
-use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\DataProvider;
-use PHPUnit\Framework\Attributes\UsesClass;
+use ReflectionProperty;
 use Symfony\Component\AssetMapper\AssetMapperInterface;
 use Symfony\Component\AssetMapper\Command\ImportMapUpdateCommand;
 use Symfony\Component\AssetMapper\CompiledAssetMapperConfigReader;
@@ -34,11 +34,7 @@ use Symfony\Component\HttpClient\Response\JsonMockResponse;
 use Symfony\Component\Yaml\Yaml;
 
 // The two import map settings of config/packages/asset_mapper.yaml applied by AssetMapper's own classes; npm and jsDelivr are replaced, so the run stays offline.
-#[CoversClass(ImportMapGenerator::class)]
-#[CoversClass(ImportMapUpdateChecker::class)]
-#[UsesClass(ImportMapRenderer::class)]
-#[UsesClass(ImportMapManager::class)]
-#[UsesClass(ImportMapUpdateCommand::class)]
+#[CoversNothing]
 final class ImportMapPolicyTest extends KernelTestCase
 {
     private const string NOW = '2026-11-19T12:00:00+00:00';
@@ -66,6 +62,11 @@ final class ImportMapPolicyTest extends KernelTestCase
     public function testTheRepositoryAsksForSha384IntegrityInTheImportMap(): void
     {
         self::assertSame(['sha384'], $this->repositoryAssetMapperSetting('importmap_integrity_algorithms'));
+    }
+
+    public function testTheContainerGeneratesTheImportMapWithSha384Integrity(): void
+    {
+        self::assertSame(['sha384'], $this->wiredIntegrityAlgorithms());
     }
 
     public function testTheMinimumReleaseAgeIsTheComposerCooldownPeriod(): void
@@ -162,15 +163,27 @@ final class ImportMapPolicyTest extends KernelTestCase
     private function generator(AssetMapperInterface $assetMapper): ImportMapGenerator
     {
         new Filesystem()->dumpFile($this->directory.'/importmap.php', '<?php return '.var_export(['app' => ['path' => './assets/app.js', 'entrypoint' => true]], true).';');
-        $algorithms = $this->repositoryAssetMapperSetting('importmap_integrity_algorithms');
-        self::assertIsArray($algorithms);
 
         return new ImportMapGenerator(
             $assetMapper,
             new CompiledAssetMapperConfigReader($this->directory.'/public/assets'),
             $this->configReader(),
-            array_values(array_filter($algorithms, is_string(...))),
+            $this->wiredIntegrityAlgorithms(),
         );
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function wiredIntegrityAlgorithms(): array
+    {
+        $generator = self::getContainer()->get('asset_mapper.importmap.generator');
+        self::assertInstanceOf(ImportMapGenerator::class, $generator);
+        // Read from the private property because the generator offers no getter, and the wired value is what a deployed install renders.
+        $algorithms = new ReflectionProperty(ImportMapGenerator::class, 'integrityHashAlgorithms')->getValue($generator);
+        self::assertIsArray($algorithms);
+
+        return array_values(array_filter($algorithms, is_string(...)));
     }
 
     private function assetMapperServing(string $content): AssetMapperInterface
