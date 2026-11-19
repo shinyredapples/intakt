@@ -562,7 +562,7 @@ final class ReviewerVerdictTest extends WebTestCase
     {
         $this->diff = str_repeat('+x', PromptCut::CEILING_BYTES + 1);
         $document = VerdictDocument::fromTheDesign()->with('verdict', 'blocked')->with('resolved', [])->withFinding('id', Verdict::INVALID_OUTPUT);
-        $finding = $document->decoded()['findings'][0];
+        $finding = $document->finding();
 
         $refused = $this->refused('Add a cart.', [], $document->with('findings', [$finding, [...$finding, 'id' => Verdict::NO_TOOLS]])->json());
 
