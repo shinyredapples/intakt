@@ -98,7 +98,7 @@ final class AccountPlatformCooldownTest extends TestCase
     {
         $platform = self::createStub(PlatformInterface::class);
         $platform->method('invoke')->willThrowException($thrown);
-        $wrapped = new AccountPlatform($account ?? $this->account(), $platform, $cooldowns, new NativeClock(), new NullLogger(), new SendFailures());
+        $wrapped = new AccountPlatform($account ?? $this->account(), $platform, $cooldowns, new NativeClock(), new NullLogger(), new SendFailures(), new NoPinnedProviderCooldowns(), null);
 
         try {
             $wrapped->invoke('model', 'review');

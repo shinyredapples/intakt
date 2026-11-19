@@ -148,7 +148,7 @@ final class AccountFailoverPlatformTest extends TestCase
     // The reviewer's probe, because the judging's failure listener logs the exception it gets with its message and its chain.
     public function testARejectionThatEndsTheCallCarriesNoTextOfTheProvider(): void
     {
-        $onlyDefault = new AccountFailoverPlatform(Provider::Anthropic, [Account::DEFAULT => $this->answering(static fn (): never => throw new AuthenticationException('invalid key SENTINEL'))], $this->cooldowns, new NativeClock(), new NullLogger());
+        $onlyDefault = new AccountFailoverPlatform(Provider::Anthropic, [Account::DEFAULT => $this->answering(static fn (): never => throw new AuthenticationException('invalid key SENTINEL'))], $this->cooldowns, new NativeClock(), new NullLogger(), new NoPinnedProviderCooldowns());
 
         try {
             $_ = $onlyDefault->invoke('big', 'Review.');
@@ -301,7 +301,7 @@ final class AccountFailoverPlatformTest extends TestCase
     public function testTwoRevokedAccountsWhoseRejectionsAreOffsetEndTheCallAsARejection(): void
     {
         $revoked = static fn (): never => throw new AuthenticationException('revoked');
-        $onlyDefault = new AccountFailoverPlatform(Provider::Anthropic, [Account::DEFAULT => $this->answering($revoked)], $this->cooldowns, new NativeClock(), new NullLogger());
+        $onlyDefault = new AccountFailoverPlatform(Provider::Anthropic, [Account::DEFAULT => $this->answering($revoked)], $this->cooldowns, new NativeClock(), new NullLogger(), new NoPinnedProviderCooldowns());
         try {
             $_ = $onlyDefault->invoke('big', 'Review.');
         } catch (AuthenticationException) {
@@ -319,7 +319,7 @@ final class AccountFailoverPlatformTest extends TestCase
     // The reviewer's probe, because the second call meets no rejection itself and finds the only account cooling down from the first one's.
     public function testASecondCallOnAProviderWhoseOnlyKeyWasRejectedIsTheRejectionAndNotAWait(): void
     {
-        $onlyDefault = new AccountFailoverPlatform(Provider::Anthropic, [Account::DEFAULT => $this->answering(static fn (): never => throw new AuthenticationException('revoked'))], $this->cooldowns, new NativeClock(), new NullLogger());
+        $onlyDefault = new AccountFailoverPlatform(Provider::Anthropic, [Account::DEFAULT => $this->answering(static fn (): never => throw new AuthenticationException('revoked'))], $this->cooldowns, new NativeClock(), new NullLogger(), new NoPinnedProviderCooldowns());
         try {
             $_ = $onlyDefault->invoke('big', 'Review.');
         } catch (AuthenticationException) {
@@ -497,7 +497,7 @@ final class AccountFailoverPlatformTest extends TestCase
             return 'anthropic.team' === $account->key() && 1 === ++$teamChecks;
         });
         $unreachable = static fn (): never => throw new TransportException('Could not resolve host: localhost');
-        $platform = new AccountFailoverPlatform(Provider::Anthropic, [Account::DEFAULT => $this->answering($unreachable), 'team' => $this->answering('second')], $cooldowns, new NativeClock(), new NullLogger());
+        $platform = new AccountFailoverPlatform(Provider::Anthropic, [Account::DEFAULT => $this->answering($unreachable), 'team' => $this->answering('second')], $cooldowns, new NativeClock(), new NullLogger(), new NoPinnedProviderCooldowns());
 
         $this->expectException(EveryEndpointUnreachable::class);
 
@@ -676,7 +676,7 @@ final class AccountFailoverPlatformTest extends TestCase
     private function streamed(Closure $deltas, AccountCooldowns $cooldowns, SendFailures $failures): DeferredResult
     {
         $platform = $this->extracting(new TokenUsage(), static fn (): StreamResult => new StreamResult($deltas()));
-        $account = new AccountPlatform($this->account(Account::DEFAULT), $platform, $cooldowns, new NativeClock(), new NullLogger(), $failures);
+        $account = new AccountPlatform($this->account(Account::DEFAULT), $platform, $cooldowns, new NativeClock(), new NullLogger(), $failures, new NoPinnedProviderCooldowns(), null);
 
         return $account->invoke('big', 'Review.');
     }
@@ -689,7 +689,7 @@ final class AccountFailoverPlatformTest extends TestCase
 
     private function onDefault(PlatformInterface $platform, AccountCooldowns $cooldowns, ClockInterface $clock): AccountPlatform
     {
-        return new AccountPlatform($this->account(Account::DEFAULT), $platform, $cooldowns, $clock, new NullLogger(), new SendFailures());
+        return new AccountPlatform($this->account(Account::DEFAULT), $platform, $cooldowns, $clock, new NullLogger(), new SendFailures(), new NoPinnedProviderCooldowns(), null);
     }
 
     private function loseTheLogin(AccountCooldowns $cooldowns, ClockInterface $clock): void
@@ -732,7 +732,7 @@ final class AccountFailoverPlatformTest extends TestCase
 
     private function accounts(PlatformInterface $default, PlatformInterface $team, ?BufferingLogger $logger = null): AccountFailoverPlatform
     {
-        return new AccountFailoverPlatform(Provider::Anthropic, [Account::DEFAULT => $default, 'team' => $team], $this->cooldowns, new NativeClock(), $logger ?? new NullLogger());
+        return new AccountFailoverPlatform(Provider::Anthropic, [Account::DEFAULT => $default, 'team' => $team], $this->cooldowns, new NativeClock(), $logger ?? new NullLogger(), new NoPinnedProviderCooldowns());
     }
 
     private function account(string $name): Account

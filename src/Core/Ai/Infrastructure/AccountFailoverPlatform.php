@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Ai\Infrastructure;
 
+use Closure;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\AccountCooldowns;
 use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
 use Intakt\Core\Ai\Contract\EveryEndpointUnreachable;
 use Intakt\Core\Ai\Contract\EveryKeyRejected;
 use Intakt\Core\Ai\Contract\KeyRejected;
+use Intakt\Core\Ai\Contract\PinnedProvider;
+use Intakt\Core\Ai\Contract\PinnedProviderCooldowns;
 use Intakt\Core\Ai\Contract\Provider;
 use LogicException;
 use Override;
@@ -40,6 +43,7 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         private AccountCooldowns $cooldowns,
         private ClockInterface $clock,
         private LoggerInterface $logger,
+        private PinnedProviderCooldowns $pinnedCooldowns,
     ) {
     }
 
@@ -47,7 +51,8 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
     public function invoke(string|Model $model, array|string|object $input, array $options = []): DeferredResult
     {
         $failures = new SendFailures();
-        $free = $this->freeAccounts($failures);
+        $routerProvider = $this->routerProviderOf($model);
+        $free = $this->freeAccounts($failures, $routerProvider);
         if ([] === $free) {
             throw $this->outOfAccounts($failures);
         }
@@ -57,10 +62,10 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         try {
             $answer = $this->failover($free)->invoke($model, $input, $options);
         } catch (RuntimeException $everyAccountFailed) {
-            throw $this->typed($everyAccountFailed, $failures);
+            throw $this->typed($everyAccountFailed, $failures, $routerProvider);
         }
 
-        return $this->typedWhenRead($answer, $failures, $options);
+        return $this->typedWhenRead($answer, fn (): Throwable => $this->rejectedWhenRead($answer, $failures, $routerProvider), $options);
     }
 
     #[Override]
@@ -69,18 +74,36 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         return array_first($this->platforms)->getModelCatalog();
     }
 
+    // The part after the model id's last colon (`deepinfra` in `moonshotai/Kimi-K3.1-Pro:deepinfra`), read without the options Symfony AI's catalog takes after a question mark.
+    private function routerProviderOf(string|Model $model): ?string
+    {
+        $name = explode('?', $model instanceof Model ? $model->getName() : $model, 2)[0];
+        $colon = strrpos($name, ':');
+        if (false === $colon) {
+            return null;
+        }
+
+        $routerProvider = substr($name, $colon + 1);
+
+        return '' === $routerProvider ? null : $routerProvider;
+    }
+
+    // An account whose pinned provider for this model cools down is left out like a cooling account, so it costs no call.
     /**
      * @return array<string, AccountPlatform>
      */
-    private function freeAccounts(SendFailures $failures): array
+    private function freeAccounts(SendFailures $failures, ?string $routerProvider): array
     {
         $free = [];
 
         foreach ($this->platforms as $name => $platform) {
             $account = new Account($this->provider, $name);
-            if (!$this->cooldowns->isCoolingDown($account)) {
-                $free[$name] = new AccountPlatform($account, $platform, $this->cooldowns, $this->clock, $this->logger, $failures);
+            $pinned = null === $routerProvider ? null : new PinnedProvider($account, $routerProvider);
+            if ($this->cooldowns->isCoolingDown($account) || ($pinned instanceof PinnedProvider && $this->pinnedCooldowns->isCoolingDown($pinned))) {
+                continue;
             }
+
+            $free[$name] = new AccountPlatform($account, $platform, $this->cooldowns, $this->clock, $this->logger, $failures, $this->pinnedCooldowns, $pinned);
         }
 
         return $free;
@@ -101,13 +124,13 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
     }
 
     // FailoverPlatform's own error names no cause, so a provider whose accounts all cooled down during the call says so like one that was out before it. The unreachable case is a guard for a platform that fails while sending (the HTTP client reports a failed name lookup only when the answer is read): judged over the accounts this call was sent to, because one whose cooldown ended during the call was never tried, and typed so the vendor retries the reviewer like an unreachable endpoint.
-    private function typed(RuntimeException $everyAccountFailed, SendFailures $failures): Throwable
+    private function typed(RuntimeException $everyAccountFailed, SendFailures $failures, ?string $routerProvider): Throwable
     {
         if ($failures->isEveryTriedUnreachable()) {
             return new EveryEndpointUnreachable($this->provider);
         }
 
-        if ([] !== $this->freeAccounts($failures)) {
+        if ([] !== $this->freeAccounts($failures, $routerProvider)) {
             return $everyAccountFailed;
         }
 
@@ -139,11 +162,12 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
 
     // A key rejected when the answer is read follows the same rule as one rejected as the call is sent, because an account cooling down from a limit beside it is free again after its wait.
     /**
+     * @param Closure(): Throwable $rejected
      * @param array<string, mixed> $options
      */
-    private function typedWhenRead(DeferredResult $answer, SendFailures $failures, array $options): DeferredResult
+    private function typedWhenRead(DeferredResult $answer, Closure $rejected, array $options): DeferredResult
     {
-        $converter = new TypedRejectionConverter($answer, fn (): Throwable => $this->rejectedWhenRead($answer, $failures));
+        $converter = new TypedRejectionConverter($answer, $rejected);
         $typed = new DeferredResult($converter, $answer->getRawResult(), $options);
         $typed->getMetadata()->set($answer->getMetadata()->all());
 
@@ -151,9 +175,9 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
     }
 
     // With a free account left the rejection is thrown as KeyRejected, never as the provider's own, because its message can echo a key and the judging's failure listener logs what it gets; FailoverPlatform already hides the provider's own when the key is rejected as the call is sent.
-    private function rejectedWhenRead(DeferredResult $answer, SendFailures $failures): Throwable
+    private function rejectedWhenRead(DeferredResult $answer, SendFailures $failures, ?string $routerProvider): Throwable
     {
-        if ([] !== $this->freeAccounts($failures)) {
+        if ([] !== $this->freeAccounts($failures, $routerProvider)) {
             return new KeyRejected($this->accountThatAnswered($answer));
         }
 

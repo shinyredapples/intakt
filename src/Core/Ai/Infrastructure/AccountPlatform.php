@@ -8,6 +8,9 @@ use Closure;
 use DateTimeImmutable;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\AccountCooldowns;
+use Intakt\Core\Ai\Contract\PinnedProvider;
+use Intakt\Core\Ai\Contract\PinnedProviderCooldownNotSaved;
+use Intakt\Core\Ai\Contract\PinnedProviderCooldowns;
 use Override;
 use Psr\Log\LoggerInterface;
 use Symfony\AI\Platform\Exception\AuthenticationException;
@@ -29,6 +32,9 @@ use Throwable;
 #[Exclude]
 final readonly class AccountPlatform implements PlatformInterface
 {
+    // The same minute an account waits after a limit without a reset (AccountCooldownWindows), so a pinned provider is tried again as soon as its account would be.
+    public const int PINNED_PROVIDER_COOLDOWN_SECONDS = 60;
+
     public function __construct(
         private Account $account,
         private PlatformInterface $platform,
@@ -36,6 +42,8 @@ final readonly class AccountPlatform implements PlatformInterface
         private ClockInterface $clock,
         private LoggerInterface $logger,
         private SendFailures $failures,
+        private PinnedProviderCooldowns $pinnedCooldowns,
+        private ?PinnedProvider $pinned,
     ) {
     }
 
@@ -125,6 +133,11 @@ final readonly class AccountPlatform implements PlatformInterface
     // A spent subscription plan is raised as a limit without a reset (CodexAccountFailure), so only that limit waits for the plan's measured reset; any other failure keeps its own wait.
     private function coolDownLimited(?int $retryAfter): void
     {
+        if ($this->pinned instanceof PinnedProvider) {
+            $this->coolDownPinned($this->pinned, $retryAfter ?? self::PINNED_PROVIDER_COOLDOWN_SECONDS);
+        }
+
+        // The account cools down too, because AccountLimitedVendor reads the wait from the account cooldowns alone, and a free account would start the reviewer again at once, without a delay, for as long as the pinned provider cools down.
         if (null === $retryAfter && $this->account->provider->spendsAPlan()) {
             $this->cooldowns->coolDownUntilPlanResets($this->account);
 
@@ -132,5 +145,15 @@ final readonly class AccountPlatform implements PlatformInterface
         }
 
         $this->cooldowns->coolDown($this->account, $retryAfter);
+    }
+
+    // Logged instead of thrown, because the provider's 429 must still reach the failover, which then tries the next account.
+    private function coolDownPinned(PinnedProvider $pinned, int $seconds): void
+    {
+        try {
+            $this->pinnedCooldowns->coolDown($pinned, $seconds);
+        } catch (PinnedProviderCooldownNotSaved $notSaved) {
+            $this->logger->warning('The cooldown of pinned provider {pinned} could not be saved.', ['pinned' => $pinned->key(), 'exception' => $notSaved]);
+        }
     }
 }
