@@ -1,0 +1,3 @@
+## Symfony components
+
+| HttpKernel 8.2 `#[Lock]` controller attribute | the dashboard's start of the next round and stop of a reviewer take one lock per round (`RoundLock`, a final subclass that presets the key `dashboard-round-{round}` from the route value), tried without waiting; a press that finds the round's lock held gets the `LockConflictedException` as a controller argument (8.2's recoverable attributes) and returns with an error line, and the lock comes from the `default` lock resource on `flock://` in the directory of the other file locks | in progress | #2703 (part #1851), `src/Core/Dashboard/Infrastructure/RoundLock.php`, `config/packages/lock.yaml` |
