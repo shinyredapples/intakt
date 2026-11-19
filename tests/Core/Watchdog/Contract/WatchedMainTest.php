@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Watchdog\Contract;
 
-use InvalidArgumentException;
 use Intakt\Core\Watchdog\Contract\CommitName;
 use Intakt\Core\Watchdog\Contract\RecordedMerge;
 use Intakt\Core\Watchdog\Contract\WatchedMain;
+use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
