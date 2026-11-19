@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Dashboard\Infrastructure;
 use Intakt\Core\Dashboard\Contract\DashboardTopics;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Domain\Board;
+use Intakt\Core\Dashboard\Domain\BoardColumn;
 use Intakt\Core\Dashboard\Domain\Headline;
 use Intakt\Core\Dashboard\Domain\WhoIsWorking;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
@@ -39,6 +40,7 @@ use Twig\Environment;
 #[UsesClass(ReplayMarks::class)]
 #[UsesClass(LedgerPayloads::class)]
 #[UsesClass(Board::class)]
+#[UsesClass(BoardColumn::class)]
 #[UsesClass(Headline::class)]
 #[UsesClass(WhoIsWorking::class)]
 #[UsesClass(LiveEvent::class)]
@@ -52,7 +54,31 @@ final class LiveBoardHeadlineTest extends KernelTestCase
 
         self::assertCount(1, $live->events);
         self::assertSame(DashboardTopics::SHELL, $live->events[0]->topic);
-        self::assertCount(1, new Crawler($live->events[0]->turboStream)->filter('turbo-stream[target="board-octopus"] #board-octopus.head-character'));
+        self::assertCount(1, new Crawler($live->events[0]->turboStream)->filter('turbo-stream[target="board-octopus"] #board-octopus.firstday'));
+    }
+
+    public function testTheBoardPublishedOnceEveryReviewIsJudgedCarriesTheAsleepOctopus(): void
+    {
+        $ledger = new DashboardLedger();
+        $this->judgeRoundsOf($ledger, 1);
+        $live = new PublishedLiveEvents();
+
+        $this->headlineOn($ledger, $live)->publishTheBoard();
+
+        self::assertCount(2, new Crawler($live->events[0]->turboStream)->filter('turbo-stream[target="board-octopus"] #board-octopus.asleep:not([hidden]) img[src*="octopus-asleep-"]'));
+    }
+
+    public function testTheBoardPublishedWhileABuildIsInFlightCarriesNoOctopus(): void
+    {
+        $ledger = new DashboardLedger();
+        $this->judgeRoundsOf($ledger, 1);
+        $ledger->passBuildStep('alpha', 'task-7', 'build_job');
+        $live = new PublishedLiveEvents();
+
+        $this->headlineOn($ledger, $live)->publishTheBoard();
+
+        $stream = new Crawler($live->events[0]->turboStream);
+        self::assertSame([1, 0], [$stream->filter('turbo-stream[target="board-octopus"] span#board-octopus[hidden]')->count(), $stream->filter('img[src*="octopus-"]')->count()]);
     }
 
     public function testAPushedDoneColumnCarriesAtMostThePageLimitOfCards(): void
@@ -95,6 +121,16 @@ final class LiveBoardHeadlineTest extends KernelTestCase
 
         self::assertCount(0, $done->filter('article[data-project="beta"]'));
         self::assertSame('Show 1 more', $done->filter('.col-cards > a.more-link')->text());
+    }
+
+    public function testAnEmptyDoneColumnPushedAfterTheFirstRoundStillSaysWhatLandsThere(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startRoundOf('change-1', 'r1', 1);
+
+        $done = $this->pushedDoneColumnFrom($ledger);
+
+        self::assertSame(BoardColumn::Done->emptyLine(), $done->filter('.col-empty')->text());
     }
 
     private function pushedDoneColumnOf(int $judged): Crawler

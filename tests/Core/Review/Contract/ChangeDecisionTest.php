@@ -45,6 +45,29 @@ final class ChangeDecisionTest extends TestCase
         self::assertSame(Decision::Blocked, new ChangeDecision()->of(QuorumPolicy::OneStrongPlusOne, [$this->vote(Decision::Blocked, Tier::Strong), $this->vote(Decision::Approve)]));
     }
 
+    public function testAStoredChangesVerdictWithAReservedFailureIdAloneAsksForChanges(): void
+    {
+        self::assertSame(Decision::Changes, new ChangeDecision()->of(QuorumPolicy::Majority, [$this->legacyVote()]));
+    }
+
+    public function testAStoredChangesVerdictWithAReservedFailureIdDoesNotOverrideAMetQuorum(): void
+    {
+        self::assertSame(Decision::Approve, new ChangeDecision()->of(QuorumPolicy::Majority, [$this->legacyVote(), $this->vote(Decision::Approve), $this->vote(Decision::Approve)]));
+    }
+
+    public function testAStoredChangesVerdictWithAReservedFailureIdAsksForChangesWhenAllMustApprove(): void
+    {
+        self::assertSame(Decision::Changes, new ChangeDecision()->of(QuorumPolicy::All, [$this->legacyVote(), $this->vote(Decision::Approve), $this->vote(Decision::Approve)]));
+    }
+
+    private function legacyVote(): PanelVerdict
+    {
+        $legacy = new Verdict(Decision::Changes, Verdict::noTools()->findings, ['F1'], []);
+        self::assertTrue($legacy->isFailedReview(), 'The stored verdict does not read as a failed review.');
+
+        return new PanelVerdict(Tier::Strong, $legacy);
+    }
+
     private function vote(Decision $decision, Tier $tier = Tier::Standard): PanelVerdict
     {
         return new PanelVerdict($tier, new Verdict($decision, [], [], []));

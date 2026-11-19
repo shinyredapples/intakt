@@ -5,19 +5,21 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\Infrastructure;
 
 use Intakt\Core\Ai\Contract\ResolvedModel;
-use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\JobReview;
+use Intakt\Core\Review\Contract\JobReviewer;
+use Intakt\Core\Review\Contract\JobVerdict;
 use Intakt\Core\Review\Contract\ReviewJobRequest;
 use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictParser;
 use Intakt\Core\Review\Contract\VerdictUnreadable;
+use Override;
 use Symfony\AI\Platform\Exception\ValidationException;
 use Symfony\Component\Serializer\SerializerInterface;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 // The job's answer is read and checked here like an answer in the app's own process, because the job's CLI, which reads a read-only clone of the exact head and reaches only its vendor, is model output like any other.
-final readonly class ReviewerInJob
+final readonly class ReviewerInJob implements JobReviewer
 {
     private VerdictInText $text;
 
@@ -39,17 +41,30 @@ final readonly class ReviewerInJob
      * @throws VerdictUnreadable
      * @throws ReviewJobFailure
      */
-    public function review(ReviewRequest $request, JobReview $job, ResolvedModel $model): Verdict
+    #[Override]
+    public function review(ReviewRequest $request, JobReview $job, ResolvedModel $model): JobVerdict
     {
         $answer = $this->answerOf($request, $job, $model);
+
+        return new JobVerdict($this->verdictOf($request, $answer), $answer->readTheCheckout, $answer->usage);
+    }
+
+    /**
+     * @throws VerdictUnreadable
+     */
+    private function verdictOf(ReviewRequest $request, ReviewJobAnswer $answer): Verdict
+    {
         $verdict = $this->parser->parseWith(fn (): Verdict => $this->validated($this->text->verdictOf($answer->text)));
 
+        $this->ids->refuseClaimedFailureIds($verdict);
+        $counted = $this->ids->asTheRoundCounts($request->brief, $verdict);
+
         // Refused in plain code, as in the app's own process, because the note that a text was cut is only prompt text.
-        if (Decision::Approve === $verdict->verdict && $this->prompt->cutsInputOf($request->brief)) {
+        if ($counted->mayCountAsApproval() && $this->prompt->cutsInputOf($request->brief)) {
             return Verdict::cutApproval();
         }
 
-        return $this->ids->checkedAgainst($request->brief, $verdict);
+        return $this->ids->checkedAgainst($request->brief, $counted);
     }
 
     // The clone is removed after the job, also when it throws, so no head is left on the host.

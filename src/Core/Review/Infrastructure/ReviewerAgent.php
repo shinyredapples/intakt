@@ -6,7 +6,6 @@ namespace Intakt\Core\Review\Infrastructure;
 
 use Closure;
 use Intakt\Core\Ai\Contract\ResolvedModel;
-use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\ReadAnswer;
 use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\Reviewer;
@@ -65,22 +64,27 @@ final readonly class ReviewerAgent implements Reviewer
 
         $verdict = $this->canStream($platform, $model->model) ? $this->answeredStreaming($agent, $conversation, $request->conversation) : $this->answeredUnstreamed($agent, $conversation, $request->conversation);
 
-        // A stop wins over an earlier malformed call, because only a stopped verdict lets the stop be recorded; a model naming the id itself gains nothing, since its verdict still blocks.
+        // A stop wins over an earlier malformed call, because only a stopped verdict lets the stop be recorded; a model naming the id itself gains nothing, since OpenFindingIds::refuseClaimedFailureIds() refuses a forged stop.
         if ($tools->seen() && !$verdict->isStopped()) {
             throw VerdictUnreadable::becauseKeySafe('the reviewer made a malformed tool call.');
         }
 
-        if ($this->approvesCutText($verdict, $request->brief, $fenced)) {
+        // Before the cut approval is put in its place, because a reviewer that names a reserved id has given an unreadable answer whatever it decided, and is asked once more.
+        $this->ids->refuseClaimedFailureIds($verdict);
+
+        $counted = $this->ids->asTheRoundCounts($request->brief, $verdict);
+
+        if ($this->approvesCutText($counted, $request->brief, $fenced)) {
             return Verdict::cutApproval();
         }
 
-        return $this->ids->checkedAgainst($request->brief, $verdict);
+        return $this->ids->checkedAgainst($request->brief, $counted);
     }
 
     // Plain code refuses it, because the note asking the reviewer to read the rest is only prompt text, and a steered or lazy reviewer could approve code it never saw.
     private function approvesCutText(Verdict $verdict, ReviewBrief $brief, FencedToolbox $fenced): bool
     {
-        return Decision::Approve === $verdict->verdict && ($this->prompt->cutsInputOf($brief) || $fenced->cutAnAnswer());
+        return $verdict->mayCountAsApproval() && ($this->prompt->cutsInputOf($brief) || $fenced->cutAnAnswer());
     }
 
     // Read from the model's catalog entry, never from model text, so the choice to stream is made by plain code.

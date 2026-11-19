@@ -108,6 +108,11 @@ final class DashboardLedger implements Ledger
         $this->add(LedgerEventKind::ReviewerFailed, $this->reviewer($round, $role) + ['failure' => $failure]);
     }
 
+    public function blockReviewer(string $round, string $role, string $reason): void
+    {
+        $this->add(LedgerEventKind::ReviewerBlocked, $this->reviewer($round, $role) + ['reason' => $reason]);
+    }
+
     public function owesCatchUp(string $round, string $role): void
     {
         $this->add(LedgerEventKind::CatchUpOwed, $this->reviewer($round, $role) + ['substitute' => 'openai']);
@@ -268,6 +273,21 @@ final class DashboardLedger implements Ledger
     public function bootMain(string $project, string $main = 'b', string $toolFingerprint = 'tools-1'): void
     {
         $this->add(LedgerEventKind::BootResultComputed, ['project' => $project, 'main' => $main, 'tool_fingerprint' => $toolFingerprint, 'state' => 'booted', 'reason' => '']);
+    }
+
+    public function readMainFromStore(string $project, string $main, string $state): void
+    {
+        $this->add(LedgerEventKind::BootResultComputed, ['project' => $project, 'main' => $main, 'tool_fingerprint' => 'tools-1', 'state' => $state, 'reason' => '', 'read_from' => 'store']);
+    }
+
+    public function readFailedMainFromStore(string $project, string $main, string $reason): void
+    {
+        $this->add(LedgerEventKind::BootResultComputed, ['project' => $project, 'main' => $main, 'tool_fingerprint' => 'tools-1', 'state' => 'failed', 'reason' => $reason, 'read_from' => 'store']);
+    }
+
+    public function computeFailedMain(string $project, string $main, string $reason): void
+    {
+        $this->add(LedgerEventKind::BootResultComputed, ['project' => $project, 'main' => $main, 'tool_fingerprint' => 'tools-1', 'state' => 'failed', 'reason' => $reason]);
     }
 
     public function failHeadWithoutCause(string $project, string $change): void

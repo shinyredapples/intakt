@@ -87,6 +87,8 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
 
     private EntityManagerInterface $entities;
 
+    private string $firstHeadRuns = 'runs_in_progress.json';
+
     protected function setUp(): void
     {
         $entities = self::getContainer()->get('doctrine.orm.entity_manager');
@@ -108,6 +110,19 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         self::assertSame(1, preg_match_all('/ head_pending \{[^}]*pull\\\\\/7/', $events));
         self::assertSame(1, preg_match_all('/ round_queued \{[^}]*pull\\\\\/8/', $events));
         self::assertStringContainsString('2 events', $events);
+    }
+
+    public function testATickQueuesTheRoundOfAHeadWhoseQueuedRunANewerGreenRunOfTheSameOriginReplaced(): void
+    {
+        $this->firstHeadRuns = 'runs_queued_and_newer_green.json';
+        $commands = new RecordingCommandBus();
+
+        $this->handler($commands)(new WatchPullRequests('alpha'));
+
+        self::assertCount(2, $commands->started);
+        $events = $this->recordedEvents();
+        self::assertSame(0, preg_match_all('/ head_pending /', $events));
+        self::assertSame(1, preg_match_all('/ round_queued \{[^}]*pull\\\\\/7/', $events));
     }
 
     private function recordedEvents(): string
@@ -143,7 +158,7 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         // Main's boot line goes to a ledger of its own, because the test counts only the lines of the two heads.
         $authors = self::createStub(AuthorTrust::class);
         $authors->method('isAuthorTrusted')->willReturn(true);
-        $gate = new BootGate($queries, $authors, new BootResults($queries, $this->entities, $clock, new WatcherLedger(new InMemoryLedger()), $redactor, $logger, $doctrine), $ledger, $logger);
+        $gate = new BootGate($queries, $authors, new BootResults($queries, $this->entities, $clock, new WatcherLedger(new InMemoryLedger()), $redactor, $logger, $doctrine, new LockFactory(new InMemoryStore())), $ledger, $logger);
         $settle = new SettleHeads(new SettleHead($gate, new StaleVerdicts($queries, $commands, $rounds, $ledger), new HeadsWithoutRound($ledger, $pending), $starts), $starts, $backOff);
         $projects = new WatchedProjects(['alpha' => ['repository' => 'repo', 'base' => 'main', 'task' => 'Review it.', 'github' => 'acme/widgets']]);
 
@@ -168,7 +183,7 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         return match (true) {
             str_contains($url, '/pulls') => new MockResponse($this->fixture('pulls_open.json'), ['response_headers' => ['ETag' => 'W/"recorded"']]),
             str_contains($url, 'head_sha='.self::GREEN) => new MockResponse($this->fixture('runs_green_head_2.json')),
-            str_contains($url, '/actions/runs') => new MockResponse($this->fixture('runs_in_progress.json')),
+            str_contains($url, '/actions/runs') => new MockResponse($this->fixture($this->firstHeadRuns)),
             default => new MockResponse($this->fixture('suites_none.json')),
         };
     }

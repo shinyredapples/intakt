@@ -13,6 +13,7 @@ use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\ReviewerOutcome;
 use Intakt\Core\Dashboard\Domain\ReviewerProgress;
+use Intakt\Core\Dashboard\Domain\ReviewOutcome;
 use Intakt\Core\Dashboard\Domain\ReviewState;
 use Intakt\Core\Dashboard\Domain\RoundFinding;
 use Intakt\Core\Dashboard\Domain\RoundPlace;
@@ -85,6 +86,7 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(Review::class)]
 #[UsesClass(ReviewedRound::class)]
 #[UsesClass(ReviewerOutcome::class)]
+#[UsesClass(ReviewOutcome::class)]
 #[UsesClass(RoundFinding::class)]
 #[UsesClass(RoundPlace::class)]
 #[UsesClass(RoundStart::class)]
@@ -677,6 +679,40 @@ final class LedgerRoundsTest extends TestCase
         self::assertSame([ReviewerProgress::Failed, 'the model endpoint could not be reached'], [$review?->rounds[0]->outcomes[0]->progress, $review?->rounds[0]->outcomes[0]->note]);
     }
 
+    public function testABlockedReviewerIsNotedWithItsReason(): void
+    {
+        $blocked = $this->row(LedgerEventKind::ReviewerBlocked, new ReviewerBlocked('r1', 'x', 'security', Tier::Strong, 'Every provider of the tier is out.'));
+
+        $review = $this->reviewOf('r1', $this->quorumStart(2, QuorumPolicy::All), $blocked);
+
+        self::assertSame([ReviewerProgress::Blocked, 'Every provider of the tier is out.'], [$review?->rounds[0]->outcomes[0]->progress, $review?->rounds[0]->outcomes[0]->note]);
+    }
+
+    public function testABlockedVerdictIntaktGaveIsNotedWithItsReason(): void
+    {
+        $blocked = $this->row(LedgerEventKind::VerdictReceived, new VerdictReceived('r1', 'x', 'security', Tier::Strong, Decision::Blocked, 1, ProjectMode::Live, 'The reviewer stream ended before its verdict.'));
+
+        $review = $this->reviewOf('r1', $this->quorumStart(2, QuorumPolicy::All), $blocked);
+
+        self::assertSame([ReviewOutcome::Blocked, 'The reviewer stream ended before its verdict.'], [$review?->rounds[0]->outcomes[0]->outcome(), $review?->rounds[0]->outcomes[0]->note]);
+    }
+
+    public function testABlockedVerdictRecordedBeforeReasonsWereKeptSaysItsReasonWasNotRecorded(): void
+    {
+        $older = $this->event(LedgerEventKind::VerdictReceived, '{"round":"r1","reviewer":"x","role":"security","tier":"strong","decision":"blocked","findings":1,"mode":"live"}');
+
+        $review = $this->reviewOf('r1', $this->quorumStart(2, QuorumPolicy::All), $older);
+
+        self::assertSame([ReviewOutcome::Blocked, 'Reason not recorded: this verdict was written before Intakt kept the reason of a blocked verdict.'], [$review?->rounds[0]->outcomes[0]->outcome(), $review?->rounds[0]->outcomes[0]->note]);
+    }
+
+    public function testAnAnsweredReviewerWithoutAReasonHasNoNote(): void
+    {
+        $review = $this->reviewOf('r1', $this->quorumStart(2, QuorumPolicy::All), $this->approved('x'));
+
+        self::assertNull($review?->rounds[0]->outcomes[0]->note);
+    }
+
     public function testAJudgedRoundWithAFailedReviewerBesideAnApprovalIsBlockedUnderTheAllPolicy(): void
     {
         $review = $this->reviewOf('r1', $this->quorumStart(2, QuorumPolicy::All), $this->approved('x'), $this->failed('y'), $this->judged());
@@ -689,6 +725,25 @@ final class LedgerRoundsTest extends TestCase
         $changes = $this->row(LedgerEventKind::VerdictReceived, new VerdictReceived('r1', 'x', 'correctness', Tier::Standard, Decision::Changes, 1, ProjectMode::Live));
 
         $review = $this->reviewOf('r1', $this->quorumStart(2, QuorumPolicy::All), $changes, $this->failed('y'), $this->judged());
+
+        self::assertSame(Decision::Changes, $review?->rounds[0]->outcome);
+    }
+
+    public function testAChangesVerdictTheJudgeStepCountedAsApprovalApprovesTheRoundAsTheConsoleDoes(): void
+    {
+        $changes = $this->row(LedgerEventKind::VerdictReceived, new VerdictReceived('r1', 'x', 'correctness', Tier::Standard, Decision::Changes, 1, ProjectMode::Live));
+        $judged = $this->row(LedgerEventKind::JudgeDone, new JudgeDone('r1', [], ['F1'], [new JudgeDoneFinding('F1', Severity::P3, 'Later.')], votes: ['x' => Decision::Approve]));
+
+        $review = $this->reviewOf('r1', $this->quorumStart(1, QuorumPolicy::All), $changes, $judged);
+
+        self::assertSame([Decision::Approve, Decision::Changes], [$review?->rounds[0]->outcome, $review?->rounds[0]->outcomes[0]->decision]);
+    }
+
+    public function testAJudgeRowWithoutCountedVotesDecidesFromTheVerdictsAsGiven(): void
+    {
+        $changes = $this->row(LedgerEventKind::VerdictReceived, new VerdictReceived('r1', 'x', 'correctness', Tier::Standard, Decision::Changes, 1, ProjectMode::Live));
+
+        $review = $this->reviewOf('r1', $this->quorumStart(1, QuorumPolicy::All), $changes, $this->judged());
 
         self::assertSame(Decision::Changes, $review?->rounds[0]->outcome);
     }

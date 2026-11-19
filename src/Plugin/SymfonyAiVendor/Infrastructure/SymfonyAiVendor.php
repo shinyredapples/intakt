@@ -17,9 +17,10 @@ use Intakt\Core\Ai\Contract\TierInvoker;
 use Intakt\Core\Ai\Contract\TierNotMapped;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Review\Contract\ChangesWithoutFindings;
-use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Contract\JobReview;
+use Intakt\Core\Review\Contract\JobReviewer;
+use Intakt\Core\Review\Contract\JobVerdict;
 use Intakt\Core\Review\Contract\Judge;
 use Intakt\Core\Review\Contract\Judgement;
 use Intakt\Core\Review\Contract\JudgeRequest;
@@ -69,6 +70,7 @@ final readonly class SymfonyAiVendor implements Vendor
         private VendorAccountLimit $accounts,
         private ClockInterface $clock,
         private ReviewServerAccesses $servers,
+        private JobReviewer $jobs,
     ) {
     }
 
@@ -193,6 +195,10 @@ final readonly class SymfonyAiVendor implements Vendor
 
     private function verdictOn(ResolvedModel $answering, UsageReservation $reservation, ReviewRequest $request): Verdict
     {
+        if ($request->job instanceof JobReview) {
+            return $this->jobVerdictOn($answering, $reservation, $request, $request->job);
+        }
+
         try {
             $options = $this->serverOptions($answering, $request);
         } catch (NoReviewServerAccess) {
@@ -230,7 +236,38 @@ final readonly class SymfonyAiVendor implements Vendor
 
         $this->usage->settle($reservation, ...$platform->rounds());
 
-        return $this->readOrRefused($platform, $request, $this->namingAFinding($verdict));
+        return $this->readOrRefused($platform, $this->namingAFinding($verdict));
+    }
+
+    // The job's own usage settles the call, because the platform is never called for it; a job that reported none, or whose answer is no verdict, is left unsettled, never settled as zero.
+    private function jobVerdictOn(ResolvedModel $answering, UsageReservation $reservation, ReviewRequest $request, JobReview $job): Verdict
+    {
+        try {
+            $answer = $this->jobs->review($request, $job, $answering);
+        } catch (VerdictUnreadable $unreadable) {
+            $this->usage->leaveUnsettled($reservation, $unreadable);
+
+            throw $unreadable;
+            // Boundary: leaves the call unsettled and rethrows it typed, because any job failure must reach the callers as a vendor failure.
+        } catch (Throwable $failure) {
+            $this->usage->leaveUnsettled($reservation, $failure);
+
+            throw $this->typed($failure);
+        }
+
+        if ([] === $answer->usage) {
+            $this->usage->leaveUnsettled($reservation, JobReportedNoUsage::inItsOutput());
+        } else {
+            $this->usage->settleReported($reservation, $answer->usage);
+        }
+
+        return $this->jobReadOrRefused($answer, $this->namingAFinding($answer->verdict));
+    }
+
+    // Decided here in plain code like readOrRefused(), because a mounted checkout is no read: the approve counts only when the job CLI's own events show a file of the checkout read.
+    private function jobReadOrRefused(JobVerdict $answer, Verdict $verdict): Verdict
+    {
+        return !$verdict->mayCountAsApproval() || $answer->readTheCheckout ? $verdict : Verdict::unreadApproval();
     }
 
     // Refused after the usage is settled, because the call itself finished and was paid for.
@@ -247,7 +284,7 @@ final readonly class SymfonyAiVendor implements Vendor
     {
         $round = $request->conversation->round;
 
-        if ($answering->provider->readsTheCheckout() || $request->job instanceof JobReview || !$round instanceof Uuid) {
+        if ($answering->provider->readsTheCheckout() || !$round instanceof Uuid) {
             return [];
         }
 
@@ -301,10 +338,10 @@ final readonly class SymfonyAiVendor implements Vendor
         return true;
     }
 
-    // Decided here in plain code, because a reviewer that never saw the change can still answer approve; per call, because a subscription CLI in the app's own process reads the change only through the review server this call gave it, while in a review job it reads the checkout mounted into the job.
-    private function readOrRefused(TierRoutedPlatform $platform, ReviewRequest $request, Verdict $verdict): Verdict
+    // Decided here in plain code, because a reviewer that never saw the change can still answer approve; per call, because a subscription CLI in the app's own process reads the change only through the review server this call gave it.
+    private function readOrRefused(TierRoutedPlatform $platform, Verdict $verdict): Verdict
     {
-        if (Decision::Approve !== $verdict->verdict || $platform->answering->provider->readsTheCheckout() || $request->job instanceof JobReview) {
+        if (!$verdict->mayCountAsApproval() || $platform->answering->provider->readsTheCheckout()) {
             return $verdict;
         }
 

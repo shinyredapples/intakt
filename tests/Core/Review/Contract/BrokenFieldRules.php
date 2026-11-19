@@ -63,6 +63,7 @@ final readonly class BrokenFieldRules
         yield 'unknown: a verdict field' => [$design->with('summary', '...')->json(), '"summary" is unknown'];
         yield 'unknown: a finding field' => [$design->withFinding('note', '...')->json(), '"findings[0].note" is unknown'];
         yield 'unknown: merged ids, which only the act list sets' => [$design->withFinding('merged', ['F1'])->json(), '"findings[0].merged" is unknown'];
+        yield 'unknown: the origin of a failure verdict, which only Intakt sets' => [$design->with('origin', 'intakt')->json(), '"origin" is unknown'];
         yield 'unknown: an evidence field' => [$design->withFinding('evidence', ['probe' => '...', 'output' => '...', 'note' => '...'])->json(), '"findings[0].evidence.note" is unknown'];
     }
 

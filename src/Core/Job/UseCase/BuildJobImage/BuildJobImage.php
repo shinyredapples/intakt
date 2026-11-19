@@ -9,6 +9,7 @@ use Intakt\Core\Job\Contract\JobEventNotRecorded;
 use Intakt\Core\Job\Contract\JobOutputRefused;
 use Intakt\Core\Job\Contract\JobRefused;
 use Intakt\Core\Job\Infrastructure\DockerEngine;
+use Intakt\Core\Job\Infrastructure\ImageBuild;
 
 final readonly class BuildJobImage
 {
@@ -34,12 +35,24 @@ final readonly class BuildJobImage
         }
 
         $plan = $this->planner->planFor($directory, $kind);
-        $build = $this->engine->build($this->context->of($plan, $directory), $tag, $plan->dockerfile);
+        $build = $this->sent($plan, $directory, $tag);
 
         if (null !== $build->error || null === $build->image) {
             throw JobImageNotBuilt::buildFailed($tag, $build->error ?? 'no image', $build->output);
         }
 
         return new BuiltJobImage($plan, $build->output, $build->image, $plan->php instanceof PhpProfile ? $this->php->verify($tag, $build->image, $plan->php) : null);
+    }
+
+    // The upload removes the file once the engine read it all; removed in finally as well, because a request that failed before its end leaves it behind.
+    private function sent(JobImagePlan $plan, string $directory, string $tag): ImageBuild
+    {
+        $file = $this->context->of($plan, $directory);
+
+        try {
+            return $this->engine->build($this->context->upload($file), $tag, $plan->dockerfile);
+        } finally {
+            $this->context->remove($file);
+        }
     }
 }

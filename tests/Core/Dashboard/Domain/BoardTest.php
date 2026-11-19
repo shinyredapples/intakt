@@ -8,8 +8,10 @@ use DateTimeImmutable;
 use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Dashboard\Domain\Board;
 use Intakt\Core\Dashboard\Domain\BoardColumn;
+use Intakt\Core\Dashboard\Domain\BuildTask;
 use Intakt\Core\Dashboard\Domain\Headline;
 use Intakt\Core\Dashboard\Domain\Lane;
+use Intakt\Core\Dashboard\Domain\MascotPose;
 use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\ReviewerOutcome;
@@ -29,6 +31,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(Lane::class)]
 #[UsesClass(WhoIsWorking::class)]
 #[UsesClass(Headline::class)]
+#[UsesClass(BuildTask::class)]
 #[UsesClass(RoundPlace::class)]
 #[UsesClass(RoundStart::class)]
 #[UsesClass(Cost::class)]
@@ -193,6 +196,128 @@ final class BoardTest extends TestCase
         self::assertSame(['The Code reviewers are reviewing change feat/a of alpha.', 'Nothing needs you.'], [$headline->opening(), $headline->waitingWords()]);
     }
 
+    public function testOnTheFirstDayEveryColumnGivesTheLineOfWhatLandsInIt(): void
+    {
+        $board = new Board([]);
+
+        self::assertSame(
+            array_map(static fn (BoardColumn $column): string => $column->emptyLine(), BoardColumn::cases()),
+            array_map($board->emptyLineOf(...), BoardColumn::cases()),
+        );
+    }
+
+    public function testAnEmptyColumnStillGivesItsLineOnceAReviewHasRun(): void
+    {
+        $board = new Board([new Review([$this->round('r1', 'feat/a', 1)])]);
+
+        self::assertSame('Reviews appear here once the judge has decided them', $board->emptyLineOf(BoardColumn::Done));
+    }
+
+    public function testAColumnWithACardGivesNoEmptyLine(): void
+    {
+        $board = new Board([new Review([$this->round('r1', 'feat/a', 1)])]);
+
+        self::assertNull($board->emptyLineOf(BoardColumn::InReview));
+    }
+
+    public function testOnTheFirstDayWhoIsWorkingSaysThatReviewersAppearWhileTheyReview(): void
+    {
+        self::assertSame('Nobody is working yet: reviewers appear here while they review a change', new Board([])->nobodyWorkingLine());
+    }
+
+    public function testWhoIsWorkingKeepsItsLineWhenNobodyRunsOnceAReviewHasRun(): void
+    {
+        $board = new Board([new Review([$this->round('r1', 'feat/a', 1)->judgedWith([], $this->morning())])]);
+
+        self::assertSame('Nobody is working yet: reviewers appear here while they review a change', $board->nobodyWorkingLine());
+    }
+
+    public function testWhoIsWorkingHasNoEmptyLineWhileAReviewerRuns(): void
+    {
+        $running = $this->round('r1', 'feat/a', 1)->withOutcomes([new ReviewerOutcome('r1-a', 'correctness', 'standard', $this->morning())]);
+
+        self::assertNull(new Board([new Review([$running])])->nobodyWorkingLine());
+    }
+
+    public function testATaskTheBuildRecordedEndsTheFirstDayBeforeAnyReview(): void
+    {
+        self::assertFalse(new Board([], [$this->failed('alpha')])->isFirstDay());
+    }
+
+    public function testOnTheFirstDayTheOctopusWaits(): void
+    {
+        self::assertSame(MascotPose::Waiting, new Board([])->mascot());
+    }
+
+    public function testABoardWhoseEveryCardIsDoneShowsTheAsleepOctopus(): void
+    {
+        $board = new Board([new Review([$this->round('r1', 'feat/a', 1)->judgedWith([], $this->morning())])]);
+
+        self::assertSame(MascotPose::Asleep, $board->mascot());
+    }
+
+    public function testABoardWithARunningReviewShowsNoOctopus(): void
+    {
+        self::assertNull(new Board([new Review([$this->round('r1', 'feat/a', 1)])])->mascot());
+    }
+
+    public function testABuildInFlightShowsNoOctopus(): void
+    {
+        $board = new Board([new Review([$this->round('r1', 'feat/a', 1)->judgedWith([], $this->morning())])], [$this->inFlight('alpha')]);
+
+        self::assertNull($board->mascot());
+    }
+
+    public function testABuildInFlightWithNoCardShowsNoOctopus(): void
+    {
+        self::assertNull(new Board([], [$this->inFlight('alpha')])->mascot());
+    }
+
+    public function testATaskAtRestWithNoCardShowsTheAsleepOctopus(): void
+    {
+        self::assertSame(MascotPose::Asleep, new Board([], [$this->failed('alpha')])->mascot());
+    }
+
+    public function testTheHeadlineDoesNotSayNothingIsRunningWhileABuildIsInFlight(): void
+    {
+        self::assertSame('A build is running.', new Board([], [$this->inFlight('alpha')])->headline()->opening());
+    }
+
+    public function testTheHeadlineOfATaskAtRestWithNoCardSaysNothingIsRunning(): void
+    {
+        self::assertSame('Nothing is running.', new Board([], [$this->failed('alpha')])->headline()->opening());
+    }
+
+    public function testIdleProjectsAreThoseWhoseEveryCardIsDone(): void
+    {
+        $board = new Board([
+            new Review([$this->started(new RoundStart('r1', 'alpha', 2), new RoundPlace('feat/a', 1), $this->morning())->judgedWith([], $this->morning())]),
+            new Review([$this->started(new RoundStart('r2', 'beta', 2), new RoundPlace('feat/b', 1), $this->morning())]),
+        ]);
+
+        self::assertSame(['alpha'], $board->idleProjects());
+    }
+
+    public function testIdleProjectsLeaveOutAProjectWithABuildInFlight(): void
+    {
+        $board = new Board(
+            [
+                new Review([$this->started(new RoundStart('r1', 'alpha', 2), new RoundPlace('feat/a', 1), $this->morning())->judgedWith([], $this->morning())]),
+                new Review([$this->started(new RoundStart('r2', 'beta', 2), new RoundPlace('feat/b', 1), $this->morning())->judgedWith([], $this->morning())]),
+            ],
+            [$this->inFlight('beta'), $this->failed('beta')],
+        );
+
+        self::assertSame(['alpha'], $board->idleProjects());
+    }
+
+    public function testAProjectWithOnlyATaskAtRestIsIdle(): void
+    {
+        $board = new Board([new Review([$this->started(new RoundStart('r1', 'beta', 2), new RoundPlace('feat/b', 1), $this->morning())])], [$this->failed('alpha')]);
+
+        self::assertSame(['alpha'], $board->idleProjects());
+    }
+
     /**
      * @return list<string>
      */
@@ -209,6 +334,16 @@ final class BoardTest extends TestCase
     private function started(RoundStart $start, RoundPlace $place, DateTimeImmutable $startedAt): ReviewedRound
     {
         return new ReviewedRound($start, $place, $startedAt, null);
+    }
+
+    private function inFlight(string $project): BuildTask
+    {
+        return new BuildTask($project, 'task-1', true);
+    }
+
+    private function failed(string $project): BuildTask
+    {
+        return new BuildTask($project, 'task-2', false);
     }
 
     private function morning(): DateTimeImmutable
