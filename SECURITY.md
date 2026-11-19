@@ -4,7 +4,7 @@ Intakt handles provider keys and GitHub App keys, and it runs reviewers on code 
 
 ## How to report
 
-Use GitHub's private vulnerability reporting: open the repository's **Security** tab and choose **Report a vulnerability**. Only the maintainer sees the report.
+Use GitHub's private vulnerability reporting: open the repository's **Security** tab and choose **Report a vulnerability**. Only you and the repository's maintainers can see the report.
 
 Never open a public issue, pull request or discussion for a security problem.
 
