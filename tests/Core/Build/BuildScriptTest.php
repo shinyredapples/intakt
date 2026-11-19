@@ -9,6 +9,7 @@ use Intakt\Tests\Core\HandBack\BuildHistory;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\TestCase;
+use RuntimeException;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Process\ExecutableFinder;
 use Symfony\Component\Process\Process;
@@ -398,6 +399,79 @@ final class BuildScriptTest extends TestCase
         self::assertFileDoesNotExist($this->output.'/handback.bundle');
     }
 
+    public function testAnIncludeThatWaitsOnAPipeInTheClonesGitConfigDoesNotStopTheBundleOfTheBranch(): void
+    {
+        // Nobody writes into the pipe, so a git that reads the clone's own settings after the session waits until the job is timed out.
+        $this->givenTheCli(<<<'SH'
+            echo 'built' > built.txt
+            git add built.txt
+            git commit --quiet -m 'feat: build the task'
+            mkfifo "$TMPDIR/settings"
+            git config include.path "$TMPDIR/settings"
+            SH);
+
+        try {
+            $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5', timeout: 10);
+        } finally {
+            $this->releaseThePipe($this->work.'/settings');
+        }
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertSame("built\n", $this->fileAtTheBundlesHead('task', 'built.txt'));
+    }
+
+    public function testACommonFolderTheCliNamesInTheCloneDoesNotStopTheBundleOfTheBranch(): void
+    {
+        // Git reads the settings of the folder a commondir file names, so the include waits on a pipe nobody writes into.
+        $this->givenTheCli(<<<'SH'
+            echo 'built' > built.txt
+            git add built.txt
+            git commit --quiet -m 'feat: build the task'
+            mkfifo "$TMPDIR/settings"
+            cp -R .git "$TMPDIR/common"
+            printf '[include]\n\tpath = %s\n' "$TMPDIR/settings" >> "$TMPDIR/common/config"
+            echo "$TMPDIR/common" > .git/commondir
+            SH);
+
+        try {
+            $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5', timeout: 10);
+        } finally {
+            $this->releaseThePipe($this->work.'/settings');
+        }
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertSame("built\n", $this->fileAtTheBundlesHead('task', 'built.txt'));
+    }
+
+    public function testASha256BuildCloneStillHandsBackABundleOfTheBranchAfterItsSettingsAreReplaced(): void
+    {
+        $source = $this->history->folder.'/sha256';
+        foreach ([['init', '--quiet', '--object-format=sha256', '--initial-branch=task', $source], ['-C', $source, 'commit', '--quiet', '--allow-empty', '-m', 'chore: start']] as $command) {
+            new Process(['git', '-c', 'user.name=test', '-c', 'user.email=test@intakt.invalid', ...$command], null, $this->environment())->mustRun();
+        }
+        $this->givenTheCli('git commit --quiet --allow-empty -m "feat: build the task" && git rev-parse HEAD > "$RECORD/head"');
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5', source: $source);
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertStringStartsWith("# v3 git bundle\n@object-format=sha256\n", $this->outputFile('handback.bundle'));
+        self::assertStringContainsString(trim((string) file_get_contents($this->history->folder.'/head')).' refs/heads/task', $this->outputFile('handback.bundle'));
+    }
+
+    public function testCloneSettingsThatCannotBeReplacedHandNoBundleBack(): void
+    {
+        // A remove that fails stands in for settings the builder made impossible to remove.
+        file_put_contents($this->bin.'/rm', "#!/bin/sh\nexit 1\n");
+        chmod($this->bin.'/rm', 0o755);
+        $this->givenTheCli('echo built > built.txt && git add built.txt && git commit --quiet -m "feat: build"');
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertFileDoesNotExist($this->output.'/handback.bundle');
+        self::assertStringContainsString("no bundle is handed back: the clone's git settings could not be replaced", $this->outputFile('build.log'));
+    }
+
     public function testWhatAFailedBundleLeftIsNotHandedBack(): void
     {
         $this->givenGitLeavesAPartialBundleAndFails();
@@ -656,6 +730,20 @@ final class BuildScriptTest extends TestCase
         chmod($this->bin.'/claude', 0o755);
     }
 
+    // A git that still waits on the pipe once the script was timed out would outlive the test: opened for reading and writing, which never waits, the pipe lets that git go on,
+    // and an empty file in its place serves every later read, because git reads its settings more than once.
+    private function releaseThePipe(string $path): void
+    {
+        if (!file_exists($path)) {
+            return;
+        }
+
+        $pipe = fopen($path, 'r+') ?: throw new RuntimeException('the pipe could not be opened');
+        unlink($path);
+        touch($path);
+        fclose($pipe);
+    }
+
     // Each sleep reports its own process id, because the CI image has no procps to look it up with.
     private function givenSleepRecordsItsProcess(): void
     {
@@ -763,13 +851,13 @@ final class BuildScriptTest extends TestCase
         chmod($this->bin.'/sha256sum', 0o755);
     }
 
-    private function whenTheBuildRuns(string $branch, string $model, int $allowance = 600): Process
+    private function whenTheBuildRuns(string $branch, string $model, int $allowance = 600, int $timeout = 20, ?string $source = null): Process
     {
         $run = new Process(
-            ['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-build', $this->history->work, $this->prompt, $branch, $model, '7', (string) $allowance, $this->gates],
+            ['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-build', $source ?? $this->history->work, $this->prompt, $branch, $model, '7', (string) $allowance, $this->gates],
             null,
             $this->environment(),
-            timeout: 20,
+            timeout: $timeout,
         );
         $run->run();
 

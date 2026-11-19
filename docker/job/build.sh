@@ -94,6 +94,24 @@ fi
 GIT_CONFIG_GLOBAL=/dev/null
 GIT_CONFIG_NOSYSTEM=1
 export GIT_CONFIG_GLOBAL GIT_CONFIG_NOSYSTEM
+# The same for the clone's own settings, which git reads in the clone, so they are replaced by the script's, written without git, which would read them;
+# the format is the one read before the session, and a commondir file would point git at another folder's settings.
+replace_settings() {
+    # The builder can take the permissions away too; chmod follows a link, so a link is left alone.
+    if [ -d .git ] && [ ! -L .git ]; then
+        chmod u+rwx -- .git || return 1
+    fi
+    rm -rf -- .git/config .git/commondir || return 1
+    if [ "$format" = sha1 ]; then
+        printf '[core]\n\trepositoryformatversion = 0\n\tbare = false\n' > .git/config
+    else
+        printf '[core]\n\trepositoryformatversion = 1\n\tbare = false\n[extensions]\n\tobjectformat = %s\n' "$format" > .git/config
+    fi
+}
+settings_replaced=1
+if ! replace_settings >> "$log" 2>&1; then
+    settings_replaced=0
+fi
 
 # The builder can write to the output folder too, and take its permissions away, so only what this script writes after the session is handed back.
 # chmod follows a link, so a link the builder left is removed without being touched.
@@ -131,6 +149,12 @@ elif [ -f QUESTION.json ] && [ ! -L QUESTION.json ]; then
     elif [ "$question_after" != "$question_before" ]; then
         cp QUESTION.json "$output/question.json"
     fi
+fi
+
+# Settings the script could not replace may still be the builder's, which git would read, so no git command runs then.
+if [ "$settings_replaced" -eq 0 ]; then
+    echo 'no bundle is handed back: the clone'"'"'s git settings could not be replaced' >> "$log"
+    exit 0
 fi
 
 # The branch by its full name, so a branch the builder checked out instead is never what is handed back; git refuses an empty bundle.
