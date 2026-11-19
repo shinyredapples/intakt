@@ -192,6 +192,52 @@ final class PinnedProviderCooldownTest extends TestCase
         self::assertSame([113, true], [$wait, 0 < $accounts->secondsUntilAnAccountIsFree(Provider::OpenAiCompatible)]);
     }
 
+    // The default account's answer in flight is read while the second pin's wait is read, after the failover gave the default account its short window, and the wait read takes a second, so that short window has ended by then.
+    public function testA429InFlightThatExtendsAPinAfterItsAccountWasRefreshedExtendsTheAccountWindowToo(): void
+    {
+        $default = new Account(Provider::OpenAiCompatible, Account::DEFAULT);
+        $accounts = new AccountWindowsOnAClock($this->clock, [Account::DEFAULT, 'team'], 1);
+        $inFlight = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => new FailingWhenRead(new RateLimitExceededException(120))], $accounts, new NativeClock(), new NullLogger(), $this->pinned)->invoke(self::PINNED, 'Review.');
+        $this->pinned->coolDown($this->deepinfra(Account::DEFAULT), 2);
+        $this->pinned->coolDown($this->deepinfra('team'), 120);
+        $pins = new InterruptedPinRead($this->pinned, $this->deepinfra('team'), function () use ($inFlight): void {
+            $this->clock->sleep(1);
+            $this->read($inFlight);
+        });
+        $platform = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $this->answering('first'), 'team' => $this->answering('second')], $accounts, new NativeClock(), new NullLogger(), $pins);
+
+        $wait = $this->waitAfterEveryAccountIsOut($platform);
+
+        self::assertSame([118, 119, $this->pinned->secondsUntilFree($this->deepinfra(Account::DEFAULT))], [$wait, $this->pinned->secondsUntilFree($this->deepinfra('team')) + 1, $accounts->endOf($default)?->getTimestamp() - $this->clock->now()->getTimestamp()]);
+    }
+
+    public function testA429FromAPinnedProviderWritesTheAccountWindowBeforeThePinnedWindow(): void
+    {
+        $default = new Account(Provider::OpenAiCompatible, Account::DEFAULT);
+        $accounts = new AccountWindowsOnAClock($this->clock, [Account::DEFAULT], 0);
+        $accountEndWhenThePinIsWritten = null;
+        $pins = self::createStub(PinnedProviderCooldowns::class);
+        $pins->method('coolDown')->willReturnCallback(static function () use ($accounts, $default, &$accountEndWhenThePinIsWritten): void {
+            $accountEndWhenThePinIsWritten = $accounts->endOf($default);
+        });
+
+        $this->read(new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => new FailingWhenRead(new RateLimitExceededException(120))], $accounts, new NativeClock(), new NullLogger(), $pins)->invoke(self::PINNED, 'Review.'));
+
+        self::assertEquals($this->clock->now()->modify('+120 seconds'), $accountEndWhenThePinIsWritten);
+    }
+
+    public function testA429FromAPinnedProviderNeverShortensALongerAccountWindow(): void
+    {
+        $default = new Account(Provider::OpenAiCompatible, Account::DEFAULT);
+        $accounts = new AccountWindowsOnAClock($this->clock, [Account::DEFAULT], 0);
+        $inFlight = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => new FailingWhenRead(new RateLimitExceededException(120))], $accounts, new NativeClock(), new NullLogger(), $this->pinned)->invoke(self::PINNED, 'Review.');
+        $accounts->coolDown($default, 600);
+
+        $this->read($inFlight);
+
+        self::assertEquals($this->clock->now()->modify('+600 seconds'), $accounts->endOf($default));
+    }
+
     public function testAnAccountWindowShorterThanItsPinEndsAtThePinsEndAfterOneSkippedCall(): void
     {
         $accounts = new AccountWindowsOnAClock($this->clock, [Account::DEFAULT], 0);

@@ -149,13 +149,13 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
             return new EveryKeyRejected($this->provider);
         }
 
-        // One read is enough, because after the refresh every account whose pin cools has a window ending no earlier than its pin: 0 means an account really is free.
+        // One read is enough, because after the refresh every account whose pin cools has a window ending no earlier than its pin, and a 429 that extends a pin afterwards extends its account window first (AccountPlatform): 0 means an account really is free.
         $this->coolDownAccountsWhosePinCools($routerProvider);
 
         return new EveryAccountCoolingDown($this->provider, $this->cooldowns->secondsUntilAnAccountIsFree($this->provider));
     }
 
-    // The pinned window can outlive the account's own (a later 429 in flight extends only the pinned one), and AccountLimitedVendor reads its wait from the account cooldowns alone, so the account waits out its pin; otherwise the caller would be told to start again at once for as long as the pin cools. A running account window that ends first is replaced, one that ends later is kept.
+    // The pinned window can outlive the account's own (a pin cooled without its account, or an account window that ended first on the system time), and AccountLimitedVendor reads its wait from the account cooldowns alone, so the account waits out its pin; otherwise the caller would be told to start again at once for as long as the pin cools. A running account window that ends first is replaced, one that ends later is kept.
     private function coolDownAccountsWhosePinCools(?string $routerProvider): void
     {
         if (null === $routerProvider) {

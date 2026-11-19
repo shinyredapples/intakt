@@ -140,18 +140,23 @@ final readonly class AccountPlatform implements PlatformInterface
     // A spent subscription plan is raised as a limit without a reset (CodexAccountFailure), so only that limit waits for the plan's measured reset; any other failure keeps its own wait.
     private function coolDownLimited(?int $retryAfter): void
     {
-        if ($this->pinned instanceof PinnedProvider) {
-            $this->coolDownPinned($this->pinned, min(AccountCooldownWindows::LONGEST_SECONDS, $retryAfter ?? self::PINNED_PROVIDER_COOLDOWN_SECONDS));
+        $waitsForThePlan = null === $retryAfter && $this->account->provider->spendsAPlan();
+        if ($waitsForThePlan) {
+            $this->cooldowns->coolDownUntilPlanResets($this->account);
         }
 
-        // The account cools down too, because AccountLimitedVendor reads the wait from the account cooldowns alone, and a free account would start the reviewer again at once, without a delay, for as long as the pinned provider cools down.
-        if (null === $retryAfter && $this->account->provider->spendsAPlan()) {
-            $this->cooldowns->coolDownUntilPlanResets($this->account);
+        if (!$this->pinned instanceof PinnedProvider) {
+            if (!$waitsForThePlan) {
+                $this->cooldowns->coolDown($this->account, $retryAfter);
+            }
 
             return;
         }
 
-        $this->cooldowns->coolDown($this->account, $retryAfter);
+        $seconds = min(AccountCooldownWindows::LONGEST_SECONDS, $retryAfter ?? self::PINNED_PROVIDER_COOLDOWN_SECONDS);
+        // The account cools down too, because AccountLimitedVendor reads the wait from the account cooldowns alone; until at least the pin's end and written before the pin, because a 429 in flight can extend a pin whose account already has a shorter window, and no reader may see a pin outlive its account.
+        $this->cooldowns->coolDownAtLeast($this->account, $seconds);
+        $this->coolDownPinned($this->pinned, $seconds);
     }
 
     // Logged instead of thrown, because the provider's 429 must still reach the failover, which then tries the next account.
