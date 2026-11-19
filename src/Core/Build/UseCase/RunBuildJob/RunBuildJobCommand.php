@@ -76,19 +76,19 @@ final readonly class RunBuildJobCommand
 
     private function asked(SymfonyStyle $io, BuildQuestion $question): int
     {
-        $io->writeln('question: '.self::oneLine($question->question));
+        $io->writeln('question: '.$this->oneLine($question->question));
 
         foreach ($question->choices as $choice) {
-            $io->writeln('choice: '.self::oneLine($choice));
+            $io->writeln('choice: '.$this->oneLine($choice));
         }
 
-        $io->writeln('recommendation: '.self::oneLine($question->recommendation));
+        $io->writeln('recommendation: '.$this->oneLine($question->recommendation));
 
         return Command::SUCCESS;
     }
 
     // The builder wrote the text, so a line break or a terminal control in it could forge a line of its own, such as a second recommendation.
-    private static function oneLine(string $text): string
+    private function oneLine(string $text): string
     {
         return OutputFormatter::escape(preg_replace('/[\p{Cc}\p{Zl}\p{Zp}]/u', '?', $text) ?? '?');
     }
