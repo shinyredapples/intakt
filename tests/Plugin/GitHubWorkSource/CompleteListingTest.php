@@ -133,7 +133,7 @@ final class CompleteListingTest extends KernelTestCase
     public function testALaterPageThatFailsYieldsAShortListingThatClosesNothingAndLogsTheReason(): void
     {
         $api = new RecordedIssueApi();
-        $api->pages = [1 => $this->pageOf([...$this->issues(1, 1, body: 'Waits for #2'), ...$this->issues(2, 1)])];
+        $api->pages = [1 => $this->pageOf([$this->issue(1, body: 'Waits for #2'), $this->issue(2)])];
         $this->tickOver($api->reads());
         $api->pages = [1 => $this->page(1, 100), 2 => '502'];
         $api->namingNext = [1];
@@ -268,22 +268,17 @@ final class CompleteListingTest extends KernelTestCase
      */
     private function page(int $first, int $count, array $labels = ['intakt']): string
     {
-        return $this->pageOf($this->issues($first, $count, $labels));
+        return $this->pageOf(array_map(fn (int $number): array => $this->issue($number, $labels), range($first, $first + $count - 1)));
     }
 
     /**
      * @param list<string> $labels
      *
-     * @return list<array<string, mixed>>
+     * @return array<string, mixed>
      */
-    private function issues(int $first, int $count, array $labels = ['intakt'], string $body = ''): array
+    private function issue(int $number, array $labels = ['intakt'], string $body = ''): array
     {
-        $issues = [];
-        for ($number = $first; $number < $first + $count; ++$number) {
-            $issues[] = ['number' => $number, 'title' => 'Task '.$number, 'body' => $body, 'user' => ['login' => 'ana'], 'labels' => array_map(static fn (string $name): array => ['name' => $name], $labels), 'milestone' => null, 'updated_at' => '2026-11-10T10:00:00Z'];
-        }
-
-        return $issues;
+        return ['number' => $number, 'title' => 'Task '.$number, 'body' => $body, 'user' => ['login' => 'ana'], 'labels' => array_map(static fn (string $name): array => ['name' => $name], $labels), 'milestone' => null, 'updated_at' => '2026-11-10T10:00:00Z'];
     }
 
     /**
