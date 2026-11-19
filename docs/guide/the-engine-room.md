@@ -95,7 +95,7 @@ Locks are short-lived: a job that waits for something outside (CI, you) gives it
 
 ## Cycles and generations: second chances
 
-A **cycle** is one round of *build, check, review*. When reviewers ask for changes, the task goes around again.
+A **cycle** is one round of *build, check, review*. When the reviewers leave something that must be fixed, the task goes around again.
 
 ```mermaid
 flowchart LR
