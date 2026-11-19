@@ -44,7 +44,7 @@ final readonly class CheckPullRequestTextCommand
         }
     }
 
-    // The body after the title line, trimmed as the build step trims it before the push.
+    // Trimmed after the title line as the build step trims it before the push, so the cap counts the body the forge would get.
     private function bodyOf(string $pullRequestText): string
     {
         return trim(explode("\n", $pullRequestText, 2)[1] ?? '');

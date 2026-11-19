@@ -19,7 +19,7 @@ final readonly class EvidenceItems
     {
         return self::outsideFences($task)
             |> self::evidenceSection(...)
-            |> (static fn (array $section): int => count(preg_grep(self::TOP_LEVEL_ITEM, $section) ?: []));
+            |> (static fn (array $section): int => count(array_filter($section, self::isTopLevelItem(...))));
     }
 
     /**
@@ -30,7 +30,7 @@ final readonly class EvidenceItems
         $lines = [];
         $fenced = false;
 
-        foreach (preg_split('/\r\n|\n|\r/', $task) ?: [] as $line) {
+        foreach (explode("\n", str_replace(["\r\n", "\r"], "\n", $task)) as $line) {
             if (1 === preg_match(self::FENCE, $line)) {
                 $fenced = !$fenced;
             } elseif (!$fenced) {
@@ -69,13 +69,18 @@ final readonly class EvidenceItems
         return $section;
     }
 
-    // A line at the start that follows a blank line is a new paragraph, while one right after an item only continues it.
+    // Markdown reads a line at the start after a blank line as a new paragraph, so it ends the list, while one right after an item only continues it.
     private static function endsTheSection(string $line, string $previous): bool
     {
         if (1 === preg_match(self::SECTION_END, $line)) {
             return true;
         }
 
-        return '' === trim($previous) && 1 === preg_match('/^\S/', $line) && 1 !== preg_match(self::TOP_LEVEL_ITEM, $line);
+        return '' === trim($previous) && 1 === preg_match('/^\S/', $line) && !self::isTopLevelItem($line);
+    }
+
+    private static function isTopLevelItem(string $line): bool
+    {
+        return 1 === preg_match(self::TOP_LEVEL_ITEM, $line);
     }
 }
