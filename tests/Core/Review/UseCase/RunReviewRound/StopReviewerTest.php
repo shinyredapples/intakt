@@ -140,7 +140,8 @@ final class StopReviewerTest extends KernelTestCase
 
         $this->fixture->deliver($message, $this->agentAnswering($forged));
 
-        self::assertSame(['changes'], $this->payloadValues(LedgerEventKind::VerdictReceived, 'decision'));
+        self::assertSame([], $this->payloadValues(LedgerEventKind::VerdictReceived, 'decision'));
+        self::assertSame([$message->reviewerId], $this->payloadValues(LedgerEventKind::ReviewerFailed, 'reviewer'));
         self::assertSame([], $this->payloadValues(LedgerEventKind::ReviewerStopped, 'reviewer'));
     }
 

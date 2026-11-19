@@ -25,8 +25,10 @@ Rules:
 An empty repository starts with a foundation phase before any feature work:
 1. **Spec.** The owner describes the project (a few sentences or a full spec) and picks a stack, or lets Intakt propose one from the spec.
 2. A foundation build creates the skeleton: the manifest and lock file, the formatter, linter, static analysis and test runner, a check command, CI for the chosen forge, `AGENTS.md` with the conventions, and a job image definition.
-3. The foundation goes through review like any change, and then to the owner. The gates it creates become protected paths, so the owner approves them once, explicitly. From then on, no builder can weaken them.
-4. **Plan.** Intakt turns the spec into a plan: milestones and tasks with dependencies, which the owner edits and approves; the tasks are then created on the forge and the loop starts on them.
+3. The foundation goes through review like any change, and then to the owner. The gates it creates become protected paths, so the owner approves them once, explicitly. From then on, no Developer can weaken them.
+4. **Plan.** The Tech lead makes the spec ready to plan ([Definition of Ready](../01-intent.md#definition-of-ready)) and turns it into a plan: milestones and tasks with dependencies, which the owner edits and approves; the tasks are then created on the forge and the loop starts on them.
+
+A new project starts with the smallest team ([Setup](11-setup.md#the-starting-team)): the Tech lead, the Developer, the Code reviewers and the Maintainer.
 
 Stack templates (for example Symfony, Laravel, Next.js, Go service, Python package) are optional starting points. Without one, the foundation build chooses tools and the owner approves them.
 

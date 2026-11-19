@@ -253,7 +253,8 @@ a.card.needs:hover, .card.needs.is-hover { filter: brightness(.98); }
 /* Board: the nine columns side by side, scrolled sideways where they do not fit (docs/design/mocks/index.html). */
 .content.wide { max-width: none; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-.board { display: flex; align-items: flex-start; gap: var(--s16); overflow-x: auto; padding-bottom: var(--s16); }
+/* Positioned, because an absolute .sr-only label in a folded strip past the edge otherwise escapes the scroller and widens the page. */
+.board { display: flex; align-items: flex-start; gap: var(--s16); overflow-x: auto; padding-bottom: var(--s16); position: relative; }
 .board .col { flex: 1 1 0; min-width: 176px; }
 .board .col.col-needs { flex-grow: 1.25; min-width: 224px; }
 .col-head { display: flex; align-items: center; gap: var(--s8); height: 32px; margin-bottom: var(--s8); font-family: var(--f-head); }
@@ -495,6 +496,10 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
 .firstday > .character { max-height: 144px; width: auto; }
 .firstday h2 { margin: 0 0 var(--s8); }
 .firstday ol { margin: 0; padding-left: var(--s24); display: grid; gap: var(--s4); }
+/* The idle board's asleep octopus, decorative and capped under the 160 px the mascot decision allows on a desktop. */
+.asleep { margin: var(--s8) 0 var(--s16); }
+.asleep[hidden] { display: none; }
+.asleep > .character { max-height: 144px; width: auto; }
 /* The mock's phone head: a closer gap under the headline, so the board's first lane stays in view. */
 @media (max-width: 760px) {
   .page-head { margin-bottom: var(--s16); }
@@ -502,6 +507,7 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
   /* Smaller on a phone, so the steps start in the first screen under the head. */
   .firstday { padding: var(--s16); }
   .firstday > .character { max-height: 120px; }
+  .asleep > .character { max-height: 120px; }
   .headline-long { display: none; }
   .headline-short { display: inline; }
   /* The first-day headline is a link alone in its line, so no sentence exempts it from the phone's 44 px touch target (DESIGN.md). */

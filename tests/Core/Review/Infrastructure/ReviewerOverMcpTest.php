@@ -149,7 +149,7 @@ final class ReviewerOverMcpTest extends KernelTestCase
 
     public function testAReviewWithoutARoundIsRefusedBecauseNoCredentialCouldNameItsHead(): void
     {
-        $request = new ReviewRequest(new Checkout($this->round->checkoutRoot()), new ReviewBrief(new ChangeUnderReview('alpha', 'Add a cart.', 'diff --git a/a b/a'), []), new ReviewerConversation('You review for correctness.', new UuidV7()));
+        $request = new ReviewRequest(new Checkout($this->round->checkoutRoot()), new ReviewBrief(new ChangeUnderReview('alpha', 'Add a cart.', 'diff --git a/a b/a'), [], 1), new ReviewerConversation('You review for correctness.', new UuidV7()));
 
         $this->expectException(LogicException::class);
 
@@ -295,6 +295,6 @@ final class ReviewerOverMcpTest extends KernelTestCase
 
     private function request(): ReviewRequest
     {
-        return new ReviewRequest(new Checkout($this->round->checkoutRoot()), new ReviewBrief(new ChangeUnderReview('alpha', 'Add a cart.', 'diff --git a/a b/a'), []), new ReviewerConversation('You review for correctness.', new UuidV7(), $this->round->id()));
+        return new ReviewRequest(new Checkout($this->round->checkoutRoot()), new ReviewBrief(new ChangeUnderReview('alpha', 'Add a cart.', 'diff --git a/a b/a'), [], 1), new ReviewerConversation('You review for correctness.', new UuidV7(), $this->round->id()));
     }
 }

@@ -25,7 +25,7 @@ Every builder and reviewer works in a **fresh, throwaway container**:
 
 ## Layer 2: what comes back is data, not commands
 
-A builder hands back **a package of commits and a short description**, nothing else. Intakt then:
+A builder hands back **a package of commits and a short description**, or **a question** when it needs a decision from you, nothing else. A question is plain text that Intakt checks against a fixed shape (a question, a few choices, a recommendation among them) and refuses otherwise; it changes no code. For commits and a description, Intakt then:
 1. checks that the commits really build on the version of the project it was given;
 2. **signs the commits with its own key**, so every commit on the branch is verifiably Intakt's;
 3. scans for anything that looks like a password or key, and refuses the change if it finds one;
