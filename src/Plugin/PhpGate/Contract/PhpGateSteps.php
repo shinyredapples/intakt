@@ -12,7 +12,7 @@ final readonly class PhpGateSteps
 
     public const string CHECK = 'bin/check --fast';
 
-    // Before Composer runs, because Composer resolves anew without a lock file or with config.lock off, and the lock entry of a path package or of a local archive without a checksum does not pin its contents.
+    // Before Composer runs, because Composer resolves anew without a lock file or with config.lock off, and the lock entry of a path package, of a local archive without a checksum or of a source whose reference is not a full commit id (a branch or tag can move) does not pin its contents.
     public const string LOCK_GUARD = <<<'SH'
         php -r 'if (!is_file("composer.lock")) { fwrite(STDERR, "composer.lock is missing, so there are no locked packages to install.\n"); exit(1); }
         $manifest = json_decode(file_get_contents("composer.json"), true, 512, JSON_THROW_ON_ERROR);
@@ -21,6 +21,7 @@ final readonly class PhpGateSteps
         foreach ([...$lock["packages"] ?? [], ...$lock["packages-dev"] ?? []] as $package) {
             if ("path" === ($package["dist"]["type"] ?? null) || "path" === ($package["source"]["type"] ?? null)) { fwrite(STDERR, $package["name"]." comes from a path repository, so composer.lock does not pin its contents.\n"); exit(1); }
             if (isset($package["dist"]["url"]) && 1 !== preg_match("#^https?://#i", (string) $package["dist"]["url"]) && "" === (string) ($package["dist"]["shasum"] ?? "")) { fwrite(STDERR, $package["name"]." comes from a local archive without a checksum, so composer.lock does not pin its contents.\n"); exit(1); }
+            if (isset($package["source"]) && 1 !== preg_match("#^(?:[0-9a-f]{40}|[0-9a-f]{64})$#D", (string) ($package["source"]["reference"] ?? ""))) { fwrite(STDERR, $package["name"]." has a source reference that is not a full commit id, so composer.lock does not pin its contents.\n"); exit(1); }
         }'
         SH;
 

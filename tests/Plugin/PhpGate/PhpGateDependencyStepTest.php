@@ -141,6 +141,31 @@ final class PhpGateDependencyStepTest extends TestCase
         self::assertFileDoesNotExist($this->directory.'/vendor/fixture/archive/contents.txt');
     }
 
+    public function testTheLockedInstallRefusesAGitSourceLockedToABranchBecauseAdvancingTheBranchChangesTheInstall(): void
+    {
+        $this->gitPackage('first');
+        $this->projectWithGitSource('fixture-branch');
+        $this->mustRun('composer update --no-interaction --no-plugins --no-scripts --no-install');
+
+        $install = $this->runInProject($this->step->install);
+
+        self::assertFalse($install->isSuccessful());
+        self::assertStringContainsString('fixture/git', $install->getErrorOutput());
+        self::assertDirectoryDoesNotExist($this->directory.'/vendor');
+    }
+
+    public function testTheLockedInstallOfAGitSourceLockedToACommitStaysOnThatCommitWhenTheBranchAdvances(): void
+    {
+        $this->gitPackage('first');
+        $this->projectWithGitSource(trim($this->mustRun('git -C package rev-parse HEAD')));
+        $this->mustRun('composer update --no-interaction --no-plugins --no-scripts --no-install');
+        $this->gitPackage('second');
+
+        $this->mustRun($this->step->install);
+
+        self::assertStringEqualsFile($this->directory.'/vendor/fixture/git/contents.txt', 'first');
+    }
+
     public function testTheLockedInstallAcceptsALockFileWithOnlyPinnedPackages(): void
     {
         $this->project([
@@ -186,6 +211,27 @@ final class PhpGateDependencyStepTest extends TestCase
                 'dist' => ['type' => 'zip', 'url' => './package.zip', ...$checksum],
             ]]],
             'require' => ['fixture/archive' => '1.0.0'],
+        ]);
+    }
+
+    private function gitPackage(string $contents): void
+    {
+        if (!is_dir($this->directory.'/package/.git')) {
+            $this->mustRun('git init -q -b fixture-branch package');
+        }
+        new Filesystem()->dumpFile($this->directory.'/package/contents.txt', $contents);
+        $this->mustRun('git -C package add contents.txt && git -C package commit -qm '.$contents);
+    }
+
+    private function projectWithGitSource(string $reference): void
+    {
+        $this->project([
+            'config' => ['preferred-install' => 'source'],
+            'repositories' => [['packagist.org' => false], ['type' => 'package', 'package' => [
+                'name' => 'fixture/git', 'version' => '1.0.0',
+                'source' => ['type' => 'git', 'url' => $this->directory.'/package', 'reference' => $reference],
+            ]]],
+            'require' => ['fixture/git' => '1.0.0'],
         ]);
     }
 
