@@ -477,6 +477,63 @@ final class BuildScriptTest extends TestCase
         self::assertStringContainsString("no bundle is handed back: the clone's git settings could not be replaced", $this->outputFile('build.log'));
     }
 
+    public function testARepositoryTheCliMakesAboveACloneWhoseHeadItRemovedDoesNotStopTheBundleOfTheBranch(): void
+    {
+        // Without a HEAD the clone's .git is no repository, so a git that searches upward finds the work area's, whose include waits on a pipe nobody writes into.
+        $this->givenTheCli(<<<'SH'
+            echo 'built' > built.txt
+            git add built.txt
+            git commit --quiet -m 'feat: build the task'
+            git init --quiet "$TMPDIR"
+            mkfifo "$TMPDIR/settings"
+            printf '[include]\n\tpath = %s\n' "$TMPDIR/settings" >> "$TMPDIR/.git/config"
+            rm .git/HEAD
+            SH);
+        $this->timeout = 10;
+
+        try {
+            $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+        } finally {
+            $this->releaseThePipe($this->work.'/settings');
+        }
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertSame("built\n", $this->fileAtTheBundlesHead('task', 'built.txt'));
+    }
+
+    public function testAGitFolderTheCliTurnsIntoALinkHandsNoBundleBackAndLeavesTheLinkedFilesAlone(): void
+    {
+        $this->givenTheCli(<<<'SH'
+            git commit --quiet --allow-empty -m 'feat: build the task'
+            mv .git "$TMPDIR/elsewhere"
+            ln -s "$TMPDIR/elsewhere" .git
+            echo outside > "$TMPDIR/elsewhere/commondir"
+            SH);
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertFileDoesNotExist($this->output.'/handback.bundle');
+        self::assertStringEqualsFile($this->work.'/elsewhere/commondir', "outside\n");
+        self::assertStringContainsString("no bundle is handed back: the clone's git settings could not be replaced", $this->outputFile('build.log'));
+    }
+
+    public function testACliThatTakesAwayEveryPermissionOnTheOutputStillHandsBackTheBundleOfTheBranch(): void
+    {
+        $this->givenTheCli(<<<'SH'
+            echo 'built' > built.txt
+            git add built.txt
+            git commit --quiet -m 'feat: build the task'
+            chmod 000 "$INTAKT_JOB_OUTPUT"
+            SH);
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertSame("built\n", $this->fileAtTheBundlesHead('task', 'built.txt'));
+        self::assertStringContainsString("claude exited with 0\n", $this->outputFile('build.log'));
+    }
+
     public function testWhatAFailedBundleLeftIsNotHandedBack(): void
     {
         $this->givenGitLeavesAPartialBundleAndFails();

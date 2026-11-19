@@ -76,10 +76,6 @@ if [ "$status" -ne 137 ]; then
 fi
 wait "$watchdog" 2>/dev/null
 cut=$?
-printf 'claude exited with %d\n' "$status" >> "$log"
-if [ "$cut" -eq 0 ]; then
-    printf 'claude cut after %d seconds, its commits are kept\n' "$allowance" >> "$log"
-fi
 
 # A process the builder leaves running could write into the output after the cleanup below, so none is left.
 # In the container this script is the first process of the job's own process namespace, so every other process there is the builder's,
@@ -90,18 +86,34 @@ else
     kill -s KILL -- "-$session" 2>/dev/null
 fi
 
+# The builder can write to the output folder too, and take its permissions away, so its access is restored before the log is written again.
+# chmod follows a link, so a link the builder left is removed below without being touched.
+chmod u+rwx -- "$output"
+printf 'claude exited with %d\n' "$status" >> "$log"
+if [ "$cut" -eq 0 ]; then
+    printf 'claude cut after %d seconds, its commits are kept\n' "$allowance" >> "$log"
+fi
+
 # The builder can write git's global and system settings too, for example an include that waits on a pipe or runs a command, so git no longer reads them.
 GIT_CONFIG_GLOBAL=/dev/null
 GIT_CONFIG_NOSYSTEM=1
 export GIT_CONFIG_GLOBAL GIT_CONFIG_NOSYSTEM
+# Git finds its repository by searching upward from a folder whose .git it cannot use, and the builder can make one in the work area above the clone,
+# so the repository is named: relative, because the builder could put a link at the clone's path, never in place of the folder this script is in.
+GIT_DIR=.git
+GIT_WORK_TREE=.
+export GIT_DIR GIT_WORK_TREE
 # The same for the clone's own settings, which git reads in the clone, so they are replaced by the script's, written without git, which would read them;
-# the format is the one read before the session, and a commondir file would point git at another folder's settings.
+# the format is the one read before the session, a commondir file would point git at another folder's settings, and a HEAD git cannot read would make .git no repository.
 replace_settings() {
-    # The builder can take the permissions away too; chmod follows a link, so a link is left alone.
-    if [ -d .git ] && [ ! -L .git ]; then
-        chmod u+rwx -- .git || return 1
+    # A link at .git would take the removal and the new files outside the clone, and the builder can take the permissions away too.
+    if [ ! -d .git ] || [ -L .git ]; then
+        echo '.git is not a folder of the clone' >&2
+        return 1
     fi
-    rm -rf -- .git/config .git/commondir || return 1
+    chmod u+rwx -- .git || return 1
+    rm -rf -- .git/config .git/commondir .git/HEAD || return 1
+    printf 'ref: refs/heads/%s\n' "$branch" > .git/HEAD || return 1
     if [ "$format" = sha1 ]; then
         printf '[core]\n\trepositoryformatversion = 0\n\tbare = false\n' > .git/config
     else
@@ -113,9 +125,7 @@ if ! replace_settings >> "$log" 2>&1; then
     settings_replaced=0
 fi
 
-# The builder can write to the output folder too, and take its permissions away, so only what this script writes after the session is handed back.
-# chmod follows a link, so a link the builder left is removed without being touched.
-chmod u+rwx -- "$output"
+# Only what this script writes after the session is handed back.
 for planted in "$output/pull-request.md" "$output/handback.bundle" "$output/question.json"; do
     if [ -d "$planted" ] && [ ! -L "$planted" ]; then
         chmod -R u+rwx -- "$planted"
