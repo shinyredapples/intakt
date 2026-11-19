@@ -4,9 +4,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thank you for the suggestion. The guide [writing a good task](https://github.com/shinyredapples/intakt/blob/main/docs/guide/writing-a-good-task.md) shows what makes an issue easy to act on.
-
-        A security problem does not belong in a public issue: use **Report a security problem** on the "New issue" page instead.
+        See [writing a good task](https://github.com/shinyredapples/intakt/blob/main/docs/guide/writing-a-good-task.md). Report a security problem privately, never here.
   - type: textarea
     id: what-should-be-different
     attributes:
