@@ -26,10 +26,6 @@ final class EntrypointSampleSeedTest extends TestCase
 
     private string $directory;
 
-    // One default-env start serves four tests, because they read different results of the same run and none changes it.
-    /** @var array{consoleCalls: list<string>, cacheDirectoryExists: bool, keptToken: string, seen: string, compatible: string}|null */
-    private static ?array $defaultDemo = null;
-
     private ?Process $entrypoint = null;
 
     protected function setUp(): void
@@ -52,7 +48,7 @@ final class EntrypointSampleSeedTest extends TestCase
             'bin/console intakt:sample:seed /data/sample <directory>/intakt.yaml',
             'bin/console cache:warmup --no-interaction',
             'bin/console intakt:ai:tiers',
-        ], $this->theDefaultDemo()['consoleCalls']);
+        ], $this->runTheDefaultDemo()['consoleCalls']);
     }
 
     public function testARestartOnTheSameDataVolumeDoesNotPrintTheProviderNotesAgain(): void
@@ -92,12 +88,12 @@ final class EntrypointSampleSeedTest extends TestCase
 
     public function testEveryOldContainerIsRemovedBeforeItsWarmup(): void
     {
-        self::assertFalse($this->theDefaultDemo()['cacheDirectoryExists'], 'the image container or the one the seed left survived');
+        self::assertFalse($this->runTheDefaultDemo()['cacheDirectoryExists'], 'the image container or the one the seed left survived');
     }
 
     public function testTheDemoMakesOneOwnerTokenAndKeepsItOnTheDataVolume(): void
     {
-        $demo = $this->theDefaultDemo();
+        $demo = $this->runTheDefaultDemo();
 
         self::assertMatchesRegularExpression('/^[0-9a-f]{64}$/', $demo['keptToken']);
         self::assertSame($demo['keptToken'].' mcp_tool_write', $demo['seen']);
@@ -181,7 +177,7 @@ final class EntrypointSampleSeedTest extends TestCase
 
     public function testWithoutAHuggingFaceTokenNoOpenAiCompatibleAccountIsSet(): void
     {
-        self::assertSame('', $this->theDefaultDemo()['compatible']);
+        self::assertSame('', $this->runTheDefaultDemo()['compatible']);
     }
 
     public function testTwoFirstStartsAtOnceShareOneOwnerToken(): void
@@ -252,7 +248,7 @@ final class EntrypointSampleSeedTest extends TestCase
 
     public function testASampleStartedOutsideComposeCreatesNoDemoProject(): void
     {
-        self::assertNotContains('bin/console intakt:demo:create', $this->theDefaultDemo()['consoleCalls']);
+        self::assertNotContains('bin/console intakt:demo:create', $this->runTheDefaultDemo()['consoleCalls']);
     }
 
     public function testAComposeServiceWithoutASampleRepositoryCreatesNoDemoProject(): void
@@ -542,14 +538,6 @@ final class EntrypointSampleSeedTest extends TestCase
         $process->setTimeout(self::SECONDS_TO_WAIT * 2);
 
         return $process;
-    }
-
-    /**
-     * @return array{consoleCalls: list<string>, cacheDirectoryExists: bool, keptToken: string, seen: string, compatible: string}
-     */
-    private function theDefaultDemo(): array
-    {
-        return self::$defaultDemo ??= $this->runTheDefaultDemo();
     }
 
     /**
