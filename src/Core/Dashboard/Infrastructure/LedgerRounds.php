@@ -263,7 +263,7 @@ final class LedgerRounds
     {
         return match (true) {
             $row instanceof ReviewerStarted => $outcome->restarted($at, $row->model),
-            $row instanceof VerdictReceived => $outcome->answered($row->decision, $row->findings, $row->mode),
+            $row instanceof VerdictReceived => $outcome->answered($row->decision, $row->findings, $row->mode)->because($row->reason),
             $row instanceof ReviewerFailed => $outcome->failed($this->failures->of($row->failure)),
             $row instanceof ReviewerBlocked => $outcome->blocked($row->reason),
             $row instanceof ReviewerStopped => $outcome->stopped(),

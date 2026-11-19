@@ -11,6 +11,7 @@ use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Dashboard\Domain\JudgeCall;
 use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
+use Intakt\Core\Dashboard\Domain\ReviewOutcome;
 use Intakt\Core\Dashboard\Domain\ReviewerOutcome;
 use Intakt\Core\Dashboard\Domain\ReviewerProgress;
 use Intakt\Core\Dashboard\Domain\ReviewState;
@@ -85,6 +86,7 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(Review::class)]
 #[UsesClass(ReviewedRound::class)]
 #[UsesClass(ReviewerOutcome::class)]
+#[UsesClass(ReviewOutcome::class)]
 #[UsesClass(RoundFinding::class)]
 #[UsesClass(RoundPlace::class)]
 #[UsesClass(RoundStart::class)]
@@ -675,6 +677,31 @@ final class LedgerRoundsTest extends TestCase
         $review = $this->reviewOf('r1', $this->quorumStart(2, QuorumPolicy::All), $unreachable);
 
         self::assertSame([ReviewerProgress::Failed, 'the model endpoint could not be reached'], [$review?->rounds[0]->outcomes[0]->progress, $review?->rounds[0]->outcomes[0]->note]);
+    }
+
+    public function testABlockedReviewerIsNotedWithItsReason(): void
+    {
+        $blocked = $this->row(LedgerEventKind::ReviewerBlocked, new ReviewerBlocked('r1', 'x', 'security', Tier::Strong, 'Every provider of the tier is out.'));
+
+        $review = $this->reviewOf('r1', $this->quorumStart(2, QuorumPolicy::All), $blocked);
+
+        self::assertSame([ReviewerProgress::Blocked, 'Every provider of the tier is out.'], [$review?->rounds[0]->outcomes[0]->progress, $review?->rounds[0]->outcomes[0]->note]);
+    }
+
+    public function testABlockedVerdictIntaktGaveIsNotedWithItsReason(): void
+    {
+        $blocked = $this->row(LedgerEventKind::VerdictReceived, new VerdictReceived('r1', 'x', 'security', Tier::Strong, Decision::Blocked, 1, ProjectMode::Live, 'The reviewer stream ended before its verdict.'));
+
+        $review = $this->reviewOf('r1', $this->quorumStart(2, QuorumPolicy::All), $blocked);
+
+        self::assertSame([ReviewOutcome::Blocked, 'The reviewer stream ended before its verdict.'], [$review?->rounds[0]->outcomes[0]->outcome(), $review?->rounds[0]->outcomes[0]->note]);
+    }
+
+    public function testAnAnsweredReviewerWithoutAReasonHasNoNote(): void
+    {
+        $review = $this->reviewOf('r1', $this->quorumStart(2, QuorumPolicy::All), $this->approved('x'));
+
+        self::assertNull($review?->rounds[0]->outcomes[0]->note);
     }
 
     public function testAJudgedRoundWithAFailedReviewerBesideAnApprovalIsBlockedUnderTheAllPolicy(): void
