@@ -39,11 +39,12 @@ cd "$clone" || exit 1
 base="$(git rev-parse HEAD)"
 # The bytes of a QUESTION.json the checkout already holds, read before the session and kept in a variable the builder cannot write:
 # the checkout's bytes and not the commit's, because a checkout that converts line endings holds other bytes than the commit.
-# A hash git could not take is no baseline, because an empty one would make any question count as written, so none is handed back then.
+# Hashed by sha256sum and not by git, because git's hash follows the clone's settings (its object format, its filters), which the builder can write.
+# A hash that could not be taken is no baseline, because an empty one would make any question count as written, so none is handed back then.
 question_before=''
 question_hashed=1
 if [ -f QUESTION.json ] && [ ! -L QUESTION.json ]; then
-    if ! question_before="$(git hash-object --no-filters -- QUESTION.json 2>/dev/null)" || [ -z "$question_before" ]; then
+    if ! question_before="$(sha256sum 2>/dev/null < QUESTION.json)" || [ -z "$question_before" ]; then
         question_hashed=0
     fi
 fi
@@ -119,13 +120,14 @@ fi
 
 # The same for the question, which says the builder stopped to ask instead of building;
 # a QUESTION.json the checkout already held when the session started is not this builder's question, so it is handed back only when the session wrote it or changed its bytes.
-# Without filters, because the builder can write the clone's git settings, and a clean filter named there would run here.
-# A hash that fails after the session is no change either, because the builder can break the clone's git settings, and the bundle then fails the same way.
-if [ -f QUESTION.json ] && [ ! -L QUESTION.json ]; then
-    if [ "$question_hashed" -eq 0 ]; then
-        echo 'QUESTION.json is not handed back: git could not hash it before the session' >> "$log"
-    elif ! question_after="$(git hash-object --no-filters -- QUESTION.json 2>/dev/null)" || [ -z "$question_after" ]; then
-        echo 'QUESTION.json is not handed back: git could not hash it after the session' >> "$log"
+# The same sha256sum of the file's bytes as before the session, so no git setting the builder wrote in the clone reaches the comparison.
+# A hash that fails after the session is no change either, because only a hash that was taken can show other bytes.
+# The failed baseline is logged whether or not the file is still there, because the builder can remove it.
+if [ "$question_hashed" -eq 0 ]; then
+    echo 'QUESTION.json is not handed back: it could not be hashed before the session' >> "$log"
+elif [ -f QUESTION.json ] && [ ! -L QUESTION.json ]; then
+    if ! question_after="$(sha256sum 2>/dev/null < QUESTION.json)" || [ -z "$question_after" ]; then
+        echo 'QUESTION.json is not handed back: it could not be hashed after the session' >> "$log"
     elif [ "$question_after" != "$question_before" ]; then
         cp QUESTION.json "$output/question.json"
     fi

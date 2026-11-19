@@ -516,13 +516,42 @@ final class BuildScriptTest extends TestCase
         $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
 
         self::assertFileDoesNotExist($this->output.'/question.json');
-        self::assertStringContainsString("QUESTION.json is not handed back: git could not hash it after the session\n", $this->outputFile('build.log'));
     }
 
-    public function testAQuestionWhoseHashFailedBeforeTheSessionIsNotHandedBackEvenWhenTheCliRewritesIt(): void
+    // A hash git takes in the clone follows the clone's object format, which the builder can write, so the same bytes would get another hash after the session.
+    public function testAnUntouchedQuestionInACloneWhoseObjectFormatTheCliSwitchedIsNotHandedBack(): void
     {
         $this->history->commitFile('QUESTION.json', '{"question":"Old?","choices":["a"],"recommendation":"a"}', 'docs: keep an old question');
-        $this->givenGitFailsItsFirstHash();
+        $this->givenTheCli(<<<'SH'
+            git config core.repositoryformatversion 1
+            git config extensions.objectFormat sha256
+            git config extensions.objectFormat > "$RECORD/object-format"
+            SH);
+
+        $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertSame("sha256\n", (string) file_get_contents($this->history->folder.'/object-format'));
+        self::assertFileDoesNotExist($this->output.'/question.json');
+    }
+
+    public function testARewrittenQuestionInACloneWhoseObjectFormatTheCliSwitchedIsHandedBack(): void
+    {
+        $this->history->commitFile('QUESTION.json', '{"question":"Old?","choices":["a"],"recommendation":"a"}', 'docs: keep an old question');
+        $this->givenTheCli(<<<'SH'
+            git config core.repositoryformatversion 1
+            git config extensions.objectFormat sha256
+            printf '{"question":"New?","choices":["b"],"recommendation":"b"}' > QUESTION.json
+            SH);
+
+        $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertSame('{"question":"New?","choices":["b"],"recommendation":"b"}', $this->outputFile('question.json'));
+    }
+
+    public function testAQuestionWhoseDigestFailedBeforeTheSessionIsNotHandedBackEvenWhenTheCliRewritesIt(): void
+    {
+        $this->history->commitFile('QUESTION.json', '{"question":"Old?","choices":["a"],"recommendation":"a"}', 'docs: keep an old question');
+        $this->givenTheDigestFailsOnItsCall(1);
         $this->givenTheCli(<<<'SH'
             printf '{"question":"New?","choices":["b"],"recommendation":"b"}' > QUESTION.json
             SH);
@@ -530,7 +559,47 @@ final class BuildScriptTest extends TestCase
         $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
 
         self::assertFileDoesNotExist($this->output.'/question.json');
-        self::assertStringContainsString("QUESTION.json is not handed back: git could not hash it before the session\n", $this->outputFile('build.log'));
+        self::assertStringContainsString("QUESTION.json is not handed back: it could not be hashed before the session\n", $this->outputFile('build.log'));
+    }
+
+    public function testADigestThatFailedBeforeTheSessionIsLoggedEvenWhenTheCliRemovesTheQuestion(): void
+    {
+        $this->history->commitFile('QUESTION.json', '{"question":"Old?","choices":["a"],"recommendation":"a"}', 'docs: keep an old question');
+        $this->givenTheDigestFailsOnItsCall(1);
+        $this->givenTheCli('rm QUESTION.json');
+
+        $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertFileDoesNotExist($this->output.'/question.json');
+        self::assertStringContainsString("QUESTION.json is not handed back: it could not be hashed before the session\n", $this->outputFile('build.log'));
+    }
+
+    public function testAQuestionWhoseDigestFailsAfterTheSessionIsNotHandedBackEvenWhenTheCliRewritesIt(): void
+    {
+        $this->history->commitFile('QUESTION.json', '{"question":"Old?","choices":["a"],"recommendation":"a"}', 'docs: keep an old question');
+        $this->givenTheDigestFailsOnItsCall(2);
+        $this->givenTheCli(<<<'SH'
+            printf '{"question":"New?","choices":["b"],"recommendation":"b"}' > QUESTION.json
+            SH);
+
+        $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertFileDoesNotExist($this->output.'/question.json');
+        self::assertStringContainsString("QUESTION.json is not handed back: it could not be hashed after the session\n", $this->outputFile('build.log'));
+    }
+
+    public function testADigestThatPrintsNothingAfterTheSessionHandsNoQuestionBack(): void
+    {
+        $this->history->commitFile('QUESTION.json', '{"question":"Old?","choices":["a"],"recommendation":"a"}', 'docs: keep an old question');
+        $this->givenTheDigestFailsOnItsCall(2, 0);
+        $this->givenTheCli(<<<'SH'
+            printf '{"question":"New?","choices":["b"],"recommendation":"b"}' > QUESTION.json
+            SH);
+
+        $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertFileDoesNotExist($this->output.'/question.json');
+        self::assertStringContainsString("QUESTION.json is not handed back: it could not be hashed after the session\n", $this->outputFile('build.log'));
     }
 
     public function testAQuestionThatIsALinkIsNotHandedBack(): void
@@ -679,18 +748,19 @@ final class BuildScriptTest extends TestCase
         chmod($this->bin.'/git', 0o755);
     }
 
-    private function givenGitFailsItsFirstHash(): void
+    // The given call of sha256sum prints nothing and exits with the status; every other call is the real tool.
+    private function givenTheDigestFailsOnItsCall(int $call, int $status = 1): void
     {
-        $git = (string) new ExecutableFinder()->find('git');
-        file_put_contents($this->bin.'/git', <<<SH
+        $digest = (string) new ExecutableFinder()->find('sha256sum');
+        file_put_contents($this->bin.'/sha256sum', <<<SH
             #!/bin/sh
-            if [ "\$1" = hash-object ] && [ ! -e "\$RECORD/hashed-once" ]; then
-                : > "\$RECORD/hashed-once"
-                exit 128
+            echo call >> "\$RECORD/digests"
+            if [ "\$(grep -c call "\$RECORD/digests")" -eq {$call} ]; then
+                exit {$status}
             fi
-            exec '{$git}' "\$@"
+            exec '{$digest}' "\$@"
             SH);
-        chmod($this->bin.'/git', 0o755);
+        chmod($this->bin.'/sha256sum', 0o755);
     }
 
     private function whenTheBuildRuns(string $branch, string $model, int $allowance = 600): Process
