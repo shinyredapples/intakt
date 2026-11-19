@@ -15,7 +15,6 @@ use Intakt\Core\Build\Domain\ParkedTaskRecord;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTaskRequest;
 use Intakt\Core\Build\UseCase\BuildTask\ParkedTasks;
 use Intakt\Core\Build\UseCase\BuildTask\TaskNotParked;
-use Intakt\Core\Ledger\Contract\AppendResult;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
