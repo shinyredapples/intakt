@@ -19,7 +19,9 @@ use Intakt\Core\Review\UseCase\JudgeRound\JudgeRound;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRoundHandler;
 use Intakt\Core\Review\UseCase\JudgeRound\QueueJudgingOfCompletedRound;
 use Intakt\Core\Review\UseCase\JudgeRound\RecordFailedJudging;
+use Intakt\Core\Review\UseCase\JudgeRound\JudgedRounds;
 use Intakt\Core\Review\UseCase\JudgeRound\RecordFailedJudgingHandler;
+use Intakt\Core\Review\UseCase\JudgeRound\StampFailureOfEarlierJudging;
 use Intakt\Core\Review\UseCase\PublishVerdict\PublishVerdict;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\FailingBus;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
@@ -35,6 +37,8 @@ use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\Event\WorkerMessageFailedEvent;
 use Symfony\Component\Messenger\Exception\HandlerFailedException;
 use Symfony\Component\Messenger\MessageBusInterface;
+use Symfony\Component\Messenger\Middleware\StackMiddleware;
+use Symfony\Component\Messenger\Stamp\DispatchOnFailureStamp;
 use Symfony\Component\Messenger\Stamp\ReceivedStamp;
 use Symfony\Component\Messenger\Stamp\RedeliveryStamp;
 use Throwable;
@@ -46,6 +50,8 @@ use Throwable;
 #[CoversClass(RecordFailedJudgingHandler::class)]
 #[CoversClass(FailedJudgings::class)]
 #[CoversClass(JudgingFailed::class)]
+#[CoversClass(StampFailureOfEarlierJudging::class)]
+#[CoversClass(JudgedRounds::class)]
 #[UsesClass(JudgeRound::class)]
 #[UsesClass(JudgeRoundHandler::class)]
 #[UsesClass(PublishVerdict::class)]
@@ -169,8 +175,7 @@ final class JudgingPublicationTest extends KernelTestCase
         }
     }
 
-    // The log comes after the publication is queued, so a failure there shows whether the queued row commits apart from the record.
-    public function testThePublicationOfAFailedJudgingIsQueuedInTheTransactionOfItsRecord(): void
+    public function testAFailedJudgingWhoseLogCannotBeWrittenKeepsItsRecordAndItsQueuedPublication(): void
     {
         $roundId = $this->completedRound();
         $logger = self::createStub(LoggerInterface::class);
@@ -180,8 +185,73 @@ final class JudgingPublicationTest extends KernelTestCase
             $this->fixture->failedJudgingRecorder($this->commands(), $logger)(new RecordFailedJudging($roundId));
             self::fail('The log was written.');
         } catch (RuntimeException) {
-            self::assertSame([[], []], [$this->publications(), $this->recordedFailures()]);
+            self::assertSame([[$roundId], [$roundId]], [$this->publications(), $this->recordedFailures()]);
         }
+    }
+
+    // The worker stopped after the failure was recorded and before it removed the judging, and the judge answers when the judging comes back.
+    public function testAJudgingThatSucceedsAfterItsFailureWasRecordedQueuesNoSecondPublication(): void
+    {
+        $roundId = $this->completedRound();
+        $this->failForGood($roundId);
+
+        $this->fixture->judge($this->panel())($this->judgingOf($roundId));
+
+        self::assertSame([$roundId], $this->publications());
+        $this->assertFailedForGoodLogged($roundId);
+    }
+
+    // The worker parked the judging and stopped before it removed the delivery, so the judging comes back and fails for good with its copy parked.
+    public function testAParkedCopyOfAJudgingDoesNotKeepItsFailureFromBeingRecordedAndPublished(): void
+    {
+        $roundId = $this->completedRound();
+        $this->transport('messenger.transport.failed')->send(new Envelope(new JudgeRound($roundId)));
+
+        $this->commands()->dispatch(new RecordFailedJudging($roundId));
+
+        self::assertSame([[$roundId], [$roundId]], [$this->publications(), $this->recordedFailures()]);
+        $this->assertFailedForGoodLogged($roundId);
+    }
+
+    public function testAJudgingQueuedWithoutItsFailureStampGetsItWhenAWorkerReceivesIt(): void
+    {
+        try {
+            $this->commands()->dispatch(new Envelope(new JudgeRound('not-a-round'), [new ReceivedStamp('async')]));
+            self::fail('The judging of a missing round was handled.');
+        } catch (HandlerFailedException $failed) {
+            $failure = $failed->getEnvelope()->last(DispatchOnFailureStamp::class)?->getMessage();
+
+            self::assertEquals(new RecordFailedJudging('not-a-round'), $failure);
+        }
+    }
+
+    public function testAJudgingQueuedWithoutItsFailureStampThatFailsForGoodQueuesThePublicationOnce(): void
+    {
+        $roundId = $this->completedRound();
+        $unstamped = $this->judging($roundId)->withoutAll(DispatchOnFailureStamp::class);
+        $received = new StampFailureOfEarlierJudging()->handle($unstamped, new StackMiddleware());
+
+        $this->giveUp($roundId, $this->failureOf($roundId), $received);
+
+        self::assertSame([[$roundId], [$roundId]], [$this->publications(), $this->recordedFailures()]);
+        $this->assertFailedForGoodLogged($roundId);
+    }
+
+    public function testAJudgingThatKeepsItsFailureStampKeepsItWhenAWorkerReceivesIt(): void
+    {
+        $stamp = RecordFailedJudging::onFailureOf('round-a');
+        $judging = new Envelope(new JudgeRound('round-b'), [$stamp]);
+
+        $received = new StampFailureOfEarlierJudging()->handle($judging, new StackMiddleware());
+
+        self::assertSame([$stamp], $received->all(DispatchOnFailureStamp::class));
+    }
+
+    public function testAMessageOtherThanAJudgingGetsNoFailureStamp(): void
+    {
+        $received = new StampFailureOfEarlierJudging()->handle(new Envelope(new PublishVerdict('round-a')), new StackMiddleware());
+
+        self::assertNull($received->last(DispatchOnFailureStamp::class));
     }
 
     private function completedRound(): string
@@ -209,9 +279,9 @@ final class JudgingPublicationTest extends KernelTestCase
     }
 
     // The last of the async transport's retries, so Messenger gives the judging up as a worker does, and says so.
-    private function giveUp(string $roundId, Throwable $failure): void
+    private function giveUp(string $roundId, Throwable $failure, ?Envelope $judging = null): void
     {
-        $this->reportFailure($this->judging($roundId)->with(new RedeliveryStamp(2)), $failure);
+        $this->reportFailure(($judging ?? $this->judging($roundId))->with(new RedeliveryStamp(2)), $failure);
         self::assertLoggedError('critical', sprintf(self::REMOVED_AFTER_RETRIES, JudgeRound::class, JudgeRound::class, $failure->getMessage()));
     }
 

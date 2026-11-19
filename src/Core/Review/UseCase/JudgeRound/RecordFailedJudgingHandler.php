@@ -29,20 +29,27 @@ final readonly class RecordFailedJudgingHandler
 
     public function __invoke(RecordFailedJudging $command): void
     {
-        $this->rounds->withLockedRound(Uuid::fromString($command->roundId), function (ReviewRound $round): void {
+        $recorded = false;
+
+        $this->rounds->withLockedRound(Uuid::fromString($command->roundId), function (ReviewRound $round) use (&$recorded): void {
             if (!$this->isStillUnjudged($round)) {
                 return;
             }
 
             $this->ledger->judgingFailed($round);
             $this->commands->dispatch(new PublishVerdict($round->id()->toRfc4122()));
-            $this->logger->error('The judging of round {round} failed for good; the round stays unjudged and is published as not reviewed.', ['round' => $round->id()->toRfc4122()]);
+            $recorded = true;
         });
+
+        // After the commit, so a log that cannot be written does not take the record and the queued publication back.
+        if ($recorded) {
+            $this->logger->error('The judging of round {round} failed for good; the round stays unjudged and is published as not reviewed.', ['round' => $command->roundId]);
+        }
     }
 
-    // A round another worker judged meanwhile keeps its verdict, and one already recorded as failed was published already.
+    // A round another worker judged meanwhile keeps its verdict, and one whose failure is recorded was published already; a parked copy of the judging says neither, so it does not count here.
     private function isStillUnjudged(ReviewRound $round): bool
     {
-        return RoundState::Complete === $round->state() && !$this->failedJudgings->hasFailed($round->id()->toRfc4122());
+        return RoundState::Complete === $round->state() && !$this->failedJudgings->isRecorded($round->id()->toRfc4122());
     }
 }

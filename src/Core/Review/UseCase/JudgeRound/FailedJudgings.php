@@ -29,7 +29,8 @@ final readonly class FailedJudgings
         return $this->isRecorded($roundId) || $this->isParked($roundId);
     }
 
-    private function isRecorded(string $roundId): bool
+    // The ledger record alone, which commits together with the queued publication, so it tells whether the round's outcome is published already.
+    public function isRecorded(string $roundId): bool
     {
         foreach ($this->ledger->readOfKind(LedgerEventKind::JudgingFailed) as $recorded) {
             if ($roundId === $this->payloads->of($recorded, JudgingFailed::class)?->round) {

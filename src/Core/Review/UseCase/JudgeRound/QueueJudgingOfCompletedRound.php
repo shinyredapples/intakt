@@ -7,7 +7,6 @@ namespace Intakt\Core\Review\UseCase\JudgeRound;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\MessageBusInterface;
-use Symfony\Component\Messenger\Stamp\DispatchOnFailureStamp;
 use Symfony\Component\Workflow\Attribute\AsCompletedListener;
 use Symfony\Component\Workflow\Event\CompletedEvent;
 
@@ -33,6 +32,6 @@ final readonly class QueueJudgingOfCompletedRound
 
     private function judgingOf(string $roundId): Envelope
     {
-        return new Envelope(new JudgeRound($roundId), [new DispatchOnFailureStamp(new RecordFailedJudging($roundId))]);
+        return new Envelope(new JudgeRound($roundId), [RecordFailedJudging::onFailureOf($roundId)]);
     }
 }
