@@ -23,8 +23,8 @@ final class PhpGateDependencyStepTest extends TestCase
     // Because the fixtures serve their own packages, a proxy nobody listens on turns any request to Packagist into a failed test.
     private const array OFFLINE = ['http_proxy' => 'http://127.0.0.1:9', 'https_proxy' => 'http://127.0.0.1:9', 'HTTP_PROXY' => 'http://127.0.0.1:9', 'HTTPS_PROXY' => 'http://127.0.0.1:9', 'no_proxy' => '', 'NO_PROXY' => ''];
 
-    // Removed from the commands' environment, because a Composer setting of whoever runs the test would point the fixtures at another manifest or vendor folder, or refuse the local package repositories.
-    private const array NOT_INHERITED = ['COMPOSER' => false, 'COMPOSER_VENDOR_DIR' => false, 'COMPOSER_DISABLE_NETWORK' => false, 'COMPOSER_AUTH' => false];
+    // Removed from the commands' environment, because a Composer setting of whoever runs the test would point the fixtures at another manifest or vendor folder, refuse the local package repositories or skip the scripts the tests expect.
+    private const array NOT_INHERITED = ['COMPOSER' => false, 'COMPOSER_VENDOR_DIR' => false, 'COMPOSER_DISABLE_NETWORK' => false, 'COMPOSER_AUTH' => false, 'COMPOSER_SKIP_SCRIPTS' => false];
 
     private string $directory;
 
@@ -114,6 +114,64 @@ final class PhpGateDependencyStepTest extends TestCase
 
         self::assertSame(1, $install->getExitCode());
         self::assertStringContainsString('composer.lock changed during the install', $install->getErrorOutput());
+    }
+
+    public function testTheLockedInstallReportsTheRewrittenLockFileAlsoWhenComposerFailsAfterResolvingAnEmptyLockFile(): void
+    {
+        $this->project([
+            'repositories' => [
+                ['packagist.org' => false],
+                ['type' => 'package', 'package' => ['name' => 'fixture/absent', 'version' => '1.0.0', 'dist' => ['type' => 'zip', 'url' => './absent.zip']]],
+            ],
+            'require' => ['fixture/absent' => '1.0.0'],
+        ]);
+        new Filesystem()->dumpFile($this->directory.'/composer.lock', '{}');
+
+        $install = $this->runInProject($this->step->install);
+
+        self::assertSame(1, $install->getExitCode());
+        self::assertStringContainsString('composer.lock changed during the install', $install->getErrorOutput());
+    }
+
+    public function testTheLockedInstallExitsWithComposersOwnCodeWhenComposerFailsWithoutTouchingTheLockFile(): void
+    {
+        $this->project([
+            'repositories' => [
+                ['packagist.org' => false],
+                ['type' => 'package', 'package' => ['name' => 'fixture/absent', 'version' => '1.0.0', 'dist' => ['type' => 'zip', 'url' => './absent.zip']]],
+            ],
+            'require' => ['fixture/absent' => '1.0.0'],
+        ]);
+        $this->mustRun('composer update --no-interaction --no-plugins --no-scripts --no-install');
+        $lock = (string) file_get_contents($this->directory.'/composer.lock');
+
+        $install = $this->runInProject($this->step->install);
+
+        self::assertFalse($install->isSuccessful());
+        self::assertNotSame(1, $install->getExitCode());
+        self::assertStringNotContainsString('composer.lock changed', $install->getErrorOutput());
+        self::assertStringEqualsFile($this->directory.'/composer.lock', $lock);
+    }
+
+    public function testTheSplitFlowStillRunsTheAutoloadScriptsWhenWhoeverRunsTheTestsSkipsThemInTheirEnvironment(): void
+    {
+        $this->project(['scripts' => ['post-autoload-dump' => '@php -r "touch(\'autoload-event\');"']]);
+        $this->mustRun('composer update --no-interaction --no-plugins --no-scripts --no-install');
+        $saved = [$_ENV['COMPOSER_SKIP_SCRIPTS'] ?? null, $_SERVER['COMPOSER_SKIP_SCRIPTS'] ?? null, getenv('COMPOSER_SKIP_SCRIPTS')];
+        $_ENV['COMPOSER_SKIP_SCRIPTS'] = $_SERVER['COMPOSER_SKIP_SCRIPTS'] = 'post-autoload-dump';
+        putenv('COMPOSER_SKIP_SCRIPTS=post-autoload-dump');
+
+        try {
+            $this->mustRun($this->step->install);
+            $this->mustRun($this->step->generate);
+        } finally {
+            [$env, $server, $process] = $saved;
+            if (null === $env) { unset($_ENV['COMPOSER_SKIP_SCRIPTS']); } else { $_ENV['COMPOSER_SKIP_SCRIPTS'] = $env; }
+            if (null === $server) { unset($_SERVER['COMPOSER_SKIP_SCRIPTS']); } else { $_SERVER['COMPOSER_SKIP_SCRIPTS'] = $server; }
+            putenv(false === $process ? 'COMPOSER_SKIP_SCRIPTS' : 'COMPOSER_SKIP_SCRIPTS='.$process);
+        }
+
+        self::assertFileExists($this->directory.'/autoload-event');
     }
 
     public function testTheLockedInstallInstallsTheLockedPackagesWithoutAnAutoloaderAndLeavesTheLockFileAsItWas(): void

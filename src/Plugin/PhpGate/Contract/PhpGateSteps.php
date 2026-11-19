@@ -19,8 +19,8 @@ final readonly class PhpGateSteps
         if (is_array($config) && array_key_exists("lock", $config) && true !== $config["lock"]) { fwrite(STDERR, "composer.json sets config.lock to something other than true, so Composer ignores composer.lock.\n"); exit(1); }'
         SH;
 
-    // Scripts and plugins off, because a reused install must hold only the locked packages and nothing a package ran. The lock's hash is compared around Composer because Composer exits 0 after resolving anew, for example when the lock file names no packages.
-    public const string LOCKED_INSTALL = self::LOCK_GUARD.' && intakt_lock_before="$('.self::LOCK_HASH.')" && composer install --no-interaction --no-progress --no-scripts --no-plugins --no-autoloader && '.self::LOCK_UNCHANGED;
+    // Scripts and plugins off, because a reused install must hold only the locked packages and nothing a package ran. The lock's hash is compared around Composer because Composer exits 0 after resolving anew, for example when the lock file has no packages key; it is compared after a failed Composer run too, because Composer writes the new lock before it downloads.
+    public const string LOCKED_INSTALL = self::LOCK_GUARD.' && intakt_lock_before="$('.self::LOCK_HASH.')" && { composer install --no-interaction --no-progress --no-scripts --no-plugins --no-autoloader; intakt_composer=$?; '.self::LOCK_UNCHANGED.' && (exit "$intakt_composer"); }';
 
     // The whole install, because dump-autoload leaves installed.php naming the head that made the install, while this rewrites it from the checked tree.
     public const string GENERATE = self::INSTALL;
