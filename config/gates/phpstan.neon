@@ -86,3 +86,9 @@ services:
             catalog: Intakt\Plugin\Vendor\Contract\ProviderDescriptor
         tags:
             - phpstan.rules.rule
+    -
+        class: Intakt\Gates\PhpStan\FinalClassRule
+        arguments:
+            root: %currentWorkingDirectory%
+        tags:
+            - phpstan.rules.rule
