@@ -147,6 +147,66 @@ final class PhpGateDependencyStepTest extends TestCase
         yield 'absolute path' => ['/packages/remote'];
         yield 'relative path' => ['packages/remote'];
         yield 'parent path' => ['../remote'];
+        yield 'compressed stream of an absolute path' => ['compress.zlib:///packages/remote.zip'];
+        yield 'phar stream' => ['phar:///packages/remote.phar/package'];
+        yield 'unknown scheme' => ['ftp://localhost/remote.zip'];
+    }
+
+    public function testTheLockGuardRefusesACompressedStreamArchiveOfAnAbsolutePathWithAValidChecksum(): void
+    {
+        $this->archive('first');
+        $path = $this->directory.'/package.zip';
+        $this->lockFileWith(['name' => 'fixture/archive', 'version' => '1.0.0', 'dist' => ['type' => 'zip', 'url' => 'compress.zlib://'.$path, 'shasum' => (string) sha1_file($path)]]);
+
+        $guard = $this->runInProject(PhpGateSteps::LOCK_GUARD);
+
+        self::assertSame(PhpGateSteps::REFUSED, $guard->getExitCode());
+        self::assertStringContainsString('fixture/archive comes from an archive at a local URL', $guard->getErrorOutput());
+    }
+
+    #[DataProvider('remoteArchiveUrls')]
+    public function testTheLockGuardAcceptsAnArchiveWithAChecksumAtAnHttpOrHttpsUrl(string $url): void
+    {
+        $this->lockFileWith(['name' => 'fixture/remote', 'version' => '1.0.0', 'dist' => ['type' => 'zip', 'url' => $url, 'shasum' => sha1('archive')]]);
+
+        $this->mustRun(PhpGateSteps::LOCK_GUARD);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function remoteArchiveUrls(): iterable
+    {
+        yield 'https' => ['https://localhost/remote.zip'];
+        yield 'http' => ['http://localhost/remote.zip'];
+    }
+
+    #[DataProvider('remoteSourceUrls')]
+    public function testTheLockGuardAcceptsASourceWithAFullCommitIdAtARemoteSchemeTheAllowlistNames(string $url): void
+    {
+        $this->lockFileWith(['name' => 'fixture/remote', 'version' => '1.0.0', 'source' => ['type' => 'git', 'url' => $url, 'reference' => str_repeat('a', 40)]]);
+
+        $this->mustRun(PhpGateSteps::LOCK_GUARD);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function remoteSourceUrls(): iterable
+    {
+        foreach (['https', 'http', 'ssh', 'git', 'git+ssh', 'svn'] as $scheme) {
+            yield $scheme => [$scheme.'://localhost/remote.git'];
+        }
+    }
+
+    public function testTheLockGuardRefusesAnArchiveAtAGitOnlySchemeBecauseOnlyHttpAndHttpsAreRemoteForAnArchive(): void
+    {
+        $this->lockFileWith(['name' => 'fixture/remote', 'version' => '1.0.0', 'dist' => ['type' => 'zip', 'url' => 'ssh://localhost/remote.zip', 'shasum' => sha1('archive')]]);
+
+        $guard = $this->runInProject(PhpGateSteps::LOCK_GUARD);
+
+        self::assertSame(PhpGateSteps::REFUSED, $guard->getExitCode());
+        self::assertStringContainsString('fixture/remote comes from an archive at a local URL', $guard->getErrorOutput());
     }
 
     public function testTheLockGuardAcceptsAGitSourceAtAnScpLikeRemoteWithAFullCommitId(): void
