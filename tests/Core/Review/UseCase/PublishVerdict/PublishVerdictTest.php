@@ -14,6 +14,7 @@ use Intakt\Core\Review\Contract\MarkVerdictsStale;
 use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
+use Intakt\Core\Review\Domain\CountedVote;
 use Intakt\Core\Review\Domain\ReplayProject;
 use Intakt\Core\Review\UseCase\MarkReplay\FlagProjectAsReplayHandler;
 use Intakt\Core\Review\UseCase\MarkVerdictsStale\MarkVerdictsStaleHandler;
@@ -41,6 +42,7 @@ use Intakt\Plugin\Forge\Contract\ReviewToken;
 use Intakt\Plugin\GitHubForge\Infrastructure\PostedComments;
 use Intakt\Plugin\GitHubForge\Infrastructure\VerdictLocks;
 use Intakt\Tests\Core\Review\SampleIdentity;
+use Intakt\Tests\Core\Review\UseCase\ReviewChange\DeferringJudge;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\VerdictPerRole;
 use Intakt\Tests\Plugin\GitHubForge\ScriptedGitHub;
@@ -79,6 +81,7 @@ use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
 #[UsesClass(FlagProjectAsReplay::class)]
 #[UsesClass(ReplayProject::class)]
 #[UsesClass(ReplayMark::class)]
+#[UsesClass(CountedVote::class)]
 final class PublishVerdictTest extends KernelTestCase
 {
     private const string PULL = 'https://github.com/acme/widgets/pull/7';
@@ -107,6 +110,25 @@ final class PublishVerdictTest extends KernelTestCase
             [self::COMMENT, ['body' => self::HEADING."\n\n```json\n".'{"verdict":"approve","head":"'.SampleIdentity::HEAD.'","summary":"2 of 2 reviewers approve; findings to act on: 0."}'."\n```\n\n".$this->marker($roundId)]],
             [self::STATUS, ['state' => 'success', 'context' => 'intakt/review', 'description' => 'Intakt approves this head.']],
         ], $this->github->writes);
+    }
+
+    public function testAReviewerWhoseOnlyFindingIsADeferredP3IsPublishedAsApprovingWithTheSameEmptyActListAsTheReviewCommand(): void
+    {
+        $roundId = $this->publishRoundDeferringEveryP3On(['Look at part 1.' => $this->changes($this->unplaced('A', Severity::P3, 'Name the helper.'))]);
+
+        self::assertSame([
+            [self::COMMENT, ['body' => self::HEADING."\n\n```json\n".'{"verdict":"approve","head":"'.SampleIdentity::HEAD.'","summary":"2 of 2 reviewers approve; findings to act on: 0."}'."\n```\n\n".$this->marker($roundId)]],
+            [self::STATUS, ['state' => 'success', 'context' => 'intakt/review', 'description' => 'Intakt approves this head.']],
+        ], $this->github->writes);
+    }
+
+    public function testAReviewerWhoseP2SitsBesideADeferredP3IsPublishedAsChangesNamingTheP2(): void
+    {
+        $this->publishRoundDeferringEveryP3On(['Look at part 1.' => $this->changes($this->placed('A', Severity::P2, 'Fix the guard.'), $this->unplaced('B', Severity::P3, 'Name the helper.'))]);
+
+        self::assertStringContainsString("[P2] src/Thing.php:3: Fix the guard.\n", $this->commentBody());
+        self::assertStringNotContainsString('Name the helper.', $this->commentBody());
+        self::assertStringContainsString('"summary":"1 of 2 reviewers approve; findings to act on: 1."', $this->commentBody());
     }
 
     public function testAnApprovalWhoseActListHoldsAP2FilesItAsAFollowUpSoTheLoopReadsAnApprovalToo(): void
@@ -488,6 +510,23 @@ final class PublishVerdictTest extends KernelTestCase
 
         foreach ($this->publicationsOf($roundId) as $publication) {
             $handler($publication);
+        }
+
+        return $roundId;
+    }
+
+    /**
+     * @param array<string, Verdict> $verdicts
+     */
+    private function publishRoundDeferringEveryP3On(array $verdicts): string
+    {
+        $roundId = $this->reviewedRound(self::PULL, $verdicts);
+        foreach ($this->fixture->judgings() as $judging) {
+            $this->fixture->judge(new DeferringJudge(new VerdictPerRole($verdicts)))($judging);
+        }
+
+        foreach ($this->publicationsOf($roundId) as $publication) {
+            $this->handler(new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']))($publication);
         }
 
         return $roundId;

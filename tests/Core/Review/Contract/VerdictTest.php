@@ -39,6 +39,39 @@ final class VerdictTest extends TestCase
         self::assertSame($evidence, Verdict::incompleteStream('the stream ended early', $evidence)->findings[0]->evidence);
     }
 
+    public function testAnApprovalAndChangesOfOnlyP3FindingsMayCountAsApproval(): void
+    {
+        self::assertSame([true, true], [
+            new Verdict(Decision::Approve, [], [], [])->mayCountAsApproval(),
+            $this->changes(Severity::P3, Severity::P3)->mayCountAsApproval(),
+        ]);
+    }
+
+    public function testChangesWithAP2WithoutFindingsOrOfAFailedReviewNeverCountAsApproval(): void
+    {
+        $failed = new Verdict(Decision::Changes, [new Finding(Verdict::NO_TOOLS, Severity::P3, null, null, null, 'No tools.', FixableBy::Owner, false, null, null)], [], []);
+
+        self::assertSame([false, false, false, false], [
+            $this->changes(Severity::P3, Severity::P2)->mayCountAsApproval(),
+            $this->changes()->mayCountAsApproval(),
+            $failed->mayCountAsApproval(),
+            Verdict::unreadApproval()->mayCountAsApproval(),
+        ]);
+    }
+
+    public function testAReviewersBlockedVerdictOfOnlyP3FindingsMayCountAsApprovalBecauseItIsRecordedAsChanges(): void
+    {
+        $blocked = new Verdict(Decision::Blocked, [new Finding('A', Severity::P3, null, null, null, 'Text.', FixableBy::Builder, false, null, null)], [], []);
+        $withAP2 = new Verdict(Decision::Blocked, [new Finding('A', Severity::P2, null, null, null, 'Text.', FixableBy::Builder, false, null, null)], [], []);
+
+        self::assertSame([true, false], [$blocked->mayCountAsApproval(), $withAP2->mayCountAsApproval()]);
+    }
+
+    private function changes(Severity ...$severities): Verdict
+    {
+        return new Verdict(Decision::Changes, array_map(static fn (Severity $severity): Finding => new Finding('A', $severity, null, null, null, 'Text.', FixableBy::Builder, false, null, null), array_values($severities)), [], []);
+    }
+
     public function testAReviewersBlockedVerdictWithFindingsIsRecordedAsChanges(): void
     {
         $verdict = new Verdict(Decision::Blocked, [$this->finding()], ['F0'], ['a follow-up']);

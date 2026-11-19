@@ -254,6 +254,6 @@ final class AccountLimitedVendorTest extends TestCase
 
     private function request(): ReviewRequest
     {
-        return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), []), new ReviewerConversation('You review for correctness.', new UuidV7()));
+        return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [], 1), new ReviewerConversation('You review for correctness.', new UuidV7()));
     }
 }
