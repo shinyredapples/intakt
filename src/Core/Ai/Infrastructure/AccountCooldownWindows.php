@@ -171,7 +171,8 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
 
         try {
             $running = $this->window($account);
-            if (0 === $running->getRemainingTokens() && $running->getRetryAfter() >= $until) {
+            // In whole seconds, the precision a pin's wait and the ledger's record have, so a window ending in the same second is kept and not recorded twice.
+            if (0 === $running->getRemainingTokens() && $running->getRetryAfter()->getTimestamp() >= $until->getTimestamp()) {
                 return;
             }
 
