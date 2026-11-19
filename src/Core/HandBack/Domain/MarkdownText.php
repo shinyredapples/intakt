@@ -151,7 +151,7 @@ final readonly class MarkdownText
     private static function untilItsListItemEnds(string $before, string $fence): string
     {
         $lines = explode("\n", $before);
-        $marker = $lines[array_key_last($lines)];
+        $marker = array_last($lines);
         $column = '' === trim($marker) ? self::columnOfTheItemAround($before, strspn($fence, ' ')) : strlen($marker);
 
         if (null === $column) {
