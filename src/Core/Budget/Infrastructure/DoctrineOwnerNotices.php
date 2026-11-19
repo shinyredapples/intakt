@@ -36,7 +36,7 @@ final readonly class DoctrineOwnerNotices implements OwnerNotices
         $records = $this->entities->createQueryBuilder()
             ->select('notice')
             ->from(OutageNoticeRecord::class, 'notice')
-            ->where('NOT EXISTS (' . $readingSince->getDQL() . ')')
+            ->where('NOT EXISTS ('.$readingSince->getDQL().')')
             ->orderBy('notice.position')
             ->getQuery()
             ->getResult();
