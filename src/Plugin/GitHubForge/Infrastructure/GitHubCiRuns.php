@@ -93,8 +93,7 @@ final readonly class GitHubCiRuns
      */
     private function workflowRunStateOf(array $entry): CiRunState
     {
-        // Only a queued first attempt never started; check suites stay Unfinished, because all of one app's suites share one origin.
-        // A queued rerun keeps the first attempt's creation time, so it cannot tell whether a newer run replaced it and waits like a running run.
+        // Only a queued first attempt never started, because a queued rerun keeps the first attempt's creation time; check suites stay Unfinished, because one app's suites share one origin.
         return 'queued' === $this->text($entry, 'status') && 1 === $this->positive($entry, 'run_attempt') ? CiRunState::Queued : $this->stateOf($entry);
     }
 

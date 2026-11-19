@@ -9,9 +9,6 @@ use DateTimeImmutable;
 // Kept as one type for both, because a head is judged by all of them together.
 final readonly class CiRun
 {
-    /**
-     * @param ?int $number the forge's count of runs of this origin, which breaks a tie of two runs created in the same second; null where the forge numbers none
-     */
     public function __construct(
         public CiRunOrigin $origin,
         public CiRunState $state,
@@ -27,10 +24,12 @@ final readonly class CiRun
 
     private function isLaterThan(self $other): bool
     {
-        if ($this->startedAt != $other->startedAt) {
-            return $this->startedAt > $other->startedAt;
+        $order = $this->startedAt <=> $other->startedAt;
+        if (0 !== $order) {
+            return $order > 0;
         }
 
+        // The forge's run number breaks a tie of two runs created in the same second, and a forge that numbers none leaves it null.
         return null !== $this->number && null !== $other->number && $this->number > $other->number;
     }
 }
