@@ -73,8 +73,33 @@ final class BuildScriptTest extends TestCase
 
         self::assertSame("Build the task.\n", (string) file_get_contents($this->history->folder.'/input'));
         self::assertSame(
-            ['-p', '--model', 'claude-opus-5-5', '--max-turns', '7', '--output-format', 'json', '--dangerously-skip-permissions'],
+            ['-p', '--model', 'claude-opus-5-5', '--max-turns', '7', '--output-format', 'json', '--dangerously-skip-permissions', '--settings', '{"env":{"BASH_DEFAULT_TIMEOUT_MS":"1800000","BASH_MAX_TIMEOUT_MS":"1800000"}}'],
             explode("\n", trim((string) file_get_contents($this->history->folder.'/arguments'))),
+        );
+    }
+
+    public function testTheSessionIsStartedWithASettingsArgumentWhoseEnvGivesBothBashTimeoutsTheLimitInMilliseconds(): void
+    {
+        $this->givenTheCli('printf "%s\n" "$@" > "$RECORD/arguments"');
+
+        $this->whenTheBuildRuns('task', 'claude-opus-5-5');
+
+        self::assertSame(
+            ['env' => ['BASH_DEFAULT_TIMEOUT_MS' => '1800000', 'BASH_MAX_TIMEOUT_MS' => '1800000']],
+            $this->settingsTheCliWasGiven(),
+        );
+    }
+
+    public function testACloneWhoseProjectSettingsRaiseBothBashTimeoutsStillStartsTheSessionWithTheLimitInItsSettingsArgument(): void
+    {
+        $this->history->commitFile('.claude/settings.json', '{"env":{"BASH_DEFAULT_TIMEOUT_MS":"7200000","BASH_MAX_TIMEOUT_MS":"7200000"}}', 'chore: raise the tool time limit');
+        $this->givenTheCli('test -f .claude/settings.json && printf "%s\n" "$@" > "$RECORD/arguments"');
+
+        $this->whenTheBuildRuns('task', 'claude-opus-5-5');
+
+        self::assertSame(
+            ['env' => ['BASH_DEFAULT_TIMEOUT_MS' => '1800000', 'BASH_MAX_TIMEOUT_MS' => '1800000']],
+            $this->settingsTheCliWasGiven(),
         );
     }
 
@@ -624,6 +649,20 @@ final class BuildScriptTest extends TestCase
         $this->history->inMirror('fetch', '--quiet', $this->output.'/handback.bundle', 'refs/heads/'.$branch.':refs/heads/fetched');
 
         return $this->history->inMirror('show', 'refs/heads/fetched:'.$path)."\n";
+    }
+
+    /**
+     * @return array<mixed>
+     */
+    private function settingsTheCliWasGiven(): array
+    {
+        $arguments = explode("\n", trim((string) file_get_contents($this->history->folder.'/arguments')));
+        $at = array_search('--settings', $arguments, true);
+        self::assertIsInt($at);
+        $settings = json_decode($arguments[$at + 1] ?? '', true, flags: JSON_THROW_ON_ERROR);
+        self::assertIsArray($settings);
+
+        return $settings;
     }
 
     private function outputFile(string $name): string
