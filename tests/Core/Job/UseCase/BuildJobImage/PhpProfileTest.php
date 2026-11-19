@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Job\UseCase\BuildJobImage;
 use Intakt\Core\Job\UseCase\BuildJobImage\JobImageNotBuilt;
 use Intakt\Core\Job\UseCase\BuildJobImage\PhpProfile;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
@@ -14,6 +15,8 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(JobImageNotBuilt::class)]
 final class PhpProfileTest extends TestCase
 {
+    private const string RELEASED = '8.4.25';
+
     public function testThePlatformVersionIsTheOnlyPhpTheImageMayHave(): void
     {
         $php = PhpProfile::fromComposerJson('{"require": {"php": ">=8.5.12"}, "config": {"platform": {"php": "8.5.12"}}}');
@@ -41,41 +44,110 @@ final class PhpProfileTest extends TestCase
         self::assertNull($php->platform);
     }
 
-    public function testAMinorWhoseNewestPatchesMeetTheRuleIsItsMovingTag(): void
+    #[DataProvider('rulesWithoutAGapAboveTheReleasedPatch')]
+    public function testARuleThatAdmitsEveryPatchFromTheReleasedOneToTheMinorsEndGetsTheMovingTag(string $rule): void
+    {
+        $php = PhpProfile::fromComposerJson(sprintf('{"require": {"php": "%s"}}', $rule));
+
+        self::assertSame('8.4', $php->imageVersionIn('8.4', self::RELEASED));
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function rulesWithoutAGapAboveTheReleasedPatch(): iterable
+    {
+        yield 'range to the minor end' => ['>=8.4.3 <8.5'];
+        yield 'caret' => ['^8.4'];
+    }
+
+    public function testAMinorTheRuleDoesNotReachHasNoVersion(): void
     {
         $php = PhpProfile::fromComposerJson('{"require": {"php": ">=8.4.3 <8.5"}}');
 
-        self::assertSame('8.4', $php->imageVersionIn('8.4'));
-        self::assertNull($php->imageVersionIn('8.5'));
-        self::assertNull($php->imageVersionIn('8.3'));
+        self::assertNull($php->imageVersionIn('8.5', '8.5.12'));
+        self::assertNull($php->imageVersionIn('8.3', null));
     }
 
-    public function testARuleCappedInsideAMinorGetsItsLowestPatch(): void
+    #[DataProvider('rulesWithAGapAboveTheReleasedPatch')]
+    public function testARuleWithAGapAboveTheReleasedPatchIsPinnedToIt(string $rule): void
     {
-        $php = PhpProfile::fromComposerJson('{"require": {"php": ">=8.4.1 <8.4.5"}}');
+        $php = PhpProfile::fromComposerJson(sprintf('{"require": {"php": "%s"}}', $rule));
 
-        self::assertSame('8.4.1', $php->imageVersionIn('8.4'));
+        self::assertSame(self::RELEASED, $php->imageVersionIn('8.4', self::RELEASED));
     }
 
-    public function testARuleThatExcludesItsLowerBoundGetsThePatchAfterIt(): void
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function rulesWithAGapAboveTheReleasedPatch(): iterable
     {
-        $php = PhpProfile::fromComposerJson('{"require": {"php": ">8.4.1 <8.4.5"}}');
+        yield 'the next patch excluded' => ['>=8.4.0 <8.5 !=8.4.26'];
+        yield 'a future patch excluded' => ['^8.4 !=8.4.9999'];
+        yield 'gaps on both sides' => ['>=8.4.1 <8.4.20 || 8.4.25 || >=8.4.30 <8.5'];
+    }
 
-        self::assertSame('8.4.2', $php->imageVersionIn('8.4'));
+    #[DataProvider('pinnedRules')]
+    public function testAPinnedRuleGetsItsHighestPatchAtOrBelowTheReleasedOneElseItsLowest(string $rule, string $patch): void
+    {
+        $php = PhpProfile::fromComposerJson(sprintf('{"require": {"php": "%s"}}', $rule));
+
+        self::assertSame($patch, $php->imageVersionIn('8.4', self::RELEASED));
+    }
+
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function pinnedRules(): iterable
+    {
+        yield 'capped with an excluded upper bound' => ['>=8.4.1 <8.4.20', '8.4.19'];
+        yield 'capped, then open above a future patch' => ['>=8.4.1 <8.4.20 || >=8.4.10000 <8.5', '8.4.19'];
+        yield 'capped with an included upper bound' => ['>=8.4.1 <=8.4.5', '8.4.5'];
+        yield 'exact' => ['8.4.7', '8.4.7'];
+        yield 'the released patch excluded' => ['>=8.4.0 <8.5 !=8.4.25', '8.4.24'];
+        yield 'starting above the released patch' => ['>=8.4.30 <8.5', '8.4.30'];
+        yield 'starting above it with an excluded lower bound' => ['>8.4.30 <8.5', '8.4.31'];
+    }
+
+    public function testWithoutAReleasedPatchARuleWhoseLastRangeRunsToTheMinorsEndGetsTheMovingTag(): void
+    {
+        $php = PhpProfile::fromComposerJson('{"require": {"php": ">=8.4.1 <8.4.20 || >=8.4.10000 <8.5"}}');
+
+        self::assertSame('8.4', $php->imageVersionIn('8.4', null));
+    }
+
+    #[DataProvider('cappedRules')]
+    public function testWithoutAReleasedPatchACappedRuleGetsItsHighestPatch(string $rule, string $patch): void
+    {
+        $php = PhpProfile::fromComposerJson(sprintf('{"require": {"php": "%s"}}', $rule));
+
+        self::assertSame($patch, $php->imageVersionIn('8.4', null));
+    }
+
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function cappedRules(): iterable
+    {
+        yield 'excluded upper bound' => ['>=8.4.1 <8.4.20', '8.4.19'];
+        yield 'excluded lower and upper bound' => ['>8.4.1 <8.4.5', '8.4.4'];
+        yield 'exact' => ['8.4.7', '8.4.7'];
+        yield 'the last range ending at an excluded patch' => ['>=8.4.1 <8.4.5 || >=8.4.10 <8.4.9999', '8.4.9998'];
     }
 
     public function testARuleThatAdmitsNoPatchOfAMinorHasNoVersionThere(): void
     {
         $php = PhpProfile::fromComposerJson('{"require": {"php": ">8.4.1 <8.4.2"}}');
 
-        self::assertNull($php->imageVersionIn('8.4'));
+        self::assertNull($php->imageVersionIn('8.4', self::RELEASED));
+        self::assertNull($php->imageVersionIn('8.4', null));
     }
 
     public function testALaterRangeIsUsedWhenTheFirstAdmitsNoPatch(): void
     {
         $php = PhpProfile::fromComposerJson('{"require": {"php": ">8.4.1 <8.4.2 || 8.4.7"}}');
 
-        self::assertSame('8.4.7', $php->imageVersionIn('8.4'));
+        self::assertSame('8.4.7', $php->imageVersionIn('8.4', self::RELEASED));
     }
 
     public function testAComposerJsonWithoutAPhpRecordIsRefused(): void
