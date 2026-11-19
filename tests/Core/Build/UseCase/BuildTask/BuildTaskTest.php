@@ -1061,7 +1061,7 @@ final class BuildTaskTest extends TestCase
         return new ParkedTasks($connection, new MockClock('2026-11-19T10:00:00+00:00'));
     }
 
-    // Drops the rows the work inserted when it throws, as a real transaction rolls them back.
+    // Because a real transaction rolls back what the work inserted when it throws, and ParkedTasksTest proves that on SQLite.
     private function rolledBackOnFailure(Closure $work, Connection $connection): mixed
     {
         $before = $this->parkedRows;
