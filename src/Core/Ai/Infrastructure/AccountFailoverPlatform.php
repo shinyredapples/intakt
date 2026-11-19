@@ -74,7 +74,7 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         return array_first($this->platforms)->getModelCatalog();
     }
 
-    // The part after the model id's last colon (`deepinfra` in `moonshotai/Kimi-K3.1-Pro:deepinfra`), read without the options Symfony AI's catalog takes after a question mark.
+    // Read without the options after a question mark, because Symfony AI's catalog takes them from the model name too, and a pin is the part after the last colon (`deepinfra` in `moonshotai/Kimi-K3.1-Pro:deepinfra`).
     private function routerProviderOf(string|Model $model): ?string
     {
         $name = explode('?', $model instanceof Model ? $model->getName() : $model, 2)[0];
