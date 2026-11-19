@@ -56,7 +56,7 @@ You can ask Intakt which reviewers a change would get, before any review runs an
 
 ## Answering a question
 
-When a builder needs a decision the task doesn't cover, it doesn't guess: it posts a question on the issue with the choices and its recommendation, and the builder moves on to other work. Answer on the issue, from any device. Your answer is written into the task as a decision, and the task starts again from there.
+When a builder needs a decision the task doesn't cover, it doesn't guess: it ends its build with a question, the choices and its recommendation, and Intakt checks that the question is well formed. Today that question is only shown by `intakt:build:run`. (Planned:) Intakt posts it on the issue and moves on to other work. Answer on the issue, from any device. Your answer is written into the task as a decision, and the task starts again from there.
 
 ## Changing course
 

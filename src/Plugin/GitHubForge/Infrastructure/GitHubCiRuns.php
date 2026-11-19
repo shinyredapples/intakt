@@ -27,7 +27,8 @@ final readonly class GitHubCiRuns
      */
     public function ofWorkflowRuns(RepositoryAddress $repository, CommitId $head, array $answer): array
     {
-        return $this->runsOf($repository, $this->ofHead($head, $this->entries($answer, 'workflow_runs')), fn (array $entry): array => [$this->text($entry, 'name'), $this->text($entry, 'event')]);
+        // Named by the workflow's ID, because two workflows may share a display name and must not replace each other's runs.
+        return $this->runsOf($repository, $this->ofHead($head, $this->entries($answer, 'workflow_runs')), fn (array $entry): array => [(string) $this->positive($entry, 'workflow_id'), $this->text($entry, 'event'), $this->workflowRunStateOf($entry), $this->runNumberOf($entry)]);
     }
 
     /**
@@ -38,7 +39,7 @@ final readonly class GitHubCiRuns
     public function ofCheckSuites(RepositoryAddress $repository, CommitId $head, array $answer): array
     {
         // A queued suite without check runs is kept, because its first job may still start and the other runs alone would make the head green too early.
-        return $this->runsOf($repository, $this->ofHead($head, $this->entries($answer, 'check_suites')), fn (array $suite): array => [$this->text($suite, 'app', 'name'), self::CHECK_SUITE_EVENT]);
+        return $this->runsOf($repository, $this->ofHead($head, $this->entries($answer, 'check_suites')), fn (array $suite): array => [$this->text($suite, 'app', 'name'), self::CHECK_SUITE_EVENT, $this->stateOf($suite), null]);
     }
 
     /**
@@ -73,18 +74,59 @@ final readonly class GitHubCiRuns
     }
 
     /**
-     * @param list<array<mixed>>                            $entries
-     * @param callable(array<mixed>): array{string, string} $originOf
+     * @param list<array<mixed>>                                              $entries
+     * @param callable(array<mixed>): array{string, string, CiRunState, ?int} $describe
      *
      * @return list<CiRun>
      */
-    private function runsOf(RepositoryAddress $repository, array $entries, callable $originOf): array
+    private function runsOf(RepositoryAddress $repository, array $entries, callable $describe): array
     {
-        return array_map(function (array $entry) use ($repository, $originOf): CiRun {
-            [$name, $event] = $originOf($entry);
+        return array_map(function (array $entry) use ($repository, $describe): CiRun {
+            [$name, $event, $state, $number] = $describe($entry);
 
-            return new CiRun(new CiRunOrigin($name, $event, $this->changeOf($repository, $entry)), $this->stateOf($entry), $this->moments->parse($this->text($entry, 'created_at')));
+            return new CiRun(new CiRunOrigin($name, $event, $this->changeOf($repository, $entry)), $state, $this->moments->parse($this->text($entry, 'created_at')), $number);
         }, $entries);
+    }
+
+    /**
+     * @param array<mixed> $entry
+     */
+    private function workflowRunStateOf(array $entry): CiRunState
+    {
+        // Only a queued first attempt never started, because a queued rerun keeps the first attempt's creation time; check suites stay Unfinished, because one app's suites share one origin.
+        return 'queued' === $this->text($entry, 'status') && 1 === $this->positive($entry, 'run_attempt') && !$this->withoutItsPullRequest($entry) ? CiRunState::Queued : $this->stateOf($entry);
+    }
+
+    /**
+     * @param array<mixed> $entry
+     */
+    private function runNumberOf(array $entry): ?int
+    {
+        $number = $this->positive($entry, 'run_number');
+
+        // Left out for a pull request run without its pull request, because two unknown pull requests are not one origin and a same-second tie must not order them.
+        return $this->withoutItsPullRequest($entry) ? null : $number;
+    }
+
+    /**
+     * @param array<mixed> $entry
+     */
+    private function withoutItsPullRequest(array $entry): bool
+    {
+        // Such a run stays Unfinished, because GitHub leaves out the pull request of a run from a fork and two unknown pull requests are not one origin.
+        $pulls = $entry['pull_requests'] ?? null;
+
+        return str_starts_with($this->text($entry, 'event'), 'pull_request') && !is_array(is_array($pulls) ? ($pulls[0] ?? null) : null);
+    }
+
+    /**
+     * @param array<mixed> $entry
+     */
+    private function positive(array $entry, string $key): int
+    {
+        $value = $entry[$key] ?? null;
+
+        return is_int($value) && $value > 0 ? $value : throw new ForgeReadFailed(sprintf('GitHub answered without a positive "%s".', $key));
     }
 
     /**
