@@ -214,6 +214,47 @@ final class DependencySnapshotsTest extends TestCase
         self::assertSame([$this->key('second')->value], $this->snapshots());
     }
 
+    public function testAHitAfterTheLeasesEndTrimsTheStoreBackToTheCount(): void
+    {
+        $store = $this->store(1);
+        $store->save($this->key('a'), $this->install('a'));
+        $lease = $store->leaseOf($this->key('a'), '/input/dependencies');
+        $store->save($this->key('b'), $this->install('b'));
+        self::assertCount(2, $this->snapshots());
+        $lease?->release();
+
+        $this->store(1)->leaseOf($this->key('b'), '/input/dependencies')?->release();
+
+        self::assertSame([$this->key('b')->value], $this->snapshots());
+    }
+
+    public function testALeaseNeverEvictsTheSnapshotItLeases(): void
+    {
+        $store = $this->store(1);
+        $store->save($this->key('a'), $this->install('a'));
+        $lease = $store->leaseOf($this->key('a'), '/input/dependencies');
+        $store->save($this->key('b'), $this->install('b'));
+        $lease?->release();
+
+        $again = $this->store(1)->leaseOf($this->key('a'), '/input/dependencies');
+
+        self::assertNotNull($again);
+        self::assertSame([$this->key('a')->value], $this->snapshots());
+        self::assertFileExists($again->input->hostPath.'/vendor/fixture/pkg/code.php');
+    }
+
+    public function testSixteenSavesOfDistinctKeysAtACountOfOneLeaveAtMostTwoPinFiles(): void
+    {
+        $store = $this->store(1);
+
+        foreach (range(1, 16) as $number) {
+            $store->save($this->key((string) $number), $this->install((string) $number));
+            $store->leaseOf($this->key((string) $number), '/input/dependencies')?->release();
+        }
+
+        self::assertLessThanOrEqual(2, count($this->pinFiles()));
+    }
+
     public function testACountBelowOneIsRefused(): void
     {
         $this->expectException(DependencySnapshotCountRefused::class);
@@ -281,6 +322,17 @@ final class DependencySnapshotsTest extends TestCase
         sort($names);
 
         return array_map(strval(...), $names);
+    }
+
+    // Wherever a pin's file lands, in the store or in the shared lock folder, so a pin left behind is counted either way.
+    /**
+     * @return list<string>
+     */
+    private function pinFiles(): array
+    {
+        $pins = is_dir($this->directory.'/store/.pins') ? array_filter($this->pathsUnder($this->directory.'/store/.pins'), is_file(...)) : [];
+
+        return [...array_values($pins), ...(array) glob($this->directory.'/locks/*dependency-snapshot-*')];
     }
 
     /**

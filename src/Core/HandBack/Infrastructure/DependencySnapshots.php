@@ -16,6 +16,7 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\SharedLockInterface;
+use Symfony\Component\Lock\Store\FlockStore;
 
 // Written by the orchestrator's user alone; a job reaches a snapshot only as a read-only mount, because jobs run under that same user id and could otherwise give themselves write permission back.
 final readonly class DependencySnapshots
@@ -25,9 +26,12 @@ final readonly class DependencySnapshots
     // The order of use, least recent first, kept as a list rather than in timestamps so two uses within one clock tick still have an order.
     private const string USES = '.uses';
 
+    // One folder per pinned key, so an eviction removes the pin's file by its folder and never depends on how the lock library names its files.
+    private const string PINS = '.pins';
+
     private const string LOCK = 'intakt-dependency-snapshots';
 
-    private const string PIN = 'intakt-dependency-snapshot-';
+    private const string PIN = 'pin';
 
     public function __construct(
         #[Autowire('%kernel.project_dir%/var/dependency-snapshots')]
@@ -61,7 +65,7 @@ final readonly class DependencySnapshots
         }
     }
 
-    // Busy pins count as a miss rather than a wait, because waiting here would hold the store lock while another job runs.
+    // Busy pins count as a miss rather than a wait, because waiting here would hold the store lock while another job runs. A lease trims the store too, so hits alone bring it back to the count once older leases end.
     #[NoDiscard]
     public function leaseOf(DependencySnapshotKey $key, string $containerPath): ?DependencySnapshotLease
     {
@@ -69,18 +73,35 @@ final readonly class DependencySnapshots
         $lock->acquire(true);
 
         try {
-            $pin = $this->pinOf($key->value);
-
-            if (!is_dir($this->pathOf($key)) || !$pin->acquireRead(false)) {
+            if (!is_dir($this->root)) {
                 return null;
             }
 
-            $this->markUsed($key);
+            $lease = $this->pinned($key, $containerPath);
+            $this->evictPastCount($key);
 
-            return new DependencySnapshotLease(new JobInput($this->pathOf($key), $containerPath), $pin);
+            return $lease;
         } finally {
             $lock->release();
         }
+    }
+
+    // The folder is checked before the pin is created, so a key that was evicted, and its pin file with it, never gets a pin back without a snapshot.
+    private function pinned(DependencySnapshotKey $key, string $containerPath): ?DependencySnapshotLease
+    {
+        if (!is_dir($this->pathOf($key))) {
+            return null;
+        }
+
+        $pin = $this->pinOf($key->value);
+
+        if (!$pin->acquireRead(false)) {
+            return null;
+        }
+
+        $this->markUsed($key);
+
+        return new DependencySnapshotLease(new JobInput($this->pathOf($key), $containerPath), $pin);
     }
 
     private function pathOf(DependencySnapshotKey $key): string
@@ -91,7 +112,10 @@ final readonly class DependencySnapshots
     // Without an expiry, because a check may mount its snapshot for longer than any fixed time.
     private function pinOf(string $name): SharedLockInterface
     {
-        return $this->locks->createLock(self::PIN.$name, null);
+        $folder = $this->root.'/'.self::PINS.'/'.$name;
+        new Filesystem()->mkdir($folder, 0o700);
+
+        return new LockFactory(new FlockStore($folder))->createLock(self::PIN, null);
     }
 
     // An incoming copy left by a crashed save is removed here, under the lock, so no other save is still writing it.
@@ -129,7 +153,7 @@ final readonly class DependencySnapshots
         $this->writeUses([...array_diff($this->uses(), [$key->value]), $key->value]);
     }
 
-    // A pinned snapshot is skipped and a less recently used one goes instead, so the store stays bounded while a job still mounts the old one; the snapshot just saved always stays.
+    // A pinned snapshot is skipped and a less recently used one goes instead, so the store stays bounded while a job still mounts the old one; the snapshot just saved or leased always stays.
     private function evictPastCount(DependencySnapshotKey $saved): void
     {
         $snapshots = $this->leastRecentlyUsedFirst();
@@ -144,6 +168,7 @@ final readonly class DependencySnapshots
         $this->writeUses(array_filter($this->uses(), fn (string $name): bool => is_dir($this->root.'/'.$name)));
     }
 
+    // The pin file goes while its exclusive pin is held, so no lease holds it, and none can take it later: a lease checks the snapshot's folder first, under the same store lock.
     private function evicted(string $name): bool
     {
         $pin = $this->pinOf($name);
@@ -154,6 +179,7 @@ final readonly class DependencySnapshots
 
         try {
             $this->remove($this->root.'/'.$name);
+            new Filesystem()->remove($this->root.'/'.self::PINS.'/'.$name);
 
             return true;
         } finally {
