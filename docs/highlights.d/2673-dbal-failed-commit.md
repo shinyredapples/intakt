@@ -1,0 +1,2 @@
+## Found in the beta
+| DBAL: a COMMIT SQLite refuses (a reader holds the database) leaves the native transaction open while `Connection` counts it closed, and `transactional()` throws `NoActiveTransaction` instead of the commit's error | in progress | T49 (#1696, part #2673), `upstream/dbal-failed-commit-leaves-transaction-open/` | recheck needed before filing in doctrine/dbal: not yet run against the default branch or searched for duplicates |

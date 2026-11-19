@@ -9,6 +9,7 @@ use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Exception;
 use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\Domain\ParkedTaskRecord;
+use PDO;
 use Symfony\Component\Clock\ClockInterface;
 
 final readonly class ParkedTasks
@@ -32,6 +33,7 @@ final readonly class ParkedTasks
         }
 
         $record = new ParkedTaskRecord($request->project, $request->issue, $question, $this->clock->now());
+        $outermost = !$this->connection->isTransactionActive();
 
         try {
             // In a savepoint, because PostgreSQL refuses every further statement of a caller's transaction in which one failed; the ledger writes on this same connection, so an event it refuses takes the new row back and the earlier question stays.
@@ -40,7 +42,21 @@ final readonly class ParkedTasks
                 $recordParking();
             });
         } catch (Exception $failure) {
+            if ($outermost) {
+                $this->rollBackWhatTheRefusedCommitLeftOpen();
+            }
+
             throw TaskNotParked::for($request, $failure);
+        }
+    }
+
+    // SQLite keeps the transaction open when a reader refuses its COMMIT, while DBAL counts it as closed (upstream/dbal-failed-commit-leaves-transaction-open/), so the new row would stay visible on this connection and the ledger's next write would join it.
+    private function rollBackWhatTheRefusedCommitLeftOpen(): void
+    {
+        $native = $this->connection->getNativeConnection();
+
+        if ($native instanceof PDO && $native->inTransaction()) {
+            $native->rollBack();
         }
     }
 
