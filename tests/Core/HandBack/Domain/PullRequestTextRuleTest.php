@@ -6,10 +6,14 @@ namespace Intakt\Tests\Core\HandBack\Domain;
 
 use Intakt\Core\HandBack\Contract\PullRequestTextOutcome;
 use Intakt\Core\HandBack\Contract\PullRequestTextVerdict;
+use Intakt\Core\HandBack\Domain\CodeSpans;
 use Intakt\Core\HandBack\Domain\EvidenceItems;
+use Intakt\Core\HandBack\Domain\FencedBlock;
 use Intakt\Core\HandBack\Domain\MarkdownText;
+use Intakt\Core\HandBack\Domain\ParagraphEnd;
 use Intakt\Core\HandBack\Domain\PullRequestTextRule;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
@@ -18,6 +22,9 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(PullRequestTextVerdict::class)]
 #[UsesClass(EvidenceItems::class)]
 #[UsesClass(MarkdownText::class)]
+#[UsesClass(CodeSpans::class)]
+#[UsesClass(FencedBlock::class)]
+#[UsesClass(ParagraphEnd::class)]
 final class PullRequestTextRuleTest extends TestCase
 {
     private const string TASK = "Build it.\n\nEvidence:\n- E1. A red check.\n- E2. A green check.\n- E3. The docs.\n";
@@ -142,9 +149,71 @@ final class PullRequestTextRuleTest extends TestCase
 
     public function testABodyAtTheCapThatIsOneCodeSpanIsJudged(): void
     {
-        $body = '`'.str_repeat('x', PullRequestTextRule::MAX_BODY_CHARACTERS - 5).'` E1';
+        $body = '`E1 '.str_repeat('x', PullRequestTextRule::MAX_BODY_CHARACTERS - 5).'`';
+        $outcome = PullRequestTextRule::judge("## Evidence\n- E1. output", $body);
 
-        self::assertSame(PullRequestTextVerdict::Passed, PullRequestTextRule::judge("## Evidence\n- E1. output", $body)->verdict);
+        self::assertSame([PullRequestTextVerdict::Passed, PullRequestTextRule::MAX_BODY_CHARACTERS], [$outcome->verdict, $outcome->bodyCharacters]);
+    }
+
+    #[TestWith(['`'])]
+    #[TestWith(['~'])]
+    public function testATaskWithAFenceRunLongerThanTheLargestRegexQuantifierIsJudged(string $character): void
+    {
+        $run = str_repeat($character, 65_536);
+        $task = "## Evidence\n- E1. output\n\n".$run."\n- hidden\n".$run."\n\n- E2. shown";
+        $outcome = PullRequestTextRule::judge($task, 'E1');
+
+        self::assertLessThan(256 * 1024, strlen($task));
+        self::assertSame([2, [2]], [$outcome->evidenceItems, $outcome->missingItems]);
+    }
+
+    #[TestWith(['`'])]
+    #[TestWith(['~'])]
+    public function testAnUnclosedFenceRunLongerThanTheLargestRegexQuantifierHidesTheRestOfTheTask(string $character): void
+    {
+        $task = "## Evidence\n- E1. output\n\n".str_repeat($character, 65_536)."\n\n- E2. hidden";
+
+        self::assertSame(PullRequestTextVerdict::Passed, PullRequestTextRule::judge($task, 'E1')->verdict);
+    }
+
+    public function testABodyWithAFenceRunAsLongAsTheCapAllowsIsJudged(): void
+    {
+        $run = str_repeat('~', (PullRequestTextRule::MAX_BODY_CHARACTERS - 20) / 2);
+        $body = $run."\nE1\n".$run."\n<!-- E2 -->";
+
+        self::assertSame([2], PullRequestTextRule::judge("## Evidence\n- E1. a\n- E2. b", $body)->missingItems);
+    }
+
+    public function testATaskOfManyUnpairedBackticksIsRead(): void
+    {
+        $task = "## Evidence\n- E1. ".str_repeat('\`` ', 60_000)."\n- E2. b";
+
+        self::assertSame([2], PullRequestTextRule::judge($task, 'E1')->missingItems);
+    }
+
+    #[TestWith(["## Heading `\n<!-- E1 -->\n`"], 'an ATX heading')]
+    #[TestWith(["Heading `\n=======\n<!-- E1 -->\n`"], 'a setext heading')]
+    #[TestWith(["Intro `\n- ~~~\n  content\n<!-- E1 -->\n`"], 'a fence opened after a list marker')]
+    #[TestWith(["Intro `\n- ~~~\n  content\n  ~~~\n<!-- E1 -->\n`"], 'a closed fence in a list item')]
+    #[TestWith(["Intro `\n```not-a-fence`\n<!-- E1 -->"], 'a line of inline code that looks like a fence')]
+    public function testAReferenceInACommentBehindABacktickThatCannotCrossABlockIsMissing(string $body): void
+    {
+        self::assertSame([1], PullRequestTextRule::judge("## Evidence\n- E1. output", $body)->missingItems);
+    }
+
+    public function testACommentAfterAFenceClosedAtTheContentColumnOfAnOrderedItemIsHidden(): void
+    {
+        self::assertSame([1], PullRequestTextRule::judge("## Evidence\n- E1. output", "10. ```\n    Example\n    ```\n    <!-- E1 -->")->missingItems);
+    }
+
+    public function testAReferenceInAFenceOpenedAfterATabbedMarkerCounts(): void
+    {
+        self::assertSame([], PullRequestTextRule::judge("## Evidence\n- E1. output", "-\t```\n\t<!-- E1 -->\n\n\t```")->missingItems);
+    }
+
+    public function testACommentAfterAFenceOpenedAfterATabbedMarkerIsHidden(): void
+    {
+        self::assertSame([1], PullRequestTextRule::judge("## Evidence\n- E1. output", "-\t~~~\n\tx\n\t~~~\n\t<!-- E1 -->")->missingItems);
     }
 
     public function testABodyOfFortyThousandCharactersWithACodeSpanIsOverTheCap(): void

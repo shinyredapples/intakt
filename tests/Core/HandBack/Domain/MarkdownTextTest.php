@@ -4,11 +4,18 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\HandBack\Domain;
 
+use Intakt\Core\HandBack\Domain\CodeSpans;
+use Intakt\Core\HandBack\Domain\FencedBlock;
 use Intakt\Core\HandBack\Domain\MarkdownText;
+use Intakt\Core\HandBack\Domain\ParagraphEnd;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(MarkdownText::class)]
+#[UsesClass(CodeSpans::class)]
+#[UsesClass(FencedBlock::class)]
+#[UsesClass(ParagraphEnd::class)]
 final class MarkdownTextTest extends TestCase
 {
     public function testAnHtmlCommentOnOneLineIsHidden(): void
@@ -105,6 +112,22 @@ final class MarkdownTextTest extends TestCase
     {
         self::assertSame("- ```\n  <!-- x -->\nafter ", MarkdownText::visible("- ```\n  <!-- x -->\nafter <!-- y -->"));
         self::assertSame("- ```\n\n\n- two", MarkdownText::visibleProse("- ```\n  code\n  ```\n- two"));
+    }
+
+    public function testAFenceOpenedAfterATabbedMarkerBelongsToThatItem(): void
+    {
+        self::assertSame("-\t```\n\n\n- two", MarkdownText::visibleProse("-\t```\n\tcode\n\t```\n- two"));
+        self::assertSame("1.\t~~~\n\t<!-- x -->\n\n\t~~~\nafter ", MarkdownText::visible("1.\t~~~\n\t<!-- x -->\n\n\t~~~\nafter <!-- y -->"));
+    }
+
+    public function testALineStartsAfterTheLineBreakBeforeIt(): void
+    {
+        self::assertSame([0, 0, 2, 2, 4], array_map(static fn (int $position): int => MarkdownText::lineStartAt("a\nb\n", $position), [0, 1, 2, 3, 4]));
+    }
+
+    public function testALineEndsAtItsLineBreakOrTheEndOfTheText(): void
+    {
+        self::assertSame([1, 1, 3, 3], array_map(static fn (int $position): int => MarkdownText::lineEndAt("a\nb", $position), [0, 1, 2, 3]));
     }
 
     public function testLongPartsAreReadWithoutExhaustingTheRegexEngine(): void

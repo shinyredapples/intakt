@@ -4,14 +4,20 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\HandBack\Domain;
 
+use Intakt\Core\HandBack\Domain\CodeSpans;
 use Intakt\Core\HandBack\Domain\EvidenceItems;
+use Intakt\Core\HandBack\Domain\FencedBlock;
 use Intakt\Core\HandBack\Domain\MarkdownText;
+use Intakt\Core\HandBack\Domain\ParagraphEnd;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(EvidenceItems::class)]
 #[UsesClass(MarkdownText::class)]
+#[UsesClass(CodeSpans::class)]
+#[UsesClass(FencedBlock::class)]
+#[UsesClass(ParagraphEnd::class)]
 final class EvidenceItemsTest extends TestCase
 {
     public function testTheTopLevelItemsUnderAnEvidenceLabelAreCounted(): void
@@ -178,6 +184,19 @@ final class EvidenceItemsTest extends TestCase
     public function testAHeadingAfterAParagraphThatEndedTheListEndsTheSection(): void
     {
         self::assertSame(1, EvidenceItems::countIn("## Evidence\n- E1. first\n\nA paragraph.\n\n  ## Notes\n- not evidence"));
+    }
+
+    public function testAnItemAfterAFenceOpenedAfterATabbedMarkerIsCounted(): void
+    {
+        self::assertSame(2, EvidenceItems::countIn("## Evidence\n-\t```\n\tx\n\t```\n- E2. b\n"));
+        self::assertSame(2, EvidenceItems::countIn("## Evidence\n-\t```\n\tx\n- E2. b\n"));
+    }
+
+    // The tab puts the item's content at column four, so the lines indented two are outside it: the second fence line opens a block of its own that holds the next item, as the reference CommonMark parser renders it.
+    public function testAnItemInAFenceOpenedLeftOfATabbedMarkersContentIsNotCounted(): void
+    {
+        self::assertSame(1, EvidenceItems::countIn("## Evidence\n-\t```\n  x\n  ```\n- E2. b\n"));
+        self::assertSame(1, EvidenceItems::countIn("## Evidence\n-   ```\n  x\n  ```\n- E2. b\n"));
     }
 
     public function testAnItemWithATabAfterItsMarkerIsCounted(): void
