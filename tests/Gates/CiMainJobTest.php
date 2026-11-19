@@ -59,7 +59,7 @@ final class CiMainJobTest extends TestCase
         $steps = $this->job('check')['steps'] ?? [];
         $names = array_map(static fn (array $step): string => $step['name'] ?? '', $steps);
         $record = $this->step('check', 'tested-tree');
-        $upload = $steps[\count($steps) - 1];
+        $upload = $steps[count($steps) - 1];
 
         self::assertGreaterThan(array_search('Run the gates', $names, true), array_search('Record the tested tree', $names, true));
         self::assertSame("github.event_name == 'pull_request'", $record['if'] ?? null);
@@ -80,7 +80,7 @@ final class CiMainJobTest extends TestCase
             }
         }
 
-        self::fail(\sprintf('The %s job has no step %s.', $job, $id));
+        self::fail(sprintf('The %s job has no step %s.', $job, $id));
     }
 
     /**
@@ -89,7 +89,7 @@ final class CiMainJobTest extends TestCase
     private function job(string $name): array
     {
         $jobs = $this->workflow()['jobs'];
-        self::assertArrayHasKey($name, $jobs, \sprintf('ci.yml has no %s job.', $name));
+        self::assertArrayHasKey($name, $jobs, sprintf('ci.yml has no %s job.', $name));
 
         return $jobs[$name];
     }

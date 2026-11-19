@@ -13,7 +13,7 @@ final class PrRunPassedTest extends SandboxTestCase
 {
     private const string SCRIPT = __DIR__.'/../../.github/ci/pr-run-passed.sh';
 
-    // The fake gh answers the two API calls of the script from files in the sandbox and applies the script's --jq filter.
+    // A fake gh, so the test needs no network: it answers the script's two API calls from files and applies its --jq filter.
     private const string FAKE_GH = <<<'SH'
         #!/bin/sh
         set -eu
@@ -84,7 +84,7 @@ final class PrRunPassedTest extends SandboxTestCase
 
     public function testAFailingArtifactsCallExitsNonZeroAndPrintsNoAnswer(): void
     {
-        // No artifacts file for the run: the fake gh's jq fails like an API error.
+        // The run has no artifacts file, so the fake gh fails like an API error.
         $result = $this->answer($this->sandboxWithRuns([['id' => 7, 'head_repository' => ['full_name' => 'example/intakt']]]));
 
         self::assertFalse($result->succeeded());
@@ -120,6 +120,6 @@ final class PrRunPassedTest extends SandboxTestCase
     /** @param array<string, mixed> $value */
     private function json(array $value): string
     {
-        return json_encode($value, \JSON_THROW_ON_ERROR);
+        return json_encode($value, JSON_THROW_ON_ERROR);
     }
 }
