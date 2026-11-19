@@ -79,6 +79,7 @@ final readonly class RoundLedger
             decision: $verdict->verdict,
             findings: count($verdict->findings),
             mode: $this->modes->of($reviewer->round()->project()),
+            reason: $verdict->blockedReason(),
         ));
     }
 

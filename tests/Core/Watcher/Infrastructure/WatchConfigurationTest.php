@@ -14,7 +14,7 @@ use Symfony\Component\Config\Definition\Processor;
 #[CoversClass(WatchConfiguration::class)]
 final class WatchConfigurationTest extends TestCase
 {
-    public function testAWatchSectionWithEveryKeyIsAccepted(): void
+    public function testAWatchSectionWithOnlyTheRequiredKeysIsAccepted(): void
     {
         $projects = $this->processed(['repository' => '/r', 'base' => 'main', 'task' => 'Review.']);
 
@@ -26,6 +26,42 @@ final class WatchConfigurationTest extends TestCase
         $projects = $this->processed(['repository' => '/r', 'base' => 'main', 'task' => 'Review.', 'github' => 'acme/widgets']);
 
         self::assertSame(['alpha' => ['repository' => '/r', 'base' => 'main', 'task' => 'Review.', 'github' => 'acme/widgets']], $projects);
+    }
+
+    public function testAnEligibilityLabelIsAccepted(): void
+    {
+        $projects = $this->processed(['repository' => '/r', 'base' => 'main', 'task' => 'Review.', 'eligibility_label' => 'build']);
+
+        self::assertSame(['alpha' => ['repository' => '/r', 'base' => 'main', 'task' => 'Review.', 'eligibility_label' => 'build']], $projects);
+    }
+
+    public function testABlankEligibilityLabelIsRefused(): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+
+        $this->processed(['repository' => '/r', 'base' => 'main', 'task' => 'Review.', 'eligibility_label' => '']);
+    }
+
+    public function testAWhitespaceEligibilityLabelIsRefused(): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+
+        $this->processed(['repository' => '/r', 'base' => 'main', 'task' => 'Review.', 'eligibility_label' => " \u{00A0}\t"]);
+    }
+
+    public function testAnEligibilityLabelOfOnlyANoBreakSpaceIsRefused(): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+        $this->expectExceptionMessageMatches('/"eligibility_label" key must not be blank/');
+
+        $this->processed(['repository' => '/r', 'base' => 'main', 'task' => 'Review.', 'eligibility_label' => "\u{00A0}"]);
+    }
+
+    public function testAnEligibilityLabelWithSpacesInsideIsAccepted(): void
+    {
+        $projects = $this->processed(['repository' => '/r', 'base' => 'main', 'task' => 'Review.', 'eligibility_label' => 'ready to build']);
+
+        self::assertSame(['alpha' => ['repository' => '/r', 'base' => 'main', 'task' => 'Review.', 'eligibility_label' => 'ready to build']], $projects);
     }
 
     #[DataProvider('misspelledRepositories')]
