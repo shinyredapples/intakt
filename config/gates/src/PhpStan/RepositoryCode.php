@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Gates\PhpStan;
 
-/**
- * The folders whose code the repository owns, shared by the rules that judge only that code so their coverage cannot drift apart.
- */
+// one list for every rule that judges only the repository's own code, so their coverage cannot drift apart
 final readonly class RepositoryCode
 {
     private const array FOLDERS = ['/src/', '/tests/', '/bin/', '/config/gates/src/'];
