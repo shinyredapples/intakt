@@ -332,7 +332,9 @@ final class DependencySnapshotsTest extends TestCase
     {
         $pins = is_dir($this->directory.'/store/.pins') ? array_filter($this->pathsUnder($this->directory.'/store/.pins'), is_file(...)) : [];
 
-        return [...array_values($pins), ...(array) glob($this->directory.'/locks/*dependency-snapshot-*')];
+        $locks = glob($this->directory.'/locks/*dependency-snapshot-*');
+
+        return [...array_values($pins), ...(false === $locks ? [] : $locks)];
     }
 
     /**
