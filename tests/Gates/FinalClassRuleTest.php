@@ -15,6 +15,7 @@ use Symfony\Component\Process\Process;
  * @extends PhpStanRuleTestCase<FinalClassRule>
  */
 #[CoversClass(FinalClassRule::class)]
+#[UsesClass(RepositoryCode::class)]
 #[UsesClass(StaticAnalysisGate::class)]
 final class FinalClassRuleTest extends PhpStanRuleTestCase
 {
