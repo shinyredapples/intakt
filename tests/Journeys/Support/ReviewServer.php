@@ -24,9 +24,9 @@ final readonly class ReviewServer
         $process = new Process([PHP_BINARY, '-d', 'variables_order=EGPCS', '-S', '127.0.0.1:'.$port, '-t', self::ROOT.'/public', self::ROOT.'/public/index.php'], self::ROOT, ['DASHBOARD_PORT' => (string) $port]);
         $process->start();
         $server = new self($process, $port);
-        $until = microtime(true) + self::BOOT_SECONDS;
+        $until = MonotonicSeconds::now() + self::BOOT_SECONDS;
 
-        while (microtime(true) < $until) {
+        while (MonotonicSeconds::now() < $until) {
             $socket = @fsockopen('127.0.0.1', $port, $code, $message, 0.2);
 
             if (false !== $socket) {
@@ -55,7 +55,12 @@ final readonly class ReviewServer
 
     private static function freePort(): int
     {
-        $socket = stream_socket_server('tcp://127.0.0.1:0', $code, $message) ?: throw new RuntimeException('No free port: '.$message);
+        $socket = stream_socket_server('tcp://127.0.0.1:0', $code, $message);
+
+        if (false === $socket) {
+            throw new RuntimeException('No free port: '.$message);
+        }
+
         $port = (int) array_last(explode(':', (string) stream_socket_get_name($socket, false)));
         fclose($socket);
 

@@ -36,7 +36,7 @@ final class ScriptedJourneyVendorTest extends TestCase
     public function testAReviewGoesToTheShippedVendorOnceAScriptIsSet(): void
     {
         $answer = new VendorReview(new Verdict(Decision::Blocked, [], [], []));
-        $shipped = $this->createStub(Vendor::class);
+        $shipped = self::createStub(Vendor::class);
         $shipped->method('review')->willReturn($answer);
 
         $review = new ScriptedJourneyVendor(new JourneyVendor(), $shipped, '/script')->review('sample', Tier::Standard, $this->request());
@@ -46,7 +46,7 @@ final class ScriptedJourneyVendorTest extends TestCase
 
     public function testTheQuickVendorAnswersTheMappingWhetherOrNotAScriptIsSet(): void
     {
-        $shipped = $this->createStub(Vendor::class);
+        $shipped = self::createStub(Vendor::class);
         $shipped->method('mapsAModelTo')->willReturn(false);
 
         self::assertTrue(new ScriptedJourneyVendor(new JourneyVendor(), $shipped, '/script')->mapsAModelTo('sample', Tier::Standard));

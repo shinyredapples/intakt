@@ -38,6 +38,14 @@ final class ScriptedHttpClientTest extends TestCase
         self::assertSame('inner', $client->request('POST', self::MESSAGES)->getContent());
     }
 
+    public function testOptionsReachTheInnerClient(): void
+    {
+        $inner = new MockHttpClient(static fn (string $method, string $url): MockResponse => new MockResponse($url));
+        $client = new ScriptedHttpClient($inner, null)->withOptions(['base_uri' => 'https://example.com/']);
+
+        self::assertSame('https://example.com/path', $client->request('GET', 'path')->getContent());
+    }
+
     public function testARequestToAnotherHostGoesToTheInnerClientEvenWithAScript(): void
     {
         $client = new ScriptedHttpClient(new MockHttpClient(new MockResponse('inner')), $this->directory);

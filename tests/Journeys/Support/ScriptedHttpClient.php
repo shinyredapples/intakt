@@ -29,6 +29,9 @@ final class ScriptedHttpClient implements HttpClientInterface
     ) {
     }
 
+    /**
+     * @param array<mixed> $options
+     */
     #[Override]
     public function request(string $method, string $url, array $options = []): ResponseInterface
     {
@@ -49,13 +52,13 @@ final class ScriptedHttpClient implements HttpClientInterface
         return $first instanceof MockResponse && $this->scripted instanceof MockHttpClient ? $this->scripted->stream($responses, $timeout) : $this->inner->stream($responses, $timeout);
     }
 
+    /**
+     * @param array<mixed> $options
+     */
     #[Override]
     public function withOptions(array $options): static
     {
-        $clone = clone $this;
-        $clone->scripted = null;
-
-        return $clone;
+        return new self($this->inner->withOptions($options), $this->script);
     }
 
     /**

@@ -11,6 +11,7 @@ use Symfony\Component\Filesystem\Filesystem;
 
 #[CoversClass(ScriptDirectory::class)]
 #[UsesClass(CallRecords::class)]
+#[UsesClass(MonotonicSeconds::class)]
 final class ScriptDirectoryTest extends TestCase
 {
     private string $directory = '';
@@ -42,11 +43,11 @@ final class ScriptDirectoryTest extends TestCase
 
     public function testACallIsNotHeldWithoutAHoldFile(): void
     {
-        $started = microtime(true);
+        $started = MonotonicSeconds::now();
 
         new ScriptDirectory($this->directory)->holdWhileScripted(1);
 
-        self::assertLessThan(1.0, microtime(true) - $started);
+        self::assertLessThan(1.0, MonotonicSeconds::now() - $started);
     }
 
     public function testAHeldCallGoesOnOnceAllCallsAreReleased(): void
@@ -54,11 +55,11 @@ final class ScriptDirectoryTest extends TestCase
         touch($this->directory.'/'.ScriptDirectory::HOLD);
         $script = new ScriptDirectory($this->directory);
         $script->releaseAll();
-        $started = microtime(true);
+        $started = MonotonicSeconds::now();
 
         $script->holdWhileScripted(1);
 
-        self::assertLessThan(1.0, microtime(true) - $started);
+        self::assertLessThan(1.0, MonotonicSeconds::now() - $started);
     }
 
     public function testAHeldCallGoesOnOnceItIsReleasedItself(): void
@@ -67,11 +68,11 @@ final class ScriptDirectoryTest extends TestCase
         $script = new ScriptDirectory($this->directory);
         $call = $script->callStarted();
         $script->release($call);
-        $started = microtime(true);
+        $started = MonotonicSeconds::now();
 
         $script->holdWhileScripted($call);
 
-        self::assertLessThan(1.0, microtime(true) - $started);
+        self::assertLessThan(1.0, MonotonicSeconds::now() - $started);
     }
 
     public function testReleasingOneCallLeavesTheOthersHeld(): void

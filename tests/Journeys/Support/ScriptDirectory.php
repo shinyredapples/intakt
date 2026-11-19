@@ -6,7 +6,7 @@ namespace Intakt\Tests\Journeys\Support;
 
 use RuntimeException;
 
-// The files a scripted provider call and its journey share: one start and one end file per call, and the files that decide how long a call is held and how heavy it leaves its process.
+// Files, because a scripted call runs in a worker process of the consumer, which the journey can reach only through them: one start and one end file per call, and the files that decide how long a call is held and how heavy it leaves its process.
 final readonly class ScriptDirectory
 {
     public const string RELEASE = 'release';
@@ -34,7 +34,7 @@ final readonly class ScriptDirectory
                 continue;
             }
 
-            fwrite($file, json_encode(['pid' => getmypid(), 'at' => microtime(true)], JSON_THROW_ON_ERROR));
+            fwrite($file, json_encode(['pid' => getmypid(), 'at' => MonotonicSeconds::now()], JSON_THROW_ON_ERROR));
             fclose($file);
 
             return $call;
@@ -43,7 +43,7 @@ final readonly class ScriptDirectory
 
     public function callEnded(int $call): void
     {
-        file_put_contents($this->file($call, 'end'), json_encode(['pid' => getmypid(), 'at' => microtime(true)], JSON_THROW_ON_ERROR));
+        file_put_contents($this->file($call, 'end'), json_encode(['pid' => getmypid(), 'at' => MonotonicSeconds::now()], JSON_THROW_ON_ERROR));
     }
 
     public function holdWhileScripted(int $call): void
@@ -52,9 +52,9 @@ final readonly class ScriptDirectory
             return;
         }
 
-        $until = microtime(true) + self::HOLD_SECONDS;
+        $until = MonotonicSeconds::now() + self::HOLD_SECONDS;
 
-        while (microtime(true) < $until && !$this->released($call)) {
+        while (MonotonicSeconds::now() < $until && !$this->released($call)) {
             usleep(self::POLL_MICROSECONDS);
         }
     }

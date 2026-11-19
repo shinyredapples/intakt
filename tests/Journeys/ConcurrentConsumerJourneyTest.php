@@ -16,6 +16,7 @@ use Intakt\Tests\Journeys\Support\CallRecords;
 use Intakt\Tests\Journeys\Support\ConsumerProcess;
 use Intakt\Tests\Journeys\Support\InstanceDatabase;
 use Intakt\Tests\Journeys\Support\JourneyTestCase;
+use Intakt\Tests\Journeys\Support\MonotonicSeconds;
 use Intakt\Tests\Journeys\Support\ReviewServer;
 use Intakt\Tests\Journeys\Support\ScriptDirectory;
 use PHPUnit\Framework\Attributes\CoversNothing;
@@ -27,7 +28,7 @@ use Symfony\Component\Messenger\Stamp\HandledStamp;
 use Symfony\Component\Semaphore\SemaphoreFactory;
 use Symfony\Component\Semaphore\SemaphoreInterface;
 
-// Proves what part 2 of the 8.2 adoption relies on: one `messenger:consume async --concurrency` process, started as the container entrypoint starts its consumer, over the shipped reviewer, its account limit and its stop check, answered by a scripted Anthropic API.
+// Over the shipped reviewer, its account limit and its stop check, answered by a scripted Anthropic API, because part 2 of the 8.2 adoption starts the container's consumer as one `messenger:consume async --concurrency` process only if these cases hold.
 #[CoversNothing]
 #[Group('journeys')]
 final class ConcurrentConsumerJourneyTest extends JourneyTestCase
@@ -36,10 +37,10 @@ final class ConcurrentConsumerJourneyTest extends JourneyTestCase
     private const string PLACEHOLDER_KEY = 'journey-placeholder';
     private const string TRANSPORT = 'async';
     private const int CONCURRENCY = 2;
-    // Docker's default grace time of `docker stop`.
+    // Docker's default grace time, because `docker stop` kills the container once it has passed.
     private const float GRACE_SECONDS = 10.0;
     private const float WAIT_SECONDS = 40.0;
-    // How long docker/entrypoint.sh waits after its SIGTERM before it kills what still runs, inside Docker's 10 seconds.
+    // What docker/entrypoint.sh waits after its SIGTERM before it kills what still runs, so a consumer still running then is killed inside Docker's 10 seconds.
     private const float ENTRYPOINT_WAIT_SECONDS = 8.0;
     private const int ACCOUNT_CAP = 3;
     // Far above what the consumer itself uses, so only a worker that made a call crosses it.
@@ -174,8 +175,8 @@ final class ConcurrentConsumerJourneyTest extends JourneyTestCase
         $this->openRound();
 
         $this->waitUntil(fn (): bool => 2 === CallRecords::in($this->script)->started(), 'the two reviewers did not both start: '.$this->consumer()->output());
-        $reviewer = $this->database()->payloads('reviewer_started', 1)[0]['reviewer'] ?? self::fail('no reviewer started');
-        $flash = $this->serviceWith(ReviewerStops::class, $this->environment())->requestStopOf($this->roundId, (string) $reviewer);
+        $reviewer = $this->database()->payloads('reviewer_started', 1)[0]['reviewer'] ?? null;
+        $flash = $this->serviceWith(ReviewerStops::class, $this->environment())->requestStopOf($this->roundId, is_string($reviewer) ? $reviewer : self::fail('no reviewer started'));
 
         self::assertSame(['success', 'Asked the reviewer to stop.'], $flash);
         $this->releaseOneByOne();
@@ -183,7 +184,7 @@ final class ConcurrentConsumerJourneyTest extends JourneyTestCase
         self::assertSame($stopped + 1, $this->database()->ledgerRows('reviewer_stopped'));
     }
 
-    // A consumer at its limit handles the message it received and ends with status 0, and the next consumer (the entrypoint starts one) goes on. Observed, not wished for: it fetches --fetch-size messages at once, by default its --concurrency, and leaves the ones it had not handled marked as delivered, which the Doctrine transport hands out again only after redeliver_timeout (90 minutes); with --fetch-size=1 it leaves none.
+    // A consumer at its limit handles the message it received and ends with status 0, so the next consumer the entrypoint starts goes on. Observed, not wished for: it fetches --fetch-size messages at once, by default its --concurrency, and leaves the ones it had not handled marked as delivered, which the Doctrine transport hands out again only after redeliver_timeout (90 minutes); with --fetch-size=1 it leaves none.
     private function replaceAConsumerAtItsMessageLimit(): void
     {
         $this->arm(hold: false);
@@ -214,7 +215,7 @@ final class ConcurrentConsumerJourneyTest extends JourneyTestCase
         file_put_contents($this->script.'/'.ScriptDirectory::WEIGHT, (string) self::WORKER_WEIGHT_MB);
         $consumer = $this->consume(['--concurrency='.self::CONCURRENCY, '--memory-limit='.self::MEMORY_LIMIT_MB.'M', '--time-limit=200']);
 
-        // The last reviewer the limit step left, then a whole round.
+        // The last reviewer the limit step left comes first, so its round is judged before the next one opens.
         $this->waitForJudge();
         $this->openRound();
         $this->waitForJudge();
@@ -262,7 +263,7 @@ final class ConcurrentConsumerJourneyTest extends JourneyTestCase
         self::assertSame(2, $this->database()->queued(ReviewWithReviewer::class));
     }
 
-    // A fresh set of calls for the next case; the earlier case's calls have all ended.
+    // Fresh for each case, so a case never counts the calls of the one before.
     private function arm(bool $hold, bool $settled = true): void
     {
         // Settled first, because a reviewer message is acknowledged after its call ended, and the next case must not see it.
@@ -321,7 +322,7 @@ final class ConcurrentConsumerJourneyTest extends JourneyTestCase
     {
         $consumer = $this->consume(['--concurrency='.self::CONCURRENCY, '--limit=1', '--time-limit=60', ...$options]);
 
-        self::assertNotNull($consumer->endedWithin(self::WAIT_SECONDS, microtime(true)), 'the consumer did not stop at its limit: '.$consumer->output());
+        self::assertNotNull($consumer->endedWithin(self::WAIT_SECONDS, MonotonicSeconds::now()), 'the consumer did not stop at its limit: '.$consumer->output());
         self::assertSame(0, $consumer->exitCode(), $consumer->output());
     }
 
@@ -352,11 +353,14 @@ final class ConcurrentConsumerJourneyTest extends JourneyTestCase
         }
     }
 
+    /**
+     * @param callable(): bool $condition
+     */
     private function waitUntil(callable $condition, string $failure): void
     {
-        $until = microtime(true) + self::WAIT_SECONDS;
+        $until = MonotonicSeconds::now() + self::WAIT_SECONDS;
 
-        while (microtime(true) < $until) {
+        while (MonotonicSeconds::now() < $until) {
             if ($condition()) {
                 return;
             }

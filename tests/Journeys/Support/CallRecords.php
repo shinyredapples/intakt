@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Journeys\Support;
 
-// What the scripted provider calls of one run wrote: each call's process, start and end, read back for the journey's assertions.
+use RuntimeException;
+
+// Read back from the files, because the calls ran in the consumer's worker processes and not in the journey's own.
 final readonly class CallRecords
 {
     /**
@@ -17,12 +19,12 @@ final readonly class CallRecords
     public static function in(string $directory): self
     {
         $calls = [];
+        $files = glob($directory.'/calls/*.start');
 
-        foreach (glob($directory.'/calls/*.start') ?: [] as $file) {
+        foreach (false === $files ? [] : $files as $file) {
             $call = (int) basename($file, '.start');
-            $start = self::read($file);
-            $end = is_file($directory.'/calls/'.$call.'.end') ? self::read($directory.'/calls/'.$call.'.end') : null;
-            $calls[] = ['call' => $call, 'pid' => (int) ($start['pid'] ?? 0), 'start' => (float) ($start['at'] ?? 0.0), 'end' => null === $end ? null : (float) ($end['at'] ?? 0.0)];
+            $end = $directory.'/calls/'.$call.'.end';
+            $calls[] = ['call' => $call, 'pid' => self::pidIn($file), 'start' => self::momentIn($file), 'end' => is_file($end) ? self::momentIn($end) : null];
         }
 
         usort($calls, static fn (array $a, array $b): int => $a['call'] <=> $b['call']);
@@ -40,7 +42,7 @@ final readonly class CallRecords
         return count(array_filter($this->calls, static fn (array $call): bool => null !== $call['end']));
     }
 
-    // The most calls that were running at the same moment; a call without an end counts as running to the end.
+    // A call without an end counts as running to the end, because a held call that never ended still overlapped everything after its start.
     public function mostAtOnce(): int
     {
         $moments = [];
@@ -71,8 +73,22 @@ final readonly class CallRecords
         return array_values(array_unique(array_column($this->calls, 'pid')));
     }
 
+    private static function pidIn(string $file): int
+    {
+        $pid = self::read($file)['pid'] ?? null;
+
+        return is_int($pid) ? $pid : throw new RuntimeException('The call record '.$file.' names no process.');
+    }
+
+    private static function momentIn(string $file): float
+    {
+        $moment = self::read($file)['at'] ?? null;
+
+        return is_float($moment) || is_int($moment) ? (float) $moment : throw new RuntimeException('The call record '.$file.' names no moment.');
+    }
+
     /**
-     * @return array<string,mixed>
+     * @return array<mixed>
      */
     private static function read(string $file): array
     {

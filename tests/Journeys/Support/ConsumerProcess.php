@@ -6,13 +6,13 @@ namespace Intakt\Tests\Journeys\Support;
 
 use Symfony\Component\Process\Process;
 
-// One messenger:consume process of the instance, started as the container entrypoint starts its consumer (the console, the transport, the options), that a journey signals and waits for.
+// Started with plain `php bin/console`, as docker/entrypoint.sh starts its consumer, so the journey signals the process the container would signal.
 final readonly class ConsumerProcess
 {
     private const string ROOT = __DIR__.'/../../..';
     private const float POLL_SECONDS = 0.05;
 
-    private function __construct(private Process $process, private float $startedAt)
+    private function __construct(private Process $process)
     {
     }
 
@@ -25,7 +25,7 @@ final readonly class ConsumerProcess
         $process = new Process([PHP_BINARY, self::ROOT.'/bin/console', '--no-interaction', 'messenger:consume', $transport, ...$options], self::ROOT, $environment, null, null);
         $process->start();
 
-        return new self($process, microtime(true));
+        return new self($process);
     }
 
     public function pid(): int
@@ -38,20 +38,20 @@ final readonly class ConsumerProcess
         return $this->process->isRunning();
     }
 
-    // As `docker stop` signals the container's first process.
+    // SIGTERM, because that is what `docker stop` sends the container's first process; returns the moment it was sent.
     public function terminate(): float
     {
         $this->process->signal(SIGTERM);
 
-        return microtime(true);
+        return MonotonicSeconds::now();
     }
 
-    // Seconds from the given moment until the process ended, or null when it still ran after the deadline; it is killed then, so a failed journey leaves no consumer behind.
+    // Killed once the deadline passed, so a failed journey leaves no consumer behind; null then, else the seconds from the given moment until it ended.
     public function endedWithin(float $seconds, float $since): ?float
     {
         $deadline = $since + $seconds;
 
-        while ($this->process->isRunning() && microtime(true) < $deadline) {
+        while ($this->process->isRunning() && MonotonicSeconds::now() < $deadline) {
             usleep((int) (self::POLL_SECONDS * 1_000_000));
         }
 
@@ -61,7 +61,7 @@ final readonly class ConsumerProcess
             return null;
         }
 
-        return microtime(true) - $since;
+        return MonotonicSeconds::now() - $since;
     }
 
     public function hasPrinted(string $text): bool
@@ -84,10 +84,5 @@ final readonly class ConsumerProcess
         if ($this->process->isRunning()) {
             $this->process->stop(0, SIGKILL);
         }
-    }
-
-    public function secondsSinceStart(): float
-    {
-        return microtime(true) - $this->startedAt;
     }
 }

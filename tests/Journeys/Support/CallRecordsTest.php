@@ -6,6 +6,7 @@ namespace Intakt\Tests\Journeys\Support;
 
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
+use RuntimeException;
 use Symfony\Component\Filesystem\Filesystem;
 
 #[CoversClass(CallRecords::class)]
@@ -26,8 +27,10 @@ final class CallRecordsTest extends TestCase
 
     public function testTwoCallsThatRanAtTheSameMomentOverlap(): void
     {
-        $this->call(1, 100, 1.0, 3.0);
-        $this->call(2, 101, 2.0, 4.0);
+        $this->record(1, 'start', ['pid' => 100, 'at' => 1.0]);
+        $this->record(1, 'end', ['pid' => 100, 'at' => 3.0]);
+        $this->record(2, 'start', ['pid' => 101, 'at' => 2.0]);
+        $this->record(2, 'end', ['pid' => 101, 'at' => 4.0]);
 
         $calls = CallRecords::in($this->directory);
 
@@ -37,16 +40,19 @@ final class CallRecordsTest extends TestCase
 
     public function testACallThatBeganAsAnotherEndedDoesNotOverlapIt(): void
     {
-        $this->call(1, 100, 1.0, 2.0);
-        $this->call(2, 100, 2.0, 3.0);
+        $this->record(1, 'start', ['pid' => 100, 'at' => 1.0]);
+        $this->record(1, 'end', ['pid' => 100, 'at' => 2.0]);
+        $this->record(2, 'start', ['pid' => 100, 'at' => 2.0]);
+        $this->record(2, 'end', ['pid' => 100, 'at' => 3.0]);
 
         self::assertSame(1, CallRecords::in($this->directory)->mostAtOnce());
     }
 
     public function testACallWithoutAnEndCountsAsRunningToTheEnd(): void
     {
-        $this->call(1, 100, 1.0, null);
-        $this->call(2, 101, 5.0, 6.0);
+        $this->record(1, 'start', ['pid' => 100, 'at' => 1.0]);
+        $this->record(2, 'start', ['pid' => 101, 'at' => 5.0]);
+        $this->record(2, 'end', ['pid' => 101, 'at' => 6.0]);
 
         $calls = CallRecords::in($this->directory);
 
@@ -60,12 +66,29 @@ final class CallRecordsTest extends TestCase
         self::assertSame([0, 0, 0], [$calls->started(), $calls->ended(), $calls->mostAtOnce()]);
     }
 
-    private function call(int $call, int $pid, float $start, ?float $end): void
+    public function testARecordWithoutAProcessIsRefused(): void
     {
-        file_put_contents($this->directory.'/calls/'.$call.'.start', json_encode(['pid' => $pid, 'at' => $start], JSON_THROW_ON_ERROR));
+        $this->record(1, 'start', ['at' => 1.0]);
 
-        if (null !== $end) {
-            file_put_contents($this->directory.'/calls/'.$call.'.end', json_encode(['pid' => $pid, 'at' => $end], JSON_THROW_ON_ERROR));
-        }
+        $this->expectException(RuntimeException::class);
+
+        CallRecords::in($this->directory);
+    }
+
+    public function testARecordThatIsNoJsonIsRefused(): void
+    {
+        file_put_contents($this->directory.'/calls/1.start', 'not json');
+
+        $this->expectException(RuntimeException::class);
+
+        CallRecords::in($this->directory);
+    }
+
+    /**
+     * @param array<string,mixed> $data
+     */
+    private function record(int $call, string $kind, array $data): void
+    {
+        file_put_contents($this->directory.'/calls/'.$call.'.'.$kind, json_encode($data, JSON_THROW_ON_ERROR));
     }
 }

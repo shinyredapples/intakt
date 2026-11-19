@@ -29,19 +29,17 @@ final readonly class InstanceDatabase
         return new self(new PDO('sqlite:'.substr($url, strlen(self::SCHEME)), null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]));
     }
 
-    // The messages of the async transport whose body names the class, delivered or not.
     public function queued(string $messageClass): int
     {
         return $this->count('SELECT COUNT(*) FROM '.self::QUEUE.' WHERE queue_name = ? AND (body || headers) LIKE ?', [self::DEFAULT_QUEUE, '%'.str_replace('\\', '%', $messageClass).'%']);
     }
 
-    // Every message of the async transport, of any class, delivered or not.
     public function waiting(): int
     {
         return $this->count('SELECT COUNT(*) FROM '.self::QUEUE.' WHERE queue_name = ?', [self::DEFAULT_QUEUE]);
     }
 
-    // The messages a consumer fetched and has not acknowledged, which stay on the transport until it does.
+    // Counted apart, because the Doctrine transport hands a delivered message out again only after redeliver_timeout.
     public function fetchedNotAcknowledged(string $messageClass): int
     {
         return $this->count('SELECT COUNT(*) FROM '.self::QUEUE.' WHERE queue_name = ? AND delivered_at IS NOT NULL AND (body || headers) LIKE ?', [self::DEFAULT_QUEUE, '%'.str_replace('\\', '%', $messageClass).'%']);
@@ -57,9 +55,8 @@ final readonly class InstanceDatabase
         return $this->count('SELECT COUNT(*) FROM ledger_event WHERE kind = ?', [$kind]);
     }
 
-    // The newest payloads of the kind, newest first.
     /**
-     * @return list<array<string,mixed>>
+     * @return list<array<mixed>>
      */
     public function payloads(string $kind, int $limit): array
     {
