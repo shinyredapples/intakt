@@ -378,14 +378,140 @@ final class GitHubWatchReadsTest extends TestCase
         self::assertSame('10|pull_request|https://github.com/acme/widgets/pull/7|2026-11-02T09:00:00+00:00|1', $run->origin->name.'|'.$run->origin->event.'|'.$run->origin->change?->value.'|'.$run->startedAt->format('c').'|'.$run->number);
     }
 
-    public function testACheckSuiteIsNamedAfterItsAppAndItsEventIsCheckSuite(): void
+    public function testACheckSuiteOfNoWorkflowRunIsNamedAfterItsOwnIdAndItsEventIsCheckSuite(): void
     {
         $this->runs = 'runs_none.json';
         $this->suites = 'suites_green.json';
 
         $origin = $this->state()->runs[0]->origin;
 
-        self::assertSame('Lint App|check_suite', $origin->name.'|'.$origin->event);
+        self::assertSame('suite:401|check_suite|https://github.com/acme/widgets/pull/7', $origin->name.'|'.$origin->event.'|'.$origin->change?->value);
+    }
+
+    public function testTwoCheckSuitesOfNoWorkflowRunOfOneAppNeverReplaceEachOther(): void
+    {
+        $this->runs = 'runs_none.json';
+        $this->suites = 'suites_linked_queued_and_newer_green.json';
+
+        [$queued, $green] = $this->state()->runs;
+
+        self::assertSame(CiRunState::Unfinished, $queued->state);
+        self::assertFalse($green->isNewerRunOf($queued));
+    }
+
+    public function testALinkedCheckSuiteTakesTheWorkflowEventAndPullRequestOfItsRunAndKeepsItsOwnStateAndCreationTime(): void
+    {
+        $this->runs = 'runs_linked_queued_and_newer_green.json';
+        $this->suites = 'suites_linked_queued_and_newer_green.json';
+
+        $suite = $this->state()->runs[2];
+
+        self::assertSame('suite-of-workflow:10|pull_request|https://github.com/acme/widgets/pull/7|queued|2026-11-11T20:30:00+00:00|1', $suite->origin->name.'|'.$suite->origin->event.'|'.$suite->origin->change?->value.'|'.$suite->state->value.'|'.$suite->startedAt->format('c').'|'.$suite->number);
+    }
+
+    public function testAQueuedLinkedCheckSuiteWithoutCheckRunsIsReplacedByTheNewerSuiteOfARunForTheSamePullRequest(): void
+    {
+        $this->runs = 'runs_linked_queued_and_newer_green.json';
+        $this->suites = 'suites_linked_queued_and_newer_green.json';
+
+        [, , $queued, $green] = $this->state()->runs;
+
+        self::assertTrue($green->isNewerRunOf($queued));
+    }
+
+    public function testAQueuedLinkedCheckSuiteIsNotReplacedByTheNewerSuiteOfARunForAnotherPullRequestWhenBothSuitesListNoPullRequest(): void
+    {
+        $this->runs = 'runs_linked_queued_and_newer_green_of_another_pull_request.json';
+        $this->suites = 'suites_linked_queued_and_newer_green.json';
+
+        [, , $queued, $green] = $this->state()->runs;
+
+        self::assertFalse($green->isNewerRunOf($queued));
+    }
+
+    public function testAQueuedLinkedCheckSuiteOfAPullRequestRunIsNotReplacedByTheNewerSuiteOfAPushRunOfTheSameWorkflow(): void
+    {
+        $this->runs = 'runs_linked_queued_pull_request_and_newer_green_push.json';
+        $this->suites = 'suites_linked_queued_and_newer_green.json';
+
+        [, , $queued, $green] = $this->state()->runs;
+
+        self::assertFalse($green->isNewerRunOf($queued));
+    }
+
+    public function testAQueuedLinkedCheckSuiteThatHasCheckRunsIsUnfinished(): void
+    {
+        $this->runs = 'runs_linked_queued_and_newer_green.json';
+        $this->suites = 'suites_linked_queued_with_check_runs_and_newer_green.json';
+
+        self::assertSame(CiRunState::Unfinished, $this->state()->runs[2]->state);
+    }
+
+    public function testAQueuedLinkedCheckSuiteWithoutACountIsUnfinished(): void
+    {
+        $this->runs = 'runs_linked_queued_and_newer_green.json';
+        $this->suites = 'suites_linked_queued_without_a_count_and_newer_green.json';
+
+        self::assertSame(CiRunState::Unfinished, $this->state()->runs[2]->state);
+    }
+
+    public function testAQueuedCheckSuiteOfAPullRequestRunWhosePullRequestGitHubLeftOutIsUnfinished(): void
+    {
+        $this->runs = 'runs_linked_queued_and_newer_green_without_their_pull_request.json';
+        $this->suites = 'suites_linked_queued_and_newer_green.json';
+
+        self::assertSame(CiRunState::Unfinished, $this->state()->runs[2]->state);
+    }
+
+    public function testAHeadWhoseQueuedRunAndQueuedSuiteANewerGreenRunAndSuiteReplacedIsGreen(): void
+    {
+        $this->runs = 'runs_linked_queued_and_newer_green.json';
+        $this->suites = 'suites_linked_queued_and_newer_green.json';
+
+        self::assertSame(HeadAdmission::Green, new AdmissionDecision()->admissionOf($this->state()));
+    }
+
+    public function testAGreenRunCreatedAfterItsOwnQueuedSuiteDoesNotReplaceThatSuite(): void
+    {
+        $this->runs = 'runs_green_created_after_its_queued_suite.json';
+        $this->suites = 'suites_linked_queued_and_newer_green.json';
+
+        self::assertSame(HeadAdmission::Pending, new AdmissionDecision()->admissionOf($this->state()));
+    }
+
+    public function testAHeadWhoseQueuedRunAndSuiteANewerRunAndSuiteOfTheSameSecondReplacedIsGreen(): void
+    {
+        $this->runs = 'runs_linked_queued_and_newer_green_in_one_second.json';
+        $this->suites = 'suites_linked_queued_and_newer_green_in_one_second.json';
+
+        self::assertSame(HeadAdmission::Green, new AdmissionDecision()->admissionOf($this->state()));
+    }
+
+    public function testTwoWorkflowRunsLinkedToOneCheckSuiteRaiseAReadFailure(): void
+    {
+        $this->runs = 'runs_linked_twice_to_one_suite.json';
+
+        $this->expectExceptionObject(new ForgeReadFailed('GitHub linked two workflow runs to one check suite.'));
+
+        $this->state();
+    }
+
+    public function testAWorkflowRunWithACheckSuiteIdThatIsNotAPositiveNumberRaisesAReadFailure(): void
+    {
+        $this->runs = 'runs_with_a_check_suite_id_that_is_not_a_number.json';
+
+        $this->expectExceptionObject(new ForgeReadFailed('GitHub answered without a positive "check_suite_id".'));
+
+        $this->state();
+    }
+
+    public function testACheckSuiteWithoutItsIdRaisesAReadFailure(): void
+    {
+        $this->suites = 'suites_without_id.json';
+
+        $this->expectExceptionObject(new ForgeReadFailed('GitHub answered without a positive "id".'));
+
+        $this->state();
     }
 
     public function testTheRunsAreAskedForTheExactHead(): void
