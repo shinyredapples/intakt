@@ -6,10 +6,17 @@ namespace Intakt\Tests\Gates;
 
 use Intakt\Core\Review\Contract\PromptAssembly;
 use Intakt\Core\Review\Contract\ReviewerConversation;
+use Intakt\Core\Review\Contract\ReviewerRole;
+use Intakt\Core\Review\Domain\ReviewRound;
+use Intakt\Core\Review\Domain\RoundReviewer;
+use Intakt\Core\Review\Infrastructure\ConfiguredPanels;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewerHandler;
+use Intakt\Core\Review\UseCase\SeedSampleProject\SampleProject;
 use Intakt\Gates\PhpStan\RawPromptMessageRule;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiVendor;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\TestWith;
 use Symfony\AI\Platform\Message\Content\Text;
 use Symfony\AI\Platform\Message\Message;
 use Symfony\AI\Platform\Message\MessageBag;
@@ -164,6 +171,100 @@ final class RawPromptMessageRuleTest extends PhpStanRuleTestCase
         self::assertStringContainsString('config/packages/prompt.php:10 intakt.rawPromptMessage', $findings);
         self::assertStringContainsString('config/packages/prompt.php:11 intakt.reviewerConversation', $findings);
         self::assertStringContainsString('bin/prompt.php:7 intakt.rawPromptMessage', $findings);
+    }
+
+    public function testTheReviewHandlerMayNotBuildItsOwnRoundReviewerFromAPlainString(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/Core/Review/UseCase/RunReviewRound/ReviewWithReviewerHandler.php', <<<'PHP'
+            <?php
+
+            declare(strict_types=1);
+
+            namespace Intakt\Core\Review\UseCase\RunReviewRound;
+
+            use Intakt\Core\Review\Contract\PanelReviewer;
+            use Intakt\Core\Review\Contract\ReviewerConversation;
+            use Intakt\Core\Review\Contract\ReviewerModel;
+            use Intakt\Core\Review\Contract\ReviewerRole;
+            use Intakt\Core\Review\Domain\ReviewRound;
+            use Intakt\Core\Review\Domain\RoundReviewer;
+            use Symfony\Component\Uid\UuidV7;
+
+            final readonly class ReviewWithReviewerHandler
+            {
+                public function review(string $brief, ReviewRound $round, ReviewerModel $model): ReviewerConversation
+                {
+                    $role = new ReviewerRole('brief', $brief);
+                    $reviewer = new RoundReviewer(new UuidV7(), $round, new PanelReviewer($role, $model, 10));
+
+                    return new ReviewerConversation($reviewer->rolePrompt(), new UuidV7());
+                }
+            }
+            PHP);
+
+        $findings = $this->ruleFindingsIn($sandbox);
+
+        self::assertStringContainsString('ReviewWithReviewerHandler.php:19 intakt.reviewerRole', $findings);
+        self::assertStringContainsString('ReviewWithReviewerHandler.php:20 intakt.reviewerRole', $findings);
+    }
+
+    #[TestWith([ConfiguredPanels::class])]
+    #[TestWith([SampleProject::class])]
+    public function testTheOwnersPanelsAndTheSampleProjectMayBuildReviewerRoles(string $builder): void
+    {
+        $findings = $this->ruleFindingsIn($this->sampleSandbox($builder, [ReviewerRole::class], ['new ReviewerRole($text, $text)', 'new (ReviewerRole::class)($text, $text)']));
+
+        self::assertSame('', $findings);
+    }
+
+    public function testTheReviewRoundMayBuildRoundReviewers(): void
+    {
+        $findings = $this->ruleFindingsIn($this->sampleSandbox(ReviewRound::class, [RoundReviewer::class, UuidV7::class], ['new RoundReviewer(new UuidV7(), $this, $text)']));
+
+        self::assertSame('', $findings);
+    }
+
+    /**
+     * @param list<string> $expressions
+     */
+    #[DataProvider('constructionsOutsideTheirBuilders')]
+    public function testReviewerRolesAndRoundReviewersBuiltInAnyOtherClassAreRefused(string $class, array $expressions): void
+    {
+        $imports = [ReviewerRole::class, 'Intakt\Core\Review\Contract\ReviewerRole as Role', RoundReviewer::class, UuidV7::class];
+
+        $findings = $this->ruleFindingsIn($this->sampleSandbox($class, $imports, $expressions));
+
+        $this->assertEachCaseRefused($findings, 'intakt.reviewerRole');
+    }
+
+    /**
+     * @return iterable<string, array{string, list<string>}>
+     */
+    public static function constructionsOutsideTheirBuilders(): iterable
+    {
+        $roles = ['new ReviewerRole($text, $text)', 'new Role($text, $text)', 'new (ReviewerRole::class)($text, $text)', 'new \intakt\core\review\contract\reviewerrole($text, $text)'];
+        $roundReviewers = ['new RoundReviewer(new UuidV7(), $text, $text)', 'new (RoundReviewer::class)(new UuidV7(), $text, $text)'];
+
+        yield 'any other class' => [self::SAMPLE, [...$roles, ...$roundReviewers]];
+        yield 'the review handler' => [ReviewWithReviewerHandler::class, [...$roles, ...$roundReviewers]];
+        yield 'the owner\'s panels' => [ConfiguredPanels::class, $roundReviewers];
+        yield 'the sample project' => [SampleProject::class, $roundReviewers];
+        yield 'the review round' => [ReviewRound::class, $roles];
+    }
+
+    public function testReviewerRolesAndRoundReviewersBuiltInATraitOrAConfigurationFileAreRefused(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/Core/Review/Domain/Reviewers.php', "<?php\n\ndeclare(strict_types=1);\n\nnamespace Intakt\\Core\\Review\\Domain;\n\nuse Symfony\\Component\\Uid\\UuidV7;\n\ntrait Reviewers\n{\n    public function reviewer(mixed \$member): RoundReviewer\n    {\n        return new RoundReviewer(new UuidV7(), \$this, \$member);\n    }\n}\n");
+        $sandbox->write('src/Core/Review/Domain/ReviewRound.php', "<?php\n\ndeclare(strict_types=1);\n\nnamespace Intakt\\Core\\Review\\Domain;\n\nfinal class ReviewRound\n{\n    use Reviewers;\n}\n");
+        $sandbox->write('config/packages/panel.php', "<?php\n\ndeclare(strict_types=1);\n\nuse Intakt\\Core\\Review\\Contract\\ReviewerRole;\nuse Intakt\\Core\\Review\\Domain\\RoundReviewer;\nuse Symfony\\Component\\Uid\\UuidV7;\n\nreturn [\n    new ReviewerRole('brief', (string) getenv('BRIEF')),\n    new RoundReviewer(new UuidV7(), null, null),\n];\n");
+
+        $findings = $this->ruleFindingsIn($sandbox);
+
+        self::assertStringContainsString('src/Core/Review/Domain/Reviewers.php (in context of class Intakt\Core\Review\Domain\ReviewRound):13 intakt.reviewerRole', $findings);
+        self::assertStringContainsString('config/packages/panel.php:10 intakt.reviewerRole', $findings);
+        self::assertStringContainsString('config/packages/panel.php:11 intakt.reviewerRole', $findings);
     }
 
     public function testTheAssemblyMayNotBuildAConversation(): void

@@ -6,8 +6,12 @@ namespace Intakt\Gates\PhpStan;
 
 use Intakt\Core\Review\Contract\PromptAssembly;
 use Intakt\Core\Review\Contract\ReviewerConversation;
+use Intakt\Core\Review\Contract\ReviewerRole;
+use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundReviewer;
+use Intakt\Core\Review\Infrastructure\ConfiguredPanels;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewerHandler;
+use Intakt\Core\Review\UseCase\SeedSampleProject\SampleProject;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiVendor;
 use PhpParser\Node;
 use PhpParser\Node\Arg;
@@ -49,6 +53,13 @@ final readonly class RawPromptMessageRule implements Rule
     private const string RETRIES = SymfonyAiVendor::class;
     private const string ROLE_PROMPT = 'rolePrompt';
     private const string CONVERSATION_ADVICE = 'new ReviewerConversation sets a role prompt that enters the system message verbatim: build one only in ReviewWithReviewerHandler with the round reviewer\'s $reviewer->rolePrompt() as the role prompt or, in the retries of SymfonyAiVendor, with an existing conversation\'s $conversation->rolePrompt as the role prompt.';
+
+    // the handler's proof ends at the round reviewer, so the role prompt it carries must come from the owner's panel configuration or the fixed sample roles, and a round reviewer only from a panel member (maintainer decision 2 of #2520)
+    private const array ROLE_SOURCE_BUILDERS = [
+        ReviewerRole::class => [ConfiguredPanels::class, SampleProject::class],
+        RoundReviewer::class => [ReviewRound::class],
+    ];
+    private const string ROLE_SOURCE_ADVICE = ' carries a role prompt that enters the system message verbatim: build one only in ';
 
     public function __construct(private string $root)
     {
@@ -110,7 +121,25 @@ final readonly class RawPromptMessageRule implements Rule
             return [RuleErrorBuilder::message(self::CONVERSATION_ADVICE)->identifier('intakt.reviewerConversation')->build()];
         }
 
-        return [];
+        return $this->roleSourceFindings($classes, $scope);
+    }
+
+    /**
+     * @param list<string> $classes
+     *
+     * @return list<IdentifierRuleError>
+     */
+    private function roleSourceFindings(array $classes, Scope $scope): array
+    {
+        $source = array_find_key(self::ROLE_SOURCE_BUILDERS, static fn (array $builders, string $class): bool => in_array(strtolower($class), $classes, true));
+
+        if (null === $source || array_any(self::ROLE_SOURCE_BUILDERS[$source], fn (string $builder): bool => $this->isInside($builder, $scope))) {
+            return [];
+        }
+
+        $builders = implode(' or ', array_map(static fn (string $builder): string => substr($builder, (int) strrpos($builder, '\\') + 1), self::ROLE_SOURCE_BUILDERS[$source]));
+
+        return [RuleErrorBuilder::message('new '.substr($source, (int) strrpos($source, '\\') + 1).self::ROLE_SOURCE_ADVICE.$builders.'.')->identifier('intakt.reviewerRole')->build()];
     }
 
     // being inside one of the two classes proves nothing on its own: the handler also holds the untrusted task brief, so in each class only the one expression that reads the trusted role prompt passes
