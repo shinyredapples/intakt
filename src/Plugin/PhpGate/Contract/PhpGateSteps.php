@@ -15,7 +15,7 @@ final readonly class PhpGateSteps
     // A status Composer never exits with, so a caller can tell "this head installs every time" from an install that failed (Composer exits 1 for its own failures too).
     public const int REFUSED = 78;
 
-    // Before Composer runs, because Composer resolves anew without a lock file or with config.lock off (an explicit null too: only a missing key means the default), the split install never runs the root's package-event scripts, and a lock entry that does not pin its contents could install other code for the same lock inputs: a path package, a mirror the guard cannot check, a local URL whose bytes the lock does not name, a plugin the install skips (symfony/runtime's work is redone by the generation), a checksum Composer skips, an archive with neither a checksum nor an https URL that ends in its locked commit id, or a source whose reference does not look like a full commit id.
+    // Before Composer runs, because Composer resolves anew without a lock file or with config.lock off (an explicit null too: only a missing key means the default), the split install never runs the root's package-event scripts, and a lock entry that does not pin its contents could install other code for the same lock inputs: a path package, a mirror the guard cannot check, a local URL whose bytes the lock does not name (a user@host:path URL is remote only for a git source, because Composer reads an archive URL of that form as a path), a plugin the install skips (symfony/runtime's work is redone by the generation), a checksum Composer skips, an archive with neither a checksum nor an https URL that ends in its locked commit id, or a source whose reference does not look like a full commit id.
     public const string LOCK_GUARD = <<<'SH'
         php -r '$refuse = static function (string $why) use ($argv): never { fwrite(STDERR, $why."\n"); exit((int) $argv[1]); };
         if (!is_file("composer.lock")) { $refuse("composer.lock is missing, so there are no locked packages to install."); }
@@ -25,7 +25,7 @@ final readonly class PhpGateSteps
         foreach (["pre-package-install", "post-package-install", "pre-package-update", "post-package-update"] as $event) {
             if (is_array($manifest["scripts"] ?? null) && array_key_exists($event, $manifest["scripts"])) { $refuse("composer.json defines a ".$event." script, which the locked install never runs, so this head installs every time."); }
         }
-        $local = static fn (mixed $url): bool => !is_string($url) || 1 !== preg_match("~^(?!file:)[a-z][a-z0-9+.-]*://|^[^/:@]+@[^/:]+:~i", $url);
+        $local = static fn (mixed $url, bool $git): bool => !is_string($url) || (1 !== preg_match("~^(?!file:)[a-z][a-z0-9+.-]*://~i", $url) && (!$git || 1 !== preg_match("~^[^/:@]+@[^/:]+:~", $url)));
         $lock = json_decode(file_get_contents("composer.lock"), true, 512, JSON_THROW_ON_ERROR);
         foreach ([...$lock["packages"] ?? [], ...$lock["packages-dev"] ?? []] as $package) {
             $name = (string) ($package["name"] ?? "A package without a name");
@@ -35,12 +35,12 @@ final readonly class PhpGateSteps
             if ("composer-plugin" === ($package["type"] ?? null) && "symfony/runtime" !== $name) { $unpinned("is a Composer plugin, which the locked install skips"); }
             if (isset($package["dist"]["url"])) {
                 $shasum = $package["dist"]["shasum"] ?? "";
-                if ($local($package["dist"]["url"])) { $unpinned("comes from an archive at a local URL"); }
+                if ($local($package["dist"]["url"], false)) { $unpinned("comes from an archive at a local URL"); }
                 if ("" !== $shasum && (!is_string($shasum) || 1 !== preg_match("~^[0-9a-f]{40}$~D", $shasum))) { $unpinned("has a checksum that is not 40 lowercase hex characters, which Composer may skip"); }
                 if ("" === $shasum && (1 !== preg_match("~^https://[^?#]+/([0-9a-f]{40})$~D", (string) $package["dist"]["url"], $named) || $named[1] !== ($package["dist"]["reference"] ?? null))) { $unpinned("comes from an archive without a checksum whose URL does not end in its locked commit id"); }
             }
             if (isset($package["source"])) {
-                if ($local($package["source"]["url"] ?? null)) { $unpinned("comes from a source at a local URL"); }
+                if ($local($package["source"]["url"] ?? null, "git" === ($package["source"]["type"] ?? null))) { $unpinned("comes from a source at a local URL"); }
                 if (1 !== preg_match("~^(?:[0-9a-f]{40}|[0-9a-f]{64})$~D", (string) ($package["source"]["reference"] ?? ""))) { $unpinned("has a source reference that is not a full commit id"); }
             }
         }'

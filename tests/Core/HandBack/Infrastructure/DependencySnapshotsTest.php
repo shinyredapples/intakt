@@ -7,8 +7,15 @@ namespace Intakt\Tests\Core\HandBack\Infrastructure;
 use FilesystemIterator;
 use Intakt\Core\HandBack\Domain\DependencySnapshotKey;
 use Intakt\Core\HandBack\Infrastructure\DependencySnapshotCountRefused;
+use Intakt\Core\HandBack\Infrastructure\DependencySnapshotLease;
 use Intakt\Core\HandBack\Infrastructure\DependencySnapshots;
+use Intakt\Core\Job\Contract\JobEgress;
+use Intakt\Core\Job\Contract\JobId;
 use Intakt\Core\Job\Contract\JobInput;
+use Intakt\Core\Job\Contract\JobLimits;
+use Intakt\Core\Job\Contract\JobSpec;
+use Intakt\Core\Job\Infrastructure\EgressRoute;
+use Intakt\Core\Job\Infrastructure\JobContainerDefinition;
 use Intakt\Plugin\Gate\Contract\DependencyStep;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -16,27 +23,32 @@ use PHPUnit\Framework\TestCase;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use SplFileInfo;
-use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Lock\LockFactory;
-use Symfony\Component\Lock\Store\InMemoryStore;
+use Symfony\Component\Lock\Store\FlockStore;
 
 #[CoversClass(DependencySnapshots::class)]
+#[CoversClass(DependencySnapshotLease::class)]
 #[CoversClass(DependencySnapshotCountRefused::class)]
 #[UsesClass(DependencySnapshotKey::class)]
 #[UsesClass(DependencyStep::class)]
 #[UsesClass(JobInput::class)]
+#[UsesClass(JobContainerDefinition::class)]
+#[UsesClass(JobSpec::class)]
+#[UsesClass(JobId::class)]
+#[UsesClass(JobLimits::class)]
+#[UsesClass(JobEgress::class)]
+#[UsesClass(EgressRoute::class)]
 final class DependencySnapshotsTest extends TestCase
 {
-    private string $directory;
+    private const string START_CHECK = __DIR__.'/../../../../docker/job/start-check.sh';
 
-    private MockClock $clock;
+    private string $directory;
 
     protected function setUp(): void
     {
         $this->directory = sys_get_temp_dir().'/intakt-dependency-snapshots-'.bin2hex(random_bytes(6));
-        new Filesystem()->mkdir($this->directory);
-        $this->clock = new MockClock('2026-11-19T12:00:00Z');
+        new Filesystem()->mkdir([$this->directory, $this->directory.'/locks']);
     }
 
     protected function tearDown(): void
@@ -69,18 +81,23 @@ final class DependencySnapshotsTest extends TestCase
         self::assertStringEqualsFile($this->snapshotOf('a').'/vendor/fixture/pkg/code.php', '<?php // a');
     }
 
-    public function testAJobReachesASnapshotOnlyAsAReadOnlyMountOfItsFolder(): void
+    public function testACheckJobGetsALeasedSnapshotAsAReadOnlyBindOfItsOwnFolderAndNeverTheStore(): void
     {
         $this->store()->save($this->key('a'), $this->install('a'));
+        $lease = $this->store()->leaseOf($this->key('a'), '/input/dependencies');
+        self::assertNotNull($lease);
 
-        $mount = $this->store()->mountOf($this->key('a'), '/input/dependencies');
+        $spec = new JobSpec(new JobId('check-1'), 'sample:latest', ['true'], [$lease->input], new JobLimits(1 << 30, 1.0, 60), JobEgress::none());
+        $hostConfig = new JobContainerDefinition(self::START_CHECK)->of($spec, $this->directory.'/output', EgressRoute::none())['HostConfig'];
 
-        self::assertEquals(new JobInput($this->snapshotOf('a'), '/input/dependencies'), $mount);
+        self::assertIsArray($hostConfig);
+        self::assertContains(['Type' => 'bind', 'Source' => $this->snapshotOf('a'), 'Target' => '/input/dependencies', 'ReadOnly' => true], $hostConfig['Mounts']);
+        self::assertNotContains($this->directory.'/store', array_column((array) $hostConfig['Mounts'], 'Source'));
     }
 
-    public function testAKeyWithoutASnapshotHasNoMount(): void
+    public function testAKeyWithoutASnapshotHasNoLease(): void
     {
-        self::assertNull($this->store()->mountOf($this->key('absent'), '/input/dependencies'));
+        self::assertNull($this->store()->leaseOf($this->key('absent'), '/input/dependencies'));
     }
 
     public function testOnlyTheStoresOwnerMayAddToTheStore(): void
@@ -115,7 +132,6 @@ final class DependencySnapshotsTest extends TestCase
     {
         foreach (range(1, 11) as $number) {
             $this->store()->save($this->key((string) $number), $this->install((string) $number));
-            $this->clock->sleep(60);
         }
 
         self::assertDirectoryDoesNotExist($this->snapshotOf('1'));
@@ -127,21 +143,17 @@ final class DependencySnapshotsTest extends TestCase
     {
         foreach (range(1, 10) as $number) {
             $this->store()->save($this->key((string) $number), $this->install((string) $number));
-            $this->clock->sleep(60);
         }
 
         self::assertCount(10, $this->snapshots());
     }
 
-    public function testASnapshotMountedAgainIsKeptWhileAnOlderUnusedOneIsEvicted(): void
+    public function testASnapshotLeasedAgainIsKeptWhileAnOlderUnusedOneIsEvicted(): void
     {
         $store = $this->store(2);
         $store->save($this->key('first'), $this->install('first'));
-        $this->clock->sleep(60);
         $store->save($this->key('second'), $this->install('second'));
-        $this->clock->sleep(60);
-        self::assertNotNull($store->mountOf($this->key('first'), '/input/dependencies'));
-        $this->clock->sleep(60);
+        $store->leaseOf($this->key('first'), '/input/dependencies')?->release();
 
         $store->save($this->key('third'), $this->install('third'));
 
@@ -150,11 +162,50 @@ final class DependencySnapshotsTest extends TestCase
         self::assertDirectoryExists($this->snapshotOf('third'));
     }
 
+    public function testTheSnapshotJustSavedIsKeptWhenItsKeySortsBeforeTheOlderOnes(): void
+    {
+        $store = $this->store(1);
+        [$earlier, $later] = $this->keysInHashOrder('x', 'y');
+        $store->save($later, $this->install('later'));
+
+        $store->save($earlier, $this->install('earlier'));
+
+        self::assertSame([$earlier->value], $this->snapshots());
+    }
+
+    public function testASnapshotLeasedByAnotherProcessSurvivesASaveThatWouldEvictItUntilTheLeaseEnds(): void
+    {
+        $reader = $this->store(1);
+        $writer = $this->store(1);
+        $reader->save($this->key('first'), $this->install('first'));
+        $lease = $reader->leaseOf($this->key('first'), '/input/dependencies');
+        self::assertNotNull($lease);
+
+        $writer->save($this->key('second'), $this->install('second'));
+        self::assertFileExists($lease->input->hostPath.'/vendor/fixture/pkg/code.php');
+
+        $lease->release();
+        $writer->save($this->key('third'), $this->install('third'));
+        self::assertSame([$this->key('third')->value], $this->snapshots());
+    }
+
+    public function testWhileTheLeastRecentlyUsedSnapshotIsLeasedTheNextOneIsEvictedSoTheStoreStaysBounded(): void
+    {
+        $store = $this->store(2);
+        $store->save($this->key('first'), $this->install('first'));
+        $lease = $store->leaseOf($this->key('first'), '/input/dependencies');
+        $store->save($this->key('second'), $this->install('second'));
+
+        $store->save($this->key('third'), $this->install('third'));
+
+        self::assertNotNull($lease);
+        self::assertEqualsCanonicalizing([$this->key('first')->value, $this->key('third')->value], $this->snapshots());
+    }
+
     public function testACountOfOneKeepsOnlyTheSnapshotJustSaved(): void
     {
         $store = $this->store(1);
         $store->save($this->key('first'), $this->install('first'));
-        $this->clock->sleep(60);
 
         $store->save($this->key('second'), $this->install('second'));
 
@@ -179,9 +230,10 @@ final class DependencySnapshotsTest extends TestCase
         self::assertSame([$this->key('a')->value], $this->snapshots());
     }
 
+    // File locks, as the application's default lock store uses, and a factory of its own per store, as two orchestrator processes would have.
     private function store(int $count = 10): DependencySnapshots
     {
-        return new DependencySnapshots($this->directory.'/store', $count, $this->clock, new LockFactory(new InMemoryStore()));
+        return new DependencySnapshots($this->directory.'/store', $count, new LockFactory(new FlockStore($this->directory.'/locks')));
     }
 
     private function key(string $lock): DependencySnapshotKey
@@ -189,6 +241,17 @@ final class DependencySnapshotsTest extends TestCase
         $step = new DependencyStep(['composer.json', 'composer.lock'], 'probe', 'install', 'generate');
 
         return DependencySnapshotKey::of($step, ['composer.json' => '{}', 'composer.lock' => $lock], '8.5.12');
+    }
+
+    /**
+     * @return array{DependencySnapshotKey, DependencySnapshotKey}
+     */
+    private function keysInHashOrder(string $one, string $other): array
+    {
+        $keys = [$this->key($one), $this->key($other)];
+        usort($keys, static fn (DependencySnapshotKey $a, DependencySnapshotKey $b): int => strcmp($a->value, $b->value));
+
+        return [$keys[0], $keys[1]];
     }
 
     private function snapshotOf(string $lock): string

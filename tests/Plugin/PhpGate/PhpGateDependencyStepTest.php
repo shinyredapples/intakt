@@ -158,6 +158,38 @@ final class PhpGateDependencyStepTest extends TestCase
         $this->mustRun(PhpGateSteps::LOCK_GUARD);
     }
 
+    public function testTheLockedInstallRefusesAnArchiveWhoseUrlLooksScpLikeBecauseComposerReadsItFromTheTree(): void
+    {
+        $this->archive('first');
+        new Filesystem()->rename($this->directory.'/package.zip', $this->directory.'/fixture@archive:package.zip');
+        $this->project([
+            'repositories' => [['packagist.org' => false], ['type' => 'package', 'package' => [
+                'name' => 'fixture/archive', 'version' => '1.0.0',
+                'dist' => ['type' => 'zip', 'url' => 'fixture@archive:package.zip', 'shasum' => (string) sha1_file($this->directory.'/fixture@archive:package.zip')],
+            ]]],
+            'require' => ['fixture/archive' => '1.0.0'],
+        ]);
+        $this->mustRun('composer update --no-interaction --no-plugins --no-scripts --no-install');
+
+        $install = $this->runInProject($this->step->install);
+
+        self::assertSame(PhpGateSteps::REFUSED, $install->getExitCode());
+        self::assertStringContainsString('fixture/archive comes from an archive at a local URL', $install->getErrorOutput());
+        self::assertDirectoryDoesNotExist($this->directory.'/vendor');
+    }
+
+    public function testTheLockGuardRefusesANonGitSourceWhoseUrlLooksScpLike(): void
+    {
+        $this->lockFileWith(['name' => 'fixture/remote', 'version' => '1.0.0', 'source' => [
+            'type' => 'hg', 'url' => 'fixture@source:remote', 'reference' => str_repeat('a', 40),
+        ]]);
+
+        $guard = $this->runInProject(PhpGateSteps::LOCK_GUARD);
+
+        self::assertSame(PhpGateSteps::REFUSED, $guard->getExitCode());
+        self::assertStringContainsString('fixture/remote comes from a source at a local URL', $guard->getErrorOutput());
+    }
+
     #[DataProvider('unpinnedChecksums')]
     public function testTheLockGuardRefusesAChecksumThatIsNeitherEmptyNorFortyLowercaseHexCharacters(mixed $shasum): void
     {
