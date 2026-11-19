@@ -200,6 +200,17 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         self::assertSame(2, $octopus->filter('img[src*="octopus-asleep-"]')->count());
     }
 
+    public function testAProjectWithOnlyFinishedBuildWorkCanBeChosenInTheFilterWhileAnotherProjectWorks(): void
+    {
+        $this->ledger->passBuildStep('build-only', '42', 'push');
+        $this->ledger->startRound('round-1', 'reviewing');
+
+        $page = $this->browser->request('GET', '/');
+
+        self::assertSame('["build-only"]', $page->filter('#board-octopus')->attr('data-idle-projects'));
+        self::assertCount(1, $page->filter('#projfilter option[value="build-only"]'));
+    }
+
     public function testADemoInstallWithoutAReviewOpensOnTheFirstRunPage(): void
     {
         $this->onADemoInstall();

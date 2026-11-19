@@ -86,6 +86,14 @@ final readonly class LedgerReviewPages
         return $started;
     }
 
+    /**
+     * @return list<string>
+     */
+    public function builtProjects(): array
+    {
+        return array_values(array_unique(array_map(static fn (array $step): string => $step['project'], $this->buildSteps->in($this->ledger->readInOrder()))));
+    }
+
     public function board(): Board
     {
         return $this->boardOf($this->ledger->readInOrder());
