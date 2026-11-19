@@ -228,7 +228,7 @@ final readonly class GitHubIssueReads implements IssueReads
         }
 
         // Without a validator there is no earlier listing a 304 could stand for, so taking it as unchanged would report issues never read.
-        return null !== $validator ? ['status' => $answer['status'], 'body' => '', 'etag' => $validator, 'next' => false, 'date' => $answer['date']] :throw new ForgeReadFailed('GitHub answered 304 to a read without a validator.');
+        return null !== $validator ? ['status' => $answer['status'], 'body' => '', 'etag' => $validator, 'next' => false, 'date' => $answer['date']] : throw new ForgeReadFailed('GitHub answered 304 to a read without a validator.');
     }
 
     /**
