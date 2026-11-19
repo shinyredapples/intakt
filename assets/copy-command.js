@@ -35,6 +35,8 @@ export function copyCommands(page, view) {
 }
 
 async function copy(button, view) {
+    // Set before the text changes, so a screen reader announces "Copied" or "Copy failed".
+    button.setAttribute('aria-live', 'polite');
     // Read only while the button shows its own label, because a click during a message would keep the message as the label.
     if (button.hasAttribute(MESSAGE)) {
         // The 2 s count from the press, so a press just before the old deadline cannot have its write still pending when Copy comes back early.
