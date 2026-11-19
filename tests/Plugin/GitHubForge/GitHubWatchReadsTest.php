@@ -399,6 +399,16 @@ final class GitHubWatchReadsTest extends TestCase
         self::assertSame([CiRunState::Succeeded, CiRunState::Succeeded, CiRunState::Unfinished], $this->statesOfHead());
     }
 
+    public function testAQueuedCheckSuiteOfNoWorkflowRunPastTheCeilingWithAnInvalidPullRequestNumberRaisesAReadFailure(): void
+    {
+        $this->suites = 'suites_empty_queue_invalid_number.json';
+        $this->ciNow = '2026-11-02 09:31:01 UTC';
+
+        $this->expectException(ForgeReadFailed::class);
+
+        $this->state();
+    }
+
     public function testAQueuedCheckSuiteOfNoWorkflowRunThatHasCheckRunsIsKeptPastTheCeiling(): void
     {
         $this->runs = 'runs_none.json';

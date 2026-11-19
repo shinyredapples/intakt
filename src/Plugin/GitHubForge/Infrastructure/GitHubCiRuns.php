@@ -34,12 +34,13 @@ final readonly class GitHubCiRuns
     {
         $workflowRuns = $this->onHead($head, $this->entries($answers['workflow_runs'], 'workflow_runs'));
         $runsBySuite = $this->runsBySuite($workflowRuns);
+        $ceiling = $this->clock->now()->modify('-'.self::ABANDONED_AFTER);
         // An installed app that never starts its suite would keep every head pending forever; Actions' own queued workflows stay covered by their workflow runs, so only unlinked suites age out.
-        $suites = $this->withoutAbandonedSuites($this->onHead($head, $this->entries($answers['check_suites'], 'check_suites')), $runsBySuite);
+        $suites = array_map(fn (array $suite): ?CiRun => $this->suiteOf($repository, $suite, $runsBySuite, $ceiling), $this->onHead($head, $this->entries($answers['check_suites'], 'check_suites')));
 
         return [
             ...array_map(fn (array $run): CiRun => $this->workflowRunOf($repository, $run), $workflowRuns),
-            ...array_map(fn (array $suite): CiRun => $this->suiteOf($repository, $suite, $runsBySuite), $suites),
+            ...array_values(array_filter($suites)),
         ];
     }
 
@@ -96,26 +97,11 @@ final readonly class GitHubCiRuns
     }
 
     /**
-     * @param list<array<mixed>>       $suites
-     * @param array<int, array<mixed>> $runsBySuite
-     *
-     * @return list<array<mixed>>
+     * @param array<mixed> $suite
      */
-    private function withoutAbandonedSuites(array $suites, array $runsBySuite): array
+    private function abandoned(array $suite, DateTimeImmutable $ceiling): bool
     {
-        $ceiling = $this->clock->now()->modify('-'.self::ABANDONED_AFTER);
-
-        return array_values(array_filter($suites, fn (array $suite): bool => !$this->abandoned($suite, $runsBySuite, $ceiling)));
-    }
-
-    /**
-     * @param array<mixed>             $suite
-     * @param array<int, array<mixed>> $runsBySuite
-     */
-    private function abandoned(array $suite, array $runsBySuite, DateTimeImmutable $ceiling): bool
-    {
-        return !isset($runsBySuite[$this->positive($suite, 'id')])
-            && 'queued' === $this->text($suite, 'status')
+        return 'queued' === $this->text($suite, 'status')
             && 0 === ($suite['latest_check_runs_count'] ?? null)
             && $this->createdAt($suite) < $ceiling;
     }
@@ -132,13 +118,16 @@ final readonly class GitHubCiRuns
      * @param array<mixed>             $suite
      * @param array<int, array<mixed>> $runsBySuite
      */
-    private function suiteOf(RepositoryAddress $repository, array $suite, array $runsBySuite): CiRun
+    private function suiteOf(RepositoryAddress $repository, array $suite, array $runsBySuite, DateTimeImmutable $ceiling): ?CiRun
     {
         $id = $this->positive($suite, 'id');
         $run = $runsBySuite[$id] ?? null;
         if (null === $run) {
             // Named by its own ID, because one app's unlinked suites are no proof of one check and must not replace each other.
-            return new CiRun(new CiRunOrigin('suite:'.$id, self::CHECK_SUITE_EVENT, $this->changeOf($repository, $suite)), $this->stateOf($suite), $this->createdAt($suite));
+            $unlinked = new CiRun(new CiRunOrigin('suite:'.$id, self::CHECK_SUITE_EVENT, $this->changeOf($repository, $suite)), $this->stateOf($suite), $this->createdAt($suite));
+
+            // Built before it may age out, because a malformed suite must fail the read instead of vanishing and leaving the other runs to make the head green.
+            return $this->abandoned($suite, $ceiling) ? null : $unlinked;
         }
 
         // The run's whole origin, because GitHub often leaves a suite's own pull requests empty and two pull requests must not look like one.
