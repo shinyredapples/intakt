@@ -114,8 +114,6 @@ The Tech lead's tool-less call (formerly triage and the sizer) that checks a tas
 
 <a id="maintainer-agent"></a>
 
-<a id="maintainer-agent"></a>
-
 ### Maintainer
 The Maintainer (`maintainer`, formerly the maintainer agent).
 - **Reads:** blocked verdicts, findings, questions, recurring failures, task and pull request text, the design documents, and the weekly flow and quality report (figures from plain code; the task titles, ledger text and the names of checks and tests in it fenced). Check and test names come from the checks' output on code Developers wrote, and a test name can carry a data-provider value, so before the report reaches the model Intakt redacts the values of every credential mounted or injected into the jobs whose output it read and runs the secret scan over the whole report; a report with a hit, or one the scan could not complete, is withheld, the session gets only Intakt's note that it was withheld, and the gap is shown on the dashboard, as for the Test engineer's report. The dashboard takes the check and test names it shows (the slowest tests of the codebase health) from that same redacted and scanned data, never from the checks' raw output, and shows the figures without the names when the report was withheld ([Dashboard](13-dashboard.md)). For the backlog sweep it also reads the issue listings (the numbers and titles of open and recently closed issues) and the evidence plain code gathers from main, which arrive through the same per-source fencing as sizing ([Readiness and sizing](#triage-and-sizing)).
