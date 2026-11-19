@@ -26,7 +26,7 @@ Both the bundle and the text are untrusted: the [hand-back check](hand-back.md) 
 
 ## In the container
 
-`docker/job/build.sh` (POSIX `sh`, with `git`, `setsid`, `sleep` and `claude`) runs as the job's command after the [start check](job-containers.md#start-check):
+`docker/job/build.sh` (POSIX `sh`, with `git`, `setsid`, `sleep`, `sha256sum` and `claude`) runs as the job's command after the [start check](job-containers.md#start-check):
 
 1. The branch must pass `git check-ref-format --branch` with the name itself as the answer.
 2. `git init --initial-branch=<branch> --object-format=<the build clone's>` in `$TMPDIR/clone` (`/work/clone`), then `git fetch --no-tags --no-write-fetch-head --update-head-ok` of the build clone's `refs/heads/*` and `refs/source/*`, and `git checkout --force <branch>`. The clone therefore holds what the build clone holds and no remote. Its git identity is `Intakt builder <builder@intakt.invalid>` (builder's choice), because the job has no git configuration and the orchestrator signs the commits before a push. A step that fails ends the job with no bundle and no text, and the CLI does not run.
