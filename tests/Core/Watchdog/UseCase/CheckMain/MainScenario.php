@@ -84,6 +84,14 @@ final readonly class MainScenario
         return $commit;
     }
 
+    public function bareCopy(): string
+    {
+        $bare = $this->folder.'/bare.git';
+        new Process(['git', 'clone', '-q', '--bare', $this->main->path, $bare], null, ['GIT_DIR' => false, 'GIT_WORK_TREE' => false])->mustRun();
+
+        return $bare;
+    }
+
     public function forceMainTo(string $commit): void
     {
         $this->git(['update-ref', 'refs/heads/main', $commit]);

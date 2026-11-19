@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Intakt\Core\Watchdog\UseCase\CheckMain;
 
 use Intakt\Core\Git\Contract\HardenedGit;
+use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Core\Watchdog\Contract\MainNotRead;
 use Symfony\Component\Process\Exception\ExceptionInterface;
+use Symfony\Component\Process\Exception\RuntimeException;
 use Symfony\Component\Process\Process;
 
 final readonly class MainHistory
@@ -25,6 +27,7 @@ final readonly class MainHistory
      */
     public function headOf(string $repository): string
     {
+        $this->mustBeTheRepository($repository);
         // Before any commit is listed, because a shallow repository ends its walk early and would show the missing history as clean.
         $this->mustBeComplete($repository);
 
@@ -42,18 +45,6 @@ final readonly class MainHistory
             self::ANSWERS_NO => false,
             // Because a commit that is there but cannot be read says nothing about a rewrite.
             default => $this->holds($repository, $earlier) ? throw MainNotRead::because('git merge-base could not read the history') : false,
-        };
-    }
-
-    /**
-     * @throws MainNotRead
-     */
-    private function holds(string $repository, string $object): bool
-    {
-        return match ($this->run($repository, ['cat-file', '-e', $object])->getExitCode()) {
-            self::ANSWERS_YES => true,
-            self::ANSWERS_NO => false,
-            default => throw MainNotRead::because('git cat-file failed'),
         };
     }
 
@@ -78,6 +69,17 @@ final readonly class MainHistory
         return $this->mustRun($repository, ['cat-file', 'commit', $commit]);
     }
 
+    // Because run() bounds git's discovery to the path itself, this call fails for anything but the top of a work tree or a git directory; --show-toplevel cannot tell, since HardenedGit pins the work tree to the path.
+    /**
+     * @throws MainNotRead
+     */
+    private function mustBeTheRepository(string $repository): void
+    {
+        if (!$this->run($repository, ['rev-parse', '--absolute-git-dir'])->isSuccessful()) {
+            throw MainNotRead::because('the path is not the top of a work tree or a git directory');
+        }
+    }
+
     /**
      * @throws MainNotRead
      */
@@ -86,6 +88,18 @@ final readonly class MainHistory
         if ('false' !== trim($this->mustRun($repository, ['rev-parse', '--is-shallow-repository']))) {
             throw MainNotRead::because('the repository is shallow, so its history is incomplete');
         }
+    }
+
+    /**
+     * @throws MainNotRead
+     */
+    private function holds(string $repository, string $object): bool
+    {
+        return match ($this->run($repository, ['cat-file', '-e', $object])->getExitCode()) {
+            self::ANSWERS_YES => true,
+            self::ANSWERS_NO => false,
+            default => throw MainNotRead::because('git cat-file failed'),
+        };
     }
 
     /**
@@ -112,8 +126,17 @@ final readonly class MainHistory
             throw MainNotRead::because('the repository is not there');
         }
 
-        $call = $this->hardened->call($arguments, $directory);
-        $process = new Process($call->command, $call->directory, $call->environment);
+        try {
+            $call = $this->hardened->call($arguments, $directory);
+        } catch (RepositoryAttributesRefused $refused) {
+            throw MainNotRead::because($refused->getMessage());
+        } catch (RuntimeException) {
+            // Because HardenedGit first asks git for the repository's object format, and that call can be stopped like any other.
+            throw MainNotRead::because(sprintf('git %s could not be prepared, because the look at its repository was stopped', $arguments[0]));
+        }
+
+        // The ceiling is the parent, because git would otherwise discover an enclosing repository and read its main for a plain subdirectory.
+        $process = new Process($call->command, $call->directory, [...$call->environment, 'GIT_CEILING_DIRECTORIES' => dirname($directory)]);
 
         try {
             $process->run();

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Watchdog\UseCase\CheckMain;
 
 use Intakt\Core\Git\Contract\HardenedGit;
+use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Core\Watchdog\Contract\CheckedMain;
 use Intakt\Core\Watchdog\Contract\CommitClassification;
 use Intakt\Core\Watchdog\Contract\MainNotRead;
@@ -32,6 +33,7 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(CommitClassification::class)]
 #[UsesClass(SignatureStatus::class)]
 #[UsesClass(HardenedGit::class)]
+#[UsesClass(RepositoryAttributesRefused::class)]
 #[UsesClass(TemporaryRepository::class)]
 #[UsesClass(MainScenario::class)]
 final class CheckMainTest extends TestCase
@@ -281,6 +283,40 @@ final class CheckMainTest extends TestCase
         $checked = $this->scenario->check()->of(new WatchedMain(rtrim($relative, '/'), $head, [], []));
 
         self::assertSame($head, $checked->head);
+    }
+
+    public function testAPlainSubdirectoryOfTheRepositoryIsRefusedInsteadOfReadingTheEnclosingMain(): void
+    {
+        $head = $this->scenario->main->commitFile('ordinary/file.txt', "test\n");
+
+        try {
+            (void) $this->scenario->check()->of(new WatchedMain($this->scenario->main->path.'/ordinary', $head, [], []));
+            self::fail('The enclosing repository was read for a subdirectory.');
+        } catch (MainNotRead $refused) {
+            self::assertSame('Main was not read: the path is not the top of a work tree or a git directory', $refused->getMessage());
+        }
+    }
+
+    public function testABareRepositoryIsReadAtItsGitDirectory(): void
+    {
+        $head = $this->scenario->main->commitFile('a.txt', "one\n");
+
+        $checked = $this->scenario->check()->of(new WatchedMain($this->scenario->bareCopy(), $head, [], []));
+
+        self::assertSame($head, $checked->head);
+    }
+
+    public function testAnInfoAttributesFileLeavesMainNotRead(): void
+    {
+        $head = $this->scenario->main->commitFile('ordinary.txt', "test\n");
+        touch($this->scenario->main->path.'/.git/info/attributes');
+
+        try {
+            (void) $this->scenario->check()->of($this->watching($head, [], []));
+            self::fail('A repository with an info/attributes file was read.');
+        } catch (MainNotRead $refused) {
+            self::assertStringContainsString('info/attributes', $refused->getMessage());
+        }
     }
 
     // Symfony Process hands a child the variables of getenv() and $_ENV, so both carry the changed PATH.
