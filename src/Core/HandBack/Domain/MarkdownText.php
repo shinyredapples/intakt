@@ -22,12 +22,12 @@ final readonly class MarkdownText
 
     public static function visible(string $markdown): string
     {
-        return self::read($markdown, withFences: true);
+        return self::read($markdown, static fn (string $fence): string => $fence);
     }
 
     public static function visibleProse(string $markdown): string
     {
-        return self::read($markdown, withFences: false);
+        return self::read($markdown, self::lineBreaksOf(...));
     }
 
     // A tab in the indent or after a list marker runs to the next tab stop, as Markdown reads it (https://spec.commonmark.org/0.31.2/#tabs).
@@ -46,24 +46,41 @@ final readonly class MarkdownText
         return strlen($match[1]) + strlen($match[2]) + (strlen($match[3]) > 4 ? 1 : strlen($match[3]));
     }
 
-    private static function read(string $markdown, bool $withFences): string
+    /**
+     * @param callable(string): string $fenced
+     */
+    private static function read(string $markdown, callable $fenced): string
     {
         $text = str_replace(["\r\n", "\r"], "\n", $markdown);
         $read = '';
         $offset = 0;
 
-        while (1 === ($found = preg_match(self::HIDDEN_OR_LITERAL, $text, $match, PREG_OFFSET_CAPTURE | PREG_UNMATCHED_AS_NULL, $offset))) {
+        while (null !== ($match = self::nextMarkedPart($text, $offset))) {
             [$part, $start] = $match[0];
-            $isFence = null !== $match['fence'][0];
+            $isFence = '' !== ($match['fence'][0] ?? '');
             $part = $isFence ? self::untilItsListItemEnds(substr($text, 0, $start), $part) : $part;
-            $isShown = null !== $match['code'][0] || ($isFence && $withFences);
-            $read .= substr($text, $offset, $start - $offset).($isShown ? $part : self::lineBreaksOf($part));
+            $read .= substr($text, $offset, $start - $offset).match (true) {
+                $isFence => $fenced($part),
+                '' !== ($match['code'][0] ?? '') => $part,
+                default => self::lineBreaksOf($part),
+            };
             $offset = $start + strlen($part);
         }
 
-        // An unreadable text must stop the check, because reading it as empty would pass a task's Evidence list unseen.
-        return false === $found
-            ? throw new RuntimeException('the Markdown text cannot be read: '.preg_last_error_msg()) : $read.substr($text, $offset);
+        return $read.substr($text, $offset);
+    }
+
+    // An unreadable text must stop the check, because reading it as empty would pass a task's Evidence list unseen.
+    /**
+     * @return array<array{string, int}>|null
+     */
+    private static function nextMarkedPart(string $text, int $offset): ?array
+    {
+        return match (preg_match(self::HIDDEN_OR_LITERAL, $text, $match, PREG_OFFSET_CAPTURE, $offset)) {
+            1 => $match,
+            0 => null,
+            false => throw new RuntimeException('the Markdown text cannot be read: '.preg_last_error_msg()),
+        };
     }
 
     // A fence opened inside a list item ends with that item, closed or not, so the first line indented less than the item's content is outside it and is read again.
@@ -78,18 +95,11 @@ final readonly class MarkdownText
         return 1 === preg_match('/\n(?= {0,'.($column - 1).'}\S)/', $fence, $match, PREG_OFFSET_CAPTURE) ? substr($fence, 0, $match[0][1]) : $fence;
     }
 
-    // The item a line belongs to is the nearest list item above whose content column the line reaches; a less indented line in between that is no such item has ended every deeper item.
+    // The walk goes up from the fence, because the item a line belongs to is the nearest list item above whose content column the line reaches, and a less indented line in between that is no such item has ended every deeper item.
     private static function columnOfTheItemAround(string $before, int $indent): ?int
     {
-        foreach (array_reverse(explode("\n", $before)) as $rawLine) {
-            if (0 === $indent) {
-                return null;
-            }
-
-            $line = self::withSpacesForTabs($rawLine);
-            $lineIndent = strspn($line, ' ');
-
-            if ('' === trim($line) || $lineIndent > $indent) {
+        foreach (array_map(self::withSpacesForTabs(...), array_reverse(explode("\n", $before))) as $line) {
+            if ('' === trim($line) || strspn($line, ' ') > $indent) {
                 continue;
             }
 
@@ -99,7 +109,7 @@ final readonly class MarkdownText
                 return $column;
             }
 
-            $indent = $lineIndent;
+            $indent = strspn($line, ' ');
         }
 
         return null;

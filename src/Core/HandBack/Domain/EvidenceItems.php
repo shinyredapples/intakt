@@ -27,56 +27,34 @@ final readonly class EvidenceItems
             $heading = self::headingLines($lines, $index);
 
             if ($heading > 0 && 1 === preg_match(self::EVIDENCE_HEADING_TEXT, $lines[$index])) {
-                return self::topLevelItems(array_slice($lines, $index + $heading), underLabel: false);
+                return self::topLevelItems(array_slice($lines, $index + $heading));
             }
 
             if (1 === preg_match(self::EVIDENCE_LABEL, $lines[$index])) {
-                return self::topLevelItems(array_slice($lines, $index + 1), underLabel: true);
+                return self::topLevelItems(self::untilTheLabelListEnds(array_slice($lines, $index + 1)));
             }
         }
 
         return 0;
     }
 
-    // The end of the section is decided while walking the items, because only there the content column of the open item is known, and a heading indented to it is part of that item.
+    // A plain `Evidence:` label has no end of its own, so its list also ends where the text after the first item starts. Such a line has no indent, so it is never inside an item and can be cut before the items are walked.
     /**
      * @param list<string> $lines
+     *
+     * @return list<string>
      */
-    private static function topLevelItems(array $lines, bool $underLabel): int
+    private static function untilTheLabelListEnds(array $lines): array
     {
-        $count = 0;
-        $column = null;
-        $hasList = false;
+        $first = array_find_key($lines, static fn (string $line): bool => null !== self::contentColumnOf($line));
 
-        foreach ($lines as $index => $line) {
-            $column = self::endsTheList($lines, $index, $column) ? null : $column;
-
-            if (self::endsTheSection($lines, $index, $column, $underLabel && $hasList)) {
-                break;
-            }
-
-            $hasList = $hasList || null !== self::contentColumnOf($line);
-
-            if (self::isTopLevelItem($line, $column)) {
-                ++$count;
-                $column = self::contentColumnOf($line);
-            }
+        if (null === $first) {
+            return $lines;
         }
 
-        return $count;
-    }
+        $end = array_find_key($lines, static fn (string $line, int $index): bool => $index > $first && self::endsTheLabelList($lines, $index));
 
-    // A section runs to the next heading, as Markdown renders it, so an introduction line or a paragraph inside it ends nothing. A plain `Evidence:` label has no end of its own, so its list also ends where the text after the first item starts.
-    /**
-     * @param list<string> $lines
-     */
-    private static function endsTheSection(array $lines, int $index, ?int $column, bool $inLabelList): bool
-    {
-        if (null !== $column && self::indentOf($lines[$index]) >= $column) {
-            return false;
-        }
-
-        return self::headingLines($lines, $index) > 0 || ($inLabelList && self::endsTheLabelList($lines, $index));
+        return null === $end ? $lines : array_slice($lines, 0, $end);
     }
 
     // A lower-case line ending in a colon right after an item is kept, because it is the item wrapped onto a new line, not a label.
@@ -91,7 +69,41 @@ final readonly class EvidenceItems
             return true;
         }
 
-        return '' === trim($section[$index - 1] ?? '') && 1 === preg_match('/^\S/', $line) && null === self::contentColumnOf($line);
+        return '' === trim($section[$index - 1]) && 1 === preg_match('/^\S/', $line) && null === self::contentColumnOf($line);
+    }
+
+    // The end of the section is decided while walking the items, because only there the content column of the open item is known, and a heading indented to it is part of that item.
+    /**
+     * @param list<string> $lines
+     */
+    private static function topLevelItems(array $lines): int
+    {
+        $count = 0;
+        $column = null;
+
+        foreach ($lines as $index => $line) {
+            $column = self::endsTheList($lines, $index, $column) ? null : $column;
+
+            if (self::endsTheSection($lines, $index, $column)) {
+                break;
+            }
+
+            if (self::isTopLevelItem($line, $column)) {
+                ++$count;
+                $column = self::contentColumnOf($line);
+            }
+        }
+
+        return $count;
+    }
+
+    // A section runs to the next heading outside the open item, as Markdown renders it, so an introduction line or a paragraph inside it ends nothing.
+    /**
+     * @param list<string> $lines
+     */
+    private static function endsTheSection(array $lines, int $index, ?int $column): bool
+    {
+        return self::indentOf($lines[$index]) < ($column ?? PHP_INT_MAX) && self::headingLines($lines, $index) > 0;
     }
 
     // An item indented to the content of the item above is nested in it (https://spec.commonmark.org/0.31.2/#list-items).
