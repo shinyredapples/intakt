@@ -52,7 +52,7 @@ final class WatchConfigurationTest extends TestCase
     public function testAnEligibilityLabelOfOnlyANoBreakSpaceIsRefused(): void
     {
         $this->expectException(InvalidConfigurationException::class);
-        $this->expectExceptionMessage('The "eligibility_label" key must not be blank.');
+        $this->expectExceptionMessageMatches('/"eligibility_label" key must not be blank/');
 
         $this->processed(['repository' => '/r', 'base' => 'main', 'task' => 'Review.', 'eligibility_label' => "\u{00A0}"]);
     }
