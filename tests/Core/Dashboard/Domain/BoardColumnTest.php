@@ -18,14 +18,14 @@ final class BoardColumnTest extends TestCase
         self::assertSame([BoardColumn::Backlog, BoardColumn::Done], array_values($collapsed));
     }
 
-    public function testInReviewSaysOnItsFirstDayThatReviewsAppearWhileAPanelReviews(): void
+    public function testAnEmptyInReviewSaysThatReviewsAppearWhileAPanelReviews(): void
     {
-        self::assertSame('Reviews appear here while a panel reviews a change', BoardColumn::InReview->firstDayLine());
+        self::assertSame('Reviews appear here while a panel reviews a change', BoardColumn::InReview->emptyLine());
     }
 
-    public function testEveryColumnSaysOnItsFirstDayWhatAppearsInItInALineOfItsOwn(): void
+    public function testEveryEmptyColumnSaysWhatAppearsInItInALineOfItsOwn(): void
     {
-        $lines = array_map(static fn (BoardColumn $column): string => $column->firstDayLine(), BoardColumn::cases());
+        $lines = array_map(static fn (BoardColumn $column): string => $column->emptyLine(), BoardColumn::cases());
 
         self::assertSame($lines, array_values(array_unique($lines)));
         self::assertSame([], array_filter($lines, static fn (string $line): bool => !str_contains($line, ' here ')));

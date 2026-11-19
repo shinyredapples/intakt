@@ -55,6 +55,10 @@ final readonly class ReviewReport
         foreach ($review->actList as $finding) {
             // The merged ids join the entry's id, so each finding the entry stands for stays traceable from the command's output in one line; the review page names them below the entry's id instead.
             $lines[] = sprintf('%s %s %s: %s', $this->text->of(implode('+', [$finding->id, ...$finding->merged])), $finding->severity->value, $this->place($finding), $this->text->of($finding->text));
+            $judgeLine = $this->judgeLine($finding);
+            if (null !== $judgeLine) {
+                $lines[] = $judgeLine;
+            }
         }
 
         $tokens = $review->tokens;
@@ -67,6 +71,17 @@ final readonly class ReviewReport
         $lines[] = 'cost: '.$this->cost($review->cost);
 
         return $lines;
+    }
+
+    // Only an entry the judge gave a note, so a P1 or P2 the judge did not argue with reads as before the note existed.
+    private function judgeLine(Finding $finding): ?string
+    {
+        $note = $finding->judgeNote();
+        if (null === $note) {
+            return null;
+        }
+
+        return 'judge: '.$this->text->of($note);
     }
 
     // An unknown cost has no figure to mark, because there is nothing to mislabel; an estimate names the day of its price list, or says it is not recorded.

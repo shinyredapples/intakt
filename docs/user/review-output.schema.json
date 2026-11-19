@@ -36,7 +36,8 @@
                     "symbol": {"type": ["string", "null"]},
                     "text": {"type": "string", "minLength": 1},
                     "fixable_by": {"enum": ["builder", "owner"]},
-                    "merged": {"type": "array", "items": {"type": "string", "minLength": 1}}
+                    "merged": {"type": "array", "items": {"type": "string", "minLength": 1}},
+                    "judge_note": {"type": "string", "minLength": 1}
                 }
             }
         },

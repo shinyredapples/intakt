@@ -22,6 +22,7 @@ use Intakt\Core\Review\Contract\ReviewProgress;
 use Intakt\Core\Review\Contract\RoundEnds;
 use Intakt\Core\Review\Contract\RoundTierNotMapped;
 use Intakt\Core\Review\Contract\Verdict;
+use Intakt\Core\Review\Domain\ReviewerState;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\ReviewSubject;
 use Intakt\Core\Review\Domain\ReviewTarget;
@@ -222,11 +223,27 @@ final readonly class ReviewChange implements ChangeReviews
         $reasons = ReplayMark::Replay === $round->replayMark() ? [$this->reasons->replay()] : [];
 
         foreach ($round->reviewers() as $reviewer) {
-            if (null !== $reviewer->failure()) {
-                $reasons[] = $reviewer->roleName().' reviewer failed, '.$this->failures->of($reviewer->failure());
+            $reason = $this->reasonOf($reviewer);
+
+            if (null !== $reason) {
+                $reasons[] = $reviewer->roleName().' reviewer '.$reason;
             }
         }
 
         return $reasons;
+    }
+
+    // Blocked and failed are named apart, so the line says what the dashboard's chip says for the same reviewer.
+    private function reasonOf(RoundReviewer $reviewer): ?string
+    {
+        $failure = $reviewer->failure();
+
+        if (null !== $failure) {
+            return (ReviewerState::Blocked === $reviewer->state() ? 'blocked, ' : 'failed, ').$this->failures->of($failure);
+        }
+
+        $blocked = $this->verdicts->ofReviewer($reviewer)?->blockedReason();
+
+        return null === $blocked ? null : 'blocked, '.$blocked;
     }
 }
