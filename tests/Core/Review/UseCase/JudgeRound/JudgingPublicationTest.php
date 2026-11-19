@@ -213,6 +213,19 @@ final class JudgingPublicationTest extends KernelTestCase
         $this->assertFailedForGoodLogged($roundId);
     }
 
+    // A round id the recorder cannot read, so recording the failure throws and Messenger parks the judging as it did before the stamp.
+    public function testAFailedJudgingWhoseFailureCannotBeRecordedIsParkedAndStillCountsAsFailed(): void
+    {
+        $roundId = 'not-a-round';
+        $judging = new Envelope(new JudgeRound($roundId), [RecordFailedJudging::onFailureOf($roundId)]);
+
+        $this->giveUp($roundId, new RuntimeException('The judge is down.'), $judging);
+
+        self::assertLoggedError('error', sprintf('Failed dispatching %s after message %s failed.', RecordFailedJudging::class, JudgeRound::class));
+        self::assertSame(1, $this->transport('messenger.transport.failed')->getMessageCount());
+        self::assertTrue(self::getContainer()->get(FailedJudgings::class)->hasFailed($roundId));
+    }
+
     public function testAJudgingQueuedWithoutItsFailureStampGetsItWhenAWorkerReceivesIt(): void
     {
         try {
