@@ -10,6 +10,7 @@ Code and conventions:
 - [Bare mirror](mirror.md)
 - [Build clone](build-clone.md)
 - [Branch push](branch-push.md)
+- [Watchdog](watchdog.md): classifying main's new commits (a recorded merge or an owner-signed commit is clean; unsigned, unknown key and a rewritten history are violations), and the refusal of a shallow repository
 - [Hand-back checks](hand-back.md): the bundle a build returns, refused when it touches main, is not a fast-forward, holds a merge or a secret, stripped of attribution and redacted of mounted credentials; the pull request text scanned too, and a failure sent back once, then handed over
 - [Check job](check-job.md): the pre-push check of an accepted bundle in a fresh clone through the gate plugin, the lost-content rule, and the verdict read from the job's output directory only
 - [Protected paths of a head](protected-paths.md): the owner's list per project, read from the whole change and each commit; unreadable counts as protected
