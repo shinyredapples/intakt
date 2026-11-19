@@ -35,6 +35,12 @@ final readonly class InstanceDatabase
         return $this->count('SELECT COUNT(*) FROM '.self::QUEUE.' WHERE queue_name = ? AND (body || headers) LIKE ?', [self::DEFAULT_QUEUE, '%'.str_replace('\\', '%', $messageClass).'%']);
     }
 
+    // Every message of the async transport, of any class, delivered or not.
+    public function waiting(): int
+    {
+        return $this->count('SELECT COUNT(*) FROM '.self::QUEUE.' WHERE queue_name = ?', [self::DEFAULT_QUEUE]);
+    }
+
     // The messages a consumer fetched and has not acknowledged, which stay on the transport until it does.
     public function fetchedNotAcknowledged(string $messageClass): int
     {

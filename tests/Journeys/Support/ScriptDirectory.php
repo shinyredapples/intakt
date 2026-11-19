@@ -6,16 +6,15 @@ namespace Intakt\Tests\Journeys\Support;
 
 use RuntimeException;
 
-// The files a scripted provider call and its journey share: one start and one end file per call, and the two files that decide how long a call is held.
+// The files a scripted provider call and its journey share: one start and one end file per call, and the files that decide how long a call is held and how heavy it leaves its process.
 final readonly class ScriptDirectory
 {
     public const string RELEASE = 'release';
     public const string HOLD = 'hold';
-    public const string WAIT_FOR_STARTS = 'wait-for-starts';
+    public const string WEIGHT = 'weight';
     // Under the journey's 240 seconds, so a call nobody releases ends on its own and a failed journey leaves no process waiting.
     private const float HOLD_SECONDS = 90.0;
     private const int POLL_MICROSECONDS = 20000;
-    private const int PARTS = 2;
 
     public function __construct(private string $path)
     {
@@ -47,7 +46,7 @@ final readonly class ScriptDirectory
         file_put_contents($this->file($call, 'end'), json_encode(['pid' => getmypid(), 'at' => microtime(true)], JSON_THROW_ON_ERROR));
     }
 
-    public function holdWhileScripted(): void
+    public function holdWhileScripted(int $call): void
     {
         if (!is_file($this->path.'/'.self::HOLD)) {
             return;
@@ -55,20 +54,33 @@ final readonly class ScriptDirectory
 
         $until = microtime(true) + self::HOLD_SECONDS;
 
-        while (microtime(true) < $until && !$this->released()) {
+        while (microtime(true) < $until && !$this->released($call)) {
             usleep(self::POLL_MICROSECONDS);
         }
     }
 
-    private function released(): bool
+    // One call at a time, because two reviewers released together write the ledger at the same instant, which a SQLite database can refuse to one of them.
+    public function release(int $call): void
     {
-        if (is_file($this->path.'/'.self::RELEASE)) {
-            return true;
-        }
+        touch($this->file($call, self::RELEASE));
+    }
 
-        $wanted = @file_get_contents($this->path.'/'.self::WAIT_FOR_STARTS);
+    public function releaseAll(): void
+    {
+        touch($this->path.'/'.self::RELEASE);
+    }
 
-        return false !== $wanted && count(glob($this->path.'/calls/*.start') ?: []) >= (int) $wanted;
+    public function released(int $call): bool
+    {
+        return is_file($this->path.'/'.self::RELEASE) || is_file($this->file($call, self::RELEASE));
+    }
+
+    // What a call leaves behind in its process (the megabytes the weight file names), so a parallel worker crosses the consumer's memory limit; nothing without the file.
+    public function weightInBytes(): int
+    {
+        $megabytes = @file_get_contents($this->path.'/'.self::WEIGHT);
+
+        return false === $megabytes ? 0 : max(0, (int) $megabytes) * 1024 * 1024;
     }
 
     private function file(int $call, string $kind): string

@@ -44,33 +44,56 @@ final class ScriptDirectoryTest extends TestCase
     {
         $started = microtime(true);
 
-        new ScriptDirectory($this->directory)->holdWhileScripted();
+        new ScriptDirectory($this->directory)->holdWhileScripted(1);
 
         self::assertLessThan(1.0, microtime(true) - $started);
     }
 
-    public function testAHeldCallGoesOnOnceTheReleaseFileExists(): void
+    public function testAHeldCallGoesOnOnceAllCallsAreReleased(): void
     {
         touch($this->directory.'/'.ScriptDirectory::HOLD);
-        touch($this->directory.'/'.ScriptDirectory::RELEASE);
-        $started = microtime(true);
-
-        new ScriptDirectory($this->directory)->holdWhileScripted();
-
-        self::assertLessThan(1.0, microtime(true) - $started);
-    }
-
-    public function testAHeldCallGoesOnOnceTheWantedNumberOfCallsHasStarted(): void
-    {
-        touch($this->directory.'/'.ScriptDirectory::HOLD);
-        file_put_contents($this->directory.'/'.ScriptDirectory::WAIT_FOR_STARTS, '2');
         $script = new ScriptDirectory($this->directory);
-        $script->callStarted();
-        $script->callStarted();
+        $script->releaseAll();
         $started = microtime(true);
 
-        $script->holdWhileScripted();
+        $script->holdWhileScripted(1);
 
         self::assertLessThan(1.0, microtime(true) - $started);
+    }
+
+    public function testAHeldCallGoesOnOnceItIsReleasedItself(): void
+    {
+        touch($this->directory.'/'.ScriptDirectory::HOLD);
+        $script = new ScriptDirectory($this->directory);
+        $call = $script->callStarted();
+        $script->release($call);
+        $started = microtime(true);
+
+        $script->holdWhileScripted($call);
+
+        self::assertLessThan(1.0, microtime(true) - $started);
+    }
+
+    public function testReleasingOneCallLeavesTheOthersHeld(): void
+    {
+        $script = new ScriptDirectory($this->directory);
+        $first = $script->callStarted();
+        $second = $script->callStarted();
+
+        $script->release($first);
+
+        self::assertSame([true, false], [$script->released($first), $script->released($second)]);
+    }
+
+    public function testACallWeighsNothingWithoutAWeightFile(): void
+    {
+        self::assertSame(0, new ScriptDirectory($this->directory)->weightInBytes());
+    }
+
+    public function testACallWeighsTheMegabytesTheWeightFileNames(): void
+    {
+        file_put_contents($this->directory.'/'.ScriptDirectory::WEIGHT, '3');
+
+        self::assertSame(3 * 1024 * 1024, new ScriptDirectory($this->directory)->weightInBytes());
     }
 }

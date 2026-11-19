@@ -56,4 +56,15 @@ final class ScriptedHttpClientTest extends TestCase
         $calls = CallRecords::in($this->directory);
         self::assertSame([1, 1], [$calls->started(), $calls->ended()]);
     }
+
+    public function testACallKeepsTheScriptedWeightInItsProcessAfterItEnded(): void
+    {
+        file_put_contents($this->directory.'/'.ScriptDirectory::WEIGHT, '4');
+        $client = new ScriptedHttpClient(new MockHttpClient(new MockResponse('inner')), $this->directory);
+        $before = memory_get_usage();
+
+        $client->request('POST', self::MESSAGES)->getContent();
+
+        self::assertGreaterThanOrEqual(4 * 1024 * 1024, memory_get_usage() - $before);
+    }
 }

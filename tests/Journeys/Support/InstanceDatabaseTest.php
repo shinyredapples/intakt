@@ -34,6 +34,16 @@ final class InstanceDatabaseTest extends TestCase
         self::assertSame(1, $database->fetchedNotAcknowledged(self::MESSAGE));
     }
 
+    public function testWaitingMessagesOfEveryClassAreCountedInTheDefaultQueueOnly(): void
+    {
+        $this->message('default', null);
+        $this->message('default', '2026-11-01 00:00:00');
+        $this->pdo->exec('INSERT INTO messenger_messages (body, headers, queue_name) VALUES (\'O:1:"y":0:{}\', \'{"type":"Other"}\', \'default\')');
+        $this->message('failed', null);
+
+        self::assertSame(3, new InstanceDatabase($this->pdo)->waiting());
+    }
+
     public function testAFetchedMessageCanBeMadeAvailableAgain(): void
     {
         $this->message('default', '2026-11-01 00:00:00');

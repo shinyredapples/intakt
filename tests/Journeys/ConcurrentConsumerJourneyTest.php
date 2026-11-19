@@ -42,6 +42,9 @@ final class ConcurrentConsumerJourneyTest extends JourneyTestCase
     // How long docker/entrypoint.sh waits after its SIGTERM before it kills what still runs, inside Docker's 10 seconds.
     private const float ENTRYPOINT_WAIT_SECONDS = 8.0;
     private const int ACCOUNT_CAP = 3;
+    // Far above what the consumer itself uses, so only a worker that made a call crosses it.
+    private const int MEMORY_LIMIT_MB = 128;
+    private const int WORKER_WEIGHT_MB = 160;
     private const string QUEUE_VARIABLE = 'MESSENGER_TRANSPORT_DSN';
     private const string SHARED_QUEUE = 'doctrine://default';
 
@@ -96,8 +99,9 @@ final class ConcurrentConsumerJourneyTest extends JourneyTestCase
         $this->step('refuse a call over the account cap and start it once a place is free', $this->holdTheAccountCap(...));
         $this->step('cancel a running reviewer on a stop request', $this->stopARunningReviewer(...));
         $this->step('end the idle consumer on SIGTERM', fn () => $this->endGracefully($this->consumer()));
-        $this->step('read what a consumer at its message limit leaves behind (does not hold)', $this->readTheConsumerAtItsLimit(...));
-        $this->step('read what SIGTERM during a review leaves behind (does not hold)', $this->readSigtermDuringAReview(...));
+        $this->step('replace a consumer at its message limit, and read the message its default fetch size leaves behind (does not hold)', $this->replaceAConsumerAtItsMessageLimit(...));
+        $this->step('replace a parallel worker past the memory limit while the consumer goes on', $this->replaceAWorkerPastTheMemoryLimit(...));
+        $this->step('read what SIGTERM during a review leaves behind (does not end within the entrypoint wait)', $this->readSigtermDuringAReview(...));
     }
 
     private function seedTheSampleProject(): void
@@ -132,9 +136,10 @@ final class ConcurrentConsumerJourneyTest extends JourneyTestCase
     // Held until the second reviewer has started, so the first cannot end before the second began: the overlap is forced, not hoped for.
     private function runTwoReviewersTogether(): void
     {
-        $this->arm(hold: true, waitForStarts: 2);
+        $this->arm(hold: true);
         $this->openRound();
-        $this->waitForJudge();
+        $this->waitUntil(fn (): bool => 2 === CallRecords::in($this->script)->started(), 'the two reviewers did not both start: '.$this->consumer()->output());
+        $this->releaseOneByOne();
         $calls = CallRecords::in($this->script);
 
         self::assertSame([2, 2, 2], [$calls->started(), $calls->ended(), $calls->mostAtOnce()]);
@@ -150,9 +155,10 @@ final class ConcurrentConsumerJourneyTest extends JourneyTestCase
         $this->takeAccountPlaces(self::ACCOUNT_CAP - 1);
         $this->openRound();
 
-        $this->waitUntil(fn (): bool => $this->consumer()->hasPrinted('retry'), 'the call over the cap was not sent for a retry: '.$this->consumer()->output());
+        // Both, because the refused reviewer can be sent for a retry before the held one's call started; the held one keeps its place until released, so the refused one cannot start meanwhile.
+        $this->waitUntil(fn (): bool => $this->consumer()->hasPrinted('retry') && 1 <= CallRecords::in($this->script)->started(), 'the call over the cap was not sent for a retry: '.$this->consumer()->output());
         self::assertSame(1, CallRecords::in($this->script)->started(), 'a call started over the account cap');
-        $this->release();
+        new ScriptDirectory($this->script)->releaseAll();
         $this->waitForJudge();
         $this->releaseAccountPlaces();
         $calls = CallRecords::in($this->script);
@@ -172,31 +178,56 @@ final class ConcurrentConsumerJourneyTest extends JourneyTestCase
         $flash = $this->serviceWith(ReviewerStops::class, $this->environment())->requestStopOf($this->roundId, (string) $reviewer);
 
         self::assertSame(['success', 'Asked the reviewer to stop.'], $flash);
-        $this->release();
-        $this->waitForJudge();
+        $this->releaseOneByOne();
 
         self::assertSame($stopped + 1, $this->database()->ledgerRows('reviewer_stopped'));
     }
 
-    // Observed, not wished for: a consumer with --concurrency and --limit=1 ends within seconds with status 0 before any reviewer ran, where a consumer without --concurrency handles its message first. Both messages stay on the transport, and one of them may be fetched and not acknowledged, so it comes back only after the transport's redelivery time. The cause is not isolated: a Worker with ParallelExecutionStrategy over an in-memory or a Doctrine transport and a limit of 1 handles and acknowledges the message first.
-    private function readTheConsumerAtItsLimit(): void
+    // A consumer at its limit handles the message it received and ends with status 0, and the next consumer (the entrypoint starts one) goes on. Observed, not wished for: it fetches --fetch-size messages at once, by default its --concurrency, and leaves the ones it had not handled marked as delivered, which the Doctrine transport hands out again only after redeliver_timeout (90 minutes); with --fetch-size=1 it leaves none.
+    private function replaceAConsumerAtItsMessageLimit(): void
     {
         $this->arm(hold: false);
         $this->openRound(queueReviewers: true);
-        $consumer = $this->consume(['--concurrency='.self::CONCURRENCY, '--limit=1', '--time-limit=60']);
+        $waiting = $this->database()->waiting();
 
-        self::assertNotNull($consumer->endedWithin(self::GRACE_SECONDS, microtime(true)), 'the consumer did not stop at its limit: '.$consumer->output());
-        self::assertSame(0, $consumer->exitCode());
-        self::assertSame(0, CallRecords::in($this->script)->started(), 'the consumer handled the message it received before it ended');
-        self::assertSame(2, $this->database()->queued(ReviewWithReviewer::class));
-        // As the transport's redelivery time would, so the next step runs the same round's reviewers.
+        $this->consumeToTheLimit([]);
+
+        self::assertSame($waiting - 1, $this->database()->waiting(), 'the consumer did not handle exactly one message');
+        self::assertSame(1, $this->database()->fetchedNotAcknowledged(ReviewWithReviewer::class), 'the default fetch size left no fetched message behind');
+        // As the transport's redelivery time would, so the replacement can fetch it.
         $this->database()->makeFetchedMessagesAvailable();
+
+        $this->consumeToTheLimit(['--fetch-size=1']);
+
+        self::assertSame($waiting - 2, $this->database()->waiting(), 'the replacement did not handle exactly one message');
+        self::assertSame(0, $this->database()->fetchedNotAcknowledged(ReviewWithReviewer::class), 'a fetch size of one left a fetched message behind');
+        self::assertSame(1, CallRecords::in($this->script)->ended());
+    }
+
+    // A parallel worker checks the memory limit after each message, ends past it, and the consumer starts another in its place (ParallelExecutionStrategy::replaceChannel()); the consumer itself stays below the limit and goes on. Each call leaves more than the limit in its worker, so a worker never makes a second call.
+    private function replaceAWorkerPastTheMemoryLimit(): void
+    {
+        $this->arm(hold: false, settled: false);
+        file_put_contents($this->script.'/'.ScriptDirectory::WEIGHT, (string) self::WORKER_WEIGHT_MB);
+        $consumer = $this->consume(['--concurrency='.self::CONCURRENCY, '--memory-limit='.self::MEMORY_LIMIT_MB.'M', '--time-limit=200']);
+
+        // The last reviewer the limit step left, then a whole round.
+        $this->waitForJudge();
+        $this->openRound();
+        $this->waitForJudge();
+        $calls = CallRecords::in($this->script);
+
+        self::assertSame([3, 3], [$calls->started(), $calls->ended()]);
+        self::assertCount(3, $calls->processes(), 'a worker past the memory limit made another call');
+        self::assertTrue($consumer->running(), 'the consumer ended at the memory limit of its workers: '.$consumer->output());
+        $this->endGracefully($consumer);
     }
 
     // Observed, not wished for: the consumer keeps running after SIGTERM until its review ends, as a consumer without --concurrency does, so the entrypoint's kill ends it within the grace time; the interrupted message stays on the transport, and its worker process outlives the killed consumer (inside a container it ends with the container).
     private function readSigtermDuringAReview(): void
     {
-        $this->arm(hold: true, settled: false);
+        $this->arm(hold: true);
+        $this->openRound(queueReviewers: true);
         $consumer = $this->consume(['--concurrency='.self::CONCURRENCY, '--time-limit=60']);
 
         $this->waitUntil(fn (): bool => 1 <= CallRecords::in($this->script)->started(), 'no reviewer started: '.$consumer->output());
@@ -229,27 +260,34 @@ final class ConcurrentConsumerJourneyTest extends JourneyTestCase
     }
 
     // A fresh set of calls for the next case; the earlier case's calls have all ended.
-    private function arm(bool $hold, ?int $waitForStarts = null, bool $settled = true): void
+    private function arm(bool $hold, bool $settled = true): void
     {
         // Settled first, because a reviewer message is acknowledged after its call ended, and the next case must not see it.
         if ($settled) {
             $this->waitUntil(fn (): bool => 0 === $this->database()->queued(ReviewWithReviewer::class), 'a reviewer message stayed on the transport');
         }
 
-        new Filesystem()->remove([$this->script.'/calls', ...array_map(fn (string $file): string => $this->script.'/'.$file, [ScriptDirectory::HOLD, ScriptDirectory::WAIT_FOR_STARTS, ScriptDirectory::RELEASE])]);
+        new Filesystem()->remove([$this->script.'/calls', ...array_map(fn (string $file): string => $this->script.'/'.$file, [ScriptDirectory::HOLD, ScriptDirectory::RELEASE, ScriptDirectory::WEIGHT])]);
 
         if ($hold) {
             touch($this->script.'/'.ScriptDirectory::HOLD);
         }
-
-        if (null !== $waitForStarts) {
-            file_put_contents($this->script.'/'.ScriptDirectory::WAIT_FOR_STARTS, (string) $waitForStarts);
-        }
     }
 
-    private function release(): void
+    // The second only once the first reviewer's answer is in the ledger, so the two never write it at the same instant (see ScriptDirectory::release()).
+    private function releaseOneByOne(): void
     {
-        touch($this->script.'/'.ScriptDirectory::RELEASE);
+        $script = new ScriptDirectory($this->script);
+        $answers = $this->answers();
+        $script->release(1);
+        $this->waitUntil(fn (): bool => $answers < $this->answers(), 'the first released reviewer did not answer: '.$this->consumer()->output());
+        $script->release(2);
+        $this->waitForJudge();
+    }
+
+    private function answers(): int
+    {
+        return array_sum(array_map($this->database()->ledgerRows(...), ['verdict_received', 'reviewer_stopped', 'reviewer_failed', 'reviewer_blocked']));
     }
 
     private function waitForJudge(): void
@@ -271,6 +309,17 @@ final class ConcurrentConsumerJourneyTest extends JourneyTestCase
     private function consumer(): ConsumerProcess
     {
         return array_last($this->consumers) ?? throw new RuntimeException('No consumer was started.');
+    }
+
+    /**
+     * @param list<string> $options
+     */
+    private function consumeToTheLimit(array $options): void
+    {
+        $consumer = $this->consume(['--concurrency='.self::CONCURRENCY, '--limit=1', '--time-limit=60', ...$options]);
+
+        self::assertNotNull($consumer->endedWithin(self::WAIT_SECONDS, microtime(true)), 'the consumer did not stop at its limit: '.$consumer->output());
+        self::assertSame(0, $consumer->exitCode(), $consumer->output());
     }
 
     private function endGracefully(ConsumerProcess $consumer): void

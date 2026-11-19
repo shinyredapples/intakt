@@ -18,6 +18,9 @@ final class ScriptedHttpClient implements HttpClientInterface
     private const string ANTHROPIC = 'https://api.anthropic.com/';
     private const string APPROVE = '{"verdict":"approve","findings":[],"resolved":[],"follow_ups":[]}';
 
+    // Kept for the life of the process, as a leak would be, so only replacing the worker frees it.
+    private static string $weight = '';
+
     private ?MockHttpClient $scripted = null;
 
     public function __construct(
@@ -66,17 +69,17 @@ final class ScriptedHttpClient implements HttpClientInterface
 
         yield $this->event('message_start', ['type' => 'message_start', 'message' => ['id' => 'msg_journey', 'type' => 'message', 'role' => 'assistant', 'model' => 'claude-opus-5-5', 'content' => [], 'stop_reason' => null, 'stop_sequence' => null, 'usage' => ['input_tokens' => 10, 'cache_creation_input_tokens' => 0, 'cache_read_input_tokens' => 0, 'output_tokens' => 1]]]);
         yield $this->event('content_block_start', ['type' => 'content_block_start', 'index' => 0, 'content_block' => ['type' => 'text', 'text' => '']]);
+        // Before the first delta, because the stop check runs at each one: a request made while the call is held is always seen at the first, never sometimes at the second.
+        $directory->holdWhileScripted($call);
+
         yield $this->delta(substr($text, 0, $half));
-
-        // Between two deltas, because the stop check runs at each one: a request made while the call is held lands at the second.
-        $directory->holdWhileScripted();
-
         yield $this->delta(substr($text, $half));
         yield $this->event('content_block_stop', ['type' => 'content_block_stop', 'index' => 0]);
         yield $this->event('message_delta', ['type' => 'message_delta', 'delta' => ['stop_reason' => 'end_turn', 'stop_sequence' => null], 'usage' => ['input_tokens' => 10, 'cache_creation_input_tokens' => 0, 'cache_read_input_tokens' => 0, 'output_tokens' => 20]]);
         yield $this->event('message_stop', ['type' => 'message_stop']);
 
         $directory->callEnded($call);
+        self::$weight .= str_repeat('w', $directory->weightInBytes());
     }
 
     private function delta(string $text): string
