@@ -11,8 +11,7 @@ use Symfony\Component\Messenger\Stamp\DispatchOnFailureStamp;
 use Symfony\Component\Workflow\Attribute\AsCompletedListener;
 use Symfony\Component\Workflow\Event\CompletedEvent;
 
-// On the completed transition, which runs once per round inside the completing transaction; the Doctrine queue shares that transaction, so a round is never complete without its judging queued, and the call itself runs later in a worker, outside the round's lock.
-// The failure stamp names what follows a judging that fails for good (a record and the publication of the round as not reviewed), so no listener of Intakt's own watches worker failures for it.
+// On the completed transition, which runs once per round inside the completing transaction; the Doctrine queue shares that transaction, so a round is never complete without its judging queued, and the call itself runs later in a worker, outside the round's lock; the failure stamp names what follows a judging that fails for good, so no listener of Intakt's own watches worker failures for it.
 #[AsCompletedListener(workflow: 'review_round', transition: 'complete')]
 final readonly class QueueJudgingOfCompletedRound
 {

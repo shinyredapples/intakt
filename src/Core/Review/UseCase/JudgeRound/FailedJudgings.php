@@ -13,7 +13,7 @@ use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\Transport\Receiver\ListableReceiverInterface;
 use Symfony\Component\Messenger\Transport\Receiver\ReceiverInterface;
 
-// A judging that failed for good leaves no mark on the round: its failure message records it in the ledger, and Messenger parks the judging in the failure transport only when that message could not be dispatched.
+// Both places are read, because the failure message records the failure in the ledger, and Messenger parks the judging only when that message could not be dispatched.
 final readonly class FailedJudgings
 {
     public function __construct(

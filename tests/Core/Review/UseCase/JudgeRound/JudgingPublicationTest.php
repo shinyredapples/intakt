@@ -30,7 +30,6 @@ use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\LoggerInterface;
 use RuntimeException;
-use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\Messenger\Bridge\Doctrine\Transport\DoctrineTransport;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\Event\WorkerMessageFailedEvent;
@@ -147,7 +146,6 @@ final class JudgingPublicationTest extends KernelTestCase
         self::assertSame([$roundId], $this->publications());
     }
 
-    // Two deliveries of one judging both asked the judge; the second call failed for good after the first one's verdict was recorded.
     public function testAJudgingThatFailsForGoodAfterAnotherWorkerJudgedTheRoundRecordsAndPublishesNothingMore(): void
     {
         $roundId = $this->completedRound();
@@ -230,12 +228,10 @@ final class JudgingPublicationTest extends KernelTestCase
         self::fail('The scripted judge answered.');
     }
 
-    // What a worker dispatches when a handler of the received judging threw.
     private function reportFailure(Envelope $judging, Throwable $failure): void
     {
         $received = $judging->with(new ReceivedStamp('async'));
         $events = self::getContainer()->get('event_dispatcher');
-        assert($events instanceof EventDispatcherInterface);
 
         $events->dispatch(new WorkerMessageFailedEvent($received, 'async', new HandlerFailedException($received, [JudgeRoundHandler::class => $failure])));
     }
@@ -298,7 +294,6 @@ final class JudgingPublicationTest extends KernelTestCase
     private function commands(): MessageBusInterface
     {
         $commands = self::getContainer()->get('command.bus');
-        assert($commands instanceof MessageBusInterface);
 
         return $commands;
     }
