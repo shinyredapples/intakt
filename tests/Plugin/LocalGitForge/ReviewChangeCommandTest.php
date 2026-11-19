@@ -75,34 +75,19 @@ use Symfony\Component\Console\Tester\CommandTester;
 #[UsesClass(RoundTierNotMapped::class)]
 final class ReviewChangeCommandTest extends TestCase
 {
-    // Built once, because each git call costs a process: the cases that leave the checkout as it is share it.
-    private static TemporaryRepository $shared;
-
     private TemporaryRepository $repository;
-
-    public static function setUpBeforeClass(): void
-    {
-        self::$shared = new TemporaryRepository();
-        self::$shared->commitFile('README.md', "base\n");
-        self::$shared->checkoutNewBranch('sample');
-        self::$shared->commitFile('src/Feature.php', "<?php\n");
-    }
-
-    public static function tearDownAfterClass(): void
-    {
-        self::$shared->remove();
-    }
 
     protected function setUp(): void
     {
-        $this->repository = self::$shared;
+        $this->repository = new TemporaryRepository();
+        $this->repository->commitFile('README.md', "base\n");
+        $this->repository->checkoutNewBranch('sample');
+        $this->repository->commitFile('src/Feature.php', "<?php\n");
     }
 
     protected function tearDown(): void
     {
-        if ($this->repository !== self::$shared) {
-            $this->repository->remove();
-        }
+        $this->repository->remove();
     }
 
     /**
@@ -277,7 +262,6 @@ final class ReviewChangeCommandTest extends TestCase
 
     public function testTheReviewersReadASnapshotOfTheHeadWhileTheCheckoutStaysWhereItIs(): void
     {
-        $this->repository = self::$shared->copy();
         $this->repository->checkout('main');
 
         $tester = $this->whenTheCommandRuns($this->reviewingTheSnapshot(static function (string $snapshot): void {
@@ -293,8 +277,6 @@ final class ReviewChangeCommandTest extends TestCase
     // The reviewer's probe: a checkout switched away and back while the reviewers read must not change what they read.
     public function testABranchSwitchedAndRestoredDuringTheRoundDoesNotChangeWhatTheReviewersRead(): void
     {
-        $this->repository = self::$shared->copy();
-
         $tester = $this->whenTheCommandRuns($this->reviewingTheSnapshot(function (string $snapshot): void {
             $this->repository->checkout('main');
             self::assertFileDoesNotExist($this->repository->path.'/src/Feature.php');
@@ -307,7 +289,6 @@ final class ReviewChangeCommandTest extends TestCase
 
     public function testAnEditInTheCheckoutDoesNotReachTheSnapshot(): void
     {
-        $this->repository = self::$shared->copy();
         file_put_contents($this->repository->path.'/src/Feature.php', "<?php\n// edited\n");
         file_put_contents($this->repository->path.'/notes.txt', "scratch\n");
 
