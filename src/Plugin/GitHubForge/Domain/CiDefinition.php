@@ -10,7 +10,7 @@ use NoDiscard;
 final readonly class CiDefinition
 {
     private const string GITHUB_FOLDER = '.github/';
-    // Not CI, because GitHub only shows issue forms and the pull request template and never runs them; a workflow that names one still counts it.
+    // Not CI by folder, because GitHub only shows these templates.
     private const string TEMPLATE = '#^\.github/(?:ISSUE_TEMPLATE/[^/\n]+\.(?:ya?ml|md)|pull_request_template\.md)\z#';
     // Every Dockerfile counts, because a workflow can build an image from one in its build context without naming it.
     private const string DOCKERFILE = '/(?:^|\/)(?:Dockerfile(?:\..+)?|[^\/]+\.Dockerfile)$/i';
@@ -42,8 +42,7 @@ final readonly class CiDefinition
     /** @param list<WorkflowFile> $workflows */
     private function isPartOf(array $workflows, string $path): bool
     {
-        $isTemplate = 1 === preg_match(self::TEMPLATE, $path);
-        if ((str_starts_with($path, self::GITHUB_FOLDER) && !$isTemplate) || 1 === preg_match(self::DOCKERFILE, $path)) {
+        if ((str_starts_with($path, self::GITHUB_FOLDER) && 1 !== preg_match(self::TEMPLATE, $path)) || 1 === preg_match(self::DOCKERFILE, $path)) {
             return true;
         }
 

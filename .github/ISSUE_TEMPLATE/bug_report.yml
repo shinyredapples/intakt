@@ -1,15 +1,15 @@
 name: Bug report
-description: Something in Intakt does not work as it should.
+description: Intakt does not work as it should.
 body:
   - type: markdown
     attributes:
       value: |
-        See [writing a good task](https://github.com/shinyredapples/intakt/blob/main/docs/guide/writing-a-good-task.md). Report a security problem privately, never here.
+        See [writing a good task](https://github.com/shinyredapples/intakt/blob/main/docs/guide/writing-a-good-task.md).
   - type: textarea
     id: what-happened
     attributes:
       label: What happened
-      description: What you saw, with the output or error message if there is one.
+      description: What you saw, with any error message.
     validations:
       required: true
   - type: textarea
@@ -24,15 +24,12 @@ body:
     attributes:
       label: Steps to reproduce
       description: The smallest steps that make it happen again.
-      placeholder: |
-        1. Run `bin/console ...`
-        2. ...
     validations:
       required: true
   - type: input
     id: version
     attributes:
       label: Version
-      description: The Intakt release or commit you ran.
+      description: The release or commit you ran.
     validations:
       required: true
