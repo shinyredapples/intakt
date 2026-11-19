@@ -24,8 +24,6 @@ final readonly class GitHubIssueReads implements IssueReads
     private const int MAX_PAGES = 10;
     private const int NOT_MODIFIED = 304;
     private const int UNAUTHORIZED = 401;
-    // The answer's Date and an issue's `updated_at` come from different GitHub servers, whose clocks may differ by this much.
-    private const int CLOCK_SLACK_SECONDS = 5;
 
     public function __construct(
         private GitHubCalls $calls,
@@ -80,24 +78,9 @@ final readonly class GitHubIssueReads implements IssueReads
                 throw new ForgeReadFailed('GitHub lists more open issues than this forge reads.');
             }
 
-            $this->refuseChangedWhileServed($listed, $answer['date'], $page);
+            new ChangedWhileServed($this->moments)->refuse($listed, $answer['date'], $page);
             $validators[$page] = $answer['etag'];
             $answer = $this->get($path, $this->page($page + 1));
-        }
-    }
-
-    // A `304` compares representations, and `updated_at` counts whole seconds, so an issue closed and reopened in the second its page was served looks unchanged while a later page was read without the issue it pushed back; only an issue updated before that second rules this out.
-    /**
-     * @param list<ListedIssue> $listed
-     *
-     * @throws ForgeReadFailed
-     */
-    private function refuseChangedWhileServed(array $listed, ?string $date, int $page): void
-    {
-        $served = $this->moments->served($date ?? throw new ForgeReadFailed(sprintf('GitHub answered page %d of open issues without a Date.', $page)));
-        $recent = array_find($listed, static fn (ListedIssue $issue): bool => $issue->updatedAt > $served->modify(sprintf('-%d seconds', self::CLOCK_SLACK_SECONDS)));
-        if (null !== $recent) {
-            throw new ForgeReadFailed(sprintf('Issue #%d on page %d of the open issues changed in the seconds GitHub served the page, so a close and reopen while the later pages were read cannot be ruled out.', $recent->number, $page));
         }
     }
 

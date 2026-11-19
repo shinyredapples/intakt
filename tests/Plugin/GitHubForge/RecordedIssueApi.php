@@ -32,7 +32,7 @@ final class RecordedIssueApi
     /** @var array<int, string> */
     public array $pages = [];
     public string $etag = 'W/"issues-1"';
-    // The Date header of every page, or null for none; fifteen days after the pages' issues were last updated.
+    // Fifteen days after the scripted issues were last updated, because a page served in the second one of its issues changed fails a listing of several pages; null sends no Date.
     public ?string $served = 'Wed, 25 Nov 2026 10:00:00 GMT';
     public bool $notModified = false;
     // Answers 304 to a request that carries the current ETag, as GitHub does for a page that did not change; off by default, so a scripted page is read even when a validator is sent.

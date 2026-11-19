@@ -14,6 +14,7 @@ use Intakt\Plugin\GitHubForge\Contract\IssueListing;
 use Intakt\Plugin\GitHubForge\Contract\IssueReads;
 use Intakt\Plugin\GitHubForge\Contract\LabelApplication;
 use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
+use Intakt\Plugin\GitHubForge\Infrastructure\ChangedWhileServed;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubIssueReads;
 use Intakt\Plugin\GitHubWorkSource\Domain\HeldIssue;
 use Intakt\Plugin\GitHubWorkSource\Domain\IntakePlan;
@@ -47,6 +48,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[CoversClass(TaskFailure::class)]
 #[CoversClass(OpenItems::class)]
 #[UsesClass(GitHubIssueReads::class)]
+#[UsesClass(ChangedWhileServed::class)]
 #[UsesClass(IssueListing::class)]
 #[UsesClass(ListedIssue::class)]
 #[UsesClass(IssueHistory::class)]
