@@ -39,9 +39,8 @@ final class JavaScriptLexer
      */
     private array $frames = [];
 
+    // Because a function or class in an expression is an operand once its body closes, the depth at which that body's `{` will open is kept until it does.
     /**
-     * Because a function or class in an expression is an operand once its body closes, the depth at which that body's `{` will open is kept until it does.
-     *
      * @var array<int, true>
      */
     private array $expressionBodies = [];
@@ -278,7 +277,8 @@ final class JavaScriptLexer
     private function afterSemicolon(int $offset): int
     {
         if (self::FOR_HEAD === array_last($this->frames)) {
-            $this->frames[array_key_last($this->frames)] = self::HEAD_PARENTHESIS;
+            array_pop($this->frames);
+            $this->frames[] = self::HEAD_PARENTHESIS;
         }
 
         return $this->after(self::STATEMENT_END, $offset + 1);

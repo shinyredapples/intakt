@@ -17,9 +17,7 @@ final readonly class JavaScriptLiterals
     private const string SPACE_LEADS = "\xC2\xE1\xE2\xE3\xEF";
     private const string WORD_ASCII = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_$\\';
     private const string DECIMAL_DIGITS = '0123456789_';
-    private const string RADIX_DIGITS = '0123456789abcdefABCDEF_';
-    private const string HEX_DIGITS = '0123456789abcdefABCDEF';
-    private const array RADIX_PREFIXES = ['x', 'X', 'o', 'O', 'b', 'B'];
+    private const string RADIX_DIGITS = '0123456789abcdefABCDEF_';    private const array RADIX_PREFIXES = ['x', 'X', 'o', 'O', 'b', 'B'];
     private const array EXPONENTS = ['e', 'E'];
     private const string BIGINT_SUFFIX = 'n';
 
@@ -85,9 +83,7 @@ final readonly class JavaScriptLiterals
 
     public function functionFollows(int $offset): bool
     {
-        $word = $offset + strspn($this->source, " \t", $offset);
-
-        return 'function' === substr($this->source, $word, 8) && !str_contains($this->wordBytes, $this->source[$word + 8] ?? ' ');
+        return 1 === preg_match('/\G[ \t]*function(?![\w$\\\\])/', $this->source, offset: $offset);
     }
 
     public function afterNumber(int $offset): int
@@ -174,13 +170,9 @@ final readonly class JavaScriptLiterals
             return 1;
         }
 
-        if ($offset - 2 < $start || '\\u{' !== substr($this->source, $offset - 2, 3)) {
-            return 0;
-        }
+        $escape = [];
 
-        $digits = strspn($this->source, self::HEX_DIGITS, $offset + 1);
-
-        return '}' === ($this->source[$offset + 1 + $digits] ?? '') ? 2 + $digits : 0;
+        return $offset - 2 >= $start && 1 === preg_match('/\G\\\\u(\{[0-9a-fA-F]+\})/', $this->source, $escape, offset: $offset - 2) ? strlen($escape[1]) : 0;
     }
 
     private function wordContinuesAt(int $offset): bool
