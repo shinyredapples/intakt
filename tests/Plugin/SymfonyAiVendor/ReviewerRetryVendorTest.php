@@ -30,6 +30,7 @@ use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Contract\ReviewServerAccesses;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
+use Intakt\Core\Review\Contract\VerdictUnreadable;
 use Intakt\Core\Review\Infrastructure\JudgeAgent;
 use Intakt\Core\Review\Infrastructure\JudgePrompt;
 use Intakt\Core\Review\Infrastructure\LiveProgress;
@@ -231,6 +232,25 @@ final class ReviewerRetryVendorTest extends KernelTestCase
         self::assertSame('gave no approval without naming a finding', new FailureInWords()->of($failure::class));
     }
 
+    public function testAChangesAnswerNamingAReservedFailureIdIsAskedOnceMoreAndTheNamedFindingCounts(): void
+    {
+        $verdict = $this->vendor($this->answering($this->reservedFailureId(...), $this->namedFinding(...)))->review('alpha', Tier::Strong, $this->request())->verdict;
+
+        self::assertSame([Decision::Changes, 1, false], [$verdict->verdict, count($verdict->findings), $verdict->isFailedReview()]);
+        self::assertSame([false, false], $this->askedToNameFindings);
+    }
+
+    public function testASecondAnswerNamingAReservedFailureIdFailsTheReviewerAsUnreadable(): void
+    {
+        $vendor = $this->vendor($this->answering($this->reservedFailureId(...), $this->reservedFailureId(...)));
+
+        $failure = $this->thrownBy(fn (): VendorReview => $vendor->review('alpha', Tier::Strong, $this->request()));
+
+        self::assertInstanceOf(VerdictUnreadable::class, $failure);
+        self::assertSame('the reviewer\'s answer could not be read as a verdict: the verdict names finding ids reserved for failed reviews: no-tools.', $failure->keySafeInWords());
+        self::assertCount(2, $this->askedToNameFindings);
+    }
+
     public function testAnApprovalWithoutAFindingIsNotAskedAgain(): void
     {
         $verdict = $this->vendor($this->answering($this->approvalWithoutFindings(...), $this->namedFinding(...)))->review('alpha', Tier::Strong, $this->request())->verdict;
@@ -285,6 +305,11 @@ final class ReviewerRetryVendorTest extends KernelTestCase
     private function approvalWithoutFindings(): TextResult
     {
         return new TextResult(VerdictDocument::fromTheDesign()->with('verdict', 'approve')->with('resolved', [])->with('findings', [])->json());
+    }
+
+    private function reservedFailureId(): TextResult
+    {
+        return new TextResult(VerdictDocument::fromTheDesign()->with('verdict', 'changes')->with('resolved', [])->withFinding('id', Verdict::NO_TOOLS)->json());
     }
 
     private function exampleFinding(): TextResult

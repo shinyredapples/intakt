@@ -66,10 +66,13 @@ final readonly class ReviewerAgent implements Reviewer
 
         $verdict = $this->canStream($platform, $model) ? $this->answeredStreaming($agent, $conversation, $request->conversation) : $this->answeredUnstreamed($agent, $conversation, $request->conversation);
 
-        // A stop wins over an earlier malformed call, because only a stopped verdict lets the stop be recorded; a model naming the id itself gains nothing, since its verdict still blocks.
+        // A stop wins over an earlier malformed call, because only a stopped verdict lets the stop be recorded; a model naming the id itself gains nothing, since refuseClaimedFailureIds() refuses a forged stop.
         if ($tools->seen() && !$verdict->isStopped()) {
             throw VerdictUnreadable::becauseKeySafe('the reviewer made a malformed tool call.');
         }
+
+        // Before the cut approval is put in its place, because a reviewer that names a reserved id has given an unreadable answer whatever it decided, and is asked once more.
+        $this->refuseClaimedFailureIds($verdict);
 
         $counted = $this->asTheRoundCounts($request->brief, $verdict);
 
@@ -84,6 +87,16 @@ final readonly class ReviewerAgent implements Reviewer
     private function asTheRoundCounts(ReviewBrief $brief, Verdict $verdict): Verdict
     {
         return new GoalpostRule()->applyToVerdict($brief->round, $verdict, $brief->open);
+    }
+
+    // Refused like unreadable output, because a counted vote under a reserved id would send the head back with findings the ledger drops; key-safe, because only Intakt's own ids are named.
+    private function refuseClaimedFailureIds(Verdict $verdict): void
+    {
+        $claimed = $verdict->claimedFailureIds();
+
+        if ([] !== $claimed) {
+            throw VerdictUnreadable::becauseKeySafe(sprintf('the verdict names finding ids reserved for failed reviews: %s.', implode(', ', $claimed)));
+        }
     }
 
     // Plain code refuses it, because the note asking the reviewer to read the rest is only prompt text, and a steered or lazy reviewer could approve code it never saw.
