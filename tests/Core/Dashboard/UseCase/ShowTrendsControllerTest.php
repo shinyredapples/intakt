@@ -77,7 +77,7 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
         self::assertSame('2 review rounds over every project', $page->filter('.page-head .meta span')->text());
     }
 
-    public function testTheOneReviewerTileReadsNoDataEvenWhenActEntriesHaveMerges(): void
+    public function testTheOneReviewerTileReadsNoDataForRoundsWithoutARecordOfWhoReportedWhatEvenWhenActEntriesHaveMerges(): void
     {
         $this->ledger->startRound('r-1', 'alpha');
         $this->ledger->judgeOneEntryOf('r-1', 'F1', 'F2');
@@ -85,7 +85,25 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
         $page = $this->browser->request('GET', '/trends');
 
         self::assertSame('No data', $this->tiles($page)['Caught by one reviewer only']);
-        self::assertStringContainsString('The ledger does not record which reviewer reported each finding', $page->filter('.tiles-note')->text());
+        self::assertStringContainsString('"Caught by one reviewer only" leaves out the rounds completed before Intakt recorded which reviewer reported each finding.', $page->filter('.tiles-note')->text());
+    }
+
+    public function testTheOneReviewerTileShowsTheShareOfActEntriesOnlyOneReviewerReported(): void
+    {
+        $this->ledger->startRound('r-1', 'alpha');
+        $this->ledger->reportFindings('r-1', 'correctness', ['F1']);
+        $this->ledger->reportFindings('r-1', 'security', ['F2']);
+        $this->ledger->judgeOneEntryOf('r-1', 'F1', 'F2');
+        $this->ledger->startRound('r-2', 'alpha');
+        $this->ledger->reportFindings('r-2', 'correctness', ['F1']);
+        $this->ledger->reportFindings('r-2', 'security', []);
+        $this->ledger->judgeFindings('r-2', ['F1' => 'act']);
+        $this->ledger->startRound('r-3', 'alpha');
+        $this->ledger->judgeOneEntryOf('r-3', 'F1', 'F2');
+
+        $page = $this->browser->request('GET', '/trends');
+
+        self::assertSame('50%', $this->tiles($page)['Caught by one reviewer only']);
     }
 
     public function testTheCostTileIsTheMeanOverEveryPricedRound(): void

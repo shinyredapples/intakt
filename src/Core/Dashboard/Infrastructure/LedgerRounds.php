@@ -26,6 +26,7 @@ use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Core\Review\Contract\ReviewerBlocked;
 use Intakt\Core\Review\Contract\ReviewerFailed;
+use Intakt\Core\Review\Contract\ReviewerFindingsRecorded;
 use Intakt\Core\Review\Contract\ReviewerStarted;
 use Intakt\Core\Review\Contract\ReviewerStopped;
 use Intakt\Core\Review\Contract\RoundCosts;
@@ -52,6 +53,9 @@ final class LedgerRounds
 
     /** @var array<string, ReplayMark> */
     private array $roundMarks = [];
+
+    /** @var array<string, array<string, list<string>>> */
+    private array $findingsByReviewer = [];
 
     private readonly LedgerTokens $tokens;
 
@@ -84,6 +88,12 @@ final class LedgerRounds
 
         if (LedgerEventKind::JudgeDone === $kind) {
             $this->addJudge($recorded);
+
+            return;
+        }
+
+        if (LedgerEventKind::ReviewerFindingsRecorded === $kind) {
+            $this->addReviewerFindings($recorded);
 
             return;
         }
@@ -201,6 +211,15 @@ final class LedgerRounds
         }
     }
 
+    private function addReviewerFindings(RecordedEvent $recorded): void
+    {
+        $row = $this->payloads->reviewerFindingsOf($recorded);
+
+        if ($row instanceof ReviewerFindingsRecorded) {
+            $this->findingsByReviewer[$row->round][$row->reviewer] = $row->findings;
+        }
+    }
+
     /**
      * @return list<RoundFinding>
      */
@@ -287,7 +306,7 @@ final class LedgerRounds
     // The one place that decides a round's outcomes, findings, ending and state, so the review list and the review page never decide them apart.
     private function decidedAsOnThePage(ReviewedRound $round): ReviewedRound
     {
-        $completed = $round->withOutcomes(array_values($this->outcomes[$round->round] ?? []));
+        $completed = $this->withReporters($round->withOutcomes(array_values($this->outcomes[$round->round] ?? [])));
 
         $judged = $this->judged[$round->round] ?? null;
 
@@ -296,6 +315,14 @@ final class LedgerRounds
             $judged['textRecorded'] => $this->decided($completed->judgedWith($judged['findings'], $judged['at'])->withDropped($judged['dropped']), $judged['votes']),
             default => $this->decided($completed->judgedFromMarksOnly($judged['findings'], $judged['at'])->withDropped($judged['dropped']), $judged['votes']),
         };
+    }
+
+    // Left unrecorded without a row, because a round completed before the rows were written has no record, which is not a record of no findings.
+    private function withReporters(ReviewedRound $round): ReviewedRound
+    {
+        $reported = $this->findingsByReviewer[$round->round] ?? null;
+
+        return null === $reported ? $round : $round->withFindingsByReviewer($reported);
     }
 
     private function endedOrRunning(ReviewedRound $round): ReviewedRound
