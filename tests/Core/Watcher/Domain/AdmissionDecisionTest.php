@@ -88,6 +88,54 @@ final class AdmissionDecisionTest extends TestCase
         self::assertSame(HeadAdmission::Pending, $this->admissionOfRuns($this->ciRun(CiRunState::Cancelled, 0), $this->ciRun(CiRunState::Succeeded, 5, $other)));
     }
 
+    public function testARunThatNeverStartedIsIgnoredWhenANewerGreenRunOfTheSameOriginExists(): void
+    {
+        self::assertSame(HeadAdmission::Green, $this->admissionOfRuns($this->ciRun(CiRunState::Queued, 0), $this->ciRun(CiRunState::Succeeded, 5)));
+    }
+
+    public function testARunThatNeverStartedNextToANewerRedRunOfTheSameOriginIsRed(): void
+    {
+        self::assertSame(HeadAdmission::Red, $this->admissionOfRuns($this->ciRun(CiRunState::Queued, 0), $this->ciRun(CiRunState::Failed, 5)));
+    }
+
+    public function testARunThatNeverStartedAndNothingReplacedIsPending(): void
+    {
+        self::assertSame(HeadAdmission::Pending, $this->admission(CiRunState::Queued));
+    }
+
+    public function testARunThatStartedStaysPendingNextToANewerGreenRunOfTheSameOrigin(): void
+    {
+        self::assertSame(HeadAdmission::Pending, $this->admissionOfRuns($this->ciRun(CiRunState::Unfinished, 0), $this->ciRun(CiRunState::Succeeded, 5)));
+    }
+
+    public function testARunThatNeverStartedIsNotReplacedByANewerRunOfAnotherName(): void
+    {
+        $lint = new CiRunOrigin('lint', 'pull_request', new ChangeId('7'));
+
+        self::assertSame(HeadAdmission::Pending, $this->admissionOfRuns($this->ciRun(CiRunState::Queued, 0), $this->ciRun(CiRunState::Succeeded, 5, $lint)));
+    }
+
+    public function testARunThatNeverStartedNewerThanTheSucceededOneIsPending(): void
+    {
+        self::assertSame(HeadAdmission::Pending, $this->admissionOfRuns($this->ciRun(CiRunState::Queued, 5), $this->ciRun(CiRunState::Succeeded, 0)));
+    }
+
+    public function testARunThatNeverStartedIsIgnoredWhenAGreenRunOfTheSameOriginCreatedInTheSameSecondHasAHigherNumber(): void
+    {
+        $origin = new CiRunOrigin('ci', 'pull_request', new ChangeId('7'));
+        $at = new DateTimeImmutable('2026-11-02T10:00:00+00:00');
+
+        self::assertSame(HeadAdmission::Green, $this->admissionOfRuns(new CiRun($origin, CiRunState::Succeeded, $at, 2), new CiRun($origin, CiRunState::Queued, $at, 1)));
+    }
+
+    public function testARunThatNeverStartedStaysPendingWhenAGreenRunOfTheSameOriginCreatedInTheSameSecondHasNoNumber(): void
+    {
+        $origin = new CiRunOrigin('ci', 'pull_request', new ChangeId('7'));
+        $at = new DateTimeImmutable('2026-11-02T10:00:00+00:00');
+
+        self::assertSame(HeadAdmission::Pending, $this->admissionOfRuns(new CiRun($origin, CiRunState::Succeeded, $at), new CiRun($origin, CiRunState::Queued, $at)));
+    }
+
     public function testOnlyAGreenHeadStartsARound(): void
     {
         self::assertTrue($this->decided('1', HeadAdmission::Green)->startsRound());

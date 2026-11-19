@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\Forge\Contract;
 
-// Kept apart from the run, because only a run of the same origin can replace a cancelled one, see docs/design/05-architecture/08-merge.md.
+// Kept apart from the run, because only a run of the same origin can replace a cancelled or queued one, see docs/design/05-architecture/08-merge.md.
 final readonly class CiRunOrigin
 {
     public function __construct(
