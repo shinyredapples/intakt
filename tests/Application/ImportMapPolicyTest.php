@@ -6,7 +6,6 @@ namespace Intakt\Tests\Application;
 
 use DateInterval;
 use DateTimeImmutable;
-use DateTimeZone;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -15,7 +14,6 @@ use Symfony\Component\AssetMapper\AssetMapperInterface;
 use Symfony\Component\AssetMapper\Command\ImportMapUpdateCommand;
 use Symfony\Component\AssetMapper\CompiledAssetMapperConfigReader;
 use Symfony\Component\AssetMapper\ImportMap\ImportMapConfigReader;
-use Symfony\Component\AssetMapper\ImportMap\ImportMapEntry;
 use Symfony\Component\AssetMapper\ImportMap\ImportMapGenerator;
 use Symfony\Component\AssetMapper\ImportMap\ImportMapManager;
 use Symfony\Component\AssetMapper\ImportMap\ImportMapRenderer;
@@ -74,6 +72,9 @@ final class ImportMapPolicyTest extends KernelTestCase
     {
         $composer = json_decode((string) file_get_contents(dirname(__DIR__, 2).'/composer.json'), true, flags: JSON_THROW_ON_ERROR);
         self::assertIsArray($composer);
+        self::assertIsArray($composer['config'] ?? null);
+        self::assertIsArray($composer['config']['policy'] ?? null);
+        self::assertIsArray($composer['config']['policy']['cooldown'] ?? null);
         $period = $composer['config']['policy']['cooldown']['period'] ?? null;
         self::assertIsString($period);
         $epoch = new DateTimeImmutable('@0');
@@ -131,6 +132,8 @@ final class ImportMapPolicyTest extends KernelTestCase
     {
         $config = Yaml::parseFile(dirname(__DIR__, 2).'/config/packages/asset_mapper.yaml');
         self::assertIsArray($config);
+        self::assertIsArray($config['framework'] ?? null);
+        self::assertIsArray($config['framework']['asset_mapper'] ?? null);
 
         return $config['framework']['asset_mapper'][$key] ?? self::fail('asset_mapper.yaml sets no '.$key);
     }
@@ -188,7 +191,7 @@ final class ImportMapPolicyTest extends KernelTestCase
     {
         $html = new ImportMapRenderer($generator)->render('app');
         self::assertSame(1, preg_match('~<script type="importmap">(.*?)</script>~s', $html, $match));
-        $importMap = json_decode($match[1], true, flags: JSON_THROW_ON_ERROR);
+        $importMap = json_decode($match[1] ?? '', true, flags: JSON_THROW_ON_ERROR);
         self::assertIsArray($importMap);
 
         return $importMap;
@@ -207,7 +210,7 @@ final class ImportMapPolicyTest extends KernelTestCase
     private function runTheUpdateCommandWithTheNewerVersionPublishedSecondsAgo(int $seconds): void
     {
         $clock = new MockClock(self::NOW);
-        $now = new DateTimeImmutable(self::NOW, new DateTimeZone('UTC'));
+        $now = $clock->now();
         $registry = new MockHttpClient(static fn (): JsonMockResponse => new JsonMockResponse([
             'dist-tags' => ['latest' => self::NEWER],
             'versions' => [self::PINNED => [], self::NEWER => []],
@@ -235,11 +238,13 @@ final class ImportMapPolicyTest extends KernelTestCase
     {
         $resolver = self::createStub(PackageResolverInterface::class);
         $resolver->method('resolvePackages')->willReturnCallback(static fn (array $packages): array => array_map(
-            static fn (PackageRequireOptions $package): ResolvedImportMapPackage => new ResolvedImportMapPackage($package, (string) $package->versionConstraint, ImportMapType::JS),
+            static fn (mixed $package): ResolvedImportMapPackage => $package instanceof PackageRequireOptions
+                ? new ResolvedImportMapPackage($package, (string) $package->versionConstraint, ImportMapType::JS)
+                : self::fail('the update asked to resolve something other than package options'),
             $packages,
         ));
         $resolver->method('downloadPackages')->willReturnCallback(static fn (array $entries): array => array_map(
-            static fn (ImportMapEntry $entry): array => ['content' => self::MODULE, 'dependencies' => [], 'extraFiles' => []],
+            static fn (): array => ['content' => self::MODULE, 'dependencies' => [], 'extraFiles' => []],
             $entries,
         ));
 
