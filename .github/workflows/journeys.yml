@@ -59,8 +59,8 @@ jobs:
     needs: journeys
     # A cancel by hand makes failure() false: only a timeout gets here as cancelled.
     if: failure() && (needs.journeys.outputs.outcome == 'failure' || needs.journeys.outputs.outcome == 'cancelled')
-    # GitHub's image has gh; the CI image lacks it.
-    runs-on: ubuntu-24.04
+    # Uses the runner's gh, because the CI image lacks it: a CI_RUNS_ON runner must have gh, as GitHub's has.
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-24.04"') }}
     permissions:
       contents: read
       issues: write
