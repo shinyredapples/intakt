@@ -181,8 +181,9 @@ final readonly class ReviewedRound
         return clone ($this, ['outcome' => $outcome]);
     }
 
+    // Keyed by reviewer id, with the ids of the change's finding ledger, because those are the ids the act entries and their merges name.
     /**
-     * @param array<string, list<string>> $findings the ledger ids of the findings each reviewer reported, by reviewer id
+     * @param array<string, list<string>> $findings
      */
     public function withFindingsByReviewer(array $findings): self
     {

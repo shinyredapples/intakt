@@ -89,12 +89,9 @@ final readonly class RoundPayloads
         };
     }
 
-    // Null when an id is not text, because the docblock type does not bind the deserializer, and a row the tile cannot trust must not count.
     public function reviewerFindingsOf(RecordedEvent $recorded): ?ReviewerFindingsRecorded
     {
-        $row = $this->payloads->of($recorded, ReviewerFindingsRecorded::class);
-
-        return null !== $row && array_is_list($row->findings) && array_all($row->findings, static fn (mixed $id): bool => is_string($id)) ? $row : null;
+        return $this->payloads->of($recorded, ReviewerFindingsRecorded::class);
     }
 
     // Told apart by the row's phase, because an unsettled row also reads into UsageSettled.
