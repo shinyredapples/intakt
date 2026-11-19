@@ -178,7 +178,7 @@ final class ConcurrentConsumerJourneyTest extends JourneyTestCase
         self::assertSame($stopped + 1, $this->database()->ledgerRows('reviewer_stopped'));
     }
 
-    // Observed, not wished for: a consumer with --concurrency counts the message it received against its limit and ends at once, so the reviewer never runs, where a consumer without it would handle the message first. The message stays on the transport (fetched and not acknowledged, so it comes back only after the transport's redelivery time).
+    // Observed, not wished for: a consumer with --concurrency and --limit=1 ends within seconds with status 0 before any reviewer ran, where a consumer without --concurrency handles its message first. Both messages stay on the transport, and one of them may be fetched and not acknowledged, so it comes back only after the transport's redelivery time. The cause is not isolated: a Worker with ParallelExecutionStrategy over an in-memory or a Doctrine transport and a limit of 1 handles and acknowledges the message first.
     private function readTheConsumerAtItsLimit(): void
     {
         $this->arm(hold: false);

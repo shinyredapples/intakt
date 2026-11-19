@@ -1,0 +1,3 @@
+## Symfony components
+
+| Messenger `--concurrency` | the `--concurrency` option of `messenger:consume` (8.2), tested on the async transport by the concurrent consumer journey: two reviewers of one round run at once once the consumer has handled a first message of their class, the per-account cap holds, a stop request cancels a running reviewer; a consumer ending at `--limit=1` before any reviewer ran and SIGTERM during a review not ending the consumer within the entrypoint's wait are recorded as not holding; the shipped consumer still starts one process per transport | tested, not yet shipped | #2723 (part 1 of #1850), `tests/Journeys/ConcurrentConsumerJourneyTest.php` |
