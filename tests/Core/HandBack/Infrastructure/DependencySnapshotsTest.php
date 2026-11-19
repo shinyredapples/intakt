@@ -91,8 +91,10 @@ final class DependencySnapshotsTest extends TestCase
         $hostConfig = new JobContainerDefinition(self::START_CHECK)->of($spec, $this->directory.'/output', EgressRoute::none())['HostConfig'];
 
         self::assertIsArray($hostConfig);
-        self::assertContains(['Type' => 'bind', 'Source' => $this->snapshotOf('a'), 'Target' => '/input/dependencies', 'ReadOnly' => true], $hostConfig['Mounts']);
-        self::assertNotContains($this->directory.'/store', array_column((array) $hostConfig['Mounts'], 'Source'));
+        $mounts = $hostConfig['Mounts'];
+        self::assertIsArray($mounts);
+        self::assertContains(['Type' => 'bind', 'Source' => $this->snapshotOf('a'), 'Target' => '/input/dependencies', 'ReadOnly' => true], $mounts);
+        self::assertNotContains($this->directory.'/store', array_column($mounts, 'Source'));
     }
 
     public function testAKeyWithoutASnapshotHasNoLease(): void

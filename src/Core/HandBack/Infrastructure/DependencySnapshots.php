@@ -161,9 +161,8 @@ final readonly class DependencySnapshots
         }
     }
 
+    // Snapshots the order does not name yet come first, because nothing records that they were used.
     /**
-     * Snapshots the order does not name yet come first, because nothing records that they were used.
-     *
      * @return list<string>
      */
     private function leastRecentlyUsedFirst(): array
