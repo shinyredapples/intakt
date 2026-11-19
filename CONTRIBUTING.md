@@ -12,6 +12,8 @@ Thank you for looking. Intakt is built mostly by its own loop: AI agents build t
 
 Open an issue. The guide [writing a good task](docs/guide/writing-a-good-task.md) shows what makes an issue easy to act on: what should be different, how to tell it is done, and the evidence that shows it. A bug report with the smallest steps that reproduce it is the most useful thing you can send.
 
+A security problem is the exception: never open a public issue for it. Report it privately as [`SECURITY.md`](SECURITY.md) describes.
+
 ## Working on the code
 
 ```mermaid
