@@ -17,6 +17,10 @@ The `intakt` volume at `/data` survives an image update; during an update the jo
 
 Podman works through its Docker-compatible socket. Rootless mode is the default where available.
 
+## The starting team
+
+A new project starts with four model roles of [the team](01-overview.md#the-team): the Tech lead (`tech_lead`), the Developer (`developer`), the Code reviewers (`code_reviewer`) and the Maintainer (`maintainer`). The Designer (`designer`), the Security engineer (`security_engineer`) and the AI engineer (`ai_engineer`) are opt-in per project, off until the owner turns one on, and so is every tool they need: the security scanners, the accessibility and page-quality tools, and the scan of the running app. The Test engineer (`test_engineer`) is opt-in the same way. The wizard proposes none of them, so the simplest first install needs none of them, nor their tools. A project without the Security engineer still has the approval of protected changes: with the role not configured, every protected change goes to the owner ([Merge](08-merge.md#independent-security-review)).
+
 ## Updates
 
 An update replaces Intakt's own version while the lanes keep working: the new version is checked beside the old one, starts on one build slot first, and only the slot being switched waits, with a deadline. Only an update the old version could not run beside pauses every lane. Measured in the build loop Intakt is distilled from (2026-11-05): four self-updates in one day each drained every lane and ran the target project's full check before and after, which paused builds and reviews for 30 to 80 minutes per update, and one update whose check failed on a test that failed the same way on the old version kept everything paused until the next update.
