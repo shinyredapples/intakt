@@ -34,8 +34,7 @@ final readonly class GitHubCiRuns
     {
         $workflowRuns = $this->onHead($head, $this->entries($answers['workflow_runs'], 'workflow_runs'));
         $runsBySuite = $this->runsBySuite($workflowRuns);
-        // An installed app that never starts its suite would keep every head pending forever; Actions' own queued workflows stay covered by their workflow runs, so only unlinked suites age out.
-        // Each suite is built before it may age out, because a malformed suite must fail the read instead of vanishing and leaving the other runs to make the head green.
+        // An app that never starts its suite would keep every head pending, so only unlinked suites age out (Actions' queued workflows stay covered by their runs), and only once built, because a malformed suite must fail the read instead of vanishing.
         $suites = array_map(fn (array $suite): ?CiRun => $this->unlessAbandoned($suite, $this->suiteOf($repository, $suite, $runsBySuite), $runsBySuite), $this->onHead($head, $this->entries($answers['check_suites'], 'check_suites')));
 
         return [
