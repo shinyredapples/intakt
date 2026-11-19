@@ -21,9 +21,10 @@ final readonly class StoredRoundEndings implements RoundEndings
     ) {
     }
 
+    // The ledger record alone, because the judging's DispatchOnFailureStamp keeps a judging that failed for good out of the failure transport (#1848).
     public function ofUnjudged(string $roundId, int $reviewers, DateTimeImmutable $startedAt): ?RoundEnding
     {
-        if ($this->failedJudgings->hasFailed($roundId)) {
+        if ($this->failedJudgings->isRecorded($roundId)) {
             return new RoundEnding(RoundEnds::JudgingFailed, $this->reasons->judgingFailed());
         }
 
