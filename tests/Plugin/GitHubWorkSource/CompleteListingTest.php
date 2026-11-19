@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Intakt\Tests\Plugin\GitHubWorkSource;
 
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\ORM\Event\PreFlushEventArgs;
+use Doctrine\ORM\Events;
 use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
@@ -34,8 +36,10 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\LoggerInterface;
+use ReflectionObject;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
+use WeakReference;
 
 // The plans are made here as the pick will make them, with every item vouched for, because what a stored row is worth shows only in the order and the holds it yields.
 #[Group('persistence')]
@@ -123,6 +127,7 @@ final class CompleteListingTest extends KernelTestCase
         $api = new RecordedIssueApi();
         $api->pages = [1 => $this->page(1, 100), 2 => $this->page(101, 100), 3 => $this->page(201, 49, ['intakt', 'priority:urgent'])];
         $api->namingNext = [1, 2];
+        $api->stable = true;
 
         $ready = $this->readyOf($this->planOf($this->tickOver($api->reads())));
 
@@ -166,6 +171,8 @@ final class CompleteListingTest extends KernelTestCase
         $this->tickOver($api->reads());
         $api->pages = [1 => $this->page(1, 100), 2 => $this->pageOf([$this->issue(100), $this->issue(102)])];
         $api->namingNext = [1];
+        $api->etag = 'W/"issues-2"';
+        $api->stable = true;
 
         $overlapping = $this->tickOver($api->reads());
 
@@ -173,6 +180,66 @@ final class CompleteListingTest extends KernelTestCase
         self::assertLoggedError('error', self::NOT_COMPLETE);
         self::assertInstanceOf(StoredItem::class, $this->entities->find(StoredItem::class, ['project' => 'alpha', 'number' => 101]));
         self::assertNull($this->entities->find(StoredItem::class, ['project' => 'alpha', 'number' => 102]));
+    }
+
+    public function testAnIssueSkippedBecauseAnEarlierPageMovedWhileTheLaterWasReadKeepsItsRow(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->pageOf([$this->issue(1, body: 'Waits for #101'), ...array_map(fn (int $number): array => $this->issue($number), range(2, 101))])];
+        $this->tickOver($api->reads());
+        // Page 1 is read with #1 to #100, then an issue on it closes, so page 2 starts at #102 and #101 is never listed.
+        $api->pages = [1 => $this->pageOf([$this->issue(1, body: 'Waits for #101'), ...array_map(fn (int $number): array => $this->issue($number), range(2, 100))]), 2 => $this->pageOf([$this->issue(102)])];
+        $api->namingNext = [1];
+
+        $skipping = $this->tickOver($api->reads());
+
+        self::assertNull($skipping);
+        self::assertLoggedError('error', self::NOT_COMPLETE);
+        self::assertInstanceOf(StoredItem::class, $this->entities->find(StoredItem::class, ['project' => 'alpha', 'number' => 101]));
+        self::assertNull($this->entities->find(StoredItem::class, ['project' => 'alpha', 'number' => 102]));
+    }
+
+    public function testTheEntityManagerOfAFinishedTickIsFreed(): void
+    {
+        $seen = new class {
+            /** @var list<WeakReference<object>> */
+            public array $managers = [];
+
+            public function preFlush(PreFlushEventArgs $args): void
+            {
+                $this->managers[] = WeakReference::create($args->getObjectManager());
+            }
+        };
+        $this->entities->getEventManager()->addEventListener(Events::preFlush, $seen);
+        $snapshots = $this->snapshots($this->reads);
+        $this->reads->lists([Issues::task(1)]);
+        $snapshots->current('alpha');
+        for ($tick = 0; $tick < 200; ++$tick) {
+            $this->reads->listsUnchanged();
+            $snapshots->current('alpha');
+        }
+
+        gc_collect_cycles();
+
+        self::assertCount(201, $seen->managers);
+        self::assertSame(0, count(array_filter($seen->managers, static fn (WeakReference $manager): bool => $manager->get() instanceof EntityManagerInterface)));
+    }
+
+    public function testATickLeavesNoRepositoryOfItsManagerInTheSharedFactory(): void
+    {
+        $this->reads->lists([Issues::task(1)]);
+        $this->entities->persist(new TaskFailure('alpha', 9, 'the build failed'));
+        $this->entities->flush();
+
+        $this->tick();
+
+        $factory = $this->entities->getConfiguration()->getRepositoryFactory();
+        $held = 0;
+        foreach (new ReflectionObject($factory)->getProperties() as $property) {
+            $value = $property->getValue($factory);
+            $held += is_array($value) ? count($value) : 0;
+        }
+        self::assertSame(0, $held);
     }
 
     public function testAShortListingLeavesTheCallersPendingWorkForTheCallersFlush(): void

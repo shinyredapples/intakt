@@ -31,14 +31,48 @@ final class GitHubIssueReadsTest extends TestCase
         $api = new RecordedIssueApi();
         $api->pages = [1 => $this->page(1, 100), 2 => $this->page(101, 100), 3 => $this->page(201, 100)];
         $api->namingNext = [1, 2];
+        $api->stable = true;
 
         $listing = $api->reads()->listOpen('alpha', null);
 
         self::assertSame(range(1, 300), array_map(static fn (ListedIssue $issue): int => $issue->number, $listing->issues()));
-        self::assertCount(3, $api->requests);
         self::assertStringContainsString('page=1', $api->requests[0]);
         self::assertStringContainsString('page=2', $api->requests[1]);
         self::assertStringContainsString('page=3', $api->requests[2]);
+    }
+
+    public function testEveryPageBeforeTheLastIsAskedAgainWithItsValidatorOnceTheLastIsRead(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->page(1, 100), 2 => $this->page(101, 100), 3 => $this->page(201, 100)];
+        $api->namingNext = [1, 2];
+        $api->stable = true;
+
+        $api->reads()->listOpen('alpha', null);
+
+        self::assertCount(5, $api->requests);
+        self::assertStringContainsString('page=1', $api->requests[3]);
+        self::assertStringContainsString('page=2', $api->requests[4]);
+        self::assertSame(['W/"issues-1"', 'W/"issues-1"'], $api->conditions);
+    }
+
+    public function testAnEarlierPageThatIsNotConfirmedUnchangedFailsTheListing(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->page(1, 100), 2 => $this->page(102, 1)];
+        $api->namingNext = [1];
+
+        self::assertSame('GitHub did not confirm that page 1 of the open issues stayed the same while the later pages were read.', $this->failureOf($api)->getMessage());
+    }
+
+    public function testASinglePageIsNotAskedAgain(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->page(1, 100)];
+
+        $api->reads()->listOpen('alpha', null);
+
+        self::assertCount(1, $api->requests);
     }
 
     public function testAListedIssueCarriesWhatTheIntakeReads(): void
@@ -79,6 +113,7 @@ final class GitHubIssueReadsTest extends TestCase
         $several = new RecordedIssueApi();
         $several->pages = [1 => $this->page(1, 100), 2 => $this->page(101, 1)];
         $several->namingNext = [1];
+        $several->stable = true;
 
         self::assertSame('W/"issues-1"', $single->reads()->listOpen('alpha', null)->validator);
         self::assertNull($several->reads()->listOpen('alpha', null)->validator);
@@ -168,6 +203,7 @@ final class GitHubIssueReadsTest extends TestCase
             $api->pages[$page] = $this->page(($page - 1) * 100 + 1, 100);
         }
         $api->namingNext = range(1, 9);
+        $api->stable = true;
 
         self::assertCount(1000, $api->reads()->listOpen('alpha', null)->issues());
     }

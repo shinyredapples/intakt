@@ -33,6 +33,8 @@ final class RecordedIssueApi
     public array $pages = [];
     public string $etag = 'W/"issues-1"';
     public bool $notModified = false;
+    // Answers 304 to a request that carries the current ETag, as GitHub does for a page that did not change; off by default, so a scripted page is read even when a validator is sent.
+    public bool $stable = false;
     /** @var list<int> */
     public array $namingNext = [];
     /** @var list<string> */
@@ -88,14 +90,18 @@ final class RecordedIssueApi
     /**
      * @param array<string, mixed> $options
      */
-    private function keepConditions(array $options): void
+    private function keepConditions(array $options): ?string
     {
+        $condition = null;
         $headers = $options['headers'] ?? [];
         foreach (is_array($headers) ? $headers : [] as $header) {
             if (is_string($header) && str_starts_with($header, 'If-None-Match: ')) {
-                $this->conditions[] = substr($header, strlen('If-None-Match: '));
+                $condition = substr($header, strlen('If-None-Match: '));
+                $this->conditions[] = $condition;
             }
         }
+
+        return $condition;
     }
 
     /**
@@ -114,13 +120,13 @@ final class RecordedIssueApi
     private function answer(string $method, string $url, array $options): ResponseInterface
     {
         $this->requests[] = $method.' '.$url;
-        $this->keepConditions($options);
+        $condition = $this->keepConditions($options);
 
         if (str_ends_with($url, '/graphql')) {
             return $this->answerHistory($options);
         }
 
-        if ($this->notModified) {
+        if ($this->notModified || ($this->stable && $condition === $this->etag)) {
             return new MockResponse('', ['http_code' => 304]);
         }
 

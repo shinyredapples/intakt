@@ -58,6 +58,7 @@ final readonly class GitHubIssueReads implements IssueReads
     private function allPagesFrom(array $first, string $path): array
     {
         $issues = [];
+        $validators = [];
         $answer = $first;
         for ($page = 1;; ++$page) {
             $listed = $this->issuesOf($answer['body']);
@@ -68,6 +69,8 @@ final readonly class GitHubIssueReads implements IssueReads
 
             $issues = [...$issues, ...$listed];
             if (!$answer['next']) {
+                $this->confirmUnmoved($path, $validators);
+
                 return ['issues' => $issues, 'pages' => $page];
             }
 
@@ -75,7 +78,25 @@ final readonly class GitHubIssueReads implements IssueReads
                 throw new ForgeReadFailed('GitHub lists more open issues than this forge reads.');
             }
 
+            $validators[$page] = $answer['etag'];
             $answer = $this->get($path, $this->page($page + 1));
+        }
+    }
+
+    /**
+     * An issue that closes or opens on a page already read moves every later page by one, so an issue at a page boundary is read twice or never; only a 304 for every page read before the last says none of them moved.
+     *
+     * @param array<int, ?string> $validators
+     *
+     * @throws ForgeReadFailed
+     * @throws ForgeRateLimited
+     */
+    private function confirmUnmoved(string $path, array $validators): void
+    {
+        foreach ($validators as $page => $validator) {
+            if (self::NOT_MODIFIED !== $this->get($path, $this->page($page), $validator)['status']) {
+                throw new ForgeReadFailed(sprintf('GitHub did not confirm that page %d of the open issues stayed the same while the later pages were read.', $page));
+            }
         }
     }
 

@@ -150,11 +150,27 @@ final readonly class IntakeSnapshots
     private function failuresOf(string $project, EntityManagerInterface $entities): array
     {
         $failures = [];
-        foreach ($entities->getRepository(TaskFailure::class)->findBy(['project' => $project]) as $failure) {
+        foreach ($this->ofProject($project, TaskFailure::class, $entities) as $failure) {
             $failures[$failure->number()] = $failure->reason();
         }
 
         return $failures;
+    }
+
+    /**
+     * Queried on the tick's manager and never through a repository, because the repository factory is shared with the injected manager and keeps every repository, with its manager, for the life of the process.
+     *
+     * @template T of object
+     *
+     * @param class-string<T> $entity
+     *
+     * @return list<T>
+     */
+    private function ofProject(string $project, string $entity, EntityManagerInterface $entities): array
+    {
+        $found = $entities->createQueryBuilder()->select('row')->from($entity, 'row')->where('row.project = :project')->setParameter('project', $project)->getQuery()->getResult();
+
+        return array_values(array_filter(is_array($found) ? $found : [], static fn (mixed $row): bool => $row instanceof $entity));
     }
 
     // A forge that sends no validator leaves none stored, so the next listing is a full one.
@@ -183,6 +199,6 @@ final readonly class IntakeSnapshots
      */
     private function rowsOf(string $project, EntityManagerInterface $entities): array
     {
-        return $entities->getRepository(StoredItem::class)->findBy(['project' => $project]);
+        return $this->ofProject($project, StoredItem::class, $entities);
     }
 }
