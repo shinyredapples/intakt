@@ -10,7 +10,7 @@ use NoDiscard;
 final readonly class CiDefinition
 {
     private const string GITHUB_FOLDER = '.github/';
-    // GitHub only shows issue forms and the pull request template on its pages and never runs them; a workflow that names one still makes it a CI change.
+    // Not CI, because GitHub only shows issue forms and the pull request template and never runs them; a workflow that names one still counts it.
     private const string TEMPLATE = '#^\.github/(?:ISSUE_TEMPLATE/[^/]+\.(?:ya?ml|md)|pull_request_template\.md)$#';
     // Every Dockerfile counts, because a workflow can build an image from one in its build context without naming it.
     private const string DOCKERFILE = '/(?:^|\/)(?:Dockerfile(?:\..+)?|[^\/]+\.Dockerfile)$/i';
