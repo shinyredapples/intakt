@@ -8,6 +8,7 @@ use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\NetworkGit;
 use Intakt\Core\Git\Contract\NetworkGitFailed;
+use Intakt\Core\Git\Contract\WorkTreeInBareRepository;
 use Intakt\Core\Git\Domain\Mirrors;
 use Intakt\Core\Git\UseCase\UpdateMirror\MirrorNotUpdated;
 use Intakt\Core\Git\UseCase\UpdateMirror\UpdateMirror;
@@ -23,6 +24,7 @@ use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Process\ExecutableFinder;
+use Symfony\Component\Process\Exception\RuntimeException;
 use Symfony\Component\Process\Process;
 
 #[CoversClass(UpdateMirror::class)]
@@ -32,6 +34,7 @@ use Symfony\Component\Process\Process;
 #[UsesClass(NetworkGitFailed::class)]
 #[UsesClass(GitCall::class)]
 #[UsesClass(MirrorNotUpdated::class)]
+#[UsesClass(WorkTreeInBareRepository::class)]
 final class UpdateMirrorTest extends TestCase
 {
     private string $mirrors;
@@ -186,6 +189,20 @@ final class UpdateMirrorTest extends TestCase
         self::assertSame('true', $this->git($path, 'config', 'core.bare'));
         self::assertSame('', $this->git($path, 'config', '--default', '', 'core.worktree'));
         self::assertSame($this->remote->objectAt('HEAD'), $this->git($path, 'rev-parse', 'refs/heads/main'));
+    }
+
+    public function testACheckThatIsKilledBySignalNeverReplacesAValidMirror(): void
+    {
+        $path = $this->update('alpha', $this->remote->path);
+        file_put_contents($path.'/description', 'Keep this existing mirror');
+        $this->beforeTheFirstGitCallWith('--is-bare-repository', 'kill -TERM $$');
+
+        try {
+            $this->update('alpha', $this->remote->path);
+            self::fail('A check that was killed gives no answer and must stop the update.');
+        } catch (RuntimeException) {
+            self::assertSame('Keep this existing mirror', file_get_contents($path.'/description'));
+        }
     }
 
     public function testTheMirrorsHeadFollowsTheRemotesHead(): void

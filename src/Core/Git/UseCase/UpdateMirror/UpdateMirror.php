@@ -7,6 +7,7 @@ namespace Intakt\Core\Git\UseCase\UpdateMirror;
 use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\NetworkGit;
+use Intakt\Core\Git\Contract\WorkTreeInBareRepository;
 use Intakt\Core\Git\Contract\NetworkGitFailed;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Core\Git\Domain\Mirrors;
@@ -17,7 +18,6 @@ use Symfony\Component\Filesystem\Path;
 use Symfony\Component\Lock\Exception\ExceptionInterface as LockFailure;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Process\Exception\ExceptionInterface as ProcessFailure;
-use Symfony\Component\Process\Exception\RuntimeException;
 use Symfony\Component\Process\Process;
 
 final readonly class UpdateMirror
@@ -83,8 +83,8 @@ final readonly class UpdateMirror
 
         try {
             $bare = $this->local(['rev-parse', '--is-bare-repository'], $path);
-        } catch (RuntimeException) {
-            // Because the bare call refuses a folder whose config gives it a work tree, which is no mirror either.
+        } catch (WorkTreeInBareRepository) {
+            // Because the bare call refuses a folder whose config gives it a work tree, which is no mirror either; a call that was killed or timed out is no answer and propagates, so a valid mirror is never replaced for it.
             return false;
         }
 

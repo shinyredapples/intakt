@@ -187,7 +187,7 @@ final readonly class HardenedGit
 
         // Because a line that is empty or holds a slash is a way to a work tree, never an object format; refused as a failed git call, because every caller already handles one.
         if ('' === $format || str_contains($format, '/')) {
-            throw new RuntimeException(sprintf('%s names a work tree in its config (core.worktree), so a bare call refuses it', $repository));
+            throw WorkTreeInBareRepository::at($repository);
         }
 
         $this->refuseInfoAttributes($repository, $path);
