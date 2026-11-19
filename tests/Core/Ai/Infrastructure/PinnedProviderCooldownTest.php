@@ -167,24 +167,75 @@ final class PinnedProviderCooldownTest extends TestCase
         self::assertSame([true, true], [in_array($wait, [539, 540], true), 0 < $ended->secondsUntilAnAccountIsFree(Provider::OpenAiCompatible)]);
     }
 
-    public function testAPinnedWindowLongerThanTheAccountsLongestWaitKeepsTheCallerWaitingAfterTheAccountWindow(): void
+    public function testAPinnedCooldownLongerThanADayIsCappedAtTheAccountsLongestWindow(): void
     {
         $this->read($this->onlyDefault(new FailingWhenRead(new RateLimitExceededException(90000)), $this->cooldowns)->invoke(self::PINNED, 'Review.'));
-        $this->clock->sleep(86400);
 
-        $wait = $this->waitAfterEveryAccountIsOut($this->onlyDefault($this->answering('first'), $this->accountWindows(Account::DEFAULT)));
-
-        self::assertContains($wait, [3599, 3600]);
+        $this->clock->sleep(AccountCooldownWindows::LONGEST_SECONDS - 1);
+        self::assertTrue($this->pinned->isCoolingDown($this->deepinfra(Account::DEFAULT)));
+        $this->clock->sleep(1);
+        self::assertFalse($this->pinned->isCoolingDown($this->deepinfra(Account::DEFAULT)));
     }
 
-    public function testAnAccountWindowThatEndsBetweenTheRefreshAndTheReadIsStartedAgainWhileThePinCools(): void
+    // Every pin read and every wait read takes time on the mocked clock, so the first account's window ends while the second pin is read and the second account's window ends while the wait is read.
+    public function testTwoAccountWindowsEndingInTurnWhileThePinsAreReadStillLeaveAWaitAboveZero(): void
     {
         $this->pinned->coolDown($this->deepinfra(Account::DEFAULT), 120);
-        $ending = new WindowEndingBeforeTheRead();
+        $this->pinned->coolDown($this->deepinfra('team'), 120);
+        $accounts = new AccountWindowsOnAClock($this->clock, [Account::DEFAULT, 'team'], 1);
+        $accounts->coolDown(new Account(Provider::OpenAiCompatible, Account::DEFAULT), 4);
+        $accounts->coolDown(new Account(Provider::OpenAiCompatible, 'team'), 14);
+        $platform = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $this->answering('first'), 'team' => $this->answering('second')], $accounts, new NativeClock(), new NullLogger(), new SlowPinReads($this->pinned, $this->clock, 3));
 
-        $wait = $this->waitAfterEveryAccountIsOut(new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $this->answering('first')], $ending, new NativeClock(), new NullLogger(), $this->pinned));
+        $wait = $this->waitAfterEveryAccountIsOut($platform);
 
-        self::assertSame([120, true], [$wait, $ending->isCoolingDown(new Account(Provider::OpenAiCompatible, Account::DEFAULT))]);
+        self::assertSame([113, true], [$wait, 0 < $accounts->secondsUntilAnAccountIsFree(Provider::OpenAiCompatible)]);
+    }
+
+    public function testAnAccountWindowShorterThanItsPinEndsAtThePinsEndAfterOneSkippedCall(): void
+    {
+        $accounts = new AccountWindowsOnAClock($this->clock, [Account::DEFAULT], 0);
+        $accounts->coolDown(new Account(Provider::OpenAiCompatible, Account::DEFAULT), 30);
+        $this->pinned->coolDown($this->deepinfra(Account::DEFAULT), 120);
+
+        $this->waitAfterEveryAccountIsOut(new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $this->answering('first')], $accounts, new NativeClock(), new NullLogger(), $this->pinned));
+
+        self::assertEquals($this->clock->now()->modify('+120 seconds'), $accounts->endOf(new Account(Provider::OpenAiCompatible, Account::DEFAULT)));
+    }
+
+    public function testAnAccountWindowShorterThanItsPinIsReplacedInTheAccountStoreAfterOneSkippedCall(): void
+    {
+        $accounts = $this->accountWindows(Account::DEFAULT);
+        $accounts->coolDown(new Account(Provider::OpenAiCompatible, Account::DEFAULT), 30);
+        $this->pinned->coolDown($this->deepinfra(Account::DEFAULT), 120);
+
+        $wait = $this->waitAfterEveryAccountIsOut($this->onlyDefault($this->answering('first'), $accounts));
+
+        self::assertContains($wait, [119, 120]);
+    }
+
+    public function testARunningAccountWindowLongerThanItsPinIsNotShortened(): void
+    {
+        $accounts = $this->accountWindows(Account::DEFAULT);
+        $accounts->coolDown(new Account(Provider::OpenAiCompatible, Account::DEFAULT), 600);
+        $this->pinned->coolDown($this->deepinfra(Account::DEFAULT), 120);
+
+        $wait = $this->waitAfterEveryAccountIsOut($this->onlyDefault($this->answering('first'), $accounts));
+
+        self::assertContains($wait, [599, 600]);
+    }
+
+    // The pin cools only while the send guard asks, so the account is chosen, skipped, and free again when the failover's error is judged.
+    public function testAPinThatEndsBetweenTheSendGuardAndTheJudgingEndsTheCallAsEveryAccountCoolingDownWithoutARequest(): void
+    {
+        $pins = self::createStub(PinnedProviderCooldowns::class);
+        $pins->method('isCoolingDown')->willReturn(false, true, false);
+        $unsent = $this->createMock(PlatformInterface::class);
+        $unsent->expects(self::never())->method('invoke');
+
+        $wait = $this->waitAfterEveryAccountIsOut(new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $unsent], $this->accountWindows(Account::DEFAULT), new NativeClock(), new NullLogger(), $pins));
+
+        self::assertSame(0, $wait);
     }
 
     public function testAnAccountWindowThatEndsBeforeTheReadStaysEndedWhenNoPinCools(): void
@@ -192,7 +243,7 @@ final class PinnedProviderCooldownTest extends TestCase
         $ended = $this->createMock(AccountCooldowns::class);
         $ended->method('isCoolingDown')->willReturn(true);
         $ended->method('secondsUntilAnAccountIsFree')->willReturn(0);
-        $ended->expects(self::never())->method('coolDown');
+        $ended->expects(self::never())->method('coolDownAtLeast');
 
         $wait = $this->waitAfterEveryAccountIsOut(new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $this->answering('first')], $ended, new NativeClock(), new NullLogger(), $this->pinned));
 

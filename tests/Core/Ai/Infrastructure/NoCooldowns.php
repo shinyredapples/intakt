@@ -19,6 +19,11 @@ final readonly class NoCooldowns implements AccountCooldowns
     }
 
     #[Override]
+    public function coolDownAtLeast(Account $account, int $seconds): void
+    {
+    }
+
+    #[Override]
     public function coolDownUntilPlanResets(Account $account): void
     {
     }

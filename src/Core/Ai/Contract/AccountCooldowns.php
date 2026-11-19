@@ -10,6 +10,9 @@ interface AccountCooldowns
 {
     public function coolDown(Account $account, ?int $resetInSeconds): void;
 
+    // Apart from coolDown(), which keeps a running window as it is, because an account must wait out its cooling pinned provider and a window that ends first would let the caller start again at once; never shortens a window.
+    public function coolDownAtLeast(Account $account, int $seconds): void;
+
     // Apart from coolDown(), because only a subscription plan's limit without a reset waits for the plan's measured reset (issue #1749); an outage keeps its short pause.
     public function coolDownUntilPlanResets(Account $account): void;
 

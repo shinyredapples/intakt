@@ -31,6 +31,11 @@ final class SendFailures
     private array $unreachable = [];
 
     /**
+     * @var array<string, true>
+     */
+    private array $skipped = [];
+
+    /**
      * @var WeakMap<Throwable, array<string, true>>
      */
     private WeakMap $seen;
@@ -77,5 +82,16 @@ final class SendFailures
     public function isEveryTriedUnreachable(): bool
     {
         return [] !== $this->tried && [] === array_diff_key($this->tried, $this->unreachable);
+    }
+
+    // Kept apart from the accounts tried, because a call whose pinned provider cooled down was never sent and says nothing about the platform.
+    public function skipped(Account $account): void
+    {
+        $this->skipped[$account->key()] = true;
+    }
+
+    public function isEveryAttemptSkipped(): bool
+    {
+        return [] !== $this->skipped && [] === $this->tried;
     }
 }

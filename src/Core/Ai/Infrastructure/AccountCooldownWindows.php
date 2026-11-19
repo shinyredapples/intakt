@@ -37,8 +37,8 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
     // One minute because a provider that sends no reset still gets a pause, and it is the async transport's longest wait between two tries.
     private const int SECONDS_WITHOUT_RESET = 60;
 
-    // At most a day, so a huge reset never puts an account out of reach and the window stays inside its one-month period.
-    private const int LONGEST_SECONDS = 86400;
+    // At most a day, so a huge reset never puts an account out of reach and the window stays inside its one-month period; public, because a pinned window is capped alike and so never outlives the longest account window.
+    public const int LONGEST_SECONDS = 86400;
 
     private const float SPENT_PERCENT = 100.0;
 
@@ -140,9 +140,48 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
 
         $until = $this->clock->now()->modify(sprintf('+%d seconds', $seconds));
 
-        // Refused while a cooldown already runs, which is kept as it is, because only a call already in flight can still be limited then.
-        if (!$this->windowsEndingAt($until)->create($account->key())->consume()->isAccepted()) {
+        // Under the write lock coolDownAtLeast() takes, so a window it replaces is never started between its reset and its own window.
+        $lock = $this->locks->createLock($this->writeKey($account));
+        $lock->acquire(true);
+
+        try {
+            // Refused while a cooldown already runs, which is kept as it is, because only a call already in flight can still be limited then.
+            if (!$this->windowsEndingAt($until)->create($account->key())->consume()->isAccepted()) {
+                return;
+            }
+        } finally {
+            $lock->release();
+        }
+
+        $this->record($account, $until);
+    }
+
+    public function coolDownAtLeast(Account $account, int $seconds): void
+    {
+        $seconds = min(self::LONGEST_SECONDS, $seconds);
+        if ($seconds <= 0) {
             return;
+        }
+
+        $until = $this->clock->now()->modify(sprintf('+%d seconds', $seconds));
+
+        // The running end is read and replaced under the lock every writer of the window takes, so no other window starts between the reset and the new one.
+        $lock = $this->locks->createLock($this->writeKey($account));
+        $lock->acquire(true);
+
+        try {
+            $running = $this->window($account);
+            if (0 === $running->getRemainingTokens() && $running->getRetryAfter() >= $until) {
+                return;
+            }
+
+            $windows = $this->windowsEndingAt($until)->create($account->key());
+            $windows->reset();
+            if (!$windows->consume()->isAccepted()) {
+                return;
+            }
+        } finally {
+            $lock->release();
         }
 
         $this->record($account, $until);
@@ -246,6 +285,12 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
         if (!$this->pool->getItem($this->reportKey($account))->isHit()) {
             $this->report($account);
         }
+    }
+
+    // Apart from the RateLimiter's own lock on the window, which its consume() and reset() each take and let go, so a check and a replacement stay under one lock.
+    private function writeKey(Account $account): string
+    {
+        return self::LIMITER.'-write-'.$account->key();
     }
 
     // Named apart from the report so its key never contains the report's key.

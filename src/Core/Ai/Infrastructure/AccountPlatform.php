@@ -52,6 +52,8 @@ final readonly class AccountPlatform implements PlatformInterface
     {
         // Asked again as the call is sent, because another worker can cool the pinned provider down after the failover chose this account; not counted as tried, so the call ends as every account cooling down, not as unreachable.
         if ($this->pinned instanceof PinnedProvider && $this->pinnedCooldowns->isCoolingDown($this->pinned)) {
+            $this->failures->skipped($this->account);
+
             throw new PinnedProviderSkipped($this->pinned);
         }
 
@@ -139,7 +141,7 @@ final readonly class AccountPlatform implements PlatformInterface
     private function coolDownLimited(?int $retryAfter): void
     {
         if ($this->pinned instanceof PinnedProvider) {
-            $this->coolDownPinned($this->pinned, $retryAfter ?? self::PINNED_PROVIDER_COOLDOWN_SECONDS);
+            $this->coolDownPinned($this->pinned, min(AccountCooldownWindows::LONGEST_SECONDS, $retryAfter ?? self::PINNED_PROVIDER_COOLDOWN_SECONDS));
         }
 
         // The account cools down too, because AccountLimitedVendor reads the wait from the account cooldowns alone, and a free account would start the reviewer again at once, without a delay, for as long as the pinned provider cools down.

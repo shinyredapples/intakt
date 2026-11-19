@@ -316,6 +316,73 @@ final class AccountCooldownWindowsTest extends TestCase
         self::assertCount(1, $this->ledger->kinds());
     }
 
+    public function testCoolingDownAtLeastStartsAWindowWhenNoneRuns(): void
+    {
+        $this->cooldowns()->coolDownAtLeast($this->default(), 120);
+
+        self::assertEqualsWithDelta(120, $this->secondsUntilFree($this->default()), 1);
+        self::assertSame([LedgerEventKind::AccountCooledDown], $this->ledger->kinds());
+    }
+
+    public function testCoolingDownAtLeastReplacesARunningWindowThatEndsEarlierAndRecordsIt(): void
+    {
+        $cooldowns = $this->cooldowns();
+        $cooldowns->coolDown($this->default(), 30);
+
+        $cooldowns->coolDownAtLeast($this->default(), 600);
+
+        self::assertEqualsWithDelta(600, $this->secondsUntilFree($this->default()), 1);
+        self::assertSame([LedgerEventKind::AccountCooledDown, LedgerEventKind::AccountCooledDown], $this->ledger->kinds());
+    }
+
+    public function testCoolingDownAtLeastNeverShortensARunningWindowAndRecordsNothing(): void
+    {
+        $cooldowns = $this->cooldowns();
+        $cooldowns->coolDown($this->default(), 600);
+
+        $cooldowns->coolDownAtLeast($this->default(), 120);
+
+        self::assertEqualsWithDelta(600, $this->secondsUntilFree($this->default()), 1);
+        self::assertCount(1, $this->ledger->kinds());
+    }
+
+    public function testCoolingDownAtLeastIsCappedAtOneDay(): void
+    {
+        $this->cooldowns()->coolDownAtLeast($this->default(), PHP_INT_MAX);
+
+        self::assertEqualsWithDelta(AccountCooldownWindows::LONGEST_SECONDS, $this->secondsUntilFree($this->default()), 1);
+    }
+
+    public function testCoolingDownAtLeastForZeroSecondsStartsNothing(): void
+    {
+        $cooldowns = $this->cooldowns();
+
+        $cooldowns->coolDownAtLeast($this->default(), 0);
+
+        self::assertFalse($cooldowns->isCoolingDown($this->default()));
+        self::assertSame(0, $this->ledger->count());
+    }
+
+    public function testALimitAfterAReplacedWindowKeepsTheReplacedWindow(): void
+    {
+        $cooldowns = $this->cooldowns();
+        $cooldowns->coolDown($this->default(), 30);
+        $cooldowns->coolDownAtLeast($this->default(), 600);
+
+        $cooldowns->coolDown($this->default(), 60);
+
+        self::assertEqualsWithDelta(600, $this->secondsUntilFree($this->default()), 1);
+    }
+
+    public function testCoolingDownAtLeastOneAccountLeavesTheOtherAccountFree(): void
+    {
+        $cooldowns = $this->cooldowns();
+
+        $cooldowns->coolDownAtLeast($this->default(), 120);
+
+        self::assertFalse($cooldowns->isCoolingDown($this->team()));
+    }
+
     public function testACooldownTheLedgerRefusesIsLoggedAndStillHolds(): void
     {
         $logger = new BufferingLogger();
