@@ -191,6 +191,16 @@ final class EvidenceItemsTest extends TestCase
         self::assertSame(2, EvidenceItems::countIn("## Evidence\n- E1. output\n\n  ```\n  example\n- E2. second result"));
     }
 
+    public function testAnItemThatOpensAFenceOnItsMarkerLineIsCounted(): void
+    {
+        self::assertSame(2, EvidenceItems::countIn("## Evidence\n- ```\n  code\n  ```\n- E2. b\n"));
+    }
+
+    public function testAListAfterALabelUnderAnEvidenceHeadingCountsAsEvidenceItems(): void
+    {
+        self::assertSame(3, EvidenceItems::countIn("## Evidence\n- E1\n- E2\n\nAcceptance:\n- the third item\n"));
+    }
+
     public function testOnlyTheFirstEvidenceSectionCounts(): void
     {
         self::assertSame(1, EvidenceItems::countIn("## Evidence\n- E1\n\n## Evidence\n- E1\n- E2\n"));

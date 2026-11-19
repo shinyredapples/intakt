@@ -88,6 +88,34 @@ final class MarkdownTextTest extends TestCase
         self::assertSame("a ` b\n\n ` c", MarkdownText::visible("a ` b\n\n<!-- x --> ` c"));
     }
 
+    public function testABackslashEscapedBacktickOpensNoCodeSpan(): void
+    {
+        self::assertSame('a \`  `', MarkdownText::visible('a \` <!-- x --> `'));
+        self::assertSame('a \``<!-- x -->`', MarkdownText::visible('a \``<!-- x -->`'));
+        self::assertSame('a \\\\`<!-- x -->`', MarkdownText::visible('a \\\\`<!-- x -->`'));
+    }
+
+    public function testACodeSpanEndsAtAHeadingOrFenceLine(): void
+    {
+        self::assertSame("a `\n# b\n\n`", MarkdownText::visible("a `\n# b\n<!-- x -->\n`"));
+        self::assertSame("a `\n~~~\n<!-- x -->\n`", MarkdownText::visible("a `\n~~~\n<!-- x -->\n`"));
+    }
+
+    public function testAFenceOpenedRightAfterAListMarkerBelongsToThatItem(): void
+    {
+        self::assertSame("- ```\n  <!-- x -->\nafter ", MarkdownText::visible("- ```\n  <!-- x -->\nafter <!-- y -->"));
+        self::assertSame("- ```\n\n\n- two", MarkdownText::visibleProse("- ```\n  code\n  ```\n- two"));
+    }
+
+    public function testLongPartsAreReadWithoutExhaustingTheRegexEngine(): void
+    {
+        $long = str_repeat('x', 256 * 1024);
+
+        self::assertSame(strlen('`'.$long.'`'), strlen(MarkdownText::visible('`'.$long.'`')));
+        self::assertSame("a\n\n", MarkdownText::visibleProse("a\n```\n".$long));
+        self::assertSame('a ', MarkdownText::visible('a <!--'.$long));
+    }
+
     public function testABacktickInsideAnHtmlCommentOpensNoCodeSpan(): void
     {
         self::assertSame('a  ` E2', MarkdownText::visible('a <!-- ` E1 --> ` E2'));

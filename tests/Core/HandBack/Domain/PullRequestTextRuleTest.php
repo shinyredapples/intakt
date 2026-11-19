@@ -132,12 +132,53 @@ final class PullRequestTextRuleTest extends TestCase
         self::assertTrue(PullRequestTextRule::judge('Fix it.', str_repeat('ä', PullRequestTextRule::MAX_BODY_CHARACTERS))->passed());
     }
 
-    public function testAMissingReferenceIsReportedBeforeABodyOverTheCap(): void
+    public function testABodyOverTheCapIsRefusedBeforeItsReferencesAreRead(): void
     {
         $outcome = PullRequestTextRule::judge(self::TASK, 'E1 E2 '.str_repeat('a', PullRequestTextRule::MAX_BODY_CHARACTERS));
 
-        self::assertSame([PullRequestTextVerdict::MissingEvidenceReference, [3]], [$outcome->verdict, $outcome->missingItems]);
+        self::assertSame([PullRequestTextVerdict::BodyOverCap, []], [$outcome->verdict, $outcome->missingItems]);
         self::assertGreaterThan(PullRequestTextRule::MAX_BODY_CHARACTERS, $outcome->bodyCharacters);
+    }
+
+    public function testABodyAtTheCapThatIsOneCodeSpanIsJudged(): void
+    {
+        $body = '`'.str_repeat('x', PullRequestTextRule::MAX_BODY_CHARACTERS - 5).'` E1';
+
+        self::assertSame(PullRequestTextVerdict::Passed, PullRequestTextRule::judge("## Evidence\n- E1. output", $body)->verdict);
+    }
+
+    public function testABodyOfFortyThousandCharactersWithACodeSpanIsOverTheCap(): void
+    {
+        $body = '`'.str_repeat('x', 40_000 - 5).'` E1';
+
+        self::assertSame(PullRequestTextVerdict::BodyOverCap, PullRequestTextRule::judge("## Evidence\n- E1. output", $body)->verdict);
+    }
+
+    public function testATaskOf256KilobytesWithLongCodeSpansIsRead(): void
+    {
+        $task = "## Evidence\n- E1. `".str_repeat('x', 128 * 1024).'` and `'.str_repeat('y', 128 * 1024)."\n- E2. b";
+
+        self::assertSame([2], PullRequestTextRule::judge($task, 'E1')->missingItems);
+    }
+
+    public function testABackslashEscapedBacktickOpensNoCodeSpan(): void
+    {
+        self::assertSame([1], PullRequestTextRule::judge("## Evidence\n- E1. output", 'Output: \` <!-- E1 --> `')->missingItems);
+    }
+
+    public function testACodeSpanEndsAtAHeadingLine(): void
+    {
+        self::assertSame([1], PullRequestTextRule::judge("## Evidence\n- E1. output", "Output: `\n## Heading\n<!-- E1 -->\n`")->missingItems);
+    }
+
+    public function testACodeSpanEndsAtAFenceLine(): void
+    {
+        self::assertSame([1], PullRequestTextRule::judge("## Evidence\n- E1. output", "Output: `\n```\nx\n```\n<!-- E1 -->\n`")->missingItems);
+    }
+
+    public function testAReferenceInAFenceOpenedOnAListMarkerCounts(): void
+    {
+        self::assertSame([], PullRequestTextRule::judge("## Evidence\n- E1. output", "- ```\n  <!-- E1 -->")->missingItems);
     }
 
     public function testEachVerdictHasAFixedReason(): void

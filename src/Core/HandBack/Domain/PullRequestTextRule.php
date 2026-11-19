@@ -13,14 +13,21 @@ final readonly class PullRequestTextRule
     // Reviewers read the whole body on every round, so a longer one costs each review more; the forge's own limit is far higher.
     public const int MAX_BODY_CHARACTERS = 4000;
 
+    // The cap is measured before anything is parsed, so a body of any length gets a verdict and never an error.
     #[NoDiscard]
     public static function judge(string $task, string $body): PullRequestTextOutcome
     {
-        $items = EvidenceItems::countIn($task);
-        $missing = self::missingReferences($items, MarkdownText::visible($body));
         $characters = mb_strlen($body, 'UTF-8');
 
-        return new PullRequestTextOutcome(self::verdictOf($missing, $characters), $items, $missing, $characters);
+        if ($characters > self::MAX_BODY_CHARACTERS) {
+            return new PullRequestTextOutcome(PullRequestTextVerdict::BodyOverCap, 0, [], $characters);
+        }
+
+        $items = EvidenceItems::countIn($task);
+        $missing = self::missingReferences($items, MarkdownText::visible($body));
+        $verdict = [] === $missing ? PullRequestTextVerdict::Passed : PullRequestTextVerdict::MissingEvidenceReference;
+
+        return new PullRequestTextOutcome($verdict, $items, $missing, $characters);
     }
 
     /**
@@ -38,17 +45,5 @@ final readonly class PullRequestTextRule
         }
 
         return $missing;
-    }
-
-    /**
-     * @param list<positive-int> $missing
-     */
-    private static function verdictOf(array $missing, int $characters): PullRequestTextVerdict
-    {
-        return match (true) {
-            [] !== $missing => PullRequestTextVerdict::MissingEvidenceReference,
-            $characters > self::MAX_BODY_CHARACTERS => PullRequestTextVerdict::BodyOverCap,
-            default => PullRequestTextVerdict::Passed,
-        };
     }
 }
