@@ -1,0 +1,23 @@
+name: Feature request
+description: Suggest something Intakt should do differently.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for the suggestion. The guide [writing a good task](https://github.com/shinyredapples/intakt/blob/main/docs/guide/writing-a-good-task.md) shows what makes an issue easy to act on.
+
+        A security problem does not belong in a public issue: use **Report a security problem** on the "New issue" page instead.
+  - type: textarea
+    id: what-should-be-different
+    attributes:
+      label: What should be different
+      description: What Intakt should do that it does not do today, and why it matters to you.
+    validations:
+      required: true
+  - type: textarea
+    id: how-to-tell-it-is-done
+    attributes:
+      label: How to tell it is done
+      description: What someone would see or run to know the change is there.
+    validations:
+      required: true

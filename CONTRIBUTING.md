@@ -10,7 +10,9 @@ Thank you for looking. Intakt is built mostly by its own loop: AI agents build t
 
 ## Reporting a bug or suggesting a feature
 
-Open an issue. The guide [writing a good task](docs/guide/writing-a-good-task.md) shows what makes an issue easy to act on: what should be different, how to tell it is done, and the evidence that shows it. A bug report with the smallest steps that reproduce it is the most useful thing you can send.
+Open an issue: it starts from a short form, a bug report or a feature request; the forms apply no label. The guide [writing a good task](docs/guide/writing-a-good-task.md) shows what makes an issue easy to act on: what should be different, how to tell it is done, and the evidence that shows it. A bug report with the smallest steps that reproduce it is the most useful thing you can send.
+
+A security problem never goes into a public issue: use **Report a security problem** on the "New issue" page, which opens the repository's private vulnerability reporting.
 
 ## How your issue or pull request is handled
 

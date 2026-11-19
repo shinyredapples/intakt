@@ -1,0 +1,40 @@
+name: Bug report
+description: Something in Intakt does not work as it should.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting. The guide [writing a good task](https://github.com/shinyredapples/intakt/blob/main/docs/guide/writing-a-good-task.md) shows what makes an issue easy to act on. The smallest steps that reproduce the bug help most.
+
+        A security problem does not belong in a public issue: use **Report a security problem** on the "New issue" page instead.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you saw, with the output or error message if there is one.
+    validations:
+      required: true
+  - type: textarea
+    id: what-you-expected
+    attributes:
+      label: What you expected
+      description: What should have happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The smallest steps that make it happen again.
+      placeholder: |
+        1. Run `bin/console ...`
+        2. ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The Intakt release or commit you ran.
+    validations:
+      required: true
