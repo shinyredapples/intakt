@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\PhpGate;
 
+use Closure;
 use Composer\InstalledVersions;
 use Intakt\Plugin\Gate\Contract\DependencyStep;
 use Intakt\Plugin\PhpGate\Contract\PhpGateSteps;
@@ -25,6 +26,9 @@ final class PhpGateDependencyStepTest extends TestCase
 
     // Removed from the commands' environment, because a Composer setting of whoever runs the test would point the fixtures at another manifest or vendor folder, refuse the local package repositories or skip the scripts the tests expect.
     private const array NOT_INHERITED = ['COMPOSER' => false, 'COMPOSER_VENDOR_DIR' => false, 'COMPOSER_DISABLE_NETWORK' => false, 'COMPOSER_AUTH' => false, 'COMPOSER_SKIP_SCRIPTS' => false];
+
+    // Removed as well, because a Git hook or a caller that sets them would make the fixtures' git add and git commit write into the caller's repository and index instead of the fixture's.
+    private const array GIT_NOT_INHERITED = ['GIT_DIR' => false, 'GIT_WORK_TREE' => false, 'GIT_INDEX_FILE' => false, 'GIT_OBJECT_DIRECTORY' => false, 'GIT_ALTERNATE_OBJECT_DIRECTORIES' => false, 'GIT_COMMON_DIR' => false, 'GIT_NAMESPACE' => false, 'GIT_PREFIX' => false];
 
     private string $directory;
 
@@ -157,29 +161,47 @@ final class PhpGateDependencyStepTest extends TestCase
     {
         $this->project(['scripts' => ['post-autoload-dump' => '@php -r "touch(\'autoload-event\');"']]);
         $this->mustRun('composer update --no-interaction --no-plugins --no-scripts --no-install');
-        $saved = [$_ENV['COMPOSER_SKIP_SCRIPTS'] ?? null, $_SERVER['COMPOSER_SKIP_SCRIPTS'] ?? null, getenv('COMPOSER_SKIP_SCRIPTS')];
-        $_ENV['COMPOSER_SKIP_SCRIPTS'] = $_SERVER['COMPOSER_SKIP_SCRIPTS'] = 'post-autoload-dump';
-        putenv('COMPOSER_SKIP_SCRIPTS=post-autoload-dump');
-
-        try {
+        $this->withInherited(['COMPOSER_SKIP_SCRIPTS' => 'post-autoload-dump'], function (): void {
             $this->mustRun($this->step->install);
             $this->mustRun($this->step->generate);
-        } finally {
-            [$env, $server, $process] = $saved;
-            if (null === $env) {
-                unset($_ENV['COMPOSER_SKIP_SCRIPTS']);
-            } else {
-                $_ENV['COMPOSER_SKIP_SCRIPTS'] = $env;
-            }
-            if (null === $server) {
-                unset($_SERVER['COMPOSER_SKIP_SCRIPTS']);
-            } else {
-                $_SERVER['COMPOSER_SKIP_SCRIPTS'] = $server;
-            }
-            putenv(false === $process ? 'COMPOSER_SKIP_SCRIPTS' : 'COMPOSER_SKIP_SCRIPTS='.$process);
-        }
+        });
 
         self::assertFileExists($this->directory.'/autoload-event');
+    }
+
+    public function testTheGenerationWritesNoPlatformCheckFileWhenTheManifestTurnsThePlatformCheckOff(): void
+    {
+        $this->project(['config' => ['platform-check' => false]]);
+        $this->mustRun('composer update --no-interaction --no-plugins --no-scripts --no-install');
+        $this->mustRun($this->step->install);
+
+        $this->mustRun($this->step->generate);
+
+        self::assertFileExists($this->directory.'/vendor/autoload.php');
+        self::assertFileDoesNotExist($this->directory.'/vendor/composer/platform_check.php');
+    }
+
+    public function testTheFixtureGitCommandsStayInTheFixtureWhenTheCallerPointsGitAtAnotherRepository(): void
+    {
+        $other = $this->directory.'-other';
+        $git = ['GIT_DIR' => false, 'GIT_WORK_TREE' => false, 'GIT_CONFIG_GLOBAL' => '/dev/null', 'GIT_CONFIG_NOSYSTEM' => '1'];
+        new Filesystem()->mkdir($other);
+
+        try {
+            Process::fromShellCommandline('git init -q -b main', $other, $git)->mustRun();
+            new Filesystem()->dumpFile($other.'/unrelated', 'unrelated change');
+            $this->project([]);
+
+            $this->withInherited(['GIT_DIR' => $other.'/.git', 'GIT_WORK_TREE' => $other], function (): void {
+                $this->mustRun('git init -q -b main && git add -A && git commit -qm fixture');
+            });
+
+            self::assertDirectoryExists($this->directory.'/.git');
+            self::assertNotSame(0, Process::fromShellCommandline('git rev-parse --verify --quiet HEAD', $other, $git)->run());
+            self::assertSame('', Process::fromShellCommandline('git diff --cached --name-only', $other, $git)->mustRun()->getOutput());
+        } finally {
+            new Filesystem()->remove($other);
+        }
     }
 
     public function testTheLockedInstallInstallsTheLockedPackagesWithoutAnAutoloaderAndLeavesTheLockFileAsItWas(): void
@@ -254,6 +276,37 @@ final class PhpGateDependencyStepTest extends TestCase
         return $process->getOutput();
     }
 
+    /**
+     * @param array<string, string> $variables
+     */
+    private function withInherited(array $variables, Closure $run): void
+    {
+        $saved = [];
+        foreach ($variables as $name => $value) {
+            $saved[$name] = [$_ENV[$name] ?? null, $_SERVER[$name] ?? null, getenv($name)];
+            $_ENV[$name] = $_SERVER[$name] = $value;
+            putenv($name.'='.$value);
+        }
+
+        try {
+            $run();
+        } finally {
+            foreach ($saved as $name => [$env, $server, $process]) {
+                if (null === $env) {
+                    unset($_ENV[$name]);
+                } else {
+                    $_ENV[$name] = $env;
+                }
+                if (null === $server) {
+                    unset($_SERVER[$name]);
+                } else {
+                    $_SERVER[$name] = $server;
+                }
+                putenv(false === $process ? $name : $name.'='.$process);
+            }
+        }
+    }
+
     private function runInProject(string $command): Process
     {
         $process = Process::fromShellCommandline($command, $this->directory, [
@@ -262,6 +315,7 @@ final class PhpGateDependencyStepTest extends TestCase
             'COMPOSER_CACHE_DIR' => $this->directory.'/.composer-cache',
             'COMPOSER_ALLOW_SUPERUSER' => '1',
             ...self::NOT_INHERITED,
+            ...self::GIT_NOT_INHERITED,
             'GIT_CONFIG_GLOBAL' => '/dev/null',
             'GIT_CONFIG_NOSYSTEM' => '1',
             'GIT_AUTHOR_NAME' => 'Fixture',
