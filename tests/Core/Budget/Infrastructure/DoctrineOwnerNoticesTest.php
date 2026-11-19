@@ -9,32 +9,42 @@ use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\Provider;
-use Intakt\Core\Budget\Contract\OwnerNotice;
+use Intakt\Core\Budget\Contract\MeasuredUse;
+use Intakt\Core\Budget\Contract\OutageNotice;
 use Intakt\Core\Budget\Contract\Usage;
 use Intakt\Core\Budget\Contract\UsageWindow;
 use Intakt\Core\Budget\Contract\WindowReading;
+use Intakt\Core\Budget\Contract\WindowUse;
 use Intakt\Core\Budget\Domain\OutageNoticeRecord;
+use Intakt\Core\Budget\Domain\OutageWatch;
+use Intakt\Core\Budget\Domain\UsageReadingsStayedAway;
 use Intakt\Core\Budget\Domain\WindowReadingRecord;
+use Intakt\Core\Budget\Infrastructure\DoctrineMeasuredUse;
 use Intakt\Core\Budget\Infrastructure\DoctrineOwnerNotices;
 use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\Clock\MockClock;
+use Symfony\Component\EventDispatcher\EventDispatcher;
 
 #[Group('persistence')]
 #[CoversClass(DoctrineOwnerNotices::class)]
-#[CoversClass(OwnerNotice::class)]
+#[UsesClass(DoctrineMeasuredUse::class)]
+#[UsesClass(OutageWatch::class)]
+#[UsesClass(UsageReadingsStayedAway::class)]
+#[UsesClass(WindowUse::class)]
+#[UsesClass(OutageNotice::class)]
 #[UsesClass(OutageNoticeRecord::class)]
-#[UsesClass(WindowReadingRecord::class)]
-#[UsesClass(WindowReading::class)]
-#[UsesClass(Usage::class)]
 #[UsesClass(Account::class)]
+#[UsesClass(Usage::class)]
+#[UsesClass(WindowReading::class)]
+#[UsesClass(WindowReadingRecord::class)]
 final class DoctrineOwnerNoticesTest extends KernelTestCase
 {
     private EntityManagerInterface $entities;
-    private DateTimeImmutable $noticedAt;
 
     protected function setUp(): void
     {
@@ -43,96 +53,158 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
         $this->entities = $entities;
         EmptyDatabase::in(self::getContainer());
         new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
-        $this->noticedAt = new MockClock('2026-11-02 12:00:00 UTC')->now();
     }
 
-    public function testWithNoNoticeStoredNothingIsInForce(): void
+    public function testOutageNoticesAreListedOldestFirst(): void
     {
-        self::assertSame([], $this->ownerNotices()->inForce());
+        $this->store('later', new DateTimeImmutable('2026-11-02T12:00:00+00:00'));
+        $this->store('first', new DateTimeImmutable('2026-11-02T09:00:00+00:00'));
+
+        $accounts = array_map(static fn (OutageNotice $notice): string => $notice->account->name, $this->notices()->stillRunningOldestFirst());
+
+        self::assertSame(['first', 'later'], $accounts);
     }
 
-    public function testANoticeWithoutALaterReadingOfItsAccountIsInForce(): void
+    public function testNoticesNoticedTogetherKeepTheOrderTheyWereStoredIn(): void
     {
-        $this->notice($this->claude('main'));
+        $this->store('b', new DateTimeImmutable('2026-11-02T09:00:00+00:00'));
+        $this->store('a', new DateTimeImmutable('2026-11-02T09:00:00+00:00'));
 
-        self::assertEquals(
-            [new OwnerNotice($this->claude('main'), $this->noticedAt->modify('-4 hours'), $this->noticedAt)],
-            $this->ownerNotices()->inForce(),
-        );
+        $accounts = array_map(static fn (OutageNotice $notice): string => $notice->account->name, $this->notices()->stillRunningOldestFirst());
+
+        self::assertSame(['b', 'a'], $accounts);
     }
 
-    public function testANoticeFollowedByAReadingOfItsAccountIsNoLongerInForceAndStaysStored(): void
+    public function testANoticeCarriesItsAccountAndTheLastReading(): void
     {
-        $this->notice($this->claude('main'));
-        $this->reading($this->claude('main'), '+1 minute');
+        $this->store('main', new DateTimeImmutable('2026-11-02T09:00:00+00:00'));
 
-        self::assertSame([], $this->ownerNotices()->inForce());
+        $notice = $this->notices()->stillRunningOldestFirst()[0];
+
+        self::assertSame('claude_code.main', $notice->account->key());
+        self::assertSame('2026-11-02 08:00:00', $notice->lastReadingAt->format('Y-m-d H:i:s'));
+    }
+
+    public function testNoNoticeGivesAnEmptyList(): void
+    {
+        self::assertSame([], $this->notices()->stillRunningOldestFirst());
+    }
+
+    public function testAReadingOfTheAccountAfterTheOutageTakesItsNoticeOffTheList(): void
+    {
+        $this->store('main', new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
+        $this->read('main', new DateTimeImmutable('2026-11-02T12:00:00+00:00'));
+
+        self::assertSame([], $this->notices()->stillRunningOldestFirst());
+    }
+
+    public function testANoticeTakenOffTheListStaysStored(): void
+    {
+        $this->store('main', new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
+        $this->read('main', new DateTimeImmutable('2026-11-02T12:00:00+00:00'));
+
+        $this->notices()->stillRunningOldestFirst();
+
         self::assertCount(1, $this->entities->getRepository(OutageNoticeRecord::class)->findAll());
     }
 
-    public function testAReadingTakenAtTheMomentOfTheNoticeEndsIt(): void
+    // The watch reads the old snapshot, a fresh reading lands, and only then is the notice stamped with a later moment.
+    public function testAReadingThatLandsWhileTheOutageIsBeingNoticedTakesItOffTheList(): void
     {
-        $this->notice($this->claude('main'));
-        $this->reading($this->claude('main'), '+0 seconds');
+        $account = new Account(Provider::ClaudeCode, 'main');
+        $clock = new MockClock('2026-11-02 08:00:00 UTC');
+        $use = new DoctrineMeasuredUse($this->entities, $clock);
+        $reading = new WindowReading($account, UsageWindow::FiveHour, new Usage(12.0, null));
+        $use->record($reading);
+        $clock->modify('+4 hours');
+        $snapshots = $this->createStub(MeasuredUse::class);
+        $snapshots->method('of')->willReturnCallback(
+            static function (Account $account, UsageWindow $window) use ($clock, $reading, $use): ?WindowUse {
+                $snapshot = $use->of($account, $window);
+                if (UsageWindow::FiveHour === $window) {
+                    $use->record($reading);
+                    $clock->modify('+1 second');
+                }
 
-        self::assertSame([], $this->ownerNotices()->inForce());
-    }
-
-    public function testAReadingTakenBeforeTheNoticeKeepsItInForce(): void
-    {
-        $this->notice($this->claude('main'));
-        $this->reading($this->claude('main'), '-1 second');
-
-        self::assertCount(1, $this->ownerNotices()->inForce());
-    }
-
-    public function testAReadingOfTheSameAccountNameAtAnotherProviderKeepsTheNoticeInForce(): void
-    {
-        $this->notice($this->claude('main'));
-        $this->reading(new Account(Provider::Anthropic, 'main'), '+1 minute');
-
-        self::assertCount(1, $this->ownerNotices()->inForce());
-    }
-
-    public function testAReadingOfAnotherAccountAtTheSameProviderKeepsTheNoticeInForce(): void
-    {
-        $this->notice($this->claude('main'));
-        $this->reading($this->claude('team'), '+1 minute');
-
-        self::assertCount(1, $this->ownerNotices()->inForce());
-    }
-
-    public function testNoticesInForceAreListedInTheOrderTheyWereNoticed(): void
-    {
-        $this->notice($this->claude('team'));
-        $this->notice($this->claude('main'));
-
-        self::assertSame(
-            ['team', 'main'],
-            array_map(static fn (OwnerNotice $notice): string => $notice->account->name, $this->ownerNotices()->inForce()),
+                return $snapshot;
+            },
         );
+        $dispatcher = new EventDispatcher();
+        $dispatcher->addListener(UsageReadingsStayedAway::class, function (UsageReadingsStayedAway $away): void {
+            $this->entities->persist(new OutageNoticeRecord($away->account, $away->lastReadingAt, $away->seenAt));
+            $this->entities->flush();
+        });
+
+        new OutageWatch($snapshots, $clock, $dispatcher)->watch($account);
+
+        self::assertCount(1, $this->entities->getRepository(OutageNoticeRecord::class)->findAll());
+        self::assertSame([], $this->notices()->stillRunningOldestFirst());
     }
 
-    private function ownerNotices(): DoctrineOwnerNotices
+    // A slow writer stamps its reading before a fresh one lands but stores it after, so cleaning up by position removes the fresh one.
+    public function testAReadingStoredLateStillTakesTheNoticeOffTheList(): void
+    {
+        $account = new Account(Provider::ClaudeCode, 'main');
+        $clock = new MockClock('2026-11-02 08:00:00 UTC');
+        $use = new DoctrineMeasuredUse($this->entities, $clock);
+        $use->record(new WindowReading($account, UsageWindow::FiveHour, new Usage(12.0, null)));
+        $clock->modify('+4 hours');
+        $this->entities->persist(new OutageNoticeRecord($account, new DateTimeImmutable('2026-11-02T08:00:00+00:00'), $clock->now()));
+        $this->entities->flush();
+        $reading = new WindowReading($account, UsageWindow::FiveHour, new Usage(12.0, null));
+        $slowClock = $this->createStub(ClockInterface::class);
+        $slowClock->method('now')->willReturnCallback(static function () use ($clock, $use, $reading): DateTimeImmutable {
+            $stampedAt = $clock->now()->modify('-1 second');
+            $clock->modify('+1 second');
+            $use->record($reading);
+
+            return $stampedAt;
+        });
+
+        new DoctrineMeasuredUse($this->entities, $slowClock)->record($reading);
+
+        self::assertSame([], $this->notices()->stillRunningOldestFirst());
+    }
+
+    public function testTheReadingTheOutageStartedFromKeepsItsNoticeListed(): void
+    {
+        $this->store('main', new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
+        $this->read('main', new DateTimeImmutable('2026-11-02T08:00:00+00:00'));
+
+        self::assertCount(1, $this->notices()->stillRunningOldestFirst());
+    }
+
+    public function testAReadingOfAnotherAccountKeepsTheNoticeListed(): void
+    {
+        $this->store('main', new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
+        $this->read('other', new DateTimeImmutable('2026-11-02T12:00:00+00:00'));
+
+        self::assertCount(1, $this->notices()->stillRunningOldestFirst());
+    }
+
+    // An account is its provider and its name together, so the same name at another provider is another account.
+    public function testAReadingOfTheSameAccountNameAtAnotherProviderKeepsTheNoticeListed(): void
+    {
+        $this->store('main', new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
+        $this->read('main', new DateTimeImmutable('2026-11-02T12:00:00+00:00'), Provider::Codex);
+
+        self::assertCount(1, $this->notices()->stillRunningOldestFirst());
+    }
+
+    private function notices(): DoctrineOwnerNotices
     {
         return new DoctrineOwnerNotices($this->entities);
     }
 
-    private function notice(Account $account): void
+    private function read(string $account, DateTimeImmutable $takenAt, Provider $provider = Provider::ClaudeCode): void
     {
-        $this->entities->persist(new OutageNoticeRecord($account, $this->noticedAt->modify('-4 hours'), $this->noticedAt));
+        $this->entities->persist(new WindowReadingRecord(new WindowReading(new Account($provider, $account), UsageWindow::FiveHour, new Usage(10.0, null)), $takenAt));
         $this->entities->flush();
     }
 
-    private function reading(Account $account, string $sinceTheNotice): void
+    private function store(string $account, DateTimeImmutable $noticedAt): void
     {
-        $reading = new WindowReading($account, UsageWindow::FiveHour, new Usage(12.0, null));
-        $this->entities->persist(new WindowReadingRecord($reading, $this->noticedAt->modify($sinceTheNotice)));
+        $this->entities->persist(new OutageNoticeRecord(new Account(Provider::ClaudeCode, $account), new DateTimeImmutable('2026-11-02T08:00:00+00:00'), $noticedAt));
         $this->entities->flush();
-    }
-
-    private function claude(string $name): Account
-    {
-        return new Account(Provider::ClaudeCode, $name);
     }
 }

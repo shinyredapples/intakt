@@ -6,10 +6,9 @@ namespace Intakt\Core\Budget\Contract;
 
 use DateTimeImmutable;
 use Intakt\Core\Ai\Contract\Account;
-use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
-#[Exclude]
-final readonly class OwnerNotice
+// The last reading is kept with the account because it tells the owner how long the account has been unread.
+final readonly class OutageNotice
 {
     public function __construct(
         public Account $account,
