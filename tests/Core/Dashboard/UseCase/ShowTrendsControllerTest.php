@@ -159,7 +159,7 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
 
         foreach ($page->filter('.tiles .tile') as $tile) {
             $crawler = new Crawler($tile);
-            $label = $crawler->filter('dt')->getNode(0)?->firstChild?->textContent ?? '';
+            $label = $crawler->filter('dt')->getNode(0)?->firstChild->textContent ?? '';
             $tiles[trim($label)] = $crawler->filter('dd')->text();
         }
 

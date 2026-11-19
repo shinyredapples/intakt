@@ -6,8 +6,10 @@ namespace Intakt\Core\Dashboard\Domain;
 
 use DateTimeImmutable;
 use Intakt\Core\Budget\Contract\Cost;
+use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
 // Each figure is null when the ledger holds nothing it could be read from, so the page shows "No data" instead of a zero nobody measured (D7 of #2858).
+#[Exclude]
 final readonly class ReviewTrends
 {
     private const array SERIOUS = ['P1', 'P2'];
