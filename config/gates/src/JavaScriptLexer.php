@@ -28,10 +28,17 @@ final class JavaScriptLexer
     private const int FOR_HEAD = 6;
     private const int EXPRESSION_BODY = 7;
     private const array HOLDS_STATEMENTS = [self::BLOCK, self::EXPRESSION_BODY, null];
-    private const array HEAD_KEYWORDS = ['if', 'while', 'with'];
     private const array BODY_KEYWORDS = ['function', 'class'];
-    private const array BLOCK_KEYWORDS = ['do', 'else', 'try', 'finally'];
-    private const array KEYWORDS_BEFORE_AN_OPERAND = ['return', 'typeof', 'case', 'default', 'in', 'of', 'new', 'delete', 'void', 'throw', 'instanceof', 'yield', 'await', 'const', 'let', 'var'];
+    // Because a `default` after `export` is read on its own, the kind given here is that of a `default` in a `switch`.
+    private const array KEYWORD_KINDS = [
+        'for' => self::FOR_KEYWORD, 'export' => self::EXPORT,
+        'if' => self::HEAD_KEYWORD, 'while' => self::HEAD_KEYWORD, 'with' => self::HEAD_KEYWORD,
+        'do' => self::STATEMENT_END, 'else' => self::STATEMENT_END, 'try' => self::STATEMENT_END, 'finally' => self::STATEMENT_END,
+        'return' => self::OPERATOR, 'typeof' => self::OPERATOR, 'case' => self::OPERATOR, 'default' => self::OPERATOR, 'in' => self::OPERATOR,
+        'of' => self::OPERATOR, 'new' => self::OPERATOR, 'delete' => self::OPERATOR, 'void' => self::OPERATOR, 'throw' => self::OPERATOR,
+        'instanceof' => self::OPERATOR, 'yield' => self::OPERATOR, 'await' => self::OPERATOR, 'const' => self::OPERATOR, 'let' => self::OPERATOR,
+        'var' => self::OPERATOR,
+    ];
 
     private readonly JavaScriptLiterals $literals;
     private int $previous = self::STATEMENT_END;
@@ -180,15 +187,10 @@ final class JavaScriptLexer
             'async' === $word && $this->literals->functionFollows($end) => $end,
             // Because `of` is a keyword only right after the binding of a `for` head that has no `;`, elsewhere it names a variable.
             'of' === $word && !$this->bindingOfAForOfHeadEnded() => $this->after(self::OPERAND, $end),
-            'for' === $word => $this->after(self::FOR_KEYWORD, $end),
-            'export' === $word => $this->after(self::EXPORT, $end),
             // Because after `export default` a `function` or `class` is a declaration, while a `default` in a `switch` precedes an operand.
             'default' === $word && self::EXPORT === $this->previous => $this->after(self::DEFAULT_EXPORT, $end),
-            in_array($word, self::HEAD_KEYWORDS, true) => $this->after(self::HEAD_KEYWORD, $end),
             in_array($word, self::BODY_KEYWORDS, true) => $this->afterBodyKeyword($end),
-            in_array($word, self::BLOCK_KEYWORDS, true) => $this->after(self::STATEMENT_END, $end),
-            in_array($word, self::KEYWORDS_BEFORE_AN_OPERAND, true) => $this->after(self::OPERATOR, $end),
-            default => $this->after(self::OPERAND, $end),
+            default => $this->after(self::KEYWORD_KINDS[$word] ?? self::OPERAND, $end),
         };
     }
 
