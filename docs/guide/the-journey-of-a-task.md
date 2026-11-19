@@ -97,8 +97,10 @@ flowchart TD
   panel --> probes[Planned: reviewers may run small tests<br/>in a sealed sandbox]
   probes --> verdicts[Each returns a verdict:<br/>approve, or changes with findings;<br/>blocked only when Intakt holds it back]
   verdicts --> judge[A quick judge step sorts the findings:<br/>serious findings it is given stay on the to-fix list,<br/>a small one is fixed now, later, or not at all;<br/>a reviewer with only small points set aside counts as approving]
-  judge -- something to fix now --> build[Back to the builder]
-  judge -- nothing to fix now --> pass[The panel approves]
+  judge --> count[Plain code counts the votes]
+  count -- enough reviewers approve --> pass[The panel approves]
+  count -- not enough, something to fix now --> build[Back to the builder]
+  count -- not enough, nothing to fix --> held[Held back,<br/>nothing sent to the builder]
 ```
 
 - **Findings have a severity:** P1 (wrong or unsafe: always blocks), P2 (a real defect: blocks), P3 (a nice-to-have: never blocks; a small fix in a file the change already touches is marked "fix now", a bigger one becomes a follow-up task, or is set aside when the judge finds it not needed). A quick plain check first drops a finding that quotes code the change does not contain; the judge step cannot set a P1 or P2 aside that the check kept: when it thinks one is not needed, the finding still goes to the builder, with the judge's reason written beside it. A change is sent back only with something on the to-fix list: a reviewer that asked for changes only over small points the judge put off or set aside counts as approving, and one whose points never reached the to-fix list for another reason (the plain check dropped them, or the judge's answer could not be read) counts as not approving, so the builder is never sent back with nothing to fix. From the second review round on, a new P1 or P2 only keeps its severity when it is something the change broke or it names a rule or task requirement it breaks; otherwise it is lowered to P3, so reviewers cannot keep moving the goalposts.
