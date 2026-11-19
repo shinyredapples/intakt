@@ -84,6 +84,18 @@ final class CheckPullRequestTextCommandTest extends TestCase
         self::assertStringContainsString('missing.md', $this->flat($tester));
     }
 
+    public function testTheSampleRepositorysTextsGiveAGreenAndARedResult(): void
+    {
+        $sample = dirname(__DIR__, 5).'/fixtures/sample-repository/pull-request-text';
+        $tester = new CommandTester($this->application()->find('intakt:check:pull-request-text'));
+
+        $green = $tester->execute(['task' => $sample.'/task.md', 'pull-request-text' => $sample.'/complete.md']);
+        $red = $tester->execute(['task' => $sample.'/task.md', 'pull-request-text' => $sample.'/incomplete.md']);
+
+        self::assertSame([Command::SUCCESS, Command::FAILURE], [$green, $red]);
+        self::assertStringContainsString('missing: E2, E3', $tester->getDisplay());
+    }
+
     private function executed(string $task, string $pullRequestText): CommandTester
     {
         new Filesystem()->dumpFile($this->folder.'/task.md', $task);
