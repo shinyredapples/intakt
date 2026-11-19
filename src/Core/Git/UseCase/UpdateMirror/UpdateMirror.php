@@ -17,6 +17,7 @@ use Symfony\Component\Filesystem\Path;
 use Symfony\Component\Lock\Exception\ExceptionInterface as LockFailure;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Process\Exception\ExceptionInterface as ProcessFailure;
+use Symfony\Component\Process\Exception\RuntimeException;
 use Symfony\Component\Process\Process;
 
 final readonly class UpdateMirror
@@ -80,7 +81,12 @@ final readonly class UpdateMirror
             return false;
         }
 
-        $bare = $this->local(['--git-dir='.$path, 'rev-parse', '--is-bare-repository'], $path);
+        try {
+            $bare = $this->local(['rev-parse', '--is-bare-repository'], $path);
+        } catch (RuntimeException) {
+            // Because the bare call refuses a folder whose config gives it a work tree, which is no mirror either.
+            return false;
+        }
 
         return $bare->isSuccessful() && 'true' === trim($bare->getOutput());
     }
@@ -96,7 +102,8 @@ final readonly class UpdateMirror
             $this->network->runEachAttempt(function () use ($project, $remote, &$attempts, &$staging): GitCall {
                 $attempts[] = $staging = $this->stagingPath($project);
 
-                return $this->withoutAttributeSource($this->pinned(['clone', '--mirror', '--quiet', '--', $remote, $staging], $this->mirrors->directory));
+                // The work tree stays pinned to the mirrors folder, because a mirror clone takes none.
+                return $this->withoutAttributeSource($this->hardened->call(['clone', '--mirror', '--quiet', '--', $remote, $staging], $this->mirrors->directory));
             });
             $this->forgetRemote($staging);
             $published = $this->publish($project, $staging, $path);
@@ -127,25 +134,25 @@ final readonly class UpdateMirror
     private function forgetRemote(string $staging): void
     {
         // Because the clone saves the remote's address, credential included, as "remote.origin.url"; the remote is named on every call instead, so the mirror keeps no address.
-        $this->mustRun(['--git-dir='.$staging, 'config', '--remove-section', 'remote.origin'], $staging);
+        $this->mustRun(['config', '--remove-section', 'remote.origin'], $staging);
     }
 
     private function fill(string $repository, string $remote): void
     {
         // Asked before the refs fetch, so a branch the remote's HEAD names already exists when the fetch runs and comes in with it.
-        $heads = $this->network->run($this->pinned(['--git-dir='.$repository, 'ls-remote', '--symref', '--', $remote, 'HEAD'], $repository));
+        $heads = $this->network->run($this->inMirror(['ls-remote', '--symref', '--', $remote, 'HEAD'], $repository));
 
         // The remote is named on each call, so a mirror never depends on a remote setting; "--" ends the options, so a remote that starts with a dash is a repository, never an option. No FETCH_HEAD, because git writes the remote's address into it, and the mirror keeps no address.
-        $this->network->run($this->pinned(['--git-dir='.$repository, 'fetch', '--prune', '--quiet', '--no-write-fetch-head', '--', $remote, self::MIRROR_REFSPEC], $repository));
+        $this->network->run($this->inMirror(['fetch', '--prune', '--quiet', '--no-write-fetch-head', '--', $remote, self::MIRROR_REFSPEC], $repository));
 
         if (1 === preg_match(self::REMOTE_HEAD, $heads, $match)) {
-            $this->mustRun(['--git-dir='.$repository, 'symbolic-ref', 'HEAD', $match[1]], $repository);
+            $this->mustRun(['symbolic-ref', 'HEAD', $match[1]], $repository);
             $this->mustResolveHead($repository, $match[1]);
         } elseif (1 === preg_match(self::DETACHED_HEAD, $heads, $match)) {
             // Fetched by name, because a detached HEAD may sit on a commit no ref reaches, which the refs fetch leaves out; only here, since an empty remote advertises no HEAD.
-            $this->network->run($this->pinned(['--git-dir='.$repository, 'fetch', '--quiet', '--no-write-fetch-head', '--', $remote, 'HEAD'], $repository));
+            $this->network->run($this->inMirror(['fetch', '--quiet', '--no-write-fetch-head', '--', $remote, 'HEAD'], $repository));
             // Detached, as "clone --mirror" leaves it, because a remote whose HEAD names no branch only advertises the commit.
-            $this->mustRun(['--git-dir='.$repository, 'update-ref', '--no-deref', 'HEAD', $match[1]], $repository);
+            $this->mustRun(['update-ref', '--no-deref', 'HEAD', $match[1]], $repository);
             $this->mustResolveHead($repository, $match[1]);
         }
     }
@@ -153,7 +160,7 @@ final readonly class UpdateMirror
     private function mustResolveHead(string $repository, string $ref): void
     {
         // Because the remote may delete the branch between "ls-remote" and the fetch: the update then fails, and the next one repairs HEAD.
-        if (!$this->local(['--git-dir='.$repository, 'rev-parse', '--verify', '--quiet', 'HEAD'], $repository)->isSuccessful()) {
+        if (!$this->local(['rev-parse', '--verify', '--quiet', 'HEAD'], $repository)->isSuccessful()) {
             throw MirrorNotUpdated::at($repository, sprintf('HEAD names %s, which the mirror does not hold', $ref));
         }
     }
@@ -195,9 +202,9 @@ final readonly class UpdateMirror
     /**
      * @param list<string> $arguments
      */
-    private function local(array $arguments, string $directory): Process
+    private function local(array $arguments, string $repository): Process
     {
-        $call = $this->pinned($arguments, $directory);
+        $call = $this->inMirror($arguments, $repository);
         $process = new Process($call->command, $call->directory, $call->environment);
         $process->run();
 
@@ -207,11 +214,8 @@ final readonly class UpdateMirror
     /**
      * @param list<string> $arguments
      */
-    private function pinned(array $arguments, string $directory): GitCall
+    private function inMirror(array $arguments, string $repository): GitCall
     {
-        $call = $this->hardened->call($arguments, $directory);
-
-        // Because a work tree beside --git-dir would make git treat the bare mirror as a checkout.
-        return new GitCall($call->command, $call->directory, [...$call->environment, 'GIT_WORK_TREE' => false]);
+        return $this->hardened->callInBareRepository($arguments, $repository);
     }
 }

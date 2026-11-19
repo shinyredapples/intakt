@@ -174,6 +174,20 @@ final class UpdateMirrorTest extends TestCase
         self::assertSame($this->remote->objectAt('HEAD'), $this->git($path, 'rev-parse', 'refs/heads/main'));
     }
 
+    public function testARepositoryWhoseConfigNamesAWorkTreeIsNoMirrorAndIsReplacedByOne(): void
+    {
+        mkdir($this->mirrors);
+        $this->git($this->mirrors, 'init', '--bare', '--quiet', 'alpha.git');
+        $this->git($this->mirrors.'/alpha.git', 'config', 'core.bare', 'false');
+        $this->git($this->mirrors.'/alpha.git', 'config', 'core.worktree', $this->mirrors);
+
+        $path = $this->update('alpha', $this->remote->path);
+
+        self::assertSame('true', $this->git($path, 'config', 'core.bare'));
+        self::assertSame('', $this->git($path, 'config', '--default', '', 'core.worktree'));
+        self::assertSame($this->remote->objectAt('HEAD'), $this->git($path, 'rev-parse', 'refs/heads/main'));
+    }
+
     public function testTheMirrorsHeadFollowsTheRemotesHead(): void
     {
         $path = $this->update('alpha', $this->remote->path);
