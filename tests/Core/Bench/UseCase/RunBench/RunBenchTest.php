@@ -223,8 +223,6 @@ final class RunBenchTest extends KernelTestCase
         };
         $serializer = self::getContainer()->get('serializer.stored');
         $handler = $this->fixture->startHandlerOn($this->fixture->bus);
-        $failures = self::createStub(ListableReceiverInterface::class);
-        $failures->method('all')->willReturn([]);
 
         return new ReviewChange(
             new MessageBus([new HandleMessageMiddleware(new HandlersLocator([RunReviewRound::class => [$handler]]))]),
@@ -236,7 +234,7 @@ final class RunBenchTest extends KernelTestCase
             new WorkerOnSleep($this->fixture->clock, $work),
             new FailureInWords(),
             $vendor,
-            new FailedJudgings($failures),
+            $this->fixture->noFailedJudgings(),
         );
     }
 

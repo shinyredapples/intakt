@@ -46,6 +46,8 @@ use Intakt\Core\Review\Infrastructure\StopRequests;
 use Intakt\Core\Review\UseCase\IndexResolvedFindings\IndexResolvedFindings;
 use Intakt\Core\Review\UseCase\IndexResolvedFindings\IndexResolvedFindingsHandler;
 use Intakt\Core\Review\UseCase\JudgeRound\FailedJudgings;
+use Intakt\Core\Review\UseCase\JudgeRound\RecordFailedJudgingHandler;
+use Psr\Log\LoggerInterface;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgedRounds;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRound;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRoundHandler;
@@ -247,10 +249,15 @@ final readonly class RoundFixture
         return array_values(array_filter(array_map(static fn (Envelope $sent): object => $sent->getMessage(), $queue->getSent()), static fn (object $message): bool => $message instanceof JudgeRound));
     }
 
-    // An empty in-memory failure transport, so a test that waits on a round sees no failed judging.
+    // An empty in-memory failure transport and the round's ledger, so a test that waits on a round sees a failed judging only once its failure is recorded.
     public function noFailedJudgings(): FailedJudgings
     {
-        return new FailedJudgings(new InMemoryTransport());
+        return new FailedJudgings(new InMemoryTransport(), $this->ledger, $this->ledgerPayloads());
+    }
+
+    public function failedJudgingRecorder(MessageBusInterface $commands, LoggerInterface $logger): RecordFailedJudgingHandler
+    {
+        return new RecordFailedJudgingHandler($this->transactions(), $this->roundLedger($this->ledger), $this->noFailedJudgings(), $commands, $logger);
     }
 
     public function indexing(MemoryIndex $memory): IndexResolvedFindingsHandler
