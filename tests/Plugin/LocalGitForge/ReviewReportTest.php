@@ -93,20 +93,20 @@ final class ReviewReportTest extends TestCase
     {
         $review = $this->reviewOf($this->noted('Deferred: belongs to the retry task.'));
 
-        self::assertSame('Deferred: belongs to the retry task.', $this->documentOf($review)['act_list'][0]['judge_note'] ?? null);
+        self::assertSame('Deferred: belongs to the retry task.', $this->rowsOf($review)['act_list'][0]['judge_note'] ?? null);
         self::assertSame([], $this->schemaErrors($this->report()->asJson($review)));
     }
 
     public function testAJsonActListRowWithoutAJudgesNoteHasNoJudgeNoteKey(): void
     {
-        $document = $this->documentOf($this->review(Decision::Changes));
+        $document = $this->rowsOf($this->review(Decision::Changes));
 
-        self::assertArrayNotHasKey('judge_note', $document['act_list'][0] ?? []);
+        self::assertArrayNotHasKey('judge_note', $document['act_list'][0]);
     }
 
     public function testTheSchemaRefusesAnEmptyJudgesNote(): void
     {
-        $document = $this->documentOf($this->review(Decision::Changes));
+        $document = $this->rowsOf($this->review(Decision::Changes));
         $document['act_list'][0]['judge_note'] = '';
 
         self::assertNotSame([], $this->schemaErrors(json_encode($document, JSON_THROW_ON_ERROR)));
@@ -302,6 +302,17 @@ final class ReviewReportTest extends TestCase
     {
         $document = json_decode($this->report()->asJson($review), true, flags: JSON_THROW_ON_ERROR);
         self::assertIsArray($document);
+
+        return $document;
+    }
+
+    /**
+     * @return array{act_list: non-empty-list<array<string, mixed>>}
+     */
+    private function rowsOf(ChangeReview $review): array
+    {
+        /** @var array{act_list: non-empty-list<array<string, mixed>>} $document */
+        $document = $this->documentOf($review);
 
         return $document;
     }

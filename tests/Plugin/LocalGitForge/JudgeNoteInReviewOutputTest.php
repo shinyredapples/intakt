@@ -76,7 +76,7 @@ final class JudgeNoteInReviewOutputTest extends KernelTestCase
     {
         $review = $this->reviewWith(new JudgeMarkingByText($this->reviewersReporting(Severity::P1), ['Text of A.' => [Mark::Reject, self::REJECTED]]));
 
-        self::assertSame(self::REJECTED, $this->lineAfter($review, 'P1 src/A.php:7: Text of A.'));
+        self::assertSame(self::REJECTED, $this->judgeNoteAfter($review, 'P1 src/A.php:7: Text of A.'));
         self::assertSame(self::REJECTED, $this->jsonRow($review, 'Text of A.')['judge_note'] ?? null);
     }
 
@@ -84,7 +84,7 @@ final class JudgeNoteInReviewOutputTest extends KernelTestCase
     {
         $review = $this->reviewWith(new JudgeMarkingByText($this->reviewersReporting(Severity::P2), ['Text of B.' => [Mark::Defer, self::DEFERRED]]));
 
-        self::assertSame(self::DEFERRED, $this->lineAfter($review, 'P2 src/A.php:9: Text of B.'));
+        self::assertSame(self::DEFERRED, $this->judgeNoteAfter($review, 'P2 src/A.php:9: Text of B.'));
         self::assertSame(self::DEFERRED, $this->jsonRow($review, 'Text of B.')['judge_note'] ?? null);
     }
 
@@ -92,12 +92,11 @@ final class JudgeNoteInReviewOutputTest extends KernelTestCase
     {
         $review = $this->reviewWith(new JudgeMarkingByText($this->reviewersReporting(Severity::P2), ['Text of B.' => [Mark::Defer, self::DEFERRED]]));
 
-        self::assertNull($this->lineAfter($review, 'P1 src/A.php:7: Text of A.'));
+        self::assertNull($this->judgeNoteAfter($review, 'P1 src/A.php:7: Text of A.'));
         self::assertArrayNotHasKey('judge_note', $this->jsonRow($review, 'Text of A.'));
     }
 
-    // The judge's note without its prefix when the line after the finding is a judge line, else null.
-    private function lineAfter(ChangeReview $review, string $finding): ?string
+    private function judgeNoteAfter(ChangeReview $review, string $finding): ?string
     {
         $lines = $this->report()->asLines($review);
         $at = array_find_key($lines, static fn (string $line): bool => str_ends_with($line, ' '.$finding));
