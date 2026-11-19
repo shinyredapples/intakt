@@ -62,7 +62,7 @@ Everything that waits has a **deadline** that wakes it, for example "check again
 
 Before pushing, Intakt runs the project's check itself (`bin/check --fast` for a PHP project, the quick version). CI repeats that check in full after the push and can add jobs of its own. For Intakt's own repository it also runs:
 - the journeys, which walk through a first install and the live review page;
-- the database tests on MySQL, MariaDB and PostgreSQL (the check before the push uses SQLite only), when a pull request touches the database layer, its migrations, the locked dependencies, the persistence tests or the CI files;
+- the database tests on MySQL, MariaDB and PostgreSQL (the check before the push uses SQLite only), when a pull request touches the database layer, its migrations, the dependencies, the persistence tests or their setup, or the CI files;
 - building the app image, with a smoke test and a check that it starts on an empty volume, unless a pull request changes only files under `docs/`, `tests/` or `upstream/`;
 - an upgrade check, when a pull request touches migrations, mapped database classes, the `Dockerfile`, the `docker/` folder or the locked dependencies: the image starts on a copy of the data of the version the change starts from.
 
