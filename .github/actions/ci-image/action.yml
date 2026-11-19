@@ -21,11 +21,16 @@ runs:
         path: ${{ runner.temp }}/intakt-ci-image.tar
         key: ${{ steps.name.outputs.key }}
     - shell: bash
+      env:
+        PRESENT: ${{ steps.name.outputs.present }}
       run: |
         set -eu
         if [ -f "$RUNNER_TEMP/intakt-ci-image.tar" ]; then
           docker load --input "$RUNNER_TEMP/intakt-ci-image.tar"
           rm -f "$RUNNER_TEMP/intakt-ci-image.tar"
+        elif [ "${DOCKERHUB_LOGIN_FAILED:-}" = 1 ] && [ "$PRESENT" != true ]; then
+          echo "::error::The Docker Hub login failed and the CI image is neither on the runner nor cached, so it would have to be pulled or built."
+          exit 1
         fi
         .github/ci/build-image.sh
     # Only a run on main saves (a push, the nightly journeys or a manual run), never a pull request: a pull request runs
