@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Job\UseCase\BuildJobImage;
 
+use Closure;
 use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Job\Contract\DockerEngineFailed;
@@ -43,11 +44,13 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use RecursiveIteratorIterator;
+use ReflectionFunction;
 use SplFileInfo;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\HttpClient\Exception\TransportException;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 use Symfony\Component\Process\Process;
@@ -93,6 +96,10 @@ final class BuildJobImageCommandTest extends TestCase
     private string $probe = '{"version": "8.5.12", "extensions": ["core", "intl"]}';
     private string $context = '';
     private string $url = '';
+    private int $socketAnswersWithStatus = 200;
+    private string $contextFile = '';
+    private bool $contextLeftOnceSent = true;
+    private ?int $disconnectAfter = null;
     private ?BuildJobImage $racing = null;
 
     /** @var list<MockResponse> */
@@ -232,6 +239,36 @@ final class BuildJobImageCommandTest extends TestCase
         self::assertSame([], $this->requests);
     }
 
+    public function testTheBuildContextIsStreamedFromAFileThatIsRemovedOnceTheRequestIsSent(): void
+    {
+        $tester = $this->whenTheCommandRuns(self::BUILT);
+
+        self::assertSame(Command::SUCCESS, $tester->getStatusCode(), $tester->getDisplay());
+        self::assertFalse($this->contextLeftOnceSent, 'The archive is gone before the engine answers.');
+        self::assertDirectoryDoesNotExist(dirname($this->contextFile));
+    }
+
+    public function testTheBuildContextIsRemovedAlsoWhenTheEngineRefusesTheBuild(): void
+    {
+        $this->socketAnswersWithStatus = 400;
+
+        $this->whenTheCommandRuns('{"message":"invalid reference format"}');
+
+        self::assertDirectoryDoesNotExist(dirname($this->contextFile));
+    }
+
+    public function testTheBuildContextIsRemovedAlsoWhenTheConnectionBreaksDuringTheUpload(): void
+    {
+        $this->disconnectAfter = 1024;
+
+        $tester = $this->whenTheCommandRuns(self::BUILT);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString('Connection reset during the upload', $this->display($tester));
+        self::assertTrue($this->contextLeftOnceSent, 'The upload broke off before the end of the archive.');
+        self::assertDirectoryDoesNotExist(dirname($this->contextFile));
+    }
+
     public function testATagThatIsNoImageReferenceIsRefused(): void
     {
         $tester = $this->whenTheCommandRuns(self::BUILT, 'Demo:main tag');
@@ -258,8 +295,12 @@ final class BuildJobImageCommandTest extends TestCase
         $client = new MockHttpClient(function (string $method, string $url, array $options) use ($stream): MockResponse {
             $this->url = $url;
             $this->context = sys_get_temp_dir().'/intakt-context-'.bin2hex(random_bytes(4)).'.tar';
-            new Filesystem()->dumpFile($this->context, is_string($options['body']) ? $options['body'] : self::fail('The build context is no string.'));
-            $response = new MockResponse($stream);
+            self::assertInstanceOf(Closure::class, $options['body'], 'The build context is streamed, not held as a string.');
+            $this->contextFile = $this->fileBehind($options['body']);
+            self::assertFileExists($this->contextFile);
+            new Filesystem()->dumpFile($this->context, $this->bodyRead($options['body'], $this->disconnectAfter));
+            $this->contextLeftOnceSent = file_exists(dirname($this->contextFile));
+            $response = new MockResponse($stream, ['http_code' => $this->socketAnswersWithStatus]);
             $this->requests[] = $response;
 
             return $response;
@@ -274,6 +315,33 @@ final class BuildJobImageCommandTest extends TestCase
         $tester->execute(['directory' => $this->repository->path, 'tag' => $tag, ...$options]);
 
         return $tester;
+    }
+
+    // From what the body reads, because a glob over the shared temp folder would also match the contexts of builds running beside this one.
+    private function fileBehind(Closure $body): string
+    {
+        // By its value and not its variable's name, so renaming a local of the upload does not break the test.
+        $files = array_filter(new ReflectionFunction($body)->getClosureUsedVariables(), static fn (mixed $used): bool => is_string($used) && is_file($used));
+        self::assertCount(1, $files);
+
+        return (string) array_first($files);
+    }
+
+    private function bodyRead(Closure $body, ?int $disconnectAfter): string
+    {
+        $read = '';
+
+        while ('' !== ($chunk = $body(512))) {
+            $read .= is_string($chunk) ? $chunk : '';
+
+            if (null !== $disconnectAfter && strlen($read) >= $disconnectAfter) {
+                $this->contextLeftOnceSent = file_exists(dirname($this->contextFile));
+
+                throw new TransportException('Connection reset during the upload');
+            }
+        }
+
+        return $read;
     }
 
     private function fileInTheSentContext(string $name): string
