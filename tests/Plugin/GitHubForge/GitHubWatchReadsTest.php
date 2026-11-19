@@ -271,6 +271,13 @@ final class GitHubWatchReadsTest extends TestCase
         self::assertSame([CiRunState::Unfinished], $this->statesOfHead());
     }
 
+    public function testAQueuedWorkflowRunNextToANewerCompletedOneOnTheSameHeadIsQueued(): void
+    {
+        $this->runs = 'runs_queued_and_newer_green.json';
+
+        self::assertSame([CiRunState::Succeeded, CiRunState::Queued], $this->statesOfHead());
+    }
+
     public function testAFailedWorkflowRunIsFailed(): void
     {
         $this->runs = 'runs_failed.json';

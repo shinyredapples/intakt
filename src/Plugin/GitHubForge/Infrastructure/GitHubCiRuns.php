@@ -27,7 +27,7 @@ final readonly class GitHubCiRuns
      */
     public function ofWorkflowRuns(RepositoryAddress $repository, CommitId $head, array $answer): array
     {
-        return $this->runsOf($repository, $this->ofHead($head, $this->entries($answer, 'workflow_runs')), fn (array $entry): array => [$this->text($entry, 'name'), $this->text($entry, 'event')]);
+        return $this->runsOf($repository, $this->ofHead($head, $this->entries($answer, 'workflow_runs')), fn (array $entry): array => [$this->text($entry, 'name'), $this->text($entry, 'event'), $this->workflowRunStateOf($entry)]);
     }
 
     /**
@@ -38,7 +38,7 @@ final readonly class GitHubCiRuns
     public function ofCheckSuites(RepositoryAddress $repository, CommitId $head, array $answer): array
     {
         // A queued suite without check runs is kept, because its first job may still start and the other runs alone would make the head green too early.
-        return $this->runsOf($repository, $this->ofHead($head, $this->entries($answer, 'check_suites')), fn (array $suite): array => [$this->text($suite, 'app', 'name'), self::CHECK_SUITE_EVENT]);
+        return $this->runsOf($repository, $this->ofHead($head, $this->entries($answer, 'check_suites')), fn (array $suite): array => [$this->text($suite, 'app', 'name'), self::CHECK_SUITE_EVENT, $this->stateOf($suite)]);
     }
 
     /**
@@ -73,18 +73,27 @@ final readonly class GitHubCiRuns
     }
 
     /**
-     * @param list<array<mixed>>                            $entries
-     * @param callable(array<mixed>): array{string, string} $originOf
+     * @param list<array<mixed>>                                        $entries
+     * @param callable(array<mixed>): array{string, string, CiRunState} $describe
      *
      * @return list<CiRun>
      */
-    private function runsOf(RepositoryAddress $repository, array $entries, callable $originOf): array
+    private function runsOf(RepositoryAddress $repository, array $entries, callable $describe): array
     {
-        return array_map(function (array $entry) use ($repository, $originOf): CiRun {
-            [$name, $event] = $originOf($entry);
+        return array_map(function (array $entry) use ($repository, $describe): CiRun {
+            [$name, $event, $state] = $describe($entry);
 
-            return new CiRun(new CiRunOrigin($name, $event, $this->changeOf($repository, $entry)), $this->stateOf($entry), $this->moments->parse($this->text($entry, 'created_at')));
+            return new CiRun(new CiRunOrigin($name, $event, $this->changeOf($repository, $entry)), $state, $this->moments->parse($this->text($entry, 'created_at')));
         }, $entries);
+    }
+
+    /**
+     * @param array<mixed> $entry
+     */
+    private function workflowRunStateOf(array $entry): CiRunState
+    {
+        // Only "queued" is a run that never started; check suites stay Unfinished, because all of one app's suites share one origin.
+        return 'queued' === $this->text($entry, 'status') ? CiRunState::Queued : $this->stateOf($entry);
     }
 
     /**
