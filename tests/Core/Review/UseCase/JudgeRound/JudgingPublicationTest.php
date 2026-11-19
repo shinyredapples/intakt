@@ -293,9 +293,7 @@ final class JudgingPublicationTest extends KernelTestCase
 
     private function commands(): MessageBusInterface
     {
-        $commands = self::getContainer()->get('command.bus');
-
-        return $commands;
+        return self::getContainer()->get('command.bus');
     }
 
     private function transport(string $id): DoctrineTransport
