@@ -138,7 +138,8 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       # Decided in a step, like the image job's, so the check always reports: every push to main runs the journeys, a pull
-      # request only when it needs the app image (.github/ci/image-needed.sh) or touches tests/Journeys. A failing git fails the step.
+      # request only when it needs the app image (.github/ci/image-needed.sh) or touches the journeys' test code (the paths
+      # below). git diff exits 1 for a change and 0 for none; any other status is a git error and fails the step.
       - name: Decide on the journeys
         id: journeys
         env:
@@ -151,7 +152,20 @@ jobs:
           if [ "$EVENT" != push ]; then
             base=$(git merge-base "origin/$BASE_REF" "$HEAD_SHA")
             needed=$(.github/ci/image-needed.sh "$base" "$HEAD_SHA")
-            if [ "$needed" != yes ] && ! git diff --quiet "$base" "$HEAD_SHA" -- tests/Journeys; then needed=yes; fi
+            paths=(
+              tests/Journeys                              # the journeys themselves
+              tests/Support                               # StoredSerializerFactory.php, which DemoTourJourneyTest loads
+              tests/Core/Watcher/RecordedPullRequests.php # the recorded answers WatcherStart loads
+            )
+            if [ "$needed" != yes ]; then
+              status=0
+              git diff --quiet "$base" "$HEAD_SHA" -- "${paths[@]}" || status=$?
+              case "$status" in
+                0) ;;
+                1) needed=yes ;;
+                *) echo "::error::git diff failed with status $status."; exit 1 ;;
+              esac
+            fi
           fi
           echo "needed=$needed" >> "$GITHUB_OUTPUT"
           if [ "$needed" = yes ]; then echo "journeys needed"; else echo "skipped: no journey inputs changed"; fi
