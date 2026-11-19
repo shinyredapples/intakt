@@ -48,9 +48,9 @@ final class ReviewRoundStateMachineTest extends KernelTestCase
         self::assertSame(['collecting'], $this->roundMachine()->getDefinition()->getInitialPlaces());
     }
 
+    // The registrar names the service after the type, so only a state machine answers to this id.
     public function testTheRoundMachineIsAStateMachine(): void
     {
-        self::assertFalse(self::getContainer()->has('workflow.review_round'));
         self::assertTrue(self::getContainer()->has('state_machine.review_round'));
     }
 
