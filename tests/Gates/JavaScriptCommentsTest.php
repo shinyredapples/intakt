@@ -132,7 +132,8 @@ final class JavaScriptCommentsTest extends TestCase
         yield 'a regular expression after an arrow function body' => ["const f = () => {}\n/[/* TODO */]/.test(input);\n"];
         yield 'a regular expression after a catch block' => ["try {} catch (e) {} /[/* TODO */]/.test(input);\n"];
         yield 'a regular expression as the body of a for await loop' => ["async function f() { for await (const x of y) /[/* TODO */]/.test(a); }\n"];
-        yield 'a regular expression in a for await head' => ["async function f() { for await (const x of /[/* TODO */]/.exec(a)) {} }\n"];    }
+        yield 'a regular expression in a for await head' => ["async function f() { for await (const x of /[/* TODO */]/.exec(a)) {} }\n"];
+    }
 
     #[DataProvider('scriptsWithoutAMarkerComment')]
     public function testAJavaScriptSourceWithoutAMarkerCommentHasNoMarkers(string $script): void
