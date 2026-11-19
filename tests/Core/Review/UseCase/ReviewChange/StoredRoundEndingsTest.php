@@ -54,6 +54,20 @@ final class StoredRoundEndingsTest extends TestCase
         self::assertStringStartsWith(RoundEndReasons::NO_OUTCOME_IN_TIME.': the round did not end within 10 seconds', $ending->reason);
     }
 
+    public function testARoundWithNoOutcomeInTimeEndedWhenItsUpperWaitRanOut(): void
+    {
+        $ending = $this->endingsAt('2026-10-28T12:05:00+00:00')->ofUnjudged('round-1', 2, new DateTimeImmutable('2026-10-28T12:00:00+00:00'));
+
+        self::assertEquals(new DateTimeImmutable('2026-10-28T12:00:10+00:00'), $ending?->endedAt);
+    }
+
+    public function testAJudgingFailureRecordedInTheLedgerEndedTheRoundWhenItWasRecorded(): void
+    {
+        $ending = $this->endingsAt('2026-10-28T12:30:00+00:00', recorded: ['round-1'])->ofUnjudged('round-1', 2, new DateTimeImmutable('2026-10-28T11:00:00+00:00'));
+
+        self::assertEquals(new DateTimeImmutable('2026-10-28T12:00:00+00:00'), $ending?->endedAt);
+    }
+
     public function testARoundWhoseJudgingFailureIsRecordedInTheLedgerEndedWithJudgingFailedEvenWithinItsWait(): void
     {
         $ending = $this->endingsAt('2026-10-28T12:00:00+00:00', recorded: ['round-1'])->ofUnjudged('round-1', 2, new DateTimeImmutable('2026-10-28T12:00:00+00:00'));
@@ -70,11 +84,19 @@ final class StoredRoundEndingsTest extends TestCase
         self::assertNull($endings->ofUnjudged('round-1', 2, new DateTimeImmutable('2026-10-28T12:00:00+00:00')));
     }
 
-    public function testAJudgingParkedInTheFailureTransportWithoutALedgerRecordDoesNotEndTheRoundWithinItsWait(): void
+    public function testAJudgingParkedInTheFailureTransportWithoutALedgerRecordEndedWithJudgingFailedEvenPastItsWait(): void
     {
-        $endings = $this->endingsAt('2026-10-28T12:00:00+00:00', parked: [new Envelope(new JudgeRound('round-1'))]);
+        $ending = $this->endingsAt('2026-10-29T12:00:00+00:00', parked: [new Envelope(new JudgeRound('round-1'))])->ofUnjudged('round-1', 2, new DateTimeImmutable('2026-10-28T12:00:00+00:00'));
 
-        self::assertNull($endings->ofUnjudged('round-1', 2, new DateTimeImmutable('2026-10-28T12:00:00+00:00')));
+        self::assertSame(RoundEnds::JudgingFailed, $ending?->end);
+    }
+
+    public function testAJudgingParkedWithoutALedgerRecordHasNoTimeItEnded(): void
+    {
+        $ending = $this->endingsAt('2026-10-28T12:00:00+00:00', parked: [new Envelope(new JudgeRound('round-1'))])->ofUnjudged('round-1', 2, new DateTimeImmutable('2026-10-28T12:00:00+00:00'));
+
+        self::assertInstanceOf(RoundEnding::class, $ending);
+        self::assertNull($ending->endedAt);
     }
 
     /**

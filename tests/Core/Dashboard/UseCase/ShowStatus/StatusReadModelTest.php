@@ -41,11 +41,12 @@ use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\FailureInWords;
 use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Core\Review\Contract\RoundCosts;
+use DateTimeImmutable;
 use Intakt\Core\Review\Contract\RoundEnding;
+use Intakt\Core\Review\Contract\RoundEndings;
 use Intakt\Core\Review\Contract\RoundEnds;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 use Intakt\Tests\Core\Dashboard\UseCase\DashboardLedger;
-use Intakt\Tests\Support\FixedRoundEndings;
 use Intakt\Tests\Support\ReplayMarkBus;
 use Intakt\Tests\Support\StoredSerializerFactory;
 use JsonSchema\Validator;
@@ -108,6 +109,9 @@ final class StatusReadModelTest extends TestCase
     private array $storedMarks = [];
 
     private ?RoundEnding $ending = null;
+
+    /** @var array<string, RoundEnding> */
+    private array $endings = [];
 
     protected function setUp(): void
     {
@@ -379,6 +383,45 @@ final class StatusReadModelTest extends TestCase
         self::assertSame([['r2', 'judging_failed']], array_map(static fn (array $entry): array => [$entry['round'], $entry['end']], $this->projectOf($this->read(), 'alpha')['last_outcomes']));
     }
 
+    public function testAFailedJudgingStaysTheChangesLastOutcomeWhileItsNextRoundRuns(): void
+    {
+        $this->endings = ['r1' => new RoundEnding(RoundEnds::JudgingFailed, 'the judging failed')];
+        $this->ledger->startRecordedRoundOf('7', 'r1', 1);
+        $this->ledger->startRecordedRoundOf('7', 'r2', 2);
+
+        $project = $this->projectOf($this->read(), 'alpha');
+
+        self::assertSame([['r1', 'judging_failed']], array_map(static fn (array $entry): array => [$entry['round'], $entry['end']], $project['last_outcomes']));
+        self::assertSame(['r2'], array_column($project['lanes']['review'], 'round'));
+    }
+
+    public function testAFailedJudgingAfterAJudgedRoundStaysTheLastOutcomeWhileAThirdRoundRuns(): void
+    {
+        $this->endings = ['r2' => new RoundEnding(RoundEnds::JudgingFailed, 'the judging failed')];
+        $this->ledger->startRecordedRoundOf('7', 'r1', 1);
+        $this->ledger->judgeRound('r1');
+        $this->ledger->startRecordedRoundOf('7', 'r2', 2);
+        $this->ledger->startRecordedRoundOf('7', 'r3', 3);
+
+        self::assertSame([['r2', 'judging_failed']], array_map(static fn (array $entry): array => [$entry['round'], $entry['end']], $this->projectOf($this->read(), 'alpha')['last_outcomes']));
+    }
+
+    public function testAJudgingFailureRecordedAfterTenJudgmentsIsTheNewestOfTheTenLatestOutcomes(): void
+    {
+        $this->endings = ['failed' => new RoundEnding(RoundEnds::JudgingFailed, 'the judging failed', new DateTimeImmutable('2026-10-28T12:05:00+00:00'))];
+        $this->ledger->startRecordedRoundOf('11', 'failed', 1);
+
+        foreach (range(1, 10) as $change) {
+            $this->ledger->startRecordedRoundOf((string) $change, 'r'.$change, 1);
+            $this->ledger->judgeRoundAt('r'.$change, '2026-10-28T12:01:00+00:00');
+        }
+
+        $outcomes = $this->projectOf($this->read(), 'alpha')['last_outcomes'];
+
+        self::assertCount(10, $outcomes);
+        self::assertSame(['failed', 'judging_failed'], [$outcomes[0]['round'], $outcomes[0]['end']]);
+    }
+
     public function testARoundThatFailedInItsJudgingStillValidatesAgainstTheDocumentedSchema(): void
     {
         $this->ending = new RoundEnding(RoundEnds::JudgingFailed, 'the judging failed');
@@ -643,7 +686,9 @@ final class StatusReadModelTest extends TestCase
         $costs->method('costOf')->willReturn(Cost::none());
         $ledger = $this->readFrom ?? $this->ledger;
         $marks = new ReplayMarks(new ReplayMarkBus($this->replays, $this->storedMarks));
-        $pages = new LedgerReviewPages($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), new FixedRoundEndings($this->ending), $marks);
+        $endings = self::createStub(RoundEndings::class);
+        $endings->method('ofUnjudged')->willReturnCallback(fn (string $round): ?RoundEnding => $this->endings[$round] ?? $this->ending);
+        $pages = new LedgerReviewPages($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), $endings, $marks);
         $projects = new ProjectStatuses($ledger, $pages, new LedgerFailingHeads($ledger), new LedgerWaitingHeads(), new LedgerBuildSteps(), $redactor, $marks, ['alpha' => [], 'beta' => []]);
 
         return new StatusReadModel(new MockClock('2026-10-28T12:30:00+00:00'), $holds, new MessageQueues($this->receivers), $projects);

@@ -53,6 +53,11 @@ final class DashboardLedger implements Ledger
         $this->add(LedgerEventKind::JudgeDone, ['round' => $round, 'act' => [], 'follow_ups' => []]);
     }
 
+    public function judgeRoundAt(string $round, string $at): void
+    {
+        $this->add(LedgerEventKind::JudgeDone, ['round' => $round, 'act' => [], 'follow_ups' => []], $at);
+    }
+
     public function startRoundOf(string $change, string $round, int $number): void
     {
         $this->add(LedgerEventKind::ReviewStarted, ['round' => $round, 'project' => 'alpha', 'reviewers' => 2, 'change' => $change, 'number' => $number]);
@@ -332,8 +337,8 @@ final class DashboardLedger implements Ledger
     /**
      * @param array<string, mixed> $payload
      */
-    private function add(LedgerEventKind $kind, array $payload): void
+    private function add(LedgerEventKind $kind, array $payload, string $at = '2026-10-28T12:00:00+00:00'): void
     {
-        $this->recorded[] = new RecordedEvent(Uuid::v7(), new LedgerEvent($kind, json_encode($payload, JSON_THROW_ON_ERROR)), new DateTimeImmutable('2026-10-28T12:00:00+00:00'));
+        $this->recorded[] = new RecordedEvent(Uuid::v7(), new LedgerEvent($kind, json_encode($payload, JSON_THROW_ON_ERROR)), new DateTimeImmutable($at));
     }
 }

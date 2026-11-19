@@ -189,19 +189,19 @@ final readonly class ProjectStatuses
         return $outcomes;
     }
 
-    // A latest round that ended without the judge's call is newer than any judged round of its card, because a card's rounds run one after another.
+    // The newest round of a card that was judged or ended, so a round running after a failed judging does not hide that failure.
     /**
      * @return list<ReviewedRound>
      */
     private function endedRounds(Board $board): array
     {
-        return array_values(array_filter(array_map(static fn (Review $card): ?ReviewedRound => $card->latest()->hasEnded() ? $card->latest() : $card->lastJudgedRound(), $this->cardsOf($board))));
+        return array_values(array_filter(array_map(static fn (Review $card): ?ReviewedRound => array_last(array_values(array_filter($card->rounds, static fn (ReviewedRound $round): bool => $round->isJudged() || $round->hasEnded()))), $this->cardsOf($board))));
     }
 
-    // A round that ended without the judge's call has no judgment time, and the ledger gives its ending none either, so its start places it.
+    // A failure recorded in the ledger is placed by its record, and only an ending without any time falls back to the round's start.
     private static function endedAt(ReviewedRound $round): DateTimeImmutable
     {
-        return $round->judgedAt ?? $round->startedAt;
+        return $round->judgedAt ?? $round->ending?->endedAt ?? $round->startedAt;
     }
 
     /**

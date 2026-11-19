@@ -21,19 +21,20 @@ final readonly class StoredRoundEndings implements RoundEndings
     ) {
     }
 
-    // The ledger record alone, because the judging's DispatchOnFailureStamp keeps a judging that failed for good out of the failure transport (#1848).
+    // The failure transport still counts, because a judging parked there before the DispatchOnFailureStamp (#1848) has no ledger record and has failed all the same.
     public function ofUnjudged(string $roundId, int $reviewers, DateTimeImmutable $startedAt): ?RoundEnding
     {
-        if ($this->failedJudgings->isRecorded($roundId)) {
-            return new RoundEnding(RoundEnds::JudgingFailed, $this->reasons->judgingFailed());
+        if ($this->failedJudgings->hasFailed($roundId)) {
+            return new RoundEnding(RoundEnds::JudgingFailed, $this->reasons->judgingFailed(), $this->failedJudgings->recordedAt($roundId));
         }
 
         $seconds = $this->upperWait->secondsForReviewers($reviewers);
+        $deadline = $startedAt->modify('+'.$seconds.' seconds');
 
-        if ($this->clock->now() < $startedAt->modify('+'.$seconds.' seconds')) {
+        if ($this->clock->now() < $deadline) {
             return null;
         }
 
-        return new RoundEnding(RoundEnds::NoOutcomeInTime, $this->reasons->noOutcomeInTime($seconds));
+        return new RoundEnding(RoundEnds::NoOutcomeInTime, $this->reasons->noOutcomeInTime($seconds), $deadline);
     }
 }
