@@ -807,4 +807,35 @@ The Security engineer covers the security of the product being built, across inf
 - **Evidence:** the report on a running install and one audit that files a task.
 - **Waits for:** T8. **Size:** M. **Labels:** `class:core`, `priority:normal`, `plan:required`.
 
-Parallel paths: T84, T85 and T86 in parallel after T51; T87 after T85; T88 after T8 and T66, alongside the checks, its reviews covering a layer until that layer's checks land; T89 after T60 and T69.
+## Designer (#863)
+
+The Designer shapes and reviews user-facing work, and only for a user-facing task of a project with a user interface ([Reviews](design/05-architecture/07-reviews.md#the-designer-planned)). Its scoring has three layers ([Designer scoring layers](design/05-architecture/15-designer-scoring.md)): objective checks that block, a rubric with evidence, and taste learned by blind pairwise comparison; the dashboard shows the scores, regressions and agreement ([Dashboard](design/05-architecture/13-dashboard.md#designer-scores)). One task per layer. Conventions, in addition to the ones above:
+
+- The tools (axe-core, Lighthouse, a headless browser with its screenshot reader) are opt-in per project and run in the check environment, never in the Designer's session; a check is a gate under the Product security conventions (its own class, test file and fixtures, one appended registry entry, a protected change), and an external command updates `docs/architecture/requirements.md`. Without a tool, what needs it is "not run", never passed, except for the screenshot reader, which the scan below needs: with the reader off, every screenshot is withheld and a build that adds or changes a committed reference fails the hand-back, never "not run".
+- Every model input these tasks add is scanned against the [revision's credential set](design/05-architecture/15-designer-scoring.md#the-credential-set-of-a-revision) before it leaves and fenced before the Designer reads it, and the [Designer's session](design/05-architecture/14-threat-model.md#the-designers-session-planned) in the threat model lists it. A value of the set that cannot be read counts as a hit. The scan depends on the input:
+  - **Check results** are text: every value in the set is redacted and the secret scan runs; a result with a hit is withheld whole.
+  - **Screenshots and committed references** are images, so nothing is redacted in them: the [screenshot reader](design/05-architecture/15-designer-scoring.md#the-three-scans), a process without network or credentials, extracts their text and decodes any machine-readable code (a QR code or barcode), and that text is matched against every value in the set and secret-scanned. A hit, or an image the reader could not read within its limits, withholds the whole image (a committed reference fails the hand-back instead); the Designer gets Intakt's note that it was withheld and the dashboard shows the gap.
+
+| Milestone | Outcome | Tasks | Target |
+|---|---|---|---|
+| Designer | user-facing work is checked, scored with evidence and matched to the owner's taste, opt-in per project | T99 to T101 | after M7, set by the owner |
+
+### T99 The Designer's objective checks
+- **Description:** Layer 1 of the [scoring](design/05-architecture/15-designer-scoring.md#layer-1-objective-checks-that-block): accessibility (no serious or critical axe-core violation, passing contrast), layout at phone, tablet and desktop width, design tokens only, the project's Lighthouse thresholds, and screenshots against main's references under the mechanical reference rule; the page list and thresholds live in protected files; screenshots and committed references pass the screenshot reader and the scan before they leave.
+- **Acceptance:** each check has a failing fixture and a passing neighbor; a screen whose rendering differs from main's reference within the project's threshold passes without an updated reference; a screen that differs by more than the threshold without an updated reference fails, as do a missing, deleted or unlisted reference and a reference that does not match the head's own rendering; a project with a tool off reports that check "not run" with the reason; with the browser on and the reader off every screenshot is withheld; with the reader off, a build that adds or changes a reference fails the hand-back; a reference image holding a planted credential value fails the hand-back.
+- **Evidence:** the checks' output on a fixture project with one finding per check, and with the browser off.
+- **Waits for:** T51. **Size:** L. **Labels:** `class:tooling`, `priority:normal`, `plan:required`.
+
+### T100 The Designer's rubric and score history
+- **Description:** Layer 2: the Designer scores each screen a change touches against the fixed heuristics, every score citing a screenshot region; a low score is a review finding, never a gate; scores are kept per screen over time and a drop shows as a regression on the dashboard, with gaps ("not run", withheld, no browser) shown as gaps.
+- **Acceptance:** with `MockPlatformFactory`, a score without evidence is an invalid answer; a low score reaches the change as a finding and fails no check; a lower score than the screen's previous one shows as a regression, and a drop to a score that is not low raises no finding; without the browser the review records "rubric scores unavailable: no browser" and the history shows a gap, never a zero.
+- **Evidence:** a scripted review's scores and one regression on the dashboard of a running install.
+- **Waits for:** T99, T58. **Size:** L. **Labels:** `class:core`, `priority:normal`, `plan:required`.
+
+### T101 The Designer's taste ladder and agreement
+- **Description:** Layer 3: for a visible design choice the Designer writes typed variants, isolated build jobs implement each as a kept, unpushed commit, render jobs screenshot them, and the Designer ranks them in pairs; the owner votes blind on a sample in an order plain code picks at random; agreement is measured and shown on the dashboard, and choices with character go to the owner as options while it is low.
+- **Acceptance:** a variant build and a render job get no project credential and no external dependency's address; a variant failing the hand-back checks is dropped and shown; the pair order does not follow the Designer's preference; agreement with no votes or without the browser counts as low and shows as not measured; fewer choices are asked as agreement rises.
+- **Evidence:** a scripted ladder with owner votes and the agreement shown on a running install.
+- **Waits for:** T100. **Size:** L. **Labels:** `class:core`, `priority:normal`, `plan:required`.
+
+Parallel paths: T84, T85 and T86 in parallel after T51; T87 after T85; T88 after T8 and T66, alongside the checks, its reviews covering a layer until that layer's checks land; T89 after T60 and T69; T99 after T51, T100 after T99 and T58, T101 after T100.
