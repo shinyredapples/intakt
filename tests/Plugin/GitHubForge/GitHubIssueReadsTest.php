@@ -140,6 +140,25 @@ final class GitHubIssueReadsTest extends TestCase
         self::assertSame('GitHub answered a Date this forge cannot read.', $this->failureOf($api)->getMessage());
     }
 
+    public function testAnEarlierPageWithADateWhoseWeekdayDoesNotMatchItsDayFailsTheListing(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->page(1, 100, '2026-11-25T10:00:00Z'), 2 => $this->page(102, 1)];
+        $api->namingNext = [1];
+        $api->stable = true;
+        $api->served = 'Thu, 25 Nov 2026 10:00:00 GMT';
+
+        self::assertSame('GitHub answered a Date this forge cannot read.', $this->failureOf($api)->getMessage());
+    }
+
+    public function testAListedIssueWhoseUpdateMomentIsNotWrittenAsGitHubWritesItFailsTheListing(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->page(1, 1, '2026-11-25T9:00:00Z')];
+
+        self::assertSame('GitHub answered a moment this forge cannot read.', $this->failureOf($api)->getMessage());
+    }
+
     public function testAListedIssueWhoseUpdateMomentIsOutOfRangeFailsTheListing(): void
     {
         $api = new RecordedIssueApi();

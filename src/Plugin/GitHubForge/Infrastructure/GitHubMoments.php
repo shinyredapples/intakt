@@ -31,11 +31,11 @@ final readonly class GitHubMoments
         return $this->strictly(self::HTTP_DATE, $date) ?? throw new ForgeReadFailed('GitHub answered a Date this forge cannot read.');
     }
 
-    // PHP rolls an out-of-range field over (second 99 becomes the next minute) and only warns, which would move a moment GitHub never sent.
+    // PHP rolls an out-of-range field over with only a warning (second 99 becomes the next minute) and reads a weekday that does not match its day as the next such weekday without one, so only a moment that formats back to the received text is the moment GitHub sent.
     private function strictly(string $format, string $text): ?DateTimeImmutable
     {
         $moment = DateTimeImmutable::createFromFormat($format, $text, new DateTimeZone('UTC'));
 
-        return false === $moment || false !== DateTimeImmutable::getLastErrors() ? null : $moment->setTimezone(new DateTimeZone('UTC'));
+        return false === $moment || $moment->format($format) !== $text ? null : $moment->setTimezone(new DateTimeZone('UTC'));
     }
 }
