@@ -77,7 +77,7 @@ final readonly class PinnedProviderCooldownWindows implements PinnedProviderCool
         return 0 < $left ? intdiv($left + self::MICROSECONDS - 1, self::MICROSECONDS) : 0;
     }
 
-    // False when the cache refused the write; true when it saved the window or a running window already ends as late.
+    // True when a running window already ends as late, because answers in flight arrive in any order and the later end must stay.
     private function extend(string $key, DateTimeImmutable $until): bool
     {
         // Under the lock every worker takes, because two answers in flight could otherwise replace a later end with an earlier one.

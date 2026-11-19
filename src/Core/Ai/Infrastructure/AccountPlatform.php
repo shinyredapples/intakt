@@ -136,8 +136,7 @@ final readonly class AccountPlatform implements PlatformInterface
         };
     }
 
-    // A spent subscription plan is raised as a limit without a reset (CodexAccountFailure), so only that limit waits for the plan's measured reset; any other failure keeps its own wait.
-    // The account first and the pin in a finally block, so a pin store that fails never costs the account its cooldown, and an account store that fails never costs the pin.
+    // A spent plan's limit comes without a reset (CodexAccountFailure), so only it waits for the plan's measured reset; the pin cools in a finally block after the account, so neither failing store costs the other its window.
     private function coolDownLimited(?int $retryAfter): void
     {
         try {

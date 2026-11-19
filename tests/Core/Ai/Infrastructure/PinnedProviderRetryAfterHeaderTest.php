@@ -117,7 +117,12 @@ final class PinnedProviderRetryAfterHeaderTest extends TestCase
     private function platform(MockHttpClient $http): AccountFailoverPlatform
     {
         $models = new ProjectModelCatalog(['demo' => ['tiers' => ['strong' => ['provider' => self::ROUTER->value, 'model' => self::PINNED]]]]);
-        $bridge = Factory::createPlatform('https://router.example', 'test', httpClient: $http, modelCatalog: new InMemoryModelCatalog($models->models(self::ROUTER)));
+        $bridge = Factory::createPlatform(
+            'https://router.example',
+            'test',
+            httpClient: $http,
+            modelCatalog: new InMemoryModelCatalog($models->models(self::ROUTER)),
+        );
 
         return new AccountFailoverPlatform(self::ROUTER, [Account::DEFAULT => $bridge], $this->accounts, $this->clock, new NullLogger(), $this->pins);
     }

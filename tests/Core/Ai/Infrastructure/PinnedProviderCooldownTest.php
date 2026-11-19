@@ -168,7 +168,7 @@ final class PinnedProviderCooldownTest extends TestCase
     }
 
     /**
-     * @param non-empty-string $model
+     * @param non-empty-string       $model
      * @param non-empty-list<string> $tails
      */
     #[DataProvider('modelsThatPinNothing')]
