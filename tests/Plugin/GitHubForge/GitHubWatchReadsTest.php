@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\GitHubForge;
 
+use Intakt\Core\Watcher\Domain\AdmissionDecision;
+use Intakt\Core\Watcher\Domain\HeadAdmission;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\ChangeNotFound;
 use Intakt\Plugin\Forge\Contract\CiRun;
@@ -51,6 +53,7 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
 #[CoversClass(RepositoryAddress::class)]
 #[CoversClass(GitHubMoments::class)]
 #[CoversClass(WatchedRepositories::class)]
+#[UsesClass(AdmissionDecision::class)]
 #[UsesClass(PullRequestAddress::class)]
 #[UsesClass(ChangeId::class)]
 #[UsesClass(ChangeNotFound::class)]
@@ -301,6 +304,13 @@ final class GitHubWatchReadsTest extends TestCase
         [$green, $queued] = $this->state()->runs;
 
         self::assertTrue($green->isNewerRunOf($queued));
+    }
+
+    public function testACancelledAndAGreenPullRequestRunFromTheSameSecondWithoutTheirPullRequestLeaveTheHeadPending(): void
+    {
+        $this->runs = 'runs_cancelled_and_green_in_the_same_second_without_their_pull_request.json';
+
+        self::assertSame(HeadAdmission::Pending, new AdmissionDecision()->admissionOf($this->state()));
     }
 
     public function testAQueuedPullRequestRunWhosePullRequestGitHubLeftOutIsUnfinished(): void

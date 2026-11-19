@@ -28,7 +28,7 @@ final readonly class GitHubCiRuns
     public function ofWorkflowRuns(RepositoryAddress $repository, CommitId $head, array $answer): array
     {
         // Named by the workflow's ID, because two workflows may share a display name and must not replace each other's runs.
-        return $this->runsOf($repository, $this->ofHead($head, $this->entries($answer, 'workflow_runs')), fn (array $entry): array => [(string) $this->positive($entry, 'workflow_id'), $this->text($entry, 'event'), $this->workflowRunStateOf($entry), $this->positive($entry, 'run_number')]);
+        return $this->runsOf($repository, $this->ofHead($head, $this->entries($answer, 'workflow_runs')), fn (array $entry): array => [(string) $this->positive($entry, 'workflow_id'), $this->text($entry, 'event'), $this->workflowRunStateOf($entry), $this->runNumberOf($entry)]);
     }
 
     /**
@@ -95,6 +95,17 @@ final readonly class GitHubCiRuns
     {
         // Only a queued first attempt never started, because a queued rerun keeps the first attempt's creation time; check suites stay Unfinished, because one app's suites share one origin.
         return 'queued' === $this->text($entry, 'status') && 1 === $this->positive($entry, 'run_attempt') && !$this->withoutItsPullRequest($entry) ? CiRunState::Queued : $this->stateOf($entry);
+    }
+
+    /**
+     * @param array<mixed> $entry
+     */
+    private function runNumberOf(array $entry): ?int
+    {
+        $number = $this->positive($entry, 'run_number');
+
+        // Left out for a pull request run without its pull request, because two unknown pull requests are not one origin and a same-second tie must not order them.
+        return $this->withoutItsPullRequest($entry) ? null : $number;
     }
 
     /**
