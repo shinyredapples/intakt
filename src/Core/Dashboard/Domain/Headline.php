@@ -23,6 +23,7 @@ final readonly class Headline
         private WhoIsWorking $working,
         private array $waiting,
         private int $cards,
+        private int $builds = 0,
     ) {
     }
 
@@ -89,8 +90,13 @@ final readonly class Headline
     {
         $changes = $this->runningChanges();
 
+        // A build has no lane yet, so it is counted, never named, and the line never says nothing runs while one is in flight (#2732).
         if ([] === $changes) {
-            return 'Nothing is running.';
+            return match ($this->builds) {
+                0 => 'Nothing is running.',
+                1 => 'A build is running.',
+                default => $this->builds.' builds are running.',
+            };
         }
 
         return 'The '.self::REVIEWERS.' are reviewing '.$this->named($changes).'.';

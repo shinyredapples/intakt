@@ -161,7 +161,9 @@ final readonly class ReviewChange implements ChangeReviews
             return Decision::Blocked;
         }
 
-        return $this->decision->of($request->panel->quorum, array_map($this->voteOf(...), $round->reviewers()));
+        $counted = $this->ledger->votesOf($round->id()->toRfc4122());
+
+        return $this->decision->of($request->panel->quorum, array_map(fn (RoundReviewer $reviewer): PanelVerdict => $this->voteOf($reviewer, $counted), $round->reviewers()));
     }
 
     private function unfinished(ChangeReview $review, int $seconds): ChangeReview
@@ -169,12 +171,16 @@ final readonly class ReviewChange implements ChangeReviews
         return $review->blockedFor(RoundEnds::NoOutcomeInTime, $this->reasons->noOutcomeInTime($seconds));
     }
 
-    // A reviewer without a verdict votes as blocked, so a failed review can never help a quorum.
-    private function voteOf(RoundReviewer $reviewer): PanelVerdict
+    // A reviewer without a verdict votes as blocked, so a failed review can never help a quorum; a verdict counts as the judge step recorded it, and as it was given when that step recorded no vote for it (a round judged before votes were counted).
+    /**
+     * @param array<string, Decision> $counted
+     */
+    private function voteOf(RoundReviewer $reviewer, array $counted): PanelVerdict
     {
-        $verdict = $this->verdicts->ofReviewer($reviewer) ?? new Verdict(Decision::Blocked, [], [], []);
+        $given = $this->verdicts->ofReviewer($reviewer)?->verdict;
+        $vote = $given instanceof Decision ? $counted[$reviewer->id()->toRfc4122()] ?? $given : Decision::Blocked;
 
-        return new PanelVerdict($reviewer->tier(), $verdict);
+        return new PanelVerdict($reviewer->tier(), new Verdict($vote, [], [], []));
     }
 
     /**

@@ -16,6 +16,7 @@ final readonly class JudgedFindings
      * @param list<FollowUp>        $followUps
      * @param list<DroppedFinding>  $dropped
      * @param array<string, string> $sameCause
+     * @param list<Finding>         $rejected
      * @param array<string, string> $notes
      */
     private function __construct(
@@ -24,6 +25,8 @@ final readonly class JudgedFindings
         public array $followUps,
         public array $dropped,
         public array $sameCause,
+        // The P3 findings the judge marked reject, apart from the ones it gave no mark, because only a judge's own mark lets a changes verdict count as approval.
+        public array $rejected,
         public array $notes,
     ) {
     }
@@ -48,8 +51,9 @@ final readonly class JudgedFindings
         $blocking = static fn (Finding $finding): bool => Severity::P3 !== $finding->severity;
         $actList = array_values(array_filter($findings, static fn (Finding $finding): bool => $blocking($finding) || Mark::Act === ($marks[$finding->id] ?? null)));
         $deferred = array_values(array_filter($findings, static fn (Finding $finding): bool => !$blocking($finding) && Mark::Defer === ($marks[$finding->id] ?? null)));
+        $rejected = array_values(array_filter($findings, static fn (Finding $finding): bool => !$blocking($finding) && Mark::Reject === ($marks[$finding->id] ?? null)));
 
-        return new self($findings, $actList, array_map(static fn (Finding $finding): FollowUp => new FollowUp($finding), $deferred), $dropped, $sameCause, self::notesOf($judgement, $findings));
+        return new self($findings, $actList, array_map(static fn (Finding $finding): FollowUp => new FollowUp($finding), $deferred), $dropped, $sameCause, $rejected, self::notesOf($judgement, $findings));
     }
 
     // Only a P1 or P2 marked defer or reject keeps a note, because plain code does not apply that mark (the finding stays on the act list), so the note takes the place of the mark.
