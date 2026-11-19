@@ -9,7 +9,6 @@ use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Dashboard\Domain\Board;
 use Intakt\Core\Dashboard\Domain\BoardColumn;
 use Intakt\Core\Dashboard\Domain\FailingHead;
-use Intakt\Core\Dashboard\Domain\FailingMain;
 use Intakt\Core\Dashboard\Domain\HeadFault;
 use Intakt\Core\Dashboard\Domain\Headline;
 use Intakt\Core\Dashboard\Domain\Lane;
@@ -20,7 +19,6 @@ use Intakt\Core\Dashboard\Domain\RoundPlace;
 use Intakt\Core\Dashboard\Domain\RoundStart;
 use Intakt\Core\Dashboard\Domain\WhoIsWorking;
 use Intakt\Core\Dashboard\Infrastructure\LedgerFailingHeads;
-use Intakt\Core\Dashboard\Infrastructure\LedgerFailingMains;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\RefuseForeignHost;
@@ -28,6 +26,8 @@ use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Dashboard\Infrastructure\SampleChangeSource;
 use Intakt\Core\Dashboard\UseCase\ShowBoard\ShowBoardController;
 use Intakt\Core\Review\Contract\ReplayMark;
+use Intakt\Core\Watcher\Contract\FailingMain;
+use Intakt\Core\Watcher\Contract\FailingMains;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\Asset\Packages;
@@ -50,7 +50,7 @@ use Symfony\Component\HttpFoundation\Response;
 #[UsesClass(RefuseForeignHost::class)]
 #[UsesClass(LedgerFailingHeads::class)]
 #[UsesClass(FailingHead::class)]
-#[UsesClass(LedgerFailingMains::class)]
+#[UsesClass(FailingMains::class)]
 #[UsesClass(FailingMain::class)]
 #[UsesClass(HeadFault::class)]
 #[UsesClass(ReplayMarks::class)]

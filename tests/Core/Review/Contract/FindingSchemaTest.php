@@ -29,4 +29,12 @@ final class FindingSchemaTest extends TestCase
 
         self::assertArrayNotHasKey('merged', $properties);
     }
+
+    public function testTheStructuredOutputSchemaOfAFindingDoesNotAskForAJudgeNote(): void
+    {
+        /** @var array<string, mixed> $properties */
+        $properties = new ResponseFormatFactory()->create(Finding::class)['json_schema']['schema']['properties'];
+
+        self::assertArrayNotHasKey('judge_note', $properties);
+    }
 }
