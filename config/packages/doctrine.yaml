@@ -22,6 +22,12 @@ doctrine:
                 dir: '%kernel.project_dir%/src/Core/Budget/Domain'
                 prefix: 'Intakt\Core\Budget\Domain'
                 alias: Budget
+            Build:
+                type: attribute
+                is_bundle: false
+                dir: '%kernel.project_dir%/src/Core/Build/Domain'
+                prefix: 'Intakt\Core\Build\Domain'
+                alias: Build
             Ledger:
                 type: attribute
                 is_bundle: false

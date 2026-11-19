@@ -11,6 +11,7 @@ use Intakt\Core\Build\Contract\BuildRouting;
 use Intakt\Core\Build\Contract\BuildRoutingNotConfigured;
 use Intakt\Core\Build\Contract\BuildStep;
 use Intakt\Core\Build\Contract\BuildStepOutcome;
+use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuilderNotOnClaudeCode;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
@@ -45,6 +46,7 @@ final readonly class BuildTask
         private PrePushCheck $prePushChecks,
         private PushStep $pushes,
         private Ledger $ledger,
+        private ParkedTasks $parkedTasks,
     ) {
     }
 
@@ -85,6 +87,10 @@ final readonly class BuildTask
                 BuildStep::Push => $this->push($request, $results),
             };
 
+            if ($result instanceof BuildQuestion) {
+                return $this->park($request, $task, $result);
+            }
+
             // A local of this run, never a property, because a worker keeps the service between runs.
             $results[$step->value] = $result;
             $failure = $this->failureIn($result);
@@ -97,6 +103,22 @@ final readonly class BuildTask
         }
 
         return new BuildTaskOutcome(array_last(BuildStep::cases()), null, $task);
+    }
+
+    // The run ends at the build job, neither passed nor failed, because the task waits for a decision; a record that cannot be stored fails the step instead, so the task never looks parked without its question.
+    private function park(BuildTaskRequest $request, ListedIssue $task, BuildQuestion $question): BuildTaskOutcome
+    {
+        try {
+            $this->parkedTasks->park($request, $question);
+        } catch (TaskNotParked $unparked) {
+            $this->record($request, BuildStep::BuildJob, $unparked->getMessage());
+
+            return new BuildTaskOutcome(BuildStep::BuildJob, $unparked->getMessage(), $task);
+        }
+
+        $this->append($request, BuildStep::BuildJob, ['outcome' => BuildStepOutcome::Asked->value, 'failure' => null]);
+
+        return new BuildTaskOutcome(BuildStep::BuildJob, null, $task, $question);
     }
 
     // A job that built and a hand-back the check accepted give their result instead of a failure, so their step passed.
@@ -146,8 +168,8 @@ final readonly class BuildTask
         return null;
     }
 
-    // The outcome of a job that built, for the hand-back check, otherwise the failure's text.
-    private function runBuildJob(BuildTaskRequest $request, ListedIssue $task): BuildJobOutcome|string
+    // The outcome of a job that built, for the hand-back check, the checked question of a job that asked, otherwise the failure's text.
+    private function runBuildJob(BuildTaskRequest $request, ListedIssue $task): BuildJobOutcome|BuildQuestion|string
     {
         try {
             $outcome = $this->builds->run($this->jobOf($request, $task));
@@ -155,8 +177,8 @@ final readonly class BuildTask
             return $failure->getMessage();
         }
 
-        // What the job hands back stays untrusted until the hand-back check, so only its verdict reaches the ledger.
-        return $outcome->built() ? $outcome : $outcome->verdict->reason();
+        // What the job hands back stays untrusted until the hand-back check, so only its verdict reaches the ledger; a question goes only to its record.
+        return $outcome->built() ? $outcome : $outcome->question ?? $outcome->verdict->reason();
     }
 
     /**
@@ -215,13 +237,20 @@ final readonly class BuildTask
 
     private function record(BuildTaskRequest $request, BuildStep $step, ?string $failure): void
     {
+        $this->append($request, $step, ['outcome' => (null === $failure ? BuildStepOutcome::Passed : BuildStepOutcome::Failed)->value, 'failure' => $failure]);
+    }
+
+    /**
+     * @param array{outcome: string, failure: ?string} $outcome
+     */
+    private function append(BuildTaskRequest $request, BuildStep $step, array $outcome): void
+    {
         // Because the title and body are untrusted text, the payload names the task by its number only.
         $payload = json_encode([
             'project' => $request->project,
             'task' => (string) $request->issue,
             'step' => $step->value,
-            'outcome' => (null === $failure ? BuildStepOutcome::Passed : BuildStepOutcome::Failed)->value,
-            'failure' => $failure,
+            ...$outcome,
         ], JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE);
 
         $result = $this->ledger->append(new LedgerEvent(LedgerEventKind::BuildStepEnded, $payload));

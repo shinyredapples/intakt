@@ -14,13 +14,22 @@ use Intakt\Core\Build\Contract\BuildRouting;
 use Intakt\Core\Build\Contract\BuildRoutingNotConfigured;
 use Intakt\Core\Build\Contract\BuildStep;
 use Intakt\Core\Build\Contract\TierChoice;
+use Closure;
+use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\ConnectionException;
 use Intakt\Core\Build\Domain\BuilderPrompt;
+use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\Domain\GatesAtOnce;
 use Intakt\Core\Build\Domain\GatesByDefault;
 use Intakt\Core\Build\Domain\ModelRouting;
+use Intakt\Core\Build\Domain\ParkedTaskRecord;
+use Intakt\Core\Build\Domain\QuestionRefused;
 use Intakt\Core\Build\Domain\RoutingRules;
 use Intakt\Core\Build\Infrastructure\ConfiguredBuildRouting;
 use Intakt\Core\Build\UseCase\BuildTask\BuildStepNotRecorded;
+use Intakt\Core\Build\UseCase\BuildTask\ParkedTasks;
+use Intakt\Core\Build\UseCase\BuildTask\TaskNotParked;
+use Symfony\Component\Clock\MockClock;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTask;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTaskOutcome;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTaskRequest;
@@ -125,6 +134,11 @@ use Symfony\Component\Process\Process;
 #[CoversClass(BuildTaskOutcome::class)]
 #[CoversClass(BuildTaskRequest::class)]
 #[CoversClass(BuildStepNotRecorded::class)]
+#[CoversClass(ParkedTasks::class)]
+#[CoversClass(TaskNotParked::class)]
+#[UsesClass(ParkedTaskRecord::class)]
+#[UsesClass(BuildQuestion::class)]
+#[UsesClass(QuestionRefused::class)]
 #[CoversClass(GitBuildCheckout::class)]
 #[CoversClass(BuildCheckoutFailed::class)]
 #[CoversClass(HandBackCheck::class)]
@@ -242,6 +256,11 @@ final class BuildTaskTest extends TestCase
     private Filesystem $handBackFiles;
 
     private RecordingChangeOpening $changes;
+
+    /** @var list<array<string, mixed>> */
+    private array $parkedRows = [];
+
+    private bool $parkingFails = false;
 
     protected function setUp(): void
     {
@@ -607,6 +626,67 @@ final class BuildTaskTest extends TestCase
         self::assertSame([], glob($this->mirrors.'-hand-backs/*'));
     }
 
+    public function testABuildThatEndsWithAQuestionParksTheTaskAndStopsBeforeTheHandBackCheck(): void
+    {
+        new Filesystem()->dumpFile($this->output.'/'.RunBuildJob::QUESTION, '{"question":"Which store?","choices":["SQLite","Postgres"],"recommendation":"SQLite"}');
+
+        $outcome = $this->taskOf(new InMemoryLedger(), [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertTrue($outcome->parked());
+        self::assertFalse($outcome->failed());
+        self::assertSame(BuildStep::BuildJob, $outcome->last);
+        self::assertSame([BuildStep::Task, BuildStep::Mirror, BuildStep::Clone], $outcome->passedSteps());
+        self::assertSame('Which store?', $outcome->question?->question);
+        self::assertSame([['project' => 'alpha', 'task' => 7, 'question' => 'Which store?', 'choices' => ['SQLite', 'Postgres'], 'recommendation' => 'SQLite']], array_map(static fn (array $row): array => array_diff_key($row, ['parked_at' => true]), $this->parkedRows));
+        self::assertNull($this->checked);
+        self::assertSame([], glob($this->mirrors.'-hand-backs/*'));
+        self::assertNull($this->remoteTip());
+    }
+
+    public function testABuildStepThatEndsWithAQuestionIsRecordedAsAskedWithNothingOfTheQuestion(): void
+    {
+        new Filesystem()->dumpFile($this->output.'/'.RunBuildJob::QUESTION, '{"question":"PLANT-question","choices":["PLANT-a","PLANT-b"],"recommendation":"PLANT-a"}');
+        $ledger = new InMemoryLedger();
+
+        (void) $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(['task', 'mirror', 'clone', 'build_job'], array_column($ledger->payloads(), 'step'));
+        self::assertSame(['passed', 'passed', 'passed', 'asked'], array_column($ledger->payloads(), 'outcome'));
+        self::assertNull($ledger->payloads()[3]['failure']);
+        self::assertSame(array_fill(0, 4, LedgerEventKind::BuildStepEnded), $ledger->kinds());
+        self::assertStringNotContainsString('PLANT', (string) json_encode($ledger->payloads()));
+    }
+
+    public function testABuildThatEndsWithARefusedQuestionFailsTheBuildJobStepAndParksNothing(): void
+    {
+        new Filesystem()->dumpFile($this->output.'/'.RunBuildJob::QUESTION, '{"question":"Which store?","choices":["SQLite"],"recommendation":"Postgres"}');
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertFalse($outcome->parked());
+        self::assertSame(BuildVerdict::QuestionRefused->reason(), $outcome->failure);
+        self::assertSame(['passed', 'passed', 'passed', 'failed'], array_column($ledger->payloads(), 'outcome'));
+        self::assertSame([], $this->parkedRows);
+    }
+
+    public function testATaskThatCannotBeParkedFailsTheBuildJobStepWithFixedWordsAndNothingOfTheQuestion(): void
+    {
+        new Filesystem()->dumpFile($this->output.'/'.RunBuildJob::QUESTION, '{"question":"PLANT-question","choices":["SQLite","Postgres"],"recommendation":"SQLite"}');
+        $this->parkingFails = true;
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertFalse($outcome->parked());
+        self::assertSame(BuildStep::BuildJob, $outcome->last);
+        self::assertSame('issue 7 of project "alpha" could not be parked', $outcome->failure);
+        self::assertSame(['passed', 'passed', 'passed', 'failed'], array_column($ledger->payloads(), 'outcome'));
+        self::assertSame('issue 7 of project "alpha" could not be parked', $ledger->payloads()[3]['failure']);
+        self::assertStringNotContainsString('PLANT', (string) json_encode($ledger->payloads()));
+        self::assertNull($this->checked);
+    }
+
     public function testABuildJobThatHandsBackNoCommitEndsAtTheBuildJobStepWithItsVerdictRecorded(): void
     {
         new Filesystem()->remove($this->output.'/'.RunBuildJob::BUNDLE);
@@ -949,7 +1029,21 @@ final class BuildTaskTest extends TestCase
         $files = new HandBackFile($checkout, $this->handBackFiles, $this->mirrors.'-hand-backs');
         $checkJobs = new RunCheckJob($checks, new LostContentCheck($git), $this->checkRunner, new PhpGate(), new Filesystem(), self::CHECK_SCRIPT);
 
-        return new BuildTask($issues, $checkout, $this->routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files), new PushStep($this->branchPush($ledger), $checkout), $ledger);
+        return new BuildTask($issues, $checkout, $this->routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files), new PushStep($this->branchPush($ledger), $checkout), $ledger, $this->parkedTasks());
+    }
+
+    // Keeps the rows the store inserts, because ParkedTasksTest proves the database side on SQLite.
+    private function parkedTasks(): ParkedTasks
+    {
+        $connection = self::createStub(Connection::class);
+        $connection->method('transactional')->willReturnCallback(fn (Closure $work): mixed => $this->parkingFails ? throw new ConnectionException('PLANT-question') : $work($connection));
+        $connection->method('insert')->willReturnCallback(function (string $table, array $row): int {
+            $this->parkedRows[] = $row;
+
+            return 1;
+        });
+
+        return new ParkedTasks($connection, new MockClock('2026-11-19T10:00:00+00:00'));
     }
 
     // Records in the run's own ledger, as the container wires it, so the push's events sit between the steps' events.

@@ -13,10 +13,16 @@ use Intakt\Core\Build\Contract\BuildFacts;
 use Intakt\Core\Build\Contract\BuildRouting;
 use Intakt\Core\Build\Contract\TierChoice;
 use Intakt\Core\Build\Contract\TierReason;
+use Closure;
+use Doctrine\DBAL\Connection;
 use Intakt\Core\Build\Domain\BuilderPrompt;
+use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\Domain\GatesAtOnce;
 use Intakt\Core\Build\Domain\GatesByDefault;
+use Intakt\Core\Build\Domain\ParkedTaskRecord;
 use Intakt\Core\Build\UseCase\BuildTask\BuildStepNotRecorded;
+use Intakt\Core\Build\UseCase\BuildTask\ParkedTasks;
+use Symfony\Component\Clock\MockClock;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTask;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTaskCommand;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTaskInput;
@@ -80,6 +86,9 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(BuildTaskOutcome::class)]
 #[UsesClass(BuildTaskRequest::class)]
 #[UsesClass(BuildStepNotRecorded::class)]
+#[UsesClass(ParkedTasks::class)]
+#[UsesClass(ParkedTaskRecord::class)]
+#[UsesClass(BuildQuestion::class)]
 #[UsesClass(BuildCheckoutFailed::class)]
 #[UsesClass(HandBackCheck::class)]
 #[UsesClass(HandBackFile::class)]
@@ -228,6 +237,20 @@ final class BuildTaskCommandTest extends TestCase
         self::assertSame(['passed', 'passed', 'passed', 'failed'], array_column($ledger->payloads(), 'outcome'));
     }
 
+    public function testItReportsAParkedTaskWithoutTheQuestionsTextAndExitsWithSuccess(): void
+    {
+        new Filesystem()->dumpFile($this->folder.'/output/'.RunBuildJob::QUESTION, '{"question":"PLANT-question","choices":["SQLite","Postgres"],"recommendation":"SQLite"}');
+        $ledger = new InMemoryLedger();
+
+        $tester = $this->execute($ledger, self::createStub(BuildCheckout::class), ['project' => 'alpha', 'issue' => '7', ...$this->options]);
+
+        self::assertSame(Command::SUCCESS, $tester->getStatusCode());
+        self::assertStringContainsString("clone passed\ntitle Task 7\nbuild_job asked: the build ended with a question instead of a change, so the task is parked\n", $tester->getDisplay());
+        self::assertStringNotContainsString('build_job passed', $tester->getDisplay());
+        self::assertStringNotContainsString('PLANT', $tester->getDisplay());
+        self::assertSame(['passed', 'passed', 'passed', 'asked'], array_column($ledger->payloads(), 'outcome'));
+    }
+
     public function testItReplacesEachControlCharacterOfTheTitleSoItCannotDriveTheTerminal(): void
     {
         $display = $this->displayOfTitle("Evil \e[2J\e]0;pwned\x07 <error>x</error> \x7F\u{80}\u{9B}31m\ttab\nline");
@@ -332,7 +355,10 @@ final class BuildTaskCommandTest extends TestCase
         $branches = self::createStub(BranchPush::class);
         $branches->method('push')->willReturn($this->pushed);
 
-        return new BuildTask($issues, $checkout, $routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files), new PushStep($branches, $checkout), $ledger);
+        $connection = self::createStub(Connection::class);
+        $connection->method('transactional')->willReturnCallback(static fn (Closure $work): mixed => $work($connection));
+
+        return new BuildTask($issues, $checkout, $routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files), new PushStep($branches, $checkout), $ledger, new ParkedTasks($connection, new MockClock()));
     }
 
     private function listing(ListedIssue $task): IssueReads

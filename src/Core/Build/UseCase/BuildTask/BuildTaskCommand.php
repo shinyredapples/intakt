@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Build\UseCase\BuildTask;
 
+use Intakt\Core\Build\UseCase\RunBuildJob\BuildVerdict;
 use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\MapInput;
@@ -64,6 +65,11 @@ final readonly class BuildTaskCommand
 
         if ($outcome->task instanceof ListedIssue) {
             $io->writeln('title '.$this->visible($outcome->task->title));
+        }
+
+        // Without the question's text, because the builder wrote it: it waits in the parked task's record.
+        if ($outcome->parked()) {
+            $io->writeln(sprintf('%s asked: %s, so the task is parked', $outcome->last->value, BuildVerdict::Asked->reason()));
         }
 
         if ($outcome->failed()) {
