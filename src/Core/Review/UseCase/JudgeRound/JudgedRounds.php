@@ -71,13 +71,18 @@ final readonly class JudgedRounds
     }
 
     // Checked again under the round's lock, because another worker may have judged the round while this one waited for the model, or recorded its judging as failed for good and queued its publication already, before a restart handed the judging out again.
-    public function record(ReviewRound $round, JudgedFindings $judged): void
+    // False when the round was not judged here, so the caller announces only a judge transition that committed.
+    public function record(ReviewRound $round, JudgedFindings $judged): bool
     {
-        $this->rounds->withLockedRound($round->id(), function (ReviewRound $locked) use ($judged): void {
+        $recorded = false;
+        $this->rounds->withLockedRound($round->id(), function (ReviewRound $locked) use ($judged, &$recorded): void {
             if (!$this->failedJudgings->isRecorded($locked->id()->toRfc4122()) && $this->findings->markJudged($locked)) {
                 $this->ledger->judgeDone($locked, $judged, $this->votesOf($locked, $judged));
+                $recorded = true;
             }
         });
+
+        return $recorded;
     }
 
     // Counted once, with the judgement, and recorded with it, so every reader of the round counts the same votes.

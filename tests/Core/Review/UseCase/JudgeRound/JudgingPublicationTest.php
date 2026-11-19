@@ -11,7 +11,9 @@ use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
+use Intakt\Core\Review\Contract\Judgement;
 use Intakt\Core\Review\Contract\JudgingFailed;
+use Intakt\Core\Review\Contract\RoundJudged;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\UseCase\JudgeRound\FailedJudgings;
@@ -23,6 +25,7 @@ use Intakt\Core\Review\UseCase\JudgeRound\RecordFailedJudging;
 use Intakt\Core\Review\UseCase\JudgeRound\RecordFailedJudgingHandler;
 use Intakt\Core\Review\UseCase\JudgeRound\StampFailureOfEarlierJudging;
 use Intakt\Core\Review\UseCase\PublishVerdict\PublishVerdict;
+use Intakt\Plugin\Vendor\Contract\Vendor;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\FailingBus;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\VerdictPerRole;
@@ -199,6 +202,27 @@ final class JudgingPublicationTest extends KernelTestCase
 
         self::assertSame([$roundId], $this->publications());
         $this->assertFailedForGoodLogged($roundId);
+    }
+
+    // Recorded while the judge answers, because that is the order a final failure on another worker leaves behind while this one waits for the model.
+    public function testAJudgingThatLosesToARecordedFailureWhileTheJudgeAnswersSaysNothingOfAJudgedRound(): void
+    {
+        $roundId = $this->completedRound();
+        $judged = [];
+        $this->fixture->events->addListener(RoundJudged::class, static function (RoundJudged $event) use (&$judged): void {
+            $judged[] = $event->roundId;
+        });
+        $judge = self::createStub(Vendor::class);
+        $judge->method('judge')->willReturnCallback(function () use ($roundId): Judgement {
+            $this->fixture->failedJudgingRecorder($this->commands(), $this->fixture->log)(new RecordFailedJudging($roundId));
+
+            return new Judgement([]);
+        });
+
+        $this->fixture->judge($judge)($this->judgingOf($roundId));
+
+        self::assertSame([[$roundId], [$roundId], []], [$this->publications(), $this->recordedFailures(), $judged]);
+        self::assertNotContains(LedgerEventKind::JudgeDone, $this->fixture->ledgerKinds());
     }
 
     // The worker parked the judging and stopped before it removed the delivery, so the judging comes back and fails for good with its copy parked.
