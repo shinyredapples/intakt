@@ -32,7 +32,8 @@ A rule marked "enforced by `bin/check`" is checked by the named gate, whose fail
 - A `Provider` case value is derived from the case, never re-spelled, and an `intakt.` container id or parameter name comes from the module's ids class (`<Module>Services` in its `Contract/`): enforced by `bin/check` (`phpstan`).
 - Handlers use `AsCommandHandler`/`AsQueryHandler`, never `AsMessageHandler`: enforced by `bin/check` (`architecture`).
 - Final classes (abstract classes allowed, anonymous classes exempt): enforced by `bin/check` (`phpstan`).
-- `readonly` where possible, no public setters, no static state, no service locator, no magic methods, constructor injection only.
+- No static state: no static properties (abstract and anonymous classes exempt), enforced by `bin/check` (`phpstan`).
+- `readonly` where possible, no public setters, no service locator, no magic methods, constructor injection only.
 - PHP 8.5 where it is clearer: `|>`, `clone()` with overrides, imported `#[NoDiscard]` on results that must not be ignored, `array_first()`/`array_last()`, `Uri\Rfc3986\Uri` for URLs, closures in constant expressions.
 - Worker mode: services keep no per-request state, also not in readonly properties, and `#[KeptForTheProcess]` marks only state that is the same for every request.
 - Small methods, early returns; split a service whose dependencies keep growing by responsibility, not by count.
