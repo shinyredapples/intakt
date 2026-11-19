@@ -60,7 +60,6 @@ final class ChangeDecisionTest extends TestCase
         self::assertSame(Decision::Changes, new ChangeDecision()->of(QuorumPolicy::All, [$this->legacyVote(), $this->vote(Decision::Approve), $this->vote(Decision::Approve)]));
     }
 
-    /** A verdict as a round stored before reserved ids were refused holds it: `changes` with one of Intakt's failure findings. */
     private function legacyVote(): PanelVerdict
     {
         $legacy = new Verdict(Decision::Changes, Verdict::noTools()->findings, ['F1'], []);
