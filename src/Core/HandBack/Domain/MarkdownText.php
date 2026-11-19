@@ -12,7 +12,7 @@ final readonly class MarkdownText
     // One pass from left to right, because whichever of a fence, a code span and a comment opens first makes the others' markers literal (https://spec.commonmark.org/0.31.2/#fenced-code-blocks, https://spec.commonmark.org/0.31.2/#code-spans). The pattern finds only where a part opens; each end is searched with plain string functions, because a pattern that walks a long part character by character exhausts the regex engine's stack on a long text. A fence may open right after a list marker, which then stays outside the part.
     private const string OPENING = '/^(?: {0,3}(?:[-*+]|\d{1,9}[.)]) {1,4}\K)?(?<fence> {0,3}(?:`{3,}(?=[^`\n]*$)|~{3,}))|(?<code>`+)|(?<comment><!--)/m';
 
-    // A code span stays inside its paragraph, which ends at a blank line, a heading line or a fence line.
+    // A heading or fence line interrupts a paragraph as a blank line does, so a code span cannot run past it (https://spec.commonmark.org/0.31.2/#paragraphs).
     private const string PARAGRAPH_END = '/\n(?:[ \t]*(?:\n|\z)| {0,3}#{1,6}(?:[ \t]|$)| {0,3}(?:`{3}|~{3}))/m';
 
     private const string COMMENT_END = '-->';
@@ -92,7 +92,7 @@ final readonly class MarkdownText
         };
     }
 
-    // A fence closes only with a run of its own character at least as long.
+    // Only a run of its own character at least as long closes a fence (https://spec.commonmark.org/0.31.2/#fenced-code-blocks).
     private static function fenceAt(string $text, int $start): string
     {
         $indent = strspn($text, ' ', $start);
