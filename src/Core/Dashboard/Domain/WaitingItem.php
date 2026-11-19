@@ -35,7 +35,7 @@ final readonly class WaitingItem
         }
     }
 
-    // Only a running outage becomes an item (OwnerNotices), so the present tense holds. Leaving it is recommended because no command brings a reading back, and the probe is offered with its cost because it only tells whether the provider answers. Without a status page (an OpenAI-compatible server) the page links to the board.
+    // The probe is not recommended because it makes a paid call and cannot tell whether readings resumed for this account.
     public static function ofOutage(OutageNotice $notice, ?string $statusPage): self
     {
         $account = $notice->account->key();
