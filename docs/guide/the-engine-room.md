@@ -98,7 +98,7 @@ flowchart LR
   s -. "no way to split" .-> r[Rewrite the task, or one more try<br/>with a stronger model]
 ```
 
-Today the task moves on to generation 2 after its last cycle. The dotted arrows are planned: at the third send-back, whichever cycle that falls in, the task is split once instead, as the last bullet below says.
+Running builds on their own is planned ([what works today](../user/README.md)), so this whole flow is planned too. In it, the task moves on to generation 2 after its last cycle. The dotted arrows are a later addition to that plan: at the third send-back, whichever cycle that falls in, the task is split once instead, as the last bullet below says.
 
 - A task gets a **limited number of cycles**, so a change that keeps failing doesn't burn the budget forever.
 - A **generation** is a set of cycles with one kind of builder. Generation 1 uses the normal model; if it runs out of cycles, **generation 2** starts with a stronger model.
