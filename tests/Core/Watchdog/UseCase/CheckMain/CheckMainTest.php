@@ -168,10 +168,12 @@ final class CheckMainTest extends TestCase
         $head = $this->scenario->main->commitFile('b.txt', "two\n");
         $this->scenario->main->cutHistoryBelow($head);
 
-        $this->expectException(MainNotRead::class);
-        $this->expectExceptionMessage('Main was not read: the repository is shallow, so its history is incomplete');
-
-        (void) $this->scenario->check()->of($this->watching($base, [], []));
+        try {
+            (void) $this->scenario->check()->of($this->watching($base, [], []));
+            self::fail('A shallow repository was read.');
+        } catch (MainNotRead $refused) {
+            self::assertSame('Main was not read: the repository is shallow, so its history is incomplete', $refused->getMessage());
+        }
     }
 
     public function testARepositoryThatIsNotThereIsRefused(): void
@@ -184,7 +186,7 @@ final class CheckMainTest extends TestCase
     public function testARelativePathToTheRepositoryIsRead(): void
     {
         $head = $this->scenario->main->commitFile('a.txt', "one\n");
-        $relative = new Filesystem()->makePathRelative($this->scenario->main->path, getcwd() ?: '/');
+        $relative = new Filesystem()->makePathRelative($this->scenario->main->path, (string) getcwd());
 
         $checked = $this->scenario->check()->of(new WatchedMain(rtrim($relative, '/'), $head, [], []));
 

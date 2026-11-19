@@ -42,7 +42,7 @@ final readonly class CommitSignature
     }
 
     /**
-     * @return array{?string, string} the signature and the text it signed
+     * @return array{?string, string}
      */
     private function split(string $commitText): array
     {
@@ -53,7 +53,7 @@ final readonly class CommitSignature
         $inSignature = false;
 
         foreach (explode("\n", $headers) as $line) {
-            // A continuation line belongs to the signature header just before it.
+            // Because git folds a multi-line signature into continuation lines that start with a space.
             if ($inSignature && str_starts_with($line, ' ')) {
                 $signature .= "\n".substr($line, 1);
 
@@ -86,23 +86,33 @@ final readonly class CommitSignature
         try {
             $this->filesystem->dumpFile($allowed, $this->allowedSigners($ownerKeys));
             $this->filesystem->dumpFile($signatureFile, $signature);
-            $check = new Process([self::PROGRAM, '-Y', 'verify', '-f', $allowed, '-I', self::PRINCIPAL, '-n', self::NAMESPACE, '-s', $signatureFile], null, ['SSH_ASKPASS' => false, 'SSH_ASKPASS_REQUIRE' => 'never'], $payload, $this->timeoutSeconds);
-
-            try {
-                $check->run();
-            } catch (ExceptionInterface) {
-                throw MainNotRead::because(self::PROGRAM.' did not finish');
-            }
+            $exit = $this->verify($allowed, $signatureFile, $payload);
         } finally {
             $this->filesystem->remove([$allowed, $signatureFile]);
         }
 
         // Only a refusal says the key is not the owner's; any other exit (not found, killed) proves nothing and must not read as one.
-        return match ($check->getExitCode()) {
+        return match ($exit) {
             0 => true,
             self::REFUSED => false,
             default => throw MainNotRead::because(self::PROGRAM.' could not check the signature'),
         };
+    }
+
+    /**
+     * @throws MainNotRead
+     */
+    private function verify(string $allowed, string $signatureFile, string $payload): ?int
+    {
+        $check = new Process([self::PROGRAM, '-Y', 'verify', '-f', $allowed, '-I', self::PRINCIPAL, '-n', self::NAMESPACE, '-s', $signatureFile], null, ['SSH_ASKPASS' => false, 'SSH_ASKPASS_REQUIRE' => 'never'], $payload, $this->timeoutSeconds);
+
+        try {
+            $check->run();
+        } catch (ExceptionInterface) {
+            throw MainNotRead::because(self::PROGRAM.' did not finish');
+        }
+
+        return $check->getExitCode();
     }
 
     /**

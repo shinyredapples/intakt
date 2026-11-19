@@ -30,7 +30,7 @@ final readonly class MainScenario
         return new CheckMain(new MainHistory(new HardenedGit()), new CommitSignature(new Filesystem()));
     }
 
-    // Returns the public key line "<type> <base64>" of a new key pair.
+    // The public key line without its comment, because that is the form an owner registers.
     public function newKey(string $name): string
     {
         $file = $this->keyFile($name);

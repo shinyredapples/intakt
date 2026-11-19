@@ -12,7 +12,7 @@ final readonly class WatchedMain
 
     /**
      * @param list<RecordedMerge> $recordedMerges
-     * @param list<string>        $ownerKeys      public keys of the owner, one "<type> <base64>" line each
+     * @param list<string>        $ownerKeys
      *
      * @throws InvalidArgumentException
      */

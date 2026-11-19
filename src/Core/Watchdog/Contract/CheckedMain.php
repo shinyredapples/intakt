@@ -7,7 +7,7 @@ namespace Intakt\Core\Watchdog\Contract;
 final readonly class CheckedMain
 {
     /**
-     * @param list<CommitClassification> $commits oldest first; a rewritten history holds the new head alone
+     * @param list<CommitClassification> $commits
      */
     public function __construct(
         public string $head,
