@@ -66,7 +66,7 @@ Intakt's own checks run on GitHub's machines by default. Whoever maintains a cop
 
 `CI_RUNS_ON` also leaves alone the job that builds and starts the demo on an ARM machine after every merge: it stays on GitHub's ARM machine unless the separate variable `CI_ARM_RUNS_ON` names another one.
 
-If CI never starts (GitHub occasionally misses an update), Intakt notices after a few minutes, nudges GitHub once, and alerts the maintainer agent if that didn't help. *(Planned:)* first it looks at the pull request once: if the change clashes with the newest main, it goes back to a builder to join the two, except a clash only in the project's shared lists (such as the lock file), which Intakt joins itself and checks before it sends the result. A wait for CI never blocks a bench: the work is parked and the bench takes the next job.
+If CI never starts (GitHub occasionally misses an update), Intakt notices after a few minutes, nudges GitHub once, and alerts the maintainer agent if that didn't help. *(Planned:)* first it looks at the pull request once: if the change clashes with the newest main, it goes back to a builder to join the two (or to the maintainer agent when the task has no build tries left), except a clash only in the project's shared lists (such as the lock file), which Intakt joins itself and checks before it sends the result. A wait for CI never blocks a bench: the work is parked and the bench takes the next job.
 
 ## Locks: one at a time
 
