@@ -32,6 +32,8 @@ final class RecordedIssueApi
     /** @var array<int, string> */
     public array $pages = [];
     public string $etag = 'W/"issues-1"';
+    // The Date header of every page, or null for none; fifteen days after the pages' issues were last updated.
+    public ?string $served = 'Wed, 25 Nov 2026 10:00:00 GMT';
     public bool $notModified = false;
     // Answers 304 to a request that carries the current ETag, as GitHub does for a page that did not change; off by default, so a scripted page is read even when a validator is sent.
     public bool $stable = false;
@@ -137,7 +139,7 @@ final class RecordedIssueApi
             return new MockResponse('{}', ['http_code' => (int) $body, 'response_headers' => ['Retry-After' => '60']]);
         }
 
-        $headers = ['ETag' => $this->etag];
+        $headers = ['ETag' => $this->etag, ...(null === $this->served ? [] : ['Date' => $this->served])];
         if (in_array($page, $this->namingNext, true)) {
             $headers['Link'] = sprintf('<https://api.github.com/repositories/1/issues?page=%d>; rel="next", <https://api.github.com/repositories/1/issues?page=9>; rel="last"', $page + 1);
         }

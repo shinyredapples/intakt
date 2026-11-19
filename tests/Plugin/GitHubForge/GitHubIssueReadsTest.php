@@ -65,6 +65,58 @@ final class GitHubIssueReadsTest extends TestCase
         self::assertSame('GitHub did not confirm that page 1 of the open issues stayed the same while the later pages were read.', $this->failureOf($api)->getMessage());
     }
 
+    public function testAnEarlierPageWithAnIssueUpdatedInTheSecondsItWasServedFailsTheListing(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->page(1, 100, '2026-11-25T09:59:56Z'), 2 => $this->page(101, 1)];
+        $api->namingNext = [1];
+        $api->stable = true;
+
+        self::assertSame('Issue #1 on page 1 of the open issues changed in the seconds GitHub served the page, so a close and reopen while the later pages were read cannot be ruled out.', $this->failureOf($api)->getMessage());
+    }
+
+    public function testAnEarlierPageWhoseIssuesWereUpdatedBeforeTheClockSlackIsAccepted(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->page(1, 100, '2026-11-25T09:59:55Z'), 2 => $this->page(101, 1)];
+        $api->namingNext = [1];
+        $api->stable = true;
+
+        self::assertCount(101, $api->reads()->listOpen('alpha', null)->issues());
+    }
+
+    public function testAnIssueUpdatedInTheSecondTheLastPageWasServedIsAccepted(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->page(1, 100), 2 => $this->page(101, 1, '2026-11-25T10:00:00Z')];
+        $api->namingNext = [1];
+        $api->stable = true;
+
+        self::assertCount(101, $api->reads()->listOpen('alpha', null)->issues());
+    }
+
+    public function testAnEarlierPageWithoutADateFailsTheListing(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->page(1, 100), 2 => $this->page(101, 1)];
+        $api->namingNext = [1];
+        $api->stable = true;
+        $api->served = null;
+
+        self::assertSame('GitHub answered page 1 of open issues without a Date.', $this->failureOf($api)->getMessage());
+    }
+
+    public function testAnEarlierPageWithADateThisForgeCannotReadFailsTheListing(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->page(1, 100), 2 => $this->page(101, 1)];
+        $api->namingNext = [1];
+        $api->stable = true;
+        $api->served = '2026-11-25T10:00:00Z';
+
+        self::assertSame('GitHub answered a Date this forge cannot read.', $this->failureOf($api)->getMessage());
+    }
+
     public function testASinglePageIsNotAskedAgain(): void
     {
         $api = new RecordedIssueApi();
@@ -219,7 +271,7 @@ final class GitHubIssueReadsTest extends TestCase
         self::fail('The listing was expected to fail.');
     }
 
-    private function page(int $from, int $count): string
+    private function page(int $from, int $count, string $updatedAt = '2026-11-10T10:00:00Z'): string
     {
         $issues = array_map(static fn (int $number): array => [
             'number' => $number,
@@ -228,7 +280,7 @@ final class GitHubIssueReadsTest extends TestCase
             'user' => ['login' => 'ana'],
             'labels' => [],
             'milestone' => null,
-            'updated_at' => '2026-11-10T10:00:00Z',
+            'updated_at' => $updatedAt,
         ], range($from, $from + $count - 1));
 
         return json_encode($issues, JSON_THROW_ON_ERROR);

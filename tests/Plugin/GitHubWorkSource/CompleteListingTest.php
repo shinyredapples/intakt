@@ -197,6 +197,24 @@ final class CompleteListingTest extends KernelTestCase
         self::assertNull($this->entities->find(StoredItem::class, ['project' => 'alpha', 'number' => 102]));
     }
 
+    public function testAnIssueSkippedBecauseAnEarlierPageClosedAndReopenedWithinASecondKeepsItsRow(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->pageOf([$this->issue(1, body: 'Waits for #101'), $this->issue(101)])];
+        $this->tickOver($api->reads());
+        // #100 closes while page 2 is read, so page 2 starts at #102, and reopens in the same second, so page 1 is confirmed unchanged.
+        $api->pages = [1 => $this->pageOf([$this->issue(1, body: 'Waits for #101'), ...array_map(fn (int $number): array => $this->issue($number), range(2, 99)), [...$this->issue(100), 'updated_at' => '2026-11-25T10:00:00Z']]), 2 => $this->pageOf([$this->issue(102)])];
+        $api->namingNext = [1];
+        $api->etag = 'W/"issues-2"';
+        $api->stable = true;
+
+        $skipping = $this->tickOver($api->reads());
+
+        self::assertNull($skipping);
+        self::assertLoggedError('error', self::NOT_COMPLETE);
+        self::assertInstanceOf(StoredItem::class, $this->entities->find(StoredItem::class, ['project' => 'alpha', 'number' => 101]));
+    }
+
     public function testTheEntityManagerOfAFinishedTickIsFreed(): void
     {
         $seen = new FlushedManagers();
