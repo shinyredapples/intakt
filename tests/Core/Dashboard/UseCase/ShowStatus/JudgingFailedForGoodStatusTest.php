@@ -140,7 +140,7 @@ final class JudgingFailedForGoodStatusTest extends KernelTestCase
         self::assertSame([[$this->reviewedRound, 'judging_failed']], array_map(static fn (array $outcome): array => [$outcome['round'], $outcome['end']], $this->projectInStatus('alpha')['last_outcomes']));
     }
 
-    // Runs intakt:review on a branch of a temporary repository, with the workers answering and the judge failing for good while the command waits.
+    // On a branch of a temporary repository, so the lines are the command's own output while the judge fails for good during its wait.
     private function reviewedByTheCommand(): CommandTester
     {
         $repository = new TemporaryRepository();

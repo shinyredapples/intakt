@@ -189,7 +189,7 @@ final readonly class ProjectStatuses
         return $outcomes;
     }
 
-    // The newest round of a card that was judged or ended, so a round running after a failed judging does not hide that failure.
+    // Any round of the card and not only the latest, because a round running after a failed judging must not hide that failure.
     /**
      * @return list<ReviewedRound>
      */
@@ -198,10 +198,10 @@ final readonly class ProjectStatuses
         return array_values(array_filter(array_map(static fn (Review $card): ?ReviewedRound => array_last(array_values(array_filter($card->rounds, static fn (ReviewedRound $round): bool => $round->isJudged() || $round->hasEnded()))), $this->cardsOf($board))));
     }
 
-    // A failure recorded in the ledger is placed by its record, and only an ending without any time falls back to the round's start.
+    // A failure is placed by its ledger record rather than the round's start, because ten judgments since the start must not push a new failure off the list.
     private static function endedAt(ReviewedRound $round): DateTimeImmutable
     {
-        return $round->judgedAt ?? $round->ending?->endedAt ?? $round->startedAt;
+        return $round->judgedAt ?? $round->ending->endedAt ?? $round->startedAt;
     }
 
     /**

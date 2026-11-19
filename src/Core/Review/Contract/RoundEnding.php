@@ -9,7 +9,7 @@ use DateTimeImmutable;
 // Carries the reason with the end, because every door must print the same words for it and none may spell them again.
 final readonly class RoundEnding
 {
-    // The time is null when nothing recorded when the round ended, as for a judging Messenger parked before the ledger took failure records.
+    // The time may be null, because a judging Messenger parked before the DispatchOnFailureStamp (#1848) left no record of when it failed.
     public function __construct(
         public RoundEnds $end,
         public string $reason,

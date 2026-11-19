@@ -413,7 +413,7 @@ final class StatusReadModelTest extends TestCase
 
         foreach (range(1, 10) as $change) {
             $this->ledger->startRecordedRoundOf((string) $change, 'r'.$change, 1);
-            $this->ledger->judgeRoundAt('r'.$change, '2026-10-28T12:01:00+00:00');
+            $this->ledger->judgeRoundAt('r'.$change, new DateTimeImmutable('2026-10-28T12:01:00+00:00'));
         }
 
         $outcomes = $this->projectOf($this->read(), 'alpha')['last_outcomes'];
