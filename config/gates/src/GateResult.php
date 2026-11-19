@@ -103,9 +103,23 @@ final readonly class GateResult
         return $list;
     }
 
+    // Because the full report tells a cut finding by the measure the cut used: display width with mbstring, characters without it.
+    public static function widthOf(string $text): int
+    {
+        if (!function_exists('mb_strwidth')) {
+            return (int) preg_match_all('/./su', $text);
+        }
+
+        return mb_strwidth($text);
+    }
+
     private function shorten(string $finding): string
     {
         $oneLine = trim((string) preg_replace('/\s+/', ' ', $finding));
+
+        if (self::widthOf($oneLine) <= self::MAXIMUM_FINDING_LENGTH) {
+            return $oneLine;
+        }
 
         // The environment gate reports a missing mbstring through here, so the cut must work without it.
         if (!function_exists('mb_strimwidth')) {

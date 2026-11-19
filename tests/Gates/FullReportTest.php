@@ -105,6 +105,36 @@ final class FullReportTest extends SandboxTestCase
         self::assertNull($name);
     }
 
+    public function testNoReportIsNamedWhenTheLineCutAFindingOfWideCharactersTheChildFailedToKeep(): void
+    {
+        $tree = $this->emptySandbox();
+        $finding = str_repeat("\u{754C}", 160);
+
+        $name = $this->startedReport()->writeTo($tree->root, self::SUMMARY, [$this->failingLine('dashes', [$finding])]);
+
+        self::assertNull($name);
+    }
+
+    public function testALineFindingJustShorterThanACutOneStandsInForAChildThatKeptNothing(): void
+    {
+        $tree = $this->emptySandbox();
+        $finding = str_repeat('x', GateResult::MAXIMUM_FINDING_LENGTH - 4);
+
+        $name = $this->startedReport()->writeTo($tree->root, self::SUMMARY, [$this->failingLine('dashes', [$finding])]);
+
+        self::assertSame([$finding], $this->findingsIn($tree->root.'/'.$name));
+    }
+
+    public function testALineFindingAsLongAsACutOneNamesNoReportForAChildThatKeptNothing(): void
+    {
+        $tree = $this->emptySandbox();
+        $finding = str_repeat('x', GateResult::MAXIMUM_FINDING_LENGTH - 3);
+
+        $name = $this->startedReport()->writeTo($tree->root, self::SUMMARY, [$this->failingLine('dashes', [$finding])]);
+
+        self::assertNull($name);
+    }
+
     public function testAKeptResultWithFewerFindingsThanItsLineAccountsForNamesNoReport(): void
     {
         $tree = $this->emptySandbox();

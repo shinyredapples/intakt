@@ -14,7 +14,7 @@ final readonly class FullReport
 {
     public const string VARIABLE = 'INTAKT_GATE_FULL_RESULT';
 
-    // Under var/, which every checked tree's .gitignore already leaves out, so a report never shows up as a change and the gates need no rule of their own to skip it.
+    // Under var/, which Intakt's own .gitignore leaves out, so a report never shows up as a change there; a tree that does scan var/ still passes because the report holds only ASCII.
     public const string FOLDER = 'var/check';
 
     private const string PREFIX = 'intakt-check-report';
@@ -132,7 +132,7 @@ final readonly class FullReport
             && count($findings) === count($shown) + $omitted;
     }
 
-    // Because a finding cut to the line's length cannot be told from one that is exactly that long, both count as cut.
+    // Because a cut finding measures at least the line's length less its three dots (a wide character may leave one column free) and cannot be told from an uncut one that long, both count as cut.
     /**
      * @param array<array-key, mixed> $line
      */
@@ -142,7 +142,7 @@ final readonly class FullReport
 
         return 0 === ($line['omitted'] ?? null)
             && is_array($findings)
-            && array_all($findings, static fn (mixed $finding): bool => is_string($finding) && preg_match_all('/./su', $finding) < GateResult::MAXIMUM_FINDING_LENGTH);
+            && array_all($findings, static fn (mixed $finding): bool => is_string($finding) && GateResult::widthOf($finding) < GateResult::MAXIMUM_FINDING_LENGTH - 3);
     }
 
     /**
@@ -169,6 +169,20 @@ final readonly class FullReport
             return null;
         }
 
-        return strlen($content) === $file->fwrite($content) ? $name : null;
+        // A failed write raises a notice that would reach stdout under display_errors, between the gate lines and the summary.
+        $written = @$file->fwrite($content);
+        $file = null;
+
+        if (strlen($content) === $written) {
+            return $name;
+        }
+
+        try {
+            new Filesystem()->remove($root.'/'.$name);
+        } catch (IOException) {
+            return null;
+        }
+
+        return null;
     }
 }
