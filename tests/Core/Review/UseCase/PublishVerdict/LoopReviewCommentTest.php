@@ -4,10 +4,15 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\PublishVerdict;
 
+use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Review\Contract\ChangeDecision;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
+use Intakt\Core\Review\Contract\PanelVerdict;
+use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\Severity;
+use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\UseCase\PublishVerdict\LoopReviewComment;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\HeadStatus;
@@ -22,6 +27,10 @@ use UnexpectedValueException;
 #[CoversClass(LoopReviewComment::class)]
 #[UsesClass(PublishedVerdict::class)]
 #[UsesClass(ReviewToken::class)]
+#[UsesClass(ChangeDecision::class)]
+#[UsesClass(QuorumPolicy::class)]
+#[UsesClass(PanelVerdict::class)]
+#[UsesClass(Verdict::class)]
 final class LoopReviewCommentTest extends TestCase
 {
     private const string HEAD = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
@@ -108,6 +117,20 @@ final class LoopReviewCommentTest extends TestCase
     public function testAFindingWithoutAnythingToRedactIsKeptAsWritten(): void
     {
         self::assertStringContainsString("\n[P2] src/Cookies.php: The cookie jar [is] not cleared.\n", $this->commentOn('src/Cookies.php', 'The cookie jar [is] not cleared.', null));
+    }
+
+    public function testAMajorityApprovalBesideAStoredReservedIdVoteIsPublishedAsChangesWhileAnotherReviewersP1IsOpen(): void
+    {
+        $legacy = new Verdict(Decision::Changes, Verdict::noTools()->findings, [], []);
+        $openP1 = new Finding('F1', Severity::P1, 'src/Cart.php', 42, null, 'The discount is applied twice.', FixableBy::Builder, false, null, null);
+        $decision = new ChangeDecision()->of(QuorumPolicy::Majority, [
+            new PanelVerdict(Tier::Strong, $legacy),
+            new PanelVerdict(Tier::Strong, new Verdict(Decision::Approve, [$openP1], [], [])),
+            new PanelVerdict(Tier::Standard, new Verdict(Decision::Approve, [], [], [])),
+        ]);
+
+        self::assertSame(Decision::Approve, $decision, 'The panel does not approve by majority.');
+        self::assertSame(Decision::Changes, new LoopReviewComment(new CommitId(self::HEAD), $decision, [$openP1], 's')->verdict());
     }
 
     private function commentOn(string $file, string $text, ?int $line = 3): string

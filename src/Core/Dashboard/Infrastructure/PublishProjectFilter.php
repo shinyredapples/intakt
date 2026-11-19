@@ -14,7 +14,7 @@ use Symfony\Component\Lock\LockFactory;
 use Throwable;
 use Twig\Environment;
 
-// Only on a project's first round, because that start is the only ledger row that adds a project to the filter, and every publication resets the select of an open page.
+// Only on a project's first round, because every publication resets the select of an open page; a project whose build work comes first is listed at the next page load, since a build step publishes nothing.
 #[AsCommandHandler]
 final readonly class PublishProjectFilter
 {
