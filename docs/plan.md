@@ -127,7 +127,7 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 - **Waits for:** T9. **Size:** S. **Labels:** `class:core`, `priority:normal`.
 
 ### T12 Judge step
-- **Description:** A judge agent on a light tier marks each finding act, defer or reject against the task's acceptance criteria and non-goals, using structured output. Deferred findings become follow-ups.
+- **Description:** A judge agent on a light tier marks each finding act, defer or reject against the task's acceptance criteria and non-goals, using structured output. A deferred P3 finding becomes a follow-up. A P1 or P2 finding stays on the builder's act list even when the judge marks it `defer` or `reject`, with the judge's reason kept beside it as a note.
 - **Acceptance:** the judge's output is a typed object through structured output, checked by the Validator; an invalid judge answer means every blocking finding is `act`; the builder-facing list holds only `act` findings.
 - **Evidence:** a real judge result on the T10 rounds.
 - **Waits for:** T10. **Size:** M. **Labels:** `class:core`, `priority:high`.
