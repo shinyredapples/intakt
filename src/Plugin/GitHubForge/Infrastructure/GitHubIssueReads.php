@@ -83,9 +83,8 @@ final readonly class GitHubIssueReads implements IssueReads
         }
     }
 
+    // An issue that closes or opens on a page already read moves every later page by one, so an issue at a page boundary is read twice or never; only a 304 for every page read before the last says none of them moved.
     /**
-     * An issue that closes or opens on a page already read moves every later page by one, so an issue at a page boundary is read twice or never; only a 304 for every page read before the last says none of them moved.
-     *
      * @param array<int, ?string> $validators
      *
      * @throws ForgeReadFailed
@@ -93,10 +92,9 @@ final readonly class GitHubIssueReads implements IssueReads
      */
     private function confirmUnmoved(string $path, array $validators): void
     {
-        foreach ($validators as $page => $validator) {
-            if (self::NOT_MODIFIED !== $this->get($path, $this->page($page), $validator)['status']) {
-                throw new ForgeReadFailed(sprintf('GitHub did not confirm that page %d of the open issues stayed the same while the later pages were read.', $page));
-            }
+        $moved = array_find_key($validators, fn (?string $validator, int $page): bool => self::NOT_MODIFIED !== $this->get($path, $this->page($page), $validator)['status']);
+        if (null !== $moved) {
+            throw new ForgeReadFailed(sprintf('GitHub did not confirm that page %d of the open issues stayed the same while the later pages were read.', $moved));
         }
     }
 

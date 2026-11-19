@@ -157,9 +157,8 @@ final readonly class IntakeSnapshots
         return $failures;
     }
 
+    // Queried on the tick's manager and never through a repository, because the repository factory is shared with the injected manager and keeps every repository, with its manager, for the life of the process.
     /**
-     * Queried on the tick's manager and never through a repository, because the repository factory is shared with the injected manager and keeps every repository, with its manager, for the life of the process.
-     *
      * @template T of object
      *
      * @param class-string<T> $entity

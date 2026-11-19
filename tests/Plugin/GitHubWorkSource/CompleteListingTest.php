@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Intakt\Tests\Plugin\GitHubWorkSource;
 
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\Event\PreFlushEventArgs;
 use Doctrine\ORM\Events;
 use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
@@ -39,7 +38,6 @@ use Psr\Log\LoggerInterface;
 use ReflectionObject;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
-use WeakReference;
 
 // The plans are made here as the pick will make them, with every item vouched for, because what a stored row is worth shows only in the order and the holds it yields.
 #[Group('persistence')]
@@ -201,15 +199,7 @@ final class CompleteListingTest extends KernelTestCase
 
     public function testTheEntityManagerOfAFinishedTickIsFreed(): void
     {
-        $seen = new class {
-            /** @var list<WeakReference<object>> */
-            public array $managers = [];
-
-            public function preFlush(PreFlushEventArgs $args): void
-            {
-                $this->managers[] = WeakReference::create($args->getObjectManager());
-            }
-        };
+        $seen = new FlushedManagers();
         $this->entities->getEventManager()->addEventListener(Events::preFlush, $seen);
         $snapshots = $this->snapshots($this->reads);
         $this->reads->lists([Issues::task(1)]);
@@ -221,8 +211,8 @@ final class CompleteListingTest extends KernelTestCase
 
         gc_collect_cycles();
 
-        self::assertCount(201, $seen->managers);
-        self::assertSame(0, count(array_filter($seen->managers, static fn (WeakReference $manager): bool => $manager->get() instanceof EntityManagerInterface)));
+        self::assertSame(201, $seen->flushed());
+        self::assertSame(0, $seen->alive());
     }
 
     public function testATickLeavesNoRepositoryOfItsManagerInTheSharedFactory(): void
