@@ -104,6 +104,21 @@ final class VerdictTest extends TestCase
         self::assertSame(Decision::Blocked, Verdict::noTools()->withFindings([$this->finding()])->asRecorded()->verdict);
     }
 
+    public function testABlockedVerdictIntaktGaveNamesItsFindingAsItsReason(): void
+    {
+        self::assertSame(Verdict::noTools()->findings[0]->text, Verdict::noTools()->blockedReason());
+    }
+
+    public function testAVerdictThatIsNotBlockedHasNoBlockedReason(): void
+    {
+        self::assertNull(new Verdict(Decision::Changes, [$this->finding()], [], [])->blockedReason());
+    }
+
+    public function testABlockedVerdictWithoutAFindingHasNoBlockedReason(): void
+    {
+        self::assertNull(new Verdict(Decision::Blocked, [], [], [])->blockedReason());
+    }
+
     public function testAnApprovalAndAChangesVerdictAreRecordedAsGiven(): void
     {
         self::assertSame(Decision::Approve, new Verdict(Decision::Approve, [], [], [])->asRecorded()->verdict);

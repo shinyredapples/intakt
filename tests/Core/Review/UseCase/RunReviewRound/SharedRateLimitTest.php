@@ -61,7 +61,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 final class SharedRateLimitTest extends KernelTestCase
 {
     private const int RESET_SECONDS = 300;
-    private const string OUT_FOR_THE_RESET = '/^role-\d reviewer failed, Every provider of the tier is out: anthropic for \d+ s, openai for \d+ s\.$/';
+    private const string OUT_FOR_THE_RESET = '/^role-\d reviewer blocked, Every provider of the tier is out: anthropic for \d+ s, openai for \d+ s\.$/';
 
     private ScriptedRound $run;
 

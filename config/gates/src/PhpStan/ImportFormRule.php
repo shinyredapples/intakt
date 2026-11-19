@@ -131,7 +131,8 @@ final readonly class ImportFormRule implements Rule
     {
         $classes = new NodeFinder()->findInstanceOf($nodes, ClassLike::class);
 
-        return array_values(array_filter(array_map(static fn (ClassLike $class): ?string => $class->namespacedName?->toLowerString(), $classes), is_string(...)));
+        // isset because the name resolver leaves namespacedName uninitialized on an anonymous class inside a closure, where ?-> throws instead of giving null
+        return array_values(array_filter(array_map(static fn (ClassLike $class): ?string => isset($class->namespacedName) ? $class->namespacedName->toLowerString() : null, $classes), is_string(...)));
     }
 
     /**
