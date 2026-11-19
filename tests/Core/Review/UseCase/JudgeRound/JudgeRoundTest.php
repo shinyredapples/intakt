@@ -123,6 +123,26 @@ final class JudgeRoundTest extends KernelTestCase
         self::assertSame([['round' => $round->id()->toRfc4122(), 'act' => ['F1', 'F2'], 'follow_ups' => ['F3']]], $this->judgeCalls());
     }
 
+    public function testJudgeDoneRecordsEachReviewersVoteAsTheQuorumCountsIt(): void
+    {
+        $round = $this->roundReporting([$this->finding('A', Severity::P3)]);
+        $reviewer = $round->reviewers()[0]->id()->toRfc4122();
+
+        $this->fixture->judge(new ScriptedJudgement(new Judgement([new JudgedFinding('F1', Mark::Defer)])))($this->judgingOf($round));
+
+        self::assertSame([$reviewer => 'approve'], $this->judgeDonePayloads()[0]['votes']);
+    }
+
+    public function testJudgeDoneRecordsAChangesVoteForAP3TheJudgeMarksAct(): void
+    {
+        $round = $this->roundReporting([$this->finding('A', Severity::P3)]);
+        $reviewer = $round->reviewers()[0]->id()->toRfc4122();
+
+        $this->fixture->judge(new ScriptedJudgement(new Judgement([new JudgedFinding('F1', Mark::Act)])))($this->judgingOf($round));
+
+        self::assertSame([$reviewer => 'changes'], $this->judgeDonePayloads()[0]['votes']);
+    }
+
     public function testAJudgeThatRejectsAP1AndDefersAP2LeavesBothOnTheActList(): void
     {
         $round = $this->completedRound();
@@ -661,7 +681,7 @@ final class JudgeRoundTest extends KernelTestCase
      */
     private function judgeCalls(): array
     {
-        return array_map(static fn (array $payload): array => array_diff_key($payload, ['findings' => true, 'dropped' => true, 'same_cause' => true]), $this->judgeDonePayloads());
+        return array_map(static fn (array $payload): array => array_diff_key($payload, ['findings' => true, 'dropped' => true, 'same_cause' => true, 'votes' => true]), $this->judgeDonePayloads());
     }
 
     /**
