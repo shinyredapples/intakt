@@ -11,7 +11,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversNothing]
 final class WaitingStylesTest extends TestCase
 {
-    // DESIGN.md's bridge (761 to 1099 px) is single column; a 340 px choices column there left the lead about 45 px beside the rail.
+    // Needed because a 340 px choices column at 761 px beside the open rail left the lead about 45 px, and DESIGN.md's bridge is single column.
     public function testBelow1100WideAWaitingItemIsOneColumnInTheOrderTabReachesItsParts(): void
     {
         $rules = $this->rulesOf($this->mediaBlocks('max-width: 1099px'));
