@@ -9,8 +9,8 @@ use RuntimeException;
 // Both the task and the pull request text are judged by what the forge renders, so text a reader never sees (an HTML comment) must not count, while a fenced block is shown but is code, not structure.
 final readonly class MarkdownText
 {
-    // One pass from left to right, because whichever of a fence, a code span and a comment opens first makes the others' markers literal (https://spec.commonmark.org/0.31.2/#fenced-code-blocks, https://spec.commonmark.org/0.31.2/#code-spans). The pattern finds only where a part opens; each end is searched with plain string functions (`FencedBlock`, `CodeSpans`, `commentAt()`), because a pattern that walks a long part character by character exhausts the regex engine's stack on a long text, and a pattern built from a part's length is refused above the engine's largest quantifier. A fence may open right after a list marker, which then stays outside the part, and its indent is judged by `FencedBlock::opensAt()`, because inside a list item it is measured from the item's content column.
-    private const string OPENING = '/^(?: {0,3}(?:[-*+]|\d{1,9}[.)])[ \t]{1,4}\K)?(?<fence> *(?:`{3,}(?=[^`\n]*$)|~{3,}))|(?<code>`+)|(?<comment><!--)/m';
+    // One pass from left to right, because whichever of a fence, a code span and a comment opens first makes the others' markers literal (https://spec.commonmark.org/0.31.2/#fenced-code-blocks, https://spec.commonmark.org/0.31.2/#code-spans). The pattern finds only where a part opens; each end is searched with plain string functions (`FencedBlock`, `CodeSpans`, `commentAt()`), because a pattern that walks a long part character by character exhausts the regex engine's stack on a long text, and a pattern built from a part's length is refused above the engine's largest quantifier. A fence may open right after a list marker, which then stays outside the part, and its indent is judged by `FencedBlock::opensAt()`, because inside a list item it is measured from the item's content column. The same pass tells `OpenListItems` which fences and comments it read, so the list items around a fence are found by reading each line once and never from a marker shown inside an earlier fence.
+    private const string OPENING = '/^(?: {0,3}(?:[-*+]|\d{1,9}[.)])[ \t]{1,4}\K)?(?<fence>[ \t]*(?:`{3,}(?=[^`\n]*$)|~{3,}))|(?<code>`+)|(?<comment><!--)/m';
 
     private const string COMMENT_END = '-->';
 
@@ -84,18 +84,24 @@ final readonly class MarkdownText
         $read = '';
         $offset = 0;
         $codeSpans = CodeSpans::of($text);
+        $items = new OpenListItems($text);
 
         while (null !== ($match = self::firstMatch(self::OPENING, $text, $offset))) {
-            $kind = self::kindOf($text, $match[0][1], $match);
+            $kind = self::kindOf($text, $match[0][1], $match, $items);
             $start = self::startOf($kind, $text, $match[0][1]);
             $part = match ($kind) {
-                self::FENCE, self::FENCE_AFTER_A_MARKER => FencedBlock::at($text, $start),
+                self::FENCE, self::FENCE_AFTER_A_MARKER => FencedBlock::at($text, $start, $items),
                 self::CODE => ($codeSpans = $codeSpans->inTheParagraphAt($start))->spanOrLiteralAt($start, $offset),
                 self::LITERAL => $match['fence'][0],
                 default => self::commentAt($text, $start),
             };
             $read .= substr($text, $offset, $start - $offset).self::shown($kind, $part, $fenced);
             $offset = $start + strlen($part);
+
+            // A code span or a literal run shows its lines as text, so only the lines of a fence or a comment hold no list items.
+            if (self::CODE !== $kind && self::LITERAL !== $kind) {
+                $items->passOver($start, $offset);
+            }
         }
 
         return $read.substr($text, $offset);
@@ -117,13 +123,13 @@ final readonly class MarkdownText
     /**
      * @param array<array{string, int}> $match
      */
-    private static function kindOf(string $text, int $start, array $match): string
+    private static function kindOf(string $text, int $start, array $match, OpenListItems $items): string
     {
         $fence = $match['fence'][0] ?? '';
 
         return match (true) {
             '' === $fence => '' !== ($match['code'][0] ?? '') ? self::CODE : self::COMMENT,
-            FencedBlock::opensAt($text, $start) => $start > 0 && "\n" !== $text[$start - 1] ? self::FENCE_AFTER_A_MARKER : self::FENCE,
+            FencedBlock::opensAt($text, $start, $items) => $start > 0 && "\n" !== $text[$start - 1] ? self::FENCE_AFTER_A_MARKER : self::FENCE,
             str_ends_with($fence, '`') => self::CODE,
             default => self::LITERAL,
         };
@@ -132,7 +138,7 @@ final readonly class MarkdownText
     // A backtick run indented too far to open a fence still opens or closes a code span, so the part starts at the run, not at the indent.
     private static function startOf(string $kind, string $text, int $match): int
     {
-        return $match + (self::CODE === $kind ? strspn($text, ' ', $match) : 0);
+        return $match + (self::CODE === $kind ? strspn($text, " \t", $match) : 0);
     }
 
     /**

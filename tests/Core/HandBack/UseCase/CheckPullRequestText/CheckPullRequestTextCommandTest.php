@@ -10,6 +10,7 @@ use Intakt\Core\HandBack\Domain\CodeSpans;
 use Intakt\Core\HandBack\Domain\EvidenceItems;
 use Intakt\Core\HandBack\Domain\FencedBlock;
 use Intakt\Core\HandBack\Domain\MarkdownText;
+use Intakt\Core\HandBack\Domain\OpenListItems;
 use Intakt\Core\HandBack\Domain\ParagraphEnd;
 use Intakt\Core\HandBack\Domain\PullRequestTextRule;
 use Intakt\Core\HandBack\UseCase\CheckPullRequestText\CheckPullRequestTextCommand;
@@ -29,6 +30,7 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(MarkdownText::class)]
 #[UsesClass(CodeSpans::class)]
 #[UsesClass(FencedBlock::class)]
+#[UsesClass(OpenListItems::class)]
 #[UsesClass(ParagraphEnd::class)]
 #[UsesClass(PullRequestTextOutcome::class)]
 #[UsesClass(PullRequestTextVerdict::class)]

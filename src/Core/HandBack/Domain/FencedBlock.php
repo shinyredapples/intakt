@@ -11,16 +11,13 @@ final readonly class FencedBlock
 
     private const int MOST_INDENT = 3;
 
-    // No list item has its content left of this column (a one-character marker and one space), so a fence indented less is in no item.
-    private const int NARROWEST_ITEM_COLUMN = 2;
-
     // Only a run of its own character at least as long closes a fence (https://spec.commonmark.org/0.31.2/#fenced-code-blocks). A fence opened inside a list item ends with that item, closed or not, so the first line indented less than the item's content is outside it and is read again.
-    public static function at(string $text, int $start): string
+    public static function at(string $text, int $start, ?OpenListItems $items = null): string
     {
-        $indent = strspn($text, ' ', $start);
+        $indent = strspn($text, self::BLANK, $start);
         $character = $text[$start + $indent];
         $run = strspn($text, $character, $start + $indent);
-        $column = self::columnOfItsListItem($text, $start, $indent);
+        $column = self::columnOfItsListItem($text, $start, $items ?? new OpenListItems($text));
         $lineEnd = MarkdownText::lineEndAt($text, $start);
 
         while ($lineEnd < strlen($text)) {
@@ -41,16 +38,20 @@ final readonly class FencedBlock
         return substr($text, $start, $lineEnd - $start);
     }
 
-    // A fence is indented up to three columns from where its container's content starts, so inside a list item it may sit further right, while four or more past that column make indented code.
-    public static function opensAt(string $text, int $start): bool
+    // A fence is indented up to three columns from where its container's content starts, so inside a list item it may sit further right, while four or more past that column make indented code. The indent is counted in columns, a tab to its tab stop, as the content column was; right after a list marker the item's content starts at the fence, so only up to three blanks may come before it.
+    public static function opensAt(string $text, int $start, ?OpenListItems $items = null): bool
     {
-        $indent = strspn($text, ' ', $start);
+        if (MarkdownText::lineStartAt($text, $start) !== $start) {
+            return strspn($text, self::BLANK, $start) <= self::MOST_INDENT;
+        }
+
+        $indent = self::indentColumnsAt($text, $start);
 
         if ($indent <= self::MOST_INDENT) {
             return true;
         }
 
-        $column = MarkdownText::lineStartAt($text, $start) === $start ? self::columnOfTheItemAbove($text, $start, $indent) : null;
+        $column = ($items ?? new OpenListItems($text))->columnFor($start, $indent);
 
         return null !== $column && $indent - $column <= self::MOST_INDENT;
     }
@@ -83,38 +84,13 @@ final readonly class FencedBlock
         return $columns;
     }
 
-    // A fence opened right after a list marker is the first content of that marker's item, so the item's content column is where the fence starts.
-    private static function columnOfItsListItem(string $text, int $start, int $indent): ?int
+    // A fence opened right after a list marker is the first content of that marker's item, so the item's content column is where the fence starts; a fence on a line of its own is in the open item whose content column its indent reaches.
+    private static function columnOfItsListItem(string $text, int $start, OpenListItems $items): ?int
     {
         $lineStart = MarkdownText::lineStartAt($text, $start);
-        $marker = substr($text, $lineStart, $start - $lineStart);
 
-        return '' === $marker
-            ? self::columnOfTheItemAbove($text, $lineStart, $indent)
-            : strlen(MarkdownText::withSpacesForTabs($marker));
-    }
-
-    // The walk goes up from the fence, because the item a line belongs to is the nearest list item above whose content column the line reaches, and a less indented line in between that is no such item has ended every deeper item.
-    private static function columnOfTheItemAbove(string $text, int $lineStart, int $indent): ?int
-    {
-        while ($lineStart > 0 && $indent >= self::NARROWEST_ITEM_COLUMN) {
-            $lineEnd = $lineStart - 1;
-            $lineStart = MarkdownText::lineStartAt($text, $lineEnd);
-            $line = MarkdownText::withSpacesForTabs(substr($text, $lineStart, $lineEnd - $lineStart));
-
-            if ('' === trim($line) || strspn($line, ' ') > $indent) {
-                continue;
-            }
-
-            $column = MarkdownText::listItemColumnOf($line) ?? PHP_INT_MAX;
-
-            if ($column <= $indent) {
-                return $column;
-            }
-
-            $indent = strspn($line, ' ');
-        }
-
-        return null;
+        return $lineStart === $start
+            ? $items->columnFor($start, self::indentColumnsAt($text, $start))
+            : strlen(MarkdownText::withSpacesForTabs(substr($text, $lineStart, $start - $lineStart)));
     }
 }

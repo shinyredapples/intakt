@@ -8,6 +8,7 @@ use Intakt\Core\HandBack\Domain\CodeSpans;
 use Intakt\Core\HandBack\Domain\EvidenceItems;
 use Intakt\Core\HandBack\Domain\FencedBlock;
 use Intakt\Core\HandBack\Domain\MarkdownText;
+use Intakt\Core\HandBack\Domain\OpenListItems;
 use Intakt\Core\HandBack\Domain\ParagraphEnd;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -17,6 +18,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(MarkdownText::class)]
 #[UsesClass(CodeSpans::class)]
 #[UsesClass(FencedBlock::class)]
+#[UsesClass(OpenListItems::class)]
 #[UsesClass(ParagraphEnd::class)]
 final class EvidenceItemsTest extends TestCase
 {

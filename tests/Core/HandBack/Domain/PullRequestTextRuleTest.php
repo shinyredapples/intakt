@@ -10,6 +10,7 @@ use Intakt\Core\HandBack\Domain\CodeSpans;
 use Intakt\Core\HandBack\Domain\EvidenceItems;
 use Intakt\Core\HandBack\Domain\FencedBlock;
 use Intakt\Core\HandBack\Domain\MarkdownText;
+use Intakt\Core\HandBack\Domain\OpenListItems;
 use Intakt\Core\HandBack\Domain\ParagraphEnd;
 use Intakt\Core\HandBack\Domain\PullRequestTextRule;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -24,6 +25,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(MarkdownText::class)]
 #[UsesClass(CodeSpans::class)]
 #[UsesClass(FencedBlock::class)]
+#[UsesClass(OpenListItems::class)]
 #[UsesClass(ParagraphEnd::class)]
 final class PullRequestTextRuleTest extends TestCase
 {
@@ -274,6 +276,27 @@ final class PullRequestTextRuleTest extends TestCase
     public function testAReferenceInAFenceOpenedOnAListMarkerCounts(): void
     {
         self::assertSame([], PullRequestTextRule::judge("## Evidence\n- E1. output", "- ```\n  <!-- E1 -->")->missingItems);
+    }
+
+    #[TestWith(['```'], 'backticks')]
+    #[TestWith(['~~~'], 'tildes')]
+    public function testAReferenceInATabIndentedFenceAtTheContentColumnOfATwoDigitItemCounts(string $fence): void
+    {
+        self::assertSame([], PullRequestTextRule::judge("## Evidence\n- E1. output", "10. Example\n\n\t{$fence}\n\t<!-- E1 -->\n\t{$fence}")->missingItems);
+    }
+
+    public function testAListMarkerShownInsideAClosedFenceStartsNoItemForTheNextFence(): void
+    {
+        $body = "10. Example\n\n    ~~~\n    - prose\n      ~~~\n\n      ~~~\n    <!-- E1 -->\n    ~~~";
+
+        self::assertSame([], PullRequestTextRule::judge("## Evidence\n- E1. output", $body)->missingItems);
+    }
+
+    public function testAListMarkerHiddenInAnHtmlCommentStartsNoItemForTheNextFence(): void
+    {
+        $body = "10. Example\n\n    <!--\n    - hidden\n    -->\n\n      ~~~\n    <!-- E1 -->\n    ~~~";
+
+        self::assertSame([], PullRequestTextRule::judge("## Evidence\n- E1. output", $body)->missingItems);
     }
 
     public function testEachVerdictHasAFixedReason(): void

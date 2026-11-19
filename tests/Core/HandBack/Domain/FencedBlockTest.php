@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\HandBack\Domain;
 
 use Intakt\Core\HandBack\Domain\FencedBlock;
 use Intakt\Core\HandBack\Domain\MarkdownText;
+use Intakt\Core\HandBack\Domain\OpenListItems;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -13,6 +14,7 @@ use PHPUnit\Framework\TestCase;
 
 #[CoversClass(FencedBlock::class)]
 #[UsesClass(MarkdownText::class)]
+#[UsesClass(OpenListItems::class)]
 final class FencedBlockTest extends TestCase
 {
     private const int ONE_MORE_THAN_THE_LARGEST_REGEX_QUANTIFIER = 65_536;
@@ -66,6 +68,11 @@ final class FencedBlockTest extends TestCase
         self::assertSame("```\n        ```\n    after", FencedBlock::at("10. ```\n        ```\n    after", 4));
     }
 
+    public function testATabIndentedFenceInATwoDigitItemClosesAtATabIndentedRun(): void
+    {
+        self::assertSame("\t```\n\tx\n\t```", FencedBlock::at("10. a\n\n\t```\n\tx\n\t```\nafter", 7));
+    }
+
     public function testAFenceOpenedAfterATabbedMarkerHasTheContentColumnOfTheTabStop(): void
     {
         self::assertSame("```\n\tx\n\t```", FencedBlock::at("-\t```\n\tx\n\t```\n\tafter", 2));
@@ -92,6 +99,7 @@ final class FencedBlockTest extends TestCase
     #[TestWith(['   ```', 0], 'three spaces outside any item')]
     #[TestWith(["10. a\n\n    ```", 7], 'at the content column of a two-digit item')]
     #[TestWith(["10. a\n\n       ```", 7], 'three spaces past the content column of a two-digit item')]
+    #[TestWith(["10. a\n\n\t```", 7], 'a tab at the content column of a two-digit item')]
     public function testAFenceIndentedUpToThreeColumnsPastItsContainersContentOpens(string $text, int $start): void
     {
         self::assertTrue(FencedBlock::opensAt($text, $start));
@@ -100,6 +108,7 @@ final class FencedBlockTest extends TestCase
     #[TestWith(['    ```', 0], 'four spaces outside any item')]
     #[TestWith(["- a\n\n      ```", 5], 'four spaces past the content column of an item')]
     #[TestWith(["a\n\n    ```", 3], 'four spaces below a paragraph')]
+    #[TestWith(["\t```", 0], 'a tab outside any item')]
     public function testAFenceIndentedFourColumnsPastItsContainersContentOpensNone(string $text, int $start): void
     {
         self::assertFalse(FencedBlock::opensAt($text, $start));

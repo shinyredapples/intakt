@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\HandBack\Domain;
 use Intakt\Core\HandBack\Domain\CodeSpans;
 use Intakt\Core\HandBack\Domain\FencedBlock;
 use Intakt\Core\HandBack\Domain\MarkdownText;
+use Intakt\Core\HandBack\Domain\OpenListItems;
 use Intakt\Core\HandBack\Domain\ParagraphEnd;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -15,6 +16,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(MarkdownText::class)]
 #[UsesClass(CodeSpans::class)]
 #[UsesClass(FencedBlock::class)]
+#[UsesClass(OpenListItems::class)]
 #[UsesClass(ParagraphEnd::class)]
 final class MarkdownTextTest extends TestCase
 {
@@ -153,5 +155,23 @@ final class MarkdownTextTest extends TestCase
     public function testTabsInTheIndentRunToTheNextTabStop(): void
     {
         self::assertSame(['    a', '    a', "1.  a\tb"], array_map(MarkdownText::withSpacesForTabs(...), ["\ta", "  \ta", "1.\ta\tb"]));
+    }
+
+    // Each line is read once for the list items, so thousands of fences with a marker shown in each still leave the last one in the two-digit item.
+    public function testAFenceAfterThousandsOfFencesInAnItemIsStillInThatItem(): void
+    {
+        $last = "      ~~~\n    <!-- E1 -->\n    ~~~";
+
+        self::assertStringEndsWith($last, MarkdownText::visible("10. Example\n\n".str_repeat("    ~~~\n    - shown\n    ~~~\n\n", 5_000).$last));
+    }
+
+    public function testATabIndentedFenceAtTheContentColumnOfATwoDigitItemShowsItsComment(): void
+    {
+        self::assertSame("10. a\n\n\t```\n\t<!-- x -->\n\t```\n", MarkdownText::visible("10. a\n\n\t```\n\t<!-- x -->\n\t```\n<!-- y -->"));
+    }
+
+    public function testATabIndentedFenceOutsideAnyItemOpensNone(): void
+    {
+        self::assertSame("\t~~~\n\nafter", MarkdownText::visible("\t~~~\n<!-- x -->\nafter"));
     }
 }
