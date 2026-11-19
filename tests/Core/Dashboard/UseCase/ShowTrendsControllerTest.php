@@ -77,10 +77,10 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
         self::assertSame('2 review rounds over every project', $page->filter('.page-head .meta span')->text());
     }
 
-    public function testTheOneReviewerTileReadsNoDataEvenWhenAnEntryMergedNoOtherFinding(): void
+    public function testTheOneReviewerTileReadsNoDataEvenWhenActEntriesHaveMerges(): void
     {
         $this->ledger->startRound('r-1', 'alpha');
-        $this->ledger->judgeFindings('r-1', ['F1' => 'act']);
+        $this->ledger->judgeOneEntryOf('r-1', 'F1', 'F2');
 
         $page = $this->browser->request('GET', '/trends');
 

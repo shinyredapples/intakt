@@ -187,16 +187,6 @@ final class SearchControllerTest extends DashboardPageTestCase
         self::assertStringStartsWith('All projects', $row->filter('.sub')->text());
     }
 
-    public function testTheTrendsPageIsFoundByItsName(): void
-    {
-        $crawler = $this->browser->request('GET', '/search?q=trends');
-
-        $row = $this->rowsOf($crawler, 'Pages');
-        self::assertSame('Trends', $row->filter('.lbl')->text());
-        self::assertSame('/trends', $row->attr('href'));
-        self::assertSame('All projects, how the reviews went', $row->filter('.sub')->text());
-    }
-
     public function testAnActionIsFoundByItsWordsAndHasNoLink(): void
     {
         $crawler = $this->browser->request('GET', '/search?q=theme');

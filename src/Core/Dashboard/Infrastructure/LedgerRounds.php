@@ -6,7 +6,6 @@ namespace Intakt\Core\Dashboard\Infrastructure;
 
 use DateTimeImmutable;
 use Intakt\Core\Ai\Contract\Tier;
-use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Dashboard\Domain\JudgeCall;
 use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
@@ -148,17 +147,6 @@ final class LedgerRounds
         return array_map($this->decidedAsOnThePage(...), array_values($this->started));
     }
 
-    // In the order of each round's first readable start, with cost, tokens and replay mark; never grouped into reviews and priced in one read, because the trends read every round and grouping or pricing each round apart rereads the ledger once per round.
-    /**
-     * @return list<ReviewedRound>
-     */
-    public function everyRound(): array
-    {
-        $costs = $this->costs->costsOf(array_map(static fn (ReviewedRound $round): string => $round->round, array_values($this->started)));
-
-        return array_map(fn (ReviewedRound $round): ReviewedRound => $this->completedAt($round, $costs[$round->round]), array_values($this->started));
-    }
-
     /**
      * @return list<ReviewedRound>
      */
@@ -293,12 +281,7 @@ final class LedgerRounds
 
     private function completed(ReviewedRound $round): ReviewedRound
     {
-        return $this->completedAt($round, $this->costs->costOf($round->round));
-    }
-
-    private function completedAt(ReviewedRound $round, Cost $cost): ReviewedRound
-    {
-        return $this->decidedAsOnThePage($round->withTokens($this->tokens->ofRound($round->round))->withCost($cost)->markedAs($this->markOf($round)));
+        return $this->decidedAsOnThePage($round->withTokens($this->tokens->ofRound($round->round))->withCost($this->costs->costOf($round->round))->markedAs($this->markOf($round)));
     }
 
     // The one place that decides a round's outcomes, findings, ending and state, so the review list and the review page never decide them apart.

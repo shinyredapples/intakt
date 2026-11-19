@@ -71,6 +71,12 @@ final readonly class ReviewTrends
         return count(array_filter($this->actFindingsOf($known), static fn (RoundFinding $finding): bool => in_array($finding->severity, self::SERIOUS, true)));
     }
 
+    // Null until the ledger records which reviewer reported each finding: the judge also merges two findings of one reviewer at one place, so a merged entry proves no second reviewer, and D1 of #2858 rules out an estimate.
+    public function caughtByOneReviewerOnlyPercent(): ?int
+    {
+        return null;
+    }
+
     public function medianSecondsToVerdict(): ?int
     {
         $seconds = array_map(static fn (ReviewedRound $round): int => ($round->judgedAt?->getTimestamp() ?? $round->startedAt->getTimestamp()) - $round->startedAt->getTimestamp(), $this->judgedRounds());
