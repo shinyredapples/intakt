@@ -26,7 +26,7 @@ final readonly class BuildTaskOutcome
 
     public function parked(): bool
     {
-        return null !== $this->question;
+        return $this->question instanceof BuildQuestion;
     }
 
     /**
