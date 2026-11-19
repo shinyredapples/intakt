@@ -40,8 +40,7 @@ final class HighlightsWorkflowTest extends TestCase
     {
         $jobs = $this->workflow()['jobs'];
 
-        // The build job may read Pages, issues and pull requests because jekyll-build-pages and bin/journey-record need them.
-        // Only the publish job may write, because it alone deploys the site.
+        // Because jekyll-build-pages and bin/journey-record read Pages, issues and pull requests, the build job may read them; only publish may write.
         self::assertSame(['contents' => 'read', 'pages' => 'read', 'issues' => 'read', 'pull-requests' => 'read'], $jobs['build']['permissions'] ?? null);
         self::assertSame(['pages' => 'write', 'id-token' => 'write'], $jobs['publish']['permissions'] ?? null);
     }
