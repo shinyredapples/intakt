@@ -49,7 +49,6 @@ abstract class DashboardPageTestCase extends WebTestCase
         $kernel = self::createKernel();
         $kernel->boot();
         $container = $kernel->getContainer()->get('test.service_container');
-        assert($container instanceof TestContainer);
         $clock = $container->get(ClockInterface::class);
         assert($clock instanceof PinnableClock);
         $clock->pinAt('2026-10-28T12:00:00+00:00');
@@ -72,10 +71,9 @@ abstract class DashboardPageTestCase extends WebTestCase
      */
     protected static function roundLockFiles(): array
     {
-        $directory = self::getContainer()->getParameter('kernel.cache_dir');
-        assert(is_string($directory));
+        $files = glob(self::getContainer()->getParameter('kernel.cache_dir').'/locks/sf.dashboard-round-*');
 
-        return glob($directory.'/locks/sf.dashboard-round-*') ?: [];
+        return false === $files ? [] : $files;
     }
 
     private function serveTheSameFactsIn(TestContainer $container): void

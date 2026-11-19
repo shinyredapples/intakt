@@ -28,7 +28,6 @@ use PHPUnit\Framework\MockObject\MockObject;
 use Psr\Log\LogLevel;
 use RuntimeException;
 use stdClass;
-use Symfony\Bundle\FrameworkBundle\Test\TestContainer;
 use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Session\FlashBagAwareSessionInterface;
@@ -254,7 +253,7 @@ final class StartReviewControllerTest extends DashboardPageTestCase
     public function testTwoPressesForTheSameRoundArrivingTogetherStartOneRoundAndRefuseTheOther(): void
     {
         $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
-        $commands = $this->createStub(MessageBusInterface::class);
+        $commands = self::createStub(MessageBusInterface::class);
         self::getContainer()->set('command.bus', $commands);
         $token = $this->token();
         $presses = 0;
@@ -263,7 +262,9 @@ final class StartReviewControllerTest extends DashboardPageTestCase
             if (1 === ++$presses) {
                 $secondLines = $this->pressInAnotherWorker($commands, '/reviews/round-1/start', ['_token' => $token, 'number' => '2']);
             }
-            $this->ledger->startRecordedRoundOf($command->round->change, 'round-'.$command->round->number.'-'.$presses, $command->round->number);
+            $number = $command->round->number;
+            self::assertIsInt($number);
+            $this->ledger->startRecordedRoundOf($command->round->change, 'round-'.$number.'-'.$presses, $number);
 
             return new Envelope(new stdClass(), [new HandledStamp('round-2', 'handler')]);
         });
@@ -443,9 +444,7 @@ final class StartReviewControllerTest extends DashboardPageTestCase
     private function pressInAnotherWorker(MessageBusInterface $commands, string $path, array $form): array
     {
         $kernel = $this->anotherWorker();
-        $container = $kernel->getContainer()->get('test.service_container');
-        assert($container instanceof TestContainer);
-        $container->set('command.bus', $commands);
+        $kernel->getContainer()->get('test.service_container')->set('command.bus', $commands);
         $request = Request::create('http://localhost:7780'.$path, 'POST', $form);
         foreach ($this->browser->getCookieJar()->all() as $cookie) {
             $request->cookies->set($cookie->getName(), $cookie->getValue());
