@@ -210,7 +210,11 @@ final readonly class RunBuildJob
     private function asked(string $text, string $log): BuildJobOutcome
     {
         try {
-            return new BuildJobOutcome(BuildVerdict::Asked, log: $log, question: BuildQuestion::fromHandedBack($text));
+            return new BuildJobOutcome(
+                BuildVerdict::Asked,
+                log: $log,
+                question: BuildQuestion::fromHandedBack($text),
+            );
         } catch (QuestionRefused $refusal) {
             return new BuildJobOutcome(BuildVerdict::QuestionRefused, log: $log.'question refused: '.$refusal->getMessage()."\n");
         }
