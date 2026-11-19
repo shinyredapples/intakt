@@ -45,37 +45,32 @@ final readonly class ParkedTasks
                 $recordParking();
             });
         } catch (Exception $failure) {
-            $this->forgetWhatTheFailedParkingWrote($outermost);
+            if ($outermost) {
+                $this->rollBackWhatTheRefusedCommitLeftOpen();
+            }
+
+            // The appended event's record stays managed under a position the rollback freed, so the ledger's next append would collide with it.
+            $this->registry->resetManager();
 
             throw TaskNotParked::for($request, $failure);
         }
     }
 
-    // The cleanup's own failure is not reported, because the parking's failure is the one the run records and a database error may quote the row.
-    private function forgetWhatTheFailedParkingWrote(bool $outermost): void
-    {
-        try {
-            if ($outermost) {
-                $this->rollBackWhatTheRefusedCommitLeftOpen();
-            }
-        } catch (Exception|PDOException) {
-        } finally {
-            // The appended event's record stays managed under a position the rollback freed, so the ledger's next append would collide with it.
-            $this->registry->resetManager();
-        }
-    }
-
     // SQLite keeps the transaction open when a reader refuses its COMMIT, while DBAL counts it as closed (upstream/dbal-failed-commit-leaves-transaction-open/), so the new row would stay visible on this connection and the ledger's next write would join it.
+    // A failure here is not reported, because the parking's failure is the one the run records and a database error may quote the row.
     private function rollBackWhatTheRefusedCommitLeftOpen(): void
     {
         if (!$this->connection->isConnected()) {
             return;
         }
 
-        $native = $this->connection->getNativeConnection();
+        try {
+            $native = $this->connection->getNativeConnection();
 
-        if ($native instanceof PDO && $native->inTransaction()) {
-            $native->rollBack();
+            if ($native instanceof PDO && $native->inTransaction()) {
+                $native->rollBack();
+            }
+        } catch (Exception|PDOException) {
         }
     }
 
