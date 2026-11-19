@@ -59,6 +59,14 @@ final class VerdictTest extends TestCase
         ]);
     }
 
+    public function testAReviewersBlockedVerdictOfOnlyP3FindingsMayCountAsApprovalBecauseItIsRecordedAsChanges(): void
+    {
+        $blocked = new Verdict(Decision::Blocked, [new Finding('A', Severity::P3, null, null, null, 'Text.', FixableBy::Builder, false, null, null)], [], []);
+        $withAP2 = new Verdict(Decision::Blocked, [new Finding('A', Severity::P2, null, null, null, 'Text.', FixableBy::Builder, false, null, null)], [], []);
+
+        self::assertSame([true, false], [$blocked->mayCountAsApproval(), $withAP2->mayCountAsApproval()]);
+    }
+
     private function changes(Severity ...$severities): Verdict
     {
         return new Verdict(Decision::Changes, array_map(static fn (Severity $severity): Finding => new Finding('A', $severity, null, null, null, 'Text.', FixableBy::Builder, false, null, null), array_values($severities)), [], []);

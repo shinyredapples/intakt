@@ -68,12 +68,14 @@ final readonly class Verdict
         return Decision::Blocked === $this->verdict && array_any($this->findings, static fn (Finding $finding): bool => self::REVIEWER_STOPPED === $finding->id);
     }
 
-    // An approval, or a changes verdict of P3 findings only, which the quorum counts as approval when the judge defers or rejects them all; the guards that refuse an approval refuse both, because the judge's marks come only after them.
+    // An approval, or a changes verdict of P3 findings only, which the quorum counts as approval when the judge defers or rejects them all; the guards that refuse an approval refuse both, because the judge's marks come only after them. It reads the verdict as recorded, because a reviewer's blocked with findings is recorded as changes after the guards ran.
     #[Ignore]
     public function mayCountAsApproval(): bool
     {
-        return Decision::Approve === $this->verdict
-            || (Decision::Changes === $this->verdict && [] !== $this->findings && !$this->isFailedReview() && array_all($this->findings, static fn (Finding $finding): bool => Severity::P3 === $finding->severity));
+        $recorded = $this->asRecorded();
+
+        return Decision::Approve === $recorded->verdict
+            || (Decision::Changes === $recorded->verdict && [] !== $recorded->findings && !$recorded->isFailedReview() && array_all($recorded->findings, static fn (Finding $finding): bool => Severity::P3 === $finding->severity));
     }
 
     // A verdict that withholds approval names at least one finding, so a changes or blocked verdict that names none is not a valid verdict.
