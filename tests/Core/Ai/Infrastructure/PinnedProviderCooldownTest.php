@@ -208,7 +208,7 @@ final class PinnedProviderCooldownTest extends TestCase
 
         $wait = $this->waitAfterEveryAccountIsOut($platform);
 
-        self::assertSame([118, 119, $this->pinned->secondsUntilFree($this->deepinfra(Account::DEFAULT))], [$wait, $this->pinned->secondsUntilFree($this->deepinfra('team')) + 1, $accounts->endOf($default)?->getTimestamp() - $this->clock->now()->getTimestamp()]);
+        self::assertSame([118, 118, $this->clock->now()->getTimestamp() + $this->pinned->secondsUntilFree($this->deepinfra(Account::DEFAULT))], [$wait, $this->pinned->secondsUntilFree($this->deepinfra('team')), $accounts->endOf($default)?->getTimestamp()]);
     }
 
     public function testA429FromAPinnedProviderWritesTheAccountWindowBeforeThePinnedWindow(): void
