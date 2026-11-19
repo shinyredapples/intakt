@@ -838,6 +838,20 @@ final class LedgerRoundsTest extends TestCase
         self::assertSame(['x' => ['F1', 'F2'], 'y' => []], $review?->rounds[0]->findingsByReviewer);
     }
 
+    public function testARoundWhoseSecondReviewerHasNoReadableRecordReadsAsUnrecorded(): void
+    {
+        $review = $this->reviewOf('r1', $this->event(LedgerEventKind::ReviewStarted, self::START), $this->approved('x'), $this->approved('y'), $this->reported('x', ['F1']), $this->event(LedgerEventKind::ReviewerFindingsRecorded, '{"round":"r1","reviewer":"y","findings":[7]}'), $this->judged());
+
+        self::assertNull($review?->rounds[0]->findingsByReviewer);
+    }
+
+    public function testARoundWhereEveryReviewerWithAVerdictHasARecordIsReadAsRecorded(): void
+    {
+        $review = $this->reviewOf('r1', $this->event(LedgerEventKind::ReviewStarted, self::START), $this->approved('x'), $this->approved('y'), $this->reported('x', ['F1']), $this->reported('y', []), $this->judged());
+
+        self::assertSame(['x' => ['F1'], 'y' => []], $review?->rounds[0]->findingsByReviewer);
+    }
+
     public function testARoundWithoutARecordOfWhoReportedWhatReadsAsUnrecordedNotAsEmpty(): void
     {
         $review = $this->reviewOf('r1', $this->event(LedgerEventKind::ReviewStarted, self::START), $this->approved('x'), $this->judged());

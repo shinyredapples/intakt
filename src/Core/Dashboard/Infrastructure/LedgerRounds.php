@@ -317,12 +317,19 @@ final class LedgerRounds
         };
     }
 
-    // Left unrecorded without a row, because a round completed before the rows were written has no record, which is not a record of no findings.
+    // Left unrecorded unless every reviewer with a verdict has a readable row, because a round completed before the rows were written, or one whose row cannot be read, has no full record, and a partial one would turn a finding two reviewers reported into a one-reviewer catch.
     private function withReporters(ReviewedRound $round): ReviewedRound
     {
         $reported = $this->findingsByReviewer[$round->round] ?? null;
 
-        return null === $reported ? $round : $round->withFindingsByReviewer($reported);
+        if (null === $reported) {
+            return $round;
+        }
+
+        $answered = array_filter($round->outcomes, static fn (ReviewerOutcome $outcome): bool => ReviewerProgress::Answered === $outcome->progress);
+        $unrecorded = array_filter($answered, static fn (ReviewerOutcome $outcome): bool => !array_key_exists($outcome->id, $reported));
+
+        return [] === $unrecorded ? $round->withFindingsByReviewer($reported) : $round;
     }
 
     private function endedOrRunning(ReviewedRound $round): ReviewedRound
