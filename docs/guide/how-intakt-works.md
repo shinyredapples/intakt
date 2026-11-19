@@ -100,9 +100,11 @@ flowchart TD
 
 | The change... | Who approves it |
 |---|---|
-| passes the mechanical checks, the Security engineer's security review and penetration test, and every reviewer with a blocking vote classes it as tightening or neutral on the current head (this includes new checks, edited tests of a check with the proof that it got no weaker, and the start-up scripts; a CI edit or a change to the agents' instructions that no check covers still comes to you) | Intakt approves it itself, and lists it on the dashboard for a week |
+| passes the mechanical checks, the Security engineer's security review and penetration test, and every reviewer with a blocking vote classes it as tightening or neutral on the current head (this includes new checks, edited tests of a check with the proof that it got no weaker, and the start-up scripts; a CI edit or a change to the agents' instructions that no check covers still comes to you) | Intakt approves it itself, and lists it on the dashboard for a week (only once automatic approval is switched on for the project; until then it still comes to you, with Intakt's answer) |
 | changes how Intakt approves (the list of protected files, the limits, the checks that apply them, the Security engineer's instructions, the known bad changes), or touches secrets and permissions (how secrets are kept or scanned, a workflow that reads a secret, more workflow permissions, new triggers, other machines) | always you |
 | fails a check, the security review or penetration test finds a way around it, or a reviewer with a blocking vote classes it as loosening or gives it no class on the current head | you |
+
+If either Security engineer session cannot run, the decision waits, whichever row applies and whether or not automatic approval is on, until it runs. The known bad changes Intakt tries on a schedule resume after an outage too, and each must still reach you, or automatic approval turns off (before it is switched on, it stays off).
 
 You never approve a merge whose checks are failing: Intakt asks you to approve the merge only once the checks are green and the review panel has approved. (Planned:) A decision only you can make, such as a new package from an outside company, is asked as soon as it shows up, so you can answer while the checks are still being fixed.
 
@@ -163,7 +165,7 @@ It also avoids waste on purpose: it keeps descriptions and reviews short, doesn'
 | **Main** | the official version of your project |
 | **Merge** | adding a pull request's change to main |
 | **Checks / CI** | the automatic tests that run on every change |
-| **Review** | a reviewer's verdict: approve, changes needed with a list of findings, or blocked (held for a person) |
+| **Review** | a reviewer's verdict: approve, or changes needed with a list of findings; blocked (held for a person) only when Intakt holds the review back, and a reviewer that answers blocked with findings counts as changes |
 | **Protected files** | the project's rules: the checks that judge the code, the CI setup, the agents' instructions |
 | **Hold** | a pause that lifts by itself when its reason is gone |
 | **Priority** | `urgent`, `high`, `normal` or `low`, set as a label on the task |
