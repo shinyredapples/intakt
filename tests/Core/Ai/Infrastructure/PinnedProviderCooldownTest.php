@@ -25,6 +25,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Cache\CacheItemInterface;
 use Psr\Log\NullLogger;
+use RuntimeException;
 use Symfony\AI\Platform\Exception\RateLimitExceededException;
 use Symfony\AI\Platform\PlatformInterface;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
@@ -104,7 +105,7 @@ final class PinnedProviderCooldownTest extends TestCase
         self::assertSame(['second', 0, 'first', 1], [$during, $requestsDuring, $after, $requests]);
     }
 
-    public function testAPinOnOneModelLeavesAnotherRouterProviderOnTheSameAccountFree(): void
+    public function testThePinStoreAloneLeavesAnotherRouterProviderOnTheSameAccountFree(): void
     {
         $this->pins->coolDown($this->deepinfra(Account::DEFAULT), 300);
 
@@ -168,25 +169,52 @@ final class PinnedProviderCooldownTest extends TestCase
 
     /**
      * @param non-empty-string $model
+     * @param non-empty-list<string> $tails
      */
     #[DataProvider('modelsThatPinNothing')]
-    public function testAModelIdOutsideTheRouterShapeCoolsNoPin(string $model, string $tail): void
+    public function testAModelIdOutsideTheRouterShapeCoolsNoPin(string $model, array $tails): void
     {
         $answer = $this->accounts(new FailingWhenRead(new RateLimitExceededException(120)), $this->answering('second'))->invoke($model, 'Review.');
 
         $this->failureOf(static fn (): string => $answer->asText());
 
-        self::assertSame(0, $this->pins->secondsUntilFree($this->pinned(Account::DEFAULT, $tail)));
+        self::assertSame(array_fill(0, count($tails), 0), array_map(fn (string $tail): int => $this->pins->secondsUntilFree($this->pinned(Account::DEFAULT, $tail)), $tails));
     }
 
     /**
-     * @return iterable<string, array{non-empty-string, string}>
+     * @return iterable<string, array{non-empty-string, non-empty-list<string>}>
      */
     public static function modelsThatPinNothing(): iterable
     {
-        yield 'a trailing newline' => ["owner/model:router\n", "router\n"];
-        yield 'a tag without an owner' => ['llama3:8b', '8b'];
-        yield 'a fine-tune id' => ['ft:gpt-4o-mini:org:custom:id', 'id'];
+        yield 'a trailing newline' => ["owner/model:router\n", ['router', "router\n"]];
+        yield 'a newline before the colon' => ["owner/model\n:router", ['router']];
+        yield 'a nested owner' => ['owner/group/model:router', ['router']];
+        yield 'a tag without an owner' => ['llama3:8b', ['8b']];
+        yield 'a fine-tune id' => ['ft:gpt-4o-mini:org:custom:id', ['id']];
+    }
+
+    // Forced order: the pin store's cache fails while saving, so the pin is not saved; the account still cools for the 429's wait and the call reports that wait instead of the store's error.
+    public function testAPinStoreThatFailsWhileSavingCostsTheAccountNeitherItsCooldownNorThe429(): void
+    {
+        $pool = new class extends ArrayAdapter {
+            #[Override]
+            public function save(CacheItemInterface $item): bool
+            {
+                if (str_starts_with($item->getKey(), 'pinned-provider-cooldown-')) {
+                    throw new RuntimeException('The disk is full.');
+                }
+
+                return parent::save($item);
+            }
+        };
+        $accounts = new AccountWindowsOnAClock($this->clock, [Provider::OpenAiCompatible->value => [Account::DEFAULT]]);
+        $pins = new PinnedProviderCooldownWindows($pool, $this->clock, new LockFactory(new InMemoryStore()));
+        $platform = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $this->answering(static fn (): never => throw new RateLimitExceededException(120))], $accounts, $this->clock, new NullLogger(), $pins);
+
+        $out = $this->failureOf(static fn (): object => $platform->invoke(self::PINNED, 'Review.'));
+
+        self::assertInstanceOf(EveryAccountCoolingDown::class, $out);
+        self::assertSame([120, 120, 0], [$out->secondsUntilAnAccountIsFree, $accounts->secondsUntilFree(new Account(Provider::OpenAiCompatible, Account::DEFAULT)), $pins->secondsUntilFree($this->deepinfra(Account::DEFAULT))]);
     }
 
     private function accounts(PlatformInterface $default, PlatformInterface $team): AccountFailoverPlatform

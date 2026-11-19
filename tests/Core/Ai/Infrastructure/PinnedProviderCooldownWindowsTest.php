@@ -14,6 +14,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Cache\CacheItemInterface;
 use Psr\Cache\CacheItemPoolInterface;
+use RuntimeException;
 use Symfony\Component\Cache\Adapter\ArrayAdapter;
 use Symfony\Component\Cache\Adapter\FilesystemAdapter;
 use Symfony\Component\Clock\MockClock;
@@ -252,6 +253,22 @@ final class PinnedProviderCooldownWindowsTest extends TestCase
         }
 
         self::assertTrue($this->locks->createLock('pinned-provider-cooldown-'.hash('xxh128', $this->deepinfra()->key()))->acquire());
+    }
+
+    public function testACacheThatFailsWhileSavingIsReportedAsAWindowNotSavedWithItsCause(): void
+    {
+        $pool = $this->pool;
+        $failing = self::createStub(CacheItemPoolInterface::class);
+        $failing->method('getItem')->willReturnCallback($pool->getItem(...));
+        $cause = new RuntimeException('The disk is full.');
+        $failing->method('save')->willThrowException($cause);
+
+        try {
+            new PinnedProviderCooldownWindows($failing, $this->clock, $this->locks)->coolDown($this->deepinfra(), 60);
+            self::fail('The window was expected not to be saved.');
+        } catch (PinnedProviderCooldownNotSaved $notSaved) {
+            self::assertSame($cause, $notSaved->getPrevious());
+        }
     }
 
     private function cooldowns(): PinnedProviderCooldownWindows

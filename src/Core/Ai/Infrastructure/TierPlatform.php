@@ -9,7 +9,7 @@ use Intakt\Core\Ai\Contract\AiServices;
 use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
 use Intakt\Core\Ai\Contract\EveryKeyRejected;
 use Intakt\Core\Ai\Contract\EveryProviderOut;
-use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Ai\Contract\ModelWaits;
 use Intakt\Core\Ai\Contract\ProviderOutage;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
@@ -39,7 +39,7 @@ final readonly class TierPlatform implements TierInvoker
     ) {
     }
 
-    // Decided by the configuration and the cooldowns alone, never by a failed call, because a request that fails on purpose would otherwise let its sender pick the reviewer.
+    // Decided by the configuration and the cooldowns alone (the account windows and a model's pinned router provider), never by a failed call, because a request that fails on purpose would otherwise let its sender pick the reviewer.
     #[Override]
     public function answering(string $project, Tier $tier): ResolvedModel
     {
@@ -51,8 +51,10 @@ final readonly class TierPlatform implements TierInvoker
         $outages = [];
 
         foreach ([$own, ...$this->resolver->substitutes($project, $tier)] as $model) {
-            $outages[$model->provider->value] ??= $this->outageOf($model->provider);
-            if (!$outages[$model->provider->value] instanceof ProviderOutage) {
+            // Per model, because a model that pins a router provider can cool while another model of the same provider is free.
+            $key = $model->provider->value."\n".$model->model;
+            $outages[$key] ??= $this->outageOf($model);
+            if (!$outages[$key] instanceof ProviderOutage) {
                 $this->recordSwitch($own, $model);
 
                 return $model;
@@ -95,7 +97,7 @@ final readonly class TierPlatform implements TierInvoker
             throw new EveryKeyRejected($own->provider);
         }
 
-        $wait = $this->cooldowns->secondsUntilAnAccountIsFree($own->provider);
+        $wait = $this->secondsUntilFree($own);
         if (0 < $wait) {
             throw new EveryAccountCoolingDown($own->provider, $wait);
         }
@@ -104,8 +106,9 @@ final readonly class TierPlatform implements TierInvoker
     }
 
     // One read of the cooldowns decides both whether the provider answers and the reason it does not, so a cooldown that ends in between never gives a wait of 0 s. Ends blocked even when every substitute is disabled, because the owner named a way around the outage.
-    private function outageOf(Provider $provider): ?ProviderOutage
+    private function outageOf(ResolvedModel $model): ?ProviderOutage
     {
+        $provider = $model->provider;
         if ($this->resolver->isDisabled($provider)) {
             return ProviderOutage::disabled($provider);
         }
@@ -114,9 +117,18 @@ final readonly class TierPlatform implements TierInvoker
             return ProviderOutage::keysRejected($provider);
         }
 
-        $wait = $this->cooldowns->secondsUntilAnAccountIsFree($provider);
+        $wait = $this->secondsUntilFree($model);
 
         return 0 < $wait ? ProviderOutage::coolingDown($provider, $wait) : null;
+    }
+
+    // The provider's own platform reads each account's window together with the model's pinned router provider (AccountFailoverPlatform), so a pin that outlasts its account window still keeps the model out; the account windows alone stay the floor for a platform that cannot tell.
+    private function secondsUntilFree(ResolvedModel $model): int
+    {
+        $wait = $this->cooldowns->secondsUntilAnAccountIsFree($model->provider);
+        $platform = $this->platforms->has($model->provider->value) ? $this->platforms->get($model->provider->value) : null;
+
+        return $platform instanceof ModelWaits ? max($wait, $platform->secondsUntilModelIsFree($model->model)) : $wait;
     }
 
     private function recordSwitch(ResolvedModel $own, ResolvedModel $answering): void

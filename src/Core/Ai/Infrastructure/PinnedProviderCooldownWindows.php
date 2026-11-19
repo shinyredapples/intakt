@@ -15,6 +15,7 @@ use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Lock\LockFactory;
+use Throwable;
 
 // The end of each window in the cache every worker shares, judged against the clock, so all reviewers wait for the same pinned provider together.
 #[AsAlias(PinnedProviderCooldowns::class)]
@@ -41,21 +42,15 @@ final readonly class PinnedProviderCooldownWindows implements PinnedProviderCool
         $key = $this->keyOf($provider);
         $until = $this->clock->now()->modify(sprintf('+%d seconds', min(AccountCooldowns::LONGEST_SECONDS, $seconds)));
 
-        // Under the lock every worker takes, because two answers in flight could otherwise replace a later end with an earlier one.
-        $lock = $this->locks->createLock($key);
-        $lock->acquire(true);
-
         try {
-            $running = $this->endOf($key);
-            if ($running instanceof DateTimeImmutable && $running >= $until) {
-                return;
-            }
+            $saved = $this->extend($key, $until);
+            // Boundary: a lock or cache that fails is a window not saved, so the caller handles one exception and still cools the account and passes on the provider's 429.
+        } catch (Throwable $failure) {
+            throw new PinnedProviderCooldownNotSaved($provider, $failure);
+        }
 
-            if (!$this->pool->save($this->pool->getItem($key)->set($until))) {
-                throw new PinnedProviderCooldownNotSaved($provider);
-            }
-        } finally {
-            $lock->release();
+        if (!$saved) {
+            throw new PinnedProviderCooldownNotSaved($provider);
         }
     }
 
@@ -80,6 +75,25 @@ final readonly class PinnedProviderCooldownWindows implements PinnedProviderCool
         $left = ($until->getTimestamp() - $now->getTimestamp()) * self::MICROSECONDS + (int) $until->format('u') - (int) $now->format('u');
 
         return 0 < $left ? intdiv($left + self::MICROSECONDS - 1, self::MICROSECONDS) : 0;
+    }
+
+    // False when the cache refused the write; true when it saved the window or a running window already ends as late.
+    private function extend(string $key, DateTimeImmutable $until): bool
+    {
+        // Under the lock every worker takes, because two answers in flight could otherwise replace a later end with an earlier one.
+        $lock = $this->locks->createLock($key);
+        $lock->acquire(true);
+
+        try {
+            $running = $this->endOf($key);
+            if ($running instanceof DateTimeImmutable && $running >= $until) {
+                return true;
+            }
+
+            return $this->pool->save($this->pool->getItem($key)->set($until));
+        } finally {
+            $lock->release();
+        }
     }
 
     private function endOf(string $key): ?DateTimeImmutable
