@@ -528,9 +528,8 @@ final class StatusReadModelTest extends TestCase
         $build = ['properties', 'projects', 'items', 'properties', 'lanes', 'properties', 'build', 'items', 'properties'];
 
         self::assertSame(array_column(BuildStep::cases(), 'value'), $this->schemaAt(...$build, ...['step', 'enum']));
-        // Without `asked`: no step is written with it yet, and the published schema names it together with the change that writes it.
-        $written = array_filter(BuildStepOutcome::cases(), static fn (BuildStepOutcome $outcome): bool => BuildStepOutcome::Asked !== $outcome);
-        self::assertSame(array_column(array_values($written), 'value'), $this->schemaAt(...$build, ...['outcome', 'enum']));
+        // The schema is one case behind, because no step is written as asked yet and the published schema names it with the change that writes it.
+        self::assertSame(array_column(BuildStepOutcome::cases(), 'value'), [...(array) $this->schemaAt(...$build, ...['outcome', 'enum']), BuildStepOutcome::Asked->value]);
     }
 
     private function schemaAt(string ...$path): mixed

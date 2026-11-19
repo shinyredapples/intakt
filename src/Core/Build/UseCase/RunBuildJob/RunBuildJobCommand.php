@@ -87,8 +87,7 @@ final readonly class RunBuildJobCommand
         return Command::SUCCESS;
     }
 
-    // The builder wrote the text, so a line break or a terminal control in it could forge a line of its own, such as a second recommendation.
-    // Each such character is printed as its code point and a backslash is doubled, so two different choices never print the same and the reader sees which one is recommended.
+    // The builder wrote the text, so a line break or control could forge a line; each is printed as its code point and a backslash doubled, so two different choices never print the same.
     private function oneLine(string $text): string
     {
         $visible = preg_replace_callback(

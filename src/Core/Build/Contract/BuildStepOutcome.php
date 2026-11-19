@@ -8,6 +8,6 @@ enum BuildStepOutcome: string
 {
     case Passed = 'passed';
     case Failed = 'failed';
-    // The build job ended with a question for the maintainer instead of a change.
+    // Neither passed nor failed, because a build job that ends with a question waits for a decision instead of handing back a change.
     case Asked = 'asked';
 }

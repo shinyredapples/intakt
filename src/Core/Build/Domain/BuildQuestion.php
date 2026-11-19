@@ -67,8 +67,7 @@ final readonly class BuildQuestion
         return $data instanceof stdClass ? get_object_vars($data) : throw QuestionRefused::notJson();
     }
 
-    // PHP decodes no object with a key that starts with NUL, and an unknown key is ignored, never a reason to refuse:
-    // such a key gets another first character, which leaves it unknown. Every string of the text is matched whole, so a key is never looked for inside a value.
+    // A key that starts with NUL gets another first character, because PHP decodes no object with one and an unknown key is ignored, never refused; every string is matched whole, so no value is changed.
     private static function withDecodableKeys(string $text): string
     {
         return preg_replace_callback(
