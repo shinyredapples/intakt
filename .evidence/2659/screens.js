@@ -39,8 +39,32 @@ const SIZES = [{ width: 1440, height: 900 }, { width: 1920, height: 1080 }, { wi
       await page.addScriptTag({ path: axe });
       const violations = await page.evaluate(async () => (await axe.run(document, { resultTypes: ['violations'] })).violations.map((v) => ({ id: v.id, impact: v.impact, help: v.help, nodes: v.nodes.map((n) => n.target.join(' ')) })));
       const floors = size.width === 390 ? await page.evaluate(measureFloors, { text: 15, target: 44 }) : [];
-      console.log(`board (six projects) ${theme} ${size.width}: ${seen}`);
+      // The board scrolls sideways inside itself; the document must stay within the viewport, also with the board scrolled to its far edge (Done folded past it).
+      const overflow = await page.evaluate(() => {
+        const board = document.querySelector('.board');
+        const doc = () => document.documentElement.scrollWidth;
+        const before = doc();
+        board.scrollLeft = board.scrollWidth;
+        return { boardScrolls: board.scrollWidth > board.clientWidth, before, atEdge: doc(), viewport: window.innerWidth };
+      });
+      if (overflow.before > overflow.viewport || overflow.atEdge > overflow.viewport) errors.push(`page overflows: ${JSON.stringify(overflow)}`);
+      console.log(`board (six projects) ${theme} ${size.width}: ${seen}; overflow ${JSON.stringify(overflow)}`);
+      await page.evaluate(() => { document.querySelector('.board').scrollLeft = 0; });
+      // The first column holding cards is brought into view, so the shot shows the review cards and not only empty columns.
+      await page.evaluate(() => { const col = [...document.querySelectorAll('.board .col')].find((c) => c.querySelector('.card')); if (col) col.scrollIntoView({ inline: 'center', block: 'nearest' }); });
       await page.screenshot({ path: path.join(__dirname, `board-six-${theme}-${size.width}.png`), fullPage: size.width !== 390 });
+      if (size.width !== 390) {
+        const filterSeen = await page.evaluate(() => {
+          const filter = document.querySelector('#projfilter');
+          const name = filter.options[1].value;
+          filter.value = name;
+          filter.dispatchEvent(new Event('change', { bubbles: true }));
+          const cards = [...document.querySelectorAll('.card[data-project]')];
+          return `selected "${name}": ${cards.filter((c) => c.offsetParent !== null).length} of ${cards.length} cards shown`;
+        });
+        console.log(`board (six projects) ${theme} ${size.width} filter ${filterSeen}`);
+        await page.screenshot({ path: path.join(__dirname, `board-six-filtered-${theme}-${size.width}.png`), fullPage: true });
+      }
       runs.push({ page: 'board (six projects)', theme, width: size.width, errors, violations, floors });
       await context.close();
     }
