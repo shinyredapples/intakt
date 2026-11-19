@@ -12,6 +12,17 @@ Thank you for looking. Intakt is built mostly by its own loop: AI agents build t
 
 Open an issue. The guide [writing a good task](docs/guide/writing-a-good-task.md) shows what makes an issue easy to act on: what should be different, how to tell it is done, and the evidence that shows it. A bug report with the smallest steps that reproduce it is the most useful thing you can send.
 
+## How your issue or pull request is handled
+
+People with write access to the repository decide what gets built. Opening an issue or a pull request asks them; it does not start any work by itself.
+
+- **An issue is built only after someone with write access labels it `ready`** (the label this repository uses; Intakt's own default is `intakt`). If someone without write access edits it after that, it waits until a person with write access edits or confirms it again.
+- **Labels count only when someone with write access added them.** A label you add, or one added by an issue template or a workflow, has no effect on what Intakt does. Bot accounts never steer, even with write access, except Intakt's own and its maintainer agent's, and those two only while they have write access themselves.
+- **A pull request from outside is reviewed by Intakt's review panel after a maintainer labels it.** The findings come back as one comment. For now a maintainer merges it by hand. Having Intakt rework it (the `take-over` label) is planned.
+- **CI does not run on a pull request from a fork:** every CI job runs only for branches of this repository and for main. Run `bin/check` yourself before you open it (see below).
+
+The full rules are in [steering Intakt](docs/guide/steering-intakt.md).
+
 ## Working on the code
 
 ```mermaid
