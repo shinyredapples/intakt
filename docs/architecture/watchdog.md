@@ -18,7 +18,7 @@
 
 ## Signatures
 
-The signature is read from the header git uses for the repository's object format: `gpgsig` for a 40-character commit name (SHA-1), `gpgsig-sha256` for a 64-character one (SHA-256). It is checked by `ssh-keygen -Y verify` (namespace `git`, at most 60 seconds) against an allowed-signers file made of the owner's keys alone, over the commit text without any signature header, as git signs it. `git log --show-signature` is not used: the hardened git call (`HardenedGit`) switches git's signature programs off on purpose. An exit of `ssh-keygen` other than success or refusal (not installed, killed, timed out) ends in `MainNotRead`, never in a verdict, so a missing program cannot read as "unknown key". Tests need `ssh-keygen` and do not skip without it.
+The signature is read from the header git uses for the repository's object format: `gpgsig` for a 40-character commit name (SHA-1), `gpgsig-sha256` for a 64-character one (SHA-256). The headers are read line by line (a line that starts with a space continues the header before it), so a folded header of any length, such as a long `mergetag`, does not hide the signature. It is checked by `ssh-keygen -Y verify` (namespace `git`, at most 60 seconds) against an allowed-signers file made of the owner's keys alone, over the commit text without any signature header, as git signs it. `git log --show-signature` is not used: the hardened git call (`HardenedGit`) switches git's signature programs off on purpose. An exit of `ssh-keygen` other than success or refusal (not installed, killed, timed out) ends in `MainNotRead`, never in a verdict, so a missing program cannot read as "unknown key". Tests need `ssh-keygen` and do not skip without it.
 
 ## A shallow repository is refused
 
