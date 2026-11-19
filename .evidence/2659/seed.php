@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 // Writes straight to the ledger, because the board only reads it and a real round needs a provider (#2659).
-// Six projects, the names of the mock's stress example (index.html?demo=stress), one of them longer than a card's corner.
+// It uses the mock's six stress names (index.html?demo=stress), because one is longer than a card's corner and must be cut.
 
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
