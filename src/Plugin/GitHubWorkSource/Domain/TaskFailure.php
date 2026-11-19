@@ -9,17 +9,17 @@ use Doctrine\ORM\Mapping as ORM;
 // Apart from the listing's rows, because a failed task that is closed afterwards must still hold the tasks that wait on it.
 #[ORM\Entity]
 #[ORM\Table(name: 'work_source_failure')]
-final class TaskFailure
+final readonly class TaskFailure
 {
     public function __construct(
         #[ORM\Id]
         #[ORM\Column(length: 255)]
-        private readonly string $project,
+        private string $project,
         #[ORM\Id]
         #[ORM\Column]
-        private readonly int $number,
+        private int $number,
         #[ORM\Column(type: 'text')]
-        private readonly string $reason,
+        private string $reason,
     ) {
     }
 

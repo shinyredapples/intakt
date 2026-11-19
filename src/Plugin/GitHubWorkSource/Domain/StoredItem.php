@@ -35,7 +35,7 @@ final class StoredItem
     private string $updatedAt;
 
     #[ORM\Column(length: 26, nullable: true)]
-    private ?string $milestoneDue;
+    private ?string $milestoneDue = null;
 
     #[ORM\Column]
     private bool $pullRequest;
@@ -54,7 +54,7 @@ final class StoredItem
 
     public function isStillAt(ListedIssue $listed): bool
     {
-        return $this->updatedAt === self::momentOf($listed->updatedAt);
+        return $this->updatedAt === $this->momentOf($listed->updatedAt);
     }
 
     public function see(ListedIssue $listed): void
@@ -63,7 +63,7 @@ final class StoredItem
         $this->body = $listed->body;
         $this->labels = $listed->labels;
         $this->author = $listed->author;
-        $this->updatedAt = self::momentOf($listed->updatedAt);
+        $this->updatedAt = $this->momentOf($listed->updatedAt);
         $this->pullRequest = $listed->isPullRequest;
         $this->dueOn($listed->milestoneDue);
     }
@@ -71,7 +71,7 @@ final class StoredItem
     // Taken from every listing, because GitHub changes a milestone's due date without moving the issue's updated_at.
     public function dueOn(?DateTimeImmutable $due): void
     {
-        $this->milestoneDue = null === $due ? null : self::momentOf($due);
+        $this->milestoneDue = $due instanceof DateTimeImmutable ? $this->momentOf($due) : null;
     }
 
     public function listed(): ListedIssue
@@ -82,8 +82,8 @@ final class StoredItem
             $this->body,
             $this->labels,
             $this->author,
-            self::moment($this->updatedAt),
-            null === $this->milestoneDue ? null : self::moment($this->milestoneDue),
+            $this->moment($this->updatedAt),
+            null === $this->milestoneDue ? null : $this->moment($this->milestoneDue),
             $this->pullRequest,
         );
     }
@@ -98,12 +98,12 @@ final class StoredItem
         return $this->number;
     }
 
-    private static function momentOf(DateTimeImmutable $moment): string
+    private function momentOf(DateTimeImmutable $moment): string
     {
         return $moment->setTimezone(new DateTimeZone('UTC'))->format(self::MOMENT);
     }
 
-    private static function moment(string $stored): DateTimeImmutable
+    private function moment(string $stored): DateTimeImmutable
     {
         $moment = DateTimeImmutable::createFromFormat(self::MOMENT, $stored, new DateTimeZone('UTC'));
 
