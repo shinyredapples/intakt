@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Journeys\Support;
 
+use Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewer;
 use PDO;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -11,7 +12,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(InstanceDatabase::class)]
 final class InstanceDatabaseTest extends TestCase
 {
-    private const string MESSAGE = 'Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewer';
+    private const string MESSAGE = ReviewWithReviewer::class;
 
     private PDO $pdo;
 

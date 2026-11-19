@@ -7,12 +7,12 @@ namespace Intakt\Tests\Journeys\Support;
 use Symfony\Component\Process\Process;
 
 // One messenger:consume process of the instance, started as the container entrypoint starts its consumer (the console, the transport, the options), that a journey signals and waits for.
-final class ConsumerProcess
+final readonly class ConsumerProcess
 {
     private const string ROOT = __DIR__.'/../../..';
     private const float POLL_SECONDS = 0.05;
 
-    private function __construct(private readonly Process $process, private readonly float $startedAt)
+    private function __construct(private Process $process, private float $startedAt)
     {
     }
 

@@ -207,7 +207,10 @@ final class ConcurrentConsumerJourneyTest extends JourneyTestCase
     // A parallel worker checks the memory limit after each message, ends past it, and the consumer starts another in its place (ParallelExecutionStrategy::replaceChannel()); the consumer itself stays below the limit and goes on. Each call leaves more than the limit in its worker, so a worker never makes a second call.
     private function replaceAWorkerPastTheMemoryLimit(): void
     {
-        $this->arm(hold: false, settled: false);
+        $this->arm(
+            hold: false,
+            settled: false,
+        );
         file_put_contents($this->script.'/'.ScriptDirectory::WEIGHT, (string) self::WORKER_WEIGHT_MB);
         $consumer = $this->consume(['--concurrency='.self::CONCURRENCY, '--memory-limit='.self::MEMORY_LIMIT_MB.'M', '--time-limit=200']);
 

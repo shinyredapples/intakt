@@ -8,12 +8,12 @@ use RuntimeException;
 use Symfony\Component\Process\Process;
 
 // The dashboard on a port of its own, because a reviewer reads the change through its /mcp/review and the dashboard refuses any host name or port but the one DASHBOARD_PORT names, which the instance's own server does not listen on.
-final class ReviewServer
+final readonly class ReviewServer
 {
     private const string ROOT = __DIR__.'/../../..';
     private const float BOOT_SECONDS = 20.0;
 
-    private function __construct(private readonly Process $process, public readonly int $port)
+    private function __construct(private Process $process, public int $port)
     {
     }
 
