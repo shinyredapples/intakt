@@ -50,6 +50,7 @@ final class ShippedRecordingTest extends TestCase
 
     public function testComposeLeavesTheRecordingToEnvLocalSoAnOwnerCanOverrideIt(): void
     {
+        // A compose `environment:` entry would win over `env_file: .env.local`, so the owner could not override it.
         self::assertStringNotContainsString('INTAKT_DEMO_RECORDING', $this->file('/compose.yaml'));
     }
 
