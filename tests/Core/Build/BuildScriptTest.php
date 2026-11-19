@@ -4,21 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Build;
 
-use Intakt\Core\Ai\Contract\Provider;
-use Intakt\Core\Ai\Contract\ResolvedModel;
-use Intakt\Core\Ai\Contract\Tier;
-use Intakt\Core\Ai\Contract\TierResolver;
-use Intakt\Core\Build\Contract\BuildBrief;
-use Intakt\Core\Build\Domain\BuilderPrompt;
-use Intakt\Core\Build\Domain\GatesAtOnce;
-use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
-use Intakt\Core\Build\UseCase\RunBuildJob\BuildVerdict;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
-use Intakt\Core\Review\Contract\Fence;
-use Intakt\Core\Review\Contract\PromptCut;
-use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
 use Intakt\Tests\Core\HandBack\BuildHistory;
 use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Process\ExecutableFinder;
@@ -476,23 +465,47 @@ final class BuildScriptTest extends TestCase
         self::assertSame('{"question":"New?","choices":["b"],"recommendation":"b"}', $this->outputFile('question.json'));
     }
 
-    public function testAScriptedQuestionReachesTheBuildJobsOutcome(): void
+    // The checkout converts the line endings, so it holds other bytes than the commit: only the checkout's own bytes at the start tell an untouched question from a rewritten one.
+    #[TestWith(["QUESTION.json text eol=crlf\n"])]
+    #[TestWith(["* text=auto eol=crlf\n"])]
+    public function testAQuestionTheCheckoutConvertsTheLineEndingsOfIsNotHandedBackWhenTheCliLeavesItUntouched(string $attributes): void
     {
-        $this->givenTheCli(<<<'SH'
-            printf '{"question":"Which store should the ledger use?","choices":["SQLite","PostgreSQL"],"recommendation":"SQLite"}' > QUESTION.json
-            SH);
+        $this->history->commitFile('.gitattributes', $attributes, 'chore: check the question out with other line endings');
+        $this->history->commitFile('QUESTION.json', "{\"question\":\"Old?\",\"choices\":[\"a\"],\"recommendation\":\"a\"}\n", 'docs: keep an old question');
+        $this->givenTheCli('cp QUESTION.json "$RECORD/checked-out.json"');
+
         $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
-        $tiers = self::createStub(TierResolver::class);
-        $tiers->method('resolve')->willReturn(new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'));
-        $builds = new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), new ScriptedJobRunner($this->output), new PhpGate(), new GatesAtOnce(12, 1), new Filesystem(), self::SCRIPT, $this->history->folder.'/prompts');
 
-        $outcome = $builds->run(new BuildJob('demo', $this->history->work, 'task', new BuildBrief('task', [], null), Tier::Standard, 'intakt-job-demo:1'));
+        self::assertStringEndsWith("}\r\n", (string) file_get_contents($this->history->folder.'/checked-out.json'));
+        self::assertFileDoesNotExist($this->output.'/question.json');
+    }
 
-        self::assertSame(BuildVerdict::Asked, $outcome->verdict);
-        self::assertSame(
-            ['Which store should the ledger use?', ['SQLite', 'PostgreSQL'], 'SQLite'],
-            [$outcome->question?->question, $outcome->question?->choices, $outcome->question?->recommendation],
-        );
+    public function testAQuestionTheCheckoutConvertsTheLineEndingsOfIsHandedBackWhenTheCliRewritesIt(): void
+    {
+        $this->history->commitFile('.gitattributes', "QUESTION.json text eol=crlf\n", 'chore: check the question out with other line endings');
+        $this->history->commitFile('QUESTION.json', "{\"question\":\"Old?\",\"choices\":[\"a\"],\"recommendation\":\"a\"}\n", 'docs: keep an old question');
+        $this->givenTheCli(<<<'SH'
+            printf '{"question":"New?","choices":["b"],"recommendation":"b"}' > QUESTION.json
+            SH);
+
+        $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertSame('{"question":"New?","choices":["b"],"recommendation":"b"}', $this->outputFile('question.json'));
+    }
+
+    public function testAQuestionTheBranchAlreadyHeldIsNotHandedBackWhenTheCliOnlyCommitsItsCheckedOutBytes(): void
+    {
+        $this->history->commitFile('QUESTION.json', '{"question":"Old?","choices":["a"],"recommendation":"a"}', 'docs: keep an old question');
+        $this->givenTheCli(<<<'SH'
+            echo 'built' > built.txt
+            git add built.txt
+            git commit --quiet -m 'feat: build the task'
+            SH);
+
+        $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertFileDoesNotExist($this->output.'/question.json');
+        self::assertFileExists($this->output.'/handback.bundle');
     }
 
     public function testAQuestionThatIsALinkIsNotHandedBack(): void

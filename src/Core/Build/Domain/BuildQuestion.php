@@ -59,12 +59,23 @@ final readonly class BuildQuestion
     {
         // Decoded to objects, because an associative decoding turns {"0":"a"} into a list and so an object into choices.
         try {
-            $data = json_decode($text, false, 8, JSON_THROW_ON_ERROR);
+            $data = json_decode(self::withDecodableKeys($text), false, 8, JSON_THROW_ON_ERROR);
         } catch (JsonException) {
             throw QuestionRefused::notJson();
         }
 
         return $data instanceof stdClass ? get_object_vars($data) : throw QuestionRefused::notJson();
+    }
+
+    // PHP decodes no object with a key that starts with NUL, and an unknown key is ignored, never a reason to refuse:
+    // such a key gets another first character, which leaves it unknown. Every string of the text is matched whole, so a key is never looked for inside a value.
+    private static function withDecodableKeys(string $text): string
+    {
+        return preg_replace_callback(
+            '/"(?:[^"\\\\]|\\\\.)*+"(?:[ \t\n\r]*+:)?/s',
+            static fn (array $string): string => str_starts_with($string[0], '"\u0000') && str_ends_with($string[0], ':') ? '"\u0001'.substr($string[0], 7) : $string[0],
+            $text,
+        ) ?? $text;
     }
 
     private static function textOf(mixed $value): string

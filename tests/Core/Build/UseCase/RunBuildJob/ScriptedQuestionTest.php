@@ -1,0 +1,104 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Tests\Core\Build\UseCase\RunBuildJob;
+
+use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Ai\Contract\ResolvedModel;
+use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Ai\Contract\TierResolver;
+use Intakt\Core\Build\Contract\BuildBrief;
+use Intakt\Core\Build\Domain\BuilderPrompt;
+use Intakt\Core\Build\Domain\BuildQuestion;
+use Intakt\Core\Build\Domain\GatesAtOnce;
+use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
+use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
+use Intakt\Core\Build\UseCase\RunBuildJob\BuildVerdict;
+use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
+use Intakt\Core\Review\Contract\Fence;
+use Intakt\Core\Review\Contract\PromptCut;
+use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
+use Intakt\Tests\Core\Build\ScriptedJobRunner;
+use Intakt\Tests\Core\HandBack\BuildHistory;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\TestCase;
+use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Process\Process;
+
+// The build script and the use case in one run: the script's own output folder is what the use case reads, so nothing between them is written by the test.
+#[CoversClass(RunBuildJob::class)]
+#[CoversClass(BuildJobOutcome::class)]
+#[CoversClass(BuildQuestion::class)]
+final class ScriptedQuestionTest extends TestCase
+{
+    private const string SCRIPT = __DIR__.'/../../../../../docker/job/build.sh';
+
+    private BuildHistory $history;
+    private string $output = '';
+
+    protected function setUp(): void
+    {
+        $this->history = new BuildHistory();
+        $this->output = $this->history->folder.'/output';
+        new Filesystem()->mkdir([$this->output, $this->history->folder.'/job', $this->history->folder.'/bin']);
+        file_put_contents($this->history->folder.'/prompt.md', "Build the task.\n");
+    }
+
+    protected function tearDown(): void
+    {
+        $this->history->remove();
+    }
+
+    public function testAScriptedQuestionReachesTheBuildJobsOutcome(): void
+    {
+        $this->givenTheBuildScriptRanWithTheCli(<<<'SH'
+            printf '{"question":"Which store should the ledger use?","choices":["SQLite","PostgreSQL"],"recommendation":"SQLite"}' > QUESTION.json
+            SH);
+
+        $outcome = $this->whenTheBuildJobReadsTheScriptsOutput();
+
+        self::assertSame(BuildVerdict::Asked, $outcome->verdict);
+        self::assertSame(
+            ['Which store should the ledger use?', ['SQLite', 'PostgreSQL'], 'SQLite'],
+            [$outcome->question?->question, $outcome->question?->choices, $outcome->question?->recommendation],
+        );
+    }
+
+    public function testAQuestionTheCheckoutAlreadyHeldWithConvertedLineEndingsEndsAsNoCommitsWhenTheCliDoesNothing(): void
+    {
+        $this->history->commitFile('.gitattributes', "QUESTION.json text eol=crlf\n", 'chore: check the question out with other line endings');
+        $this->history->commitFile('QUESTION.json', "{\"question\":\"Old?\",\"choices\":[\"a\"],\"recommendation\":\"a\"}\n", 'docs: keep an old question');
+        $this->givenTheBuildScriptRanWithTheCli('true');
+
+        $outcome = $this->whenTheBuildJobReadsTheScriptsOutput();
+
+        self::assertSame(BuildVerdict::NoCommits, $outcome->verdict);
+        self::assertNull($outcome->question);
+    }
+
+    private function givenTheBuildScriptRanWithTheCli(string $script): void
+    {
+        $folder = $this->history->folder;
+        file_put_contents($folder.'/bin/claude', "#!/bin/sh\n".$script."\n");
+        chmod($folder.'/bin/claude', 0o755);
+        // As the container sets them, and without the host's git variables, which would point git at another repository.
+        $environment = ['HOME' => $folder.'/job', 'TMPDIR' => $folder.'/job', 'INTAKT_JOB_OUTPUT' => $this->output, 'PATH' => $folder.'/bin:'.getenv('PATH'), 'INTAKT_GATE_SLOTS' => false];
+        foreach (array_keys([...getenv(), ...$_ENV]) as $name) {
+            if (is_string($name) && str_starts_with($name, 'GIT_')) {
+                $environment[$name] = false;
+            }
+        }
+
+        new Process(['/bin/sh', self::SCRIPT, $this->history->work, $folder.'/prompt.md', 'task', 'claude-sonnet-5-5', '7', '600', ''], null, $environment, timeout: 20)->mustRun();
+    }
+
+    private function whenTheBuildJobReadsTheScriptsOutput(): BuildJobOutcome
+    {
+        $tiers = self::createStub(TierResolver::class);
+        $tiers->method('resolve')->willReturn(new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'));
+        $builds = new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), new ScriptedJobRunner($this->output), new PhpGate(), new GatesAtOnce(12, 1), new Filesystem(), self::SCRIPT, $this->history->folder.'/prompts');
+
+        return $builds->run(new BuildJob('demo', $this->history->work, 'task', new BuildBrief('task', [], null), Tier::Standard, 'intakt-job-demo:1'));
+    }
+}

@@ -141,7 +141,21 @@ final class RunBuildJobCommandTest extends TestCase
 
         $tester = $this->executed(new JobOutput(['question.json' => $question]), []);
 
-        self::assertSame("question: Which store??recommendation: Postgres?[2K?\nchoice: SQLite\nchoice: Postgres\nrecommendation: Postgres\n", $tester->getDisplay());
+        self::assertSame("question: Which store?\\u{A}recommendation: Postgres\\u{1B}[2K\\u{2028}\nchoice: SQLite\nchoice: Postgres\nrecommendation: Postgres\n", $tester->getDisplay());
+    }
+
+    public function testChoicesThatDifferOnlyInACharacterThatIsNotPrintedAsItIsStayDifferentSoTheRecommendedOneCanBeTold(): void
+    {
+        $question = '{"question":"Which?","choices":["a\tb","a\u000bb","a?b","a\\\\u{9}b","a​b","a b","a b","ab\\\\"],"recommendation":"a\u000bb"}';
+
+        $tester = $this->executed(new JobOutput(['question.json' => $question]), []);
+
+        $lines = explode("\n", trim($tester->getDisplay()));
+        self::assertSame(
+            ['question: Which?', 'choice: a\u{9}b', 'choice: a\u{B}b', 'choice: a?b', 'choice: a\\\\u{9}b', 'choice: a\u{200B}b', 'choice: a\u{A0}b', 'choice: a b', 'choice: ab\\\\', 'recommendation: a\u{B}b'],
+            $lines,
+        );
+        self::assertCount(count($lines), array_unique($lines));
     }
 
     public function testARefusedQuestionIsPrintedAsAFailedBuildWithItsReason(): void

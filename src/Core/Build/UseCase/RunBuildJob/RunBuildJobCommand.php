@@ -88,9 +88,17 @@ final readonly class RunBuildJobCommand
     }
 
     // The builder wrote the text, so a line break or a terminal control in it could forge a line of its own, such as a second recommendation.
+    // Each such character is printed as its code point and a backslash is doubled, so two different choices never print the same and the reader sees which one is recommended.
     private function oneLine(string $text): string
     {
-        return OutputFormatter::escape(preg_replace('/[\p{Cc}\p{Zl}\p{Zp}]/u', '?', $text) ?? '?');
+        $visible = preg_replace_callback(
+            '/[\\\\\p{C}\p{Zl}\p{Zp}]|(?! )\p{Zs}/u',
+            static fn (array $found): string => '\\' === $found[0] ? '\\\\' : sprintf('\u{%X}', mb_ord($found[0], 'UTF-8')),
+            $text,
+        );
+
+        // A text the pattern cannot read is no UTF-8, so it is printed byte by byte.
+        return OutputFormatter::escape($visible ?? '\x{'.bin2hex($text).'}');
     }
 
     private function handedBack(SymfonyStyle $io, BuildJobOutcome $outcome, string $path): int

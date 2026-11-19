@@ -21,6 +21,28 @@ final class BuildQuestionTest extends TestCase
         self::assertSame(['Which store?', ['SQLite', 'Postgres'], 'SQLite'], [$question->question, $question->choices, $question->recommendation]);
     }
 
+    #[TestWith(['{"\u0000note":1,"question":"Which store?","choices":["SQLite"],"recommendation":"SQLite"}'])]
+    #[TestWith(['{"question":"Which store?","choices":["SQLite"],"recommendation":"SQLite","\u0000":{"\u0000deep":["x"]}}'])]
+    #[TestWith(["{\"question\":\"Which store?\",\"choices\":[\"SQLite\"],\"recommendation\":\"SQLite\",\"\\u0000note\" \t\r\n: null}"])]
+    #[TestWith(['{"note":7,"":"empty key","question":"Which store?","choices":["SQLite"],"recommendation":"SQLite"}'])]
+    public function testAnUnknownKeyIsIgnoredAlsoWhenItStartsWithNul(string $text): void
+    {
+        $question = BuildQuestion::fromHandedBack($text);
+
+        self::assertSame(['Which store?', ['SQLite'], 'SQLite'], [$question->question, $question->choices, $question->recommendation]);
+    }
+
+    public function testATextThatLooksLikeAKeyStartingWithNulInsideAValueIsKeptAsItIs(): void
+    {
+        $question = BuildQuestion::fromHandedBack('{"question":"Is \"\u0000x\": a key?","choices":["\\\\","no"],"recommendation":"\\\\"}');
+
+        self::assertSame(["Is \"\0x\": a key?", ['\\', 'no'], '\\'], [$question->question, $question->choices, $question->recommendation]);
+    }
+
+    #[TestWith(['{"\u0000note":1,"question":"Q","choices":{"0":"a"},"recommendation":"a"}', 'the question has no list of choices'])]
+    #[TestWith(['{"question":"Q","choices":[{"\u0000":"a"}],"recommendation":"a"}', 'a choice is not a non-empty text'])]
+    #[TestWith(['{"\u0000question":"Q","choices":["a"],"recommendation":"a"}', 'the question text is empty'])]
+    #[TestWith(['{"\u0000note":1,"question":"Q","choices":["a"],"recommendation":"a"', 'the question is not a JSON object'])]
     #[TestWith(['{"question":"Q","choices":["a","b"],"recommendation":"c"}', 'the recommendation is not one of the choices'])]
     #[TestWith(['{"question":"Q","choices":["a"]}', 'the recommendation is not one of the choices'])]
     #[TestWith(['{"question":"Q","choices":[],"recommendation":"a"}', 'the question has no list of choices'])]

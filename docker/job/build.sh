@@ -37,6 +37,12 @@ fi
 
 cd "$clone" || exit 1
 base="$(git rev-parse HEAD)"
+# The bytes of a QUESTION.json the checkout already holds, read before the session and kept in a variable the builder cannot write:
+# the checkout's bytes and not the commit's, because a checkout that converts line endings holds other bytes than the commit.
+question_before=''
+if [ -f QUESTION.json ] && [ ! -L QUESTION.json ]; then
+    question_before="$(git hash-object --no-filters -- QUESTION.json 2>/dev/null)"
+fi
 
 # The egress allowlist lets only the vendor's API through, so the CLI's telemetry and update checks would only fail.
 CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1
@@ -108,9 +114,10 @@ if [ -f PR.md ] && [ ! -L PR.md ]; then
 fi
 
 # The same for the question, which says the builder stopped to ask instead of building;
-# a QUESTION.json the branch already held when the session started is not this builder's question, so it is handed back only when the session wrote it or changed it.
+# a QUESTION.json the checkout already held when the session started is not this builder's question, so it is handed back only when the session wrote it or changed its bytes.
+# Without filters, because the builder can write the clone's git settings, and a clean filter named there would run here.
 if [ -f QUESTION.json ] && [ ! -L QUESTION.json ] \
-    && [ "$(git hash-object --no-filters -- QUESTION.json 2>/dev/null)" != "$(git rev-parse --quiet --verify "$base:QUESTION.json" 2>/dev/null)" ]; then
+    && [ "$(git hash-object --no-filters -- QUESTION.json 2>/dev/null)" != "$question_before" ]; then
     cp QUESTION.json "$output/question.json"
 fi
 
