@@ -111,7 +111,7 @@ The Code reviewers and their verdict step each have one character, drawn in a li
 
 | Role | `Character` | Drawing |
 |---|---|---|
-| Code reviewer (every reviewer setting of the panel, whatever its lens) | `CodeReviewer` (`code_reviewer`) | Meerkat with a magnifying glass |
+| Code reviewer (every reviewer setting of the Code reviewers, whatever its lens) | `CodeReviewer` (`code_reviewer`) | Meerkat with a magnifying glass |
 | The Code reviewers' verdict step (formerly the judge) | `Judge` (`judge`) | Owl with a gavel |
 
 The octopus has three poses (`MascotPose`): `waiting`, `conducting`, `bowing`, for empty and approved states. The enum value is the file stem: `assets/images/roles/<value>-{light,dark}-{48,96,192}.webp` for a role and `assets/images/mascot/octopus-<value>-{light,dark}-{96,144,192,288}.webp` for a pose, plus `-72` for `bowing`, which sits at 72 px beside an approved newest round (scaled from `octopus-<value>-{light,dark}.webp`). Every place uses the one partial `templates/dashboard/components/character.html.twig` (`character`, `size`); the components page shows each character and pose in both themes.
