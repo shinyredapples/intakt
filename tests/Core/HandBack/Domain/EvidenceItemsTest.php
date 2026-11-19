@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\HandBack\Domain;
 
 use Intakt\Core\HandBack\Domain\EvidenceItems;
+use Intakt\Core\HandBack\Domain\MarkdownText;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(EvidenceItems::class)]
+#[UsesClass(MarkdownText::class)]
 final class EvidenceItemsTest extends TestCase
 {
     public function testTheTopLevelItemsUnderAnEvidenceLabelAreCounted(): void
@@ -61,6 +64,80 @@ final class EvidenceItemsTest extends TestCase
     public function testWindowsLineBreaksAreLineBreaks(): void
     {
         self::assertSame(2, EvidenceItems::countIn("Evidence:\r\n- E1. one\r\n- E2. two\r\n"));
+    }
+
+    public function testAnIntroductoryLabelUnderAnEvidenceHeadingDoesNotEndTheSection(): void
+    {
+        self::assertSame(1, EvidenceItems::countIn("## Evidence\nShow these results:\n\n- E1. The command output\n"));
+    }
+
+    public function testAnIntroductoryLabelUnderAnEvidenceLabelDoesNotEndTheSection(): void
+    {
+        self::assertSame(1, EvidenceItems::countIn("Evidence:\nShow these results:\n- E1. The command output\n"));
+    }
+
+    public function testAParagraphAfterABlankLineUnderAnEvidenceHeadingDoesNotEndTheSection(): void
+    {
+        self::assertSame(2, EvidenceItems::countIn("## Evidence\n- E1. one\n\nAlso show:\n\n- E2. two\n## Notes\n- not evidence\n"));
+    }
+
+    public function testASetextEvidenceHeadingStartsTheSection(): void
+    {
+        self::assertSame(1, EvidenceItems::countIn("Evidence\n--------\n\n- E1. The command output\n"));
+        self::assertSame(1, EvidenceItems::countIn("Evidence\n===\n- E1. one\n\nNotes\n-----\n- not evidence\n"));
+    }
+
+    public function testAnEvidenceHeadingWithMoreWordsStartsTheSection(): void
+    {
+        self::assertSame(1, EvidenceItems::countIn("## Evidence (for this part)\n- E1. one\n"));
+    }
+
+    public function testAWordThatOnlyStartsWithEvidenceIsNoHeading(): void
+    {
+        self::assertSame(0, EvidenceItems::countIn("## Evidenced elsewhere\n- E1. one\n"));
+    }
+
+    public function testItemsIndentedByUpToThreeSpacesAreTopLevel(): void
+    {
+        self::assertSame(2, EvidenceItems::countIn("## Evidence\n  - E1. A red result\n  - E2. A green result\n"));
+        self::assertSame(2, EvidenceItems::countIn("## Evidence\n   1. one\n   2. two\n"));
+    }
+
+    public function testItemsIndentedToTheContentOfAnIndentedItemAreNested(): void
+    {
+        self::assertSame(1, EvidenceItems::countIn("## Evidence\n  - E1. Both results:\n    - a red one\n"));
+        self::assertSame(1, EvidenceItems::countIn("## Evidence\n1. E1. Both results:\n   - a red one\n"));
+    }
+
+    public function testALineIndentedByFourSpacesWithoutAListIsNoItem(): void
+    {
+        self::assertSame(0, EvidenceItems::countIn("## Evidence\n    - code, not an item\n"));
+    }
+
+    public function testAThematicBreakIsNoItem(): void
+    {
+        self::assertSame(1, EvidenceItems::countIn("## Evidence\n- E1. one\n\n* * *\n"));
+    }
+
+    public function testAWrappedLowerCaseLineEndingInAColonContinuesTheItem(): void
+    {
+        self::assertSame(2, EvidenceItems::countIn("Evidence:\n- E1. The results\nof:\n- E2. Another.\n"));
+    }
+
+    public function testAFenceClosesOnlyWithItsOwnMarker(): void
+    {
+        self::assertSame(1, EvidenceItems::countIn("~~~markdown\n```\n~~~\n\n## Evidence\n- E1. Red and green results\n"));
+        self::assertSame(0, EvidenceItems::countIn("````\n```\n## Evidence\n- E1. quoted\n````\n"));
+    }
+
+    public function testAFenceLineWithTextAfterTheMarkerDoesNotCloseIt(): void
+    {
+        self::assertSame(0, EvidenceItems::countIn("```\n``` php\n## Evidence\n- E1. quoted\n```\n"));
+    }
+
+    public function testAnEvidenceSectionInsideAnHtmlCommentIsHidden(): void
+    {
+        self::assertSame(1, EvidenceItems::countIn("<!--\n## Evidence\n- E1. hidden\n- E2. hidden\n-->\n## Evidence\n- E1. shown\n"));
     }
 
     public function testOnlyTheFirstEvidenceSectionCounts(): void

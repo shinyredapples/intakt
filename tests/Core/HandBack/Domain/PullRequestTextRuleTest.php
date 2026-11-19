@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\HandBack\Domain;
 use Intakt\Core\HandBack\Contract\PullRequestTextOutcome;
 use Intakt\Core\HandBack\Contract\PullRequestTextVerdict;
 use Intakt\Core\HandBack\Domain\EvidenceItems;
+use Intakt\Core\HandBack\Domain\MarkdownText;
 use Intakt\Core\HandBack\Domain\PullRequestTextRule;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -16,6 +17,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(PullRequestTextOutcome::class)]
 #[CoversClass(PullRequestTextVerdict::class)]
 #[UsesClass(EvidenceItems::class)]
+#[UsesClass(MarkdownText::class)]
 final class PullRequestTextRuleTest extends TestCase
 {
     private const string TASK = "Build it.\n\nEvidence:\n- E1. A red check.\n- E2. A green check.\n- E3. The docs.\n";
@@ -51,6 +53,36 @@ final class PullRequestTextRuleTest extends TestCase
     public function testAReferenceInLowerCaseDoesNotCount(): void
     {
         self::assertSame([1], PullRequestTextRule::judge("Evidence:\n- E1. one\n", 'e1: done')->missingItems);
+    }
+
+    public function testAReferenceOnlyInAnHtmlCommentDoesNotCount(): void
+    {
+        $outcome = PullRequestTextRule::judge("## Evidence\n- E1: Show the command output\n", "## Evidence\nNo output provided.\n<!-- E1: placeholder -->");
+
+        self::assertSame([PullRequestTextVerdict::MissingEvidenceReference, [1]], [$outcome->verdict, $outcome->missingItems]);
+    }
+
+    public function testAReferenceInAnUnclosedHtmlCommentDoesNotCount(): void
+    {
+        self::assertSame([1], PullRequestTextRule::judge("Evidence:\n- E1. one\n", "Done.\n<!--\nE1: later")->missingItems);
+    }
+
+    public function testAReferenceAfterAClosedHtmlCommentCounts(): void
+    {
+        self::assertTrue(PullRequestTextRule::judge("Evidence:\n- E1. one\n- E2. two\n", "<!-- note --> E1: red\n<!--\nhidden\n--> E2: green")->passed());
+    }
+
+    public function testACommentMarkerInsideACodeFenceDoesNotHideTheReference(): void
+    {
+        self::assertTrue(PullRequestTextRule::judge("Evidence:\n- E1. one\n", "```\n<!-- not a comment here\nE1: shown\n```\n")->passed());
+    }
+
+    public function testTheProbedEvidenceSectionShapesAskForTheirReference(): void
+    {
+        self::assertSame([1], PullRequestTextRule::judge("## Evidence\nShow these results:\n\n- E1. The command output\n", 'Completed.')->missingItems);
+        self::assertSame([1], PullRequestTextRule::judge("Evidence\n--------\n\n- E1. The command output\n", 'Completed.')->missingItems);
+        self::assertSame([2], PullRequestTextRule::judge("## Evidence\n  - E1. A red result\n  - E2. A green result\n", 'E1: red')->missingItems);
+        self::assertSame([1], PullRequestTextRule::judge("~~~markdown\n```\n~~~\n\n## Evidence\n- E1. Red and green results\n", 'Completed.')->missingItems);
     }
 
     public function testATaskWithoutEvidenceAsksForNoReference(): void

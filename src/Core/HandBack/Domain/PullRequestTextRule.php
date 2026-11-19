@@ -17,7 +17,7 @@ final readonly class PullRequestTextRule
     public static function judge(string $task, string $body): PullRequestTextOutcome
     {
         $items = EvidenceItems::countIn($task);
-        $missing = self::missingReferences($items, $body);
+        $missing = self::missingReferences($items, MarkdownText::visible($body));
         $characters = mb_strlen($body, 'UTF-8');
 
         return new PullRequestTextOutcome(self::verdictOf($missing, $characters), $items, $missing, $characters);
