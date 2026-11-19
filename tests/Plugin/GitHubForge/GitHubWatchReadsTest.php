@@ -809,12 +809,20 @@ final class GitHubWatchReadsTest extends TestCase
         $page = 1 === preg_match('/[?&]page=(\d+)/', $url, $found) ? (int) $found[1] : 1;
         $headers = ['response_headers' => ['ETag' => $this->listingEtag, ...$this->budget()]];
 
+        return new MockResponse($this->pageOf($page), $headers);
+    }
+
+    private function pageOf(int $page): string
+    {
+        if (1 === $page && in_array($this->listing, ['pulls_page_full.json', 'pulls_page_shifted.json', 'pulls_page_full_only.json'], true)) {
+            return $this->fixture('pulls_page_full.json');
+        }
+
         return match ($this->listing) {
-            'pulls_page_full.json' => new MockResponse($this->fixture(1 === $page ? 'pulls_page_full.json' : 'pulls_page_last.json'), $headers),
-            'pulls_page_shifted.json' => new MockResponse($this->fixture(1 === $page ? 'pulls_page_full.json' : 'pulls_page_shifted.json'), $headers),
-            'pulls_page_full_only.json' => new MockResponse(1 === $page ? $this->fixture('pulls_page_full.json') : '[]', $headers),
-            'pulls_endless.json' => new MockResponse($this->fixture('pulls_page_full.json'), $headers),
-            default => new MockResponse($this->fixture($this->listing), $headers),
+            'pulls_page_full.json' => $this->fixture('pulls_page_last.json'),
+            'pulls_page_full_only.json' => '[]',
+            'pulls_endless.json' => $this->fixture('pulls_page_full.json'),
+            default => $this->fixture($this->listing),
         };
     }
 
