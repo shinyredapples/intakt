@@ -793,6 +793,30 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         self::assertStringContainsString('export function toggleBanners(page)', $this->browser->getInternalResponse()->getContent());
     }
 
+    public function testABoardWithoutLiveUpdatesStillImportsTheCopyCommandScript(): void
+    {
+        $packages = self::getContainer()->get(Packages::class);
+        self::assertInstanceOf(Packages::class, $packages);
+
+        $page = $this->browser->request('GET', '/');
+
+        self::assertCount(0, $page->filter('script[type="importmap"]'));
+        $script = $page->filter('head script[type="module"]')->text();
+        self::assertStringContainsString(sprintf("import { copyCommands } from '%s';", $packages->getUrl('copy-command.js')), $script);
+        self::assertStringContainsString('copyCommands(document, window);', $script);
+    }
+
+    public function testTheCopyCommandScriptTheBoardImportsIsServedByTheInstall(): void
+    {
+        $packages = self::getContainer()->get(Packages::class);
+        self::assertInstanceOf(Packages::class, $packages);
+
+        $this->browser->request('GET', $packages->getUrl('copy-command.js'));
+
+        self::assertResponseIsSuccessful();
+        self::assertStringContainsString('export function copyCommands(page, view)', $this->browser->getInternalResponse()->getContent());
+    }
+
     public function testTheBoardUsesTheFullWidthOfThePage(): void
     {
         self::assertCount(1, $this->browser->request('GET', '/')->filter('main.content.wide'));

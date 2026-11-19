@@ -1,0 +1,263 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { FakeElement, root } from './stimulus-controller.mjs';
+
+const { copyCommands } = await import(new URL('assets/copy-command.js', root));
+
+const COMMAND = 'intakt account login home';
+
+class FakeCopyButton extends FakeElement {
+    constructor() {
+        super('Copy');
+        this.dataset = { copy: COMMAND };
+        this.setAttribute('data-copy', COMMAND);
+    }
+
+    closest(selector) {
+        return selector === 'button[data-copy]' ? this : null;
+    }
+}
+
+class FakeSummary extends FakeElement {
+    focused = false;
+
+    closest() {
+        return null;
+    }
+
+    focus() {
+        this.focused = true;
+    }
+}
+
+class FakeWhy extends FakeElement {
+    constructor(open) {
+        super();
+        this.open = open;
+        this.summary = new FakeSummary('Why');
+    }
+
+    querySelector(selector) {
+        return selector === 'summary' ? this.summary : null;
+    }
+}
+
+class FakeInsideWhy extends FakeElement {
+    constructor(why) {
+        super();
+        this.why = why;
+    }
+
+    closest(selector) {
+        return selector === 'details.why' ? this.why : null;
+    }
+}
+
+class FakePage {
+    listeners = new Map();
+    buttons = [];
+
+    addEventListener(type, listener) {
+        assert.equal(this.listeners.has(type), false);
+        this.listeners.set(type, listener);
+    }
+
+    querySelectorAll(selector) {
+        assert.equal(selector, '[data-copy-message]');
+
+        return this.buttons.filter((button) => button.hasAttribute('data-copy-message'));
+    }
+
+    dispatch(type, event = {}) {
+        this.listeners.get(type)(event);
+    }
+}
+
+class FakeTimers {
+    pending = new Map();
+    next = 1;
+
+    setTimeout(callback, delay) {
+        assert.equal(delay, 2000);
+        const id = this.next++;
+        this.pending.set(id, callback);
+
+        return id;
+    }
+
+    clearTimeout(id) {
+        this.pending.delete(id);
+    }
+
+    runPending() {
+        const due = [...this.pending.values()];
+        this.pending.clear();
+        due.forEach((callback) => callback());
+    }
+}
+
+class FakeClipboard {
+    written = [];
+
+    constructor(refuses = false) {
+        this.refuses = refuses;
+    }
+
+    writeText(text) {
+        if (this.refuses) {
+            return Promise.reject(new Error('Write permission denied.'));
+        }
+        this.written.push(text);
+
+        return Promise.resolve();
+    }
+}
+
+function pageWithACommand({ clipboard = new FakeClipboard(), phone = false } = {}) {
+    const page = new FakePage();
+    const timers = new FakeTimers();
+    const view = {
+        navigator: clipboard === null ? {} : { clipboard },
+        setTimeout: (callback, delay) => timers.setTimeout(callback, delay),
+        clearTimeout: (id) => timers.clearTimeout(id),
+        matchMedia: (query) => {
+            assert.equal(query, '(max-width: 760px)');
+
+            return { matches: phone };
+        },
+    };
+    copyCommands(page, view);
+    const button = new FakeCopyButton();
+    page.buttons.push(button);
+
+    return { page, timers, clipboard, button };
+}
+
+// The clipboard answers with a promise, so its outcome shows only once the pending reactions ran.
+function clipboardAnswered() {
+    return new Promise((resolve) => setImmediate(resolve));
+}
+
+test('a click on Copy writes the command to the clipboard and says it was copied', async () => {
+    const { page, clipboard, button } = pageWithACommand();
+
+    page.dispatch('click', { target: button });
+    await clipboardAnswered();
+
+    assert.deepEqual(clipboard.written, [COMMAND]);
+    assert.equal(button.textContent, 'Copied');
+});
+
+test('the label goes back to Copy once two seconds passed', async () => {
+    const { page, timers, button } = pageWithACommand();
+    page.dispatch('click', { target: button });
+    await clipboardAnswered();
+
+    timers.runPending();
+
+    assert.equal(button.textContent, 'Copy');
+    assert.equal(button.hasAttribute('data-copy-message'), false);
+});
+
+test('a browser without a clipboard shows that the copy failed', async () => {
+    const { page, button } = pageWithACommand({ clipboard: null });
+
+    page.dispatch('click', { target: button });
+    await clipboardAnswered();
+
+    assert.equal(button.textContent, 'Copy failed');
+});
+
+test('a clipboard that refuses the text shows that the copy failed', async () => {
+    const { page, button } = pageWithACommand({ clipboard: new FakeClipboard(true) });
+
+    page.dispatch('click', { target: button });
+    await clipboardAnswered();
+
+    assert.equal(button.textContent, 'Copy failed');
+});
+
+test('the failure label goes back to Copy once two seconds passed', async () => {
+    const { page, timers, button } = pageWithACommand({ clipboard: null });
+    page.dispatch('click', { target: button });
+    await clipboardAnswered();
+
+    timers.runPending();
+
+    assert.equal(button.textContent, 'Copy');
+});
+
+test('a second click restarts the two seconds and the label still goes back to Copy', async () => {
+    const { page, timers, button } = pageWithACommand();
+    page.dispatch('click', { target: button });
+    await clipboardAnswered();
+    const first = [...timers.pending.keys()];
+
+    page.dispatch('click', { target: button });
+    await clipboardAnswered();
+
+    assert.equal(first.some((id) => timers.pending.has(id)), false);
+    assert.equal(timers.pending.size, 1);
+    assert.equal(button.textContent, 'Copied');
+    timers.runPending();
+    assert.equal(button.textContent, 'Copy');
+});
+
+test('a page Turbo caches before the two seconds passed keeps Copy and no timer', async () => {
+    const { page, timers, button } = pageWithACommand();
+    page.dispatch('click', { target: button });
+    await clipboardAnswered();
+
+    page.dispatch('turbo:before-cache');
+
+    assert.equal(button.textContent, 'Copy');
+    assert.equal(button.hasAttribute('data-copy-message'), false);
+    assert.equal(timers.pending.size, 0);
+});
+
+test('a click outside a Copy button copies nothing', async () => {
+    const { page, timers, clipboard, button } = pageWithACommand();
+
+    page.dispatch('click', { target: { closest: () => null } });
+    page.dispatch('click', { target: null });
+    await clipboardAnswered();
+
+    assert.deepEqual(clipboard.written, []);
+    assert.equal(button.textContent, 'Copy');
+    assert.equal(timers.pending.size, 0);
+});
+
+test('Escape on a phone closes the open Why and gives the focus back to its summary', () => {
+    const { page } = pageWithACommand({ phone: true });
+    const why = new FakeWhy(true);
+
+    page.dispatch('keydown', { key: 'Escape', target: new FakeInsideWhy(why) });
+
+    assert.equal(why.open, false);
+    assert.equal(why.summary.focused, true);
+});
+
+test('Escape on a wide screen leaves the Why open, because every Why shows there', () => {
+    const { page } = pageWithACommand();
+    const why = new FakeWhy(true);
+
+    page.dispatch('keydown', { key: 'Escape', target: new FakeInsideWhy(why) });
+
+    assert.equal(why.open, true);
+    assert.equal(why.summary.focused, false);
+});
+
+test('another key or a closed Why changes nothing', () => {
+    const { page } = pageWithACommand({ phone: true });
+    const open = new FakeWhy(true);
+    const closed = new FakeWhy(false);
+
+    page.dispatch('keydown', { key: 'Enter', target: new FakeInsideWhy(open) });
+    page.dispatch('keydown', { key: 'Escape', target: new FakeInsideWhy(closed) });
+    page.dispatch('keydown', { key: 'Escape', target: { closest: () => null } });
+    page.dispatch('keydown', { key: 'Escape', target: null });
+
+    assert.equal(open.open, true);
+    assert.equal(open.summary.focused, false);
+    assert.equal(closed.summary.focused, false);
+});
