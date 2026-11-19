@@ -43,8 +43,7 @@ final readonly class DockerEngine
         return $this->containerIdOf($answer['Id'] ?? null, 'containers/create');
     }
 
-    // With rm and forcerm, so no container of a step is left behind, also after a failed one.
-    // The context is sent as a stream read from its file, so a large repository does not have to fit in memory.
+    // With rm and forcerm, so no container of a step is left behind, also after a failed one; the context is streamed from its file, so a large repository does not have to fit in memory.
     public function build(string $contextFile, string $tag, string $dockerfile): ImageBuild
     {
         $stream = fopen($contextFile, 'r');

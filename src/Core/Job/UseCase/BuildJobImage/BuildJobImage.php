@@ -44,7 +44,7 @@ final readonly class BuildJobImage
         return new BuiltJobImage($plan, $build->output, $build->image, $plan->php instanceof PhpProfile ? $this->php->verify($tag, $build->image, $plan->php) : null);
     }
 
-    // The context file is removed once the request is over, whether the engine built the image, refused it or could not be reached.
+    // Removed in finally, because the file must be gone after the request whether the engine built, refused or could not be reached.
     private function sent(JobImagePlan $plan, string $directory, string $tag): ImageBuild
     {
         $file = $this->context->of($plan, $directory);

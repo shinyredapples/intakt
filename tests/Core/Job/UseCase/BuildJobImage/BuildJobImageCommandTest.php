@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Job\UseCase\BuildJobImage;
 
+use Closure;
 use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Job\Contract\DockerEngineFailed;
@@ -282,7 +283,8 @@ final class BuildJobImageCommandTest extends TestCase
             $this->url = $url;
             $this->context = sys_get_temp_dir().'/intakt-context-'.bin2hex(random_bytes(4)).'.tar';
             self::assertFalse(is_string($options['body']), 'The build context is streamed, not held as a string.');
-            $this->contextFilesDuringTheRequest = glob(sys_get_temp_dir().'/intakt-image-*/context.tar') ?: [];
+            $found = glob(sys_get_temp_dir().'/intakt-image-*/context.tar');
+            $this->contextFilesDuringTheRequest = is_array($found) ? $found : [];
             new Filesystem()->dumpFile($this->context, $this->bodyRead($options['body']));
             $response = new MockResponse($stream, ['http_code' => $this->socketAnswersWithStatus]);
             $this->requests[] = $response;
@@ -307,11 +309,11 @@ final class BuildJobImageCommandTest extends TestCase
             return (string) stream_get_contents($body);
         }
 
-        self::assertInstanceOf(\Closure::class, $body);
+        self::assertInstanceOf(Closure::class, $body);
         $read = '';
 
         while ('' !== ($chunk = $body(16372))) {
-            $read .= $chunk;
+            $read .= is_string($chunk) ? $chunk : '';
         }
 
         return $read;
