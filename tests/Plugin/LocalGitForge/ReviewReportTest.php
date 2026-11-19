@@ -68,6 +68,50 @@ final class ReviewReportTest extends TestCase
         self::assertContains('F1+F2+F4 P1 src/Feature.php:3: Missing check.', $lines);
     }
 
+    public function testAnActEntryWithAJudgesNotePrintsTheNoteOnTheLineAfterIt(): void
+    {
+        $lines = $this->report()->asLines($this->reviewOf($this->noted('Rejected: unreachable.')));
+
+        self::assertSame(['F1 P1 src/Feature.php:3: Missing check.', 'judge: Rejected: unreachable.'], array_slice($lines, 4, 2));
+    }
+
+    public function testAnActEntryWithoutAJudgesNotePrintsNoJudgeLine(): void
+    {
+        $lines = $this->report()->asLines($this->review(Decision::Changes));
+
+        self::assertSame([], array_filter($lines, static fn (string $line): bool => str_starts_with($line, 'judge:')));
+    }
+
+    public function testTheJudgesNoteIsPrintedWithItsControlBytesVisible(): void
+    {
+        $lines = $this->report()->asLines($this->reviewOf($this->noted("Rejected.\e[2J<info>")));
+
+        self::assertContains('judge: Rejected.\x1b[2J\<info\>', $lines);
+    }
+
+    public function testTheJsonActListRowCarriesTheJudgesNoteAndValidatesAgainstTheDocumentedSchema(): void
+    {
+        $review = $this->reviewOf($this->noted('Deferred: belongs to the retry task.'));
+
+        self::assertSame('Deferred: belongs to the retry task.', $this->documentOf($review)['act_list'][0]['judge_note'] ?? null);
+        self::assertSame([], $this->schemaErrors($this->report()->asJson($review)));
+    }
+
+    public function testAJsonActListRowWithoutAJudgesNoteHasNoJudgeNoteKey(): void
+    {
+        $document = $this->documentOf($this->review(Decision::Changes));
+
+        self::assertArrayNotHasKey('judge_note', $document['act_list'][0] ?? []);
+    }
+
+    public function testTheSchemaRefusesAnEmptyJudgesNote(): void
+    {
+        $document = $this->documentOf($this->review(Decision::Changes));
+        $document['act_list'][0]['judge_note'] = '';
+
+        self::assertNotSame([], $this->schemaErrors(json_encode($document, JSON_THROW_ON_ERROR)));
+    }
+
     public function testAFailedReviewerIsPrintedAsFailedInPlainWordsWithoutAClassName(): void
     {
         $failed = $this->review(Decision::Approve)->blockedFor(RoundEnds::NoOutcomeInTime, 'correctness reviewer failed, stopped at its output limit');
@@ -232,6 +276,18 @@ final class ReviewReportTest extends TestCase
         $tokens ??= RoundTokens::of(2, new TokenFigures(100, 0, 0, 0, 20));
 
         return new ChangeReview('0192a000-0000-7000-8000-000000000000', 1, $decision, $verdicts, [$finding], $tokens, $cost ?? Cost::inUsd(0.00014), Decision::Blocked === $decision ? ['correctness: provider refused the key'] : []);
+    }
+
+    private function noted(string $note): Finding
+    {
+        return new Finding('F1', Severity::P1, 'src/Feature.php', 3, null, 'Missing check.', FixableBy::Builder, false, null, null)->withJudgeNote($note);
+    }
+
+    private function reviewOf(Finding $entry): ChangeReview
+    {
+        $review = $this->review(Decision::Changes);
+
+        return new ChangeReview($review->roundId, $review->round, $review->decision, $review->verdicts, [$entry], $review->tokens, $review->cost, $review->reasons);
     }
 
     private function report(): ReviewReport
