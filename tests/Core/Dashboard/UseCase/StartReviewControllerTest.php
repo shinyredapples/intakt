@@ -17,6 +17,7 @@ use Intakt\Core\Dashboard\Infrastructure\RoundLock;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
 use Intakt\Core\Dashboard\UseCase\StartReview\ReviewStarts;
 use Intakt\Core\Dashboard\UseCase\StartReview\StartReviewController;
+use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Review\Contract\ChangeSource;
 use Intakt\Core\Review\Contract\RequestedRound;
 use Intakt\Core\Review\Contract\RoundNotNext;
@@ -27,6 +28,7 @@ use PHPUnit\Framework\MockObject\MockObject;
 use Psr\Log\LogLevel;
 use RuntimeException;
 use stdClass;
+use Symfony\Bundle\FrameworkBundle\Test\TestContainer;
 use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Session\FlashBagAwareSessionInterface;
@@ -248,25 +250,40 @@ final class StartReviewControllerTest extends DashboardPageTestCase
         self::assertLoggedError(LogLevel::CRITICAL, sprintf('Uncaught PHP Exception %s: "the review store is gone"', RuntimeException::class));
     }
 
-    // The second press arrives while the first one's command runs, so the order is forced and not left to timing.
+    // The second press arrives while the first one's command runs, so the order is forced and not left to timing; both workers read the same ledger and send to the same bus, so without the lock the second would start a round too.
     public function testTwoPressesForTheSameRoundArrivingTogetherStartOneRoundAndRefuseTheOther(): void
     {
         $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
-        $commands = $this->commandBus();
+        $commands = $this->createStub(MessageBusInterface::class);
+        self::getContainer()->set('command.bus', $commands);
         $token = $this->token();
+        $presses = 0;
         $secondLines = [];
-        $commands->expects(self::once())->method('dispatch')
-            ->willReturnCallback(function () use ($token, &$secondLines): Envelope {
-                $secondLines = $this->pressInAnotherWorker('/reviews/round-1/start', ['_token' => $token, 'number' => '2']);
+        $commands->method('dispatch')->willReturnCallback(function (StartReview $command) use ($commands, $token, &$presses, &$secondLines): Envelope {
+            if (1 === ++$presses) {
+                $secondLines = $this->pressInAnotherWorker($commands, '/reviews/round-1/start', ['_token' => $token, 'number' => '2']);
+            }
+            $this->ledger->startRecordedRoundOf($command->round->change, 'round-'.$command->round->number.'-'.$presses, $command->round->number);
 
-                return new Envelope(new stdClass(), [new HandledStamp('round-2', 'handler')]);
-            });
+            return new Envelope(new stdClass(), [new HandledStamp('round-2', 'handler')]);
+        });
 
         $this->browser->request('POST', '/reviews/round-1/start', ['_token' => $token, 'number' => '2']);
         $this->browser->followRedirect();
 
         self::assertSelectorTextSame('.toast', 'Started round 2.');
         self::assertSame(['error' => ['Another press for this round is still running, so nothing was started.']], $secondLines);
+        self::assertSame([1, 2], $this->numbersStartedFor('feat/thing'));
+    }
+
+    public function testARefusedPressForAnUnknownRoundLeavesNoLockFileBehind(): void
+    {
+        $before = self::roundLockFiles();
+
+        $this->browser->request('POST', '/reviews/unknown-'.bin2hex(random_bytes(8)).'/start');
+
+        self::assertResponseStatusCodeSame(400);
+        self::assertSame([], array_values(array_diff(self::roundLockFiles(), $before)));
     }
 
     public function testAStartWhileAnotherPressForTheRoundRunsDispatchesNothingAndSaysSo(): void
@@ -384,15 +401,33 @@ final class StartReviewControllerTest extends DashboardPageTestCase
     }
 
     /**
+     * @return list<int>
+     */
+    private function numbersStartedFor(string $change): array
+    {
+        $numbers = [];
+        foreach ($this->ledger->readOfKind(LedgerEventKind::ReviewStarted) as $row) {
+            $payload = json_decode($row->event->payload, true);
+            if (is_array($payload) && $change === ($payload['change'] ?? null) && is_int($payload['number'] ?? null)) {
+                $numbers[] = $payload['number'];
+            }
+        }
+
+        return $numbers;
+    }
+
+    /**
      * @param array<string, string> $form
      *
      * @return array<mixed>
      */
-    // A kernel of its own, as another worker of the install would be, on the browser's session; the lines are read from its session, because the first press saves the session after it.
-    private function pressInAnotherWorker(string $path, array $form): array
+    // On the browser's session; the lines are read from its session, because the first press saves the session after it.
+    private function pressInAnotherWorker(MessageBusInterface $commands, string $path, array $form): array
     {
-        $kernel = self::createKernel();
-        $kernel->boot();
+        $kernel = $this->anotherWorker();
+        $container = $kernel->getContainer()->get('test.service_container');
+        assert($container instanceof TestContainer);
+        $container->set('command.bus', $commands);
         $request = Request::create('http://localhost:7780'.$path, 'POST', $form);
         foreach ($this->browser->getCookieJar()->all() as $cookie) {
             $request->cookies->set($cookie->getName(), $cookie->getValue());

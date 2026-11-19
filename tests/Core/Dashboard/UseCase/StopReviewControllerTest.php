@@ -111,6 +111,24 @@ final class StopReviewControllerTest extends DashboardPageTestCase
         self::assertSelectorTextContains('.flash-error', 'Another press for this round is still running, so nothing was stopped.');
     }
 
+    public function testARefusedStopForAnUnknownRoundLeavesNoLockFileBehind(): void
+    {
+        $before = self::roundLockFiles();
+
+        $this->browser->request('POST', '/reviews/unknown-'.bin2hex(random_bytes(8)).'/reviewers/unknown-security/stop');
+
+        self::assertResponseStatusCodeSame(400);
+        self::assertSame([], array_values(array_diff(self::roundLockFiles(), $before)));
+    }
+
+    public function testARefusedStopLeavesTheRoundFreeForTheNextPress(): void
+    {
+        $this->browser->request('POST', '/reviews/round-1/reviewers/round-1-security/stop');
+
+        self::assertResponseStatusCodeSame(400);
+        $this->holdRoundLock('round-1')->release();
+    }
+
     public function testAStopIsNotHeldBackByAPressForAnotherRound(): void
     {
         $this->runningReviewer();
