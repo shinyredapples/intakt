@@ -22,12 +22,13 @@ final readonly class JobContainerDefinition
     /**
      * @return array<string, mixed>
      */
-    public function of(JobSpec $spec, string $outputDirectory, EgressRoute $route): array
+    public function of(JobSpec $spec, string $outputDirectory, EgressRoute $route, string $mark): array
     {
         return [
             'Image' => $spec->image,
             // Passed inline rather than mounted, so the check runs in any image with a POSIX shell and no input path can collide with it.
-            'Entrypoint' => ['/bin/sh', '-c', new Filesystem()->readFile($this->startCheckScript), 'intakt-start-check'],
+            // The mark is an argument, never the environment, so it is gone once the script runs the job with exec.
+            'Entrypoint' => ['/bin/sh', '-c', new Filesystem()->readFile($this->startCheckScript), 'intakt-start-check', $mark],
             'Cmd' => [...array_map(static fn (JobInput $input): string => $input->containerPath, $spec->inputs), '--', ...$spec->command],
             // The orchestrator's own user, so the job can write the output directory only it may read, and never runs as root.
             'User' => sprintf('%d:%d', posix_getuid(), posix_getgid()),
@@ -67,6 +68,8 @@ final readonly class JobContainerDefinition
             'NetworkMode' => $route->networkMode,
             'CapDrop' => ['ALL'],
             'SecurityOpt' => ['no-new-privileges'],
+            // A driver the engine can read back and blocking delivery, so the start check's lines are neither unreadable nor dropped, whatever the daemon's defaults are.
+            'LogConfig' => ['Type' => 'json-file', 'Config' => ['mode' => 'blocking']],
         ];
     }
 

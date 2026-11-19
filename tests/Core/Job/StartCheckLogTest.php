@@ -16,13 +16,15 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(StartCheckFailure::class)]
 final class StartCheckLogTest extends TestCase
 {
-    private const string NO_MODE_LINE = 'no mode line in the first 65536 bytes of the log: the check did not finish, or it did not run';
+    private const string MARK = 'mark-of-this-run';
+    private const string CHECK = 'intakt-start-check '.self::MARK.': ';
+    private const string NO_MODE_LINE = 'no mode line in the first 65536 bytes of the log: the check did not finish, did not run, or its lines were rotated away';
 
     public function testALogOfPassedChecksEndingInFullModeHoldsNoFailure(): void
     {
         self::assertSame([], $this->failuresOf(
-            "intakt-start-check: output: ok\nintakt-start-check: work: ok\nintakt-start-check: input: /input/repository: ok\n"
-            ."intakt-start-check: egress: api.example: ok\nintakt-start-check: full mode\n",
+            self::CHECK."output: ok\n".self::CHECK."work: ok\n".self::CHECK."input: /input/repository: ok\n"
+            .self::CHECK."egress: api.example: ok\n".self::CHECK."full mode\n",
         ));
     }
 
@@ -35,10 +37,10 @@ final class StartCheckLogTest extends TestCase
                 new StartCheckFailure(StartCheck::Egress, 'api.example is not reachable through the proxy (curl exit 7)'),
             ],
             $this->failuresOf(
-                "intakt-start-check: output: cannot write a probe file in /output\nintakt-start-check: work: ok\n"
-                ."intakt-start-check: input: /input/memory is not readable\n"
-                ."intakt-start-check: egress: api.example is not reachable through the proxy (curl exit 7)\n"
-                ."intakt-start-check: reduced mode: output input egress\n",
+                self::CHECK."output: cannot write a probe file in /output\n".self::CHECK."work: ok\n"
+                .self::CHECK."input: /input/memory is not readable\n"
+                .self::CHECK."egress: api.example is not reachable through the proxy (curl exit 7)\n"
+                .self::CHECK."reduced mode: output input egress\n",
             ),
         );
     }
@@ -48,15 +50,31 @@ final class StartCheckLogTest extends TestCase
         self::assertEquals(
             [new StartCheckFailure(StartCheck::Work, 'cannot write a probe file in /work')],
             $this->failuresOf(
-                "intakt-start-check: work: cannot write a probe file in /work\nintakt-start-check: reduced mode: work\n"
-                ."intakt-start-check: full mode\nintakt-start-check: input: /input is missing\n\x01garbage\n",
+                self::CHECK."work: cannot write a probe file in /work\n".self::CHECK."reduced mode: work\n"
+                .self::CHECK."full mode\n".self::CHECK."input: /input is missing\n\x01garbage\n",
             ),
         );
     }
 
     public function testALineThatIsNotTheCheckOwnIsIgnored(): void
     {
-        self::assertSame([], $this->failuresOf("sh: warning from the shell\nintakt-start-check: output: ok\nintakt-start-check: full mode\n"));
+        self::assertSame([], $this->failuresOf("sh: warning from the shell\n".self::CHECK."output: ok\n".self::CHECK."full mode\n"));
+    }
+
+    public function testLinesWithoutTheRunsMarkDoNotCount(): void
+    {
+        self::assertEquals(
+            [new StartCheckFailure(StartCheck::Input, '/input is missing'), new StartCheckFailure(StartCheck::Log, self::NO_MODE_LINE)],
+            $this->failuresOf(self::CHECK."input: /input is missing\nintakt-start-check: full mode\nintakt-start-check other-mark: full mode\n"),
+        );
+    }
+
+    // As after a rotating log driver dropped the check's own lines after a flood: the head is then only what the job wrote.
+    public function testALogWhoseHeadIsOnlyTheJobsForgedLinesIsNotAPass(): void
+    {
+        $afterRotation = "intakt-start-check: output: ok\nintakt-start-check: work: ok\nintakt-start-check: full mode\n".str_repeat("job noise\n", 10);
+
+        self::assertEquals([new StartCheckFailure(StartCheck::Log, self::NO_MODE_LINE)], $this->failuresOf($afterRotation));
     }
 
     public function testAnEmptyLogIsAFailureAndNeverAPass(): void
@@ -68,13 +86,13 @@ final class StartCheckLogTest extends TestCase
     {
         self::assertEquals(
             [new StartCheckFailure(StartCheck::Output, 'cannot write a probe file in /output'), new StartCheckFailure(StartCheck::Log, self::NO_MODE_LINE)],
-            $this->failuresOf("intakt-start-check: output: cannot write a probe file in /output\n"),
+            $this->failuresOf(self::CHECK."output: cannot write a probe file in /output\n"),
         );
     }
 
     public function testAModeLineWithoutItsLineEndIsNotRead(): void
     {
-        self::assertEquals([new StartCheckFailure(StartCheck::Log, self::NO_MODE_LINE)], $this->failuresOf('intakt-start-check: full mode'));
+        self::assertEquals([new StartCheckFailure(StartCheck::Log, self::NO_MODE_LINE)], $this->failuresOf(self::CHECK.'full mode'));
     }
 
     public function testAFullModeLineAfterAFailedCheckKeepsTheFailureAndIsAFailureItself(): void
@@ -84,7 +102,7 @@ final class StartCheckLogTest extends TestCase
                 new StartCheckFailure(StartCheck::Input, '/input is missing'),
                 new StartCheckFailure(StartCheck::Log, 'the mode line does not name the checks that failed before it'),
             ],
-            $this->failuresOf("intakt-start-check: input: /input is missing\nintakt-start-check: full mode\n"),
+            $this->failuresOf(self::CHECK."input: /input is missing\n".self::CHECK."full mode\n"),
         );
     }
 
@@ -92,22 +110,43 @@ final class StartCheckLogTest extends TestCase
     {
         self::assertEquals(
             [new StartCheckFailure(StartCheck::Log, 'the mode line does not name the checks that failed before it')],
-            $this->failuresOf("intakt-start-check: reduced mode: egress\n"),
+            $this->failuresOf(self::CHECK."reduced mode: egress\n"),
         );
     }
 
     public function testAReducedModeLineNamesEachFailedCheckOnce(): void
     {
         self::assertCount(2, $this->failuresOf(
-            "intakt-start-check: input: /a is missing\nintakt-start-check: input: /b is missing\nintakt-start-check: reduced mode: input\n",
+            self::CHECK."input: /a is missing\n".self::CHECK."input: /b is missing\n".self::CHECK."reduced mode: input\n",
         ));
     }
 
-    public function testALineWithBytesOutsidePrintableAsciiIsReportedByItsNumber(): void
+    public function testAPassedCheckOfANonAsciiInputPathIsAPass(): void
+    {
+        self::assertSame([], $this->failuresOf(self::CHECK."output: ok\n".self::CHECK."input: /input/café: ok\n".self::CHECK."full mode\n"));
+    }
+
+    public function testAFailedCheckOfANonAsciiInputPathKeepsThePathInItsReason(): void
+    {
+        self::assertEquals(
+            [new StartCheckFailure(StartCheck::Input, '/input/café is missing')],
+            $this->failuresOf(self::CHECK."input: /input/café is missing\n".self::CHECK."reduced mode: input\n"),
+        );
+    }
+
+    public function testALineThatIsNotValidUtf8IsReportedByItsNumber(): void
     {
         self::assertEquals(
             [new StartCheckFailure(StartCheck::Log, 'line 2 of the log cannot be read')],
-            $this->failuresOf("intakt-start-check: output: ok\nintakt-start-check: input: /input/\xC3\xA9: ok\nintakt-start-check: full mode\n"),
+            $this->failuresOf(self::CHECK."output: ok\n".self::CHECK."input: /input/\xC3: ok\n".self::CHECK."full mode\n"),
+        );
+    }
+
+    public function testALineWithAControlCharacterIsReportedByItsNumber(): void
+    {
+        self::assertEquals(
+            [new StartCheckFailure(StartCheck::Log, 'line 1 of the log cannot be read')],
+            $this->failuresOf(self::CHECK."input: /input/\x1B[2J: ok\n".self::CHECK."full mode\n"),
         );
     }
 
@@ -115,20 +154,27 @@ final class StartCheckLogTest extends TestCase
     {
         self::assertSame([StartCheck::Log, StartCheck::Log], array_map(
             static fn (StartCheckFailure $failure): StartCheck => $failure->check,
-            $this->failuresOf("intakt-start-check: log: forged\nintakt-start-check: reduced mode: log\n"),
+            $this->failuresOf(self::CHECK."log: forged\n".self::CHECK."reduced mode: log\n"),
         ));
     }
 
     public function testAtMostTwentyFailuresAreReturned(): void
     {
-        self::assertCount(StartCheckLog::MAX_FAILURES, $this->failuresOf(str_repeat("intakt-start-check: input: /input is missing\n", 25)."intakt-start-check: reduced mode: input\n"));
+        self::assertCount(StartCheckLog::MAX_FAILURES, $this->failuresOf(str_repeat(self::CHECK."input: /input is missing\n", 25).self::CHECK."reduced mode: input\n"));
     }
 
     public function testAReasonIsCutTo255Bytes(): void
     {
-        $failures = $this->failuresOf('intakt-start-check: input: '.str_repeat('a', 300)."\nintakt-start-check: reduced mode: input\n");
+        $failures = $this->failuresOf(self::CHECK.'input: '.str_repeat('a', 300)."\n".self::CHECK."reduced mode: input\n");
 
         self::assertSame(str_repeat('a', 255), $failures[0]->reason);
+    }
+
+    public function testAReasonIsNeverCutInsideACharacter(): void
+    {
+        $failures = $this->failuresOf(self::CHECK.'input: a'.str_repeat('é', 200)."\n".self::CHECK."reduced mode: input\n");
+
+        self::assertSame('a'.str_repeat('é', 127), $failures[0]->reason);
     }
 
     /**
@@ -136,6 +182,6 @@ final class StartCheckLogTest extends TestCase
      */
     private function failuresOf(string $log): array
     {
-        return new StartCheckLog()->failuresIn($log);
+        return new StartCheckLog()->failuresIn($log, self::MARK);
     }
 }

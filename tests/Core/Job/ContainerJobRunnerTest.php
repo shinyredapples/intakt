@@ -87,7 +87,7 @@ final class ContainerJobRunnerTest extends TestCase
 {
     private const int MEMORY = 512 * 1024 * 1024;
     private const string START_CHECK = __DIR__.'/../../../docker/job/start-check.sh';
-    private const string FAILED_INPUT_CHECK = "intakt-start-check: input: /input/repository is not readable\nintakt-start-check: reduced mode: input\n";
+    private const string FAILED_INPUT_CHECK = FakeContainerLogs::CHECK."input: /input/repository is not readable\n".FakeContainerLogs::CHECK."reduced mode: input\n";
 
     // Written as Squid's native access log writes a refused tunnel, so the run reads the proxy's real format.
     private const string REFUSED_TUNNEL = "1762855200.123      0 192.0.2.3 TCP_DENIED/403 3924 CONNECT outside.example:443 - HIER_NONE/- text/html\n";
@@ -123,6 +123,13 @@ final class ContainerJobRunnerTest extends TestCase
         self::assertSame(['ALL'], $host['CapDrop']);
         self::assertSame(['no-new-privileges'], $host['SecurityOpt']);
         self::assertSame('none', $host['NetworkMode']);
+    }
+
+    public function testAJobLogsToAReadableDriverInBlockingModeWhateverTheDaemonDefaultIs(): void
+    {
+        $this->whenJobRuns($this->spec('build-1'));
+
+        self::assertSame(['Type' => 'json-file', 'Config' => ['mode' => 'blocking']], $this->hostConfigOf('build-1')['LogConfig']);
     }
 
     public function testInputsAreMountedReadOnlyAndTheOutputDirectoryIsTheOnlyWritableMount(): void
@@ -596,8 +603,21 @@ final class ContainerJobRunnerTest extends TestCase
         $this->whenJobRuns($this->spec('build-1', [new JobInput('/srv/mirror/sample.git', '/input/repository')]));
 
         $definition = $this->engine->definitionOf('build-1');
-        self::assertSame(['/bin/sh', '-c', file_get_contents(self::START_CHECK), 'intakt-start-check'], $definition['Entrypoint']);
+        self::assertIsArray($definition['Entrypoint']);
+        self::assertSame(['/bin/sh', '-c', file_get_contents(self::START_CHECK), 'intakt-start-check'], array_slice($definition['Entrypoint'], 0, 4));
         self::assertSame(['/input/repository', '--', 'composer', 'test'], $definition['Cmd']);
+    }
+
+    public function testEachRunGivesTheStartCheckANewMarkOutsideTheJobsEnvironment(): void
+    {
+        $this->whenJobRuns($this->spec('build-1'));
+        $this->whenJobRuns($this->spec('build-2'));
+
+        $first = $this->markOf('build-1');
+        self::assertMatchesRegularExpression('/^[0-9a-f]{32}$/D', $first);
+        self::assertNotSame($first, $this->markOf('build-2'));
+        self::assertIsArray($this->engine->definitionOf('build-1')['Env']);
+        self::assertSame([], preg_grep('/'.$first.'/', $this->engine->definitionOf('build-1')['Env']));
     }
 
     public function testAJobWithAnAllowlistIsToldWhichHostsTheStartCheckTries(): void
@@ -652,6 +672,17 @@ final class ContainerJobRunnerTest extends TestCase
         self::assertSame(['job' => 'build-1', 'check' => 'input', 'reason' => '/input/repository is not readable'], $this->ledger->payloads()[0]);
     }
 
+    // As after a rotating log driver dropped the check's own lines: the head of the log is then only the job's.
+    public function testAJobWhoseCheckLinesWereRotatedAwayCannotPassWithForgedLines(): void
+    {
+        $this->engine->jobStandardError('build-1', "intakt-start-check: output: ok\nintakt-start-check: full mode\n".str_repeat("job noise\n", 10));
+
+        $this->whenJobRuns($this->spec('build-1'));
+
+        self::assertSame([LedgerEventKind::JobStartCheckFailed, LedgerEventKind::JobEnded], $this->ledger->kinds());
+        self::assertSame('log', $this->ledger->payloads()[0]['check'] ?? null);
+    }
+
     public function testAJobWhoseLogHoldsNoModeLineIsRecordedAsAFailedCheck(): void
     {
         $this->engine->jobStandardError('build-1', '');
@@ -664,7 +695,7 @@ final class ContainerJobRunnerTest extends TestCase
 
     public function testAModeLineBeyondTheFirst64KibOfTheLogIsNotRead(): void
     {
-        $this->engine->jobStandardError('build-1', str_repeat(str_repeat('x', 1023)."\n", 64)."intakt-start-check: full mode\n");
+        $this->engine->jobStandardError('build-1', str_repeat(str_repeat('x', 1023)."\n", 64).FakeContainerLogs::CHECK."full mode\n");
 
         $this->whenJobRuns($this->spec('build-1'));
 
@@ -894,6 +925,15 @@ final class ContainerJobRunnerTest extends TestCase
         $host = $this->engine->definitionOf($job)['HostConfig'];
 
         return $host;
+    }
+
+    private function markOf(string $job): string
+    {
+        $entrypoint = $this->engine->definitionOf($job)['Entrypoint'];
+        self::assertIsArray($entrypoint);
+        self::assertIsString($entrypoint[4] ?? null);
+
+        return $entrypoint[4];
     }
 
     private function whenJobRuns(JobSpec $spec, string $startCheck = self::START_CHECK): JobResult

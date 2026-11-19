@@ -283,7 +283,7 @@ final class FakeDockerEngine
     private function create(string $url, array $options): MockResponse
     {
         $query = $this->queryOf($url);
-        /** @var array{Labels: array<string, string>, HostConfig: array{NetworkMode: string, Mounts?: list<array{Source: string, Target: string}>}, NetworkingConfig?: array{EndpointsConfig: array<string, mixed>}} $definition */
+        /** @var array{Labels: array<string, string>, Entrypoint?: list<string>, HostConfig: array{NetworkMode: string, Mounts?: list<array{Source: string, Target: string}>}, NetworkingConfig?: array{EndpointsConfig: array<string, mixed>}} $definition */
         $definition = json_decode(is_string($options['body'] ?? null) ? $options['body'] : '{}', true, flags: JSON_THROW_ON_ERROR);
         $job = $definition['Labels']['intakt.job'];
         $name = is_string($query['name'] ?? null) ? $query['name'] : '';
@@ -303,6 +303,7 @@ final class FakeDockerEngine
         $id = $this->nextId();
         $this->containers[$id] = new FakeContainer($name, $job, $output);
         $this->containers[$id]->networks = $networks;
+        $this->containers[$id]->startCheckMark = (string) ($definition['Entrypoint'][4] ?? '');
         $this->definitions[$name] = $definition;
 
         return $this->json(['Id' => $id], 201);

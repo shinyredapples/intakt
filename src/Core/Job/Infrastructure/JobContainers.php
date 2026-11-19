@@ -46,13 +46,15 @@ final readonly class JobContainers
     // The log is read before the container is removed, because the engine keeps it only as long as the container.
     private function runInContainer(JobSpec $spec, string $outputDirectory, EgressRoute $route): ContainerEnd
     {
-        $container = $this->engine->create('intakt-job-'.$spec->id->value, $this->definition->of($spec, $outputDirectory, $route));
+        // New for every run, so a job cannot reuse a mark it saw in an earlier run's output.
+        $mark = bin2hex(random_bytes(16));
+        $container = $this->engine->create('intakt-job-'.$spec->id->value, $this->definition->of($spec, $outputDirectory, $route, $mark));
 
         try {
             $this->engine->start($container);
             $end = $this->awaitEnd($container, $this->clock->now()->modify(sprintf('+%d seconds', $spec->limits->seconds)));
 
-            return new ContainerEnd($end, $this->engine->standardErrorHead($container, StartCheckLog::MAX_BYTES));
+            return new ContainerEnd($end, $this->engine->standardErrorHead($container, StartCheckLog::MAX_BYTES), $mark);
         } finally {
             $this->engine->remove($container);
         }

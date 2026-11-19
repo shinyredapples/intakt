@@ -13,6 +13,7 @@ final readonly class ContainerEnd
     public function __construct(
         public JobEnd $end,
         public string $standardError,
+        public string $mark,
     ) {
     }
 }

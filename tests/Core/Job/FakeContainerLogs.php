@@ -9,8 +9,11 @@ use Symfony\Component\HttpClient\Response\MockResponse;
 // Answers the engine's log call for the fake engine, so the proxy's standard output and the job's standard error stay apart as on a real engine.
 final class FakeContainerLogs
 {
+    // Stands for the start check's own prefix with the run's mark, which only the container knows, so a test can tell the script's lines from lines the job forges.
+    public const string CHECK = '{start-check}';
+
     // A passed start check, as docker/job/start-check.sh logs it, so a test that plays no log plays only the job after it.
-    private const string PASSED_START_CHECK = "intakt-start-check: full mode\n";
+    private const string PASSED_START_CHECK = self::CHECK."full mode\n";
 
     /** @var array<string, string> */
     private array $proxyLogs = [];
@@ -45,7 +48,8 @@ final class FakeContainerLogs
         $proxy = str_starts_with($container->name, 'intakt-egress-');
         $stream = $proxy ? 1 : 2;
         $asked = 'true' === ($query[$proxy ? 'stdout' : 'stderr'] ?? null);
-        $log = $proxy ? $this->proxyLogs[$container->job] ?? '' : $this->standardErrors[$container->job] ?? self::PASSED_START_CHECK;
+        $played = $proxy ? $this->proxyLogs[$container->job] ?? '' : $this->standardErrors[$container->job] ?? self::PASSED_START_CHECK;
+        $log = str_replace(self::CHECK, sprintf('intakt-start-check %s: ', $container->startCheckMark), $played);
         $framed = $asked ? $this->framed($stream, $log) : '';
 
         if (in_array($container->job, $this->broken, true)) {

@@ -15,6 +15,8 @@ use Symfony\Component\Process\Process;
 final class StartCheckScriptTest extends TestCase
 {
     private const string SCRIPT = __DIR__.'/../../../docker/job/start-check.sh';
+    private const string MARK = 'mark-of-this-run';
+    private const string CHECK = 'intakt-start-check '.self::MARK.': ';
 
     private string $root = '';
     private string $output = '';
@@ -145,7 +147,23 @@ final class StartCheckScriptTest extends TestCase
         $run = $this->startCheckWith([$this->root.'/input'], $this->environment(null, (string) getenv('PATH')));
 
         self::assertSame(64, $run->getExitCode());
-        self::assertStringContainsString('intakt-start-check: no command to run', $run->getErrorOutput());
+        self::assertStringContainsString(self::CHECK.'no command to run', $run->getErrorOutput());
+    }
+
+    public function testTheJobsCommandSeesTheMarkNeitherInItsArgumentsNorInItsEnvironment(): void
+    {
+        $run = $this->startCheckWith(['--', '/bin/sh', '-c', 'env; printf "%s\n" "$0" "$@"', 'first'], $this->environment(null, (string) getenv('PATH')));
+
+        self::assertSame(0, $run->getExitCode());
+        self::assertStringContainsString("first\n", $run->getOutput());
+        self::assertStringNotContainsString(self::MARK, $run->getOutput());
+    }
+
+    public function testEveryLineOfTheCheckCarriesTheMark(): void
+    {
+        $run = $this->whenTheCheckRuns([$this->root.'/input']);
+
+        self::assertSame(self::CHECK."output: ok\n".self::CHECK."work: ok\n".self::CHECK.'input: '.$this->root."/input: ok\n".self::CHECK."full mode\n", $run->getErrorOutput());
     }
 
     /**
@@ -165,7 +183,7 @@ final class StartCheckScriptTest extends TestCase
      */
     private function startCheckWith(array $arguments, array $environment): Process
     {
-        $run = new Process(['/bin/sh', '-c', $this->script(), 'intakt-start-check', ...$arguments], null, $environment);
+        $run = new Process(['/bin/sh', '-c', $this->script(), 'intakt-start-check', self::MARK, ...$arguments], null, $environment);
         $run->run();
 
         return $run;
@@ -202,6 +220,6 @@ final class StartCheckScriptTest extends TestCase
     // Stripped, because every line of the check carries the prefix and the expected lines read clearer without it.
     private function logOf(Process $run): string
     {
-        return str_replace('intakt-start-check: ', '', $run->getErrorOutput());
+        return str_replace(self::CHECK, '', $run->getErrorOutput());
     }
 }

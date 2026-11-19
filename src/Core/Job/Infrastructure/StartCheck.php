@@ -18,6 +18,6 @@ enum StartCheck: string
      */
     public static function logged(): array
     {
-        return array_filter(self::cases(), static fn (self $check): bool => self::Log !== $check);
+        return array_values(array_filter(self::cases(), static fn (self $check): bool => self::Log !== $check));
     }
 }
