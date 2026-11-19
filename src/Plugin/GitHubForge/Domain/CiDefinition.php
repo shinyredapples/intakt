@@ -10,6 +10,8 @@ use NoDiscard;
 final readonly class CiDefinition
 {
     private const string GITHUB_FOLDER = '.github/';
+    // GitHub only shows issue forms and the pull request template on its pages and never runs them; a workflow that names one still makes it a CI change.
+    private const string TEMPLATE = '#^\.github/(?:ISSUE_TEMPLATE/[^/]+\.(?:ya?ml|md)|pull_request_template\.md)$#';
     // Every Dockerfile counts, because a workflow can build an image from one in its build context without naming it.
     private const string DOCKERFILE = '/(?:^|\/)(?:Dockerfile(?:\..+)?|[^\/]+\.Dockerfile)$/i';
     // A quoted key or a space before the colon is the same YAML key, so both still name an action.
@@ -40,7 +42,8 @@ final readonly class CiDefinition
     /** @param list<WorkflowFile> $workflows */
     private function isPartOf(array $workflows, string $path): bool
     {
-        if (str_starts_with($path, self::GITHUB_FOLDER) || 1 === preg_match(self::DOCKERFILE, $path)) {
+        $isTemplate = 1 === preg_match(self::TEMPLATE, $path);
+        if ((str_starts_with($path, self::GITHUB_FOLDER) && !$isTemplate) || 1 === preg_match(self::DOCKERFILE, $path)) {
             return true;
         }
 

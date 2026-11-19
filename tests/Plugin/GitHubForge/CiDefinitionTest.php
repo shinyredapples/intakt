@@ -64,6 +64,23 @@ final class CiDefinitionTest extends TestCase
         self::assertSame(['.github/ci/build.sh', '.github/workflows/ci.yml'], $this->ciPaths(['.github/ci/build.sh', '.github/workflows/ci.yml']));
     }
 
+    public function testAnIssueFormOrThePullRequestTemplateIsNoCiChange(): void
+    {
+        self::assertSame([], $this->ciPaths(['.github/ISSUE_TEMPLATE/bug_report.yml', '.github/ISSUE_TEMPLATE/config.yml', '.github/pull_request_template.md']));
+    }
+
+    public function testAnotherFileInTheIssueTemplateFolderIsStillACiChange(): void
+    {
+        $paths = ['.github/ISSUE_TEMPLATE/run.sh', '.github/ISSUE_TEMPLATE/sub/form.yml', '.github/pull_request_template.sh'];
+
+        self::assertSame($paths, $this->ciPaths($paths));
+    }
+
+    public function testAnIssueFormAWorkflowNamesIsStillACiChange(): void
+    {
+        self::assertSame(['.github/ISSUE_TEMPLATE/bug_report.yml'], $this->ciPathsOf("jobs:\n  t:\n    steps:\n      - run: cat bug_report.yml\n", ['.github/ISSUE_TEMPLATE/bug_report.yml']));
+    }
+
     public function testADockerfileIsACiChangeWithoutBeingNamed(): void
     {
         self::assertSame(['Dockerfile', 'docker/ci.Dockerfile', 'docker/Dockerfile.ci', 'docker/dockerfile'], $this->ciPaths(['Dockerfile', 'docker/ci.Dockerfile', 'docker/Dockerfile.ci', 'docker/dockerfile']));
