@@ -20,6 +20,7 @@ The words used across Intakt's guides and dashboard, in plain terms. Each entry 
 | **CI** | the project's full check run again on the pushed version, on a machine the builder does not control: today GitHub's machines; planned: a fresh container Intakt starts by default, or GitHub's machines where the project sets it | [engine room](the-engine-room.md#ci-the-second-opinion) |
 | **Core panel** | the reviewers every change gets | [how it works](how-intakt-works.md#which-reviewers-look-at-a-change) |
 | **Cycle** | one round of build, check and review | [engine room](the-engine-room.md#cycles-and-generations-second-chances) |
+| **Designer** (planned) | an AI agent that plans and judges your project's screens: automatic checks, scores with a reason, and your taste learned by choosing between two versions | [how it works](how-intakt-works.md) |
 | **Draining** | stopping new work so running jobs can finish before an update; planned: an update drains only the builder slots it is moving to the new version (first one slot, then the remaining builder slots together, so several can show draining while reviews go on), and all of them only when it changes stored data the old version could not read | [engine room](the-engine-room.md#draining-and-updates) |
 | **Evidence** | what a finished change must show, numbered E1, E2, ... | [writing a good task](writing-a-good-task.md) |
 | **Finding** | one problem a reviewer reports, with a severity | [journey](the-journey-of-a-task.md#5-reviewing) |

@@ -24,7 +24,7 @@ The Designer scores each screen a change touches against fixed usability heurist
 
 - **Every score cites evidence:** a region of a screenshot and what is wrong there. A score without evidence is an invalid answer.
 - **A low score is a review finding, not a gate.** It reaches the change as a finding of the Designer's review and is handled like any other finding ([Reviews](07-reviews.md)); it never fails a check.
-- **Scores are kept per screen over time,** so a screen that gets worse shows as a regression on the [dashboard](13-dashboard.md).
+- **Scores are kept per screen over time,** so a screen that gets worse shows as a regression on the [dashboard](13-dashboard.md#designer-scores).
 
 ## Layer 3: taste by blind pairwise comparison
 
@@ -34,7 +34,7 @@ Some choices are visible but not wrong either way (a layout, an emphasis, a tone
 - **What a variant is:** the Designer writes no code. It creates a variant as a typed description (the choice, the screen, and what differs, such as a token value, a layout or a line of copy). A build job implements each variant as a commit of its own on top of the head; those commits are kept by the orchestrator, never pushed to the change's branch and never merged. The check environment renders each one with the same tools as Layer 1, and the rendered screenshots are what the Designer ranks and the owner sees. Variant commits pass the same hand-back checks as any build, so a variant that fails them is dropped and shown, never ranked.
 - **Variant builds are isolated:** a variant build job gets none of the project's credentials, even when the owner opted in for build jobs, and no external dependency's address on its egress allowlist; a dependency the page needs runs as a bundled sidecar of that job only ([Threat model](14-threat-model.md#external-dependencies)). A render job, for a head or a variant, is isolated the same way, so code written for a variant reaches no shared instance.
 - **The owner votes blind** on a sample of those pairs: the owner sees two variants' screenshots, in an order plain code picks at random, without knowing which one the Designer preferred.
-- **Agreement is measured and shown:** how often the Designer's ranking matches the owner's votes, shown on the [dashboard](13-dashboard.md).
+- **Agreement is measured and shown:** how often the Designer's ranking matches the owner's votes, shown on the [dashboard](13-dashboard.md#designer-scores).
 - **Asking follows agreement.** While agreement is low, choices with character go to the owner as options; as it rises, fewer are asked.
 
 ## Tools
