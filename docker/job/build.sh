@@ -112,7 +112,17 @@ replace_settings() {
         return 1
     fi
     chmod u+rwx -- .git || return 1
-    rm -rf -- .git/config .git/commondir .git/HEAD || return 1
+    # Alternates tell git where else to read objects, so they are settings too; a link on their path would take the removal outside the clone.
+    for folder in .git/objects .git/objects/info; do
+        if [ -L "$folder" ]; then
+            echo "$folder is not a folder of the clone" >&2
+            return 1
+        fi
+        if [ -d "$folder" ]; then
+            chmod u+rwx -- "$folder" || return 1
+        fi
+    done
+    rm -rf -- .git/config .git/commondir .git/HEAD .git/objects/info/alternates .git/objects/info/http-alternates || return 1
     printf 'ref: refs/heads/%s\n' "$branch" > .git/HEAD || return 1
     if [ "$format" = sha1 ]; then
         printf '[core]\n\trepositoryformatversion = 0\n\tbare = false\n' > .git/config

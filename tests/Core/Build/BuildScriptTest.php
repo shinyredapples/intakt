@@ -518,6 +518,65 @@ final class BuildScriptTest extends TestCase
         self::assertStringContainsString("no bundle is handed back: the clone's git settings could not be replaced", $this->outputFile('build.log'));
     }
 
+    public function testAnAlternatesFileThatIsAPipeDoesNotStopTheBundleOfTheBranch(): void
+    {
+        // Git reads the alternates file for every object it looks up, so a pipe nobody writes into holds the bundle until the job is timed out.
+        $this->givenTheCli(<<<'SH'
+            echo 'built' > built.txt
+            git add built.txt
+            git commit --quiet -m 'feat: build the task'
+            mkfifo .git/objects/info/alternates
+            SH);
+        $this->timeout = 10;
+
+        try {
+            $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+        } finally {
+            $this->releaseThePipe($this->work.'/clone/.git/objects/info/alternates');
+        }
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertSame("built\n", $this->fileAtTheBundlesHead('task', 'built.txt'));
+    }
+
+    public function testObjectsTheCliMovedOutOfTheCloneAndNamedInAlternatesHandNoBundleBack(): void
+    {
+        $this->givenTheCli(<<<'SH'
+            echo 'built' > built.txt
+            git add built.txt
+            git commit --quiet -m 'feat: build the task'
+            mv .git/objects "$TMPDIR/objects"
+            mkdir -p .git/objects/info
+            echo "$TMPDIR/objects" > .git/objects/info/alternates
+            echo "$TMPDIR/objects" > .git/objects/info/http-alternates
+            SH);
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertFileDoesNotExist($this->output.'/handback.bundle');
+        self::assertFileDoesNotExist($this->work.'/clone/.git/objects/info/alternates');
+        self::assertFileDoesNotExist($this->work.'/clone/.git/objects/info/http-alternates');
+    }
+
+    public function testAnObjectsInfoFolderTheCliTurnsIntoALinkHandsNoBundleBackAndLeavesTheLinkedFilesAlone(): void
+    {
+        $this->givenTheCli(<<<'SH'
+            git commit --quiet --allow-empty -m 'feat: build the task'
+            mkdir "$TMPDIR/elsewhere"
+            echo outside > "$TMPDIR/elsewhere/alternates"
+            rm -rf .git/objects/info
+            ln -s "$TMPDIR/elsewhere" .git/objects/info
+            SH);
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertFileDoesNotExist($this->output.'/handback.bundle');
+        self::assertStringEqualsFile($this->work.'/elsewhere/alternates', "outside\n");
+        self::assertStringContainsString("no bundle is handed back: the clone's git settings could not be replaced", $this->outputFile('build.log'));
+    }
+
     public function testACliThatTakesAwayEveryPermissionOnTheOutputStillHandsBackTheBundleOfTheBranch(): void
     {
         $this->givenTheCli(<<<'SH'
