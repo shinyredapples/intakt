@@ -104,7 +104,7 @@ final readonly class PhpProfile
     private function highestPatchIn(array $intervals): ?string
     {
         foreach (array_reverse($intervals) as $interval) {
-            [$major, $minor, $patch] = self::patchOf($interval->getEnd()->getVersion());
+            [$major, $minor, $patch] = $this->patchOf($interval->getEnd()->getVersion());
             // The patch below the end too, because an end the rule excludes ("<8.4.20") admits only the one before it.
             $highest = $this->firstAllowed($major, $minor, [$patch, $patch - 1]);
 
@@ -122,7 +122,7 @@ final readonly class PhpProfile
     private function lowestPatchIn(array $intervals): ?string
     {
         foreach ($intervals as $interval) {
-            [$major, $minor, $patch] = self::patchOf($interval->getStart()->getVersion());
+            [$major, $minor, $patch] = $this->patchOf($interval->getStart()->getVersion());
             // The patch after the start too, because a start the rule excludes (">8.4.1") or a fourth part ("8.4.1.5") admits only the next patch.
             $lowest = $this->firstAllowed($major, $minor, [$patch, $patch + 1]);
 
@@ -153,7 +153,7 @@ final readonly class PhpProfile
     /**
      * @return array{int, int, int}
      */
-    private static function patchOf(string $normalized): array
+    private function patchOf(string $normalized): array
     {
         [$major, $minor, $patch] = array_map(intval(...), array_slice(explode('.', explode('-', $normalized)[0]), 0, 3));
 
