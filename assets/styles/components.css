@@ -730,3 +730,30 @@ details.ev > summary time { margin-left: auto; color: var(--muted); font-size: v
   .tour-caption { bottom: calc(var(--bar) + env(safe-area-inset-bottom)); flex-wrap: wrap; padding: var(--s8) var(--s16); }
   .tour-caption .tour-line { flex-basis: 100%; order: -1; }
 }
+
+/* Waiting items of docs/design/mocks/waiting.html: the lead, meta, consequence, the one action and the Why. Amber is the tint of the card and the one needs button, nothing else. */
+.wait-item {
+  display: grid; grid-template-columns: minmax(0, 1fr) 340px; grid-template-areas: "title act" "meta act" "conseq act" "why act";
+  grid-template-rows: auto auto auto 1fr; gap: var(--s4) var(--s32); align-items: start; margin-bottom: var(--s12); padding: calc(var(--s16) + var(--s4)); border-radius: var(--r-card); background: var(--amber-tint);
+}
+.wait-item h3 { grid-area: title; display: flex; align-items: baseline; gap: var(--s8); font-size: var(--t17); overflow-wrap: anywhere; }
+.wait-item h3 .dot { position: relative; top: -2px; }
+.wait-item > .meta { grid-area: meta; padding-left: var(--s16); }
+.wait-item .conseq { grid-area: conseq; margin-top: var(--s4); padding-left: var(--s16); font-weight: 500; }
+.wait-item .act { grid-area: act; display: flex; flex-direction: column; gap: var(--s12); align-self: center; margin: 0; padding: 0; list-style: none; }
+.wait-item .act li { display: flex; flex-direction: column; gap: var(--s4); }
+.wait-item .act .outcome { color: var(--ink); font-size: var(--t13); }
+.wait-item .act .recommended { color: var(--muted); font-size: var(--t13); font-weight: 600; }
+.wait-item .copy { background: var(--raised); }
+.wait-item .copy .btn { background: var(--tint); }
+.wait-item .why { grid-area: why; max-width: 72ch; margin-top: var(--s4); padding-left: var(--s16); }
+/* The summary shows on a desktop too, so the reader who folds the Why there can open it again. */
+.wait-item .why summary { display: inline-flex; align-items: center; gap: var(--s8); color: var(--link); font: 500 var(--t13)/1.4 var(--f-head); cursor: pointer; list-style: none; }
+.wait-item .why summary::-webkit-details-marker { display: none; }
+.wait-item .why summary::after { content: ""; width: 7px; height: 7px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg) translateY(-2px); }
+.wait-item .why[open] summary::after { transform: rotate(-135deg); }
+@media (max-width: 760px) {
+  .wait-item { grid-template-columns: minmax(0, 1fr); grid-template-areas: "title" "meta" "conseq" "act" "why"; grid-template-rows: none; gap: var(--s8); padding: var(--s16); }
+  .wait-item > .meta, .wait-item .why, .wait-item .conseq { padding-left: 0; }
+  .wait-item .why summary { min-height: 44px; font-size: var(--t15); line-height: 1; }
+}

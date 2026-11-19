@@ -27,6 +27,7 @@ const PAGES = [
   { name: 'reviews', path: '/reviews' },
   { name: 'search', path: '/reviews', search: true },
   { name: 'setup', path: '/setup' },
+  { name: 'waiting', path: '/waiting' },
 ];
 
 async function main(argv) {
