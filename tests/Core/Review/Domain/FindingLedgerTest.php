@@ -303,6 +303,7 @@ final class FindingLedgerTest extends TestCase
         $ledger->recordVerdict(1, $this->verdict([], [$this->finding('cart-total')]));
 
         self::assertCount(1, $ledger->open());
+        self::assertSame('F1', $ledger->open()[0]->id);
     }
 
     public function testAFindingThatOnlySharesItsTextWithAFailedReviewIsRecorded(): void
