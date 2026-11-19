@@ -100,7 +100,7 @@ final readonly class ReviewerAgent implements Reviewer
     // Plain code checks the ids, because only the request knows which findings were open; an id the reviewer invented would otherwise close or revive a finding that never existed.
     private function checkedAgainst(ReviewBrief $brief, Verdict $verdict): Verdict
     {
-        $open =array_map(static fn (Finding $finding): string => $finding->id, $brief->open);
+        $open = array_map(static fn (Finding $finding): string => $finding->id, $brief->open);
         $repeated = array_map(static fn (Finding $finding): string => $finding->id, array_filter($verdict->findings, static fn (Finding $finding): bool => $finding->repeat));
         $unknown = array_unique([...array_diff($verdict->resolved, $open), ...array_diff($repeated, $open)]);
 
