@@ -253,7 +253,8 @@ a.card.needs:hover, .card.needs.is-hover { filter: brightness(.98); }
 /* Board: the nine columns side by side, scrolled sideways where they do not fit (docs/design/mocks/index.html). */
 .content.wide { max-width: none; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-.board { display: flex; align-items: flex-start; gap: var(--s16); overflow-x: auto; padding-bottom: var(--s16); }
+/* Positioned, because an absolute .sr-only label in a folded strip past the edge otherwise escapes the scroller and widens the page. */
+.board { display: flex; align-items: flex-start; gap: var(--s16); overflow-x: auto; padding-bottom: var(--s16); position: relative; }
 .board .col { flex: 1 1 0; min-width: 176px; }
 .board .col.col-needs { flex-grow: 1.25; min-width: 224px; }
 .col-head { display: flex; align-items: center; gap: var(--s8); height: 32px; margin-bottom: var(--s8); font-family: var(--f-head); }
