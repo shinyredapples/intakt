@@ -49,7 +49,7 @@ final class ReviewerPromptWiringTest extends KernelTestCase
         $prompt = self::getContainer()->get(ReviewerPrompt::class);
         $diff = "diff --git a/src/Cart.php b/src/Cart.php\n--- a/src/Cart.php\n+++ b/src/Cart.php\n";
 
-        $messages = $prompt->messagesFor(new ReviewerConversation('You review.', new UuidV7()), new ReviewBrief(new ChangeUnderReview('alpha', 'Task.', $diff), []))->getMessages();
+        $messages = $prompt->messagesFor(new ReviewerConversation('You review.', new UuidV7()), new ReviewBrief(new ChangeUnderReview('alpha', 'Task.', $diff), [], 1))->getMessages();
 
         $last = array_last($messages);
         self::assertCount(4, $messages);

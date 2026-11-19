@@ -337,7 +337,7 @@ final class ReviewerRetryVendorTest extends KernelTestCase
     {
         $open = new Finding('F1', Severity::P2, null, null, null, 'Earlier.', FixableBy::Builder, false, null, null);
 
-        return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$open]), new ReviewerConversation('You review for correctness.', new UuidV7()));
+        return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$open], 1), new ReviewerConversation('You review for correctness.', new UuidV7()));
     }
 
     // Optionally on accounts, because config/packages/ai.php puts an AccountFailoverPlatform in front of every configured provider and its failover can hide a transport error thrown while sending, which the retry depends on.
