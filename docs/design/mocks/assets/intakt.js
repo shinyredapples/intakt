@@ -347,7 +347,7 @@
     Checking: "Tasks appear here while their checks run",
     "In review": "Reviews appear here while a panel reviews a change",
     Merging: "Tasks appear here while they wait to merge",
-    Done: "Reviews appear here once the judge has decided them",
+    Done: "Reviews appear here once the Code reviewers' verdict step has decided them",
   };
   function renderBoard() {
     const lanes = document.getElementById("lanes");
@@ -534,7 +534,7 @@
       const octopus = (theme) => `<img class="octopus-${theme}" src="${files[theme]}" alt="" width="144" height="144">`;
       document.getElementById("working").insertAdjacentHTML("beforebegin", `<section class="firstday" aria-labelledby="firstday-h">${octopus("light")}${octopus("dark")}<div><h2 id="firstday-h">Give Intakt its first task</h2>
         <ol><li>Choose <strong>Set up Intakt</strong> and add an AI provider and a project.</li>
-        <li>Start the first review there. It shows up in In review while the panel reviews the change, then in Done once the judge decides.</li>
+        <li>Start the first review there. It shows up in In review while the Code reviewers review the change, then in Done once their verdict step decides.</li>
         <li>Reviewers show up under Who is working while they review it.</li></ol></div></section>`);
       // With no lane the strip would open to nothing, so it is a plain line without a chevron, as the built board renders it.
       document.getElementById("working").outerHTML = '<p class="working working-none" id="working">Nobody is working yet: reviewers appear here while they review a change</p>';
