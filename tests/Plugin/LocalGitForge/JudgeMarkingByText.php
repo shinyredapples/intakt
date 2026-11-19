@@ -15,7 +15,7 @@ use Intakt\Plugin\Vendor\Contract\Vendor;
 use Intakt\Plugin\Vendor\Contract\VendorReview;
 use Override;
 
-// Answers the judge by a finding's text, because the round gives the findings their ids only after the reviewers answered; a finding it does not name acts without a note.
+// Answers the judge by a finding's text, because the round gives the findings their ids only after the reviewers answered; a finding it does not name gets no judge answer at all.
 final readonly class JudgeMarkingByText implements Vendor
 {
     /**
@@ -36,7 +36,9 @@ final readonly class JudgeMarkingByText implements Vendor
     #[Override]
     public function judge(string $project, JudgeRequest $request): Judgement
     {
-        return new Judgement(array_map($this->marked(...), $request->findings));
+        $named = array_filter($request->findings, fn (Finding $finding): bool => array_key_exists($finding->text, $this->marks));
+
+        return new Judgement(array_values(array_map($this->marked(...), $named)));
     }
 
     #[Override]
@@ -47,7 +49,7 @@ final readonly class JudgeMarkingByText implements Vendor
 
     private function marked(Finding $finding): JudgedFinding
     {
-        [$mark, $note] = $this->marks[$finding->text] ?? [Mark::Act, null];
+        [$mark, $note] = $this->marks[$finding->text];
 
         return new JudgedFinding($finding->id, $mark, note: $note);
     }
