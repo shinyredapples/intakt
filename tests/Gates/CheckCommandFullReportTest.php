@@ -7,6 +7,7 @@ namespace Intakt\Tests\Gates;
 use Intakt\Gates\CheckCommand;
 use Intakt\Gates\FullReport;
 use Intakt\Gates\GateResult;
+use Intakt\Gates\JsonNode;
 use Intakt\Gates\ProcessRunner;
 use Intakt\Gates\ScratchDirectory;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -16,6 +17,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[CoversClass(FullReport::class)]
 #[CoversClass(ScratchDirectory::class)]
 #[UsesClass(GateResult::class)]
+#[UsesClass(JsonNode::class)]
 #[UsesClass(ProcessRunner::class)]
 final class CheckCommandFullReportTest extends SandboxTestCase
 {
@@ -32,11 +34,14 @@ final class CheckCommandFullReportTest extends SandboxTestCase
         $summary = $this->summaryOf($run);
         self::assertSame(1, $run->exitCode(), $run->output());
         self::assertSame(['dashes'], $summary['failed'] ?? null);
-        self::assertMatchesRegularExpression('/^report-[0-9a-f]{16}\.json$/', (string) ($summary['report'] ?? ''), $run->output());
+        $name = $summary['report'] ?? null;
+        self::assertIsString($name, $run->output());
+        self::assertMatchesRegularExpression('/^report-[0-9a-f]{16}\.json$/', $name);
         self::assertSame('2', $run->omittedOf('dashes'));
-        $report = $this->decoded((string) file_get_contents($tree->root.'/'.$summary['report']));
-        self::assertSame('fail', $report['result'] ?? null);
-        self::assertCount(self::DASHED_LINES, $report['gates'][0]['findings'] ?? []);
+        $report = JsonNode::parse((string) file_get_contents($tree->root.'/'.$name));
+        self::assertInstanceOf(JsonNode::class, $report);
+        self::assertSame('fail', $report->get('result')->text());
+        self::assertCount(self::DASHED_LINES, array_first($report->get('gates')->items())?->get('findings')->items() ?? []);
     }
 
     public function testWithoutAScratchFolderBinCheckWritesNoReportAndPrintsOnlyJson(): void

@@ -7,6 +7,7 @@ namespace Intakt\Tests\Gates;
 use Intakt\Gates\FullReport;
 use Intakt\Gates\GateReport;
 use Intakt\Gates\GateResult;
+use Intakt\Gates\JsonNode;
 use Intakt\Gates\ProcessResult;
 use Intakt\Gates\ScratchDirectory;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -16,6 +17,7 @@ use Symfony\Component\Filesystem\Filesystem;
 #[CoversClass(FullReport::class)]
 #[UsesClass(GateReport::class)]
 #[UsesClass(GateResult::class)]
+#[UsesClass(JsonNode::class)]
 #[UsesClass(ProcessResult::class)]
 #[UsesClass(ScratchDirectory::class)]
 final class FullReportTest extends SandboxTestCase
@@ -63,7 +65,7 @@ final class FullReportTest extends SandboxTestCase
 
         $name = $fullReport->writeTo($tree->root, self::SUMMARY, [$this->failingLine('dashes', $findings)]);
 
-        self::assertSame($findings, $this->reportIn($tree->root.'/'.$name)['gates'][0]['findings'] ?? null);
+        self::assertSame($findings, $this->findingsIn($tree->root.'/'.$name));
     }
 
     public function testAGateWhoseChildKeptNothingIsReportedByItsLine(): void
@@ -73,7 +75,7 @@ final class FullReportTest extends SandboxTestCase
 
         $name = $fullReport->writeTo($tree->root, self::SUMMARY, [$this->failingLine('dashes', ['from the line'])]);
 
-        self::assertSame(['from the line'], $this->reportIn($tree->root.'/'.$name)['gates'][0]['findings'] ?? null);
+        self::assertSame(['from the line'], $this->findingsIn($tree->root.'/'.$name));
     }
 
     public function testAKeptResultThatContradictsTheGateLineIsReplacedByTheLine(): void
@@ -84,7 +86,7 @@ final class FullReportTest extends SandboxTestCase
 
         $name = $fullReport->writeTo($tree->root, self::SUMMARY, [$this->failingLine('dashes', ['from the line'])]);
 
-        self::assertSame(['from the line'], $this->reportIn($tree->root.'/'.$name)['gates'][0]['findings'] ?? null);
+        self::assertSame(['from the line'], $this->findingsIn($tree->root.'/'.$name));
     }
 
     public function testTheScratchFolderIsGoneOnceTheReportIsWritten(): void
@@ -125,6 +127,17 @@ final class FullReportTest extends SandboxTestCase
     private function failingLine(string $gate, array $findings): GateReport
     {
         return GateReport::fromChild($gate, new ProcessResult(1, GateResult::withFindings($gate, $findings)->toJson()."\n", ''));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function findingsIn(string $file): array
+    {
+        $report = JsonNode::parse((string) file_get_contents($file));
+        self::assertInstanceOf(JsonNode::class, $report);
+
+        return array_map(static fn (JsonNode $finding): string => $finding->text(), array_first($report->get('gates')->items())?->get('findings')->items() ?? []);
     }
 
     /**
