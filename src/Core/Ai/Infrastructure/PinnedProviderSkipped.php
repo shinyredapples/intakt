@@ -7,7 +7,7 @@ namespace Intakt\Core\Ai\Infrastructure;
 use Intakt\Core\Ai\Contract\PinnedProvider;
 use RuntimeException;
 
-// Thrown to AccountFailoverPlatform's FailoverPlatform only, which moves on to the next account; the message holds the account key and the router provider from the owner's model id, never a key.
+// Thrown instead of sending, because FailoverPlatform moves on to the next account after any exception.
 final class PinnedProviderSkipped extends RuntimeException
 {
     public function __construct(PinnedProvider $provider)
