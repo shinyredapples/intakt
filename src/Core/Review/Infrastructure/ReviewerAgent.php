@@ -71,11 +71,24 @@ final readonly class ReviewerAgent implements Reviewer
             throw VerdictUnreadable::becauseKeySafe('the reviewer made a malformed tool call.');
         }
 
+        // Before the cut approval is put in its place, because a reviewer that names a reserved id has given an unreadable answer whatever it decided, and is asked once more.
+        $this->refuseClaimedFailureIds($verdict);
+
         if ($this->approvesCutText($verdict, $request->brief, $fenced)) {
             return Verdict::cutApproval();
         }
 
         return $this->checkedAgainst($request->brief, $verdict);
+    }
+
+    // Refused like unreadable output, because a counted vote under a reserved id would send the head back with findings the ledger drops; key-safe, because only Intakt's own ids are named.
+    private function refuseClaimedFailureIds(Verdict $verdict): void
+    {
+        $claimed = $verdict->claimedFailureIds();
+
+        if ([] !== $claimed) {
+            throw VerdictUnreadable::becauseKeySafe(sprintf('the verdict names finding ids reserved for failed reviews: %s.', implode(', ', $claimed)));
+        }
     }
 
     // Plain code refuses it, because the note asking the reviewer to read the rest is only prompt text, and a steered or lazy reviewer could approve code it never saw.
@@ -87,14 +100,7 @@ final readonly class ReviewerAgent implements Reviewer
     // Plain code checks the ids, because only the request knows which findings were open; an id the reviewer invented would otherwise close or revive a finding that never existed.
     private function checkedAgainst(ReviewBrief $brief, Verdict $verdict): Verdict
     {
-        // Refused like unreadable output, because a counted vote under a reserved id would send the head back with findings the ledger drops; key-safe, because only Intakt's own ids are named.
-        $claimed = $verdict->claimedFailureIds();
-
-        if ([] !== $claimed) {
-            throw VerdictUnreadable::becauseKeySafe(sprintf('the verdict names finding ids reserved for failed reviews: %s.', implode(', ', $claimed)));
-        }
-
-        $open = array_map(static fn (Finding $finding): string => $finding->id, $brief->open);
+        $open =array_map(static fn (Finding $finding): string => $finding->id, $brief->open);
         $repeated = array_map(static fn (Finding $finding): string => $finding->id, array_filter($verdict->findings, static fn (Finding $finding): bool => $finding->repeat));
         $unknown = array_unique([...array_diff($verdict->resolved, $open), ...array_diff($repeated, $open)]);
 
