@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Ai\Infrastructure;
 
 use Intakt\Core\Ai\Contract\Account;
+use Intakt\Core\Ai\Contract\AccountCooldowns;
 use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
 use Intakt\Core\Ai\Contract\PinnedProvider;
 use Intakt\Core\Ai\Contract\PinnedProviderCooldownNotSaved;
@@ -174,6 +175,28 @@ final class PinnedProviderCooldownTest extends TestCase
         $wait = $this->waitAfterEveryAccountIsOut($this->onlyDefault($this->answering('first'), $this->accountWindows(Account::DEFAULT)));
 
         self::assertContains($wait, [3599, 3600]);
+    }
+
+    public function testAnAccountWindowThatEndsBetweenTheRefreshAndTheReadIsStartedAgainWhileThePinCools(): void
+    {
+        $this->pinned->coolDown($this->deepinfra(Account::DEFAULT), 120);
+        $ending = new WindowEndingBeforeTheRead();
+
+        $wait = $this->waitAfterEveryAccountIsOut(new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $this->answering('first')], $ending, new NativeClock(), new NullLogger(), $this->pinned));
+
+        self::assertSame([120, true], [$wait, $ending->isCoolingDown(new Account(Provider::OpenAiCompatible, Account::DEFAULT))]);
+    }
+
+    public function testAnAccountWindowThatEndsBeforeTheReadStaysEndedWhenNoPinCools(): void
+    {
+        $ended = $this->createMock(AccountCooldowns::class);
+        $ended->method('isCoolingDown')->willReturn(true);
+        $ended->method('secondsUntilAnAccountIsFree')->willReturn(0);
+        $ended->expects(self::never())->method('coolDown');
+
+        $wait = $this->waitAfterEveryAccountIsOut(new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $this->answering('first')], $ended, new NativeClock(), new NullLogger(), $this->pinned));
+
+        self::assertSame(0, $wait);
     }
 
     public function testAnAccountWhosePinCoolsIsNotCooledDownWhileAnotherAccountTakesTheCall(): void

@@ -144,25 +144,35 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
             return new EveryKeyRejected($this->provider);
         }
 
-        $this->coolDownAccountsWhosePinCools($routerProvider);
-
-        return new EveryAccountCoolingDown($this->provider, $this->cooldowns->secondsUntilAnAccountIsFree($this->provider));
-    }
-
-    // The pinned window can outlive the account's own (a later 429 in flight extends only the pinned one, and an account waits a day at most), and AccountLimitedVendor reads its wait from the account cooldowns alone, so the account waits out its pin; otherwise the caller would be told to start again at once for as long as the pin cools. A running account cooldown is kept as it is by the store.
-    private function coolDownAccountsWhosePinCools(?string $routerProvider): void
-    {
-        if (null === $routerProvider) {
-            return;
+        $aPinCools = $this->coolDownAccountsWhosePinCools($routerProvider);
+        $wait = $this->cooldowns->secondsUntilAnAccountIsFree($this->provider);
+        if (0 === $wait && $aPinCools) {
+            // The store kept an account window that still ran as it was asked and has ended since, so no window covers the pin: asked again, the store starts one. Repaired in the store and not in the wait thrown, because AccountLimitedVendor reads its wait from the store again.
+            $this->coolDownAccountsWhosePinCools($routerProvider);
+            $wait = $this->cooldowns->secondsUntilAnAccountIsFree($this->provider);
         }
 
+        return new EveryAccountCoolingDown($this->provider, $wait);
+    }
+
+    // The pinned window can outlive the account's own (a later 429 in flight extends only the pinned one, and an account waits a day at most), and AccountLimitedVendor reads its wait from the account cooldowns alone, so the account waits out its pin; otherwise the caller would be told to start again at once for as long as the pin cools. A running account cooldown is kept as it is by the store. Says whether a pin still cools, so the caller can tell a wait of zero that a free account explains from one an ended window left.
+    private function coolDownAccountsWhosePinCools(?string $routerProvider): bool
+    {
+        if (null === $routerProvider) {
+            return false;
+        }
+
+        $aPinCools = false;
         foreach (array_keys($this->platforms) as $name) {
             $account = new Account($this->provider, $name);
             $pinnedWait = $this->pinnedCooldowns->secondsUntilFree(new PinnedProvider($account, $routerProvider));
             if (0 < $pinnedWait) {
                 $this->cooldowns->coolDown($account, $pinnedWait);
+                $aPinCools = true;
             }
         }
+
+        return $aPinCools;
     }
 
     // Judged across calls through the shared cooldowns, because two accounts whose rejections land a moment apart would otherwise each be free in turn and the call would wait forever (one worker's rejection beside another's).
