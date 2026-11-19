@@ -12,16 +12,22 @@ final class JavaScriptLexer
     private const int OPERATOR = 1;
     private const int DOT = 2;
     private const int HEAD_KEYWORD = 3;
+    private const int CLOSING_PARENTHESIS = 4;
+    private const int STATEMENT_END = 5;
+    private const array ENDS_AN_OPERAND = [self::OPERAND, self::CLOSING_PARENTHESIS];
+    private const array OPENS_A_BLOCK = [self::OPERAND, self::CLOSING_PARENTHESIS, self::STATEMENT_END];
     private const int PARENTHESIS = 0;
     private const int HEAD_PARENTHESIS = 1;
     private const int BRACKET = 2;
     private const int BRACE = 3;
     private const int TEMPLATE_EXPRESSION = 4;
+    private const int BLOCK = 5;
     private const array HEAD_KEYWORDS = ['if', 'while', 'for', 'with'];
-    private const array KEYWORDS_BEFORE_AN_OPERAND = ['return', 'typeof', 'case', 'do', 'else', 'in', 'of', 'new', 'delete', 'void', 'throw', 'instanceof', 'yield', 'await'];
+    private const array BLOCK_KEYWORDS = ['do', 'else', 'try', 'finally'];
+    private const array KEYWORDS_BEFORE_AN_OPERAND = ['return', 'typeof', 'case', 'default', 'in', 'of', 'new', 'delete', 'void', 'throw', 'instanceof', 'yield', 'await'];
 
     private readonly JavaScriptLiterals $literals;
-    private int $previous = self::OPERATOR;
+    private int $previous = self::STATEMENT_END;
 
     /**
      * @var list<int>
@@ -55,10 +61,11 @@ final class JavaScriptLexer
     private function afterToken(int $offset): int
     {
         $char = $this->literals->source[$offset];
+        $space = $this->literals->multibyteSpaceLengthAt($offset);
 
         return match (true) {
             str_contains(self::WHITESPACE, $char) => $offset + strspn($this->literals->source, self::WHITESPACE, $offset),
-            $this->literals->separatorAt($offset) => $offset + 3,
+            0 < $space => $offset + $space,
             '/' === $char => $this->afterSlash($offset),
             "'" === $char, '"' === $char => $this->after(self::OPERAND, $this->literals->afterString($offset + 1, $char)),
             '`' === $char => $this->afterTemplateText($offset + 1),
@@ -73,7 +80,7 @@ final class JavaScriptLexer
         return match (true) {
             '/' === ($this->literals->source[$offset + 1] ?? '') => $this->afterLineComment($offset),
             '*' === ($this->literals->source[$offset + 1] ?? '') => $this->afterBlockComment($offset),
-            self::OPERAND !== $this->previous => $this->after(self::OPERAND, $this->literals->afterRegex($offset + 1)),
+            !in_array($this->previous, self::ENDS_AN_OPERAND, true) => $this->after(self::OPERAND, $this->literals->afterRegex($offset + 1)),
             default => $this->after(self::OPERATOR, $offset + 1),
         };
     }
@@ -151,7 +158,10 @@ final class JavaScriptLexer
             self::DOT === $this->previous => $this->after(self::OPERAND, $end),
             // Because `for await (` heads a loop like `for (`, the keyword between them keeps the head.
             'await' === $word && self::HEAD_KEYWORD === $this->previous => $end,
+            // Because `of` is a keyword only between the parentheses of a `for` head, elsewhere it names a variable.
+            'of' === $word && self::HEAD_PARENTHESIS !== array_last($this->frames) => $this->after(self::OPERAND, $end),
             in_array($word, self::HEAD_KEYWORDS, true) => $this->after(self::HEAD_KEYWORD, $end),
+            in_array($word, self::BLOCK_KEYWORDS, true) => $this->after(self::STATEMENT_END, $end),
             in_array($word, self::KEYWORDS_BEFORE_AN_OPERAND, true) => $this->after(self::OPERATOR, $end),
             default => $this->after(self::OPERAND, $end),
         };
@@ -162,11 +172,16 @@ final class JavaScriptLexer
         return match ($char) {
             '(' => $this->open(self::HEAD_KEYWORD === $this->previous ? self::HEAD_PARENTHESIS : self::PARENTHESIS, $offset),
             '[' => $this->open(self::BRACKET, $offset),
-            '{' => $this->open(self::BRACE, $offset),
+            // Because in ordinary code a brace after an operator opens an object and any other brace opens a block or a class or function body.
+            '{' => $this->open(in_array($this->previous, self::OPENS_A_BLOCK, true) ? self::BLOCK : self::BRACE, $offset),
             ')', ']' => $this->afterClosingBracket($offset),
             '}' => $this->afterClosingBrace($offset),
             '.' => $this->afterDot($offset),
             '+', '-' => $this->afterPlusOrMinus($offset, $char),
+            // Because the name after `#` is a private property, it is never a keyword, as after a `.`.
+            '#' => $this->after(self::DOT, $offset + 1),
+            ';' => $this->after(self::STATEMENT_END, $offset + 1),
+            '=' => '>' === ($this->literals->source[$offset + 1] ?? '') ? $this->after(self::STATEMENT_END, $offset + 2) : $this->after(self::OPERATOR, $offset + 1),
             default => $this->after(self::OPERATOR, $offset + 1),
         };
     }
@@ -175,7 +190,7 @@ final class JavaScriptLexer
     {
         $this->frames[] = $frame;
 
-        return $this->after(self::OPERATOR, $offset + 1);
+        return $this->after(self::BLOCK === $frame ? self::STATEMENT_END : self::OPERATOR, $offset + 1);
     }
 
     // Because the parenthesis that closes an `if`, `while`, `for` or `with` head ends no operand, a slash after it starts a pattern.
@@ -183,14 +198,21 @@ final class JavaScriptLexer
     {
         $frame = self::TEMPLATE_EXPRESSION === array_last($this->frames) ? null : array_pop($this->frames);
 
-        return $this->after(self::HEAD_PARENTHESIS === $frame ? self::OPERATOR : self::OPERAND, $offset + 1);
+        return $this->after(match ($frame) {
+            self::HEAD_PARENTHESIS => self::STATEMENT_END,
+            self::PARENTHESIS => self::CLOSING_PARENTHESIS,
+            default => self::OPERAND,
+        }, $offset + 1);
     }
 
+    // Because a statement may follow the brace that closes a block, a slash after it starts a pattern, while after an object it divides.
     private function afterClosingBrace(int $offset): int
     {
-        $frame = array_pop($this->frames);
-
-        return self::TEMPLATE_EXPRESSION === $frame ? $this->afterTemplateText($offset + 1) : $this->after(self::OPERAND, $offset + 1);
+        return match (array_pop($this->frames)) {
+            self::TEMPLATE_EXPRESSION => $this->afterTemplateText($offset + 1),
+            self::BLOCK => $this->after(self::STATEMENT_END, $offset + 1),
+            default => $this->after(self::OPERAND, $offset + 1),
+        };
     }
 
     private function afterDot(int $offset): int
