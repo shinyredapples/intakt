@@ -57,7 +57,7 @@ final class BoardHeadlineRoundUpdatesTest extends KernelTestCase
 {
     private const string ROUND = '0199a5b4-0000-7000-8000-000000000001';
 
-    private const string STREAM_START = '<turbo-stream action="update" target="board-headline"><template>';
+    private const string STREAM_START = '<turbo-stream action="update" method="morph" target="board-headline"><template>';
 
     private DashboardLedger $ledger;
 
