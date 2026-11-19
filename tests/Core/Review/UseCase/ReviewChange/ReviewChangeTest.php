@@ -578,7 +578,7 @@ final class ReviewChangeTest extends KernelTestCase
             new WorkerOnSleep($this->fixture->clock, $work),
             new FailureInWords(),
             $this->tiers,
-            new FailedJudgings($this->failureTransport()),
+            new FailedJudgings($this->failureTransport(), $this->fixture->ledger(), $this->fixture->ledgerPayloads()),
             $upperWait,
         );
     }

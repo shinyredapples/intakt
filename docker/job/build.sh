@@ -4,7 +4,7 @@
 # Copies the build clone's branches into TMPDIR, runs Claude Code there with the prompt on its input, then bundles the branch's new commits.
 # The builder's bin/check runs <gates at once> gates at the same time, a count the orchestrator hands over only when it is below what bin/check picks from the job's limits; when it is empty, INTAKT_GATE_SLOTS is left as the job's environment has it (unset unless the image sets it), so bin/check uses the job's limits (its CPUs and memory) to size its gates at once itself.
 # The session ends at its turn limit or when the allowance is used up, and the script outlives it, so what it committed before is still bundled.
-# Writes build.log, handback.bundle (only when the branch has new commits) and pull-request.md (only when PR.md is a regular file) into INTAKT_JOB_OUTPUT.
+# Writes build.log, handback.bundle (only when the branch has new commits), pull-request.md (only when PR.md is a regular file) and question.json (only when QUESTION.json is a regular file) into INTAKT_JOB_OUTPUT.
 set -u
 
 source="$1"
@@ -37,6 +37,17 @@ fi
 
 cd "$clone" || exit 1
 base="$(git rev-parse HEAD)"
+# The bytes of a QUESTION.json the checkout already holds, read before the session and kept in a variable the builder cannot write:
+# the checkout's bytes and not the commit's, because a checkout that converts line endings holds other bytes than the commit.
+# Hashed by sha256sum and not by git, because git's hash follows the clone's settings (its object format, its filters), which the builder can write.
+# A hash that could not be taken is no baseline, because an empty one would make any question count as written, so none is handed back then.
+question_before=''
+question_hashed=1
+if [ -f QUESTION.json ] && [ ! -L QUESTION.json ]; then
+    if ! question_before="$(sha256sum 2>/dev/null < QUESTION.json)" || [ -z "$question_before" ]; then
+        question_hashed=0
+    fi
+fi
 
 # The egress allowlist lets only the vendor's API through, so the CLI's telemetry and update checks would only fail.
 CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1
@@ -65,10 +76,6 @@ if [ "$status" -ne 137 ]; then
 fi
 wait "$watchdog" 2>/dev/null
 cut=$?
-printf 'claude exited with %d\n' "$status" >> "$log"
-if [ "$cut" -eq 0 ]; then
-    printf 'claude cut after %d seconds, its commits are kept\n' "$allowance" >> "$log"
-fi
 
 # A process the builder leaves running could write into the output after the cleanup below, so none is left.
 # In the container this script is the first process of the job's own process namespace, so every other process there is the builder's,
@@ -79,24 +86,67 @@ else
     kill -s KILL -- "-$session" 2>/dev/null
 fi
 
+# The builder can write to the output folder too, and take its permissions away, so its access is restored before the log is written again.
+# chmod follows a link, so a link the builder left is removed below without being touched.
+chmod u+rwx -- "$output"
+printf 'claude exited with %d\n' "$status" >> "$log"
+if [ "$cut" -eq 0 ]; then
+    printf 'claude cut after %d seconds, its commits are kept\n' "$allowance" >> "$log"
+fi
+
 # The builder can write git's global and system settings too, for example an include that waits on a pipe or runs a command, so git no longer reads them.
 GIT_CONFIG_GLOBAL=/dev/null
 GIT_CONFIG_NOSYSTEM=1
 export GIT_CONFIG_GLOBAL GIT_CONFIG_NOSYSTEM
+# Git finds its repository by searching upward from a folder whose .git it cannot use, and the builder can make one in the work area above the clone,
+# so the repository is named: relative, because the builder could put a link at the clone's path, never in place of the folder this script is in.
+GIT_DIR=.git
+GIT_WORK_TREE=.
+export GIT_DIR GIT_WORK_TREE
+# The same for the clone's own settings, which git reads in the clone, so they are replaced by the script's, written without git, which would read them;
+# the format is the one read before the session, a commondir file would point git at another folder's settings, and a HEAD git cannot read would make .git no repository.
+replace_settings() {
+    # A link at .git would take the removal and the new files outside the clone, and the builder can take the permissions away too.
+    if [ ! -d .git ] || [ -L .git ]; then
+        echo '.git is not a folder of the clone' >&2
+        return 1
+    fi
+    chmod u+rwx -- .git || return 1
+    # Alternates tell git where else to read objects, so they are settings too; a link on their path would take the removal outside the clone.
+    for folder in .git/objects .git/objects/info; do
+        if [ -L "$folder" ]; then
+            echo "$folder is not a folder of the clone" >&2
+            return 1
+        fi
+        if [ -d "$folder" ]; then
+            chmod u+rwx -- "$folder" || return 1
+        fi
+    done
+    rm -rf -- .git/config .git/commondir .git/HEAD .git/objects/info/alternates .git/objects/info/http-alternates || return 1
+    printf 'ref: refs/heads/%s\n' "$branch" > .git/HEAD || return 1
+    if [ "$format" = sha1 ]; then
+        printf '[core]\n\trepositoryformatversion = 0\n\tbare = false\n' > .git/config
+    else
+        printf '[core]\n\trepositoryformatversion = 1\n\tbare = false\n[extensions]\n\tobjectformat = %s\n' "$format" > .git/config
+    fi
+}
+settings_replaced=1
+if ! replace_settings >> "$log" 2>&1; then
+    settings_replaced=0
+fi
 
-# The builder can write to the output folder too, and take its permissions away, so only what this script writes after the session is handed back.
-# chmod follows a link, so a link the builder left is removed without being touched.
-chmod u+rwx -- "$output"
-for planted in "$output/pull-request.md" "$output/handback.bundle"; do
+# Only what this script writes after the session is handed back.
+for planted in "$output/pull-request.md" "$output/handback.bundle" "$output/question.json"; do
     if [ -d "$planted" ] && [ ! -L "$planted" ]; then
         chmod -R u+rwx -- "$planted"
     fi
 done
-rm -rf -- "$output/pull-request.md" "$output/handback.bundle"
+rm -rf -- "$output/pull-request.md" "$output/handback.bundle" "$output/question.json"
 
 # The orchestrator reads this exit code as no result, because a planted file left here would otherwise be handed back.
 if [ -e "$output/pull-request.md" ] || [ -L "$output/pull-request.md" ] \
-    || [ -e "$output/handback.bundle" ] || [ -L "$output/handback.bundle" ]; then
+    || [ -e "$output/handback.bundle" ] || [ -L "$output/handback.bundle" ] \
+    || [ -e "$output/question.json" ] || [ -L "$output/question.json" ]; then
     echo 'the output folder could not be cleared' >> "$log"
     exit 3
 fi
@@ -104,6 +154,27 @@ fi
 # A link is not followed, because it could point the text at any file the job can read.
 if [ -f PR.md ] && [ ! -L PR.md ]; then
     cp PR.md "$output/pull-request.md"
+fi
+
+# The same for the question, which says the builder stopped to ask instead of building;
+# a QUESTION.json the checkout already held when the session started is not this builder's question, so it is handed back only when the session wrote it or changed its bytes.
+# The same sha256sum of the file's bytes as before the session, so no git setting the builder wrote in the clone reaches the comparison.
+# A hash that fails after the session is no change either, because only a hash that was taken can show other bytes.
+# The failed baseline is logged whether or not the file is still there, because the builder can remove it.
+if [ "$question_hashed" -eq 0 ]; then
+    echo 'QUESTION.json is not handed back: it could not be hashed before the session' >> "$log"
+elif [ -f QUESTION.json ] && [ ! -L QUESTION.json ]; then
+    if ! question_after="$(sha256sum 2>/dev/null < QUESTION.json)" || [ -z "$question_after" ]; then
+        echo 'QUESTION.json is not handed back: it could not be hashed after the session' >> "$log"
+    elif [ "$question_after" != "$question_before" ]; then
+        cp QUESTION.json "$output/question.json"
+    fi
+fi
+
+# Settings the script could not replace may still be the builder's, which git would read, so no git command runs then.
+if [ "$settings_replaced" -eq 0 ]; then
+    echo 'no bundle is handed back: the clone'"'"'s git settings could not be replaced' >> "$log"
+    exit 0
 fi
 
 # The branch by its full name, so a branch the builder checked out instead is never what is handed back; git refuses an empty bundle.
