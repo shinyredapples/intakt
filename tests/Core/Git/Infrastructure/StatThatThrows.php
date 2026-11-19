@@ -17,7 +17,7 @@ final class StatThatThrows
     /**
      * @return array<int|string, int>|false
      */
-    public function url_stat(string $path, int $flags): array|false
+    public function url_stat(): array|false
     {
         throw new InvalidArgumentException('unexpected');
     }
