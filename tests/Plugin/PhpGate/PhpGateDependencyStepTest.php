@@ -24,12 +24,6 @@ final class PhpGateDependencyStepTest extends TestCase
     // Because the fixtures serve their own packages, a proxy nobody listens on turns any request to Packagist into a failed test.
     private const array OFFLINE = ['http_proxy' => 'http://127.0.0.1:9', 'https_proxy' => 'http://127.0.0.1:9', 'HTTP_PROXY' => 'http://127.0.0.1:9', 'HTTPS_PROXY' => 'http://127.0.0.1:9', 'no_proxy' => '', 'NO_PROXY' => ''];
 
-    // Removed from the commands' environment, because a Composer setting of whoever runs the test would point the fixtures at another manifest or vendor folder, refuse the local package repositories or skip the scripts the tests expect.
-    private const array NOT_INHERITED = ['COMPOSER' => false, 'COMPOSER_VENDOR_DIR' => false, 'COMPOSER_DISABLE_NETWORK' => false, 'COMPOSER_AUTH' => false, 'COMPOSER_SKIP_SCRIPTS' => false];
-
-    // Removed as well, because a Git hook or a caller that sets them would make the fixtures' git add and git commit write into the caller's repository and index instead of the fixture's.
-    private const array GIT_NOT_INHERITED = ['GIT_DIR' => false, 'GIT_WORK_TREE' => false, 'GIT_INDEX_FILE' => false, 'GIT_OBJECT_DIRECTORY' => false, 'GIT_ALTERNATE_OBJECT_DIRECTORIES' => false, 'GIT_COMMON_DIR' => false, 'GIT_NAMESPACE' => false, 'GIT_PREFIX' => false];
-
     private string $directory;
 
     private DependencyStep $step;
@@ -137,6 +131,24 @@ final class PhpGateDependencyStepTest extends TestCase
         self::assertStringContainsString('composer.lock changed during the install', $install->getErrorOutput());
     }
 
+    public function testTheLockedInstallReportsTheRewrittenLockFileAlsoWhenTheCallersShellExitsOnTheFirstFailingCommand(): void
+    {
+        $this->project([
+            'repositories' => [
+                ['packagist.org' => false],
+                ['type' => 'package', 'package' => ['name' => 'fixture/absent', 'version' => '1.0.0', 'dist' => ['type' => 'zip', 'url' => './absent.zip']]],
+            ],
+            'require' => ['fixture/absent' => '1.0.0'],
+        ]);
+        new Filesystem()->dumpFile($this->directory.'/composer.lock', '{}');
+
+        $install = $this->runInProject('set -e; '.PhpGateSteps::LOCKED_INSTALL);
+
+        self::assertSame(1, $install->getExitCode());
+        self::assertStringNotEqualsFile($this->directory.'/composer.lock', '{}');
+        self::assertStringContainsString('composer.lock changed during the install', $install->getErrorOutput());
+    }
+
     public function testTheLockedInstallExitsWithComposersOwnCodeWhenComposerFailsWithoutTouchingTheLockFile(): void
     {
         $this->project([
@@ -192,10 +204,21 @@ final class PhpGateDependencyStepTest extends TestCase
             new Filesystem()->dumpFile($other.'/unrelated', 'unrelated change');
             $this->project([]);
 
-            $this->withInherited(['GIT_DIR' => $other.'/.git', 'GIT_WORK_TREE' => $other], function (): void {
+            $inherited = [
+                'GIT_DIR' => $other.'/.git',
+                'GIT_WORK_TREE' => $other,
+                'COMPOSER_NO_DEV' => '1',
+                'GIT_CONFIG_COUNT' => '1',
+                'GIT_CONFIG_KEY_0' => 'commit.gpgsign',
+                'GIT_CONFIG_VALUE_0' => 'true',
+            ];
+            $noDev = null;
+            $this->withInherited($inherited, function () use (&$noDev): void {
                 $this->mustRun('git init -q -b main && git add -A && git commit -qm fixture');
+                $noDev = $this->mustRun('php -r \'var_export(getenv("COMPOSER_NO_DEV"));\'');
             });
 
+            self::assertSame('false', $noDev);
             self::assertDirectoryExists($this->directory.'/.git');
             self::assertNotSame(0, Process::fromShellCommandline('git rev-parse --verify --quiet HEAD', $other, $git)->run());
             self::assertSame('', Process::fromShellCommandline('git diff --cached --name-only', $other, $git)->mustRun()->getOutput());
@@ -314,13 +337,17 @@ final class PhpGateDependencyStepTest extends TestCase
 
     private function runInProject(string $command): Process
     {
+        // Every Composer and Git variable of whoever runs the test is removed, read at run time because a typed list has missed one each time: such a setting points the fixtures at another manifest, repository or index, changes which packages install or makes the fixture commits ask for a signature.
+        $inherited = array_filter(
+            array_map(strval(...), array_keys([...getenv(), ...$_ENV, ...$_SERVER])),
+            static fn (string $name): bool => str_starts_with($name, 'COMPOSER') || str_starts_with($name, 'GIT_'),
+        );
         $process = Process::fromShellCommandline($command, $this->directory, [
+            ...array_fill_keys($inherited, false),
             ...self::OFFLINE,
             'COMPOSER_HOME' => $this->directory.'/.composer-home',
             'COMPOSER_CACHE_DIR' => $this->directory.'/.composer-cache',
             'COMPOSER_ALLOW_SUPERUSER' => '1',
-            ...self::NOT_INHERITED,
-            ...self::GIT_NOT_INHERITED,
             'GIT_CONFIG_GLOBAL' => '/dev/null',
             'GIT_CONFIG_NOSYSTEM' => '1',
             'GIT_AUTHOR_NAME' => 'Fixture',
