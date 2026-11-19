@@ -17,8 +17,8 @@ flowchart TD
     verdicts --> complete{"Every reviewer in?"}
     complete -->|no| wait["The round stays collecting"]
     complete -->|yes| quorum["Round complete: the quorum policy decides, findings join the change's finding list"]
-    quorum --> judge["JudgeRound: the quote check drops findings quoting code not in the change, the judge marks the rest act, defer or reject (a P3 that is a local edit in a touched file is act); every P1 and P2 it was given reaches the act list whatever its mark, with the judge's note"]
-    judge --> act["Act list (every kept P1 and P2, and the P3s marked act), follow-ups and dropped P3 findings with their reasons in judge_done"]
+    quorum --> judge["JudgeRound: the quote check drops findings quoting code not in the change, the judge marks the rest act, defer or reject (a P3 that is a local edit in a touched file is act); every P1 and P2 it was given reaches the act list whatever its mark; a P1 or P2 marked defer or reject keeps the judge's note, if it gave one"]
+    judge --> act["Act list (every kept P1 and P2, and the P3s marked act), follow-ups (the P3s marked defer) and the quote check's dropped findings, of any severity, with their reasons in judge_done"]
     act --> ledger[("Ledger")]
     open --> ledger
     verdicts --> ledger
