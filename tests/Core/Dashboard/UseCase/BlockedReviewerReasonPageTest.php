@@ -123,6 +123,16 @@ final class BlockedReviewerReasonPageTest extends WebTestCase
         return $tester;
     }
 
+    private function panel(): Panel
+    {
+        $members = array_map(
+            static fn (int $number): PanelReviewer => new PanelReviewer(new ReviewerRole('role-'.$number, 'Look at part '.$number.'.'), new ReviewerModel(Tier::Standard, Provider::Anthropic), 1),
+            [1, 2],
+        );
+
+        return new Panel($members, QuorumPolicy::All);
+    }
+
     private function reviewChange(): ReviewChange
     {
         $fixture = $this->fixture;
@@ -167,15 +177,5 @@ final class BlockedReviewerReasonPageTest extends WebTestCase
         }
 
         self::fail('The round has no role-1 reviewer.');
-    }
-
-    private function panel(): Panel
-    {
-        $members = array_map(
-            static fn (int $number): PanelReviewer => new PanelReviewer(new ReviewerRole('role-'.$number, 'Look at part '.$number.'.'), new ReviewerModel(Tier::Standard, Provider::Anthropic), 1),
-            [1, 2],
-        );
-
-        return new Panel($members, QuorumPolicy::All);
     }
 }

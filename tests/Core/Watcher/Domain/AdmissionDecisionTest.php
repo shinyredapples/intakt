@@ -171,16 +171,16 @@ final class AdmissionDecisionTest extends TestCase
         return $this->admissionOfRuns(...array_map(fn (CiRunState $state): CiRun => $this->ciRun($state, 0), $states));
     }
 
-    private function admissionOfRuns(CiRun ...$runs): HeadAdmission
-    {
-        return new AdmissionDecision()->admissionOf(new CiState(new CommitId(str_repeat('a', 40)), array_values($runs)));
-    }
-
     private function ciRun(CiRunState $state, int $minutesAfterTen, ?CiRunOrigin $origin = null): CiRun
     {
         $startedAt = new DateTimeImmutable('2026-11-02T10:00:00+00:00')->add(new DateInterval('PT'.$minutesAfterTen.'M'));
 
         return new CiRun($origin ?? new CiRunOrigin('ci', 'pull_request', new ChangeId('7')), $state, $startedAt);
+    }
+
+    private function admissionOfRuns(CiRun ...$runs): HeadAdmission
+    {
+        return new AdmissionDecision()->admissionOf(new CiState(new CommitId(str_repeat('a', 40)), array_values($runs)));
     }
 
     private function decided(string $id, HeadAdmission $admission): HeadDecision

@@ -118,53 +118,114 @@ final readonly class SymfonyAiVendor implements Vendor
         return true;
     }
 
-    // Retried once, because a call stopped by the output limit or an answer that is no verdict leaves nothing to judge and the same room could stop it again, a changes verdict without findings is no verdict either, an endpoint that could not be reached is often reached on the next call, and a stream cut before its answer completed may be a streaming fault the provider does not have unstreamed; a second failure fails the reviewer. A stream that a subscription CLI cut is not retried, because its call never streamed, and neither is a cut caused by a provider outage, because the outage has already cooled the account down and retrying would turn a blocked reviewer into a waiting one.
-    /**
-     * @param Closure(): Verdict                                                                                                                $first
-     * @param Closure(MaxOutputTokensException|VerdictUnreadable|ChangesWithoutFindings|ProviderUnreachable|IncompleteStreamException): Verdict $retry
-     */
-    private function retriedOnce(Closure $first, Closure $retry): Verdict
+    private function answering(string $project, Tier $tier): ResolvedModel
     {
         try {
-            return $first();
-        } catch (MaxOutputTokensException|VerdictUnreadable|ChangesWithoutFindings|ProviderUnreachable|IncompleteStreamException $failure) {
-            return $retry($failure);
+            return $this->tiers->answering($project, $tier);
+        } catch (EveryAccountCoolingDown|EveryProviderOut|EveryKeyRejected $out) {
+            throw $this->typed($out);
         }
     }
 
-    // A second cut keeps the first cut's reason, so the reviewer ends as it did before the retry; a provider failure of the retry follows its own rule, so an outage is handled as one, and no other failure of it is retried, because retriedOnce() catches only the first try's.
-    /**
-     * @param Closure(): Verdict $unstreamed
-     */
-    private function unstreamedAfter(IncompleteStreamException $cut, Closure $unstreamed): Verdict
+    // Matched on the exception type because the provider's text can change and carries anything (plan T5).
+    private function typed(Throwable $failure): Throwable
     {
-        try {
-            return $unstreamed();
-        } catch (IncompleteStreamException) {
-            throw $cut;
-        }
+        return match (true) {
+            $failure instanceof RateLimitExceededException => new ProviderRateLimited($failure->getRetryAfter(), $failure),
+            $failure instanceof EveryProviderOut => new NoProviderLeft($failure->getMessage(), $failure),
+            $failure instanceof AuthenticationException => new ProviderRejectedTheKey($failure),
+            $failure instanceof EveryAccountCoolingDown => new ProviderRateLimited($failure->secondsUntilAnAccountIsFree, $failure),
+            $failure instanceof RetryableExceptionInterface => new ProviderFailedTransiently($failure),
+            $failure instanceof TransportExceptionInterface => new ProviderUnreachable($failure),
+            default => $failure,
+        };
     }
 
-    // Blocked only once no try is left, so every cut try is recorded in the ledger before the reviewer ends with the last cut's reason.
-    /**
-     * @param Closure(): Verdict $review
-     */
-    private function blockedWhenCut(ResolvedModel $answering, Closure $review): Verdict
+    // Read from the model chosen before the review, never from its text, so a reviewer cannot claim to be a substitute; against the configured model, because a disabled one is substituted too.
+    private function substituteOf(string $project, Tier $tier, ResolvedModel $answering): ?Provider
     {
-        try {
-            return $review();
-        } catch (IncompleteStreamException $incomplete) {
-            return Verdict::incompleteStream($incomplete->getMessage(), $this->evidenceOfCut($answering, $incomplete));
-        }
+        return $this->resolver->configured($project, $tier)->provider === $answering->provider ? null : $answering->provider;
     }
 
-    // Kept on the finding, because the message alone cannot tell a provider that cut the stream from a platform or an Intakt check that misread a complete one (issue #1964); every try asks the same provider and model.
-    private function evidenceOfCut(ResolvedModel $answering, IncompleteStreamException $cut): Evidence
+    private function verdictOn(ResolvedModel $answering, UsageReservation $reservation, ReviewRequest $request): Verdict
     {
-        return new Evidence(
-            sprintf('the call to %s, model %s', $answering->provider->value, $answering->model),
-            $cut instanceof StreamEndedEarly ? $cut->described() : sprintf('cut by: %s, outside a counted stream', StreamCutBy::Platform->value),
-        );
+        try {
+            $options = $this->serverOptions($answering, $request);
+        } catch (NoReviewServerAccess) {
+            // Settled with no usage, because the CLI never started; blocked like an API-key reviewer whose toolbox cannot reach the server.
+            $this->usage->settle($reservation);
+
+            return Verdict::noTools();
+        }
+
+        return $this->verdictThrough(new TierRoutedPlatform($this->tiers, $answering, $options), $reservation, $request);
+    }
+
+    // Only a subscription CLI is given the review server, because every other provider reaches it through the reviewer's own toolbox; the judge reads no repository.
+    /**
+     * @return array<string, mixed>
+     */
+    private function serverOptions(ResolvedModel $answering, ReviewRequest $request): array
+    {
+        $round = $request->conversation->round;
+
+        if ($answering->provider->readsTheCheckout() || !$round instanceof Uuid) {
+            return [];
+        }
+
+        return [ReviewServerAccess::OPTION => $this->servers->forRound($round)];
+    }
+
+    private function verdictThrough(TierRoutedPlatform $platform, UsageReservation $reservation, ReviewRequest $request): Verdict
+    {
+        try {
+            $verdict = $this->reviewer->review($request, $platform, $platform->answering->model);
+        } catch (VerdictUnreadable $unreadable) {
+            // Settled, because the call ended with an answer and its usage is known.
+            $this->usage->settle($reservation, ...$platform->rounds());
+
+            throw $unreadable;
+            // Boundary: leaves the call unsettled and rethrows it typed, because any provider failure must reach the callers as a vendor failure.
+        } catch (Throwable $failure) {
+            // Left unsettled, never settled as well, so the call's usage is counted once, also for a cut stream.
+            $this->usage->leaveUnsettled($reservation, $failure, ...$platform->rounds());
+
+            throw $this->typed($failure);
+        }
+
+        $this->usage->settle($reservation, ...$platform->rounds());
+
+        return $this->readOrRefused($platform, $this->namingAFinding($verdict));
+    }
+
+    // Refused after the usage is settled, because the call itself finished and was paid for.
+    private function namingAFinding(Verdict $verdict): Verdict
+    {
+        return $verdict->withholdsApprovalWithoutFinding() ? throw ChangesWithoutFindings::fromTheReviewer() : $verdict;
+    }
+
+    // Decided here in plain code, because a reviewer that never saw the change can still answer approve; per call, because a subscription CLI reads the change only through the review server this call gave it.
+    private function readOrRefused(TierRoutedPlatform $platform, Verdict $verdict): Verdict
+    {
+        if (!$verdict->mayCountAsApproval() || $platform->answering->provider->readsTheCheckout()) {
+            return $verdict;
+        }
+
+        $access = $platform->options[ReviewServerAccess::OPTION] ?? null;
+
+        return $access instanceof ReviewServerAccess && $this->readInThisCall($access, ...$platform->rounds()) ? $verdict : Verdict::unreadApproval();
+    }
+
+    // The call must show a read in its own events, because being given the server does not make the CLI use it.
+    private function readInThisCall(ReviewServerAccess $access, DeferredResult ...$rounds): bool
+    {
+        return array_any($rounds, static fn (DeferredResult $round): bool => ($raw = $round->getRawResult()) instanceof ReviewServerReads && $raw->readThrough($access));
+    }
+
+    // Without server options, because only a subscription CLI is given them and its calls never stream, so they are never retried unstreamed.
+    private function unstreamedVerdictOn(ResolvedModel $answering, UsageReservation $reservation, ReviewRequest $request): Verdict
+    {
+        return $this->verdictThrough(new TierRoutedPlatform($this->tiers, $answering, catalog: new UnstreamedModelCatalog()), $reservation, $request);
     }
 
     // Twice the tier's default when the mapping sent none, because the model's own default stopped the call then.
@@ -198,82 +259,53 @@ final readonly class SymfonyAiVendor implements Vendor
         return new ReviewRequest($request->checkout, $request->brief, $conversation);
     }
 
-    private function answering(string $project, Tier $tier): ResolvedModel
-    {
-        try {
-            return $this->tiers->answering($project, $tier);
-        } catch (EveryAccountCoolingDown|EveryProviderOut|EveryKeyRejected $out) {
-            throw $this->typed($out);
-        }
-    }
-
-    // Read from the model chosen before the review, never from its text, so a reviewer cannot claim to be a substitute; against the configured model, because a disabled one is substituted too.
-    private function substituteOf(string $project, Tier $tier, ResolvedModel $answering): ?Provider
-    {
-        return $this->resolver->configured($project, $tier)->provider === $answering->provider ? null : $answering->provider;
-    }
-
-    private function verdictOn(ResolvedModel $answering, UsageReservation $reservation, ReviewRequest $request): Verdict
-    {
-        try {
-            $options = $this->serverOptions($answering, $request);
-        } catch (NoReviewServerAccess) {
-            // Settled with no usage, because the CLI never started; blocked like an API-key reviewer whose toolbox cannot reach the server.
-            $this->usage->settle($reservation);
-
-            return Verdict::noTools();
-        }
-
-        return $this->verdictThrough(new TierRoutedPlatform($this->tiers, $answering, $options), $reservation, $request);
-    }
-
-    // Without server options, because only a subscription CLI is given them and its calls never stream, so they are never retried unstreamed.
-    private function unstreamedVerdictOn(ResolvedModel $answering, UsageReservation $reservation, ReviewRequest $request): Verdict
-    {
-        return $this->verdictThrough(new TierRoutedPlatform($this->tiers, $answering, catalog: new UnstreamedModelCatalog()), $reservation, $request);
-    }
-
-    private function verdictThrough(TierRoutedPlatform $platform, UsageReservation $reservation, ReviewRequest $request): Verdict
-    {
-        try {
-            $verdict = $this->reviewer->review($request, $platform, $platform->answering->model);
-        } catch (VerdictUnreadable $unreadable) {
-            // Settled, because the call ended with an answer and its usage is known.
-            $this->usage->settle($reservation, ...$platform->rounds());
-
-            throw $unreadable;
-            // Boundary: leaves the call unsettled and rethrows it typed, because any provider failure must reach the callers as a vendor failure.
-        } catch (Throwable $failure) {
-            // Left unsettled, never settled as well, so the call's usage is counted once, also for a cut stream.
-            $this->usage->leaveUnsettled($reservation, $failure, ...$platform->rounds());
-
-            throw $this->typed($failure);
-        }
-
-        $this->usage->settle($reservation, ...$platform->rounds());
-
-        return $this->readOrRefused($platform, $this->namingAFinding($verdict));
-    }
-
-    // Refused after the usage is settled, because the call itself finished and was paid for.
-    private function namingAFinding(Verdict $verdict): Verdict
-    {
-        return $verdict->withholdsApprovalWithoutFinding() ? throw ChangesWithoutFindings::fromTheReviewer() : $verdict;
-    }
-
-    // Only a subscription CLI is given the review server, because every other provider reaches it through the reviewer's own toolbox; the judge reads no repository.
+    // A second cut keeps the first cut's reason, so the reviewer ends as it did before the retry; a provider failure of the retry follows its own rule, so an outage is handled as one, and no other failure of it is retried, because retriedOnce() catches only the first try's.
     /**
-     * @return array<string, mixed>
+     * @param Closure(): Verdict $unstreamed
      */
-    private function serverOptions(ResolvedModel $answering, ReviewRequest $request): array
+    private function unstreamedAfter(IncompleteStreamException $cut, Closure $unstreamed): Verdict
     {
-        $round = $request->conversation->round;
-
-        if ($answering->provider->readsTheCheckout() || !$round instanceof Uuid) {
-            return [];
+        try {
+            return $unstreamed();
+        } catch (IncompleteStreamException) {
+            throw $cut;
         }
+    }
 
-        return [ReviewServerAccess::OPTION => $this->servers->forRound($round)];
+    // Retried once, because a call stopped by the output limit or an answer that is no verdict leaves nothing to judge and the same room could stop it again, a changes verdict without findings is no verdict either, an endpoint that could not be reached is often reached on the next call, and a stream cut before its answer completed may be a streaming fault the provider does not have unstreamed; a second failure fails the reviewer. A stream that a subscription CLI cut is not retried, because its call never streamed, and neither is a cut caused by a provider outage, because the outage has already cooled the account down and retrying would turn a blocked reviewer into a waiting one.
+    /**
+     * @param Closure(): Verdict                                                                                                                $first
+     * @param Closure(MaxOutputTokensException|VerdictUnreadable|ChangesWithoutFindings|ProviderUnreachable|IncompleteStreamException): Verdict $retry
+     */
+    private function retriedOnce(Closure $first, Closure $retry): Verdict
+    {
+        try {
+            return $first();
+        } catch (MaxOutputTokensException|VerdictUnreadable|ChangesWithoutFindings|ProviderUnreachable|IncompleteStreamException $failure) {
+            return $retry($failure);
+        }
+    }
+
+    // Blocked only once no try is left, so every cut try is recorded in the ledger before the reviewer ends with the last cut's reason.
+    /**
+     * @param Closure(): Verdict $review
+     */
+    private function blockedWhenCut(ResolvedModel $answering, Closure $review): Verdict
+    {
+        try {
+            return $review();
+        } catch (IncompleteStreamException $incomplete) {
+            return Verdict::incompleteStream($incomplete->getMessage(), $this->evidenceOfCut($answering, $incomplete));
+        }
+    }
+
+    // Kept on the finding, because the message alone cannot tell a provider that cut the stream from a platform or an Intakt check that misread a complete one (issue #1964); every try asks the same provider and model.
+    private function evidenceOfCut(ResolvedModel $answering, IncompleteStreamException $cut): Evidence
+    {
+        return new Evidence(
+            sprintf('the call to %s, model %s', $answering->provider->value, $answering->model),
+            $cut instanceof StreamEndedEarly ? $cut->described() : sprintf('cut by: %s, outside a counted stream', StreamCutBy::Platform->value),
+        );
     }
 
     private function judgementOn(ResolvedModel $answering, UsageReservation $reservation, JudgeRequest $request): Judgement
@@ -297,37 +329,5 @@ final readonly class SymfonyAiVendor implements Vendor
         $this->usage->settle($reservation, ...$platform->rounds());
 
         return $judgement;
-    }
-
-    // Decided here in plain code, because a reviewer that never saw the change can still answer approve; per call, because a subscription CLI reads the change only through the review server this call gave it.
-    private function readOrRefused(TierRoutedPlatform $platform, Verdict $verdict): Verdict
-    {
-        if (!$verdict->mayCountAsApproval() || $platform->answering->provider->readsTheCheckout()) {
-            return $verdict;
-        }
-
-        $access = $platform->options[ReviewServerAccess::OPTION] ?? null;
-
-        return $access instanceof ReviewServerAccess && $this->readInThisCall($access, ...$platform->rounds()) ? $verdict : Verdict::unreadApproval();
-    }
-
-    // The call must show a read in its own events, because being given the server does not make the CLI use it.
-    private function readInThisCall(ReviewServerAccess $access, DeferredResult ...$rounds): bool
-    {
-        return array_any($rounds, static fn (DeferredResult $round): bool => ($raw = $round->getRawResult()) instanceof ReviewServerReads && $raw->readThrough($access));
-    }
-
-    // Matched on the exception type because the provider's text can change and carries anything (plan T5).
-    private function typed(Throwable $failure): Throwable
-    {
-        return match (true) {
-            $failure instanceof RateLimitExceededException => new ProviderRateLimited($failure->getRetryAfter(), $failure),
-            $failure instanceof EveryProviderOut => new NoProviderLeft($failure->getMessage(), $failure),
-            $failure instanceof AuthenticationException => new ProviderRejectedTheKey($failure),
-            $failure instanceof EveryAccountCoolingDown => new ProviderRateLimited($failure->secondsUntilAnAccountIsFree, $failure),
-            $failure instanceof RetryableExceptionInterface => new ProviderFailedTransiently($failure),
-            $failure instanceof TransportExceptionInterface => new ProviderUnreachable($failure),
-            default => $failure,
-        };
     }
 }

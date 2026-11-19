@@ -96,29 +96,6 @@ final class JudgeNoteInReviewOutputTest extends KernelTestCase
         $this->fixture = new RoundFixture(self::getContainer());
     }
 
-    private function judgeNoteAfter(ChangeReview $review, string $finding): ?string
-    {
-        $lines = $this->report()->asLines($review);
-        $at = array_find_key($lines, static fn (string $line): bool => str_ends_with($line, ' '.$finding));
-        self::assertIsInt($at, 'The act list should print '.$finding);
-        $next = $lines[$at + 1] ?? '';
-
-        return str_starts_with($next, 'judge: ') ? substr($next, strlen('judge: ')) : null;
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function jsonRow(ChangeReview $review, string $text): array
-    {
-        /** @var array{act_list: list<array<string, mixed>>} $document */
-        $document = json_decode($this->report()->asJson($review), true, flags: JSON_THROW_ON_ERROR);
-        $row = array_find($document['act_list'], static fn (array $row): bool => $text === $row['text']);
-        self::assertIsArray($row, 'The act list should hold '.$text);
-
-        return $row;
-    }
-
     // Two places, so the judge's marks never meet in one merged entry.
     private function reviewersReporting(Severity $second): Vendor
     {
@@ -180,8 +157,31 @@ final class JudgeNoteInReviewOutputTest extends KernelTestCase
         return new ChangeReviewRequest('alpha', __DIR__, RoundFixture::TASK, RoundFixture::DIFF, new RequestedRound(RoundFixture::CHANGE), SampleIdentity::of(RoundFixture::TASK, $panel), $panel);
     }
 
+    private function judgeNoteAfter(ChangeReview $review, string $finding): ?string
+    {
+        $lines = $this->report()->asLines($review);
+        $at = array_find_key($lines, static fn (string $line): bool => str_ends_with($line, ' '.$finding));
+        self::assertIsInt($at, 'The act list should print '.$finding);
+        $next = $lines[$at + 1] ?? '';
+
+        return str_starts_with($next, 'judge: ') ? substr($next, strlen('judge: ')) : null;
+    }
+
     private function report(): ReviewReport
     {
         return self::getContainer()->get(ReviewReport::class);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function jsonRow(ChangeReview $review, string $text): array
+    {
+        /** @var array{act_list: list<array<string, mixed>>} $document */
+        $document = json_decode($this->report()->asJson($review), true, flags: JSON_THROW_ON_ERROR);
+        $row = array_find($document['act_list'], static fn (array $row): bool => $text === $row['text']);
+        self::assertIsArray($row, 'The act list should hold '.$text);
+
+        return $row;
     }
 }

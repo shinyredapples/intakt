@@ -1340,12 +1340,10 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         parent::tearDown();
     }
 
-    private function actionsTheConnectionControllerHolds(): string
+    private function givenARunningRound(): void
     {
-        $script = (string) file_get_contents(dirname(__DIR__, 4).'/assets/controllers/connection_controller.js');
-        self::assertSame(1, preg_match("/const ACTIONS = '(?<selector>[^']+)';/", $script, $found));
-
-        return $found['selector'] ?? '';
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->startReviewer('round-1', 'correctness');
     }
 
     /**
@@ -1358,136 +1356,6 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
         // Unread unless a test gives them, as MercureRoundUpdates sends them when the ledger cannot be read.
         return $twig->render(sprintf('dashboard/stream/%s.stream.html.twig', $name), $context + ['outcome' => null, 'outcomes' => []]);
-    }
-
-    /**
-     * @return array{Uuid, string, Crawler}
-     */
-    private function givenAPageLoadedBeforeAnyReviewerStarted(): array
-    {
-        $round = $this->givenTheHubRecordsWhatIsPublishedForARoundWithoutSummary();
-        $id = $round->toRfc4122();
-        $this->ledger->startRoundOf('feat/thing', $id, 1);
-
-        return [$round, $id, $this->browser->request('GET', '/reviews/'.$id)];
-    }
-
-    /**
-     * @return array{Uuid, string, Crawler}
-     */
-    private function givenAPageLoadedBeforeTheRoundStartsWithTheSummary(SessionSummary $summary): array
-    {
-        $this->browser->disableReboot();
-        $summaries = self::createStub(SessionSummaries::class);
-        $summaries->method('ofRound')->willReturn($summary);
-        self::getContainer()->set(SessionSummaries::class, $summaries);
-        $this->givenTheHubRecordsWhatIsPublished();
-        $round = Uuid::v7();
-        $id = $round->toRfc4122();
-        $this->ledger->startRoundOf('feat/thing', $id, 1);
-
-        return [$round, $id, $this->browser->request('GET', '/reviews/'.$id)];
-    }
-
-    /**
-     * @return array{Uuid, string, Crawler}
-     */
-    private function givenAPageLoadedBeforeTheJudgeSpentTokens(): array
-    {
-        $this->browser->disableReboot();
-        $summaries = self::createStub(SessionSummaries::class);
-        $summaries->method('ofRound')->willReturn(new SessionSummary([], Cost::inUsd(0.1), [], [], [], [], false));
-        self::getContainer()->set(SessionSummaries::class, $summaries);
-        $this->givenTheHubRecordsWhatIsPublished();
-        $round = Uuid::v7();
-        $id = $round->toRfc4122();
-        $this->ledger->startRoundOf('feat/thing', $id, 1);
-        $this->ledger->startReviewer($id, 'security');
-        $page = $this->browser->request('GET', '/reviews/'.$id);
-
-        $this->ledger->answer($id, 'security', 0);
-        $this->ledger->useTokens($id, 1000, 200);
-        $this->ledger->judgeFindings($id, []);
-
-        return [$round, $id, $page];
-    }
-
-    /**
-     * @param array<string, 'act'|'defer'|'reject'> $marks
-     */
-    private function givenTheRoundIsJudgedWith(Uuid $round, array $marks): void
-    {
-        $this->givenEveryReviewerAnswered($round, count($marks));
-        $this->ledger->judgeFindings($round->toRfc4122(), $marks);
-        $this->publishedUpdates()->roundChanged($round, new RoundProgress(2, 2, true));
-    }
-
-    private function givenTheRoundIsJudgedAsOneEntryPerCause(Uuid $round): void
-    {
-        $this->givenEveryReviewerAnswered($round, 2);
-        $this->ledger->judgeOneEntryPerCause($round->toRfc4122());
-        $this->publishedUpdates()->roundChanged($round, new RoundProgress(2, 2, true));
-    }
-
-    private function givenEveryReviewerAnswered(Uuid $round, int $findings): void
-    {
-        $id = $round->toRfc4122();
-        $this->ledger->startReviewer($id, 'security');
-        $this->ledger->startReviewer($id, 'correctness');
-        $this->publishedUpdates()->roundChanged($round, new RoundProgress(2, 0, false));
-        $this->ledger->answer($id, 'security', $findings);
-        $this->ledger->answer($id, 'correctness', $findings);
-    }
-
-    /**
-     * @return array{Uuid, string, Crawler}
-     */
-    private function givenAPageLoadedBeforeTheRoundOfQuorumStarted(): array
-    {
-        $round = $this->givenTheHubRecordsWhatIsPublishedForARoundWithoutSummary();
-        $id = $round->toRfc4122();
-        $this->ledger->startRoundOfQuorum('feat/thing', $id, 'all');
-
-        return [$round, $id, $this->browser->request('GET', '/reviews/'.$id)];
-    }
-
-    private function publishedStreams(): string
-    {
-        return implode('', array_map(static fn (Update $update): string => $update->getData(), $this->published));
-    }
-
-    /**
-     * @return list<list<string>>
-     */
-    private function rowsOf(Crawler $page): array
-    {
-        return $page->filter('table.reviewers tbody tr')->each(static fn (Crawler $tr): array => $tr->filter('td')->each(static fn (Crawler $td): string => $td->text()));
-    }
-
-    /**
-     * @return list<int>
-     */
-    private function cellCountsOf(Crawler $page): array
-    {
-        return $page->filter('table.reviewers tbody tr')->each(static fn (Crawler $tr): int => $tr->filter('td')->count());
-    }
-
-    // Done by hand on the parsed page, because no browser runs Turbo in the tests.
-    private function appended(Crawler $target, string $template): Crawler
-    {
-        $node = $target->getNode(0);
-        self::assertNotNull($node);
-        $document = $node->ownerDocument;
-        self::assertNotNull($document);
-
-        // Every child node, text included, because a streamed text is a bare text node; parsed inside a template, because only there a table row keeps its cells.
-        $wrapper = new Crawler('<template>'.$template.'</template>')->filter('template')->getNode(0);
-        self::assertNotNull($wrapper);
-        foreach ($wrapper->childNodes as $child) {
-            $node->appendChild($document->importNode($child, true));
-        }
-
-        return new Crawler($document);
     }
 
     // Done by hand on the parsed page, because no browser runs Turbo in the tests; like Turbo, a stream whose target is absent changes nothing.
@@ -1535,6 +1403,119 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $node->parentNode?->replaceChild($document->importNode($replacement, true), $node);
     }
 
+    // No stored summary, so the round's own streams are the only updates the hub records.
+    private function givenTheHubRecordsWhatIsPublishedForARoundWithoutSummary(): Uuid
+    {
+        $this->browser->disableReboot();
+        self::getContainer()->set(SessionSummaries::class, self::createStub(SessionSummaries::class));
+        $this->givenTheHubRecordsWhatIsPublished();
+
+        return Uuid::v7();
+    }
+
+    private function publishedUpdates(): RoundUpdates
+    {
+        $updates = self::getContainer()->get(RoundUpdates::class);
+        self::assertInstanceOf(RoundUpdates::class, $updates);
+
+        return $updates;
+    }
+
+    /**
+     * @return array{Uuid, string, Crawler}
+     */
+    private function givenAPageLoadedBeforeTheRoundOfQuorumStarted(): array
+    {
+        $round = $this->givenTheHubRecordsWhatIsPublishedForARoundWithoutSummary();
+        $id = $round->toRfc4122();
+        $this->ledger->startRoundOfQuorum('feat/thing', $id, 'all');
+
+        return [$round, $id, $this->browser->request('GET', '/reviews/'.$id)];
+    }
+
+    /**
+     * @param array<string, 'act'|'defer'|'reject'> $marks
+     */
+    private function givenTheRoundIsJudgedWith(Uuid $round, array $marks): void
+    {
+        $this->givenEveryReviewerAnswered($round, count($marks));
+        $this->ledger->judgeFindings($round->toRfc4122(), $marks);
+        $this->publishedUpdates()->roundChanged($round, new RoundProgress(2, 2, true));
+    }
+
+    private function givenEveryReviewerAnswered(Uuid $round, int $findings): void
+    {
+        $id = $round->toRfc4122();
+        $this->ledger->startReviewer($id, 'security');
+        $this->ledger->startReviewer($id, 'correctness');
+        $this->publishedUpdates()->roundChanged($round, new RoundProgress(2, 0, false));
+        $this->ledger->answer($id, 'security', $findings);
+        $this->ledger->answer($id, 'correctness', $findings);
+    }
+
+    private function publishedStreams(): string
+    {
+        return implode('', array_map(static fn (Update $update): string => $update->getData(), $this->published));
+    }
+
+    private function givenTheRoundIsJudgedAsOneEntryPerCause(Uuid $round): void
+    {
+        $this->givenEveryReviewerAnswered($round, 2);
+        $this->ledger->judgeOneEntryPerCause($round->toRfc4122());
+        $this->publishedUpdates()->roundChanged($round, new RoundProgress(2, 2, true));
+    }
+
+    /**
+     * @return array{Uuid, string, Crawler}
+     */
+    private function givenAPageLoadedBeforeAnyReviewerStarted(): array
+    {
+        $round = $this->givenTheHubRecordsWhatIsPublishedForARoundWithoutSummary();
+        $id = $round->toRfc4122();
+        $this->ledger->startRoundOf('feat/thing', $id, 1);
+
+        return [$round, $id, $this->browser->request('GET', '/reviews/'.$id)];
+    }
+
+    /**
+     * @return array{Uuid, string, Crawler}
+     */
+    private function givenAPageLoadedBeforeTheJudgeSpentTokens(): array
+    {
+        $this->browser->disableReboot();
+        $summaries = self::createStub(SessionSummaries::class);
+        $summaries->method('ofRound')->willReturn(new SessionSummary([], Cost::inUsd(0.1), [], [], [], [], false));
+        self::getContainer()->set(SessionSummaries::class, $summaries);
+        $this->givenTheHubRecordsWhatIsPublished();
+        $round = Uuid::v7();
+        $id = $round->toRfc4122();
+        $this->ledger->startRoundOf('feat/thing', $id, 1);
+        $this->ledger->startReviewer($id, 'security');
+        $page = $this->browser->request('GET', '/reviews/'.$id);
+
+        $this->ledger->answer($id, 'security', 0);
+        $this->ledger->useTokens($id, 1000, 200);
+        $this->ledger->judgeFindings($id, []);
+
+        return [$round, $id, $page];
+    }
+
+    /**
+     * @return list<list<string>>
+     */
+    private function rowsOf(Crawler $page): array
+    {
+        return $page->filter('table.reviewers tbody tr')->each(static fn (Crawler $tr): array => $tr->filter('td')->each(static fn (Crawler $td): string => $td->text()));
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function cellCountsOf(Crawler $page): array
+    {
+        return $page->filter('table.reviewers tbody tr')->each(static fn (Crawler $tr): int => $tr->filter('td')->count());
+    }
+
     /**
      * @return list<string>
      */
@@ -1555,6 +1536,57 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         self::fail('The page set no subscriber cookie.');
     }
 
+    // Done by hand on the parsed page, because no browser runs Turbo in the tests.
+    private function appended(Crawler $target, string $template): Crawler
+    {
+        $node = $target->getNode(0);
+        self::assertNotNull($node);
+        $document = $node->ownerDocument;
+        self::assertNotNull($document);
+
+        // Every child node, text included, because a streamed text is a bare text node; parsed inside a template, because only there a table row keeps its cells.
+        $wrapper = new Crawler('<template>'.$template.'</template>')->filter('template')->getNode(0);
+        self::assertNotNull($wrapper);
+        foreach ($wrapper->childNodes as $child) {
+            $node->appendChild($document->importNode($child, true));
+        }
+
+        return new Crawler($document);
+    }
+
+    /**
+     * @return array{Uuid, string, Crawler}
+     */
+    private function givenAPageLoadedBeforeTheRoundStartsWithTheSummary(SessionSummary $summary): array
+    {
+        $this->browser->disableReboot();
+        $summaries = self::createStub(SessionSummaries::class);
+        $summaries->method('ofRound')->willReturn($summary);
+        self::getContainer()->set(SessionSummaries::class, $summaries);
+        $this->givenTheHubRecordsWhatIsPublished();
+        $round = Uuid::v7();
+        $id = $round->toRfc4122();
+        $this->ledger->startRoundOf('feat/thing', $id, 1);
+
+        return [$round, $id, $this->browser->request('GET', '/reviews/'.$id)];
+    }
+
+    /**
+     * @return list<list<string>>
+     */
+    private function pairsOf(Crawler $list): array
+    {
+        return $list->filter('dt')->each(static fn (Crawler $term): array => [$term->text(), $term->nextAll()->first()->text()]);
+    }
+
+    private function givenARunningRoundWithTheSummary(SessionSummary $summary): void
+    {
+        $this->givenARunningRound();
+        $summaries = self::createStub(SessionSummaries::class);
+        $summaries->method('ofRound')->willReturn($summary);
+        self::getContainer()->set(SessionSummaries::class, $summaries);
+    }
+
     private function givenTheHubRecordsWhatIsPublished(): void
     {
         $container = self::getContainer();
@@ -1572,24 +1604,6 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $container->set(RoundUpdates::class, new MercureRoundUpdates(new MercureLiveUpdates($hub, new NullLogger()), $twig, $summaries, $pages, new LockFactory(new InMemoryStore()), new NullLogger()));
     }
 
-    // No stored summary, so the round's own streams are the only updates the hub records.
-    private function givenTheHubRecordsWhatIsPublishedForARoundWithoutSummary(): Uuid
-    {
-        $this->browser->disableReboot();
-        self::getContainer()->set(SessionSummaries::class, self::createStub(SessionSummaries::class));
-        $this->givenTheHubRecordsWhatIsPublished();
-
-        return Uuid::v7();
-    }
-
-    private function publishedUpdates(): RoundUpdates
-    {
-        $updates = self::getContainer()->get(RoundUpdates::class);
-        self::assertInstanceOf(RoundUpdates::class, $updates);
-
-        return $updates;
-    }
-
     private function reviewServerFor(string $round): McpServerClient
     {
         $credential = self::getContainer()->get(ReviewCredential::class);
@@ -1601,25 +1615,11 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         return $server;
     }
 
-    private function givenARunningRoundWithTheSummary(SessionSummary $summary): void
+    private function actionsTheConnectionControllerHolds(): string
     {
-        $this->givenARunningRound();
-        $summaries = self::createStub(SessionSummaries::class);
-        $summaries->method('ofRound')->willReturn($summary);
-        self::getContainer()->set(SessionSummaries::class, $summaries);
-    }
+        $script = (string) file_get_contents(dirname(__DIR__, 4).'/assets/controllers/connection_controller.js');
+        self::assertSame(1, preg_match("/const ACTIONS = '(?<selector>[^']+)';/", $script, $found));
 
-    /**
-     * @return list<list<string>>
-     */
-    private function pairsOf(Crawler $list): array
-    {
-        return $list->filter('dt')->each(static fn (Crawler $term): array => [$term->text(), $term->nextAll()->first()->text()]);
-    }
-
-    private function givenARunningRound(): void
-    {
-        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
-        $this->ledger->startReviewer('round-1', 'correctness');
+        return $found['selector'] ?? '';
     }
 }

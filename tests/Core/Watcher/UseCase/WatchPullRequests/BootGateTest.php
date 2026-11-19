@@ -258,14 +258,6 @@ final class BootGateTest extends KernelTestCase
         return new BootGate($bus, $this->authors(), $results, new WatcherLedger($this->ledger), $logger);
     }
 
-    private function authors(): AuthorTrust
-    {
-        $authors = self::createStub(AuthorTrust::class);
-        $authors->method('isAuthorTrusted')->willReturnCallback(fn (): bool => $this->trustCheckDown ? throw new RuntimeException('The permission API is down.') : $this->authorTrusted);
-
-        return $authors;
-    }
-
     private function answer(object $query): CommitId|BootOutcome|string
     {
         $this->asked[] = $query;
@@ -279,6 +271,14 @@ final class BootGateTest extends KernelTestCase
             $query instanceof BootHarness => $this->main,
             default => $this->head,
         };
+    }
+
+    private function authors(): AuthorTrust
+    {
+        $authors = self::createStub(AuthorTrust::class);
+        $authors->method('isAuthorTrusted')->willReturnCallback(fn (): bool => $this->trustCheckDown ? throw new RuntimeException('The permission API is down.') : $this->authorTrusted);
+
+        return $authors;
     }
 
     private function project(): WatchedProject

@@ -266,6 +266,11 @@ final class ReviewReportTest extends TestCase
         self::assertNotSame([], $this->schemaErrors(json_encode($document, JSON_THROW_ON_ERROR)));
     }
 
+    private function report(): ReviewReport
+    {
+        return new ReviewReport(StoredSerializerFactory::create());
+    }
+
     private function review(Decision $decision, ?RoundTokens $tokens = null, ?Cost $cost = null): ChangeReview
     {
         $finding = new Finding('F1', Severity::P1, 'src/Feature.php', 3, null, 'Missing check.', FixableBy::Builder, false, null, null);
@@ -290,22 +295,6 @@ final class ReviewReportTest extends TestCase
         return new ChangeReview($review->roundId, $review->round, $review->decision, $review->verdicts, [$entry], $review->tokens, $review->cost, $review->reasons);
     }
 
-    private function report(): ReviewReport
-    {
-        return new ReviewReport(StoredSerializerFactory::create());
-    }
-
-    /**
-     * @return array<mixed>
-     */
-    private function documentOf(ChangeReview $review): array
-    {
-        $document = json_decode($this->report()->asJson($review), true, flags: JSON_THROW_ON_ERROR);
-        self::assertIsArray($document);
-
-        return $document;
-    }
-
     /**
      * @return array{act_list: non-empty-list<array<string, mixed>>}
      */
@@ -327,5 +316,16 @@ final class ReviewReportTest extends TestCase
         $validator->validate($document, json_decode((string) file_get_contents(self::SCHEMA)));
 
         return array_values($validator->getErrors());
+    }
+
+    /**
+     * @return array<mixed>
+     */
+    private function documentOf(ChangeReview $review): array
+    {
+        $document = json_decode($this->report()->asJson($review), true, flags: JSON_THROW_ON_ERROR);
+        self::assertIsArray($document);
+
+        return $document;
     }
 }

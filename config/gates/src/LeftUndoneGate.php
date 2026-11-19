@@ -61,6 +61,55 @@ final readonly class LeftUndoneGate implements Gate
     }
 
     /**
+     * @return list<array{string, ?list<int>, CommentLanguage}>
+     */
+    private function scannedLinesSince(Workspace $workspace, string $mergeBase): array
+    {
+        $paths = $this->nulSeparated($this->gitOutput($workspace, ['diff', '--name-only', '-z', ...self::DIFF_OPTIONS, $mergeBase]));
+        $patch = $this->gitOutput($workspace, ['diff', '--unified=0', ...self::DIFF_OPTIONS, $mergeBase]);
+        // Because a file git does not track yet has no lines on the base, every line of it is added.
+        $untracked = array_map(static fn (string $path): array => [$path, null], $workspace->untrackedPaths());
+        $scanned = [];
+
+        foreach ([...$this->addedLines->byPath($paths, $patch), ...$untracked] as [$path, $addedLines]) {
+            $language = $this->isFixture($path) ? null : $this->languages->languageOf($workspace, $path);
+
+            if ($language instanceof CommentLanguage) {
+                $scanned[] = [$path, $addedLines, $language];
+            }
+        }
+
+        return $scanned;
+    }
+
+    /**
+     * @param list<string> $arguments
+     */
+    private function gitOutput(Workspace $workspace, array $arguments): string
+    {
+        $result = $workspace->git($arguments);
+
+        if (!$result->succeeded()) {
+            throw new ScopeFailure('git '.$arguments[0].' failed: '.$result->firstErrorLine());
+        }
+
+        return $result->output;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function nulSeparated(string $output): array
+    {
+        return array_values(array_filter(explode("\0", $output), static fn (string $path): bool => '' !== $path));
+    }
+
+    private function isFixture(string $path): bool
+    {
+        return array_any(self::FIXTURE_PREFIXES, static fn (string $prefix): bool => str_starts_with($path, $prefix));
+    }
+
+    /**
      * @param array{string, ?list<int>, CommentLanguage} $file
      *
      * @return list<string>
@@ -91,33 +140,6 @@ final readonly class LeftUndoneGate implements Gate
         return $findings;
     }
 
-    /**
-     * @return list<array{string, ?list<int>, CommentLanguage}>
-     */
-    private function scannedLinesSince(Workspace $workspace, string $mergeBase): array
-    {
-        $paths = $this->nulSeparated($this->gitOutput($workspace, ['diff', '--name-only', '-z', ...self::DIFF_OPTIONS, $mergeBase]));
-        $patch = $this->gitOutput($workspace, ['diff', '--unified=0', ...self::DIFF_OPTIONS, $mergeBase]);
-        // Because a file git does not track yet has no lines on the base, every line of it is added.
-        $untracked = array_map(static fn (string $path): array => [$path, null], $workspace->untrackedPaths());
-        $scanned = [];
-
-        foreach ([...$this->addedLines->byPath($paths, $patch), ...$untracked] as [$path, $addedLines]) {
-            $language = $this->isFixture($path) ? null : $this->languages->languageOf($workspace, $path);
-
-            if ($language instanceof CommentLanguage) {
-                $scanned[] = [$path, $addedLines, $language];
-            }
-        }
-
-        return $scanned;
-    }
-
-    private function isFixture(string $path): bool
-    {
-        return array_any(self::FIXTURE_PREFIXES, static fn (string $prefix): bool => str_starts_with($path, $prefix));
-    }
-
     private function sourceOf(Workspace $workspace, string $path): ?string
     {
         $file = $workspace->root.'/'.$path;
@@ -137,27 +159,5 @@ final readonly class LeftUndoneGate implements Gate
     private function everyLineOf(string $source): array
     {
         return range(1, substr_count($source, "\n") + 1);
-    }
-
-    /**
-     * @param list<string> $arguments
-     */
-    private function gitOutput(Workspace $workspace, array $arguments): string
-    {
-        $result = $workspace->git($arguments);
-
-        if (!$result->succeeded()) {
-            throw new ScopeFailure('git '.$arguments[0].' failed: '.$result->firstErrorLine());
-        }
-
-        return $result->output;
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function nulSeparated(string $output): array
-    {
-        return array_values(array_filter(explode("\0", $output), static fn (string $path): bool => '' !== $path));
     }
 }

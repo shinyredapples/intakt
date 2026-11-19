@@ -98,6 +98,69 @@ final readonly class BootResults
         }
     }
 
+    // Claimed and recorded in one transaction, because the ledger writes through the same connection: a refused alert, or a worker that stops before the commit, leaves the row pending, so a later ask records it. A crash is no alert, because it is the boot step's fault and not main's, and would repeat after every back-off.
+    private function alert(BootKey $key, BootOutcome $outcome): void
+    {
+        try {
+            $this->entities->getConnection()->transactional(function (Connection $claiming) use ($key, $outcome): void {
+                if ($this->claimedAlert($claiming, $key)) {
+                    $this->ledger->mainBootFailed($key, $outcome);
+                }
+            });
+            // Boundary: logs an alert the ledger refused, because the row stays pending so a later ask records it, and the review must go on.
+        } catch (Throwable $unrecorded) {
+            // Reset as the ledger resets it after a failed flush, because a line the ledger flushed before the rollback stays managed though the database no longer holds it, and the next flush would close the manager.
+            $this->registry->resetManager();
+            $this->logger->error("Main's boot failure could not be recorded in the ledger as an alert.", ['exception' => $unrecorded]);
+        }
+    }
+
+    // One conditional update, so of two workers that read the same pending alert only the one that changes the row records it.
+    private function claimedAlert(Connection $claiming, BootKey $key): bool
+    {
+        return 1 === $claiming->update(BootRecord::TABLE, ['alert_pending' => false], BootRecord::keyRow($key) + ['alert_pending' => true], ['alert_pending' => 'boolean']);
+    }
+
+    // Recorded only when the board shows otherwise, because the board reads it from the ledger, which a stored result never reaches when main or the tools go back to a pair already seen; a repeated hit of the same state, or a crash, changes nothing the board shows.
+    private function recordChangeBackTo(BootKey $key, BootOutcome $outcome): void
+    {
+        if (BootState::Crashed === $outcome->state) {
+            return;
+        }
+
+        // Not released on destruction, because recordWhileHolding() gives it back itself.
+        $lock = $this->locks->createLock('watcher-main-boot-'.hash('sha256', $key->project), autoRelease: false);
+
+        try {
+            $this->recordWhileHolding($lock, $key, $outcome);
+        } catch (Throwable $unrecorded) {
+            $this->logger->error("Main's stored boot result could not be recorded in the ledger.", ['exception' => $unrecorded]);
+        }
+    }
+
+    // Read and appended under one lock per project, because two hits that both read the board before either appends would record the same change twice. Tried without waiting, because the review must not wait on it, and a hit that finds it busy appends nothing: the board then ends as if the dropped hit had come just before the holder's, and the next hit of the current main reads the board again and corrects it.
+    private function recordWhileHolding(LockInterface $lock, BootKey $key, BootOutcome $outcome): void
+    {
+        if (!$lock->acquire(false)) {
+            return;
+        }
+
+        try {
+            if ($this->boardShowsOtherThan($key, $outcome)) {
+                $this->ledger->bootResultReadFromStore($key, $outcome);
+            }
+        } finally {
+            $lock->release();
+        }
+    }
+
+    private function boardShowsOtherThan(BootKey $key, BootOutcome $outcome): bool
+    {
+        $shown = $this->ledger->failingMainOf($key->project);
+
+        return BootState::Booted === $outcome->state ? $shown instanceof FailingMain : true !== $shown?->isOf($key->main->hash, $key->toolFingerprint);
+    }
+
     // Turned into an outcome because a boot that throws would stop the review it only gates.
     private function boot(BootHarness|BootHarnessAtMain $query): BootOutcome
     {
@@ -149,29 +212,6 @@ final readonly class BootResults
         return true;
     }
 
-    // Claimed and recorded in one transaction, because the ledger writes through the same connection: a refused alert, or a worker that stops before the commit, leaves the row pending, so a later ask records it. A crash is no alert, because it is the boot step's fault and not main's, and would repeat after every back-off.
-    private function alert(BootKey $key, BootOutcome $outcome): void
-    {
-        try {
-            $this->entities->getConnection()->transactional(function (Connection $claiming) use ($key, $outcome): void {
-                if ($this->claimedAlert($claiming, $key)) {
-                    $this->ledger->mainBootFailed($key, $outcome);
-                }
-            });
-            // Boundary: logs an alert the ledger refused, because the row stays pending so a later ask records it, and the review must go on.
-        } catch (Throwable $unrecorded) {
-            // Reset as the ledger resets it after a failed flush, because a line the ledger flushed before the rollback stays managed though the database no longer holds it, and the next flush would close the manager.
-            $this->registry->resetManager();
-            $this->logger->error("Main's boot failure could not be recorded in the ledger as an alert.", ['exception' => $unrecorded]);
-        }
-    }
-
-    // One conditional update, so of two workers that read the same pending alert only the one that changes the row records it.
-    private function claimedAlert(Connection $claiming, BootKey $key): bool
-    {
-        return 1 === $claiming->update(BootRecord::TABLE, ['alert_pending' => false], BootRecord::keyRow($key) + ['alert_pending' => true], ['alert_pending' => 'boolean']);
-    }
-
     // Only a crashed row is deleted, because a worker that already replaced it with a booted or failed result must keep that result for good.
     private function replaceExpiredCrashAndInsert(Connection $inner, BootRecord $record): int|string
     {
@@ -189,45 +229,5 @@ final readonly class BootResults
         } catch (Throwable $unrecorded) {
             $this->logger->error("Main's computed boot result could not be recorded in the ledger.", ['exception' => $unrecorded]);
         }
-    }
-
-    // Recorded only when the board shows otherwise, because the board reads it from the ledger, which a stored result never reaches when main or the tools go back to a pair already seen; a repeated hit of the same state, or a crash, changes nothing the board shows.
-    private function recordChangeBackTo(BootKey $key, BootOutcome $outcome): void
-    {
-        if (BootState::Crashed === $outcome->state) {
-            return;
-        }
-
-        // Not released on destruction, because recordWhileHolding() gives it back itself.
-        $lock = $this->locks->createLock('watcher-main-boot-'.hash('sha256', $key->project), autoRelease: false);
-
-        try {
-            $this->recordWhileHolding($lock, $key, $outcome);
-        } catch (Throwable $unrecorded) {
-            $this->logger->error("Main's stored boot result could not be recorded in the ledger.", ['exception' => $unrecorded]);
-        }
-    }
-
-    // Read and appended under one lock per project, because two hits that both read the board before either appends would record the same change twice. Tried without waiting, because the review must not wait on it, and a hit that finds it busy appends nothing: the board then ends as if the dropped hit had come just before the holder's, and the next hit of the current main reads the board again and corrects it.
-    private function recordWhileHolding(LockInterface $lock, BootKey $key, BootOutcome $outcome): void
-    {
-        if (!$lock->acquire(false)) {
-            return;
-        }
-
-        try {
-            if ($this->boardShowsOtherThan($key, $outcome)) {
-                $this->ledger->bootResultReadFromStore($key, $outcome);
-            }
-        } finally {
-            $lock->release();
-        }
-    }
-
-    private function boardShowsOtherThan(BootKey $key, BootOutcome $outcome): bool
-    {
-        $shown = $this->ledger->failingMainOf($key->project);
-
-        return BootState::Booted === $outcome->state ? $shown instanceof FailingMain : true !== $shown?->isOf($key->main->hash, $key->toolFingerprint);
     }
 }

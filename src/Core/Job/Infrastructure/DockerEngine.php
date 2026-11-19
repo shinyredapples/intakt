@@ -204,6 +204,42 @@ final readonly class DockerEngine
         return array_values(array_filter(array_map($this->jobContainerOf(...), $listed)));
     }
 
+    /**
+     * @param array<string, mixed> $options
+     */
+    private function send(string $method, string $path, array $options = []): EngineAnswer
+    {
+        try {
+            $response = $this->request($method, $path, $options);
+
+            return new EngineAnswer($path, $response->getStatusCode(), $response->getContent(false));
+        } catch (TransportExceptionInterface $failure) {
+            throw DockerEngineFailed::unreachable($this->socket, $failure);
+        }
+    }
+
+    private function containerIdOf(mixed $id, string $call): string
+    {
+        if (!is_string($id) || 1 !== preg_match(self::CONTAINER_ID, $id)) {
+            throw DockerEngineFailed::unexpected($call);
+        }
+
+        return $id;
+    }
+
+    /**
+     * @param array<string, mixed> $options
+     */
+    // Checked first, because without the socket file the curl client reads bindto as a network interface and reports that instead.
+    private function request(string $method, string $path, array $options): ResponseInterface
+    {
+        if (!file_exists($this->socket)) {
+            throw DockerEngineFailed::noSocket($this->socket);
+        }
+
+        return $this->client->request($method, $path, $options);
+    }
+
     // The engine sends the 200 header before the wait ends and reports a wait that failed meanwhile as an Error in the body, so only a plain exit code counts.
     private function holdsAnExitCode(string $body): bool
     {
@@ -240,41 +276,5 @@ final readonly class DockerEngine
         }
 
         return new JobContainer($this->containerIdOf($listed['Id'] ?? null, 'containers/json'), new JobId($job));
-    }
-
-    private function containerIdOf(mixed $id, string $call): string
-    {
-        if (!is_string($id) || 1 !== preg_match(self::CONTAINER_ID, $id)) {
-            throw DockerEngineFailed::unexpected($call);
-        }
-
-        return $id;
-    }
-
-    /**
-     * @param array<string, mixed> $options
-     */
-    private function send(string $method, string $path, array $options = []): EngineAnswer
-    {
-        try {
-            $response = $this->request($method, $path, $options);
-
-            return new EngineAnswer($path, $response->getStatusCode(), $response->getContent(false));
-        } catch (TransportExceptionInterface $failure) {
-            throw DockerEngineFailed::unreachable($this->socket, $failure);
-        }
-    }
-
-    /**
-     * @param array<string, mixed> $options
-     */
-    // Checked first, because without the socket file the curl client reads bindto as a network interface and reports that instead.
-    private function request(string $method, string $path, array $options): ResponseInterface
-    {
-        if (!file_exists($this->socket)) {
-            throw DockerEngineFailed::noSocket($this->socket);
-        }
-
-        return $this->client->request($method, $path, $options);
     }
 }

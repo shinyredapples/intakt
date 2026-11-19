@@ -77,6 +77,24 @@ final readonly class FailingMains
 
     /**
      * @param array<array-key, mixed> $payload
+     *
+     * @return array{string, string, string}|null
+     */
+    private function pairOf(array $payload): ?array
+    {
+        $project = $payload['project'] ?? null;
+        $main = $payload['main'] ?? null;
+        $tools = $payload['tool_fingerprint'] ?? null;
+
+        if (!is_string($project) || !is_string($main) || !is_string($tools)) {
+            return null;
+        }
+
+        return [$project, $main, $tools];
+    }
+
+    /**
+     * @param array<array-key, mixed> $payload
      */
     private function failureReasonOf(RecordedEvent $recorded, array $payload): ?string
     {
@@ -93,23 +111,5 @@ final readonly class FailingMains
     private function readFromStore(array $payload): bool
     {
         return 'store' === ($payload['read_from'] ?? null);
-    }
-
-    /**
-     * @param array<array-key, mixed> $payload
-     *
-     * @return array{string, string, string}|null
-     */
-    private function pairOf(array $payload): ?array
-    {
-        $project = $payload['project'] ?? null;
-        $main = $payload['main'] ?? null;
-        $tools = $payload['tool_fingerprint'] ?? null;
-
-        if (!is_string($project) || !is_string($main) || !is_string($tools)) {
-            return null;
-        }
-
-        return [$project, $main, $tools];
     }
 }

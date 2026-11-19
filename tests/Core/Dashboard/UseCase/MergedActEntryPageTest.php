@@ -147,6 +147,11 @@ final class MergedActEntryPageTest extends WebTestCase
         $this->fixture = new RoundFixture(self::getContainer());
     }
 
+    private function findingAt(string $id, Severity $severity): Finding
+    {
+        return new Finding($id, $severity, 'src/A.php', 7, null, 'Text of '.$id.'.', FixableBy::Builder, false, null, null);
+    }
+
     /**
      * @param non-empty-list<Finding> $findings
      */
@@ -189,24 +194,6 @@ final class MergedActEntryPageTest extends WebTestCase
         return $reviewChange->review($this->request(count($findings), $diff), new IgnoredProgress());
     }
 
-    private function judgeDoneOf(ChangeReview $review): ?JudgeDone
-    {
-        return new RoundLedgerReading($this->fixture->ledger(), $this->fixture->ledgerPayloads(), new ConfiguredPrices([]))->judgeDoneOf($review->roundId);
-    }
-
-    private function findingAt(string $id, Severity $severity): Finding
-    {
-        return new Finding($id, $severity, 'src/A.php', 7, null, 'Text of '.$id.'.', FixableBy::Builder, false, null, null);
-    }
-
-    private function serializer(): SerializerInterface
-    {
-        $serializer = self::getContainer()->get('serializer.stored');
-        self::assertInstanceOf(SerializerInterface::class, $serializer);
-
-        return $serializer;
-    }
-
     private function request(int $reviewers, string $diff): ChangeReviewRequest
     {
         $members = array_map(
@@ -216,6 +203,14 @@ final class MergedActEntryPageTest extends WebTestCase
         $panel = new Panel($members, QuorumPolicy::All);
 
         return new ChangeReviewRequest('alpha', __DIR__, RoundFixture::TASK, $diff, new RequestedRound(RoundFixture::CHANGE), SampleIdentity::of(RoundFixture::TASK, $panel), $panel);
+    }
+
+    private function serializer(): SerializerInterface
+    {
+        $serializer = self::getContainer()->get('serializer.stored');
+        self::assertInstanceOf(SerializerInterface::class, $serializer);
+
+        return $serializer;
     }
 
     /**
@@ -242,5 +237,10 @@ final class MergedActEntryPageTest extends WebTestCase
     private function pageRows(Crawler $cards): array
     {
         return $cards->each(static fn (Crawler $card): array => $card->filter('.fc-id, .sev, .fc-text, .fc-merged, .fc-call')->each(static fn (Crawler $part): string => $part->text()));
+    }
+
+    private function judgeDoneOf(ChangeReview $review): ?JudgeDone
+    {
+        return new RoundLedgerReading($this->fixture->ledger(), $this->fixture->ledgerPayloads(), new ConfiguredPrices([]))->judgeDoneOf($review->roundId);
     }
 }

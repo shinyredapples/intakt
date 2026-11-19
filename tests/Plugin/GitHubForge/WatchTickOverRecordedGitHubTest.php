@@ -125,14 +125,6 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
     }
 
-    private function recordedEvents(): string
-    {
-        $tester = new CommandTester(new Application(self::bootKernel())->find('intakt:ledger:events'));
-        $tester->execute([]);
-
-        return $tester->getDisplay();
-    }
-
     private function handler(RecordingCommandBus $commands): WatchPullRequestsHandler
     {
         $clock = new MockClock('2026-11-02T10:00:00+00:00');
@@ -188,15 +180,23 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         };
     }
 
-    private function panel(): Panel
-    {
-        return new Panel([new PanelReviewer(new ReviewerRole('core', 'Review the change.'), new ReviewerModel(Tier::Strong, Provider::Anthropic), 10)], QuorumPolicy::All);
-    }
-
     private function fixture(string $name): string
     {
         $content = file_get_contents(__DIR__.'/Fixtures/'.$name);
 
         return false === $content ? throw new LogicException('Missing fixture '.$name) : $content;
+    }
+
+    private function panel(): Panel
+    {
+        return new Panel([new PanelReviewer(new ReviewerRole('core', 'Review the change.'), new ReviewerModel(Tier::Strong, Provider::Anthropic), 10)], QuorumPolicy::All);
+    }
+
+    private function recordedEvents(): string
+    {
+        $tester = new CommandTester(new Application(self::bootKernel())->find('intakt:ledger:events'));
+        $tester->execute([]);
+
+        return $tester->getDisplay();
     }
 }

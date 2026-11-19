@@ -353,9 +353,14 @@ final class ReadRoundToolsTest extends KernelTestCase
         $this->fixture = new RoundFixture(self::getContainer());
     }
 
-    private function flag(string $project): void
+    private function statusTool(): RoundStatusTool
     {
-        new FlagProjectAsReplayHandler($this->fixture->entities)(new FlagProjectAsReplay($project));
+        return new RoundStatusTool($this->readable(), $this->ledgerReading());
+    }
+
+    private function ledgerReading(): RoundLedgerReading
+    {
+        return new RoundLedgerReading($this->fixture->ledger(), $this->fixture->ledgerPayloads(), new ConfiguredPrices([]));
     }
 
     private function reviewedRound(): ReviewRound
@@ -371,22 +376,15 @@ final class ReadRoundToolsTest extends KernelTestCase
         return $this->fixture->round($round->id()->toRfc4122());
     }
 
-    private function judgedBy(Judgement $judgement): ReviewRound
+    private function finding(string $id, Severity $severity): Finding
     {
-        $round = $this->reviewedRound();
-        $this->fixture->judge(new ScriptedJudgement($judgement))(new JudgeRound($round->id()->toRfc4122()));
-
-        return $round;
+        return new Finding($id, $severity, null, null, null, 'Text of '.$id.'.', FixableBy::Builder, false, null, null);
     }
 
-    /**
-     * @param list<Finding> $act
-     *
-     * @return array<string, string|null>
-     */
-    private function notesOf(array $act): array
+    // At one place, so a finding that is dropped would otherwise be merged with the other.
+    private function quoting(string $id, string $text): Finding
     {
-        return array_combine(array_map(static fn (Finding $entry): string => $entry->id, $act), array_map(static fn (Finding $entry): ?string => $entry->judgeNote(), $act));
+        return new Finding($id, Severity::P1, 'src/Thing.php', 1, null, $text, FixableBy::Builder, false, null, null);
     }
 
     /**
@@ -401,26 +399,9 @@ final class ReadRoundToolsTest extends KernelTestCase
         return $this->fixture->round($round->id()->toRfc4122());
     }
 
-    private function statusTool(): RoundStatusTool
-    {
-        return new RoundStatusTool($this->readable(), $this->ledgerReading());
-    }
-
     private function actList(): RoundActListTool
     {
         return new RoundActListTool($this->readable(), $this->fixture->findingStore(), $this->ledgerReading());
-    }
-
-    private function ledgerReading(): RoundLedgerReading
-    {
-        return new RoundLedgerReading($this->fixture->ledger(), $this->fixture->ledgerPayloads(), new ConfiguredPrices([]));
-    }
-
-    private function findingsResource(): RoundFindingsResource
-    {
-        $stored = self::getContainer()->get('serializer.stored');
-
-        return new RoundFindingsResource($this->readable(), $this->fixture->findingStore(), $stored);
     }
 
     private function readable(): ReadableRounds
@@ -461,14 +442,33 @@ final class ReadRoundToolsTest extends KernelTestCase
         return new Fence()->contentOf(UntrustedSource::ActList, $note);
     }
 
-    // At one place, so a finding that is dropped would otherwise be merged with the other.
-    private function quoting(string $id, string $text): Finding
+    private function judgedBy(Judgement $judgement): ReviewRound
     {
-        return new Finding($id, Severity::P1, 'src/Thing.php', 1, null, $text, FixableBy::Builder, false, null, null);
+        $round = $this->reviewedRound();
+        $this->fixture->judge(new ScriptedJudgement($judgement))(new JudgeRound($round->id()->toRfc4122()));
+
+        return $round;
     }
 
-    private function finding(string $id, Severity $severity): Finding
+    /**
+     * @param list<Finding> $act
+     *
+     * @return array<string, string|null>
+     */
+    private function notesOf(array $act): array
     {
-        return new Finding($id, $severity, null, null, null, 'Text of '.$id.'.', FixableBy::Builder, false, null, null);
+        return array_combine(array_map(static fn (Finding $entry): string => $entry->id, $act), array_map(static fn (Finding $entry): ?string => $entry->judgeNote(), $act));
+    }
+
+    private function findingsResource(): RoundFindingsResource
+    {
+        $stored = self::getContainer()->get('serializer.stored');
+
+        return new RoundFindingsResource($this->readable(), $this->fixture->findingStore(), $stored);
+    }
+
+    private function flag(string $project): void
+    {
+        new FlagProjectAsReplayHandler($this->fixture->entities)(new FlagProjectAsReplay($project));
     }
 }

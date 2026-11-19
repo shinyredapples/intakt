@@ -150,6 +150,28 @@ final class StartReviewToolTest extends TestCase
         $this->repository->remove();
     }
 
+    private function reviewing(?ChangeReviewRequest &$seen): ChangeReviews
+    {
+        $finding = new Finding('F1', Severity::P1, 'src/Feature.php', 3, null, 'Missing check.', FixableBy::Builder, false, null, null);
+        $reviews = self::createStub(ChangeReviews::class);
+        $reviews->method('review')->willReturnCallback(static function (ChangeReviewRequest $request) use (&$seen, $finding): ChangeReview {
+            $seen = $request;
+
+            return new ChangeReview('0192a000-0000-7000-8000-000000000000', 1, Decision::Changes, [], [$finding], new RoundTokens(1, 10, 0, 0, 0, 2, 12), Cost::none());
+        });
+
+        return $reviews;
+    }
+
+    private function tool(ChangeReviews $reviews): StartReviewTool
+    {
+        $reviewer = new PanelReviewer(new ReviewerRole('core', 'Review the change.'), new ReviewerModel(Tier::Strong, Provider::Anthropic), 10);
+        $panels = self::createStub(Panels::class);
+        $panels->method('panelForChange')->willReturn(new Panel([$reviewer], QuorumPolicy::All));
+
+        return new StartReviewTool(new LocalChangeReview($panels, $reviews));
+    }
+
     private function gateway(): ClientGateway
     {
         return new ClientGateway(self::createStub(SessionInterface::class));
@@ -163,33 +185,11 @@ final class StartReviewToolTest extends TestCase
         return ['project' => 'alpha', 'task' => $task, 'change' => 'sample', 'repository' => $this->repository->path, 'round' => $round];
     }
 
-    private function tool(ChangeReviews $reviews): StartReviewTool
-    {
-        $reviewer = new PanelReviewer(new ReviewerRole('core', 'Review the change.'), new ReviewerModel(Tier::Strong, Provider::Anthropic), 10);
-        $panels = self::createStub(Panels::class);
-        $panels->method('panelForChange')->willReturn(new Panel([$reviewer], QuorumPolicy::All));
-
-        return new StartReviewTool(new LocalChangeReview($panels, $reviews));
-    }
-
     private function ending(RoundEnds $end, string $reason): ChangeReviews
     {
         $blocked = new ChangeReview('0192a000-0000-7000-8000-000000000000', 1, Decision::Approve, [], [], new RoundTokens(0, 0, 0, 0, 0, 0, 0), Cost::none());
         $reviews = self::createStub(ChangeReviews::class);
         $reviews->method('review')->willReturn($blocked->blockedFor($end, $reason));
-
-        return $reviews;
-    }
-
-    private function reviewing(?ChangeReviewRequest &$seen): ChangeReviews
-    {
-        $finding = new Finding('F1', Severity::P1, 'src/Feature.php', 3, null, 'Missing check.', FixableBy::Builder, false, null, null);
-        $reviews = self::createStub(ChangeReviews::class);
-        $reviews->method('review')->willReturnCallback(static function (ChangeReviewRequest $request) use (&$seen, $finding): ChangeReview {
-            $seen = $request;
-
-            return new ChangeReview('0192a000-0000-7000-8000-000000000000', 1, Decision::Changes, [], [$finding], new RoundTokens(1, 10, 0, 0, 0, 2, 12), Cost::none());
-        });
 
         return $reviews;
     }

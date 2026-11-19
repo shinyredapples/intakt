@@ -318,6 +318,11 @@ final class BoardTest extends TestCase
         self::assertSame(['alpha'], $board->idleProjects());
     }
 
+    private function round(string $round, string $change, int $number): ReviewedRound
+    {
+        return $this->started(new RoundStart($round, 'alpha', 2), new RoundPlace($change, $number), $this->morning());
+    }
+
     /**
      * @return list<string>
      */
@@ -326,9 +331,9 @@ final class BoardTest extends TestCase
         return array_map(static fn (Review $card): string => $card->latest()->round, $board->cardsIn($column));
     }
 
-    private function round(string $round, string $change, int $number): ReviewedRound
+    private function morning(): DateTimeImmutable
     {
-        return $this->started(new RoundStart($round, 'alpha', 2), new RoundPlace($change, $number), $this->morning());
+        return new DateTimeImmutable('2026-11-01T10:00:00+00:00');
     }
 
     private function started(RoundStart $start, RoundPlace $place, DateTimeImmutable $startedAt): ReviewedRound
@@ -336,18 +341,13 @@ final class BoardTest extends TestCase
         return new ReviewedRound($start, $place, $startedAt, null);
     }
 
-    private function inFlight(string $project): BuildTask
-    {
-        return new BuildTask($project, 'task-1', true);
-    }
-
     private function failed(string $project): BuildTask
     {
         return new BuildTask($project, 'task-2', false);
     }
 
-    private function morning(): DateTimeImmutable
+    private function inFlight(string $project): BuildTask
     {
-        return new DateTimeImmutable('2026-11-01T10:00:00+00:00');
+        return new BuildTask($project, 'task-1', true);
     }
 }

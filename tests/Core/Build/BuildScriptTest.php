@@ -656,40 +656,60 @@ final class BuildScriptTest extends TestCase
         chmod($this->bin.'/claude', 0o755);
     }
 
+    private function whenTheBuildRuns(string $branch, string $model, int $allowance = 600): Process
+    {
+        $run = new Process(
+            ['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-build', $this->history->work, $this->prompt, $branch, $model, '7', (string) $allowance, $this->gates],
+            null,
+            $this->environment(),
+            timeout: 20,
+        );
+        $run->run();
+
+        return $run;
+    }
+
+    /**
+     * @return array<string, string|false>
+     */
+    private function environment(): array
+    {
+        // As the container sets them, and without the host's git variables, which would point git at another repository.
+        $environment = [
+            'HOME' => $this->work,
+            'TMPDIR' => $this->work,
+            'INTAKT_JOB_OUTPUT' => $this->output,
+            'PATH' => $this->bin.':'.getenv('PATH'),
+            'RECORD' => $this->history->folder,
+            'INTAKT_GATE_SLOTS' => $this->inherited,
+        ];
+        foreach (array_keys([...getenv(), ...$_ENV]) as $name) {
+            if (is_string($name) && str_starts_with($name, 'GIT_')) {
+                $environment[$name] = false;
+            }
+        }
+
+        return $environment;
+    }
+
+    private function outputFile(string $name): string
+    {
+        return (string) file_get_contents($this->output.'/'.$name);
+    }
+
+    private function fileAtTheBundlesHead(string $branch, string $path): string
+    {
+        $this->history->inMirror('fetch', '--quiet', $this->output.'/handback.bundle', 'refs/heads/'.$branch.':refs/heads/fetched');
+
+        return $this->history->inMirror('show', 'refs/heads/fetched:'.$path)."\n";
+    }
+
     // Each sleep reports its own process id, because the CI image has no procps to look it up with.
     private function givenSleepRecordsItsProcess(): void
     {
         $sleep = new ExecutableFinder()->find('sleep');
         self::assertNotNull($sleep);
         file_put_contents($this->bin.'/sleep', "#!/bin/sh\necho \$\$ >> \"\$RECORD/sleeps\"\nexec ".escapeshellarg($sleep)." \"\$@\"\n");
-        chmod($this->bin.'/sleep', 0o755);
-    }
-
-    // A stand-in that reports itself only once in a session of its own, so the group kill misses it and it runs until the build returned, as a killed sleep still in its exit does; it has no time limit a slow build could outlast, and also ends once tearDown removes the folder or the test runner's process is gone or a zombie, because a failed test must leave nothing and a killed runner never reaches tearDown, and its parent may not reap it.
-    private function givenSleepRecordsAProcessThatEndsOnlyAfterTheBuild(?int $runner = null): void
-    {
-        $runner ??= (int) getmypid();
-        $sleep = escapeshellarg((string) new ExecutableFinder()->find('sleep'));
-        file_put_contents($this->bin.'/stand-in', <<<'SH'
-            #!/bin/sh
-            echo $$ > "$RECORD/stand-in.$2"
-            while [ ! -e "$RECORD/build-returned" ] && [ -d "$RECORD" ]; do
-                case "$(sed -n 's/.*) \(.\).*/\1/p' "/proc/$3/stat" 2>/dev/null)" in
-                    ''|Z|X) exit 0 ;;
-                esac
-                "$1" 0.05
-            done
-            SH);
-        chmod($this->bin.'/stand-in', 0o755);
-        $standIn = escapeshellarg($this->bin.'/stand-in');
-        file_put_contents($this->bin.'/sleep', <<<SH
-            #!/bin/sh
-            setsid {$standIn} {$sleep} \$\$ {$runner} > /dev/null 2>&1 &
-            until [ -s "\$RECORD/stand-in.\$\$" ]; do :; done
-            cat "\$RECORD/stand-in.\$\$" >> "\$RECORD/sleeps"
-            echo \$\$ >> "\$RECORD/sleeps"
-            exec {$sleep} "\$@"
-            SH);
         chmod($this->bin.'/sleep', 0o755);
     }
 
@@ -718,6 +738,34 @@ final class BuildScriptTest extends TestCase
         }
 
         return $running;
+    }
+
+    // A stand-in that reports itself only once in a session of its own, so the group kill misses it and it runs until the build returned, as a killed sleep still in its exit does; it has no time limit a slow build could outlast, and also ends once tearDown removes the folder or the test runner's process is gone or a zombie, because a failed test must leave nothing and a killed runner never reaches tearDown, and its parent may not reap it.
+    private function givenSleepRecordsAProcessThatEndsOnlyAfterTheBuild(?int $runner = null): void
+    {
+        $runner ??= (int) getmypid();
+        $sleep = escapeshellarg((string) new ExecutableFinder()->find('sleep'));
+        file_put_contents($this->bin.'/stand-in', <<<'SH'
+            #!/bin/sh
+            echo $$ > "$RECORD/stand-in.$2"
+            while [ ! -e "$RECORD/build-returned" ] && [ -d "$RECORD" ]; do
+                case "$(sed -n 's/.*) \(.\).*/\1/p' "/proc/$3/stat" 2>/dev/null)" in
+                    ''|Z|X) exit 0 ;;
+                esac
+                "$1" 0.05
+            done
+            SH);
+        chmod($this->bin.'/stand-in', 0o755);
+        $standIn = escapeshellarg($this->bin.'/stand-in');
+        file_put_contents($this->bin.'/sleep', <<<SH
+            #!/bin/sh
+            setsid {$standIn} {$sleep} \$\$ {$runner} > /dev/null 2>&1 &
+            until [ -s "\$RECORD/stand-in.\$\$" ]; do :; done
+            cat "\$RECORD/stand-in.\$\$" >> "\$RECORD/sleeps"
+            echo \$\$ >> "\$RECORD/sleeps"
+            exec {$sleep} "\$@"
+            SH);
+        chmod($this->bin.'/sleep', 0o755);
     }
 
     private function isRunning(int $process): bool
@@ -761,53 +809,5 @@ final class BuildScriptTest extends TestCase
             exec '{$digest}' "\$@"
             SH);
         chmod($this->bin.'/sha256sum', 0o755);
-    }
-
-    private function whenTheBuildRuns(string $branch, string $model, int $allowance = 600): Process
-    {
-        $run = new Process(
-            ['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-build', $this->history->work, $this->prompt, $branch, $model, '7', (string) $allowance, $this->gates],
-            null,
-            $this->environment(),
-            timeout: 20,
-        );
-        $run->run();
-
-        return $run;
-    }
-
-    /**
-     * @return array<string, string|false>
-     */
-    private function environment(): array
-    {
-        // As the container sets them, and without the host's git variables, which would point git at another repository.
-        $environment = [
-            'HOME' => $this->work,
-            'TMPDIR' => $this->work,
-            'INTAKT_JOB_OUTPUT' => $this->output,
-            'PATH' => $this->bin.':'.getenv('PATH'),
-            'RECORD' => $this->history->folder,
-            'INTAKT_GATE_SLOTS' => $this->inherited,
-        ];
-        foreach (array_keys([...getenv(), ...$_ENV]) as $name) {
-            if (is_string($name) && str_starts_with($name, 'GIT_')) {
-                $environment[$name] = false;
-            }
-        }
-
-        return $environment;
-    }
-
-    private function fileAtTheBundlesHead(string $branch, string $path): string
-    {
-        $this->history->inMirror('fetch', '--quiet', $this->output.'/handback.bundle', 'refs/heads/'.$branch.':refs/heads/fetched');
-
-        return $this->history->inMirror('show', 'refs/heads/fetched:'.$path)."\n";
-    }
-
-    private function outputFile(string $name): string
-    {
-        return (string) file_get_contents($this->output.'/'.$name);
     }
 }

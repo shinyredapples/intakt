@@ -48,28 +48,6 @@ final readonly class ImportFormRule implements Rule
     /**
      * @param array<Node> $nodes
      *
-     * @return list<array<Node>>
-     */
-    private function namespaceScopes(array $nodes): array
-    {
-        $namespaces = array_values(array_filter($nodes, static fn (Node $node): bool => $node instanceof Namespace_));
-
-        return [] === $namespaces ? [$nodes] : array_map(static fn (Namespace_ $namespace): array => $namespace->stmts, $namespaces);
-    }
-
-    /**
-     * @param array<Node> $nodes
-     *
-     * @return list<IdentifierRuleError>
-     */
-    private function unneededAliasesIn(array $nodes): array
-    {
-        return $this->unneededAliases($this->importsIn($nodes), $this->declaredClassNames($nodes));
-    }
-
-    /**
-     * @param array<Node> $nodes
-     *
      * @return list<Import>
      */
     private function importsIn(array $nodes): array
@@ -125,6 +103,16 @@ final readonly class ImportFormRule implements Rule
     /**
      * @param array<Node> $nodes
      *
+     * @return list<IdentifierRuleError>
+     */
+    private function unneededAliasesIn(array $nodes): array
+    {
+        return $this->unneededAliases($this->importsIn($nodes), $this->declaredClassNames($nodes));
+    }
+
+    /**
+     * @param array<Node> $nodes
+     *
      * @return list<string>
      */
     private function declaredClassNames(array $nodes): array
@@ -169,5 +157,17 @@ final readonly class ImportFormRule implements Rule
         $parts = explode('\\', strtolower($name));
 
         return array_last($parts);
+    }
+
+    /**
+     * @param array<Node> $nodes
+     *
+     * @return list<array<Node>>
+     */
+    private function namespaceScopes(array $nodes): array
+    {
+        $namespaces = array_values(array_filter($nodes, static fn (Node $node): bool => $node instanceof Namespace_));
+
+        return [] === $namespaces ? [$nodes] : array_map(static fn (Namespace_ $namespace): array => $namespace->stmts, $namespaces);
     }
 }

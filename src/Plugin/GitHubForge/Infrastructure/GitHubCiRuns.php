@@ -74,18 +74,26 @@ final readonly class GitHubCiRuns
     }
 
     /**
-     * @param list<array<mixed>>                                              $entries
-     * @param callable(array<mixed>): array{string, string, CiRunState, ?int} $describe
-     *
-     * @return list<CiRun>
+     * @param array<mixed> $entry
      */
-    private function runsOf(RepositoryAddress $repository, array $entries, callable $describe): array
+    private function positive(array $entry, string $key): int
     {
-        return array_map(function (array $entry) use ($repository, $describe): CiRun {
-            [$name, $event, $state, $number] = $describe($entry);
+        $value = $entry[$key] ?? null;
 
-            return new CiRun(new CiRunOrigin($name, $event, $this->changeOf($repository, $entry)), $state, $this->moments->parse($this->text($entry, 'created_at')), $number);
-        }, $entries);
+        return is_int($value) && $value > 0 ? $value : throw new ForgeReadFailed(sprintf('GitHub answered without a positive "%s".', $key));
+    }
+
+    /**
+     * @param array<mixed> $data
+     */
+    private function text(array $data, string ...$keys): string
+    {
+        $value = $data;
+        foreach ($keys as $key) {
+            $value = is_array($value) ? ($value[$key] ?? null) : null;
+        }
+
+        return is_string($value) && '' !== $value ? $value : throw new ForgeReadFailed(sprintf('GitHub answered without "%s".', implode('.', $keys)));
     }
 
     /**
@@ -95,17 +103,6 @@ final readonly class GitHubCiRuns
     {
         // Only a queued first attempt never started, because a queued rerun keeps the first attempt's creation time; check suites stay Unfinished, because one app's suites share one origin.
         return 'queued' === $this->text($entry, 'status') && 1 === $this->positive($entry, 'run_attempt') && !$this->withoutItsPullRequest($entry) ? CiRunState::Queued : $this->stateOf($entry);
-    }
-
-    /**
-     * @param array<mixed> $entry
-     */
-    private function runNumberOf(array $entry): ?int
-    {
-        $number = $this->positive($entry, 'run_number');
-
-        // Left out for a pull request run without its pull request, because two unknown pull requests are not one origin and a same-second tie must not order them.
-        return $this->withoutItsPullRequest($entry) ? null : $number;
     }
 
     /**
@@ -122,11 +119,27 @@ final readonly class GitHubCiRuns
     /**
      * @param array<mixed> $entry
      */
-    private function positive(array $entry, string $key): int
+    private function runNumberOf(array $entry): ?int
     {
-        $value = $entry[$key] ?? null;
+        $number = $this->positive($entry, 'run_number');
 
-        return is_int($value) && $value > 0 ? $value : throw new ForgeReadFailed(sprintf('GitHub answered without a positive "%s".', $key));
+        // Left out for a pull request run without its pull request, because two unknown pull requests are not one origin and a same-second tie must not order them.
+        return $this->withoutItsPullRequest($entry) ? null : $number;
+    }
+
+    /**
+     * @param list<array<mixed>>                                              $entries
+     * @param callable(array<mixed>): array{string, string, CiRunState, ?int} $describe
+     *
+     * @return list<CiRun>
+     */
+    private function runsOf(RepositoryAddress $repository, array $entries, callable $describe): array
+    {
+        return array_map(function (array $entry) use ($repository, $describe): CiRun {
+            [$name, $event, $state, $number] = $describe($entry);
+
+            return new CiRun(new CiRunOrigin($name, $event, $this->changeOf($repository, $entry)), $state, $this->moments->parse($this->text($entry, 'created_at')), $number);
+        }, $entries);
     }
 
     /**
@@ -159,18 +172,5 @@ final readonly class GitHubCiRuns
             'cancelled' => CiRunState::Cancelled,
             default => CiRunState::Failed,
         };
-    }
-
-    /**
-     * @param array<mixed> $data
-     */
-    private function text(array $data, string ...$keys): string
-    {
-        $value = $data;
-        foreach ($keys as $key) {
-            $value = is_array($value) ? ($value[$key] ?? null) : null;
-        }
-
-        return is_string($value) && '' !== $value ? $value : throw new ForgeReadFailed(sprintf('GitHub answered without "%s".', implode('.', $keys)));
     }
 }

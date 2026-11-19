@@ -148,24 +148,6 @@ final readonly class RoundLedgerReading implements RoundCosts
     }
 
     /**
-     * @param class-string<ReviewerStarted|VerdictReceived|ReviewerFailed|ReviewerStopped> $payload
-     *
-     * @return list<DateTimeImmutable>
-     */
-    private function momentsOf(LedgerEventKind $kind, string $payload, string $reviewerId): array
-    {
-        $moments = [];
-
-        foreach ($this->ledger->readOfKind($kind) as $recorded) {
-            if ($reviewerId === $this->payloads->of($recorded, $payload)?->reviewer) {
-                $moments[] = $recorded->recordedAt;
-            }
-        }
-
-        return $moments;
-    }
-
-    /**
      * @param list<RecordedEvent> $recorded
      *
      * @return array<string, string|null>
@@ -184,30 +166,6 @@ final readonly class RoundLedgerReading implements RoundCosts
         }
 
         return $calls;
-    }
-
-    /**
-     * @param array<string, string|null> $models
-     */
-    private function costOfEnding(RecordedEvent $row, array $models): Cost
-    {
-        $ended = $this->endingOf($row);
-
-        if (null === $ended || !array_key_exists($ended->call, $models)) {
-            return Cost::none();
-        }
-
-        $cost = $this->prices->costOf($models[$ended->call], $this->figuresOf($ended->usages));
-
-        return array_any($ended->usages, static fn (TokenUsageRow $usage): bool => null === $usage->prompt) ? $cost->plus(Cost::unknown()) : $cost;
-    }
-
-    /**
-     * @param list<TokenUsageRow> $usages
-     */
-    private function figuresOf(array $usages): TokenFigures
-    {
-        return array_reduce($usages, static fn (TokenFigures $sum, TokenUsageRow $usage): TokenFigures => $sum->plus($usage->figures()), TokenFigures::none());
     }
 
     /**
@@ -231,6 +189,48 @@ final readonly class RoundLedgerReading implements RoundCosts
         $ended = $this->endingOf($row);
 
         return null !== $ended && in_array($ended->call, $calls, true) ? $ended->usages : [];
+    }
+
+    /**
+     * @param list<TokenUsageRow> $usages
+     */
+    private function figuresOf(array $usages): TokenFigures
+    {
+        return array_reduce($usages, static fn (TokenFigures $sum, TokenUsageRow $usage): TokenFigures => $sum->plus($usage->figures()), TokenFigures::none());
+    }
+
+    /**
+     * @param class-string<ReviewerStarted|VerdictReceived|ReviewerFailed|ReviewerStopped> $payload
+     *
+     * @return list<DateTimeImmutable>
+     */
+    private function momentsOf(LedgerEventKind $kind, string $payload, string $reviewerId): array
+    {
+        $moments = [];
+
+        foreach ($this->ledger->readOfKind($kind) as $recorded) {
+            if ($reviewerId === $this->payloads->of($recorded, $payload)?->reviewer) {
+                $moments[] = $recorded->recordedAt;
+            }
+        }
+
+        return $moments;
+    }
+
+    /**
+     * @param array<string, string|null> $models
+     */
+    private function costOfEnding(RecordedEvent $row, array $models): Cost
+    {
+        $ended = $this->endingOf($row);
+
+        if (null === $ended || !array_key_exists($ended->call, $models)) {
+            return Cost::none();
+        }
+
+        $cost = $this->prices->costOf($models[$ended->call], $this->figuresOf($ended->usages));
+
+        return array_any($ended->usages, static fn (TokenUsageRow $usage): bool => null === $usage->prompt) ? $cost->plus(Cost::unknown()) : $cost;
     }
 
     // Tried as settled first, because an unsettled row also reads into UsageSettled and only its phase tells the two apart.

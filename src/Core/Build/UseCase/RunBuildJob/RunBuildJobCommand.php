@@ -73,17 +73,6 @@ final readonly class RunBuildJobCommand
         return Tier::tryFrom($value) ?? throw new InvalidArgumentException(sprintf('The tier "%s" is not one of %s.', $value, implode(', ', array_map(static fn (Tier $tier): string => $tier->value, Tier::cases()))));
     }
 
-    private function failed(SymfonyStyle $io, BuildJobOutcome $outcome): int
-    {
-        foreach ($this->endOfLog($outcome->log) as $line) {
-            $io->writeln(OutputFormatter::escape($line));
-        }
-
-        $io->error('failed: '.$outcome->verdict->reason());
-
-        return Command::FAILURE;
-    }
-
     private function asked(SymfonyStyle $io, BuildQuestion $question): int
     {
         $io->writeln('question: '.$this->oneLine($question->question));
@@ -111,14 +100,15 @@ final readonly class RunBuildJobCommand
         return OutputFormatter::escape($visible ?? '\x{'.bin2hex($text).'}');
     }
 
-    private function handedBack(SymfonyStyle $io, BuildJobOutcome $outcome, string $path): int
+    private function failed(SymfonyStyle $io, BuildJobOutcome $outcome): int
     {
-        $this->filesystem->dumpFile($path, (string) $outcome->bundle);
-        $io->writeln('bundle '.OutputFormatter::escape($path));
-        $io->writeln('pull request text:');
-        $io->write(OutputFormatter::escape((string) $outcome->pullRequestText));
+        foreach ($this->endOfLog($outcome->log) as $line) {
+            $io->writeln(OutputFormatter::escape($line));
+        }
 
-        return Command::SUCCESS;
+        $io->error('failed: '.$outcome->verdict->reason());
+
+        return Command::FAILURE;
     }
 
     /**
@@ -129,5 +119,15 @@ final readonly class RunBuildJobCommand
         $log = rtrim($log, "\n");
 
         return '' === $log ? [] : array_slice(explode("\n", $log), -self::LOG_LINES);
+    }
+
+    private function handedBack(SymfonyStyle $io, BuildJobOutcome $outcome, string $path): int
+    {
+        $this->filesystem->dumpFile($path, (string) $outcome->bundle);
+        $io->writeln('bundle '.OutputFormatter::escape($path));
+        $io->writeln('pull request text:');
+        $io->write(OutputFormatter::escape((string) $outcome->pullRequestText));
+
+        return Command::SUCCESS;
     }
 }

@@ -511,14 +511,6 @@ final class ReviewChangeTest extends KernelTestCase
         $this->tiers = new VerdictPerRole([]);
     }
 
-    private function mapping(Tier ...$mapped): Vendor
-    {
-        $vendor = self::createStub(Vendor::class);
-        $vendor->method('mapsAModelTo')->willReturnCallback(static fn (string $project, Tier $tier): bool => in_array($tier, $mapped, true));
-
-        return $vendor;
-    }
-
     private function reviewWith(Vendor $vendor, ?int $round = null, ?Closure $duringTheRound = null): ChangeReview
     {
         $delivered = 0;
@@ -540,21 +532,31 @@ final class ReviewChangeTest extends KernelTestCase
         return $this->reviewChange($work)->review($this->request($round));
     }
 
-    // The reviewers answer with a finding, so the judge would be asked, and the judging is parked in the failure transport instead, as a worker parks it after its last retry.
-    /**
-     * @param Closure(): string $round
-     */
-    private function reviewersFinishAndTheJudgingOf(Closure $round): Closure
+    private function finding(string $id, Severity $severity): Finding
     {
-        $vendor = new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, [$this->finding('A', Severity::P1)], [], [])]);
+        return new Finding($id, $severity, null, null, null, 'Text of '.$id.'.', FixableBy::Builder, false, null, null);
+    }
 
-        return function () use ($vendor, $round): void {
-            foreach ($this->fixture->bus->messages as $message) {
-                $this->fixture->deliver($message, $vendor);
-            }
+    // A quote of code the change does not hold, so the quote check drops it before the judge.
+    private function quotingMissingCode(Severity $severity): Finding
+    {
+        return new Finding('A', $severity, 'src/Thing.php', 3, null, 'The call to `missingProbeSymbol` needs a guard.', FixableBy::Builder, false, null, null);
+    }
 
-            $this->parked = [new Envelope(new JudgeRound($round()))];
-        };
+    /**
+     * @return array<string, Verdict>
+     */
+    private function bothReportLines(int $first, int $second, Severity $secondSeverity = Severity::P1): array
+    {
+        return [
+            'Look at part 1.' => new Verdict(Decision::Changes, [$this->findingAt('A', $first, Severity::P1)], [], []),
+            'Look at part 2.' => new Verdict(Decision::Changes, [$this->findingAt('B', $second, $secondSeverity)], [], []),
+        ];
+    }
+
+    private function findingAt(string $id, int $line, Severity $severity): Finding
+    {
+        return new Finding($id, $severity, 'src/A.php', $line, null, 'Text of '.$id.'.', FixableBy::Builder, false, null, null);
     }
 
     // Two seconds a reviewer and one for the judge, so the two-reviewer panel's upper wait is 5 seconds.
@@ -583,25 +585,17 @@ final class ReviewChangeTest extends KernelTestCase
         );
     }
 
+    private function serializer(): SerializerInterface
+    {
+        return self::getContainer()->get('serializer.stored');
+    }
+
     private function failureTransport(): ListableReceiverInterface
     {
         $transport = self::createStub(ListableReceiverInterface::class);
         $transport->method('all')->willReturnCallback(fn (): array => $this->parked);
 
         return $transport;
-    }
-
-    // Messenger's own handling, so a refusal reaches the caller unwrapped as the application's command bus unwraps it; the reviewers' messages go to the test's workers.
-    private function commandBus(): MessageBusInterface
-    {
-        $handler = $this->fixture->startHandlerOn($this->fixture->bus);
-
-        return new MessageBus([new HandleMessageMiddleware(new HandlersLocator([RunReviewRound::class => [$handler]]))], unwrapExceptions: true);
-    }
-
-    private function serializer(): SerializerInterface
-    {
-        return self::getContainer()->get('serializer.stored');
     }
 
     private function request(?int $round = null): ChangeReviewRequest
@@ -630,6 +624,23 @@ final class ReviewChangeTest extends KernelTestCase
         return $round->id()->toRfc4122();
     }
 
+    // The reviewers answer with a finding, so the judge would be asked, and the judging is parked in the failure transport instead, as a worker parks it after its last retry.
+    /**
+     * @param Closure(): string $round
+     */
+    private function reviewersFinishAndTheJudgingOf(Closure $round): Closure
+    {
+        $vendor = new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, [$this->finding('A', Severity::P1)], [], [])]);
+
+        return function () use ($vendor, $round): void {
+            foreach ($this->fixture->bus->messages as $message) {
+                $this->fixture->deliver($message, $vendor);
+            }
+
+            $this->parked = [new Envelope(new JudgeRound($round()))];
+        };
+    }
+
     // Both rows UsageLedger writes, because only the started one names the round and only the settled one carries the tokens.
     private function recordUsage(string $call, int $total, ?string $round = null): void
     {
@@ -647,30 +658,19 @@ final class ReviewChangeTest extends KernelTestCase
         self::assertTrue($appended->succeeded());
     }
 
-    /**
-     * @return array<string, Verdict>
-     */
-    private function bothReportLines(int $first, int $second, Severity $secondSeverity = Severity::P1): array
+    // Messenger's own handling, so a refusal reaches the caller unwrapped as the application's command bus unwraps it; the reviewers' messages go to the test's workers.
+    private function commandBus(): MessageBusInterface
     {
-        return [
-            'Look at part 1.' => new Verdict(Decision::Changes, [$this->findingAt('A', $first, Severity::P1)], [], []),
-            'Look at part 2.' => new Verdict(Decision::Changes, [$this->findingAt('B', $second, $secondSeverity)], [], []),
-        ];
+        $handler = $this->fixture->startHandlerOn($this->fixture->bus);
+
+        return new MessageBus([new HandleMessageMiddleware(new HandlersLocator([RunReviewRound::class => [$handler]]))], unwrapExceptions: true);
     }
 
-    private function findingAt(string $id, int $line, Severity $severity): Finding
+    private function mapping(Tier ...$mapped): Vendor
     {
-        return new Finding($id, $severity, 'src/A.php', $line, null, 'Text of '.$id.'.', FixableBy::Builder, false, null, null);
-    }
+        $vendor = self::createStub(Vendor::class);
+        $vendor->method('mapsAModelTo')->willReturnCallback(static fn (string $project, Tier $tier): bool => in_array($tier, $mapped, true));
 
-    private function finding(string $id, Severity $severity): Finding
-    {
-        return new Finding($id, $severity, null, null, null, 'Text of '.$id.'.', FixableBy::Builder, false, null, null);
-    }
-
-    // A quote of code the change does not hold, so the quote check drops it before the judge.
-    private function quotingMissingCode(Severity $severity): Finding
-    {
-        return new Finding('A', $severity, 'src/Thing.php', 3, null, 'The call to `missingProbeSymbol` needs a guard.', FixableBy::Builder, false, null, null);
+        return $vendor;
     }
 }

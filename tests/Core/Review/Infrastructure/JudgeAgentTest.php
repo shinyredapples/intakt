@@ -234,6 +234,11 @@ final class JudgeAgentTest extends KernelTestCase
         return $this->ask(new JudgeRequest($task, $given, new UuidV7(), []), $answer);
     }
 
+    private function finding(string $id, string $file, Severity $severity = Severity::P3): Finding
+    {
+        return new Finding($id, $severity, $file, 3, null, 'Text '.$id, FixableBy::Builder, false, null, null);
+    }
+
     private function ask(JudgeRequest $request, string $answer): Judgement
     {
         $platform = MockPlatformFactory::createPlatform(function (mixed $model, mixed $input) use ($answer): string {
@@ -243,10 +248,5 @@ final class JudgeAgentTest extends KernelTestCase
         }, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
 
         return new JudgeAgent(new JudgePrompt(new Fence()))->judge($request, $platform, 'judge-model');
-    }
-
-    private function finding(string $id, string $file, Severity $severity = Severity::P3): Finding
-    {
-        return new Finding($id, $severity, $file, 3, null, 'Text '.$id, FixableBy::Builder, false, null, null);
     }
 }

@@ -246,6 +246,11 @@ final class CountedVoteTest extends TestCase
         self::assertSame(Decision::Approve, $this->counted([], [])->of(new Verdict(Decision::Approve, [], [], [])));
     }
 
+    private function finding(string $id, Severity $severity, string $text): Finding
+    {
+        return new Finding($id, $severity, 'src/A.php', 7, null, $text, FixableBy::Builder, false, null, null);
+    }
+
     /**
      * @param list<Finding>       $reported
      * @param array<string, Mark> $marks
@@ -254,16 +259,6 @@ final class CountedVoteTest extends TestCase
     private function counted(array $reported, array $marks, array $dropped = []): CountedVote
     {
         return new CountedVote($reported, [], $this->judged($reported, $marks, $dropped));
-    }
-
-    /**
-     * @param list<string>        $shown
-     * @param list<Finding>       $reported
-     * @param array<string, Mark> $marks
-     */
-    private function countedShowing(array $shown, array $reported, array $marks): CountedVote
-    {
-        return new CountedVote($reported, $shown, $this->judged($reported, $marks, []));
     }
 
     /**
@@ -277,6 +272,21 @@ final class CountedVoteTest extends TestCase
         $judgement = new Judgement(array_map(static fn (string $id, Mark $mark): JudgedFinding => new JudgedFinding($id, $mark), array_keys($marks), $marks));
 
         return JudgedFindings::of($judgement, $kept, array_map(static fn (Finding $finding): DroppedFinding => DroppedFinding::of($finding, 'none of its 1 quoted code fragments is in the change'), $dropped));
+    }
+
+    private function changes(Finding ...$findings): Verdict
+    {
+        return new Verdict(Decision::Changes, array_values($findings), [], []);
+    }
+
+    /**
+     * @param list<string>        $shown
+     * @param list<Finding>       $reported
+     * @param array<string, Mark> $marks
+     */
+    private function countedShowing(array $shown, array $reported, array $marks): CountedVote
+    {
+        return new CountedVote($reported, $shown, $this->judged($reported, $marks, []));
     }
 
     // Through a real ledger, so the reported findings carry every field the ledger keeps and the ids it gives.
@@ -294,15 +304,5 @@ final class CountedVoteTest extends TestCase
         $judged = JudgedFindings::of(new Judgement([new JudgedFinding('F1', Mark::Defer), new JudgedFinding('F2', Mark::Act)]), $reported);
 
         return [$first, $second, new CountedVote($reported, [], $judged)];
-    }
-
-    private function changes(Finding ...$findings): Verdict
-    {
-        return new Verdict(Decision::Changes, array_values($findings), [], []);
-    }
-
-    private function finding(string $id, Severity $severity, string $text): Finding
-    {
-        return new Finding($id, $severity, 'src/A.php', 7, null, $text, FixableBy::Builder, false, null, null);
     }
 }

@@ -557,27 +557,6 @@ final class GitHubWatchReadsTest extends TestCase
         $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
     }
 
-    /**
-     * @return list<CiRunState>
-     */
-    private function statesOfHead(): array
-    {
-        return array_map(static fn (CiRun $run): CiRunState => $run->state, $this->state()->runs);
-    }
-
-    private function state(): CiState
-    {
-        return $this->reads()->ciStateOf('alpha', new CommitId(self::HEAD));
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function listingRequests(): array
-    {
-        return array_values(array_filter($this->requested, static fn (string $request): bool => str_starts_with($request, self::PULLS)));
-    }
-
     private function reads(): GitHubWatchReads
     {
         $http = new MockHttpClient(function (string $method, string $url, array $options): ResponseInterface {
@@ -614,18 +593,6 @@ final class GitHubWatchReadsTest extends TestCase
         };
     }
 
-    /**
-     * @return array<string, string>
-     */
-    private function budget(): array
-    {
-        return null === $this->remaining ? [] : [
-            'x-ratelimit-limit' => '5000',
-            'x-ratelimit-remaining' => (string) $this->remaining,
-            'x-ratelimit-reset' => (string) $this->clock->now()->modify('+30 minutes')->getTimestamp(),
-        ];
-    }
-
     private function listingPage(string $url): MockResponse
     {
         if (304 === $this->listingStatus) {
@@ -643,6 +610,33 @@ final class GitHubWatchReadsTest extends TestCase
         };
     }
 
+    private function fixture(string $name): string
+    {
+        $content = file_get_contents(__DIR__.'/Fixtures/'.$name);
+
+        return false === $content ? throw new LogicException('Missing fixture '.$name) : $content;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function budget(): array
+    {
+        return null === $this->remaining ? [] : [
+            'x-ratelimit-limit' => '5000',
+            'x-ratelimit-remaining' => (string) $this->remaining,
+            'x-ratelimit-reset' => (string) $this->clock->now()->modify('+30 minutes')->getTimestamp(),
+        ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function listingRequests(): array
+    {
+        return array_values(array_filter($this->requested, static fn (string $request): bool => str_starts_with($request, self::PULLS)));
+    }
+
     /**
      * @param array<mixed> $options
      */
@@ -654,10 +648,16 @@ final class GitHubWatchReadsTest extends TestCase
         return is_array($values) && is_string($values[0] ?? null) ? preg_replace('/^[^:]+: /', '', $values[0]) ?? '' : '';
     }
 
-    private function fixture(string $name): string
+    /**
+     * @return list<CiRunState>
+     */
+    private function statesOfHead(): array
     {
-        $content = file_get_contents(__DIR__.'/Fixtures/'.$name);
+        return array_map(static fn (CiRun $run): CiRunState => $run->state, $this->state()->runs);
+    }
 
-        return false === $content ? throw new LogicException('Missing fixture '.$name) : $content;
+    private function state(): CiState
+    {
+        return $this->reads()->ciStateOf('alpha', new CommitId(self::HEAD));
     }
 }

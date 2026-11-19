@@ -64,16 +64,16 @@ final readonly class PinnedProviderCooldownWindows implements PinnedProviderCool
         return $until instanceof DateTimeImmutable && $this->clock->now() < $until;
     }
 
+    // Hashed, because a router provider name comes from a model id and may hold characters PSR-6 reserves in keys.
+    private function keyOf(PinnedProvider $provider): string
+    {
+        return self::PREFIX.hash('xxh128', $provider->key());
+    }
+
     private function endOf(string $key): ?DateTimeImmutable
     {
         $until = $this->pool->getItem($key)->get();
 
         return $until instanceof DateTimeImmutable ? $until : null;
-    }
-
-    // Hashed, because a router provider name comes from a model id and may hold characters PSR-6 reserves in keys.
-    private function keyOf(PinnedProvider $provider): string
-    {
-        return self::PREFIX.hash('xxh128', $provider->key());
     }
 }

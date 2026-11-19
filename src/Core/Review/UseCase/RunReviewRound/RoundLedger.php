@@ -129,6 +129,45 @@ final readonly class RoundLedger
         ));
     }
 
+    private function append(LedgerEventKind $kind, ReviewStarted|ReviewerStarted|VerdictReceived|CatchUpOwed|ReviewerFailed|ReviewerBlocked|ReviewerStopped|JudgeDone $payload): void
+    {
+        $result = $this->ledger->append(new LedgerEvent($kind, $this->serializer->serialize($payload, JsonEncoder::FORMAT)));
+
+        if (!$result->succeeded()) {
+            throw ReviewEventNotRecorded::for($kind->value, (string) $result->failure);
+        }
+    }
+
+    /**
+     * @return array{round: string, reviewer: string, role: string, tier: Tier}
+     */
+    private function identify(RoundReviewer $reviewer): array
+    {
+        return ['round' => $reviewer->round()->id()->toRfc4122(), 'reviewer' => $reviewer->id()->toRfc4122(), 'role' => $reviewer->roleName(), 'tier' => $reviewer->tier()];
+    }
+
+    // A tier that does not resolve still records the start, without a model, because the reviewer's own call then fails on its usual path.
+    private function modelOf(RoundReviewer $reviewer): ?string
+    {
+        try {
+            return $this->tiers->resolve($reviewer->round()->project(), $reviewer->tier())->model;
+        } catch (TierResolutionFailure) {
+            return null;
+        }
+    }
+
+    // The first substitute on that provider, because the vendor tries the tier's substitutes in order and an outage takes a whole provider out.
+    private function substituteModelOf(RoundReviewer $reviewer, Provider $substitute): ?string
+    {
+        try {
+            $substitutes = $this->tiers->substitutes($reviewer->round()->project(), $reviewer->tier());
+        } catch (TierResolutionFailure) {
+            return null;
+        }
+
+        return array_find($substitutes, static fn (ResolvedModel $model): bool => $substitute === $model->provider)?->model;
+    }
+
     // An act entry is recorded as the act list holds it (highest severity, merged ids), so the review page shows it the way the console does; the merged findings stay recorded for their ids.
     /**
      * @param list<string> $act
@@ -158,44 +197,5 @@ final readonly class RoundLedger
         $stored = trim($this->redactor->redact($note));
 
         return '' === $stored ? null : $stored;
-    }
-
-    // A tier that does not resolve still records the start, without a model, because the reviewer's own call then fails on its usual path.
-    private function modelOf(RoundReviewer $reviewer): ?string
-    {
-        try {
-            return $this->tiers->resolve($reviewer->round()->project(), $reviewer->tier())->model;
-        } catch (TierResolutionFailure) {
-            return null;
-        }
-    }
-
-    // The first substitute on that provider, because the vendor tries the tier's substitutes in order and an outage takes a whole provider out.
-    private function substituteModelOf(RoundReviewer $reviewer, Provider $substitute): ?string
-    {
-        try {
-            $substitutes = $this->tiers->substitutes($reviewer->round()->project(), $reviewer->tier());
-        } catch (TierResolutionFailure) {
-            return null;
-        }
-
-        return array_find($substitutes, static fn (ResolvedModel $model): bool => $substitute === $model->provider)?->model;
-    }
-
-    /**
-     * @return array{round: string, reviewer: string, role: string, tier: Tier}
-     */
-    private function identify(RoundReviewer $reviewer): array
-    {
-        return ['round' => $reviewer->round()->id()->toRfc4122(), 'reviewer' => $reviewer->id()->toRfc4122(), 'role' => $reviewer->roleName(), 'tier' => $reviewer->tier()];
-    }
-
-    private function append(LedgerEventKind $kind, ReviewStarted|ReviewerStarted|VerdictReceived|CatchUpOwed|ReviewerFailed|ReviewerBlocked|ReviewerStopped|JudgeDone $payload): void
-    {
-        $result = $this->ledger->append(new LedgerEvent($kind, $this->serializer->serialize($payload, JsonEncoder::FORMAT)));
-
-        if (!$result->succeeded()) {
-            throw ReviewEventNotRecorded::for($kind->value, (string) $result->failure);
-        }
     }
 }

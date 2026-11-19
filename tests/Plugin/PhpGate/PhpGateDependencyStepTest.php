@@ -260,25 +260,18 @@ final class PhpGateDependencyStepTest extends TestCase
     /**
      * @param array<string, mixed> $manifest
      */
-    private function projectRequiringAPackage(array $manifest): void
-    {
-        $this->project([
-            'repositories' => [
-                ['packagist.org' => false],
-                ['type' => 'package', 'package' => ['name' => 'fixture/pinned', 'version' => '1.0.0', 'type' => 'metapackage']],
-            ],
-            'require' => ['fixture/pinned' => '1.0.0'],
-            ...$manifest,
-        ]);
-    }
-
-    /**
-     * @param array<string, mixed> $manifest
-     */
     private function project(array $manifest): void
     {
         $manifest = ['name' => 'fixture/root', 'repositories' => [['packagist.org' => false]], ...$manifest];
         new Filesystem()->dumpFile($this->directory.'/composer.json', json_encode($manifest, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES));
+    }
+
+    private function mustRun(string $command): string
+    {
+        $process = $this->runInProject($command);
+        self::assertTrue($process->isSuccessful(), $command."\n".$process->getErrorOutput());
+
+        return $process->getOutput();
     }
 
     /**
@@ -292,12 +285,44 @@ final class PhpGateDependencyStepTest extends TestCase
         return $contents;
     }
 
-    private function mustRun(string $command): string
+    private function runInProject(string $command, ?string $directory = null): Process
     {
-        $process = $this->runInProject($command);
-        self::assertTrue($process->isSuccessful(), $command."\n".$process->getErrorOutput());
+        // Every Composer and Git variable of whoever runs the test is removed, read at run time because a typed list has missed one each time: such a setting points the fixtures at another manifest, repository or index, changes which packages install or makes the fixture commits ask for a signature.
+        $inherited = array_filter(
+            array_map(strval(...), array_keys([...getenv(), ...$_ENV, ...$_SERVER])),
+            static fn (string $name): bool => str_starts_with($name, 'COMPOSER') || str_starts_with($name, 'GIT_'),
+        );
+        $process = Process::fromShellCommandline($command, $directory ?? $this->directory, [
+            ...array_fill_keys($inherited, false),
+            ...self::OFFLINE,
+            'COMPOSER_HOME' => $this->directory.'/.composer-home',
+            'COMPOSER_CACHE_DIR' => $this->directory.'/.composer-cache',
+            'COMPOSER_ALLOW_SUPERUSER' => '1',
+            'GIT_CONFIG_GLOBAL' => '/dev/null',
+            'GIT_CONFIG_NOSYSTEM' => '1',
+            'GIT_AUTHOR_NAME' => 'Fixture',
+            'GIT_AUTHOR_EMAIL' => 'fixture@example.invalid',
+            'GIT_COMMITTER_NAME' => 'Fixture',
+            'GIT_COMMITTER_EMAIL' => 'fixture@example.invalid',
+        ]);
+        $process->run();
 
-        return $process->getOutput();
+        return $process;
+    }
+
+    /**
+     * @param array<string, mixed> $manifest
+     */
+    private function projectRequiringAPackage(array $manifest): void
+    {
+        $this->project([
+            'repositories' => [
+                ['packagist.org' => false],
+                ['type' => 'package', 'package' => ['name' => 'fixture/pinned', 'version' => '1.0.0', 'type' => 'metapackage']],
+            ],
+            'require' => ['fixture/pinned' => '1.0.0'],
+            ...$manifest,
+        ]);
     }
 
     /**
@@ -334,30 +359,5 @@ final class PhpGateDependencyStepTest extends TestCase
             return;
         }
         $variables[$name] = $value;
-    }
-
-    private function runInProject(string $command, ?string $directory = null): Process
-    {
-        // Every Composer and Git variable of whoever runs the test is removed, read at run time because a typed list has missed one each time: such a setting points the fixtures at another manifest, repository or index, changes which packages install or makes the fixture commits ask for a signature.
-        $inherited = array_filter(
-            array_map(strval(...), array_keys([...getenv(), ...$_ENV, ...$_SERVER])),
-            static fn (string $name): bool => str_starts_with($name, 'COMPOSER') || str_starts_with($name, 'GIT_'),
-        );
-        $process = Process::fromShellCommandline($command, $directory ?? $this->directory, [
-            ...array_fill_keys($inherited, false),
-            ...self::OFFLINE,
-            'COMPOSER_HOME' => $this->directory.'/.composer-home',
-            'COMPOSER_CACHE_DIR' => $this->directory.'/.composer-cache',
-            'COMPOSER_ALLOW_SUPERUSER' => '1',
-            'GIT_CONFIG_GLOBAL' => '/dev/null',
-            'GIT_CONFIG_NOSYSTEM' => '1',
-            'GIT_AUTHOR_NAME' => 'Fixture',
-            'GIT_AUTHOR_EMAIL' => 'fixture@example.invalid',
-            'GIT_COMMITTER_NAME' => 'Fixture',
-            'GIT_COMMITTER_EMAIL' => 'fixture@example.invalid',
-        ]);
-        $process->run();
-
-        return $process;
     }
 }

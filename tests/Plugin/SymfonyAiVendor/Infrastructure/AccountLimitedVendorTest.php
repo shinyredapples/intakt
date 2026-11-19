@@ -203,6 +203,40 @@ final class AccountLimitedVendorTest extends TestCase
         self::assertInstanceOf(VendorAccountOut::class, $rejected);
     }
 
+    private function vendor(Vendor $vendor, ?AccountCooldowns $cooldowns = null, ?TierResolver $resolver = null): AccountLimitedVendor
+    {
+        return new AccountLimitedVendor($vendor, $resolver ?? $this->tier(), $cooldowns ?? $this->cooldowns(0));
+    }
+
+    private function tier(): TierResolver
+    {
+        $resolver = self::createStub(TierResolver::class);
+        $resolver->method('resolve')->willReturn(new ResolvedModel(Provider::Anthropic, 'claude-test'));
+
+        return $resolver;
+    }
+
+    private function request(): ReviewRequest
+    {
+        return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [], 1), new ReviewerConversation('You review for correctness.', new UuidV7()));
+    }
+
+    private function failing(Throwable $failure): Vendor
+    {
+        $vendor = self::createStub(Vendor::class);
+        $vendor->method('review')->willThrowException($failure);
+
+        return $vendor;
+    }
+
+    private function cooldowns(int $secondsUntilAnAccountIsFree): AccountCooldowns
+    {
+        $cooldowns = self::createStub(AccountCooldowns::class);
+        $cooldowns->method('secondsUntilAnAccountIsFree')->willReturn($secondsUntilAnAccountIsFree);
+
+        return $cooldowns;
+    }
+
     private function failureOf(AccountLimitedVendor $vendor): Throwable
     {
         try {
@@ -214,35 +248,6 @@ final class AccountLimitedVendorTest extends TestCase
         self::fail('The review was expected to fail.');
     }
 
-    private function failing(Throwable $failure): Vendor
-    {
-        $vendor = self::createStub(Vendor::class);
-        $vendor->method('review')->willThrowException($failure);
-
-        return $vendor;
-    }
-
-    private function vendor(Vendor $vendor, ?AccountCooldowns $cooldowns = null, ?TierResolver $resolver = null): AccountLimitedVendor
-    {
-        return new AccountLimitedVendor($vendor, $resolver ?? $this->tier(), $cooldowns ?? $this->cooldowns(0));
-    }
-
-    private function cooldowns(int $secondsUntilAnAccountIsFree): AccountCooldowns
-    {
-        $cooldowns = self::createStub(AccountCooldowns::class);
-        $cooldowns->method('secondsUntilAnAccountIsFree')->willReturn($secondsUntilAnAccountIsFree);
-
-        return $cooldowns;
-    }
-
-    private function tier(): TierResolver
-    {
-        $resolver = self::createStub(TierResolver::class);
-        $resolver->method('resolve')->willReturn(new ResolvedModel(Provider::Anthropic, 'claude-test'));
-
-        return $resolver;
-    }
-
     private function tierWithSubstitutes(): TierResolver
     {
         $resolver = self::createStub(TierResolver::class);
@@ -250,10 +255,5 @@ final class AccountLimitedVendorTest extends TestCase
         $resolver->method('hasSubstitutes')->willReturn(true);
 
         return $resolver;
-    }
-
-    private function request(): ReviewRequest
-    {
-        return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [], 1), new ReviewerConversation('You review for correctness.', new UuidV7()));
     }
 }

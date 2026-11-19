@@ -261,6 +261,19 @@ final class HeadlineTest extends TestCase
         self::assertSame('legacy-round-a', $this->headline([$this->unnamed('legacy-round-a')], [])->runningRound());
     }
 
+    private function running(string $project, string $change, string ...$roles): Review
+    {
+        return $this->review(new RoundStart('r-'.$project.'-'.$change, $project, 2), $change, ...$roles);
+    }
+
+    private function review(RoundStart $start, string $change, string ...$roles): Review
+    {
+        $since = new DateTimeImmutable('2026-11-01T10:00:00+00:00');
+        $outcomes = array_map(static fn (string $role): ReviewerOutcome => new ReviewerOutcome($start->round.'-'.$role, $role, 'standard', $since), [] === $roles ? ['correctness'] : array_values($roles));
+
+        return new Review([new ReviewedRound($start, new RoundPlace($change, 1), $since, null)->withOutcomes($outcomes)]);
+    }
+
     /**
      * @param list<Review> $running
      * @param list<Review> $waiting
@@ -270,21 +283,8 @@ final class HeadlineTest extends TestCase
         return new Headline(new WhoIsWorking($running), $waiting, count($running) + count($waiting));
     }
 
-    private function running(string $project, string $change, string ...$roles): Review
-    {
-        return $this->review(new RoundStart('r-'.$project.'-'.$change, $project, 2), $change, ...$roles);
-    }
-
     private function unnamed(string $round, string ...$roles): Review
     {
         return $this->review(new RoundStart($round, 'sample', 2), '', ...$roles);
-    }
-
-    private function review(RoundStart $start, string $change, string ...$roles): Review
-    {
-        $since = new DateTimeImmutable('2026-11-01T10:00:00+00:00');
-        $outcomes = array_map(static fn (string $role): ReviewerOutcome => new ReviewerOutcome($start->round.'-'.$role, $role, 'standard', $since), [] === $roles ? ['correctness'] : array_values($roles));
-
-        return new Review([new ReviewedRound($start, new RoundPlace($change, 1), $since, null)->withOutcomes($outcomes)]);
     }
 }

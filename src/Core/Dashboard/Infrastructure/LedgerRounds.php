@@ -147,30 +147,6 @@ final class LedgerRounds
         return array_map($this->decidedAsOnThePage(...), array_values($this->started));
     }
 
-    /**
-     * @return list<ReviewedRound>
-     */
-    private function membersOf(string $round): array
-    {
-        $chosen = $this->started[$round] ?? null;
-
-        if (!$chosen instanceof ReviewedRound) {
-            return [];
-        }
-
-        $others = array_filter($this->started, static fn (ReviewedRound $other): bool => $other !== $chosen && $chosen->isOfTheSameReviewAs($other));
-        $rounds = [$chosen, ...array_values($others)];
-        usort($rounds, static fn (ReviewedRound $one, ReviewedRound $other): int => ($one->number ?? 0) <=> ($other->number ?? 0));
-
-        return $rounds;
-    }
-
-    // Each round keeps its own mark, never one of its review, because a replay round opened after a live round of the same change is still a replay; kept per round for one read, because the board and a review page may ask for the same round more than once.
-    private function markOf(ReviewedRound $round): ReplayMark
-    {
-        return $this->roundMarks[$round->round] ??= $this->marks->ofRound($round->round, $round->project);
-    }
-
     private function addUsage(RecordedEvent $recorded): void
     {
         $usage = $this->payloads->usageOf($recorded);
@@ -199,14 +175,6 @@ final class LedgerRounds
             $findings = $this->payloads->judgedFindingsOf($recorded);
             $this->judged += [$judge->round => ['findings' => $this->judgedFindings($judge, $findings ?? []), 'dropped' => $this->droppedFindings($recorded), 'textRecorded' => null !== $findings, 'at' => $recorded->recordedAt, 'votes' => $judge->votes]];
         }
-    }
-
-    /**
-     * @return list<RoundFinding>
-     */
-    private function droppedFindings(RecordedEvent $recorded): array
-    {
-        return array_map(static fn (DroppedFinding $finding): RoundFinding => new RoundFinding($finding->id, $finding->severity->value, $finding->text, [], $finding->file, $finding->line, $finding->reason), $this->payloads->droppedOf($recorded));
     }
 
     /**
@@ -251,6 +219,14 @@ final class LedgerRounds
         return array_map(static fn (string $id): RoundFinding => new RoundFinding($id, null, null), array_values(array_diff(array_unique([...$judge->act, ...$judge->followUps]), $recordedIds)));
     }
 
+    /**
+     * @return list<RoundFinding>
+     */
+    private function droppedFindings(RecordedEvent $recorded): array
+    {
+        return array_map(static fn (DroppedFinding $finding): RoundFinding => new RoundFinding($finding->id, $finding->severity->value, $finding->text, [], $finding->file, $finding->line, $finding->reason), $this->payloads->droppedOf($recorded));
+    }
+
     private function addReviewerRow(RecordedEvent $recorded): void
     {
         $row = $this->payloads->reviewerRowOf($recorded);
@@ -279,9 +255,33 @@ final class LedgerRounds
         return Decision::Blocked === $decision ? self::UNRECORDED_REASON : null;
     }
 
+    /**
+     * @return list<ReviewedRound>
+     */
+    private function membersOf(string $round): array
+    {
+        $chosen = $this->started[$round] ?? null;
+
+        if (!$chosen instanceof ReviewedRound) {
+            return [];
+        }
+
+        $others = array_filter($this->started, static fn (ReviewedRound $other): bool => $other !== $chosen && $chosen->isOfTheSameReviewAs($other));
+        $rounds = [$chosen, ...array_values($others)];
+        usort($rounds, static fn (ReviewedRound $one, ReviewedRound $other): int => ($one->number ?? 0) <=> ($other->number ?? 0));
+
+        return $rounds;
+    }
+
     private function completed(ReviewedRound $round): ReviewedRound
     {
         return $this->decidedAsOnThePage($round->withTokens($this->tokens->ofRound($round->round))->withCost($this->costs->costOf($round->round))->markedAs($this->markOf($round)));
+    }
+
+    // Each round keeps its own mark, never one of its review, because a replay round opened after a live round of the same change is still a replay; kept per round for one read, because the board and a review page may ask for the same round more than once.
+    private function markOf(ReviewedRound $round): ReplayMark
+    {
+        return $this->roundMarks[$round->round] ??= $this->marks->ofRound($round->round, $round->project);
     }
 
     // The one place that decides a round's outcomes, findings, ending and state, so the review list and the review page never decide them apart.
