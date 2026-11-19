@@ -20,8 +20,6 @@ final readonly class FindingKeys
     private const string WORD_EDGES = '/^[("\'\[<{*]+|[)"\'\]>},;:!?.*]+$/u';
     private const string CITATION = '/^(.+?)(?::\d+(?:[-:]\d+)?)?\.?$/u';
     private const string QUOTED_OR_SPACE = '/((?<!`)(`+)(?!`)[^\n]+?(?<!`)\2(?!`)|"[^"]*")|\s+/u';
-    private const string FIRST_WORD = '/^(\S+)\s/u';
-    private const string FIRST_WORD_IN_BYTES = '/^(\S+)\s/';
 
     public function of(Finding $finding, string $checkoutRoot): ?FindingKey
     {
@@ -46,7 +44,7 @@ final readonly class FindingKeys
 
         $found = [
             $this->fileOfTheFileField($checkout, $finding->file),
-            $this->isAnyCutAtASpace($checkout, [...$words, ...$this->rawWordsOf($finding->text)]) ? false : [],
+            new NamesCutAtASpace()->anyIn($checkout, [...$words, ...$this->rawWordsOf($finding->text)]) ? false : [],
             ...array_map(fn (string $path): array|false => $this->fileAtPath($checkout, $path), $this->withDirectory($citations)),
             $this->filesWithNames($checkout, $root, $this->namesWithoutDirectory($checkout, $citations)),
         ];
@@ -93,7 +91,7 @@ final readonly class FindingKeys
         return 1 === preg_match(self::CITATION, $citation, $match) ? $match[1] : $citation;
     }
 
-    // A reviewer may write a path the Windows way (src\Deep\B.php).
+    // Backslashes become slashes, because a reviewer may write a path the Windows way (src\Deep\B.php).
     private function asPath(string $citation): string
     {
         return str_replace('\\', '/', $citation);
@@ -117,58 +115,6 @@ final readonly class FindingKeys
         $hashed = $this->hashOf($checkout, $file);
 
         return null === $hashed || false === $hashed ? false : [$hashed];
-    }
-
-    // A word that is the start of a name with a space in its directory (docs/Release in "docs/Release Notes.md") gives no key, because the rest of that name is a word of its own and an edit of that file would not change the key.
-    /**
-     * @param list<string> $words
-     */
-    private function isAnyCutAtASpace(Checkout $checkout, array $words): bool
-    {
-        $startsByDirectory = [];
-
-        foreach (array_unique($words) as $word) {
-            $cut = strrpos($word, '/');
-            $startsByDirectory[false === $cut ? '.' : substr($word, 0, $cut)][] = false === $cut ? $word : substr($word, $cut + 1);
-        }
-
-        return [] !== array_filter(
-            array_keys($startsByDirectory),
-            fn (string|int $directory): bool => $this->holdsANameStartingWith($checkout, (string) $directory, $startsByDirectory[$directory]),
-        );
-    }
-
-    /**
-     * @param list<string> $starts
-     */
-    private function holdsANameStartingWith(Checkout $checkout, string $directory, array $starts): bool
-    {
-        $real = $this->realPathOf($checkout, $directory);
-
-        if (null === $real || !is_dir($real)) {
-            return false;
-        }
-
-        $entries = scandir($real);
-
-        // An unlisted directory may hold such a name.
-        if (false === $entries) {
-            return true;
-        }
-
-        return [] !== array_filter($entries, fn (string $entry): bool => in_array($this->firstWordOf($entry), $starts, true));
-    }
-
-    // A file name need not be UTF-8, so one that is not is split by bytes.
-    private function firstWordOf(string $name): ?string
-    {
-        $matched = preg_match(self::FIRST_WORD, $name, $match);
-
-        if (false === $matched) {
-            $matched = preg_match(self::FIRST_WORD_IN_BYTES, $name, $match);
-        }
-
-        return 1 === $matched ? $match[1] : null;
     }
 
     /**
@@ -196,7 +142,7 @@ final readonly class FindingKeys
         return false === $hashed ? false : [$hashed];
     }
 
-    // A name without a directory counts when it has a file extension or a file of the checkout root carries it (Makefile).
+    // A name without a directory counts when it has a file extension or a file of the checkout root carries it, because a root file such as Makefile has no extension.
     /**
      * @param list<string> $citations
      *
@@ -270,15 +216,6 @@ final readonly class FindingKeys
         $hash = is_readable($real) ? hash_file(FindingKey::ALGORITHM, $real) : false;
 
         return false === $hash ? false : [$checkout->relative($real), $hash];
-    }
-
-    private function realPathOf(Checkout $checkout, string $path): ?string
-    {
-        try {
-            return $checkout->resolve($path);
-        } catch (PathNotInCheckout|PathOutsideCheckout) {
-            return null;
-        }
     }
 
     private function hasFileExtension(string $candidate): bool

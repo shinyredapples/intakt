@@ -28,8 +28,13 @@ final readonly class CheckoutFileNames
     {
         $pathsByName = [];
 
+        $entries = new RecursiveIteratorIterator(new RecursiveCallbackFilterIterator(
+            new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS),
+            static fn (SplFileInfo $entry): bool => self::GIT_DIRECTORY !== $entry->getFilename(),
+        ));
+
         try {
-            foreach (self::entriesUnder($root) as $entry) {
+            foreach ($entries as $entry) {
                 if ($entry instanceof SplFileInfo && $entry->isFile()) {
                     $pathsByName[$entry->getFilename()][] = ltrim(substr($entry->getPathname(), strlen($root)), '/');
                 }
@@ -47,16 +52,5 @@ final readonly class CheckoutFileNames
     public function pathsNamed(string $name): array
     {
         return $this->pathsByName[$name] ?? [];
-    }
-
-    /**
-     * @return RecursiveIteratorIterator<RecursiveCallbackFilterIterator<string, SplFileInfo, RecursiveDirectoryIterator>>
-     */
-    private static function entriesUnder(string $root): RecursiveIteratorIterator
-    {
-        return new RecursiveIteratorIterator(new RecursiveCallbackFilterIterator(
-            new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS),
-            static fn (SplFileInfo $entry): bool => self::GIT_DIRECTORY !== $entry->getFilename(),
-        ));
     }
 }

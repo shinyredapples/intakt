@@ -13,6 +13,7 @@ use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Domain\FindingKey;
 use Intakt\Core\Review\Infrastructure\CheckoutFileNames;
 use Intakt\Core\Review\Infrastructure\FindingKeys;
+use Intakt\Core\Review\Infrastructure\NamesCutAtASpace;
 use Intakt\Tests\Core\Git\TemporaryRepository;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -21,6 +22,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(FindingKeys::class)]
 #[CoversClass(FindingKey::class)]
 #[CoversClass(CheckoutFileNames::class)]
+#[CoversClass(NamesCutAtASpace::class)]
 #[UsesClass(Checkout::class)]
 #[UsesClass(PathNotInCheckout::class)]
 #[UsesClass(PathOutsideCheckout::class)]
@@ -266,6 +268,13 @@ final class FindingKeysTest extends TestCase
         $this->write('docs/Release Notes.md', "# Notes\n");
 
         self::assertNull($this->keyOf($this->finding('See docs/Release Notes.md and src/A.php.')));
+    }
+
+    public function testAPlainTextNameWithASpaceAfterTheDigitZeroGetsNoKey(): void
+    {
+        $this->write('0 Notes.md', "# Notes\n");
+
+        self::assertNull($this->keyOf($this->finding('See 0 Notes.md and src/A.php.')));
     }
 
     public function testABareFileNameWithALineNumberChangesTheKeyWhenTheOneFileWithThatNameIsEdited(): void
