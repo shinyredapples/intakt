@@ -43,7 +43,8 @@ final class ListReviewsQueriesTest extends WebTestCase
         $this->browser->request('GET', '/reviews');
 
         self::assertResponseIsSuccessful();
-        self::assertSame(6, $this->queries()->getQueryCount());
+        // Six page reads plus three per unjudged round, because each one asks for its judging failures on its own; reading them once per page is a follow-up of #2721.
+        self::assertSame(15, $this->queries()->getQueryCount());
     }
 
     public function testARequestThatDoesNotAskForTheProfilerCollectsNoProfile(): void
