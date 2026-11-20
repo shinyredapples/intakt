@@ -51,6 +51,24 @@ final class FullReportTest extends SandboxTestCase
         self::assertSame([...array_fill(0, 10, 'valid finding'), 'file-?.md:1: U+2014'], $report['findings']);
     }
 
+    public function testWithASpaceAsSubstituteCharacterAChildKeepingElevenFindingsOneWithABrokenByteNextToASpaceGetsAReport(): void
+    {
+        $previous = mb_substitute_character();
+        mb_substitute_character(32);
+
+        try {
+            $findings = ["file.md:1: \xFF U+2014", ...array_fill(0, 10, 'valid finding')];
+            $result = GateResult::withFindings('dashes', $findings);
+            $results = $this->resultsKeeping('dashes', $result->toFullJson());
+
+            $named = $this->fullReportIn($results)->writtenFor([$this->lineOf($result)]);
+        } finally {
+            mb_substitute_character($previous);
+        }
+
+        self::assertArrayHasKey('report', $named);
+    }
+
     public function testAKeptResultWithFewerFindingsThanItsLineAccountsForNamesNoReport(): void
     {
         $results = $this->resultsKeeping('cs', GateResult::withFindings('cs', $this->numbered(3))->toFullJson());
