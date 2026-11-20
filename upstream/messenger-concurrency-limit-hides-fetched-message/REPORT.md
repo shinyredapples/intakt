@@ -1,6 +1,6 @@
 # [Messenger][Doctrine] A worker stopped by `--limit` hides the rest of its fetched batch until `redeliver_timeout`
 
-Draft, not posted. Found by the `--concurrency` proof of #2723 (#3020). Affected: v8.1.11 (with `--fetch-size`), v8.2.0-BETA2 and `8.2.x-dev` (also with `--concurrency` alone); target branch: 8.1. Versions: `symfony/messenger` and `symfony/doctrine-messenger` v8.2.0-BETA2 (Intakt's), `doctrine/dbal` 4, SQLite, PHP 8.5.12.
+Filed as pull request [symfony/symfony#68307](https://github.com/symfony/symfony/pull/68307) on 2026-11-20. Found by the `--concurrency` proof of #2723 (#3020). Affected: v8.1.11 (with `--fetch-size`), v8.2.0-BETA2 and `8.2.x-dev` (also with `--concurrency` alone); target branch: 8.1. Versions: `symfony/messenger` and `symfony/doctrine-messenger` v8.2.0-BETA2 (Intakt's), `doctrine/dbal` 4, SQLite, PHP 8.5.12.
 
 ## What happens
 
@@ -29,5 +29,5 @@ The image runs `messenger:consume async` with `--memory-limit` and `--time-limit
 - **Pull requests and commits:** none found that fix it (2026-11-20). Open and closed pull requests searched with the terms above; `git log -G 'fetch_size|delivered_at'` on `8.1` and `8.2` of the Doctrine bridge and `Worker.php` lists only #63662, #64128, #67556 and #67993, none of which gives a fetched message back when the worker stops.
 - **Form and branch:** a fix pull request against `8.1`, the lowest maintained branch with the bug (`--fetch-size` is new in 8.1; 7.4 fetches one message, so it is not affected). Source: the symfony/symfony pull request template and contributing guide (bug fixes to the lowest maintained branch, merged up by the maintainers).
 - **Fix:** `fix.patch` on `8.1` at 46cb370c72 (2026-11-19). The Doctrine `Connection` remembers the delivery time of each fetched message until it is acknowledged or rejected; `DoctrineReceiver` and `DoctrineTransport` implement `CloseableTransportInterface`, and `close()`, which the worker calls once it stopped, sets `delivered_at` back to `NULL` for those messages, unless another delivery changed it since. The new `DoctrineIntegrationTest` worker test fails without the change; the Doctrine bridge suite passes (149 tests, 14 PostgreSQL tests skipped), php-cs-fixer clean, and `reproduce.php` passes against the patched `8.1`. The merge-up to `8.2` conflicts in context only and was not run.
-- **Decision:** `ready to file` as a fix pull request; the text is `PR.md`, which names the behavior change (the message being handled when an exception ends the worker comes back at once) and offers Redis and SQS as follow-ups.
+- **Decision:** `filed as pull request` [symfony/symfony#68307](https://github.com/symfony/symfony/pull/68307) against 8.1 on 2026-11-20 (the owner's OK after the reproduction on v8.2.0-BETA2); next: watch its review and CI.
 - **Fix pull request:** `fix pull request ready` (`fix.patch`, `PR.md`); the owner signs the commit and opens it.
