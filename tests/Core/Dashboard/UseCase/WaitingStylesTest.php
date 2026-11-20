@@ -23,7 +23,7 @@ final class WaitingStylesTest extends TestCase
         self::assertMatchesRegularExpression(self::STACKED, $rules['.wait-item'] ?? '');
     }
 
-    // A zoomed window has fractional CSS widths, and 1099.5 px is still below 1100.
+    // Fractional widths are checked because a zoomed window has them, and max-width: 1099px misses 1099.5 px.
     public function testAWaitingItemIsOneColumnAtEveryWidthBelow1100IncludingAFractionalOne(): void
     {
         $sheet = (string) preg_replace('~/\*.*?\*/~s', '', $this->sheet());
