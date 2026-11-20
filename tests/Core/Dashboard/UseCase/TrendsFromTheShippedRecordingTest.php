@@ -23,7 +23,14 @@ use Intakt\Core\Review\Contract\Mark;
 use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
+use Intakt\Core\Review\UseCase\JudgeRound\JudgedRounds;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRound;
+use Intakt\Core\Review\UseCase\JudgeRound\JudgeRoundHandler;
+use Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewer;
+use Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewerHandler;
+use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRound;
+use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRoundHandler;
+use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
 use Intakt\Tests\Core\Dashboard\Infrastructure\PublishedLiveEvents;
 use Intakt\Tests\Core\Dashboard\UseCase\ReplayDemo\MarkAnsweringQueries;
 use Intakt\Tests\Core\Dashboard\UseCase\ReplayDemo\TourCaptionsOn;
@@ -34,6 +41,7 @@ use Intakt\Tests\Core\Review\UseCase\RunReviewRound\VerdictPerRole;
 use Intakt\Tests\Support\StoredSerializerFactory;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\Lock\LockFactory;
@@ -42,6 +50,23 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 // The keyless demo is what a juror without a key plays, so the shipped recording must fill both charts on its own (#3053).
 #[CoversClass(ReviewerCatches::class)]
 #[CoversClass(JudgeOutcomes::class)]
+#[UsesClass(ReplaysRecording::class)]
+#[UsesClass(RecordingFormat::class)]
+#[UsesClass(Recording::class)]
+#[UsesClass(RecordedLedgerEvent::class)]
+#[UsesClass(ReplayMarks::class)]
+#[UsesClass(JudgeRound::class)]
+#[UsesClass(JudgeRoundHandler::class)]
+#[UsesClass(JudgedRounds::class)]
+#[UsesClass(RunReviewRound::class)]
+#[UsesClass(RunReviewRoundHandler::class)]
+#[UsesClass(ReviewWithReviewer::class)]
+#[UsesClass(ReviewWithReviewerHandler::class)]
+#[UsesClass(StoredFindings::class)]
+#[UsesClass(Verdict::class)]
+#[UsesClass(Finding::class)]
+#[UsesClass(Judgement::class)]
+#[UsesClass(JudgedFinding::class)]
 final class TrendsFromTheShippedRecordingTest extends DashboardPageTestCase
 {
     use DownloadedScriptStandIns;
