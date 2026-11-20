@@ -10,13 +10,14 @@ use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\GitHubForge\Contract\InstallationDoesNotMatchConfiguration;
 use Intakt\Plugin\GitHubForge\Contract\InstallationNotReadBack;
 use Intakt\Plugin\GitHubForge\Contract\InstallationTokenNotMinted;
+use Intakt\Plugin\GitHubForge\Contract\IssueHistories;
 use Intakt\Plugin\GitHubForge\Contract\IssueHistory;
 use Intakt\Plugin\GitHubForge\Contract\LabelApplication;
 use JsonException;
 use Symfony\Contracts\HttpClient\Exception\ExceptionInterface;
 
 // GraphQL, because the REST API names neither the account that last edited a body nor the one that applied each label.
-final readonly class GitHubIssueHistories
+final readonly class GitHubIssueHistories implements IssueHistories
 {
     // A history of more label events than this fails, because a label applied later would go unread and its applier with it.
     private const int EVENTS = 100;

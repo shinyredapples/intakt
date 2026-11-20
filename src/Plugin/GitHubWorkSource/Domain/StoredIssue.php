@@ -90,6 +90,22 @@ final class StoredIssue
         $this->vouchedLabels = $vouching->labels;
     }
 
+    // Kept only while the update time stands, because GitHub moves it on every edit of the text and of the labels the history vouches for.
+    public function keepVouchingOf(self $stored): void
+    {
+        if ($this->number !== $stored->number || $this->updatedAt !== $stored->updatedAt) {
+            return;
+        }
+
+        $this->trusted = $stored->trusted;
+        $this->vouchedLabels = $stored->vouchedLabels;
+    }
+
+    public function isVouched(): bool
+    {
+        return null !== $this->trusted;
+    }
+
     // Copied field by field, because a newer reading of a stored item must update its row, not add a second one.
     public function replaceWith(self $newer): void
     {
@@ -123,6 +139,11 @@ final class StoredIssue
     public function number(): int
     {
         return $this->number;
+    }
+
+    public function author(): string
+    {
+        return $this->author;
     }
 
     private function moment(DateTimeImmutable $moment): string
