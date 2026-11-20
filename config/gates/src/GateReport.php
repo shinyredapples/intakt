@@ -66,15 +66,15 @@ final readonly class GateReport
             return $this;
         }
 
-        $recut = self::shownOf(GateResult::withFindings($this->gate, $findings)->toJson());
-        $shown = self::shownOf($this->line);
+        $recut = $this->shownOf(GateResult::withFindings($this->gate, $findings)->toJson());
+        $shown = $this->shownOf($this->line);
 
         return [$recut['findings'], $recut['omitted']] === [$shown['findings'], $shown['omitted']] ? new self($this->gate, $this->line, $kept) : $this;
     }
 
     public function lineIsCut(): bool
     {
-        $shown = self::shownOf($this->line);
+        $shown = $this->shownOf($this->line);
 
         return 0 !== $shown['omitted'] || array_any($shown['findings'], static fn (mixed $finding): bool => is_string($finding) && GateResult::isCut($finding));
     }
@@ -82,7 +82,7 @@ final readonly class GateReport
     /**
      * @return array{findings: array<mixed>, omitted: mixed}
      */
-    private static function shownOf(string $line): array
+    private function shownOf(string $line): array
     {
         $shown = json_decode($line, true);
         $findings = is_array($shown) ? ($shown['findings'] ?? null) : null;

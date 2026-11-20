@@ -66,7 +66,7 @@ final readonly class GateResult
     {
         $shown = array_slice($this->findings, 0, self::MAXIMUM_FINDINGS);
 
-        return json_encode($this->reportOf(array_map(self::shorten(...), $shown), count($this->findings) - count($shown)), self::JSON_FLAGS);
+        return json_encode($this->reportOf(array_map($this->shorten(...), $shown), count($this->findings) - count($shown)), self::JSON_FLAGS);
     }
 
     // Because the line keeps at most ten findings of at most 300 columns, the child also keeps every finding whole for the parent to collect.
@@ -126,7 +126,7 @@ final readonly class GateResult
         return $list;
     }
 
-    private static function shorten(string $finding): string
+    private function shorten(string $finding): string
     {
         $oneLine = trim((string) preg_replace('/\s+/', ' ', self::scrubbed($finding)));
 

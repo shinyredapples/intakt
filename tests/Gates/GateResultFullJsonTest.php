@@ -32,12 +32,12 @@ final class GateResultFullJsonTest extends TestCase
     {
         $result = GateResult::withFindings('dashes', ["notes.md:1 a\xFFb"]);
 
-        self::assertSame($this->decoded($result->toJson())['findings'], $this->decoded($result->toFullJson())['findings']);
+        self::assertSame($this->firstFindingShownIn($result->toJson()), $this->firstFindingShownIn($result->toFullJson()));
     }
 
     public function testAFindingOf160WideCharactersCountsAsCutOnceTheLineShortensIt(): void
     {
-        $shown = $this->decoded(GateResult::withFindings('dashes', [str_repeat('界', 160)])->toJson())['findings'][0];
+        $shown = $this->firstFindingShownIn(GateResult::withFindings('dashes', [str_repeat('界', 160)])->toJson());
 
         self::assertTrue(GateResult::isCut($shown));
     }
@@ -65,15 +65,23 @@ final class GateResultFullJsonTest extends TestCase
     }
 
     /**
-     * @return array<string, mixed>
+     * @return array<mixed>
      */
     private function decoded(string $json): array
     {
         $decoded = json_decode($json, true, flags: JSON_THROW_ON_ERROR);
         self::assertIsArray($decoded);
 
-        /** @var array<string, mixed> $decoded */
         return $decoded;
+    }
+
+    private function firstFindingShownIn(string $json): string
+    {
+        $findings = $this->decoded($json)['findings'] ?? null;
+        self::assertIsArray($findings);
+        self::assertIsString($findings[0] ?? null);
+
+        return $findings[0];
     }
 
     // Because the Composer autoloader brings Symfony's mbstring polyfill, the class is loaded alone, as on a PHP whose only gap is mbstring.
