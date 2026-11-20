@@ -140,8 +140,7 @@ Built for the [Symfony AI & MCP Hackathon](docs/spec.md) (deadline 2026-11-22):
 ## Documentation
 
 - [Intakt in plain words](docs/guide/README.md): friendly guides with diagrams, from the big picture to troubleshooting.
-- [Contributing](CONTRIBUTING.md): reporting bugs, suggesting features, sending pull requests.
-- [How your issue or pull request is handled](CONTRIBUTING.md#how-your-issue-or-pull-request-is-handled): who decides what gets built, and why only labels from people with write access count.
+- [Contributing](CONTRIBUTING.md): reporting bugs, suggesting features, sending pull requests, and [how they are handled](CONTRIBUTING.md#how-your-issue-or-pull-request-is-handled).
 - [User guide](docs/user/README.md): for owners running Intakt.
 - [Technical pages](docs/architecture/README.md): how it works, the gates, the module layout.
 - [Design](docs/design/README.md): what Intakt does and why.
