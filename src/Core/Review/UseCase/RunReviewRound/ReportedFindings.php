@@ -10,11 +10,13 @@ use Intakt\Core\Review\Domain\RoundReviewer;
 final readonly class ReportedFindings
 {
     /**
-     * @param list<string> $findings
+     * @param list<string>          $findings
+     * @param array<string, string> $severities by ledger id, as this reviewer rated it
      */
     public function __construct(
         public RoundReviewer $reviewer,
         public array $findings,
+        public array $severities,
     ) {
     }
 }

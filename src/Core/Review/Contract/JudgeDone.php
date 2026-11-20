@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Contract;
 
+use Symfony\Component\DependencyInjection\Attribute\Exclude;
+
+#[Exclude]
 final readonly class JudgeDone
 {
     /**
@@ -28,6 +31,8 @@ final readonly class JudgeDone
         public array $votes = [],
         // Each P1 finding's key by finding id, null for one that gets none, so a later round can tell the same finding on unchanged files; empty by default, because a judge_done row written before keys were recorded holds none.
         public array $p1Keys = [],
+        // True when the judge left a finding without its mark, which is what the fallback for an answer that cannot be read does (it acts on every P1 and P2 and marks no P3), so the dashboard does not count an unmarked P3 as the judge's rejection; null on a row written before it was recorded.
+        public ?bool $fallback = null,
     ) {
     }
 }

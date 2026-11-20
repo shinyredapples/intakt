@@ -28,6 +28,8 @@ final readonly class JudgedFindings
         // The P3 findings the judge marked reject, apart from the ones it gave no mark, because only a judge's own mark lets a changes verdict count as approval.
         public array $rejected,
         public array $notes,
+        // False when a finding has no mark of the judge's, as with the fallback for an answer that cannot be read (JudgeAgent refuses any answer that does not mark each finding once).
+        public bool $everyFindingMarked,
     ) {
     }
 
@@ -53,7 +55,7 @@ final readonly class JudgedFindings
         $deferred = array_values(array_filter($findings, static fn (Finding $finding): bool => !$blocking($finding) && Mark::Defer === ($marks[$finding->id] ?? null)));
         $rejected = array_values(array_filter($findings, static fn (Finding $finding): bool => !$blocking($finding) && Mark::Reject === ($marks[$finding->id] ?? null)));
 
-        return new self($findings, $actList, array_map(static fn (Finding $finding): FollowUp => new FollowUp($finding), $deferred), $dropped, $sameCause, $rejected, self::notesOf($judgement, $findings));
+        return new self($findings, $actList, array_map(static fn (Finding $finding): FollowUp => new FollowUp($finding), $deferred), $dropped, $sameCause, $rejected, self::notesOf($judgement, $findings), array_all($given, static fn (string $id): bool => isset($marks[$id])));
     }
 
     // Only a P1 or P2 marked defer or reject keeps a note, because plain code does not apply that mark (the finding stays on the act list), so the note takes the place of the mark.

@@ -96,6 +96,7 @@ final readonly class RoundLedger
             $reported->reviewer->round()->id()->toRfc4122(),
             $reported->reviewer->id()->toRfc4122(),
             $reported->findings,
+            $reported->severities,
         ));
     }
 
@@ -148,6 +149,7 @@ final readonly class RoundLedger
             $judged->sameCause,
             $votes,
             $this->p1KeysOf($round, $judged),
+            !$judged->everyFindingMarked,
         ));
     }
 
@@ -182,22 +184,9 @@ final readonly class RoundLedger
             $entries[$entry->id] = $entry;
         }
 
-        return array_map(fn (Finding $reported): JudgeDoneFinding => $this->recordedFinding($entries[$reported->id] ?? $reported, $reported, $judged), $findings);
-    }
+        $shown = array_map(static fn (Finding $finding): Finding => $entries[$finding->id] ?? $finding, $findings);
 
-    // The entry's severity may be raised by its merges, so the reported one goes beside it for the dashboard's count of which reviewer caught what.
-    private function recordedFinding(Finding $shown, Finding $reported, JudgedFindings $judged): JudgeDoneFinding
-    {
-        return new JudgeDoneFinding(
-            $shown->id,
-            $shown->severity,
-            $shown->text,
-            $shown->merged,
-            $shown->file,
-            $shown->line,
-            $this->storedNote($judged->notes[$shown->id] ?? null),
-            $reported->severity,
-        );
+        return array_map(fn (Finding $finding): JudgeDoneFinding => new JudgeDoneFinding($finding->id, $finding->severity, $finding->text, $finding->merged, $finding->file, $finding->line, $this->storedNote($judged->notes[$finding->id] ?? null)), $shown);
     }
 
     // Redacted and then trimmed, because the note is model text that may quote a held credential, and a credential held with edge whitespace leaves that whitespace behind.

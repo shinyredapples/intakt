@@ -123,6 +123,7 @@ final class JudgeRoundTest extends KernelTestCase
         $this->fixture->judge(new ScriptedJudgement($judgement))($this->judgingOf($round));
 
         self::assertSame([['round' => $round->id()->toRfc4122(), 'act' => ['F1', 'F2'], 'follow_ups' => ['F3']]], $this->judgeCalls());
+        self::assertFalse($this->judgeDonePayloads()[0]['fallback']);
     }
 
     public function testJudgeDoneRecordsEachReviewersVoteAsTheQuorumCountsIt(): void
@@ -171,7 +172,7 @@ final class JudgeRoundTest extends KernelTestCase
         $this->fixture->judge(new ScriptedJudgement(new Judgement([])))($this->judgingOf($round));
 
         self::assertSame(
-            [['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of A.', 'merged' => [], 'file' => null, 'line' => null, 'judge_note' => null, 'reported_severity' => 'P1'], ['id' => 'F2', 'severity' => 'P2', 'text' => 'Text of B.', 'merged' => [], 'file' => null, 'line' => null, 'judge_note' => null, 'reported_severity' => 'P2'], ['id' => 'F3', 'severity' => 'P3', 'text' => 'Text of C.', 'merged' => [], 'file' => null, 'line' => null, 'judge_note' => null, 'reported_severity' => 'P3']],
+            [['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of A.', 'merged' => [], 'file' => null, 'line' => null, 'judge_note' => null], ['id' => 'F2', 'severity' => 'P2', 'text' => 'Text of B.', 'merged' => [], 'file' => null, 'line' => null, 'judge_note' => null], ['id' => 'F3', 'severity' => 'P3', 'text' => 'Text of C.', 'merged' => [], 'file' => null, 'line' => null, 'judge_note' => null]],
             $this->judgeDonePayloads()[0]['findings'],
         );
     }
@@ -435,6 +436,15 @@ final class JudgeRoundTest extends KernelTestCase
         self::assertSame([['round' => $round->id()->toRfc4122(), 'act' => ['F1', 'F2'], 'follow_ups' => []]], $this->judgeCalls());
     }
 
+    // Decision 5 of #2981: the dashboard leaves such a round out of the judge's chart, because its unmarked P3 is no rejection of the judge's.
+    public function testAnInvalidJudgeAnswerIsRecordedAsTheFallback(): void
+    {
+        $fallback = $this->completedRound();
+        $this->fixture->judge(new ScriptedJudgement(Judgement::everyBlockingFindingActs([$this->finding('F1', Severity::P1), $this->finding('F2', Severity::P2), $this->finding('F3', Severity::P3)])))($this->judgingOf($fallback));
+
+        self::assertTrue($this->judgeDonePayloads()[0]['fallback']);
+    }
+
     public function testAJudgedRoundDeliveredAgainAsksTheJudgeNothingAndRecordsNoSecondJudgeDone(): void
     {
         $round = $this->completedRound();
@@ -514,7 +524,7 @@ final class JudgeRoundTest extends KernelTestCase
 
         $this->fixture->judge(new ScriptedJudgement(new Judgement([])))($this->judgingOf($round));
 
-        self::assertSame([['id' => 'F2', 'severity' => 'P2', 'text' => '`old` is still read.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => 1, 'judge_note' => null, 'reported_severity' => 'P2']], $this->judgeDonePayloads()[0]['findings']);
+        self::assertSame([['id' => 'F2', 'severity' => 'P2', 'text' => '`old` is still read.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => 1, 'judge_note' => null]], $this->judgeDonePayloads()[0]['findings']);
     }
 
     public function testTwoFindingsTheJudgeGivesOneCauseAreRecordedAsOneEntryWithTheHigherSeverityAndTheLink(): void
@@ -525,7 +535,7 @@ final class JudgeRoundTest extends KernelTestCase
 
         $payload = $this->judgeDonePayloads()[0];
         self::assertSame(['F2' => 'F1'], $payload['same_cause']);
-        self::assertSame([['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of A.', 'merged' => ['F2'], 'file' => 'src/Thing.php', 'line' => 3, 'judge_note' => null, 'reported_severity' => 'P2'], ['id' => 'F2', 'severity' => 'P1', 'text' => 'Text of B.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => 5, 'judge_note' => null, 'reported_severity' => 'P1']], $payload['findings']);
+        self::assertSame([['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of A.', 'merged' => ['F2'], 'file' => 'src/Thing.php', 'line' => 3, 'judge_note' => null], ['id' => 'F2', 'severity' => 'P1', 'text' => 'Text of B.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => 5, 'judge_note' => null]], $payload['findings']);
     }
 
     public function testTwoFindingsInOneHunkWithDifferentCausesAreRecordedAsTwoEntries(): void
@@ -677,8 +687,8 @@ final class JudgeRoundTest extends KernelTestCase
     private function twoSeparateEntries(int $lineOfB): array
     {
         return [
-            ['id' => 'F1', 'severity' => 'P2', 'text' => 'Text of A.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => 3, 'judge_note' => null, 'reported_severity' => 'P2'],
-            ['id' => 'F2', 'severity' => 'P1', 'text' => 'Text of B.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => $lineOfB, 'judge_note' => null, 'reported_severity' => 'P1'],
+            ['id' => 'F1', 'severity' => 'P2', 'text' => 'Text of A.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => 3, 'judge_note' => null],
+            ['id' => 'F2', 'severity' => 'P1', 'text' => 'Text of B.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => $lineOfB, 'judge_note' => null],
         ];
     }
 
@@ -692,7 +702,7 @@ final class JudgeRoundTest extends KernelTestCase
      */
     private function judgeCalls(): array
     {
-        return array_map(static fn (array $payload): array => array_diff_key($payload, ['findings' => true, 'dropped' => true, 'same_cause' => true, 'votes' => true, 'p1_keys' => true]), $this->judgeDonePayloads());
+        return array_map(static fn (array $payload): array => array_diff_key($payload, ['findings' => true, 'dropped' => true, 'same_cause' => true, 'votes' => true, 'p1_keys' => true, 'fallback' => true]), $this->judgeDonePayloads());
     }
 
     /**
