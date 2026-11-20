@@ -9,7 +9,6 @@ use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\ChangeNotFound;
 use Intakt\Plugin\Forge\Contract\CiState;
 use Intakt\Plugin\Forge\Contract\CommitId;
-use Intakt\Plugin\Forge\Contract\CommitIdMalformed;
 use Intakt\Plugin\Forge\Contract\ForgeCredentialsRefused;
 use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
@@ -116,7 +115,7 @@ final readonly class GitHubWatchReads implements OpenChanges, HeadChecks
             PullRequestAddress::of($id);
 
             return new OpenChange($id, new CommitId($this->text($pull, 'head', 'sha')), $this->moments->parse($this->text($pull, 'updated_at')));
-        } catch (ChangeNotFound|CommitIdMalformed|Exception $invalid) {
+        } catch (ChangeNotFound|Exception $invalid) {
             throw new ForgeReadFailed('GitHub listed a pull request this forge cannot read.', $invalid->getCode(), previous: $invalid);
         }
     }
