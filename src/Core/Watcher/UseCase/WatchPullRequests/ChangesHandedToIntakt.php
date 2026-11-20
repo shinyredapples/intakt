@@ -50,12 +50,11 @@ final readonly class ChangesHandedToIntakt
     private function createdByIntaktAmong(string $project, array $open): array
     {
         $openings = $this->openingsOf($project);
-        $intended = $this->intendedHeadsOf($project);
         $created = [];
         $undecided = [];
 
         foreach ($this->unhandedAmong($project, $open) as $address => $change) {
-            match ($this->decidedBy($openings[$address] ?? null, $intended, $change)) {
+            match ($this->decidedBy($openings[$address] ?? [])) {
                 true => $created[] = $change,
                 null => $undecided[] = $change,
                 false => null,
@@ -86,15 +85,13 @@ final readonly class ChangesHandedToIntakt
         return $unhanded;
     }
 
-    // Only an opening that created the pull request, because Intakt's push also updates an open pull request someone else opened on the same branch; null leaves it to the forge's author, because a record written before openings were recorded does not say, and a push that stopped between the forge's creation and its record left only the intent for that head.
+    // Only an opening that created the pull request, because Intakt's push also updates an open pull request someone else opened on the same branch; null leaves it to the forge's author, because a record written before openings were recorded does not say, and a push that stopped between the forge's creation and its record left none, while the branch may have moved since.
     /**
-     * @param list<mixed>|null    $openings
-     * @param array<string, true> $intended
+     * @param list<mixed> $openings
      */
-    private function decidedBy(?array $openings, array $intended, OpenChange $change): ?bool
+    private function decidedBy(array $openings): ?bool
     {
         return match (true) {
-            null === $openings => isset($intended[$change->head->hash]) ? null : false,
             in_array(Opening::Created->value, $openings, true) => true,
             in_array(Opening::Updated->value, $openings, true) => false,
             default => null,
@@ -144,24 +141,6 @@ final readonly class ChangesHandedToIntakt
         }
 
         return $openings;
-    }
-
-    /**
-     * @return array<string, true>
-     */
-    private function intendedHeadsOf(string $project): array
-    {
-        $heads = [];
-
-        foreach ($this->payloadsOf($project, LedgerEventKind::ChangeIntended) as $payload) {
-            $head = $payload['head'] ?? null;
-
-            if (is_string($head)) {
-                $heads[$head] = true;
-            }
-        }
-
-        return $heads;
     }
 
     /**

@@ -123,7 +123,7 @@ final class ChangesHandedToIntaktTest extends KernelTestCase
         $authorship->expects(self::never())->method('isCreatedByIntakt');
         $this->authorship = $authorship;
 
-        $this->recognize('alpha', $this->change(self::PULL), $this->change(self::LOOP_PULL, 'b'), $this->change('https://github.com/acme/widgets/pull/9'));
+        $this->recognize('alpha', $this->change(self::PULL), $this->change(self::LOOP_PULL, 'b'));
 
         self::assertSame([self::PULL], array_column($this->handedToIntakt(), 'change'));
     }
@@ -211,17 +211,27 @@ final class ChangesHandedToIntaktTest extends KernelTestCase
         self::assertSame([], $this->handedToIntakt());
     }
 
-    public function testTheForgeIsNotAskedForAPullRequestWhoseHeadNoPushOfTheProjectIntended(): void
+    public function testAPullRequestTheAppCreatedWhoseBranchMovedBeforeItsOpeningWasRecordedIsRecorded(): void
     {
-        $this->record(LedgerEventKind::ChangeIntended, ['project' => 'beta', 'branch' => 'feat/8', 'head' => str_repeat('a', 40)]);
-        $this->record(LedgerEventKind::ChangeIntended, ['project' => 'alpha', 'branch' => 'feat/8', 'head' => str_repeat('b', 40)]);
-        $authorship = self::createMock(ChangeAuthorship::class);
-        $authorship->expects(self::never())->method('isCreatedByIntakt');
+        $this->record(LedgerEventKind::ChangeIntended, ['project' => 'alpha', 'branch' => 'feat/7', 'head' => str_repeat('a', 40)]);
+        $authorship = self::createStub(ChangeAuthorship::class);
+        $authorship->method('isCreatedByIntakt')->willReturnCallback(static fn (ChangeId $change): bool => self::PULL === $change->value);
         $this->authorship = $authorship;
 
-        $this->recognize('alpha', $this->change(self::LOOP_PULL));
+        $this->recognize('alpha', $this->change(self::PULL, 'b'));
 
-        self::assertSame([], $this->handedToIntakt());
+        self::assertSame([self::PULL], array_column($this->handedToIntakt(), 'change'));
+    }
+
+    public function testAPullRequestTheAppCreatedWithoutAnyRecordOfIntaktIsRecorded(): void
+    {
+        $authorship = self::createStub(ChangeAuthorship::class);
+        $authorship->method('isCreatedByIntakt')->willReturn(true);
+        $this->authorship = $authorship;
+
+        $this->recognize('alpha', $this->change(self::PULL));
+
+        self::assertSame([self::PULL], array_column($this->handedToIntakt(), 'change'));
     }
 
     public function testEveryPullRequestIntaktCreatedIsRecordedOnceAllAuthorsAreRead(): void

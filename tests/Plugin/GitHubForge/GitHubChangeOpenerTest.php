@@ -154,6 +154,15 @@ final class GitHubChangeOpenerTest extends TestCase
         self::assertCount(1, $github->writes);
     }
 
+    public function testARetryThatFindsItsPullRequestWithAnEmptyAuthorLoginFailsBeforeAnyWrite(): void
+    {
+        $github = new ScriptedGitHub();
+        $github->openPulls = [['number' => 11, 'head' => ['ref' => 'task'], 'user' => ['login' => '']]];
+
+        $this->assertWriteFailsWith('without its author\'s login', fn () => $github->opener()->openOrUpdate(new ProposedChange('widgets', 'task', 'main', new ChangeText('T', 'B'))));
+        self::assertSame([], $github->writes);
+    }
+
     public function testABotAuthorThatCannotBeCheckedAgainstTheAppFailsBeforeAnyWrite(): void
     {
         $github = new ScriptedGitHub();

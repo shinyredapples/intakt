@@ -260,6 +260,31 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         self::assertSame(['1', '2'], array_column($this->ledger->payloads(), 'change'));
     }
 
+    public function testATickThatOverlapsAnotherWhileItReadsAnAuthorRecordsNoSecondHandOver(): void
+    {
+        $doctrine = self::getContainer()->get('doctrine');
+        self::assertInstanceOf(ManagerRegistry::class, $doctrine);
+        $this->openings = new DoctrineLedger($doctrine, $this->clock);
+        self::assertTrue($this->openings->append(new LedgerEvent(LedgerEventKind::ChangeOpened, '{"project":"alpha","change":"1"}'))->succeeded());
+        $overlapped = false;
+        $authorship = self::createStub(ChangeAuthorship::class);
+        $authorship->method('isCreatedByIntakt')->willReturnCallback(function () use (&$overlapped): bool {
+            if (!$overlapped) {
+                $overlapped = true;
+                $this->tick();
+            }
+
+            return true;
+        });
+        $this->authorship = $authorship;
+        $this->handler = $this->handler();
+        $this->listing->opens('alpha', RecordedForge::change('1', self::PENDING, '2026-11-02T09:00:00Z'));
+
+        $this->tick();
+
+        self::assertSame([LedgerEventKind::ChangeHandedToIntakt, LedgerEventKind::HeadPending], $this->ledger->kinds());
+    }
+
     public function testAPendingHeadIsReadAgainOnceItsReadAgainTimeHasPassedEvenWhenTheListingIsUnchanged(): void
     {
         $this->listing->opens('alpha', RecordedForge::change('1', self::PENDING, '2026-11-02T09:00:00Z'));
