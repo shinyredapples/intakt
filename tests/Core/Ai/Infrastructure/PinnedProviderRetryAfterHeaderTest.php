@@ -21,6 +21,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 use Symfony\AI\Platform\Bridge\Generic\Factory;
+use Symfony\AI\Platform\Exception\RateLimitExceededException;
 use Symfony\AI\Platform\Message\Message;
 use Symfony\AI\Platform\Message\MessageBag;
 use Symfony\AI\Platform\ModelCatalog\InMemoryModelCatalog;
@@ -93,13 +94,38 @@ final class PinnedProviderRetryAfterHeaderTest extends TestCase
         yield 'a past date' => ['Thu, 19 Nov 2026 11:00:00 GMT', 1];
     }
 
+    // Judged at another time of the clock, because a one-digit asctime day, an RFC 850 year and a leap second each need a date of their own.
+    #[DataProvider('datesAtTheirOwnTime')]
+    public function testAnHttpDateIsReadAsRfc9110DefinesIt(string $now, string $header, int $seconds): void
+    {
+        $this->clock->modify($now);
+        $platform = $this->platform($this->limited(['retry-after: '.$header]));
+
+        $failure = $this->failureOf(fn (): string => $platform->invoke(self::PINNED, $this->messages())->asText());
+
+        self::assertInstanceOf(RateLimitExceededException::class, $failure);
+        self::assertSame($seconds, $this->pins->secondsUntilFree($this->pin()));
+    }
+
+    /**
+     * @return iterable<string, array{string, string, int}>
+     */
+    public static function datesAtTheirOwnTime(): iterable
+    {
+        yield 'an asctime date with a one-digit day padded by a space' => ['2026-11-09T12:00:00Z', 'Mon Nov  9 12:02:00 2026', 120];
+        yield 'an RFC 850 year outside PHP\'s fixed window' => ['2070-01-01T00:00:00Z', 'Wednesday, 01-Jan-70 00:02:00 GMT', 120];
+        yield 'an RFC 850 year more than 50 years ahead, read as the past century' => ['2026-11-19T12:00:00Z', 'Saturday, 19-Nov-77 12:02:00 GMT', 1];
+        yield 'a leap second' => ['2016-12-31T23:58:00Z', 'Sat, 31 Dec 2016 23:59:60 GMT', 120];
+    }
+
     #[DataProvider('unreadableRetryAfters')]
     public function testARouter429WithoutAReadableRetryAfterHeaderCoolsThePinForTheDefaultMinute(string $header): void
     {
         $platform = $this->platform($this->limited('' === $header ? [] : ['retry-after: '.$header]));
 
-        $this->failureOf(fn (): string => $platform->invoke(self::PINNED, $this->messages())->asText());
+        $failure = $this->failureOf(fn (): string => $platform->invoke(self::PINNED, $this->messages())->asText());
 
+        self::assertInstanceOf(RateLimitExceededException::class, $failure);
         self::assertSame(60, $this->pins->secondsUntilFree($this->pin()));
     }
 
@@ -113,6 +139,13 @@ final class PinnedProviderRetryAfterHeaderTest extends TestCase
         yield 'a negative number' => ['-5'];
         yield 'a date PHP would normalize' => ['Thu, 19 Nov 2026 12:99:00 GMT'];
         yield 'a date with the wrong weekday' => ['Fri, 19 Nov 2026 12:02:00 GMT'];
+        yield 'a date with an embedded NUL' => ["Thu, 19 Nov\0 2026 12:02:00 GMT"];
+        yield 'an asctime date with a one-digit day and one space' => ['Mon Nov 9 12:02:00 2026'];
+        yield 'an IMF-fixdate with a doubled space' => ['Thu, 19 Nov  2026 12:02:00 GMT'];
+        yield 'hour 24' => ['Thu, 19 Nov 2026 24:00:00 GMT'];
+        yield 'second 61' => ['Thu, 19 Nov 2026 12:02:61 GMT'];
+        yield 'February 31' => ['Tue, 31 Feb 2026 12:02:00 GMT'];
+        yield 'a lowercase GMT' => ['Thu, 19 Nov 2026 12:02:00 gmt'];
     }
 
     /**
