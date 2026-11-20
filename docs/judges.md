@@ -23,7 +23,7 @@ The video's script and shot list: [docs/video.md](video.md)
 
 First clone and start Intakt as in steps 1 and 2 of path a.
 
-1. Open http://localhost:7781/setup, the first-run page (once path a has played, http://localhost:7781 opens the board instead). Paste the key or token in step 1 ("A key or token for Anthropic, OpenAI or Hugging Face") and press **Keep the key**. Calls are billed to the key's owner.
+1. Open http://localhost:7781/setup, the first-run page (once path a has played, http://localhost:7781 opens the board instead in a desktop browser, and a phone opens Waiting on you; `/?board=1` is the board on any device). Paste the key or token in step 1 ("A key or token for Anthropic, OpenAI or Hugging Face") and press **Keep the key**. Calls are billed to the key's owner.
 2. `docker compose restart intakt`, so the sample project gets its reviewers. Wait until `docker compose ps` shows the container as healthy.
 3. Reload http://localhost:7781/setup: step 2 now reads "1 project is configured." and lists the `sample` project. Then start the live review:
    - **If you skipped path a:** press **Start the first review** in step 3. Its live review page opens: each reviewer's row fills in as it answers, then the round shows its outcome (`approve`, `changes` or `blocked`) and "Findings and the judge's call" lists the act list, each entry marked **Fix now**.
@@ -59,6 +59,7 @@ Every Symfony and Symfony AI feature in use, with its status: [Highlights](https
 
 ## More
 
+- What was planned, achieved and what comes next: [the hackathon page](hackathon.md).
 - [The review bench](../README.md#review-bench): how well the panel finds planted defects, measured.
 - [Upstream reproductions](architecture/upstream-reproductions.md): library bugs found while building Intakt.
 - [Connecting an agent through MCP](user/mcp.md).
