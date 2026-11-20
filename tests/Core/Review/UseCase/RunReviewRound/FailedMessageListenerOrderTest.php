@@ -36,9 +36,9 @@ final class FailedMessageListenerOrderTest extends KernelTestCase
         $events = self::getContainer()->get(EventDispatcherInterface::class);
         self::assertInstanceOf(EventDispatcherInterface::class, $events);
 
-        return array_values(array_map(
+        return array_map(
             static fn (mixed $listener): string => is_array($listener) ? get_debug_type($listener[0]) : get_debug_type($listener),
             $events->getListeners(WorkerMessageFailedEvent::class),
-        ));
+        );
     }
 }
