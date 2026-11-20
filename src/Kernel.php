@@ -41,7 +41,7 @@ final class Kernel extends BaseKernel
     public static function addApplicationPasses(ContainerBuilder $container): void
     {
         $container->addCompilerPass(new AuthorizeToolCallsPass(), PassConfig::TYPE_BEFORE_OPTIMIZATION, -10);
-        // Between the autoconfiguration (100), which tags autoconfigured collectors, and FrameworkBundle's ProfilerPass (0), which reads the tags.
+        // At 10, because autoconfiguration (100) must have tagged the collectors and FrameworkBundle's ProfilerPass (0) reads the tags afterwards.
         $container->addCompilerPass(new ProfileOnlyRequestMeasuresPass(), PassConfig::TYPE_BEFORE_OPTIMIZATION, 10);
     }
 

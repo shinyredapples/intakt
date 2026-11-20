@@ -21,19 +21,19 @@ final class ProfileOnlyRequestMeasuresPass implements CompilerPassInterface
         }
 
         foreach ($container->findTaggedServiceIds(self::TAG) as $id => $tags) {
-            $this->keepOnlyAMeasure($container, $id, $tags);
+            if (!$this->measuresARequest($tags)) {
+                $container->getDefinition($id)->clearTag(self::TAG);
+            }
         }
     }
 
     /**
-     * @param array<array<string, mixed>> $tags
+     * @param array<mixed> $tags
      */
-    private function keepOnlyAMeasure(ContainerBuilder $container, string $id, array $tags): void
+    private function measuresARequest(array $tags): bool
     {
-        if (in_array($tags[0]['id'] ?? null, self::MEASURES, true)) {
-            return;
-        }
+        $first = $tags[0] ?? null;
 
-        $container->getDefinition($id)->clearTag(self::TAG);
+        return is_array($first) && in_array($first['id'] ?? null, self::MEASURES, true);
     }
 }
