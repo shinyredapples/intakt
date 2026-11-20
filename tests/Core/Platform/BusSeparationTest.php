@@ -55,7 +55,7 @@ final class BusSeparationTest extends KernelTestCase
     {
         $this->messageBus = $this->bus('query.bus');
 
-        $this->expectExceptionObject(new InvalidArgumentException(\sprintf(
+        $this->expectExceptionObject(new InvalidArgumentException(sprintf(
             'This bus only dispatches messages of type "%s", "%s" given.',
             QueryMessage::class,
             RenameThing::class,
@@ -68,7 +68,7 @@ final class BusSeparationTest extends KernelTestCase
     {
         $this->messageBus = $this->bus('command.bus');
 
-        $this->expectExceptionObject(new InvalidArgumentException(\sprintf(
+        $this->expectExceptionObject(new InvalidArgumentException(sprintf(
             'This bus only dispatches messages of type "%s", "%s" given.',
             CommandMessage::class,
             FindThing::class,
