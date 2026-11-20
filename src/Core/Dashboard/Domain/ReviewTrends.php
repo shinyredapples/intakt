@@ -129,6 +129,11 @@ final readonly class ReviewTrends
         return JudgeOutcomes::of($this->rounds);
     }
 
+    public function reviewsPerDay(): ?ReviewsPerDay
+    {
+        return ReviewsPerDay::of($this->rounds);
+    }
+
     /**
      * @return list<ReviewedRound>
      */

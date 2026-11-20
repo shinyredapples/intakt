@@ -52,6 +52,7 @@ use Intakt\Core\Review\UseCase\JudgeRound\JudgeRound;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRoundHandler;
 use Intakt\Core\Review\UseCase\JudgeRound\PublishJudgedRound;
 use Intakt\Core\Review\UseCase\JudgeRound\RecordFailedJudgingHandler;
+use Intakt\Core\Review\UseCase\JudgeRound\RecurringP1s;
 use Intakt\Core\Review\UseCase\ReadVerdicts\StoredVerdicts;
 use Intakt\Core\Review\UseCase\ReadVerdicts\VerdictsOfRoundHandler;
 use Intakt\Core\Review\UseCase\RunReviewRound\BlockReviewerOfFailedMessage;
@@ -235,7 +236,12 @@ final readonly class RoundFixture
 
     public function judge(Vendor $vendor): JudgeRoundHandler
     {
-        return new JudgeRoundHandler(new JudgedRounds($this->rounds($this->entities), $this->storedFindingsOn($this->entities), $this->roundLedger($this->ledger), new ChangeText(new DiffPaths()), new DiffHunks(new DiffPaths()), new DiffPaths(), new StoredVerdicts($this->serializer), $this->noFailedJudgings()), $vendor, $this->events);
+        return new JudgeRoundHandler(new JudgedRounds($this->rounds($this->entities), $this->storedFindingsOn($this->entities), $this->roundLedger($this->ledger), new ChangeText(new DiffPaths()), new DiffHunks(new DiffPaths()), new DiffPaths(), new StoredVerdicts($this->serializer), $this->noFailedJudgings(), $this->recurringP1s($this->ledger)), $vendor, $this->events);
+    }
+
+    public function recurringP1s(Ledger $ledger): RecurringP1s
+    {
+        return new RecurringP1s($this->rounds($this->entities), $ledger, $this->ledgerPayloads());
     }
 
     // The application's queue, because the round's workflow, taken from the container, queues the judging through the application's bus.

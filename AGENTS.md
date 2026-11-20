@@ -99,4 +99,19 @@ AI Mate: project diagnostic tools, exposed through the `vendor/bin/mate` CLI.
 - Installed extensions: symfony/ai-mate, symfony/ai-symfony-mate-extension.
 <!-- END AI_MATE_INSTRUCTIONS -->
 
-Use Mate before guessing how the container wires a service or where an env variable is set: `tools:call symfony-services`, `symfony-service-detail`, `symfony-dotenv-check`. The profiler tools find nothing, since the app does not enable the profiler. It is a dev tool: nothing of it is in the image, and application code never uses it.
+### Tools for looking inside the app
+
+Measured facts beat reading code. Mate and the profiler are dev tools: they are not in the image, and application code never uses them. The console commands below are read-only and work in any environment.
+
+- Mate (`vendor/bin/mate tools:call <tool> --<param>=<value>`), by purpose:
+  - Services: `symfony-services` finds services by id, class or tag; `symfony-service-detail` shows how one is wired.
+  - Environment: `symfony-dotenv-check` says which `.env*` file declares a variable and whether it resolves (masked); `server-info` reports the PHP runtime.
+  - Profiler: after a request to a running development install (`APP_ENV=dev`), `symfony-profiler-list` lists the saved profiles, newest first, and `symfony-profiler-get --token=<X-Debug-Token>` shows one with its collectors (`db`, `messenger`, `time`, `memory`). With `bin/instance`, run Mate as its command (`bin/instance -- <command>`), since the profiles live in its scratch cache.
+- Read-only console commands:
+  - `bin/console debug:container <id>`: what a service is and what it is wired to.
+  - `bin/console debug:router`: which route a path reaches.
+  - `bin/console debug:messenger`: which handler takes which message, on which bus.
+  - `bin/console debug:event-dispatcher <event>`: which listeners run for an event, in order.
+  - `bin/console debug:config <bundle>`: the configuration a bundle ends up with.
+  - `bin/console workflow:dump <name>`: the states and transitions of a workflow.
+  - `bin/console lint:container`: whether the container's services are wired with the right types.
