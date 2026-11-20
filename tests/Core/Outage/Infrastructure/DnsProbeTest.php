@@ -13,7 +13,6 @@ final class DnsProbeTest extends TestCase
 {
     public function testAnAddressLiteralAnswersWithoutAResolver(): void
     {
-        // A name like localhost depends on the machine's hosts file; an address literal does not.
         self::assertTrue(new DnsProbe('127.0.0.1', 3.0)->answers());
     }
 
