@@ -108,9 +108,8 @@ final readonly class GitHubWatchReads implements OpenChanges, HeadChecks
      */
     private function openChange(array $pull): OpenChange
     {
-        $id = new ChangeId($this->text($pull, 'html_url'));
-
         try {
+            $id = new ChangeId($this->text($pull, 'html_url'));
             // Only an address the forge's other reads accept, so a listed change can be read by them.
             PullRequestAddress::of($id);
 
