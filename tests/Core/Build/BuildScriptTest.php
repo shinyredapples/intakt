@@ -30,6 +30,8 @@ final class BuildScriptTest extends TestCase
     private string $gates = '4';
     // False removes the variable, so a value the test run itself was started with never reaches the script.
     private string|false $inherited = false;
+    // False for the same reason, because the test run itself may run inside a CLI session that sets both.
+    private string|false $inheritedTimeout = false;
     // Seconds the script may run, so a git waiting on a pipe fails its test instead of holding the suite.
     private int $timeout = 20;
     private ?string $source = null;
@@ -76,8 +78,37 @@ final class BuildScriptTest extends TestCase
 
         self::assertSame("Build the task.\n", (string) file_get_contents($this->history->folder.'/input'));
         self::assertSame(
-            ['-p', '--model', 'claude-opus-5-5', '--max-turns', '7', '--output-format', 'json', '--dangerously-skip-permissions'],
+            ['-p', '--model', 'claude-opus-5-5', '--max-turns', '7', '--output-format', 'json', '--dangerously-skip-permissions', '--settings', '{"env":{"BASH_DEFAULT_TIMEOUT_MS":"1800000","BASH_MAX_TIMEOUT_MS":"1800000"}}'],
             explode("\n", trim((string) file_get_contents($this->history->folder.'/arguments'))),
+        );
+    }
+
+    public function testTheSessionIsStartedWithASettingsArgumentWhoseEnvGivesBothBashTimeoutsTheToolTimeLimitInMilliseconds(): void
+    {
+        $this->givenTheCli('printf "%s\n" "$@" > "$RECORD/arguments"');
+
+        $this->whenTheBuildRuns('task', 'claude-opus-5-5');
+
+        self::assertSame(
+            ['env' => ['BASH_DEFAULT_TIMEOUT_MS' => '1800000', 'BASH_MAX_TIMEOUT_MS' => '1800000']],
+            $this->settingsArgument(),
+        );
+    }
+
+    // Claude Code applies the env of the clone's own settings files after it starts, so only the command-line settings, which rank above them, keep the limit.
+    #[TestWith(['.claude/settings.json'])]
+    #[TestWith(['.claude/settings.local.json'])]
+    public function testACloneWhoseSettingsFileSetsBothBashTimeoutsHigherStillStartsTheSessionWithTheLimitAsItsSettingsArgument(string $file): void
+    {
+        $this->history->commitFile($file, '{"env":{"BASH_DEFAULT_TIMEOUT_MS":"7200000","BASH_MAX_TIMEOUT_MS":"7200000"}}', 'chore: ask for more time');
+        $this->givenTheCli('cp "'.$file.'" "$RECORD/project-settings.json"; printf "%s\n" "$@" > "$RECORD/arguments"');
+
+        $this->whenTheBuildRuns('task', 'claude-opus-5-5');
+
+        self::assertStringContainsString('7200000', (string) file_get_contents($this->history->folder.'/project-settings.json'));
+        self::assertSame(
+            ['env' => ['BASH_DEFAULT_TIMEOUT_MS' => '1800000', 'BASH_MAX_TIMEOUT_MS' => '1800000']],
+            $this->settingsArgument(),
         );
     }
 
@@ -122,6 +153,26 @@ final class BuildScriptTest extends TestCase
         $this->whenTheBuildRuns('task', 'claude-opus-5-5');
 
         self::assertSame("4\n", (string) file_get_contents($this->history->folder.'/gates'));
+    }
+
+    public function testTheBuildScriptGivesTheCliItsToolTimeLimitInMillisecondsAsBothBashTimeouts(): void
+    {
+        $this->givenTheCli('printf "%s %s\n" "${BASH_DEFAULT_TIMEOUT_MS-unset}" "${BASH_MAX_TIMEOUT_MS-unset}" > "$RECORD/timeouts"');
+
+        $this->whenTheBuildRuns('task', 'claude-opus-5-5');
+
+        self::assertSame("1800000 1800000\n", (string) file_get_contents($this->history->folder.'/timeouts'));
+    }
+
+    public function testTheBuildScriptReplacesBashTimeoutsItsEnvironmentAlreadySets(): void
+    {
+        $this->givenTheCli('printf "%s %s\n" "${BASH_DEFAULT_TIMEOUT_MS-unset}" "${BASH_MAX_TIMEOUT_MS-unset}" > "$RECORD/timeouts"');
+
+        $this->inheritedTimeout = '7200000';
+
+        $this->whenTheBuildRuns('task', 'claude-opus-5-5');
+
+        self::assertSame("1800000 1800000\n", (string) file_get_contents($this->history->folder.'/timeouts'));
     }
 
     public function testASessionCutAtItsAllowanceAfterCommittingHandsBackABundleOfItsCommits(): void
@@ -979,7 +1030,7 @@ final class BuildScriptTest extends TestCase
     private function whenTheBuildRuns(string $branch, string $model, int $allowance = 600): Process
     {
         $run = new Process(
-            ['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-build', $this->source ?? $this->history->work, $this->prompt, $branch, $model, '7', (string) $allowance, $this->gates],
+            ['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-build', $this->source ?? $this->history->work, $this->prompt, $branch, $model, '7', (string) $allowance, $this->gates, '1800'],
             null,
             $this->environment(),
             timeout: $this->timeout,
@@ -1002,6 +1053,8 @@ final class BuildScriptTest extends TestCase
             'PATH' => $this->bin.':'.getenv('PATH'),
             'RECORD' => $this->history->folder,
             'INTAKT_GATE_SLOTS' => $this->inherited,
+            'BASH_DEFAULT_TIMEOUT_MS' => $this->inheritedTimeout,
+            'BASH_MAX_TIMEOUT_MS' => $this->inheritedTimeout,
         ];
         foreach (array_keys([...getenv(), ...$_ENV]) as $name) {
             if (is_string($name) && str_starts_with($name, 'GIT_')) {
@@ -1017,6 +1070,15 @@ final class BuildScriptTest extends TestCase
         $this->history->inMirror('fetch', '--quiet', $this->output.'/handback.bundle', 'refs/heads/'.$branch.':refs/heads/fetched');
 
         return $this->history->inMirror('show', 'refs/heads/fetched:'.$path)."\n";
+    }
+
+    private function settingsArgument(): mixed
+    {
+        $arguments = explode("\n", trim((string) file_get_contents($this->history->folder.'/arguments')));
+        $at = array_search('--settings', $arguments, true);
+        self::assertIsInt($at);
+
+        return json_decode($arguments[$at + 1] ?? '', true, flags: JSON_THROW_ON_ERROR);
     }
 
     private function outputFile(string $name): string

@@ -13,6 +13,7 @@ final readonly class GateReport
     private function __construct(
         public string $gate,
         public string $line,
+        public ?string $kept = null,
     ) {
     }
 
@@ -53,6 +54,42 @@ final readonly class GateReport
     public function isPassing(): bool
     {
         return true === self::verdictOf($this->gate, $this->line);
+    }
+
+    // Because only a kept result that, cut as the line cuts it, gives the line's own findings and omitted count can stand in for it; the verdict stays the line's.
+    public function keeping(string $kept): self
+    {
+        $whole = json_decode($kept, true);
+        $findings = is_array($whole) && $this->gate === ($whole['gate'] ?? null) ? ($whole['findings'] ?? null) : null;
+
+        $strings = is_array($findings) && array_is_list($findings) ? array_values(array_filter($findings, is_string(...))) : null;
+
+        if (null === $strings || count($strings) !== count($findings)) {
+            return $this;
+        }
+
+        $recut = $this->shownOf(GateResult::withFindings($this->gate, $strings)->toJson());
+        $shown = $this->shownOf($this->line);
+
+        return [$recut['findings'], $recut['omitted']] === [$shown['findings'], $shown['omitted']] ? new self($this->gate, $this->line, $kept) : $this;
+    }
+
+    public function lineIsCut(): bool
+    {
+        $shown = $this->shownOf($this->line);
+
+        return 0 !== $shown['omitted'] || array_any($shown['findings'], static fn (mixed $finding): bool => is_string($finding) && GateResult::isCut($finding));
+    }
+
+    /**
+     * @return array{findings: array<mixed>, omitted: mixed}
+     */
+    private function shownOf(string $line): array
+    {
+        $shown = json_decode($line, true);
+        $findings = is_array($shown) ? ($shown['findings'] ?? null) : null;
+
+        return ['findings' => is_array($findings) ? $findings : [], 'omitted' => is_array($shown) ? ($shown['omitted'] ?? null) : null];
     }
 
     // Because only the exact bytes a gate's own GateResult writes may pass: no stray byte, repeated key or object where a list belongs.

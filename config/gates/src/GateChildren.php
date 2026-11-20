@@ -6,7 +6,11 @@ namespace Intakt\Gates;
 
 final readonly class GateChildren
 {
+    public const string FULL_RESULT_VARIABLE = 'INTAKT_GATE_FULL_RESULT';
+
     private const string ENTRY = 'config/gates/run-gate.php';
+
+    private const string SCRATCH_PREFIX = 'intakt-gate-results';
 
     private const int POLL_MICROSECONDS = 10000;
 
@@ -30,9 +34,31 @@ final readonly class GateChildren
      */
     public function reportsOf(array $gates, array $arguments): array
     {
-        $results = $this->resultsOf($this->slots->launchOrder($gates, $this->runningTheChangesCode), $this->childrenOf($gates, $arguments));
+        $scratch = $this->scratchOutsideTheTree();
 
-        return array_map(static fn (string $gate): GateReport => GateReport::fromChild($gate, $results[$gate]), $gates);
+        // Because the folder holds every child's whole result, it goes whatever ends the run.
+        try {
+            $results = $this->resultsOf($this->slots->launchOrder($gates, $this->runningTheChangesCode), $this->childrenOf($gates, $arguments, $scratch), $scratch);
+
+            return array_map(static fn (string $gate): GateReport => self::keptIn($scratch, GateReport::fromChild($gate, $results[$gate])), $gates);
+        } finally {
+            $scratch?->remove();
+        }
+    }
+
+    // Because gates scan every file under the checked tree, a scratch folder there would put one gate's whole result into the scan of the next.
+    private function scratchOutsideTheTree(): ?ScratchDirectory
+    {
+        $scratch = ScratchDirectory::create(self::SCRATCH_PREFIX);
+        $tree = realpath($this->root);
+
+        if (!$scratch instanceof ScratchDirectory || false === $tree || !str_starts_with((string) realpath($scratch->path), rtrim($tree, '/').'/')) {
+            return $scratch;
+        }
+
+        $scratch->remove();
+
+        return null;
     }
 
     /**
@@ -41,15 +67,35 @@ final readonly class GateChildren
      *
      * @return array<string, ChildCommand>
      */
-    private function childrenOf(array $gates, array $arguments): array
+    private function childrenOf(array $gates, array $arguments, ?ScratchDirectory $scratch): array
     {
         $children = [];
 
         foreach ($gates as $gate) {
-            $children[$gate] = new ChildCommand([PHP_BINARY, $this->home.'/'.self::ENTRY, $gate, ...$arguments], $this->directory(), LowPriority::environmentFor($gate, $this->runningTheChangesCode, $this->slots));
+            // Because a child inherits bin/check's environment, a hand-off set outside would otherwise still name a file when there is no scratch folder.
+            $handOff = [self::FULL_RESULT_VARIABLE => $scratch instanceof ScratchDirectory ? self::wholeResultFile($scratch, $gate) : false];
+            $children[$gate] = new ChildCommand([PHP_BINARY, $this->home.'/'.self::ENTRY, $gate, ...$arguments], $this->directory(), [...LowPriority::environmentFor($gate, $this->runningTheChangesCode, $this->slots), ...$handOff]);
         }
 
         return $children;
+    }
+
+    private static function wholeResultFile(ScratchDirectory $scratch, string $gate): string
+    {
+        return $scratch->path.'/'.$gate.'.json';
+    }
+
+    private static function keptIn(?ScratchDirectory $scratch, GateReport $report): GateReport
+    {
+        $file = $scratch instanceof ScratchDirectory ? self::wholeResultFile($scratch, $report->gate) : null;
+
+        if (null === $file || !is_file($file) || !is_readable($file)) {
+            return $report;
+        }
+
+        $kept = file_get_contents($file);
+
+        return false === $kept ? $report : $report->keeping($kept);
     }
 
     /**
@@ -58,13 +104,14 @@ final readonly class GateChildren
      *
      * @return array<string, ProcessResult>
      */
-    private function resultsOf(array $waiting, array $children): array
+    private function resultsOf(array $waiting, array $children, ?ScratchDirectory $scratch): array
     {
         $running = [];
         $results = [];
-        // Because one Ctrl-C or kill meant for bin/check must reach every child running at that moment.
-        $forwarding = StopSignalForwarding::through(static function () use (&$running): void {
+        // Because one Ctrl-C or kill meant for bin/check must reach every child running at that moment, and bin/check then dies of that signal before any finally runs.
+        $forwarding = StopSignalForwarding::through(static function () use (&$running, $scratch): void {
             self::stopAll($running);
+            $scratch?->remove();
         });
 
         while ([] !== $waiting || [] !== $running) {
