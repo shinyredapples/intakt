@@ -178,6 +178,62 @@ final class RawPromptMessageRuleTest extends PhpStanRuleTestCase
         self::assertStringNotContainsString('intakt.rawPromptMessage', $this->ruleFindingsIn($sandbox));
     }
 
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function callableForms(): iterable
+    {
+        yield 'a literal array' => ['[Message::class, \'ofUser\']'];
+        yield 'a keyed reordered array' => ['[1 => \'ofUser\', 0 => Message::class]'];
+        yield 'a method known only at run time' => ['[Message::class, $method]'];
+        yield 'a single backslash class in an array' => ['[\'\\Symfony\\AI\\Platform\\Message\\Message\', \'ofUser\']'];
+        yield 'a callable string' => ['\'Symfony\\AI\\Platform\\Message\\Message::forSystem\''];
+        yield 'a single backslash callable string' => ['\'\\Symfony\\AI\\Platform\\Message\\Message::forSystem\''];
+        yield 'a static call on a single backslash class string' => ['(\'\\Symfony\\AI\\Platform\\Message\\Message\')::ofUser($text)'];
+        yield 'new on a single backslash class string' => ['new (\'\\Symfony\\AI\\Platform\\Message\\UserMessage\')(new Text($text))'];
+    }
+
+    #[DataProvider('callableForms')]
+    public function testALiteralCallableOfAMessageFactoryOutsideTheAssemblyIsRefused(string $expression): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/Sample/Report.php', $this->classWithCases('Intakt\Sample\\Report', '(string $text, string $method)', [$expression]));
+
+        self::assertStringContainsString('src/Sample/Report.php:'.self::FIRST_CASE_LINE.' intakt.rawPromptMessage', $this->ruleFindingsIn($sandbox));
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function nonCallableForms(): iterable
+    {
+        yield 'an associative array' => ['[\'class\' => Message::class, \'method\' => \'ofUser\']'];
+        yield 'an array with a third key' => ['[Message::class, \'ofUser\', $text]'];
+        yield 'the keys 1 and 2' => ['[1 => \'ofUser\', 2 => Message::class]'];
+        yield 'another class' => ['[\\ArrayObject::class, \'ofUser\']'];
+        yield 'another method' => ['[Message::class, \'ofUserLater\']'];
+        yield 'two leading backslashes in an array' => ['[\'\\\\\\\\Symfony\\AI\\Platform\\Message\\Message\', \'ofUser\']'];
+        yield 'two leading backslashes in a callable string' => ['\'\\\\\\\\Symfony\\AI\\Platform\\Message\\Message::ofUser\''];
+    }
+
+    #[DataProvider('nonCallableForms')]
+    public function testAnythingButALiteralMessageCallablePasses(string $expression): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/Sample/Report.php', $this->classWithCases('Intakt\Sample\\Report', '(string $text, string $method)', [$expression]));
+
+        self::assertStringNotContainsString('intakt.rawPromptMessage', $this->ruleFindingsIn($sandbox));
+    }
+
+    public function testATraitUnderSrcUsedOnlyUnderTestsIsJudgedByItsOwnFile(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/Sample/BuildsMessages.php', "<?php\n\ndeclare(strict_types=1);\n\nnamespace Intakt\\Sample;\n\nuse Symfony\\AI\\Platform\\Message\\Message;\n\ntrait BuildsMessages\n{\n    public function build(string \$text): mixed\n    {\n        return Message::forSystem(\$text);\n    }\n}\n");
+        $sandbox->write('tests/Sample/ReportTest.php', "<?php\n\ndeclare(strict_types=1);\n\nnamespace Intakt\\Tests\\Sample;\n\nuse Intakt\\Sample\\BuildsMessages;\n\nfinal class ReportTest\n{\n    use BuildsMessages;\n}\n");
+
+        self::assertStringContainsString('src/Sample/BuildsMessages.php (in context of class Intakt\Tests\Sample\ReportTest):13 intakt.rawPromptMessage', $this->ruleFindingsIn($sandbox));
+    }
+
     public function testTheAssemblyClassMayBuildMessages(): void
     {
         $sandbox = $this->emptySandbox();
