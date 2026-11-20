@@ -6,17 +6,17 @@ namespace Intakt\Gates\PhpStan;
 
 use PhpParser\Node;
 use PhpParser\Node\Expr;
-use PhpParser\Node\Expr\Array_;
 use PhpParser\Node\Expr\CallLike;
 use PhpParser\Node\Expr\MethodCall;
 use PhpParser\Node\Expr\NullsafeMethodCall;
 use PhpParser\Node\Expr\StaticCall;
 use PhpParser\Node\Identifier;
 use PhpParser\Node\Name;
-use PhpParser\Node\Scalar\Int_;
 use PhpParser\Node\Scalar\String_;
 use PHPStan\Analyser\Scope;
 use PHPStan\Reflection\ClassReflection;
+use PHPStan\Reflection\ParameterReflection;
+use PHPStan\Reflection\ParametersAcceptor;
 use PHPStan\Rules\IdentifierRuleError;
 use PHPStan\Rules\Rule;
 use PHPStan\Rules\RuleErrorBuilder;
@@ -59,21 +59,16 @@ final readonly class BareSerializerFormatRule implements Rule
      */
     public function processNode(Node $node, Scope $scope): array
     {
-        // a first-class callable has no arguments yet, and asking it for them fails an assertion inside the parser
+        // checked first because a first-class callable has no arguments, and asking it for them fails an assertion inside the parser
         if (!$node instanceof MethodCall && !$node instanceof NullsafeMethodCall && !$node instanceof StaticCall || $node->isFirstClassCallable()) {
             return [];
         }
 
-        $method = $this->methodName($node);
-
-        if (null === $method) {
-            return [];
-        }
-
-        [$contract, $position] = self::FORMAT_ARGUMENTS[$method] ?? [null, 0];
+        [$contract, $position] = self::FORMAT_ARGUMENTS[$this->methodName($node)] ?? [null, 0];
         $classes = null === $contract ? [] : $this->serializerClasses($scope, $node, $contract);
+        $names = $this->formatParameterNames($classes, $this->methodName($node), $position);
 
-        if ([] === $classes || !$this->isBareFormat($this->formatArgument($node, $position, $this->formatParameterNames($classes, $method, $position)))) {
+        if ([] === $classes || !$this->isBareFormat(new SerializerCallArguments()->valueAt($node, $position, $names))) {
             return [];
         }
 
@@ -84,62 +79,14 @@ final readonly class BareSerializerFormatRule implements Rule
         ];
     }
 
-    // a braced literal name such as ->{'serialize'} calls the same method as the plain name
-    private function methodName(MethodCall|NullsafeMethodCall|StaticCall $node): ?string
+    // a braced literal name such as ->{'serialize'} counts too, because it calls the same method as the plain name
+    private function methodName(MethodCall|NullsafeMethodCall|StaticCall $call): string
     {
         return match (true) {
-            $node->name instanceof Identifier => $node->name->toLowerString(),
-            $node->name instanceof String_ => strtolower($node->name->value),
-            default => null,
+            $call->name instanceof Identifier => $call->name->toLowerString(),
+            $call->name instanceof String_ => strtolower($call->name->value),
+            default => '',
         };
-    }
-
-    /**
-     * @param list<string> $names
-     */
-    private function formatArgument(MethodCall|NullsafeMethodCall|StaticCall $call, int $position, array $names): ?Expr
-    {
-        $index = 0;
-
-        foreach ($this->arguments($call) as [$name, $value]) {
-            if (null !== $name && in_array($name, $names, true) || null === $name && $index++ === $position) {
-                return $value;
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * Each argument as its name (null when positional) and value, with a literal array unpacked in place, because PHP passes its items as if written out.
-     *
-     * @return list<array{?string, Expr}>
-     */
-    private function arguments(MethodCall|NullsafeMethodCall|StaticCall $call): array
-    {
-        $arguments = [];
-
-        foreach ($call->getArgs() as $argument) {
-            if (!$argument->unpack) {
-                $arguments[] = [$argument->name?->toString(), $argument->value];
-
-                continue;
-            }
-
-            if (!$argument->value instanceof Array_) {
-                return $arguments;
-            }
-
-            foreach ($argument->value->items as $item) {
-                if ($item->unpack || null !== $item->key && !$item->key instanceof String_ && !$item->key instanceof Int_) {
-                    return $arguments;
-                }
-
-                $arguments[] = [$item->key instanceof String_ ? $item->key->value : null, $item->value];
-            }
-        }
-
-        return $arguments;
     }
 
     // only the literal itself, because JsonEncoder::FORMAT has the same constant value and is the spelling the rule asks for
@@ -148,9 +95,8 @@ final readonly class BareSerializerFormatRule implements Rule
         return $value instanceof String_ && self::BARE_FORMAT === $value->value;
     }
 
+    // every class the receiver may be, so a nullable or a union receiver still counts while an unrelated class with a method of the same name does not
     /**
-     * Every class the receiver may be that implements the contract, so a nullable or a union receiver still counts while an unrelated class with a method of the same name does not.
-     *
      * @return list<ClassReflection>
      */
     private function serializerClasses(Scope $scope, MethodCall|NullsafeMethodCall|StaticCall $call, string $contract): array
@@ -167,31 +113,33 @@ final readonly class BareSerializerFormatRule implements Rule
         ));
     }
 
+    // read from each receiver class, because an implementation may rename the format parameter and a named argument follows the implementation
     /**
-     * The name each receiver class gives the format parameter, because an implementation may rename it and a named argument follows the implementation.
-     *
      * @param list<ClassReflection> $classes
      *
      * @return list<string>
      */
     private function formatParameterNames(array $classes, string $method, int $position): array
     {
-        $names = [];
-
-        foreach ($classes as $class) {
-            if (!$class->hasNativeMethod($method)) {
-                continue;
-            }
-
-            foreach ($class->getNativeMethod($method)->getVariants() as $variant) {
-                $parameter = $variant->getParameters()[$position] ?? null;
-
-                if (null !== $parameter) {
-                    $names[] = $parameter->getName();
-                }
-            }
-        }
+        $names = array_merge(...array_map(fn (ClassReflection $class): array => $this->parameterNamesOf($class, $method, $position), $classes));
 
         return [] === $names ? [self::CONTRACT_PARAMETER] : array_values(array_unique($names));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function parameterNamesOf(ClassReflection $class, string $method, int $position): array
+    {
+        if (!$class->hasNativeMethod($method)) {
+            return [];
+        }
+
+        $parameters = array_map(
+            static fn (ParametersAcceptor $variant): ?ParameterReflection => $variant->getParameters()[$position] ?? null,
+            $class->getNativeMethod($method)->getVariants(),
+        );
+
+        return array_values(array_map(static fn (ParameterReflection $parameter): string => $parameter->getName(), array_filter($parameters)));
     }
 }

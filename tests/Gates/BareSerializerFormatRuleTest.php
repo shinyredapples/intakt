@@ -9,6 +9,10 @@ use PhpParser\Node\Expr\MethodCall;
 use PhpParser\Node\Expr\Variable;
 use PhpParser\Node\Identifier;
 use PhpParser\Node\VariadicPlaceholder;
+use Intakt\Gates\PhpStan\SerializerCallArguments;
+use PHPStan\Analyser\CollectedDataEmitter;
+use PHPStan\Analyser\DependencyTracker;
+use PHPStan\Analyser\NodeCallbackInvoker;
 use PHPStan\Analyser\Scope;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -17,6 +21,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
  * @extends PhpStanRuleTestCase<BareSerializerFormatRule>
  */
 #[CoversClass(BareSerializerFormatRule::class)]
+#[CoversClass(SerializerCallArguments::class)]
 final class BareSerializerFormatRuleTest extends PhpStanRuleTestCase
 {
     private const int FIRST_CASE_LINE = 11;
@@ -110,7 +115,7 @@ final class BareSerializerFormatRuleTest extends PhpStanRuleTestCase
     {
         $node = new MethodCall(new Variable('other'), new Identifier('encode'), [new VariadicPlaceholder()]);
 
-        $errors = new BareSerializerFormatRule()->processNode($node, $this->createStub(Scope::class));
+        $errors = new BareSerializerFormatRule()->processNode($node, self::createStubForIntersectionOfInterfaces([Scope::class, CollectedDataEmitter::class, DependencyTracker::class, NodeCallbackInvoker::class]));
 
         self::assertSame([], $errors);
     }
