@@ -6,13 +6,19 @@ namespace Intakt\Tests\Core\Dashboard\Domain;
 
 use DateTimeImmutable;
 use Intakt\Core\Budget\Contract\Cost;
+use Intakt\Core\Dashboard\Domain\ChartScale;
 use Intakt\Core\Dashboard\Domain\JudgeCall;
+use Intakt\Core\Dashboard\Domain\JudgeOutcomes;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
+use Intakt\Core\Dashboard\Domain\ReviewerCatch;
+use Intakt\Core\Dashboard\Domain\ReviewerCatches;
+use Intakt\Core\Dashboard\Domain\ReviewerOutcome;
 use Intakt\Core\Dashboard\Domain\ReviewTrends;
 use Intakt\Core\Dashboard\Domain\RoundFinding;
 use Intakt\Core\Dashboard\Domain\RoundPlace;
 use Intakt\Core\Dashboard\Domain\RoundStart;
 use Intakt\Core\Review\Contract\ReplayMark;
+use Intakt\Core\Review\Contract\Severity;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -23,6 +29,11 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(RoundFinding::class)]
 #[UsesClass(Cost::class)]
 #[UsesClass(TokenFigures::class)]
+#[UsesClass(JudgeOutcomes::class)]
+#[UsesClass(ReviewerCatches::class)]
+#[UsesClass(ReviewerCatch::class)]
+#[UsesClass(ReviewerOutcome::class)]
+#[UsesClass(ChartScale::class)]
 final class ReviewTrendsTest extends TestCase
 {
     public function testWithNoRoundEveryFigureButTheCountHasNoData(): void
@@ -205,6 +216,19 @@ final class ReviewTrendsTest extends TestCase
         self::assertFalse($trends->includesTheDemo());
         self::assertTrue($trends->canLeaveOutTheDemo());
         self::assertTrue($trends->demoLeftOut);
+    }
+
+    public function testLeavingOutTheDemoTakesItsRoundsOutOfBothCharts(): void
+    {
+        $replayed = $this->replayed('r-2')->withOutcomes([new ReviewerOutcome('r-2-security', 'security', 'standard', new DateTimeImmutable('2026-10-28T11:00:00+00:00'))])
+            ->judgedWith([$this->act('F1', 'P1')], new DateTimeImmutable('2026-10-28T11:10:00+00:00'))
+            ->withFindingsByReviewer(['r-2-security' => ['F1']]);
+
+        $counted = ReviewTrends::counting([$replayed]);
+        $leftOut = ReviewTrends::leavingOutTheDemo([$replayed]);
+
+        self::assertSame([1, 1], [$counted->judgeOutcomes()?->kept, $counted->reviewerCatches()?->reviewers[0]->found(Severity::P1)]);
+        self::assertSame([null, null], [$leftOut->judgeOutcomes(), $leftOut->reviewerCatches()]);
     }
 
     public function testLeavingOutAnOnlyDemoReviewStillCountsAsAReviewHavingRun(): void

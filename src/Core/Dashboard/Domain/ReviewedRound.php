@@ -31,6 +31,10 @@ final readonly class ReviewedRound
     /** @var list<RoundFinding> */
     public array $dropped;
 
+    // The findings an act entry merged, which get no row of their own, so a reviewer's finding keeps the severity it reported.
+    /** @var list<RoundFinding> */
+    public array $mergedFindings;
+
     public bool $findingTextRecorded;
     public ReviewState $state;
     public TokenFigures $tokens;
@@ -61,6 +65,7 @@ final readonly class ReviewedRound
         $this->outcomes = [];
         $this->findings = [];
         $this->dropped = [];
+        $this->mergedFindings = [];
         $this->findingTextRecorded = true;
         $this->state = ReviewState::InProgress;
         $this->tokens = TokenFigures::none();
@@ -100,6 +105,14 @@ final readonly class ReviewedRound
     public function actFindings(): array
     {
         return [...array_filter($this->findings, static fn (RoundFinding $finding): bool => JudgeCall::Act === $finding->call)];
+    }
+
+    // Null for an id the round holds no severity for, such as a mark kept without its finding, so a count never guesses one.
+    public function severityOf(string $id): ?string
+    {
+        $finding = array_find([...$this->findings, ...$this->mergedFindings, ...$this->dropped], static fn (RoundFinding $finding): bool => $finding->id === $id);
+
+        return $finding?->severity;
     }
 
     public function reviewOutcome(): ?ReviewOutcome
@@ -159,6 +172,14 @@ final readonly class ReviewedRound
     public function withDropped(array $dropped): self
     {
         return clone ($this, ['dropped' => $dropped]);
+    }
+
+    /**
+     * @param list<RoundFinding> $merged
+     */
+    public function withMergedFindings(array $merged): self
+    {
+        return clone ($this, ['mergedFindings' => $merged]);
     }
 
     public function withTokens(TokenFigures $tokens): self

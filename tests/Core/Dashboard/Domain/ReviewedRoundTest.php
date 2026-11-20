@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\ReviewerOutcome;
 use Intakt\Core\Dashboard\Domain\ReviewOutcome;
+use Intakt\Core\Dashboard\Domain\RoundFinding;
 use Intakt\Core\Dashboard\Domain\RoundPlace;
 use Intakt\Core\Dashboard\Domain\RoundStart;
 use Intakt\Core\Review\Contract\Decision;
@@ -22,8 +23,19 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(ReviewedRound::class)]
 #[UsesClass(ReviewOutcome::class)]
 #[UsesClass(ReviewerOutcome::class)]
+#[UsesClass(RoundFinding::class)]
 final class ReviewedRoundTest extends TestCase
 {
+    public function testTheSeverityOfAFindingIsReadFromItsEntryItsMergeOrItsDrop(): void
+    {
+        $round = $this->round()
+            ->judgedWith([new RoundFinding('F1', 'P1', 'Entry.', ['F2'])], new DateTimeImmutable('2026-10-28T11:10:00+00:00'))
+            ->withMergedFindings([new RoundFinding('F2', 'P3', 'Merged.')])
+            ->withDropped([new RoundFinding('F3', 'P2', 'Dropped.')]);
+
+        self::assertSame(['P1', 'P3', 'P2', null], array_map($round->severityOf(...), ['F1', 'F2', 'F3', 'F4']));
+    }
+
     public function testAJudgedRoundDecidedAsChangesGivesChangesRequested(): void
     {
         self::assertSame(ReviewOutcome::ChangesRequested, $this->judged()->decidedAs(Decision::Changes)->reviewOutcome());

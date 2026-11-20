@@ -48,7 +48,7 @@ final class LedgerRounds
     /** @var array<string, array<string, ReviewerOutcome>> */
     private array $outcomes = [];
 
-    /** @var array<string, array{findings: list<RoundFinding>, dropped: list<RoundFinding>, textRecorded: bool, at: DateTimeImmutable, votes: array<string, Decision>}> */
+    /** @var array<string, array{findings: list<RoundFinding>, dropped: list<RoundFinding>, merged: list<RoundFinding>, textRecorded: bool, at: DateTimeImmutable, votes: array<string, Decision>}> */
     private array $judged = [];
 
     /** @var array<string, ReplayMark> */
@@ -207,7 +207,7 @@ final class LedgerRounds
 
         if ($judge instanceof JudgeDone) {
             $findings = $this->payloads->judgedFindingsOf($recorded);
-            $this->judged += [$judge->round => ['findings' => $this->judgedFindings($judge, $findings ?? []), 'dropped' => $this->droppedFindings($recorded), 'textRecorded' => null !== $findings, 'at' => $recorded->recordedAt, 'votes' => $judge->votes]];
+            $this->judged += [$judge->round => ['findings' => $this->judgedFindings($judge, $findings ?? []), 'dropped' => $this->droppedFindings($recorded), 'merged' => $this->mergedFindings($findings ?? []), 'textRecorded' => null !== $findings, 'at' => $recorded->recordedAt, 'votes' => $judge->votes]];
         }
     }
 
@@ -226,6 +226,20 @@ final class LedgerRounds
     private function droppedFindings(RecordedEvent $recorded): array
     {
         return array_map(static fn (DroppedFinding $finding): RoundFinding => new RoundFinding($finding->id, $finding->severity->value, $finding->text, [], $finding->file, $finding->line, $finding->reason), $this->payloads->droppedOf($recorded));
+    }
+
+    /**
+     * @param list<JudgeDoneFinding> $findings
+     *
+     * @return list<RoundFinding>
+     */
+    // Kept beside the entries, because a merged finding has no row of its own, yet the Trends page counts it under the severity its reviewer gave it.
+    private function mergedFindings(array $findings): array
+    {
+        $merged = array_merge([], ...array_map(static fn (JudgeDoneFinding $finding): array => $finding->merged, $findings));
+        $mergedOnes = array_filter($findings, static fn (JudgeDoneFinding $finding): bool => in_array($finding->id, $merged, true));
+
+        return array_values(array_map(static fn (JudgeDoneFinding $finding): RoundFinding => new RoundFinding($finding->id, $finding->severity->value, $finding->text, [], $finding->file, $finding->line), $mergedOnes));
     }
 
     /**
@@ -312,7 +326,7 @@ final class LedgerRounds
 
         return match (true) {
             null === $judged => $this->endedOrRunning($completed),
-            $judged['textRecorded'] => $this->decided($completed->judgedWith($judged['findings'], $judged['at'])->withDropped($judged['dropped']), $judged['votes']),
+            $judged['textRecorded'] => $this->decided($completed->judgedWith($judged['findings'], $judged['at'])->withDropped($judged['dropped'])->withMergedFindings($judged['merged']), $judged['votes']),
             default => $this->decided($completed->judgedFromMarksOnly($judged['findings'], $judged['at'])->withDropped($judged['dropped']), $judged['votes']),
         };
     }
