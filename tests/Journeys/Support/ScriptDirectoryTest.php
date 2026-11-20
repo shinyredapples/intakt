@@ -71,7 +71,9 @@ final class ScriptDirectoryTest extends TestCase
     {
         $script = new ScriptDirectory($this->directory);
         $script->callEnded($script->callStarted());
-        [$soft, $hard] = [posix_getrlimit()['soft filesize'], posix_getrlimit()['hard filesize']];
+        $limits = posix_getrlimit();
+        self::assertIsArray($limits);
+        [$soft, $hard] = [$limits['soft filesize'] ?? 'unlimited', $limits['hard filesize'] ?? 'unlimited'];
         pcntl_signal(SIGXFSZ, SIG_IGN);
         posix_setrlimit(POSIX_RLIMIT_FSIZE, 1, 'unlimited' === $hard ? POSIX_RLIMIT_INFINITY : (int) $hard);
         set_error_handler(static fn (): bool => true);
