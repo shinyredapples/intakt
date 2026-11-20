@@ -109,6 +109,15 @@ final class ConfiguredProbesTest extends TestCase
         );
     }
 
+    // A zone ID names a host on the local link, and reaching it says nothing about reaching the outside.
+    public function testAScopedIpv6BaseUrlAddsNoProbe(): void
+    {
+        self::assertSame(
+            ['https://forge.example/'],
+            $this->probedUrls(['openai_compatible' => ['default']], ['https://[2001:db8::1%25eth0]/v1']),
+        );
+    }
+
     /**
      * @return iterable<string, array{string}>
      */
