@@ -98,6 +98,7 @@ final readonly class ShowErrorController
     {
         try {
             return $this->twig->render('dashboard/error.html.twig', ['status' => $status, 'message' => $message, 'reference' => $reference, 'project_names' => $this->projectNames()]);
+            // Boundary: logs a failed shell and answers with the plain page, because the error page itself must never fail.
         } catch (Throwable $failure) {
             $this->logger->warning('The error page was shown without the dashboard shell.', ['exception' => $failure]);
 
@@ -113,6 +114,7 @@ final readonly class ShowErrorController
     {
         try {
             return $this->projects->names();
+            // Boundary: logs an unreadable ledger and lists no projects, because the error page must answer even when the ledger is what failed.
         } catch (Throwable $failure) {
             $this->logger->warning('The error page lists no projects, because they could not be read.', ['exception' => $failure]);
 

@@ -30,11 +30,13 @@ use Intakt\Core\Review\Contract\ReviewerFindingsRecorded;
 use Intakt\Core\Review\Contract\ReviewerStarted;
 use Intakt\Core\Review\Contract\ReviewerStopped;
 use Intakt\Core\Review\Contract\ReviewStarted;
+use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictReceived;
 use Intakt\Core\Review\Domain\OnePerPlace;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundReviewer;
+use Intakt\Core\Review\Infrastructure\FindingKeys;
 use Intakt\Core\ReviewerForLoop\Contract\ProjectModes;
 use Symfony\Component\DependencyInjection\Attribute\Target;
 use Symfony\Component\Serializer\Encoder\JsonEncoder;
@@ -50,6 +52,7 @@ final readonly class RoundLedger
         private SerializerInterface $serializer,
         private TierResolver $tiers,
         private Redactor $redactor,
+        private FindingKeys $keys,
     ) {
     }
 
@@ -145,7 +148,25 @@ final readonly class RoundLedger
             $judged->dropped,
             $judged->sameCause,
             $votes,
+            $this->p1KeysOf($round, $judged),
         ));
+    }
+
+    // Keyed at the head the round judged, because only the reviewed checkout holds the files a P1 named as the reviewers saw them.
+    /**
+     * @return array<string, ?string>
+     */
+    private function p1KeysOf(ReviewRound $round, JudgedFindings $judged): array
+    {
+        $keys = [];
+
+        foreach ($judged->findings as $finding) {
+            if (Severity::P1 === $finding->severity) {
+                $keys[$finding->id] = $this->keys->of($finding, $round->checkoutRoot())?->value;
+            }
+        }
+
+        return $keys;
     }
 
     // An act entry is recorded as the act list holds it (highest severity, merged ids), so the review page shows it the way the console does; the merged findings stay recorded for their ids.
