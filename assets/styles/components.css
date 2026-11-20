@@ -736,3 +736,55 @@ details.ev > summary time { margin-left: auto; color: var(--muted); font-size: v
   .tour-caption { bottom: calc(var(--bar) + env(safe-area-inset-bottom)); flex-wrap: wrap; padding: var(--s8) var(--s16); }
   .tour-caption .tour-line { flex-basis: 100%; order: -1; }
 }
+
+/* Trends: stat tiles, the figure big above its label; two per row on a phone (decisions D2 and D7 of issue 2858). */
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(208px, 1fr)); gap: var(--s12); margin: 0; }
+.tile { display: flex; flex-direction: column-reverse; justify-content: flex-end; gap: var(--s4); padding: var(--s12) var(--s16); border-radius: var(--r-card); background: var(--tint); }
+.tile dt { color: var(--muted); font-size: var(--t13); }
+.tile dd { margin: 0; color: var(--ink); font: 700 var(--t28)/1.2 var(--f-body); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.tile[data-no-data] dd { color: var(--muted); font-size: var(--t17); font-weight: 500; }
+.tiles-note { margin: var(--s12) 0 0; font-size: var(--t13); }
+a.fchip { display: inline-flex; align-items: center; text-decoration: none; }
+@media (max-width: 760px) {
+  .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s8); }
+  .tile dd { font-size: var(--t21); }
+}
+
+/* Waiting on you (DESIGN.md, Waiting item): the choices sit in a 340 px column beside the words only from 1100 px, because the bridge below it is single column and beside an open rail the words would keep about 45 px. */
+.wait-list { display: grid; gap: var(--s12); }
+.wait-item {
+  display: grid; grid-template-columns: minmax(0, 1fr) 340px; grid-template-areas: "title act" "meta act" "conseq act" "why act"; grid-template-rows: auto auto auto 1fr;
+  gap: var(--s8) var(--s32); align-items: start; padding: calc(var(--s16) + var(--s4)); border-radius: var(--r-card);
+}
+.wait-item.needs { background: var(--amber-tint); }
+.wait-lead { grid-area: title; display: flex; align-items: baseline; gap: var(--s8); min-width: 0; margin: 0; font: 600 var(--t17)/1.3 var(--f-head); overflow-wrap: anywhere; }
+.wait-lead .dot { position: relative; top: -2px; }
+.wait-item > .meta { grid-area: meta; }
+.wait-item .conseq { grid-area: conseq; margin: var(--s4) 0 0; font-weight: 500; overflow-wrap: anywhere; }
+/* Indented by the dot and its gap, so the lines under the lead start where its words do. */
+.wait-item > .meta, .wait-item .conseq, .wait-item .why { padding-left: calc(8px + var(--s8)); }
+.wait-item .why { grid-area: why; max-width: 72ch; }
+.wait-item .why summary { display: inline-flex; align-items: center; gap: var(--s8); color: var(--link); font: 500 var(--t15)/1.3 var(--f-head); cursor: pointer; }
+.wait-item .why summary::after { content: ""; width: 7px; height: 7px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg) translateY(-2px); }
+.wait-item .why[open] summary::after { transform: rotate(-135deg); }
+.wait-item .why p { margin: var(--s4) 0 0; color: var(--ink); overflow-wrap: anywhere; }
+.wait-item .act { grid-area: act; display: flex; flex-direction: column; gap: var(--s12); align-self: center; min-width: 0; margin: 0; padding: 0; list-style: none; }
+.wait-item .act li { display: grid; justify-items: start; gap: var(--s4); min-width: 0; }
+.wait-item .act .copy { width: 100%; }
+.wait-item .recommended { font: 500 var(--t13)/1.3 var(--f-head); color: var(--ink); }
+.wait-item .outcome { color: var(--muted); font-size: var(--t13); }
+.wait-item .copy { background: var(--raised); }
+.wait-item .copy .btn { background: var(--tint); }
+/* DESIGN.md, Breakpoints: 761 to 1099 px is the bridge, one column in the tab order of D6, so act stays after why. */
+/* Strict, because a zoomed window can be 1099.5 px wide and max-width: 1099px would then give it two columns. */
+@media (width < 1100px) {
+  .wait-item { grid-template-columns: minmax(0, 1fr); grid-template-areas: "title" "meta" "conseq" "why" "act"; grid-template-rows: none; }
+  .wait-item .act { align-self: stretch; margin-top: var(--s4); }
+}
+@media (max-width: 760px) {
+  .wait-item { gap: var(--s8); padding: var(--s16); }
+  .wait-item > .meta, .wait-item .conseq, .wait-item .why { padding-left: 0; }
+  .wait-item .why summary { min-height: 44px; }
+  .wait-item .act li { justify-items: stretch; }
+  .wait-item .act .btn { width: 100%; }
+}

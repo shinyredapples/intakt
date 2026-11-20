@@ -7,7 +7,7 @@
 
 Your coding agent says it is done. Intakt tells you whether to believe it.
 
-A panel of reviewers on models from different makers reviews the change and a judge marks every finding against the task: every P1 and P2 finding whose quote checks out reaches the act list whatever the judge answers. Your own agent runs this loop over MCP until the verdict is clean.
+A panel of reviewers on models from different AI labs reviews the change and a judge marks every finding against the task: every P1 and P2 finding whose quote checks out reaches the act list whatever the judge answers. Your own agent runs this loop over MCP until the verdict is clean.
 
 <p align="center">
   <picture>
@@ -31,7 +31,7 @@ With your agent: `claude mcp add --transport http intakt http://localhost:7781/m
 
 **No provider key?** With no key in `.env.local`, open `http://localhost:7781/demo` and press **Play the demo run**. It plays a recorded review onto the dashboard without calling any model, with a caption at the bottom of every page that names each stage, from the change arriving to the judge's act list. Nothing needs setting up: the image plays the real review of the sample change that Intakt ships. It has one round, so its tour ends at the act list of round 1. To play another recording written by `intakt:demo:record`, name it in `INTAKT_DEMO_RECORDING` in `.env.local` ([details](docs/user/README.md#playing-the-demo-run-in-the-dashboard)).
 
-The demo reviews a sample change with two reviewers ([how long it takes](#timed-run)): open http://localhost:7781. A new install opens on a first-run page with two choices: **watch a recorded real review now**, with no key (its **Play the demo run** button plays the tour above; the shipped recording is ready on first start, and the page says why it cannot play if `.env.local` empties `INTAKT_DEMO_RECORDING` or points it at a missing file), or **paste one provider key or Hugging Face token and run the demo review**, which opens its live review page. Calls are billed to the key's or token's owner; a Hugging Face token alone puts the reviewers on two makers ([Hugging Face details](docs/user/README.md#running-the-demo-on-a-hugging-face-token)).
+The demo reviews a sample change with two reviewers ([how long it takes](#timed-run)): open http://localhost:7781. A new install opens on a first-run page with two choices: **watch a recorded real review now**, with no key (its **Play the demo run** button plays the tour above; the shipped recording is ready on first start, and the page says why it cannot play if `.env.local` empties `INTAKT_DEMO_RECORDING` or points it at a missing file), or **paste one provider key or Hugging Face token and run the demo review**, which opens its live review page. Calls are billed to the key's or token's owner; a Hugging Face token alone puts the reviewers on models from two AI labs ([Hugging Face details](docs/user/README.md#running-the-demo-on-a-hugging-face-token)).
 
 From the terminal: `docker compose exec intakt php bin/console intakt:demo` runs the same demo review and prints its verdict ([read it](docs/user/README.md#reading-a-verdict)). The [demo walkthrough](docs/guide/demo-walkthrough.md) retells it in plain words; [the review flow](docs/architecture/review-flow.md) draws it inside.
 
@@ -91,7 +91,7 @@ Date of the run: 2026-11-16. Models (the demo's Hugging Face mapping): `correctn
 Built for the [Symfony AI & MCP Hackathon](docs/spec.md) (deadline 2026-11-22):
 
 - Point Intakt at a change, a branch of a local repository. A configurable panel of reviewers, each a provider, a model tier and a prompt through Symfony AI's Platform, returns structured JSON verdicts.
-- Findings keep their ids across rounds, enforced in code, so reviewers cannot move the goalposts. A judge step tells the builder what to act on, and only a P3 finding can be deferred or rejected: P1 and P2 findings whose quote checks out reach the act list even when the judge's answer is invalid.
+- Findings keep their ids across rounds, enforced in code, so reviewers cannot move the goalposts. A judge step tells the builder what to act on, and only a P3 finding can be deferred or rejected: P1 and P2 findings whose quote checks out reach the act list even when the judge's answer is invalid. The outcome and the act list agree: a round sent back as `changes` always names a finding to act on, and a reviewer whose findings are all P3s the judge deferred or rejected counts as approving, with follow-ups.
 - Agents start reviews and read findings through an MCP server.
 - A small live dashboard shows each round as it streams.
 - Every figure says what kind it is: token counts the provider reported are `measured`, rounds and findings from the ledger are `counted`, and a cost from your price list is `estimated`, with the date of the prices. Figures of different kinds are never added into one total.
@@ -112,6 +112,7 @@ Built for the [Symfony AI & MCP Hackathon](docs/spec.md) (deadline 2026-11-22):
 
 ## Documentation
 
+- [For judges](docs/judges.md): from clone to a played review in a few minutes, and the code behind each promise.
 - [Intakt in plain words](docs/guide/README.md): friendly guides with diagrams, from the big picture to troubleshooting.
 - [Contributing](CONTRIBUTING.md): reporting bugs, suggesting features, sending pull requests.
 - [How your issue or pull request is handled](CONTRIBUTING.md#how-your-issue-or-pull-request-is-handled): who decides what gets built, and why only labels from people with write access count.

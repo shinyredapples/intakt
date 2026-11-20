@@ -19,7 +19,7 @@ flowchart LR
     U --> L["ProtectedPaths::touchedBy: sorted, each path once"]
 ```
 
-`ChangedPaths` reads, all through `HardenedGit` with `--git-dir=<repository>` and no work tree:
+`ChangedPaths` reads, all through `HardenedGit::callInBareRepository()` (`--git-dir=<repository> --bare`, no work tree):
 
 - main from `symbolic-ref --quiet HEAD`, which must name a branch under `refs/heads/`, resolved once to a commit id with `rev-parse --verify --quiet <branch>^{commit}` (unreadable when the branch names no commit); every later call names that id, never the branch, so a main that moves while the check runs (a mirror update) is compared against the same commit throughout;
 - that the head is a commit (`cat-file -t`), so an annotated tag's id is refused;
@@ -31,7 +31,7 @@ The whole change catches a crafted merge (first parent the branch, second an old
 
 ## Unreadable counts as protected
 
-`Domain/ChangedPath::listFrom()` parses the raw records (two modes, two object ids, one status letter of `ADMTUX`, then one path) and refuses anything else with `ChangeNotRead`. A failed git call, a malformed record, a missing or non-folder repository, a `HEAD` that names no branch, a main branch that names no commit, a head that is not a commit, a shallow history, a missing object and an `info/attributes` file (`RepositoryAttributesRefused`) all end in `ProtectedChanges::unreadable()` with the reason; `touchesProtectedPaths()` is then true. A head that is not a full commit id is an `InvalidArgumentException`, since a ref name could move while the check runs.
+`Domain/ChangedPath::listFrom()` parses the raw records (two modes, two object ids, one status letter of `ADMTUX`, then one path) and refuses anything else with `ChangeNotRead`. A failed git call, a malformed record, a missing or non-folder repository, a `HEAD` that names no branch, a main branch that names no commit, a head that is not a commit, a shallow history, a missing object and an `info/attributes` file (`RepositoryAttributesRefused`) all end in `ProtectedChanges::unreadable()` with the reason; `touchesProtectedPaths()` is then true. A head that is not a full commit id is refused with `CommitNameRefused`, since a ref name could move while the check runs.
 
 ## The command
 

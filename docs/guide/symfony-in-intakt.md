@@ -110,7 +110,7 @@ The whole review loop as the Workflow component would draw it (planned):
 stateDiagram-v2
   [*] --> Waiting
   Waiting --> Reviewing: checks are green
-  Reviewing --> Changes: a reviewer asks for changes
+  Reviewing --> Changes: a reviewer leaves something to fix
   Changes --> Waiting: the builder pushes a fix
   Reviewing --> Approved: the panel approves
   Approved --> [*]
@@ -135,6 +135,16 @@ As a second safety net, a worker (one loaded copy of Intakt) does not live forev
 - **Clock:** all time comes from one clock, so tests can freeze or fast-forward it; a check refuses code that reads the system time directly. *(in use)*
 - **Validator and Serializer:** a reviewer's verdict is checked field by field; an unknown field or a missing one is refused rather than guessed. *(in progress)*
 - **Quality gates:** `bin/check` runs every check (static analysis, code style, tests and Intakt's own rules) the same way on your machine and in CI. The walks through a freshly started install (the journeys, see [Checking the whole product](checking-the-whole-product.md)) run separately, with `bin/check --journeys`. *(in use)*
+
+## Waiting before taking a new release
+
+A brand-new release of a package is the one most likely to be broken or, rarely, tampered with: such problems are usually spotted and the release pulled within a few days. So Intakt holds every fresh release back for 3 days, a **cooldown**. *(built)*
+
+- **PHP packages:** Composer leaves out any version published less than 3 days ago, and the checks fail when the lock file holds one, except for the owner's one-time exception for Symfony 8.2.0-BETA2.
+- **The dashboard's JavaScript packages:** the import map (the list in `importmap.php` that tells the browser where each JavaScript module of the dashboard lives) follows the same rule: while the newest release is less than 3 days old, `bin/console importmap:update` holds it back and can move the pin to an older release that is old enough.
+- **A fingerprint on every module:** the import map the browser receives pins each module by its **integrity hash** (sha384), a fingerprint of the exact file Intakt serves. If the file's bytes change after the fingerprint was taken, the browser refuses to run it.
+
+Both are set in `config/packages/asset_mapper.yaml`; the exact rules are in [the user guide](../user/README.md#the-release-cooldown-for-dependencies).
 
 ## Finding bugs in the beta
 

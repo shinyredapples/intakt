@@ -8,8 +8,8 @@ use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierResolutionFailure;
 use Intakt\Core\Build\Contract\BuildBrief;
 use Intakt\Core\Build\Domain\BuildQuestion;
+use Intakt\Core\Job\Contract\JobRefused;
 use Intakt\Core\Platform\Contract\ReportableFailure;
-use InvalidArgumentException;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\MapInput;
 use Symfony\Component\Console\Command\Command;
@@ -44,7 +44,7 @@ final readonly class RunBuildJobCommand
     {
         try {
             $outcome = $this->builds->run($this->jobOf($input));
-        } catch (InvalidArgumentException|TierResolutionFailure|ReportableFailure|IOException $failure) {
+        } catch (TierResolutionFailure|ReportableFailure|JobRefused|IOException $failure) {
             $io->error($failure->getMessage());
 
             return Command::FAILURE;
@@ -70,7 +70,7 @@ final readonly class RunBuildJobCommand
 
     private function tierOf(string $value): Tier
     {
-        return Tier::tryFrom($value) ?? throw new InvalidArgumentException(sprintf('The tier "%s" is not one of %s.', $value, implode(', ', array_map(static fn (Tier $tier): string => $tier->value, Tier::cases()))));
+        return Tier::tryFrom($value) ?? throw TierNotKnown::named($value);
     }
 
     private function failed(SymfonyStyle $io, BuildJobOutcome $outcome): int

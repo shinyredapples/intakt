@@ -10,6 +10,7 @@ use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Ledger\Contract\AppendResult;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
@@ -77,6 +78,7 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(Judgement::class)]
 #[UsesClass(JudgedFinding::class)]
 #[UsesClass(JudgeRequest::class)]
+#[UsesClass(Paths::class)]
 #[UsesClass(Finding::class)]
 #[UsesClass(Tier::class)]
 #[UsesClass(Provider::class)]
@@ -162,7 +164,7 @@ final class SymfonyAiVendorJudgeTest extends KernelTestCase
         return new JudgeRequest('Add a cart.', [
             new Finding('F1', Severity::P2, null, null, null, 'Text.', FixableBy::Builder, false, null, null),
             new Finding('F2', Severity::P3, null, null, null, 'Nit.', FixableBy::Builder, false, null, null),
-        ], Uuid::fromString(self::ROUND), []);
+        ], Uuid::fromString(self::ROUND), new Paths());
     }
 
     private function vendor(Closure $answer, InMemoryLedger $ledger = new InMemoryLedger()): SymfonyAiVendor

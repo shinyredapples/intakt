@@ -44,4 +44,6 @@ enum LedgerEventKind: string
     case ChangeIntended = 'change_intended';
     case ChangeOpened = 'change_opened';
     case BuildStepEnded = 'build_step_ended';
+    case JudgingFailed = 'judging_failed';
+    case ReviewerFindingsRecorded = 'reviewer_findings_recorded';
 }
