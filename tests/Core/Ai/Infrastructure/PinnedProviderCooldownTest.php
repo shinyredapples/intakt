@@ -222,7 +222,7 @@ final class PinnedProviderCooldownTest extends TestCase
         self::assertSame([120, 120, 0], [$out->secondsUntilAnAccountIsFree, $accounts->secondsUntilFree(new Account(Provider::OpenAiCompatible, Account::DEFAULT)), $pins->secondsUntilFree($this->deepinfra(Account::DEFAULT))]);
     }
 
-    // Forced order: the account store throws while saving its window; the pin still cools for the 429's wait and the caller gets the provider's own 429, not the store's error.
+    // Forced order: the account store throws while saving its window, so only the pin can cool; it still cools for the 429's wait and the caller gets the provider's own 429, not the store's error.
     public function testAnAccountStoreThatThrowsWhileSavingCostsThePinNeitherItsCooldownNorTheCallerThe429(): void
     {
         $accounts = self::createStub(AccountCooldowns::class);

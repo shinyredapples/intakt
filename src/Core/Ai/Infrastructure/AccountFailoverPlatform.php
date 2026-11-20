@@ -84,7 +84,7 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         return array_first($this->platforms)->getModelCatalog();
     }
 
-    // The one read that decides both which accounts are free and how long the call waits when none is (ModelWaits).
+    // Through ModelWaits, because tier selection must read the same values that decide which accounts are free and how long the call waits.
     /**
      * @return array<string, int>
      */
