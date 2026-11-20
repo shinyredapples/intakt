@@ -40,6 +40,7 @@ final readonly class NextLinks
     }
 
     // Only the first `rel` of a link counts and relation types compare without case, because RFC 8288 says so.
+    // A quoted-pair stands for its character (RFC 9110, 5.6.4), because otherwise `rel="ne\xt"` would hide a next page.
     /**
      * @return list<string>
      */
@@ -47,7 +48,7 @@ final readonly class NextLinks
     {
         preg_match_all('/\G\s*;\s*('.self::TOKEN.')\s*(?:=\s*(?:('.self::QUOTED.')|('.self::TOKEN.')))?/', $parameters, $found, PREG_SET_ORDER | PREG_UNMATCHED_AS_NULL);
         $rel = array_find($found, static fn (array $parameter): bool => 'rel' === strtolower($parameter[1]));
-        $relations = null === $rel ? '' : ($rel[3] ?? trim((string) $rel[2], '"'));
+        $relations = null === $rel ? '' : ($rel[3] ?? (string) preg_replace('/\\\\(.)/s', '$1', substr((string) $rel[2], 1, -1)));
         $types = preg_split('/\s+/', strtolower($relations));
 
         return array_values(array_filter(false === $types ? [] : $types, static fn (string $relation): bool => '' !== $relation));

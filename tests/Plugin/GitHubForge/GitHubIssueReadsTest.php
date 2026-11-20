@@ -333,6 +333,16 @@ final class GitHubIssueReadsTest extends TestCase
         self::assertCount(101, $this->listedWithNextLink('<https://api.github.com/repositories/1/issues?page=9>; rel=last, <https://api.github.com/repositories/1/issues?page=%d>;rel=next'));
     }
 
+    public function testANextRelationWrittenWithAQuotedPairReadsTheNextPage(): void
+    {
+        self::assertCount(101, $this->listedWithNextLink('<https://api.github.com/repositories/1/issues?page=%d>; rel="ne\xt"'));
+    }
+
+    public function testAQuotedPairThatSpellsAnotherRelationEndsTheListing(): void
+    {
+        self::assertCount(100, $this->listedWithNextLink('<https://api.github.com/repositories/1/issues?page=%d>; rel="next\-page"'));
+    }
+
     public function testARelationThatOnlyStartsWithNextEndsTheListing(): void
     {
         self::assertCount(100, $this->listedWithNextLink('<https://api.github.com/repositories/1/issues?page=%d>; rel="next-page"'));
