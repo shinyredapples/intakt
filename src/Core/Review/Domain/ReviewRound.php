@@ -109,6 +109,12 @@ final class ReviewRound implements HasPlace
         return VerdictIdentity::fromRecorded($this->identity);
     }
 
+    // Null for a round stored before identities were recorded, because such a round names no head.
+    public function headHash(): ?string
+    {
+        return '' === $this->identity ? null : $this->identity()->commits->head->hash;
+    }
+
     public function addReviewer(UuidV7 $id, PanelReviewer $member): void
     {
         $this->reviewers->add(new RoundReviewer($id, $this, $member));

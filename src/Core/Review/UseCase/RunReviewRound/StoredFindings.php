@@ -121,6 +121,12 @@ final readonly class StoredFindings
         return $ids;
     }
 
+    // Taken by a judging before it reads anything else, because two rounds of the change judged at once would otherwise each miss the other's judgement, and the first plain read fixes the snapshot under REPEATABLE READ.
+    public function lockChangeOf(ReviewRound $round): void
+    {
+        $this->locked($round->project(), $round->change());
+    }
+
     // False when the round is judged already, so a judgement is recorded once however often the round is judged; the caller holds the round's lock.
     public function markJudged(ReviewRound $round): bool
     {

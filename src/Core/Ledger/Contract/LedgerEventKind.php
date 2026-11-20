@@ -46,4 +46,5 @@ enum LedgerEventKind: string
     case BuildStepEnded = 'build_step_ended';
     case JudgingFailed = 'judging_failed';
     case ReviewerFindingsRecorded = 'reviewer_findings_recorded';
+    case RecurringP1Found = 'recurring_p1_found';
 }

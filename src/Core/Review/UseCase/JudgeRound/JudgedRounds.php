@@ -7,6 +7,7 @@ namespace Intakt\Core\Review\UseCase\JudgeRound;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\JudgedFindings;
+use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\CountedVote;
 use Intakt\Core\Review\Domain\ReviewRound;
@@ -30,6 +31,7 @@ final readonly class JudgedRounds
         private DiffPaths $paths,
         private StoredVerdicts $verdicts,
         private FailedJudgings $failedJudgings,
+        private RecurringP1s $recurring,
     ) {
     }
 
@@ -75,13 +77,22 @@ final readonly class JudgedRounds
     {
         $recorded = false;
         $this->rounds->withLockedRound($round->id(), function (ReviewRound $locked) use ($judged, &$recorded): void {
+            $this->findings->lockChangeOf($locked);
+
             if (!$this->failedJudgings->isRecorded($locked->id()->toRfc4122()) && $this->findings->markJudged($locked)) {
-                $this->ledger->judgeDone($locked, $judged, $this->votesOf($locked, $judged));
+                $this->recordRecurrencesOf($locked, $this->ledger->judgeDone($locked, $judged, $this->votesOf($locked, $judged)));
                 $recorded = true;
             }
         });
 
         return $recorded;
+    }
+
+    private function recordRecurrencesOf(ReviewRound $round, JudgeDone $done): void
+    {
+        foreach ($this->recurring->foundWhenJudged($round, $done) as $found) {
+            $this->ledger->recurringP1Found($found);
+        }
     }
 
     // Counted once, with the judgement, and recorded with it, so every reader of the round counts the same votes.

@@ -128,6 +128,22 @@ final readonly class ReviewRounds
     }
 
     /**
+     * @return list<ReviewRound>
+     */
+    public function otherJudgedRoundsOf(ReviewRound $round): array
+    {
+        /** @var list<ReviewRound> $others */
+        $others = $this->entities->createQuery(sprintf('SELECT r FROM %s r WHERE r.subject.project = :project AND r.change.change = :change AND r.id <> :id AND r.state = :judged', ReviewRound::class))
+            ->setParameter('project', $round->project())
+            ->setParameter('change', $round->change())
+            ->setParameter('id', $round->id(), UuidType::NAME)
+            ->setParameter('judged', RoundState::Judged->value)
+            ->getResult();
+
+        return $others;
+    }
+
+    /**
      * @param Closure(ReviewRound): mixed $work
      */
     public function withLockedRound(Uuid $roundId, Closure $work): void
