@@ -11,6 +11,7 @@ use Intakt\Core\Review\Contract\ReviewServices;
 use Intakt\Core\Review\UseCase\ServeReviewTools\ListDirectoryTool;
 use Intakt\Core\Review\UseCase\ServeReviewTools\ReadFileTool;
 use Intakt\Core\Review\UseCase\ServeReviewTools\ReviewCredential;
+use Intakt\Core\Review\UseCase\ServeReviewTools\ReviewCredentialNeedsSecret;
 use Intakt\Core\Review\UseCase\ServeReviewTools\SearchFilesTool;
 use LogicException;
 use Mcp\Capability\Attribute\McpTool;
@@ -45,7 +46,7 @@ final readonly class IssuedReviewServerAccesses implements ReviewServerAccesses
     {
         try {
             return $this->credential->issueFor($round->toRfc4122());
-        } catch (LogicException $unsigned) {
+        } catch (ReviewCredentialNeedsSecret $unsigned) {
             throw NoReviewServerAccess::because($unsigned);
         }
     }
