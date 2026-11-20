@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Memory\Infrastructure;
 
 use Generator;
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Memory\Contract\MemoryEntry;
 use Intakt\Core\Memory\Contract\MemoryQuery;
 use Intakt\Core\Memory\Contract\ProjectMemory;
@@ -21,7 +22,7 @@ final readonly class StoreProjectMemory implements ProjectMemory
 
     public function relevantTo(MemoryQuery $query): RelevantMemory
     {
-        if ([] === $query->files) {
+        if ($query->files->isEmpty()) {
             return RelevantMemory::within([], $query->maxBytes);
         }
 
@@ -45,12 +46,9 @@ final readonly class StoreProjectMemory implements ProjectMemory
         }
     }
 
-    /**
-     * @param list<string> $files
-     */
-    private function searchText(array $files): string
+    private function searchText(Paths $files): string
     {
         // The SQLite store quotes FTS5 terms without escaping a quote (upstream/ai-sqlite-store-unescaped-fts-quote), and its tokenizer drops quotes anyway.
-        return str_replace('"', ' ', implode(' ', $files));
+        return str_replace('"', ' ', implode(' ', [...$files]));
     }
 }

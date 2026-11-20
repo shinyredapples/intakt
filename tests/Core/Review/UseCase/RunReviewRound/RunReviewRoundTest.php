@@ -155,7 +155,7 @@ final class RunReviewRoundTest extends KernelTestCase
 
         self::assertSame(RoundState::Complete, $this->fixture->round($round->id()->toRfc4122())->state());
         self::assertSame(1, $vendor->calls);
-        self::assertCount(3, $this->fixture->ledgerKinds());
+        self::assertCount(4, $this->fixture->ledgerKinds());
     }
 
     public function testAFailedReviewerCountsAsFinishedAndTheRoundStillCompletes(): void
@@ -245,7 +245,7 @@ final class RunReviewRoundTest extends KernelTestCase
         $this->fixture->deliver($this->fixture->bus->messages[0], $failing);
 
         self::assertSame(
-            [LedgerEventKind::ReviewStarted, LedgerEventKind::ReviewerStarted, LedgerEventKind::VerdictReceived, LedgerEventKind::ReviewerStarted, LedgerEventKind::ReviewerFailed],
+            [LedgerEventKind::ReviewStarted, LedgerEventKind::ReviewerStarted, LedgerEventKind::VerdictReceived, LedgerEventKind::ReviewerStarted, LedgerEventKind::ReviewerFailed, LedgerEventKind::ReviewerFindingsRecorded],
             $this->fixture->ledgerKinds(),
         );
     }

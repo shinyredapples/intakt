@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\JudgeRound;
 
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Platform\Contract\Redaction;
@@ -73,6 +74,7 @@ use Throwable;
 #[CoversClass(QuotesInChange::class)]
 #[CoversClass(ChangeText::class)]
 #[UsesClass(DiffPaths::class)]
+#[UsesClass(Paths::class)]
 #[CoversClass(CausesInOneHunk::class)]
 #[CoversClass(DiffHunks::class)]
 #[UsesClass(JudgedFindings::class)]
@@ -344,7 +346,7 @@ final class JudgeRoundTest extends KernelTestCase
 
         $asked = $vendor->asked;
         self::assertInstanceOf(JudgeRequest::class, $asked);
-        self::assertSame(['src/Thing.php'], $asked->changedFiles);
+        self::assertSame(['src/Thing.php'], [...$asked->changedFiles]);
     }
 
     public function testTwoReviewersReportingDifferentFindingsUnderOneIdBothReachTheJudge(): void

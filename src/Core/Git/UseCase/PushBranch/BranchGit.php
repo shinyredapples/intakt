@@ -96,16 +96,15 @@ final readonly class BranchGit
     private function process(string $repository, array $arguments, array $environment): Process
     {
         try {
-            $call = $this->hardened->call(['--git-dir='.$repository, ...$arguments], $repository);
+            $call = $this->hardened->callInBareRepository($arguments, $repository);
         } catch (RepositoryAttributesRefused $refused) {
             throw BranchNotPushed::because($refused->getMessage());
         } catch (RuntimeException) {
-            // Because HardenedGit first asks git for the repository's object format, and that call can be killed or hit its limit like any other; its exception is not chained, as in GuardedRun.
-            throw BranchNotPushed::because(sprintf('git %s could not be prepared, because the look at its repository was stopped', $arguments[0] ?? ''));
+            // Because HardenedGit first asks git for the repository's object format, and that call can be killed, hit its limit like any other, or find no bare repository; its exception is not chained, as in GuardedRun.
+            throw BranchNotPushed::because(sprintf('git %s could not be prepared, because the look at its repository was stopped or found no bare repository', $arguments[0] ?? ''));
         }
 
-        // Because a work tree beside --git-dir would make git treat the bare repository as a checkout.
-        return new Process($call->command, $call->directory, [...$call->environment, 'GIT_WORK_TREE' => false, ...$environment], null, $this->timeoutSeconds);
+        return new Process($call->command, $call->directory, [...$call->environment, ...$environment], null, $this->timeoutSeconds);
     }
 
     // Every call goes through this one step, so none leaves the push as a Process exception.

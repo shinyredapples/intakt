@@ -260,6 +260,45 @@ final class CheckScriptTest extends TestCase
         $this->thenAConflictingBranchEndsConflictsWithMain();
     }
 
+    public function testAMirrorOwnedByAnotherUserIsStillClonedAndItsStepsRun(): void
+    {
+        // A git in front of the real one that takes the mirror for another user's, because a test cannot hand the mirror to another user; it sets the variable after own_git cleared the environment.
+        $git = (string) new ExecutableFinder()->find('git');
+        $shim = $this->history->folder.'/shim';
+        new Filesystem()->dumpFile($shim.'/git', <<<SH
+            #!/bin/sh
+            for argument in "\$@"; do
+                if [ "\$argument" = clone ]; then
+                    GIT_TEST_ASSUME_DIFFERENT_OWNER=1
+                    export GIT_TEST_ASSUME_DIFFERENT_OWNER
+                fi
+            done
+            exec '{$git}' "\$@"
+            SH);
+        new Filesystem()->chmod($shim.'/git', 0o700);
+        $this->path = $shim.PATH_SEPARATOR.getenv('PATH');
+        $this->history->commit('Build work');
+
+        $run = $this->whenTheCheckRuns($this->history->bundle('main..task'), 'task', 'echo ran');
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
+        self::assertSame("passed\n", $this->outputFile('check-result'));
+    }
+
+    public function testTheExceptionForAMirrorOwnedByAnotherUserIsLeftToTheCloneAndNeverReachesTheSteps(): void
+    {
+        $this->history->commit('Build work');
+
+        $run = $this->whenTheCheckRuns(
+            $this->history->bundle('main..task'),
+            'task',
+            sprintf("! GIT_TEST_ASSUME_DIFFERENT_OWNER=1 git -C '%s' rev-parse --git-dir", $this->history->mirror),
+        );
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
+        self::assertSame("passed\n", $this->outputFile('check-result'));
+    }
+
     public function testTheCloneHoldsNothingOfGitsDefaultTemplate(): void
     {
         $this->history->commit('Build work');
