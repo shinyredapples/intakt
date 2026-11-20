@@ -133,6 +133,70 @@ final class NarrowCatchRuleTest extends PhpStanRuleTestCase
         $this->assertRuleAccepts('narrow-catch-throwable-at-boundary');
     }
 
+    public function testAMarkedThrowableCatchThatReturnsATypedOutcomeWithoutBindingTheFailurePassesStaticAnalysis(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/Work.php', <<<'PHP'
+            <?php
+            enum WorkOutcome { case Done; case Failed; }
+            final class Work
+            {
+                public function run(callable $perform): WorkOutcome
+                {
+                    try {
+                        $perform();
+                    }
+                    // Boundary: callers receive an explicit failure outcome
+                    catch (Throwable) {
+                        return WorkOutcome::Failed;
+                    }
+
+                    return WorkOutcome::Done;
+                }
+            }
+            PHP);
+
+        self::assertSame('', $this->ruleFindingsIn($sandbox));
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function markedCatchBodiesThatLoseTheFailure(): iterable
+    {
+        yield 'a return of null' => ['return null;'];
+        yield 'a bare return' => ['return;'];
+        yield 'a throw inside a closure that is never called' => ['$never = static fn () => throw new \LogicException();'];
+        yield 'a use of the failure inside a closure that is never called' => ['$never = static fn () => $failure;'];
+        yield 'a typed outcome returned inside an anonymous class' => ['$never = new class { public function outcome(): int { return 1; } };'];
+    }
+
+    #[DataProvider('markedCatchBodiesThatLoseTheFailure')]
+    public function testAMarkedThrowableCatchWhoseBodyLosesTheFailureFailsStaticAnalysis(string $body): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/Lossy.php', <<<PHP
+            <?php
+            final class Lossy
+            {
+                public function run(callable \$perform): ?int
+                {
+                    try {
+                        \$perform();
+                    }
+                    // Boundary: the caller goes on without the result
+                    catch (Throwable \$failure) {
+                        {$body}
+                    }
+
+                    return 0;
+                }
+            }
+            PHP);
+
+        self::assertStringContainsString('src/Lossy.php:10 intakt.narrowCatch A catch of Throwable at a failure boundary that neither rethrows nor records the failure', $this->ruleFindingsIn($sandbox));
+    }
+
     public function testLibraryExceptionsSharingARootsShortNamePassStaticAnalysis(): void
     {
         $this->assertRuleAccepts('narrow-catch-library-exceptions');
