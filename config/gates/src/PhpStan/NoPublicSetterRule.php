@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Intakt\Gates\PhpStan;
 
-use PhpParser\Node\Identifier;
 use PhpParser\Modifiers;
 use PhpParser\Node;
 use PhpParser\Node\Attribute;
 use PhpParser\Node\AttributeGroup;
+use PhpParser\Node\Identifier;
 use PhpParser\Node\Stmt;
 use PhpParser\Node\Stmt\ClassMethod;
 use PhpParser\Node\Stmt\Trait_;

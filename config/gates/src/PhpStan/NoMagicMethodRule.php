@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Gates\PhpStan;
 
-use PhpParser\Node\Identifier;
 use PhpParser\Node;
+use PhpParser\Node\Identifier;
 use PhpParser\Node\Stmt;
 use PhpParser\Node\Stmt\ClassMethod;
 use PhpParser\Node\Stmt\Trait_;
