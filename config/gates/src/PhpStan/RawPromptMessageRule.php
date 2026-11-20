@@ -15,7 +15,6 @@ use PhpParser\Node\Identifier;
 use PhpParser\Node\Name;
 use PhpParser\Node\Stmt\Class_;
 use PHPStan\Analyser\Scope;
-use PHPStan\Node\StaticMethodCallableNode;
 use PHPStan\Rules\IdentifierRuleError;
 use PHPStan\Rules\Rule;
 use PHPStan\Rules\RuleErrorBuilder;
@@ -25,7 +24,7 @@ use Symfony\AI\Platform\Message\SystemMessage;
 use Symfony\AI\Platform\Message\UserMessage;
 
 /**
- * @implements Rule<Expr>
+ * @implements Rule<CallLike>
  */
 final readonly class RawPromptMessageRule implements Rule
 {
@@ -50,7 +49,7 @@ final readonly class RawPromptMessageRule implements Rule
 
     public function getNodeType(): string
     {
-        return Expr::class;
+        return CallLike::class;
     }
 
     /**
@@ -58,10 +57,7 @@ final readonly class RawPromptMessageRule implements Rule
      */
     public function processNode(Node $node, Scope $scope): array
     {
-        // PHPStan hands a first-class callable such as Message::ofUser(...) to rules as its own node, not as the call
-        $node = $node instanceof StaticMethodCallableNode ? $node->getOriginalNode() : $node;
-
-        if (!$node instanceof CallLike || !$this->isShipped($scope->getFile())) {
+        if (!$this->isShipped($scope->getFile())) {
             return [];
         }
 

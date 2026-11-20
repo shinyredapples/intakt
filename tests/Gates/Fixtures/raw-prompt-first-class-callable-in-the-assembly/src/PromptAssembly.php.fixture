@@ -1,0 +1,16 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use Closure;
+use Symfony\AI\Platform\Message\Message;
+
+final readonly class PromptAssembly
+{
+    public function messageFactory(): Closure
+    {
+        return Message::ofUser(...);
+    }
+}

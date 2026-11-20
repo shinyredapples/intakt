@@ -108,3 +108,7 @@ services:
             roundReviewer: Intakt\Core\Review\Domain\RoundReviewer
         tags:
             - phpstan.rules.rule
+    -
+        class: Intakt\Gates\PhpStan\RawPromptCallableRule
+        tags:
+            - phpstan.rules.rule

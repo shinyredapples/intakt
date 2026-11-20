@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Sample;
 
-use Closure;
 use Symfony\AI\Platform\Message as Messages;
 use Symfony\AI\Platform\Message\Message as Msg;
 use Symfony\AI\Platform\Message\SystemMessage;
@@ -20,11 +19,6 @@ final readonly class Briefing
     public function throughTheNamespace(string $role): SystemMessage
     {
         return new Messages\SystemMessage($role);
-    }
-
-    public function firstClassCallable(): Closure
-    {
-        return Msg::ofUser(...);
     }
 
     public function fromAClassString(string $issueText): UserMessage

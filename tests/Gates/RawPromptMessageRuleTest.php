@@ -46,11 +46,11 @@ final class RawPromptMessageRuleTest extends PhpStanRuleTestCase
         self::assertStringContainsString('src/Briefing.php:20 intakt.rawPromptMessage', $findings);
     }
 
-    public function testAMessageBuiltThroughAnAliasACallableAClassStringOrAnotherCaseIsRefused(): void
+    public function testAMessageBuiltThroughAnAliasAClassStringOrAnotherCaseIsRefused(): void
     {
         $findings = $this->ruleFindingsOf('raw-prompt-other-call-forms');
 
-        self::assertSame([17, 22, 27, 34, 41, 46], $this->linesOf($findings));
+        self::assertSame([16, 21, 28, 35, 40], $this->linesOf($findings));
     }
 
     public function testAMessageBuiltInAScriptOrThroughAFactoryNamedAtRuntimeIsRefused(): void
