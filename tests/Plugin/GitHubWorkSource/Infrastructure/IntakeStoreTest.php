@@ -6,6 +6,7 @@ namespace Intakt\Tests\Plugin\GitHubWorkSource\Infrastructure;
 
 use DateTimeZone;
 use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\Exception\RetryableException;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Event\PostLoadEventArgs;
 use Doctrine\ORM\Events;
@@ -418,10 +419,11 @@ final class IntakeStoreTest extends KernelTestCase
         $shared = TwoConnections::mappedBy($this->entities->getConfiguration());
         $shared->holdTheWriteLockOnTheRight();
         try {
-            $this->expectException(IntakeStoreLocked::class);
-            $this->expectExceptionMessage('The stored listing of project "alpha" stayed locked by another writer for 3 attempts.');
-
             new IntakeStore($shared->left)->recordIfStill('alpha', [$this->stored(Issues::task(7))], new ValidatorChange(IntakeState::none(), null));
+            self::fail('A store that stays locked must not answer.');
+        } catch (IntakeStoreLocked $locked) {
+            self::assertSame('The stored listing of project "alpha" stayed locked by another writer for 3 attempts.', $locked->getMessage());
+            self::assertInstanceOf(RetryableException::class, $locked->getPrevious());
         } finally {
             $shared->close();
         }

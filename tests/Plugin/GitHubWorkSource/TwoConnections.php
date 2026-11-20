@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Plugin\GitHubWorkSource;
 
 use Closure;
-use Doctrine\Common\EventManager;
+use Doctrine\Common\EventManagerInterface;
 use Doctrine\DBAL\DriverManager;
 use Doctrine\ORM\Configuration;
 use Doctrine\ORM\EntityManager;
@@ -39,7 +39,7 @@ final readonly class TwoConnections
         $events->addEventListener([Events::preFlush], new readonly class($competing(...), $events) {
             public function __construct(
                 private Closure $competing,
-                private EventManager $events,
+                private EventManagerInterface $events,
             ) {
             }
 

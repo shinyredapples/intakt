@@ -49,17 +49,17 @@ final readonly class IntakeStore
     public function recordIfStill(string $project, array $issues, ValidatorChange $change): bool
     {
         $listed = $this->listed($project, $issues);
-        $refusal = null;
-        for ($attempt = 1; $attempt <= self::ATTEMPTS; ++$attempt) {
+        $refusals = [];
+        while (count($refusals) < self::ATTEMPTS) {
             try {
                 return $this->comparedAndSet($project, $listed, $change);
             } catch (RetryableException $refusal) {
                 // A refused lock does not say whether the other writer committed, so the compare runs again on what is stored now instead of being answered blindly.
-                continue;
+                $refusals[] = $refusal;
             }
         }
 
-        throw IntakeStoreLocked::after($project, self::ATTEMPTS, $refusal);
+        throw IntakeStoreLocked::after($project, $refusals);
     }
 
     // Apart from the issue rows, so a task that is closed after it failed for good still holds the tasks that wait on it.
