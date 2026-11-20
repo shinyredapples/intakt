@@ -22,7 +22,11 @@ final readonly class GitHubIssueReads implements IssueReads
     private const int PAGE_SIZE = 100;
     // A listing of more pages than this fails, because reading on has no end a tick could wait for.
     private const int MAX_PAGES = 10;
+    private const int OK = 200;
     private const int NOT_MODIFIED = 304;
+    // RFC 9110 token and quoted-string, the two forms a `Link` parameter's name and value take.
+    private const string TOKEN = "[!#$%&'*+.^_`|~0-9A-Za-z-]+";
+    private const string QUOTED = '"(?:[^"\\\\]|\\\\.)*"';
     private const int UNAUTHORIZED = 401;
 
     public function __construct(
@@ -238,7 +242,8 @@ final readonly class GitHubIssueReads implements IssueReads
             throw $this->unreachable($failure::class);
         }
 
-        if (self::NOT_MODIFIED !== $status && ($status < 200 || $status >= 300)) {
+        // Only a whole page counts, because another 2xx such as `206 Partial Content` would list part of a page as all of it.
+        if (self::OK !== $status && self::NOT_MODIFIED !== $status) {
             throw new ForgeReadFailed(sprintf('GitHub answered %d to a read.', $status), previous: self::UNAUTHORIZED === $status ? new ForgeCredentialsRefused() : null);
         }
 
@@ -250,7 +255,36 @@ final readonly class GitHubIssueReads implements IssueReads
      */
     private function namesNext(array $links): bool
     {
-        return array_any($links, static fn (string $link): bool => 1 === preg_match('/;\s*rel="?next"?/i', $link));
+        return array_any($links, fn (string $link): bool => in_array('next', $this->relationsOf($link), true));
+    }
+
+    // A `Link` this forge cannot read fails the listing, because taking it as naming no next page would end the listing early.
+    /**
+     * @return list<string>
+     *
+     * @throws ForgeReadFailed
+     */
+    private function relationsOf(string $link): array
+    {
+        $value = '<[^>]*>((?:\s*;\s*'.self::TOKEN.'\s*(?:=\s*(?:'.self::QUOTED.'|'.self::TOKEN.'))?)*)';
+        if (1 !== preg_match('/\A\s*'.$value.'(?:\s*,\s*'.$value.')*\s*\z/', $link) || false === preg_match_all('/'.$value.'/', $link, $values)) {
+            throw new ForgeReadFailed('GitHub answered a Link header this forge cannot read.');
+        }
+
+        return array_merge(...array_map($this->relationsIn(...), $values[1]));
+    }
+
+    // RFC 8288: `rel` is a parameter like any other, its value a space-separated list of relation types compared without case, and only its first occurrence counts.
+    /**
+     * @return list<string>
+     */
+    private function relationsIn(string $parameters): array
+    {
+        preg_match_all('/\G\s*;\s*('.self::TOKEN.')\s*(?:=\s*(?:('.self::QUOTED.')|('.self::TOKEN.')))?/', $parameters, $found, PREG_SET_ORDER | PREG_UNMATCHED_AS_NULL);
+        $rel = array_find($found, static fn (array $parameter): bool => 'rel' === strtolower((string) $parameter[1]));
+        $relations = null === $rel ? '' : ($rel[3] ?? trim((string) $rel[2], '"'));
+
+        return array_values(array_filter(preg_split('~\s+~', strtolower($relations)) ?: [], static fn (string $relation): bool => '' !== $relation));
     }
 
     // Not chained to the client's exception, because its trace holds the request options with the bearer token.

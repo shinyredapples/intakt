@@ -41,6 +41,8 @@ final class RecordedIssueApi
     public bool $stable = false;
     /** @var list<int> */
     public array $namingNext = [];
+    // The `Link` of a page in `namingNext`, with `%d` for the next page's number.
+    public string $nextLink = '<https://api.github.com/repositories/1/issues?page=%d>; rel="next", <https://api.github.com/repositories/1/issues?page=9>; rel="last"';
     /** @var list<string> */
     public array $conditions = [];
     // A body, or three digits for an HTTP status, because the history read is scripted like the listing pages.
@@ -143,7 +145,7 @@ final class RecordedIssueApi
 
         $headers = ['ETag' => $this->etagOf($page), ...(null === $this->served ? [] : ['Date' => $this->served])];
         if (in_array($page, $this->namingNext, true)) {
-            $headers['Link'] = sprintf('<https://api.github.com/repositories/1/issues?page=%d>; rel="next", <https://api.github.com/repositories/1/issues?page=9>; rel="last"', $page + 1);
+            $headers['Link'] = sprintf($this->nextLink, $page + 1);
         }
 
         return new MockResponse($body, ['response_headers' => $headers]);

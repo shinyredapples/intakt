@@ -306,6 +306,51 @@ final class GitHubIssueReadsTest extends TestCase
         self::assertStringContainsString('GitHub answered 500 to a read.', $this->failureOf($api)->getMessage());
     }
 
+    public function testALaterPageAnsweredWithPartialContentFailsTheListing(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->page(1, 100), 2 => '206'];
+        $api->namingNext = [1];
+        $api->stable = true;
+
+        self::assertSame('GitHub answered 206 to a read.', $this->failureOf($api)->getMessage());
+    }
+
+    public function testANextRelationWithSpacesAroundTheEqualsSignReadsTheNextPage(): void
+    {
+        self::assertCount(101, $this->listedWithNextLink('<https://api.github.com/repositories/1/issues?page=%d>; rel = "next"'));
+    }
+
+    public function testANextRelationAmongOthersInAQuotedValueReadsTheNextPage(): void
+    {
+        self::assertCount(101, $this->listedWithNextLink('<https://api.github.com/repositories/1/issues?page=%d>; rel="prev NEXT"'));
+    }
+
+    public function testAnUnquotedNextRelationReadsTheNextPage(): void
+    {
+        self::assertCount(101, $this->listedWithNextLink('<https://api.github.com/repositories/1/issues?page=9>; rel=last, <https://api.github.com/repositories/1/issues?page=%d>;rel=next'));
+    }
+
+    public function testARelationThatOnlyStartsWithNextEndsTheListing(): void
+    {
+        self::assertCount(100, $this->listedWithNextLink('<https://api.github.com/repositories/1/issues?page=%d>; rel="next-page"'));
+    }
+
+    public function testANextRelationQuotedInsideAnotherParameterEndsTheListing(): void
+    {
+        self::assertCount(100, $this->listedWithNextLink('<https://api.github.com/repositories/1/issues?page=%d>; title="a; rel=next"'));
+    }
+
+    public function testALinkHeaderThisForgeCannotReadFailsTheListing(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->page(1, 100), 2 => $this->page(101, 1)];
+        $api->namingNext = [1];
+        $api->nextLink = '<https://api.github.com/repositories/1/issues?page=%d; rel="next"';
+
+        self::assertSame('GitHub answered a Link header this forge cannot read.', $this->failureOf($api)->getMessage());
+    }
+
     public function testARateLimitedLaterPageFailsTheListingAsRateLimited(): void
     {
         $api = new RecordedIssueApi();
@@ -365,6 +410,20 @@ final class GitHubIssueReadsTest extends TestCase
         $api->stable = true;
 
         self::assertCount(1000, $api->reads()->listOpen('alpha', null)->issues());
+    }
+
+    /**
+     * @return list<ListedIssue>
+     */
+    private function listedWithNextLink(string $nextLink): array
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->page(1, 100), 2 => $this->page(101, 1)];
+        $api->namingNext = [1];
+        $api->nextLink = $nextLink;
+        $api->stable = true;
+
+        return $api->reads()->listOpen('alpha', null)->issues();
     }
 
     private function failureOf(RecordedIssueApi $api): ForgeReadFailed
