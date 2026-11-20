@@ -14,8 +14,11 @@ final class IntakeValidator
         #[ORM\Id]
         #[ORM\Column(length: 255)]
         private readonly string $project,
-        #[ORM\Column(type: 'text')]
-        private string $validator,
+        #[ORM\Column(type: 'text', nullable: true)]
+        private ?string $validator,
+        // Advanced by every recorded listing, because a listing of several pages stores no validator and two syncs must still tell whose rows are newer.
+        #[ORM\Column(options: ['default' => 0])]
+        private int $generation = 0,
     ) {
     }
 
@@ -24,13 +27,14 @@ final class IntakeValidator
         return $this->project;
     }
 
-    public function value(): string
+    public function state(): IntakeState
     {
-        return $this->validator;
+        return new IntakeState($this->validator, $this->generation);
     }
 
-    public function replace(string $validator): void
+    public function advance(?string $validator): void
     {
         $this->validator = $validator;
+        ++$this->generation;
     }
 }

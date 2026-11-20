@@ -13,6 +13,7 @@ use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
 use Intakt\Plugin\GitHubForge\Contract\SteeringAccounts;
 use Intakt\Plugin\GitHubForge\Contract\TrustNotChecked;
 use Intakt\Plugin\GitHubWorkSource\Domain\IntakeRules;
+use Intakt\Plugin\GitHubWorkSource\Domain\IntakeState;
 use Intakt\Plugin\GitHubWorkSource\Domain\IssueReferences;
 use Intakt\Plugin\GitHubWorkSource\Domain\ItemReading;
 use Intakt\Plugin\GitHubWorkSource\Domain\QueuedIssue;
@@ -39,20 +40,28 @@ final readonly class CompleteListing
     // The rules come from the caller, because which label makes a task eligible is the project's setting and decides whose history is read.
     public function sync(string $project, IntakeRules $rules): SyncedListing
     {
-        $validator = $this->store->validatorOf($project);
         try {
-            $listing = $this->reads->listOpen($project, $validator);
-            $issues = $this->vouched($project, $this->issuesOf($project, $listing), $rules);
+            $issues = $this->recorded($project, $this->store->stateOf($project), $rules);
         } catch (ForgeReadFailed|ForgeRateLimited|TrustNotChecked $short) {
             return $this->short($project, $short);
         }
 
-        if (!$this->store->recordIfStill($project, $issues, new ValidatorChange($validator, $listing->isUnchanged() ? $validator : $listing->validator))) {
-            // The stored rows are answered instead, because the sync that stored its listing while this request was in flight holds the newer truth.
-            $issues = $this->store->issuesOf($project);
+        return SyncedListing::complete(array_map(static fn (StoredIssue $issue): QueuedIssue => $issue->queued(), $issues));
+    }
+
+    /**
+     * @return list<StoredIssue>
+     */
+    private function recorded(string $project, IntakeState $seen, IntakeRules $rules): array
+    {
+        $listing = $this->reads->listOpen($project, $seen->validator);
+        $issues = $this->vouched($project, $this->issuesOf($project, $listing), $rules);
+        if ($this->store->recordIfStill($project, $issues, new ValidatorChange($seen, $listing->isUnchanged() ? $seen->validator : $listing->validator))) {
+            return $issues;
         }
 
-        return SyncedListing::complete(array_map(static fn (StoredIssue $issue): QueuedIssue => $issue->queued(), $issues));
+        // The sync that stored its listing while this request was in flight holds the newer rows, but it vouched them under its own rules, so this tick's eligibility label is applied to them again.
+        return $this->vouched($project, $this->store->issuesOf($project), $rules);
     }
 
     // Every listed field comes from the listing, also for an unchanged item, because a milestone's due date changes without the item's update time moving.

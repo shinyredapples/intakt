@@ -14,6 +14,8 @@ use Intakt\Plugin\GitHubForge\Contract\TrustNotChecked;
 use Intakt\Plugin\GitHubWorkSource\Domain\HeldIssue;
 use Intakt\Plugin\GitHubWorkSource\Domain\IntakePlan;
 use Intakt\Plugin\GitHubWorkSource\Domain\IntakeRules;
+use Intakt\Plugin\GitHubWorkSource\Domain\IntakeState;
+use Intakt\Plugin\GitHubWorkSource\Domain\IntakeValidator;
 use Intakt\Plugin\GitHubWorkSource\Domain\IssueReferences;
 use Intakt\Plugin\GitHubWorkSource\Domain\ItemReading;
 use Intakt\Plugin\GitHubWorkSource\Domain\QueuedIssue;
@@ -45,6 +47,8 @@ use Psr\Log\LoggerInterface;
 #[UsesClass(QueuedIssue::class)]
 #[UsesClass(Vouching::class)]
 #[UsesClass(ValidatorChange::class)]
+#[UsesClass(IntakeState::class)]
+#[UsesClass(IntakeValidator::class)]
 final class CompleteListingTest extends KernelTestCase
 {
     private IntakeStore $store;
@@ -135,8 +139,8 @@ final class CompleteListingTest extends KernelTestCase
         self::assertFalse($synced->isComplete());
         self::assertSame([], $synced->items);
         self::assertSame([3, 9], array_map(static fn (StoredIssue $issue): int => $issue->number(), $this->store->issuesOf('alpha')));
-        self::assertSame('W/"issues-1"', $this->store->validatorOf('alpha'));
-        $this->assertLoggedWarning('The listing of project alpha came back short, so nothing is picked and no wait closes this tick: ');
+        self::assertSame('W/"issues-1"', $this->store->stateOf('alpha')->validator);
+        $this->assertLoggedWarning('The listing of project alpha came back short, so nothing is picked and no wait closes this tick: GitHub answered 502 to a read.');
     }
 
     public function testARateLimitedListingIsShortAndRecordsNothing(): void
@@ -164,7 +168,7 @@ final class CompleteListingTest extends KernelTestCase
 
         self::assertSame('GitHub answered 502 to a history read.', $synced->shortBecause);
         self::assertSame([7], array_map(static fn (StoredIssue $issue): int => $issue->number(), $this->store->issuesOf('alpha')));
-        self::assertSame('W/"a"', $this->store->validatorOf('alpha'));
+        self::assertSame('W/"a"', $this->store->stateOf('alpha')->validator);
         $this->assertLoggedWarning('came back short, so nothing is picked and no wait closes this tick: GitHub answered 502 to a history read.');
     }
 
@@ -244,7 +248,61 @@ final class CompleteListingTest extends KernelTestCase
 
         self::assertSame([8], array_map(static fn (QueuedIssue $task): int => $task->number(), $synced->items));
         self::assertSame([8], array_map(static fn (StoredIssue $issue): int => $issue->number(), $this->store->issuesOf('alpha')));
-        self::assertSame('W/"b"', $this->store->validatorOf('alpha'));
+        self::assertSame('W/"b"', $this->store->stateOf('alpha')->validator);
+    }
+
+    public function testAnOlderListingWithoutAValidatorLosesToOneAnotherSyncStoredWhileItWasRead(): void
+    {
+        $reads = new RecordedIssueReads();
+        $listing = $this->listing($reads);
+        $rules = new IntakeRules('intakt');
+        $reads->lists([Issues::task(7)], null);
+        $listing->sync('alpha', $rules);
+        $reads->during = static function () use ($listing, $rules, $reads): void {
+            $reads->lists([Issues::task(8)], null);
+            $listing->sync('alpha', $rules);
+            $reads->lists([Issues::task(7)], null);
+        };
+
+        $synced = $listing->sync('alpha', $rules);
+
+        self::assertSame([8], array_map(static fn (QueuedIssue $task): int => $task->number(), $synced->items));
+        self::assertSame([8], array_map(static fn (StoredIssue $issue): int => $issue->number(), $this->store->issuesOf('alpha')));
+    }
+
+    public function testAFirstSyncLosesCleanlyToOneThatStoredTheProjectsFirstListingWhileItWasRead(): void
+    {
+        $reads = new RecordedIssueReads();
+        $listing = $this->listing($reads);
+        $rules = new IntakeRules('intakt');
+        $reads->during = static function () use ($listing, $rules, $reads): void {
+            $reads->lists([Issues::task(8)], null);
+            $listing->sync('alpha', $rules);
+            $reads->lists([Issues::task(7)], null);
+        };
+
+        $synced = $listing->sync('alpha', $rules);
+
+        self::assertSame([8], array_map(static fn (QueuedIssue $task): int => $task->number(), $synced->items));
+        self::assertSame([8], array_map(static fn (StoredIssue $issue): int => $issue->number(), $this->store->issuesOf('alpha')));
+    }
+
+    public function testRowsAnotherSyncStoredUnderAnotherEligibilityLabelAreJudgedByThisTicksLabelWhenItsWriteIsLost(): void
+    {
+        $reads = new RecordedIssueReads();
+        $listing = $this->listing($reads);
+        $reads->lists([Issues::task(7, ['ready'])], 'W/"a"');
+        $listing->sync('alpha', new IntakeRules('intakt'));
+        $reads->during = static function () use ($listing, $reads): void {
+            $reads->lists([Issues::task(7, ['ready'])], 'W/"b"');
+            $listing->sync('alpha', new IntakeRules('intakt'));
+            $reads->lists([Issues::task(7, ['ready'])], 'W/"c"');
+        };
+
+        $synced = $listing->sync('alpha', new IntakeRules('ready'));
+
+        self::assertSame([7], array_map(static fn (QueuedIssue $task): int => $task->number(), $this->planOf($synced, 'ready')->ready));
+        self::assertSame('W/"b"', $this->store->stateOf('alpha')->validator);
     }
 
     private function listing(IssueReads $reads): CompleteListing

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Plugin\GitHubWorkSource\Infrastructure;
 
 use DateTimeZone;
-use Doctrine\DBAL\Exception\TableNotFoundException;
+use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Event\PostLoadEventArgs;
 use Doctrine\ORM\Events;
@@ -14,6 +14,7 @@ use Intakt\Plugin\GitHubForge\Contract\IssueHistory;
 use Intakt\Plugin\GitHubForge\Contract\LabelApplication;
 use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
 use Intakt\Plugin\GitHubWorkSource\Domain\IntakeRules;
+use Intakt\Plugin\GitHubWorkSource\Domain\IntakeState;
 use Intakt\Plugin\GitHubWorkSource\Domain\IntakeValidator;
 use Intakt\Plugin\GitHubWorkSource\Domain\IssueReferences;
 use Intakt\Plugin\GitHubWorkSource\Domain\ItemReading;
@@ -32,6 +33,7 @@ use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
+use RuntimeException;
 use WeakReference;
 
 #[Group('persistence')]
@@ -40,6 +42,7 @@ use WeakReference;
 #[CoversClass(IntakeValidator::class)]
 #[CoversClass(TaskFailure::class)]
 #[CoversClass(ValidatorChange::class)]
+#[CoversClass(IntakeState::class)]
 #[CoversClass(Vouching::class)]
 #[UsesClass(ItemReading::class)]
 #[UsesClass(QueuedIssue::class)]
@@ -66,7 +69,7 @@ final class IntakeStoreTest extends KernelTestCase
     public function testAStoredIssueIsReadBackAsTheItemItWasStoredFrom(): void
     {
         $listed = Issues::task(7, ['intakt', 'priority:high'], ['body' => "Waits for #3\nWaits for whatever", 'due' => '2026-12-01T09:30:00Z', 'updatedAt' => '2026-11-10T10:00:00Z']);
-        $this->store->record('alpha', [$this->vouched($listed)], null);
+        $this->record('alpha', [$this->vouched($listed)], null);
         $this->entities->clear();
 
         $queued = array_first($this->store->issuesOf('alpha'))?->queued();
@@ -84,7 +87,7 @@ final class IntakeStoreTest extends KernelTestCase
 
     public function testAnItemWhoseHistoryWasNotReadIsReadBackUntrusted(): void
     {
-        $this->store->record('alpha', [$this->stored(Issues::task(7))], null);
+        $this->record('alpha', [$this->stored(Issues::task(7))], null);
 
         $queued = array_first($this->store->issuesOf('alpha'))?->queued();
 
@@ -95,7 +98,7 @@ final class IntakeStoreTest extends KernelTestCase
 
     public function testAPullRequestIsReadBackWithTheTasksItCloses(): void
     {
-        $this->store->record('alpha', [$this->stored(Issues::pullRequest(12, 'Closes #7'))], null);
+        $this->record('alpha', [$this->stored(Issues::pullRequest(12, 'Closes #7'))], null);
 
         $queued = array_first($this->store->issuesOf('alpha'))?->queued();
 
@@ -109,16 +112,16 @@ final class IntakeStoreTest extends KernelTestCase
         $listed = Issues::task(7);
         $later = new ListedIssue(7, $listed->title, '', $listed->labels, $listed->author, $listed->updatedAt->setTimezone(new DateTimeZone('Europe/Berlin'))->modify('+250 milliseconds'), null, false);
 
-        $this->store->record('alpha', [$this->stored($later)], null);
+        $this->record('alpha', [$this->stored($later)], null);
 
         self::assertSame('2026-11-10 10:00:00.250000', $this->entities->getConnection()->fetchOne('SELECT updated_at FROM work_source_issue WHERE number = 7'));
     }
 
     public function testAnIssueRecordedAgainReplacesItsRowInsteadOfAddingOne(): void
     {
-        $this->store->record('alpha', [$this->vouched(Issues::task(7, ['intakt'], ['body' => 'Waits for #3']))], null);
+        $this->record('alpha', [$this->vouched(Issues::task(7, ['intakt'], ['body' => 'Waits for #3']))], null);
 
-        $this->store->record('alpha', [$this->stored(Issues::task(7, ['intakt'], ['body' => 'Waits for #4']))], null);
+        $this->record('alpha', [$this->stored(Issues::task(7, ['intakt'], ['body' => 'Waits for #4']))], null);
 
         $issues = $this->store->issuesOf('alpha');
         self::assertCount(1, $issues);
@@ -128,56 +131,62 @@ final class IntakeStoreTest extends KernelTestCase
 
     public function testARowReadBackAndRecordedAgainKeepsWhatItsHistorySaid(): void
     {
-        $this->store->record('alpha', [$this->vouched(Issues::task(7))], null);
+        $this->record('alpha', [$this->vouched(Issues::task(7))], null);
 
-        $this->store->record('alpha', $this->store->issuesOf('alpha'), null);
+        $this->record('alpha', $this->store->issuesOf('alpha'), null);
 
         self::assertTrue(array_first($this->store->issuesOf('alpha'))?->queued()->isTrusted());
     }
 
     public function testAnIssueTheListingNoLongerShowsLosesItsRow(): void
     {
-        $this->store->record('alpha', [$this->stored(Issues::task(7)), $this->stored(Issues::task(8))], null);
+        $this->record('alpha', [$this->stored(Issues::task(7)), $this->stored(Issues::task(8))], null);
 
-        $this->store->record('alpha', [$this->stored(Issues::task(8))], null);
+        $this->record('alpha', [$this->stored(Issues::task(8))], null);
 
         self::assertSame([8], array_map(static fn (StoredIssue $issue): int => $issue->number(), $this->store->issuesOf('alpha')));
     }
 
     public function testTheRowsOfAnotherProjectAreLeftAlone(): void
     {
-        $this->store->record('beta', [$this->stored(Issues::task(7), 'beta')], null);
+        $this->record('beta', [$this->stored(Issues::task(7), 'beta')], null);
 
-        $this->store->record('alpha', [], null);
+        $this->record('alpha', [], null);
 
         self::assertCount(1, $this->store->issuesOf('beta'));
     }
 
     public function testAnIssueOfAnotherProjectIsRefusedAndNothingIsWritten(): void
     {
-        $this->store->record('alpha', [$this->stored(Issues::task(7))], null);
+        $this->record('alpha', [$this->stored(Issues::task(7))], null);
 
         try {
-            $this->store->record('alpha', [$this->stored(Issues::task(8), 'beta')], 'W/"a"');
+            $this->record('alpha', [$this->stored(Issues::task(8), 'beta')], 'W/"a"');
             self::fail('An issue of another project was recorded.');
         } catch (InvalidArgumentException) {
         }
 
         self::assertSame([7], array_map(static fn (StoredIssue $issue): int => $issue->number(), $this->store->issuesOf('alpha')));
-        self::assertNull($this->store->validatorOf('alpha'));
+        self::assertNull($this->store->stateOf('alpha')->validator);
     }
 
     public function testAListingWhoseWriteFailedLeavesNoRemovalForALaterFlush(): void
     {
-        $connection = $this->entities->getConnection();
-        $this->store->record('alpha', [$this->stored(Issues::task(7))], 'W/"a"');
-        $connection->executeStatement('ALTER TABLE work_source_validator RENAME TO hidden_validator');
+        $this->record('alpha', [$this->stored(Issues::task(7))], 'W/"a"');
+        $failing = new class {
+            public function onFlush(): void
+            {
+                throw new RuntimeException('The flush failed.');
+            }
+        };
+        $events = $this->entities->getEventManager();
+        $events->addEventListener([Events::onFlush], $failing);
         try {
-            $this->store->record('alpha', [], 'W/"b"');
-            self::fail('The validator could be read without its table.');
-        } catch (TableNotFoundException) {
+            $this->record('alpha', [], 'W/"b"');
+            self::fail('The listing was recorded although its flush failed.');
+        } catch (RuntimeException) {
         } finally {
-            $connection->executeStatement('ALTER TABLE hidden_validator RENAME TO work_source_validator');
+            $events->removeEventListener([Events::onFlush], $failing);
         }
 
         $this->entities->flush();
@@ -189,26 +198,26 @@ final class IntakeStoreTest extends KernelTestCase
     {
         $this->entities->persist(new IntakeValidator('beta', 'W/"pending"'));
 
-        $this->store->record('alpha', [], 'W/"a"');
+        $this->record('alpha', [], 'W/"a"');
 
         self::assertSame(['alpha'], $this->entities->getConnection()->fetchFirstColumn('SELECT project FROM work_source_validator ORDER BY project'));
     }
 
     public function testTheValidatorIsStoredReplacedAndDroppedWhenTheForgeSendsNone(): void
     {
-        $this->store->record('alpha', [], 'W/"a"');
-        $first = $this->store->validatorOf('alpha');
-        $this->store->record('alpha', [], 'W/"b"');
-        $second = $this->store->validatorOf('alpha');
+        $this->record('alpha', [], 'W/"a"');
+        $first = $this->store->stateOf('alpha')->validator;
+        $this->record('alpha', [], 'W/"b"');
+        $second = $this->store->stateOf('alpha')->validator;
 
-        $this->store->record('alpha', [], null);
+        $this->record('alpha', [], null);
 
-        self::assertSame(['W/"a"', 'W/"b"', null], [$first, $second, $this->store->validatorOf('alpha')]);
+        self::assertSame(['W/"a"', 'W/"b"', null], [$first, $second, $this->store->stateOf('alpha')->validator]);
     }
 
     public function testARowStoredByAnotherWorkerSinceIsWhatIsReadBack(): void
     {
-        $this->store->record('alpha', [$this->stored(Issues::task(7, ['intakt'], ['body' => 'Waits for #3']))], null);
+        $this->record('alpha', [$this->stored(Issues::task(7, ['intakt'], ['body' => 'Waits for #3']))], null);
         self::assertInstanceOf(StoredIssue::class, $this->entities->find(StoredIssue::class, ['project' => 'alpha', 'number' => 7]));
         $this->entities->getConnection()->executeStatement("UPDATE work_source_issue SET waits_for = '[5]' WHERE number = 7");
 
@@ -217,7 +226,7 @@ final class IntakeStoreTest extends KernelTestCase
 
     public function testEveryCallReleasesItsEntityManagerSoRepeatedTicksKeepNoRowsInMemory(): void
     {
-        $this->store->record('alpha', [$this->stored(Issues::task(7))], 'W/"a"');
+        $this->record('alpha', [$this->stored(Issues::task(7))], 'W/"a"');
         $this->store->failForGood('alpha', 7, 'reason');
         $listener = new class {
             /** @var array<int, WeakReference<object>> */
@@ -234,7 +243,7 @@ final class IntakeStoreTest extends KernelTestCase
         for ($tick = 0; $tick < 50; ++$tick) {
             $this->store->issuesOf('alpha');
             $this->store->failuresOf('alpha');
-            $this->store->record('alpha', $this->store->issuesOf('alpha'), 'W/"a"');
+            $this->record('alpha', $this->store->issuesOf('alpha'), 'W/"a"');
         }
 
         $this->entities->getEventManager()->removeEventListener([Events::postLoad], $listener);
@@ -246,8 +255,8 @@ final class IntakeStoreTest extends KernelTestCase
 
     public function testTheFailedForGoodReasonsOfAnotherProjectAreLeftOut(): void
     {
-        $this->store->record('alpha', [$this->stored(Issues::task(7))], null);
-        $this->store->record('beta', [$this->stored(Issues::task(9), 'beta')], null);
+        $this->record('alpha', [$this->stored(Issues::task(7))], null);
+        $this->record('beta', [$this->stored(Issues::task(9), 'beta')], null);
         $this->store->failForGood('alpha', 7, 'first');
         $this->store->failForGood('beta', 9, 'other');
 
@@ -256,10 +265,10 @@ final class IntakeStoreTest extends KernelTestCase
 
     public function testRemovingTheRowOfAClosedTaskKeepsItsFailedForGoodReasonSoItsDependentsStayHeld(): void
     {
-        $this->store->record('alpha', [$this->vouched(Issues::task(7)), $this->vouched(Issues::task(8, ['intakt'], ['body' => 'Waits for #7']))], null);
+        $this->record('alpha', [$this->vouched(Issues::task(7)), $this->vouched(Issues::task(8, ['intakt'], ['body' => 'Waits for #7']))], null);
         $this->store->failForGood('alpha', 7, 'the build ran out of attempts');
 
-        $this->store->record('alpha', [$this->vouched(Issues::task(8, ['intakt'], ['body' => 'Waits for #7']))], null);
+        $this->record('alpha', [$this->vouched(Issues::task(8, ['intakt'], ['body' => 'Waits for #7']))], null);
 
         $failures = $this->store->failuresOf('alpha');
         $plan = new IntakeRules('intakt')->planOf(array_map(static fn (StoredIssue $issue): QueuedIssue => $issue->queued(), $this->store->issuesOf('alpha')), $failures);
@@ -270,7 +279,7 @@ final class IntakeStoreTest extends KernelTestCase
 
     public function testFailingATaskForGoodAgainReplacesItsReason(): void
     {
-        $this->store->record('alpha', [$this->stored(Issues::task(7))], null);
+        $this->record('alpha', [$this->stored(Issues::task(7))], null);
         $this->store->failForGood('alpha', 7, 'first');
 
         $this->store->failForGood('alpha', 7, 'second');
@@ -280,7 +289,7 @@ final class IntakeStoreTest extends KernelTestCase
 
     public function testATaskTheStoredRowsDoNotShowCannotFailForGood(): void
     {
-        $this->store->record('beta', [$this->stored(Issues::task(7), 'beta')], null);
+        $this->record('beta', [$this->stored(Issues::task(7), 'beta')], null);
 
         $this->expectException(TaskNotQueued::class);
 
@@ -294,32 +303,69 @@ final class IntakeStoreTest extends KernelTestCase
         new IntakeStore(self::createStub(EntityManagerInterface::class))->issuesOf('alpha');
     }
 
-    public function testAListingIsRecordedWhenTheStoredValidatorIsStillTheOneItWasReadWith(): void
+    public function testAListingIsRecordedWhenTheGenerationIsStillTheOneItWasReadAgainst(): void
     {
-        $this->store->record('alpha', [$this->stored(Issues::task(7))], 'W/"a"');
+        $this->record('alpha', [$this->stored(Issues::task(7))], 'W/"a"');
 
-        $recorded = $this->store->recordIfStill('alpha', [$this->stored(Issues::task(8))], new ValidatorChange('W/"a"', 'W/"b"'));
+        $recorded = $this->store->recordIfStill('alpha', [$this->stored(Issues::task(8))], new ValidatorChange($this->store->stateOf('alpha'), 'W/"b"'));
 
         self::assertTrue($recorded);
         self::assertSame([8], array_map(static fn (StoredIssue $issue): int => $issue->number(), $this->store->issuesOf('alpha')));
-        self::assertSame('W/"b"', $this->store->validatorOf('alpha'));
+        self::assertEquals(new IntakeState('W/"b"', 2), $this->store->stateOf('alpha'));
     }
 
-    public function testAListingIsNotRecordedWhenAnotherSyncStoredANewerValidatorMeanwhile(): void
+    public function testAListingIsNotRecordedWhenAnotherSyncRecordedMeanwhileAlthoughNeitherHadAValidator(): void
     {
-        $this->store->record('alpha', [$this->stored(Issues::task(8))], 'W/"b"');
+        $this->record('alpha', [], null);
+        $seen = $this->store->stateOf('alpha');
+        $this->record('alpha', [$this->stored(Issues::task(8))], null);
 
-        $recorded = $this->store->recordIfStill('alpha', [$this->stored(Issues::task(7))], new ValidatorChange('W/"a"', 'W/"a"'));
+        $recorded = $this->store->recordIfStill('alpha', [$this->stored(Issues::task(7))], new ValidatorChange($seen, null));
 
         self::assertFalse($recorded);
         self::assertSame([8], array_map(static fn (StoredIssue $issue): int => $issue->number(), $this->store->issuesOf('alpha')));
-        self::assertSame('W/"b"', $this->store->validatorOf('alpha'));
+        self::assertEquals(new IntakeState(null, 2), $this->store->stateOf('alpha'));
     }
 
-    public function testAFirstListingIsRecordedWhenNoValidatorWasStoredYet(): void
+    public function testAFirstListingIsRecordedWhenNothingWasStoredYet(): void
     {
-        self::assertTrue($this->store->recordIfStill('alpha', [$this->stored(Issues::task(7))], new ValidatorChange(null, 'W/"a"')));
-        self::assertSame('W/"a"', $this->store->validatorOf('alpha'));
+        self::assertEquals(IntakeState::none(), $this->store->stateOf('alpha'));
+
+        self::assertTrue($this->store->recordIfStill('alpha', [$this->stored(Issues::task(7))], new ValidatorChange(IntakeState::none(), 'W/"a"')));
+        self::assertEquals(new IntakeState('W/"a"', 1), $this->store->stateOf('alpha'));
+    }
+
+    public function testAFirstListingLosesWithoutAnExceptionWhenAnotherSyncInsertedTheProjectsStateWhileItWrote(): void
+    {
+        $connection = $this->entities->getConnection();
+        $competing = new class($connection) {
+            public function __construct(private readonly Connection $connection)
+            {
+            }
+
+            public function preFlush(): void
+            {
+                $this->connection->insert('work_source_validator', ['project' => 'alpha', 'validator' => 'W/"other"', 'generation' => 1]);
+            }
+        };
+        $events = $this->entities->getEventManager();
+        $events->addEventListener([Events::preFlush], $competing);
+        try {
+            $recorded = $this->store->recordIfStill('alpha', [$this->stored(Issues::task(7))], new ValidatorChange(IntakeState::none(), 'W/"a"'));
+        } finally {
+            $events->removeEventListener([Events::preFlush], $competing);
+        }
+
+        self::assertFalse($recorded);
+        self::assertSame([], $this->store->issuesOf('alpha'));
+    }
+
+    /**
+     * @param list<StoredIssue> $issues
+     */
+    private function record(string $project, array $issues, ?string $validator): void
+    {
+        self::assertTrue($this->store->recordIfStill($project, $issues, new ValidatorChange($this->store->stateOf($project), $validator)));
     }
 
     private function stored(ListedIssue $listed, string $project = 'alpha'): StoredIssue
