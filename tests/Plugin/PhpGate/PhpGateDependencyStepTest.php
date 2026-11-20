@@ -537,6 +537,9 @@ final class PhpGateDependencyStepTest extends TestCase
         $this->assertRefused(PhpGateSteps::SOURCE_GUARD, 'without a usable name');
     }
 
+    /**
+     * @return iterable<string, array{string}>
+     */
     public static function unusableNames(): iterable
     {
         yield 'dot-dot name' => ['../..'];
@@ -585,9 +588,7 @@ final class PhpGateDependencyStepTest extends TestCase
         self::assertSame(0, $install->getExitCode(), $install->getErrorOutput());
     }
 
-    /**
-     * Writes a lock for one source package and a git checkout of it at the locked commit.
-     */
+    // The lock for one source package and a git checkout of it at the locked commit, because the guard compares the two.
     private function sourceProject(string $name, string $checkout = 'vendor/fixture/pkg'): string
     {
         $this->mustRun('git init -q -b main '.escapeshellarg($checkout).' && git -C '.escapeshellarg($checkout).' commit --allow-empty -q -m locked');
