@@ -69,6 +69,26 @@ final class FullReportTest extends SandboxTestCase
         self::assertArrayHasKey('report', $named);
     }
 
+    public function testWithAParentWhoseInternalEncodingIsNotUtf8AChildKeepingElevenFindingsOneOfWideCharactersGetsAReport(): void
+    {
+        $previous = mb_internal_encoding();
+        // Because a cut by bytes must land inside a character to show the defect, the finding starts with one narrow letter.
+        $findings = ['a'.str_repeat("\u{4E00}", 160), ...array_fill(0, 10, 'valid finding')];
+        $result = GateResult::withFindings('dashes', $findings);
+        $results = $this->resultsKeeping('dashes', $result->toFullJson());
+        $line = $this->lineOf($result);
+
+        mb_internal_encoding('ISO-8859-1');
+
+        try {
+            $named = $this->fullReportIn($results)->writtenFor([$line]);
+        } finally {
+            mb_internal_encoding($previous);
+        }
+
+        self::assertArrayHasKey('report', $named);
+    }
+
     public function testAKeptResultWithFewerFindingsThanItsLineAccountsForNamesNoReport(): void
     {
         $results = $this->resultsKeeping('cs', GateResult::withFindings('cs', $this->numbered(3))->toFullJson());

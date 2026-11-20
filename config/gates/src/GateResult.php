@@ -88,7 +88,8 @@ final readonly class GateResult
     public static function widthOf(string $text): int
     {
         if (function_exists('mb_strwidth')) {
-            return mb_strwidth($text);
+            // Because the parent re-cuts a child's findings, the measure names UTF-8 instead of following the process's internal encoding.
+            return mb_strwidth($text, 'UTF-8');
         }
 
         $characters = preg_split('//u', $text, -1, PREG_SPLIT_NO_EMPTY);
@@ -132,7 +133,7 @@ final readonly class GateResult
             return false === $characters || self::widthOf($oneLine) <= self::MAXIMUM_FINDING_LENGTH ? $oneLine : implode('', array_slice($characters, 0, self::MAXIMUM_FINDING_LENGTH - 3)).'...';
         }
 
-        return mb_strimwidth($oneLine, 0, self::MAXIMUM_FINDING_LENGTH, '...');
+        return mb_strimwidth($oneLine, 0, self::MAXIMUM_FINDING_LENGTH, '...', 'UTF-8');
     }
 
     // Because a broken byte would make the kept result unreadable, it gets the same replacement the line shows, so the kept findings still give the line.
