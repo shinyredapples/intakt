@@ -39,6 +39,7 @@ use Intakt\Core\Watcher\Infrastructure\WatchConfiguration;
 use Intakt\Plugin\GitHubForge\Contract\GitHubForgeServices;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubConfiguration;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiProviderCatalog;
+use Psr\Log\LogLevel;
 use Symfony\AI\Platform\Bridge\Anthropic\Factory as AnthropicFactory;
 use Symfony\AI\Platform\Bridge\OpenAi\Factory as OpenAiFactory;
 use Symfony\AI\Platform\ModelCatalog\CompositeModelCatalog;
@@ -57,7 +58,6 @@ use Symfony\Component\DependencyInjection\Parameter;
 use Symfony\Component\DependencyInjection\Reference;
 use Symfony\Component\DependencyInjection\ServiceLocator;
 use Symfony\Component\HttpKernel\Log\Logger;
-use Psr\Log\LogLevel;
 use Symfony\Component\Yaml\Yaml;
 
 // Same sources as Symfony's env processor: the environment, then the secrets vault, then the kept key. Presence is decided at build time because an unset env reference fails when the service is built.
