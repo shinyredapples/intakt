@@ -92,7 +92,7 @@ final class LiveBoardHeadlineTest extends KernelTestCase
     {
         $more = $this->pushedDoneColumnOf(Board::PAGE_LIMIT + 3)->filter('.col-cards > a.more-link');
 
-        self::assertSame(['Show 3 more', '/'], [$more->text(), $more->attr('href')]);
+        self::assertSame(['Show 3 more', '/?board=1'], [$more->text(), $more->attr('href')]);
     }
 
     public function testAPushedDoneColumnStillCountsEveryCard(): void

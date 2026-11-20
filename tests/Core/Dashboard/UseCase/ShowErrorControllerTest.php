@@ -32,7 +32,7 @@ final class ShowErrorControllerTest extends DashboardPageTestCase
         self::assertSame('Page not found', $crawler->filter('.page-head h1')->text());
         self::assertSame(1, $crawler->filter('.shell .rail')->count());
         self::assertSame(1, $crawler->filter('.topbar')->count());
-        self::assertSame('/', $crawler->filter('main .btn.primary')->attr('href'));
+        self::assertSame('/?board=1', $crawler->filter('main .btn.primary')->attr('href'));
         self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "No route found for "GET http://localhost:7780%s""', NotFoundHttpException::class, $address));
     }
 

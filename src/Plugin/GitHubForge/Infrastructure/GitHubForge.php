@@ -10,6 +10,7 @@ use Intakt\Plugin\Forge\Contract\ChangedFiles;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\ChangeNotFound;
 use Intakt\Plugin\Forge\Contract\CommitId;
+use Intakt\Plugin\Forge\Contract\CommitIdMalformed;
 use Intakt\Plugin\Forge\Contract\CommitRange;
 use Intakt\Plugin\Forge\Contract\Diff;
 use Intakt\Plugin\Forge\Contract\FileContent;
@@ -29,7 +30,6 @@ use Intakt\Plugin\Forge\Contract\RoundStale;
 use Intakt\Plugin\GitHubForge\Contract\InstallationDoesNotMatchConfiguration;
 use Intakt\Plugin\GitHubForge\Contract\InstallationNotReadBack;
 use Intakt\Plugin\GitHubForge\Contract\InstallationTokenNotMinted;
-use InvalidArgumentException;
 use JsonException;
 use NoDiscard;
 use Symfony\Contracts\HttpClient\Exception\ExceptionInterface;
@@ -277,7 +277,7 @@ final readonly class GitHubForge implements Forge, ForgeWrites
     {
         try {
             return new CommitId($this->textAt($data, ...$keys));
-        } catch (InvalidArgumentException $invalid) {
+        } catch (CommitIdMalformed $invalid) {
             throw new ForgeReadFailed('GitHub answered something other than a commit hash.', $invalid->getCode(), previous: $invalid);
         }
     }
