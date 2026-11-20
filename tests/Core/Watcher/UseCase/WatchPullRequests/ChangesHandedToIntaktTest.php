@@ -18,6 +18,9 @@ use Intakt\Core\Ledger\Infrastructure\UtcDateTimeImmutableType;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\ChangesHandedToIntakt;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatcherEventNotRecorded;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatcherLedger;
+use Intakt\Plugin\Forge\Contract\ChangeAuthorship;
+use Intakt\Plugin\Forge\Contract\ChangeId;
+use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\OpenChange;
 use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Core\Watcher\UseCase\FindChangedPullRequests\RecordedForge;
@@ -44,6 +47,7 @@ final class ChangesHandedToIntaktTest extends KernelTestCase
     private const string LOOP_PULL = 'https://github.com/acme/widgets/pull/8';
 
     private DoctrineLedger $ledger;
+    private ChangeAuthorship $authorship;
 
     protected function setUp(): void
     {
@@ -54,6 +58,7 @@ final class ChangesHandedToIntaktTest extends KernelTestCase
         EmptyDatabase::in(self::getContainer());
         new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
         $this->ledger = new DoctrineLedger($registry, new MockClock('2026-11-20T10:00:00+00:00'));
+        $this->authorship = self::createStub(ChangeAuthorship::class);
     }
 
     public function testAPullRequestIntaktOpenedIsRecordedAsHandedToIntakt(): void
@@ -83,13 +88,54 @@ final class ChangesHandedToIntaktTest extends KernelTestCase
         self::assertSame([], $this->handedToIntakt());
     }
 
-    public function testAnOpeningRecordThatDoesNotSayHowTheForgeGotThereHandsNoPullRequestToIntakt(): void
+    public function testAnOpeningRecordThatDoesNotSayHowTheForgeGotThereHandsNoPullRequestAnotherAuthorCreatedToIntakt(): void
     {
         $this->record(LedgerEventKind::ChangeOpened, ['project' => 'alpha', 'branch' => 'feat/7', 'head' => str_repeat('a', 40), 'change' => self::PULL]);
 
         $this->recognize('alpha', $this->change(self::PULL));
 
         self::assertSame([], $this->handedToIntakt());
+    }
+
+    public function testAnOpenPullRequestTheAppCreatedBeforeOpeningsWereRecordedIsRecordedAsHandedToIntakt(): void
+    {
+        $this->record(LedgerEventKind::ChangeOpened, ['project' => 'alpha', 'branch' => 'feat/7', 'head' => str_repeat('a', 40), 'change' => self::PULL]);
+        $authorship = self::createStub(ChangeAuthorship::class);
+        $authorship->method('isCreatedByIntakt')->willReturnCallback(static fn (ChangeId $change): bool => self::PULL === $change->value);
+        $this->authorship = $authorship;
+
+        $this->recognize('alpha', $this->change(self::PULL));
+
+        self::assertSame([self::PULL], array_column($this->handedToIntakt(), 'change'));
+    }
+
+    public function testThePullRequestsAuthorIsNotAskedForAPullRequestWhoseRecordSaysHowTheForgeGotThere(): void
+    {
+        $this->record(LedgerEventKind::ChangeOpened, ['project' => 'alpha', 'branch' => 'feat/7', 'head' => str_repeat('a', 40), 'change' => self::PULL, 'opening' => 'created']);
+        $this->record(LedgerEventKind::ChangeOpened, ['project' => 'alpha', 'branch' => 'feat/8', 'head' => str_repeat('a', 40), 'change' => self::LOOP_PULL]);
+        $this->record(LedgerEventKind::ChangeOpened, ['project' => 'alpha', 'branch' => 'feat/8', 'head' => str_repeat('b', 40), 'change' => self::LOOP_PULL, 'opening' => 'updated']);
+        $authorship = self::createMock(ChangeAuthorship::class);
+        $authorship->expects(self::never())->method('isCreatedByIntakt');
+        $this->authorship = $authorship;
+
+        $this->recognize('alpha', $this->change(self::PULL), $this->change(self::LOOP_PULL, 'b'), $this->change('https://github.com/acme/widgets/pull/9'));
+
+        self::assertSame([self::PULL], array_column($this->handedToIntakt(), 'change'));
+    }
+
+    public function testAnAuthorTheForgeCannotReadFailsTheRecognitionWithNothingRecorded(): void
+    {
+        $this->record(LedgerEventKind::ChangeOpened, ['project' => 'alpha', 'branch' => 'feat/7', 'head' => str_repeat('a', 40), 'change' => self::PULL]);
+        $authorship = self::createStub(ChangeAuthorship::class);
+        $authorship->method('isCreatedByIntakt')->willThrowException(new ForgeReadFailed('unreadable'));
+        $this->authorship = $authorship;
+
+        try {
+            $this->recognize('alpha', $this->change(self::PULL));
+            self::fail('An author the forge cannot read must fail the recognition.');
+        } catch (ForgeReadFailed) {
+            self::assertSame([], $this->handedToIntakt());
+        }
     }
 
     public function testAPullRequestOpenedBeforeOpeningsWereRecordedIsRecordedAsHandedToIntaktAfterALaterPushRecordsItAsCreated(): void
@@ -137,7 +183,7 @@ final class ChangesHandedToIntaktTest extends KernelTestCase
         $ledger = self::createMock(Ledger::class);
         $ledger->expects(self::never())->method('readOfKind');
 
-        new ChangesHandedToIntakt($ledger, new WatcherLedger(new InMemoryLedger()))->recognizeAmong('alpha', []);
+        new ChangesHandedToIntakt($ledger, new WatcherLedger(new InMemoryLedger()), $this->authorship)->recognizeAmong('alpha', []);
     }
 
     public function testAnOpeningRecordOfAnotherProjectHandsNoPullRequestOfTheSameAddressToIntakt(): void
@@ -190,7 +236,7 @@ final class ChangesHandedToIntaktTest extends KernelTestCase
     public function testARecordTheLedgerRefusesFailsTheRecognition(): void
     {
         $this->record(LedgerEventKind::ChangeOpened, ['project' => 'alpha', 'branch' => 'feat/7', 'head' => str_repeat('a', 40), 'change' => self::PULL, 'opening' => 'created']);
-        $recognizer = new ChangesHandedToIntakt($this->ledger, new WatcherLedger(new InMemoryLedger(0)));
+        $recognizer = new ChangesHandedToIntakt($this->ledger, new WatcherLedger(new InMemoryLedger(0)), $this->authorship);
 
         $this->expectException(WatcherEventNotRecorded::class);
 
@@ -207,7 +253,7 @@ final class ChangesHandedToIntaktTest extends KernelTestCase
 
     private function recognize(string $project, OpenChange ...$changed): void
     {
-        new ChangesHandedToIntakt($this->ledger, new WatcherLedger($this->ledger))->recognizeAmong($project, array_values($changed));
+        new ChangesHandedToIntakt($this->ledger, new WatcherLedger($this->ledger), $this->authorship)->recognizeAmong($project, array_values($changed));
     }
 
     private function change(string $id, string $head = 'a'): OpenChange

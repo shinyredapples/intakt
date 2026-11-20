@@ -12,6 +12,7 @@ use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Plugin\Forge\Contract\ChangeText;
 use Intakt\Plugin\Forge\Contract\OpenedChange;
+use Intakt\Plugin\Forge\Contract\Opening;
 use JsonException;
 
 // One record per phase and per commit the push intends to produce, so a restart reads where the last attempt stopped and never repeats a phase it finished; keyed by project too, because two projects can share history and branch names.
@@ -47,7 +48,11 @@ final readonly class PushRecords
         $record = $this->decoded($last->payload);
         $change = $record['change'] ?? null;
 
-        return is_string($change) && ($record[self::TEXT_DIGEST] ?? null) === $this->digestOf($request->text) ? $change : null;
+        // Not without its opening, because a record written before openings were recorded must let the forge check the author again: docs/architecture/handed-to-intakt.md
+        $opening = $record['opening'] ?? null;
+        $known = is_string($opening) && null !== Opening::tryFrom($opening);
+
+        return $known && is_string($change) && ($record[self::TEXT_DIGEST] ?? null) === $this->digestOf($request->text) ? $change : null;
     }
 
     /**

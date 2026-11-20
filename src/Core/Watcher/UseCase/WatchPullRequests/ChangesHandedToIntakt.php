@@ -6,16 +6,20 @@ namespace Intakt\Core\Watcher\UseCase\WatchPullRequests;
 
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Plugin\Forge\Contract\ChangeAuthorship;
+use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
+use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\OpenChange;
 use Intakt\Plugin\Forge\Contract\Opening;
 use JsonException;
 
-// Decided from Intakt's own push records alone, because a pull request's author, title, labels and branch are text others can shape: docs/architecture/handed-to-intakt.md
+// Decided from Intakt's own push records, and from the author the forge sets only where a record does not say, because a pull request's title, labels and branch are text others can shape: docs/architecture/handed-to-intakt.md
 final readonly class ChangesHandedToIntakt
 {
     public function __construct(
         private Ledger $ledger,
         private WatcherLedger $records,
+        private ChangeAuthorship $authorship,
     ) {
     }
 
@@ -23,6 +27,8 @@ final readonly class ChangesHandedToIntakt
      * @param list<OpenChange> $open
      *
      * @throws WatcherEventNotRecorded
+     * @throws ForgeReadFailed
+     * @throws ForgeRateLimited
      */
     public function recognizeAmong(string $project, array $open): void
     {
@@ -30,37 +36,80 @@ final readonly class ChangesHandedToIntakt
             return;
         }
 
-        $waiting = array_diff_key($this->addressesOf($project, LedgerEventKind::ChangeOpened), $this->addressesOf($project, LedgerEventKind::ChangeHandedToIntakt));
+        $openings = $this->openingsOf($project);
+        $handed = $this->handedOf($project);
 
         foreach ($open as $change) {
             $address = $this->addressOf($change->id->value);
+            $recorded = $openings[$address] ?? null;
 
-            if (isset($waiting[$address])) {
+            if (null === $recorded || isset($handed[$address])) {
+                continue;
+            }
+
+            if ($this->isCreatedByIntakt($recorded, $change)) {
                 $this->records->changeHandedToIntakt($project, $change);
-                unset($waiting[$address]);
+                $handed[$address] = true;
             }
         }
     }
 
     // Only an opening that created the pull request, because Intakt's push also updates an open pull request someone else opened on the same branch.
     /**
+     * @param list<mixed> $openings
+     *
+     * @throws ForgeReadFailed
+     * @throws ForgeRateLimited
+     */
+    private function isCreatedByIntakt(array $openings, OpenChange $change): bool
+    {
+        return match (true) {
+            in_array(Opening::Created->value, $openings, true) => true,
+            in_array(Opening::Updated->value, $openings, true) => false,
+            // Asked of the forge, because a record written before openings were recorded does not say whether the App created the pull request.
+            default => $this->authorship->isCreatedByIntakt($change->id),
+        };
+    }
+
+    /**
+     * @return array<string, list<mixed>>
+     */
+    private function openingsOf(string $project): array
+    {
+        $openings = [];
+
+        foreach ($this->payloadsOf($project, LedgerEventKind::ChangeOpened) as $address => $payloads) {
+            $openings[$address] = array_map(static fn (array $payload): mixed => $payload['opening'] ?? null, $payloads);
+        }
+
+        return $openings;
+    }
+
+    /**
      * @return array<string, true>
      */
-    private function addressesOf(string $project, LedgerEventKind $kind): array
+    private function handedOf(string $project): array
     {
-        $addresses = [];
+        return array_map(static fn (): bool => true, $this->payloadsOf($project, LedgerEventKind::ChangeHandedToIntakt));
+    }
+
+    /**
+     * @return array<string, list<array<mixed>>>
+     */
+    private function payloadsOf(string $project, LedgerEventKind $kind): array
+    {
+        $payloads = [];
 
         foreach ($this->ledger->readOfKind($kind) as $recorded) {
             $payload = $this->decoded($recorded->event->payload);
             $change = $payload['change'] ?? null;
-            $created = LedgerEventKind::ChangeOpened !== $kind || Opening::Created->value === ($payload['opening'] ?? null);
 
-            if ($created && $project === ($payload['project'] ?? null) && is_string($change)) {
-                $addresses[$this->addressOf($change)] = true;
+            if ($project === ($payload['project'] ?? null) && is_string($change)) {
+                $payloads[$this->addressOf($change)][] = $payload;
             }
         }
 
-        return $addresses;
+        return $payloads;
     }
 
     // Without case, because the push names the repository as configured and the listing as the forge spells it, and forge addresses do not tell owners or repositories apart by case.

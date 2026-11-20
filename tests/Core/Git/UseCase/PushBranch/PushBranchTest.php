@@ -569,6 +569,20 @@ final class PushBranchTest extends TestCase
         self::assertSame('https://github.com/acme/widgets/pull/1', $pushed->change->value);
     }
 
+    public function testARecordOfAnOpenedPullRequestThatDoesNotSayHowTheForgeGotThereDoesNotStandInForTheSameText(): void
+    {
+        $request = $this->scenario->request();
+        $head = $this->scenario->signedCommits()->of($this->scenario->gitDirectory(), $request->accepted, 'refs/heads/main');
+        $digest = hash('sha256', strlen($request->text->title).':'.$request->text->title.$request->text->body);
+        $this->scenario->ledger->append(new LedgerEvent(LedgerEventKind::ChangeOpened, json_encode(['project' => $request->project, 'branch' => $request->branch, 'head' => $head, 'change' => 'https://github.com/acme/widgets/pull/1', 'text_digest' => $digest], JSON_THROW_ON_ERROR)));
+
+        $pushed = $this->scenario->push()->push($request);
+
+        self::assertInstanceOf(PushedBranch::class, $pushed);
+        self::assertSame(1, $this->scenario->changes->calls);
+        self::assertSame([null, 'created'], array_map(static fn (array $record): mixed => $record['opening'] ?? null, $this->scenario->ledger->payloadsOf(LedgerEventKind::ChangeOpened)));
+    }
+
     public function testTheRecordOfAPullRequestTheForgeCreatedSaysItWasCreated(): void
     {
         (void) $this->scenario->push()->push($this->scenario->request());
