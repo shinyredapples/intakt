@@ -6,6 +6,7 @@ namespace Intakt;
 
 use Intakt\Core\Mcp\Infrastructure\AuthorizeToolCallsPass;
 use Intakt\Core\Server\Infrastructure\ProcessSettings;
+use Intakt\Core\Server\Infrastructure\ProfileOnlyRequestMeasuresPass;
 use Symfony\Bundle\FrameworkBundle\Kernel\MicroKernelTrait;
 use Symfony\Component\DependencyInjection\Compiler\PassConfig;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
@@ -40,6 +41,8 @@ final class Kernel extends BaseKernel
     public static function addApplicationPasses(ContainerBuilder $container): void
     {
         $container->addCompilerPass(new AuthorizeToolCallsPass(), PassConfig::TYPE_BEFORE_OPTIMIZATION, -10);
+        // Between the autoconfiguration (100), which tags autoconfigured collectors, and FrameworkBundle's ProfilerPass (0), which reads the tags.
+        $container->addCompilerPass(new ProfileOnlyRequestMeasuresPass(), PassConfig::TYPE_BEFORE_OPTIMIZATION, 10);
     }
 
     protected function build(ContainerBuilder $container): void
