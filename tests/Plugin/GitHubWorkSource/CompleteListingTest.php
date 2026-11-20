@@ -140,7 +140,7 @@ final class CompleteListingTest extends KernelTestCase
     public function testARateLimitedListingIsShortAndRecordsNothing(): void
     {
         $reads = self::createStub(IssueReads::class);
-        $reads->method('listOpen')->willThrowException(new ForgeRateLimited(new DateTimeImmutable('2026-11-20 11:00:00 UTC')));
+        $reads->method('listOpen')->willThrowException(new ForgeRateLimited(new DateTimeImmutable('2026-11-20T11:00:00+00:00')));
 
         $synced = $this->listing($reads)->sync('alpha', new IntakeRules('intakt'));
 
@@ -246,12 +246,11 @@ final class CompleteListingTest extends KernelTestCase
 
     private function assertLoggedWarning(string $part): void
     {
-        $warnings = array_filter(LogRecords::ofThisRun()?->all() ?? [], static fn (array $record): bool => 'warning' === $record['level'] && str_contains((string) $record['message'], $part));
+        $warnings = array_filter(LogRecords::ofThisRun()?->all() ?? [], static fn (array $record): bool => 'warning' === $record['level'] && str_contains($record['message'], $part));
 
         self::assertCount(1, $warnings, 'Expected one warning containing: '.$part);
     }
 
-    // A number alone is a task with no body; a number keyed to a string is a task with that body.
     /**
      * @param array<int, int|string> $issues
      */
