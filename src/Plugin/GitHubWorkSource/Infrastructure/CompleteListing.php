@@ -119,8 +119,7 @@ final readonly class CompleteListing
     private function historyOf(string $project, StoredIssue $row): IssueHistory
     {
         $history = $this->histories->of($project, $row->number(), $row->updatedAt());
-        $body = $history->body;
-        if (!$row->isListedWith($history->currentLabels, $this->references->waitsFor($body), $this->references->unreadableWaits($body), $this->references->closedBy($body))) {
+        if (!$row->isListedAs($history, $this->references)) {
             throw new ForgeReadFailed(sprintf('GitHub holds #%d with other text or labels than it was listed with, so its history is not of the listed item.', $row->number()));
         }
 

@@ -32,9 +32,9 @@ final readonly class GitHubMoments
     }
 
     // PHP rolls an out-of-range field over with only a warning (second 99 becomes the next minute) and reads a weekday that does not match its day as the next such weekday without one, so only a moment that formats back to the received text is the moment GitHub sent.
-    // A NUL byte is refused before parsing, because PHP raises a ValueError for it instead of answering false.
     private function strictly(string $format, string $text): ?DateTimeImmutable
     {
+        // Refused before parsing, because PHP raises a ValueError for a NUL byte instead of answering false.
         if (str_contains($text, "\0")) {
             return null;
         }

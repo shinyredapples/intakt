@@ -7,6 +7,7 @@ namespace Intakt\Plugin\GitHubWorkSource\Domain;
 use DateTimeImmutable;
 use DateTimeZone;
 use Doctrine\ORM\Mapping as ORM;
+use Intakt\Plugin\GitHubForge\Contract\IssueHistory;
 use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
 use LogicException;
 
@@ -102,19 +103,15 @@ final class StoredIssue
     }
 
     // The numbers a text names, not the text, because only they steer and a row whose listing went unchanged keeps them without the body; labels in any order, because GitHub does not promise one.
-    /**
-     * @param list<string> $labels
-     * @param list<int>    $waitsFor
-     * @param list<string> $unreadableWaits
-     * @param list<int>    $closedBy
-     */
-    public function isListedWith(array $labels, array $waitsFor, array $unreadableWaits, array $closedBy): bool
+    public function isListedAs(IssueHistory $history, IssueReferences $references): bool
     {
-        $held = $this->labels;
+        $listed = $this->labels;
+        $held = $history->currentLabels;
+        sort($listed);
         sort($held);
-        sort($labels);
+        $body = $history->body;
 
-        return $held === $labels && $this->waitsFor === $waitsFor && $this->unreadableWaits === $unreadableWaits && $this->closedBy === $closedBy;
+        return $listed === $held && $this->waitsFor === $references->waitsFor($body) && $this->unreadableWaits === $references->unreadableWaits($body) && $this->closedBy === $references->closedBy($body);
     }
 
     public function isVouched(): bool

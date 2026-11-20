@@ -201,7 +201,7 @@ final class CompleteListingTest extends KernelTestCase
     public function testAnItemChangedBetweenTheListingAndItsHistoryReadLeavesTheListingShortAndWritesNothing(): void
     {
         $api = new RecordedIssueApi();
-        $api->graphql = $this->historyAnswer('Issue', '', ['intakt'], '2026-11-10T10:05:00Z');
+        $api->graphql = str_replace('2026-11-10T10:00:00Z', '2026-11-10T10:05:00Z', $this->historyAnswer('Issue', '', ['intakt']));
         $this->reads->lists([Issues::task(7)]);
 
         $plan = $this->listingOver($this->reads, $api->histories())->planOf('alpha');
@@ -344,11 +344,11 @@ final class CompleteListingTest extends KernelTestCase
     /**
      * @param list<string> $labels
      */
-    private function historyAnswer(string $type, string $body, array $labels, string $updatedAt = '2026-11-10T10:00:00Z'): string
+    private function historyAnswer(string $type, string $body, array $labels): string
     {
         $item = [
             '__typename' => $type,
-            'updatedAt' => $updatedAt,
+            'updatedAt' => '2026-11-10T10:00:00Z',
             'body' => $body,
             'labels' => ['pageInfo' => ['hasNextPage' => false], 'nodes' => array_map(static fn (string $label): array => ['name' => $label], $labels)],
             'author' => ['__typename' => 'User', 'login' => 'ana'],
