@@ -46,8 +46,8 @@ the dates from [the journey](journey.md#milestones):
 - **Built by an AI loop:** the repository itself, in figures and examples ([showcase](showcase/README.md)).
 
 Counted on 2026-11-20 from the repository: 7,256 commits on main (counted), 27 upstream reports in `upstream/`
-(counted). Counted from the GitHub API to 2026-11-13, as listed in [the journey](journey.md): 614 merged pull requests
-(counted) and 655 closed issues in the milestones M0 to M8 (counted, the sum of the Done column).
+(counted). Counted from the GitHub API to 2026-11-13, the latest GitHub count, as listed in
+[the journey](journey.md): 614 merged pull requests (counted) and 773 closed issues (counted, 761 done and 12 dropped).
 
 ## After the hackathon
 
