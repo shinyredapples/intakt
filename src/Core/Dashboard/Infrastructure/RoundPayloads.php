@@ -17,6 +17,7 @@ use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\JudgeDoneFinding;
 use Intakt\Core\Review\Contract\ReviewerBlocked;
 use Intakt\Core\Review\Contract\ReviewerFailed;
+use Intakt\Core\Review\Contract\ReviewerFindingsRecorded;
 use Intakt\Core\Review\Contract\ReviewerStarted;
 use Intakt\Core\Review\Contract\ReviewerStopped;
 use Intakt\Core\Review\Contract\ReviewStarted;
@@ -86,6 +87,11 @@ final readonly class RoundPayloads
             LedgerEventKind::CatchUpOwed => $this->payloads->of($recorded, CatchUpOwed::class),
             default => null,
         };
+    }
+
+    public function reviewerFindingsOf(RecordedEvent $recorded): ?ReviewerFindingsRecorded
+    {
+        return $this->payloads->of($recorded, ReviewerFindingsRecorded::class);
     }
 
     // Told apart by the row's phase, because an unsettled row also reads into UsageSettled.

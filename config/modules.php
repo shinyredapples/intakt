@@ -20,6 +20,7 @@ return [
     'Core/ReviewerForLoop',
     'Core/Server',
     'Core/Upstream',
+    'Core/Watchdog',
     'Core/Watcher',
     'Plugin/Forge',
     'Plugin/Gate',

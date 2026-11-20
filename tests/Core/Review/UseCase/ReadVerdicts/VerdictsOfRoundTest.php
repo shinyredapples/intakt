@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\ReadVerdicts;
 
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\FlagProjectAsReplay;
 use Intakt\Core\Review\Contract\IdentityField;
@@ -46,6 +47,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[UsesClass(VerdictStanding::class)]
 #[UsesClass(ReviewTerms::class)]
 #[UsesClass(PanelVerdict::class)]
+#[UsesClass(Paths::class)]
 #[UsesClass(CommitId::class)]
 #[UsesClass(CommitRange::class)]
 #[UsesClass(HeadMove::class)]
@@ -90,7 +92,7 @@ final class VerdictsOfRoundTest extends KernelTestCase
         $verdicts = $this->fixture->verdictsOf(new VerdictsOfRound($round, $this->fixture->identityAt(SampleIdentity::NEW_HEAD, 2), new HeadMove(HeadMoveKind::Commits, ['docs/feature.md'])));
 
         self::assertSame(Standing::KeptForUntouchedParts, $verdicts->standing->standing);
-        self::assertSame(['docs/feature.md'], $verdicts->standing->reviewAgain);
+        self::assertSame(['docs/feature.md'], [...$verdicts->standing->reviewAgain]);
         self::assertCount(2, $verdicts->counting);
     }
 

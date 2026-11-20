@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Infrastructure;
 
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Memory\Contract\MemoryEntry;
 use Intakt\Core\Memory\Contract\MemoryQuery;
 use Intakt\Core\Memory\Contract\ProjectMemory;
@@ -35,7 +36,7 @@ final readonly class ReviewerMemory
     public function briefingOn(ReviewBrief $brief): ?UserMessage
     {
         $room = self::MAX_BYTES - $this->bytesOf($this->fenced(''));
-        $entries = $this->memory->relevantTo(new MemoryQuery($brief->change->project, $this->paths->in($brief->change->diff), $room))->entries;
+        $entries = $this->memory->relevantTo(new MemoryQuery($brief->change->project, new Paths(...$this->paths->in($brief->change->diff)), $room))->entries;
         $notes = $this->notesWithin($entries);
 
         return $notes instanceof FencedText ? $this->assembly->user(self::LEAD, $notes) : null;

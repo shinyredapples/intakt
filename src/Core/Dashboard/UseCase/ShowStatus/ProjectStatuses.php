@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\UseCase\ShowStatus;
 
+use DateTimeImmutable;
 use Intakt\Core\Dashboard\Domain\Board;
 use Intakt\Core\Dashboard\Domain\BoardColumn;
 use Intakt\Core\Dashboard\Domain\FailingHead;
@@ -17,6 +18,7 @@ use Intakt\Core\Dashboard\Infrastructure\LedgerWaitingHeads;
 use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Platform\Contract\Redactor;
+use Intakt\Core\Review\Contract\RoundEnds;
 use Intakt\Core\Watcher\Contract\WatcherServices;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
@@ -78,7 +80,12 @@ final readonly class ProjectStatuses
         $lane = [];
 
         foreach ($board->cardsIn(BoardColumn::InReview) as $card) {
-            $round = $card->latest();
+            $round = $card->activeRound();
+
+            if (!$round instanceof ReviewedRound) {
+                continue;
+            }
+
             $lane[$card->project][] = [
                 'change' => $card->change,
                 'mark' => $round->replayMark()->value,
@@ -161,33 +168,40 @@ final readonly class ProjectStatuses
         return $items;
     }
 
-    // The last judged round of every card, so a change in review again still shows how its previous round ended.
+    // The last ended round of every card, so a change in review again still shows how its previous round ended.
     /**
      * @return array<string, list<array<string, mixed>>>
      */
     private function lastOutcomes(Board $board): array
     {
-        $judged = $this->judgedRounds($board);
-        usort($judged, static fn (ReviewedRound $one, ReviewedRound $other): int => $other->judgedAt <=> $one->judgedAt);
+        $ended = $this->endedRounds($board);
+        usort($ended, static fn (ReviewedRound $one, ReviewedRound $other): int => self::endedAt($other) <=> self::endedAt($one));
         $outcomes = [];
 
-        foreach ($judged as $round) {
+        foreach ($ended as $round) {
             $outcomes[$round->project] ??= [];
 
             if (count($outcomes[$round->project]) < self::LAST_OUTCOMES) {
-                $outcomes[$round->project][] = ['change' => $round->change, 'mark' => $round->replayMark()->value, 'round' => $round->round, 'number' => $round->number, 'decision' => $round->outcome?->value, 'judged_at' => $round->judgedAt?->format(DATE_ATOM)];
+                $outcomes[$round->project][] = ['change' => $round->change, 'mark' => $round->replayMark()->value, 'round' => $round->round, 'number' => $round->number, 'end' => ($round->ending->end ?? RoundEnds::Judged)->value, 'decision' => $round->outcome?->value, 'judged_at' => $round->judgedAt?->format(DATE_ATOM)];
             }
         }
 
         return $outcomes;
     }
 
+    // Any round of the card and not only the latest, because a round running after a failed judging must not hide that failure.
     /**
      * @return list<ReviewedRound>
      */
-    private function judgedRounds(Board $board): array
+    private function endedRounds(Board $board): array
     {
-        return array_values(array_filter(array_map(static fn (Review $card): ?ReviewedRound => $card->lastJudgedRound(), $this->cardsOf($board))));
+        return array_values(array_filter(array_map(static fn (Review $card): ?ReviewedRound => array_last(array_values(array_filter($card->rounds, static fn (ReviewedRound $round): bool => $round->isJudged() || $round->hasEnded()))), $this->cardsOf($board))));
+    }
+
+    // A failure is placed by its ledger record rather than the round's start, because ten judgments since the start must not push a new failure off the list.
+    private static function endedAt(ReviewedRound $round): DateTimeImmutable
+    {
+        return $round->judgedAt ?? $round->ending->endedAt ?? $round->startedAt;
     }
 
     /**

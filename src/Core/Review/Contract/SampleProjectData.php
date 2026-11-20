@@ -35,9 +35,9 @@ final readonly class SampleProjectData
         return $this->text('models', $provider->value, $tier->value);
     }
 
-    public function secondMaker(): string
+    public function secondLab(): string
     {
-        return $this->text('second_maker');
+        return $this->text('second_lab');
     }
 
     /**

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Build\UseCase\BuildTask;
 
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Core\HandBack\Contract\CheckJob;
 use Intakt\Core\HandBack\Contract\CheckJobOutcome;
@@ -38,7 +39,7 @@ final readonly class PrePushCheck
     {
         try {
             // The gate's own steps and no path named by the plan, because neither a project's check command nor plan approval is configured yet.
-            $outcome = $this->jobs->run(new CheckJob($handBack, $request->image, null, []));
+            $outcome = $this->jobs->run(new CheckJob($handBack, $request->image, null, new Paths()));
         } catch (ExceptionInterface $stopped) {
             // Caught first, because a process failure may also be an InvalidArgumentException, and its message names the whole command line.
             return $this->stoppedBy($stopped);
