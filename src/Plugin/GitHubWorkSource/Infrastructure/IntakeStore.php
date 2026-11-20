@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\GitHubWorkSource\Infrastructure;
 
+use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Intakt\Plugin\GitHubWorkSource\Domain\IntakeValidator;
 use Intakt\Plugin\GitHubWorkSource\Domain\StoredIssue;
@@ -11,7 +12,7 @@ use Intakt\Plugin\GitHubWorkSource\Domain\TaskFailure;
 use Intakt\Plugin\WorkSource\Contract\TaskNotQueued;
 use InvalidArgumentException;
 
-// Every method reads and leaves the project's rows detached, because a worker keeps its entity manager between ticks and what another worker stored since is the truth.
+// Every call works in an entity manager of its own on the shared connection: a worker keeps the shared one between ticks, what another worker stored since is the truth, a write must flush only its own rows and never another caller's pending work, and a write that fails leaves nothing behind for a later flush.
 final readonly class IntakeStore
 {
     public function __construct(
@@ -24,20 +25,12 @@ final readonly class IntakeStore
      */
     public function issuesOf(string $project): array
     {
-        $this->forgetRowsOf($project);
-        $issues = $this->storedIssuesOf($project);
-        $this->forgetRowsOf($project);
-
-        return array_values($issues);
+        return array_values($this->storedIssuesOf($this->ownManager(), $project));
     }
 
     public function validatorOf(string $project): ?string
     {
-        $this->forgetRowsOf($project);
-        $validator = $this->entities->find(IntakeValidator::class, $project)?->value();
-        $this->forgetRowsOf($project);
-
-        return $validator;
+        return $this->ownManager()->find(IntakeValidator::class, $project)?->value();
     }
 
     // The rows become those of one complete listing, so an item it no longer shows was closed and its row goes; a forge that sent no validator leaves none stored, so the next listing is a full one.
@@ -46,48 +39,46 @@ final readonly class IntakeStore
      */
     public function record(string $project, array $issues, ?string $validator): void
     {
-        $this->forgetRowsOf($project);
-        try {
-            $stored = $this->storedIssuesOf($project);
-            $listed = [];
-            foreach ($issues as $issue) {
-                if ($issue->project() !== $project) {
-                    throw new InvalidArgumentException(sprintf('Issue #%d belongs to project "%s", not to "%s".', $issue->number(), $issue->project(), $project));
-                }
-
-                $listed[$issue->number()] = $issue;
+        $listed = [];
+        foreach ($issues as $issue) {
+            if ($issue->project() !== $project) {
+                throw new InvalidArgumentException(sprintf('Issue #%d belongs to project "%s", not to "%s".', $issue->number(), $issue->project(), $project));
             }
 
+            $listed[$issue->number()] = $issue;
+        }
+
+        $this->ownManager()->wrapInTransaction(function (EntityManagerInterface $manager) use ($project, $listed, $validator): void {
+            $stored = $this->storedIssuesOf($manager, $project);
             foreach ($listed as $number => $issue) {
-                $this->keep($stored[$number] ?? null, $issue);
+                $this->keep($manager, $stored[$number] ?? null, $issue);
             }
 
             foreach (array_diff_key($stored, $listed) as $closed) {
-                $this->entities->remove($closed);
+                $manager->remove($closed);
             }
 
-            $this->recordValidator($project, $validator);
-            $this->entities->flush();
-        } finally {
-            // Detached on every way out, so a write that failed midway leaves nothing for a later flush to write.
-            $this->forgetRowsOf($project);
-        }
+            $this->recordValidator($manager, $project, $validator);
+        });
     }
 
     // Apart from the issue rows, so a task that is closed after it failed for good still holds the tasks that wait on it.
     public function failForGood(string $project, int $number, string $reason): void
     {
-        $this->forgetRowsOf($project);
-        try {
-            if (!$this->entities->find(StoredIssue::class, ['project' => $project, 'number' => $number]) instanceof StoredIssue) {
+        $this->ownManager()->wrapInTransaction(static function (EntityManagerInterface $manager) use ($project, $number, $reason): void {
+            if (!$manager->find(StoredIssue::class, ['project' => $project, 'number' => $number]) instanceof StoredIssue) {
                 throw TaskNotQueued::named($project, $number);
             }
 
-            $this->recordFailure($project, $number, $reason);
-            $this->entities->flush();
-        } finally {
-            $this->forgetRowsOf($project);
-        }
+            $failure = $manager->find(TaskFailure::class, ['project' => $project, 'number' => $number]);
+            if ($failure instanceof TaskFailure) {
+                $failure->replace($reason);
+
+                return;
+            }
+
+            $manager->persist(new TaskFailure($project, $number, $reason));
+        });
     }
 
     /**
@@ -95,31 +86,33 @@ final readonly class IntakeStore
      */
     public function failuresOf(string $project): array
     {
-        $this->forgetRowsOf($project);
         $failures = [];
-        foreach ($this->entities->getRepository(TaskFailure::class)->findBy(['project' => $project]) as $failure) {
+        foreach ($this->ownManager()->getRepository(TaskFailure::class)->findBy(['project' => $project]) as $failure) {
             $failures[$failure->number()] = $failure->reason();
         }
 
-        $this->forgetRowsOf($project);
-
         return $failures;
+    }
+
+    private function ownManager(): EntityManagerInterface
+    {
+        return new EntityManager($this->entities->getConnection(), $this->entities->getConfiguration(), $this->entities->getEventManager());
     }
 
     /**
      * @return array<int, StoredIssue>
      */
-    private function storedIssuesOf(string $project): array
+    private function storedIssuesOf(EntityManagerInterface $manager, string $project): array
     {
         $issues = [];
-        foreach ($this->entities->getRepository(StoredIssue::class)->findBy(['project' => $project], ['number' => 'ASC']) as $issue) {
+        foreach ($manager->getRepository(StoredIssue::class)->findBy(['project' => $project], ['number' => 'ASC']) as $issue) {
             $issues[$issue->number()] = $issue;
         }
 
         return $issues;
     }
 
-    private function keep(?StoredIssue $stored, StoredIssue $issue): void
+    private function keep(EntityManagerInterface $manager, ?StoredIssue $stored, StoredIssue $issue): void
     {
         if ($stored instanceof StoredIssue) {
             $stored->replaceWith($issue);
@@ -127,50 +120,26 @@ final readonly class IntakeStore
             return;
         }
 
-        $this->entities->persist($issue);
+        $manager->persist($issue);
     }
 
-    private function recordFailure(string $project, int $number, string $reason): void
+    private function recordValidator(EntityManagerInterface $manager, string $project, ?string $validator): void
     {
-        $failure = $this->entities->find(TaskFailure::class, ['project' => $project, 'number' => $number]);
-        if ($failure instanceof TaskFailure) {
-            $failure->replace($reason);
-
-            return;
-        }
-
-        $this->entities->persist(new TaskFailure($project, $number, $reason));
-    }
-
-    private function recordValidator(string $project, ?string $validator): void
-    {
-        $stored = $this->entities->find(IntakeValidator::class, $project);
+        $stored = $manager->find(IntakeValidator::class, $project);
         if (null === $validator) {
             if (null !== $stored) {
-                $this->entities->remove($stored);
+                $manager->remove($stored);
             }
 
             return;
         }
 
         if (null === $stored) {
-            $this->entities->persist(new IntakeValidator($project, $validator));
+            $manager->persist(new IntakeValidator($project, $validator));
 
             return;
         }
 
         $stored->replace($validator);
-    }
-
-    // Detached one by one, never cleared, because the caller's own pending work in the entity manager must survive.
-    private function forgetRowsOf(string $project): void
-    {
-        foreach ($this->entities->getUnitOfWork()->getIdentityMap() as $managed) {
-            foreach ($managed as $entity) {
-                if (($entity instanceof StoredIssue || $entity instanceof IntakeValidator || $entity instanceof TaskFailure) && $entity->project() === $project) {
-                    $this->entities->detach($entity);
-                }
-            }
-        }
     }
 }

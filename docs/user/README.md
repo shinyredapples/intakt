@@ -505,6 +505,8 @@ Intakt has a ledger that can store review events (review started, reviewer start
 php bin/console doctrine:migrations:migrate
 ```
 
+The same command also creates the tables where Intakt will keep what it read from a project's GitHub issues: the open issues and pull requests of the last full listing, a marker that lets the next listing ask only for changes, and the reason a task failed for good. The reason stays stored after its issue is closed, so tasks that wait for it stay held. Intakt does not take work from GitHub issues by itself yet: nothing writes to these tables so far, and the automatic intake is still planned.
+
 ### Choosing the database
 
 Intakt uses SQLite unless you set `DATABASE_URL` (in `.env.local` or the real environment) to another database; MySQL, MariaDB and PostgreSQL are tested too, for example `DATABASE_URL="postgresql://intakt@localhost:5432/intakt"`. Intakt finds out the MySQL or MariaDB server version itself on the first connection. For PostgreSQL it does not ask the server and always uses its support for PostgreSQL 12 and later, the newest it has. The test environment appends `_test` to the database name, so tests against `intakt` use the database `intakt_test`. In CI, a pull request runs the tests on MySQL, MariaDB and PostgreSQL only when it touches persistence (the ledger, migrations, Doctrine's configuration, the Composer files or the CI definition under `.github/workflows/` and `.github/ci/`, or adds a line naming Doctrine in `src/`); when that check fails, the CI run fails rather than skipping them, and every push to main runs them. SQLite runs on every change.

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Plugin\GitHubWorkSource\Infrastructure;
 
 use DateTimeZone;
+use Doctrine\DBAL\Exception\TableNotFoundException;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Plugin\GitHubForge\Contract\IssueHistory;
@@ -158,6 +159,33 @@ final class IntakeStoreTest extends KernelTestCase
 
         self::assertSame([7], array_map(static fn (StoredIssue $issue): int => $issue->number(), $this->store->issuesOf('alpha')));
         self::assertNull($this->store->validatorOf('alpha'));
+    }
+
+    public function testAListingWhoseWriteFailedLeavesNoRemovalForALaterFlush(): void
+    {
+        $connection = $this->entities->getConnection();
+        $this->store->record('alpha', [$this->stored(Issues::task(7))], 'W/"a"');
+        $connection->executeStatement('ALTER TABLE work_source_validator RENAME TO hidden_validator');
+        try {
+            $this->store->record('alpha', [], 'W/"b"');
+            self::fail('The validator could be read without its table.');
+        } catch (TableNotFoundException) {
+        } finally {
+            $connection->executeStatement('ALTER TABLE hidden_validator RENAME TO work_source_validator');
+        }
+
+        $this->entities->flush();
+
+        self::assertSame([7], array_map(static fn (StoredIssue $issue): int => $issue->number(), $this->store->issuesOf('alpha')));
+    }
+
+    public function testRecordingAListingLeavesAnotherCallersPendingWorkUnwritten(): void
+    {
+        $this->entities->persist(new IntakeValidator('beta', 'W/"pending"'));
+
+        $this->store->record('alpha', [], 'W/"a"');
+
+        self::assertSame(['alpha'], $this->entities->getConnection()->fetchFirstColumn('SELECT project FROM work_source_validator ORDER BY project'));
     }
 
     public function testTheValidatorIsStoredReplacedAndDroppedWhenTheForgeSendsNone(): void
