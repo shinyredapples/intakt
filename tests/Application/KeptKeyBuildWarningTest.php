@@ -22,12 +22,23 @@ final class KeptKeyBuildWarningTest extends TestCase
     // Starts with the prefix .gitignore leaves out for test vaults, so a run stopped before tearDown leaves no key git would offer to commit.
     private const string VAULT_ENVIRONMENT_PREFIX = 'ai_providers_test_kept_key_build_warning';
 
+    // An empty project file under tests/, so the build never reads the install's config/intakt.yaml.
+    private const string PROJECT_FILE = __DIR__.'/Fixtures/no-projects.yaml';
+
+    // Prints the two settings it ran with, so each case can show that the build saw the test's own and not the operator's.
     private const string COMPILE = <<<'PHP'
+        use Symfony\AI\AiBundle\AiBundle;
+        use Symfony\AI\McpBundle\McpBundle;
+        use Symfony\Component\Config\FileLocator;
+        use Symfony\Component\DependencyInjection\ContainerBuilder;
+        use Symfony\Component\DependencyInjection\Loader\PhpFileLoader;
+
         require 'vendor/autoload.php';
-        $container = new Symfony\Component\DependencyInjection\ContainerBuilder();
-        $container->registerExtension(new Symfony\AI\AiBundle\AiBundle()->getContainerExtension());
-        $container->registerExtension(new Symfony\AI\McpBundle\McpBundle()->getContainerExtension());
-        new Symfony\Component\DependencyInjection\Loader\PhpFileLoader($container, new Symfony\Component\Config\FileLocator('config/packages'), 'test')->load('ai.php');
+        $container = new ContainerBuilder();
+        $container->registerExtension(new AiBundle()->getContainerExtension());
+        $container->registerExtension(new McpBundle()->getContainerExtension());
+        new PhpFileLoader($container, new FileLocator('config/packages'), 'test')->load('ai.php');
+        echo getenv('INTAKT_CONFIG'), "\n", getenv('APP_RUNTIME_ENV');
         PHP;
 
     protected function tearDown(): void
@@ -44,38 +55,44 @@ final class KeptKeyBuildWarningTest extends TestCase
         $providers = new SymfonyAiProviderCatalog();
         new KeptProviderKeyFile($this->keptKeyDirectory(), $providers)->keep(ProviderKey::recognise('hf_abcdefgh12345678', $providers));
 
-        $build = $this->build([
-            'APP_RUNTIME_ENV' => $this->vaultEnvironment(),
-            // Base64 of the wrong length, so libsodium throws when the vault's loader reveals a secret.
-            'SYMFONY_DECRYPTION_SECRET' => base64_encode('too short for a key pair'),
-        ]);
+        // Base64 of the wrong length, so libsodium throws when the vault's loader reveals a secret.
+        $build = $this->build(base64_encode('too short for a key pair'));
 
         self::assertStringContainsString('Another env loader failed, so its variable counts as set and the kept key does not stand in for it.', $build->getErrorOutput());
         self::assertStringNotContainsString('provider.example', $build->getErrorOutput());
+        $this->assertTheBuildRanWithTheTestsOwnSettings($build);
     }
 
     public function testAnUnreadableKeptFileWhileTheContainerIsBuiltIsReportedOnStandardError(): void
     {
         new Filesystem()->dumpFile($this->keptKeyDirectory().'/provider-key.json', '{"provider": "huggingface", "key": "not a key of any form"}');
 
-        $build = $this->build([]);
+        $build = $this->build(false);
 
         self::assertStringContainsString('The kept provider key could not be read, so it is not used.', $build->getErrorOutput());
         self::assertStringNotContainsString('not a key of any form', $build->getErrorOutput());
+        $this->assertTheBuildRanWithTheTestsOwnSettings($build);
     }
 
-    /** @param array<string, string> $environment */
-    private function build(array $environment): Process
+    // Every case builds through here, so none can read the operator's project file, vault or decryption key.
+    private function build(string|false $decryptionSecret): Process
     {
         $build = new Process([PHP_BINARY, '-r', self::COMPILE], dirname(__DIR__, 2));
 
         return $build->mustRun(null, [
-            ...$environment,
+            'APP_RUNTIME_ENV' => $this->vaultEnvironment(),
+            'INTAKT_CONFIG' => self::PROJECT_FILE,
+            'SYMFONY_DECRYPTION_SECRET' => $decryptionSecret,
             'INTAKT_PROVIDER_KEY_DIR' => $this->keptKeyDirectory(),
             'OPENAI_COMPATIBLE_BASE_URL' => false,
             'OPENAI_COMPATIBLE_API_KEY' => false,
             'SHELL_VERBOSITY' => false,
         ]);
+    }
+
+    private function assertTheBuildRanWithTheTestsOwnSettings(Process $build): void
+    {
+        self::assertSame(self::PROJECT_FILE."\n".$this->vaultEnvironment(), $build->getOutput());
     }
 
     private function vaultDirectory(): string
