@@ -1,0 +1,21 @@
+components light 1440: chart-rounds-light: 14 rows, same as the bars; chart-findings-light: 6 rows, same as the bars; chart-rounds-dark: 14 rows, same as the bars; chart-findings-dark: 6 rows, same as the bars
+components light 1440: keyboard reached 40 of 40 bars, 40 showed their own tooltip (value first)
+components light 1440: focus Nov 7: 6Nov 7; pointer leaves, focus stays: 6Nov 7; Escape: hidden; pointer leaves after Escape: hidden; pointer on Nov 5: No dataNov 5; blur while the pointer stays on Nov 5: No dataNov 5
+components light 1920: chart-rounds-light: 14 rows, same as the bars; chart-findings-light: 6 rows, same as the bars; chart-rounds-dark: 14 rows, same as the bars; chart-findings-dark: 6 rows, same as the bars
+components light 1920: keyboard reached 40 of 40 bars, 40 showed their own tooltip (value first)
+components light 390: chart-rounds-light: 14 rows, same as the bars; chart-findings-light: 6 rows, same as the bars; chart-rounds-dark: 14 rows, same as the bars; chart-findings-dark: 6 rows, same as the bars
+components light 390: keyboard reached 40 of 40 bars, 40 showed their own tooltip (value first)
+components dark 1440: chart-rounds-light: 14 rows, same as the bars; chart-findings-light: 6 rows, same as the bars; chart-rounds-dark: 14 rows, same as the bars; chart-findings-dark: 6 rows, same as the bars
+components dark 1440: keyboard reached 40 of 40 bars, 40 showed their own tooltip (value first)
+components dark 1440: focus Nov 7: 6Nov 7; pointer leaves, focus stays: 6Nov 7; Escape: hidden; pointer leaves after Escape: hidden; pointer on Nov 5: No dataNov 5; blur while the pointer stays on Nov 5: No dataNov 5
+components dark 1920: chart-rounds-light: 14 rows, same as the bars; chart-findings-light: 6 rows, same as the bars; chart-rounds-dark: 14 rows, same as the bars; chart-findings-dark: 6 rows, same as the bars
+components dark 1920: keyboard reached 40 of 40 bars, 40 showed their own tooltip (value first)
+components dark 390: chart-rounds-light: 14 rows, same as the bars; chart-findings-light: 6 rows, same as the bars; chart-rounds-dark: 14 rows, same as the bars; chart-findings-dark: 6 rows, same as the bars
+components dark 390: keyboard reached 40 of 40 bars, 40 showed their own tooltip (value first)
+components light 1440: axe critical 0, serious 0, moderate 0, minor 0
+components light 1920: axe critical 0, serious 0, moderate 0, minor 0
+components light 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
+components dark 1440: axe critical 0, serious 0, moderate 0, minor 0
+components dark 1920: axe critical 0, serious 0, moderate 0, minor 0
+components dark 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
+UI check: 6 runs, 0 serious or critical axe violations, 0 phone floor findings, 0 page errors.
