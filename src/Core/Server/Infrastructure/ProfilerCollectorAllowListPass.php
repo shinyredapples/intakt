@@ -28,10 +28,12 @@ final class ProfilerCollectorAllowListPass implements CompilerPassInterface
     }
 
     /**
-     * @param array<array<string, mixed>> $tags
+     * @param array<mixed> $tags
      */
     private function measuresARequest(array $tags): bool
     {
-        return in_array($tags[0]['id'] ?? null, self::COLLECTORS, true);
+        $attributes = $tags[0] ?? null;
+
+        return is_array($attributes) && in_array($attributes['id'] ?? null, self::COLLECTORS, true);
     }
 }

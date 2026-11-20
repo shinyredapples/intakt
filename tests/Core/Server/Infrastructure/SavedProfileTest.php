@@ -45,36 +45,30 @@ final class SavedProfileTest extends WebTestCase
     public function testNoSavedProfileHoldsACanaryCredential(): void
     {
         $this->browser->getCookieJar()->set(new Cookie('MOCKSESSID', self::CANARY.'-cookie'));
-        $this->profiled('GET', '/reviews', server: ['INTAKT_CANARY' => self::CANARY.'-env', 'SERVER_PROVIDER_API_KEY' => self::CANARY.'-server']);
-        $this->profiled(
+        $this->browser->enableProfiler();
+        $this->browser->request('GET', '/reviews', server: ['INTAKT_CANARY' => self::CANARY.'-env', 'SERVER_PROVIDER_API_KEY' => self::CANARY.'-server']);
+        $this->keepProfileToken();
+        $this->browser->enableProfiler();
+        $this->browser->request(
             'POST',
             '/mcp/review',
             server: ['HTTP_AUTHORIZATION' => 'Bearer '.self::CANARY.'-bearer', 'CONTENT_TYPE' => 'application/json'],
             content: '{"jsonrpc":"2.0","id":1,"method":"tools/list"}',
         );
         self::assertResponseStatusCodeSame(401);
-        $this->profiled('POST', '/setup/provider-key', parameters: ['key' => self::CANARY.'-posted']);
+        $this->keepProfileToken();
+        $this->browser->enableProfiler();
+        $this->browser->request('POST', '/setup/provider-key', ['key' => self::CANARY.'-posted']);
         self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so no key was kept."', BadRequestHttpException::class));
+        $this->keepProfileToken();
 
         foreach ($this->tokens as $token) {
             self::assertStringNotContainsString(self::CANARY, $this->savedProfile($token));
         }
     }
 
-    /**
-     * @param array<string, string> $parameters
-     * @param array<string, string> $server
-     */
-    private function profiled(string $method, string $uri, array $parameters = [], array $server = [], ?string $content = null): void
+    private function keepProfileToken(): void
     {
-        $this->browser->enableProfiler();
-        $this->browser->request(
-            $method,
-            $uri,
-            $parameters,
-            server: $server,
-            content: $content,
-        );
         $token = $this->browser->getResponse()->headers->get('X-Debug-Token');
         self::assertIsString($token);
         $this->tokens[] = $token;
