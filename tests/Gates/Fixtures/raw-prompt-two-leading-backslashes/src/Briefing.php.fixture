@@ -1,0 +1,22 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+final readonly class Briefing
+{
+    /**
+     * @return list<mixed>
+     */
+    public function callables(): array
+    {
+        return [
+            ['\\\\Symfony\AI\Platform\Message\Message', 'ofUser'],
+            '\\\\Symfony\AI\Platform\Message\Message::ofUser',
+            [1 => 'forSystem', 0 => '\\\\Symfony\AI\Platform\Message\Message'],
+            ['\Symfony\AI\Platform\Message\Message', 'ofUser'],
+            '\Symfony\AI\Platform\Message\Message::ofUser',
+        ];
+    }
+}

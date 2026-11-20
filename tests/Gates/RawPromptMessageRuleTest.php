@@ -85,6 +85,11 @@ final class RawPromptMessageRuleTest extends PhpStanRuleTestCase
         self::assertSame([20, 21, 22, 23], $this->linesOf($this->ruleFindingsOf('raw-prompt-leading-backslash-class')));
     }
 
+    public function testAClassStringWithTwoLeadingBackslashesIsNoCallableAndPassesWhileOneBackslashIsRefused(): void
+    {
+        self::assertSame([18, 19], $this->linesOf($this->ruleFindingsOf('raw-prompt-two-leading-backslashes')));
+    }
+
     public function testACallableArrayWhoseMethodSlotCannotHoldAStringPasses(): void
     {
         self::assertSame([17, 18], $this->linesOf($this->ruleFindingsOf('raw-prompt-callable-array-method-slot')));

@@ -125,17 +125,22 @@ final readonly class RawPromptMessageRule implements Rule
      */
     private function classNamesOf(Type $class): array
     {
-        // trimmed because PHP resolves a class string with a leading backslash, which PHPStan does not read as a class name
-        $written = array_map(static fn (ConstantStringType $constant): string => ltrim($constant->getValue(), '\\'), $class->getConstantStrings());
+        $written = array_map(fn (ConstantStringType $constant): string => $this->classStringAsPhpResolvesIt($constant->getValue()), $class->getConstantStrings());
 
         return array_map(strtolower(...), [...$class->getObjectTypeOrClassStringObjectType()->getObjectClassNames(), ...$written]);
+    }
+
+    // PHP resolves a class string with one leading backslash, which PHPStan does not read as a class name, and refuses one with two
+    private function classStringAsPhpResolvesIt(string $class): string
+    {
+        return str_starts_with($class, '\\') ? substr($class, 1) : $class;
     }
 
     private function isAFactoryCallable(ConstantStringType $callable): bool
     {
         [$class, $method] = explode('::', $callable->getValue(), 2) + ['', ''];
 
-        return strtolower(ltrim($class, '\\')) === strtolower(Message::class) && in_array(strtolower($method), self::FACTORIES, true);
+        return strtolower($this->classStringAsPhpResolvesIt($class)) === strtolower(Message::class) && in_array(strtolower($method), self::FACTORIES, true);
     }
 
     private function names(string $class, Name|Expr|Class_ $reference, Scope $scope): bool
