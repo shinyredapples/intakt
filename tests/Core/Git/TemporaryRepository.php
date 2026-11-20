@@ -161,6 +161,11 @@ final readonly class TemporaryRepository
         $this->git('checkout', '--quiet', '-b', $name);
     }
 
+    public function deleteBranch(string $name): void
+    {
+        $this->git('branch', '--quiet', '-D', $name);
+    }
+
     public function checkout(string $name): void
     {
         $this->git('checkout', '--quiet', $name);

@@ -9,6 +9,7 @@ use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Watchdog\Contract\Classification;
 use Intakt\Core\Watchdog\Contract\CommitHistory;
 use Intakt\Core\Watchdog\Contract\CommitName;
+use Intakt\Core\Watchdog\Contract\MainHistoryRewritten;
 use Intakt\Core\Watchdog\Contract\MainViolation;
 use Intakt\Core\Watchdog\Contract\RecordedMerge;
 use Intakt\Core\Watchdog\Contract\SignatureStatus;
@@ -16,7 +17,6 @@ use Intakt\Core\Watchdog\Contract\Violation;
 use Intakt\Core\Watchdog\Contract\WatchedMain;
 use Intakt\Core\Watchdog\Domain\CommitClassifier;
 use Intakt\Core\Watchdog\Infrastructure\MainHistory;
-use Intakt\Core\Watchdog\Infrastructure\MainRewrittenDuringRead;
 use Intakt\Core\Watchdog\Infrastructure\OwnerKeyRefused;
 use Intakt\Tests\Core\Git\TemporaryRepository;
 use Override;
@@ -31,7 +31,7 @@ use Symfony\Component\Process\Process;
 
 #[CoversClass(MainHistory::class)]
 #[CoversClass(OwnerKeyRefused::class)]
-#[CoversClass(MainRewrittenDuringRead::class)]
+#[CoversClass(MainHistoryRewritten::class)]
 #[UsesClass(HardenedGit::class)]
 #[UsesClass(GitCall::class)]
 #[UsesClass(CommitClassifier::class)]
@@ -150,7 +150,18 @@ final class MainHistoryTest extends TestCase
         self::assertEquals([new MainViolation($seen, Violation::HistoryRewritten)], $classification->violations);
     }
 
-    public function testAForcePushBetweenTheAncestryCheckAndTheWalkIsAFailedReadNotACleanMain(): void
+    public function testTheWalkFromACommitMainDroppedThrowsMainHistoryRewritten(): void
+    {
+        $base = $this->repository->commitEmpty('Base');
+        $seen = $this->repository->commitEmpty('Seen');
+        $this->repository->resetTo($base);
+
+        $this->expectException(MainHistoryRewritten::class);
+
+        $this->history([])->firstParentsSince($seen);
+    }
+
+    public function testAForcePushBetweenTheAncestryCheckAndTheWalkIsHistoryRewrittenOnTheLastSeenHead(): void
     {
         $base = $this->repository->commitEmpty('Base');
         $seen = $this->repository->commitEmpty('Seen');
@@ -181,9 +192,9 @@ final class MainHistoryTest extends TestCase
             }
         };
 
-        $this->expectException(MainRewrittenDuringRead::class);
+        $classification = new CommitClassifier($forcePushAfterTheAncestryCheck)->classify(new WatchedMain($seen, []));
 
-        (void) new CommitClassifier($forcePushAfterTheAncestryCheck)->classify(new WatchedMain($seen, []));
+        self::assertEquals([new MainViolation($seen, Violation::HistoryRewritten)], $classification->violations);
     }
 
     public function testAMissingMainBranchIsAFailedReadEvenWhenATagCarriesItsFullName(): void
@@ -191,11 +202,34 @@ final class MainHistoryTest extends TestCase
         $seen = $this->repository->commitEmpty('Seen');
         $this->repository->tag('refs/heads/main');
         $this->repository->checkoutNewBranch('other');
-        new Process(['git', 'branch', '--quiet', '-D', 'main'], $this->repository->path)->mustRun();
+        $this->repository->deleteBranch('main');
 
         $this->expectException(ProcessFailedException::class);
 
         $this->history([])->contains($seen);
+    }
+
+    public function testDeletingTheMainBranchLeavesTheRepositoryAnInheritedGitDirNamesAlone(): void
+    {
+        $inherited = new TemporaryRepository();
+        foreach ([$this->repository, $inherited] as $repository) {
+            $repository->commitEmpty('Seen');
+            $repository->checkoutNewBranch('other');
+        }
+        $_SERVER['GIT_DIR'] = $inherited->path.'/.git';
+        putenv('GIT_DIR='.$_SERVER['GIT_DIR']);
+
+        try {
+            $this->repository->deleteBranch('main');
+        } finally {
+            putenv('GIT_DIR');
+            unset($_SERVER['GIT_DIR']);
+            $mainOfTheInherited = is_file($inherited->path.'/.git/refs/heads/main');
+            $mainOfTheTest = is_file($this->repository->path.'/.git/refs/heads/main');
+            $inherited->remove();
+        }
+
+        self::assertSame([true, false], [$mainOfTheInherited, $mainOfTheTest]);
     }
 
     public function testTheSignersFileIsRemovedWhenTheSignatureFileCannotBeAllocated(): void
@@ -291,10 +325,71 @@ final class MainHistoryTest extends TestCase
     }
 
     /**
+     * @return iterable<string, array{list<string>}>
+     */
+    public static function keyTypes(): iterable
+    {
+        yield 'ed25519' => [['-t', 'ed25519']];
+        yield 'rsa' => [['-t', 'rsa']];
+        yield 'ecdsa nistp256' => [['-t', 'ecdsa', '-b', '256']];
+        yield 'ecdsa nistp384' => [['-t', 'ecdsa', '-b', '384']];
+        yield 'ecdsa nistp521' => [['-t', 'ecdsa', '-b', '521']];
+    }
+
+    /**
+     * @param list<string> $type
+     */
+    #[DataProvider('keyTypes')]
+    public function testAnOwnerKeyOfEachKeyTypeSshKeygenWritesIsAcceptedAndVerifies(array $type): void
+    {
+        $this->repository->commitEmpty('Seen');
+        $signed = $this->repository->commitSignedWith($this->privateKey('owner', $type), 'Owner change');
+
+        self::assertSame(SignatureStatus::OwnerSigned, $this->history([$this->publicKey('owner')])->signatureOf($signed));
+    }
+
+    /**
+     * @return iterable<string, array{string, list<string>}>
+     */
+    public static function securityKeys(): iterable
+    {
+        yield 'ed25519' => ['ssh-ed25519', [str_repeat("\x01", 32), 'ssh:']];
+        yield 'ecdsa' => ['ecdsa-sha2-nistp256', ['nistp256', "\x04".str_repeat("\x01", 64), 'ssh:']];
+    }
+
+    /**
+     * @param list<string> $fields
+     */
+    #[DataProvider('securityKeys')]
+    public function testAnOwnerKeyOfASecurityKeyTypeIsAccepted(string $plainType, array $fields): void
+    {
+        $type = 'sk-'.$plainType.'@openssh.com';
+        $this->repository->commitEmpty('Seen');
+        $signed = $this->repository->commitSignedWith($this->privateKey('stranger'), 'Foreign change');
+
+        self::assertSame(SignatureStatus::UnknownKey, $this->history([self::key($type, [$type, ...$fields])])->signatureOf($signed));
+    }
+
+    /**
      * @return iterable<string, array{string}>
      */
     public static function refusedKeys(): iterable
     {
+        $type = 'ssh-ed25519';
+        yield 'one key byte where the key declares 32' => [$type.' '.base64_encode(pack('N', strlen($type)).$type.pack('N', 32)."\x01")];
+        yield 'an ed25519 key of 31 bytes' => [self::key($type, [$type, str_repeat("\x01", 31)])];
+        yield 'an ed25519 key of 33 bytes' => [self::key($type, [$type, str_repeat("\x01", 33)])];
+        yield 'bytes after the key' => [$type.' '.base64_encode(pack('N', strlen($type)).$type.pack('N', 32).str_repeat("\x01", 33))];
+        yield 'a second field after the key' => [self::key($type, [$type, str_repeat("\x01", 32), 'more'])];
+        yield 'a length cut off after two bytes' => [$type.' '.base64_encode(pack('N', strlen($type)).$type."\x00\x00")];
+        yield 'an rsa key without its modulus' => [self::key('ssh-rsa', ['ssh-rsa', "\x01\x00\x01"])];
+        yield 'an rsa key with an empty modulus' => [self::key('ssh-rsa', ['ssh-rsa', "\x01\x00\x01", ''])];
+        yield 'an ecdsa key that names another curve' => [self::key('ecdsa-sha2-nistp256', ['ecdsa-sha2-nistp256', 'nistp384', "\x04".str_repeat("\x01", 64)])];
+        yield 'an ecdsa point one byte short' => [self::key('ecdsa-sha2-nistp256', ['ecdsa-sha2-nistp256', 'nistp256', "\x04".str_repeat("\x01", 63)])];
+        yield 'a security key without its application' => [self::key('sk-ssh-ed25519@openssh.com', ['sk-ssh-ed25519@openssh.com', str_repeat("\x01", 32)])];
+        $securityKeyType = sprintf('sk-%s@openssh.com', 'ecdsa-sha2-nistp384');
+        yield 'a security key of a curve without a security key type' => [self::key($securityKeyType, [$securityKeyType, 'nistp384', "\x04".str_repeat("\x01", 96), 'ssh:'])];
+        yield 'a key type the check does not know' => [self::key('ssh-unknown', ['ssh-unknown', str_repeat("\x01", 32)])];
         yield 'a second line' => ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIA test\nowner ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIB"];
         yield 'an allowed-signers option' => ['cert-authority ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIA'];
         yield 'a quote in the comment' => ['ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIA "x'];
@@ -329,11 +424,22 @@ final class MainHistoryTest extends TestCase
         return new MainHistory(new HardenedGit(), $this->repository->path, $ownerKeys, new Filesystem());
     }
 
-    private function privateKey(string $name): string
+    /**
+     * @param list<string> $fields
+     */
+    private static function key(string $type, array $fields): string
+    {
+        return $type.' '.base64_encode(implode('', array_map(static fn (string $field): string => pack('N', strlen($field)).$field, $fields)));
+    }
+
+    /**
+     * @param list<string> $type
+     */
+    private function privateKey(string $name, array $type = ['-t', 'ed25519']): string
     {
         $file = $this->keys.'/'.$name;
         if (!is_file($file)) {
-            new Process(['ssh-keygen', '-q', '-t', 'ed25519', '-N', '', '-C', $name, '-f', $file])->mustRun();
+            new Process(['ssh-keygen', '-q', ...$type, '-N', '', '-C', $name, '-f', $file])->mustRun();
         }
 
         return $file;

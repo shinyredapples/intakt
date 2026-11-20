@@ -7,6 +7,7 @@ namespace Intakt\Core\Watchdog\Infrastructure;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Core\Watchdog\Contract\CommitHistory;
+use Intakt\Core\Watchdog\Contract\MainHistoryRewritten;
 use Intakt\Core\Watchdog\Contract\SignatureStatus;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Process\Exception\ProcessFailedException;
@@ -32,6 +33,18 @@ final readonly class MainHistory implements CommitHistory
 
     // Strict, because a quote, an option or a line break in a key would write another line or option into the allowed-signers file.
     private const string PUBLIC_KEY = '/\A(?<type>(?:sk-)?(?:ssh|ecdsa)-[a-z0-9-]+(?:@openssh\.com)?) (?<key>[A-Za-z0-9+\/]+={0,2})(?: [^\x00-\x1f\x7f"]*)?\z/';
+
+    // Listed per type (an exact length, an exact value, or null for any field that is not empty), because the fields after the type decide whether the bytes are a whole key.
+    private const array KEY_FIELDS = [
+        'ssh-ed25519' => [32],
+        'ssh-rsa' => [null, null],
+        'ecdsa-sha2-nistp256' => ['nistp256', 65],
+        'ecdsa-sha2-nistp384' => ['nistp384', 97],
+        'ecdsa-sha2-nistp521' => ['nistp521', 133],
+    ];
+
+    // Derived from its plain type, because a key on a security key carries the same fields and then its application.
+    private const string SECURITY_KEY = '/\Ask-(?<plain>ssh-ed25519|ecdsa-sha2-nistp256)@openssh\.com\z/';
 
     /** @var list<string> */
     private array $ownerKeys;
@@ -64,14 +77,14 @@ final readonly class MainHistory implements CommitHistory
      *
      * @throws RepositoryAttributesRefused
      * @throws RuntimeException
-     * @throws MainRewrittenDuringRead
+     * @throws MainHistoryRewritten
      */
     public function firstParentsSince(string $commit): array
     {
         // One pinned tip for the ancestry check and the walk, because a force push between two reads of the ref would walk a history that dropped the commit.
         $tip = $this->tip();
         if (!$this->holds(['merge-base', '--is-ancestor', $commit, $tip])) {
-            throw MainRewrittenDuringRead::dropped($commit, $tip);
+            throw MainHistoryRewritten::dropped($commit, $tip);
         }
 
         $commits = trim($this->read(['rev-list', '--first-parent', '--reverse', $commit.'..'.$tip]));
@@ -101,7 +114,7 @@ final readonly class MainHistory implements CommitHistory
 
     private function strictKey(string $key, int $position): string
     {
-        if (1 !== preg_match(self::PUBLIC_KEY, $key, $parts) || !$this->namesItsType((string) base64_decode($parts['key'], true), $parts['type'])) {
+        if (1 !== preg_match(self::PUBLIC_KEY, $key, $parts) || !$this->isAWholeKey((string) base64_decode($parts['key'], true), $parts['type'])) {
             throw OwnerKeyRefused::notAPublicKey($position + 1);
         }
 
@@ -109,12 +122,40 @@ final readonly class MainHistory implements CommitHistory
         return $parts['type'].' '.$parts['key'];
     }
 
-    // The key bytes start with their own length-prefixed type, so a key that does not decode, or decodes to another type, is refused here instead of failing every check later.
-    private function namesItsType(string $blob, string $type): bool
+    // The whole key, because a key cut short or with bytes left over would be accepted here and then fail every check later.
+    private function isAWholeKey(string $blob, string $type): bool
     {
-        $prefix = pack('N', strlen($type)).$type;
+        $fields = $this->fields($blob);
+        $expected = 1 === preg_match(self::SECURITY_KEY, $type, $securityKey) ? [...self::KEY_FIELDS[$securityKey['plain']], null] : self::KEY_FIELDS[$type] ?? null;
+        if (null === $fields || null === $expected || $type !== array_shift($fields) || count($fields) !== count($expected)) {
+            return false;
+        }
 
-        return str_starts_with($blob, $prefix) && strlen($blob) > strlen($prefix);
+        return array_all($expected, static fn (int|string|null $rule, int $index): bool => match (true) {
+            is_int($rule) => strlen($fields[$index]) === $rule,
+            is_string($rule) => $fields[$index] === $rule,
+            default => '' !== $fields[$index],
+        });
+    }
+
+    /**
+     * @return list<string>|null
+     */
+    private function fields(string $blob): ?array
+    {
+        $fields = [];
+        $offset = 0;
+        while ($offset < strlen($blob)) {
+            $length = strlen($blob) - $offset < 4 ? null : unpack('N', $blob, $offset);
+            // No key at all, because a length that does not fit what is left must never read as a shorter key.
+            if (!is_array($length) || !is_int($length[1]) || $length[1] > strlen($blob) - $offset - 4) {
+                return null;
+            }
+            $fields[] = substr($blob, $offset + 4, $length[1]);
+            $offset += 4 + $length[1];
+        }
+
+        return $fields;
     }
 
     /**

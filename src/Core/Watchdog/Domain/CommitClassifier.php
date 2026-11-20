@@ -6,6 +6,7 @@ namespace Intakt\Core\Watchdog\Domain;
 
 use Intakt\Core\Watchdog\Contract\Classification;
 use Intakt\Core\Watchdog\Contract\CommitHistory;
+use Intakt\Core\Watchdog\Contract\MainHistoryRewritten;
 use Intakt\Core\Watchdog\Contract\MainViolation;
 use Intakt\Core\Watchdog\Contract\SignatureStatus;
 use Intakt\Core\Watchdog\Contract\Violation;
@@ -22,10 +23,20 @@ final readonly class CommitClassifier
     public function classify(WatchedMain $main): Classification
     {
         if (!$this->history->contains($main->lastSeenHead)) {
-            return new Classification([new MainViolation($main->lastSeenHead, Violation::HistoryRewritten)]);
+            return $this->rewritten($main);
         }
 
-        return new Classification($this->violationsOnTheWalk($main));
+        try {
+            return new Classification($this->violationsOnTheWalk($main));
+        } catch (MainHistoryRewritten) {
+            // The same outcome as above, because a force push between the two reads rewrote main just the same.
+            return $this->rewritten($main);
+        }
+    }
+
+    private function rewritten(WatchedMain $main): Classification
+    {
+        return new Classification([new MainViolation($main->lastSeenHead, Violation::HistoryRewritten)]);
     }
 
     /**
