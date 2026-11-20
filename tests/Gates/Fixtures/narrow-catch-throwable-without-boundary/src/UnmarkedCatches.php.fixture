@@ -72,4 +72,35 @@ final class UnmarkedCatches
         } catch (Throwable) {
         }
     }
+
+    public function swallowsAtABoundary(callable $work): void
+    {
+        try {
+            $work();
+        }
+        // Boundary: keeps the worker alive
+        catch (Throwable) {
+        }
+    }
+
+    public function dropsTheFailureAtABoundary(callable $work): ?string
+    {
+        try {
+            $work();
+            // Boundary: keeps the worker alive
+        } catch (Throwable $failure) {
+            return null;
+        }
+
+        return 'done';
+    }
+
+    public function trailingTheLastStatement(callable $work): void
+    {
+        try {
+            $work(); // Boundary: leaves failure handling to the caller
+        } catch (Throwable $failure) {
+            throw $failure;
+        }
+    }
 }

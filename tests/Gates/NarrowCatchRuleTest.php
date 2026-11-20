@@ -55,6 +55,7 @@ final class NarrowCatchRuleTest extends PhpStanRuleTestCase
         yield 'with the comment above the last statement instead' => [52];
         yield 'in a second catch the comment is not directly above' => [63];
         yield 'with a block comment' => [72];
+        yield 'with the comment trailing the last statement' => [102];
     }
 
     #[DataProvider('unmarkedThrowableCatches')]
@@ -63,12 +64,68 @@ final class NarrowCatchRuleTest extends PhpStanRuleTestCase
         $this->assertRuleRejects('narrow-catch-throwable-without-boundary', sprintf('src/UnmarkedCatches.php:%d intakt.narrowCatch A catch of Throwable outside a failure boundary', $line));
     }
 
+    /**
+     * @return iterable<string, array{int}>
+     */
+    public static function boundariesThatLoseTheFailure(): iterable
+    {
+        yield 'an empty catch' => [82];
+        yield 'a catch that never uses the failure' => [91];
+    }
+
+    #[DataProvider('boundariesThatLoseTheFailure')]
+    public function testAMarkedThrowableCatchThatNeitherRethrowsNorRecordsFailsStaticAnalysis(int $line): void
+    {
+        $this->assertRuleRejects('narrow-catch-throwable-without-boundary', sprintf('src/UnmarkedCatches.php:%d intakt.narrowCatch A catch of Throwable at a failure boundary that neither rethrows nor records the failure', $line));
+    }
+
     public function testOnlyTheUnmarkedThrowableCatchesAreReported(): void
     {
         $findings = $this->ruleFindingsOf('narrow-catch-throwable-without-boundary');
 
-        self::assertSame(7, substr_count($findings, 'intakt.narrowCatch'));
+        self::assertSame(10, substr_count($findings, 'intakt.narrowCatch'));
         self::assertStringNotContainsString('src/UnmarkedCatches.php:61 ', $findings);
+    }
+
+    public function testAGenericCatchInASourceTraitNoClassUsesFailsStaticAnalysis(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/Unattached.php', <<<'PHP'
+            <?php
+            trait Unattached
+            {
+                public function work(callable $job): void
+                {
+                    try {
+                        $job();
+                    } catch (\RuntimeException) {
+                    }
+                }
+            }
+            PHP);
+
+        self::assertStringContainsString('src/Unattached.php:8 intakt.narrowCatch', $this->ruleFindingsIn($sandbox));
+    }
+
+    public function testAGenericCatchInATestTraitUsedBySourcePassesStaticAnalysis(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('tests/CatchFromTests.php', <<<'PHP'
+            <?php
+            trait CatchFromTests
+            {
+                public function work(callable $job): void
+                {
+                    try {
+                        $job();
+                    } catch (\RuntimeException) {
+                    }
+                }
+            }
+            PHP);
+        $sandbox->write('src/UsingTestTrait.php', '<?php final class UsingTestTrait { use CatchFromTests; }');
+
+        self::assertSame('', $this->ruleFindingsIn($sandbox));
     }
 
     public function testThrowableCatchesWithABoundaryCommentDirectlyAbovePassStaticAnalysis(): void

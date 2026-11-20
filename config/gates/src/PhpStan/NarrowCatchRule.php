@@ -10,12 +10,16 @@ use InvalidArgumentException;
 use LogicException;
 use PhpParser\Comment;
 use PhpParser\Node;
+use PhpParser\Node\Expr\Throw_;
+use PhpParser\Node\Expr\Variable;
 use PhpParser\Node\Name;
 use PhpParser\Node\Stmt;
 use PhpParser\Node\Stmt\Catch_;
 use PhpParser\Node\Stmt\Nop;
 use PhpParser\Node\Stmt\TryCatch;
+use PhpParser\NodeFinder;
 use PHPStan\Analyser\Scope;
+use PHPStan\Node\FileNode;
 use PHPStan\Rules\IdentifierRuleError;
 use PHPStan\Rules\Rule;
 use PHPStan\Rules\RuleErrorBuilder;
@@ -23,14 +27,14 @@ use RuntimeException;
 use Throwable;
 
 /**
- * @implements Rule<TryCatch>
+ * @implements Rule<FileNode>
  */
 final readonly class NarrowCatchRule implements Rule
 {
     private const array ROOTS = [Exception::class, Error::class, RuntimeException::class, LogicException::class, InvalidArgumentException::class];
 
     // a one-line comment that names what the boundary protects, so a bare "Boundary:" does not count
-    private const string BOUNDARY = '~^//\s*Boundary:\s*\S~';
+    private const string BOUNDARY = '~^(?://|#)\s*Boundary:\s*\S~';
 
     private const string SOURCE = '/src/';
 
@@ -41,7 +45,7 @@ final readonly class NarrowCatchRule implements Rule
 
     public function getNodeType(): string
     {
-        return TryCatch::class;
+        return FileNode::class;
     }
 
     /**
@@ -53,12 +57,29 @@ final readonly class NarrowCatchRule implements Rule
             return [];
         }
 
-        $findings = [];
-        $before = $node->stmts;
+        // PHPStan skips the body of a trait no class uses and analyzes a used trait in the scope of the class that uses it, so the file's own tree is searched to keep the folder boundary exact
+        $tries = new NodeFinder()->findInstanceOf($node->getNodes(), TryCatch::class);
 
-        foreach ($node->catches as $catch) {
-            foreach ($this->genericTypesOf($catch, $scope) as $type) {
-                $findings[] = $this->findingFor($type, $catch, $before);
+        if ([] === $tries) {
+            return [];
+        }
+
+        $source = (string) file_get_contents($scope->getFile());
+
+        return array_values(array_merge(...array_map(fn (TryCatch $try): array => $this->findingsIn($try, $source), $tries)));
+    }
+
+    /**
+     * @return list<IdentifierRuleError>
+     */
+    private function findingsIn(TryCatch $try, string $source): array
+    {
+        $findings = [];
+        $before = $try->stmts;
+
+        foreach ($try->catches as $catch) {
+            foreach ($this->genericTypesOf($catch) as $type) {
+                $findings[] = $this->findingFor($type, $catch, $before, $source);
             }
 
             $before = $catch->stmts;
@@ -70,9 +91,9 @@ final readonly class NarrowCatchRule implements Rule
     /**
      * @return list<string>
      */
-    private function genericTypesOf(Catch_ $catch, Scope $scope): array
+    private function genericTypesOf(Catch_ $catch): array
     {
-        $names = array_map(static fn (Name $type): string => ltrim($scope->resolveName($type), '\\'), $catch->types);
+        $names = array_map(static fn (Name $type): string => ltrim($type->toString(), '\\'), $catch->types);
 
         return array_values(array_filter($names, $this->isGeneric(...)));
     }
@@ -86,18 +107,25 @@ final readonly class NarrowCatchRule implements Rule
     /**
      * @param array<Stmt> $before
      */
-    private function findingFor(string $type, Catch_ $catch, array $before): ?IdentifierRuleError
+    private function findingFor(string $type, Catch_ $catch, array $before, string $source): ?IdentifierRuleError
     {
-        $isThrowable = 0 === strcasecmp($type, Throwable::class);
-
-        if ($isThrowable && $this->hasBoundaryCommentAbove($catch, $before)) {
-            return null;
+        if (0 !== strcasecmp($type, Throwable::class)) {
+            return $this->finding($catch, sprintf('A catch of %s: name the failures the code expects (a library\'s own exception base or a domain exception); only %s may be caught, and only at a failure boundary.', $type, Throwable::class));
         }
 
-        $message = $isThrowable
-            ? sprintf('A catch of %s outside a failure boundary: name the failures the code expects, or, where it rethrows or records the failure, put a "// Boundary: <what it protects>" line directly above the catch.', Throwable::class)
-            : sprintf('A catch of %s: name the failures the code expects (a library\'s own exception base or a domain exception); only %s may be caught, and only at a failure boundary.', $type, Throwable::class);
+        if (!$this->hasBoundaryCommentAbove($catch, $before, $source)) {
+            return $this->finding($catch, sprintf('A catch of %s outside a failure boundary: name the failures the code expects, or, where it rethrows or records the failure, put a "// Boundary: <what it protects>" line directly above the catch.', Throwable::class));
+        }
 
+        if (!$this->rethrowsOrRecords($catch)) {
+            return $this->finding($catch, sprintf('A catch of %s at a failure boundary that neither rethrows nor records the failure: throw, or use the caught failure (log, ledger, a typed outcome) before the unit of work ends.', Throwable::class));
+        }
+
+        return null;
+    }
+
+    private function finding(Catch_ $catch, string $message): IdentifierRuleError
+    {
         return RuleErrorBuilder::message($message)
             ->identifier('intakt.narrowCatch')
             ->line($catch->getStartLine())
@@ -108,14 +136,41 @@ final readonly class NarrowCatchRule implements Rule
     /**
      * @param array<Stmt> $before
      */
-    private function hasBoundaryCommentAbove(Catch_ $catch, array $before): bool
+    private function hasBoundaryCommentAbove(Catch_ $catch, array $before, string $source): bool
     {
         $last = array_last($before);
         $comments = [...$catch->getComments(), ...($last instanceof Nop ? $last->getComments() : [])];
 
         return array_any(
             $comments,
-            static fn (Comment $comment): bool => $comment->getEndLine() === $catch->getStartLine() - 1 && 1 === preg_match(self::BOUNDARY, $comment->getText()),
+            fn (Comment $comment): bool => $comment->getEndLine() === $catch->getStartLine() - 1
+                && $this->startsItsLine($comment, $source)
+                && 1 === preg_match(self::BOUNDARY, $comment->getText()),
+        );
+    }
+
+    // a comment trailing code on its line annotates that code, not the catch below it
+    private function startsItsLine(Comment $comment, string $source): bool
+    {
+        $start = $comment->getStartFilePos();
+        $lineStart = false === ($newline = strrpos(substr($source, 0, $start), "\n")) ? 0 : $newline + 1;
+
+        return '' === trim(substr($source, $lineStart, $start - $lineStart));
+    }
+
+    private function rethrowsOrRecords(Catch_ $catch): bool
+    {
+        $finder = new NodeFinder();
+
+        if (null !== $finder->findFirstInstanceOf($catch->stmts, Throw_::class)) {
+            return true;
+        }
+
+        $name = $catch->var?->name;
+
+        return is_string($name) && null !== $finder->findFirst(
+            $catch->stmts,
+            static fn (Node $node): bool => $node instanceof Variable && $node->name === $name,
         );
     }
 }

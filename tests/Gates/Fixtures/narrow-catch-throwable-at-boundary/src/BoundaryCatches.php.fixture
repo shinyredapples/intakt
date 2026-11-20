@@ -66,4 +66,24 @@ final readonly class BoundaryCatches
             $this->logger->error('The message failed.', ['exception' => $failure]);
         }
     }
+
+    public function underAHashComment(callable $work): void
+    {
+        try {
+            $work();
+            # Boundary: leaves failure handling to the caller
+        } catch (Throwable $failure) {
+            throw $failure;
+        }
+    }
+
+    public function translatesTheFailure(callable $work): void
+    {
+        try {
+            $work();
+            // Boundary: the caller sees only domain failures
+        } catch (Throwable) {
+            throw new \DomainException('The work failed.');
+        }
+    }
 }
