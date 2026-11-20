@@ -24,7 +24,7 @@ final readonly class FullReport
         $contents = $this->contents();
         $folder = $this->root.'/'.self::FOLDER;
 
-        if (null === $contents || (!@mkdir($folder, 0777, true) && !is_dir($folder))) {
+        if (null === $contents || $this->isLinked() || (!@mkdir($folder, 0777, true) && !is_dir($folder)) || $this->isLinked() || !$this->staysInside($folder)) {
             return null;
         }
 
@@ -40,6 +40,20 @@ final readonly class FullReport
         fclose($handle);
 
         return $file;
+    }
+
+    // Because a var/ or var/check that is a link would put the report outside the checked tree, it is refused before and after mkdir().
+    private function isLinked(): bool
+    {
+        return is_link($this->root.'/var') || is_link($this->root.'/'.self::FOLDER);
+    }
+
+    private function staysInside(string $folder): bool
+    {
+        $root = realpath($this->root);
+        $real = realpath($folder);
+
+        return false !== $root && false !== $real && str_starts_with($real, rtrim($root, '/').'/');
     }
 
     // Because the default escaping writes every character past ASCII as \u escapes, so no gate that reads the tree finds a long dash or broken byte in it.

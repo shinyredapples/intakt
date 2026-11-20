@@ -83,6 +83,29 @@ final class FullReportTest extends SandboxTestCase
         self::assertSame([['fail', ['dashes']], 1], [$this->verdictOf($summary), $run->exitCode()], $run->output());
     }
 
+    public function testBinCheckWritesNoReportAndKeepsItsVerdictWhenVarIsALinkOutsideTheTree(): void
+    {
+        $sandbox = $this->sandboxWithTwelveDashes();
+        $outside = $this->emptySandbox();
+        $sandbox->symlink('var', $outside->root);
+
+        $run = $sandbox->checkWith([GateSlots::VARIABLE => '1'], '--only=dashes');
+
+        $this->assertNoReportAndTheSameVerdict($run, $outside);
+    }
+
+    public function testBinCheckWritesNoReportAndKeepsItsVerdictWhenVarCheckIsALinkOutsideTheTree(): void
+    {
+        $sandbox = $this->sandboxWithTwelveDashes();
+        $outside = $this->emptySandbox();
+        mkdir($sandbox->root.'/var');
+        $sandbox->symlink('var/check', $outside->root);
+
+        $run = $sandbox->checkWith([GateSlots::VARIABLE => '1'], '--only=dashes');
+
+        $this->assertNoReportAndTheSameVerdict($run, $outside);
+    }
+
     public function testTheFullReportIsAsciiOnlyEvenWhenAFindingHoldsNonAsciiText(): void
     {
         $sandbox = $this->emptySandbox();
@@ -145,6 +168,14 @@ final class FullReportTest extends SandboxTestCase
     private function reportOf(GateResult $result): GateReport
     {
         return GateReport::fromChild('dashes', new ProcessResult($result->isPassing() ? 0 : 1, $result->toJson()."\n", ''));
+    }
+
+    private function assertNoReportAndTheSameVerdict(CheckRun $run, Sandbox $outside): void
+    {
+        $summary = $this->summaryOf($run);
+        self::assertSame(['result', 'failed'], array_keys($summary->entries()), $run->output());
+        self::assertSame([['fail', ['dashes']], 1], [$this->verdictOf($summary), $run->exitCode()], $run->output());
+        self::assertSame([], array_values(array_diff((array) scandir($outside->root), ['.', '..'])), $run->output());
     }
 
     private function summaryOf(CheckRun $run): JsonNode
