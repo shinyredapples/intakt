@@ -6,9 +6,12 @@ namespace Intakt\Core\Watchdog\Contract;
 
 final readonly class MainViolation
 {
+    public string $commit;
+
     public function __construct(
-        public string $commit,
+        string $commit,
         public Violation $violation,
     ) {
+        $this->commit = CommitName::full($commit, 'violating commit');
     }
 }

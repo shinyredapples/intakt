@@ -19,7 +19,7 @@ Every violating commit of the walk is listed, oldest first.
 ## Types
 
 - `WatchedMain(lastSeenHead, list<RecordedMerge>)`: the head the watchdog saw last and the merges Intakt recorded. `isRecordedHead()` matches a commit against the recorded heads only, never the bases.
-- `RecordedMerge(head, base)`: both must be full commit names (40 lowercase hexadecimal characters for SHA-1, 64 for SHA-256); anything else, an abbreviated name or a ref name included, throws `CommitNameNotFull`. `WatchedMain` checks its last seen head the same way (`CommitName::full()`).
+- `RecordedMerge(head, base)`: both must be full commit names (40 lowercase hexadecimal characters for SHA-1, 64 for SHA-256); anything else, an abbreviated name or a ref name included, throws `CommitNameNotFull`. `WatchedMain` checks its last seen head and `MainViolation` its commit the same way (`CommitName::full()`).
 - `SignatureStatus`: a string-backed enum, `owner_signed`, `unsigned`, `unknown_key`.
 - `Violation`: a string-backed enum, `unsigned`, `unknown_key`, `history_rewritten`.
 

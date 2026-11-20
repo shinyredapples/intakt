@@ -13,6 +13,7 @@ use Intakt\Core\Watchdog\Contract\SignatureStatus;
 use Intakt\Core\Watchdog\Contract\Violation;
 use Intakt\Core\Watchdog\Contract\WatchedMain;
 use Intakt\Core\Watchdog\Domain\CommitClassifier;
+use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -41,7 +42,10 @@ final class CommitClassifierTest extends TestCase
 
     public function testARecordedMergeHeadPassesBeforeAnySignatureCheck(): void
     {
-        $history = $this->history([self::MERGE => SignatureStatus::Unsigned]);
+        $history = self::createStub(CommitHistory::class);
+        $history->method('contains')->willReturn(true);
+        $history->method('firstParentsSince')->willReturn([self::MERGE]);
+        $history->method('signatureOf')->willThrowException(new LogicException('A recorded head is never read for its signature.'));
 
         $classification = $this->classify($history, $this->mainWithRecordedMerge());
 
