@@ -4,7 +4,7 @@ How Intakt works, for developers and agents. Each user-visible feature has a pag
 
 Code and conventions:
 - [Module layout](module-layout.md)
-- [Conventions](conventions.md): logging, Doctrine mapping, message handlers, the dependency policy and which release cooldown decides what (Dependabot's or Composer's)
+- [Conventions](conventions.md): logging, Doctrine mapping, message handlers, the dependency policy and which release cooldown decides what (Dependabot's, Composer's or the import map's)
 - [Sample repository](sample-repository.md): the demo's sample change and the review bench (`intakt:bench:review`, `intakt:bench --repeat`, the result file under `var/bench/`, agreement of repeated runs, failure causes printed before the figures)
 - [Retried network git calls](network-git.md)
 - [Bare mirror](mirror.md)
