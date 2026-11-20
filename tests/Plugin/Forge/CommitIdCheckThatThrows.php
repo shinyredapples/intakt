@@ -11,9 +11,11 @@ final class CommitIdCheckThatThrows
     public static function defineFor(string $hash): void
     {
         $code = "<?php\nnamespace Intakt\\Plugin\\Forge\\Contract;\n"
+            ."use InvalidArgumentException;\n"
+            ."use function preg_match as matchGlobally;\n"
             .'function preg_match(string $pattern, string $subject, &$matches = null, int $flags = 0, int $offset = 0): int|false {'
-            .' if ('.var_export($hash, true).' === $subject) { throw new \InvalidArgumentException(\'unexpected\'); }'
-            .' return \preg_match($pattern, $subject, $matches, $flags, $offset); }'."\n";
+            .' if ('.var_export($hash, true).' === $subject) { throw new InvalidArgumentException(\'unexpected\'); }'
+            .' return matchGlobally($pattern, $subject, $matches, $flags, $offset); }'."\n";
 
         $file = tempnam(sys_get_temp_dir(), 'commit-id-check-');
         file_put_contents($file, $code);
