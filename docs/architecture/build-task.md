@@ -38,7 +38,7 @@ A parking that fails stores neither the row nor the event and throws `UseCase/Bu
 
 Clearing the row when a later build passes, and every reader of the row (the status, the dashboard), are part 3 of #1696.
 
-Tests: `ParkedTasksOnSqliteTest` (`persistence` group, the install's SQLite database: a parked task stored with its question, choices, recommendation and time and its `asked` step; a task parked again keeping one row with the newer question; a commit refused by a reader's shared lock leaving no row and no `asked` event, after which the real `DoctrineLedger` records a failed step; a database that cannot be opened leaving the task unparked with the fixed words).
+Tests: `ParkedTasksOnSqliteTest` (`persistence` group, the install's database, the refused commit on SQLite only: a parked task stored with its question, choices, recommendation and time and its `asked` step; a task parked again keeping one row with the newer question; a commit refused by a reader's shared lock leaving no row and no `asked` event, after which the real `DoctrineLedger` records a failed step; a database that cannot be opened leaving the task unparked with the fixed words).
 
 ## The door
 
