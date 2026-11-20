@@ -142,7 +142,7 @@ final readonly class StoredFindings
         $stored = $this->locked($round->project(), $round->change());
         $ledger = $this->ledgerFor($round, $stored);
 
-        $reported = array_map(fn (RoundReviewer $reviewer): ReportedFindings => new ReportedFindings($reviewer, $ledger->recordVerdict($round->number(), $this->verdictOf($reviewer))), $this->answeredIn($round));
+        $reported = array_map(fn (RoundReviewer $reviewer): ReportedFindings => $this->reportedBy($reviewer, $ledger, $round->number()), $this->answeredIn($round));
 
         $round->keepReportedFindings($this->written($ledger->openReportedIn($round->number())));
 
@@ -161,6 +161,21 @@ final readonly class StoredFindings
         $stored->recordFindings($round->number(), $this->written($ledger->all()));
 
         return $reported;
+    }
+
+    // Each id keeps the severity this reviewer gave it, because another reviewer may repeat the same tracked finding at another one; the ledger returns one id per reported finding, in order, and the higher severity stands where a reviewer reports one id twice.
+    private function reportedBy(RoundReviewer $reviewer, FindingLedger $ledger, int $number): ReportedFindings
+    {
+        $verdict = $this->verdictOf($reviewer);
+        $ids = $ledger->recordVerdict($number, $verdict);
+        $severities = [];
+
+        foreach ($ids as $index => $id) {
+            $severity = $verdict->findings[$index]->severity->value;
+            $severities[$id] = min($severities[$id] ?? $severity, $severity);
+        }
+
+        return new ReportedFindings($reviewer, $ids, $severities);
     }
 
     /**

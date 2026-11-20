@@ -75,7 +75,7 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
 
     private const string REVIEWER = '0195f0a2-7c1e-7000-8000-000000000002';
 
-    private const string MERGED_ROW = '{"round":"'.self::ROUND.'","act":["F1","F3"],"follow_ups":["F4"],"findings":[{"id":"F1","severity":"P1","text":"A bug.","merged":["F3"],"file":null,"line":null,"judge_note":null}],"dropped":[],"same_cause":{"F3":"F1"},"votes":[],"p1_keys":[]}';
+    private const string MERGED_ROW = '{"round":"'.self::ROUND.'","act":["F1","F3"],"follow_ups":["F4"],"findings":[{"id":"F1","severity":"P1","text":"A bug.","merged":["F3"],"file":null,"line":null,"judge_note":null}],"dropped":[],"same_cause":{"F3":"F1"},"votes":[],"p1_keys":[],"fallback":null}';
 
     private const string IDENTITY = '{"round":"'.self::ROUND.'","reviewer":"'.self::REVIEWER.'","role":"security","tier":"strong"';
 
@@ -258,7 +258,7 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
     {
         $done = new JudgeDone(self::ROUND, new ListedFindingIds('f1'), new ListedFindingIds('f2'), [new JudgeDoneFinding('f1', Severity::P1, 'A bug.'), new JudgeDoneFinding('f2', Severity::P3, 'A nit.')]);
 
-        self::assertSame('{"round":"'.self::ROUND.'","act":["f1"],"follow_ups":["f2"],"findings":[{"id":"f1","severity":"P1","text":"A bug.","merged":[],"file":null,"line":null,"judge_note":null},{"id":"f2","severity":"P3","text":"A nit.","merged":[],"file":null,"line":null,"judge_note":null}],"dropped":[],"same_cause":[],"votes":[],"p1_keys":[]}', $this->written($done));
+        self::assertSame('{"round":"'.self::ROUND.'","act":["f1"],"follow_ups":["f2"],"findings":[{"id":"f1","severity":"P1","text":"A bug.","merged":[],"file":null,"line":null,"judge_note":null},{"id":"f2","severity":"P3","text":"A nit.","merged":[],"file":null,"line":null,"judge_note":null}],"dropped":[],"same_cause":[],"votes":[],"p1_keys":[],"fallback":null}', $this->written($done));
     }
 
     public function testADoneJudgeListsEachDroppedFindingWithItsIdPlaceAndReason(): void
@@ -332,7 +332,7 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
 
     public function testADoneJudgeWithoutFollowUpsStillWritesTheKey(): void
     {
-        self::assertSame('{"round":"'.self::ROUND.'","act":[],"follow_ups":[],"findings":[],"dropped":[],"same_cause":[],"votes":[],"p1_keys":[]}', $this->written(new JudgeDone(self::ROUND, new ListedFindingIds(), new ListedFindingIds(), [])));
+        self::assertSame('{"round":"'.self::ROUND.'","act":[],"follow_ups":[],"findings":[],"dropped":[],"same_cause":[],"votes":[],"p1_keys":[],"fallback":null}', $this->written(new JudgeDone(self::ROUND, new ListedFindingIds(), new ListedFindingIds(), [])));
     }
 
     public function testADoneJudgeWithMergedIdsIsWrittenInTodaysFormat(): void
@@ -353,7 +353,7 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
 
     public function testAJudgeRowWithKeyedIdListsIsWrittenAgainUnchanged(): void
     {
-        $row = '{"round":"'.self::ROUND.'","act":{"1":"F3","2":"F1"},"follow_ups":{"4":"F2"},"findings":[],"dropped":[],"same_cause":[],"votes":[],"p1_keys":[]}';
+        $row = '{"round":"'.self::ROUND.'","act":{"1":"F3","2":"F1"},"follow_ups":{"4":"F2"},"findings":[],"dropped":[],"same_cause":[],"votes":[],"p1_keys":[],"fallback":null}';
         $done = $this->serializer()->deserialize($row, JudgeDone::class, JsonEncoder::FORMAT);
 
         self::assertInstanceOf(JudgeDone::class, $done);
@@ -363,7 +363,7 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
 
     public function testTwoJudgeRowsReadByOneSerializerKeepTheirOwnKeys(): void
     {
-        $first = '{"round":"'.self::ROUND.'","act":{"3":"F3","1":"F1"},"follow_ups":[],"findings":[],"dropped":[],"same_cause":[],"votes":[],"p1_keys":[]}';
+        $first = '{"round":"'.self::ROUND.'","act":{"3":"F3","1":"F1"},"follow_ups":[],"findings":[],"dropped":[],"same_cause":[],"votes":[],"p1_keys":[],"fallback":null}';
         $second = str_replace('"3":"F3"', '"9":"F3"', $first);
         $one = $this->serializer()->deserialize($first, JudgeDone::class, JsonEncoder::FORMAT);
         $two = $this->serializer()->deserialize($second, JudgeDone::class, JsonEncoder::FORMAT);
