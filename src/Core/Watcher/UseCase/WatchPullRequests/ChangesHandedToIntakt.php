@@ -61,8 +61,8 @@ final readonly class ChangesHandedToIntakt
         $created = [];
         $undecided = [];
 
-        foreach ($this->unhandedAmong($project, $open) as $address => $change) {
-            match ($this->decidedBy($address, $openings[$address] ?? [], $notHanded)) {
+        foreach ($this->unhandedAmong($project, $open) as $change) {
+            match ($this->decidedBy($change, $openings, $notHanded)) {
                 true => $created[] = $change,
                 null => $undecided[] = $change,
                 false => null,
@@ -97,14 +97,17 @@ final readonly class ChangesHandedToIntakt
 
     // Only an opening that created the pull request, because Intakt's push also updates an open pull request someone else opened on the same branch, and it decides before a recorded author answer, because Intakt's own creation is the stronger fact; null leaves it to the forge's author, because a record written before openings were recorded does not say, and a push that stopped between the forge's creation and its record left none, while the branch may have moved since.
     /**
-     * @param list<mixed>         $openings
-     * @param array<string, true> $notHanded
+     * @param array<string, list<mixed>> $openings
+     * @param array<string, true>        $notHanded
      */
-    private function decidedBy(string $address, array $openings, array $notHanded): ?bool
+    private function decidedBy(OpenChange $change, array $openings, array $notHanded): ?bool
     {
+        $address = $this->addressOf($change->id->value);
+        $opened = $openings[$address] ?? [];
+
         return match (true) {
-            in_array(Opening::Created->value, $openings, true) => true,
-            isset($notHanded[$address]), in_array(Opening::Updated->value, $openings, true) => false,
+            in_array(Opening::Created->value, $opened, true) => true,
+            isset($notHanded[$address]), in_array(Opening::Updated->value, $opened, true) => false,
             default => null,
         };
     }
