@@ -41,9 +41,13 @@ final readonly class RoundLock
         return true;
     }
 
-    // Released only once the response listeners ran, so a press that arrives while the answer is still built finds the round busy. A sub-request holds nothing of its own, so its end frees nothing.
+    // Released only once the response listeners ran, so a press that arrives while the answer is still built finds the round busy. Only the end of the main request releases, because a sub-request copied from it carries the same list of locks and its end would free the round while the press still runs.
     public function __invoke(FinishRequestEvent $event): void
     {
+        if (!$event->isMainRequest()) {
+            return;
+        }
+
         $request = $event->getRequest();
 
         foreach ($this->heldBy($request) as $lock) {

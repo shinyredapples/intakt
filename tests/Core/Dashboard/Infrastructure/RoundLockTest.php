@@ -8,10 +8,15 @@ use Intakt\Core\Dashboard\Infrastructure\RoundLock;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\EventDispatcher\EventDispatcher;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Controller\ControllerResolver;
 use Symfony\Component\HttpKernel\Event\FinishRequestEvent;
+use Symfony\Component\HttpKernel\HttpKernel;
 use Symfony\Component\HttpKernel\HttpKernelInterface;
+use Symfony\Component\HttpKernel\KernelEvents;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
 
@@ -38,6 +43,49 @@ final class RoundLockTest extends TestCase
         $rounds($this->finished($sub, HttpKernelInterface::SUB_REQUEST));
 
         self::assertFalse(new RoundLock($locks, new RequestStack([new Request()]))->tryHolding('round-1'));
+    }
+
+    public function testTheEndOfASubRequestCopiedFromTheMainRequestKeepsTheRoundHeld(): void
+    {
+        $locks = new LockFactory(new InMemoryStore());
+        $main = new Request();
+        $rounds = new RoundLock($locks, new RequestStack([$main]));
+        $rounds->tryHolding('round-1');
+        $other = new RoundLock($locks, new RequestStack([new Request()]));
+
+        $rounds($this->finished($main->duplicate(), HttpKernelInterface::SUB_REQUEST));
+
+        self::assertFalse($other->tryHolding('round-1'));
+
+        $rounds($this->finished($main, HttpKernelInterface::MAIN_REQUEST));
+
+        self::assertTrue($other->tryHolding('round-1'));
+    }
+
+    public function testASubRequestCopiedAndHandledInsideAPressKeepsTheRoundHeldUntilThePressEnds(): void
+    {
+        $locks = new LockFactory(new InMemoryStore());
+        $requests = new RequestStack();
+        $rounds = new RoundLock($locks, $requests);
+        $events = new EventDispatcher();
+        $events->addListener(KernelEvents::FINISH_REQUEST, $rounds);
+        $kernel = new HttpKernel($events, new ControllerResolver(), $requests);
+        $main = Request::create('/');
+        $heldAfterTheSubRequest = null;
+        $main->attributes->set('_controller', static function () use ($rounds, $main, $kernel, $locks, &$heldAfterTheSubRequest): Response {
+            $rounds->tryHolding('round-1');
+            $sub = $main->duplicate();
+            $sub->attributes->set('_controller', static fn (): Response => new Response('sub'));
+            $kernel->handle($sub, HttpKernelInterface::SUB_REQUEST, false);
+            $heldAfterTheSubRequest = !$locks->createLock(RoundLock::KEY_PREFIX.'round-1')->acquire();
+
+            return new Response('main');
+        });
+
+        $kernel->handle($main, HttpKernelInterface::MAIN_REQUEST, false);
+
+        self::assertTrue($heldAfterTheSubRequest);
+        self::assertTrue($locks->createLock(RoundLock::KEY_PREFIX.'round-1')->acquire());
     }
 
     public function testTheEndOfTheMainRequestFreesEveryRoundItHeld(): void
