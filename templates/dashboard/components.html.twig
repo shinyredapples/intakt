@@ -12,7 +12,7 @@
     <div class="actions"><button class="btn secondary sm" type="button" data-theme-toggle>Switch theme</button></div>
 </div>
 <nav class="comp-nav" aria-label="Sections">
-    <a href="#c-buttons">Buttons</a><a href="#c-chips">Chips and badges</a><a href="#c-cards">Cards</a><a href="#c-rows">List rows</a><a href="#c-settings">Setting rows</a><a href="#c-inputs">Inputs</a><a href="#c-bars">Bars</a><a href="#c-banners">Banners</a><a href="#c-tabs">Tabs</a><a href="#c-search">Search</a><a href="#c-toast">Toasts</a><a href="#c-empty">Empty, loading, error</a><a href="#c-characters">Characters</a>
+    <a href="#c-buttons">Buttons</a><a href="#c-chips">Chips and badges</a><a href="#c-cards">Cards</a><a href="#c-rows">List rows</a><a href="#c-settings">Setting rows</a><a href="#c-inputs">Inputs</a><a href="#c-bars">Bars</a><a href="#c-charts">Charts</a><a href="#c-banners">Banners</a><a href="#c-tabs">Tabs</a><a href="#c-search">Search</a><a href="#c-toast">Toasts</a><a href="#c-empty">Empty, loading, error</a><a href="#c-characters">Characters</a>
 </nav>
 
 <section class="comp-sec" id="c-buttons"><h2>Buttons</h2><p>Primary for the main action, secondary for others, quiet for links, danger arms on first click, needs (amber) only for the one action a waiting item asks for.</p>
@@ -80,6 +80,26 @@
     {{ include(c ~ 'bar.html.twig', {label: 'Full', note: 'Share used up', used: 100}) }}
     {{ include(c ~ 'bar.html.twig', {label: 'Last known', note: 'Unknown until logged in', used: 22, last_known: true}) }}
     {{ include(c ~ 'bar_legend.html.twig') }}
+</div>{% endfor %}</div></section>
+
+{#- Sample figures, as plain hashes the bar chart reads like ChartBar, so the chart is shown without data from the ledger. -#}
+{% set sample_bars = [
+    {label: 'P1', value: 3, reading: '3 P1 findings', detail: 'Security reviewer, 2 found by it alone', part: 2, inWords: '3 P1 findings, Security reviewer, 2 found by it alone'},
+    {label: 'P2', value: 5, reading: '5 P2 findings', detail: 'Security reviewer, 1 found by it alone', part: 1, inWords: '5 P2 findings, Security reviewer, 1 found by it alone'},
+    {label: 'P3', value: 0, reading: '0 P3 findings', detail: 'Security reviewer, 0 found by it alone', part: 0, inWords: '0 P3 findings, Security reviewer, 0 found by it alone'},
+] %}
+<section class="comp-sec" id="c-charts"><h2>Charts</h2><p>Server-drawn SVG in one hue, a hairline grid and a direct label on every bar; the solid part of a bar is its share, the lighter rest its whole. Every bar takes keyboard focus and shows its value first in a tooltip. "Show as table" lists the same numbers. Missing data reads "No data", never zero.</p>
+<div class="spec-cols">{% for theme in themes %}<div class="spec" data-theme="{{ theme }}"><h3>{{ theme|capitalize }}</h3>
+    <div class="cgrp chart" data-controller="chart" data-action="keydown.esc@window->chart#dismiss"><h4>Bar chart</h4>
+        <p class="takeaway">The security reviewer found the most P1 findings, 3, and 2 of them no other reviewer found.</p>
+        {{ include(c ~ 'bar_chart.html.twig', {name: 'Sample findings of one reviewer by severity', bars: sample_bars, top: 6}, with_context = false) }}
+        <details class="c-table"><summary>Show as table</summary><table>
+            <thead><tr><th scope="col">Severity</th><th scope="col">Findings</th><th scope="col">Found by it alone</th></tr></thead>
+            <tbody>{% for bar in sample_bars %}<tr><td>{{ bar.label }}</td><td>{{ bar.value }}</td><td>{{ bar.part }}</td></tr>{% endfor %}</tbody>
+        </table></details>
+        <div class="chart-tip" data-chart-target="tip" aria-hidden="true" hidden><strong></strong><span></span></div>
+    </div>
+    <div class="cgrp"><h4>No data</h4><p class="takeaway" data-no-data>No data</p><p class="chart-key muted">Fills in once a judged review records which reviewer reported each finding.</p></div>
 </div>{% endfor %}</div></section>
 
 <section class="comp-sec" id="c-banners"><h2>Banners</h2><p>Full on desktop; one line on phones that expands.</p>

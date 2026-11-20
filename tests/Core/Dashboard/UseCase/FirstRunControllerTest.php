@@ -22,6 +22,7 @@ use Intakt\Core\Dashboard\Domain\StepState;
 use Intakt\Core\Dashboard\Domain\TierLine;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
+use Intakt\Core\Dashboard\Infrastructure\RoundLock;
 use Intakt\Core\Dashboard\Infrastructure\SampleChangeSource;
 use Intakt\Core\Dashboard\UseCase\FirstRun\FirstRunController;
 use Intakt\Core\Dashboard\UseCase\FirstRun\FirstRunSteps;
@@ -70,6 +71,7 @@ use Symfony\Component\Messenger\Stamp\HandledStamp;
 #[CoversClass(StepState::class)]
 #[CoversClass(StartFirstReviewController::class)]
 #[CoversClass(ReviewStarts::class)]
+#[UsesClass(RoundLock::class)]
 #[CoversClass(StartAnswer::class)]
 #[CoversClass(DemoChoices::class)]
 #[CoversClass(SampleChangeSource::class)]
@@ -711,7 +713,7 @@ final class FirstRunControllerTest extends WebTestCase
         $token = $this->tokenFromThePage();
         // Replaced in the running container, because the repository is read when the container is built, and a new build would lose the session that holds the token.
         $container = self::getContainer();
-        $starts = new ReviewStarts($container->get(LedgerReviewPages::class), $container->get('command.bus'), new SampleChangeSource($container->get(TierResolver::class), null));
+        $starts = new ReviewStarts($container->get(LedgerReviewPages::class), $container->get('command.bus'), new SampleChangeSource($container->get(TierResolver::class), null), $container->get(RoundLock::class));
         $container->set(ReviewStarts::class, $starts);
 
         $this->browser()->request('POST', '/setup/first-review', ['_token' => $token]);

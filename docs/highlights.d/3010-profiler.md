@@ -1,0 +1,2 @@
+## Symfony components
+| Profiler | saved profiles in `dev`, and in `test` only for a test that calls `enableProfiler()`, absent from `prod`; only the `db`, `messenger`, `time` and `memory` collectors are registered (a compiler pass removes every other `data_collector` tag) and a decorated `profiler.storage` saves no query string or client address, so a profile holds no secret | in progress | #2721 (part #3010), `config/packages/framework.yaml`, `src/Core/Server/Infrastructure/ProfileOnlyRequestMeasuresPass.php`, `src/Core/Server/Infrastructure/PathOnlyProfilerStorage.php` |
