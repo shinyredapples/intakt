@@ -9,20 +9,52 @@ use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Build\Contract\BuildBrief;
+use Intakt\Core\Build\Domain\BuilderPrompt;
+use Intakt\Core\Build\Domain\BuildQuestion;
+use Intakt\Core\Build\Domain\GatesAtOnce;
+use Intakt\Core\Build\Domain\GatesByDefault;
+use Intakt\Core\Build\Domain\QuestionRefused;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
 use Intakt\Core\Job\Contract\JobCause;
+use Intakt\Core\Job\Contract\JobEgress;
 use Intakt\Core\Job\Contract\JobEnd;
+use Intakt\Core\Job\Contract\JobId;
+use Intakt\Core\Job\Contract\JobInput;
+use Intakt\Core\Job\Contract\JobLimits;
 use Intakt\Core\Job\Contract\JobOutput;
 use Intakt\Core\Job\Contract\JobResult;
 use Intakt\Core\Job\Contract\JobRunner;
 use Intakt\Core\Job\Contract\JobSpec;
+use Intakt\Core\Review\Contract\Fence;
+use Intakt\Core\Review\Contract\PromptCut;
+use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
 use Intakt\Tests\Core\Build\ScriptedJobRunner;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\Filesystem\Filesystem;
 
 #[CoversClass(RunBuildJob::class)]
+#[UsesClass(BuildBrief::class)]
+#[UsesClass(BuildJob::class)]
+#[UsesClass(JobSpec::class)]
+#[UsesClass(JobResult::class)]
+#[UsesClass(JobEnd::class)]
+#[UsesClass(JobOutput::class)]
+#[UsesClass(ResolvedModel::class)]
+#[UsesClass(BuilderPrompt::class)]
+#[UsesClass(BuildQuestion::class)]
+#[UsesClass(GatesAtOnce::class)]
+#[UsesClass(GatesByDefault::class)]
+#[UsesClass(QuestionRefused::class)]
+#[UsesClass(JobEgress::class)]
+#[UsesClass(JobId::class)]
+#[UsesClass(JobInput::class)]
+#[UsesClass(JobLimits::class)]
+#[UsesClass(Fence::class)]
+#[UsesClass(PromptCut::class)]
+#[UsesClass(PhpGate::class)]
 final class ToolTimeLimitConfigTest extends KernelTestCase
 {
     protected static function getKernelClass(): string
