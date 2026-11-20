@@ -16,7 +16,7 @@ final readonly class Vouching
     /**
      * @param list<string> $labels
      */
-    private function __construct(
+    public function __construct(
         public bool $trusted,
         public array $labels,
     ) {

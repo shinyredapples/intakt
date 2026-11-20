@@ -9,7 +9,7 @@ use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Core\Git\Domain\Mirrors;
-use InvalidArgumentException;
+use Intakt\Core\Git\Domain\ProjectNameRefused;
 use Symfony\Component\Process\Exception\ExceptionInterface;
 use Symfony\Component\Process\Process;
 
@@ -23,7 +23,7 @@ final readonly class TakeCheckedHead
     }
 
     /**
-     * @throws InvalidArgumentException
+     * @throws ProjectNameRefused
      * @throws CheckedHeadNotTaken
      * @throws RepositoryAttributesRefused
      * @throws ExceptionInterface

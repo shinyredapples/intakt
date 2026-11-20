@@ -6,9 +6,10 @@ namespace Intakt\Core\Git\UseCase\ListProtectedChanges;
 
 use Intakt\Core\Git\Contract\GitServices;
 use Intakt\Core\Git\Domain\Mirrors;
+use Intakt\Core\Git\Domain\ProjectNameRefused;
 use Intakt\Core\Git\Domain\ProtectedChanges;
+use Intakt\Core\Git\Domain\ProtectedPathRefused;
 use Intakt\Core\Git\Domain\ProtectedPaths;
-use InvalidArgumentException;
 use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -39,7 +40,7 @@ final readonly class ListProtectedChangesCommand
     ): int {
         try {
             $changes = $this->changes->of($this->mirrors->pathOf($project), $head, new ProtectedPaths($this->protectedPaths[$project] ?? []));
-        } catch (InvalidArgumentException $refused) {
+        } catch (ProjectNameRefused|CommitNameRefused|ProtectedPathRefused $refused) {
             $io->error($refused->getMessage());
 
             return Command::FAILURE;
