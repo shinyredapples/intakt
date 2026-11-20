@@ -217,7 +217,7 @@ final readonly class RoundFixture
 
     public function worker(EntityManagerInterface $entities, Vendor $vendor, Ledger $ledger): ReviewWithReviewerHandler
     {
-        return new ReviewWithReviewerHandler($this->leases($entities, $ledger), $vendor, $this->rounds($entities), new GoalpostRule(), $this->liveProgress($entities));
+        return new ReviewWithReviewerHandler($this->leases($entities, $ledger), $vendor, $this->rounds($entities, $ledger), new GoalpostRule(), $this->liveProgress($entities));
     }
 
     // The fixture's one lock store, because the workers of one install share theirs and a worker on its own store would never find the publication taken.
@@ -278,7 +278,7 @@ final readonly class RoundFixture
 
     public function failedMessages(?Ledger $ledger = null): BlockReviewerOfFailedMessage
     {
-        return new BlockReviewerOfFailedMessage($this->leases($this->entities, $ledger), $this->rounds($this->entities), $this->log);
+        return new BlockReviewerOfFailedMessage($this->leases($this->entities, $ledger), $this->rounds($this->entities, $ledger), $this->log);
     }
 
     // Another worker: its own connection and entity manager, as another messenger:consume process has; its ledger is in memory because the Doctrine ledger writes through the first connection.
@@ -395,9 +395,9 @@ final readonly class RoundFixture
         return new ReviewSubject('alpha', __DIR__, self::TASK, self::DIFF);
     }
 
-    private function rounds(EntityManagerInterface $entities): ReviewRounds
+    private function rounds(EntityManagerInterface $entities, ?Ledger $ledger = null): ReviewRounds
     {
-        return new ReviewRounds($entities, $this->clock, $this->storedFindingsOn($entities));
+        return new ReviewRounds($entities, $this->clock, $this->storedFindingsOn($entities), $this->roundLedger($ledger ?? $this->ledger));
     }
 
     private function storedFindingsOn(EntityManagerInterface $entities): StoredFindings
