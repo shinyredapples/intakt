@@ -30,7 +30,7 @@ M{{ x|round(1) }},{{ base|round(1) }} V{{ (y + r)|round(1) }} Q{{ x|round(1) }},
     {%- set partTop = base - bar.part / top * plot %}
     <path d="{{ _self.bar_path(x, partTop, barWidth, base, bar.part == bar.value) }}" class="c-bar c-part"/>
     {%- endif %}
-    <text x="{{ center|round(1) }}" y="{{ (y - 6)|round(1) }}" class="c-label" text-anchor="middle" aria-hidden="true">{{ bar.directLabel }}{% if bar.part is not null %} ({{ bar.part }} alone){% endif %}</text>
+    <text x="{{ center|round(1) }}" y="{{ (y - 6)|round(1) }}" class="c-label" text-anchor="middle" aria-hidden="true">{{ bar.shown ?? bar.value }}{% if bar.part is not null %} ({{ bar.part }} alone){% endif %}</text>
     <text x="{{ center|round(1) }}" y="{{ height - 8 }}" class="c-axis" text-anchor="middle" aria-hidden="true">{{ bar.label }}</text>
     <rect x="{{ (left + step * loop.index0)|round(1) }}" y="{{ above }}" width="{{ step|round(1) }}" height="{{ plot }}" class="c-hit" tabindex="0" role="img" aria-label="{{ bar.inWords }}"
         data-action="pointerenter->chart#pointerEnter pointerleave->chart#pointerLeave focus->chart#focusIn blur->chart#focusOut"
