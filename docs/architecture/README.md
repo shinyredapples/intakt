@@ -20,7 +20,7 @@ Code and conventions:
 - [Development diagnostics (Mate)](development-diagnostics.md)
 
 Checks, CI and releases:
-- [Quality gates](quality-gates.md): also the `workflows` gate, zizmor over the GitHub Actions workflows in `.github/`, offline; an inline `# zizmor: ignore[<audit>]` without a reason on the same line fails it
+- [Quality gates](quality-gates.md): also the `workflows` gate, zizmor over the GitHub Actions workflows in `.github/`, offline; an inline `# zizmor: ignore[<audit>]` without a reason on the same line fails it; the `phpstan` gate refuses a model message built outside `PromptAssembly` and judges `src/`, `bin/` and `config/`; a message built under `tests/` is not judged
 - [The journey page](journey-page.md): `bin/journey` regenerates the At a glance table, the milestone table and the chart regions of `docs/journey.md` from the GitHub API and `docs/journey/usage.jsonl`, writing only between marker comments, and draws the charts and the Mermaid timeline as SVG files in `docs/journey/`
 - [Journeys](journeys.md): the harness, the test vendor, the recording hub, the live round driver, the dashboard of the journey's own, the watcher start and the round stream check the journeys use, and each journey (first install and setup, live review progress on the dashboard); a failing journey names itself and its step, and the live review progress journey has a forced-break proof; `bin/journey-alarm` files or updates one urgent task for a red run
 - [CI](ci.md): also the journeys, on every push to main, on a pull request that needs the app image or touches the journeys' test code, and on main nightly and on demand. Dependabot updates every image CI and the app use weekly, once a release is 3 days old, except images on GHCR, such as gitleaks (no wait). Every image is pinned by tag and digest except the database images in `.github/ci/databases.Dockerfile`, which carry a tag only: whoever has registry access appends `@sha256:<index digest>` to each of its lines, and Dependabot then keeps tag and digest current like the other images.
@@ -69,6 +69,7 @@ Reviews:
 - [Finding ledger](finding-ledger.md)
 - [Reviewer repository tools](reviewer-repository-tools.md)
 - [Reviewer agent](reviewer-agent.md)
+- [Prompt assembly](prompt-assembly.md): `PromptAssembly` is the only class that builds a model message, with literals and `FencedText` only, the role prompt only through `systemWithRole()`, enforced by the `phpstan` gate
 - [Project memory](project-memory.md)
 - [Ledger](ledger.md)
 - [The weekly report: the loop's reviews and Intakt's](weekly-report.md)
