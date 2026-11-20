@@ -124,7 +124,7 @@ final class PinnedProviderCooldownTest extends TestCase
             return 'team';
         });
 
-        $out = $this->failureOf(fn (): object => $this->accounts($default, $team)->invoke(self::PINNED, 'Review.')->asText());
+        $out = $this->failureOf(fn (): string => $this->accounts($default, $team)->invoke(self::PINNED, 'Review.')->asText());
 
         self::assertInstanceOf(EveryAccountCoolingDown::class, $out);
         self::assertSame([120, 0], [$out->secondsUntilAnAccountIsFree, $requests]);

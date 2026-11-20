@@ -105,13 +105,19 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         foreach ($this->platforms as $name => $platform) {
             if (0 === $waits[$name]) {
                 $account = new Account($this->provider, $name);
-                $pinned = null === $routerProvider ? null : new PinnedProvider($account, $routerProvider);
+                // Every account but the first free one is read again right before it sends, because the read that found it free was made before an earlier account was tried.
                 $recheck = [] === $free ? null : $this->modelWaits;
-                $free[$name] = new AccountPlatform($account, $platform, $this->cooldowns, $this->clock, $this->logger, $failures, $this->pinnedCooldowns, $pinned, $recheck);
+                $free[$name] = new AccountPlatform($account, $platform, $this->cooldowns, $this->clock, $this->logger, $failures, $this->pinnedCooldowns, $this->pinnedOf($account, $routerProvider), $recheck);
             }
         }
 
         return $free;
+    }
+
+    // Only a model id that pins a router provider has a pin to cool and to read.
+    private function pinnedOf(Account $account, ?string $routerProvider): ?PinnedProvider
+    {
+        return null === $routerProvider ? null : new PinnedProvider($account, $routerProvider);
     }
 
     /**
