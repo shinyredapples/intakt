@@ -133,11 +133,12 @@ final readonly class NoPublicSetterRule implements Rule
             return false;
         }
 
-        if (0 !== $visibility) {
-            return Modifiers::PUBLIC === $visibility;
-        }
-
         $native = $owner->getNativeReflection();
+
+        // a method the owner declares itself wins over the alias and is judged as a method, so the alias only counts when it is what callers really get
+        if (array_key_exists(strtolower($name), array_change_key_case($native->getBetterReflection()->getImmediateMethods()))) {
+            return false;
+        }
 
         return $native->hasMethod($name) && $native->getMethod($name)->isPublic();
     }

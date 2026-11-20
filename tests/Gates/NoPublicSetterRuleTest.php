@@ -137,6 +137,19 @@ final class NoPublicSetterRuleTest extends PhpStanRuleTestCase
         $this->assertRuleAccepts('trait-with-named-methods');
     }
 
+    public function testAPublicSetterAliasMaskedByAProtectedMethodOfTheClassPassesStaticAnalysis(): void
+    {
+        $this->assertRuleAccepts('protected-method-masks-setter-alias');
+    }
+
+    public function testAPublicSetterMaskingAPrivateAliasIsReportedOnceWhereTheClassDeclaresIt(): void
+    {
+        $findings = $this->ruleFindingsOf('public-method-masks-setter-alias');
+
+        self::assertStringStartsWith('src/Person.php:13 intakt.noPublicSetter Method Intakt\Sample\Person::setName() is a public setter', $findings);
+        self::assertCount(1, explode("\n", $findings));
+    }
+
     public function testASetterAliasInATraitNoClassUsesFailsStaticAnalysis(): void
     {
         $this->assertRuleRejects('unused-trait-alias-setter', 'src/WrappedSetter.php:10 intakt.noPublicSetter Method Intakt\Sample\WrappedSetter::setLabel() is a public setter');
