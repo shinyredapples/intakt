@@ -41,13 +41,22 @@ the dates from [the journey](journey.md#milestones):
   ([MCP](user/mcp.md), [the skill](../skills/intakt-review/README.md)).
 - **The quality gates:** `bin/check` runs every gate CI runs on every change ([quality gates](architecture/quality-gates.md)).
 - **Upstream reports:** likely bugs in Symfony, Symfony AI and other libraries, each with a minimal reproduction, and
-  fixes that are in Symfony 8.2.0-BETA2 ([upstream reproductions](../upstream/README.md), "Found in the beta" on
+  fixes that are in Symfony 8.2.0-BETA2 ([found and fixed upstream](../README.md#found-and-fixed-upstream),
+  [upstream reproductions](../upstream/README.md), "Found in the beta" on
   [Highlights](https://shinyredapples.github.io/intakt/)).
 - **Built by an AI loop:** the repository itself, in figures and examples ([showcase](showcase/README.md)).
 
 Counted on 2026-11-20 from the repository: 7,256 commits on main (counted), 27 upstream reports in `upstream/`
 (counted). Counted from the GitHub API to 2026-11-13, the latest GitHub count, as listed in
 [the journey](journey.md): 614 merged pull requests (counted) and 773 closed issues (counted, 761 done and 12 dropped).
+
+## AI use
+
+- AI agents in a build loop wrote the code, the docs and the tests.
+- Every change went through a pull request with reviews by models from two AI labs, CI with the repository's quality
+  gates, and an owner approval step for protected paths.
+- The owner set the plan, the decisions and the priorities.
+- The repository as an example of this way of working, in figures and examples: [the showcase](showcase/README.md).
 
 ## After the hackathon
 
