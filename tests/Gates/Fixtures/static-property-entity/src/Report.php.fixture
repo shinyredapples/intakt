@@ -1,0 +1,17 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use Doctrine\ORM\Mapping as ORM;
+
+#[ORM\Entity]
+final class Report
+{
+    public static ?self $latest = null;
+
+    public function __construct(#[ORM\Id, ORM\Column] public readonly int $id)
+    {
+    }
+}
