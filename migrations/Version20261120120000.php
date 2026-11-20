@@ -31,8 +31,11 @@ final class Version20261120120000 extends AbstractMigration
         }
     }
 
+    // Back to running, the state it was interrupted from, because the previous release has no interrupted case and cannot hydrate such a row.
     public function down(Schema $schema): void
     {
+        $this->addSql("UPDATE round_reviewer SET state = 'running' WHERE state = 'interrupted'");
+
         $table = $schema->getTable('round_reviewer');
         $columns = array_map($table->getColumn(...), self::COLUMNS);
 
