@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Dashboard\Domain;
 
 use DateTimeImmutable;
+use DateTimeZone;
 use LogicException;
 use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Dashboard\Domain\ChartBar;
@@ -104,7 +105,18 @@ final class ReviewsPerDayTest extends TestCase
 
     private function round(string $round, string $at): ReviewedRound
     {
-        return new ReviewedRound(new RoundStart($round, 'alpha', 2), new RoundPlace('feat/thing', 7), DateTimeImmutable::createFromFormat(DATE_ATOM, $at) ?: throw new LogicException('bad time'), null);
+        return new ReviewedRound(new RoundStart($round, 'alpha', 2), new RoundPlace('feat/thing', 7), $this->moment($at), null);
+    }
+
+    private function moment(string $at): DateTimeImmutable
+    {
+        $moment = DateTimeImmutable::createFromFormat(DATE_ATOM, $at, new DateTimeZone('UTC'));
+
+        if (false === $moment) {
+            throw new LogicException('Not a time: '.$at);
+        }
+
+        return $moment;
     }
 
     private function priced(string $round, string $at, float $usd): ReviewedRound

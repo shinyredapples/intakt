@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\Domain;
 
-use DateTimeImmutable;
 use DateTimeZone;
 use Intakt\Core\Budget\Contract\Cost;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
@@ -21,8 +20,9 @@ final readonly class ReviewsPerDay
     // Keyed by UTC start day, oldest first.
     /**
      * @param array<string, list<ReviewedRound>> $days
+     * @param array<string, string>              $names
      */
-    private function __construct(private array $days)
+    private function __construct(private array $days, private array $names)
     {
     }
 
@@ -32,9 +32,12 @@ final readonly class ReviewsPerDay
     public static function of(array $rounds): ?self
     {
         $days = [];
+        $names = [];
 
         foreach ($rounds as $round) {
-            $days[$round->startedAt->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d')][] = $round;
+            $start = $round->startedAt->setTimezone(new DateTimeZone('UTC'));
+            $days[$start->format('Y-m-d')][] = $round;
+            $names[$start->format('Y-m-d')] = $start->format('M j');
         }
 
         if (count($days) < self::MINIMUM_DAYS) {
@@ -43,7 +46,7 @@ final readonly class ReviewsPerDay
 
         ksort($days);
 
-        return new self($days);
+        return new self($days, $names);
     }
 
     public function dayCount(): int
@@ -152,6 +155,6 @@ final readonly class ReviewsPerDay
 
     private function name(string $day): string
     {
-        return DateTimeImmutable::createFromFormat('!Y-m-d', $day, new DateTimeZone('UTC'))->format('M j');
+        return $this->names[$day] ?? $day;
     }
 }
