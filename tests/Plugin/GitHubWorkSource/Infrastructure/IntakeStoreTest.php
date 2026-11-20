@@ -24,20 +24,24 @@ use Intakt\Plugin\GitHubWorkSource\Domain\TaskFailure;
 use Intakt\Plugin\GitHubWorkSource\Domain\ValidatorChange;
 use Intakt\Plugin\GitHubWorkSource\Domain\Vouching;
 use Intakt\Plugin\GitHubWorkSource\Infrastructure\IntakeStore;
+use Intakt\Plugin\GitHubWorkSource\Infrastructure\IntakeStoreLocked;
 use Intakt\Plugin\WorkSource\Contract\TaskNotQueued;
 use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Plugin\GitHubWorkSource\Issues;
+use Intakt\Tests\Plugin\GitHubWorkSource\TwoConnections;
 use Intakt\Tests\Support\KernelTestCase;
 use InvalidArgumentException;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
+use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\Attributes\UsesClass;
 use RuntimeException;
 use WeakReference;
 
 #[Group('persistence')]
 #[CoversClass(IntakeStore::class)]
+#[CoversClass(IntakeStoreLocked::class)]
 #[CoversClass(StoredIssue::class)]
 #[CoversClass(IntakeValidator::class)]
 #[CoversClass(TaskFailure::class)]
@@ -358,6 +362,69 @@ final class IntakeStoreTest extends KernelTestCase
 
         self::assertFalse($recorded);
         self::assertSame([], $this->store->issuesOf('alpha'));
+    }
+
+    /**
+     * @param list<int> $storedBefore
+     */
+    #[TestWith([[]], 'the first listing of the project')]
+    #[TestWith([[6]], 'a later listing')]
+    public function testAListingAnotherConnectionOvertookBetweenTheReadAndTheWriteIsNotRecordedAndNoLockFailureEscapes(array $storedBefore): void
+    {
+        $shared = TwoConnections::mappedBy($this->entities->getConfiguration());
+        try {
+            $store = new IntakeStore($shared->left);
+            $other = new IntakeStore($shared->right);
+            if ([] !== $storedBefore) {
+                $store->recordIfStill('alpha', array_map(fn (int $number): StoredIssue => $this->stored(Issues::task($number)), $storedBefore), new ValidatorChange(IntakeState::none(), null));
+            }
+
+            $seen = $store->stateOf('alpha');
+            $overtaking = [$this->stored(Issues::task(8))];
+            $shared->beforeTheNextLeftFlush(static fn (): bool => $other->recordIfStill('alpha', $overtaking, new ValidatorChange($seen, null)));
+
+            $recorded = $store->recordIfStill('alpha', [$this->stored(Issues::task(7))], new ValidatorChange($seen, null));
+
+            self::assertFalse($recorded);
+            self::assertSame([8], array_map(static fn (StoredIssue $issue): int => $issue->number(), $store->issuesOf('alpha')));
+            self::assertSame($seen->generation + 1, $store->stateOf('alpha')->generation);
+        } finally {
+            $shared->close();
+        }
+    }
+
+    public function testAListingRefusedForALockThatIsGoneOnTheNextAttemptIsRecordedAndNotCountedAsLost(): void
+    {
+        $shared = TwoConnections::mappedBy($this->entities->getConfiguration());
+        try {
+            $store = new IntakeStore($shared->left);
+            $shared->beforeTheNextLeftFlush(static function () use ($shared): void {
+                $shared->holdTheWriteLockOnTheRight();
+                $shared->beforeTheNextLeftFlush($shared->releaseTheWriteLockOnTheRight(...));
+            });
+
+            $recorded = $store->recordIfStill('alpha', [$this->stored(Issues::task(7))], new ValidatorChange(IntakeState::none(), null));
+
+            self::assertTrue($recorded);
+            self::assertSame([7], array_map(static fn (StoredIssue $issue): int => $issue->number(), $store->issuesOf('alpha')));
+            self::assertSame(1, $store->stateOf('alpha')->generation);
+        } finally {
+            $shared->close();
+        }
+    }
+
+    public function testAListingStillRefusedOnTheThirdAttemptIsALockedStoreAndNeverAnsweredAsLost(): void
+    {
+        $shared = TwoConnections::mappedBy($this->entities->getConfiguration());
+        $shared->holdTheWriteLockOnTheRight();
+        try {
+            $this->expectException(IntakeStoreLocked::class);
+            $this->expectExceptionMessage('The stored listing of project "alpha" stayed locked by another writer for 3 attempts.');
+
+            new IntakeStore($shared->left)->recordIfStill('alpha', [$this->stored(Issues::task(7))], new ValidatorChange(IntakeState::none(), null));
+        } finally {
+            $shared->close();
+        }
     }
 
     /**

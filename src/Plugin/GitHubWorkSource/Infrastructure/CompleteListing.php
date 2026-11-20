@@ -42,7 +42,7 @@ final readonly class CompleteListing
     {
         try {
             $issues = $this->recorded($project, $this->store->stateOf($project), $rules);
-        } catch (ForgeReadFailed|ForgeRateLimited|TrustNotChecked $short) {
+        } catch (ForgeReadFailed|ForgeRateLimited|TrustNotChecked|IntakeStoreLocked $short) {
             return $this->short($project, $short);
         }
 
@@ -55,13 +55,25 @@ final readonly class CompleteListing
     private function recorded(string $project, IntakeState $seen, IntakeRules $rules): array
     {
         $listing = $this->reads->listOpen($project, $seen->validator);
-        $issues = $this->vouched($project, $this->issuesOf($project, $listing), $rules);
-        if ($this->store->recordIfStill($project, $issues, new ValidatorChange($seen, $listing->isUnchanged() ? $seen->validator : $listing->validator))) {
+        try {
+            // A listing another sync has superseded already may show items that closed since, so no history is read for it.
+            $issues = $this->isSuperseded($project, $seen) ? null : $this->vouched($project, $this->issuesOf($project, $listing), $rules);
+        } catch (ForgeReadFailed|ForgeRateLimited|TrustNotChecked $short) {
+            // A read for a listing that was superseded meanwhile must not end the tick short, because the rows that now count were never asked.
+            $issues = $this->isSuperseded($project, $seen) ? null : throw $short;
+        }
+
+        if (null !== $issues && $this->store->recordIfStill($project, $issues, new ValidatorChange($seen, $listing->isUnchanged() ? $seen->validator : $listing->validator))) {
             return $issues;
         }
 
         // The sync that stored its listing while this request was in flight holds the newer rows, but it vouched them under its own rules, so this tick's eligibility label is applied to them again.
         return $this->vouched($project, $this->store->issuesOf($project), $rules);
+    }
+
+    private function isSuperseded(string $project, IntakeState $seen): bool
+    {
+        return $this->store->stateOf($project)->generation !== $seen->generation;
     }
 
     // Every listed field comes from the listing, also for an unchanged item, because a milestone's due date changes without the item's update time moving.

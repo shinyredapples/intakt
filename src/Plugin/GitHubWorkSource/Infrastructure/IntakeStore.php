@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Plugin\GitHubWorkSource\Infrastructure;
 
 use Doctrine\Common\EventManager;
+use Doctrine\DBAL\Exception\RetryableException;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManager;
@@ -21,6 +22,8 @@ use LogicException;
 // Every call works in an entity manager of its own on the shared connection: a worker keeps the shared one between ticks, what another worker stored since is the truth, a write must flush only its own rows and never another caller's pending work, and a write that fails leaves nothing behind for a later flush.
 final readonly class IntakeStore
 {
+    private const int ATTEMPTS = 3;
+
     public function __construct(
         private EntityManagerInterface $entities,
     ) {
@@ -46,22 +49,17 @@ final readonly class IntakeStore
     public function recordIfStill(string $project, array $issues, ValidatorChange $change): bool
     {
         $listed = $this->listed($project, $issues);
-        try {
-            return true === $this->ownManager()->wrapInTransaction(function (EntityManagerInterface $manager) use ($project, $listed, $change): bool {
-                $stored = $manager->find(IntakeValidator::class, $project, LockMode::PESSIMISTIC_WRITE) ?? $this->firstStateOf($manager, $project);
-                if ($stored->state()->generation !== $change->from->generation) {
-                    return false;
-                }
-
-                $this->replaceRows($manager, $project, $listed);
-                $stored->advance($change->to);
-
-                return true;
-            });
-        } catch (UniqueConstraintViolationException) {
-            // A first sync that committed the project's state row while this one wrote its own holds the newer rows, so this one loses like any other stale write.
-            return false;
+        $refusal = null;
+        for ($attempt = 1; $attempt <= self::ATTEMPTS; ++$attempt) {
+            try {
+                return $this->comparedAndSet($project, $listed, $change);
+            } catch (RetryableException $refusal) {
+                // A refused lock does not say whether the other writer committed, so the compare runs again on what is stored now instead of being answered blindly.
+                continue;
+            }
         }
+
+        throw IntakeStoreLocked::after($project, self::ATTEMPTS, $refusal);
     }
 
     // Apart from the issue rows, so a task that is closed after it failed for good still holds the tasks that wait on it.
@@ -94,6 +92,30 @@ final readonly class IntakeStore
         }
 
         return $failures;
+    }
+
+    // In a transaction and an entity manager of its own for every attempt, because a database without row locks (SQLite) refuses the write of a transaction another connection overtook, and only a fresh read sees what that one committed.
+    /**
+     * @param array<int, StoredIssue> $listed
+     */
+    private function comparedAndSet(string $project, array $listed, ValidatorChange $change): bool
+    {
+        try {
+            return true === $this->ownManager()->wrapInTransaction(function (EntityManagerInterface $manager) use ($project, $listed, $change): bool {
+                $stored = $manager->find(IntakeValidator::class, $project, LockMode::PESSIMISTIC_WRITE) ?? $this->firstStateOf($manager, $project);
+                if ($stored->state()->generation !== $change->from->generation) {
+                    return false;
+                }
+
+                $this->replaceRows($manager, $project, $listed);
+                $stored->advance($change->to);
+
+                return true;
+            });
+        } catch (UniqueConstraintViolationException) {
+            // A first sync that committed the project's state row while this one wrote its own holds the newer rows, so this one loses like any other stale write.
+            return false;
+        }
     }
 
     /**

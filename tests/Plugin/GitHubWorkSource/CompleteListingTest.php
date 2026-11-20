@@ -25,12 +25,14 @@ use Intakt\Plugin\GitHubWorkSource\Domain\ValidatorChange;
 use Intakt\Plugin\GitHubWorkSource\Domain\Vouching;
 use Intakt\Plugin\GitHubWorkSource\Infrastructure\CompleteListing;
 use Intakt\Plugin\GitHubWorkSource\Infrastructure\IntakeStore;
+use Intakt\Plugin\GitHubWorkSource\Infrastructure\IntakeStoreLocked;
 use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Plugin\GitHubForge\RecordedIssueApi;
 use Intakt\Tests\Support\KernelTestCase;
 use Intakt\Tests\Support\Log\LogRecords;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
+use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\LoggerInterface;
 
@@ -39,6 +41,7 @@ use Psr\Log\LoggerInterface;
 #[CoversClass(SyncedListing::class)]
 #[CoversClass(StoredIssue::class)]
 #[UsesClass(IntakeStore::class)]
+#[UsesClass(IntakeStoreLocked::class)]
 #[UsesClass(IntakeRules::class)]
 #[UsesClass(IntakePlan::class)]
 #[UsesClass(HeldIssue::class)]
@@ -303,6 +306,112 @@ final class CompleteListingTest extends KernelTestCase
 
         self::assertSame([7], array_map(static fn (QueuedIssue $task): int => $task->number(), $this->planOf($synced, 'ready')->ready));
         self::assertSame('W/"b"', $this->store->stateOf('alpha')->validator);
+    }
+
+    public function testAListingAnotherSyncSupersededWhileItWasReadGetsNoHistoryReadOfItsOwn(): void
+    {
+        $reads = new RecordedIssueReads();
+        $listing = $this->listing($reads);
+        $rules = new IntakeRules('intakt');
+        $histories = $this->histories;
+        $reads->during = static function () use ($listing, $rules, $reads, $histories): void {
+            $reads->lists([Issues::task(8)], null);
+            $listing->sync('alpha', $rules);
+            $reads->lists([Issues::task(7)], null);
+            $histories->failing = true;
+        };
+
+        $synced = $listing->sync('alpha', $rules);
+
+        self::assertTrue($synced->isComplete(), (string) $synced->shortBecause);
+        self::assertSame([8], array_map(static fn (QueuedIssue $task): int => $task->number(), $synced->items));
+        self::assertSame([8], $this->histories->read);
+    }
+
+    public function testAHistoryReadThatFailsForAListingSupersededMeanwhileAnswersTheRowsThatNowCount(): void
+    {
+        $reads = new RecordedIssueReads();
+        $listing = $this->listing($reads);
+        $rules = new IntakeRules('intakt');
+        $histories = $this->histories;
+        $reads->lists([Issues::task(7)], null);
+        $histories->during = static function () use ($listing, $rules, $reads, $histories): void {
+            $reads->lists([Issues::task(8)], null);
+            $listing->sync('alpha', $rules);
+            $histories->failing = true;
+        };
+
+        $synced = $listing->sync('alpha', $rules);
+
+        self::assertTrue($synced->isComplete(), (string) $synced->shortBecause);
+        self::assertSame([8], array_map(static fn (QueuedIssue $task): int => $task->number(), $synced->items));
+        self::assertSame([7, 8], $this->histories->read);
+    }
+
+    /**
+     * @param list<int> $storedBefore
+     */
+    #[TestWith([[]], 'the first sync of the project')]
+    #[TestWith([[6]], 'a later sync')]
+    public function testASyncAnotherConnectionOvertookBetweenItsReadAndItsWriteAnswersTheListingThatOneCommitted(array $storedBefore): void
+    {
+        $shared = $this->twoConnections();
+        try {
+            $rules = new IntakeRules('intakt');
+            $reads = new RecordedIssueReads();
+            $overtaken = $this->listingOn($shared->left, $reads);
+            if ([] !== $storedBefore) {
+                $reads->lists(array_map(Issues::task(...), $storedBefore), null);
+                $overtaken->sync('alpha', $rules);
+            }
+
+            $reads->lists([Issues::task(7)], null);
+            $otherReads = new RecordedIssueReads();
+            $otherReads->lists([Issues::task(8)], null);
+            $other = $this->listingOn($shared->right, $otherReads);
+            $shared->beforeTheNextLeftFlush(static fn (): SyncedListing => $other->sync('alpha', $rules));
+
+            $synced = $overtaken->sync('alpha', $rules);
+
+            self::assertTrue($synced->isComplete(), (string) $synced->shortBecause);
+            self::assertSame([8], array_map(static fn (QueuedIssue $task): int => $task->number(), $synced->items));
+            self::assertSame([8], array_map(static fn (StoredIssue $issue): int => $issue->number(), new IntakeStore($shared->left)->issuesOf('alpha')));
+        } finally {
+            $shared->close();
+        }
+    }
+
+    public function testAStoreAnotherWriterKeepsLockedEndsTheTickShortWithTheReasonAndRecordsNothing(): void
+    {
+        $shared = $this->twoConnections();
+        try {
+            $reads = new RecordedIssueReads();
+            $reads->lists([Issues::task(7)], null);
+            $shared->holdTheWriteLockOnTheRight();
+
+            $synced = $this->listingOn($shared->left, $reads)->sync('alpha', new IntakeRules('intakt'));
+
+            $shared->releaseTheWriteLockOnTheRight();
+            self::assertSame('The stored listing of project "alpha" stayed locked by another writer for 3 attempts.', $synced->shortBecause);
+            self::assertSame([], $synced->items);
+            self::assertSame([], new IntakeStore($shared->left)->issuesOf('alpha'));
+            $this->assertLoggedWarning('came back short, so nothing is picked and no wait closes this tick: The stored listing of project "alpha" stayed locked by another writer for 3 attempts.');
+        } finally {
+            $shared->close();
+        }
+    }
+
+    private function twoConnections(): TwoConnections
+    {
+        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
+        self::assertInstanceOf(EntityManagerInterface::class, $entities);
+
+        return TwoConnections::mappedBy($entities->getConfiguration());
+    }
+
+    private function listingOn(EntityManagerInterface $entities, IssueReads $reads): CompleteListing
+    {
+        return new CompleteListing($reads, $this->histories, new GrantedAccounts(), new IntakeStore($entities), new IssueReferences(), $this->logger);
     }
 
     private function listing(IssueReads $reads): CompleteListing
