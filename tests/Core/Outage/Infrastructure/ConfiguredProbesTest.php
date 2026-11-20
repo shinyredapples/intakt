@@ -50,9 +50,39 @@ final class ConfiguredProbesTest extends TestCase
     public function testEachEnabledCompatibleAccountIsProbedAtItsOwnBaseUrl(): void
     {
         self::assertSame(
-            ['https://forge.example/', 'https://llm.example/v1', 'https://team-llm.example/v1'],
+            ['https://forge.example/', 'https://llm.example/', 'https://team-llm.example/'],
             $this->probedUrls(['openai_compatible' => ['default', 'team']], ['https://llm.example/v1', 'https://team-llm.example/v1']),
         );
+    }
+
+    #[DataProvider('nonHttpsBaseUrls')]
+    public function testACompatibleBaseUrlThatIsNotAbsoluteHttpsIsNotRequested(string $url): void
+    {
+        self::assertSame(
+            ['https://forge.example/', 'https://llm.example/'],
+            $this->probedUrls(['openai_compatible' => ['default', 'team']], [$url, 'https://llm.example/v1']),
+        );
+    }
+
+    #[DataProvider('nonHttpsBaseUrls')]
+    public function testAnAnsweringPlainHttpOrRelativeBaseUrlCannotMakeTheCheckOnline(string $url): void
+    {
+        $http = new MockHttpClient(static fn (string $method, string $requested): ResponseInterface => str_starts_with($requested, 'https://')
+            ? new MockResponse('', ['error' => 'Could not resolve host'])
+            : new MockResponse('', ['http_code' => 500]));
+
+        self::assertSame(Reachability::Offline, $this->httpsReachability($http, $url));
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function nonHttpsBaseUrls(): iterable
+    {
+        yield 'plain http' => ['http://model.example/v1'];
+        yield 'a relative path' => ['/v1'];
+        yield 'https with an empty host' => ['https:///v1'];
+        yield 'another scheme' => ['ftp://model.example/v1'];
     }
 
     #[DataProvider('unparseableBaseUrls')]
@@ -74,7 +104,7 @@ final class ConfiguredProbesTest extends TestCase
     public function testAnUnparseableCompatibleBaseUrlIsNotRequested(): void
     {
         self::assertSame(
-            ['https://forge.example/', 'https://llm.example/v1'],
+            ['https://forge.example/', 'https://llm.example/'],
             $this->probedUrls(['openai_compatible' => ['default', 'team']], ['http://[bad', 'https://llm.example/v1']),
         );
     }

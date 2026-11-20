@@ -46,10 +46,19 @@ final class HttpsProbeTest extends TestCase
         $response = new MockResponse('', ['http_code' => 200]);
         new HttpsProbe(new MockHttpClient($response), new Uri('https://user:secret@llm.example/v1'), 3.0)->answers();
 
-        self::assertSame('https://llm.example/v1', $response->getRequestUrl());
+        self::assertSame('https://llm.example/', $response->getRequestUrl());
         $headers = $response->getRequestOptions()['headers'];
         self::assertIsArray($headers);
         self::assertSame([], preg_grep('/^authorization\s*:/i', $headers));
+    }
+
+    public function testOnlyTheOriginIsRequestedSoAPathOrQueryCarryingACredentialIsNotSent(): void
+    {
+        $response = new MockResponse('', ['http_code' => 500]);
+        $probe = new HttpsProbe(new MockHttpClient($response), new Uri('https://model.example:8443/gateway/synthetic-path/v1?api_key=synthetic-query#part'), 3.0);
+
+        self::assertTrue($probe->answers());
+        self::assertSame('https://model.example:8443/', $response->getRequestUrl());
     }
 
     public function testTheProbeWaitsAtMostItsTimeout(): void

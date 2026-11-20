@@ -21,8 +21,8 @@ final readonly class HttpsProbe implements Probe
     public function answers(): bool
     {
         try {
-            // Userinfo is dropped because HttpClient would send it as a Basic header, and a configured base URL may carry it.
-            $this->http->request('HEAD', $this->url->withUserInfo(null)->toString(), [
+            // Only the origin is requested: a configured base URL may carry a credential in its userinfo (HttpClient would send it as a Basic header), its path or its query.
+            $this->http->request('HEAD', $this->url->withUserInfo(null)->withPath('/')->withQuery(null)->withFragment(null)->toString(), [
                 'timeout' => $this->timeout,
                 'max_duration' => $this->timeout,
                 'max_redirects' => 0,

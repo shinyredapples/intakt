@@ -59,8 +59,12 @@ final readonly class ConfiguredProbes
      */
     private function compatibleUrls(): array
     {
-        // An account's base URL is free text from the environment: one the parser rejects adds no probe, so a typing mistake cannot make the whole check throw.
-        return array_values(array_filter(array_map(Uri::parse(...), $this->compatibleBaseUrls)));
+        // An account's base URL is free text from the environment: one the parser rejects adds no probe, so a typing mistake cannot make the whole check throw,
+        // and neither does one that is not absolute HTTPS, so a plain HTTP answer (perhaps from a local proxy) cannot stand in for the network.
+        return array_values(array_filter(
+            array_map(Uri::parse(...), $this->compatibleBaseUrls),
+            static fn (?Uri $url): bool => 'https' === $url?->getScheme() && '' !== (string) $url->getHost(),
+        ));
     }
 
     /**
