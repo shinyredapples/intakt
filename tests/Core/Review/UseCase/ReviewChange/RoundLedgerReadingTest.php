@@ -378,7 +378,7 @@ final class RoundLedgerReadingTest extends KernelTestCase
      */
     private function actIdsOf(string $round): array
     {
-        return [...$this->reading()->judgeDoneOf($round)->act ?? new FindingIds()];
+        return array_values(iterator_to_array($this->reading()->judgeDoneOf($round)->act ?? new FindingIds()));
     }
 
     private function reading(): RoundLedgerReading

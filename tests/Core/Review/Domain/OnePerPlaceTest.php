@@ -150,7 +150,7 @@ final class OnePerPlaceTest extends TestCase
     {
         $act = new OnePerPlace()->actList([$this->finding('F1', 'src/A.php', 7), $this->finding('F2', 'src/A.php', 9)], ['F1', 'F2'], ['F1' => 'F2']);
 
-        self::assertSame([['F1', ['F2']]], array_map(static fn (Finding $entry): array => [$entry->id, [...$entry->merged]], $act));
+        self::assertSame([['F1', ['F2']]], array_map(static fn (Finding $entry): array => [$entry->id, array_values(iterator_to_array($entry->merged))], $act));
     }
 
     public function testTwoActFindingsWithoutALinkAtDifferentLinesStaySeparate(): void
@@ -166,14 +166,14 @@ final class OnePerPlaceTest extends TestCase
 
         $act = new OnePerPlace()->actList($reported, ['F1', 'F2', 'F3'], ['F2' => 'F1']);
 
-        self::assertSame([['F1', ['F2', 'F3']]], array_map(static fn (Finding $entry): array => [$entry->id, [...$entry->merged]], $act));
+        self::assertSame([['F1', ['F2', 'F3']]], array_map(static fn (Finding $entry): array => [$entry->id, array_values(iterator_to_array($entry->merged))], $act));
     }
 
     public function testAFindingNamingACauseOffTheActListStaysOnItsOwn(): void
     {
         $act = new OnePerPlace()->actList([$this->finding('F1', 'src/A.php', 7), $this->finding('F2', 'src/A.php', 8)], ['F2'], ['F2' => 'F1']);
 
-        self::assertSame([['F2', []]], array_map(static fn (Finding $entry): array => [$entry->id, [...$entry->merged]], $act));
+        self::assertSame([['F2', []]], array_map(static fn (Finding $entry): array => [$entry->id, array_values(iterator_to_array($entry->merged))], $act));
     }
 
     public function testAFindingLinkedToAnEarlierEntryBringsTheEntryAtItsOwnPlaceWithIt(): void
@@ -303,7 +303,7 @@ final class OnePerPlaceTest extends TestCase
      */
     private function idsOf(array $act): array
     {
-        return array_map(static fn (Finding $entry): array => [$entry->id, [...$entry->merged]], $act);
+        return array_map(static fn (Finding $entry): array => [$entry->id, array_values(iterator_to_array($entry->merged))], $act);
     }
 
     private function finding(string $id, ?string $file, ?int $line): Finding
