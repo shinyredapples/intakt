@@ -16,6 +16,8 @@ flowchart LR
   eligible -- "plan:" --> plan[Plan first or not]
 ```
 
+`intakt` is the default eligibility label. A project can name its own label in its settings (`eligibility_label`), and that label must stay apart from the existing loop's label: a task that carries only the loop's label is not Intakt's to build.
+
 | Label | What it does |
 |---|---|
 | `intakt` | Intakt may build this task |

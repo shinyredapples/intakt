@@ -8,6 +8,5 @@ namespace Intakt\Plugin\GitHubWorkSource\Contract;
 final readonly class WorkLabels
 {
     public const string IDEA = 'idea';
-    public const string DEFAULT_ELIGIBILITY = 'intakt';
     public const string PRIORITY_PREFIX = 'priority:';
 }

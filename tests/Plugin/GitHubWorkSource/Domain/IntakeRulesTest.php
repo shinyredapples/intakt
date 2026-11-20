@@ -7,7 +7,6 @@ namespace Intakt\Tests\Plugin\GitHubWorkSource\Domain;
 use Intakt\Plugin\GitHubForge\Contract\IssueHistory;
 use Intakt\Plugin\GitHubForge\Contract\LabelApplication;
 use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
-use Intakt\Plugin\GitHubWorkSource\Contract\WorkLabels;
 use Intakt\Plugin\GitHubWorkSource\Domain\HeldIssue;
 use Intakt\Plugin\GitHubWorkSource\Domain\IntakePlan;
 use Intakt\Plugin\GitHubWorkSource\Domain\IntakeRules;
@@ -36,6 +35,7 @@ final class IntakeRulesTest extends TestCase
 
     // Any label other than the project's stands for the existing loop's, because Intakt knows no list of the loop's labels.
     private const string LOOPS_LABEL = 'build';
+    private const string DEFAULT_LABEL = 'intakt';
 
     public function testAnOpenTrustedTaskWithTheEligibilityLabelIsReady(): void
     {
@@ -303,14 +303,14 @@ final class IntakeRulesTest extends TestCase
 
     public function testATaskCarryingOnlyTheExistingLoopsLabelIsNotEligibleUnderTheDefaultLabel(): void
     {
-        $plan = new IntakeRules(WorkLabels::DEFAULT_ELIGIBILITY)->planOf([$this->row(Issues::task(1, [self::LOOPS_LABEL]))], []);
+        $plan = new IntakeRules(self::DEFAULT_LABEL)->planOf([$this->row(Issues::task(1, [self::LOOPS_LABEL]))], []);
 
         self::assertSame([[], []], [$this->numbers($plan->ready), $plan->held]);
     }
 
     public function testATaskCarryingTheProjectsLabelBesideTheExistingLoopsLabelIsEligible(): void
     {
-        $plan = new IntakeRules(WorkLabels::DEFAULT_ELIGIBILITY)->planOf([$this->row(Issues::task(1, [self::LOOPS_LABEL, WorkLabels::DEFAULT_ELIGIBILITY]))], []);
+        $plan = new IntakeRules(self::DEFAULT_LABEL)->planOf([$this->row(Issues::task(1, [self::LOOPS_LABEL, self::DEFAULT_LABEL]))], []);
 
         self::assertSame([1], $this->numbers($plan->ready));
     }
