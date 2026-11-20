@@ -114,7 +114,6 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         return $free;
     }
 
-    // Only a model id that pins a router provider has a pin to cool and to read.
     private function pinnedOf(Account $account, ?string $routerProvider): ?PinnedProvider
     {
         return null === $routerProvider ? null : new PinnedProvider($account, $routerProvider);
