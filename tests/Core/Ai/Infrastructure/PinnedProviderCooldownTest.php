@@ -109,6 +109,27 @@ final class PinnedProviderCooldownTest extends TestCase
         self::assertSame(['second', 0, 'first', 1], [$during, $requestsDuring, $after, $requests]);
     }
 
+    // Forced order: another worker cools the team account's pin while the default account is tried, after the read that found both free. The team account is read again before it sends, so it gets no request and the call waits for the pin.
+    public function testAFallbackAccountWhosePinCoolsDuringTheCallGetsNoRequest(): void
+    {
+        $requests = 0;
+        $default = $this->answering(function (): never {
+            $this->pins->coolDown($this->deepinfra('team'), 120);
+
+            throw new RateLimitExceededException(120);
+        });
+        $team = $this->answering(static function () use (&$requests): string {
+            ++$requests;
+
+            return 'team';
+        });
+
+        $out = $this->failureOf(fn (): object => $this->accounts($default, $team)->invoke(self::PINNED, 'Review.')->asText());
+
+        self::assertInstanceOf(EveryAccountCoolingDown::class, $out);
+        self::assertSame([120, 0], [$out->secondsUntilAnAccountIsFree, $requests]);
+    }
+
     public function testThePinStoreAloneLeavesAnotherRouterProviderOnTheSameAccountFree(): void
     {
         $this->pins->coolDown($this->deepinfra(Account::DEFAULT), 300);

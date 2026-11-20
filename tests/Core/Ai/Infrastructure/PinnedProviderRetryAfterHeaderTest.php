@@ -121,6 +121,7 @@ final class PinnedProviderRetryAfterHeaderTest extends TestCase
         yield 'second 61' => ['Thu, 19 Nov 2026 12:02:61 GMT'];
         yield 'February 31' => ['Tue, 31 Feb 2026 12:02:00 GMT'];
         yield 'a lowercase GMT' => ['Thu, 19 Nov 2026 12:02:00 gmt'];
+        yield 'delta seconds with a trailing NUL' => ["137\0"];
     }
 
     /**
