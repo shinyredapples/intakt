@@ -97,20 +97,21 @@ One row per reproduction in `upstream/`, merged first. *Intakt's* marks a pull r
 | symfony/ai | [Codex: tools the CLI ran come back as tool calls](upstream/ai-codex-platform-cli-tool-calls/) | [#2875](https://github.com/symfony/ai/pull/2875) Intakt's, merged |
 | symfony/ai | [`#[Positive]` gets a boolean `exclusiveMinimum`](upstream/ai-platform-positive-boolean-exclusive-minimum/) | [#2888](https://github.com/symfony/ai/pull/2888) Intakt's, merged |
 | Doctrine | [PostgreSQL without `server_version` fails](upstream/doctrine-bundle-postgresql-empty-server-version/) | [DoctrineBundle#2335](https://github.com/doctrine/DoctrineBundle/pull/2335) Intakt's, merged |
-| symfony/symfony | [NaN skips config validation](upstream/config-nan-skips-validation/) | [#67911](https://github.com/symfony/symfony/pull/67911) fixed upstream, merged |
-| symfony/symfony | [`messenger:consume` ignores an early SIGTERM](upstream/messenger-consume-ignores-early-sigterm/) | [#67912](https://github.com/symfony/symfony/pull/67912) fixed upstream, merged |
-| symfony/symfony | [Serializer list accepts any object](upstream/serializer-object-collection-accepts-any-object/) | [#67913](https://github.com/symfony/symfony/pull/67913) fixed upstream, merged |
-| symfony/ai | [Codex: a cut turn reads as complete](upstream/ai-codex-platform-cut-off-stream/) | [#2889](https://github.com/symfony/ai/pull/2889) fixed upstream, merged |
-| symfony/ai | [Codex: earlier user messages dropped](upstream/ai-codex-platform-last-user-message/) | [#2891](https://github.com/symfony/ai/pull/2891) fixed upstream, merged |
+| symfony/symfony | [NaN skips config validation](upstream/config-nan-skips-validation/) | [#67911](https://github.com/symfony/symfony/pull/67911) Intakt's, merged |
+| symfony/symfony | [`messenger:consume` ignores an early SIGTERM](upstream/messenger-consume-ignores-early-sigterm/) | [#67912](https://github.com/symfony/symfony/pull/67912) Intakt's, merged |
+| symfony/symfony | [Serializer list accepts any object](upstream/serializer-object-collection-accepts-any-object/) | [#67913](https://github.com/symfony/symfony/pull/67913) Intakt's, merged |
+| symfony/ai | [Codex: a cut turn reads as complete](upstream/ai-codex-platform-cut-off-stream/) | [#2889](https://github.com/symfony/ai/pull/2889) Intakt's, merged |
+| symfony/ai | [Codex: earlier user messages dropped](upstream/ai-codex-platform-last-user-message/) | [#2891](https://github.com/symfony/ai/pull/2891) Intakt's, merged |
+| symfony/ai | [Claude Code: cache token split lost](upstream/ai-claude-code-platform-cache-token-split/) | [#2963](https://github.com/symfony/ai/pull/2963) Intakt's, merged |
 | symfony/ai | [`Provider` keeps a resolved model](upstream/ai-platform-provider-keeps-resolved-model/) | [#2851](https://github.com/symfony/ai/pull/2851) fixed upstream, merged |
 | symfony/ai | [Failover retries a failed platform](upstream/ai-failover-platform-retries-a-failed-platform/) | [#2890](https://github.com/symfony/ai/pull/2890) Intakt's, open |
-| symfony/ai | [Claude Code: cache token split lost](upstream/ai-claude-code-platform-cache-token-split/) | [#2963](https://github.com/symfony/ai/pull/2963) Intakt's, open |
 | symfony/ai | [Typed answer of a multi-part reply missed](upstream/ai-structured-output-multi-part-answers/) | [#2945](https://github.com/symfony/ai/issues/2945) Intakt's, reported |
 | symfony/ai | [Failover misses a deferred 429](upstream/ai-failover-platform-deferred-rate-limit/) | [#2944](https://github.com/symfony/ai/issues/2944) Intakt's, reported |
 | symfony/ai | [Claude Code: response format passed as `Array`](upstream/ai-claude-code-platform-structured-output/) | [#2962](https://github.com/symfony/ai/issues/2962) Intakt's, reported |
 | symfony/ai | [Failed streamed tool run reports no usage](upstream/ai-agent-streamed-tool-call-cut-stream/) | [comment on #2617](https://github.com/symfony/ai/pull/2617#issuecomment-6876304595) Intakt's, reported |
 | PHPStan | [Readonly type kept after `clone with`](upstream/phpstan-clone-with-readonly-constructor-type/) | [phpstan#14838](https://github.com/phpstan/phpstan/issues/14838) already reported |
 | FrankenPHP | [`php-cli` crashes on SIGTERM](upstream/frankenphp-messenger-consume-sigterm/) | [frankenphp#2479](https://github.com/php/frankenphp/issues/2479) already reported |
+| Doctrine | [DBAL: a refused commit leaves the transaction open](upstream/dbal-failed-commit-leaves-transaction-open/) | recheck needed |
 | MCP SDK | [Three parallel `tools/call` on one session](upstream/mcp-parallel-tools-call-one-session/) | passes, nothing to file |
 | symfony/ai | [Worker-mode state of two models and two MCP sessions](upstream/ai-worker-mode-state/) | passes, nothing to file |
 | symfony/ai | [Structured output with enums and nested lists](upstream/ai-structured-output-enums-nested-lists/) | passes, nothing to file |
