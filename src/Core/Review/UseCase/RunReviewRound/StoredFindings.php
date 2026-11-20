@@ -133,6 +133,12 @@ final readonly class StoredFindings
         return true;
     }
 
+    // The change's finding row, the lock a completing round takes after its own, so two judgings of one change read each other's judge_done in turn instead of each missing the other's.
+    public function lockChangeOf(ReviewRound $round): void
+    {
+        $this->locked($round->project(), $round->change());
+    }
+
     // Every verdict of the round at once, when it completes, so a round reaches the ledger as one step that the recorded round number orders against the other rounds of the change.
     /**
      * @return list<ReportedFindings>

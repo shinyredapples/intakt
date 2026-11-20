@@ -20,6 +20,7 @@ use Intakt\Core\Review\Contract\JudgedFinding;
 use Intakt\Core\Review\Contract\JudgedFindings;
 use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\JudgeDoneFinding;
+use Intakt\Core\Review\Contract\RecurringP1Found;
 use Intakt\Core\Review\Contract\Judgement;
 use Intakt\Core\Review\Contract\Mark;
 use Intakt\Core\Review\Contract\QuorumPolicy;
@@ -55,6 +56,7 @@ use Symfony\Component\Serializer\SerializerInterface;
 #[CoversClass(JudgeDoneFinding::class)]
 #[CoversClass(DroppedFinding::class)]
 #[CoversClass(RoundLedger::class)]
+#[CoversClass(RecurringP1Found::class)]
 #[UsesClass(OnePerPlace::class)]
 #[UsesClass(FindingKeys::class)]
 #[UsesClass(FindingKey::class)]
@@ -320,6 +322,11 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
         $finding = self::getContainer()->get('serializer.stored')->deserialize('{"id":"f1","severity":"P1","text":"A bug.","judge_note":"Not reachable."}', JudgeDoneFinding::class, JsonEncoder::FORMAT);
 
         self::assertSame('Not reachable.', $finding->judgeNote);
+    }
+
+    public function testARecurringP1FoundIsWrittenWithItsRoundFindingKeyAndFirstRound(): void
+    {
+        self::assertSame('{"round":"'.self::ROUND.'","finding":"F1","key":"abc","first_round":"r1"}', $this->written(new RecurringP1Found(self::ROUND, 'F1', 'abc', 'r1')));
     }
 
     public function testADoneJudgeWithoutFollowUpsStillWritesTheKey(): void
