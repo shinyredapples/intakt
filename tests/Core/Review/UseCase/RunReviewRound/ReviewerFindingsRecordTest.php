@@ -72,7 +72,7 @@ final class ReviewerFindingsRecordTest extends KernelTestCase
     {
         $round = $this->round([self::FIRST => $this->changes($this->finding('a', severity: Severity::P1)), self::SECOND => $this->changes($this->finding('b', severity: Severity::P3))]);
 
-        self::assertSame(['role-1' => ['F1' => 'P1'], 'role-2' => ['F2' => 'P3']], $this->recordedOf($round, severities: true));
+        self::assertSame(['role-1' => ['F1' => 'P1'], 'role-2' => ['F2' => 'P3']], $this->severitiesOf($round));
     }
 
     // The goalpost rule gives a repeat the severity its finding was first stored with before the verdict is stored, so both repeats count at that one.
@@ -82,7 +82,7 @@ final class ReviewerFindingsRecordTest extends KernelTestCase
 
         $second = $this->round([self::FIRST => $this->changes($this->finding('F1', true, Severity::P3)), self::SECOND => $this->changes($this->finding('F1', true, Severity::P2))]);
 
-        self::assertSame(['role-1' => ['F1' => 'P1'], 'role-2' => ['F1' => 'P1']], $this->recordedOf($second, severities: true));
+        self::assertSame(['role-1' => ['F1' => 'P1'], 'role-2' => ['F1' => 'P1']], $this->severitiesOf($second));
     }
 
     public function testAFailedReviewIsRecordedWithNoFindings(): void
@@ -133,9 +133,25 @@ final class ReviewerFindingsRecordTest extends KernelTestCase
     }
 
     /**
-     * @return array<string, list<string>|array<string, string>|null>
+     * @return array<string, list<string>>
      */
-    private function recordedOf(string $round, bool $severities = false): array
+    private function recordedOf(string $round): array
+    {
+        return array_map(static fn (ReviewerFindingsRecorded $payload): array => $payload->findings, $this->payloadsByRole($round));
+    }
+
+    /**
+     * @return array<string, ?array<string, string>>
+     */
+    private function severitiesOf(string $round): array
+    {
+        return array_map(static fn (ReviewerFindingsRecorded $payload): ?array => $payload->severities, $this->payloadsByRole($round));
+    }
+
+    /**
+     * @return array<string, ReviewerFindingsRecorded>
+     */
+    private function payloadsByRole(string $round): array
     {
         $roles = array_column(array_map(static fn (RoundReviewer $reviewer): array => [$reviewer->id()->toRfc4122(), $reviewer->roleName()], $this->fixture->round($round)->reviewers()), 1, 0);
         $recorded = [];
@@ -144,7 +160,7 @@ final class ReviewerFindingsRecordTest extends KernelTestCase
             $payload = $this->payloadOf($row);
 
             if ($round === $payload->round) {
-                $recorded[$roles[$payload->reviewer]] = $severities ? $payload->severities : $payload->findings;
+                $recorded[$roles[$payload->reviewer]] = $payload;
             }
         }
 
