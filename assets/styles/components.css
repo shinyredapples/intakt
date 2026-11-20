@@ -771,14 +771,14 @@ a.fchip { display: inline-flex; align-items: center; text-decoration: none; }
 .c-hit { fill: transparent; }
 .c-hit:focus { outline: none; }
 .c-hit:focus-visible { stroke: var(--primary); stroke-width: 2; fill: var(--selected); fill-opacity: .35; }
-.chart-tip { position: absolute; z-index: 130; width: max-content; max-width: 260px; padding: 6px 10px; border: 1px solid var(--hairline); border-radius: var(--r-btn); background: var(--raised); color: var(--ink); font-size: var(--t13); pointer-events: none; }
+.chart-tip { position: absolute; z-index: 130; width: max-content; max-width: 260px; padding: var(--s4) var(--s8); border: 1px solid var(--hairline); border-radius: var(--r-btn); background: var(--raised); color: var(--ink); font-size: var(--t13); pointer-events: none; }
 .chart-tip[hidden] { display: none; }
 .chart-tip strong { display: block; font: 600 var(--t15)/1.2 var(--f-body); }
 .chart-tip span { color: var(--muted); }
 .c-table { margin-top: var(--s8); }
-.c-table summary { display: inline-flex; align-items: center; cursor: pointer; color: var(--link); font: 500 var(--t13)/1 var(--f-head); padding: 6px 0; }
+.c-table summary { display: inline-flex; align-items: center; cursor: pointer; color: var(--link); font: 500 var(--t13)/1 var(--f-head); padding: var(--s4) 0; }
 .c-table table { border-collapse: collapse; font-size: var(--t13); margin-top: var(--s8); font-variant-numeric: tabular-nums; }
-.c-table th, .c-table td { text-align: left; padding: 4px 16px 4px 0; border-bottom: 1px solid var(--hairline); }
+.c-table th, .c-table td { text-align: left; padding: var(--s4) var(--s16) var(--s4) 0; border-bottom: 1px solid var(--hairline); }
 .c-table th { color: var(--muted); font-weight: 500; }
 @media (max-width: 1100px) { .multiples { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 760px) {
