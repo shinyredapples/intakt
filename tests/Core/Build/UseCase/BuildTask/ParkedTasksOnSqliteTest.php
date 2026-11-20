@@ -63,10 +63,14 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
 
         $rows = $this->connection()->fetchAllAssociative('SELECT project, task, question, choices, recommendation, parked_at FROM build_parked_task');
         self::assertCount(1, $rows);
+        $task = $rows[0]['task'];
+        $choices = $rows[0]['choices'];
+        self::assertIsNumeric($task);
+        self::assertIsString($choices);
         // Decoded and converted, because MySQL normalizes stored JSON and drivers differ in how they return integers.
         self::assertSame(
             ['project' => 'sample', 'task' => 42, 'question' => 'Keep the old flag?', 'choices' => ['keep it', 'drop it'], 'recommendation' => 'drop it', 'parked_at' => '2026-11-20 10:00:00'],
-            [...$rows[0], 'task' => (int) $rows[0]['task'], 'choices' => json_decode((string) $rows[0]['choices'], true, flags: JSON_THROW_ON_ERROR)],
+            [...$rows[0], 'task' => (int) $task, 'choices' => json_decode($choices, true, flags: JSON_THROW_ON_ERROR)],
         );
         self::assertSame(
             [['kind' => 'build_step_ended', 'payload' => '{"project":"sample","task":"42","step":"build_job","outcome":"asked","failure":null}']],
