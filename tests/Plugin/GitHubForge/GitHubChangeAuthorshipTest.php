@@ -70,7 +70,7 @@ final class GitHubChangeAuthorshipTest extends TestCase
 
     public function testTheAuthorIsReadFromThePullRequestWithTheInstallationTokenAndTheAppsSlugWithItsOwnProof(): void
     {
-        (void) $this->isCreatedByIntakt(RecordedTrust::PULL_BY_OWN_IDENTITY);
+        $this->isCreatedByIntakt(RecordedTrust::PULL_BY_OWN_IDENTITY);
 
         self::assertSame('Authorization: Bearer minted-value', $this->github->credentials['https://api.github.com/repos/acme/widget/pulls/4']);
         self::assertStringStartsWith('Authorization: Bearer ey', $this->github->credentials['https://api.github.com/app']);
@@ -91,14 +91,14 @@ final class GitHubChangeAuthorshipTest extends TestCase
     {
         $this->expectException(ForgeReadFailed::class);
 
-        (void) $this->isCreatedByIntakt(RecordedTrust::PULL_WITHOUT_AUTHOR);
+        $this->isCreatedByIntakt(RecordedTrust::PULL_WITHOUT_AUTHOR);
     }
 
     public function testAPullRequestGitHubDoesNotFindFailsTheRead(): void
     {
         $this->expectException(ForgeReadFailed::class);
 
-        (void) $this->isCreatedByIntakt(RecordedTrust::PULL_UNKNOWN);
+        $this->isCreatedByIntakt(RecordedTrust::PULL_UNKNOWN);
     }
 
     public function testAFailedTokenExchangeFailsTheReadWithoutReadingThePullRequest(): void
@@ -106,7 +106,7 @@ final class GitHubChangeAuthorshipTest extends TestCase
         $this->github = new RecordedTrust(401);
 
         try {
-            (void) $this->isCreatedByIntakt(RecordedTrust::PULL_BY_OWN_IDENTITY);
+            $this->isCreatedByIntakt(RecordedTrust::PULL_BY_OWN_IDENTITY);
             self::fail('A failed token exchange must fail the read.');
         } catch (ForgeReadFailed) {
             self::assertSame([], array_filter($this->github->requested, static fn (string $url): bool => str_contains($url, '/pulls/')));
@@ -116,7 +116,7 @@ final class GitHubChangeAuthorshipTest extends TestCase
     public function testAChangeThatIsNoGitHubPullRequestFailsTheReadAndAsksNothing(): void
     {
         try {
-            (void) $this->isCreatedByIntakt('https://example.com/acme/widget/pull/4');
+            $this->isCreatedByIntakt('https://example.com/acme/widget/pull/4');
             self::fail('A change that is no GitHub pull request must fail the read.');
         } catch (ForgeReadFailed) {
             self::assertSame([], $this->github->requested);
