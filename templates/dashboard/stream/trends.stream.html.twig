@@ -1,0 +1,7 @@
+{#- Both ways of counting under their own targets, because the demo chip is a tab's own choice: a tab shows one of them and Turbo leaves a target the page does not hold. An empty variant is left out, so the page's start-first-review form, which carries a token, is never replaced by a pushed copy. Morphed, so open tables and the tooltips' state survive a push. -#}
+{% for variant in variants %}
+{% if variant.trends.anyReview %}
+<turbo-stream action="replace" method="morph" target="{{ variant.target }}"><template>{{ include('dashboard/_trends_figures.html.twig', {trends: variant.trends, target: variant.target, sample_can_start: false}, with_context = false) }}</template></turbo-stream>
+{% endif %}
+{% endfor %}
+<turbo-stream action="replace" method="morph" target="trends-up-next"><template>{{ include('dashboard/_trends_up_next.html.twig', {up_next: up_next}, with_context = false) }}</template></turbo-stream>

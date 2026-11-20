@@ -1,0 +1,140 @@
+{#- What the live push replaces: the empty state or the tiles and charts, under an id that names the variant, so a tab's demo choice never changes by a push. -#}
+{#- An estimated figure carries the same label as the review page's cost, so a guess never reads as a reading (decision D5 of #2206). -#}
+{% macro tile(label, figure, estimated) %}
+<div class="tile"{% if figure is null %} data-no-data{% endif %}>
+    <dt>{{ label }}{% if estimated and figure is not null %} {{ include('dashboard/components/figure_kind.html.twig', {kind: enum('Intakt\\Core\\Platform\\Contract\\FigureKind').Estimated, at: 'trends-cost'}, with_context = false) }}{% endif %}</dt>
+    <dd>{{ figure ?? 'No data' }}</dd>
+</div>
+{% endmacro %}
+
+{#- Missing data reads "No data", never a chart of zeros, so nothing unmeasured looks measured (DESIGN.md, Charts). -#}
+{% macro no_chart(reason) %}
+<p class="takeaway" data-no-data>No data</p>
+<p class="chart-key muted">{{ reason }}</p>
+{% endmacro %}
+
+{#- Hidden from assistive technology, because each mark's own label already reads the same value first. -#}
+{% macro tip() %}
+<div class="chart-tip" data-chart-target="tip" aria-hidden="true" hidden><strong></strong><span></span></div>
+{% endmacro %}
+
+<div id="{{ target }}">
+{% if not trends.anyReview %}
+{# The same start as step 3 of the setup page; an install without the sample change has nothing to start here, so the action opens that step, which says what is missing (D8 of #2858). #}
+<div class="empty">
+    {{ include('dashboard/components/character.html.twig', {character: enum('Intakt\\Core\\Dashboard\\Domain\\MascotPose').Waiting, size: 144}, with_context = false) }}
+    <h2>No reviews yet</h2>
+    <p class="muted">Trends show once the first review has run.</p>
+    {% if sample_can_start %}
+    <form method="post" action="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::START_FIRST_REVIEW')) }}" class="start-first-review">
+        <input type="hidden" name="_token" value="{{ csrf_token(constant('Intakt\\Core\\Dashboard\\UseCase\\StartReview\\StartFirstReviewController::TOKEN_ID')) }}">
+        {{ include('dashboard/components/button.html.twig', {kind: 'primary', type: 'submit', label: 'Start the first review'}, with_context = false) }}
+    </form>
+    {% else %}
+    <a class="btn primary" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::FIRST_RUN')) }}#step-first-review">Start the first review</a>
+    {% endif %}
+</div>
+{% else %}
+{% set cost = trends.costPerRound %}
+{% set oneReviewerOnly = trends.caughtByOneReviewerOnlyPercent %}
+<dl class="tiles" aria-label="Review figures">
+    {{ _self.tile('Review rounds run', trends.roundsRun, false) }}
+    {{ _self.tile('P1 and P2 findings on act lists', trends.seriousActFindings, false) }}
+    {{ _self.tile('Caught by one reviewer only', oneReviewerOnly is null ? null : oneReviewerOnly ~ '%', false) }}
+    {{ _self.tile('Median time from round start to verdict', trends.medianTimeToVerdict, false) }}
+    {{ _self.tile('Cost per round', cost is null ? null : cost.reading, true) }}
+</dl>
+<p class="tiles-note muted">{% if cost is not null %}Cost per round is the mean of the rounds with a known estimate, {{ cost.priceDateReading }}. {% endif %}"Caught by one reviewer only" counts only the rounds with a full record of which reviewer reported each finding.</p>
+{% set catches = trends.reviewerCatches %}
+{% set outcomes = trends.judgeOutcomes %}
+{% set perDay = trends.reviewsPerDay %}
+<div class="charts">
+    <section class="chart wide" id="chart-catches" aria-labelledby="chart-catches-title" data-controller="chart" data-action="keydown.esc@window->chart#dismiss">
+        <h2 id="chart-catches-title">Which reviewer caught what</h2>
+        {% if catches is null %}
+        {{ _self.no_chart('Fills in once a judged review records which reviewer reported each finding.') }}
+        {% else %}
+        <p class="takeaway">{{ catches.takeaway }}</p>
+        <p class="chart-key muted">Each bar counts the findings one reviewer reported, by severity; the solid part is what no other reviewer of its round reported.</p>
+        <div class="multiples">
+            {% for reviewer in catches.reviewers %}
+            <figure class="multiple">
+                <figcaption class="sub-h">{{ reviewer.role|capitalize }}</figcaption>
+                {{ include('dashboard/components/bar_chart.html.twig', {name: 'Findings of the ' ~ reviewer.role ~ ' reviewer by severity', bars: reviewer.bars, top: catches.scaleTop}, with_context = false) }}
+            </figure>
+            {% endfor %}
+        </div>
+        <details class="c-table">
+            <summary>Show as table</summary>
+            <table>
+                <thead><tr><th scope="col">Reviewer</th><th scope="col">Severity</th><th scope="col">Findings</th><th scope="col">Found by it alone</th></tr></thead>
+                <tbody>
+                {% for reviewer in catches.reviewers %}
+                {% for bar in reviewer.bars %}
+                <tr><td>{{ reviewer.role|capitalize }}</td><td>{{ bar.label }}</td><td>{{ bar.value }}</td><td>{{ bar.part }}</td></tr>
+                {% endfor %}
+                {% endfor %}
+                </tbody>
+            </table>
+        </details>
+        {% endif %}
+        {{ _self.tip() }}
+    </section>
+    <section class="chart" id="chart-judge" aria-labelledby="chart-judge-title" data-controller="chart" data-action="keydown.esc@window->chart#dismiss">
+        <h2 id="chart-judge-title">What the judge did</h2>
+        {% if outcomes is null %}
+        {{ _self.no_chart('Fills in once the judge has marked the findings of a review.') }}
+        {% else %}
+        <p class="takeaway">{{ outcomes.takeaway }}</p>
+        {{ include('dashboard/components/bar_chart.html.twig', {name: 'Findings by what the judge did with them, over every judged round', bars: outcomes.bars, top: outcomes.scaleTop}, with_context = false) }}
+        <details class="c-table">
+            <summary>Show as table</summary>
+            <table>
+                <thead><tr><th scope="col">Outcome</th><th scope="col">Findings</th></tr></thead>
+                <tbody>
+                {% for bar in outcomes.bars %}
+                <tr><td>{{ bar.detail }}</td><td>{{ bar.value }}</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </details>
+        {% endif %}
+        {{ _self.tip() }}
+    </section>
+    <section class="chart wide" id="chart-per-day" aria-labelledby="chart-per-day-title" data-controller="chart" data-action="keydown.esc@window->chart#dismiss">
+        <h2 id="chart-per-day-title">Reviews and cost per day</h2>
+        {% if perDay is null %}
+        {#- A quiet line, never an empty grid, until there is a trend to draw (D5 of #2863). -#}
+        <p class="takeaway" data-no-data>Shows once there are reviews on {{ constant('Intakt\\Core\\Dashboard\\Domain\\ReviewsPerDay::MINIMUM_DAYS') }} days</p>
+        {% else %}
+        <p class="chart-key muted">Both charts share the same days, counted by the day each round started (UTC). Cost is an estimate {{ include('dashboard/components/figure_kind.html.twig', {kind: enum('Intakt\\Core\\Platform\\Contract\\FigureKind').Estimated, at: 'trends-per-day'}, with_context = false) }}; a day without a priced round reads No data.</p>
+        <div class="multiples two">
+            <figure class="multiple">
+                <figcaption class="sub-h">Rounds per day</figcaption>
+                <p class="takeaway">{{ perDay.roundsTakeaway }}</p>
+                {{ include('dashboard/components/bar_chart.html.twig', {name: 'Review rounds per day', bars: perDay.roundBars, top: perDay.roundsTop}, with_context = false) }}
+            </figure>
+            <figure class="multiple">
+                <figcaption class="sub-h">Estimated cost per day (USD)</figcaption>
+                <p class="takeaway">{{ perDay.costTakeaway }}</p>
+                {{ include('dashboard/components/bar_chart.html.twig', {name: 'Estimated cost per day in US dollars', bars: perDay.costBars, top: perDay.costTop, divisor: perDay.costDivisor}, with_context = false) }}
+            </figure>
+        </div>
+        <details class="c-table">
+            <summary>Show as table</summary>
+            <table>
+                <thead><tr><th scope="col">Day</th><th scope="col">Rounds</th><th scope="col">Estimated cost (USD)</th></tr></thead>
+                <tbody>
+                {% set costBars = perDay.costBars %}
+                {% for bar in perDay.roundBars %}
+                <tr><td>{{ bar.label }}</td><td>{{ bar.directLabel }}</td><td>{{ costBars[loop.index0].directLabel }}</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </details>
+        {% endif %}
+        {{ _self.tip() }}
+    </section>
+</div>
+{% endif %}
+</div>

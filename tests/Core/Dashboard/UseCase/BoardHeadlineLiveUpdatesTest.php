@@ -364,7 +364,8 @@ final class BoardHeadlineLiveUpdatesTest extends DashboardPageTestCase
 
     private function lastShellUpdate(): string
     {
-        $shell = array_filter($this->published, static fn (Update $update): bool => [DashboardTopics::SHELL] === $update->getTopics());
+        // The headline's update only, because the Trends page pushes its own update on the same topic.
+        $shell = array_filter($this->published, static fn (Update $update): bool => [DashboardTopics::SHELL] === $update->getTopics() && str_contains($update->getData(), 'target="board-headline"'));
         $last = array_last($shell);
         self::assertNotNull($last, 'Nothing was published on the shell topic.');
 

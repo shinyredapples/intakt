@@ -1,0 +1,13 @@
+{#- Replaced whole by the live push, so it is one element with a stable id. -#}
+<section id="trends-up-next" class="up-next" aria-labelledby="trends-up-next-title">
+    <h2 id="trends-up-next-title">Up next</h2>
+    {% if up_next.empty %}
+    <p class="muted">{{ constant('Intakt\\Core\\Dashboard\\Domain\\UpNext::NOTHING') }}</p>
+    {% else %}
+    <ul>
+        {% for entry in up_next.rounds %}
+        <li><a href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_REVIEW'), {round: entry.round}) }}">{{ entry.project }}: {{ entry.change }}</a> <span class="muted">{{ entry.running ? 'running: ' ~ entry.reviewers|join(', ') : 'waiting to start' }}</span></li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+</section>

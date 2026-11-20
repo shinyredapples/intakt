@@ -6,6 +6,7 @@ namespace Intakt\Core\Dashboard\UseCase\ShowTrends;
 
 use Intakt\Core\Dashboard\Contract\DashboardRoutes;
 use Intakt\Core\Dashboard\Domain\ReviewTrends;
+use Intakt\Core\Dashboard\Domain\UpNext;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LivePageRendering;
 use Intakt\Core\Dashboard\Infrastructure\SampleChangeSource;
@@ -34,6 +35,7 @@ final readonly class ShowTrendsController
 
         return new Response($this->pages->render($request, 'dashboard/trends.html.twig', [
             'trends' => $trends,
+            'up_next' => UpNext::of($this->reviews->board()),
             'sample_can_start' => $this->sample->source() instanceof ChangeSource,
         ]));
     }
