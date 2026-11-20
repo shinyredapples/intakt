@@ -28,53 +28,53 @@ final readonly class PhpGateSteps
     public const string PHP_VERSION_PROBE = "php -r 'echo PHP_VERSION;'";
 
     // Package names are shown JSON-escaped, without JSON_UNESCAPED_UNICODE, so that no character of a name (U+0085 and U+2028 included) can break the one-line message.
-    private const string LOCK_GUARD_SCRIPT = <<<'SH'
-        php -r '$refused = (int) $argv[2];
-        $refuse = static function (string $what) use ($refused): never { fwrite(STDERR, $what."\n"); exit($refused); };
-        $show = static fn (string $value): string => (string) json_encode($value, JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE | JSON_PARTIAL_OUTPUT_ON_ERROR);
-        $archiveUrl = static fn (string $url): bool => 1 === preg_match("#^https?://\S+$#D", $url);
-        $sourceUrl = static fn (string $url, bool $git): bool => 1 === preg_match("#^(https?|ssh|git|git\+ssh|svn)://\S+$#D", $url) || ($git && 1 === preg_match("#^[A-Za-z0-9][A-Za-z0-9._-]*@[A-Za-z0-9][A-Za-z0-9.-]*:\S+$#D", $url));
-        if (!is_file("composer.lock")) { fwrite(STDERR, "composer.lock is missing, so there are no locked packages to install.\n"); exit(1); }
-        $manifest = json_decode(file_get_contents("composer.json"), true, 512, JSON_THROW_ON_ERROR);
-        $config = $manifest["config"] ?? null;
-        if (is_array($config) && array_key_exists("lock", $config) && true !== $config["lock"]) { fwrite(STDERR, "composer.json sets config.lock to something other than true, so Composer ignores composer.lock.\n"); exit(1); }
-        $vendor = $argv[1] ?? "";
-        if ("" === $vendor) { $refuse("composer config could not report the vendor folder, so it is unknown whether the folder holds an install."); }
-        if (is_file($vendor."/composer/installed.json")) { $refuse("The vendor folder already holds an install (".$show($vendor."/composer/installed.json")."), which may hold more than the lock."); }
-        $scripts = is_array($manifest) ? ($manifest["scripts"] ?? []) : [];
-        foreach (["pre-package-install", "post-package-install", "pre-package-update", "post-package-update"] as $event) {
-            if (is_array($scripts) && array_key_exists($event, $scripts)) { $refuse("composer.json defines the script ".$show($event).", which the locked install would skip."); }
-        }
-        try { $lock = json_decode(file_get_contents("composer.lock"), true, 512, JSON_THROW_ON_ERROR); } catch (JsonException) { $refuse("composer.lock is not valid JSON."); }
-        foreach (["packages", "packages-dev"] as $list) {
-            $packages = is_array($lock) ? ($lock[$list] ?? []) : null;
-            if (!is_array($packages)) { $refuse("composer.lock has no valid ".$show($list)." list."); }
-            foreach ($packages as $package) {
-                $name = is_array($package) && is_string($package["name"] ?? null) ? $package["name"] : null;
-                if (null === $name) { $refuse("composer.lock holds a package without a name in ".$show($list)."."); }
-                $label = "package ".$show($name);
-                $type = strtolower(is_string($package["type"] ?? null) ? $package["type"] : "");
-                if (in_array($type, ["composer-plugin", "composer-installer"], true) && "symfony/runtime" !== strtolower($name)) { $refuse("The locked ".$label." is a ".$type.", which would run code during the install."); }
-                foreach (["dist", "source"] as $kind) {
-                    $entry = $package[$kind] ?? null;
-                    if (null === $entry) { continue; }
-                    if (!is_array($entry)) { $refuse("The locked ".$label." has a ".$kind." entry that is not an object."); }
-                    if ("path" === ($entry["type"] ?? null)) { $refuse("The locked ".$label." is a path package, whose contents are not pinned."); }
-                    if (array_key_exists("mirrors", $entry)) { $refuse("The locked ".$label." has ".$kind." mirrors, which can serve other bytes."); }
-                    $url = $entry["url"] ?? null;
-                    if (!is_string($url) || "" === $url) { $refuse("The locked ".$label." has a ".$kind." entry without a url."); }
-                    $known = "dist" === $kind ? $archiveUrl($url) : $sourceUrl($url, "git" === ($package["source"]["type"] ?? null));
-                    if (!$known) { $refuse("The locked ".$label." has a ".$kind." url ".$show($url)." that is not a known remote address."); }
-                }
-                if (is_array($package["source"] ?? null) && 1 !== preg_match("#^[0-9a-f]{40}$#D", (string) (is_string($package["source"]["reference"] ?? null) ? $package["source"]["reference"] : ""))) { $refuse("The locked ".$label." has a source reference that is not a full commit id."); }
-                if (!is_array($package["dist"] ?? null)) { continue; }
-                $shasum = $package["dist"]["shasum"] ?? "";
-                if (!is_string($shasum) || ("" !== $shasum && 1 !== preg_match("#^[0-9a-f]{40}$#D", $shasum))) { $refuse("The locked ".$label." has a dist checksum that is not 40 lowercase hex digits."); }
-                $ownCommit = 1 === preg_match("#^https://[^?\#]*/([0-9a-f]{40})$#D", $package["dist"]["url"], $found) && ($package["dist"]["reference"] ?? null) === $found[1];
-                if ("" === $shasum && !$ownCommit) { $refuse("The locked ".$label." has an archive without a checksum that is not named by its own commit id."); }
+    private const string LOCK_GUARD_SCRIPT = <<<'SH_WRAP'
+    php -r '$refused = (int) $argv[2];
+    $refuse = static function (string $what) use ($refused): never { fwrite(STDERR, $what."\n"); exit($refused); };
+    $show = static fn (string $value): string => (string) json_encode($value, JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE | JSON_PARTIAL_OUTPUT_ON_ERROR);
+    $archiveUrl = static fn (string $url): bool => 1 === preg_match("#^https?://\S+$#D", $url);
+    $sourceUrl = static fn (string $url, bool $git): bool => 1 === preg_match("#^(https?|ssh|git|git\+ssh|svn)://\S+$#D", $url) || ($git && 1 === preg_match("#^[A-Za-z0-9][A-Za-z0-9._-]*@[A-Za-z0-9][A-Za-z0-9.-]*:\S+$#D", $url));
+    if (!is_file("composer.lock")) { fwrite(STDERR, "composer.lock is missing, so there are no locked packages to install.\n"); exit(1); }
+    $manifest = json_decode(file_get_contents("composer.json"), true, 512, JSON_THROW_ON_ERROR);
+    $config = $manifest["config"] ?? null;
+    if (is_array($config) && array_key_exists("lock", $config) && true !== $config["lock"]) { fwrite(STDERR, "composer.json sets config.lock to something other than true, so Composer ignores composer.lock.\n"); exit(1); }
+    $vendor = $argv[1] ?? "";
+    if ("" === $vendor) { $refuse("composer config could not report the vendor folder, so it is unknown whether the folder holds an install."); }
+    if (is_file($vendor."/composer/installed.json")) { $refuse("The vendor folder already holds an install (".$show($vendor."/composer/installed.json")."), which may hold more than the lock."); }
+    $scripts = is_array($manifest) ? ($manifest["scripts"] ?? []) : [];
+    foreach (["pre-package-install", "post-package-install", "pre-package-update", "post-package-update"] as $event) {
+        if (is_array($scripts) && array_key_exists($event, $scripts)) { $refuse("composer.json defines the script ".$show($event).", which the locked install would skip."); }
+    }
+    try { $lock = json_decode(file_get_contents("composer.lock"), true, 512, JSON_THROW_ON_ERROR); } catch (JsonException) { $refuse("composer.lock is not valid JSON."); }
+    foreach (["packages", "packages-dev"] as $list) {
+        $packages = is_array($lock) ? ($lock[$list] ?? []) : null;
+        if (!is_array($packages)) { $refuse("composer.lock has no valid ".$show($list)." list."); }
+        foreach ($packages as $package) {
+            $name = is_array($package) && is_string($package["name"] ?? null) ? $package["name"] : null;
+            if (null === $name) { $refuse("composer.lock holds a package without a name in ".$show($list)."."); }
+            $label = "package ".$show($name);
+            $type = strtolower(is_string($package["type"] ?? null) ? $package["type"] : "");
+            if (in_array($type, ["composer-plugin", "composer-installer"], true) && "symfony/runtime" !== strtolower($name)) { $refuse("The locked ".$label." is a ".$type.", which would run code during the install."); }
+            foreach (["dist", "source"] as $kind) {
+                $entry = $package[$kind] ?? null;
+                if (null === $entry) { continue; }
+                if (!is_array($entry)) { $refuse("The locked ".$label." has a ".$kind." entry that is not an object."); }
+                if ("path" === ($entry["type"] ?? null)) { $refuse("The locked ".$label." is a path package, whose contents are not pinned."); }
+                if (array_key_exists("mirrors", $entry)) { $refuse("The locked ".$label." has ".$kind." mirrors, which can serve other bytes."); }
+                $url = $entry["url"] ?? null;
+                if (!is_string($url) || "" === $url) { $refuse("The locked ".$label." has a ".$kind." entry without a url."); }
+                $known = "dist" === $kind ? $archiveUrl($url) : $sourceUrl($url, "git" === ($package["source"]["type"] ?? null));
+                if (!$known) { $refuse("The locked ".$label." has a ".$kind." url ".$show($url)." that is not a known remote address."); }
             }
-        }'
-        SH;
+            if (is_array($package["source"] ?? null) && 1 !== preg_match("#^[0-9a-f]{40}$#D", (string) (is_string($package["source"]["reference"] ?? null) ? $package["source"]["reference"] : ""))) { $refuse("The locked ".$label." has a source reference that is not a full commit id."); }
+            if (!is_array($package["dist"] ?? null)) { continue; }
+            $shasum = $package["dist"]["shasum"] ?? "";
+            if (!is_string($shasum) || ("" !== $shasum && 1 !== preg_match("#^[0-9a-f]{40}$#D", $shasum))) { $refuse("The locked ".$label." has a dist checksum that is not 40 lowercase hex digits."); }
+            $ownCommit = 1 === preg_match("#^https://[^?\#]*/([0-9a-f]{40})$#D", $package["dist"]["url"], $found) && ($package["dist"]["reference"] ?? null) === $found[1];
+            if ("" === $shasum && !$ownCommit) { $refuse("The locked ".$label." has an archive without a checksum that is not named by its own commit id."); }
+        }
+    }'
+    SH_WRAP;
 
     private const string LOCK_HASH = <<<'SH'
         php -r 'echo hash_file("sha256", "composer.lock");'

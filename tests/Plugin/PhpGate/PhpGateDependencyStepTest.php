@@ -254,6 +254,9 @@ final class PhpGateDependencyStepTest extends TestCase
         self::assertFileExists($this->directory.'/autoload-event');
     }
 
+    /**
+     * @param array<string, mixed> $package
+     */
     #[DataProvider('refusedPackages')]
     public function testTheLockedInstallRefusesAPackageWhoseLockEntryDoesNotPinItsContents(string $reason, array $package): void
     {
@@ -307,6 +310,9 @@ final class PhpGateDependencyStepTest extends TestCase
         yield 'a composer-installer in capitals' => ['installer caps', [...$pkg, 'type' => 'COMPOSER-INSTALLER']];
     }
 
+    /**
+     * @param array<string, mixed> $package
+     */
     #[DataProvider('acceptedPackages')]
     public function testTheLockGuardAcceptsAPackageWhoseLockEntryPinsItsContents(array $package): void
     {
