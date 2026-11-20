@@ -33,7 +33,7 @@ final readonly class FindingIds implements IteratorAggregate, JsonSerializable
      */
     public static function storedAs(array $ids): self
     {
-        return clone(new self(...array_values($ids)), ['written' => $ids]);
+        return clone (new self(...array_values($ids)), ['written' => $ids]);
     }
 
     public function contains(string $id): bool
