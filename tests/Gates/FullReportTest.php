@@ -11,6 +11,7 @@ use Intakt\Gates\GateChildren;
 use Intakt\Gates\GateReport;
 use Intakt\Gates\GateResult;
 use Intakt\Gates\GateSlots;
+use Intakt\Gates\JsonNode;
 use Intakt\Gates\LowPriority;
 use Intakt\Gates\ProcessGroup;
 use Intakt\Gates\ProcessResult;
@@ -28,6 +29,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[UsesClass(GateReport::class)]
 #[UsesClass(GateResult::class)]
 #[UsesClass(GateSlots::class)]
+#[UsesClass(JsonNode::class)]
 #[UsesClass(LowPriority::class)]
 #[UsesClass(ProcessGroup::class)]
 #[UsesClass(ProcessResult::class)]
@@ -45,17 +47,16 @@ final class FullReportTest extends SandboxTestCase
 
         $run = $sandbox->checkWith([GateSlots::VARIABLE => '1'], '--only=dashes');
 
-        $file = $this->reportNamedIn($run);
+        $file = $this->summaryOf($run)->get('report')->text();
         self::assertMatchesRegularExpression(self::NAME, $file, $run->output());
-        self::assertCount(12, $this->reportIn($sandbox->root.'/'.$file)['gates'][0]['findings']);
+        self::assertCount(12, $this->findingsIn($this->reportIn($sandbox->root.'/'.$file)));
     }
 
     public function testTheReportLeavesTheVerdictTheFailedListAndTheExitCodeOfAFailingCheck(): void
     {
         $run = $this->sandboxWithTwelveDashes()->checkWith([GateSlots::VARIABLE => '1'], '--only=dashes');
 
-        $summary = $this->summaryOf($run);
-        self::assertSame(['fail', ['dashes']], [$summary['result'], $summary['failed']], $run->output());
+        self::assertSame(['fail', ['dashes']], $this->verdictOf($this->summaryOf($run)), $run->output());
         self::assertSame(1, $run->exitCode(), $run->output());
     }
 
@@ -65,9 +66,9 @@ final class FullReportTest extends SandboxTestCase
 
         $run = $sandbox->checkWith([GateSlots::VARIABLE => '1'], '--only=dashes');
 
-        self::assertSame(['result' => 'pass', 'failed' => []], array_diff_key($this->summaryOf($run), ['report' => true]), $run->output());
+        self::assertSame(['pass', []], $this->verdictOf($this->summaryOf($run)), $run->output());
         self::assertSame(0, $run->exitCode(), $run->output());
-        self::assertFileExists($sandbox->root.'/'.$this->reportNamedIn($run));
+        self::assertFileExists($sandbox->root.'/'.$this->summaryOf($run)->get('report')->text());
     }
 
     public function testBinCheckPrintsNoReportKeyAndKeepsItsVerdictWhenTheReportCannotBeWritten(): void
@@ -77,8 +78,9 @@ final class FullReportTest extends SandboxTestCase
 
         $run = $sandbox->checkWith([GateSlots::VARIABLE => '1'], '--only=dashes');
 
-        self::assertSame(['result' => 'fail', 'failed' => ['dashes']], $this->summaryOf($run), $run->output());
-        self::assertSame(1, $run->exitCode(), $run->output());
+        $summary = $this->summaryOf($run);
+        self::assertSame(['result', 'failed'], array_keys($summary->entries()), $run->output());
+        self::assertSame([['fail', ['dashes']], 1], [$this->verdictOf($summary), $run->exitCode()], $run->output());
     }
 
     public function testTheFullReportIsAsciiOnlyEvenWhenAFindingHoldsNonAsciiText(): void
@@ -87,9 +89,8 @@ final class FullReportTest extends SandboxTestCase
 
         $file = new FullReport($sandbox->root, [$this->reportOf(GateResult::failedBecause('dashes', "notes.md:1 \u{2014} here"))])->write();
 
-        $contents = (string) file_get_contents($sandbox->root.'/'.$file);
-        self::assertMatchesRegularExpression('~^[\x00-\x7F]*$~', $contents);
-        self::assertSame(["notes.md:1 \u{2014} here"], $this->reportIn($sandbox->root.'/'.$file)['gates'][0]['findings']);
+        self::assertMatchesRegularExpression('~^[\x00-\x7F]*$~', (string) file_get_contents($sandbox->root.'/'.$file));
+        self::assertSame(["notes.md:1 \u{2014} here"], $this->findingsIn($this->reportIn($sandbox->root.'/'.$file)));
     }
 
     public function testTwoReportsInTheSameTreeGetDifferentNamesAndNeitherOverwritesTheOther(): void
@@ -100,30 +101,29 @@ final class FullReportTest extends SandboxTestCase
         $second = new FullReport($sandbox->root, [$this->reportOf(GateResult::failedBecause('dashes', 'second'))])->write();
 
         self::assertNotSame($first, $second);
-        self::assertSame([], $this->reportIn($sandbox->root.'/'.$first)['gates'][0]['findings']);
-        self::assertSame(['second'], $this->reportIn($sandbox->root.'/'.$second)['gates'][0]['findings']);
+        self::assertSame([], $this->findingsIn($this->reportIn($sandbox->root.'/'.$first)));
+        self::assertSame(['second'], $this->findingsIn($this->reportIn($sandbox->root.'/'.$second)));
     }
 
     public function testTheReportHoldsTheKeptWholeResultAndIsWhole(): void
     {
         $sandbox = $this->emptySandbox();
-        $result = GateResult::withFindings('dashes', array_map(static fn (int $number): string => 'notes-'.$number.'.md:1', range(1, 12)));
+        $result = $this->twelveFindings();
 
         $file = new FullReport($sandbox->root, [$this->reportOf($result)->keeping($result->toFullJson())])->write();
 
         $report = $this->reportIn($sandbox->root.'/'.$file);
-        self::assertSame([true, 12], [$report['whole'], count($report['gates'][0]['findings'])]);
+        self::assertSame(['1', 12], [$report->get('whole')->text(), count($this->findingsIn($report))]);
     }
 
     public function testAReportWithACutLineAndNoKeptResultIsNotWhole(): void
     {
         $sandbox = $this->emptySandbox();
-        $result = GateResult::withFindings('dashes', array_map(static fn (int $number): string => 'notes-'.$number.'.md:1', range(1, 12)));
 
-        $file = new FullReport($sandbox->root, [$this->reportOf($result)])->write();
+        $file = new FullReport($sandbox->root, [$this->reportOf($this->twelveFindings())])->write();
 
         $report = $this->reportIn($sandbox->root.'/'.$file);
-        self::assertSame([false, 10, 2], [$report['whole'], count($report['gates'][0]['findings']), $report['gates'][0]['omitted']]);
+        self::assertSame(['', 10, '2'], [$report->get('whole')->text(), count($this->findingsIn($report)), $report->get('gates')->items()[0]->get('omitted')->text()]);
     }
 
     private function sandboxWithTwelveDashes(): Sandbox
@@ -137,42 +137,48 @@ final class FullReportTest extends SandboxTestCase
         return $sandbox;
     }
 
+    private function twelveFindings(): GateResult
+    {
+        return GateResult::withFindings('dashes', array_map(static fn (int $number): string => 'notes-'.$number.'.md:1', range(1, 12)));
+    }
+
     private function reportOf(GateResult $result): GateReport
     {
         return GateReport::fromChild('dashes', new ProcessResult($result->isPassing() ? 0 : 1, $result->toJson()."\n", ''));
     }
 
-    private function reportNamedIn(CheckRun $run): string
+    private function summaryOf(CheckRun $run): JsonNode
     {
-        $report = $this->summaryOf($run)['report'] ?? null;
-        self::assertIsString($report, $run->output());
-
-        return $report;
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function summaryOf(CheckRun $run): array
-    {
-        $lines = $run->lines();
-        $summary = json_decode((string) array_last($lines), true);
-        self::assertIsArray($summary, $run->output());
+        $summary = JsonNode::parse((string) array_last($run->lines()));
+        self::assertInstanceOf(JsonNode::class, $summary, $run->output());
 
         return $summary;
     }
 
     /**
-     * @return array{whole: bool, gates: list<array{findings: list<string>, omitted: int}>}
+     * @return array{string, list<string>}
      */
-    private function reportIn(string $file): array
+    private function verdictOf(JsonNode $summary): array
     {
-        $report = json_decode((string) file_get_contents($file), true);
-        self::assertIsArray($report, $file);
-        self::assertIsBool($report['whole'] ?? null, $file);
-        self::assertIsArray($report['gates'] ?? null, $file);
+        return [$summary->get('result')->text(), array_map(static fn (JsonNode $gate): string => $gate->text(), $summary->get('failed')->items())];
+    }
 
-        /* @var array{whole: bool, gates: list<array{findings: list<string>, omitted: int}>} $report */
+    private function reportIn(string $file): JsonNode
+    {
+        $report = JsonNode::parse((string) file_get_contents($file));
+        self::assertInstanceOf(JsonNode::class, $report, $file);
+
         return $report;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function findingsIn(JsonNode $report): array
+    {
+        $gate = $report->get('gates')->items()[0] ?? null;
+        self::assertInstanceOf(JsonNode::class, $gate);
+
+        return array_map(static fn (JsonNode $finding): string => $finding->text(), $gate->get('findings')->items());
     }
 }
