@@ -18,8 +18,8 @@ final class ScriptedHttpClient implements HttpClientInterface
     private const string ANTHROPIC = 'https://api.anthropic.com/';
     private const string APPROVE = '{"verdict":"approve","findings":[],"resolved":[],"follow_ups":[]}';
 
-    // Kept for the life of the process, as a leak would be, so only replacing the worker frees it.
-    private static string $weight = '';
+    // Kept as long as the container keeps this service, the life of the worker process, as a leak would be, so only replacing the worker frees it.
+    private string $weight = '';
 
     private ?MockHttpClient $scripted = null;
 
@@ -82,7 +82,7 @@ final class ScriptedHttpClient implements HttpClientInterface
         yield $this->event('message_stop', ['type' => 'message_stop']);
 
         $directory->callEnded($call);
-        self::$weight .= str_repeat('w', $directory->weightInBytes());
+        $this->weight .=str_repeat('w', $directory->weightInBytes());
     }
 
     private function delta(string $text): string
