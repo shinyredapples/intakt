@@ -78,16 +78,20 @@ final readonly class NarrowCatchRule implements Rule
         $before = $try->stmts;
 
         foreach ($try->catches as $catch) {
-            $marked = $this->hasBoundaryCommentAbove($catch, $before, $source);
-
             foreach ($this->genericTypesOf($catch) as $type) {
-                $findings[] = $this->findingFor($type, $catch, $marked);
+                $problem = 0 === strcasecmp($type, Throwable::class)
+                    ? $this->throwableProblem($catch, $before, $source)
+                    : sprintf('A catch of %s: name the failures the code expects (a library\'s own exception base or a domain exception); only %s may be caught, and only at a failure boundary.', $type, Throwable::class);
+
+                if (null !== $problem) {
+                    $findings[] = $this->finding($catch, $problem);
+                }
             }
 
             $before = $catch->stmts;
         }
 
-        return array_values(array_filter($findings));
+        return $findings;
     }
 
     /**
@@ -106,18 +110,17 @@ final readonly class NarrowCatchRule implements Rule
         return in_array(strtolower($name), array_map(strtolower(...), [Throwable::class, ...self::ROOTS]), true);
     }
 
-    private function findingFor(string $type, Catch_ $catch, bool $marked): ?IdentifierRuleError
+    /**
+     * @param array<Stmt> $before
+     */
+    private function throwableProblem(Catch_ $catch, array $before, string $source): ?string
     {
-        if (0 !== strcasecmp($type, Throwable::class)) {
-            return $this->finding($catch, sprintf('A catch of %s: name the failures the code expects (a library\'s own exception base or a domain exception); only %s may be caught, and only at a failure boundary.', $type, Throwable::class));
-        }
-
-        if (!$marked) {
-            return $this->finding($catch, sprintf('A catch of %s outside a failure boundary: name the failures the code expects, or, where it rethrows or records the failure, put a "// Boundary: <what it protects>" line directly above the catch.', Throwable::class));
+        if (!$this->hasBoundaryCommentAbove($catch, $before, $source)) {
+            return sprintf('A catch of %s outside a failure boundary: name the failures the code expects, or, where it rethrows or records the failure, put a "// Boundary: <what it protects>" line directly above the catch.', Throwable::class);
         }
 
         if (!$this->rethrowsOrRecords($catch)) {
-            return $this->finding($catch, sprintf('A catch of %s at a failure boundary that neither rethrows nor records the failure: throw, or use the caught failure (log, ledger, a typed outcome) before the unit of work ends.', Throwable::class));
+            return sprintf('A catch of %s at a failure boundary that neither rethrows nor records the failure: throw, or use the caught failure (log, ledger, a typed outcome) before the unit of work ends.', Throwable::class);
         }
 
         return null;
