@@ -158,7 +158,7 @@ final readonly class MainHistory implements CommitHistory
         }
 
         // A point of the right length may still lie off the curve, and ssh-keygen would then refuse every signature the owner makes.
-        $der = (string) hex2bin($head).$fields[1];
+        $der = hex2bin($head).$fields[1];
 
         return false !== openssl_pkey_get_public("-----BEGIN PUBLIC KEY-----\n".chunk_split(base64_encode($der), 64, "\n")."-----END PUBLIC KEY-----\n");
     }
