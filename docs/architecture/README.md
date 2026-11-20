@@ -4,7 +4,7 @@ How Intakt works, for developers and agents. Each user-visible feature has a pag
 
 Code and conventions:
 - [Module layout](module-layout.md)
-- [Conventions](conventions.md): logging, Doctrine mapping, message handlers, the dependency policy and which release cooldown decides what (Dependabot's or Composer's)
+- [Conventions](conventions.md): logging, Doctrine mapping, message handlers, the dependency policy and which release cooldown decides what (Dependabot's, Composer's or the import map's)
 - [Sample repository](sample-repository.md): the demo's sample change and the review bench (`intakt:bench:review`, `intakt:bench --repeat`, the result file under `var/bench/`, agreement of repeated runs, failure causes printed before the figures)
 - [Retried network git calls](network-git.md)
 - [Bare mirror](mirror.md)
@@ -14,7 +14,7 @@ Code and conventions:
 - [Check job](check-job.md): the pre-push check of an accepted bundle in a fresh clone through the gate plugin, the lost-content rule, and the verdict read from the job's output directory only
 - [Watchdog over main](watchdog.md): the rules that classify main's new commits: a recorded merge head passes before any signature check, an owner-signed commit passes, an unsigned commit, an unknown key and a rewrite of main's history are violations
 - [Protected paths of a head](protected-paths.md): the owner's list per project, read from the whole change and each commit; unreadable counts as protected
-- [Work intake from GitHub issues](work-intake.md): the work source contract and the `eligibility_label` watch key
+- [Work intake from GitHub issues](work-intake.md): the work source contract, the `eligibility_label` watch key and the stored state of the GitHub work source
 - [Upstream reproductions](upstream-reproductions.md)
 - [The published highlights page](highlights-page.md): where the assembled `docs/highlights.md` is published
 - [Development diagnostics (Mate)](development-diagnostics.md)

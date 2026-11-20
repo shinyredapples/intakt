@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Contract;
 
+use Intakt\Core\Platform\Contract\CommandMessage;
+
 // A command for the next round of a change: it queues the round and returns its id without waiting for the judge, so a web request can send it.
-final readonly class StartReview
+final readonly class StartReview implements CommandMessage
 {
     public ChangeSource $source;
 
