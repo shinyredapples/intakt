@@ -776,7 +776,8 @@ a.fchip { display: inline-flex; align-items: center; text-decoration: none; }
 .wait-item .copy { background: var(--raised); }
 .wait-item .copy .btn { background: var(--tint); }
 /* DESIGN.md, Breakpoints: 761 to 1099 px is the bridge, one column in the tab order of D6, so act stays after why. */
-@media (max-width: 1099px) {
+/* Strict, because a zoomed window can be 1099.5 px wide and max-width: 1099px would then give it two columns. */
+@media (width < 1100px) {
   .wait-item { grid-template-columns: minmax(0, 1fr); grid-template-areas: "title" "meta" "conseq" "why" "act"; grid-template-rows: none; }
   .wait-item .act { align-self: stretch; margin-top: var(--s4); }
 }

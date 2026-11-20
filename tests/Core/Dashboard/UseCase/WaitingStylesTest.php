@@ -11,15 +11,29 @@ use PHPUnit\Framework\TestCase;
 #[CoversNothing]
 final class WaitingStylesTest extends TestCase
 {
-    private const string BRIDGE = 'max-width: 1099px';
+    private const string BRIDGE = 'width < 1100px';
     private const string PHONE = 'max-width: 760px';
+    private const string STACKED = '/grid-template-columns:\s*minmax\(0, 1fr\);\s*grid-template-areas:\s*"title" "meta" "conseq" "why" "act";/';
 
     // DESIGN.md's bridge (761 to 1099 px) is single column, and act after why keeps the tab order of D6.
     public function testBelow1100WideAWaitingItemIsOneColumnOfTitleMetaConsequenceWhyAndChoicesInThatOrder(): void
     {
         $rules = $this->rulesOf($this->mediaBlocks(self::BRIDGE));
 
-        self::assertMatchesRegularExpression('/grid-template-columns:\s*minmax\(0, 1fr\);\s*grid-template-areas:\s*"title" "meta" "conseq" "why" "act";/', $rules['.wait-item'] ?? '');
+        self::assertMatchesRegularExpression(self::STACKED, $rules['.wait-item'] ?? '');
+    }
+
+    // A zoomed window has fractional CSS widths, and 1099.5 px is still below 1100.
+    public function testAWaitingItemIsOneColumnAtEveryWidthBelow1100IncludingAFractionalOne(): void
+    {
+        $sheet = (string) preg_replace('~/\*.*?\*/~s', '', $this->sheet());
+        preg_match_all('/@media \(([^)]+)\) \{(.*?)\n\}/s', $sheet, $blocks, PREG_SET_ORDER);
+        $queries = array_column(array_filter($blocks, fn (array $block): bool => 1 === preg_match(self::STACKED, $this->rulesOf($block[2])['.wait-item'] ?? '')), 1);
+        self::assertCount(1, $queries);
+
+        foreach ([761.0, 1099.0, 1099.5, 1099.99, 1100.0, 1440.0] as $width) {
+            self::assertSame($width < 1100.0, $this->matchesWidth($queries[0], $width), (string) $width);
+        }
     }
 
     public function testFrom1100WideAWaitingItemKeepsItsChoicesInA340PxColumnBesideTheWords(): void
@@ -75,6 +89,16 @@ final class WaitingStylesTest extends TestCase
         preg_match_all('/@media \('.preg_quote($query, '/').'\) \{(.*?)\n\}/s', $this->sheet(), $blocks);
 
         return [] === $blocks[1] ? self::fail($query) : implode("\n", $blocks[1]);
+    }
+
+    private function matchesWidth(string $query, float $width): bool
+    {
+        return match (true) {
+            1 === preg_match('/^max-width: (\d+(?:\.\d+)?)px$/', $query, $limit) => $width <= (float) $limit[1],
+            1 === preg_match('/^width < (\d+(?:\.\d+)?)px$/', $query, $limit) => $width < (float) $limit[1],
+            1 === preg_match('/^width <= (\d+(?:\.\d+)?)px$/', $query, $limit) => $width <= (float) $limit[1],
+            default => self::fail($query),
+        };
     }
 
     private function sheetOutside(string ...$queries): string

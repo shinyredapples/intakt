@@ -138,10 +138,30 @@ class FakeSlowClipboard {
     }
 }
 
+// One list for the phone query, as a browser keeps it, so a resize across 760 px tells every listener.
+class FakeMediaQueryList {
+    listeners = [];
+
+    constructor(matches) {
+        this.matches = matches;
+    }
+
+    addEventListener(type, listener) {
+        assert.equal(type, 'change');
+        this.listeners.push(listener);
+    }
+
+    cross(matches) {
+        this.matches = matches;
+        this.listeners.forEach((listener) => listener({ matches }));
+    }
+}
+
 function pageWithACommand({ clipboard = new FakeClipboard(), phone = false, whys = [] } = {}) {
     const page = new FakePage();
     page.whys.push(...whys);
     const timers = new FakeTimers();
+    const media = new FakeMediaQueryList(phone);
     const view = {
         navigator: clipboard === null ? {} : { clipboard },
         setTimeout: (callback, delay) => timers.setTimeout(callback, delay),
@@ -149,14 +169,14 @@ function pageWithACommand({ clipboard = new FakeClipboard(), phone = false, whys
         matchMedia: (query) => {
             assert.equal(query, '(max-width: 760px)');
 
-            return { matches: phone };
+            return media;
         },
     };
     copyCommands(page, view);
     const button = new FakeCopyButton();
     page.buttons.push(button);
 
-    return { page, timers, clipboard, button };
+    return { page, timers, clipboard, button, media };
 }
 
 // The clipboard answers with a promise, so its outcome shows only once the pending reactions ran.
@@ -388,6 +408,24 @@ test('a Turbo visit on a phone leaves every Why of the new page closed', () => {
     page.dispatch('turbo:load');
 
     assert.equal(why.open, false);
+});
+
+test('narrowing a wide window to phone width closes every Why', () => {
+    const whys = [new FakeWhy(false), new FakeWhy(false)];
+    const { media } = pageWithACommand({ whys });
+
+    media.cross(true);
+
+    assert.deepEqual(whys.map((why) => why.open), [false, false]);
+});
+
+test('widening a phone window past 760 px opens every Why', () => {
+    const whys = [new FakeWhy(false), new FakeWhy(false)];
+    const { media } = pageWithACommand({ phone: true, whys });
+
+    media.cross(false);
+
+    assert.deepEqual(whys.map((why) => why.open), [true, true]);
 });
 
 test('a page Turbo caches keeps every Why closed and moves no focus', () => {

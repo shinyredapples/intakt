@@ -17,6 +17,8 @@ export function copyCommands(page, view) {
     showWhys(page, view);
     // A Turbo visit brings new items, and a page back from the cache has every Why closed.
     page.addEventListener('turbo:load', () => showWhys(page, view));
+    // A window resized or turned across 760 px gets the state its new width shows on first render.
+    view.matchMedia(PHONE).addEventListener('change', () => showWhys(page, view));
     page.addEventListener('click', (event) => {
         const button = event.target?.closest?.(COPY_BUTTON);
         if (button) {
