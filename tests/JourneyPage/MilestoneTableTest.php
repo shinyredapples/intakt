@@ -57,6 +57,37 @@ final class MilestoneTableTest extends TestCase
     {
         $table = new MilestoneTable()->region([new Milestone(1, 'a <!-- b', 'c < d', null)], []);
 
-        self::assertStringContainsString('| a &lt;!-- b | c &lt; d |', $table->text);
+        self::assertStringContainsString('| a &lt;\!\-\- b | c &lt; d |', $table->text);
+    }
+
+    public function testMarkdownInAMilestoneGoalIsWrittenEscapedAndNeverRaw(): void
+    {
+        $table = new MilestoneTable()->region([new Milestone(1, 'Demo', '[label](#anchor){: title="x"} ![img](x.png) *em* `code`', null)], []);
+
+        self::assertStringContainsString('| Demo | \[label\]\(\#anchor\)\{\: title=\"x\"\} \!\[img\]\(x\.png\) \*em\* \`code\` |', $table->text);
+        foreach (['[label](#anchor)', '{: title="x"}', '![img](x.png)', '*em*', '`code`'] as $raw) {
+            self::assertStringNotContainsString($raw, $table->text);
+        }
+    }
+
+    public function testABackslashInAMilestoneTitleIsEscapedOnceBeforeThePunctuationAfterIt(): void
+    {
+        $table = new MilestoneTable()->region([new Milestone(1, 'a\*b', 'g', null)], []);
+
+        self::assertStringContainsString('| a\\\\\*b | g |', $table->text);
+    }
+
+    public function testEveryListedPunctuationCharacterInAMilestoneTitleIsEscaped(): void
+    {
+        $table = new MilestoneTable()->region([new Milestone(1, '\`*_{}[]()#+-.!:|"\'$>', 'g', null)], []);
+
+        self::assertStringContainsString('| \\\\\`\*\_\{\}\[\]\(\)\#\+\-\.\!\:\|\"\\\'\$\> | g |', $table->text);
+    }
+
+    public function testPunctuationOutsideTheListAndLineBreaksAreKeptAsTheyAre(): void
+    {
+        $table = new MilestoneTable()->region([new Milestone(1, " a=b & c; d\r\ne ", 'g', null)], []);
+
+        self::assertStringContainsString('| a=b & c; d e | g |', $table->text);
     }
 }
