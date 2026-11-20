@@ -202,8 +202,9 @@ final class ReviewerCatchesTest extends TestCase
     /**
      * @param list<RoundFinding>          $findings
      * @param array<string, list<string>> $reportedByRole
-     * @param array<string, string>       $reported       the severities reviewers gave beyond those of the entries that merged nothing
+     * @param array<string, string>       $reported
      */
+    // The reported severities beyond those of the entries that merged nothing, which are read at their own severity.
     private function judged(array $findings, array $reportedByRole, array $reported = []): ReviewedRound
     {
         $unmerged = array_filter($findings, static fn (RoundFinding $finding): bool => [] === $finding->merged);
