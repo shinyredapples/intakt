@@ -18,6 +18,7 @@ final readonly class GateChildren
         private string $root,
         private GateSlots $slots,
         private array $runningTheChangesCode,
+        private ?ScratchDirectory $results = null,
         private ProcessRunner $runner = new ProcessRunner(),
     ) {
     }
@@ -46,7 +47,7 @@ final readonly class GateChildren
         $children = [];
 
         foreach ($gates as $gate) {
-            $children[$gate] = new ChildCommand([PHP_BINARY, $this->home.'/'.self::ENTRY, $gate, ...$arguments], $this->directory(), LowPriority::environmentFor($gate, $this->runningTheChangesCode, $this->slots));
+            $children[$gate] = new ChildCommand([PHP_BINARY, $this->home.'/'.self::ENTRY, $gate, ...$arguments], $this->directory(), LowPriority::environmentFor($gate, $this->runningTheChangesCode, $this->slots) + FullReport::environmentFor($this->results, $gate));
         }
 
         return $children;

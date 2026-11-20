@@ -46,7 +46,7 @@ final class GateChildrenTest extends SandboxTestCase
             '{"gate":"cs","ok":true,"findings":[],"omitted":0}',
             '{"gate":"secrets","ok":false,"findings":["src/Report.php:3 broken"],"omitted":0}',
             '{"result":"fail","failed":["secrets"]}',
-        ], $run->lines());
+        ], $this->linesWithTheReportLeftOut($run));
         self::assertSame(1, $run->exitCode());
     }
 
@@ -58,7 +58,7 @@ final class GateChildrenTest extends SandboxTestCase
             '{"gate":"cs","ok":true,"findings":[],"omitted":0}',
             '{"gate":"secrets","ok":false,"findings":["src/Report.php:3 broken"],"omitted":0}',
             '{"result":"fail","failed":["secrets"]}',
-        ], $run->lines());
+        ], $this->linesWithTheReportLeftOut($run));
         self::assertSame(1, $run->exitCode());
     }
 
@@ -125,7 +125,7 @@ final class GateChildrenTest extends SandboxTestCase
             '{"gate":"audit","ok":true,"findings":[],"omitted":0}',
             '{"gate":"tests","ok":true,"findings":[],"omitted":0}',
             '{"result":"pass","failed":[]}',
-        ], $run->lines());
+        ], $this->linesWithTheReportLeftOut($run));
     }
 
     public function testTheContainerGateAlsoWaitsForTheStaticGates(): void
@@ -145,7 +145,7 @@ final class GateChildrenTest extends SandboxTestCase
             '{"gate":"comments","ok":true,"findings":[],"omitted":0}',
             '{"gate":"audit","ok":true,"findings":[],"omitted":0}',
             '{"result":"pass","failed":[]}',
-        ], $run->lines());
+        ], $this->linesWithTheReportLeftOut($run));
     }
 
     public function testAnOverrideThatNamesNoNumberOfGatesStopsBeforeAnyGateStarts(): void
@@ -221,6 +221,15 @@ final class GateChildrenTest extends SandboxTestCase
     private function checkWithFakeGatesIn(array $environment, string ...$arguments): CheckRun
     {
         return new CheckRun($this->runWithFakeGatesIn($environment, ...$arguments));
+    }
+
+    // Because the report's name is random, the summary is compared with it left out; CheckCommandFullReportTest covers the report.
+    /**
+     * @return list<string>
+     */
+    private function linesWithTheReportLeftOut(CheckRun $run): array
+    {
+        return array_map(static fn (string $line): string => (string) preg_replace('#,"report":"var/check/report-[0-9a-f]{16}\.json"\}$#', '}', $line), $run->lines());
     }
 
     private function runWithFakeGates(string ...$arguments): ProcessResult

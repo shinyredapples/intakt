@@ -73,10 +73,35 @@ final readonly class GateResult
             'omitted' => count($this->findings) - count($shown),
         ];
 
-        $report += isset($this->extras['note']) ? ['note' => $this->extras['note']] : [];
-        $report += [] === ($this->extras['slowest'] ?? []) ? [] : ['slowest' => $this->slowestList()];
+        return json_encode($report + $this->extrasList(), self::JSON_FLAGS);
+    }
 
-        return json_encode($report, self::JSON_FLAGS);
+    // Because the line keeps ten findings cut to 300 columns, the full report needs every finding as the gate wrote it.
+    public function toFullJson(): string
+    {
+        return json_encode(['gate' => $this->gate, 'ok' => $this->isPassing(), 'findings' => $this->findings] + $this->extrasList(), self::JSON_FLAGS);
+    }
+
+    // The environment gate reports a missing mbstring through here, so the measure must work without it.
+    public static function widthOf(string $text): int
+    {
+        if (function_exists('mb_strwidth')) {
+            return mb_strwidth($text);
+        }
+
+        $characters = preg_split('//u', $text, -1, PREG_SPLIT_NO_EMPTY);
+
+        return false === $characters ? strlen($text) : count($characters);
+    }
+
+    /**
+     * @return array{note?: string, slowest?: list<array{file: string, seconds: float}>}
+     */
+    private function extrasList(): array
+    {
+        $extras = isset($this->extras['note']) ? ['note' => $this->extras['note']] : [];
+
+        return $extras + ([] === ($this->extras['slowest'] ?? []) ? [] : ['slowest' => $this->slowestList()]);
     }
 
     /**
@@ -97,11 +122,15 @@ final readonly class GateResult
     {
         $oneLine = trim((string) preg_replace('/\s+/', ' ', $finding));
 
+        if (self::widthOf($oneLine) <= self::MAXIMUM_FINDING_LENGTH) {
+            return $oneLine;
+        }
+
         // The environment gate reports a missing mbstring through here, so the cut must work without it.
         if (!function_exists('mb_strimwidth')) {
             $characters = preg_split('//u', $oneLine, -1, PREG_SPLIT_NO_EMPTY);
 
-            return false === $characters || count($characters) <= self::MAXIMUM_FINDING_LENGTH ? $oneLine : implode('', array_slice($characters, 0, self::MAXIMUM_FINDING_LENGTH - 3)).'...';
+            return false === $characters ? $oneLine : implode('', array_slice($characters, 0, self::MAXIMUM_FINDING_LENGTH - 3)).'...';
         }
 
         return mb_strimwidth($oneLine, 0, self::MAXIMUM_FINDING_LENGTH, '...');

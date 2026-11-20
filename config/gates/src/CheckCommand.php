@@ -80,6 +80,7 @@ final readonly class CheckCommand
 
         $result = $this->resultOf($gate, new Workspace($options->root ?? $this->home, $this->home, $options->mode, $options->base));
         fwrite(STDOUT, $result->toJson()."\n");
+        FullReport::keep($result);
 
         return $result->isPassing() ? 0 : 1;
     }
@@ -101,18 +102,34 @@ final readonly class CheckCommand
 
         $runningTheChangesCode = array_map(static fn (Gate $gate): string => $gate->name(), array_values(array_filter($selected, static fn (Gate $gate): bool => $gate instanceof RunsTheChangesCode)));
 
-        return $this->runGates($names, $arguments, new GateChildren($this->home, $options->root ?? $this->home, $slots, $runningTheChangesCode));
+        $results = ScratchDirectory::create(FullReport::SCRATCH);
+        $reports = new GateChildren($this->home, $options->root ?? $this->home, $slots, $runningTheChangesCode, $results)->reportsOf($names, $arguments);
+
+        return $this->runGates($reports, new FullReport($options->root ?? $this->home, $results));
     }
 
     /**
-     * @param list<string> $names
-     * @param list<string> $arguments
+     * @param list<GateReport> $reports
      */
-    private function runGates(array $names, array $arguments, GateChildren $children): int
+    private function runGates(array $reports, FullReport $fullReport): int
+    {
+        [$summary, $exitCode] = $this->reportOn($reports);
+        $this->print($summary + $fullReport->writtenFor($reports));
+
+        return $exitCode;
+    }
+
+    // Because the verdict, the failed list and the exit code come from the gate lines alone, the full report written after them can never change them.
+    /**
+     * @param list<GateReport> $reports
+     *
+     * @return array{array{result: string, failed: list<string>}, int}
+     */
+    private function reportOn(array $reports): array
     {
         $failed = [];
 
-        foreach ($children->reportsOf($names, $arguments) as $report) {
+        foreach ($reports as $report) {
             fwrite(STDOUT, $report->line."\n");
 
             if (!$report->isPassing()) {
@@ -120,9 +137,7 @@ final readonly class CheckCommand
             }
         }
 
-        $this->print(['result' => [] === $failed ? 'pass' : 'fail', 'failed' => $failed]);
-
-        return [] === $failed ? 0 : 1;
+        return [['result' => [] === $failed ? 'pass' : 'fail', 'failed' => $failed], [] === $failed ? 0 : 1];
     }
 
     // Because the test workers count against the same processors as the gates, the parent sizes them as the tests gate will; a refused count fails that gate, so it counts as one.
