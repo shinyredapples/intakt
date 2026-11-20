@@ -67,6 +67,7 @@ Reviews:
 - [Finding ledger](finding-ledger.md)
 - [Reviewer repository tools](reviewer-repository-tools.md)
 - [Reviewer agent](reviewer-agent.md)
+- [Prompt assembly and its gate](prompt-assembly.md): untrusted text reaches a model only as `FencedText` (D1), only `PromptAssembly` builds Symfony AI messages, a reviewer role's configured prompt entering verbatim only through `systemWithRole()` (D2), and the `phpstan` gate refuses a message built anywhere else in `src/` or `bin/` (D3)
 - [Project memory](project-memory.md)
 - [Ledger](ledger.md)
 - [The weekly report: the loop's reviews and Intakt's](weekly-report.md)
