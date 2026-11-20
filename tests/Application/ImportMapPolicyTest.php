@@ -9,7 +9,6 @@ use DateTimeImmutable;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\DataProvider;
-use ReflectionProperty;
 use Symfony\Component\AssetMapper\AssetMapperInterface;
 use Symfony\Component\AssetMapper\Command\ImportMapUpdateCommand;
 use Symfony\Component\AssetMapper\CompiledAssetMapperConfigReader;
@@ -47,6 +46,10 @@ final class ImportMapPolicyTest extends KernelTestCase
 
     private string $directory;
 
+    private string $served = self::MODULE;
+
+    private ?ImportMapGenerator $wiredGenerator = null;
+
     protected function setUp(): void
     {
         $this->directory = sys_get_temp_dir().'/intakt-importmap-'.bin2hex(random_bytes(6));
@@ -64,11 +67,6 @@ final class ImportMapPolicyTest extends KernelTestCase
         self::assertSame(['sha384'], $this->repositoryAssetMapperSetting('importmap_integrity_algorithms'));
     }
 
-    public function testTheContainerGeneratesTheImportMapWithSha384Integrity(): void
-    {
-        self::assertSame(['sha384'], $this->wiredIntegrityAlgorithms());
-    }
-
     public function testTheMinimumReleaseAgeIsTheComposerCooldownPeriod(): void
     {
         $composer = json_decode((string) file_get_contents(dirname(__DIR__, 2).'/composer.json'), true, flags: JSON_THROW_ON_ERROR);
@@ -83,18 +81,22 @@ final class ImportMapPolicyTest extends KernelTestCase
         self::assertSame($epoch->modify('+'.$period)->getTimestamp(), $this->wiredMinimumReleaseAge());
     }
 
-    public function testTheRenderedImportMapCarriesTheSha384OfEachModule(): void
+    public function testTheContainerRendersTheImportMapWithTheSha384OfEachModule(): void
     {
-        $importMap = $this->renderedImportMap($this->generator($this->assetMapperServing(self::MODULE)));
+        $this->served = self::MODULE;
+
+        $importMap = $this->renderedImportMap();
 
         self::assertSame(['/assets/app-1.js' => $this->sha384Of(self::MODULE)], $importMap['integrity'] ?? null);
+        self::assertStringStartsWith('sha384-', $this->sha384Of(self::MODULE));
     }
 
     public function testAModuleChangedAfterTheImportMapWasCompiledNoLongerMatchesItsIntegrityHash(): void
     {
         $this->compileTheImportMapOf(self::MODULE);
+        $this->served = 'export const answer = 43;';
 
-        $importMap = $this->renderedImportMap($this->generator($this->assetMapperServing('export const answer = 43;')));
+        $importMap = $this->renderedImportMap();
 
         self::assertIsArray($importMap['integrity'] ?? null);
         self::assertSame($this->sha384Of(self::MODULE), $importMap['integrity']['/assets/app-1.js'] ?? null);
@@ -106,8 +108,9 @@ final class ImportMapPolicyTest extends KernelTestCase
         $this->compileTheImportMapOf(self::MODULE);
         $pinned = $this->sha384Of(self::MODULE);
         new Filesystem()->remove($this->directory.'/public/assets/importmap.json');
+        $this->served = 'export const answer = 43;';
 
-        $importMap = $this->renderedImportMap($this->generator($this->assetMapperServing('export const answer = 43;')));
+        $importMap = $this->renderedImportMap();
 
         self::assertIsArray($importMap['integrity'] ?? null);
         self::assertSame($this->sha384Of('export const answer = 43;'), $importMap['integrity']['/assets/app-1.js'] ?? null);
@@ -160,41 +163,34 @@ final class ImportMapPolicyTest extends KernelTestCase
         return $checker->getMinimumReleaseAge();
     }
 
-    private function generator(AssetMapperInterface $assetMapper): ImportMapGenerator
+    // The container's own generator, so the integrity algorithms are the wired ones; only its file sources point at this test's directory.
+    private function wiredGenerator(): ImportMapGenerator
+    {
+        return $this->wiredGenerator ??= $this->wireTheGeneratorToThisDirectory();
+    }
+
+    private function wireTheGeneratorToThisDirectory(): ImportMapGenerator
     {
         new Filesystem()->dumpFile($this->directory.'/importmap.php', '<?php return '.var_export(['app' => ['path' => './assets/app.js', 'entrypoint' => true]], true).';');
-
-        return new ImportMapGenerator(
-            $assetMapper,
-            new CompiledAssetMapperConfigReader($this->directory.'/public/assets'),
-            $this->configReader(),
-            $this->wiredIntegrityAlgorithms(),
-        );
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function wiredIntegrityAlgorithms(): array
-    {
-        $generator = self::getContainer()->get('asset_mapper.importmap.generator');
+        $container = self::getContainer();
+        $container->set('asset_mapper', $this->assetMapperServingTheCurrentModule());
+        $container->set('asset_mapper.compiled_asset_mapper_config_reader', new CompiledAssetMapperConfigReader($this->directory.'/public/assets'));
+        $container->set('asset_mapper.importmap.config_reader', $this->configReader());
+        $generator = $container->get('asset_mapper.importmap.generator');
         self::assertInstanceOf(ImportMapGenerator::class, $generator);
-        // Read from the private property because the generator offers no getter, and the wired value is what a deployed install renders.
-        $algorithms = new ReflectionProperty(ImportMapGenerator::class, 'integrityHashAlgorithms')->getValue($generator);
-        self::assertIsArray($algorithms);
 
-        return array_values(array_filter($algorithms, is_string(...)));
+        return $generator;
     }
 
-    private function assetMapperServing(string $content): AssetMapperInterface
+    private function assetMapperServingTheCurrentModule(): AssetMapperInterface
     {
         $assetMapper = self::createStub(AssetMapperInterface::class);
-        $assetMapper->method('getAsset')->willReturn(new MappedAsset(
+        $assetMapper->method('getAsset')->willReturnCallback(fn (): MappedAsset => new MappedAsset(
             'app.js',
             $this->directory.'/assets/app.js',
             '/assets/app.js',
             '/assets/app-1.js',
-            $content,
+            $this->served,
             '1',
             false,
         ));
@@ -205,7 +201,8 @@ final class ImportMapPolicyTest extends KernelTestCase
     // Because asset-map:compile stores this raw data, a deployed install renders the hash of the bytes it compiled.
     private function compileTheImportMapOf(string $content): void
     {
-        $data = $this->generator($this->assetMapperServing($content))->getRawImportMapData();
+        $this->served = $content;
+        $data = $this->wiredGenerator()->getRawImportMapData();
         new CompiledAssetMapperConfigReader($this->directory.'/public/assets')->saveConfig('importmap.json', $data);
         new CompiledAssetMapperConfigReader($this->directory.'/public/assets')->saveConfig('entrypoint.app.json', []);
     }
@@ -213,9 +210,9 @@ final class ImportMapPolicyTest extends KernelTestCase
     /**
      * @return array<mixed>
      */
-    private function renderedImportMap(ImportMapGenerator $generator): array
+    private function renderedImportMap(): array
     {
-        $html = new ImportMapRenderer($generator)->render('app');
+        $html = new ImportMapRenderer($this->wiredGenerator())->render('app');
         self::assertSame(1, preg_match('~<script type="importmap">(.*?)</script>~s', $html, $match));
         $importMap = json_decode($match[1] ?? '', true, flags: JSON_THROW_ON_ERROR);
         self::assertIsArray($importMap);
