@@ -4,12 +4,19 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
+use Intakt\Core\Dashboard\Domain\BarChart;
+use Intakt\Core\Dashboard\Domain\ChartBar;
+use Intakt\Core\Dashboard\Domain\ChartPoint;
 use Intakt\Core\Dashboard\UseCase\ShowComponents\ShowComponentsController;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\DomCrawler\Crawler;
 
 #[CoversClass(ShowComponentsController::class)]
+#[UsesClass(BarChart::class)]
+#[UsesClass(ChartBar::class)]
+#[UsesClass(ChartPoint::class)]
 final class ShowComponentsControllerTest extends DashboardPageTestCase
 {
     use DownloadedScriptStandIns;
@@ -34,6 +41,7 @@ final class ShowComponentsControllerTest extends DashboardPageTestCase
         yield 'copy field' => ['.copy code + button.btn'];
         yield 'bar' => ['.window .bar'];
         yield 'last-known bar' => ['.window .bar.last-known'];
+        yield 'bar chart' => ['.charts .chart svg.chart-svg path.c-bar + rect.c-hit'];
         yield 'banner' => ['.banner.broken'];
         yield 'compact banner, collapsed' => ['.banner.compact:not(.open) .banner-toggle[aria-expanded="false"]'];
         yield 'compact banner, open' => ['.banner.compact.open .banner-toggle[aria-expanded="true"]'];
@@ -115,6 +123,73 @@ final class ShowComponentsControllerTest extends DashboardPageTestCase
             self::assertCount(1, $focused, $theme);
             self::assertStringContainsString('#626', $focused->text(), $theme);
         }
+    }
+
+    public function testEachChartsTableListsTheSameNumbersAsItsBarsInBothThemes(): void
+    {
+        $page = $this->browser->request('GET', '/components');
+
+        foreach (['light', 'dark'] as $theme) {
+            $charts = $page->filter('#c-charts .spec[data-theme="'.$theme.'"] .charts > .chart');
+            self::assertCount(2, $charts, $theme);
+            $charts->each(static function (Crawler $chart) use ($theme): void {
+                $rows = $chart->filter('.c-table tbody tr')->each(static fn (Crawler $row): string => $row->filter('th')->text().': '.$row->filter('td')->text());
+                self::assertNotEmpty($rows, $theme);
+                self::assertSame($rows, $chart->filter('svg rect.c-hit')->each(static fn (Crawler $hit): string => (string) $hit->attr('aria-label')), $theme);
+            });
+        }
+    }
+
+    public function testAMissingDayDrawsNoBarAndReadsNoDataNeverZero(): void
+    {
+        $chart = $this->browser->request('GET', '/components')->filter('#chart-rounds-light');
+
+        self::assertCount(14, $chart->filter('rect.c-hit'));
+        self::assertCount(13, $chart->filter('path.c-bar'));
+        self::assertCount(1, $chart->filter('rect.c-hit[aria-label="Nov 5: No data"][data-reading="No data"]'));
+        self::assertSame('No data', $chart->filter('.c-table tbody tr')->eq(4)->filter('td')->text());
+    }
+
+    public function testAZeroDrawsABarSoItReadsApartFromMissingData(): void
+    {
+        $chart = $this->browser->request('GET', '/components')->filter('#chart-findings-dark');
+
+        self::assertCount(6, $chart->filter('path.c-bar'));
+        self::assertCount(1, $chart->filter('rect.c-hit[aria-label="Round 4: 0"]'));
+    }
+
+    public function testTheKeyboardReachesEveryBarAndItsFocusShowsTheTooltip(): void
+    {
+        $page = $this->browser->request('GET', '/components');
+
+        $hits = $page->filter('#c-charts rect.c-hit');
+        self::assertCount(2 * (14 + 6), $hits);
+        $hits->each(static function (Crawler $hit): void {
+            self::assertSame('0', $hit->attr('tabindex'));
+            self::assertSame('img', $hit->attr('role'));
+            self::assertSame('pointerenter->chart#pointerEnter pointerleave->chart#pointerLeave focus->chart#focusIn blur->chart#focusOut', $hit->attr('data-action'));
+        });
+    }
+
+    public function testEachChartCarriesItsTooltipControllerAndAHiddenTip(): void
+    {
+        $page = $this->browser->request('GET', '/components');
+
+        $charts = $page->filter('#c-charts .chart');
+        self::assertCount(4, $charts);
+        self::assertCount(4, $page->filter('#c-charts .chart[data-controller="chart"][data-action="keydown.esc@window->chart#dismiss"]'));
+        self::assertCount(4, $page->filter('#c-charts .chart > .chart-tip[data-chart-target="tip"][aria-hidden="true"][hidden] > strong[data-chart-target="reading"] + span[data-chart-target="label"]'));
+        self::assertCount(4, $page->filter('#c-charts .chart > details.c-table > summary'));
+        self::assertSame('Show as table', $page->filter('#c-charts .c-table summary')->first()->text());
+    }
+
+    public function testEachChartNamesItsSvgByItsTitleAndSaysItsTakeaway(): void
+    {
+        $chart = $this->browser->request('GET', '/components')->filter('#c-charts .spec[data-theme="dark"] .chart')->first();
+
+        self::assertSame('Review rounds per day', $chart->filter('#chart-rounds-dark-title')->text());
+        self::assertSame('chart-rounds-dark-title', $chart->filter('svg')->attr('aria-labelledby'));
+        self::assertSame('48 rounds in 14 days, at most 6 a day; Nov 5 has no record.', $chart->filter('.takeaway')->text());
     }
 
     public function testTheComponentsPageAnswersASecondRequestOfTheSameTest(): void
