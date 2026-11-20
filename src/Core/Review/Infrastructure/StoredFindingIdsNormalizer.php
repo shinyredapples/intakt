@@ -10,20 +10,11 @@ use Symfony\Component\Serializer\Exception\LogicException;
 use Symfony\Component\Serializer\Exception\UnexpectedValueException;
 use Symfony\Component\Serializer\Normalizer\DenormalizerInterface;
 use Symfony\Component\Serializer\Normalizer\NormalizerInterface;
-use WeakMap;
 
 // Only on the stored serializer, because judge_done rows keep finding ids as a JSON list, as they were written before the ids were one value.
 #[AutoconfigureTag('serializer.normalizer', ['serializer' => 'stored'])]
 final class StoredFindingIdsNormalizer implements NormalizerInterface, DenormalizerInterface
 {
-    /** @var WeakMap<FindingIds, array<int|string, string>> */
-    private readonly WeakMap $keysRead;
-
-    public function __construct()
-    {
-        $this->keysRead = new WeakMap();
-    }
-
     /**
      * @param array<string, mixed> $context
      *
@@ -35,7 +26,7 @@ final class StoredFindingIdsNormalizer implements NormalizerInterface, Denormali
             throw new LogicException(sprintf('Only "%s" are normalized here.', FindingIds::class));
         }
 
-        return $this->keysRead[$data] ?? [...$data];
+        return $data instanceof KeyedFindingIds ? $data->stored : [...$data];
     }
 
     /**
@@ -62,12 +53,7 @@ final class StoredFindingIdsNormalizer implements NormalizerInterface, Denormali
             }
         }
 
-        $ids = new FindingIds(...array_values($data));
-        if (!array_is_list($data)) {
-            $this->keysRead[$ids] = $data;
-        }
-
-        return $ids;
+        return array_is_list($data) ? new FindingIds(...$data) : new KeyedFindingIds($data);
     }
 
     /**
@@ -80,7 +66,7 @@ final class StoredFindingIdsNormalizer implements NormalizerInterface, Denormali
 
     public function getSupportedTypes(?string $format): array
     {
-        return [FindingIds::class => true];
+        return [FindingIds::class => true, KeyedFindingIds::class => true];
     }
 
     private function notIds(): UnexpectedValueException

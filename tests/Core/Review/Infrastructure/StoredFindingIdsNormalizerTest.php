@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Review\Infrastructure;
 
 use Intakt\Core\Review\Contract\FindingIds;
+use Intakt\Core\Review\Infrastructure\KeyedFindingIds;
 use Intakt\Core\Review\Infrastructure\StoredFindingIdsNormalizer;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -15,6 +16,7 @@ use Symfony\Component\Serializer\Exception\UnexpectedValueException;
 
 #[CoversClass(StoredFindingIdsNormalizer::class)]
 #[UsesClass(FindingIds::class)]
+#[UsesClass(KeyedFindingIds::class)]
 final class StoredFindingIdsNormalizerTest extends TestCase
 {
     public function testFindingIdsAreWrittenAsAList(): void
@@ -69,6 +71,15 @@ final class StoredFindingIdsNormalizerTest extends TestCase
         self::assertSame([1 => 'F1', 'a' => 'F2'], $normalizer->normalize($ids));
     }
 
+    public function testAnotherNormalizerWritesTheKeysOfAValueItDidNotRead(): void
+    {
+        $ids = new StoredFindingIdsNormalizer()->denormalize([1 => 'F3', 4 => 'F1'], FindingIds::class);
+
+        self::assertInstanceOf(FindingIds::class, $ids);
+        self::assertSame([1 => 'F3', 4 => 'F1'], new StoredFindingIdsNormalizer()->normalize($ids));
+        self::assertSame('["F3","F1"]', json_encode($ids, JSON_THROW_ON_ERROR));
+    }
+
     public function testAValueThatIsNoArrayFailsToRead(): void
     {
         $this->expectException(UnexpectedValueException::class);
@@ -95,6 +106,6 @@ final class StoredFindingIdsNormalizerTest extends TestCase
 
     public function testFindingIdsAreNamedAsCacheable(): void
     {
-        self::assertSame([FindingIds::class => true], new StoredFindingIdsNormalizer()->getSupportedTypes(null));
+        self::assertSame([FindingIds::class => true, KeyedFindingIds::class => true], new StoredFindingIdsNormalizer()->getSupportedTypes(null));
     }
 }
