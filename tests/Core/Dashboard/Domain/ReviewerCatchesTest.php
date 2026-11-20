@@ -204,7 +204,7 @@ final class ReviewerCatchesTest extends TestCase
      * @param array<string, list<string>> $reportedByRole
      * @param array<string, string>       $reported
      */
-    // The reported severities beyond those of the entries that merged nothing, which are read at their own severity.
+    // Only the entries that merged nothing are read at their own severity, because a merge may have raised an entry's one, as the ledger reader does.
     private function judged(array $findings, array $reportedByRole, array $reported = []): ReviewedRound
     {
         $unmerged = array_filter($findings, static fn (RoundFinding $finding): bool => [] === $finding->merged);
