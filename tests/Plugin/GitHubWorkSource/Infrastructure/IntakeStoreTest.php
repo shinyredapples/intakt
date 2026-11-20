@@ -218,7 +218,7 @@ final class IntakeStoreTest extends KernelTestCase
     {
         $references = new IssueReferences();
 
-        return new StoredIssue($project, new ItemReading($listed, $references->waitsFor($listed->body), $references->unreadableWaits($listed->body), $references->closedBy($listed->body)));
+        return StoredIssue::of($project, new ItemReading($listed, $references->waitsFor($listed->body), $references->unreadableWaits($listed->body), $references->closedBy($listed->body)));
     }
 
     private function vouched(ListedIssue $listed): StoredIssue

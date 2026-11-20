@@ -18,14 +18,6 @@ final class StoredIssue
     // Text rather than a datetime column, because the platforms' datetime columns keep whole seconds and an edit within the same second would then go unseen.
     private const string MOMENT = 'Y-m-d H:i:s.u';
 
-    #[ORM\Id]
-    #[ORM\Column(length: 255)]
-    private readonly string $project;
-
-    #[ORM\Id]
-    #[ORM\Column]
-    private readonly int $number;
-
     #[ORM\Column(length: 255)]
     private string $title;
 
@@ -65,22 +57,31 @@ final class StoredIssue
     #[ORM\Column(type: 'json')]
     private array $vouchedLabels = [];
 
-    public function __construct(
-        string $project,
+    // Both keys promoted, project first, because Doctrine orders the primary key as the properties are declared and the migration keys project, then number.
+    private function __construct(
+        #[ORM\Id]
+        #[ORM\Column(length: 255)]
+        private readonly string $project,
+        #[ORM\Id]
+        #[ORM\Column]
+        private readonly int $number,
         ItemReading $reading,
     ) {
         $listed = $reading->listed;
-        $this->project = $project;
-        $this->number = $listed->number;
         $this->title = mb_substr($listed->title, 0, 255);
         $this->labels = $listed->labels;
         $this->author = $listed->author;
         $this->updatedAt = $this->moment($listed->updatedAt);
-        $this->milestoneDue = null === $listed->milestoneDue ? null : $this->moment($listed->milestoneDue);
+        $this->milestoneDue = $listed->milestoneDue instanceof DateTimeImmutable ? $this->moment($listed->milestoneDue) : null;
         $this->pullRequest = $listed->isPullRequest;
         $this->waitsFor = $reading->waitsFor;
         $this->unreadableWaits = $reading->unreadableWaits;
         $this->closedBy = $reading->closedBy;
+    }
+
+    public static function of(string $project, ItemReading $reading): self
+    {
+        return new self($project, $reading->listed->number, $reading);
     }
 
     public function vouch(Vouching $vouching): void
