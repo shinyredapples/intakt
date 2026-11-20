@@ -98,3 +98,9 @@ services:
             root: %currentWorkingDirectory%
         tags:
             - phpstan.rules.rule
+    -
+        class: Intakt\Gates\PhpStan\RawPromptMessageRule
+        arguments:
+            root: %currentWorkingDirectory%
+        tags:
+            - phpstan.rules.rule
