@@ -7,7 +7,7 @@ The video's script and shot list: [docs/video.md](video.md)
 ## Why this needed Symfony AI and MCP
 
 - **Platform**: one interface over the Anthropic, OpenAI and OpenAI-compatible providers, so one panel mixes models from different AI labs.
-- **Structured output**: reviewer verdicts and judge results are checked against a schema, either by the model's structured output or, for CLI reviewers that return JSON, by Intakt after the call. **Agent**: the reviewers' tool loop. **Store**: project memory.
+- **Structured output**: the schema of a verdict or judge result goes out with the request where the provider supports structured output, and Intakt maps and validates every reviewer verdict and judge result after the call, also the JSON a CLI reviewer returns. **Agent**: the reviewers' tool loop. **Store**: project memory.
 - **Messenger**: each reviewer's run and the judging of a round go to a worker, so a round runs in the background.
 - **MCP Bundle**: your own agent starts reviews and reads the act list and findings as tools, then fixes the code in its own workspace.
 
