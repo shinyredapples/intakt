@@ -258,7 +258,7 @@ final class DemoReviewCommandTest extends TestCase
         self::assertStringStartsWith('approve (', $this->lines($tester)[0]);
     }
 
-    // Issue #2802, forced order: the worker's call answers 429 for the reviewer's only router provider, then the demo polls; it stops at that poll with the plain message and a failure exit, while the clock has not moved, instead of waiting through 60 s retries.
+    // Forced order, because the worker's 429 must land before the poll: the demo then stops at that poll while the clock has not moved, instead of waiting through 60 s retries (issue #2802).
     public function testARateLimitedReviewerStopsTheDemoAtOnceWithAPlainMessageAndAFailureExit(): void
     {
         $tiers = $this->rateLimitedRouter($this->clock);

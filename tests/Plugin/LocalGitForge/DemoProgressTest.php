@@ -23,7 +23,6 @@ use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Console\Output\BufferedOutput;
 use Throwable;
 
-// Issues #2802 and #2803: the demo says what it waits on and stops at once with a plain message when the model it waits on is rate-limited and no fallback is free.
 #[CoversClass(DemoProgress::class)]
 #[CoversClass(DemoProviderBusy::class)]
 #[UsesClass(AwaitedReviewer::class)]
@@ -138,7 +137,7 @@ final class DemoProgressTest extends TestCase
         return $tiers;
     }
 
-    // The strong tier is out; the standard tier still answers.
+    // Only the strong tier is out, so the stop names the reviewer whose tier is out.
     private function limited(Throwable $out): TierInvoker
     {
         $tiers = self::createStub(TierInvoker::class);

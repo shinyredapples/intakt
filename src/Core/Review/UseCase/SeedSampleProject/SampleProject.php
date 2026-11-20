@@ -126,7 +126,7 @@ final readonly class SampleProject
         return $models;
     }
 
-    // The fallback is a substitute on the tier's own provider, which reviews at once while the first router provider is rate-limited and owes no catch-up (issue #2816).
+    // A substitute on the tier's own provider, so it reviews at once while the first router provider is rate-limited and owes no catch-up (issue #2816).
     /**
      * @param array{provider: string, model: string} $mapping
      *

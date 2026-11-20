@@ -40,7 +40,7 @@ final readonly class SampleProjectData
         return $this->text('second_lab');
     }
 
-    // Null for a model the file lists no fallback for, such as an AI lab's own model, which has no router provider to swap.
+    // Null when the file lists none, because an AI lab's own model has no router provider to swap.
     public function fallbackOf(string $model): ?string
     {
         return null === $this->value('fallbacks', $model) ? null : $this->text('fallbacks', $model);

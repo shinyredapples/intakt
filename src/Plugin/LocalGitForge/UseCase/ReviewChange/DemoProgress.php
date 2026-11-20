@@ -62,7 +62,7 @@ final class DemoProgress implements ReviewProgress
         }
     }
 
-    // The reviewers not finished yet, in panel order, or the judge once every reviewer is in.
+    // The judge only once every reviewer is in, because it reads their findings.
     private function waitingOn(RoundProgress $progress): string
     {
         $parts = array_map(fn (AwaitedReviewer $reviewer): string => $this->named($reviewer->role.' reviewer', $reviewer->tier), $progress->awaited);

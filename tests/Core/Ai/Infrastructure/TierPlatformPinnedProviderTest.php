@@ -134,7 +134,6 @@ final class TierPlatformPinnedProviderTest extends TestCase
         self::assertSame([self::ROUTER, self::PINNED], [$answering->provider, $answering->model]);
     }
 
-    // Issue #2825: a substitute on the tier's own provider that names another router provider answers while the first pin cools, before any other provider.
     public function testAPinnedFallbackOnTheTiersOwnProviderAnswersWhileThePinCools(): void
     {
         $this->pins->coolDown($this->pin(), 120);
@@ -165,7 +164,7 @@ final class TierPlatformPinnedProviderTest extends TestCase
         self::assertSame('Every provider of the tier is out: openai_compatible for 120 s.', $out->getMessage());
     }
 
-    // Issue #2825, the whole call: the pinned model's 429 cools only its pin, and the next selection goes to the pinned fallback, which answers on the same account at once.
+    // The whole call, because selection alone does not show that the account still serves the fallback after the pinned 429 (issue #2825).
     public function testAPinned429IsFollowedByTheCallCompletingThroughThePinnedFallback(): void
     {
         $sent = [];
