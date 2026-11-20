@@ -12,11 +12,11 @@ final readonly class PhpGateSteps
 
     public const string CHECK = 'bin/check --fast';
 
-    // Not a status Composer's own failures use, so that a caller reads it as "this head cannot reuse an install" and not as a failed check.
+    // A status Composer's own failures do not use, so that a caller reads it as "this head cannot reuse an install" and not as a failed check.
     public const int REFUSED = 78;
 
-    // Before Composer runs, because Composer resolves anew without a lock file or with config.lock off, and because a reused install must hold only packages whose lock entries pin their contents. An explicit null is refused as well: only a missing key means the default.
-    public const string LOCK_GUARD = self::LOCK_GUARD_SCRIPT.' "$(composer config vendor-dir 2>/dev/null)" '.self::REFUSED;
+    // Before Composer runs, because Composer resolves anew without a lock file or with config.lock off, and because a reused install must hold only packages whose lock entries pin their contents. An explicit null is refused as well: only a missing key means the default. The x after Composer's answer is there because command substitution drops every trailing newline, and a vendor folder whose name ends in one would then be looked for in another folder.
+    public const string LOCK_GUARD = self::LOCK_GUARD_SCRIPT.' "$(composer config vendor-dir 2>/dev/null && printf x)" '.self::REFUSED;
 
     // Scripts and plugins off, because a reused install must hold only the locked packages and nothing a package ran. The lock's hash is compared around Composer because Composer exits 0 after resolving anew, for example when the lock file has no packages key; it is compared after a failed Composer run too, because Composer writes the new lock before it downloads. Composer's exit code is taken with ||, because a caller's shell running with set -e would otherwise end at a failing Composer, before the comparison.
     public const string LOCKED_INSTALL = self::LOCK_GUARD.' && intakt_lock_before="$('.self::LOCK_HASH.')" && { intakt_composer=0; composer install --no-interaction --no-progress --no-scripts --no-plugins --no-autoloader || intakt_composer=$?; '.self::LOCK_UNCHANGED.' && (exit "$intakt_composer"); }';
@@ -40,7 +40,8 @@ final readonly class PhpGateSteps
         try { return json_decode($text, true, 512, JSON_THROW_ON_ERROR); } catch (JsonException) { $refuse($file." is not valid JSON."); }
     };
     if (!is_file("composer.lock")) { fwrite(STDERR, "composer.lock is missing, so there are no locked packages to install.\n"); exit(1); }
-    $vendor = $argv[1] ?? "";
+    $answer = $argv[1] ?? "";
+    $vendor = str_ends_with($answer, "\nx") ? substr($answer, 0, -2) : "";
     if ("" === $vendor) { $refuse("composer config could not report the vendor folder, so it is unknown whether the folder holds an install."); }
     $manifest = $read("composer.json");
     $config = is_array($manifest) ? ($manifest["config"] ?? null) : null;

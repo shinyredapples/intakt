@@ -416,6 +416,19 @@ final class PhpGateDependencyStepTest extends TestCase
         self::assertStringContainsString('already holds an install', $install->getErrorOutput());
     }
 
+    public function testTheLockedInstallRefusesAVendorFolderWhoseNameEndsInANewlineAndHoldsAnInstall(): void
+    {
+        $this->projectRequiringAPackage(['config' => ['vendor-dir' => "dependencies\n"]]);
+        $this->mustRun('composer update --no-interaction --no-plugins --no-scripts');
+        self::assertFileExists($this->directory."/dependencies\n/composer/installed.json");
+        self::assertDirectoryDoesNotExist($this->directory.'/dependencies');
+
+        $install = $this->runInProject(PhpGateSteps::LOCKED_INSTALL);
+
+        self::assertSame(PhpGateSteps::REFUSED, $install->getExitCode());
+        self::assertStringContainsString('already holds an install', $install->getErrorOutput());
+    }
+
     public function testARefusedAddressIsNotShownBecauseItCanHoldCredentials(): void
     {
         $this->lockedProject([['name' => 'fixture/pkg', 'version' => '1.0.0', 'dist' => ['type' => 'zip', 'url' => 'ftp://user:hidden-word@archive.invalid/pkg.zip', 'shasum' => str_repeat('a', 40)]]]);
