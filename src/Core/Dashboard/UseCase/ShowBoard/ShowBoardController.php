@@ -69,7 +69,7 @@ final readonly class ShowBoardController
             return false;
         }
 
-        return $request->headers->get('Sec-CH-UA-Mobile') === '?1'
+        return '?1' === $request->headers->get('Sec-CH-UA-Mobile')
             || str_contains($request->headers->get('User-Agent') ?? '', 'Mobi');
     }
 

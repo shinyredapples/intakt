@@ -101,6 +101,6 @@ final class BoardPhoneLandingTest extends DashboardPageTestCase
         $page = $this->browser->request('GET', '/reviews');
 
         self::assertSame('/?board=1', $page->filter('.rail a.nav[data-k="board"]')->attr('href'));
-        self::assertSame(['/', '/'], $page->filter('a[aria-label="Intakt home"]')->each(static fn ($link): ?string => $link->attr('href')));
+        self::assertSame(['/', '/'], $page->filter('a[aria-label="Intakt home"]')->each(static fn (Crawler $link): ?string => $link->attr('href')));
     }
 }
