@@ -11,6 +11,7 @@ use Intakt\Core\Watcher\Domain\ListingValidator;
 use Intakt\Core\Watcher\Domain\SeenChange;
 use Intakt\Plugin\Forge\Contract\OpenChange;
 use Symfony\Component\Lock\LockFactory;
+use Throwable;
 
 final readonly class SeenListings
 {
@@ -28,6 +29,7 @@ final readonly class SeenListings
      * @return T
      *
      * @throws ListingInProgress
+     * @throws Throwable
      */
     public function whileListing(string $project, Closure $listing): mixed
     {

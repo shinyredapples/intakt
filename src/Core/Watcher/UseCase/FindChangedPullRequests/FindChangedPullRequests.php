@@ -11,6 +11,7 @@ use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\OpenChange;
 use Intakt\Plugin\Forge\Contract\OpenChanges;
 use Psr\Log\LoggerInterface;
+use Throwable;
 
 final readonly class FindChangedPullRequests
 {
@@ -40,6 +41,7 @@ final readonly class FindChangedPullRequests
      * @return T
      *
      * @throws ListingInProgress
+     * @throws Throwable
      */
     public function whileListing(string $project, Closure $work): mixed
     {
