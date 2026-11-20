@@ -93,8 +93,8 @@ One row per reproduction in `upstream/`, merged first. *Intakt's* marks a pull r
 | Project | Bug | Upstream |
 | --- | --- | --- |
 | symfony/ai | [SQLite store: a quote breaks FTS5](upstream/ai-sqlite-store-unescaped-fts-quote/) | [#2874](https://github.com/symfony/ai/pull/2874) Intakt's, merged |
-| symfony/ai | [Claude Code: CLI tool calls lost](upstream/ai-claude-code-platform-cli-tool-calls/) | [#2875](https://github.com/symfony/ai/pull/2875) Intakt's, merged |
-| symfony/ai | [Codex: CLI tool calls lost](upstream/ai-codex-platform-cli-tool-calls/) | [#2875](https://github.com/symfony/ai/pull/2875) Intakt's, merged |
+| symfony/ai | [Claude Code: tools the CLI ran come back as tool calls](upstream/ai-claude-code-platform-cli-tool-calls/) | [#2875](https://github.com/symfony/ai/pull/2875) Intakt's, merged |
+| symfony/ai | [Codex: tools the CLI ran come back as tool calls](upstream/ai-codex-platform-cli-tool-calls/) | [#2875](https://github.com/symfony/ai/pull/2875) Intakt's, merged |
 | symfony/ai | [`#[Positive]` gets a boolean `exclusiveMinimum`](upstream/ai-platform-positive-boolean-exclusive-minimum/) | [#2888](https://github.com/symfony/ai/pull/2888) Intakt's, merged |
 | Doctrine | [PostgreSQL without `server_version` fails](upstream/doctrine-bundle-postgresql-empty-server-version/) | [DoctrineBundle#2335](https://github.com/doctrine/DoctrineBundle/pull/2335) Intakt's, merged |
 | symfony/symfony | [NaN skips config validation](upstream/config-nan-skips-validation/) | [#67911](https://github.com/symfony/symfony/pull/67911) fixed upstream, merged |
