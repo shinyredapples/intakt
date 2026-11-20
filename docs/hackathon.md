@@ -24,7 +24,8 @@ the dates from [the journey](journey.md#milestones):
 - **2026-11-06:** M1 Review core (one reviewer, a schema-valid verdict in the ledger) and M4 Live dashboard.
 - **2026-11-11:** the first release, v0.1.0, then a release train twice a day.
 - **2026-11-12:** M2 Panel and rounds: a configured panel, quorum, finding ids that persist, the judge.
-- **2026-11-21:** M5 Demo (`docker compose up`, the sample repository, the five-minute path) and the feature freeze.
+- **2026-11-21 (planned):** M5 Demo (`docker compose up`, the sample repository, the five-minute path) is due, and the
+  feature freeze starts.
 
 ## What was achieved
 
@@ -44,7 +45,9 @@ the dates from [the journey](journey.md#milestones):
   [Highlights](https://shinyredapples.github.io/intakt/)).
 - **Built by an AI loop:** the repository itself, in figures and examples ([showcase](showcase/README.md)).
 
-Counted on 2026-11-20: 7,116 commits on main (counted), 26 upstream reports in `upstream/` (counted).
+Counted on 2026-11-20 from the repository: 7,256 commits on main (counted), 27 upstream reports in `upstream/`
+(counted). Counted from the GitHub API to 2026-11-13, as listed in [the journey](journey.md): 614 merged pull requests
+(counted) and 655 closed issues in the milestones M0 to M8 (counted, the sum of the Done column).
 
 ## After the hackathon
 
