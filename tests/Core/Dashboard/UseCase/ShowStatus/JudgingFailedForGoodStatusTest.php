@@ -137,7 +137,7 @@ final class JudgingFailedForGoodStatusTest extends KernelTestCase
         self::assertSame(0, $this->transport('messenger.transport.failed')->getMessageCount());
     }
 
-    // intakt:review and messenger:consume as the container wires them, on a branch of a temporary repository: only the panel and the vendor are the test's, and the worker runs while the command waits, as a worker process runs beside it on an install.
+    // Only the panel and the vendor are the test's, because the proof is the installed wiring of both commands; the worker runs during the command's waits, because on an install a worker process runs beside it.
     private function reviewedByTheInstalledCommand(): CommandTester
     {
         $repository = new TemporaryRepository();

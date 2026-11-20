@@ -29,9 +29,8 @@ final class PinnableClock implements ClockInterface
         $this->pinned = new MockClock($moment);
     }
 
+    // A test runs a worker during a command's waits on this clock, because on an install a worker process runs beside the command.
     /**
-     * Lets a test run a worker while a command of the container waits on this clock, as a worker process would run beside it.
-     *
      * @param Closure(): void $work
      */
     public function workOnEachSleep(Closure $work): void
