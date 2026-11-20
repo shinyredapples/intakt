@@ -26,6 +26,7 @@ use Intakt\Core\Review\UseCase\JudgeRound\RecordFailedJudging;
 use Intakt\Core\Review\UseCase\JudgeRound\RecordFailedJudgingHandler;
 use Intakt\Core\Review\UseCase\JudgeRound\RecurringP1s;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
+use Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewer;
 use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
 use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
 use Intakt\Tests\Core\HandBack\RecordingLedger;
@@ -188,6 +189,21 @@ final class RecurringP1sTest extends KernelTestCase
         self::assertSame([$third], array_column($this->recurrences(), 'round'));
     }
 
+    public function testRoundsOnHeadsABAWithTheFirstStillCollectingRecordTheThirdNowAndTheSecondWhenTheFirstIsJudged(): void
+    {
+        $sent = count($this->fixture->bus->messages);
+        $first = $this->fixture->startAtHead(RoundFixture::CHANGE, self::HEAD_A);
+        $collecting = array_slice($this->fixture->bus->messages, $sent);
+        [$second, $third] = [$this->roundAt(self::HEAD_B), $this->roundAt(self::HEAD_A)];
+        array_map($this->judge(...), [$second, $third]);
+        $beforeTheFirst = array_column($this->recurrences(), 'round');
+
+        $this->deliver($collecting);
+        $this->judge($first);
+
+        self::assertSame([[$third], [$third, $second]], [$beforeTheFirst, array_column($this->recurrences(), 'round')]);
+    }
+
     public function testARoundJudgedWhileAnotherRoundOfTheChangeCommitsItsJudgingRecordsTheRecurrence(): void
     {
         [$first, $second] = [$this->roundAt(self::HEAD_A), $this->roundAt(self::HEAD_B)];
@@ -273,13 +289,21 @@ final class RecurringP1sTest extends KernelTestCase
     {
         $sent = count($this->fixture->bus->messages);
         $roundId = $this->fixture->startAtHead($change, $head);
-        $vendor = new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, [$finding ?? $this->keyedP1()], [], [])]);
-
-        foreach (array_slice($this->fixture->bus->messages, $sent) as $message) {
-            $this->fixture->deliver($message, $vendor);
-        }
+        $this->deliver(array_slice($this->fixture->bus->messages, $sent), $finding);
 
         return $roundId;
+    }
+
+    /**
+     * @param list<ReviewWithReviewer> $messages
+     */
+    private function deliver(array $messages, ?Finding $finding = null): void
+    {
+        $vendor = new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, [$finding ?? $this->keyedP1()], [], [])]);
+
+        foreach ($messages as $message) {
+            $this->fixture->deliver($message, $vendor);
+        }
     }
 
     private function judge(string $roundId): void
