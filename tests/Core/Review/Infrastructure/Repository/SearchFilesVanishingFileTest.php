@@ -3,8 +3,7 @@
 declare(strict_types=1);
 
 namespace Intakt\Core\Review\Infrastructure\Repository {
-    // Removes the file between the walk that found it and its stat, a moment no test can time, then stats it for real, so the stat raises its warning; the size is read through stat() because the name filesize() resolves here.
-    // A function cannot be undefined, so it stays in place for every later test in the process; any other file name passes through to a real stat, so those tests see the size as before.
+    // Removes the file between the walk that found it and its stat, a moment no test can time, then stats it for real, so the stat raises its warning; the size is read through stat() because the name filesize() resolves here; it stays defined for every later test in the process, which is harmless because any other file name passes through to a real stat.
     function filesize(string $filename): int|false
     {
         if ('vanishes.txt' === basename($filename)) {
