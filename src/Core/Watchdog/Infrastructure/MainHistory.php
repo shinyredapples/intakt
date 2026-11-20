@@ -56,7 +56,7 @@ final readonly class MainHistory implements CommitHistory
      */
     public function contains(string $commit): bool
     {
-        return $this->holds(['merge-base', '--is-ancestor', $commit, self::MAIN]);
+        return $this->holds(['merge-base', '--is-ancestor', $commit, $this->tip()]);
     }
 
     /**
@@ -64,10 +64,17 @@ final readonly class MainHistory implements CommitHistory
      *
      * @throws RepositoryAttributesRefused
      * @throws RuntimeException
+     * @throws MainRewrittenDuringRead
      */
     public function firstParentsSince(string $commit): array
     {
-        $commits = trim($this->read(['rev-list', '--first-parent', '--reverse', $commit.'..'.self::MAIN]));
+        // One pinned tip for the ancestry check and the walk, because a force push between two reads of the ref would walk a history that dropped the commit.
+        $tip = $this->tip();
+        if (!$this->holds(['merge-base', '--is-ancestor', $commit, $tip])) {
+            throw MainRewrittenDuringRead::dropped($commit, $tip);
+        }
+
+        $commits = trim($this->read(['rev-list', '--first-parent', '--reverse', $commit.'..'.$tip]));
 
         return '' === $commits ? [] : explode("\n", $commits);
     }
@@ -94,12 +101,30 @@ final readonly class MainHistory implements CommitHistory
 
     private function strictKey(string $key, int $position): string
     {
-        if (1 !== preg_match(self::PUBLIC_KEY, $key, $parts)) {
+        if (1 !== preg_match(self::PUBLIC_KEY, $key, $parts) || !$this->namesItsType((string) base64_decode($parts['key'], true), $parts['type'])) {
             throw OwnerKeyRefused::notAPublicKey($position + 1);
         }
 
         // Without the comment, because only the type and the key bytes decide who signed.
         return $parts['type'].' '.$parts['key'];
+    }
+
+    // The key bytes start with their own length-prefixed type, so a key that does not decode, or decodes to another type, is refused here instead of failing every check later.
+    private function namesItsType(string $blob, string $type): bool
+    {
+        $prefix = pack('N', strlen($type)).$type;
+
+        return str_starts_with($blob, $prefix) && strlen($blob) > strlen($prefix);
+    }
+
+    /**
+     * @throws RepositoryAttributesRefused
+     * @throws RuntimeException
+     */
+    private function tip(): string
+    {
+        // show-ref --verify takes the exact ref only, because rev-parse would fall back to a tag named refs/heads/main once the branch is gone.
+        return trim($this->read(['show-ref', '--verify', '--hash', self::MAIN]));
     }
 
     /**
@@ -201,16 +226,17 @@ final readonly class MainHistory implements CommitHistory
             return false;
         }
 
-        $signers = $this->filesystem->tempnam(sys_get_temp_dir(), 'intakt-owner-signers-');
-        $signatureFile = $this->filesystem->tempnam(sys_get_temp_dir(), 'intakt-owner-signature-');
+        $files = [$signers = $this->filesystem->tempnam(sys_get_temp_dir(), 'intakt-owner-signers-')];
 
         try {
+            // Allocated inside the try, because a failure here must still remove the signers file.
+            $files[] = $signatureFile = $this->filesystem->tempnam(sys_get_temp_dir(), 'intakt-owner-signature-');
             $this->filesystem->dumpFile($signers, $this->allowedSigners());
             $this->filesystem->dumpFile($signatureFile, $signature);
 
             return $this->verifies($signers, $signatureFile, $payload);
         } finally {
-            $this->filesystem->remove([$signers, $signatureFile]);
+            $this->filesystem->remove($files);
         }
     }
 

@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Watchdog\Infrastructure;
 use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Watchdog\Contract\Classification;
+use Intakt\Core\Watchdog\Contract\CommitHistory;
 use Intakt\Core\Watchdog\Contract\CommitName;
 use Intakt\Core\Watchdog\Contract\MainViolation;
 use Intakt\Core\Watchdog\Contract\RecordedMerge;
@@ -15,6 +16,7 @@ use Intakt\Core\Watchdog\Contract\Violation;
 use Intakt\Core\Watchdog\Contract\WatchedMain;
 use Intakt\Core\Watchdog\Domain\CommitClassifier;
 use Intakt\Core\Watchdog\Infrastructure\MainHistory;
+use Intakt\Core\Watchdog\Infrastructure\MainRewrittenDuringRead;
 use Intakt\Core\Watchdog\Infrastructure\OwnerKeyRefused;
 use Intakt\Tests\Core\Git\TemporaryRepository;
 use Override;
@@ -22,12 +24,14 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Process\Exception\ProcessFailedException;
 use Symfony\Component\Process\Process;
 
 #[CoversClass(MainHistory::class)]
 #[CoversClass(OwnerKeyRefused::class)]
+#[CoversClass(MainRewrittenDuringRead::class)]
 #[UsesClass(HardenedGit::class)]
 #[UsesClass(GitCall::class)]
 #[UsesClass(CommitClassifier::class)]
@@ -116,9 +120,11 @@ final class MainHistoryTest extends TestCase
     public function testACommitWithASecondSignatureHeaderIsAnUnknownKeyEvenWhenTheFirstVerifies(): void
     {
         $this->repository->commitEmpty('Seen');
-        $signed = $this->repository->rawCommit($this->repository->commitSignedWith($this->privateKey('owner'), 'Owner change'));
+        $original = $this->repository->commitSignedWith($this->privateKey('owner'), 'Owner change');
+        $signed = $this->repository->rawCommit($original);
         [$headers, $message] = explode("\n\n", $signed, 2);
         $signature = substr($headers, (int) strpos($headers, "\ngpgsig "));
+        self::assertSame($original, $this->repository->commitObject($signed), 'The crafted commit must start from the exact bytes the owner signed.');
         $commit = $this->repository->commitObject($headers.$signature."\n\n".$message);
 
         self::assertSame(SignatureStatus::UnknownKey, $this->history([$this->publicKey('owner')])->signatureOf($commit));
@@ -142,6 +148,81 @@ final class MainHistoryTest extends TestCase
         $classification = $this->classify(new WatchedMain($seen, []), [$this->publicKey('owner')]);
 
         self::assertEquals([new MainViolation($seen, Violation::HistoryRewritten)], $classification->violations);
+    }
+
+    public function testAForcePushBetweenTheAncestryCheckAndTheWalkIsAFailedReadNotACleanMain(): void
+    {
+        $base = $this->repository->commitEmpty('Base');
+        $seen = $this->repository->commitEmpty('Seen');
+        $forcePushAfterTheAncestryCheck = new readonly class($this->history([]), $this->repository, $base) implements CommitHistory {
+            public function __construct(private MainHistory $history, private TemporaryRepository $repository, private string $base)
+            {
+            }
+
+            #[Override]
+            public function contains(string $commit): bool
+            {
+                $contains = $this->history->contains($commit);
+                $this->repository->resetTo($this->base);
+
+                return $contains;
+            }
+
+            #[Override]
+            public function firstParentsSince(string $commit): array
+            {
+                return $this->history->firstParentsSince($commit);
+            }
+
+            #[Override]
+            public function signatureOf(string $commit): SignatureStatus
+            {
+                return $this->history->signatureOf($commit);
+            }
+        };
+
+        $this->expectException(MainRewrittenDuringRead::class);
+
+        (void) new CommitClassifier($forcePushAfterTheAncestryCheck)->classify(new WatchedMain($seen, []));
+    }
+
+    public function testAMissingMainBranchIsAFailedReadEvenWhenATagCarriesItsFullName(): void
+    {
+        $seen = $this->repository->commitEmpty('Seen');
+        $this->repository->tag('refs/heads/main');
+        $this->repository->checkoutNewBranch('other');
+        new Process(['git', 'branch', '--quiet', '-D', 'main'], $this->repository->path)->mustRun();
+
+        $this->expectException(ProcessFailedException::class);
+
+        $this->history([])->contains($seen);
+    }
+
+    public function testTheSignersFileIsRemovedWhenTheSignatureFileCannotBeAllocated(): void
+    {
+        $this->repository->commitEmpty('Seen');
+        $signed = $this->repository->commitSignedWith($this->privateKey('owner'), 'Owner change');
+        $filesystem = new class extends Filesystem {
+            /** @var list<string> */
+            public array $allocated = [];
+
+            #[Override]
+            public function tempnam(string $dir, string $prefix, string $suffix = ''): string
+            {
+                if ([] !== $this->allocated) {
+                    throw new IOException('No second temporary file.');
+                }
+
+                return $this->allocated[] = parent::tempnam($dir, $prefix, $suffix);
+            }
+        };
+
+        try {
+            new MainHistory(new HardenedGit(), $this->repository->path, [$this->publicKey('owner')], $filesystem)->signatureOf($signed);
+        } catch (IOException) {
+        }
+
+        self::assertFileDoesNotExist($filesystem->allocated[0]);
     }
 
     public function testASignedCommitInASha256RepositoryIsReadFromItsSha256HeaderAndVerifies(): void
@@ -219,6 +300,9 @@ final class MainHistoryTest extends TestCase
         yield 'a quote in the comment' => ['ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIA "x'];
         yield 'no key bytes' => ['ssh-ed25519'];
         yield 'an empty key' => [''];
+        yield 'key bytes that are not Base64' => ['ssh-ed25519 A'];
+        yield 'key bytes of another type' => ['ssh-rsa AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl'];
+        yield 'a type with no key after it' => ['ssh-ed25519 AAAAC3NzaC1lZDI1NTE5'];
     }
 
     #[DataProvider('refusedKeys')]

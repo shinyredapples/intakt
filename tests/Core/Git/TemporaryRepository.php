@@ -91,9 +91,10 @@ final readonly class TemporaryRepository
         return $this->git('rev-parse', 'HEAD');
     }
 
+    // Untrimmed, because a signature covers every byte of the object, its final newline too.
     public function rawCommit(string $revision): string
     {
-        return $this->run(['cat-file', 'commit', $revision], null);
+        return $this->bytes(['cat-file', 'commit', $revision], null);
     }
 
     // Written as given, because a crafted header (a second signature, for example) is what git itself never writes.
@@ -260,6 +261,14 @@ final readonly class TemporaryRepository
      */
     private function run(array $arguments, ?string $input): string
     {
+        return trim($this->bytes($arguments, $input));
+    }
+
+    /**
+     * @param list<string> $arguments
+     */
+    private function bytes(array $arguments, ?string $input): string
+    {
         // Inherited GIT_DIR and the like (as inside a git hook) would make the test change another repository.
         $unset = [];
         foreach (array_keys([...getenv(), ...$_ENV]) as $name) {
@@ -275,6 +284,6 @@ final readonly class TemporaryRepository
             throw new RuntimeException($process->getErrorOutput());
         }
 
-        return trim($process->getOutput());
+        return $process->getOutput();
     }
 }
