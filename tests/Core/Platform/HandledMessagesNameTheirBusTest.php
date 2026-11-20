@@ -56,7 +56,7 @@ final class HandledMessagesNameTheirBusTest extends TestCase
     }
 
     /**
-     * @return array<string, array{class-string, Bus}>
+     * @return array<string, array{string, Bus}>
      */
     public static function handledMessages(): array
     {
