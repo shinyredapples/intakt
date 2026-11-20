@@ -138,6 +138,13 @@ final class ReviewerCatchesTest extends TestCase
         self::assertSame(['P1', 2, 1, '2 P1 findings, Security reviewer, 1 found by it alone'], [$bar?->label, $bar?->value, $bar?->part, $bar?->inWords()]);
     }
 
+    public function testAScaleOverAReviewerThatReportedNothingStillHasATop(): void
+    {
+        $round = $this->judged([], ['security' => []]);
+
+        self::assertSame(2, ReviewerCatches::of([$round])?->scaleTop());
+    }
+
     public function testEveryMultipleSharesOneScale(): void
     {
         $round = $this->judged([$this->act('F1', 'P1'), $this->act('F2', 'P2'), $this->act('F3', 'P2'), $this->act('F4', 'P2')], ['security' => ['F1'], 'correctness' => ['F2', 'F3', 'F4']]);

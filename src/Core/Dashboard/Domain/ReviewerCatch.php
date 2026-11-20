@@ -32,7 +32,7 @@ final readonly class ReviewerCatch
 
     public function largest(): int
     {
-        return max(0, ...array_values($this->found));
+        return max([0, ...array_values($this->found)]);
     }
 
     /**
