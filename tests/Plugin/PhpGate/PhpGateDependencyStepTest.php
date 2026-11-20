@@ -549,10 +549,9 @@ final class PhpGateDependencyStepTest extends TestCase
         $this->sourceProject('fixture/pkg');
         $this->mustRun('git clone -q vendor/fixture/pkg other');
         $this->mustRun('git -C vendor/fixture/pkg commit --allow-empty -q -m moved');
+        $other = escapeshellarg($this->directory.'/other/.git');
 
-        $this->withInherited(['GIT_COMMON_DIR' => $this->directory.'/other/.git', 'GIT_DIR' => $this->directory.'/other/.git'], function (): void {
-            $this->assertRefused(PhpGateSteps::SOURCE_GUARD, 'not at the locked commit');
-        });
+        $this->assertRefused('export GIT_COMMON_DIR='.$other.' GIT_DIR='.$other.'; '.PhpGateSteps::SOURCE_GUARD, 'not at the locked commit');
     }
 
     public function testTheLockedInstallGoesOnToTheSourceGuardWhenComposerSucceedsAndRefusesAMovedCheckout(): void
