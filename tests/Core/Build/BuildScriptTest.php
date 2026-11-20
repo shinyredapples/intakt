@@ -30,6 +30,8 @@ final class BuildScriptTest extends TestCase
     private string $gates = '4';
     // False removes the variable, so a value the test run itself was started with never reaches the script.
     private string|false $inherited = false;
+    // False for the same reason, because the test run itself may run inside a CLI session that sets both.
+    private string|false $inheritedTimeout = false;
     // Seconds the script may run, so a git waiting on a pipe fails its test instead of holding the suite.
     private int $timeout = 20;
     private ?string $source = null;
@@ -122,6 +124,26 @@ final class BuildScriptTest extends TestCase
         $this->whenTheBuildRuns('task', 'claude-opus-5-5');
 
         self::assertSame("4\n", (string) file_get_contents($this->history->folder.'/gates'));
+    }
+
+    public function testTheBuildScriptGivesTheCliItsToolTimeLimitInMillisecondsAsBothBashTimeouts(): void
+    {
+        $this->givenTheCli('printf "%s %s\n" "${BASH_DEFAULT_TIMEOUT_MS-unset}" "${BASH_MAX_TIMEOUT_MS-unset}" > "$RECORD/timeouts"');
+
+        $this->whenTheBuildRuns('task', 'claude-opus-5-5');
+
+        self::assertSame("1800000 1800000\n", (string) file_get_contents($this->history->folder.'/timeouts'));
+    }
+
+    public function testTheBuildScriptReplacesBashTimeoutsItsEnvironmentAlreadySets(): void
+    {
+        $this->givenTheCli('printf "%s %s\n" "${BASH_DEFAULT_TIMEOUT_MS-unset}" "${BASH_MAX_TIMEOUT_MS-unset}" > "$RECORD/timeouts"');
+
+        $this->inheritedTimeout = '7200000';
+
+        $this->whenTheBuildRuns('task', 'claude-opus-5-5');
+
+        self::assertSame("1800000 1800000\n", (string) file_get_contents($this->history->folder.'/timeouts'));
     }
 
     public function testASessionCutAtItsAllowanceAfterCommittingHandsBackABundleOfItsCommits(): void
@@ -979,7 +1001,7 @@ final class BuildScriptTest extends TestCase
     private function whenTheBuildRuns(string $branch, string $model, int $allowance = 600): Process
     {
         $run = new Process(
-            ['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-build', $this->source ?? $this->history->work, $this->prompt, $branch, $model, '7', (string) $allowance, $this->gates],
+            ['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-build', $this->source ?? $this->history->work, $this->prompt, $branch, $model, '7', (string) $allowance, $this->gates, '1800'],
             null,
             $this->environment(),
             timeout: $this->timeout,
@@ -1002,6 +1024,8 @@ final class BuildScriptTest extends TestCase
             'PATH' => $this->bin.':'.getenv('PATH'),
             'RECORD' => $this->history->folder,
             'INTAKT_GATE_SLOTS' => $this->inherited,
+            'BASH_DEFAULT_TIMEOUT_MS' => $this->inheritedTimeout,
+            'BASH_MAX_TIMEOUT_MS' => $this->inheritedTimeout,
         ];
         foreach (array_keys([...getenv(), ...$_ENV]) as $name) {
             if (is_string($name) && str_starts_with($name, 'GIT_')) {

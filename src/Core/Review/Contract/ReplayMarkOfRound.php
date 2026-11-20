@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Contract;
 
-final readonly class ReplayMarkOfRound
+use Intakt\Core\Platform\Contract\QueryMessage;
+
+final readonly class ReplayMarkOfRound implements QueryMessage
 {
     public function __construct(public string $roundId)
     {

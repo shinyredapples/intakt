@@ -7,7 +7,7 @@
 
 Your coding agent says it is done. Intakt tells you whether to believe it.
 
-A panel of reviewers on models from different makers reviews the change and a judge marks every finding against the task: every P1 and P2 finding whose quote checks out reaches the act list whatever the judge answers. Your own agent runs this loop over MCP until the verdict is clean.
+A panel of reviewers on models from different AI labs reviews the change and a judge marks every finding against the task: every P1 and P2 finding whose quote checks out reaches the act list whatever the judge answers. Your own agent runs this loop over MCP until the verdict is clean. On the [review bench](#review-bench), the panel found 11 of 15 planted defects (measured, 2026-11-16).
 
 <p align="center">
   <picture>
@@ -18,7 +18,7 @@ A panel of reviewers on models from different makers reviews the change and a ju
   The octopus conducts: Tech lead, Developer, Code reviewer, Judge, Security engineer, Designer, AI engineer and Maintainer, in that order.
 </p>
 
-PHP 8.5, Symfony AI · [Status](#status): what works today and what is planned · [Guides](docs/guide/README.md) · [Showcase](docs/showcase/README.md) · [Hackathon](docs/hackathon.md) · [Releases](https://github.com/shinyredapples/intakt/releases)
+PHP 8.5, Symfony AI · [Status](#status): what works today and what is planned · [Guides](docs/guide/README.md) · [Showcase](docs/showcase/README.md) · [For judges](docs/judges.md) · [Hackathon](docs/hackathon.md) · [Releases](https://github.com/shinyredapples/intakt/releases)
 
 ## Five-minute start
 
@@ -27,11 +27,13 @@ git clone https://github.com/shinyredapples/intakt.git && cd intakt
 docker compose up -d --wait
 ```
 
+No key? Open http://localhost:7781/demo and press **Play the demo run**.
+
 With your agent: `claude mcp add --transport http intakt http://localhost:7781/mcp/owner --header "Authorization: Bearer <the token>"` (token: first-run page step 4, or `intakt:demo`), install the [skill](skills/intakt-review/README.md) and say *intakt review the demo*.
 
-**No provider key?** With no key in `.env.local`, open `http://localhost:7781/demo` and press **Play the demo run**. It plays a recorded review onto the dashboard without calling any model, with a caption at the bottom of every page that names each stage, from the change arriving to the judge's act list. Nothing needs setting up: the image plays the real review of the sample change that Intakt ships. It has one round, so its tour ends at the act list of round 1. To play another recording written by `intakt:demo:record`, name it in `INTAKT_DEMO_RECORDING` in `.env.local` ([details](docs/user/README.md#playing-the-demo-run-in-the-dashboard)).
+The demo run plays the shipped recording of a real review of the sample change onto the dashboard without calling any model, with a caption on every page that names each stage up to the judge's act list ([details](docs/user/README.md#playing-the-demo-run-in-the-dashboard)).
 
-The demo reviews a sample change with two reviewers ([how long it takes](#timed-run)): open http://localhost:7781. A new install opens on a first-run page with two choices: **watch a recorded real review now**, with no key (its **Play the demo run** button plays the tour above; the shipped recording is ready on first start, and the page says why it cannot play if `.env.local` empties `INTAKT_DEMO_RECORDING` or points it at a missing file), or **paste one provider key or Hugging Face token and run the demo review**, which opens its live review page. Calls are billed to the key's or token's owner; a Hugging Face token alone puts the reviewers on two makers ([Hugging Face details](docs/user/README.md#running-the-demo-on-a-hugging-face-token)).
+The demo reviews a sample change with two reviewers ([how long it takes](#timed-run)): open http://localhost:7781. A new install opens on a first-run page with two choices: **watch a recorded real review now**, with no key (its **Play the demo run** button plays the tour above; the shipped recording is ready on first start, and the page says why it cannot play if `.env.local` empties `INTAKT_DEMO_RECORDING` or points it at a missing file), or **paste one provider key or Hugging Face token and run the demo review**: save it, run `docker compose restart intakt` so the sample project gets its reviewers, reload the setup page, then press **Start the first review**, which opens its live review page (once the demo run has played, step 3 shows **Open the review** instead: use the terminal command below). Calls are billed to the key's or token's owner; a Hugging Face token alone puts the reviewers on models from two AI labs ([Hugging Face details](docs/user/README.md#running-the-demo-on-a-hugging-face-token)).
 
 From the terminal: `docker compose exec intakt php bin/console intakt:demo` runs the same demo review and prints its verdict ([read it](docs/user/README.md#reading-a-verdict)). The [demo walkthrough](docs/guide/demo-walkthrough.md) retells it in plain words; [the review flow](docs/architecture/review-flow.md) draws it inside.
 
@@ -45,8 +47,6 @@ MCP: your agent loops, fixes and reports ([details](docs/user/mcp.md)).
 </details>
 
 ### Timed run
-
-On arm64 Linux, the `image-arm64` CI workflow builds and first-starts the image on every push to main and prints both timings. Docker Desktop on Apple Silicon runs the arm64 image.
 
 Measured on 2026-11-17 on a 4-core Intel i7-4790K with 16 GB RAM, Ubuntu 26.10 and Docker 29: ten consecutive runs of the five-minute path, each from a fresh `git archive` of main, with a Hugging Face token in `.env.local` and the terminal path `docker compose exec intakt php bin/console intakt:demo`.
 
@@ -70,7 +70,7 @@ What the journeys cover and how to run one: [Checking the whole product](docs/gu
 
 ### Review bench
 
-The review bench measures how well the panel finds defects: it reviews eight small changes of the sample shop, five with one planted defect each and three without any, and counts what each reviewer caught, missed and raised in error. **It calls your paid models**, so it runs only when you ask; nothing in `bin/check` or CI runs it. With the demo running, this runs the bench that gave the result below:
+The review bench reviews eight small changes of the sample shop, five with one planted defect each and three without any, and counts what each reviewer caught, missed and raised in error. **It calls your paid models**, so it runs only when you ask, never in `bin/check` or CI. With the demo running, this gave the result below:
 
 ```
 docker compose exec intakt php bin/console intakt:bench --project=sample --repeat=3
@@ -82,16 +82,51 @@ docker compose exec intakt php bin/console intakt:bench --project=sample --repea
 | `correctness` alone | 10 of 15 (1 harness failure left out, on a change without a defect) | 2 | about 2,460 |
 | `security` alone | 8 of 15 | 0 | about 4,350 |
 
-Only one change (`tax-helper`) got the same outcome in all three runs; the other seven varied between repeats, so a single run's result for one change is partly luck, and your own run will not match these figures exactly.
+Seven of the eight changes varied between the three runs: a single run's result for one change is partly luck, so your own run will not match these figures exactly.
 
-Date of the run: 2026-11-16. Models (the demo's Hugging Face mapping): `correctness` (tier strong) `moonshotai/Kimi-K3:deepinfra`, `security` (tier standard) `openai/gpt-oss-120b:novita`. Command: `intakt:bench --project=sample --repeat=3`, as above. What a run costs and how to read these figures: [the review bench](docs/user/README.md#the-review-bench) in the user guide.
+Date of the run: 2026-11-16. Models (the demo's Hugging Face mapping): `correctness` (tier strong) `moonshotai/Kimi-K3:deepinfra`, `security` (tier standard) `openai/gpt-oss-120b:novita`. What a run costs and how to read these figures: [the review bench](docs/user/README.md#the-review-bench) in the user guide.
+
+## Found and fixed upstream
+
+One row per reproduction in `upstream/`, merged first. *Intakt's* marks a pull request or issue this project sent; *fixed upstream* marks a bug Intakt reproduced and others fixed; *already reported* marks an issue others filed first.
+
+| Project | Bug | Upstream |
+| --- | --- | --- |
+| symfony/ai | [SQLite store: a quote breaks FTS5](upstream/ai-sqlite-store-unescaped-fts-quote/) | [#2874](https://github.com/symfony/ai/pull/2874) Intakt's, merged |
+| symfony/ai | [Claude Code: tools the CLI ran come back as tool calls](upstream/ai-claude-code-platform-cli-tool-calls/) | [#2875](https://github.com/symfony/ai/pull/2875) Intakt's, merged |
+| symfony/ai | [Codex: tools the CLI ran come back as tool calls](upstream/ai-codex-platform-cli-tool-calls/) | [#2875](https://github.com/symfony/ai/pull/2875) Intakt's, merged |
+| symfony/ai | [`#[Positive]` gets a boolean `exclusiveMinimum`](upstream/ai-platform-positive-boolean-exclusive-minimum/) | [#2888](https://github.com/symfony/ai/pull/2888) Intakt's, merged |
+| Doctrine | [PostgreSQL without `server_version` fails](upstream/doctrine-bundle-postgresql-empty-server-version/) | [DoctrineBundle#2335](https://github.com/doctrine/DoctrineBundle/pull/2335) Intakt's, merged |
+| symfony/symfony | [NaN skips config validation](upstream/config-nan-skips-validation/) | [#67911](https://github.com/symfony/symfony/pull/67911) fixed upstream, merged |
+| symfony/symfony | [`messenger:consume` ignores an early SIGTERM](upstream/messenger-consume-ignores-early-sigterm/) | [#67912](https://github.com/symfony/symfony/pull/67912) fixed upstream, merged |
+| symfony/symfony | [Serializer list accepts any object](upstream/serializer-object-collection-accepts-any-object/) | [#67913](https://github.com/symfony/symfony/pull/67913) fixed upstream, merged |
+| symfony/ai | [Codex: a cut turn reads as complete](upstream/ai-codex-platform-cut-off-stream/) | [#2889](https://github.com/symfony/ai/pull/2889) fixed upstream, merged |
+| symfony/ai | [Codex: earlier user messages dropped](upstream/ai-codex-platform-last-user-message/) | [#2891](https://github.com/symfony/ai/pull/2891) fixed upstream, merged |
+| symfony/ai | [`Provider` keeps a resolved model](upstream/ai-platform-provider-keeps-resolved-model/) | [#2851](https://github.com/symfony/ai/pull/2851) fixed upstream, merged |
+| symfony/ai | [Failover retries a failed platform](upstream/ai-failover-platform-retries-a-failed-platform/) | [#2890](https://github.com/symfony/ai/pull/2890) Intakt's, open |
+| symfony/ai | [Claude Code: cache token split lost](upstream/ai-claude-code-platform-cache-token-split/) | [#2963](https://github.com/symfony/ai/pull/2963) Intakt's, open |
+| symfony/ai | [Typed answer of a multi-part reply missed](upstream/ai-structured-output-multi-part-answers/) | [#2945](https://github.com/symfony/ai/issues/2945) Intakt's, reported |
+| symfony/ai | [Failover misses a deferred 429](upstream/ai-failover-platform-deferred-rate-limit/) | [#2944](https://github.com/symfony/ai/issues/2944) Intakt's, reported |
+| symfony/ai | [Claude Code: response format passed as `Array`](upstream/ai-claude-code-platform-structured-output/) | [#2962](https://github.com/symfony/ai/issues/2962) Intakt's, reported |
+| symfony/ai | [Failed streamed tool run reports no usage](upstream/ai-agent-streamed-tool-call-cut-stream/) | [comment on #2617](https://github.com/symfony/ai/pull/2617#issuecomment-6876304595) Intakt's, reported |
+| PHPStan | [Readonly type kept after `clone with`](upstream/phpstan-clone-with-readonly-constructor-type/) | [phpstan#14838](https://github.com/phpstan/phpstan/issues/14838) already reported |
+| FrankenPHP | [`php-cli` crashes on SIGTERM](upstream/frankenphp-messenger-consume-sigterm/) | [frankenphp#2479](https://github.com/php/frankenphp/issues/2479) already reported |
+| MCP SDK | [Three parallel `tools/call` on one session](upstream/mcp-parallel-tools-call-one-session/) | passes, nothing to file |
+| symfony/ai | [Worker-mode state of two models and two MCP sessions](upstream/ai-worker-mode-state/) | passes, nothing to file |
+| symfony/ai | [Structured output with enums and nested lists](upstream/ai-structured-output-enums-nested-lists/) | passes, nothing to file |
+| symfony/ai | [Generic bridge: check whether a complete stream is read as cut](upstream/ai-generic-platform-cut-stream/) | passes, nothing to file |
+| symfony/ai | [AI Mate: a symlinked `vendor` moves the root](upstream/ai-mate-symlinked-vendor-root/) | not filed: Composer's autoloaders do not support it either |
+| symfony/ai | [Claude Code: a cut run without streaming](upstream/ai-claude-code-platform-cut-off-stream/) | not filed: the exceptions raised are accurate |
+| symfony/ai | [Codex: usage of a turn without an answer lost](upstream/ai-codex-platform-usage-without-answer/) | not filed: unreachable through a `Platform` |
+
+How each folder was checked and filed: [`upstream/`](upstream/README.md).
 
 ## The first release: the review loop
 
 Built for the [Symfony AI & MCP Hackathon](docs/spec.md) (deadline 2026-11-22):
 
 - Point Intakt at a change, a branch of a local repository. A configurable panel of reviewers, each a provider, a model tier and a prompt through Symfony AI's Platform, returns structured JSON verdicts.
-- Findings keep their ids across rounds, enforced in code, so reviewers cannot move the goalposts. A judge step tells the builder what to act on, and only a P3 finding can be deferred or rejected: P1 and P2 findings whose quote checks out reach the act list even when the judge's answer is invalid. The outcome and the act list agree: a round sent back as `changes` always names a finding to act on, and a reviewer whose findings are all P3s the judge deferred or rejected counts as approving, with follow-ups.
+- Findings keep their ids across rounds, enforced in code, so reviewers cannot move the goalposts. A judge step tells the builder what to act on, and only a P3 finding can be deferred or rejected. The outcome and the act list agree: a round sent back as `changes` always names a finding to act on, and a reviewer whose findings are all P3s the judge deferred or rejected counts as approving, with follow-ups.
 - Agents start reviews and read findings through an MCP server.
 - A small live dashboard shows each round as it streams.
 - Every figure says what kind it is: token counts the provider reported are `measured`, rounds and findings from the ledger are `counted`, and a cost from your price list is `estimated`, with the date of the prices. Figures of different kinds are never added into one total.
@@ -109,14 +144,13 @@ Development continues after the hackathon: [the hackathon page](docs/hackathon.m
 
 - **PHP 8.5 and Symfony 8.2 (a beta until 8.2.0 is released)**, with the latest stable tools, and Symfony AI used for every model call, agent and memory, on purpose, to find the beta's bugs early.
 - **FrankenPHP worker mode** for the dashboard and the MCP server, with Mercure built in for live updates; Messenger consumers and the Scheduler (the watcher tick every minute, started in the image by its own consumer; usage probes, deadlines and the weekly cleanup are planned) run beside it. The local API stays planned.
-- **Steering by labels** (planned) on your forge: `intakt` to take a task, then `priority:`, `class:`, `model:`, `plan:` and `review:`; Intakt mirrors progress in `status:`.
 - **No public resource API in v1.** The interfaces are the dashboard, the CLI, an optional forge webhook endpoint (forge changes are polled by default) and the MCP server.
 
 ## Documentation
 
+- [For judges](docs/judges.md): from clone to a played review in a few minutes, and the code behind each promise.
 - [Intakt in plain words](docs/guide/README.md): friendly guides with diagrams, from the big picture to troubleshooting.
-- [Contributing](CONTRIBUTING.md): reporting bugs, suggesting features, sending pull requests.
-- [How your issue or pull request is handled](CONTRIBUTING.md#how-your-issue-or-pull-request-is-handled): who decides what gets built, and why only labels from people with write access count.
+- [Contributing](CONTRIBUTING.md): reporting bugs, suggesting features, sending pull requests, and [how they are handled](CONTRIBUTING.md#how-your-issue-or-pull-request-is-handled).
 - [User guide](docs/user/README.md): for owners running Intakt.
 - [Technical pages](docs/architecture/README.md): how it works, the gates, the module layout.
 - [Design](docs/design/README.md): what Intakt does and why.
