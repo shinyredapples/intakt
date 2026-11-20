@@ -404,7 +404,7 @@ final class PhpGateDependencyStepTest extends TestCase
     public static function unicodeLineBreaks(): iterable
     {
         yield 'next line U+0085' => ["\u{85}", '\u0085'];
-        yield 'line separator U+2028' => ["\u{2028}", '\u'.'2028'];
+        yield 'line separator U+2028' => ["\u{2028}", '\u2028'];
     }
 
     #[DataProvider('unicodeLineBreaks')]
