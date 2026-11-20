@@ -71,7 +71,7 @@ A rule marked "enforced by `bin/check`" is checked by the named gate, whose fail
 
 - A steered model must stay harmless: every decision that matters is made or checked by plain code, and each model role has only the tools its job needs.
 - A change that adds a model role, a new input to a model or a new tool for one updates the threat model page in the same change.
-- Every untrusted value that goes into a prompt goes through the fencing helper (arriving with plan T7): issue and comment text, `<!-- external -->` blocks, pull request text, code including `vendor/`, CI log excerpts, project memory and other reviews.
+- Every untrusted value that goes into a prompt goes through the fencing helper (arriving with plan T7): issue and comment text, `<!-- external -->` blocks, pull request text, code including `vendor/`, CI log excerpts, project memory and other reviews. Model messages are built only by `PromptAssembly`, from literals and fenced text (a reviewer role's configured prompt only through `systemWithRole()`): enforced by `bin/check` (`phpstan`) in `src/`, `bin/` and `config/`.
 - Only tasks, steering labels and comments from people with write access count, checked through the forge's permission API on each event.
 
 ## Docs, pull requests, commits
