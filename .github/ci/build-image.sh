@@ -17,6 +17,11 @@ if [ "${1:-}" = --print-hash ]; then
 fi
 image="intakt-ci:$hash"
 if ! docker image inspect "$image" > /dev/null 2>&1; then
+    # After a failed Docker Hub login a build would pull its base images anonymously, so it fails here, where it is decided.
+    if [ "${DOCKERHUB_LOGIN_FAILED:-}" = 1 ]; then
+        echo "::error::The Docker Hub login failed and $image is not on the runner, so it would have to be built." >&2
+        exit 1
+    fi
     docker build --tag "$image" --file .github/ci/Dockerfile .
 fi
 echo "CI_IMAGE=$image" >> "$GITHUB_ENV"
