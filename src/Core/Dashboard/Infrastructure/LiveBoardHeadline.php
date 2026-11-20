@@ -35,8 +35,8 @@ final readonly class LiveBoardHeadline
     {
         try {
             $this->publishedInTurn();
+            // Boundary: logs a failed headline and swallows it, because the board is a view and a round update must never change a verdict or a round.
         } catch (Throwable $failure) {
-            // Swallowed after a log, because the board is a view and a round update must never change a verdict or a round.
             $this->logger->warning('The board headline was not published.', ['round' => $round->toRfc4122(), 'exception' => $failure]);
         }
     }
@@ -46,6 +46,7 @@ final readonly class LiveBoardHeadline
     {
         try {
             $this->publishedInTurn();
+            // Boundary: logs a failed headline and swallows it, because the board is a view and removing a project's rows must not fail over it.
         } catch (Throwable $failure) {
             $this->logger->warning('The board headline was not published.', ['exception' => $failure]);
         }
