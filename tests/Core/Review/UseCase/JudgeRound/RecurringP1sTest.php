@@ -129,7 +129,7 @@ final class RecurringP1sTest extends KernelTestCase
 
     public function testARoundJudgedBeforeAnEarlierRoundOfTheChangeFindsNothingYet(): void
     {
-        $first = $this->fixture->startAtHead(self::CHANGE, self::HEAD_A);
+        $this->fixture->startAtHead(self::CHANGE, self::HEAD_A);
         $second = $this->fixture->startAtHead(self::CHANGE, self::HEAD_B);
         $this->appendJudgeDone($second, '["F1"]', '{"F1":"k"}');
 
