@@ -90,15 +90,15 @@ final class BarChartTest extends TestCase
     }
 
     /**
-     * @param int<0, max>|null ...$values
+     * @param int<0, max>|null $first
+     * @param int<0, max>|null ...$rest
      */
-    private function chartOf(?int ...$values): BarChart
+    private function chartOf(?int $first, ?int ...$rest): BarChart
     {
-        $points = [];
-        foreach (array_values($values) as $index => $value) {
-            $points[] = new ChartPoint('p'.$index, $value);
+        $points = [new ChartPoint('p0', $first)];
+        foreach (array_values($rest) as $index => $value) {
+            $points[] = new ChartPoint('p'.($index + 1), $value);
         }
-        self::assertNotEmpty($points);
 
         return new BarChart('Rounds per day', 'A takeaway.', 'Day', 'Rounds', $points);
     }
