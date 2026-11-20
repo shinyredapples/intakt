@@ -6,7 +6,7 @@ namespace Intakt\Upstream\FailoverPlatformDeferredRateLimit;
 
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
-use Symfony\AI\Platform\Bridge\Generic\Factory as GenericFactory;
+use Symfony\AI\Platform\Bridge\Generic\Factory;
 use Symfony\AI\Platform\Exception\RateLimitExceededException;
 use Symfony\AI\Platform\Message\Message;
 use Symfony\AI\Platform\Message\MessageBag;
@@ -22,7 +22,7 @@ final class GenericRetryAfterHeaderTest extends TestCase
             'http_code' => 429,
             'response_headers' => ['content-type: application/json', 'retry-after: 137'],
         ]));
-        $platform = GenericFactory::createPlatform('https://localhost', 'probe-key', $http);
+        $platform = Factory::createPlatform('https://localhost', 'probe-key', $http);
 
         try {
             $platform->invoke('local-model', new MessageBag(Message::ofUser('Review the change.')))->asText();
