@@ -34,6 +34,7 @@ use Symfony\AI\Platform\Test\MockPlatformFactory;
 use Symfony\Component\Cache\Adapter\ArrayAdapter;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Clock\NativeClock;
+use Symfony\Component\ErrorHandler\BufferingLogger;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
 use Throwable;
@@ -228,13 +229,15 @@ final class PinnedProviderCooldownTest extends TestCase
         $accounts = self::createStub(AccountCooldowns::class);
         $accounts->method('coolDown')->willThrowException(new RuntimeException('The disk is full.'));
         $limited = new RateLimitExceededException(120);
-        $platform = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => new FailingWhenRead($limited)], $accounts, $this->clock, new NullLogger(), $this->pins);
+        $logger = new BufferingLogger();
+        $platform = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => new FailingWhenRead($limited)], $accounts, $this->clock, $logger, $this->pins);
         $answer = $platform->invoke(self::PINNED, 'Review.');
 
         $out = $this->failureOf(static fn (): string => $answer->asText());
 
         self::assertSame($limited, $out);
         self::assertSame(120, $this->pins->secondsUntilFree($this->deepinfra(Account::DEFAULT)));
+        self::assertContains('The cooldown of account {account} could not be saved.', array_column($logger->cleanLogs(), 1));
     }
 
     private function accounts(PlatformInterface $default, PlatformInterface $team): AccountFailoverPlatform
