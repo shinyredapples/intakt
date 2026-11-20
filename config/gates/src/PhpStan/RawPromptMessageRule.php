@@ -150,20 +150,21 @@ final readonly class RawPromptMessageRule implements Rule
         return $rolePrompt instanceof Arg && $this->readsTheRoundReviewersRolePrompt($rolePrompt->value, $scope);
     }
 
-    // an unpacked argument names no role prompt, so it never proves one
+    // an unpacked argument names no role prompt, so any unpack in the call, also after the role prompt, proves none
     private function rolePromptArgument(New_ $construction): ?Arg
     {
+        $rolePrompt = null;
         foreach ($construction->args as $position => $argument) {
             if (!$argument instanceof Arg || $argument->unpack) {
                 return null;
             }
 
             if ('rolePrompt' === $argument->name?->toString() || (!$argument->name instanceof Identifier && 0 === $position)) {
-                return $argument;
+                $rolePrompt = $argument;
             }
         }
 
-        return null;
+        return $rolePrompt;
     }
 
     private function readsTheRoundReviewersRolePrompt(Expr $value, Scope $scope): bool

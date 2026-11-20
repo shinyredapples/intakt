@@ -252,7 +252,8 @@ final class RawPromptMessageRuleTest extends PhpStanRuleTestCase
         yield 'another conversation\'s role prompt' => ['new ReviewerConversation($conversation->rolePrompt, $id)'];
         yield 'a nullsafe call' => ['new ReviewerConversation((string) $maybe?->rolePrompt(), $id)'];
         yield 'unpacked arguments' => ['new ReviewerConversation(...$arguments)'];
-        yield 'no arguments' => ['new ReviewerConversation()'];
+        yield 'an unpacked list holding the role prompt' => ['new ReviewerConversation(...[$reviewer->rolePrompt(), $id])'];
+        yield 'an unpack after the role prompt' => ['new ReviewerConversation($reviewer->rolePrompt(), ...[$id])'];        yield 'no arguments' => ['new ReviewerConversation()'];
     }
 
     #[DataProvider('unprovenRolePrompts')]
