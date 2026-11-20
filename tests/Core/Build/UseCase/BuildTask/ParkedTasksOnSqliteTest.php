@@ -154,7 +154,7 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
             self::markTestSkipped('Only SQLite has a journal mode.');
         }
 
-        $this->connection()->executeStatement('PRAGMA journal_mode=WAL');
+        self::assertSame('wal', $this->connection()->fetchOne('PRAGMA journal_mode=WAL'));
         $this->resetDatabase();
         $reader = $this->readerHoldingASharedLock();
 
@@ -179,7 +179,7 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
     private function resetDatabase(): void
     {
         if ($this->connection()->getDatabasePlatform() instanceof SQLitePlatform) {
-            $this->connection()->executeStatement('PRAGMA journal_mode=DELETE');
+            self::assertSame('delete', $this->connection()->fetchOne('PRAGMA journal_mode=DELETE'));
         }
 
         $tool = new SchemaTool($this->manager());
