@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Watcher\Infrastructure;
 
+use Intakt\Plugin\GitHubWorkSource\Contract\WorkLabels;
 use Symfony\Component\Config\Definition\Builder\TreeBuilder;
 use Symfony\Component\Config\Definition\ConfigurationInterface;
 
@@ -30,8 +31,8 @@ final class WatchConfiguration implements ConfigurationInterface
         $watch->stringNode('github')
             ->validate()->ifTrue(static fn (string $value): bool => 1 !== preg_match(self::GITHUB_REPOSITORY, $value))->thenInvalid('The "github" key must be owner/name.')->end();
 
-        // Optional, because the default family name applies to a project that names none; a blank one would match no label and quietly stop the project's intake.
-        $watch->stringNode('eligibility_label')->cannotBeEmpty()
+        // Defaulted, so a project never takes the existing loop's label by accident; a blank one would match no label and quietly stop the project's intake.
+        $watch->stringNode('eligibility_label')->defaultValue(WorkLabels::DEFAULT_ELIGIBILITY)->cannotBeEmpty()
             ->validate()->ifTrue(static fn (string $value): bool => 1 === preg_match(self::BLANK, $value))->thenInvalid('The "eligibility_label" key must not be blank.')->end();
 
         return $tree;

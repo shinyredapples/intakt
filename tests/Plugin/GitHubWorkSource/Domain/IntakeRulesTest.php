@@ -7,6 +7,7 @@ namespace Intakt\Tests\Plugin\GitHubWorkSource\Domain;
 use Intakt\Plugin\GitHubForge\Contract\IssueHistory;
 use Intakt\Plugin\GitHubForge\Contract\LabelApplication;
 use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
+use Intakt\Plugin\GitHubWorkSource\Contract\WorkLabels;
 use Intakt\Plugin\GitHubWorkSource\Domain\HeldIssue;
 use Intakt\Plugin\GitHubWorkSource\Domain\IntakePlan;
 use Intakt\Plugin\GitHubWorkSource\Domain\IntakeRules;
@@ -32,6 +33,9 @@ final class IntakeRulesTest extends TestCase
 {
     // Named apart from the others, because `tom` (triage) and `mallory` (read) stand for the accounts whose word must not count.
     private const array WRITERS = ['ana', 'ben'];
+
+    // Any label other than the project's stands for the existing loop's, because Intakt knows no list of the loop's labels.
+    private const string LOOPS_LABEL = 'build';
 
     public function testAnOpenTrustedTaskWithTheEligibilityLabelIsReady(): void
     {
@@ -295,6 +299,20 @@ final class IntakeRulesTest extends TestCase
         $plan = new IntakeRules('build')->planOf([$this->row(Issues::task(1, ['intakt'])), $this->row(Issues::task(2, ['build']))], []);
 
         self::assertSame([2], $this->numbers($plan->ready));
+    }
+
+    public function testATaskCarryingOnlyTheExistingLoopsLabelIsNotEligibleUnderTheDefaultLabel(): void
+    {
+        $plan = new IntakeRules(WorkLabels::DEFAULT_ELIGIBILITY)->planOf([$this->row(Issues::task(1, [self::LOOPS_LABEL]))], []);
+
+        self::assertSame([[], []], [$this->numbers($plan->ready), $plan->held]);
+    }
+
+    public function testATaskCarryingTheProjectsLabelBesideTheExistingLoopsLabelIsEligible(): void
+    {
+        $plan = new IntakeRules(WorkLabels::DEFAULT_ELIGIBILITY)->planOf([$this->row(Issues::task(1, [self::LOOPS_LABEL, WorkLabels::DEFAULT_ELIGIBILITY]))], []);
+
+        self::assertSame([1], $this->numbers($plan->ready));
     }
 
     public function testAWaitOnAPullRequestWithoutAClosingKeywordHoldsTheTaskWhenOnlyTheHistoryTheRuleAsksForIsRead(): void
