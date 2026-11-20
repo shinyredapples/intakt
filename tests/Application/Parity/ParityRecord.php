@@ -38,7 +38,7 @@ final readonly class ParityRecord
         $findings = [];
 
         foreach (explode("\n", $record) as $index => $line) {
-            if (preg_match(self::DONE_ITEM, $line) !== 1) {
+            if (1 !== preg_match(self::DONE_ITEM, $line)) {
                 continue;
             }
 
@@ -79,7 +79,7 @@ final readonly class ParityRecord
     private function problemsOf(string $item, array $testClasses): array
     {
         $namedTests = $this->namedTests($item);
-        if ($namedTests === []) {
+        if ([] === $namedTests) {
             return ['names no Intakt test after `Intakt:`'];
         }
 
@@ -97,7 +97,7 @@ final readonly class ParityRecord
     private function namedTests(string $item): array
     {
         $start = strpos($item, self::INTAKT_PART);
-        if ($start === false) {
+        if (false === $start) {
             return [];
         }
 
@@ -106,7 +106,7 @@ final readonly class ParityRecord
         $class = null;
         $namedTests = [];
         foreach ($matches as $match) {
-            $class = $match[1] !== '' ? $match[1] : $class;
+            $class = '' !== $match[1] ? $match[1] : $class;
             $namedTests[] = [$class, $match[2]];
         }
 
@@ -118,7 +118,7 @@ final readonly class ParityRecord
      */
     private function problemWith(?string $class, string $method, array $testClasses): ?string
     {
-        if ($class === null) {
+        if (null === $class) {
             return sprintf('`%s` follows no test class', $method);
         }
 
@@ -128,7 +128,7 @@ final readonly class ParityRecord
         }
 
         $fullName = array_first($candidates);
-        if ($fullName === null || !class_exists($fullName)) {
+        if (null === $fullName || !class_exists($fullName)) {
             return sprintf('%s is no test class under tests/', $class);
         }
 

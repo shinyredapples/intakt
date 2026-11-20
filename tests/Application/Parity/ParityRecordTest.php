@@ -14,7 +14,7 @@ final class ParityRecordTest extends TestCase
 
     protected function tearDown(): void
     {
-        if ($this->scratch !== null) {
+        if (null !== $this->scratch) {
             exec('rm -rf '.escapeshellarg($this->scratch));
         }
     }
