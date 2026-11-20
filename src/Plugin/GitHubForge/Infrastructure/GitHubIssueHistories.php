@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\GitHubForge\Infrastructure;
 
+use DateTimeImmutable;
 use Intakt\Plugin\Forge\Contract\ForgeCredentialsRefused;
 use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
@@ -27,29 +28,43 @@ final readonly class GitHubIssueHistories implements IssueHistories
     // Suffixed, because GraphQL names an App by its bare slug (`renovate`) while the trust check tells an App from a person by the `[bot]` the REST API adds.
     private const string APP = 'Bot';
     private const string APP_SUFFIX = '[bot]';
+    // Issue or pull request, because the listing holds both and a pull request's closing keyword steers only by its history; the update time is read beside the history, because only a history of the listed update time is the history of the listed text and labels.
     private const string QUERY = <<<'GRAPHQL'
         query ($owner: String!, $name: String!, $number: Int!, $events: Int!) {
           repository(owner: $owner, name: $name) {
-            issue(number: $number) {
-              author { __typename login }
-              userContentEdits(first: 1) { nodes { editor { __typename login } } }
-              timelineItems(first: $events, itemTypes: [LABELED_EVENT, UNLABELED_EVENT]) {
-                pageInfo { hasNextPage }
-                nodes {
-                  __typename
-                  ... on LabeledEvent { actor { __typename login } label { name } }
-                  ... on UnlabeledEvent { actor { __typename login } label { name } }
+            issueOrPullRequest(number: $number) {
+              __typename
+              ... on Comment {
+                updatedAt
+                author { __typename login }
+                userContentEdits(first: 1) { nodes { editor { __typename login } } }
+              }
+              ... on Issue {
+                timelineItems(first: $events, itemTypes: [LABELED_EVENT, UNLABELED_EVENT]) {
+                  pageInfo { hasNextPage }
+                  nodes { __typename ...labelEvent ...unlabelEvent }
+                }
+              }
+              ... on PullRequest {
+                timelineItems(first: $events, itemTypes: [LABELED_EVENT, UNLABELED_EVENT]) {
+                  pageInfo { hasNextPage }
+                  nodes { __typename ...labelEvent ...unlabelEvent }
                 }
               }
             }
           }
         }
+
+        fragment labelEvent on LabeledEvent { actor { __typename login } label { name } }
+
+        fragment unlabelEvent on UnlabeledEvent { actor { __typename login } label { name } }
         GRAPHQL;
 
     public function __construct(
         private GitHubCalls $calls,
         private CheckedInstallationTokens $tokens,
         private WatchedRepositories $repositories,
+        private GitHubMoments $moments,
     ) {
     }
 
@@ -57,9 +72,13 @@ final readonly class GitHubIssueHistories implements IssueHistories
      * @throws ForgeReadFailed
      * @throws ForgeRateLimited
      */
-    public function of(string $project, int $number): IssueHistory
+    public function of(string $project, int $number, DateTimeImmutable $listedAt): IssueHistory
     {
         $issue = $this->issueIn($this->answer($project, $number));
+        // A later update fails the read instead of vouching, because an edit or a label made after the listing would vouch for text and labels the listing does not hold.
+        if ($this->moments->parse($this->text($issue, 'updatedAt'))->getTimestamp() !== $listedAt->getTimestamp()) {
+            throw new ForgeReadFailed(sprintf('GitHub changed #%d after it was listed, so its history may be of other text and labels.', $number));
+        }
 
         return new IssueHistory($this->lastEditorOf($issue), $this->labelsOf($issue));
     }
@@ -115,9 +134,9 @@ final readonly class GitHubIssueHistories implements IssueHistories
             throw new ForgeReadFailed('GitHub answered the history read with errors.');
         }
 
-        $issue = $this->at($answer, 'data', 'repository', 'issue');
+        $issue = $this->at($answer, 'data', 'repository', 'issueOrPullRequest');
 
-        return is_array($issue) ? $issue : throw new ForgeReadFailed('GitHub answered a history read without the issue.');
+        return is_array($issue) ? $issue : throw new ForgeReadFailed('GitHub answered a history read without the issue or pull request.');
     }
 
     /**

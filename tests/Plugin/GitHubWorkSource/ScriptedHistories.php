@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\GitHubWorkSource;
 
+use DateTimeImmutable;
 use Intakt\Plugin\GitHubForge\Contract\IssueHistories;
 use Intakt\Plugin\GitHubForge\Contract\IssueHistory;
 use Intakt\Plugin\GitHubForge\Contract\LabelApplication;
@@ -16,7 +17,7 @@ final class ScriptedHistories implements IssueHistories
     /** @var list<int> */
     public array $read = [];
 
-    public function of(string $project, int $number): IssueHistory
+    public function of(string $project, int $number, DateTimeImmutable $listedAt): IssueHistory
     {
         $this->read[] = $number;
 

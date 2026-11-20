@@ -107,7 +107,7 @@ final readonly class CompleteListing
                 continue;
             }
 
-            $row->vouch(Vouching::of($row->author(), $this->histories->of($project, $row->number()), $steers));
+            $row->vouch(Vouching::of($row->author(), $this->histories->of($project, $row->number(), $row->updatedAt()), $steers));
             $vouched[] = $row->number();
         }
 

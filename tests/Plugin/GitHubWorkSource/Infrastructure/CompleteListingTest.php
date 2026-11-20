@@ -54,7 +54,7 @@ final class CompleteListingTest extends KernelTestCase
 {
     private const string VALIDATOR = 'W/"issues-1"';
     private const string SHORT = 'The open-issue listing of project {project} came back short, so nothing is picked and no wait closes this tick: {reason}';
-    private const string LABELED_BY_ANA = '{"data":{"repository":{"issue":{"author":{"__typename":"User","login":"ana"},"userContentEdits":{"nodes":[]},"timelineItems":{"pageInfo":{"hasNextPage":false},"nodes":[{"__typename":"LabeledEvent","actor":{"__typename":"User","login":"ana"},"label":{"name":"intakt"}}]}}}}}';
+    private const string LABELED_BY_ANA = '{"data":{"repository":{"issueOrPullRequest":{"__typename":"Issue","updatedAt":"2026-11-10T10:00:00Z","author":{"__typename":"User","login":"ana"},"userContentEdits":{"nodes":[]},"timelineItems":{"pageInfo":{"hasNextPage":false},"nodes":[{"__typename":"LabeledEvent","actor":{"__typename":"User","login":"ana"},"label":{"name":"intakt"}}]}}}}}';
 
     private IntakeStore $store;
     private RecordedIssueReads $reads;
@@ -144,6 +144,32 @@ final class CompleteListingTest extends KernelTestCase
         self::assertNull($plan);
         self::assertSame([], $this->store->issuesOf('alpha'));
         self::assertSame(['GitHub answered 502 to a read.'], $this->shortListingReasons());
+    }
+
+    public function testAnOpenPullRequestWithAClosingKeywordHasItsHistoryReadWithoutLeavingTheListingShort(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->graphql = str_replace('"Issue"', '"PullRequest"', self::LABELED_BY_ANA);
+        $this->reads->lists([Issues::task(7), Issues::pullRequest(12, 'Closes #7')]);
+
+        $plan = $this->listingOver($this->reads, $api->histories())->planOf('alpha');
+
+        self::assertInstanceOf(IntakePlan::class, $plan);
+        self::assertSame([7 => 12], $plan->pullRequests);
+        self::assertSame([], $this->shortListingReasons());
+    }
+
+    public function testAnItemChangedBetweenTheListingAndItsHistoryReadLeavesTheListingShortAndWritesNothing(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->graphql = str_replace('2026-11-10T10:00:00Z', '2026-11-10T10:05:00Z', self::LABELED_BY_ANA);
+        $this->reads->lists([Issues::task(7)]);
+
+        $plan = $this->listingOver($this->reads, $api->histories())->planOf('alpha');
+
+        self::assertNull($plan);
+        self::assertSame([], $this->store->issuesOf('alpha'));
+        self::assertSame(['GitHub changed #7 after it was listed, so its history may be of other text and labels.'], $this->shortListingReasons());
     }
 
     public function testRemovingTheRowOfAClosedIssueKeepsItsFailedForGoodReasonSoItsDependentsStayHeld(): void

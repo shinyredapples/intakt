@@ -146,6 +146,11 @@ final class StoredIssue
         return $this->author;
     }
 
+    public function updatedAt(): DateTimeImmutable
+    {
+        return $this->instant($this->updatedAt);
+    }
+
     private function moment(DateTimeImmutable $moment): string
     {
         return $moment->setTimezone(new DateTimeZone('UTC'))->format(self::MOMENT);
