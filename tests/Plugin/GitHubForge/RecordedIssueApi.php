@@ -18,6 +18,7 @@ use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReadBack;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReader;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokenMinter;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokens;
+use Intakt\Plugin\GitHubForge\Infrastructure\NextLinks;
 use Intakt\Plugin\GitHubForge\Infrastructure\WatchedRepositories;
 use LogicException;
 use Psr\Log\NullLogger;
@@ -41,7 +42,7 @@ final class RecordedIssueApi
     public bool $stable = false;
     /** @var list<int> */
     public array $namingNext = [];
-    // The `Link` of a page in `namingNext`, with `%d` for the next page's number.
+    // A `%d` stands for the next page's number, because a test of how `rel` is read scripts its own `Link` for a page in `namingNext`.
     public string $nextLink = '<https://api.github.com/repositories/1/issues?page=%d>; rel="next", <https://api.github.com/repositories/1/issues?page=9>; rel="last"';
     /** @var list<string> */
     public array $conditions = [];
@@ -57,7 +58,7 @@ final class RecordedIssueApi
     {
         [$calls, $checked] = $this->wiring();
 
-        return new GitHubIssueReads($calls, $checked, new WatchedRepositories(['alpha' => ['github' => 'acme/widgets'], 'beta' => []]), new GitHubMoments(), $this->reserve, new ChangedWhileServed(new GitHubMoments()), new EntityTags());
+        return new GitHubIssueReads($calls, $checked, new WatchedRepositories(['alpha' => ['github' => 'acme/widgets'], 'beta' => []]), new GitHubMoments(), $this->reserve, new ChangedWhileServed(new GitHubMoments()), new EntityTags(), new NextLinks());
     }
 
     public function histories(): GitHubIssueHistories
