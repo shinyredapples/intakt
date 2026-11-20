@@ -82,7 +82,7 @@ docker compose exec intakt php bin/console intakt:bench --project=sample --repea
 | `correctness` alone | 10 of 15 (1 harness failure left out, on a change without a defect) | 2 | about 2,460 |
 | `security` alone | 8 of 15 | 0 | about 4,350 |
 
-Seven of the eight changes varied between the three runs, so your own run will not match these figures exactly.
+Seven of the eight changes varied between the three runs: a single run's result for one change is partly luck, so your own run will not match these figures exactly.
 
 Date of the run: 2026-11-16. Models (the demo's Hugging Face mapping): `correctness` (tier strong) `moonshotai/Kimi-K3:deepinfra`, `security` (tier standard) `openai/gpt-oss-120b:novita`. What a run costs and how to read these figures: [the review bench](docs/user/README.md#the-review-bench) in the user guide.
 
