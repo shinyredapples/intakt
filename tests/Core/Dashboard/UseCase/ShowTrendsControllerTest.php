@@ -443,6 +443,31 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
         self::assertCount(4, $this->browser->request('GET', '/trends')->filter('#chart-per-day path.c-bar'));
     }
 
+    public function testWithReviewsOnTwentyDaysEveryBarKeepsAPositiveWidthAndTheAxisLabelsThinWhileTheTableNamesEveryDay(): void
+    {
+        self::getContainer()->set(Prices::class, new ConfiguredPrices(['model-a' => ['input' => 2.0, 'output' => 10.0, 'cache_read' => 0.2, 'cache_write' => 2.5]], '2026-11-13'));
+
+        for ($day = 1; $day <= 20; ++$day) {
+            $this->ledger->startRoundAt('r-'.$day, new DateTimeImmutable(sprintf('2026-10-%02dT10:00:00+00:00', $day)));
+            $this->ledger->useTokens('r-'.$day, 1000, 100);
+        }
+
+        $page = $this->browser->request('GET', '/trends');
+
+        $paths = $page->filter('#chart-per-day path.c-bar')->each(static fn (Crawler $path): string => (string) $path->attr('d'));
+        self::assertCount(40, $paths);
+
+        foreach ($paths as $path) {
+            self::assertSame(1, preg_match('/^M([\d.]+),.*? H([\d.]+) /', $path, $edges), $path);
+            self::assertGreaterThan((float) $edges[1], (float) $edges[2], $path);
+        }
+
+        $axis = $page->filter('#chart-per-day svg')->first()->filter('text.c-axis[text-anchor="middle"]')->each(static fn (Crawler $label): string => $label->text());
+        self::assertSame(['Oct 1', 'Oct 5', 'Oct 9', 'Oct 13', 'Oct 17'], $axis);
+        self::assertCount(20, $page->filter('#chart-per-day tbody tr'));
+        self::assertCount(40, $page->filter('#chart-per-day .c-hit'));
+    }
+
     public function testLeavingOutTheDemoAlsoLeavesItsDaysOutOfChartThree(): void
     {
         $this->ledger->startRoundAt('r-1', new DateTimeImmutable('2026-10-26T10:00:00+00:00'));

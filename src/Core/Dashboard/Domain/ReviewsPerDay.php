@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\Domain;
 
+use DateTimeImmutable;
 use DateTimeZone;
 use Intakt\Core\Budget\Contract\Cost;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
@@ -32,12 +33,12 @@ final readonly class ReviewsPerDay
     public static function of(array $rounds): ?self
     {
         $days = [];
-        $names = [];
+        $starts = [];
 
         foreach ($rounds as $round) {
             $start = $round->startedAt->setTimezone(new DateTimeZone('UTC'));
             $days[$start->format('Y-m-d')][] = $round;
-            $names[$start->format('Y-m-d')] = $start->format('M j');
+            $starts[$start->format('Y-m-d')] = $start;
         }
 
         if (count($days) < self::MINIMUM_DAYS) {
@@ -46,7 +47,10 @@ final readonly class ReviewsPerDay
 
         ksort($days);
 
-        return new self($days, $names);
+        // The year joins the name once the days span more than one, because the same day of two years would otherwise share a name in the table and the tooltips.
+        $format = 1 === count(array_unique(array_map(static fn (DateTimeImmutable $start): string => $start->format('Y'), $starts))) ? 'M j' : 'M j, Y';
+
+        return new self($days, array_map(static fn (DateTimeImmutable $start): string => $start->format($format), $starts));
     }
 
     public function dayCount(): int
@@ -63,15 +67,18 @@ final readonly class ReviewsPerDay
 
     public function costTakeaway(): string
     {
-        $costs = array_filter($this->costs(), static fn (?int $cost): bool => null !== $cost);
+        $costs = array_filter($this->costs());
 
         if ([] === $costs) {
             return 'No day has a cost estimate yet.';
         }
 
-        $day = (string) array_search(max([0, ...$costs]), $costs, true);
+        // Ranked on the unrounded dollars, because days that all round to the same reading still differ.
+        $dollars = array_map(static fn (Cost $cost): float => (float) $cost->usd, $costs);
+        $day = (string) array_search(max([0.0, ...$dollars]), $dollars, true);
+        $reading = $costs[$day]->reading();
 
-        return sprintf('The costliest day was %s, at about %s USD.', $this->name($day), $this->dollars($costs[$day] ?? 0));
+        return sprintf('The costliest day was %s, at %s.', $this->name($day), str_starts_with($reading, 'less') ? $reading : 'about '.$reading);
     }
 
     public function roundsTop(): int
@@ -81,7 +88,7 @@ final readonly class ReviewsPerDay
 
     public function costTop(): int
     {
-        return ChartScale::topFor(max([0, ...array_filter($this->costs(), static fn (?int $cost): bool => null !== $cost)]));
+        return ChartScale::topFor(max([0, ...array_map($this->units(...), array_filter($this->costs()))]));
     }
 
     public function costDivisor(): int
@@ -111,7 +118,7 @@ final readonly class ReviewsPerDay
         foreach ($this->costs() as $day => $cost) {
             $bars[] = null === $cost
                 ? new ChartBar($this->name($day), null, 'No data', $this->name($day).', no cost estimate', null, 'No data')
-                : new ChartBar($this->name($day), $cost, $this->dollars($cost).' USD, estimated', $this->name($day), null, $this->dollars($cost));
+                : new ChartBar($this->name($day), $this->units($cost), $cost->reading().', estimated', $this->name($day), null, str_replace(' USD', '', $cost->reading()));
         }
 
         return $bars;
@@ -119,11 +126,11 @@ final readonly class ReviewsPerDay
 
     // A day's cost is known only when every round that made a call has an estimate, because a partial sum would read as the whole.
     /**
-     * @return array<string, int|null>
+     * @return array<string, Cost|null>
      */
     private function costs(): array
     {
-        return array_map(static function (array $rounds): ?int {
+        return array_map(static function (array $rounds): ?Cost {
             $spent = array_values(array_filter($rounds, static fn (ReviewedRound $round): bool => $round->tokens->total() > 0));
 
             if ([] === $spent) {
@@ -132,8 +139,16 @@ final readonly class ReviewsPerDay
 
             $total = array_reduce($spent, static fn (Cost $sum, ReviewedRound $round): Cost => $sum->plus($round->cost), Cost::none());
 
-            return null === $total->usd ? null : (int) round($total->usd * self::COST_UNIT);
+            return null === $total->usd ? null : $total;
         }, $this->days);
+    }
+
+    // A positive cost below one unit still draws the smallest bar, because a priced day must never look free.
+    private function units(Cost $cost): int
+    {
+        $usd = (float) $cost->usd;
+
+        return $usd > 0.0 ? max(1, (int) round($usd * self::COST_UNIT)) : 0;
     }
 
     private function busiestDay(): string
@@ -146,11 +161,6 @@ final readonly class ReviewsPerDay
     private function roundsReading(int $count): string
     {
         return sprintf('%d %s', $count, 1 === $count ? 'round' : 'rounds');
-    }
-
-    private function dollars(int $units): string
-    {
-        return sprintf('%.4f', $units / self::COST_UNIT);
     }
 
     private function name(string $day): string

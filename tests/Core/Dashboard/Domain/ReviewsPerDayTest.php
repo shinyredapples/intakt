@@ -95,6 +95,31 @@ final class ReviewsPerDayTest extends TestCase
         self::assertSame(2, $perDay->costTop());
     }
 
+    public function testATinyPositiveCostIsNeverShownAsZeroAndStillDrawsABar(): void
+    {
+        $perDay = $this->drawn([$this->priced('r-1', '2026-10-01T10:00:00+00:00', 0.00001), $this->priced('r-2', '2026-10-02T10:00:00+00:00', 0.00002), $this->priced('r-3', '2026-10-03T10:00:00+00:00', 0.00003)]);
+
+        $bar = $perDay->costBars()[0];
+        self::assertSame('less than 0.0001', $bar->directLabel());
+        self::assertSame('less than 0.0001 USD, estimated, Oct 1', $bar->inWords());
+        self::assertSame(1, $bar->value);
+    }
+
+    public function testTheCostliestDayIsRankedOnTheUnroundedTotals(): void
+    {
+        $perDay = $this->drawn([$this->priced('r-1', '2026-10-01T10:00:00+00:00', 0.00001), $this->priced('r-2', '2026-10-02T10:00:00+00:00', 0.00002), $this->priced('r-3', '2026-10-03T10:00:00+00:00', 0.00003)]);
+
+        self::assertSame('The costliest day was Oct 3, at less than 0.0001 USD.', $perDay->costTakeaway());
+    }
+
+    public function testDaysInDifferentYearsCarryTheYearSoNoTwoDaysShareAName(): void
+    {
+        $perDay = $this->drawn([$this->round('r-1', '2025-10-01T10:00:00+00:00'), $this->round('r-2', '2026-10-01T10:00:00+00:00'), $this->round('r-3', '2026-10-02T10:00:00+00:00')]);
+
+        self::assertSame(['Oct 1, 2025', 'Oct 1, 2026', 'Oct 2, 2026'], array_map(static fn (ChartBar $bar): string => $bar->label, $perDay->roundBars()));
+        self::assertSame(['Oct 1, 2025', 'Oct 1, 2026', 'Oct 2, 2026'], array_map(static fn (ChartBar $bar): string => $bar->label, $perDay->costBars()));
+    }
+
     /**
      * @param list<ReviewedRound> $rounds
      */

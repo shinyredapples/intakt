@@ -8,7 +8,11 @@
 {%- set plot = height - above - below -%}
 {%- set base = above + plot -%}
 {%- set step = (width - left - right) / bars|length -%}
-{%- set barWidth = min(40, step - 16) -%}
+{#- A bar keeps a gap of 16 while it can and a share of its slot once slots grow narrow, so a long history never draws a bar of no or negative width. -#}
+{%- set barWidth = min(40, max(step - 16, step * 0.6)) -%}
+{#- Labels show on every n-th bar once they would overlap (about 8 units a character at the chart's type size), because a long history crowds them; the tooltips and the table still name every bar. -#}
+{%- set axisEvery = max(1, (max(bars|map(bar => bar.label|length)) * 8 + 6) / step)|round(0, 'ceil') -%}
+{%- set labelEvery = max(1, (max(bars|map(bar => (bar.shown ?? bar.value)|length)) * 8 + 6) / step)|round(0, 'ceil') -%}
 {%- macro bar_path(x, y, w, base, rounded) -%}
 {%- set r = rounded ? min(4, w / 2, base - y) : 0 -%}
 M{{ x|round(1) }},{{ base|round(1) }} V{{ (y + r)|round(1) }} Q{{ x|round(1) }},{{ y|round(1) }} {{ (x + r)|round(1) }},{{ y|round(1) }} H{{ (x + w - r)|round(1) }} Q{{ (x + w)|round(1) }},{{ y|round(1) }} {{ (x + w)|round(1) }},{{ (y + r)|round(1) }} V{{ base|round(1) }} Z
@@ -30,8 +34,12 @@ M{{ x|round(1) }},{{ base|round(1) }} V{{ (y + r)|round(1) }} Q{{ x|round(1) }},
     {%- set partTop = base - bar.part / top * plot %}
     <path d="{{ _self.bar_path(x, partTop, barWidth, base, bar.part == bar.value) }}" class="c-bar c-part"/>
     {%- endif %}
+    {%- if loop.index0 % labelEvery == 0 %}
     <text x="{{ center|round(1) }}" y="{{ (y - 6)|round(1) }}" class="c-label" text-anchor="middle" aria-hidden="true">{{ bar.shown ?? bar.value }}{% if bar.part is not null %} ({{ bar.part }} alone){% endif %}</text>
+    {%- endif %}
+    {%- if loop.index0 % axisEvery == 0 %}
     <text x="{{ center|round(1) }}" y="{{ height - 8 }}" class="c-axis" text-anchor="middle" aria-hidden="true">{{ bar.label }}</text>
+    {%- endif %}
     <rect x="{{ (left + step * loop.index0)|round(1) }}" y="{{ above }}" width="{{ step|round(1) }}" height="{{ plot }}" class="c-hit" tabindex="0" role="img" aria-label="{{ bar.inWords }}"
         data-action="pointerenter->chart#pointerEnter pointerleave->chart#pointerLeave focus->chart#focusIn blur->chart#focusOut"
         data-chart-reading-param="{{ bar.reading }}" data-chart-detail-param="{{ bar.detail }}"/>
