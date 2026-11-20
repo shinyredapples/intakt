@@ -52,12 +52,12 @@ namespace Intakt\Tests\Core\Review\Infrastructure\Repository {
             // Because PHPUnit lowers the reporting level while a test runs, which would hide the warning from this handler as a silenced one.
             $this->reporting = error_reporting(E_ALL);
 
-            set_error_handler(static function (int $level, string $message, string $file, int $line): bool {
+            set_error_handler(static function (int $level, string $message): bool {
                 if (0 === (error_reporting() & $level)) {
                     return false;
                 }
 
-                throw new ErrorException($message, 0, $level, $file, $line);
+                throw new ErrorException($message, 0, $level);
             });
         }
 
