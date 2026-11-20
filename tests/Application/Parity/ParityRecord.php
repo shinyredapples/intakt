@@ -6,8 +6,8 @@ namespace Intakt\Tests\Application\Parity;
 
 use FilesystemIterator;
 use RecursiveDirectoryIterator;
-use ReflectionMethod;
 use RecursiveIteratorIterator;
+use ReflectionMethod;
 use SplFileInfo;
 
 // Because a done parity item counts toward the takeover only when the Intakt tests it names exist.
@@ -117,16 +117,23 @@ final readonly class ParityRecord
 
         $class = null;
         $namedTests = [];
-        foreach ($tokens[1] as $token) {
-            if (1 === preg_match(self::NAMED_TEST, $token, $match)) {
-                $class = '' !== $match[1] ? $match[1] : $class;
-                $namedTests[] = [$class, $match[2], null];
-            } elseif (str_contains($token, '::') || str_starts_with($token, 'test')) {
+        foreach (array_filter($tokens[1], $this->looksLikeATestName(...)) as $token) {
+            if (1 !== preg_match(self::NAMED_TEST, $token, $match)) {
                 $namedTests[] = [null, $token, 'is not a test name of the form `SomeTest::testName`'];
+
+                continue;
             }
+
+            $class = '' !== $match[1] ? $match[1] : $class;
+            $namedTests[] = [$class, $match[2], null];
         }
 
         return $namedTests;
+    }
+
+    private function looksLikeATestName(string $token): bool
+    {
+        return str_contains($token, '::') || str_starts_with($token, 'test');
     }
 
     /**

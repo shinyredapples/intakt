@@ -189,6 +189,7 @@ final class ParityRecordTest extends TestCase
 
     protected function testAProtectedHelperIsNoTest(): void
     {
+        $this->addToAssertionCount(1);
     }
 
     private function repositoryTests(): ParityRecord
