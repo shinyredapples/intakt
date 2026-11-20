@@ -140,8 +140,10 @@ final class ConsumerProcessTest extends TestCase
     public function testAPidTakenByAReplacementWorkerRightAfterItsFirstReadIsNoWorker(): void
     {
         $reads = 0;
-        // The recorded process, already moved away from the consumer, at the first read; a replacement worker of the consumer that took its PID at every later read.
-        $entryOf = static fn (int $pid): ?ProcessEntry => 200 !== $pid ? null : (0 === $reads++ ? new ProcessEntry(1, self::START) : new ProcessEntry(self::CONSUMER, self::START + 1));
+        // Moved away from the consumer at the first read and replaced by a new worker of the consumer at every later one, because that is the order of a PID reused between two reads.
+        $entryOf = static function (int $pid) use (&$reads): ?ProcessEntry {
+            return 200 !== $pid ? null : (0 === $reads++ ? new ProcessEntry(1, self::START) : new ProcessEntry(self::CONSUMER, self::START + 1));
+        };
 
         self::assertFalse($this->running($entryOf)->isWorker(200, self::START));
     }

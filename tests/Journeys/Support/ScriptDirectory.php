@@ -126,7 +126,7 @@ final readonly class ScriptDirectory
             $filesystem->remove($temporary);
         }
 
-        // A link that reports success but did not put the record at the name itself (it went through a link someone put there) never claims the number.
+        // Checked even after a reported success, because a link() through a symbolic link put at the name after the scan lands elsewhere and must not claim the number.
         if ($linked !== $landed || (!$linked && !is_link($file) && !file_exists($file))) {
             throw new RecordNotPublished($file);
         }
