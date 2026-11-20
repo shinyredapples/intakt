@@ -33,7 +33,7 @@ final class ReviewerStateMachineTest extends KernelTestCase
         );
     }
 
-    // The configuration split the two places block leaves from into two transitions of that name, in this order.
+    // Two block transitions are expected, because the configuration split a state machine transition with two input places into one per place.
     public function testTheReviewerMachineKeepsItsTransitionsWithBlockFromQueuedAndRunning(): void
     {
         $transitions = array_map(
