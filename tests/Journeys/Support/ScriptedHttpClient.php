@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Journeys\Support;
 
 use Generator;
+use Intakt\Core\Platform\Contract\KeptForTheProcess;
 use Override;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
@@ -19,8 +20,11 @@ final class ScriptedHttpClient implements HttpClientInterface
     private const string APPROVE = '{"verdict":"approve","findings":[],"resolved":[],"follow_ups":[]}';
 
     // Kept as long as the container keeps this service, the life of the worker process, as a leak would be, so only replacing the worker frees it.
+    #[KeptForTheProcess]
     private string $weight = '';
 
+    // Kept, because the scripted responses of one worker share it, and it holds no state of a call.
+    #[KeptForTheProcess]
     private ?MockHttpClient $scripted = null;
 
     public function __construct(

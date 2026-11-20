@@ -22,9 +22,13 @@ final readonly class CallRecords
         $files = glob($directory.'/calls/*.start');
 
         foreach (false === $files ? [] : $files as $file) {
+            if (!self::written($file)) {
+                continue;
+            }
+
             $call = (int) basename($file, '.start');
             $end = $directory.'/calls/'.$call.'.end';
-            $calls[] = ['call' => $call, 'pid' => self::pidIn($file), 'start' => self::momentIn($file), 'end' => is_file($end) ? self::momentIn($end) : null];
+            $calls[] = ['call' => $call, 'pid' => self::pidIn($file), 'start' => self::momentIn($file), 'end' => self::written($end) ? self::momentIn($end) : null];
         }
 
         usort($calls, static fn (array $a, array $b): int => $a['call'] <=> $b['call']);
@@ -71,6 +75,14 @@ final readonly class CallRecords
     public function processes(): array
     {
         return array_values(array_unique(array_column($this->calls, 'pid')));
+    }
+
+    // An empty file is a record whose name was created before its content, by a writer that does not publish atomically: not there yet, rather than broken.
+    private static function written(string $file): bool
+    {
+        clearstatcache(true, $file);
+
+        return is_file($file) && 0 < filesize($file);
     }
 
     private static function pidIn(string $file): int

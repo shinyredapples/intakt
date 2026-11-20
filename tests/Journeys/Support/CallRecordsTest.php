@@ -75,6 +75,27 @@ final class CallRecordsTest extends TestCase
         CallRecords::in($this->directory);
     }
 
+    // The moment a writer that creates its file before it writes leaves open: the name is there, the record is not yet.
+    public function testAStartRecordThatIsStillEmptyIsNotCountedYet(): void
+    {
+        $this->record(1, 'start', ['pid' => 100, 'at' => 1.0]);
+        touch($this->directory.'/calls/2.start');
+
+        $calls = CallRecords::in($this->directory);
+
+        self::assertSame([1, 0], [$calls->started(), $calls->ended()]);
+    }
+
+    public function testACallWhoseEndRecordIsStillEmptyIsStillRunning(): void
+    {
+        $this->record(1, 'start', ['pid' => 100, 'at' => 1.0]);
+        touch($this->directory.'/calls/1.end');
+
+        $calls = CallRecords::in($this->directory);
+
+        self::assertSame([1, 0], [$calls->started(), $calls->ended()]);
+    }
+
     public function testARecordThatIsNoJsonIsRefused(): void
     {
         file_put_contents($this->directory.'/calls/1.start', 'not json');

@@ -12,7 +12,7 @@ final readonly class ConsumerProcess
     private const string ROOT = __DIR__.'/../../..';
     private const float POLL_SECONDS = 0.05;
 
-    private function __construct(private Process $process)
+    public function __construct(private Process $process)
     {
     }
 
@@ -46,13 +46,14 @@ final readonly class ConsumerProcess
         return MonotonicSeconds::now();
     }
 
-    // Killed once the deadline passed, so a failed journey leaves no consumer behind; null then, else the seconds from the given moment until it ended.
+    // Killed once the deadline passed, so a failed journey leaves no consumer behind; null then and for an end first seen after the deadline, else the seconds from the given moment until it was seen.
     public function endedWithin(float $seconds, float $since): ?float
     {
         $deadline = $since + $seconds;
 
         while ($this->process->isRunning() && MonotonicSeconds::now() < $deadline) {
-            usleep((int) (self::POLL_SECONDS * 1_000_000));
+            // Never past the deadline, so an end just before it is still seen in time.
+            usleep(max(1, (int) (min(self::POLL_SECONDS, $deadline - MonotonicSeconds::now()) * 1_000_000)));
         }
 
         if ($this->process->isRunning()) {
@@ -61,7 +62,9 @@ final readonly class ConsumerProcess
             return null;
         }
 
-        return MonotonicSeconds::now() - $since;
+        $ended = MonotonicSeconds::now() - $since;
+
+        return $ended <= $seconds ? $ended : null;
     }
 
     public function hasPrinted(string $text): bool

@@ -12,6 +12,8 @@ final readonly class ScriptDirectory
     public const string RELEASE = 'release';
     public const string HOLD = 'hold';
     public const string WEIGHT = 'weight';
+    // The variable the consumer's processes name the script directory in, so the journey can tell its own workers from a process that was given a recorded number since.
+    public const string VARIABLE = 'JOURNEY_SCRIPT';
     // Under the journey's 240 seconds, so a call nobody releases ends on its own and a failed journey leaves no process waiting.
     private const float HOLD_SECONDS = 90.0;
     private const int POLL_MICROSECONDS = 20000;
@@ -20,30 +22,41 @@ final readonly class ScriptDirectory
     {
     }
 
-    // Created exclusively, so two calls that start together never share a number.
+    // Linked under the next free number, which fails if the name exists, so two calls that start together never share a number and no reader sees a record before it is complete.
     public function callStarted(): int
     {
-        if (!is_dir($this->path.'/calls') && !@mkdir($this->path.'/calls', 0o777, true) && !is_dir($this->path.'/calls')) {
-            throw new RuntimeException('The script directory has no calls folder.');
-        }
+        $record = $this->record();
 
-        for ($call = 1;; ++$call) {
-            $file = @fopen($this->file($call, 'start'), 'x');
-
-            if (false === $file) {
-                continue;
+        try {
+            for ($call = 1;; ++$call) {
+                if ($this->publish($record, $this->file($call, 'start'))) {
+                    return $call;
+                }
             }
-
-            fwrite($file, json_encode(['pid' => getmypid(), 'at' => MonotonicSeconds::now()], JSON_THROW_ON_ERROR));
-            fclose($file);
-
-            return $call;
+        } finally {
+            unlink($record);
         }
     }
 
     public function callEnded(int $call): void
     {
-        file_put_contents($this->file($call, 'end'), json_encode(['pid' => getmypid(), 'at' => MonotonicSeconds::now()], JSON_THROW_ON_ERROR));
+        $record = $this->record();
+
+        try {
+            if (!$this->publish($record, $this->file($call, 'end'))) {
+                throw new RuntimeException('The end of call '.$call.' was already recorded.');
+            }
+        } finally {
+            unlink($record);
+        }
+    }
+
+    // Read from the process's environment, because a recorded process number the system has given to another process since must never be taken for a worker.
+    public function runsIn(int $pid): bool
+    {
+        $environment = @file_get_contents('/proc/'.$pid.'/environ');
+
+        return false !== $environment && str_contains("\0".$environment, "\0".self::VARIABLE.'='.$this->path."\0");
     }
 
     public function holdWhileScripted(int $call): void
@@ -81,6 +94,28 @@ final readonly class ScriptDirectory
         $megabytes = @file_get_contents($this->path.'/'.self::WEIGHT);
 
         return false === $megabytes ? 0 : max(0, (int) $megabytes) * 1024 * 1024;
+    }
+
+    // Written in full under a name no reader globs for, before it is published.
+    private function record(): string
+    {
+        if (!is_dir($this->path.'/calls') && !@mkdir($this->path.'/calls', 0o777, true) && !is_dir($this->path.'/calls')) {
+            throw new RuntimeException('The script directory has no calls folder.');
+        }
+
+        $record = $this->path.'/calls/'.getmypid().'-'.bin2hex(random_bytes(6)).'.record';
+        file_put_contents($record, json_encode(['pid' => getmypid(), 'at' => MonotonicSeconds::now()], JSON_THROW_ON_ERROR));
+
+        return $record;
+    }
+
+    private function publish(string $record, string $name): bool
+    {
+        if (@link($record, $name)) {
+            return true;
+        }
+
+        return file_exists($name) ? false : throw new RuntimeException('The call record '.$name.' could not be published.');
     }
 
     private function file(int $call, string $kind): string
