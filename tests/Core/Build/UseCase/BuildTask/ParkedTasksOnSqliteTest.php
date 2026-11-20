@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Build\UseCase\BuildTask;
 
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\DriverManager;
+use Doctrine\DBAL\Platforms\SQLitePlatform;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 use Doctrine\Persistence\ManagerRegistry;
@@ -25,7 +26,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Filesystem\Filesystem;
 
-// On the install's own SQLite database, because the refused commit is SQLite's lock answer and the cleanup is the PDO connection's.
+// On the install's own database, because the row and the asked step share its transaction; the refused commit runs on SQLite only, because it is SQLite's lock answer.
 #[Group('persistence')]
 #[CoversClass(ParkedTasks::class)]
 #[CoversClass(ParkedTaskRecord::class)]
@@ -60,9 +61,12 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
     {
         $this->parkedTasks()->park('sample', 42, BuildQuestion::fromHandedBack(self::QUESTION));
 
+        $rows = $this->connection()->fetchAllAssociative('SELECT project, task, question, choices, recommendation, parked_at FROM build_parked_task');
+        self::assertCount(1, $rows);
+        // Decoded and converted, because MySQL normalizes stored JSON and drivers differ in how they return integers.
         self::assertSame(
-            [['project' => 'sample', 'task' => 42, 'question' => 'Keep the old flag?', 'choices' => '["keep it","drop it"]', 'recommendation' => 'drop it', 'parked_at' => '2026-11-20 10:00:00']],
-            $this->connection()->fetchAllAssociative('SELECT project, task, question, choices, recommendation, parked_at FROM build_parked_task'),
+            ['project' => 'sample', 'task' => 42, 'question' => 'Keep the old flag?', 'choices' => ['keep it', 'drop it'], 'recommendation' => 'drop it', 'parked_at' => '2026-11-20 10:00:00'],
+            [...$rows[0], 'task' => (int) $rows[0]['task'], 'choices' => json_decode((string) $rows[0]['choices'], true, flags: JSON_THROW_ON_ERROR)],
         );
         self::assertSame(
             [['kind' => 'build_step_ended', 'payload' => '{"project":"sample","task":"42","step":"build_job","outcome":"asked","failure":null}']],
@@ -85,6 +89,10 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
 
     public function testTheLedgerRecordsTheFailedStepAfterAParkingWhoseCommitAReaderRefusedTookItsAskedEventBack(): void
     {
+        if (!$this->connection()->getDatabasePlatform() instanceof SQLitePlatform) {
+            self::markTestSkipped('Only SQLite refuses a commit while another connection holds a read transaction.');
+        }
+
         $reader = $this->readerHoldingASharedLock();
         // No wait, because SQLite would otherwise wait its busy timeout before it refuses the commit.
         $this->connection()->executeStatement('PRAGMA busy_timeout = 0');
