@@ -19,7 +19,10 @@ final readonly class PhpGateSteps
     public const string LOCK_GUARD = self::LOCK_GUARD_SCRIPT.' -- "$(composer config vendor-dir 2>/dev/null && printf x)" '.self::REFUSED;
 
     // Scripts and plugins off, because a reused install must hold only the locked packages and nothing a package ran. The lock's hash is compared around Composer because Composer exits 0 after resolving anew, for example when the lock file has no packages key; it is compared after a failed Composer run too, because Composer writes the new lock before it downloads. Composer's exit code is taken with ||, because a caller's shell running with set -e would otherwise end at a failing Composer, before the comparison.
-    public const string LOCKED_INSTALL = self::LOCK_GUARD.' && intakt_lock_before="$('.self::LOCK_HASH.')" && { intakt_composer=0; composer install --no-interaction --no-progress --no-scripts --no-plugins --no-autoloader || intakt_composer=$?; '.self::LOCK_UNCHANGED.' && (exit "$intakt_composer"); }';
+    public const string LOCKED_INSTALL = self::LOCK_GUARD.' && intakt_lock_before="$('.self::LOCK_HASH.')" && { intakt_composer=0; composer install --no-interaction --no-progress --no-scripts --no-plugins --no-autoloader || intakt_composer=$?; '.self::LOCK_UNCHANGED.' && { (exit "$intakt_composer") && '.self::SOURCE_GUARD.'; }; }';
+
+    // After Composer, because a package Composer cloned from source must still be at the commit the lock names. The guard trusts the checkout's .git folder as git clone wrote it: it removes what the environment can inject (every inherited GIT_ variable, system and global configuration, replace objects, grafts) and refuses redirections a fresh clone never contains (a .git that is not a directory or is a link, a commondir file); further git internals are out of scope unless the locked install itself produces them. The x after Composer's answer and the -- are there for the same reasons as in the lock guard.
+    public const string SOURCE_GUARD = self::SOURCE_GUARD_SCRIPT.' -- "$(composer config vendor-dir 2>/dev/null && printf x)" '.self::REFUSED;
 
     // The whole install, because dump-autoload leaves installed.php naming the head that made the install, while this rewrites it from the checked tree.
     public const string GENERATE = self::INSTALL;
@@ -78,6 +81,42 @@ final readonly class PhpGateSteps
             if (!is_string($shasum) || ("" !== $shasum && 1 !== preg_match("#^[0-9a-f]{40}$#D", $shasum))) { $refuse("The locked ".$label." has a dist checksum that is not 40 lowercase hex digits."); }
             $ownCommit = 1 === preg_match("#^https://[^?\#]*/([0-9a-f]{40})$#D", $package["dist"]["url"], $found) && ($package["dist"]["reference"] ?? null) === $found[1];
             if ("" === $shasum && !$ownCommit) { $refuse("The locked ".$label." has an archive without a checksum that is not named by its own commit id."); }
+        }
+    }'
+    SH_WRAP;
+
+    // The package name is validated before it becomes a path, because a lock file is data and a name holding a dot-dot part would leave the vendor folder. The environment is rebuilt without GIT_ variables, because git follows GIT_COMMON_DIR and similar settings even with an explicit git directory.
+    private const string SOURCE_GUARD_SCRIPT = <<<'SH_WRAP'
+    php -r '$refused = (int) $argv[2];
+    $refuse = static function (string $what) use ($refused): never { fwrite(STDERR, $what."\n"); exit($refused); };
+    $show = static fn (string $value): string => (string) json_encode($value, JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE | JSON_PARTIAL_OUTPUT_ON_ERROR);
+    $answer = $argv[1] ?? "";
+    $vendor = str_ends_with($answer, "\nx") ? substr($answer, 0, -2) : "";
+    if ("" === $vendor) { $refuse("composer config could not report the vendor folder, so it is unknown where the source checkouts are."); }
+    $text = @file_get_contents("composer.lock");
+    if (!is_string($text)) { $refuse("composer.lock cannot be read."); }
+    try { $lock = json_decode($text, true, 512, JSON_THROW_ON_ERROR); } catch (JsonException) { $refuse("composer.lock is not valid JSON."); }
+    $environment = array_filter(getenv(), static fn (string $name): bool => !str_starts_with(strtoupper($name), "GIT_"), ARRAY_FILTER_USE_KEY);
+    $environment = [...$environment, "GIT_CONFIG_NOSYSTEM" => "1", "GIT_CONFIG_GLOBAL" => "/dev/null", "GIT_NO_REPLACE_OBJECTS" => "1"];
+    foreach (["packages", "packages-dev"] as $list) {
+        $packages = is_array($lock) ? ($lock[$list] ?? []) : null;
+        if (!is_array($packages)) { $refuse("composer.lock has no valid ".$show($list)." list."); }
+        foreach ($packages as $package) {
+            $name = is_array($package) && is_string($package["name"] ?? null) ? strtolower($package["name"]) : null;
+            if (null === $name || 1 !== preg_match("#^[a-z0-9][a-z0-9_.-]*/[a-z0-9][a-z0-9_.-]*$#D", $name)) { $refuse("composer.lock holds a package without a usable name in ".$show($list)."."); }
+            $reference = is_array($package["source"] ?? null) && is_string($package["source"]["reference"] ?? null) ? $package["source"]["reference"] : null;
+            if (null === $reference) { continue; }
+            $label = "package ".$show($name);
+            $git = $vendor."/".$name."/.git";
+            if (is_link($git)) { $refuse("The source checkout of ".$label." has a .git that is a link."); }
+            if (!file_exists($git)) { continue; }
+            if (!is_dir($git)) { $refuse("The source checkout of ".$label." has a .git that is not a directory."); }
+            if (is_link($git."/commondir") || file_exists($git."/commondir")) { $refuse("The source checkout of ".$label." has a commondir file, so git would read another repository."); }
+            $process = proc_open(["git", "--git-dir=".$git, "-c", "core.graftsFile=/dev/null", "rev-parse", "--verify", "HEAD"], [1 => ["pipe", "w"], 2 => ["file", "/dev/null", "w"]], $pipes, null, $environment);
+            $head = is_resource($process) ? trim((string) stream_get_contents($pipes[1])) : "";
+            $status = is_resource($process) ? proc_close($process) : 1;
+            if (0 !== $status) { $refuse("git could not read the HEAD of the source checkout of ".$label."."); }
+            if ($head !== $reference) { $refuse("The source checkout of ".$label." is at ".$show($head).", not at the locked commit."); }
         }
     }'
     SH_WRAP;
