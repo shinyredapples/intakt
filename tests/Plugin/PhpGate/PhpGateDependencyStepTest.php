@@ -327,6 +327,67 @@ final class PhpGateDependencyStepTest extends TestCase
         self::assertStringContainsString('fixture/installer is a Composer plugin', $guard->getErrorOutput());
     }
 
+    #[DataProvider('pluginTypesInAnotherLetterCase')]
+    public function testTheLockGuardRefusesAPluginTypeInAnyLetterCaseBecauseComposerLowercasesTheType(string $type): void
+    {
+        $this->lockFileWith(['name' => 'fixture/installer', 'version' => '1.0.0', 'type' => $type, 'dist' => $this->commitArchive()]);
+
+        $guard = $this->runInProject(PhpGateSteps::LOCK_GUARD);
+
+        self::assertSame(PhpGateSteps::REFUSED, $guard->getExitCode());
+        self::assertStringContainsString('fixture/installer is a Composer plugin', $guard->getErrorOutput());
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function pluginTypesInAnotherLetterCase(): iterable
+    {
+        yield 'an uppercase plugin' => ['COMPOSER-PLUGIN'];
+        yield 'a mixed case plugin' => ['Composer-Plugin'];
+        yield 'an uppercase legacy installer' => ['COMPOSER-INSTALLER'];
+    }
+
+    public function testTheLockGuardAcceptsTheSymfonyRuntimePluginAlsoWhenItsTypeIsInAnotherLetterCase(): void
+    {
+        $this->lockFileWith(['name' => 'symfony/runtime', 'version' => '8.0.0', 'type' => 'Composer-Plugin', 'dist' => $this->commitArchive()]);
+
+        $this->mustRun(PhpGateSteps::LOCK_GUARD);
+    }
+
+    public function testTheLockGuardAcceptsALibraryWhoseTypeIsNotAPluginType(): void
+    {
+        $this->lockFileWith(['name' => 'fixture/library', 'version' => '1.0.0', 'type' => 'LIBRARY', 'dist' => $this->commitArchive()]);
+
+        $this->mustRun(PhpGateSteps::LOCK_GUARD);
+    }
+
+    public function testTheLockGuardRefusesASourceReferenceThatIsNotTextWithOneLineOnStandardError(): void
+    {
+        $this->lockFileWith(['name' => 'fixture/remote', 'version' => '1.0.0', 'source' => [
+            'type' => 'git', 'url' => 'https://localhost/fixture/remote.git', 'reference' => [],
+        ]]);
+
+        // PHP's warnings are sent to standard error here, as an image's php.ini may do, so a conversion warning would show as a second line.
+        $guard = $this->runInProject(str_replace('php -r', 'php -d display_errors=stderr -r', PhpGateSteps::LOCK_GUARD));
+
+        self::assertSame(PhpGateSteps::REFUSED, $guard->getExitCode());
+        self::assertSame("fixture/remote has a source reference that is not a full commit id, so composer.lock does not pin its contents.\n", $guard->getErrorOutput());
+    }
+
+    public function testTheSourceGuardRefusesWithOneLineOnStandardErrorWhenComposerWarnsWhileNamingTheVendorFolder(): void
+    {
+        $this->project([]);
+        new Filesystem()->dumpFile($this->directory.'/composer.lock', '{"packages": []}');
+        $warning = $this->runInProject('composer config --no-interaction --no-plugins --absolute vendor-dir');
+        self::assertNotSame('', $warning->getErrorOutput(), 'The fixture must make Composer warn, or this test proves nothing.');
+
+        $guard = $this->runInProject(PhpGateSteps::SOURCE_GUARD);
+
+        self::assertSame(PhpGateSteps::REFUSED, $guard->getExitCode());
+        self::assertSame("The install left no vendor/composer/installed.json, so the checked out sources cannot be compared with composer.lock.\n", $guard->getErrorOutput());
+    }
+
     public function testTheLockGuardNamesAPackageWhoseNameHoldsANewlineOnOneLine(): void
     {
         $this->lockFileWith(['name' => "fixture/local\nsecond line", 'version' => '1.0.0', 'dist' => ['type' => 'path', 'url' => './package']]);

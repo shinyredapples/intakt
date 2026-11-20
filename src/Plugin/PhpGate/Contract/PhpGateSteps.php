@@ -15,7 +15,7 @@ final readonly class PhpGateSteps
     // A status Composer never exits with, so a caller can tell "this head installs every time" from an install that failed (Composer exits 1 for its own failures too).
     public const int REFUSED = 78;
 
-    // Before Composer runs, because Composer resolves anew without a lock file or with config.lock off (an explicit null too: only a missing key means the default), the split install never runs the root's package-event scripts, and a lock entry that does not pin its contents could install other code for the same lock inputs: a path package, a mirror the guard cannot check, a URL outside the known remote schemes, whose bytes the lock may not name (a stream wrapper such as compress.zlib:// reads a local file; a user@host:path URL is remote only for a git source, because Composer reads an archive URL of that form as a path), a plugin the install skips (symfony/runtime's work is redone by the generation), a checksum Composer skips, an archive with neither a checksum nor an https URL that ends in its locked commit id, or a source whose reference does not look like a full commit id.
+    // Before Composer runs, because Composer resolves anew without a lock file or with config.lock off (an explicit null too: only a missing key means the default), the split install never runs the root's package-event scripts, and a lock entry that does not pin its contents could install other code for the same lock inputs: a path package, a mirror the guard cannot check, a URL outside the known remote schemes, whose bytes the lock may not name (a stream wrapper such as compress.zlib:// reads a local file; a user@host:path URL is remote only for a git source, because Composer reads an archive URL of that form as a path), a plugin the install skips (its type compared in lowercase, as Composer lowercases it when loading the lock; symfony/runtime's work is redone by the generation), a checksum Composer skips, an archive with neither a checksum nor an https URL that ends in its locked commit id, or a source whose reference does not look like a full commit id.
     public const string LOCK_GUARD = <<<'SH'
         php -r '$refuse = static function (string $why) use ($argv): never { fwrite(STDERR, $why."\n"); exit((int) $argv[1]); };
         if (!is_file("composer.lock")) { $refuse("composer.lock is missing, so there are no locked packages to install."); }
@@ -38,7 +38,8 @@ final readonly class PhpGateSteps
             $unpinned = static fn (string $why) => $refuse($shown." ".$why.", so composer.lock does not pin its contents.");
             if ("path" === ($package["dist"]["type"] ?? null) || "path" === ($package["source"]["type"] ?? null)) { $unpinned("comes from a path repository"); }
             if (isset($package["dist"]["mirrors"]) || isset($package["source"]["mirrors"])) { $unpinned("names mirrors, which Composer may download from first"); }
-            if (in_array($package["type"] ?? null, ["composer-plugin", "composer-installer"], true) && "symfony/runtime" !== $name) { $unpinned("is a Composer plugin, which the locked install skips"); }
+            $type = $package["type"] ?? null;
+            if (is_string($type) && in_array(strtolower($type), ["composer-plugin", "composer-installer"], true) && "symfony/runtime" !== $name) { $unpinned("is a Composer plugin, which the locked install skips"); }
             if (isset($package["dist"]["url"])) {
                 $shasum = $package["dist"]["shasum"] ?? "";
                 if ($localArchive($package["dist"]["url"])) { $unpinned("comes from an archive at a local URL"); }
@@ -47,12 +48,13 @@ final readonly class PhpGateSteps
             }
             if (isset($package["source"])) {
                 if ($localSource($package["source"]["url"] ?? null, $package["source"]["type"] ?? null)) { $unpinned("comes from a source at a local URL"); }
-                if (1 !== preg_match("~^(?:[0-9a-f]{40}|[0-9a-f]{64})$~D", (string) ($package["source"]["reference"] ?? ""))) { $unpinned("has a source reference that is not a full commit id"); }
+                $reference = $package["source"]["reference"] ?? null;
+                if (!is_string($reference) || 1 !== preg_match("~^(?:[0-9a-f]{40}|[0-9a-f]{64})$~D", $reference)) { $unpinned("has a source reference that is not a full commit id"); }
             }
         }'
         SH.' '.self::REFUSED;
 
-    // After Composer ran, because the lock entry does not say which hash format the repository uses, so a branch named like a commit id passes the lock guard and only the commit that was checked out can show it: git never resolves such a branch to its own name. Git runs on the checkout's own .git folder with every inherited GIT_ variable removed and no system or global configuration, replace objects or grafts, because an inherited GIT_DIR (or a .git file pointing elsewhere) would read the HEAD of another repository.
+    // After Composer ran, because the lock entry does not say which hash format the repository uses, so a branch named like a commit id passes the lock guard and only the commit that was checked out can show it: git never resolves such a branch to its own name. Git runs on the checkout's own .git folder with every inherited GIT_ variable removed and no system or global configuration, replace objects or grafts, because an inherited GIT_DIR (or a .git file pointing elsewhere) would read the HEAD of another repository. Composer's standard error is dropped while it names the vendor folder, because a warning there (an undetected root version) would put a second line beside a refusal; when Composer fails, no installed.json is found and the guard refuses.
     public const string SOURCE_GUARD = <<<'SH'
         php -r '$refuse = static function (string $why) use ($argv): never { fwrite(STDERR, $why."\n"); exit((int) $argv[2]); };
         $environment = [...array_filter(getenv(), static fn (mixed $name): bool => !str_starts_with((string) $name, "GIT_"), ARRAY_FILTER_USE_KEY), "GIT_CONFIG_NOSYSTEM" => "1", "GIT_CONFIG_GLOBAL" => "/dev/null", "GIT_NO_REPLACE_OBJECTS" => "1", "GIT_NO_LAZY_FETCH" => "1", "GIT_ALLOW_PROTOCOL" => "", "GIT_GRAFT_FILE" => "/dev/null", "GIT_ATTR_NOSYSTEM" => "1"];
@@ -73,7 +75,7 @@ final readonly class PhpGateSteps
             $source = $locked[$package["name"]] ?? [];
             $head = "git" === ($source["type"] ?? null) ? $checkedOut($argv[1]."/composer/".$package["install-path"]) : "";
             if ("" === $head || $head !== ($source["reference"] ?? null)) { $refuse($package["name"]." was installed from source and its checked out commit is not its locked reference, so composer.lock does not pin its contents."); }
-        }' "$(composer config --no-interaction --no-plugins --absolute vendor-dir)"
+        }' "$(composer config --no-interaction --no-plugins --absolute vendor-dir 2>/dev/null)"
         SH.' '.self::REFUSED;
 
     // Scripts and plugins off, because a reused install must hold only the locked packages and nothing a package ran. The lock's hash is compared around Composer because Composer exits 0 after resolving anew, for example when the lock file has no packages key; it is compared after a failed Composer run too, because Composer writes the new lock before it downloads. Composer's exit code is taken with ||, because a caller's shell running with set -e would otherwise end at a failing Composer, before the comparison.
