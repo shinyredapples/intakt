@@ -43,7 +43,7 @@ final class RecordedTrust
     public const string PULL_BY_STRANGER = 'https://github.com/acme/widget/pull/6';
     public const string PULL_WITHOUT_AUTHOR = 'https://github.com/acme/widget/pull/7';
     public const string PULL_WITH_EMPTY_AUTHOR = 'https://github.com/acme/widget/pull/8';
-    public const string PULL_UNKNOWN ='https://github.com/acme/widget/pull/99';
+    public const string PULL_UNKNOWN = 'https://github.com/acme/widget/pull/99';
 
     private const array PULLS = [
         1 => 'pull_by_writer.json',
