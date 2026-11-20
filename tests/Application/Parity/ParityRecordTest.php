@@ -7,6 +7,7 @@ namespace Intakt\Tests\Application\Parity;
 use Intakt\Tests\Application\Parity\Fixtures\AbstractCandidate;
 use Intakt\Tests\Application\Parity\Fixtures\PlainCandidate;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Filesystem\Filesystem;
 
@@ -272,6 +273,35 @@ final class ParityRecordTest extends TestCase
             ['line 2: a done item must stay on one line'],
             $this->repositoryTests()->unprovenItems($record),
         );
+    }
+
+    #[DataProvider('linesStartingWithAHashThatAreNoHeading')]
+    public function testALineStartingWithAHashThatIsNoHeadingDirectlyAfterADoneItemIsReported(string $line): void
+    {
+        $record = "- [x] Item. Intakt: `ParityRecordTest::testAnIndentedDoneItemIsJudged`\n".$line;
+
+        self::assertSame(
+            ['line 2: a done item must stay on one line'],
+            $this->repositoryTests()->unprovenItems($record),
+        );
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function linesStartingWithAHashThatAreNoHeading(): iterable
+    {
+        yield 'an indented issue number' => ['  #3101 also covers `ParityRecordTest::testNothing`'];
+        yield 'an unindented issue number' => ['#3101 also covers `ParityRecordTest::testNothing`'];
+        yield 'a word after the hash' => ['  #also `ParityRecordTest::testNothing`'];
+        yield 'seven hashes' => ['####### `ParityRecordTest::testNothing`'];
+    }
+
+    public function testAHeadingWithoutTextDirectlyAfterADoneItemIsNoContinuation(): void
+    {
+        $record = "- [x] Item. Intakt: `ParityRecordTest::testAnIndentedDoneItemIsJudged`\n##";
+
+        self::assertSame([], $this->repositoryTests()->unprovenItems($record));
     }
 
     public function testAListItemOrHeadingOrBlankLineDirectlyAfterADoneItemIsNoContinuation(): void
