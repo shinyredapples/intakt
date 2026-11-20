@@ -189,7 +189,7 @@ It skips parsing the output, so a cut-off or empty output files or updates the s
 That task is titled `fix(journeys): the journeys run timed out on main` and says the run timed out instead of listing journeys.
 Without `--timed-out`, the command behaves as described above.
 
-Intakt's CI runs the journeys on every pull request and every push to main, as the `journeys` job of the `ci` workflow (`.github/workflows/ci.yml`). It also runs them on main every night and whenever someone starts the `journeys` workflow (`.github/workflows/journeys.yml`) by hand ("Run workflow", or `gh workflow run journeys.yml`). The two differ in what a failure does. When the `journeys` job of `ci.yml` fails, that pull request's or push's CI run fails, and no task is filed. Only a red nightly or hand-started `journeys.yml` run files one urgent task, or updates the one already open while the journeys stay red ([Running Intakt's CI on your own runner](self-hosted-ci.md)). The nightly run and its alarm stay for now; they are removed once the `journeys` job of `ci.yml` has been green on main for a week.
+Intakt's CI runs the journeys on every push to main, and on a pull request that changes more than `docs/`, `tests/` or `upstream/` or touches the journeys' test code (`tests/Journeys`, `tests/Support`, `tests/Core/Watcher/RecordedPullRequests.php`), as the `journeys` job of the `ci` workflow (`.github/workflows/ci.yml`). It also runs them on main every night and whenever someone starts the `journeys` workflow (`.github/workflows/journeys.yml`) by hand ("Run workflow", or `gh workflow run journeys.yml`). The two differ in what a failure does. When the `journeys` job of `ci.yml` fails, that pull request's or push's CI run fails, and no task is filed. Only a red nightly or hand-started `journeys.yml` run files one urgent task, or updates the one already open while the journeys stay red ([Running Intakt's CI on your own runner](self-hosted-ci.md)). The nightly run and its alarm stay for now; they are removed once the `journeys` job of `ci.yml` has been green on main for a week.
 
 ## Regenerating the journey page
 
@@ -509,7 +509,7 @@ Intakt has a ledger that can store review events (review started, reviewer start
 php bin/console doctrine:migrations:migrate
 ```
 
-The same command also creates the tables where Intakt will keep what it read from a project's GitHub issues: the open issues and pull requests of the last full listing, a marker that lets the next listing ask only for changes, and the reason a task failed for good. The reason stays stored after its issue is closed, so tasks that wait for it stay held. Intakt does not take work from GitHub issues by itself yet: nothing writes to these tables so far, and the automatic intake is still planned.
+The same command also creates the tables where Intakt will keep what it read from a project's GitHub issues: the open issues and pull requests of the last full listing, a marker (the listing's entity tag) that lets Intakt reuse the stored listing when GitHub confirms it unchanged, while a changed listing is read again in full, and the reason a task failed for good. The reason stays stored after its issue is closed, so tasks that wait for it stay held. Intakt does not take work from GitHub issues by itself yet: nothing writes to these tables so far, and the automatic intake is still planned.
 
 ### Choosing the database
 
