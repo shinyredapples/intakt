@@ -75,9 +75,9 @@ final class NoMagicMethodRuleTest extends PhpStanRuleTestCase
         $this->assertRuleAccepts('construct-and-invoke');
     }
 
-    public function testAStringableValueObjectPassesStaticAnalysis(): void
+    public function testAStringableValueObjectWithToStringFailsStaticAnalysis(): void
     {
-        $this->assertRuleAccepts('stringable-value-object');
+        $this->assertRuleRejects('stringable-magic', 'src/Name.php:16 intakt.noMagicMethod Method Intakt\Sample\Name::__toString() is a magic method');
     }
 
     public function testAMagicMethodOutsideTheRepositoryCodeFoldersPassesStaticAnalysis(): void
@@ -117,6 +117,19 @@ final class NoMagicMethodRuleTest extends PhpStanRuleTestCase
     public function testAMagicMethodDeclaredByAnInterfaceFailsStaticAnalysis(): void
     {
         $this->assertRuleRejects('interface-magic', 'src/DynamicAccess.php:9 intakt.noMagicMethod Method Intakt\Sample\DynamicAccess::__get() is a magic method');
+    }
+
+    public function testAMagicAliasInATraitNoClassUsesFailsStaticAnalysis(): void
+    {
+        $this->assertRuleRejects('unused-trait-alias-magic', 'src/WrappedLookup.php:10 intakt.noMagicMethod Method Intakt\Sample\WrappedLookup::__get() is a magic method');
+    }
+
+    public function testAMagicAliasInAUsedTraitIsReportedOnceWhereTheTraitDeclaresIt(): void
+    {
+        $findings = $this->ruleFindingsOf('used-trait-alias-magic');
+
+        self::assertStringStartsWith('src/WrappedLookup.php:10 intakt.noMagicMethod Method Intakt\Sample\WrappedLookup::__get() is a magic method', $findings);
+        self::assertCount(1, explode("\n", $findings));
     }
 
     public function testATraitWithNamedMethodsAndPlainAliasesPassesStaticAnalysis(): void

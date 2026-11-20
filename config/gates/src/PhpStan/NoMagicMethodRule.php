@@ -22,8 +22,8 @@ use PHPStan\Rules\RuleErrorBuilder;
  */
 final readonly class NoMagicMethodRule implements Rule
 {
-    // PHP reserves every method name starting with "__" for magic methods and matches method names case-insensitively, so the exemptions are lowercase; __toString is PHP's own Stringable interface, which static analysis understands
-    private const array ALLOWED = ['__construct', '__invoke', '__tostring'];
+    // PHP reserves every method name starting with "__" for magic methods and matches method names case-insensitively, so the exemptions are lowercase
+    private const array ALLOWED = ['__construct', '__invoke'];
 
     private RepositoryCode $repositoryCode;
 
@@ -73,8 +73,16 @@ final readonly class NoMagicMethodRule implements Rule
     private function magicMethodsOfTrait(Trait_ $trait): array
     {
         $magic = array_filter($trait->getMethods(), fn (ClassMethod $method): bool => $this->isMagic($method->name->toString()));
+        $findings = array_map(fn (ClassMethod $method): IdentifierRuleError => $this->magicMethod((string) $trait->namespacedName, $method->name->toString(), $method->getStartLine()), $magic);
 
-        return array_values(array_map(fn (ClassMethod $method): IdentifierRuleError => $this->magicMethod((string) $trait->namespacedName, $method->name->toString(), $method->getStartLine()), $magic));
+        // PHPStan visits a trait's own `use` only inside a class that uses the trait, so an alias written in a trait is judged here too, which covers a trait no class uses and reports a used one once
+        foreach ($trait->getTraitUses() as $use) {
+            foreach ($this->magicAliases($use) as $alias) {
+                $findings[] = $this->magicMethod((string) $trait->namespacedName, (string) $alias->newName, $alias->getStartLine());
+            }
+        }
+
+        return array_values($findings);
     }
 
     /**
@@ -84,13 +92,19 @@ final readonly class NoMagicMethodRule implements Rule
     {
         $class = $scope->getClassReflection();
 
-        if (!$class instanceof ClassReflection) {
+        if (!$class instanceof ClassReflection || $scope->isInTrait()) {
             return [];
         }
 
-        $aliases = array_filter($use->adaptations, fn (Node $adaptation): bool => $adaptation instanceof Alias && $adaptation->newName instanceof Identifier && $this->isMagic($adaptation->newName->toString()));
+        return array_map(fn (Alias $alias): IdentifierRuleError => $this->magicMethod($class->getDisplayName(), (string) $alias->newName, $alias->getStartLine()), $this->magicAliases($use));
+    }
 
-        return array_values(array_map(fn (Alias $alias): IdentifierRuleError => $this->magicMethod($class->getDisplayName(), (string) $alias->newName, $alias->getStartLine()), $aliases));
+    /**
+     * @return list<Alias>
+     */
+    private function magicAliases(TraitUse $use): array
+    {
+        return array_values(array_filter($use->adaptations, fn (Node $adaptation): bool => $adaptation instanceof Alias && $adaptation->newName instanceof Identifier && $this->isMagic($adaptation->newName->toString())));
     }
 
     private function isMagic(string $name): bool
@@ -102,7 +116,7 @@ final readonly class NoMagicMethodRule implements Rule
 
     private function magicMethod(string $class, string $method, int $line): IdentifierRuleError
     {
-        $message = sprintf('Method %s::%s() is a magic method: no magic methods other than __construct() and __invoke() (and __toString() of Stringable), because PHP calls them implicitly, so what they do is invisible to static analysis, the IDE and readers; declare the property or the method, or give the class a named method for the lookup.', $class, $method);
+        $message = sprintf('Method %s::%s() is a magic method: no magic methods other than __construct() and __invoke(), because PHP calls them implicitly, so what they do is invisible to static analysis, the IDE and readers; declare the property or the method, or give the class a named method for the lookup.', $class, $method);
 
         return RuleErrorBuilder::message($message)->identifier('intakt.noMagicMethod')->line($line)->build();
     }

@@ -4,15 +4,14 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Support\Log;
 
-use Intakt\Tests\Support\Log\Fixtures\StringableName;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
+use Symfony\Component\Uid\Uuid;
 
 #[CoversClass(RecordingLogger::class)]
 #[UsesClass(LogRecords::class)]
-#[UsesClass(StringableName::class)]
 final class RecordingLoggerTest extends TestCase
 {
     private LogRecords $records;
@@ -36,11 +35,11 @@ final class RecordingLoggerTest extends TestCase
 
     public function testAStringableContextValueFillsItsPlaceholder(): void
     {
-        $name = new StringableName();
+        $name = Uuid::fromString('01890a5d-ac96-774b-bcce-b302099a8057');
 
         new RecordingLogger($this->records)->error('Failed {name}.', ['name' => $name]);
 
-        self::assertSame([['level' => 'error', 'message' => 'Failed stringable name.']], $this->records->takeErrors());
+        self::assertSame([['level' => 'error', 'message' => 'Failed 01890a5d-ac96-774b-bcce-b302099a8057.']], $this->records->takeErrors());
     }
 
     public function testAPlaceholderWhoseContextValueIsNotScalarOrStringableStaysAsItIs(): void

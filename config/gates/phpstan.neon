@@ -110,3 +110,11 @@ services:
             root: %currentWorkingDirectory%
         tags:
             - phpstan.rules.rule
+    -
+        class: Intakt\Gates\PhpStan\TraitSetterDeclarationCollector
+        tags:
+            - phpstan.collector
+    -
+        class: Intakt\Gates\PhpStan\TraitSetterUseCollector
+        tags:
+            - phpstan.collector

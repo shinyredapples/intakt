@@ -6,38 +6,40 @@ namespace Intakt\Gates\PhpStan;
 
 use PhpParser\Modifiers;
 use PhpParser\Node;
-use PhpParser\Node\Attribute;
-use PhpParser\Node\AttributeGroup;
 use PhpParser\Node\Identifier;
-use PhpParser\Node\Stmt;
 use PhpParser\Node\Stmt\ClassMethod;
 use PhpParser\Node\Stmt\Trait_;
 use PhpParser\Node\Stmt\TraitUse;
 use PhpParser\Node\Stmt\TraitUseAdaptation\Alias;
 use PHPStan\Analyser\Scope;
+use PHPStan\Node\CollectedDataNode;
 use PHPStan\Reflection\ClassReflection;
+use PHPStan\Reflection\ReflectionProvider;
 use PHPStan\Rules\IdentifierRuleError;
 use PHPStan\Rules\Rule;
 use PHPStan\Rules\RuleErrorBuilder;
 
 /**
- * @implements Rule<Stmt>
+ * @implements Rule<Node>
  */
 final readonly class NoPublicSetterRule implements Rule
 {
-    // "set" in any letter case, since PHP matches method names case-insensitively, not followed by a lowercase letter, so setName(), SetName() and set_name() are setters while settle(), setup() and Settings() are words of their own
-    private const string SETTER = '~^[sS][eE][tT](?![a-z])~';
-
     private RepositoryCode $repositoryCode;
 
-    public function __construct(private string $root)
+    private SetterMethod $setters;
+
+    private AncestorDeclarations $ancestors;
+
+    public function __construct(private string $root, private ReflectionProvider $reflections)
     {
         $this->repositoryCode = new RepositoryCode($root);
+        $this->setters = new SetterMethod();
+        $this->ancestors = new AncestorDeclarations();
     }
 
     public function getNodeType(): string
     {
-        return Stmt::class;
+        return Node::class;
     }
 
     /**
@@ -45,10 +47,14 @@ final readonly class NoPublicSetterRule implements Rule
      */
     public function processNode(Node $node, Scope $scope): array
     {
+        if ($node instanceof CollectedDataNode) {
+            return $this->settersOfTraits($node);
+        }
+
         $findings = match (true) {
             $node instanceof ClassMethod => $this->setterOfClass($node, $scope),
-            $node instanceof Trait_ => $this->settersOfTrait($node),
-            $node instanceof TraitUse => $this->settersByTraitAlias($node, $scope),
+            $node instanceof Trait_ => $this->settersByAliasInTrait($node),
+            $node instanceof TraitUse => $this->settersByAliasInClass($node, $scope),
             default => [],
         };
 
@@ -63,57 +69,109 @@ final readonly class NoPublicSetterRule implements Rule
         $class = $scope->getClassReflection();
         $name = $method->name->toString();
 
-        if (!$class instanceof ClassReflection || !$this->isPublicSetter($method) || $this->vendorDeclares($class, $name)) {
+        // a trait's method is visited here once per using class, so it is judged once from the collected uses instead
+        if (!$class instanceof ClassReflection || $scope->isInTrait() || !$this->setters->isPublicSetter($method) || $this->vendorDeclares($class, $name)) {
             return [];
         }
 
-        if (!$scope->isInTrait()) {
-            return [$this->publicSetter($class->getDisplayName(), $name, $method->getStartLine())];
+        return [$this->publicSetter($class->getDisplayName(), $name)->line($method->getStartLine())->build()];
+    }
+
+    /**
+     * @return list<IdentifierRuleError>
+     */
+    private function settersOfTraits(CollectedDataNode $collected): array
+    {
+        $uses = array_merge(...array_values($collected->get(TraitSetterUseCollector::class)));
+        $findings = [];
+
+        foreach ($collected->get(TraitSetterDeclarationCollector::class) as $file => $traits) {
+            foreach ($this->repositoryCode->contains($file) ? array_merge(...$traits) : [] as [$trait, $method, $line]) {
+                if (!$this->vendorRequiresInEveryUse($trait, $method, $uses)) {
+                    $findings[] = $this->publicSetter($trait, $method)->file($file)->line($line)->build();
+                }
+            }
         }
 
-        // judged here only when it overrides, because only then can a vendor ancestor of the using class require it; any other trait setter is reported once, where the trait declares it
-        return $this->overrides($method) ? [$this->publicSetter($scope->getTraitReflection()->getDisplayName(), $name, $method->getStartLine())] : [];
+        return $findings;
     }
 
+    // a trait no analyzed class uses has no vendor ancestor that could require the name, and one class without such an ancestor is enough to make the name the repository's choice
     /**
-     * @return list<IdentifierRuleError>
+     * @param list<array{string, string, list<string>}> $uses
      */
-    private function settersOfTrait(Trait_ $trait): array
+    private function vendorRequiresInEveryUse(string $trait, string $method, array $uses): bool
     {
-        // PHPStan analyzes a trait's methods only inside each class that uses it, so a trait no class uses would go unjudged; a trait setter marked #[Override] (PHP checks that in each using class) is judged there instead, against that class's vendor ancestors
-        $setters = array_filter($trait->getMethods(), fn (ClassMethod $method): bool => $this->isPublicSetter($method) && !$this->overrides($method));
+        $ofMethod = array_filter($uses, static fn (array $use): bool => $trait === $use[0] && $method === $use[1]);
 
-        return array_values(array_map(fn (ClassMethod $method): IdentifierRuleError => $this->publicSetter((string) $trait->namespacedName, $method->name->toString(), $method->getStartLine()), $setters));
+        return [] !== $ofMethod && array_all($ofMethod, fn (array $use): bool => array_any($use[2], $this->isVendorFile(...)));
+    }
+
+    // PHPStan visits a trait's own `use` only inside a class that uses the trait, so an alias written in a trait is judged where the trait is declared, which covers a trait no class uses and reports a used one once
+    /**
+     * @return list<IdentifierRuleError>
+     */
+    private function settersByAliasInTrait(Trait_ $trait): array
+    {
+        $name = (string) $trait->namespacedName;
+
+        if (!$this->reflections->hasClass($name)) {
+            return [];
+        }
+
+        $declared = $this->reflections->getClass($name);
+        $findings = [];
+
+        foreach ($trait->getTraitUses() as $use) {
+            foreach ($this->publicSetterAliases($use, $declared) as $alias) {
+                $findings[] = $this->publicSetter($name, $this->aliasedName($alias))->line($alias->getStartLine())->build();
+            }
+        }
+
+        return $findings;
     }
 
     /**
      * @return list<IdentifierRuleError>
      */
-    private function settersByTraitAlias(TraitUse $use, Scope $scope): array
+    private function settersByAliasInClass(TraitUse $use, Scope $scope): array
     {
         $class = $scope->getClassReflection();
 
-        if (!$class instanceof ClassReflection) {
+        if (!$class instanceof ClassReflection || $scope->isInTrait()) {
             return [];
         }
 
-        $aliases = array_filter($use->adaptations, fn (Node $adaptation): bool => $adaptation instanceof Alias && $this->aliasesToPublicSetter($adaptation, $class));
+        $aliases = array_filter($this->publicSetterAliases($use, $class), fn (Alias $alias): bool => !$this->vendorDeclares($class, $this->aliasedName($alias)));
 
-        return array_values(array_map(fn (Alias $alias): IdentifierRuleError => $this->publicSetter($class->getDisplayName(), $this->aliasedName($alias), $alias->getStartLine()), $aliases));
+        return array_values(array_map(fn (Alias $alias): IdentifierRuleError => $this->publicSetter($class->getDisplayName(), $this->aliasedName($alias))->line($alias->getStartLine())->build(), $aliases));
     }
 
-    // an alias that keeps the trait's name and visibility adds nothing the trait's own declaration did not show
-    private function aliasesToPublicSetter(Alias $alias, ClassReflection $class): bool
+    /**
+     * @return list<Alias>
+     */
+    private function publicSetterAliases(TraitUse $use, ClassReflection $owner): array
+    {
+        return array_values(array_filter($use->adaptations, fn (Node $adaptation): bool => $adaptation instanceof Alias && $this->aliasesToPublicSetter($adaptation, $owner)));
+    }
+
+    private function aliasesToPublicSetter(Alias $alias, ClassReflection $owner): bool
     {
         $name = $this->aliasedName($alias);
+        $visibility = ($alias->newModifier ?? 0) & Modifiers::VISIBILITY_MASK;
 
-        if (!$alias->newName instanceof Identifier && Modifiers::PUBLIC !== $alias->newModifier) {
+        // an alias that keeps the trait's name and visibility adds nothing the trait's own declaration did not show
+        if (!$this->setters->isSetterName($name) || (!$alias->newName instanceof Identifier && Modifiers::PUBLIC !== $visibility)) {
             return false;
         }
 
-        $native = $class->getNativeReflection();
+        if (0 !== $visibility) {
+            return Modifiers::PUBLIC === $visibility;
+        }
 
-        return 1 === preg_match(self::SETTER, $name) && $native->hasMethod($name) && $native->getMethod($name)->isPublic() && !$this->vendorDeclares($class, $name);
+        $native = $owner->getNativeReflection();
+
+        return $native->hasMethod($name) && $native->getMethod($name)->isPublic();
     }
 
     private function aliasedName(Alias $alias): string
@@ -121,52 +179,25 @@ final readonly class NoPublicSetterRule implements Rule
         return ($alias->newName ?? $alias->method)->toString();
     }
 
-    private function isPublicSetter(ClassMethod $method): bool
-    {
-        return $method->isPublic() && 1 === preg_match(self::SETTER, $method->name->toString());
-    }
-
     // PHP does not let an implementation rename or hide a method of a vendor interface or parent, so only a setter the repository declares first can be avoided
     private function vendorDeclares(ClassReflection $class, string $name): bool
     {
-        return array_any([...$class->getInterfaces(), ...$class->getParents()], fn (ClassReflection $ancestor): bool => $this->isVendorPrototype($ancestor, $name));
+        return array_any($this->ancestors->filesDeclaring($class, $name), $this->isVendorFile(...));
     }
 
-    private function isVendorPrototype(ClassReflection $ancestor, string $name): bool
+    // a file of the repository outside vendor/ (migrations/ too) counts as the repository's, because the repository could rename what it declares
+    private function isVendorFile(string $file): bool
     {
-        $native = $ancestor->getNativeReflection();
-
-        if (!$native->hasMethod($name)) {
-            return false;
-        }
-
-        $prototype = $native->getMethod($name);
-
-        // a child's method of the same name does not override a private one, so its name is the author's choice
-        if ($prototype->isPrivate()) {
-            return false;
-        }
-
-        $file = $prototype->getDeclaringClass()->getFileName();
-
-        // a class without a file is PHP's own, and a file of the repository outside vendor/ (migrations/ too) counts as the repository's, because the repository could rename it
-        return false === $file || $this->isOutsideRepositorySources($file);
+        return AncestorDeclarations::BUILT_IN === $file || !str_starts_with($file, $this->root.'/') || str_starts_with($file, $this->root.'/vendor/');
     }
 
-    private function isOutsideRepositorySources(string $file): bool
-    {
-        return !str_starts_with($file, $this->root.'/') || str_starts_with($file, $this->root.'/vendor/');
-    }
-
-    private function overrides(ClassMethod $method): bool
-    {
-        return array_any($method->attrGroups, static fn (AttributeGroup $group): bool => array_any($group->attrs, static fn (Attribute $attribute): bool => 'override' === $attribute->name->toLowerString()));
-    }
-
-    private function publicSetter(string $class, string $method, int $line): IdentifierRuleError
+    /**
+     * @return RuleErrorBuilder<IdentifierRuleError>
+     */
+    private function publicSetter(string $class, string $method): RuleErrorBuilder
     {
         $message = sprintf('Method %s::%s() is a public setter: no public setters, because an object changed after construction can be seen half set up and changed by any caller; pass the value to the constructor, or return a new instance from a with*() method (clone() with overrides).', $class, $method);
 
-        return RuleErrorBuilder::message($message)->identifier('intakt.noPublicSetter')->line($line)->build();
+        return RuleErrorBuilder::message($message)->identifier('intakt.noPublicSetter');
     }
 }
