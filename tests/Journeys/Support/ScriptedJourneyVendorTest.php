@@ -47,7 +47,7 @@ final class ScriptedJourneyVendorTest extends TestCase
     public function testWithAScriptDirectoryAReviewIsAnsweredByTheWrappedVendor(): void
     {
         $review = new VendorReview(new Verdict(Decision::Changes, [], [], []));
-        $wrapped = $this->createStub(Vendor::class);
+        $wrapped = self::createStub(Vendor::class);
         $wrapped->method('review')->willReturn($review);
 
         $vendor = new ScriptedJourneyVendor(static fn (): Vendor => $wrapped, new JourneyVendor(), '/scripts');
@@ -58,7 +58,7 @@ final class ScriptedJourneyVendorTest extends TestCase
     public function testWithAScriptDirectoryAJudgementIsAnsweredByTheWrappedVendor(): void
     {
         $judgement = new Judgement([]);
-        $wrapped = $this->createStub(Vendor::class);
+        $wrapped = self::createStub(Vendor::class);
         $wrapped->method('judge')->willReturn($judgement);
 
         $vendor = new ScriptedJourneyVendor(static fn (): Vendor => $wrapped, new JourneyVendor(), '/scripts');
@@ -68,7 +68,7 @@ final class ScriptedJourneyVendorTest extends TestCase
 
     public function testWithAScriptDirectoryTheWrappedVendorTellsWhetherATierIsMapped(): void
     {
-        $wrapped = $this->createStub(Vendor::class);
+        $wrapped = self::createStub(Vendor::class);
         $wrapped->method('mapsAModelTo')->willReturn(false);
 
         $vendor = new ScriptedJourneyVendor(static fn (): Vendor => $wrapped, new JourneyVendor(), '/scripts');

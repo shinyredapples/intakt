@@ -96,7 +96,7 @@ final class ScriptDirectoryTest extends TestCase
         $scripts = $this->scripts();
         $scripts->callEnded($scripts->callStarted());
 
-        self::assertSame(['1.end', '1.start'], array_values(array_diff(scandir($this->path) ?: [], ['.', '..'])));
+        self::assertSame(['1.end', '1.start'], array_values(array_diff((array) scandir($this->path), ['.', '..'])));
     }
 
     public function testAnArmedScriptIsReadBack(): void

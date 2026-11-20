@@ -95,7 +95,9 @@ final readonly class ScriptDirectory
      */
     private function filesOf(string $kind): array
     {
-        return glob($this->path.'/*.'.$kind) ?: [];
+        $files = glob($this->path.'/*.'.$kind);
+
+        return false === $files ? [] : $files;
     }
 
     private function published(string $name, string $record): bool

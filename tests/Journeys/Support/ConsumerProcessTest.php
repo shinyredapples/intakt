@@ -127,18 +127,18 @@ final class ConsumerProcessTest extends TestCase
 
     private function runningUntil(MockClock $clock, float $end): Process
     {
-        $process = $this->createStub(Process::class);
+        $process = self::createStub(Process::class);
         $process->method('isRunning')->willReturnCallback(static fn (): bool => (float) $clock->now()->format('U.u') < $end);
         $process->method('getPid')->willReturn(self::CONSUMER);
 
         return $process;
     }
 
-    // Seen running at the poll that finds the deadline passed and seen ended at the check right after it, without the clock moving: the order of an exit between the last poll and the check.
+    // Seen running at the poll that finds the deadline passed and ended at the check right after it, without the clock moving, because that is the order of an exit between the last poll and the check.
     private function exitsBetweenTheLastPollAndTheCheck(MockClock $clock, float $deadline): Process
     {
         $lateCalls = 0;
-        $process = $this->createStub(Process::class);
+        $process = self::createStub(Process::class);
         $process->method('isRunning')->willReturnCallback(static function () use ($clock, $deadline, &$lateCalls): bool {
             return (float) $clock->now()->format('U.u') <= $deadline || 0 === $lateCalls++;
         });
@@ -148,7 +148,7 @@ final class ConsumerProcessTest extends TestCase
 
     private function runningAs(int $pid): Process
     {
-        $process = $this->createStub(Process::class);
+        $process = self::createStub(Process::class);
         $process->method('isRunning')->willReturn(true);
         $process->method('getPid')->willReturn($pid);
 

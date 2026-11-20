@@ -35,7 +35,7 @@ final class ScriptedHttpClient implements HttpClientInterface
     }
 
     /**
-     * @param array<string, mixed> $options
+     * @param array<mixed> $options
      */
     #[Override]
     public function request(string $method, string $url, array $options = []): ResponseInterface
@@ -58,7 +58,7 @@ final class ScriptedHttpClient implements HttpClientInterface
     }
 
     /**
-     * @param array<string, mixed> $options
+     * @param array<mixed> $options
      */
     #[Override]
     public function withOptions(array $options): static
