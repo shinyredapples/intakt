@@ -71,8 +71,8 @@ final readonly class NoPublicSetterRule implements Rule
             return [$this->publicSetter($class->getDisplayName(), $name, $method->getStartLine())];
         }
 
-        // only a trait method that overrides can be required by a vendor ancestor of the using class; any other trait setter is reported once, where the trait declares it
-        return $this->overrides($method) ? [$this->publicSetter($scope->getTraitReflection()?->getDisplayName() ?? $class->getDisplayName(), $name, $method->getStartLine())] : [];
+        // judged here only when it overrides, because only then can a vendor ancestor of the using class require it; any other trait setter is reported once, where the trait declares it
+        return $this->overrides($method) ? [$this->publicSetter($scope->getTraitReflection()->getDisplayName(), $name, $method->getStartLine())] : [];
     }
 
     /**
@@ -149,7 +149,7 @@ final readonly class NoPublicSetterRule implements Rule
 
         $file = $prototype->getDeclaringClass()->getFileName();
 
-        // PHP's own classes have no file; any file of the repository outside vendor/, migrations/ too, is code the repository could rename
+        // a class without a file is PHP's own, and a file of the repository outside vendor/ (migrations/ too) counts as the repository's, because the repository could rename it
         return false === $file || $this->isOutsideRepositorySources($file);
     }
 
