@@ -133,8 +133,7 @@ final readonly class StoredFindings
         return true;
     }
 
-    // The change's finding row, the lock a completing round takes after its own, so two judgings of one change read each other's judge_done in turn instead of each missing the other's.
-    // Taken without the plain existence read, because under MySQL's REPEATABLE READ the first plain read fixes the transaction's snapshot, and one taken before waiting here would hide the judge_done of the judging that held the lock; a judged round completed through this row, so it exists.
+    // The lock a completing round takes after its own, so two judgings of one change read each other's judge_done in turn; without the plain existence read, because under MySQL's REPEATABLE READ that read would fix the snapshot before the wait and hide the other judging's judge_done (a judged round completed through this row, so it exists).
     public function lockChangeOf(ReviewRound $round): void
     {
         $this->lockedRow($round->project(), $round->change()) ?? throw ChangeFindingsNotFound::for($round->project(), $round->change());

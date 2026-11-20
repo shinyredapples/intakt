@@ -23,8 +23,7 @@ final readonly class RecurringP1s
     ) {
     }
 
-    // Called under the change's lock after the round's judge_done is appended, so the round's own keys are read with the others and no other judging of the change commits in between.
-    // Covers every settled round, not only this one, because judging an earlier round can settle later rounds judged before it.
+    // Called under the change's lock after the round's judge_done is appended, so no other judging of the change commits in between; it covers every settled round, not only this one, because judging an earlier round can settle later rounds judged before it.
     /**
      * @return list<RecurringP1Found>
      */
@@ -42,13 +41,13 @@ final readonly class RecurringP1s
         }
 
         foreach (array_keys($keys) as $key) {
-            array_push($found, ...$this->recurrencesOf((string) $key, $settled, $flagged));
+            array_push($found, ...$this->recurrencesOf($key, $settled, $flagged));
         }
 
         return array_values(array_filter($found, static fn (RecurringP1Found $recurrence): bool => !isset($recorded[$recurrence->round][$recurrence->key])));
     }
 
-    // The rounds up to the first one not judged yet, in round-number order: for these the first round that flagged a place is final.
+    // Only the rounds up to the first one not judged yet, because only for these the first round that flagged a place is final.
     /**
      * @param array<string, string>                $rounds
      * @param array<string, array<string, string>> $flagged
