@@ -177,7 +177,7 @@ final class ListWaitingControllerTest extends DashboardPageTestCase
         yield 'Claude Code' => [Provider::ClaudeCode, 'https://status.anthropic.com'];
         yield 'OpenAI' => [Provider::OpenAi, 'https://status.openai.com'];
         yield 'Codex' => [Provider::Codex, 'https://status.openai.com'];
-        yield 'an OpenAI-compatible server, which has no status page, so the board' => [Provider::OpenAiCompatible, '/'];
+        yield 'an OpenAI-compatible server, which has no status page, so the board' => [Provider::OpenAiCompatible, '/?board=1'];
     }
 
     private function noticesAre(OutageNotice ...$notices): void
