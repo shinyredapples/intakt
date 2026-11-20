@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Outage\Infrastructure;
 
-use Symfony\Component\Process\Exception\ProcessTimedOutException;
+use Symfony\Component\Process\Exception\ExceptionInterface;
+use Symfony\Component\Process\PhpExecutableFinder;
 use Symfony\Component\Process\PhpProcess;
 
 // In a child process the timeout stops, because PHP's lookup functions take no timeout and the system resolver's retries can last far longer than a few seconds.
@@ -21,11 +22,19 @@ final readonly class DnsProbe implements Probe
 
     public function answers(): bool
     {
-        $lookup = new PhpProcess($this->lookup, null, ['INTAKT_PROBE_HOST' => $this->host])->setTimeout($this->timeout);
+        $finder = new PhpExecutableFinder();
+        $php = $finder->find(false);
+
+        // Without a PHP executable the lookup cannot run, and PhpProcess cannot even be built.
+        if (false === $php) {
+            return false;
+        }
+
+        $lookup = new PhpProcess($this->lookup, null, ['INTAKT_PROBE_HOST' => $this->host], php: [$php, ...$finder->findArguments()])->setTimeout($this->timeout);
 
         try {
             return 0 === $lookup->run();
-        } catch (ProcessTimedOutException) {
+        } catch (ExceptionInterface) {
             return false;
         }
     }

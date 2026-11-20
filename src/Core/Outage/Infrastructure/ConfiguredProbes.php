@@ -50,8 +50,17 @@ final readonly class ConfiguredProbes
             new DnsProbe((string) $forge->getHost(), $this->timeout),
             new HttpsProbe($this->http, $forge, $this->timeout),
             ...array_map(fn (ProviderDescriptor $vendor): Probe => new HttpsProbe($this->http, $vendor->baseUrl(), $this->timeout), $this->vendorsInUse()),
-            ...array_map(fn (string $url): Probe => new HttpsProbe($this->http, new Uri($url), $this->timeout), $this->compatibleBaseUrls),
+            ...array_map(fn (Uri $url): Probe => new HttpsProbe($this->http, $url, $this->timeout), $this->compatibleUrls()),
         ];
+    }
+
+    /**
+     * @return list<Uri>
+     */
+    private function compatibleUrls(): array
+    {
+        // An account's base URL is free text from the environment: one the parser rejects adds no probe, so a typing mistake cannot make the whole check throw.
+        return array_values(array_filter(array_map(Uri::parse(...), $this->compatibleBaseUrls)));
     }
 
     /**

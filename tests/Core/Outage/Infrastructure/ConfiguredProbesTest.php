@@ -6,13 +6,16 @@ namespace Intakt\Tests\Core\Outage\Infrastructure;
 
 use Intakt\Core\Outage\Infrastructure\ConfiguredProbes;
 use Intakt\Core\Outage\Infrastructure\DnsProbe;
+use Intakt\Core\Outage\Contract\Reachability;
 use Intakt\Core\Outage\Infrastructure\HttpsProbe;
+use Intakt\Core\Outage\Infrastructure\Probe;
 use Intakt\Core\Outage\Infrastructure\ProbedConnectivity;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\AnthropicDescriptor;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\HuggingFaceDescriptor;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\OpenAiDescriptor;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiProviderCatalog;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpClient\MockHttpClient;
@@ -50,6 +53,50 @@ final class ConfiguredProbesTest extends TestCase
             ['https://forge.example/', 'https://llm.example/v1', 'https://team-llm.example/v1'],
             $this->probedUrls(['openai_compatible' => ['default', 'team']], ['https://llm.example/v1', 'https://team-llm.example/v1']),
         );
+    }
+
+    #[DataProvider('unparseableBaseUrls')]
+    public function testAnUnparseableCompatibleBaseUrlNextToAnAnsweringForgeIsOnline(string $url): void
+    {
+        $http = new MockHttpClient(static fn (): ResponseInterface => new MockResponse('', ['http_code' => 500]));
+
+        self::assertSame(Reachability::Online, $this->httpsReachability($http, $url));
+    }
+
+    #[DataProvider('unparseableBaseUrls')]
+    public function testAnUnparseableCompatibleBaseUrlWithEveryOtherProbeFailingIsOffline(string $url): void
+    {
+        $http = new MockHttpClient(static fn (): ResponseInterface => new MockResponse('', ['error' => 'Could not resolve host']));
+
+        self::assertSame(Reachability::Offline, $this->httpsReachability($http, $url));
+    }
+
+    public function testAnUnparseableCompatibleBaseUrlIsNotRequested(): void
+    {
+        self::assertSame(
+            ['https://forge.example/', 'https://llm.example/v1'],
+            $this->probedUrls(['openai_compatible' => ['default', 'team']], ['http://[bad', 'https://llm.example/v1']),
+        );
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function unparseableBaseUrls(): iterable
+    {
+        yield 'an unclosed bracket' => ['http://[bad'];
+        yield 'a trailing space' => ['https://llm.example/v1 '];
+        yield 'a leading space' => [' https://llm.example/v1'];
+        yield 'a space in the path' => ['https://llm.example/my path'];
+        yield 'a non-ASCII host' => ["https://m\u{00FC}nchen.example/v1"];
+    }
+
+    // Only the HTTPS probes run here: the DNS probe would look up the forge's name on the real network.
+    private function httpsReachability(MockHttpClient $http, string $compatibleBaseUrl): Reachability
+    {
+        $probes = $this->configured(['openai_compatible' => ['default']], $http, [$compatibleBaseUrl])->probes();
+
+        return new ProbedConnectivity(array_values(array_filter($probes, static fn (Probe $probe): bool => $probe instanceof HttpsProbe)))->reachability();
     }
 
     /**
