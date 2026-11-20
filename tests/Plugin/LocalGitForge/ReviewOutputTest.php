@@ -12,6 +12,7 @@ use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FindingIds;
 use Intakt\Core\Review\Contract\FixableBy;
+use Intakt\Core\Review\Contract\ListedFindingIds;
 use Intakt\Core\Review\Contract\PanelVerdict;
 use Intakt\Core\Review\Contract\RoundTokens;
 use Intakt\Core\Review\Contract\Severity;
@@ -31,6 +32,7 @@ use Symfony\Component\Serializer\Normalizer\AbstractNormalizer;
 #[UsesClass(ReviewExit::class)]
 #[UsesClass(Cost::class)]
 #[UsesClass(FindingIds::class)]
+#[UsesClass(ListedFindingIds::class)]
 final class ReviewOutputTest extends TestCase
 {
     public function testTheOutputCarriesTheExitCodeAndTheFindingsCountPerVerdict(): void
@@ -74,7 +76,7 @@ final class ReviewOutputTest extends TestCase
      */
     private function whenTheReviewIsWritten(array $merged = []): array
     {
-        $finding = new Finding('F1', Severity::P1, 'src/Feature.php', 3, null, 'Missing check.', FixableBy::Builder, true, 'R1', new Evidence('bin/check', 'failed'))->withMerged(new FindingIds(...$merged));
+        $finding = new Finding('F1', Severity::P1, 'src/Feature.php', 3, null, 'Missing check.', FixableBy::Builder, true, 'R1', new Evidence('bin/check', 'failed'))->withMerged(new ListedFindingIds(...$merged));
         $verdicts = [
             new PanelVerdict(Tier::Strong, new Verdict(Decision::Changes, [$finding], [], [])),
             new PanelVerdict(Tier::Standard, new Verdict(Decision::Approve, [], [], [])),

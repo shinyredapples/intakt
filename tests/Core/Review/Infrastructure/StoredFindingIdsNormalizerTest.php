@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Review\Infrastructure;
 
 use Intakt\Core\Review\Contract\FindingIds;
+use Intakt\Core\Review\Contract\ListedFindingIds;
 use Intakt\Core\Review\Infrastructure\KeyedFindingIds;
 use Intakt\Core\Review\Infrastructure\StoredFindingIdsNormalizer;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -16,17 +17,18 @@ use Symfony\Component\Serializer\Exception\UnexpectedValueException;
 
 #[CoversClass(StoredFindingIdsNormalizer::class)]
 #[UsesClass(FindingIds::class)]
+#[UsesClass(ListedFindingIds::class)]
 #[UsesClass(KeyedFindingIds::class)]
 final class StoredFindingIdsNormalizerTest extends TestCase
 {
     public function testFindingIdsAreWrittenAsAList(): void
     {
-        self::assertSame(['F1', 'F2'], new StoredFindingIdsNormalizer()->normalize(new FindingIds('F1', 'F2')));
+        self::assertSame(['F1', 'F2'], new StoredFindingIdsNormalizer()->normalize(new ListedFindingIds('F1', 'F2')));
     }
 
     public function testNoFindingIdsAreWrittenAsAnEmptyList(): void
     {
-        self::assertSame([], new StoredFindingIdsNormalizer()->normalize(new FindingIds()));
+        self::assertSame([], new StoredFindingIdsNormalizer()->normalize(new ListedFindingIds()));
     }
 
     public function testAnyOtherValueIsNotNormalized(): void
@@ -38,7 +40,7 @@ final class StoredFindingIdsNormalizerTest extends TestCase
 
     public function testFindingIdsAreSupportedForWriting(): void
     {
-        self::assertTrue(new StoredFindingIdsNormalizer()->supportsNormalization(new FindingIds()));
+        self::assertTrue(new StoredFindingIdsNormalizer()->supportsNormalization(new ListedFindingIds()));
     }
 
     public function testAPlainListIsNotSupportedForWriting(): void
@@ -106,6 +108,6 @@ final class StoredFindingIdsNormalizerTest extends TestCase
 
     public function testFindingIdsAreNamedAsCacheable(): void
     {
-        self::assertSame([FindingIds::class => true, KeyedFindingIds::class => true], new StoredFindingIdsNormalizer()->getSupportedTypes(null));
+        self::assertSame([FindingIds::class => true, ListedFindingIds::class => true, KeyedFindingIds::class => true], new StoredFindingIdsNormalizer()->getSupportedTypes(null));
     }
 }

@@ -6,6 +6,7 @@ namespace Intakt\Core\Review\Infrastructure;
 
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FindingIds;
+use Intakt\Core\Review\Contract\ListedFindingIds;
 use Symfony\Component\DependencyInjection\Attribute\AutoconfigureTag;
 use Symfony\Component\Serializer\Exception\LogicException;
 use Symfony\Component\Serializer\Exception\UnexpectedValueException;
@@ -75,7 +76,7 @@ final class StoredFindingNormalizer implements NormalizerInterface, Denormalizer
         }
 
         // Read as none when the key is missing, because every row stored before merged ids existed lacks it.
-        $merged = array_key_exists(self::MERGED, $data) ? $this->idsIn($data[self::MERGED]) : new FindingIds();
+        $merged = array_key_exists(self::MERGED, $data) ? $this->idsIn($data[self::MERGED]) : new ListedFindingIds();
         $note = $this->noteIn($data[self::JUDGE_NOTE] ?? null);
         unset($data[self::MERGED], $data[self::JUDGE_NOTE]);
 
@@ -127,7 +128,7 @@ final class StoredFindingNormalizer implements NormalizerInterface, Denormalizer
             $ids[] = $id;
         }
 
-        return new FindingIds(...$ids);
+        return new ListedFindingIds(...$ids);
     }
 
     private function notIds(): UnexpectedValueException

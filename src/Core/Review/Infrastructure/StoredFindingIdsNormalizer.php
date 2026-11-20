@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\Infrastructure;
 
 use Intakt\Core\Review\Contract\FindingIds;
+use Intakt\Core\Review\Contract\ListedFindingIds;
 use Symfony\Component\DependencyInjection\Attribute\AutoconfigureTag;
 use Symfony\Component\Serializer\Exception\LogicException;
 use Symfony\Component\Serializer\Exception\UnexpectedValueException;
@@ -53,7 +54,7 @@ final class StoredFindingIdsNormalizer implements NormalizerInterface, Denormali
             }
         }
 
-        return array_is_list($data) ? new FindingIds(...$data) : new KeyedFindingIds($data);
+        return array_is_list($data) ? new ListedFindingIds(...$data) : new KeyedFindingIds($data);
     }
 
     /**
@@ -66,7 +67,7 @@ final class StoredFindingIdsNormalizer implements NormalizerInterface, Denormali
 
     public function getSupportedTypes(?string $format): array
     {
-        return [FindingIds::class => true, KeyedFindingIds::class => true];
+        return [FindingIds::class => true, ListedFindingIds::class => true, KeyedFindingIds::class => true];
     }
 
     private function notIds(): UnexpectedValueException

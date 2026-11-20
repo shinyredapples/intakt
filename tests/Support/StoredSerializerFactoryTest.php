@@ -10,6 +10,7 @@ use Intakt\Core\Review\Contract\FindingIds;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\JudgeDoneFinding;
+use Intakt\Core\Review\Contract\ListedFindingIds;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Infrastructure\StoredFindingIdsNormalizer;
 use Intakt\Core\Review\Infrastructure\StoredFindingNormalizer;
@@ -28,6 +29,7 @@ use Symfony\Component\Serializer\SerializerInterface;
 #[UsesClass(StoredFindingNormalizer::class)]
 #[UsesClass(StoredFindingIdsNormalizer::class)]
 #[UsesClass(FindingIds::class)]
+#[UsesClass(ListedFindingIds::class)]
 #[UsesClass(StoredJsonEncoder::class)]
 final class StoredSerializerFactoryTest extends KernelTestCase
 {
@@ -54,7 +56,7 @@ final class StoredSerializerFactoryTest extends KernelTestCase
     // A judge_done row with id lists, because only the stored finding ids normalizer writes them.
     public function testTheFactoryWritesAJudgeDoneRowAsTheContainersStoredSerializerDoes(): void
     {
-        $done = new JudgeDone('r1', new FindingIds('F1', 'F3'), new FindingIds('F2'), [new JudgeDoneFinding('F1', Severity::P1, 'Broken.', new FindingIds('F3'))]);
+        $done = new JudgeDone('r1', new ListedFindingIds('F1', 'F3'), new ListedFindingIds('F2'), [new JudgeDoneFinding('F1', Severity::P1, 'Broken.', new ListedFindingIds('F3'))]);
         $stored = self::getContainer()->get('serializer.stored');
         self::assertInstanceOf(SerializerInterface::class, $stored);
 
@@ -64,7 +66,7 @@ final class StoredSerializerFactoryTest extends KernelTestCase
     // A finding with merged ids, because only the stored finding normalizer keeps them.
     public function testTheFactoryWritesAFindingWithMergedIdsAsTheContainersStoredSerializerDoes(): void
     {
-        $finding = new Finding('F1', Severity::P1, 'src/A.php', 7, null, 'Broken.', FixableBy::Builder, false, null, null, merged: new FindingIds('F2'));
+        $finding = new Finding('F1', Severity::P1, 'src/A.php', 7, null, 'Broken.', FixableBy::Builder, false, null, null, merged: new ListedFindingIds('F2'));
         $stored = self::getContainer()->get('serializer.stored');
         self::assertInstanceOf(SerializerInterface::class, $stored);
 

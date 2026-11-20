@@ -9,11 +9,11 @@ use IteratorAggregate;
 use JsonSerializable;
 use Traversable;
 
-// Finding ids as one value, because module contracts carry typed objects and never lists of strings; encoded as a JSON list, so the MCP answers that json_encode findings keep their shape. Not final only so the stored serializer can carry the keys of a legacy row next to the ids.
+// Finding ids as one value, because module contracts carry typed objects and never lists of strings; encoded as a JSON list, so the MCP answers that json_encode findings keep their shape. Abstract so the stored serializer can carry the keys of a legacy row next to the ids.
 /**
  * @implements IteratorAggregate<int, string>
  */
-readonly class FindingIds implements IteratorAggregate, JsonSerializable
+abstract readonly class FindingIds implements IteratorAggregate, JsonSerializable
 {
     /** @var list<string> */
     private array $ids;
