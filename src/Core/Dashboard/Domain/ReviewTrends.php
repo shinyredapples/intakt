@@ -71,10 +71,17 @@ final readonly class ReviewTrends
         return count(array_filter($this->actFindingsOf($known), static fn (RoundFinding $finding): bool => in_array($finding->severity, self::SERIOUS, true)));
     }
 
-    // Null until the ledger records which reviewer reported each finding: the judge also merges two findings of one reviewer at one place, so a merged entry proves no second reviewer, and D1 of #2858 rules out an estimate.
-    public function caughtByOneReviewerOnlyPercent(): null
+    // Read from the recorded reporters alone, because the judge also merges two findings of one reviewer at one place, so a merged entry proves no second reviewer, and D1 of #2858 rules out an estimate; rounds without the record and entries no recorded reviewer reported are left out, and null when no entry is left.
+    public function caughtByOneReviewerOnlyPercent(): ?int
     {
-        return null;
+        $reporters = array_merge([], ...array_map($this->reportersPerActEntry(...), $this->judgedRounds()));
+        $known = array_values(array_filter($reporters, static fn (int $count): bool => $count > 0));
+
+        if ([] === $known) {
+            return null;
+        }
+
+        return (int) round(100 * count(array_filter($known, static fn (int $count): bool => 1 === $count)) / count($known));
     }
 
     public function medianSecondsToVerdict(): ?int
@@ -118,6 +125,21 @@ final readonly class ReviewTrends
     private function judgedRounds(): array
     {
         return array_values(array_filter($this->rounds, static fn (ReviewedRound $round): bool => $round->judgedAt instanceof DateTimeImmutable));
+    }
+
+    // An act entry stands for its own finding and the ones it merged, so each reviewer that reported any of them counts once.
+    /**
+     * @return list<int>
+     */
+    private function reportersPerActEntry(ReviewedRound $round): array
+    {
+        $reported = $round->findingsByReviewer;
+
+        if (null === $reported) {
+            return [];
+        }
+
+        return array_map(static fn (RoundFinding $entry): int => count(array_filter($reported, static fn (array $ids): bool => [] !== array_intersect($ids, [$entry->id, ...$entry->merged]))), $round->actFindings());
     }
 
     /**
