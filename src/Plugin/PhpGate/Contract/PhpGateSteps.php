@@ -33,7 +33,7 @@ final readonly class PhpGateSteps
             $shown = match (true) {
                 null === $name => "A package without a name",
                 is_string($name) && 1 === preg_match("~^[a-z0-9]([_.-]?[a-z0-9]+)*/[a-z0-9](([_.]|-{1,2})?[a-z0-9]+)*$~D", $name) => $name,
-                default => "The package named ".json_encode($name, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE),
+                default => "The package named ".json_encode($name, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE),
             };
             $unpinned = static fn (string $why) => $refuse($shown." ".$why.", so composer.lock does not pin its contents.");
             if ("path" === ($package["dist"]["type"] ?? null) || "path" === ($package["source"]["type"] ?? null)) { $unpinned("comes from a path repository"); }

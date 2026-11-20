@@ -334,7 +334,7 @@ final class PhpGateDependencyStepTest extends TestCase
         $guard = $this->runInProject(PhpGateSteps::LOCK_GUARD);
 
         self::assertSame(PhpGateSteps::REFUSED, $guard->getExitCode());
-        self::assertSame("The package named \"fixture/local\\nsecond line\" comes from a path repository, so composer.lock does not pin its contents.\n", $guard->getErrorOutput());
+        self::assertSame("The package named \"fixture\\/local\\nsecond line\" comes from a path repository, so composer.lock does not pin its contents.\n", $guard->getErrorOutput());
     }
 
     public function testTheLockGuardAcceptsTheSymfonyRuntimePluginBecauseTheGenerationRedoesItsWork(): void
