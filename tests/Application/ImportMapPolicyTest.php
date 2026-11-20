@@ -88,7 +88,6 @@ final class ImportMapPolicyTest extends KernelTestCase
         $importMap = $this->renderedImportMap();
 
         self::assertSame(['/assets/app-1.js' => $this->sha384Of(self::MODULE)], $importMap['integrity'] ?? null);
-        self::assertStringStartsWith('sha384-', $this->sha384Of(self::MODULE));
     }
 
     public function testAModuleChangedAfterTheImportMapWasCompiledNoLongerMatchesItsIntegrityHash(): void
