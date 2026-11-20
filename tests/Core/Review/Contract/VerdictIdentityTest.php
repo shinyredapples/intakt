@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Review\Contract;
 
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\IdentityField;
 use Intakt\Core\Review\Contract\Panel;
@@ -32,6 +33,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(VerdictIdentity::class)]
 #[CoversClass(VerdictStanding::class)]
 #[CoversClass(ReviewTerms::class)]
+#[UsesClass(Paths::class)]
 #[UsesClass(CommitId::class)]
 #[UsesClass(CommitRange::class)]
 #[UsesClass(HeadMove::class)]
@@ -125,7 +127,7 @@ final class VerdictIdentityTest extends TestCase
 
         self::assertSame(Standing::KeptForUntouchedParts, $standing->standing);
         self::assertSame([IdentityField::Head, IdentityField::Base], $standing->changed);
-        self::assertSame(['src/Main.php'], $standing->reviewAgain);
+        self::assertSame(['src/Main.php'], [...$standing->reviewAgain]);
     }
 
     public function testADocumentationOnlyChangeKeepsTheVerdictExceptForTheTouchedPages(): void
@@ -135,7 +137,7 @@ final class VerdictIdentityTest extends TestCase
         $standing = $this->reviewed()->standingAt($current, $this->move(HeadMoveKind::Commits, 'docs/user/README.md', 'docs/guide/glossary.md'));
 
         self::assertSame(Standing::KeptForUntouchedParts, $standing->standing);
-        self::assertSame(['docs/user/README.md', 'docs/guide/glossary.md'], $standing->reviewAgain);
+        self::assertSame(['docs/user/README.md', 'docs/guide/glossary.md'], [...$standing->reviewAgain]);
     }
 
     #[TestWith(['README.md'], 'documentation outside the docs folder')]

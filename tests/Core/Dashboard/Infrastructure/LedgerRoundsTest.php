@@ -38,6 +38,7 @@ use Intakt\Core\Review\Contract\PanelVerdict;
 use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\ReviewerBlocked;
 use Intakt\Core\Review\Contract\ReviewerFailed;
+use Intakt\Core\Review\Contract\ReviewerFindingsRecorded;
 use Intakt\Core\Review\Contract\ReviewerStarted;
 use Intakt\Core\Review\Contract\ReviewerStopped;
 use Intakt\Core\Review\Contract\ReviewStarted;
@@ -62,6 +63,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\AI\Platform\Exception\MaxOutputTokensException;
+use Symfony\Component\Serializer\Encoder\JsonEncoder;
 use Symfony\Component\Uid\Uuid;
 
 #[CoversClass(LedgerRounds::class)]
@@ -76,6 +78,7 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(ReviewerBlocked::class)]
 #[UsesClass(ReviewerStopped::class)]
 #[UsesClass(CatchUpOwed::class)]
+#[UsesClass(ReviewerFindingsRecorded::class)]
 #[UsesClass(JudgeDone::class)]
 #[UsesClass(DroppedFinding::class)]
 #[UsesClass(JudgeDoneFinding::class)]
@@ -829,6 +832,49 @@ final class LedgerRoundsTest extends TestCase
         self::assertNull($review?->rounds[0]->ending);
     }
 
+    public function testTheFindingsEachReviewerReportedAreReadOntoTheirRound(): void
+    {
+        $review = $this->reviewOf('r1', $this->event(LedgerEventKind::ReviewStarted, self::START), $this->reported('x', ['F1', 'F2']), $this->reported('y', []), $this->judged());
+
+        self::assertSame(['x' => ['F1', 'F2'], 'y' => []], $review?->rounds[0]->findingsByReviewer);
+    }
+
+    public function testARoundWhoseSecondReviewerHasNoReadableRecordReadsAsUnrecorded(): void
+    {
+        $review = $this->reviewOf('r1', $this->event(LedgerEventKind::ReviewStarted, self::START), $this->approved('x'), $this->approved('y'), $this->reported('x', ['F1']), $this->event(LedgerEventKind::ReviewerFindingsRecorded, '{"round":"r1","reviewer":"y","findings":[7]}'), $this->judged());
+
+        self::assertNull($review?->rounds[0]->findingsByReviewer);
+    }
+
+    public function testARoundWhereEveryReviewerWithAVerdictHasARecordIsReadAsRecorded(): void
+    {
+        $review = $this->reviewOf('r1', $this->event(LedgerEventKind::ReviewStarted, self::START), $this->approved('x'), $this->approved('y'), $this->reported('x', ['F1']), $this->reported('y', []), $this->judged());
+
+        self::assertSame(['x' => ['F1'], 'y' => []], $review?->rounds[0]->findingsByReviewer);
+    }
+
+    public function testARoundWithoutARecordOfWhoReportedWhatReadsAsUnrecordedNotAsEmpty(): void
+    {
+        $review = $this->reviewOf('r1', $this->event(LedgerEventKind::ReviewStarted, self::START), $this->approved('x'), $this->judged());
+
+        self::assertNull($review?->rounds[0]->findingsByReviewer);
+    }
+
+    public function testARecordOfWhoReportedWhatThatNamesANonTextIdIsSkipped(): void
+    {
+        $review = $this->reviewOf('r1', $this->event(LedgerEventKind::ReviewStarted, self::START), $this->event(LedgerEventKind::ReviewerFindingsRecorded, '{"round":"r1","reviewer":"x","findings":[7]}'));
+
+        self::assertNull($review?->rounds[0]->findingsByReviewer);
+    }
+
+    /**
+     * @param list<string> $findings
+     */
+    private function reported(string $reviewer, array $findings): RecordedEvent
+    {
+        return $this->row(LedgerEventKind::ReviewerFindingsRecorded, new ReviewerFindingsRecorded('r1', $reviewer, $findings));
+    }
+
     private function noCosts(): RoundCosts
     {
         $costs = self::createStub(RoundCosts::class);
@@ -876,7 +922,7 @@ final class LedgerRoundsTest extends TestCase
     // Serialized as the writers do, so the reader is shown the row it meets in production.
     private function row(LedgerEventKind $kind, object $payload): RecordedEvent
     {
-        return $this->event($kind, StoredSerializerFactory::create()->serialize($payload, 'json'));
+        return $this->event($kind, StoredSerializerFactory::create()->serialize($payload, JsonEncoder::FORMAT));
     }
 
     private function usage(int $prompt, int $completion): TokenUsageRow

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Plugin\LocalGitForge\UseCase\ReviewChange;
 
 use Closure;
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Review\Contract\ChangeDescription;
 use Intakt\Core\Review\Contract\ChangeReview;
 use Intakt\Core\Review\Contract\ChangeReviewRequest;
@@ -92,6 +93,7 @@ final readonly class LocalChangeReview
 
         try {
             return new QueuedRound($this->reviews->start($request($snapshot)), $snapshot);
+            // Boundary: removes the snapshot and rethrows the start failure (unless removal itself throws), because no queued round owns it once the start failed.
         } catch (Throwable $failure) {
             $forge->removeSnapshot($snapshot);
 
@@ -133,6 +135,6 @@ final readonly class LocalChangeReview
     {
         $paths = array_map(static fn (ChangedFile $file): string => $file->path, [...$change->diff->files]);
 
-        return new ChangeDescription($change->diff->addedLines() + $change->diff->removedLines(), $paths, []);
+        return new ChangeDescription($change->diff->addedLines() + $change->diff->removedLines(), new Paths(...$paths), []);
     }
 }

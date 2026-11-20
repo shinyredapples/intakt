@@ -25,7 +25,7 @@ final readonly class EvidenceItems
         $column = null;
 
         foreach (array_keys($lines) as $index) {
-            // A heading or label indented into an open item's content (an example inside the task) is part of that item, not the section's start.
+            // A heading or label indented into an open item's content is an example inside the task, so it must not start the section.
             $column = self::endsTheList($lines, $index, $column) ? null : $column;
             $section = self::sectionStartingAt($lines, $index, $column);
 
