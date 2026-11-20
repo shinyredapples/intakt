@@ -14,8 +14,7 @@ use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundState;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
 
-// A round's events are decided only once every earlier round of the change is judged, because an event is never taken back and an earlier round judged later could be the first to flag the place; so rounds judged out of order record the same events as rounds judged in order.
-// Only an earlier round that can still produce a judge_done delays settlement, because an event is never taken back and a round that can never be judged would otherwise hold the change forever.
+// A round's events are decided only once every earlier round of the change is judged, because an event is never taken back and an earlier round judged later could be the first to flag the place; so rounds judged out of order record the same events as rounds judged in order; only an earlier round that can still produce a judge_done delays settlement, because a round that can never be judged would otherwise hold the change forever.
 final readonly class RecurringP1s
 {
     public function __construct(
