@@ -508,13 +508,13 @@ final class EntrypointSampleSeedTest extends TestCase
         return $process;
     }
 
-    // A stand-in sleep that takes three times as long as asked, as on a loaded machine (a test pass in CI measured a stop of 10.7 s), so the test forces a stop whose pauses all overrun.
+    // A stand-in sleep that makes the entrypoint's pauses (its stop's tenth of a second and its poll's second) take three times as long, as on a loaded machine (a test pass measured a stop of 10.7 s), so the test forces a stop whose pauses all overrun.
     private function overrunningSleep(): string
     {
         $folder = $this->directory.'/overrunning';
         $sleep = new ExecutableFinder()->find('sleep');
         self::assertNotNull($sleep);
-        new Filesystem()->dumpFile($folder.'/sleep', "#!/bin/bash\n[[ \$1 =~ ^[0-9.]+\$ ]] && set -- \"\$(awk -v s=\"\$1\" 'BEGIN { print s * 3 }')\"\nexec ".escapeshellarg($sleep)." \"\$@\"\n");
+        new Filesystem()->dumpFile($folder.'/sleep', "#!/bin/bash\ncase \$1 in 0.1) set -- 0.3;; 1) set -- 3;; esac\nexec ".escapeshellarg($sleep)." \"\$@\"\n");
         new Filesystem()->chmod($folder.'/sleep', 0755);
 
         return $folder;
