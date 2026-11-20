@@ -84,13 +84,22 @@ final class ConsumerProcess
         }
 
         $parent = $worker->parent;
+        $childStart = $worker->start;
 
-        for ($depth = 1; null !== $parent && $depth <= self::WORKER_DEPTH; ++$depth) {
+        for ($depth = 1; $depth <= self::WORKER_DEPTH; ++$depth) {
             if ($consumer === $parent) {
                 return true;
             }
 
-            $parent = ($this->entryOf)($parent)?->parent;
+            $entry = ($this->entryOf)($parent);
+
+            // A parent always started before its child, so an entry that started later is a process that took a vanished parent's PID, not an ancestor.
+            if (null === $entry || $entry->start > $childStart) {
+                return false;
+            }
+
+            $parent = $entry->parent;
+            $childStart = $entry->start;
         }
 
         return false;

@@ -148,6 +148,13 @@ final class ConsumerProcessTest extends TestCase
         self::assertFalse($this->running($entryOf)->isWorker(200, self::START));
     }
 
+    public function testAWorkerWhoseShellPidWasTakenByALaterChildOfTheConsumerIsNoWorker(): void
+    {
+        $consumer = $this->running($this->entries([200 => new ProcessEntry(150, self::START), 150 => new ProcessEntry(self::CONSUMER, self::START + 1)]));
+
+        self::assertFalse($consumer->isWorker(200, self::START));
+    }
+
     private function running(Closure $entryOf): ConsumerProcess
     {
         return new ConsumerProcess($this->runningUntil(new MockClock('@1000'), 2000.0), new MockClock(), $entryOf);
