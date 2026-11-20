@@ -7,11 +7,12 @@ namespace Intakt\Core\Watchdog\Contract;
 // The classifier's only view of main, so its rules are tested on forced histories and the git reading stays outside the domain.
 interface CommitHistory
 {
-    // False after a force push that dropped the commit from main's history.
+    // Asked for the last seen head, because a force push that rewrote main's history leaves it out.
     public function contains(string $commit): bool;
 
+    // Oldest first, because the violations are reported in the order the commits reached main.
     /**
-     * @return list<string> main's first-parent commits after the given one, oldest first
+     * @return list<string>
      */
     public function firstParentsSince(string $commit): array;
 

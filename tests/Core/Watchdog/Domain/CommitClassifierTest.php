@@ -93,7 +93,7 @@ final class CommitClassifierTest extends TestCase
 
     public function testAForcePushThatDropsTheSeenHeadIsAHistoryRewrite(): void
     {
-        $history = $this->createStub(CommitHistory::class);
+        $history = self::createStub(CommitHistory::class);
         $history->method('contains')->willReturn(false);
         $history->method('firstParentsSince')->willReturn([self::MERGE]);
         $history->method('signatureOf')->willReturn(SignatureStatus::OwnerSigned);
@@ -111,11 +111,11 @@ final class CommitClassifierTest extends TestCase
     }
 
     /**
-     * @param array<string, SignatureStatus> $signatures commit name to its signature status, in first-parent order
+     * @param array<string, SignatureStatus> $signatures
      */
     private function history(array $signatures): CommitHistory
     {
-        $history = $this->createStub(CommitHistory::class);
+        $history = self::createStub(CommitHistory::class);
         $history->method('contains')->willReturn(true);
         $history->method('firstParentsSince')->willReturn(array_keys($signatures));
         $history->method('signatureOf')->willReturnCallback(
