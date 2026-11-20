@@ -78,7 +78,7 @@ final readonly class ConfiguredProbes
         $url = Url::parse($text);
         $host = $url?->getAsciiHost();
 
-        if (null === $url || null === $host || '' === $host) {
+        if (!$url instanceof Url || null === $host || '' === $host) {
             return null;
         }
 

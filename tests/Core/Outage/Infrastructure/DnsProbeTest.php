@@ -41,7 +41,7 @@ final class DnsProbeTest extends TestCase
             exit(new Intakt\Core\Outage\Infrastructure\DnsProbe('127.0.0.1', 3.0)->answers() ? 1 : 0);
             PHP;
 
-        $withoutProcOpen = new Process([\PHP_BINARY, '-d', 'disable_functions=proc_open', '-r', $probing, dirname(__DIR__, 4).'/vendor/autoload.php']);
+        $withoutProcOpen = new Process([PHP_BINARY, '-d', 'disable_functions=proc_open', '-r', $probing, dirname(__DIR__, 4).'/vendor/autoload.php']);
 
         self::assertSame(0, $withoutProcOpen->run(), $withoutProcOpen->getErrorOutput().$withoutProcOpen->getOutput());
     }
