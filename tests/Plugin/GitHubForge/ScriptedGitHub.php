@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\GitHubForge;
 
-use DateTimeImmutable;
 use Intakt\Plugin\GitHubForge\Domain\ExpectedInstallation;
 use Intakt\Plugin\GitHubForge\Infrastructure\AppJwt;
 use Intakt\Plugin\GitHubForge\Infrastructure\CheckedInstallationTokens;
@@ -37,6 +36,8 @@ final class ScriptedGitHub
     public const string OWN_LOGIN = 'acme-intakt[bot]';
     private const string APP_ID = '12345';
     private const string APP_SLUG = 'acme-intakt';
+    // 2026-11-25 10:10:00 UTC, ten minutes after the clock of the stack.
+    private const string RATE_LIMIT_RESET = '1795601400';
 
     /** @var list<array{string, array<mixed>}> */
     public array $writes = [];
@@ -112,7 +113,7 @@ final class ScriptedGitHub
         }
 
         if (null !== $this->rateLimitedEnding && str_ends_with((string) parse_url($url, PHP_URL_PATH), $this->rateLimitedEnding)) {
-            return new MockResponse('{"message":"API rate limit exceeded"}', ['http_code' => 403, 'response_headers' => ['x-ratelimit-remaining' => '0', 'x-ratelimit-reset' => (string) new DateTimeImmutable('2026-11-25 10:10:00 UTC')->getTimestamp(), 'x-ratelimit-resource' => 'core']]);
+            return new MockResponse('{"message":"API rate limit exceeded"}', ['http_code' => 403, 'response_headers' => ['x-ratelimit-remaining' => '0', 'x-ratelimit-reset' => self::RATE_LIMIT_RESET, 'x-ratelimit-resource' => 'core']]);
         }
 
         return 'GET' === $method ? $this->read($url) : $this->write($method, $url, $options);
