@@ -18,8 +18,9 @@ final readonly class ReviewsPerDay
     // One unit of a cost bar is a ten-thousandth of a dollar, the precision a cost reading shows, so the bars stay whole numbers.
     private const int COST_UNIT = 10000;
 
+    // Keyed by UTC start day, oldest first.
     /**
-     * @param array<string, list<ReviewedRound>> $days rounds by UTC start day, oldest first
+     * @param array<string, list<ReviewedRound>> $days
      */
     private function __construct(private array $days)
     {
@@ -54,7 +55,7 @@ final readonly class ReviewsPerDay
     {
         $busiest = $this->busiestDay();
 
-        return sprintf('Reviews ran on %d days; the busiest was %s, with %s.', $this->dayCount(), self::name($busiest), self::roundsReading(count($this->days[$busiest])));
+        return sprintf('Reviews ran on %d days; the busiest was %s, with %s.', $this->dayCount(), $this->name($busiest), $this->roundsReading(count($this->days[$busiest])));
     }
 
     public function costTakeaway(): string
@@ -65,14 +66,14 @@ final readonly class ReviewsPerDay
             return 'No day has a cost estimate yet.';
         }
 
-        $day = (string) array_search(max($costs), $costs, true);
+        $day = (string) array_search(max([0, ...$costs]), $costs, true);
 
-        return sprintf('The costliest day was %s, at about %s USD.', self::name($day), self::dollars($costs[$day] ?? 0));
+        return sprintf('The costliest day was %s, at about %s USD.', $this->name($day), $this->dollars($costs[$day] ?? 0));
     }
 
     public function roundsTop(): int
     {
-        return ChartScale::topFor(max(array_map(count(...), $this->days)));
+        return ChartScale::topFor(max([0, ...array_map(count(...), $this->days)]));
     }
 
     public function costTop(): int
@@ -91,7 +92,7 @@ final readonly class ReviewsPerDay
     public function roundBars(): array
     {
         return array_map(
-            static fn (string $day, array $rounds): ChartBar => new ChartBar(self::name($day), count($rounds), self::roundsReading(count($rounds)), self::name($day)),
+            fn (string $day, array $rounds): ChartBar => new ChartBar($this->name($day), count($rounds), $this->roundsReading(count($rounds)), $this->name($day)),
             array_keys($this->days),
             array_values($this->days),
         );
@@ -106,8 +107,8 @@ final readonly class ReviewsPerDay
 
         foreach ($this->costs() as $day => $cost) {
             $bars[] = null === $cost
-                ? new ChartBar(self::name($day), null, 'No data', self::name($day).', no cost estimate', null, 'No data')
-                : new ChartBar(self::name($day), $cost, self::dollars($cost).' USD, estimated', self::name($day), null, self::dollars($cost));
+                ? new ChartBar($this->name($day), null, 'No data', $this->name($day).', no cost estimate', null, 'No data')
+                : new ChartBar($this->name($day), $cost, $this->dollars($cost).' USD, estimated', $this->name($day), null, $this->dollars($cost));
         }
 
         return $bars;
@@ -136,21 +137,21 @@ final readonly class ReviewsPerDay
     {
         $counts = array_map(count(...), $this->days);
 
-        return (string) array_search(max($counts), $counts, true);
+        return (string) array_search(max([0, ...$counts]), $counts, true);
     }
 
-    private static function roundsReading(int $count): string
+    private function roundsReading(int $count): string
     {
         return sprintf('%d %s', $count, 1 === $count ? 'round' : 'rounds');
     }
 
-    private static function dollars(int $units): string
+    private function dollars(int $units): string
     {
         return sprintf('%.4f', $units / self::COST_UNIT);
     }
 
-    private static function name(string $day): string
+    private function name(string $day): string
     {
-        return new DateTimeImmutable($day)->format('M j');
+        return DateTimeImmutable::createFromFormat('!Y-m-d', $day, new DateTimeZone('UTC'))->format('M j');
     }
 }
