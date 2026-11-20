@@ -98,7 +98,7 @@ final class DashboardLedger implements Ledger
         $this->add(LedgerEventKind::VerdictReceived, $this->reviewer($round, $role) + ['decision' => 0 === $findings ? 'approve' : 'changes', 'findings' => $findings]);
     }
 
-    // Written as rows were before reporters' severities were recorded.
+    // Without severities, because rows written before reporters' severities were recorded hold none.
     /**
      * @param list<string> $findings
      */
@@ -108,7 +108,7 @@ final class DashboardLedger implements Ledger
     }
 
     /**
-     * @param array<string, string> $severities by finding id, as RoundLedger writes them
+     * @param array<string, string> $severities
      */
     public function reportRatedFindings(string $round, string $role, array $severities): void
     {

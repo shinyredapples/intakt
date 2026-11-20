@@ -301,7 +301,7 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
         self::assertSame(['0 (0 alone)', '1 (0 alone)', '0 (0 alone)'], $page->filter('#chart-catches figure')->first()->filter('.c-label')->each(static fn (Crawler $label): string => $label->text()));
     }
 
-    // Decision 4 of #2981: the severity comes from each reporter's own row, not from one lookup per finding id.
+    // Each reporter's own row gives the severity, because one lookup per finding id credited two repeat reporters with one severity (#2981, decision 4).
     public function testTwoReportersRepeatingOneFindingAtDifferentSeveritiesEachCountUnderTheirOwn(): void
     {
         $this->givenTwoReporters(['F1' => 'P2'], ['F1' => 'P1']);
@@ -353,7 +353,7 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
         yield 'an unreadable entry' => [['act' => ['F1'], 'findings' => [null]]];
     }
 
-    // Decision 6 of #2981: a round counts only when every id the judge marked is among its recorded findings.
+    // A round counts only when every id the judge marked is among its recorded findings, because matching entry counts read "kept 1 of 1" with no finding recorded (#2981, decision 6).
     /**
      * @param array<string, mixed> $row
      */

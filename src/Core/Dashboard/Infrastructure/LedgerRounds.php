@@ -57,7 +57,7 @@ final class LedgerRounds
     /** @var array<string, array<string, list<string>>> */
     private array $findingsByReviewer = [];
 
-    // Null for a reviewer whose row was written before reporters' severities were recorded.
+    // Null for a reviewer whose row was written before reporters' severities were recorded, because such a round must be left out of the reviewer chart, never guessed.
     /** @var array<string, array<string, array<string, string>|null>> */
     private array $severitiesByReviewer = [];
 

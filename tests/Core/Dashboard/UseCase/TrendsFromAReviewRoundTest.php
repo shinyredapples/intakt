@@ -26,7 +26,7 @@ use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Component\DomCrawler\Crawler;
 
-// Decision 9 of #2981: the charts read rows the Review module wrote itself, through a round run with the stand-in vendor the use-case tests use, never rows written by hand.
+// Rows the Review module wrote itself, through a round run with the stand-in vendor the use-case tests use, because evidence from rows written by hand proves nothing about what a round records (#2981, decision 9).
 #[CoversClass(ReviewerCatches::class)]
 #[CoversClass(JudgeOutcomes::class)]
 final class TrendsFromAReviewRoundTest extends DashboardPageTestCase
