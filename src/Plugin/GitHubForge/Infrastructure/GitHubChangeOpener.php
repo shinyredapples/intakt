@@ -64,7 +64,12 @@ final readonly class GitHubChangeOpener implements ChangeOpening
         $author = $pull['user'] ?? null;
         $login = is_array($author) ? ($author['login'] ?? null) : null;
 
-        if (!is_string($login) || !$this->identities->isBot($login)) {
+        // Refused before the write, because an answer of updated is final for the pull request and an author GitHub did not name may be this App's.
+        if (!is_string($login)) {
+            throw new ForgeWriteFailed('GitHub answered the open pull request without its author\'s login, so it is not updated before its author can be checked against this App.');
+        }
+
+        if (!$this->identities->isBot($login)) {
             return false;
         }
 

@@ -142,7 +142,7 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         $github->createdNumber = 7;
         $opener = $github->opener('alpha', 'Acme/Widgets');
         $records->open($this->pushOf('feature/7', '1'), str_repeat('1', 40), $opener->openOrUpdate(new ProposedChange('alpha', 'feature/7', 'main', new ChangeText('Seven', 'E1'))));
-        $github->openPulls = [['number' => 8, 'head' => ['ref' => 'feature/8']]];
+        $github->openPulls = [['number' => 8, 'head' => ['ref' => 'feature/8'], 'user' => ['login' => 'loop[bot]', 'type' => 'Bot']]];
         $records->open($this->pushOf('feature/8', '2'), self::GREEN, $opener->openOrUpdate(new ProposedChange('alpha', 'feature/8', 'main', new ChangeText('Eight', 'E1'))));
 
         $this->handler(new RecordingCommandBus())(new WatchPullRequests('alpha'));

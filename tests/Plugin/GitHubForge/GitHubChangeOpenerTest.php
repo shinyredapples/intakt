@@ -85,7 +85,7 @@ final class GitHubChangeOpenerTest extends TestCase
     public function testAnOpenPullRequestTheOpenerOnlyUpdatedIsAnsweredAsNotCreated(): void
     {
         $github = new ScriptedGitHub();
-        $github->openPulls = [['number' => 7, 'head' => ['ref' => 'task']]];
+        $github->openPulls = [['number' => 7, 'head' => ['ref' => 'task'], 'user' => ['login' => 'octocat']]];
 
         $change = $github->opener()->openOrUpdate(new ProposedChange('widgets', 'task', 'main', new ChangeText('New title', 'New body')));
 
@@ -133,14 +133,25 @@ final class GitHubChangeOpenerTest extends TestCase
         self::assertSame(Opening::Updated, $change->opening);
     }
 
-    public function testAnOpenPullRequestWhoseAuthorIsNoTextIsAnsweredAsNotCreated(): void
+    public function testAnOpenPullRequestWhoseAuthorIsNoTextFailsBeforeAnyWrite(): void
     {
         $github = new ScriptedGitHub();
         $github->openPulls = [['number' => 7, 'head' => ['ref' => 'task'], 'user' => ['login' => ['intakt[bot]']]]];
 
-        $change = $github->opener()->openOrUpdate(new ProposedChange('widgets', 'task', 'main', new ChangeText('T', 'B')));
+        $this->assertWriteFailsWith('without its author\'s login', fn () => $github->opener()->openOrUpdate(new ProposedChange('widgets', 'task', 'main', new ChangeText('T', 'B'))));
+        self::assertSame([], $github->writes);
+    }
 
-        self::assertSame(Opening::Updated, $change->opening);
+    public function testARetryThatFindsItsPullRequestWithoutAnAuthorFailsBeforeAnyWrite(): void
+    {
+        $github = new ScriptedGitHub();
+        $proposal = new ProposedChange('widgets', 'task', 'main', new ChangeText('T', 'B'));
+        $opener = $github->opener();
+        $opener->openOrUpdate($proposal);
+        $github->openPulls = [['number' => 42, 'head' => ['ref' => 'task'], 'user' => null]];
+
+        $this->assertWriteFailsWith('without its author\'s login', fn () => $opener->openOrUpdate($proposal));
+        self::assertCount(1, $github->writes);
     }
 
     public function testABotAuthorThatCannotBeCheckedAgainstTheAppFailsBeforeAnyWrite(): void
@@ -156,7 +167,7 @@ final class GitHubChangeOpenerTest extends TestCase
     public function testABranchWithAnOpenPullRequestHasItsTextUpdatedInstead(): void
     {
         $github = new ScriptedGitHub();
-        $github->openPulls = [['number' => 7, 'head' => ['ref' => 'task']]];
+        $github->openPulls = [['number' => 7, 'head' => ['ref' => 'task'], 'user' => ['login' => 'octocat']]];
 
         $change = $github->opener()->openOrUpdate(new ProposedChange('widgets', 'task', 'main', new ChangeText('New title', 'New body')));
 
@@ -198,7 +209,7 @@ final class GitHubChangeOpenerTest extends TestCase
     public function testAnOpenPullRequestWithoutANumberIsRefused(): void
     {
         $github = new ScriptedGitHub();
-        $github->openPulls = [['number' => 'seven', 'head' => ['ref' => 'task']]];
+        $github->openPulls = [['number' => 'seven', 'head' => ['ref' => 'task'], 'user' => ['login' => 'octocat']]];
 
         $this->expectException(ForgeWriteFailed::class);
 
