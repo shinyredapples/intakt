@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\ReviewerOutcome;
 use Intakt\Core\Dashboard\Domain\ReviewOutcome;
+use Intakt\Core\Dashboard\Domain\RoundFinding;
 use Intakt\Core\Dashboard\Domain\RoundPlace;
 use Intakt\Core\Dashboard\Domain\RoundStart;
 use Intakt\Core\Review\Contract\Decision;
@@ -22,8 +23,22 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(ReviewedRound::class)]
 #[UsesClass(ReviewOutcome::class)]
 #[UsesClass(ReviewerOutcome::class)]
+#[UsesClass(RoundFinding::class)]
 final class ReviewedRoundTest extends TestCase
 {
+    public function testAReportedSeverityIsReadByFindingIdAndAnUnknownIdHasNone(): void
+    {
+        $round = $this->round()->withReportedSeverities(['F1' => 'P2', 'F2' => 'P3']);
+
+        self::assertSame(['P2', 'P3', null], array_map($round->reportedSeverityOf(...), ['F1', 'F2', 'F3']));
+    }
+
+    public function testEveryFindingCountsAsReadUntilTheRoundIsMarkedOtherwise(): void
+    {
+        self::assertTrue($this->round()->everyFindingRead);
+        self::assertFalse($this->round()->withUnreadableFindings()->everyFindingRead);
+    }
+
     public function testAJudgedRoundDecidedAsChangesGivesChangesRequested(): void
     {
         self::assertSame(ReviewOutcome::ChangesRequested, $this->judged()->decidedAs(Decision::Changes)->reviewOutcome());

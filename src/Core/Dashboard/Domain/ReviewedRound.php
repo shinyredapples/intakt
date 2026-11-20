@@ -31,7 +31,14 @@ final readonly class ReviewedRound
     /** @var list<RoundFinding> */
     public array $dropped;
 
+    // Keyed by finding id, with the severity its reviewer gave it, because an act entry is recorded with the highest severity of the findings it merged; an id whose reported severity the ledger does not hold is absent.
+    /** @var array<string, string> */
+    public array $reportedSeverities;
+
     public bool $findingTextRecorded;
+
+    // False when the judge's row holds a finding entry that cannot be read, so a count over the round never reads a lost finding as none.
+    public bool $everyFindingRead;
     public ReviewState $state;
     public TokenFigures $tokens;
     public Cost $cost;
@@ -61,7 +68,9 @@ final readonly class ReviewedRound
         $this->outcomes = [];
         $this->findings = [];
         $this->dropped = [];
+        $this->reportedSeverities = [];
         $this->findingTextRecorded = true;
+        $this->everyFindingRead = true;
         $this->state = ReviewState::InProgress;
         $this->tokens = TokenFigures::none();
         $this->cost = Cost::none();
@@ -100,6 +109,12 @@ final readonly class ReviewedRound
     public function actFindings(): array
     {
         return [...array_filter($this->findings, static fn (RoundFinding $finding): bool => JudgeCall::Act === $finding->call)];
+    }
+
+    // Null for an id the round holds no reported severity for, such as a mark kept without its finding or an act entry written before the reported severity was recorded, so a count never guesses one.
+    public function reportedSeverityOf(string $id): ?string
+    {
+        return $this->reportedSeverityIn($this, $id);
     }
 
     public function reviewOutcome(): ?ReviewOutcome
@@ -161,6 +176,19 @@ final readonly class ReviewedRound
         return clone ($this, ['dropped' => $dropped]);
     }
 
+    /**
+     * @param array<string, string> $severities
+     */
+    public function withReportedSeverities(array $severities): self
+    {
+        return clone ($this, ['reportedSeverities' => $severities]);
+    }
+
+    public function withUnreadableFindings(): self
+    {
+        return clone ($this, ['everyFindingRead' => false]);
+    }
+
     public function withTokens(TokenFigures $tokens): self
     {
         return clone ($this, ['tokens' => $tokens]);
@@ -199,5 +227,11 @@ final readonly class ReviewedRound
     private function isReplayMarked(self $round): bool
     {
         return ReplayMark::Replay === $round->mark;
+    }
+
+    // Read through a round for the same reason as `isReplayMarked()`: PHPStan keeps the constructor's empty array for `$this->reportedSeverities`.
+    private function reportedSeverityIn(self $round, string $id): ?string
+    {
+        return $round->reportedSeverities[$id] ?? null;
     }
 }

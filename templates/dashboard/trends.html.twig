@@ -2,12 +2,26 @@
 
 {% block title %}Trends - Intakt{% endblock %}
 
+{#- Always loaded, not only with live updates, because the charts' tooltip controller starts from it. -#}
+{% block importmap %}{{ importmap('app') }}{% endblock %}
+
 {#- An estimated figure carries the same label as the review page's cost, so a guess never reads as a reading (decision D5 of #2206). -#}
 {% macro tile(label, figure, estimated) %}
 <div class="tile"{% if figure is null %} data-no-data{% endif %}>
     <dt>{{ label }}{% if estimated and figure is not null %} {{ include('dashboard/components/figure_kind.html.twig', {kind: enum('Intakt\\Core\\Platform\\Contract\\FigureKind').Estimated, at: 'trends-cost'}, with_context = false) }}{% endif %}</dt>
     <dd>{{ figure ?? 'No data' }}</dd>
 </div>
+{% endmacro %}
+
+{#- Missing data reads "No data", never a chart of zeros, so nothing unmeasured looks measured (DESIGN.md, Charts). -#}
+{% macro no_chart(reason) %}
+<p class="takeaway" data-no-data>No data</p>
+<p class="chart-key muted">{{ reason }}</p>
+{% endmacro %}
+
+{#- Hidden from assistive technology, because each mark's own label already reads the same value first. -#}
+{% macro tip() %}
+<div class="chart-tip" data-chart-target="tip" aria-hidden="true" hidden><strong></strong><span></span></div>
 {% endmacro %}
 
 {% block body %}
@@ -60,5 +74,61 @@
     {{ _self.tile('Cost per round', cost is null ? null : cost.reading, true) }}
 </dl>
 <p class="tiles-note muted">{% if cost is not null %}Cost per round is the mean of the rounds with a known estimate, {{ cost.priceDateReading }}. {% endif %}"Caught by one reviewer only" counts only the rounds with a full record of which reviewer reported each finding.</p>
+{% set catches = trends.reviewerCatches %}
+{% set outcomes = trends.judgeOutcomes %}
+<div class="charts">
+    <section class="chart wide" id="chart-catches" aria-labelledby="chart-catches-title" data-controller="chart">
+        <h2 id="chart-catches-title">Which reviewer caught what</h2>
+        {% if catches is null %}
+        {{ _self.no_chart('Fills in once a judged review records which reviewer reported each finding.') }}
+        {% else %}
+        <p class="takeaway">{{ catches.takeaway }}</p>
+        <p class="chart-key muted">Each bar counts the findings one reviewer reported, by severity; the solid part is what no other reviewer of its round reported.</p>
+        <div class="multiples">
+            {% for reviewer in catches.reviewers %}
+            <figure class="multiple">
+                <figcaption class="sub-h">{{ reviewer.role|capitalize }}</figcaption>
+                {{ include('dashboard/components/bar_chart.html.twig', {name: 'Findings of the ' ~ reviewer.role ~ ' reviewer by severity', bars: reviewer.bars, top: catches.scaleTop}, with_context = false) }}
+            </figure>
+            {% endfor %}
+        </div>
+        <details class="c-table">
+            <summary>Show as table</summary>
+            <table>
+                <thead><tr><th scope="col">Reviewer</th><th scope="col">Severity</th><th scope="col">Findings</th><th scope="col">Found by it alone</th></tr></thead>
+                <tbody>
+                {% for reviewer in catches.reviewers %}
+                {% for bar in reviewer.bars %}
+                <tr><td>{{ reviewer.role|capitalize }}</td><td>{{ bar.label }}</td><td>{{ bar.value }}</td><td>{{ bar.part }}</td></tr>
+                {% endfor %}
+                {% endfor %}
+                </tbody>
+            </table>
+        </details>
+        {% endif %}
+        {{ _self.tip() }}
+    </section>
+    <section class="chart" id="chart-judge" aria-labelledby="chart-judge-title" data-controller="chart">
+        <h2 id="chart-judge-title">What the judge did</h2>
+        {% if outcomes is null %}
+        {{ _self.no_chart('Fills in once the judge has marked the findings of a review.') }}
+        {% else %}
+        <p class="takeaway">{{ outcomes.takeaway }}</p>
+        {{ include('dashboard/components/bar_chart.html.twig', {name: 'Findings by what the judge did with them, over every judged round', bars: outcomes.bars, top: outcomes.scaleTop}, with_context = false) }}
+        <details class="c-table">
+            <summary>Show as table</summary>
+            <table>
+                <thead><tr><th scope="col">Outcome</th><th scope="col">Findings</th></tr></thead>
+                <tbody>
+                {% for bar in outcomes.bars %}
+                <tr><td>{{ bar.detail }}</td><td>{{ bar.value }}</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </details>
+        {% endif %}
+        {{ _self.tip() }}
+    </section>
+</div>
 {% endif %}
 {% endblock %}

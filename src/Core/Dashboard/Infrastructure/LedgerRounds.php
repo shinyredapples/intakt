@@ -48,7 +48,7 @@ final class LedgerRounds
     /** @var array<string, array<string, ReviewerOutcome>> */
     private array $outcomes = [];
 
-    /** @var array<string, array{findings: list<RoundFinding>, dropped: list<RoundFinding>, textRecorded: bool, at: DateTimeImmutable, votes: array<string, Decision>}> */
+    /** @var array<string, array{findings: list<RoundFinding>, dropped: list<RoundFinding>, reported: array<string, string>, everyRead: bool, textRecorded: bool, at: DateTimeImmutable, votes: array<string, Decision>}> */
     private array $judged = [];
 
     /** @var array<string, ReplayMark> */
@@ -207,7 +207,16 @@ final class LedgerRounds
 
         if ($judge instanceof JudgeDone) {
             $findings = $this->payloads->judgedFindingsOf($recorded);
-            $this->judged += [$judge->round => ['findings' => $this->judgedFindings($judge, $findings ?? []), 'dropped' => $this->droppedFindings($recorded), 'textRecorded' => null !== $findings, 'at' => $recorded->recordedAt, 'votes' => $judge->votes]];
+            $dropped = $this->droppedFindings($recorded);
+            $this->judged += [$judge->round => [
+                'findings' => $this->judgedFindings($judge, $findings ?? []),
+                'dropped' => $dropped,
+                'reported' => $this->reportedSeverities($findings ?? [], $dropped),
+                'everyRead' => $this->payloads->isEveryJudgedFindingRead($recorded),
+                'textRecorded' => null !== $findings,
+                'at' => $recorded->recordedAt,
+                'votes' => $judge->votes,
+            ]];
         }
     }
 
@@ -226,6 +235,32 @@ final class LedgerRounds
     private function droppedFindings(RecordedEvent $recorded): array
     {
         return array_map(static fn (DroppedFinding $finding): RoundFinding => new RoundFinding($finding->id, $finding->severity->value, $finding->text, [], $finding->file, $finding->line, $finding->reason), $this->payloads->droppedOf($recorded));
+    }
+
+    /**
+     * @param list<JudgeDoneFinding> $findings
+     * @param list<RoundFinding>     $dropped
+     *
+     * @return array<string, string>
+     */
+    // The severity each reviewer gave, for the Trends page's count of which reviewer caught what: an entry that merged others holds the highest of their severities, so a row written before the reported one was recorded leaves that entry out instead of guessing.
+    private function reportedSeverities(array $findings, array $dropped): array
+    {
+        $reported = [];
+
+        foreach ($findings as $finding) {
+            $severity = $finding->reportedSeverity ?? ([] === $finding->merged ? $finding->severity : null);
+
+            if (null !== $severity) {
+                $reported[$finding->id] = $severity->value;
+            }
+        }
+
+        foreach ($dropped as $finding) {
+            $reported += null === $finding->severity ? [] : [$finding->id => $finding->severity];
+        }
+
+        return $reported;
     }
 
     /**
@@ -310,9 +345,13 @@ final class LedgerRounds
 
         $judged = $this->judged[$round->round] ?? null;
 
+        if (null !== $judged && !$judged['everyRead']) {
+            $completed = $completed->withUnreadableFindings();
+        }
+
         return match (true) {
             null === $judged => $this->endedOrRunning($completed),
-            $judged['textRecorded'] => $this->decided($completed->judgedWith($judged['findings'], $judged['at'])->withDropped($judged['dropped']), $judged['votes']),
+            $judged['textRecorded'] => $this->decided($completed->judgedWith($judged['findings'], $judged['at'])->withDropped($judged['dropped'])->withReportedSeverities($judged['reported']), $judged['votes']),
             default => $this->decided($completed->judgedFromMarksOnly($judged['findings'], $judged['at'])->withDropped($judged['dropped']), $judged['votes']),
         };
     }

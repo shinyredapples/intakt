@@ -1,0 +1,39 @@
+{#- A bar's part is drawn solid inside a lighter whole of the same hue, because DESIGN.md's charts take one hue and small multiples instead of a second color. -#}
+{%- set width = 360 -%}
+{%- set height = 200 -%}
+{%- set left = 36 -%}
+{%- set right = 8 -%}
+{%- set above = 24 -%}
+{%- set below = 28 -%}
+{%- set plot = height - above - below -%}
+{%- set base = above + plot -%}
+{%- set step = (width - left - right) / bars|length -%}
+{%- set barWidth = min(40, step - 16) -%}
+{%- macro bar_path(x, y, w, base, rounded) -%}
+{%- set r = rounded ? min(4, w / 2, base - y) : 0 -%}
+M{{ x|round(1) }},{{ base|round(1) }} V{{ (y + r)|round(1) }} Q{{ x|round(1) }},{{ y|round(1) }} {{ (x + r)|round(1) }},{{ y|round(1) }} H{{ (x + w - r)|round(1) }} Q{{ (x + w)|round(1) }},{{ y|round(1) }} {{ (x + w)|round(1) }},{{ (y + r)|round(1) }} V{{ base|round(1) }} Z
+{%- endmacro -%}
+<svg class="chart-svg" viewBox="0 0 {{ width }} {{ height }}" width="{{ width }}" height="{{ height }}" role="group" aria-label="{{ name }}">
+    {%- for share in [0, 0.5, 1] %}
+    {%- set y = above + plot - share * plot %}
+    <line x1="{{ left }}" x2="{{ width - right }}" y1="{{ y|round(1) }}" y2="{{ y|round(1) }}" class="{{ share == 0 ? 'c-base' : 'c-grid' }}"/>
+    <text x="{{ left - 6 }}" y="{{ (y + 4)|round(1) }}" class="c-axis" text-anchor="end" aria-hidden="true">{{ share * top }}</text>
+    {%- endfor %}
+    {%- for bar in bars %}
+    {%- set center = left + step * loop.index0 + step / 2 %}
+    {%- set x = center - barWidth / 2 %}
+    {%- set y = base - bar.value / top * plot %}
+    {%- if bar.value > 0 %}
+    <path d="{{ _self.bar_path(x, y, barWidth, base, true) }}" class="c-bar{{ bar.part is not null ? ' c-whole' }}"/>
+    {%- endif %}
+    {%- if bar.part is not null and bar.part > 0 %}
+    {%- set partTop = base - bar.part / top * plot %}
+    <path d="{{ _self.bar_path(x, partTop, barWidth, base, bar.part == bar.value) }}" class="c-bar c-part"/>
+    {%- endif %}
+    <text x="{{ center|round(1) }}" y="{{ (y - 6)|round(1) }}" class="c-label" text-anchor="middle" aria-hidden="true">{{ bar.value }}{% if bar.part is not null %} ({{ bar.part }} alone){% endif %}</text>
+    <text x="{{ center|round(1) }}" y="{{ height - 8 }}" class="c-axis" text-anchor="middle" aria-hidden="true">{{ bar.label }}</text>
+    <rect x="{{ (left + step * loop.index0)|round(1) }}" y="{{ above }}" width="{{ step|round(1) }}" height="{{ plot }}" class="c-hit" tabindex="0" role="img" aria-label="{{ bar.inWords }}"
+        data-action="pointerenter->chart#show focus->chart#show pointerleave->chart#hide blur->chart#hide keydown.esc->chart#hide"
+        data-chart-reading-param="{{ bar.reading }}" data-chart-detail-param="{{ bar.detail }}"/>
+    {%- endfor %}
+</svg>

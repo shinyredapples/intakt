@@ -34,6 +34,9 @@ final class ShowComponentsControllerTest extends DashboardPageTestCase
         yield 'copy field' => ['.copy code + button.btn'];
         yield 'bar' => ['.window .bar'];
         yield 'last-known bar' => ['.window .bar.last-known'];
+        yield 'bar chart with its tooltip' => ['[data-controller="chart"] svg.chart-svg .c-hit[tabindex="0"][aria-label]'];
+        yield 'chart table view' => ['[data-controller="chart"] details.c-table table'];
+        yield 'chart without data' => ['.takeaway[data-no-data]'];
         yield 'banner' => ['.banner.broken'];
         yield 'compact banner, collapsed' => ['.banner.compact:not(.open) .banner-toggle[aria-expanded="false"]'];
         yield 'compact banner, open' => ['.banner.compact.open .banner-toggle[aria-expanded="true"]'];
@@ -115,6 +118,14 @@ final class ShowComponentsControllerTest extends DashboardPageTestCase
             self::assertCount(1, $focused, $theme);
             self::assertStringContainsString('#626', $focused->text(), $theme);
         }
+    }
+
+    public function testTheSampleChartsTableListsTheSameNumbersAsItsBars(): void
+    {
+        $chart = $this->browser->request('GET', '/components')->filter('#c-charts [data-controller="chart"]')->first();
+
+        self::assertSame(['3 (2 alone)', '5 (1 alone)', '0 (0 alone)'], $chart->filter('.c-label')->each(static fn (Crawler $label): string => $label->text()));
+        self::assertSame(['3 (2 alone)', '5 (1 alone)', '0 (0 alone)'], $chart->filter('tbody tr')->each(static fn (Crawler $row): string => sprintf('%s (%s alone)', $row->filter('td')->eq(1)->text(), $row->filter('td')->eq(2)->text())));
     }
 
     public function testTheComponentsPageAnswersASecondRequestOfTheSameTest(): void

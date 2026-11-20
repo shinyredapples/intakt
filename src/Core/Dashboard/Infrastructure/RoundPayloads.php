@@ -67,6 +67,15 @@ final readonly class RoundPayloads
         return $this->payloads->entriesOf($recorded, 'findings', JudgeDoneFinding::class);
     }
 
+    // False when an entry of the row's findings does not deserialize, because judgedFindingsOf() leaves such an entry out and a count must not read the rest as the whole.
+    public function isEveryJudgedFindingRead(RecordedEvent $recorded): bool
+    {
+        $row = json_decode($recorded->event->payload, true);
+        $entries = is_array($row) ? ($row['findings'] ?? null) : null;
+
+        return !is_array($entries) || count($entries) === count($this->judgedFindingsOf($recorded) ?? []);
+    }
+
     // Empty for a row written before drop reasons were recorded, because it dropped nothing the page could show; an unreadable entry is left out, because one bad entry must not hide the others.
     /**
      * @return list<DroppedFinding>
