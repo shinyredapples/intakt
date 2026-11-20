@@ -29,6 +29,7 @@ Checks, CI and releases:
 
 Running Intakt:
 - [Instance and probes](instance-and-probes.md)
+- [Connectivity check and outage state](outage.md): offline only when the forge's DNS lookup and every HTTPS probe of the forge and the vendors in use fail; any HTTP status counts as an answer; no credential is sent
 - [Container image](container-image.md)
 - [The demo with docker compose](demo-with-docker-compose.md)
 - [The demo recording](demo-recording.md): `intakt:demo:record` writes the ledger events and the captured live updates of a change's review rounds into one file, with the date, the models and the Intakt version, `intakt:demo:replay` writes its ledger events into the demo project and publishes its live updates at the recorded pace, and `intakt:demo:remove` deletes the demo project with its replayed ledger rows
