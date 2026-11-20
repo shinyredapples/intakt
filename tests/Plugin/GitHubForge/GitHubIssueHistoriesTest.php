@@ -32,7 +32,7 @@ final class GitHubIssueHistoriesTest extends TestCase
     {
         $api = $this->answering('history_edited.json');
 
-        $history = $api->histories()->of('alpha', 12, self::listedAt());
+        $history = $api->histories()->of('alpha', 12, $this->listedAt());
 
         self::assertSame('bob', $history->lastEditor);
         self::assertStringContainsString('"number":12', $api->graphqlRequests[0]);
@@ -41,40 +41,40 @@ final class GitHubIssueHistoriesTest extends TestCase
 
     public function testABodyNeverEditedWasLastWrittenByItsAuthor(): void
     {
-        self::assertSame('ana', $this->answering('history_unedited.json')->histories()->of('alpha', 12, self::listedAt())->lastEditor);
+        self::assertSame('ana', $this->answering('history_unedited.json')->histories()->of('alpha', 12, $this->listedAt())->lastEditor);
     }
 
     public function testAFieldErrorBesideANullEditorFailsTheReadInsteadOfNamingTheAuthor(): void
     {
         $this->expectException(ForgeReadFailed::class);
 
-        $this->answering('history_editor_field_error.json')->histories()->of('alpha', 12, self::listedAt());
+        $this->answering('history_editor_field_error.json')->histories()->of('alpha', 12, $this->listedAt());
     }
 
     public function testAnAnswerWithErrorsAndNoDataFailsTheRead(): void
     {
         $this->expectException(ForgeReadFailed::class);
 
-        $this->answering('history_errors.json')->histories()->of('alpha', 12, self::listedAt());
+        $this->answering('history_errors.json')->histories()->of('alpha', 12, $this->listedAt());
     }
 
     public function testTheLabelHistoryNamesTheAccountThatAppliedEachLabel(): void
     {
-        $history = $this->answering('history_edited.json')->histories()->of('alpha', 12, self::listedAt());
+        $history = $this->answering('history_edited.json')->histories()->of('alpha', 12, $this->listedAt());
 
         self::assertSame(['intakt' => 'ana', 'priority:high' => 'bob'], $this->appliers($history));
     }
 
     public function testLabelsAreListedInTheOrderTheyWereApplied(): void
     {
-        $history = $this->answering('history_edited.json')->histories()->of('alpha', 12, self::listedAt());
+        $history = $this->answering('history_edited.json')->histories()->of('alpha', 12, $this->listedAt());
 
         self::assertSame(['intakt', 'priority:high'], array_map(static fn (LabelApplication $label): string => $label->label, $history->labels));
     }
 
     public function testALabelRemovedAndAppliedAgainNamesTheLaterAccountAndTakesTheLaterPlace(): void
     {
-        $history = $this->answering('history_labels_reapplied.json')->histories()->of('alpha', 12, self::listedAt());
+        $history = $this->answering('history_labels_reapplied.json')->histories()->of('alpha', 12, $this->listedAt());
 
         self::assertSame(['priority:high' => 'ana', 'intakt' => 'mallory'], $this->appliers($history));
         self::assertSame(['priority:high', 'intakt'], array_keys($this->appliers($history)));
@@ -87,17 +87,17 @@ final class GitHubIssueHistoriesTest extends TestCase
 
         $this->expectException(ForgeReadFailed::class);
 
-        $api->histories()->of('alpha', 12, self::listedAt());
+        $api->histories()->of('alpha', 12, $this->listedAt());
     }
 
     public function testAnEditByAnAppIsNamedWithTheBotSuffixAsTheRestApiNamesIt(): void
     {
-        self::assertSame('renovate[bot]', $this->answering('history_app_actors.json')->histories()->of('alpha', 12, self::listedAt())->lastEditor);
+        self::assertSame('renovate[bot]', $this->answering('history_app_actors.json')->histories()->of('alpha', 12, $this->listedAt())->lastEditor);
     }
 
     public function testALabelAppliedByAnAppNamesTheAppWithTheBotSuffixAndAPersonBare(): void
     {
-        $history = $this->answering('history_app_actors.json')->histories()->of('alpha', 12, self::listedAt());
+        $history = $this->answering('history_app_actors.json')->histories()->of('alpha', 12, $this->listedAt());
 
         self::assertSame(['intakt' => 'intakt-runner[bot]', 'priority:high' => 'bob'], $this->appliers($history));
     }
@@ -108,13 +108,13 @@ final class GitHubIssueHistoriesTest extends TestCase
 
         $this->expectException(ForgeReadFailed::class);
 
-        $api->histories()->of('alpha', 12, self::listedAt());
+        $api->histories()->of('alpha', 12, $this->listedAt());
     }
 
     public function testTheQueryAsksForTheTypeOfTheAuthorTheEditorAndEveryActor(): void
     {
         $api = $this->answering('history_edited.json');
-        $api->histories()->of('alpha', 12, self::listedAt());
+        $api->histories()->of('alpha', 12, $this->listedAt());
 
         $body = json_decode($api->graphqlRequests[0], true, flags: JSON_THROW_ON_ERROR);
         self::assertIsArray($body);
@@ -128,7 +128,7 @@ final class GitHubIssueHistoriesTest extends TestCase
 
         $this->expectException(ForgeReadFailed::class);
 
-        $api->histories()->of('alpha', 12, self::listedAt());
+        $api->histories()->of('alpha', 12, $this->listedAt());
     }
 
     public function testAnAnswerWithoutThePagingFlagFailsTheRead(): void
@@ -137,7 +137,7 @@ final class GitHubIssueHistoriesTest extends TestCase
 
         $this->expectException(ForgeReadFailed::class);
 
-        $api->histories()->of('alpha', 12, self::listedAt());
+        $api->histories()->of('alpha', 12, $this->listedAt());
     }
 
     public function testAnEventOfAnUnknownKindFailsTheReadInsteadOfRemovingTheLabel(): void
@@ -146,21 +146,21 @@ final class GitHubIssueHistoriesTest extends TestCase
 
         $this->expectException(ForgeReadFailed::class);
 
-        $api->histories()->of('alpha', 12, self::listedAt());
+        $api->histories()->of('alpha', 12, $this->listedAt());
     }
 
     public function testAHistoryWithMoreLabelEventsThanOnePageFailsTheRead(): void
     {
         $this->expectException(ForgeReadFailed::class);
 
-        $this->answering('history_more_events.json')->histories()->of('alpha', 12, self::listedAt());
+        $this->answering('history_more_events.json')->histories()->of('alpha', 12, $this->listedAt());
     }
 
     public function testThePullRequestOfANumberHasItsHistoryReadLikeAnIssue(): void
     {
         $api = $this->answeringWith('history_edited.json', '"__typename":"Issue"', '"__typename":"PullRequest"');
 
-        $history = $api->histories()->of('alpha', 12, self::listedAt());
+        $history = $api->histories()->of('alpha', 12, $this->listedAt());
 
         self::assertSame('bob', $history->lastEditor);
         self::assertStringContainsString('issueOrPullRequest(number: $number)', $api->graphqlRequests[0]);
@@ -172,7 +172,7 @@ final class GitHubIssueHistoriesTest extends TestCase
 
         $this->expectExceptionObject(new ForgeReadFailed('GitHub changed #12 after it was listed, so its history may be of other text and labels.'));
 
-        $api->histories()->of('alpha', 12, self::listedAt());
+        $api->histories()->of('alpha', 12, $this->listedAt());
     }
 
     public function testAnAnswerWithoutTheUpdateTimeFailsTheRead(): void
@@ -181,7 +181,7 @@ final class GitHubIssueHistoriesTest extends TestCase
 
         $this->expectException(ForgeReadFailed::class);
 
-        $api->histories()->of('alpha', 12, self::listedAt());
+        $api->histories()->of('alpha', 12, $this->listedAt());
     }
 
     public function testAnAnswerWithoutTheItemFailsTheRead(): void
@@ -191,7 +191,7 @@ final class GitHubIssueHistoriesTest extends TestCase
 
         $this->expectException(ForgeReadFailed::class);
 
-        $api->histories()->of('alpha', 12, self::listedAt());
+        $api->histories()->of('alpha', 12, $this->listedAt());
     }
 
     public function testAnAnswerThatIsNotJsonFailsTheRead(): void
@@ -201,7 +201,7 @@ final class GitHubIssueHistoriesTest extends TestCase
 
         $this->expectException(ForgeReadFailed::class);
 
-        $api->histories()->of('alpha', 12, self::listedAt());
+        $api->histories()->of('alpha', 12, $this->listedAt());
     }
 
     public function testANon2xxAnswerFailsTheRead(): void
@@ -211,7 +211,7 @@ final class GitHubIssueHistoriesTest extends TestCase
 
         $this->expectException(ForgeReadFailed::class);
 
-        $api->histories()->of('alpha', 12, self::listedAt());
+        $api->histories()->of('alpha', 12, $this->listedAt());
     }
 
     public function testAnExhaustedGraphqlPoolAnsweredWith200HoldsTheNextReadUntilTheReset(): void
@@ -231,7 +231,7 @@ final class GitHubIssueHistoriesTest extends TestCase
     private function limitOf(GitHubIssueHistories $histories): ForgeRateLimited
     {
         try {
-            $histories->of('alpha', 12, self::listedAt());
+            $histories->of('alpha', 12, $this->listedAt());
         } catch (ForgeRateLimited $limited) {
             return $limited;
         }
@@ -239,7 +239,7 @@ final class GitHubIssueHistoriesTest extends TestCase
         throw new LogicException('The read was expected to be rate limited.');
     }
 
-    private static function listedAt(): DateTimeImmutable
+    private function listedAt(): DateTimeImmutable
     {
         return new DateTimeImmutable('2026-11-10T10:00:00Z');
     }
