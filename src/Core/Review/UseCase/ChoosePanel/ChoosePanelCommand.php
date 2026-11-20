@@ -31,7 +31,7 @@ final readonly class ChoosePanelCommand
             return Command::FAILURE;
         }
 
-        $change = new ChangeDescription($input->lines, new Paths(...$input->path),$input->label);
+        $change = new ChangeDescription($input->lines, new Paths(...$input->path), $input->label);
 
         try {
             $panel = $this->panels->panelForChange($input->project, $change);

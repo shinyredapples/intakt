@@ -65,7 +65,7 @@ final readonly class ConfiguredPanels implements Panels
         foreach ($rule['paths'] ?? [] as $glob) {
             $pattern = new PathGlob($glob);
 
-            if ([] !== array_filter([...$change->paths],$pattern->matches(...))) {
+            if ([] !== array_filter([...$change->paths], $pattern->matches(...))) {
                 return true;
             }
         }
