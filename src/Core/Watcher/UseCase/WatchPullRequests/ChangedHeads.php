@@ -17,10 +17,11 @@ final readonly class ChangedHeads
         private PendingHeads $pending,
         private WatcherLedger $ledger,
         private Connection $connection,
+        private ChangesHandedToIntakt $handedToIntakt,
     ) {
     }
 
-    // One transaction with the listing's record, because a listing recorded as seen names those pull requests never again, so they must be queued or the record undone.
+    // One transaction with the listing's record, because a listing recorded as seen names those pull requests never again, so they must be recognized and queued or the record undone.
     /**
      * @throws ListingInProgress
      * @throws ForgeRateLimited
@@ -28,7 +29,9 @@ final readonly class ChangedHeads
     public function enqueue(string $project): void
     {
         $this->connection->transactional(function () use ($project): void {
-            $this->pending->enqueue($project, ($this->find)($project));
+            $changed = ($this->find)($project);
+            $this->handedToIntakt->recognizeAmong($project, $changed);
+            $this->pending->enqueue($project, $changed);
             $this->recordForgotten($project, $this->pending->forgetClosed($project));
         });
     }

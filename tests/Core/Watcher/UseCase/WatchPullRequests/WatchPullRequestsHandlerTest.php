@@ -19,7 +19,14 @@ use Intakt\Core\Budget\Domain\ItemFailureRecord;
 use Intakt\Core\Budget\Domain\SharedHoldRecord;
 use Intakt\Core\Budget\Infrastructure\DoctrineHolds;
 use Intakt\Core\Budget\Infrastructure\DoctrineInstallWideFailures;
+use Intakt\Core\Ledger\Contract\Ledger;
+use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\RecordedEvent;
+use Intakt\Core\Ledger\Contract\RecordedEvents;
+use Intakt\Core\Ledger\Domain\EventRecord;
+use Intakt\Core\Ledger\Infrastructure\DoctrineLedger;
+use Intakt\Core\Ledger\Infrastructure\UtcDateTimeImmutableType;
 use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Review\Contract\BootAt;
 use Intakt\Core\Review\Contract\BootHarness;
@@ -52,6 +59,7 @@ use Intakt\Core\Watcher\UseCase\FindChangedPullRequests\SeenListings;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\BootGate;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\BootResults;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\ChangedHeads;
+use Intakt\Core\Watcher\UseCase\WatchPullRequests\ChangesHandedToIntakt;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\DiscardedRounds;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\FailedHeads;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\HeadBackOff;
@@ -113,6 +121,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[CoversClass(RoundStarts::class)]
 #[CoversClass(StaleVerdicts::class)]
 #[CoversClass(WatcherLedger::class)]
+#[CoversClass(ChangesHandedToIntakt::class)]
 #[CoversClass(WatchedProjects::class)]
 #[CoversClass(WatchedProject::class)]
 #[UsesClass(WatchPullRequests::class)]
@@ -138,6 +147,12 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[UsesClass(BootOutcome::class)]
 #[UsesClass(MainCommit::class)]
 #[UsesClass(MarkVerdictsStale::class)]
+#[UsesClass(DoctrineLedger::class)]
+#[UsesClass(RecordedEvent::class)]
+#[UsesClass(RecordedEvents::class)]
+#[UsesClass(EventRecord::class)]
+#[UsesClass(LedgerEvent::class)]
+#[UsesClass(UtcDateTimeImmutableType::class)]
 final class WatchPullRequestsHandlerTest extends KernelTestCase
 {
     private const string PENDING = 'a';
@@ -160,6 +175,8 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
     private WatchPullRequestsHandler $handler;
     private bool $authorTrusted = true;
     private bool $trustCheckDown = false;
+    // Read from its own ledger, because the in-memory one reads nothing back.
+    private ?Ledger $openings = null;
 
     protected function setUp(): void
     {
@@ -188,6 +205,21 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
 
         self::assertSame([], $this->commands->started);
         self::assertSame([LedgerEventKind::HeadPending], $this->ledger->kinds());
+    }
+
+    public function testATickRecordsTheListedPullRequestIntaktOpenedAsHandedToIntaktBeforeItsHeadDecision(): void
+    {
+        $doctrine = self::getContainer()->get('doctrine');
+        self::assertInstanceOf(ManagerRegistry::class, $doctrine);
+        $this->openings = new DoctrineLedger($doctrine, $this->clock);
+        self::assertTrue($this->openings->append(new LedgerEvent(LedgerEventKind::ChangeOpened, '{"project":"alpha","branch":"feat\/1","head":"'.str_repeat(self::PENDING, 40).'","change":"1"}'))->succeeded());
+        $this->handler = $this->handler();
+        $this->listing->opens('alpha', RecordedForge::change('1', self::PENDING, '2026-11-02T09:00:00Z'), RecordedForge::change('2', self::PENDING, '2026-11-02T09:00:00Z'));
+
+        $this->tick();
+
+        self::assertSame([LedgerEventKind::ChangeHandedToIntakt, LedgerEventKind::HeadPending, LedgerEventKind::HeadPending], $this->ledger->kinds());
+        self::assertSame('1', $this->ledger->payloads()[0]['change']);
     }
 
     public function testAPendingHeadIsReadAgainOnceItsReadAgainTimeHasPassedEvenWhenTheListingIsUnchanged(): void
@@ -1490,7 +1522,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         $settle = new SettleHeads(new SettleHead($gate, new StaleVerdicts($this->queries, $this->commands, $rounds, $ledger), new HeadsWithoutRound($ledger, $pending), $starts), $starts, $backOff);
         $projects = new WatchedProjects(['alpha' => ['repository' => 'repo', 'base' => 'main', 'task' => 'Review it.']]);
 
-        return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $ledger, $this->entities->getConnection()), new LookAtHeads(new HeadLocks($pending, $locks, $installWide, $logger), $decisions, $settle));
+        return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $ledger, $this->entities->getConnection(), new ChangesHandedToIntakt($this->openings ?? $this->ledger, $ledger)),new LookAtHeads(new HeadLocks($pending, $locks, $installWide, $logger), $decisions, $settle));
     }
 
     private function panel(): Panel
