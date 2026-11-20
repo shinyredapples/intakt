@@ -149,7 +149,7 @@ final readonly class RoundLedger
             $judged->sameCause,
             $votes,
             $this->p1KeysOf($round, $judged),
-            !$judged->everyFindingMarked,
+            $judged->fallback,
         ));
     }
 

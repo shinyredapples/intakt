@@ -445,6 +445,15 @@ final class JudgeRoundTest extends KernelTestCase
         self::assertTrue($this->judgeDonePayloads()[0]['fallback']);
     }
 
+    // The fallback marks every finding when none is a P3, so only the place that chooses it can tell; the marks cannot (PR #2989, second review round).
+    public function testAFallbackThatMarksEveryFindingIsStillRecordedAsTheFallback(): void
+    {
+        $fallback = $this->completedRound();
+        $this->fixture->judge(new ScriptedJudgement(Judgement::everyBlockingFindingActs([$this->finding('F1', Severity::P1), $this->finding('F2', Severity::P1), $this->finding('F3', Severity::P1)])))($this->judgingOf($fallback));
+
+        self::assertTrue($this->judgeDonePayloads()[0]['fallback']);
+    }
+
     public function testAJudgedRoundDeliveredAgainAsksTheJudgeNothingAndRecordsNoSecondJudgeDone(): void
     {
         $round = $this->completedRound();
