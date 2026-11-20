@@ -9,7 +9,7 @@ final readonly class UpNext
     public const string NOTHING = 'Nothing running or queued.';
 
     /**
-     * @param list<UpNextRound> $rounds running rounds first, then the rounds waiting to start
+     * @param list<UpNextRound> $rounds
      */
     private function __construct(private array $rounds)
     {
@@ -34,7 +34,7 @@ final readonly class UpNext
             ));
             $entry = new UpNextRound($round->round, $round->project, $round->change, $roles);
 
-            // A round with no reviewer started has not begun; one whose reviewers all answered waits on the judge, which is neither list.
+            // Because a round with no reviewer started has not begun, while one whose reviewers all answered waits on the judge and is in neither list.
             if ([] !== $roles) {
                 $running[] = $entry;
             } elseif ([] === $round->outcomes) {

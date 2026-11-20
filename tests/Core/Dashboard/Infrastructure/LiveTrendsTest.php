@@ -142,8 +142,8 @@ final class LiveTrendsTest extends KernelTestCase
         $this->updates($ledger)->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(1, 1, true));
 
         self::assertSame([], $this->live->events);
-        $logs = $this->log->cleanLogs();
-        self::assertSame('The trends were not published.', $logs[0][1] ?? null);
+        $messages = array_map(static fn (mixed $record): mixed => is_array($record) ? ($record[1] ?? null) : null, $this->log->cleanLogs());
+        self::assertSame(['The trends were not published.'], $messages);
     }
 
     private function judgedRound(): void
