@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Outage\Infrastructure;
 
+use Intakt\Core\Outage\Contract\Reachability;
 use Intakt\Core\Outage\Infrastructure\ConfiguredProbes;
 use Intakt\Core\Outage\Infrastructure\DnsProbe;
-use Intakt\Core\Outage\Contract\Reachability;
 use Intakt\Core\Outage\Infrastructure\HttpsProbe;
 use Intakt\Core\Outage\Infrastructure\Probe;
 use Intakt\Core\Outage\Infrastructure\ProbedConnectivity;
