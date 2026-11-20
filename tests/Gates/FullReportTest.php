@@ -172,7 +172,7 @@ final class FullReportTest extends SandboxTestCase
         self::assertIsBool($report['whole'] ?? null, $file);
         self::assertIsArray($report['gates'] ?? null, $file);
 
-        /** @var array{whole: bool, gates: list<array{findings: list<string>, omitted: int}>} $report */
+        /* @var array{whole: bool, gates: list<array{findings: list<string>, omitted: int}>} $report */
         return $report;
     }
 }
