@@ -58,8 +58,6 @@ final class GitBuildCheckoutTest extends TestCase
 
     protected function tearDown(): void
     {
-        PregMatchThatThrows::disarm();
-
         if (in_array(StatThatThrows::PROTOCOL, stream_get_wrappers(), true)) {
             stream_wrapper_unregister(StatThatThrows::PROTOCOL);
         }
@@ -71,7 +69,7 @@ final class GitBuildCheckoutTest extends TestCase
     #[RunInSeparateProcess]
     public function testAnUnexpectedInvalidArgumentExceptionPassesThroughTheMirrorPath(): void
     {
-        PregMatchThatThrows::arm();
+        PregMatchThatThrows::define();
 
         $this->expectExceptionObject(new InvalidArgumentException('unexpected'));
 

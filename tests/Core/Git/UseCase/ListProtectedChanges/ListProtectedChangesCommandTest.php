@@ -59,7 +59,6 @@ final class ListProtectedChangesCommandTest extends TestCase
 
     protected function tearDown(): void
     {
-        PregMatchThatThrows::disarm();
         new Filesystem()->remove($this->mirrors);
         $this->repository->remove();
     }
@@ -99,7 +98,7 @@ final class ListProtectedChangesCommandTest extends TestCase
         $head = $this->repository->objectAt('HEAD');
         $this->expectExceptionObject(new InvalidArgumentException('unexpected'));
 
-        PregMatchThatThrows::arm();
+        PregMatchThatThrows::define();
         $this->whenTheCommandRuns([], $head);
     }
 
