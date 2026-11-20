@@ -43,7 +43,7 @@ final class SearchFilesTest extends TestCase
         $this->checkout->pipe('queue');
 
         $this->expectException(PathNotReadable::class);
-        $this->expectExceptionMessage('"queue" cannot be searched.');
+        $this->expectExceptionMessageIs('"queue" cannot be searched.');
 
         new SearchFiles($this->checkout->checkout)('total', 'queue');
     }

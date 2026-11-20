@@ -44,7 +44,7 @@ final class ReviewedRepositoryTest extends KernelTestCase
         $this->signInAs($this->fixture->start(1)->id()->toRfc4122());
 
         $this->expectException(OverflowException::class);
-        $this->expectExceptionMessage('The progress could not be sent.');
+        $this->expectExceptionMessageIs('The progress could not be sent.');
 
         $this->repository->reporting(static fn (int $searched): never => throw new OverflowException('The progress could not be sent.'))->searchFiles('RoundFixture', '.');
     }
@@ -54,7 +54,7 @@ final class ReviewedRepositoryTest extends KernelTestCase
         $this->signInAs($this->roundAt(sys_get_temp_dir().'/intakt-gone-'.Uuid::v4()->toRfc4122()));
 
         $this->expectException(ToolCallException::class);
-        $this->expectExceptionMessage('The head of this round is not available.');
+        $this->expectExceptionMessageIs('The head of this round is not available.');
 
         $this->repository->readFile('README.md');
     }
@@ -64,7 +64,7 @@ final class ReviewedRepositoryTest extends KernelTestCase
         $this->signInAs($this->fixture->start(1)->id()->toRfc4122());
 
         $this->expectException(ToolCallException::class);
-        $this->expectExceptionMessage('"." is not a file.');
+        $this->expectExceptionMessageIsOrContains('"." is not a file.');
 
         $this->repository->readFile('.');
     }
@@ -74,7 +74,7 @@ final class ReviewedRepositoryTest extends KernelTestCase
         $this->signInAs($this->fixture->start(1)->id()->toRfc4122());
 
         $this->expectException(ToolCallException::class);
-        $this->expectExceptionMessage('"RoundFixture.php" is not a directory.');
+        $this->expectExceptionMessageIsOrContains('"RoundFixture.php" is not a directory.');
 
         $this->repository->listDirectory('RoundFixture.php');
     }
@@ -84,7 +84,7 @@ final class ReviewedRepositoryTest extends KernelTestCase
         $this->signInAs($this->fixture->start(1)->id()->toRfc4122());
 
         $this->expectException(ToolCallException::class);
-        $this->expectExceptionMessage('The text to find is empty.');
+        $this->expectExceptionMessageIsOrContains('The text to find is empty.');
 
         $this->repository->searchFiles('', '.');
     }
@@ -94,7 +94,7 @@ final class ReviewedRepositoryTest extends KernelTestCase
         $this->signInAs($this->fixture->start(1)->id()->toRfc4122());
 
         $this->expectException(ToolCallException::class);
-        $this->expectExceptionMessage('does not exist at the head under review');
+        $this->expectExceptionMessageIsOrContains('does not exist at the head under review');
 
         $this->repository->readFile('missing.php');
     }
