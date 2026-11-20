@@ -45,6 +45,35 @@ final class ProfileOnlyRequestMeasuresPassTest extends TestCase
         self::assertTrue($container->hasDefinition('collector'));
     }
 
+    public function testACollectorOutsideTheAllowListIsResetWithTheOtherServices(): void
+    {
+        $container = $this->containerWithAProfilerAndACollector(['id' => 'serializer']);
+
+        new ProfileOnlyRequestMeasuresPass()->process($container);
+
+        self::assertSame([['method' => 'reset']], $container->getDefinition('collector')->getTag('kernel.reset'));
+    }
+
+    public function testACollectorOutsideTheAllowListKeepsTheResetItAlreadyHas(): void
+    {
+        $container = $this->containerWithAProfilerAndACollector(['id' => 'serializer']);
+        $container->getDefinition('collector')->addTag('kernel.reset', ['method' => 'clear']);
+
+        new ProfileOnlyRequestMeasuresPass()->process($container);
+
+        self::assertSame([['method' => 'clear']], $container->getDefinition('collector')->getTag('kernel.reset'));
+    }
+
+    #[DataProvider('measures')]
+    public function testACollectorThatMeasuresARequestIsLeftToTheProfilerToReset(string $measure): void
+    {
+        $container = $this->containerWithAProfilerAndACollector(['id' => $measure]);
+
+        new ProfileOnlyRequestMeasuresPass()->process($container);
+
+        self::assertFalse($container->getDefinition('collector')->hasTag('kernel.reset'));
+    }
+
     public function testACollectorTaggedWithoutAnIdLosesItsTag(): void
     {
         $container = $this->containerWithAProfilerAndACollector([]);

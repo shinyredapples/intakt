@@ -14,6 +14,8 @@ final class ProfileOnlyRequestMeasuresPass implements CompilerPassInterface
 
     private const string TAG = 'data_collector';
 
+    private const string RESET = 'kernel.reset';
+
     public function process(ContainerBuilder $container): void
     {
         if (!$container->hasDefinition('profiler')) {
@@ -22,7 +24,11 @@ final class ProfileOnlyRequestMeasuresPass implements CompilerPassInterface
 
         foreach ($container->findTaggedServiceIds(self::TAG) as $id => $tags) {
             if (!$this->measuresARequest($tags)) {
-                $container->getDefinition($id)->clearTag(self::TAG);
+                $collector = $container->getDefinition($id)->clearTag(self::TAG);
+                // Still fed by its tracing decorators (the serializer's, for one), but only the profiler resets the collectors it registered, so the next request would see this one's data.
+                if (!$collector->hasTag(self::RESET)) {
+                    $collector->addTag(self::RESET, ['method' => 'reset']);
+                }
             }
         }
     }
