@@ -27,7 +27,7 @@ Every page comes in a light and a dark look. Until you choose, it follows your c
 
 ## Checking how the pages look
 
-Whoever works on the dashboard can check every page in one go with `bin/ui-check`. It opens each built page (the board, the components page, Projects, Reviews, the first-run page, Trends, the search window and the page of one review; the Waiting on you page is not checked yet) in a browser without a window, in the light and the dark look, as wide as a laptop (1440), as a large screen (1920) and as a phone (390). For each of them it lists the accessibility problems an automatic checker finds, from critical down to minor, and on the phone width every piece of text smaller than 15 pixels and every button, link or search result less than 44 pixels tall, the smallest sizes the design allows. A link inside a sentence is not counted, since a sentence cannot be made that tall. It also saves a picture of each page in `var/ui-check/`, so you can look at all of them side by side. It passes when there is no serious or critical problem, nothing under those sizes and no page that failed to load. The work on a new page uses it to show the page is ready. It needs the dashboard running with at least one review, and Node.js with Playwright and axe-core installed; [the user guide](../user/README.md#checking-the-pages-with-the-ui-check) has the commands.
+Whoever works on the dashboard can check the listed pages in one go with `bin/ui-check`. It opens these pages (the board, the components page, Projects, Reviews, the first-run page, Trends, the search window and the page of one review; the Waiting on you page is not checked yet) in a browser without a window, in the light and the dark look, as wide as a laptop (1440), as a large screen (1920) and as a phone (390). For each of them it lists the accessibility problems an automatic checker finds, from critical down to minor, and on the phone width every piece of text smaller than 15 pixels and every button, link or search result less than 44 pixels tall, the smallest sizes the design allows. A link inside a sentence is not counted, since a sentence cannot be made that tall. It also saves a picture of each page in `var/ui-check/`, so you can look at all of them side by side. It passes when there is no serious or critical problem, nothing under those sizes and no page that failed to load. The work on a new page uses it to show the page is ready. It needs the dashboard running with at least one review, and Node.js with Playwright and axe-core installed; [the user guide](../user/README.md#checking-the-pages-with-the-ui-check) has the commands.
 
 ## The board
 
@@ -110,7 +110,7 @@ Anything Intakt or its maintainer agent can settle never shows up here.
 
 ## Alerts and notifications
 
-Every event that might need attention is sorted by one question: who can act on it?
+Every event that might need attention is sorted by one question: who can act on it. The diagram, the delivery record and the fallback notifier below are planned; today a usage outage only appears on the Waiting on you page.
 
 ```mermaid
 flowchart TD
@@ -127,7 +127,7 @@ flowchart TD
 - **The maintainer agent can act:** a stuck task, a broken check, a label in the wrong place, a conflict with main. It gets the item first; you hear about it only if it can't settle it, as a decision with its options and recommendation.
 - **Only you can act:** an approval, a question only you can answer, an expired login, a halt only you may clear. You get one notification and a card, at the same moment (planned; today an outage only shows on the Waiting on you page).
 - **Once each:** a notification is sent once per item and change, not again every few minutes. The card stays until the reason is gone, then clears without you dismissing it.
-- **Nothing is lost:** every notice is recorded with whether it was delivered. If your phone can't be reached, the card says so and the fallback notifier is tried.
+- **Nothing is lost (planned):** every notice is recorded with whether it was delivered. If your phone can't be reached, the card says so and the fallback notifier is tried.
 - **Not yet yours:** a change still in review or being fixed doesn't ask you anything. You are asked once it has passed review and CI. (Planned:) The exception is a decision only you can make, such as a new package from an outside company: it is asked as soon as it shows up.
 
 ## Around the board
