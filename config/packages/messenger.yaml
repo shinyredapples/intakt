@@ -4,9 +4,12 @@ framework:
         failure_transport: failed
         buses:
             # A caller gets the failing handler's own exception, so a refusal such as RoundNotNext is caught by its type; a worker still gets the HandlerFailedException.
+            # Each bus accepts only its own marker, so a query sent on the command bus is refused at dispatch instead of looking for a handler.
             command.bus:
+                messages: Intakt\Core\Platform\Contract\CommandMessage
                 unwrap_exceptions: true
-            query.bus: ~
+            query.bus:
+                messages: Intakt\Core\Platform\Contract\QueryMessage
         transports:
             # One worker per reviewer message runs the reviewers of a round in parallel. The table comes from the migrations, never from a first send, because a first send inside a rolled-back transaction would take the table with it.
             # redeliver_timeout stays above RoundReviewer::REVIEW_CEILING (one hour), so a message handed out again finds its reviewer's hold ended.
