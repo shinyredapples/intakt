@@ -159,7 +159,7 @@ final class NoPublicTraitSetterRuleTest extends PhpStanRuleTestCase
         $this->assertRuleAccepts('trait-setter-migration');
     }
 
-    // as a changed-files run sees it when only the trait changed: the class that uses it is not analyzed
+    // because a changed-files run where only the trait changed does not analyze the class that uses it
     private function traitWithoutItsUsingClass(): Sandbox
     {
         $sandbox = $this->sandboxWith('vendor-parent-trait-setter');
