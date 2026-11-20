@@ -110,7 +110,7 @@ The whole review loop as the Workflow component would draw it (planned):
 stateDiagram-v2
   [*] --> Waiting
   Waiting --> Reviewing: checks are green
-  Reviewing --> Changes: a reviewer asks for changes
+  Reviewing --> Changes: a reviewer leaves something to fix
   Changes --> Waiting: the builder pushes a fix
   Reviewing --> Approved: the panel approves
   Approved --> [*]

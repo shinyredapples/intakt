@@ -24,7 +24,6 @@ use Intakt\Core\Review\UseCase\PublishVerdict\PublicationBusy;
 use Intakt\Core\Review\UseCase\PublishVerdict\PublishVerdict;
 use Intakt\Core\Review\UseCase\PublishVerdict\PublishVerdictHandler;
 use Intakt\Core\Review\UseCase\PublishVerdict\QueuePublicationOfJudgedRound;
-use Intakt\Core\Review\UseCase\PublishVerdict\QueuePublicationOfUnjudgedRound;
 use Intakt\Core\Review\UseCase\PublishVerdict\VerdictForTheLoop;
 use Intakt\Core\Review\UseCase\ReadVerdicts\StoredVerdicts;
 use Intakt\Core\Review\UseCase\ReviewChange\RoundLedgerReading;
@@ -65,7 +64,6 @@ use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
 #[CoversClass(ChangePublications::class)]
 #[CoversClass(PublicationBusy::class)]
 #[CoversClass(QueuePublicationOfJudgedRound::class)]
-#[CoversClass(QueuePublicationOfUnjudgedRound::class)]
 #[CoversClass(VerdictForTheLoop::class)]
 #[CoversClass(LoopReviewComment::class)]
 #[CoversClass(RoundLedgerReading::class)]
@@ -372,23 +370,9 @@ final class PublishVerdictTest extends KernelTestCase
     {
         $roundId = $this->reviewedRound(self::PULL, []);
 
-        $this->unjudgedPublications()(new WorkerMessageFailedEvent(new Envelope($this->fixture->judgings()[0]), 'async', new RuntimeException('tier not mapped')));
-        foreach ($this->publicationsOf($roundId) as $publication) {
-            $this->handler(new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']))($publication);
-        }
+        $this->handler(new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']))(new PublishVerdict($roundId));
 
         self::assertSame([[self::STATUS, ['state' => 'error', 'context' => 'intakt/review', 'description' => 'Intakt could not review this head.']]], $this->github->writes);
-    }
-
-    public function testAJudgingThatWillStillBeRetriedQueuesNoPublication(): void
-    {
-        $roundId = $this->reviewedRound(self::PULL, []);
-        $event = new WorkerMessageFailedEvent(new Envelope($this->fixture->judgings()[0]), 'async', new RuntimeException('again'));
-        $event->setForRetry();
-
-        $this->unjudgedPublications()($event);
-
-        self::assertSame([], $this->publicationsOf($roundId));
     }
 
     public function testARoundWhoseReviewerMessagesWereAllParkedGetsAnErrorStatusOnceJudged(): void
@@ -653,12 +637,6 @@ final class PublishVerdictTest extends KernelTestCase
         }
 
         return $roundId;
-    }
-
-    // The application's listener, so the test sees it wired to the bus that queues on the application's transport.
-    private function unjudgedPublications(): QueuePublicationOfUnjudgedRound
-    {
-        return self::getContainer()->get(QueuePublicationOfUnjudgedRound::class);
     }
 
     // The application's queue, because the judge transition of the application's workflow queues the publication.

@@ -74,7 +74,7 @@ Intakt's own checks run on GitHub's machines by default. Whoever maintains a cop
 
 `CI_RUNS_ON` also leaves alone the job that builds and starts the demo on an ARM machine after every merge: it stays on GitHub's ARM machine unless the separate variable `CI_ARM_RUNS_ON` names another one.
 
-If CI never starts (GitHub occasionally misses an update), Intakt notices after a few minutes, nudges GitHub once, and alerts the maintainer agent if that didn't help. A wait for CI never blocks a bench: the work is parked and the bench takes the next job.
+If CI never starts (GitHub occasionally misses an update), Intakt notices after a few minutes, nudges GitHub once, and alerts the maintainer agent if that didn't help. *(Planned:)* first it looks at the pull request once: if the change clashes with the newest main, it goes back to a builder to join the two (or to the maintainer agent when the task has no build tries left), except a clash only in the project's shared lists (such as the lock file), which Intakt tries to join itself and checks before it sends the result. If it cannot join them safely, or the joined result fails its checks, nothing is sent and the change takes the same way back to a builder (or to the maintainer agent). A dependency bot's change that clashes is never joined or sent to a builder: it waits for the bot's next version. A wait for CI never blocks a bench: the work is parked and the bench takes the next job.
 
 ## Locks: one at a time
 
@@ -95,18 +95,23 @@ Locks are short-lived: a job that waits for something outside (CI, you) gives it
 
 ## Cycles and generations: second chances
 
-A **cycle** is one round of *build, check, review*. When reviewers ask for changes, the task goes around again.
+A **cycle** is one round of *build, check, review*. When the reviewers leave something that must be fixed, the task goes around again.
 
 ```mermaid
 flowchart LR
   c1[Cycle 1] -- changes --> c2[Cycle 2] -- changes --> c3[Cycle 3]
   c3 -- still not approved --> g2[Generation 2:<br/>a stronger model,<br/>fresh cycles]
   g2 -- still not approved --> m[The maintainer agent decides]
+  sb([Third send-back,<br/>counted across cycles]) -. planned .-> s[Split into smaller tasks, once]
+  s -. "no way to split" .-> r[Rewrite the task, or one more try<br/>with a stronger model]
 ```
+
+Running builds on their own is planned ([what works today](../user/README.md)), so this whole flow is planned too. In it, the task moves on to generation 2 after its last cycle. The dotted arrows are a later addition to that plan: at the third send-back, whichever cycle that falls in, the task is split once instead, as the last bullet below says.
 
 - A task gets a **limited number of cycles**, so a change that keeps failing doesn't burn the budget forever.
 - A **generation** is a set of cycles with one kind of builder. Generation 1 uses the normal model; if it runs out of cycles, **generation 2** starts with a stronger model.
 - If that doesn't work either, the **maintainer agent** decides: split the task, rewrite it, or ask you.
+- *(Planned:)* the third time a task is sent back (by reviewers asking for changes, or by failing checks; within one cycle the first two failing-check returns in a row do not count, the third counts as one, and bringing in the newest project is never a send-back), it gets no further rebuild: the maintainer agent splits it into smaller tasks, once. If its open problems give no way to split it, the maintainer agent rewrites what the task must do or gives it one more try with a stronger model. A task that was already split this way is never split by this rule again.
 
 A cycle that changes nothing (the builder couldn't fix the problem because it needs something outside the task) doesn't loop: the task goes **on hold** instead ([holds](how-intakt-works.md#when-something-gets-stuck)).
 
