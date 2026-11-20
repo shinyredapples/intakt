@@ -80,6 +80,48 @@ final class GitHubIssueReadsTest extends TestCase
         self::assertSame('GitHub did not confirm that page 1 of the open issues stayed the same while the later pages were read.', $this->failureOf($api)->getMessage());
     }
 
+    public function testAnIssueListedOnTwoPagesFailsTheListingEvenWhenEveryEarlierPageIsConfirmed(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->page(1, 100), 2 => $this->page(100, 100), 3 => $this->page(201, 1)];
+        $api->namingNext = [1, 2];
+        $api->stable = true;
+
+        self::assertSame('GitHub listed issue #100 on two pages, so the open issues moved while they were read.', $this->failureOf($api)->getMessage());
+    }
+
+    public function testAWildcardValidatorOnAnEarlierPageFailsTheListing(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->page(1, 100), 2 => $this->page(102, 1)];
+        $api->namingNext = [1];
+        $api->etag = '*';
+        $api->stable = true;
+
+        self::assertSame('GitHub answered a validator that is not an entity tag.', $this->failureOf($api)->getMessage());
+    }
+
+    public function testAWildcardValidatorOnASinglePageFailsTheListing(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->page(1, 3)];
+        $api->etag = '*';
+
+        self::assertSame('GitHub answered a validator that is not an entity tag.', $this->failureOf($api)->getMessage());
+    }
+
+    public function testAStrongValidatorIsAskedAgainAsItWasServed(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->page(1, 100), 2 => $this->page(101, 1)];
+        $api->namingNext = [1];
+        $api->etag = '"issues-1"';
+        $api->stable = true;
+
+        self::assertCount(101, $api->reads()->listOpen('alpha', null)->issues());
+        self::assertSame(['"issues-1"'], $api->conditions);
+    }
+
     public function testAnEarlierPageWithAnIssueUpdatedInTheSecondsItWasServedFailsTheListing(): void
     {
         $api = new RecordedIssueApi();
