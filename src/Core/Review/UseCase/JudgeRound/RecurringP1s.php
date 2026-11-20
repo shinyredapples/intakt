@@ -72,7 +72,7 @@ final readonly class RecurringP1s
         return $settled;
     }
 
-    // A round completed before migration Version20261101120000 kept no reported findings and was never queued for judging, and a judged round without a judge_done gets none later; neither can write one.
+    // Left out of the wait because neither can ever write a judge_done: a round completed before migration Version20261101120000 kept no reported findings and was never queued for judging, and a judged round without one gets none later.
     /**
      * @param list<ReviewRound> $rounds
      *

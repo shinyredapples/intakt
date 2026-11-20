@@ -314,7 +314,7 @@ final class RecurringP1sTest extends KernelTestCase
         return new Finding('F1', $finding->severity, $finding->file, $finding->line, null, $finding->text, FixableBy::Builder, true, null, null);
     }
 
-    // No reported findings is how a round completed before migration Version20261101120000 looks: it was never queued for judging.
+    // Null leaves the reported findings unset, because that is how a round completed before migration Version20261101120000 looks.
     private function completedAs(string $id, ?string $reported): void
     {
         $round = $this->fixture->round($id);
