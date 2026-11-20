@@ -70,8 +70,8 @@ final readonly class FullReport
         $whole = true;
 
         foreach ($this->reports as $report) {
-            $kept = null === $report->kept ? null : self::encoded($report->kept);
-            $gate = $kept ?? self::encoded($report->line);
+            $kept = null === $report->kept ? null : $this->encoded($report->kept);
+            $gate = $kept ?? $this->encoded($report->line);
 
             if (null === $gate) {
                 return null;
@@ -85,7 +85,7 @@ final readonly class FullReport
     }
 
     // Because the default escaping writes every character past ASCII as \u escapes, so no gate that reads the tree finds a long dash or broken byte in it.
-    private static function encoded(string $json): ?string
+    private function encoded(string $json): ?string
     {
         try {
             return json_encode(json_decode($json, flags: JSON_THROW_ON_ERROR), JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
