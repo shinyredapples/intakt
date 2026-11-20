@@ -18,7 +18,7 @@ final class StoredFindingIdsNormalizer implements NormalizerInterface, Denormali
     /**
      * @param array<string, mixed> $context
      *
-     * @return list<string>
+     * @return array<int|string, string>
      */
     public function normalize(mixed $data, ?string $format = null, array $context = []): array
     {
@@ -26,7 +26,7 @@ final class StoredFindingIdsNormalizer implements NormalizerInterface, Denormali
             throw new LogicException(sprintf('Only "%s" are normalized here.', FindingIds::class));
         }
 
-        return [...$data];
+        return $data->jsonSerialize();
     }
 
     /**
@@ -37,7 +37,7 @@ final class StoredFindingIdsNormalizer implements NormalizerInterface, Denormali
         return $data instanceof FindingIds;
     }
 
-    // A stored row is read back as data, so ids that are not strings fail instead of reading as none; keys are not checked, because the rows were read without checking them before the ids were one value.
+    // A stored row is read back as data, so ids that are not strings fail instead of reading as none; keys are kept as they were, because the rows were read without checking them before the ids were one value.
     /**
      * @param array<string, mixed> $context
      */
@@ -47,16 +47,13 @@ final class StoredFindingIdsNormalizer implements NormalizerInterface, Denormali
             throw $this->notIds();
         }
 
-        $ids = [];
         foreach ($data as $id) {
             if (!is_string($id)) {
                 throw $this->notIds();
             }
-
-            $ids[] = $id;
         }
 
-        return new FindingIds(...$ids);
+        return FindingIds::storedAs($data);
     }
 
     /**

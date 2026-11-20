@@ -52,13 +52,21 @@ final class StoredFindingIdsNormalizerTest extends TestCase
         self::assertSame(['F1', 'F2'], [...$ids]);
     }
 
-    // Keys are dropped, because a row read before the ids were one value kept any keys and every reader only used the ids.
     public function testStringsUnderKeysAreReadAsFindingIdsInTheirOrder(): void
     {
         $ids = new StoredFindingIdsNormalizer()->denormalize([1 => 'F1', 'a' => 'F2'], FindingIds::class);
 
         self::assertInstanceOf(FindingIds::class, $ids);
         self::assertSame(['F1', 'F2'], [...$ids]);
+    }
+
+    public function testStringsUnderKeysAreWrittenAgainUnderTheSameKeys(): void
+    {
+        $normalizer = new StoredFindingIdsNormalizer();
+        $ids = $normalizer->denormalize([1 => 'F1', 'a' => 'F2'], FindingIds::class);
+
+        self::assertInstanceOf(FindingIds::class, $ids);
+        self::assertSame([1 => 'F1', 'a' => 'F2'], $normalizer->normalize($ids));
     }
 
     public function testAValueThatIsNoArrayFailsToRead(): void

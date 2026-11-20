@@ -11,6 +11,7 @@ use Intakt\Core\Review\Contract\DroppedFinding;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\FencedText;
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\FindingIds;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\FlagProjectAsReplay;
 use Intakt\Core\Review\Contract\JudgedFinding;
@@ -72,6 +73,7 @@ use Symfony\Component\Serializer\SerializerInterface;
 #[UsesClass(ReplayProject::class)]
 #[UsesClass(ReplayMark::class)]
 #[UsesClass(ActEntryAnswer::class)]
+#[UsesClass(FindingIds::class)]
 #[UsesClass(Fence::class)]
 #[UsesClass(FencedText::class)]
 final class ReadRoundToolsTest extends KernelTestCase
