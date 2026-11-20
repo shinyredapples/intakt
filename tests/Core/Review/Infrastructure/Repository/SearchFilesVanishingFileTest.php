@@ -3,12 +3,12 @@
 declare(strict_types=1);
 
 namespace Intakt\Core\Review\Infrastructure\Repository {
-    use function filesize as sizeOnDisk;
-
-    // Stands in for a file removed between the walk that found it and its stat, a moment no test can time; every other file keeps its size.
+    // Stands in for a file removed between the walk that found it and its stat, a moment no test can time; every other file keeps its size, read through stat() because the name filesize() resolves here.
     function filesize(string $filename): int|false
     {
-        return 'vanishes.txt' === basename($filename) ? false : sizeOnDisk($filename);
+        $stat = 'vanishes.txt' === basename($filename) ? false : stat($filename);
+
+        return false === $stat ? false : $stat['size'];
     }
 }
 
