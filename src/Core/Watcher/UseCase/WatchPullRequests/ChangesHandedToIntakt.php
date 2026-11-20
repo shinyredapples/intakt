@@ -36,8 +36,25 @@ final readonly class ChangesHandedToIntakt
             return;
         }
 
+        // Every author is read before the first line is appended, because a forge read that fails behind an append rolls the tick's transaction back under a line the entity manager still holds, and the ledger's next append then collides with it.
+        foreach ($this->createdByIntaktAmong($project, $open) as $change) {
+            $this->records->changeHandedToIntakt($project, $change);
+        }
+    }
+
+    /**
+     * @param list<OpenChange> $open
+     *
+     * @return list<OpenChange>
+     *
+     * @throws ForgeReadFailed
+     * @throws ForgeRateLimited
+     */
+    private function createdByIntaktAmong(string $project, array $open): array
+    {
         $openings = $this->openingsOf($project);
         $handed = $this->handedOf($project);
+        $created = [];
 
         foreach ($open as $change) {
             $address = $this->addressOf($change->id->value);
@@ -48,10 +65,12 @@ final readonly class ChangesHandedToIntakt
             }
 
             if ($this->isCreatedByIntakt($recorded, $change)) {
-                $this->records->changeHandedToIntakt($project, $change);
+                $created[] = $change;
                 $handed[$address] = true;
             }
         }
+
+        return $created;
     }
 
     // Only an opening that created the pull request, because Intakt's push also updates an open pull request someone else opened on the same branch.

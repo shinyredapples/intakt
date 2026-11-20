@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Watcher\UseCase\WatchPullRequests;
 
+use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 use Doctrine\Persistence\ManagerRegistry;
@@ -20,6 +21,7 @@ use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatcherEventNotRecorded;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatcherLedger;
 use Intakt\Plugin\Forge\Contract\ChangeAuthorship;
 use Intakt\Plugin\Forge\Contract\ChangeId;
+use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\OpenChange;
 use Intakt\Tests\Application\EmptyDatabase;
@@ -47,6 +49,7 @@ final class ChangesHandedToIntaktTest extends KernelTestCase
     private const string LOOP_PULL = 'https://github.com/acme/widgets/pull/8';
 
     private DoctrineLedger $ledger;
+    private EntityManagerInterface $entities;
     private ChangeAuthorship $authorship;
 
     protected function setUp(): void
@@ -55,6 +58,7 @@ final class ChangesHandedToIntaktTest extends KernelTestCase
         self::assertInstanceOf(ManagerRegistry::class, $registry);
         $entities = $registry->getManager();
         self::assertInstanceOf(EntityManagerInterface::class, $entities);
+        $this->entities = $entities;
         EmptyDatabase::in(self::getContainer());
         new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
         $this->ledger = new DoctrineLedger($registry, new MockClock('2026-11-20T10:00:00+00:00'));
@@ -136,6 +140,59 @@ final class ChangesHandedToIntaktTest extends KernelTestCase
         } catch (ForgeReadFailed) {
             self::assertSame([], $this->handedToIntakt());
         }
+    }
+
+    public function testTheLedgerStillTakesTheTicksNextLineAfterAnAuthorReadIsRateLimitedBehindARecognition(): void
+    {
+        $this->record(LedgerEventKind::ChangeOpened, ['project' => 'alpha', 'branch' => 'feat/7', 'head' => str_repeat('a', 40), 'change' => self::PULL]);
+        $this->record(LedgerEventKind::ChangeOpened, ['project' => 'alpha', 'branch' => 'feat/8', 'head' => str_repeat('a', 40), 'change' => self::LOOP_PULL]);
+        $authorship = self::createStub(ChangeAuthorship::class);
+        $authorship->method('isCreatedByIntakt')->willReturnCallback(
+            static fn (ChangeId $change): bool => self::PULL === $change->value ? true : throw new ForgeRateLimited(new DateTimeImmutable('2026-11-20T10:10:00+00:00')),
+        );
+        $this->authorship = $authorship;
+        $connection = $this->entities->getConnection();
+
+        // As the tick does: the recognition runs inside its transaction, the rate limit rolls it back, and the same process goes on to append its due heads' lines.
+        $connection->beginTransaction();
+        try {
+            $this->recognize('alpha', $this->change(self::PULL), $this->change(self::LOOP_PULL));
+            self::fail('A rate-limited author read must fail the recognition.');
+        } catch (ForgeRateLimited) {
+            $connection->rollBack();
+        }
+
+        self::assertSame([], $this->handedToIntakt());
+        $this->record(LedgerEventKind::HeadPending, ['project' => 'alpha', 'change' => '1']);
+    }
+
+    public function testNoLineIsAppendedBeforeEveryAuthorIsRead(): void
+    {
+        $this->record(LedgerEventKind::ChangeOpened, ['project' => 'alpha', 'branch' => 'feat/7', 'head' => str_repeat('a', 40), 'change' => self::PULL, 'opening' => 'created']);
+        $this->record(LedgerEventKind::ChangeOpened, ['project' => 'alpha', 'branch' => 'feat/8', 'head' => str_repeat('a', 40), 'change' => self::LOOP_PULL]);
+        $authorship = self::createStub(ChangeAuthorship::class);
+        $authorship->method('isCreatedByIntakt')->willThrowException(new ForgeReadFailed('unreadable'));
+        $this->authorship = $authorship;
+
+        try {
+            $this->recognize('alpha', $this->change(self::PULL), $this->change(self::LOOP_PULL));
+            self::fail('An author the forge cannot read must fail the recognition.');
+        } catch (ForgeReadFailed) {
+            self::assertSame([], $this->handedToIntakt());
+        }
+    }
+
+    public function testEveryPullRequestIntaktCreatedIsRecordedOnceAllAuthorsAreRead(): void
+    {
+        $this->record(LedgerEventKind::ChangeOpened, ['project' => 'alpha', 'branch' => 'feat/7', 'head' => str_repeat('a', 40), 'change' => self::PULL, 'opening' => 'created']);
+        $this->record(LedgerEventKind::ChangeOpened, ['project' => 'alpha', 'branch' => 'feat/8', 'head' => str_repeat('a', 40), 'change' => self::LOOP_PULL]);
+        $authorship = self::createStub(ChangeAuthorship::class);
+        $authorship->method('isCreatedByIntakt')->willReturn(true);
+        $this->authorship = $authorship;
+
+        $this->recognize('alpha', $this->change(self::PULL), $this->change(self::LOOP_PULL), $this->change(self::PULL));
+
+        self::assertSame([self::PULL, self::LOOP_PULL], array_column($this->handedToIntakt(), 'change'));
     }
 
     public function testAPullRequestOpenedBeforeOpeningsWereRecordedIsRecordedAsHandedToIntaktAfterALaterPushRecordsItAsCreated(): void
