@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Gates;
 
-use JsonException;
-
 final readonly class FullReport
 {
     // Because Intakt's own .gitignore leaves out var/, and the ASCII-only report keeps a tree whose gates do scan var/ passing.
@@ -63,44 +61,32 @@ final readonly class FullReport
         return false !== $root && false !== $real && str_starts_with($real, rtrim($root, '/').'/');
     }
 
-    // Because each gate is encoded on its own, a kept result PHP cannot encode again falls back to that gate's line and costs no other gate its findings.
     private function contents(): ?string
     {
         $gates = [];
         $whole = true;
 
         foreach ($this->reports as $report) {
-            $kept = null === $report->kept ? null : $this->encoded($report->kept);
-            $gate = $kept ?? $this->encoded($report->line);
+            $gate = $this->ascii($report->kept ?? $report->line);
 
             if (null === $gate) {
                 return null;
             }
 
             $gates[] = $gate;
-            $whole = $whole && (null !== $kept || !$report->lineIsCut());
+            $whole = $whole && (null !== $report->kept || !$report->lineIsCut());
         }
 
         return '{"whole":'.($whole ? 'true' : 'false').',"gates":['.implode(',', $gates).']}';
     }
 
-    // Because the default escaping writes every character past ASCII as \u escapes, so no gate that reads the tree finds a long dash or broken byte in it.
-    private function encoded(string $json): ?string
+    // Because decoding and encoding again changes a result's shape (an empty object, numbered keys, a number too large for a float), the bytes are copied and only each character past ASCII becomes its \u escape, so no gate that reads the tree finds a long dash or broken byte in it.
+    private function ascii(string $json): ?string
     {
-        try {
-            return json_encode($this->decoded($json), JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
-        } catch (JsonException) {
+        if (!json_validate($json)) {
             return null;
         }
-    }
 
-    // Because object mode keeps an empty {} as an object, but only the array mode GateReport validates with accepts every key, such as one starting with a NUL byte.
-    private function decoded(string $json): mixed
-    {
-        try {
-            return json_decode($json, flags: JSON_THROW_ON_ERROR);
-        } catch (JsonException) {
-            return json_decode($json, true, flags: JSON_THROW_ON_ERROR);
-        }
+        return preg_replace_callback('/[^\x00-\x7F]/u', static fn (array $character): string => substr(json_encode($character[0], JSON_THROW_ON_ERROR), 1, -1), $json);
     }
 }

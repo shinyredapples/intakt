@@ -149,23 +149,31 @@ final class FullReportTest extends SandboxTestCase
         self::assertSame(['', 10, '2'], [$report->get('whole')->text(), count($this->findingsIn($report)), $report->get('gates')->items()[0]->get('omitted')->text()]);
     }
 
-    public function testAKeptResultThatCannotBeEncodedAgainFallsBackToItsLineAndKeepsTheOtherGates(): void
+    public function testAKeptResultWithANumberTooLargeForPhpIsCopiedUnchangedAndKeepsTheReportWhole(): void
     {
         $sandbox = $this->emptySandbox();
+        $kept = substr($this->twelveFindings()->toFullJson(), 0, -1).',"note":1e400}';
         $other = GateResult::failedBecause('comments', 'kept.php:1');
 
         $file = new FullReport($sandbox->root, [
-            $this->reportOf($this->twelveFindings())->keeping(substr($this->twelveFindings()->toFullJson(), 0, -1).',"note":1e400}'),
+            $this->reportOf($this->twelveFindings())->keeping($kept),
             GateReport::fromChild('comments', new ProcessResult(1, $other->toJson()."\n", ''))->keeping($other->toFullJson()),
         ])->write();
 
-        self::assertNotNull($file);
-        $gates = $this->reportIn($sandbox->root.'/'.$file)->get('gates')->items();
-        self::assertSame(['', 10, ['kept.php:1']], [
-            $this->reportIn($sandbox->root.'/'.$file)->get('whole')->text(),
-            count($gates[0]->get('findings')->items()),
-            array_map(static fn (JsonNode $finding): string => $finding->text(), $gates[1]->get('findings')->items()),
-        ]);
+        self::assertSame('{"whole":true,"gates":['.$kept.','.$other->toFullJson().']}'."\n", file_get_contents($sandbox->root.'/'.$file));
+    }
+
+    public function testAKeptResultWithEmptyAndNumberedObjectsBesideANulKeyKeepsThemAsObjects(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $result = GateResult::failedBecause('dashes', 'notes.md:1');
+        $kept = substr($result->toFullJson(), 0, -1).',"note":{"\u0000key":{},"numeric":{"0":"value"}}}';
+        $gate = $this->reportOf($result)->keeping($kept);
+        self::assertSame($kept, $gate->kept);
+
+        $file = new FullReport($sandbox->root, [$gate])->write();
+
+        self::assertSame('{"whole":true,"gates":['.$kept.']}'."\n", file_get_contents($sandbox->root.'/'.$file));
     }
 
     public function testASummaryLineWithAKeyThatObjectsCannotHoldStillGivesAReportOfEveryGate(): void
