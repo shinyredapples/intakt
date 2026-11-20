@@ -78,10 +78,32 @@ final readonly class CheckCommand
             new LowPriority()->take();
         }
 
+        $wholeResultFile = $this->variable(GateChildren::FULL_RESULT_VARIABLE);
+        // Because a gate may start a nested bin/check or gate child of its own, none of them may write in place of this child's whole result.
+        putenv(GateChildren::FULL_RESULT_VARIABLE);
+        unset($_ENV[GateChildren::FULL_RESULT_VARIABLE], $_SERVER[GateChildren::FULL_RESULT_VARIABLE]);
+
         $result = $this->resultOf($gate, new Workspace($options->root ?? $this->home, $this->home, $options->mode, $options->base));
         fwrite(STDOUT, $result->toJson()."\n");
 
+        if (null !== $wholeResultFile) {
+            $this->keep($result, $wholeResultFile);
+        }
+
         return $result->isPassing() ? 0 : 1;
+    }
+
+    // Because the file is the parent's hand-off, the child only creates it and never writes through anything already in its place, a link included.
+    private function keep(GateResult $result, string $file): void
+    {
+        $handle = file_exists($file) || is_link($file) ? false : fopen($file, 'x');
+
+        if (false === $handle) {
+            return;
+        }
+
+        fwrite($handle, $result->toFullJson());
+        fclose($handle);
     }
 
     /**
