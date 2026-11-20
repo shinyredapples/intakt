@@ -429,6 +429,17 @@ final class PhpGateDependencyStepTest extends TestCase
         self::assertStringContainsString('already holds an install', $install->getErrorOutput());
     }
 
+    public function testTheLockGuardRefusesAnInstallInAVendorFolderWhoseNameStartsWithADash(): void
+    {
+        $this->lockedProject([], ['config' => ['vendor-dir' => "-dependencies\n"]]);
+        new Filesystem()->dumpFile($this->directory."/-dependencies\n/composer/installed.json", '[]');
+
+        $guard = $this->runInProject(PhpGateSteps::LOCK_GUARD);
+
+        self::assertSame(PhpGateSteps::REFUSED, $guard->getExitCode());
+        self::assertStringContainsString('already holds an install', $guard->getErrorOutput());
+    }
+
     public function testARefusedAddressIsNotShownBecauseItCanHoldCredentials(): void
     {
         $this->lockedProject([['name' => 'fixture/pkg', 'version' => '1.0.0', 'dist' => ['type' => 'zip', 'url' => 'ftp://user:hidden-word@archive.invalid/pkg.zip', 'shasum' => str_repeat('a', 40)]]]);
