@@ -28,7 +28,7 @@ final class EntrypointSampleSeedTest extends TestCase
     // A marked operation is held open until the stop ends it; the fallback outlasts every wait for readiness, so the stop always finds it still running, and still ends a stand-in a failed test leaves behind.
     private const int SECONDS_TO_HOLD = self::SECONDS_TO_WAIT * 2;
 
-    // Later than the earlier nine-second hold of the marked operations, as when the parallel test workers hold the consumers back.
+    // Past the nine seconds the marked operations were once held for, because the parallel test workers can hold the consumers back that long and readiness then found both ended.
     private const int SECONDS_UNTIL_LATE_READINESS = 10;
 
     private string $directory;
