@@ -48,8 +48,6 @@ MCP: your agent loops, fixes and reports ([details](docs/user/mcp.md)).
 
 ### Timed run
 
-On arm64 Linux, the `image-arm64` CI workflow builds and first-starts the image on every push to main and prints both timings. Docker Desktop on Apple Silicon runs the arm64 image.
-
 Measured on 2026-11-17 on a 4-core Intel i7-4790K with 16 GB RAM, Ubuntu 26.10 and Docker 29: ten consecutive runs of the five-minute path, each from a fresh `git archive` of main, with a Hugging Face token in `.env.local` and the terminal path `docker compose exec intakt php bin/console intakt:demo`.
 
 | Measure | Median | Range |
@@ -72,7 +70,7 @@ What the journeys cover and how to run one: [Checking the whole product](docs/gu
 
 ### Review bench
 
-The review bench measures how well the panel finds defects: it reviews eight small changes of the sample shop, five with one planted defect each and three without any, and counts what each reviewer caught, missed and raised in error. **It calls your paid models**, so it runs only when you ask; nothing in `bin/check` or CI runs it. With the demo running, this runs the bench that gave the result below:
+The review bench reviews eight small changes of the sample shop, five with one planted defect each and three without any, and counts what each reviewer caught, missed and raised in error. **It calls your paid models**, so it runs only when you ask, never in `bin/check` or CI. With the demo running, this gave the result below:
 
 ```
 docker compose exec intakt php bin/console intakt:bench --project=sample --repeat=3
@@ -86,35 +84,35 @@ docker compose exec intakt php bin/console intakt:bench --project=sample --repea
 
 Seven of the eight changes varied between the three runs, so your own run will not match these figures exactly.
 
-Date of the run: 2026-11-16. Models (the demo's Hugging Face mapping): `correctness` (tier strong) `moonshotai/Kimi-K3:deepinfra`, `security` (tier standard) `openai/gpt-oss-120b:novita`. Command: `intakt:bench --project=sample --repeat=3`, as above. What a run costs and how to read these figures: [the review bench](docs/user/README.md#the-review-bench) in the user guide.
+Date of the run: 2026-11-16. Models (the demo's Hugging Face mapping): `correctness` (tier strong) `moonshotai/Kimi-K3:deepinfra`, `security` (tier standard) `openai/gpt-oss-120b:novita`. What a run costs and how to read these figures: [the review bench](docs/user/README.md#the-review-bench) in the user guide.
 
 ## Found and fixed upstream
 
-Bugs Intakt's reproductions found in the libraries it uses, one row per `upstream/` folder that went upstream, merged first:
+Bugs the reproductions in `upstream/` found, merged first:
 
 | Project | Bug | Upstream |
 | --- | --- | --- |
-| symfony/symfony | [Config: a NaN value skips the type check and the validation closures](upstream/config-nan-skips-validation/) | [#67911](https://github.com/symfony/symfony/pull/67911): merged, in v8.2.0-BETA2 |
-| symfony/symfony | [Messenger: `messenger:consume` ignores a SIGTERM that arrives before its worker exists](upstream/messenger-consume-ignores-early-sigterm/) | [#67912](https://github.com/symfony/symfony/pull/67912): merged, in v8.2.0-BETA2 |
-| symfony/symfony | [Serializer: a list of objects accepts any object and ends in a `TypeError`](upstream/serializer-object-collection-accepts-any-object/) | [#67913](https://github.com/symfony/symfony/pull/67913): merged, in v8.2.0-BETA2 |
-| Doctrine | [DoctrineBundle: a PostgreSQL connection without `server_version` fails before it connects](upstream/doctrine-bundle-postgresql-empty-server-version/) | [doctrine/DoctrineBundle#2335](https://github.com/doctrine/DoctrineBundle/pull/2335): merged |
-| symfony/ai | [SQLite store: a double quote in the query text breaks the FTS5 query](upstream/ai-sqlite-store-unescaped-fts-quote/) | [#2874](https://github.com/symfony/ai/pull/2874): merged |
-| symfony/ai | [Claude Code bridge: tools the CLI already ran are not returned as tool calls](upstream/ai-claude-code-platform-cli-tool-calls/) | [#2875](https://github.com/symfony/ai/pull/2875): merged |
-| symfony/ai | [Codex bridge: MCP tools the CLI already called are not returned as tool calls](upstream/ai-codex-platform-cli-tool-calls/) | [#2875](https://github.com/symfony/ai/pull/2875): merged |
-| symfony/ai | [Platform: `#[Positive]` is described with a boolean `exclusiveMinimum`](upstream/ai-platform-positive-boolean-exclusive-minimum/) | [#2888](https://github.com/symfony/ai/pull/2888): merged |
-| symfony/ai | [Codex bridge: a turn without `turn.completed` is returned as a complete answer](upstream/ai-codex-platform-cut-off-stream/) | [#2889](https://github.com/symfony/ai/pull/2889): merged |
-| symfony/ai | [Codex bridge: every user message but the last is dropped](upstream/ai-codex-platform-last-user-message/) | [#2891](https://github.com/symfony/ai/pull/2891): merged |
-| symfony/ai | [Platform: a `Provider` keeps its resolved model and sends an earlier request's model options](upstream/ai-platform-provider-keeps-resolved-model/) | [#2851](https://github.com/symfony/ai/pull/2851): merged |
-| symfony/ai | [`FailoverPlatform` calls a failed platform again, and every platform shares one limiter](upstream/ai-failover-platform-retries-a-failed-platform/) | [#2890](https://github.com/symfony/ai/pull/2890): open |
-| symfony/ai | [Claude Code bridge: cache creation and cache read tokens are added together](upstream/ai-claude-code-platform-cache-token-split/) | [#2963](https://github.com/symfony/ai/pull/2963): open |
-| symfony/ai | [Structured output: the typed answer of a model that thinks or calls tools is missed](upstream/ai-structured-output-multi-part-answers/) | [#2945](https://github.com/symfony/ai/issues/2945): reported |
-| symfony/ai | [Failover: a 429 that surfaces only when the result is read](upstream/ai-failover-platform-deferred-rate-limit/) | [#2944](https://github.com/symfony/ai/issues/2944): reported |
-| symfony/ai | [Claude Code bridge: a response format becomes `--response-format Array`](upstream/ai-claude-code-platform-structured-output/) | [#2962](https://github.com/symfony/ai/issues/2962): reported |
-| symfony/ai | [Agent: a failed streamed execution with a tool call reports no usage](upstream/ai-agent-streamed-tool-call-cut-stream/) | [comment on #2617](https://github.com/symfony/ai/pull/2617#issuecomment-6876304595): reported |
-| PHPStan | [A readonly property set to `null` in the constructor still reads as `null` after `clone with`](upstream/phpstan-clone-with-readonly-constructor-type/) | [phpstan/phpstan#14838](https://github.com/phpstan/phpstan/issues/14838): reported, open |
-| FrankenPHP | [`messenger:consume` under `frankenphp php-cli` crashes on SIGTERM](upstream/frankenphp-messenger-consume-sigterm/) | [php/frankenphp#2479](https://github.com/php/frankenphp/issues/2479): reported, open |
+| symfony/symfony | [NaN skips config validation](upstream/config-nan-skips-validation/) | [#67911](https://github.com/symfony/symfony/pull/67911) merged |
+| symfony/symfony | [`messenger:consume` ignores an early SIGTERM](upstream/messenger-consume-ignores-early-sigterm/) | [#67912](https://github.com/symfony/symfony/pull/67912) merged |
+| symfony/symfony | [Serializer list accepts any object](upstream/serializer-object-collection-accepts-any-object/) | [#67913](https://github.com/symfony/symfony/pull/67913) merged |
+| Doctrine | [PostgreSQL without `server_version` fails](upstream/doctrine-bundle-postgresql-empty-server-version/) | [DoctrineBundle#2335](https://github.com/doctrine/DoctrineBundle/pull/2335) merged |
+| symfony/ai | [SQLite store: a quote breaks FTS5](upstream/ai-sqlite-store-unescaped-fts-quote/) | [#2874](https://github.com/symfony/ai/pull/2874) merged |
+| symfony/ai | [Claude Code: CLI tool calls lost](upstream/ai-claude-code-platform-cli-tool-calls/) | [#2875](https://github.com/symfony/ai/pull/2875) merged |
+| symfony/ai | [Codex: CLI tool calls lost](upstream/ai-codex-platform-cli-tool-calls/) | [#2875](https://github.com/symfony/ai/pull/2875) merged |
+| symfony/ai | [`#[Positive]` gets a boolean `exclusiveMinimum`](upstream/ai-platform-positive-boolean-exclusive-minimum/) | [#2888](https://github.com/symfony/ai/pull/2888) merged |
+| symfony/ai | [Codex: a cut turn reads as complete](upstream/ai-codex-platform-cut-off-stream/) | [#2889](https://github.com/symfony/ai/pull/2889) merged |
+| symfony/ai | [Codex: earlier user messages dropped](upstream/ai-codex-platform-last-user-message/) | [#2891](https://github.com/symfony/ai/pull/2891) merged |
+| symfony/ai | [`Provider` keeps a resolved model](upstream/ai-platform-provider-keeps-resolved-model/) | [#2851](https://github.com/symfony/ai/pull/2851) merged |
+| symfony/ai | [Failover retries a failed platform](upstream/ai-failover-platform-retries-a-failed-platform/) | [#2890](https://github.com/symfony/ai/pull/2890) open |
+| symfony/ai | [Claude Code: cache token split lost](upstream/ai-claude-code-platform-cache-token-split/) | [#2963](https://github.com/symfony/ai/pull/2963) open |
+| symfony/ai | [Typed answer of a multi-part reply missed](upstream/ai-structured-output-multi-part-answers/) | [#2945](https://github.com/symfony/ai/issues/2945) reported |
+| symfony/ai | [Failover misses a deferred 429](upstream/ai-failover-platform-deferred-rate-limit/) | [#2944](https://github.com/symfony/ai/issues/2944) reported |
+| symfony/ai | [Claude Code: response format passed as `Array`](upstream/ai-claude-code-platform-structured-output/) | [#2962](https://github.com/symfony/ai/issues/2962) reported |
+| symfony/ai | [Failed streamed tool run reports no usage](upstream/ai-agent-streamed-tool-call-cut-stream/) | [comment on #2617](https://github.com/symfony/ai/pull/2617#issuecomment-6876304595) reported |
+| PHPStan | [Readonly type kept after `clone with`](upstream/phpstan-clone-with-readonly-constructor-type/) | [phpstan#14838](https://github.com/phpstan/phpstan/issues/14838) reported |
+| FrankenPHP | [`php-cli` crashes on SIGTERM](upstream/frankenphp-messenger-consume-sigterm/) | [frankenphp#2479](https://github.com/php/frankenphp/issues/2479) reported |
 
-The other seven folders are probes that pass with nothing to file (among them the MCP SDK's parallel calls on one session) or reports not filed after the owner's review. How every reproduction is kept and checked: [`upstream/`](upstream/README.md).
+The other seven folders pass with nothing to file (MCP SDK among them) or were not filed. All of them: [`upstream/`](upstream/README.md).
 
 ## The first release: the review loop
 
@@ -137,7 +135,6 @@ Built for the [Symfony AI & MCP Hackathon](docs/spec.md) (deadline 2026-11-22):
 
 - **PHP 8.5 and Symfony 8.2 (a beta until 8.2.0 is released)**, with the latest stable tools, and Symfony AI used for every model call, agent and memory, on purpose, to find the beta's bugs early.
 - **FrankenPHP worker mode** for the dashboard and the MCP server, with Mercure built in for live updates; Messenger consumers and the Scheduler (the watcher tick every minute, started in the image by its own consumer; usage probes, deadlines and the weekly cleanup are planned) run beside it. The local API stays planned.
-- **Steering by labels** (planned) on your forge: `intakt` to take a task, then `priority:`, `class:`, `model:`, `plan:` and `review:`; Intakt mirrors progress in `status:`.
 - **No public resource API in v1.** The interfaces are the dashboard, the CLI, an optional forge webhook endpoint (forge changes are polled by default) and the MCP server.
 
 ## Documentation
