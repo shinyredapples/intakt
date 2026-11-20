@@ -1,0 +1,28 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use Symfony\AI\Platform\Message\Content\Text;
+
+final readonly class Briefing
+{
+    /**
+     * @return list<mixed>
+     */
+    public function messagesFor(string $text): array
+    {
+        $factories = '\Symfony\AI\Platform\Message\Message';
+        $message = '\Symfony\AI\Platform\Message\UserMessage';
+
+        return [
+            call_user_func(['\Symfony\AI\Platform\Message\Message', 'ofUser'], $text),
+            [1 => 'forSystem', 0 => '\symfony\ai\platform\message\MESSAGE'],
+            $factories::ofUser($text),
+            new $message(new Text($text)),
+            ['\Symfony\AI\Platform\Message\Message', 'trim'],
+            ['\Symfony\AI\Platform\Message\Content\Text', 'ofUser'],
+        ];
+    }
+}

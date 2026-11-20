@@ -1,0 +1,25 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use Symfony\AI\Platform\Message\Message;
+
+final readonly class Briefing
+{
+    /**
+     * @return list<mixed>
+     */
+    public function examplesFor(string $factory, int $position, mixed $anything): array
+    {
+        return [
+            [1 => $factory, 0 => Message::class],
+            [Message::class, $anything],
+            [Message::class, 42],
+            [Message::class, $position],
+            [Message::class, ['ofUser']],
+            [Message::class, null],
+        ];
+    }
+}

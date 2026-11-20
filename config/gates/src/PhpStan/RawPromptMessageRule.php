@@ -117,7 +117,18 @@ final readonly class RawPromptMessageRule implements Rule
 
     private function namesMessage(Type $class): bool
     {
-        return in_array(strtolower(Message::class), array_map(strtolower(...), $class->getObjectTypeOrClassStringObjectType()->getObjectClassNames()), true);
+        return in_array(strtolower(Message::class), $this->classNamesOf($class), true);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function classNamesOf(Type $class): array
+    {
+        // PHP resolves a class string with a leading backslash, which PHPStan does not read as a class name
+        $written = array_map(static fn (ConstantStringType $constant): string => ltrim($constant->getValue(), '\\'), $class->getConstantStrings());
+
+        return array_map(strtolower(...), [...$class->getObjectTypeOrClassStringObjectType()->getObjectClassNames(), ...$written]);
     }
 
     private function isAFactoryCallable(ConstantStringType $callable): bool
@@ -130,12 +141,12 @@ final readonly class RawPromptMessageRule implements Rule
     private function names(string $class, Name|Expr|Class_ $reference, Scope $scope): bool
     {
         $named = match (true) {
-            $reference instanceof Name => [$scope->resolveName($reference)],
-            $reference instanceof Expr => $scope->getType($reference)->getObjectTypeOrClassStringObjectType()->getObjectClassNames(),
+            $reference instanceof Name => [strtolower($scope->resolveName($reference))],
+            $reference instanceof Expr => $this->classNamesOf($scope->getType($reference)),
             default => [],
         };
 
-        return in_array(strtolower($class), array_map(strtolower(...), $named), true);
+        return in_array(strtolower($class), $named, true);
     }
 
     private function callsAFactory(Identifier|Expr $name, Scope $scope): bool
@@ -145,10 +156,14 @@ final readonly class RawPromptMessageRule implements Rule
             : $this->isAFactoryName($scope->getType($name));
     }
 
-    // a method name only known at runtime could be any factory, so it counts as one
+    // a method name only known at runtime could be any factory, so it counts as one, unless its type can hold no string at all
     private function isAFactoryName(Type $name): bool
     {
-        $known = array_map(static fn (ConstantStringType $constant): string => strtolower($constant->getValue()), $name->getConstantStrings());
+        if ($name->isString()->no()) {
+            return false;
+        }
+
+        $known =array_map(static fn (ConstantStringType $constant): string => strtolower($constant->getValue()), $name->getConstantStrings());
 
         return [] === $known || [] !== array_intersect($known, self::FACTORIES);
     }
