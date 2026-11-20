@@ -10,7 +10,7 @@ The answer to each request names its profile in the `X-Debug-Token` header.
 
 ## Reading one
 
-1. Start the install and send it a request, for example `curl -si http://localhost:PORT/`.
+1. Start the install and send it a request at the address it listens on. With `php bin/instance`, the usual way to start one, that address is in `$INTAKT_INSTANCE_URL` (see the command below), so the request is `curl -si "$INTAKT_INSTANCE_URL/"`.
 2. Copy the value of the `X-Debug-Token` header.
 3. Run `vendor/bin/mate tools:call symfony-profiler-get --token=TOKEN --format=json`. It names the request and lists what was collected.
 
