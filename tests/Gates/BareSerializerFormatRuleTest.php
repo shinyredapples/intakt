@@ -87,6 +87,18 @@ final class BareSerializerFormatRuleTest extends PhpStanRuleTestCase
         self::assertSame('', $findings);
     }
 
+    public function testAnUnpackedArrayThatAddsAnElementAfterTheMaximumIntegerKeyIsUnreadableAndNoFinding(): void
+    {
+        $findings = $this->ruleFindingsIn($this->sandboxReturning([
+            "\$serializer->serialize(...[9223372036854775807 => \$data, 'json'])",
+            "\$serializer->serialize(...['9223372036854775807' => \$data, 'json'])",
+            "\$serializer->serialize(...[9223372036854775807 => \$data, ...[\$data, 'json']])",
+            "\$serializer->serialize(...[\\PHP_INT_MAX => \$data, 'json'])",
+        ]));
+
+        self::assertSame('', $findings);
+    }
+
     public function testAJsonStringThatIsNotTheFormatArgumentPassesStaticAnalysis(): void
     {
         $findings = $this->ruleFindingsIn($this->sandboxReturning([

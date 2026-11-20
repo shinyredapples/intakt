@@ -50,6 +50,11 @@ final readonly class BareSerializerFormatRule implements Rule
         'supportsdecoding' => [[DecoderInterface::class], 0],
     ];
 
+    public function __construct(
+        private SerializerCallArguments $arguments = new SerializerCallArguments(),
+    ) {
+    }
+
     public function getNodeType(): string
     {
         return CallLike::class;
@@ -65,11 +70,12 @@ final readonly class BareSerializerFormatRule implements Rule
             return [];
         }
 
-        [$contracts, $position] = self::FORMAT_ARGUMENTS[$this->methodName($node)] ?? [[], 0];
+        $method = $this->methodName($node);
+        [$contracts, $position] = self::FORMAT_ARGUMENTS[$method] ?? [[], 0];
         $classes = [] === $contracts ? [] : $this->serializerClasses($scope, $node, $contracts);
-        $names = $this->formatParameterNames($classes, $this->methodName($node), $position);
+        $names = $this->formatParameterNames($classes, $method, $position);
 
-        if ([] === $classes || !$this->isBareFormat(new SerializerCallArguments()->valueAt($node, $position, $names))) {
+        if ([] === $classes || !$this->isBareFormat($this->arguments->valueAt($node, $position, $names))) {
             return [];
         }
 

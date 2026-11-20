@@ -114,20 +114,24 @@ final readonly class SerializerCallArguments
         $nested = $spread instanceof Array_ ? $this->entriesOf($spread) : null;
 
         foreach ($nested ?? [] as $key => $value) {
-            $entries = $this->withEntry($entries, is_int($key) ? null : $key, $value);
+            $entries = null === $entries ? null : $this->withEntry($entries, is_int($key) ? null : $key, $value);
         }
 
         return null === $nested ? null : $entries;
     }
 
-    // written through PHP's own array assignment, because that keeps the next free index and the place of an overwritten key as PHP does
+    // written through PHP's own array assignment, because that keeps the next free index and the place of an overwritten key as PHP does; null after the maximum integer key, because PHP refuses that append and a gate must not crash on code that parses
     /**
      * @param array<int|string, Expr> $entries
      *
-     * @return array<int|string, Expr>
+     * @return ?array<int|string, Expr>
      */
-    private function withEntry(array $entries, int|string|null $key, Expr $value): array
+    private function withEntry(array $entries, int|string|null $key, Expr $value): ?array
     {
+        if (null === $key && array_key_exists(PHP_INT_MAX, $entries)) {
+            return null;
+        }
+
         if (null === $key) {
             $entries[] = $value;
 
