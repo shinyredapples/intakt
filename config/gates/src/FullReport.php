@@ -46,10 +46,10 @@ final readonly class FullReport
         return $file;
     }
 
-    // Because a var/ or var/check that is a link would put the report outside the checked tree, it is refused before and after mkdir().
     /**
      * @phpstan-impure
      */
+    // Because a var/ or var/check that is a link would put the report outside the checked tree, it is refused before and after mkdir().
     private function isLinked(): bool
     {
         return is_link($this->root.'/var') || is_link($this->root.'/'.self::FOLDER);
@@ -63,21 +63,34 @@ final readonly class FullReport
         return false !== $root && false !== $real && str_starts_with($real, rtrim($root, '/').'/');
     }
 
-    // Because the default escaping writes every character past ASCII as \u escapes, so no gate that reads the tree finds a long dash or broken byte in it.
+    // Because each gate is encoded on its own, a kept result PHP cannot encode again falls back to that gate's line and costs no other gate its findings.
     private function contents(): ?string
     {
-        $gates = array_map(static fn (GateReport $report): mixed => json_decode($report->kept ?? $report->line), $this->reports);
+        $gates = [];
+        $whole = true;
 
+        foreach ($this->reports as $report) {
+            $kept = null === $report->kept ? null : self::encoded($report->kept);
+            $gate = $kept ?? self::encoded($report->line);
+
+            if (null === $gate) {
+                return null;
+            }
+
+            $gates[] = $gate;
+            $whole = $whole && (null !== $kept || !$report->lineIsCut());
+        }
+
+        return '{"whole":'.($whole ? 'true' : 'false').',"gates":['.implode(',', $gates).']}';
+    }
+
+    // Because the default escaping writes every character past ASCII as \u escapes, so no gate that reads the tree finds a long dash or broken byte in it.
+    private static function encoded(string $json): ?string
+    {
         try {
-            return json_encode(['whole' => $this->isWhole(), 'gates' => $gates], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
+            return json_encode(json_decode($json, flags: JSON_THROW_ON_ERROR), JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
         } catch (JsonException) {
             return null;
         }
-    }
-
-    // Because a gate whose child kept nothing reports only its line, the report is whole only when no such line lost a finding.
-    private function isWhole(): bool
-    {
-        return array_all($this->reports, static fn (GateReport $report): bool => null !== $report->kept || !$report->lineIsCut());
     }
 }
