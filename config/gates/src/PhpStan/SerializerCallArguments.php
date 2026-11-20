@@ -21,66 +21,96 @@ final readonly class SerializerCallArguments
      */
     public function valueAt(MethodCall|NullsafeMethodCall|StaticCall $call, int $position, array $names): ?Expr
     {
-        $index = 0;
+        $passed = 0;
 
-        foreach ($this->arguments($call) as [$name, $value]) {
-            if (null === $name ? $index++ === $position : in_array($name, $names, true)) {
-                return $value;
+        foreach ($call->getArgs() as $argument) {
+            $values = $this->passedBy($argument);
+            $found = $this->formatIn(null === $passed ? array_filter($values ?? [], is_string(...), \ARRAY_FILTER_USE_KEY) : $values ?? [], $position - (int) $passed, $names);
+
+            if (null !== $found) {
+                return $found;
             }
+
+            // an unpacked value the rule cannot read hides every later position, while a later named argument still names its parameter
+            $passed = null === $values || null === $passed ? null : $passed + count(array_filter(array_keys($values), is_int(...)));
         }
 
         return null;
     }
 
     /**
-     * @return list<array{?string, Expr}>
+     * @param array<int|string, Expr> $values
+     * @param list<string>            $names
      */
-    private function arguments(MethodCall|NullsafeMethodCall|StaticCall $call): array
+    private function formatIn(array $values, int $position, array $names): ?Expr
     {
-        $arguments = [];
+        $index = 0;
 
-        foreach ($call->getArgs() as $argument) {
-            $spread = $this->spread($argument);
-
-            if (null === $spread) {
-                return $arguments;
-            }
-
-            array_push($arguments, ...$spread);
-        }
-
-        return $arguments;
+        return array_find(
+            $values,
+            static function (Expr $value, int|string $key) use (&$index, $position, $names): bool {
+                return is_string($key) ? in_array($key, $names, true) : $index++ === $position;
+            },
+        );
     }
 
-    // a literal array spreads into its items, because PHP passes them as if written out, and any other unpacked value gives null since it hides every later position
+    // the values one argument passes, keyed as PHP passes them: an integer key is the next positional argument, a string key names its parameter; null when an unpacked value is no literal array the rule can read
     /**
-     * @return ?list<array{?string, Expr}>
+     * @return ?array<int|string, Expr>
      */
-    private function spread(Arg $argument): ?array
+    private function passedBy(Arg $argument): ?array
     {
-        if (!$argument->unpack) {
-            return [[$argument->name?->toString(), $argument->value]];
+        return match (true) {
+            !$argument->unpack => null === $argument->name ? [$argument->value] : [$argument->name->toString() => $argument->value],
+            $argument->value instanceof Array_ => $this->entriesOf($argument->value),
+            default => null,
+        };
+    }
+
+    // built as a PHP array on purpose, because PHP itself then applies its key rules: a numeric string key such as '1' is the integer key, a repeated key overwrites the earlier entry in place, and a nested spread renumbers integer keys
+    /**
+     * @return ?array<int|string, Expr>
+     */
+    private function entriesOf(Array_ $array): ?array
+    {
+        $entries = [];
+
+        foreach ($array->items as $item) {
+            $added = $this->withItem($entries, $item);
+
+            if (null === $added) {
+                return null;
+            }
+
+            $entries = $added;
         }
 
-        if (!$argument->value instanceof Array_) {
+        return $entries;
+    }
+
+    /**
+     * @param array<int|string, Expr> $entries
+     *
+     * @return ?array<int|string, Expr>
+     */
+    private function withItem(array $entries, ArrayItem $item): ?array
+    {
+        if ($item->unpack) {
+            $nested = $item->value instanceof Array_ ? $this->entriesOf($item->value) : null;
+
+            return null === $nested ? null : [...$entries, ...$nested];
+        }
+
+        if ($item->key instanceof Expr && !$item->key instanceof Int_ && !$item->key instanceof String_) {
             return null;
         }
 
-        $items = array_map($this->item(...), $argument->value->items);
+        if (null === $item->key) {
+            $entries[] = $item->value;
+        } else {
+            $entries[$item->key->value] = $item->value;
+        }
 
-        return in_array(null, $items, true) ? null : array_values($items);
-    }
-
-    /**
-     * @return ?array{?string, Expr}
-     */
-    private function item(ArrayItem $item): ?array
-    {
-        return match (true) {
-            $item->unpack => null,
-            !$item->key instanceof Expr, $item->key instanceof Int_ => [null, $item->value],
-            $item->key instanceof String_ => [$item->key->value, $item->value],
-            default => null,
-        };
+        return $entries;
     }
 }

@@ -41,6 +41,8 @@ final class BareSerializerFormatRuleTest extends PhpStanRuleTestCase
         yield 'normalizers, encoders and decoders' => [["\$normalizer->normalize(\$data, 'json')", "\$denormalizer->denormalize(\$data, \\stdClass::class, 'json')", "\$encoder->encode(\$data, 'json')", "\$decoder->decode('{}', 'json')"]];
         yield 'format support checks' => [["\$normalizer->supportsNormalization(\$data, 'json')", "\$denormalizer->supportsDenormalization(\$data, \\stdClass::class, 'json')", "\$encoder->supportsEncoding('json')", "\$decoder->supportsDecoding('json')"]];
         yield 'braced names and unpacked arguments' => [["\$serializer->{'serialize'}(\$data, 'json')", "\$serializer->serialize(...[\$data, 'json'])", "\$serializer->serialize(...['data' => \$data, 'format' => 'json'])", "\$serializer->serialize(\$data, ...['json'])"]];
+        yield 'supported types of both normalizer contracts' => [["\$normalizer->getSupportedTypes('json')", "\$denormalizer->getSupportedTypes('json')", "\$normalizer->getSupportedTypes(format: 'json')", "\$denormalizer->getSupportedTypes(format: 'json')"]];
+        yield 'unpacked arguments as PHP passes them' => [["\$serializer->serialize(...\$data, format: 'json')", "\$serializer->serialize(...[\$data, '1' => 'json'])", "\$serializer->serialize(...[...[\$data], 'json'])", "\$serializer->serialize(...[\$data, \\Symfony\\Component\\Serializer\\Encoder\\JsonEncoder::FORMAT, 1 => 'json'])", "\$serializer->serialize(...[\$data], ...['json'])"]];
         yield 'an override that renames the format parameter' => [["\$renamed->serialize(format: \$data, encoding: 'json')", "\$renamed->serialize(\$data, 'json')"]];
     }
 
@@ -62,6 +64,22 @@ final class BareSerializerFormatRuleTest extends PhpStanRuleTestCase
         $findings = $this->ruleFindingsIn($this->sandboxReturning([
             '$serializer->serialize($data, \Symfony\Component\Serializer\Encoder\JsonEncoder::FORMAT)',
             '$decoder->decode(\'{"json": true}\', \Symfony\Component\Serializer\Encoder\JsonEncoder::FORMAT)',
+            '$normalizer->getSupportedTypes(\Symfony\Component\Serializer\Encoder\JsonEncoder::FORMAT)',
+            '$denormalizer->getSupportedTypes(format: \Symfony\Component\Serializer\Encoder\JsonEncoder::FORMAT)',
+        ]));
+
+        self::assertSame('', $findings);
+    }
+
+    public function testAnUnpackedJsonThatPhpDoesNotPassAsTheFormatPassesStaticAnalysis(): void
+    {
+        $findings = $this->ruleFindingsIn($this->sandboxReturning([
+            "\$serializer->serialize(...[\$data, 'json', 1 => \\Symfony\\Component\\Serializer\\Encoder\\JsonEncoder::FORMAT])",
+            "\$serializer->serialize(...[\$data, 'json', '1' => \\Symfony\\Component\\Serializer\\Encoder\\JsonEncoder::FORMAT])",
+            "\$serializer->serialize(...[...['json'], \\Symfony\\Component\\Serializer\\Encoder\\JsonEncoder::FORMAT])",
+            "\$serializer->serialize(...\$data, format: \\Symfony\\Component\\Serializer\\Encoder\\JsonEncoder::FORMAT, context: ['json'])",
+            "\$serializer->serialize(...\$data, ...['json'])",
+            "\$serializer->serialize(...[\$data, \$data => 'json'])",
         ]));
 
         self::assertSame('', $findings);

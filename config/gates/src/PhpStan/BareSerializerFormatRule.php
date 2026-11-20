@@ -35,18 +35,19 @@ final readonly class BareSerializerFormatRule implements Rule
 
     private const string CONTRACT_PARAMETER = 'format';
 
-    // each method of the Serializer contracts that takes a format, with the interface that declares it and the format's position, because only that argument names a format, so a 'json' string passed as data or a type stays allowed
+    // each method of the Serializer contracts that takes a format, with the interfaces that declare it (both normalizer contracts declare getSupportedTypes()) and the format's position, because only that argument names a format, so a 'json' string passed as data or a type stays allowed
     private const array FORMAT_ARGUMENTS = [
-        'serialize' => [SerializerInterface::class, 1],
-        'deserialize' => [SerializerInterface::class, 2],
-        'normalize' => [NormalizerInterface::class, 1],
-        'supportsnormalization' => [NormalizerInterface::class, 1],
-        'denormalize' => [DenormalizerInterface::class, 2],
-        'supportsdenormalization' => [DenormalizerInterface::class, 2],
-        'encode' => [EncoderInterface::class, 1],
-        'supportsencoding' => [EncoderInterface::class, 0],
-        'decode' => [DecoderInterface::class, 1],
-        'supportsdecoding' => [DecoderInterface::class, 0],
+        'serialize' => [[SerializerInterface::class], 1],
+        'deserialize' => [[SerializerInterface::class], 2],
+        'normalize' => [[NormalizerInterface::class], 1],
+        'supportsnormalization' => [[NormalizerInterface::class], 1],
+        'denormalize' => [[DenormalizerInterface::class], 2],
+        'supportsdenormalization' => [[DenormalizerInterface::class], 2],
+        'getsupportedtypes' => [[NormalizerInterface::class, DenormalizerInterface::class], 0],
+        'encode' => [[EncoderInterface::class], 1],
+        'supportsencoding' => [[EncoderInterface::class], 0],
+        'decode' => [[DecoderInterface::class], 1],
+        'supportsdecoding' => [[DecoderInterface::class], 0],
     ];
 
     public function getNodeType(): string
@@ -64,8 +65,8 @@ final readonly class BareSerializerFormatRule implements Rule
             return [];
         }
 
-        [$contract, $position] = self::FORMAT_ARGUMENTS[$this->methodName($node)] ?? [null, 0];
-        $classes = null === $contract ? [] : $this->serializerClasses($scope, $node, $contract);
+        [$contracts, $position] = self::FORMAT_ARGUMENTS[$this->methodName($node)] ?? [[], 0];
+        $classes = [] === $contracts ? [] : $this->serializerClasses($scope, $node, $contracts);
         $names = $this->formatParameterNames($classes, $this->methodName($node), $position);
 
         if ([] === $classes || !$this->isBareFormat(new SerializerCallArguments()->valueAt($node, $position, $names))) {
@@ -97,9 +98,11 @@ final readonly class BareSerializerFormatRule implements Rule
 
     // every class the receiver may be, so a nullable or a union receiver still counts while an unrelated class with a method of the same name does not
     /**
+     * @param list<class-string> $contracts
+     *
      * @return list<ClassReflection>
      */
-    private function serializerClasses(Scope $scope, MethodCall|NullsafeMethodCall|StaticCall $call, string $contract): array
+    private function serializerClasses(Scope $scope, MethodCall|NullsafeMethodCall|StaticCall $call, array $contracts): array
     {
         $receiver = match (true) {
             $call instanceof StaticCall && $call->class instanceof Name => $scope->resolveTypeByName($call->class),
@@ -109,7 +112,10 @@ final readonly class BareSerializerFormatRule implements Rule
 
         return array_values(array_filter(
             $receiver->getObjectClassReflections(),
-            static fn (ClassReflection $class): bool => $class->getName() === $contract || $class->implementsInterface($contract),
+            static fn (ClassReflection $class): bool => array_any(
+                $contracts,
+                static fn (string $contract): bool => $class->getName() === $contract || $class->implementsInterface($contract),
+            ),
         ));
     }
 
