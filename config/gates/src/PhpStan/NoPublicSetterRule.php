@@ -7,6 +7,7 @@ namespace Intakt\Gates\PhpStan;
 use PhpParser\Modifiers;
 use PhpParser\Node;
 use PhpParser\Node\Identifier;
+use PhpParser\Node\Name;
 use PhpParser\Node\Stmt;
 use PhpParser\Node\Stmt\ClassMethod;
 use PhpParser\Node\Stmt\Trait_;
@@ -120,16 +121,15 @@ final readonly class NoPublicSetterRule implements Rule
      */
     private function publicSetterAliases(TraitUse $use, ClassReflection $owner): array
     {
-        return array_values(array_filter($use->adaptations, fn (Node $adaptation): bool => $adaptation instanceof Alias && $this->aliasesToPublicSetter($adaptation, $owner)));
+        return array_values(array_filter($use->adaptations, fn (Node $adaptation): bool => $adaptation instanceof Alias && $this->aliasesToPublicSetter($adaptation, $use, $owner)));
     }
 
-    private function aliasesToPublicSetter(Alias $alias, ClassReflection $owner): bool
+    private function aliasesToPublicSetter(Alias $alias, TraitUse $use, ClassReflection $owner): bool
     {
         $name = $this->aliasedName($alias);
-        $visibility = ($alias->newModifier ?? 0) & Modifiers::VISIBILITY_MASK;
 
         // an alias that keeps the trait's name and visibility adds nothing the trait's own declaration did not show
-        if (!$this->setters->isSetterName($name) || (!$alias->newName instanceof Identifier && Modifiers::PUBLIC !== $visibility)) {
+        if (!$this->setters->isSetterName($name) || (!$alias->newName instanceof Identifier && !$this->widensToPublic($alias, $use))) {
             return false;
         }
 
@@ -141,6 +141,20 @@ final readonly class NoPublicSetterRule implements Rule
         }
 
         return $native->hasMethod($name) && $native->getMethod($name)->isPublic();
+    }
+
+    // `setTitle as public` on a method the trait already declares public changes nothing, so the trait's declaration stays its only finding
+    private function widensToPublic(Alias $alias, TraitUse $use): bool
+    {
+        if (Modifiers::PUBLIC !== (($alias->newModifier ?? 0) & Modifiers::VISIBILITY_MASK)) {
+            return false;
+        }
+
+        $method = $alias->method->toString();
+        $traits = array_filter(array_map(fn (Name $trait): ?ClassReflection => $this->reflections->hasClass($trait->toString()) ? $this->reflections->getClass($trait->toString()) : null, $alias->trait instanceof Name ? [$alias->trait] : $use->traits));
+        $declaring = array_find($traits, static fn (ClassReflection $trait): bool => $trait->getNativeReflection()->hasMethod($method));
+
+        return !$declaring instanceof ClassReflection || !$declaring->getNativeReflection()->getMethod($method)->isPublic();
     }
 
     private function aliasedName(Alias $alias): string

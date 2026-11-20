@@ -167,4 +167,14 @@ final class NoPublicSetterRuleTest extends PhpStanRuleTestCase
     {
         $this->assertRuleAccepts('private-trait-alias-setter');
     }
+
+    public function testKeepingAnAlreadyPublicTraitSetterPublicAddsNoClassFinding(): void
+    {
+        $this->assertRuleAccepts('redundant-public-trait-setter-alias');
+    }
+
+    public function testMakingAProtectedTraitSetterPublicByAnAliasFailsStaticAnalysis(): void
+    {
+        $this->assertRuleRejects('widened-trait-setter-alias', 'src/Book.php:10 intakt.noPublicSetter Method Intakt\Sample\Book::setTitle() is a public setter');
+    }
 }
