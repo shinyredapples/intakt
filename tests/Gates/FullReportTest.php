@@ -32,6 +32,25 @@ final class FullReportTest extends SandboxTestCase
         self::assertArrayNotHasKey('omitted', $report);
     }
 
+    public function testAChildKeepsAResultWhoseEleventhFindingHasABrokenByteAndTheReportHoldsEveryFinding(): void
+    {
+        $findings = [...array_fill(0, 10, 'valid finding'), "file-\xFF.md:1: U+2014"];
+        $result = GateResult::withFindings('dashes', $findings);
+        $results = $this->resultsKeeping();
+
+        putenv(FullReport::VARIABLE.'='.$results->path.'/dashes.json');
+
+        try {
+            FullReport::keep($result);
+        } finally {
+            putenv(FullReport::VARIABLE);
+        }
+
+        $report = $this->reportOf($results, $this->lineOf($result));
+
+        self::assertSame([...array_fill(0, 10, 'valid finding'), 'file-?.md:1: U+2014'], $report['findings']);
+    }
+
     public function testAKeptResultWithFewerFindingsThanItsLineAccountsForNamesNoReport(): void
     {
         $results = $this->resultsKeeping('cs', GateResult::withFindings('cs', $this->numbered(3))->toFullJson());

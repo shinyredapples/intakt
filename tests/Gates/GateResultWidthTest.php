@@ -35,4 +35,21 @@ final class GateResultWidthTest extends TestCase
 
         self::assertSame(['gate' => 'cs', 'ok' => false, 'findings' => $findings], $full);
     }
+
+    public function testAShortFindingWithABrokenByteGivesALineWithTheByteReplaced(): void
+    {
+        $line = json_decode(GateResult::failedBecause('dashes', "file-\xFF.md:1: U+2014")->toJson(), true, flags: JSON_THROW_ON_ERROR);
+        self::assertIsArray($line);
+
+        self::assertSame(['file-?.md:1: U+2014'], $line['findings']);
+    }
+
+    public function testTheFullJsonOfAFindingWithABrokenByteHasTheByteReplacedAsInTheLine(): void
+    {
+        $full = json_decode(GateResult::withFindings('dashes', [...array_fill(0, 10, 'valid finding'), "file-\xFF.md:1: U+2014"])->toFullJson(), true, flags: JSON_THROW_ON_ERROR);
+        self::assertIsArray($full);
+        self::assertIsArray($full['findings']);
+
+        self::assertSame('file-?.md:1: U+2014', $full['findings'][10]);
+    }
 }
