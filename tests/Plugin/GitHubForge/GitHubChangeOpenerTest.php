@@ -99,6 +99,57 @@ final class GitHubChangeOpenerTest extends TestCase
         self::assertSame([], $github->writes);
     }
 
+    public function testABranchWhoseOpenPullRequestAnotherAccountOpenedIsRefusedBeforeThePush(): void
+    {
+        $github = new ScriptedGitHub();
+        $github->openPulls = [['number' => 7, 'head' => ['ref' => 'task'], 'user' => ['login' => 'acme-loop[bot]']]];
+
+        $this->assertWriteFailsWith('not opened by this App', fn () => $github->opener()->refuseForeignChange('widgets', 'task'));
+        self::assertSame([], $github->writes);
+    }
+
+    public function testABranchWhoseOpenPullRequestHasNoAuthorIsRefusedBeforeThePush(): void
+    {
+        $github = new ScriptedGitHub();
+        $github->openPulls = [['number' => 7, 'head' => ['ref' => 'task']]];
+
+        $this->assertWriteFailsWith('not opened by this App', fn () => $github->opener()->refuseForeignChange('widgets', 'task'));
+    }
+
+    public function testABranchWhoseOpenPullRequestHasAnOwnerThatCannotBeCheckedIsRefusedBeforeThePush(): void
+    {
+        $github = new ScriptedGitHub();
+        $github->openPulls = [['number' => 7, 'head' => ['ref' => 'task'], 'user' => ['login' => ScriptedGitHub::OWN_LOGIN]]];
+        $github->appRefused = true;
+
+        $this->assertWriteFailsWith('could not be checked', fn () => $github->opener()->refuseForeignChange('widgets', 'task'));
+    }
+
+    public function testABranchWhoseOpenPullRequestThisAppOpenedMayBePushedAndNothingIsWrittenForTheCheck(): void
+    {
+        $github = new ScriptedGitHub();
+        $github->openPulls = [['number' => 7, 'head' => ['ref' => 'task'], 'user' => ['login' => ScriptedGitHub::OWN_LOGIN]]];
+
+        $github->opener()->refuseForeignChange('widgets', 'task');
+
+        self::assertSame([], $github->writes);
+    }
+
+    public function testABranchWithoutAnOpenPullRequestMayBePushed(): void
+    {
+        $github = new ScriptedGitHub();
+        $github->openPulls = [['number' => 7, 'head' => ['ref' => 'other'], 'user' => ['login' => 'acme-loop[bot]']]];
+
+        $github->opener()->refuseForeignChange('widgets', 'task');
+
+        self::assertSame([], $github->writes);
+    }
+
+    public function testAProjectWithoutAGitHubRepositoryIsRefusedBeforeThePush(): void
+    {
+        $this->assertWriteFailsWith('has no GitHub repository', fn () => new ScriptedGitHub()->opener()->refuseForeignChange('unknown', 'task'));
+    }
+
     public function testAnOpenPullRequestOfThisAppIsKnownWhateverTheCaseOfItsLogin(): void
     {
         $github = new ScriptedGitHub();

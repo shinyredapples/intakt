@@ -55,6 +55,9 @@ final readonly class PushBranch implements BranchPush
         $head = $this->signed->of($request->repository, $request->accepted, $main);
         $this->signed->verify($request->repository, $head, $main);
 
+        // Before the intent is recorded and the branch is pushed, because new commits on a branch move the head of a pull request another party opened on it.
+        $this->changes->refuseForeignChange($request->project, $request->branch);
+
         $notLanded = $this->notLanded($request, $head, $main);
 
         if (null !== $notLanded) {

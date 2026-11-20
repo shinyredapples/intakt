@@ -25,11 +25,14 @@ use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\ChangeText;
+use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
 use Intakt\Tests\Core\Git\TemporaryRepository;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
 
 #[CoversClass(PushBranch::class)]
 #[CoversClass(PushRecords::class)]
@@ -46,6 +49,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(AcceptedHandBack::class)]
 #[UsesClass(ChangeText::class)]
 #[UsesClass(ChangeId::class)]
+#[UsesClass(ForgeWriteFailed::class)]
 #[UsesClass(LedgerEvent::class)]
 #[UsesClass(AppendResult::class)]
 #[UsesClass(RecordedEvent::class)]
@@ -159,6 +163,38 @@ final class PushBranchTest extends TestCase
 
         self::assertSame($theirs, $this->scenario->remoteTip());
         self::assertSame(0, $this->scenario->changes->calls);
+    }
+
+    public function testABranchWhoseOpenPullRequestAnotherAccountOpenedIsNeitherPushedNorRecorded(): void
+    {
+        $first = $this->scenario->push()->push($this->scenario->request());
+        self::assertInstanceOf(PushedBranch::class, $first);
+        $next = $this->scenario->commitOnTheBranch('e.txt', "four\n");
+        $this->scenario->changes->openedByAnother = true;
+        $ledger = new RecordingLedger();
+        $git = new BranchGit(new HardenedGit());
+        $push = new PushBranch($git, $this->scenario->signedCommits(), new PushRecords($ledger), $this->scenario->changes, new LockFactory(new InMemoryStore()));
+
+        try {
+            // The remote tip is the checked base, so nothing but the owner check stands between this head and the other account's pull request.
+            (void) $push->push($this->scenario->request($first->head, $next));
+            self::fail('A branch whose open pull request another account opened must not be pushed.');
+        } catch (ForgeWriteFailed $refused) {
+            self::assertStringContainsString('not opened by this App', $refused->getMessage());
+        }
+
+        self::assertSame($first->head, $this->scenario->remoteTip());
+        self::assertSame([], $ledger->kinds());
+        self::assertSame(1, $this->scenario->changes->calls);
+    }
+
+    public function testTheOwnerOfTheOpenPullRequestIsAskedOnEveryPushThatGoesOn(): void
+    {
+        $pushed = $this->scenario->push()->push($this->scenario->request());
+
+        self::assertInstanceOf(PushedBranch::class, $pushed);
+        self::assertSame($pushed->head, $this->scenario->remoteTip());
+        self::assertSame(1, $this->scenario->changes->ownerChecks);
     }
 
     public function testThePushRefusesABranchThatIsGoneFromTheRemoteWhileTheBaseSaysItWasPushed(): void
@@ -314,7 +350,7 @@ final class PushBranchTest extends TestCase
         self::assertSame($pushed->change->value, $this->scenario->ledger->payloadOf(LedgerEventKind::ChangeOpened)['change']);
     }
 
-    public function testAFinishedPushIsNotRepeatedAndAsksTheForgeNothingAgain(): void
+    public function testAFinishedPushIsNotRepeatedAndWritesNothingToTheForgeAgain(): void
     {
         $push = $this->scenario->push();
         $first = $push->push($this->scenario->request());

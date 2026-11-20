@@ -8,6 +8,7 @@ use Closure;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\ChangeOpening;
 use Intakt\Plugin\Forge\Contract\ChangeText;
+use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
 use Intakt\Plugin\Forge\Contract\ProposedChange;
 use Override;
 
@@ -16,11 +17,23 @@ final class RecordingChangeOpening implements ChangeOpening
 {
     public int $opened = 0;
     public int $calls = 0;
+    public int $ownerChecks = 0;
+    public bool $openedByAnother = false;
     public ?Closure $during = null;
     public ?ChangeText $text = null;
 
     /** @var array<string, ChangeId> */
     private array $pulls = [];
+
+    #[Override]
+    public function refuseForeignChange(string $project, string $branch): void
+    {
+        ++$this->ownerChecks;
+
+        if ($this->openedByAnother) {
+            throw new ForgeWriteFailed(sprintf('The open pull request of branch %s was not opened by this App, so Intakt leaves it alone.', $branch));
+        }
+    }
 
     #[Override]
     public function openOrUpdate(ProposedChange $change): ChangeId

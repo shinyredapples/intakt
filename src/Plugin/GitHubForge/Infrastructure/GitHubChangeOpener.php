@@ -32,6 +32,11 @@ final readonly class GitHubChangeOpener implements ChangeOpening
     ) {
     }
 
+    public function refuseForeignChange(string $project, string $branch): void
+    {
+        $this->numberOfOpenPullRequest($this->addressOf($project), $branch);
+    }
+
     public function openOrUpdate(ProposedChange $change): ChangeId
     {
         $text = $change->text;
@@ -44,7 +49,7 @@ final readonly class GitHubChangeOpener implements ChangeOpening
         $open = $this->numberOfOpenPullRequest($repository, $change->branch);
         $payload = ['title' => $text->title, 'body' => $text->body, 'base' => $change->base];
 
-        // The look-up comes first and a write is never retried, so a crash between the two leaves at most the pull request the next call finds.
+        // The look-up checks the opener again (a pull request can be opened between the check before the push and this write); it comes first and a write is never retried, so a crash between the two leaves at most the pull request the next call finds.
         $number = null === $open
             ? $this->numberOf($this->send('POST', $repository->path().'/pulls', [...$payload, 'head' => $change->branch]))
             : $this->numberOf($this->send('PATCH', $repository->path().'/pulls/'.$open, $payload));
