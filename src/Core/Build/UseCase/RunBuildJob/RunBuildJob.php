@@ -26,6 +26,7 @@ use Intakt\Core\Job\Contract\JobResult;
 use Intakt\Core\Job\Contract\JobRunner;
 use Intakt\Core\Job\Contract\JobSpec;
 use Intakt\Plugin\Gate\Contract\Gate;
+use InvalidArgumentException;
 use NoDiscard;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Filesystem\Filesystem;

@@ -35,6 +35,7 @@ use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\PromptCut;
 use Intakt\Core\Review\Contract\UntrustedSource;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
+use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\Attributes\UsesClass;
