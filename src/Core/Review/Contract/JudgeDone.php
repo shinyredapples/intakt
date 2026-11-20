@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Contract;
 
+use Symfony\Component\DependencyInjection\Attribute\Exclude;
+
+// Excluded because the PHPStan rule intakt.flagParameter accepts the boolean `fallback` only as data a readonly value object marked #[Exclude] stores.
+#[Exclude]
 final readonly class JudgeDone
 {
     /**
