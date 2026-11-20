@@ -7,6 +7,8 @@ namespace Intakt\Tests\Plugin\GitHubWorkSource\Infrastructure;
 use DateTimeZone;
 use Doctrine\DBAL\Exception\TableNotFoundException;
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\ORM\Event\PostLoadEventArgs;
+use Doctrine\ORM\Events;
 use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Plugin\GitHubForge\Contract\IssueHistory;
 use Intakt\Plugin\GitHubForge\Contract\LabelApplication;
@@ -29,6 +31,7 @@ use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
+use WeakReference;
 
 #[Group('persistence')]
 #[CoversClass(IntakeStore::class)]
@@ -208,6 +211,45 @@ final class IntakeStoreTest extends KernelTestCase
         $this->entities->getConnection()->executeStatement("UPDATE work_source_issue SET waits_for = '[5]' WHERE number = 7");
 
         self::assertSame([5], array_first($this->store->issuesOf('alpha'))?->queued()->waitsFor());
+    }
+
+    public function testEveryCallReleasesItsEntityManagerSoRepeatedTicksKeepNoRowsInMemory(): void
+    {
+        $this->store->record('alpha', [$this->stored(Issues::task(7))], 'W/"a"');
+        $this->store->failForGood('alpha', 7, 'reason');
+        $listener = new class {
+            /** @var array<int, WeakReference<object>> */
+            public array $managers = [];
+
+            public function postLoad(PostLoadEventArgs $event): void
+            {
+                $manager = $event->getObjectManager();
+                $this->managers[spl_object_id($manager)] = WeakReference::create($manager);
+            }
+        };
+        $this->entities->getEventManager()->addEventListener([Events::postLoad], $listener);
+
+        for ($tick = 0; $tick < 50; ++$tick) {
+            $this->store->issuesOf('alpha');
+            $this->store->failuresOf('alpha');
+            $this->store->record('alpha', $this->store->issuesOf('alpha'), 'W/"a"');
+        }
+
+        $this->entities->getEventManager()->removeEventListener([Events::postLoad], $listener);
+        gc_collect_cycles();
+
+        self::assertNotSame([], $listener->managers);
+        self::assertSame(0, count(array_filter($listener->managers, static fn (WeakReference $manager): bool => null !== $manager->get())), 'Entity managers of finished calls are still referenced.');
+    }
+
+    public function testTheFailedForGoodReasonsOfAnotherProjectAreLeftOut(): void
+    {
+        $this->store->record('alpha', [$this->stored(Issues::task(7))], null);
+        $this->store->record('beta', [$this->stored(Issues::task(9), 'beta')], null);
+        $this->store->failForGood('alpha', 7, 'first');
+        $this->store->failForGood('beta', 9, 'other');
+
+        self::assertSame([7 => 'first'], $this->store->failuresOf('alpha'));
     }
 
     public function testRemovingTheRowOfAClosedTaskKeepsItsFailedForGoodReasonSoItsDependentsStayHeld(): void

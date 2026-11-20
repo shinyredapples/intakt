@@ -89,11 +89,33 @@ final readonly class IntakeStore
     public function failuresOf(string $project): array
     {
         $failures = [];
-        foreach ($this->ownManager()->getRepository(TaskFailure::class)->findBy(['project' => $project]) as $failure) {
+        foreach ($this->rowsOf($this->ownManager(), TaskFailure::class, $project) as $failure) {
             $failures[$failure->number()] = $failure->reason();
         }
 
         return $failures;
+    }
+
+    // A query and not a repository: the shared configuration's repository factory keeps every manager it built a repository for, with the rows that manager loaded, for the life of the worker.
+    /**
+     * @template T of StoredIssue|TaskFailure
+     *
+     * @param class-string<T> $class
+     *
+     * @return list<T>
+     */
+    private function rowsOf(EntityManagerInterface $manager, string $class, string $project): array
+    {
+        $rows = $manager->createQueryBuilder()
+            ->select('row')
+            ->from($class, 'row')
+            ->where('row.project = :project')
+            ->orderBy('row.number', 'ASC')
+            ->setParameter('project', $project)
+            ->getQuery()
+            ->getResult();
+
+        return array_values(array_filter(is_array($rows) ? $rows : [], static fn (mixed $row): bool => $row instanceof $class));
     }
 
     private function ownManager(): EntityManagerInterface
@@ -113,7 +135,7 @@ final readonly class IntakeStore
     private function storedIssuesOf(EntityManagerInterface $manager, string $project): array
     {
         $issues = [];
-        foreach ($manager->getRepository(StoredIssue::class)->findBy(['project' => $project], ['number' => 'ASC']) as $issue) {
+        foreach ($this->rowsOf($manager, StoredIssue::class, $project) as $issue) {
             $issues[$issue->number()] = $issue;
         }
 
