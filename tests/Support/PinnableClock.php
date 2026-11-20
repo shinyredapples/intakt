@@ -18,8 +18,6 @@ final class PinnableClock implements ClockInterface
     /** @var (Closure(): void)|null */
     private ?Closure $onSleep = null;
 
-    private bool $working = false;
-
     public function __construct(private readonly ClockInterface $real)
     {
     }
@@ -35,7 +33,21 @@ final class PinnableClock implements ClockInterface
      */
     public function workOnEachSleep(Closure $work): void
     {
-        $this->onSleep = $work;
+        // The guard lives in the closure, so every time-zone view of this clock shares it: work that sleeps through any view must not start itself again.
+        $working = false;
+        $this->onSleep = static function () use ($work, &$working): void {
+            if ($working) {
+                return;
+            }
+
+            $working = true;
+
+            try {
+                $work();
+            } finally {
+                $working = false;
+            }
+        };
     }
 
     public function now(): DateTimeImmutable
@@ -45,15 +57,8 @@ final class PinnableClock implements ClockInterface
 
     public function sleep(float|int $seconds): void
     {
-        // A handler the work runs may sleep on this clock too; it must not start the work again inside itself.
-        if ($this->onSleep instanceof Closure && !$this->working) {
-            $this->working = true;
-
-            try {
-                ($this->onSleep)();
-            } finally {
-                $this->working = false;
-            }
+        if ($this->onSleep instanceof Closure) {
+            ($this->onSleep)();
         }
 
         ($this->pinned ?? $this->real)->sleep($seconds);

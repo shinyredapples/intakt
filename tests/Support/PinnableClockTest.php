@@ -70,6 +70,21 @@ final class PinnableClockTest extends KernelTestCase
         self::assertSame('2026-10-28T12:02:00+00:00', $clock->now()->format('c'));
     }
 
+    public function testASleepInsideTheWorkThroughATimeZoneViewDoesNotStartTheWorkAgain(): void
+    {
+        $clock = new PinnableClock(new NativeClock());
+        $clock->pinAt('2026-10-28T12:00:00+00:00');
+        $runs = 0;
+        $clock->workOnEachSleep(static function () use ($clock, &$runs): void {
+            ++$runs;
+            $clock->withTimeZone('UTC')->sleep(60);
+        });
+
+        $clock->sleep(60);
+
+        self::assertSame(1, $runs);
+    }
+
     public function testAKernelInTheTestEnvironmentOutsideAPhpunitRunKeepsTheRealClock(): void
     {
         $run = new Process([PHP_BINARY, __DIR__.'/Fixtures/name-the-clock-outside-phpunit.php'], dirname(__DIR__, 2), [LogRecords::FILE_VARIABLE => false]);

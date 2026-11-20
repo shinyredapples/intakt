@@ -140,7 +140,7 @@
                         }
                     },
                     "last_outcomes": {
-                        "description": "The last ended round of each change (judged, or ended without the judge's call), newest first by when it was judged or ended, at most ten; it stays while a next round of the change runs.",
+                        "description": "The last ended round of each change (judged, or ended without the judge's call), newest first by when it was judged or ended (a judging parked in the failure transport without a recorded failure time sorts by when its round started), at most ten; it stays while a next round of the change runs.",
                         "type": "array",
                         "maxItems": 10,
                         "items": {
