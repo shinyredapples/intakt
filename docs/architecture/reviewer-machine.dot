@@ -5,6 +5,7 @@ digraph workflow {
 
   place_efcc77141dbfd3ab9c9315b5d04cb462de5bb921 [label=<<B>queued</B>>, shape=circle style="filled"];
   place_3c49d9cc3c0c83421a1cfb921cdd4aa35dc1ba5c [label=<<B>running</B>>, shape=circle];
+  place_d897bf481c6d3038f32cd50b3a8b5f6cf56b6348 [label=<<B>interrupted</B>>, shape=circle];
   place_860360acc76b71aea886109b81a8429a8d3c4576 [label=<<B>verdict</B>>, shape=circle];
   place_5f5f8758f5f22d523e531f58123b6db9161683a4 [label=<<B>failed</B>>, shape=circle];
   place_df88b84d816d3358b3793a61b73d80e93913e627 [label=<<B>blocked</B>>, shape=circle];
@@ -14,5 +15,8 @@ digraph workflow {
   place_3c49d9cc3c0c83421a1cfb921cdd4aa35dc1ba5c -> place_5f5f8758f5f22d523e531f58123b6db9161683a4 [label="fail" style="solid"];
   place_3c49d9cc3c0c83421a1cfb921cdd4aa35dc1ba5c -> place_efcc77141dbfd3ab9c9315b5d04cb462de5bb921 [label="requeue" style="solid"];
   place_3c49d9cc3c0c83421a1cfb921cdd4aa35dc1ba5c -> place_df88b84d816d3358b3793a61b73d80e93913e627 [label="block" style="solid"];
+  place_3c49d9cc3c0c83421a1cfb921cdd4aa35dc1ba5c -> place_d897bf481c6d3038f32cd50b3a8b5f6cf56b6348 [label="interrupt" style="solid"];
+  place_d897bf481c6d3038f32cd50b3a8b5f6cf56b6348 -> place_df88b84d816d3358b3793a61b73d80e93913e627 [label="block" style="solid"];
+  place_d897bf481c6d3038f32cd50b3a8b5f6cf56b6348 -> place_3c49d9cc3c0c83421a1cfb921cdd4aa35dc1ba5c [label="resume" style="solid"];
 }
 
