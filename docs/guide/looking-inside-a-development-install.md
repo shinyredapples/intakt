@@ -1,0 +1,25 @@
+# Looking inside a development install
+
+When you work on Intakt itself, you can ask a running development install what a request did, instead of guessing from the code.
+
+## What a profile is
+
+A development install (`APP_ENV=dev`) writes down a short **profile** of every request it answers: the database queries it ran, the messages it sent, how long it took and how much memory it used. Nothing else goes into it: no headers, cookies, session, request body or environment variables, and the address stops before any `?`, so no secret ends up in a profile.
+
+The answer to each request names its profile in the `X-Debug-Token` header.
+
+## Reading one
+
+1. Start the install and send it a request, for example `curl -si http://localhost:PORT/`.
+2. Copy the value of the `X-Debug-Token` header.
+3. Run `vendor/bin/mate tools:call symfony-profiler-get --token=TOKEN --format=json`. It names the request and lists what was collected.
+
+`vendor/bin/mate tools:call symfony-profiler-list --format=json` lists the latest profiles, newest first, when you did not keep the token.
+
+There is no toolbar and no `/_profiler` page; these two tools are the way to read a profile.
+
+## What is not in the image
+
+Mate and the profiler belong to the development install. The container image has neither: it is built without the development packages, and a production install saves no profiles at all.
+
+For the other tools of the same kind (the services, the environment and the read-only console commands), see [Looking inside the development install with Mate](../user/README.md).
