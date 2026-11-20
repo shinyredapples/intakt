@@ -68,7 +68,7 @@ final readonly class SerializerCallArguments
 
         $items = array_map($this->item(...), $argument->value->items);
 
-        return in_array(null, $items, true) ? null : array_values(array_filter($items));
+        return in_array(null, $items, true) ? null : array_values($items);
     }
 
     /**
@@ -78,7 +78,7 @@ final readonly class SerializerCallArguments
     {
         return match (true) {
             $item->unpack => null,
-            null === $item->key, $item->key instanceof Int_ => [null, $item->value],
+            !$item->key instanceof Expr, $item->key instanceof Int_ => [null, $item->value],
             $item->key instanceof String_ => [$item->key->value, $item->value],
             default => null,
         };

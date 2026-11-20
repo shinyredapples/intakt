@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\PhpStan\BareSerializerFormatRule;
+use Intakt\Gates\PhpStan\SerializerCallArguments;
 use PhpParser\Node\Expr\MethodCall;
 use PhpParser\Node\Expr\Variable;
 use PhpParser\Node\Identifier;
 use PhpParser\Node\VariadicPlaceholder;
-use Intakt\Gates\PhpStan\SerializerCallArguments;
 use PHPStan\Analyser\CollectedDataEmitter;
 use PHPStan\Analyser\DependencyTracker;
 use PHPStan\Analyser\NodeCallbackInvoker;
@@ -115,7 +115,10 @@ final class BareSerializerFormatRuleTest extends PhpStanRuleTestCase
     {
         $node = new MethodCall(new Variable('other'), new Identifier('encode'), [new VariadicPlaceholder()]);
 
-        $errors = new BareSerializerFormatRule()->processNode($node, self::createStubForIntersectionOfInterfaces([Scope::class, CollectedDataEmitter::class, DependencyTracker::class, NodeCallbackInvoker::class]));
+        /** @var Scope&CollectedDataEmitter&DependencyTracker&NodeCallbackInvoker $scope */
+        $scope = self::createStubForIntersectionOfInterfaces([Scope::class, CollectedDataEmitter::class, DependencyTracker::class, NodeCallbackInvoker::class]);
+
+        $errors = new BareSerializerFormatRule()->processNode($node, $scope);
 
         self::assertSame([], $errors);
     }
