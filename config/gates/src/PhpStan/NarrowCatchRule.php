@@ -189,7 +189,7 @@ final readonly class NarrowCatchRule implements Rule
     private function returnsAnOutcome(Return_ $return): bool
     {
         return $return->expr instanceof Expr
-            && !($return->expr instanceof ConstFetch && 'null' === $return->expr->name->toLowerString());
+            && (!$return->expr instanceof ConstFetch || 'null' !== $return->expr->name->toLowerString());
     }
 
     // closures, functions and classes declared in the catch do not run when it does, so what they contain handles nothing
