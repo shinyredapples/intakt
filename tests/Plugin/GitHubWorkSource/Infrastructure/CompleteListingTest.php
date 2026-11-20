@@ -9,6 +9,7 @@ use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Plugin\GitHubForge\Contract\IssueHistories;
 use Intakt\Plugin\GitHubForge\Contract\IssueListing;
 use Intakt\Plugin\GitHubForge\Contract\IssueReads;
+use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
 use Intakt\Plugin\GitHubForge\Contract\SteeringAccounts;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubIssueHistories;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubIssueReads;
@@ -20,6 +21,7 @@ use Intakt\Plugin\GitHubWorkSource\Domain\ItemReading;
 use Intakt\Plugin\GitHubWorkSource\Domain\ListingRows;
 use Intakt\Plugin\GitHubWorkSource\Domain\QueuedIssue;
 use Intakt\Plugin\GitHubWorkSource\Domain\StoredIssue;
+use Intakt\Plugin\GitHubWorkSource\Domain\SyncState;
 use Intakt\Plugin\GitHubWorkSource\Domain\Vouching;
 use Intakt\Plugin\GitHubWorkSource\Infrastructure\CompleteListing;
 use Intakt\Plugin\GitHubWorkSource\Infrastructure\IntakeStore;
@@ -49,6 +51,7 @@ use Symfony\Component\ErrorHandler\BufferingLogger;
 #[UsesClass(ItemReading::class)]
 #[UsesClass(ListingRows::class)]
 #[UsesClass(QueuedIssue::class)]
+#[UsesClass(SyncState::class)]
 #[UsesClass(Vouching::class)]
 final class CompleteListingTest extends KernelTestCase
 {
@@ -128,7 +131,7 @@ final class CompleteListingTest extends KernelTestCase
 
         self::assertNull($plan);
         self::assertSame([7, 8], $this->numbersOf($this->store->issuesOf('alpha')));
-        self::assertSame(self::VALIDATOR, $this->store->validatorOf('alpha'));
+        self::assertSame(self::VALIDATOR, $this->store->syncStateOf('alpha')->validator);
         self::assertSame(['GitHub answered 502 to a read.'], $this->shortListingReasons());
     }
 
@@ -315,14 +318,81 @@ final class CompleteListingTest extends KernelTestCase
         $this->reads->lists([Issues::task(3), Issues::task(10, ['intakt'], ['body' => 'Waits for #3'])], 'W/"issues-2"');
         $this->reads->during = function (): void {
             $newer = $this->store->issuesOf('alpha')[1];
-            (void) $this->store->recordIfStill('alpha', self::VALIDATOR, new ListingRows([$newer], 'W/"issues-3"'));
+            (void) $this->store->recordIfStill('alpha', $this->store->syncStateOf('alpha'), new ListingRows([$newer], 'W/"issues-3"'));
         };
 
         $plan = $this->planOf();
 
         self::assertSame([10], $this->numbersOf($plan->ready));
-        self::assertSame('W/"issues-3"', $this->store->validatorOf('alpha'));
+        self::assertSame('W/"issues-3"', $this->store->syncStateOf('alpha')->validator);
         self::assertSame([10], $this->numbersOf($this->store->issuesOf('alpha')));
+    }
+
+    public function testAnOlderListingWithoutAValidatorLosesToANewerOneStoredDuringItAndTheNewerRowsStay(): void
+    {
+        $this->reads->lists([Issues::task(3), Issues::task(10, ['intakt'], ['body' => 'Waits for #3'])], null);
+        $this->planOf();
+        $this->reads->lists([Issues::task(3), Issues::task(10, ['intakt'], ['body' => 'Waits for #3'])], null);
+        $this->storedMeanwhile([$this->rowOf(10)], null);
+
+        $plan = $this->planOf();
+
+        self::assertSame([10], $this->numbersOf($plan->ready));
+        self::assertSame([10], $this->numbersOf($this->store->issuesOf('alpha')));
+    }
+
+    public function testTheFirstSyncOfAProjectLosesCleanlyToOneThatCommittedDuringIt(): void
+    {
+        $this->reads->lists([Issues::task(3), Issues::task(10, ['intakt'], ['body' => 'Waits for #3'])], null);
+        $this->storedMeanwhile([$this->rowOfListed(Issues::task(10, ['intakt'], ['body' => 'Waits for #3']))], null);
+
+        $plan = $this->planOf();
+
+        self::assertSame([10], $this->numbersOf($plan->ready));
+        self::assertSame([10], $this->numbersOf($this->store->issuesOf('alpha')));
+        self::assertSame([], $this->shortListingReasons());
+    }
+
+    public function testAfterALostWriteARowThatIsACandidateUnderThisSyncsEligibilityLabelIsVouchedBeforeThePlanIsAnswered(): void
+    {
+        $this->reads->lists([Issues::task(7, ['ready']), Issues::task(8, ['intakt'])]);
+        $this->reads->during = function (): void {
+            self::assertInstanceOf(IntakePlan::class, $this->listingOver($this->reads, $this->histories)->planOf('alpha'));
+        };
+
+        $plan = $this->listingOver($this->reads, $this->histories, 'ready')->planOf('alpha');
+
+        self::assertInstanceOf(IntakePlan::class, $plan);
+        self::assertSame([7], $this->numbersOf($plan->ready));
+        self::assertSame([8, 7, 7], $this->histories->read);
+    }
+
+    public function testAHistoryThatCannotBeReadAfterALostWriteLeavesTheListingShort(): void
+    {
+        $this->reads->lists([Issues::task(7, ['ready'])]);
+        $this->storedMeanwhile([$this->rowOfListed(Issues::task(7, ['ready', 'urgent']))], 'W/"issues-2"');
+
+        $plan = $this->listingOver($this->reads, $this->histories, 'ready')->planOf('alpha');
+
+        self::assertNull($plan);
+        self::assertSame(['GitHub holds #7 with other text or labels than it was listed with, so its history is not of the listed item.'], $this->shortListingReasons());
+    }
+
+    /**
+     * @param list<StoredIssue> $rows
+     */
+    private function storedMeanwhile(array $rows, ?string $validator): void
+    {
+        $this->reads->during = function () use ($rows, $validator): void {
+            self::assertTrue($this->store->recordIfStill('alpha', $this->store->syncStateOf('alpha'), new ListingRows($rows, $validator)));
+        };
+    }
+
+    private function rowOfListed(ListedIssue $listed): StoredIssue
+    {
+        $references = new IssueReferences();
+
+        return StoredIssue::of('alpha', new ItemReading($listed, $references->waitsFor($listed->body), $references->unreadableWaits($listed->body), $references->closedBy($listed->body)));
     }
 
     private function planOf(): IntakePlan

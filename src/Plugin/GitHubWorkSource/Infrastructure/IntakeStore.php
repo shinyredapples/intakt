@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace Intakt\Plugin\GitHubWorkSource\Infrastructure;
 
 use Doctrine\Common\EventManager;
+use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Intakt\Plugin\GitHubWorkSource\Domain\IntakeValidator;
 use Intakt\Plugin\GitHubWorkSource\Domain\ListingRows;
 use Intakt\Plugin\GitHubWorkSource\Domain\StoredIssue;
+use Intakt\Plugin\GitHubWorkSource\Domain\SyncState;
 use Intakt\Plugin\GitHubWorkSource\Domain\TaskFailure;
 use Intakt\Plugin\WorkSource\Contract\TaskNotQueued;
 use InvalidArgumentException;
@@ -33,27 +35,40 @@ final readonly class IntakeStore
         return array_values($this->storedIssuesOf($this->ownManager(), $project));
     }
 
-    public function validatorOf(string $project): ?string
+    public function syncStateOf(string $project): SyncState
     {
-        return $this->ownManager()->find(IntakeValidator::class, $project)?->value();
+        return $this->ownManager()->find(IntakeValidator::class, $project)?->state() ?? SyncState::neverSynced();
     }
 
-    // Written only while the stored validator is still the one the listing was asked with, because otherwise another worker stored a newer listing meanwhile and these rows would replace it with an older one.
+    // Written only while the stored generation is still the one read before the listing, because otherwise another worker stored a newer listing meanwhile and these rows would replace it with an older one.
     #[NoDiscard]
-    public function recordIfStill(string $project, ?string $askedWith, ListingRows $rows): bool
+    public function recordIfStill(string $project, SyncState $readBefore, ListingRows $rows): bool
     {
         $listed = $this->listed($project, $rows->issues);
 
-        return $this->ownManager()->wrapInTransaction(function (EntityManagerInterface $manager) use ($project, $askedWith, $listed, $rows): bool {
-            if ($manager->find(IntakeValidator::class, $project, LockMode::PESSIMISTIC_WRITE)?->value() !== $askedWith) {
-                return false;
-            }
+        try {
+            return $this->ownManager()->wrapInTransaction(function (EntityManagerInterface $manager) use ($project, $readBefore, $listed, $rows): bool {
+                $sync = $manager->find(IntakeValidator::class, $project, LockMode::PESSIMISTIC_WRITE);
+                if (($sync?->state() ?? SyncState::neverSynced())->generation !== $readBefore->generation) {
+                    return false;
+                }
 
-            $this->replaceRows($manager, $project, $listed);
-            $this->recordValidator($manager, $project, $rows->validator);
+                $this->replaceRows($manager, $project, $listed);
+                // Kept also when the forge sent no validator, so the next listing is a full one and still has a generation to compare.
+                if ($sync instanceof IntakeValidator) {
+                    $sync->advance($rows->validator);
 
-            return true;
-        });
+                    return true;
+                }
+
+                $manager->persist(new IntakeValidator($project, $rows->validator));
+
+                return true;
+            });
+        } catch (UniqueConstraintViolationException) {
+            // The first sync of a project finds no row to lock, so a worker that inserted the row meanwhile stored the newer listing, and this one loses.
+            return false;
+        }
     }
 
     // Apart from the issue rows, so a task that is closed after it failed for good still holds the tasks that wait on it.
@@ -178,25 +193,5 @@ final readonly class IntakeStore
         }
 
         $manager->persist($issue);
-    }
-
-    private function recordValidator(EntityManagerInterface $manager, string $project, ?string $validator): void
-    {
-        $stored = $manager->find(IntakeValidator::class, $project);
-        if (null === $validator) {
-            if (null !== $stored) {
-                $manager->remove($stored);
-            }
-
-            return;
-        }
-
-        if (null === $stored) {
-            $manager->persist(new IntakeValidator($project, $validator));
-
-            return;
-        }
-
-        $stored->replace($validator);
     }
 }

@@ -42,25 +42,25 @@ final readonly class CompleteListing
     #[NoDiscard]
     public function planOf(string $project): ?IntakePlan
     {
-        $askedWith = $this->store->validatorOf($project);
+        $readBefore = $this->store->syncStateOf($project);
         try {
-            $listing = $this->reads->listOpen($project, $askedWith);
+            $listing = $this->reads->listOpen($project, $readBefore->validator);
             $rows = $this->rowsOf($project, $listing);
             $vouched = $this->vouchWhatSteers($project, $rows);
         } catch (ForgeReadFailed|ForgeRateLimited|TrustNotChecked $short) {
-            $this->logger->warning('The open-issue listing of project {project} came back short, so nothing is picked and no wait closes this tick: {reason}', ['project' => $project, 'reason' => $short->getMessage(), 'exception' => $short]);
-
-            return null;
+            return $this->shortListing($project, $short);
         }
 
         if ($listing->isUnchanged() && [] === $vouched) {
             return $this->planOver($project, $rows);
         }
 
-        $listed = new ListingRows($rows, $listing->isUnchanged() ? $askedWith : $listing->validator);
+        $listed = new ListingRows($rows, $listing->isUnchanged() ? $readBefore->validator : $listing->validator);
+        if ($this->store->recordIfStill($project, $readBefore, $listed)) {
+            return $this->planOver($project, $rows);
+        }
 
-        // Another worker that stored a listing meanwhile holds the newer rows, so those are the ones to answer from.
-        return $this->planOver($project, $this->store->recordIfStill($project, $askedWith, $listed) ? $rows : $this->store->issuesOf($project));
+        return $this->planOverTheNewerRows($project);
     }
 
     // An unchanged listing is answered from the stored rows, and so is the history of an item whose update time stands; the rest is taken from the listing, because the milestone due date changes without moving it.
@@ -126,11 +126,31 @@ final readonly class CompleteListing
         return $history;
     }
 
+    private function shortListing(string $project, ForgeReadFailed|ForgeRateLimited|TrustNotChecked $short): null
+    {
+        $this->logger->warning('The open-issue listing of project {project} came back short, so nothing is picked and no wait closes this tick: {reason}', ['project' => $project, 'reason' => $short->getMessage(), 'exception' => $short]);
+
+        return null;
+    }
+
     /**
      * @param list<StoredIssue> $rows
      */
     private function planOver(string $project, array $rows): IntakePlan
     {
         return $this->rules->planOf(array_map(static fn (StoredIssue $row): QueuedIssue => $row->queued(), $rows), $this->store->failuresOf($project));
+    }
+
+    // Another worker that stored a listing meanwhile holds the newer rows, but vouched them under its own eligibility label, so a row that is a candidate under this one has its history read first; the rows are not written again, because only a write that won may write.
+    private function planOverTheNewerRows(string $project): ?IntakePlan
+    {
+        $newer = $this->store->issuesOf($project);
+        try {
+            $this->vouchWhatSteers($project, $newer);
+        } catch (ForgeReadFailed|ForgeRateLimited|TrustNotChecked $short) {
+            return $this->shortListing($project, $short);
+        }
+
+        return $this->planOver($project, $newer);
     }
 }
