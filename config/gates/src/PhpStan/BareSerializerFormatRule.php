@@ -8,7 +8,6 @@ use PhpParser\Node;
 use PhpParser\Node\Expr;
 use PhpParser\Node\Expr\CallLike;
 use PhpParser\Node\Expr\MethodCall;
-use PhpParser\Node\Expr\NullsafeMethodCall;
 use PhpParser\Node\Expr\StaticCall;
 use PhpParser\Node\Identifier;
 use PhpParser\Node\Name;
@@ -65,8 +64,8 @@ final readonly class BareSerializerFormatRule implements Rule
      */
     public function processNode(Node $node, Scope $scope): array
     {
-        // checked first because a first-class callable has no arguments, and asking it for them fails an assertion inside the parser
-        if (!$node instanceof MethodCall && !$node instanceof NullsafeMethodCall && !$node instanceof StaticCall || $node->isFirstClassCallable()) {
+        // checked first because a first-class callable has no arguments, and asking it for them fails an assertion inside the parser; a nullsafe call is left out because PHPStan also hands the rule the same call as a plain MethodCall, so handling both reported it twice
+        if (!$node instanceof MethodCall && !$node instanceof StaticCall || $node->isFirstClassCallable()) {
             return [];
         }
 
@@ -87,7 +86,7 @@ final readonly class BareSerializerFormatRule implements Rule
     }
 
     // a braced literal name such as ->{'serialize'} counts too, because it calls the same method as the plain name
-    private function methodName(MethodCall|NullsafeMethodCall|StaticCall $call): string
+    private function methodName(MethodCall|StaticCall $call): string
     {
         return match (true) {
             $call->name instanceof Identifier => $call->name->toLowerString(),
@@ -108,7 +107,7 @@ final readonly class BareSerializerFormatRule implements Rule
      *
      * @return list<ClassReflection>
      */
-    private function serializerClasses(Scope $scope, MethodCall|NullsafeMethodCall|StaticCall $call, array $contracts): array
+    private function serializerClasses(Scope $scope, MethodCall|StaticCall $call, array $contracts): array
     {
         $receiver = match (true) {
             $call instanceof StaticCall && $call->class instanceof Name => $scope->resolveTypeByName($call->class),

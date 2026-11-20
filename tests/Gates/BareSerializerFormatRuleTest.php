@@ -71,6 +71,23 @@ final class BareSerializerFormatRuleTest extends PhpStanRuleTestCase
         self::assertSame('', $findings);
     }
 
+    public function testANullsafeCallWithABareJsonFormatGivesExactlyOneFinding(): void
+    {
+        $findings = $this->ruleFindingsIn($this->sandboxReturning(["\$maybe?->serialize(\$data, 'json')"]));
+
+        self::assertSame(1, substr_count($findings, 'intakt.bareSerializerFormat'), $findings);
+        self::assertStringContainsString('src/Report.php:'.self::FIRST_CASE_LINE.' intakt.bareSerializerFormat', $findings);
+    }
+
+    public function testANullsafeCallWithTheEncoderConstantPassesStaticAnalysis(): void
+    {
+        $findings = $this->ruleFindingsIn($this->sandboxReturning([
+            '$maybe?->serialize($data, \Symfony\Component\Serializer\Encoder\JsonEncoder::FORMAT)',
+        ]));
+
+        self::assertSame('', $findings);
+    }
+
     public function testAnUnpackedJsonThatPhpDoesNotPassAsTheFormatPassesStaticAnalysis(): void
     {
         $findings = $this->ruleFindingsIn($this->sandboxReturning([

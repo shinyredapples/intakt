@@ -9,7 +9,6 @@ use PhpParser\Node\ArrayItem;
 use PhpParser\Node\Expr;
 use PhpParser\Node\Expr\Array_;
 use PhpParser\Node\Expr\MethodCall;
-use PhpParser\Node\Expr\NullsafeMethodCall;
 use PhpParser\Node\Expr\StaticCall;
 use PhpParser\Node\Identifier;
 use PhpParser\Node\Scalar\Int_;
@@ -20,7 +19,7 @@ final readonly class SerializerCallArguments
     /**
      * @param list<string> $names
      */
-    public function valueAt(MethodCall|NullsafeMethodCall|StaticCall $call, int $position, array $names): ?Expr
+    public function valueAt(MethodCall|StaticCall $call, int $position, array $names): ?Expr
     {
         $passed = 0;
 
