@@ -11,6 +11,7 @@ use Intakt\Core\Build\Contract\BuildRouting;
 use Intakt\Core\Build\Contract\BuildRoutingNotConfigured;
 use Intakt\Core\Build\Contract\BuildStep;
 use Intakt\Core\Build\Contract\BuildStepOutcome;
+use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildCloneIsNoFolder;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuilderNotOnClaudeCode;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
@@ -45,6 +46,7 @@ final readonly class BuildTask
         private HandBackCheck $handBacks,
         private PrePushCheck $prePushChecks,
         private PushStep $pushes,
+        private ParkedTasks $parkedTasks,
         private Ledger $ledger,
     ) {
     }
@@ -88,6 +90,11 @@ final readonly class BuildTask
 
             // A local of this run, never a property, because a worker keeps the service between runs.
             $results[$step->value] = $result;
+
+            if ($result instanceof BuildJobOutcome && $result->question instanceof BuildQuestion) {
+                return $this->park($request, $task, $result->question);
+            }
+
             $failure = $this->failureIn($result);
 
             $this->record($request, $step, $failure);
@@ -98,6 +105,20 @@ final readonly class BuildTask
         }
 
         return new BuildTaskOutcome(array_last(BuildStep::cases()), null, $task);
+    }
+
+    // The run ends at the build job without recording its step, because park() records it as asked in the transaction that stores the question.
+    private function park(BuildTaskRequest $request, ListedIssue $task, BuildQuestion $question): BuildTaskOutcome
+    {
+        try {
+            $this->parkedTasks->park($request->project, $request->issue, $question);
+        } catch (TaskNotParked $notParked) {
+            $this->record($request, BuildStep::BuildJob, $notParked->getMessage());
+
+            return new BuildTaskOutcome(BuildStep::BuildJob, $notParked->getMessage(), $task);
+        }
+
+        return new BuildTaskOutcome(BuildStep::BuildJob, null, $task);
     }
 
     // A job that built and a hand-back the check accepted give their result instead of a failure, so their step passed.
@@ -147,7 +168,7 @@ final readonly class BuildTask
         return null;
     }
 
-    // The outcome of a job that built, for the hand-back check, otherwise the failure's text.
+    // The outcome of a job that built, for the hand-back check, or of one that asked an accepted question, for the parking; otherwise the failure's text.
     private function runBuildJob(BuildTaskRequest $request, ListedIssue $task): BuildJobOutcome|string
     {
         try {
@@ -157,7 +178,7 @@ final readonly class BuildTask
         }
 
         // What the job hands back stays untrusted until the hand-back check, so only its verdict reaches the ledger.
-        return $outcome->built() ? $outcome : $outcome->verdict->reason();
+        return $outcome->built() || $outcome->question instanceof BuildQuestion ? $outcome : $outcome->verdict->reason();
     }
 
     /**

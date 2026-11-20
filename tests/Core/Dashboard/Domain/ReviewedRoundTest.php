@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\ReviewerOutcome;
 use Intakt\Core\Dashboard\Domain\ReviewOutcome;
+use Intakt\Core\Dashboard\Domain\RoundFinding;
 use Intakt\Core\Dashboard\Domain\RoundPlace;
 use Intakt\Core\Dashboard\Domain\RoundStart;
 use Intakt\Core\Review\Contract\Decision;
@@ -22,8 +23,27 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(ReviewedRound::class)]
 #[UsesClass(ReviewOutcome::class)]
 #[UsesClass(ReviewerOutcome::class)]
+#[UsesClass(RoundFinding::class)]
 final class ReviewedRoundTest extends TestCase
 {
+    public function testAReportedSeverityIsReadPerReviewerSoTwoReviewersKeepTheirOwnForOneId(): void
+    {
+        $round = $this->round()->withSeveritiesByReviewer(['r-1' => ['F1' => 'P2'], 'r-2' => ['F1' => 'P1']]);
+
+        self::assertSame(['P2', 'P1', null, null], [$round->severityReportedBy('r-1', 'F1'), $round->severityReportedBy('r-2', 'F1'), $round->severityReportedBy('r-1', 'F2'), $round->severityReportedBy('r-3', 'F1')]);
+    }
+
+    public function testEveryFindingCountsAsRecordedUntilTheRoundIsMarkedOtherwise(): void
+    {
+        self::assertTrue($this->round()->everyFindingRecorded);
+        self::assertFalse($this->round()->withFindingsMissing()->everyFindingRecorded);
+    }
+
+    public function testWhetherTheJudgeFellBackIsUnknownUntilItsRowSays(): void
+    {
+        self::assertSame([null, true, false], [$this->round()->judgeFellBack, $this->round()->judgedByFallback()->judgeFellBack, $this->round()->judgedOnItsOwnMarks()->judgeFellBack]);
+    }
+
     public function testAJudgedRoundDecidedAsChangesGivesChangesRequested(): void
     {
         self::assertSame(ReviewOutcome::ChangesRequested, $this->judged()->decidedAs(Decision::Changes)->reviewOutcome());

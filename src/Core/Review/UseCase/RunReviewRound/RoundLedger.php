@@ -96,6 +96,7 @@ final readonly class RoundLedger
             $reported->reviewer->round()->id()->toRfc4122(),
             $reported->reviewer->id()->toRfc4122(),
             $reported->findings,
+            $reported->severities,
         ));
     }
 
@@ -148,6 +149,7 @@ final readonly class RoundLedger
             $judged->sameCause,
             $votes,
             $this->p1KeysOf($round, $judged),
+            $judged->fallback,
         ));
     }
 

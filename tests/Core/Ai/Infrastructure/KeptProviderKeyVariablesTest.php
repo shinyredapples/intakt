@@ -133,6 +133,22 @@ final class KeptProviderKeyVariablesTest extends TestCase
         self::assertSame(['HF_TOKEN' => 'hf_'.self::BODY], $this->variablesOf('hf_'.self::BODY, [$failing]));
     }
 
+    public function testAnotherLoaderThatFailsIsLoggedWithOnlyAFixedMessage(): void
+    {
+        $failing = self::createStub(EnvVarLoaderInterface::class);
+        $failing->method('loadEnvVars')->willThrowException(new RuntimeException('vault-content-marker'));
+        $providers = new SymfonyAiProviderCatalog();
+        $keys = self::createStub(KeptProviderKeys::class);
+        $keys->method('read')->willReturn(ProviderKey::recognise('hf_'.self::BODY, $providers));
+        $logger = $this->createMock(LoggerInterface::class);
+        $logger->expects(self::once())->method('warning')->with(
+            'Another env loader failed, so its variable counts as set and the kept key does not stand in for it.',
+            ['loader' => $failing::class, 'exception_class' => RuntimeException::class],
+        );
+
+        new KeptProviderKeyVariables($keys, $providers, $logger, [$failing])->loadEnvVars();
+    }
+
     public function testAKeptKeyOfAProviderTheCatalogNoLongerListsLoadsNoVariable(): void
     {
         $keys = self::createStub(KeptProviderKeys::class);

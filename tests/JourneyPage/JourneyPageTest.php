@@ -99,7 +99,7 @@ final class JourneyPageTest extends TestCase
             | Milestone | Goal | Due | Last issue closed | Done / open (counted) |
             |---|---|---|---|---|
             | M0 Unblock | fixes the build loop needed first | 10-27 | 11-05 | 2 / 0 |
-            | M5 Demo | `docker compose up` \| the path | 11-21 | open | 1 / 1 |
+            | M5 Demo | \`docker compose up\` \| the path | 11-21 | open | 1 / 1 |
             | M8 Switch |  | 2027-01-07 | open | 0 / 1 |
 
             Counted: from the issues the GitHub API lists, by each issue's milestone.
