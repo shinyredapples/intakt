@@ -45,9 +45,11 @@ final class BarChartTemplateTest extends KernelTestCase
     {
         $chart = $this->render([new ChartBar('Mon', 1000, '1000 rounds', 'Mon', 1), new ChartBar('Tue', 0, '0 rounds', 'Tue', 0)], 1000);
 
-        self::assertCount(2, $this->barHeights($chart)[0]);
-        self::assertGreaterThanOrEqual(1.0, min($this->barHeights($chart)[0]));
-        self::assertSame([], $this->barHeights($chart)[1]);
+        [$tallDay, $zeroDay] = $this->barHeights($chart);
+
+        self::assertCount(2, $tallDay);
+        self::assertGreaterThanOrEqual(1.0, min($tallDay[0], $tallDay[1]));
+        self::assertSame([], $zeroDay);
     }
 
     public function testBarsStayAtLeastATenthOfAUnitWideWhenThousandsOfDaysAreDrawn(): void
@@ -55,15 +57,24 @@ final class BarChartTemplateTest extends KernelTestCase
         $bars = array_map(static fn (int $day): ChartBar => new ChartBar('d'.$day, 1, '1 round', 'd'.$day), range(1, 5000));
         $path = (string) $this->render($bars, 1)->filter('path.c-bar')->first()->attr('d');
 
-        self::assertSame(1, preg_match('/^M([\d.]+),.* H[\d.]+ Q([\d.]+),/', $path, $edges));
+        if (1 !== preg_match('/^M([\d.]+),.* H[\d.]+ Q([\d.]+),/', $path, $edges)) {
+            self::fail('Not a bar path: '.$path);
+        }
+
         self::assertGreaterThanOrEqual(0.1, round((float) $edges[2] - (float) $edges[1], 1));
     }
 
     private function costChart(): Crawler
     {
         $rounds = [];
-        foreach ([0.00001, 1.0, null, 0.0] as $day => $usd) {
-            $rounds[] = new ReviewedRound(new RoundStart('r-'.$day, 'alpha', 2), new RoundPlace('feat/thing', 7), new DateTimeImmutable(sprintf('2026-10-%02dT10:00:00+00:00', $day + 1)), null)
+        $days = [
+            [0.00001, new DateTimeImmutable('2026-10-01T10:00:00+00:00')],
+            [1.0, new DateTimeImmutable('2026-10-02T10:00:00+00:00')],
+            [null, new DateTimeImmutable('2026-10-03T10:00:00+00:00')],
+            [0.0, new DateTimeImmutable('2026-10-04T10:00:00+00:00')],
+        ];
+        foreach ($days as $day => [$usd, $at]) {
+            $rounds[] = new ReviewedRound(new RoundStart('r-'.$day, 'alpha', 2), new RoundPlace('feat/thing', 7), $at, null)
                 ->withTokens(new TokenFigures(100, 0, 0, 0, 20))
                 ->withCost(null === $usd ? Cost::unknown('model-x') : Cost::inUsd($usd, '2026-11-13'));
         }
@@ -96,8 +107,7 @@ final class BarChartTemplateTest extends KernelTestCase
             $to = $from + (float) $slot->attr('width');
             $heights = [];
             foreach ($paths as $path) {
-                preg_match('/^M([\d.]+),([\d.]+) V[\d.]+ Q[\d.]+,([\d.]+)/', $path, $coordinates);
-                if ((float) $coordinates[1] >= $from && (float) $coordinates[1] < $to) {
+                if (1 === preg_match('/^M([\d.]+),([\d.]+) V[\d.]+ Q[\d.]+,([\d.]+)/', $path, $coordinates) && (float) $coordinates[1] >= $from && (float) $coordinates[1] < $to) {
                     $heights[] = round((float) $coordinates[2] - (float) $coordinates[3], 1);
                 }
             }
