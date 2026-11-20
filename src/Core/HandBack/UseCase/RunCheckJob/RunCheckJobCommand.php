@@ -9,9 +9,9 @@ use Intakt\Core\HandBack\Contract\CheckJob;
 use Intakt\Core\HandBack\Contract\CheckJobOutcome;
 use Intakt\Core\HandBack\Contract\HandBack;
 use Intakt\Core\HandBack\Contract\RefusedHandBack;
+use Intakt\Core\Job\Contract\JobRefused;
 use Intakt\Core\Platform\Contract\ReportableFailure;
 use Intakt\Plugin\Forge\Contract\JobCredentials;
-use InvalidArgumentException;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\MapInput;
 use Symfony\Component\Console\Command\Command;
@@ -33,7 +33,7 @@ final readonly class RunCheckJobCommand
     {
         try {
             $outcome = $this->checks->run($this->jobOf($input));
-        } catch (InvalidArgumentException|ReportableFailure $failure) {
+        } catch (ReportableFailure|JobRefused $failure) {
             $io->error($failure->getMessage());
 
             return Command::FAILURE;

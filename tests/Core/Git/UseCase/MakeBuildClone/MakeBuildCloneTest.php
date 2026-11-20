@@ -8,14 +8,15 @@ use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\NetworkGit;
 use Intakt\Core\Git\Domain\Mirrors;
+use Intakt\Core\Git\Domain\ProjectNameRefused;
 use Intakt\Core\Git\Domain\SourceLine;
 use Intakt\Core\Git\Domain\TaskBranch;
+use Intakt\Core\Git\UseCase\MakeBuildClone\BranchNameRefused;
 use Intakt\Core\Git\UseCase\MakeBuildClone\BuildCloneNotMade;
 use Intakt\Core\Git\UseCase\MakeBuildClone\MakeBuildClone;
 use Intakt\Core\Git\UseCase\UpdateMirror\UpdateMirror;
 use Intakt\Tests\Core\Git\RecordingClock;
 use Intakt\Tests\Core\Git\TemporaryRepository;
-use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -29,7 +30,9 @@ use Symfony\Component\Process\Process;
 
 #[CoversClass(MakeBuildClone::class)]
 #[CoversClass(BuildCloneNotMade::class)]
+#[CoversClass(BranchNameRefused::class)]
 #[UsesClass(Mirrors::class)]
+#[UsesClass(ProjectNameRefused::class)]
 #[UsesClass(SourceLine::class)]
 #[UsesClass(TaskBranch::class)]
 #[UsesClass(UpdateMirror::class)]
@@ -155,7 +158,7 @@ final class MakeBuildCloneTest extends TestCase
 
     public function testAProjectNameThatIsNotASafePathSegmentIsRefused(): void
     {
-        $this->expectException(InvalidArgumentException::class);
+        $this->expectException(ProjectNameRefused::class);
 
         $this->buildClones()->make('../alpha', new TaskBranch('feat/task'), $this->clone);
     }
@@ -165,7 +168,7 @@ final class MakeBuildCloneTest extends TestCase
     {
         $this->givenTheMirror();
 
-        $this->expectException(InvalidArgumentException::class);
+        $this->expectException(BranchNameRefused::class);
 
         try {
             $this->whenTheBuildCloneIsMade($branch);
@@ -192,7 +195,7 @@ final class MakeBuildCloneTest extends TestCase
     {
         $this->givenTheMirror();
 
-        $this->expectExceptionObject(new InvalidArgumentException('the task\'s branch "main" is main itself'));
+        $this->expectExceptionObject(new BranchNameRefused('the task\'s branch "main" is main itself'));
 
         $this->whenTheBuildCloneIsMade('main');
     }
@@ -388,7 +391,7 @@ final class MakeBuildCloneTest extends TestCase
         $main = $this->remote->objectAt('main');
         $this->givenTheMirror();
 
-        $this->expectExceptionObject(new InvalidArgumentException(sprintf('"%s" is not a branch name git accepts', $branch)));
+        $this->expectExceptionObject(new BranchNameRefused(sprintf('"%s" is not a branch name git accepts', $branch)));
 
         try {
             $this->whenTheBuildCloneIsMadeWithTheSource('feat/task', $branch, $main);
