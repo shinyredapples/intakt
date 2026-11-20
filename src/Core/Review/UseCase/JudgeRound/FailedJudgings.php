@@ -48,6 +48,25 @@ final readonly class FailedJudgings
         return null;
     }
 
+    // In one scan of the ledger, for a reader that asks about many rounds while it holds a lock.
+    /**
+     * @return array<string, true>
+     */
+    public function recordedRounds(): array
+    {
+        $rounds = [];
+
+        foreach ($this->ledger->readOfKind(LedgerEventKind::JudgingFailed) as $recorded) {
+            $round = $this->payloads->of($recorded, JudgingFailed::class)?->round;
+
+            if (null !== $round) {
+                $rounds[$round] = true;
+            }
+        }
+
+        return $rounds;
+    }
+
     // A transport that cannot be listed shows no failure, because reading it with get() would hand its messages out.
     private function isParked(string $roundId): bool
     {

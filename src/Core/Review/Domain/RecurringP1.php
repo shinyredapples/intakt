@@ -7,38 +7,43 @@ namespace Intakt\Core\Review\Domain;
 use Intakt\Core\Review\Contract\RecurringP1Found;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
-// A place recurs on each round that flags it on another head than the first round (by number) that flagged it; plain code decides it, because no reviewer's text may start an escalation. A place is decided only once no earlier round of the change can still be judged, because that round could turn out to be the first, so a decided recurrence stays decided and a judging records exactly the ones it decides, in every judging order.
+// A place recurs on each round that flags it on another head than the first round (by number) that flagged it; plain code decides it, because no reviewer's text may start an escalation. A place is decided only once no earlier round of the change waits for its judging, because that round could turn out to be the first; every settled round asks again for all decided recurrences not recorded yet, so one held back is recorded by whichever round settles last, judged or failed for good, in every judging order.
 #[Exclude]
 final readonly class RecurringP1
 {
     /**
-     * @param list<FlaggedRound> $others
-     * @param list<int>          $pending
+     * @param list<FlaggedRound>     $judged
+     * @param list<int>              $waiting
+     * @param list<RecurringP1Found> $recorded
      *
      * @return list<RecurringP1Found>
      */
-    public function foundWhenJudged(FlaggedRound $judged, array $others, array $pending = []): array
+    public function toRecord(array $judged, array $waiting, array $recorded): array
     {
-        $before = $this->decided($others, [...$pending, $judged->number]);
+        $known = [];
+
+        foreach ($recorded as $found) {
+            $known[$found->round][$found->key] = true;
+        }
 
         return array_values(array_filter(
-            $this->decided([...$others, $judged], $pending),
-            static fn (RecurringP1Found $found): bool => !array_any($before, static fn (RecurringP1Found $known): bool => $known->round === $found->round && $known->key === $found->key),
+            $this->decided($judged, $waiting),
+            static fn (RecurringP1Found $found): bool => !isset($known[$found->round][$found->key]),
         ));
     }
 
     /**
      * @param list<FlaggedRound> $judged
-     * @param list<int>          $pending
+     * @param list<int>          $waiting
      *
      * @return list<RecurringP1Found>
      */
-    private function decided(array $judged, array $pending): array
+    private function decided(array $judged, array $waiting): array
     {
         $found = [];
 
         foreach ($this->firstToFlag($judged) as $key => $first) {
-            if (!array_any($pending, static fn (int $number): bool => $number < $first->number)) {
+            if (!array_any($waiting, static fn (int $number): bool => $number < $first->number)) {
                 $found = [...$found, ...$this->recurrencesOf($key, $first, $judged)];
             }
         }

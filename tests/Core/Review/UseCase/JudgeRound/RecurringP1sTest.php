@@ -22,6 +22,8 @@ use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\UseCase\JudgeRound\FailedJudgings;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgedRounds;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRound;
+use Intakt\Core\Review\UseCase\JudgeRound\RecordFailedJudging;
+use Intakt\Core\Review\UseCase\JudgeRound\RecordFailedJudgingHandler;
 use Intakt\Core\Review\UseCase\JudgeRound\RecurringP1s;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
 use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
@@ -33,6 +35,7 @@ use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Psr\Log\LoggerInterface;
 
 #[Group('persistence')]
 #[CoversClass(RecurringP1s::class)]
@@ -41,7 +44,9 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[CoversClass(ReviewRounds::class)]
 #[CoversClass(StoredFindings::class)]
 #[CoversClass(ReviewRound::class)]
-#[UsesClass(FailedJudgings::class)]
+#[CoversClass(RecordFailedJudgingHandler::class)]
+#[CoversClass(FailedJudgings::class)]
+#[UsesClass(RecordFailedJudging::class)]
 #[UsesClass(RecurringP1::class)]
 #[UsesClass(FlaggedRound::class)]
 #[UsesClass(RecurringP1Found::class)]
@@ -51,6 +56,7 @@ final class RecurringP1sTest extends KernelTestCase
     private const string HEAD_A = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
     private const string HEAD_B = 'cccccccccccccccccccccccccccccccccccccccc';
     private const string HEAD_C = 'dddddddddddddddddddddddddddddddddddddddd';
+    private const string HEAD_D = 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
     private const string CHANGE_LOCK = 'UPDATE change_findings';
 
     private RoundFixture $fixture;
@@ -125,6 +131,40 @@ final class RecurringP1sTest extends KernelTestCase
     {
         $failed = $this->roundAt(self::HEAD_C);
         (void) $this->fixture->ledger()->append(new LedgerEvent(LedgerEventKind::JudgingFailed, json_encode(['round' => $failed], JSON_THROW_ON_ERROR)));
+        $this->judge($this->roundAt(self::HEAD_A));
+        $third = $this->roundAt(self::HEAD_B);
+
+        $this->judge($third);
+
+        self::assertSame([$third], array_column($this->recurrences(), 'round'));
+    }
+
+    public function testARecurrenceHeldBackByAnEarlierRoundIsRecordedWhenThatRoundsJudgingFailsForGood(): void
+    {
+        [$first, $second, $third] = [$this->roundAt(self::HEAD_C), $this->roundAt(self::HEAD_A), $this->roundAt(self::HEAD_B)];
+        array_map($this->judge(...), [$second, $third]);
+        $heldBack = $this->recurrences();
+
+        $this->failForGood($first);
+
+        self::assertSame([[], [$third]], [$heldBack, array_column($this->recurrences(), 'round')]);
+    }
+
+    public function testARoundJudgedAfterAnEarlierRoundsJudgingFailedRecordsNoRecurrenceTwice(): void
+    {
+        [$first, $second, $third] = [$this->roundAt(self::HEAD_C), $this->roundAt(self::HEAD_A), $this->roundAt(self::HEAD_B)];
+        array_map($this->judge(...), [$second, $third]);
+        $this->failForGood($first);
+        $fourth = $this->roundAt(self::HEAD_D);
+
+        $this->judge($fourth);
+
+        self::assertSame([$third, $fourth], array_column($this->recurrences(), 'round'));
+    }
+
+    public function testARoundStillCollectingHoldsNoRecurrenceBack(): void
+    {
+        $this->fixture->startAtHead(RoundFixture::CHANGE, self::HEAD_C);
         $this->judge($this->roundAt(self::HEAD_A));
         $third = $this->roundAt(self::HEAD_B);
 
@@ -211,7 +251,7 @@ final class RecurringP1sTest extends KernelTestCase
         $found = $this->fixture->recurringP1s($ledger)->foundWhenJudged($third, new JudgeDone($third->id()->toRfc4122(), [], [], []));
 
         self::assertSame([], $found);
-        self::assertSame([LedgerEventKind::JudgeDone->value => 1], $ledger->readsOfKind);
+        self::assertSame([LedgerEventKind::JudgeDone->value => 1, LedgerEventKind::RecurringP1Found->value => 1], $ledger->readsOfKind);
     }
 
     private function roundAt(string $head, ?Finding $finding = null, string $change = RoundFixture::CHANGE): string
@@ -230,6 +270,11 @@ final class RecurringP1sTest extends KernelTestCase
     private function judge(string $roundId): void
     {
         $this->fixture->judge($this->scripted())(new JudgeRound($roundId));
+    }
+
+    private function failForGood(string $roundId): void
+    {
+        $this->fixture->failedJudgingRecorder(self::getContainer()->get('command.bus'), self::createStub(LoggerInterface::class))(new RecordFailedJudging($roundId));
     }
 
     private function scripted(): ScriptedJudgement

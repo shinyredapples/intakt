@@ -280,7 +280,7 @@ final readonly class RoundFixture
 
     public function failedJudgingRecorder(MessageBusInterface $commands, LoggerInterface $logger): RecordFailedJudgingHandler
     {
-        return new RecordFailedJudgingHandler($this->transactions(), $this->roundLedger($this->ledger), $this->noFailedJudgings(), $commands, $logger);
+        return new RecordFailedJudgingHandler($this->transactions(), $this->roundLedger($this->ledger), $this->noFailedJudgings(), $this->storedFindingsOn($this->entities), $this->recurringP1sOn($this->entities, $this->ledger), $commands, $logger);
     }
 
     public function indexing(MemoryIndex $memory): IndexResolvedFindingsHandler
