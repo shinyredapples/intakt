@@ -68,7 +68,7 @@ final readonly class PhpGateSteps
                 if (array_key_exists("mirrors", $entry)) { $refuse("The locked ".$label." has ".$kind." mirrors, which can serve other bytes."); }
                 $url = $entry["url"] ?? null;
                 if (!is_string($url) || "" === $url) { $refuse("The locked ".$label." has a ".$kind." entry without a url."); }
-                $known = "dist" === $kind ? $archiveUrl($url) : $sourceUrl($url, "git" === ($package["source"]["type"] ?? null));
+                $known = "dist" === $kind ? $archiveUrl($url) : $sourceUrl($url, "git" === strtolower(is_string($entry["type"] ?? null) ? $entry["type"] : ""));
                 if (!$known) { $refuse("The locked ".$label." has a ".$kind." url that is not a known remote address."); }
             }
             if (is_array($package["source"] ?? null) && 1 !== preg_match("#^[0-9a-f]{40}$#D", (string) (is_string($package["source"]["reference"] ?? null) ? $package["source"]["reference"] : ""))) { $refuse("The locked ".$label." has a source reference that is not a full commit id."); }

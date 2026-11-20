@@ -340,6 +340,8 @@ final class PhpGateDependencyStepTest extends TestCase
         yield 'an https archive ending in its own commit id' => [[...$pkg, 'dist' => ['type' => 'zip', 'url' => 'https://api.git.invalid/zipball/'.$commit, 'reference' => $commit], 'source' => ['type' => 'git', 'url' => 'https://git.invalid/pkg.git', 'reference' => $commit]]];
         yield 'an http archive with a checksum' => [[...$pkg, 'dist' => ['type' => 'zip', 'url' => 'http://archive.invalid/pkg.zip', 'shasum' => $commit]]];
         yield 'a git source over user@host:path' => [[...$pkg, 'dist' => ['type' => 'zip', 'url' => 'https://archive.invalid/pkg.zip', 'shasum' => $commit], 'source' => ['type' => 'git', 'url' => 'git@git.invalid:o/pkg.git', 'reference' => $commit]]];
+        yield 'a Git source over user@host:path, as Composer lowercases the type' => [[...$pkg, 'source' => ['type' => 'Git', 'url' => 'git@git.invalid:o/pkg.git', 'reference' => $commit]]];
+        yield 'a GIT source over user@host:path, as Composer lowercases the type' => [[...$pkg, 'source' => ['type' => 'GIT', 'url' => 'git@git.invalid:o/pkg.git', 'reference' => $commit]]];
         yield 'a git source over git+ssh' => [[...$pkg, 'source' => ['type' => 'git', 'url' => 'git+ssh://git.invalid/o/pkg.git', 'reference' => $commit]]];
         yield 'the symfony/runtime plugin' => [['name' => 'symfony/runtime', 'version' => '1.0.0', 'type' => 'composer-plugin']];
     }
