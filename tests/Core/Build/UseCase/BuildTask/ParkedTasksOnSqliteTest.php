@@ -47,9 +47,7 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
     {
         $this->root = sys_get_temp_dir().'/intakt-parked-tasks-'.bin2hex(random_bytes(4));
         new Filesystem()->mkdir($this->root);
-        $tool = new SchemaTool($this->manager());
-        $tool->dropDatabase();
-        $tool->createSchema($this->manager()->getMetadataFactory()->getAllMetadata());
+        $this->resetDatabase();
     }
 
     protected function tearDown(): void
@@ -135,10 +133,7 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
         }
 
         $reader = $this->readerHoldingASharedLock();
-        // No wait, because SQLite would otherwise wait its busy timeout before it refuses the commit.
-        $this->connection()->executeStatement('PRAGMA busy_timeout = 0');
-
-        $failure = $this->failureOfParking($this->parkedTasks());
+        $failure = $this->failureOfParkingWhileTheReaderHolds();
         $reader->rollBack();
         $reader->close();
         $failed = $this->ledger()->append(new LedgerEvent(LedgerEventKind::BuildStepEnded, '{"project":"sample","task":"42","step":"build_job","outcome":"failed","failure":"later"}'));
@@ -153,6 +148,23 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
         self::assertCount(1, $this->manager()->getUnitOfWork()->getIdentityMap()[EventRecord::class] ?? []);
     }
 
+    public function testAParkingWhoseCommitAReaderRefusedIsRefusedAlsoWhenAnEarlierTestLeftTheDatabaseInWalMode(): void
+    {
+        if (!$this->connection()->getDatabasePlatform() instanceof SQLitePlatform) {
+            self::markTestSkipped('Only SQLite has a journal mode.');
+        }
+
+        $this->connection()->executeStatement('PRAGMA journal_mode=WAL');
+        $this->resetDatabase();
+        $reader = $this->readerHoldingASharedLock();
+
+        $failure = $this->failureOfParkingWhileTheReaderHolds();
+        $reader->rollBack();
+        $reader->close();
+
+        self::assertSame(self::NOT_PARKED, $failure);
+    }
+
     public function testADatabaseThatCannotBeOpenedLeavesTheTaskUnparkedWithFixedWords(): void
     {
         $unopenable = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'path' => $this->root.'/missing/folder/data.db']);
@@ -161,6 +173,26 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
 
         self::assertSame(self::NOT_PARKED, $failure);
         self::assertSame([], $this->ledgerRows());
+    }
+
+    // The rollback journal is set, because the database file outlives a test and a review test may have left it in WAL, where a reader does not refuse a commit.
+    private function resetDatabase(): void
+    {
+        if ($this->connection()->getDatabasePlatform() instanceof SQLitePlatform) {
+            $this->connection()->executeStatement('PRAGMA journal_mode=DELETE');
+        }
+
+        $tool = new SchemaTool($this->manager());
+        $tool->dropDatabase();
+        $tool->createSchema($this->manager()->getMetadataFactory()->getAllMetadata());
+    }
+
+    private function failureOfParkingWhileTheReaderHolds(): string
+    {
+        // No wait, because SQLite would otherwise wait its busy timeout before it refuses the commit.
+        $this->connection()->executeStatement('PRAGMA busy_timeout = 0');
+
+        return $this->failureOfParking($this->parkedTasks());
     }
 
     private function failureOfParking(ParkedTasks $parked): string
