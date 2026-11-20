@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Server\Infrastructure;
 
+use Intakt\Core\Server\Infrastructure\CallCredentials;
+use Intakt\Core\Server\Infrastructure\CredentialValues;
+use Intakt\Core\Server\Infrastructure\ProfileCredentials;
 use Intakt\Core\Server\Infrastructure\RedactingProfilerStorage;
+use Intakt\Core\Server\Infrastructure\RequestCredentials;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use Intakt\Tests\Support\WebTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -21,6 +25,10 @@ use Symfony\Component\HttpKernel\Profiler\Profiler;
 
 // A saved profile is a file on disk that outlives the request, so no credential may reach it (#2721).
 #[CoversClass(RedactingProfilerStorage::class)]
+#[CoversClass(ProfileCredentials::class)]
+#[CoversClass(RequestCredentials::class)]
+#[CoversClass(CallCredentials::class)]
+#[CoversClass(CredentialValues::class)]
 final class RedactingProfilerStorageTest extends WebTestCase
 {
     private const string CANARY = 'synthetic-secret-2721';

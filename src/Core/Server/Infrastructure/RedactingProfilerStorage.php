@@ -30,6 +30,9 @@ final readonly class RedactingProfilerStorage implements ProfilerStorageInterfac
     ) {
     }
 
+    /**
+     * @return array<mixed>
+     */
     #[Override]
     public function find(?string $ip, ?string $url, ?int $limit, ?string $method, ?int $start = null, ?int $end = null, ?string $statusCode = null, ?Closure $filter = null): array
     {
@@ -121,7 +124,7 @@ final readonly class RedactingProfilerStorage implements ProfilerStorageInterfac
         return $replacements;
     }
 
-    // As a request body, a curl command and a JSON dump write it.
+    // Every spelling, because a request body, a curl command and a JSON dump each write a value their own way.
     /**
      * @return list<string>
      */
