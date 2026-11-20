@@ -112,6 +112,7 @@ Built for the [Symfony AI & MCP Hackathon](docs/spec.md) (deadline 2026-11-22):
 
 ## Documentation
 
+- [For judges](docs/judges.md): from clone to a played review in a few minutes, and the code behind each promise.
 - [Intakt in plain words](docs/guide/README.md): friendly guides with diagrams, from the big picture to troubleshooting.
 - [Contributing](CONTRIBUTING.md): reporting bugs, suggesting features, sending pull requests.
 - [How your issue or pull request is handled](CONTRIBUTING.md#how-your-issue-or-pull-request-is-handled): who decides what gets built, and why only labels from people with write access count.

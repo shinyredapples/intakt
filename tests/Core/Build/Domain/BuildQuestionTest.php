@@ -87,4 +87,16 @@ final class BuildQuestionTest extends TestCase
         self::assertSame(BuildQuestion::MAX_BYTES, strlen($text));
         self::assertSame(['a'], BuildQuestion::fromHandedBack($text)->choices);
     }
+
+    public function testAQuestionNestingEightArraysOrObjectsCountingItselfIsRefusedAlsoUnderAnIgnoredKey(): void
+    {
+        $this->expectExceptionObject(QuestionRefused::notJson());
+
+        BuildQuestion::fromHandedBack('{"question":"Q","choices":["a"],"recommendation":"a","x":[[[[[[[]]]]]]]}');
+    }
+
+    public function testAQuestionNestingSevenArraysOrObjectsCountingItselfIsAccepted(): void
+    {
+        self::assertSame(['a'], BuildQuestion::fromHandedBack('{"question":"Q","choices":["a"],"recommendation":"a","x":[[[[[{"y":1}]]]]]}')->choices);
+    }
 }
