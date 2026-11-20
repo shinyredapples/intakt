@@ -13,9 +13,9 @@ final readonly class NamesOutsideCitations
     private const string NAME_START = '(?<![\p{L}\p{N}])';
     private const string NAME_END = '(?![\p{L}\p{N}])';
 
-    // True when a file's name lies outside every read citation, or when the text cannot be searched (not UTF-8), so its caller gives no key.
+    // True when a file's name lies outside every read citation, or when the text cannot be searched (not UTF-8), so its caller gives no key. The citations are those that resolved to a hashed file, as the reading read them, so a backslash in the text is read as `/` before they are looked up.
     /**
-     * @param list<string> $citations the citations of the text that resolved to a hashed file, as the reading read them (a backslash as `/`)
+     * @param list<string> $citations
      */
     public function anyIn(string $text, CheckoutFileNames $fileNames, array $citations): bool
     {
@@ -65,7 +65,7 @@ final readonly class NamesOutsideCitations
         return $places;
     }
 
-    // Byte offsets of each match, start and end; null when the pattern or the text is not UTF-8.
+    // Byte offsets, because a name's place is compared with the citations' places found in the same bytes; null when the pattern or the text is not UTF-8, so the caller stays on the safe side.
     /**
      * @return list<array{int, int}>|null
      */
@@ -87,7 +87,7 @@ final readonly class NamesOutsideCitations
         return array_any($cited, static fn (array $citation): bool => $citation[0] <= $place[0] && $place[1] <= $citation[1]);
     }
 
-    // Lower case for the quick check before the search; a name that is not UTF-8 is lowered by bytes.
+    // Lower case for a quick check, so most names of the checkout skip the regular expression; a name that is not UTF-8 is lowered by bytes, because mb_strtolower cannot read it.
     private function folded(string $text): string
     {
         return mb_check_encoding($text, 'UTF-8') ? mb_strtolower($text, 'UTF-8') : strtolower($text);

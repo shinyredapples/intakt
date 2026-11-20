@@ -434,6 +434,8 @@ final class FindingKeysTest extends TestCase
         yield 'a namespace after a bare name' => ['src/sub/C.php', 'See C.php:Intakt\\Core\\X and src/A.php.'];
         yield 'a leading slash' => ['src/B.php', 'See /src/B.php and src/A.php.'];
         yield 'a name in another case' => ['src/B.php', 'See b.PHP and src/A.php.'];
+        yield 'a partial path that is not the start of the file\'s path' => ['src/B.php', 'See Core/B.php::run() and src/A.php.'];
+        yield 'a namespace after the bare name of a nested file' => ['src/sub/B.php', 'src/A.php and B.php:Intakt\\Core\\X break.'];
     }
 
     public function testABareWordThatOnlySharesItsFirstLettersWithAFileNameIsNotAFile(): void
