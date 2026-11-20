@@ -82,7 +82,7 @@ final readonly class FindingKeys
 
     // The file field is one citation by itself, read whole, so only the text is checked for names outside citations.
     /**
-     * @param list<string>                              $citations
+     * @param list<string>                            $citations
      * @param list<list<array{string, string}>|false> $files
      *
      * @return list<string>

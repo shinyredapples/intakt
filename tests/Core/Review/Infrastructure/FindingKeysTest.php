@@ -416,7 +416,7 @@ final class FindingKeysTest extends TestCase
 
         $this->write($path, "second\n");
 
-        self::assertTrue(null === $before || $before->value !== $this->keyOf($this->finding($text))?->value, $text);
+        self::assertTrue(!$before instanceof FindingKey || $before->value !== $this->keyOf($this->finding($text))?->value, $text);
     }
 
     /**
