@@ -11,6 +11,7 @@ use Intakt\Core\Build\Contract\BuildRouting;
 use Intakt\Core\Build\Contract\BuildRoutingNotConfigured;
 use Intakt\Core\Build\Contract\BuildStep;
 use Intakt\Core\Build\Contract\BuildStepOutcome;
+use Intakt\Core\Build\UseCase\RunBuildJob\BuildCloneIsNoFolder;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuilderNotOnClaudeCode;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
@@ -151,7 +152,7 @@ final readonly class BuildTask
     {
         try {
             $outcome = $this->builds->run($this->jobOf($request, $task));
-        } catch (BuildRoutingNotConfigured|TierResolutionFailure|BuilderNotOnClaudeCode|InvalidArgumentException|DockerEngineFailed|JobEventNotRecorded|IOException $failure) {
+        } catch (BuildRoutingNotConfigured|TierResolutionFailure|BuilderNotOnClaudeCode|BuildCloneIsNoFolder|InvalidArgumentException|DockerEngineFailed|JobEventNotRecorded|IOException $failure) {
             return $failure->getMessage();
         }
 

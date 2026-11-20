@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Budget\UseCase\ReplayDay;
 
-use InvalidArgumentException;
+use Intakt\Core\Platform\Contract\ReportableFailure;
+use RuntimeException;
 
-final class ScriptLineNotUnderstood extends InvalidArgumentException
+final class ScriptLineNotUnderstood extends RuntimeException implements ReportableFailure
 {
     public static function because(string $line, string $rule): self
     {
