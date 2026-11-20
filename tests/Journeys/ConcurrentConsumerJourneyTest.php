@@ -72,13 +72,9 @@ final class ConcurrentConsumerJourneyTest extends JourneyTestCase
             $consumer->kill();
         }
 
-        foreach ($this->workersStillRunning() as $worker) {
-            posix_kill($worker, SIGKILL);
-        }
-
-        $this->server?->stop();
-
         $this->releaseAccountPlaces();
+        $this->letTheWorkersEnd();
+        $this->server?->stop();
 
         if ('' !== $this->directory) {
             new Filesystem()->remove($this->directory);
@@ -241,6 +237,21 @@ final class ConcurrentConsumerJourneyTest extends JourneyTestCase
         self::assertFalse($consumer->running());
         self::assertSame(2, $this->database()->queued(ReviewWithReviewer::class), 'an interrupted message left the transport');
         self::assertNotSame([], $this->workersStillRunning(), 'no worker outlived the killed consumer');
+    }
+
+    // Released, never signalled, because a recorded number checked first and signalled afterwards may name an unrelated process by the time the signal arrives; a released worker ends its call and then itself, since its consumer is gone. Bounded by the hold, which ends any call nobody releases.
+    private function letTheWorkersEnd(): void
+    {
+        if ('' === $this->script) {
+            return;
+        }
+
+        new ScriptDirectory($this->script)->releaseAll();
+        $until = MonotonicSeconds::now() + self::WAIT_SECONDS;
+
+        while ([] !== $this->workersStillRunning() && MonotonicSeconds::now() < $until) {
+            usleep(50000);
+        }
     }
 
     // Only the recorded workers that are still the same process (number and start), because a number whose call ended long ago may have been given to an unrelated process since.

@@ -95,7 +95,14 @@ final readonly class ScriptDirectory
 
         $record = $this->path.'/calls/'.getmypid().'-'.bin2hex(random_bytes(6)).'.record';
         $process = RecordedProcess::current();
-        file_put_contents($record, json_encode(['pid' => $process->pid, 'started' => $process->started, 'at' => MonotonicSeconds::now()], JSON_THROW_ON_ERROR));
+        $content = json_encode(['pid' => $process->pid, 'started' => $process->started, 'at' => MonotonicSeconds::now()], JSON_THROW_ON_ERROR);
+
+        // Checked before it is linked, because a short write (a full disk, a file size limit) would publish a truncated record that stops every reader.
+        if (strlen($content) !== file_put_contents($record, $content)) {
+            @unlink($record);
+
+            throw new RuntimeException('The call record '.$record.' could not be written in full.');
+        }
 
         return $record;
     }

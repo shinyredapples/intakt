@@ -91,7 +91,7 @@ final readonly class CallRecords
         return array_values($workers);
     }
 
-    // Skipped while empty, because a writer that does not publish atomically creates the name before its content, so the record is not there yet rather than broken.
+    // Skipped while empty, as a defense: ScriptDirectory publishes whole records, but a record created by hand or by an older writer may have its name before its content, so it is not there yet rather than broken.
     private static function written(string $file): bool
     {
         clearstatcache(true, $file);

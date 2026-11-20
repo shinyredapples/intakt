@@ -66,6 +66,29 @@ final class ScriptDirectoryTest extends TestCase
         self::assertIsArray(json_decode((string) file_get_contents($this->directory.'/calls/1.end'), true));
     }
 
+    // A file size limit of one byte, because it cuts the record's write short in this process the way a full disk would, and a soft limit can be raised again afterwards.
+    public function testARecordWrittenOnlyInPartIsNeverPublished(): void
+    {
+        $script = new ScriptDirectory($this->directory);
+        $script->callEnded($script->callStarted());
+        [$soft, $hard] = [posix_getrlimit()['soft filesize'], posix_getrlimit()['hard filesize']];
+        pcntl_signal(SIGXFSZ, SIG_IGN);
+        posix_setrlimit(POSIX_RLIMIT_FSIZE, 1, 'unlimited' === $hard ? POSIX_RLIMIT_INFINITY : (int) $hard);
+        set_error_handler(static fn (): bool => true);
+
+        try {
+            $script->callStarted();
+            self::fail('A record written only in part was published.');
+        } catch (RuntimeException) {
+        } finally {
+            restore_error_handler();
+            posix_setrlimit(POSIX_RLIMIT_FSIZE, 'unlimited' === $soft ? POSIX_RLIMIT_INFINITY : (int) $soft, 'unlimited' === $hard ? POSIX_RLIMIT_INFINITY : (int) $hard);
+            pcntl_signal(SIGXFSZ, SIG_DFL);
+        }
+
+        self::assertSame(['1.end', '1.start'], array_values(array_diff((array) scandir($this->directory.'/calls'), ['.', '..'])));
+    }
+
     public function testAnEndIsRecordedOnlyOnce(): void
     {
         $script = new ScriptDirectory($this->directory);
