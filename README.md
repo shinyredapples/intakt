@@ -18,7 +18,7 @@ A panel of reviewers on models from different AI labs reviews the change and a j
   The octopus conducts: Tech lead, Developer, Code reviewer, Judge, Security engineer, Designer, AI engineer and Maintainer, in that order.
 </p>
 
-PHP 8.5, Symfony AI · [Status](#status): what works today and what is planned · [Guides](docs/guide/README.md) · [Showcase](docs/showcase/README.md) · [For judges](docs/judges.md) · [Releases](https://github.com/shinyredapples/intakt/releases)
+PHP 8.5, Symfony AI · [Status](#status): what works today and what is planned · [Guides](docs/guide/README.md) · [Showcase](docs/showcase/README.md) · [For judges](docs/judges.md) · [Hackathon](docs/hackathon.md) · [Releases](https://github.com/shinyredapples/intakt/releases)
 
 ## Five-minute start
 
@@ -131,6 +131,8 @@ Built for the [Symfony AI & MCP Hackathon](docs/spec.md) (deadline 2026-11-22):
 - A small live dashboard shows each round as it streams.
 - Every figure says what kind it is: token counts the provider reported are `measured`, rounds and findings from the ledger are `counted`, and a cost from your price list is `estimated`, with the date of the prices. Figures of different kinds are never added into one total.
 - `docker compose up` with a sample repository and your API keys (or a Hugging Face token) runs it in five minutes.
+
+Development continues after the hackathon: [the hackathon page](docs/hackathon.md) says what was planned, what was achieved and what comes next.
 
 ## Status
 

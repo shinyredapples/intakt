@@ -24,7 +24,10 @@ use Intakt\Plugin\LocalGitForge\Contract\LocalRepository;
 use Intakt\Plugin\LocalGitForge\Infrastructure\LocalGitForge;
 use Intakt\Plugin\LocalGitForge\Infrastructure\NameStatusParser;
 use Intakt\Tests\Core\Git\TemporaryRepository;
+use Intakt\Tests\Plugin\Forge\CommitIdCheckThatThrows;
+use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
@@ -70,6 +73,16 @@ final class LocalGitForgeTest extends TestCase
     {
         $_ENV = $this->environment;
         $this->repository->remove();
+    }
+
+    #[RunInSeparateProcess]
+    public function testAnUnexpectedInvalidArgumentWhileReadingAHashFromGitPassesThrough(): void
+    {
+        CommitIdCheckThatThrows::defineFor($this->repository->objectAt('main'));
+
+        $this->expectExceptionObject(new InvalidArgumentException('unexpected'));
+
+        $this->forge()->baseCommit();
     }
 
     public function testItReturnsTheHeadAndTheBaseOfABranchAgainstItsBase(): void
