@@ -20,13 +20,13 @@ abstract readonly class PhpFilesToolGate extends PhpFilesGate
      */
     abstract protected function findings(ProcessResult $result): array;
 
-    final protected function check(Workspace $workspace, array $files): GateResult
+    final protected function check(Workspace $workspace, PhpFileSelection $selection): GateResult
     {
         if (!$workspace->hasTool($this->tool())) {
             return GateResult::failedBecause($this->name(), 'missing tool '.$this->tool());
         }
 
-        $result = $workspace->command([$workspace->tool($this->tool()), ...$this->arguments($workspace, $files)], $this->environment($workspace));
+        $result = $workspace->command([$workspace->tool($this->tool()), ...$this->arguments($workspace, $selection->files)], $this->environment($selection));
 
         return $this->resultOf($result, $workspace);
     }
@@ -34,7 +34,7 @@ abstract readonly class PhpFilesToolGate extends PhpFilesGate
     /**
      * @return array<string, string|false>
      */
-    protected function environment(Workspace $workspace): array
+    protected function environment(PhpFileSelection $selection): array
     {
         return [];
     }

@@ -61,16 +61,26 @@ final readonly class Workspace
         return is_file($this->tool($name));
     }
 
-    /**
-     * @return list<string>
-     */
-    public function phpFiles(): array
+    // Because a gate that tells its tool whether it sees only some files must take that answer from the list it passes, not from a second read of a tree that may have changed in between.
+    public function phpFileSelection(): PhpFileSelection
     {
-        if (Mode::ChangedFilesOnly === $this->mode) {
-            return $this->changedOrAllPhpFiles();
+        if (Mode::ChangedFilesOnly !== $this->mode) {
+            return PhpFileSelection::everyFile($this->allPhpFilesOrFail());
         }
 
-        return $this->allPhpFilesOrFail();
+        $mergeBase = $this->mergeBase();
+
+        if (null === $mergeBase) {
+            throw new ScopeFailure('no base branch found, pass --base=<ref>');
+        }
+
+        if ($this->changesWhatEveryPhpFileDependsOn($mergeBase)) {
+            return PhpFileSelection::everyFile($this->allPhpFilesOrFail());
+        }
+
+        $changed = $this->scope->changedPhpFiles($mergeBase);
+
+        return [] === array_diff($this->scope->allPhpFiles(), $changed) ? PhpFileSelection::everyFile($changed) : PhpFileSelection::someFiles($changed);
     }
 
     /**
@@ -97,22 +107,6 @@ final readonly class Workspace
     public function isFast(): bool
     {
         return Mode::ChangedFilesOnly === $this->mode;
-    }
-
-    public function analyzesSomePhpFilesOnly(): bool
-    {
-        if (Mode::ChangedFilesOnly !== $this->mode) {
-            return false;
-        }
-
-        $mergeBase = $this->mergeBase();
-
-        if (null === $mergeBase || $this->changesWhatEveryPhpFileDependsOn($mergeBase)) {
-            return false;
-        }
-
-        // Because a change can touch every PHP file in scope, the answer comes from the list phpstan gets, not from the mode.
-        return [] !== array_diff($this->scope->allPhpFiles(), $this->scope->changedPhpFiles($mergeBase));
     }
 
     public function changesGateTests(): bool
@@ -196,24 +190,6 @@ final readonly class Workspace
     public function commandsConcurrently(array $commands): array
     {
         return $this->runner->runConcurrently($commands, $this->root);
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function changedOrAllPhpFiles(): array
-    {
-        $mergeBase = $this->mergeBase();
-
-        if (null === $mergeBase) {
-            throw new ScopeFailure('no base branch found, pass --base=<ref>');
-        }
-
-        if ($this->changesWhatEveryPhpFileDependsOn($mergeBase)) {
-            return $this->allPhpFilesOrFail();
-        }
-
-        return $this->scope->changedPhpFiles($mergeBase);
     }
 
     private function changesWhatEveryPhpFileDependsOn(string $mergeBase): bool

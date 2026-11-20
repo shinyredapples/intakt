@@ -8,6 +8,7 @@ use Intakt\Gates\GateResult;
 use Intakt\Gates\GitCall;
 use Intakt\Gates\HardenedGitCall;
 use Intakt\Gates\Mode;
+use Intakt\Gates\PhpFileSelection;
 use Intakt\Gates\PhpFilesGate;
 use Intakt\Gates\PhpFilesToolGate;
 use Intakt\Gates\ProcessQueue;
@@ -24,6 +25,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[CoversClass(PhpFilesToolGate::class)]
 #[CoversClass(Workspace::class)]
 #[UsesClass(PhpFilesGate::class)]
+#[UsesClass(PhpFileSelection::class)]
 #[UsesClass(GateResult::class)]
 #[UsesClass(Scope::class)]
 #[UsesClass(ProcessRunner::class)]
@@ -37,6 +39,8 @@ final class StaticAnalysisChangedFilesSignalTest extends SandboxTestCase
 
     private string|false $changedFilesOnly = false;
 
+    private string|false|null $path = null;
+
     #[Override]
     protected function setUp(): void
     {
@@ -49,6 +53,11 @@ final class StaticAnalysisChangedFilesSignalTest extends SandboxTestCase
     protected function tearDown(): void
     {
         putenv(false === $this->changedFilesOnly ? StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE : StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE.'='.$this->changedFilesOnly);
+
+        if (null !== $this->path) {
+            putenv(false === $this->path ? 'PATH' : 'PATH='.$this->path);
+        }
+
         parent::tearDown();
     }
 
@@ -86,6 +95,33 @@ final class StaticAnalysisChangedFilesSignalTest extends SandboxTestCase
         $tree = $this->branchChanging('src/Report.php', 'config/gates/phpstan.neon');
 
         self::assertSame('unset', $this->signalSeenByPhpstan($tree, Mode::ChangedFilesOnly));
+    }
+
+    public function testAContainerConfigurationChangeRevertedDuringTheRunDoesNotSignalTheEveryFileListPhpstanGot(): void
+    {
+        $tree = $this->emptySandbox();
+        $tree->startRepository();
+        $tree->write('src/Base.php', "<?php\n");
+        $tree->write('src/Report.php', "<?php\n");
+        $tree->write('config/services.yaml', "services: {}\n");
+        $tree->commitAll('chore: start');
+        $tree->git('switch', '--quiet', '--create', 'change');
+        $tree->write('src/Report.php', "<?php\n\n// Changed.\n");
+        $tree->write('config/services.yaml', "services: {} # changed\n");
+        $this->revertConfigurationOnSecondMergeBase();
+
+        self::assertSame('unset', $this->signalSeenByPhpstan($tree, Mode::ChangedFilesOnly));
+    }
+
+    // a git on PATH that undoes the configuration change once the gate asks for the merge base a second time, so a gate that reads the tree twice sees two different trees
+    private function revertConfigurationOnSecondMergeBase(): void
+    {
+        $git = trim((string) shell_exec('command -v git'));
+        $tools = $this->emptySandbox();
+        $tools->write('git', "#!/bin/sh\ncase \" \$* \" in\n    *\" merge-base \"*)\n        if [ -f .git/seen-merge-base ]; then printf 'services: {}\\n' > config/services.yaml; else touch .git/seen-merge-base; fi\n        ;;\nesac\nexec ".escapeshellarg($git)." \"\$@\"\n");
+        chmod($tools->root.'/git', 0o755);
+        $this->path = getenv('PATH');
+        putenv('PATH='.$tools->root.':'.$this->path);
     }
 
     private function branchChanging(string ...$paths): Sandbox
