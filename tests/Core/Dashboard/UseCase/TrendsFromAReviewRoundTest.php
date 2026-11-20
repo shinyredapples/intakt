@@ -58,7 +58,7 @@ final class TrendsFromAReviewRoundTest extends DashboardPageTestCase
         self::assertSame([
             'The role-1 reviewer found the most P1 findings, 1, and 1 of them no other reviewer found.',
             'The judge kept 1 of 3 findings and rejected 1.',
-        ], $page->filter('.chart .takeaway')->each(static fn (Crawler $takeaway): string => $takeaway->text()));
+        ], $page->filter('#chart-catches .takeaway, #chart-judge .takeaway')->each(static fn (Crawler $takeaway): string => $takeaway->text()));
         self::assertSame([
             ['Role-1', 'P1', '1', '1'], ['Role-1', 'P2', '0', '0'], ['Role-1', 'P3', '1', '1'],
             ['Role-2', 'P1', '0', '0'], ['Role-2', 'P2', '0', '0'], ['Role-2', 'P3', '1', '1'],
