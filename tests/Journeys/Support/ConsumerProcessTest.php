@@ -1,0 +1,167 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Tests\Journeys\Support;
+
+use Closure;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
+use PHPUnit\Framework\TestCase;
+use Symfony\Component\Clock\MockClock;
+use Symfony\Component\Process\Process;
+
+#[CoversClass(ConsumerProcess::class)]
+#[UsesClass(ProcParents::class)]
+final class ConsumerProcessTest extends TestCase
+{
+    private const int CONSUMER = 100;
+
+    public function testTheConsumerIsStartedWithTheConcurrencyOptionAsTheEntrypointStartsIt(): void
+    {
+        self::assertSame(
+            ['php', 'bin/console', 'messenger:consume', 'async', '--concurrency=3', '--memory-limit=256M', '--time-limit=3600', '--quiet'],
+            ConsumerProcess::command(3),
+        );
+    }
+
+    public function testAStartedConsumerEndsOnSigterm(): void
+    {
+        $consumer = ConsumerProcess::startedIn(dirname(__DIR__, 3), 1, ['APP_ENV' => 'test']);
+        $consumer->signal(SIGTERM);
+
+        self::assertNotNull($consumer->endedWithin(30.0));
+    }
+
+    public function testAnExitWithinTheLimitReturnsTheMeasuredSeconds(): void
+    {
+        $clock = new MockClock('@1000');
+        $consumer = new ConsumerProcess($this->runningUntil($clock, 1000.5), $clock, $this->parents([]));
+        $consumer->signal(SIGTERM);
+
+        self::assertEqualsWithDelta(0.5, $consumer->endedWithin(1.0), 0.001);
+    }
+
+    public function testAnExitObservedAfterTheDeadlineCountsAsLate(): void
+    {
+        $clock = new MockClock('@1000');
+        $consumer = new ConsumerProcess($this->exitsBetweenTheLastPollAndTheCheck($clock, 1001.0), $clock, $this->parents([]));
+        $consumer->signal(SIGTERM);
+
+        self::assertNull($consumer->endedWithin(1.0));
+    }
+
+    public function testAConsumerStillRunningAtTheDeadlineCountsAsLate(): void
+    {
+        $clock = new MockClock('@1000');
+        $consumer = new ConsumerProcess($this->runningUntil($clock, 2000.0), $clock, $this->parents([]));
+        $consumer->signal(SIGTERM);
+
+        self::assertNull($consumer->endedWithin(1.0));
+    }
+
+    public function testAnExitRightAtTheLimitIsInTime(): void
+    {
+        $clock = new MockClock('@1000');
+        $consumer = new ConsumerProcess($this->runningUntil($clock, 1001.0), $clock, $this->parents([]));
+        $consumer->signal(SIGTERM);
+
+        self::assertEqualsWithDelta(1.0, $consumer->endedWithin(1.0), 0.001);
+    }
+
+    public function testAChildOfTheConsumerIsItsWorker(): void
+    {
+        $consumer = new ConsumerProcess($this->runningUntil(new MockClock('@1000'), 2000.0), new MockClock(), $this->parents([200 => self::CONSUMER]));
+
+        self::assertTrue($consumer->isWorker(200));
+    }
+
+    public function testAProcessStartedThroughAShellOfTheConsumerIsItsWorker(): void
+    {
+        $consumer = new ConsumerProcess($this->runningUntil(new MockClock('@1000'), 2000.0), new MockClock(), $this->parents([200 => 150, 150 => self::CONSUMER]));
+
+        self::assertTrue($consumer->isWorker(200));
+    }
+
+    public function testARecordedPidReusedByAnotherProcessIsNoWorker(): void
+    {
+        $consumer = new ConsumerProcess($this->runningUntil(new MockClock('@1000'), 2000.0), new MockClock(), $this->parents([200 => 1]));
+
+        self::assertFalse($consumer->isWorker(200));
+    }
+
+    public function testAPidThatIsGoneIsNoWorker(): void
+    {
+        $consumer = new ConsumerProcess($this->runningUntil(new MockClock('@1000'), 2000.0), new MockClock(), $this->parents([]));
+
+        self::assertFalse($consumer->isWorker(200));
+    }
+
+    public function testTheConsumerItselfIsNoWorker(): void
+    {
+        $consumer = new ConsumerProcess($this->runningUntil(new MockClock('@1000'), 2000.0), new MockClock(), $this->parents([self::CONSUMER => 1]));
+
+        self::assertFalse($consumer->isWorker(self::CONSUMER));
+    }
+
+    public function testNoProcessIsAWorkerOfAConsumerThatHasEnded(): void
+    {
+        $consumer = new ConsumerProcess($this->runningUntil(new MockClock('@1000'), 0.0), new MockClock(), $this->parents([200 => self::CONSUMER]));
+
+        self::assertFalse($consumer->isWorker(200));
+    }
+
+    public function testAChildOfThisProcessIsFoundAsAWorkerThroughTheSystemsProcessTable(): void
+    {
+        $child = new Process(['sleep', '5']);
+        $child->start();
+
+        try {
+            $consumer = new ConsumerProcess($this->runningAs((int) getmypid()), new MockClock(), new ProcParents()->parentOf(...));
+
+            self::assertTrue($consumer->isWorker((int) $child->getPid()));
+        } finally {
+            $child->stop(0);
+        }
+    }
+
+    private function runningUntil(MockClock $clock, float $end): Process
+    {
+        $process = $this->createStub(Process::class);
+        $process->method('isRunning')->willReturnCallback(static fn (): bool => (float) $clock->now()->format('U.u') < $end);
+        $process->method('getPid')->willReturn(self::CONSUMER);
+
+        return $process;
+    }
+
+    // Seen running at the poll that finds the deadline passed and seen ended at the check right after it, without the clock moving: the order of an exit between the last poll and the check.
+    private function exitsBetweenTheLastPollAndTheCheck(MockClock $clock, float $deadline): Process
+    {
+        $lateCalls = 0;
+        $process = $this->createStub(Process::class);
+        $process->method('isRunning')->willReturnCallback(static function () use ($clock, $deadline, &$lateCalls): bool {
+            return (float) $clock->now()->format('U.u') <= $deadline || 0 === $lateCalls++;
+        });
+
+        return $process;
+    }
+
+    private function runningAs(int $pid): Process
+    {
+        $process = $this->createStub(Process::class);
+        $process->method('isRunning')->willReturn(true);
+        $process->method('getPid')->willReturn($pid);
+
+        return $process;
+    }
+
+    /**
+     * @param array<int, int> $parents
+     *
+     * @return Closure(int): ?int
+     */
+    private function parents(array $parents): Closure
+    {
+        return static fn (int $pid): ?int => $parents[$pid] ?? null;
+    }
+}

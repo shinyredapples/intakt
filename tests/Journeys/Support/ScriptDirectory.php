@@ -1,0 +1,170 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Tests\Journeys\Support;
+
+use Symfony\Component\Clock\ClockInterface;
+use Symfony\Component\Filesystem\Filesystem;
+
+// The folder a journey arms its scripted model answers in and every consumer worker records its calls in, so the journey reads the calls of other processes without a shared service.
+final readonly class ScriptDirectory
+{
+    private const string SCRIPT = 'script.json';
+
+    public function __construct(
+        private string $path,
+        private ClockInterface $clock,
+    ) {
+    }
+
+    /**
+     * @param non-empty-list<array{content_type: string, body: string}> $answers
+     */
+    public function arm(float $weight, array $answers): void
+    {
+        new Filesystem()->dumpFile($this->path.'/'.self::SCRIPT, json_encode(['weight' => $weight, 'answers' => $answers], JSON_THROW_ON_ERROR));
+    }
+
+    /**
+     * @return array{weight: float, answers: non-empty-list<array{content_type: string, body: string}>}
+     *
+     * @throws ScriptNotArmed
+     */
+    public function script(): array
+    {
+        $file = $this->path.'/'.self::SCRIPT;
+        $script = $this->decoded($file);
+        $weight = $script['weight'] ?? null;
+        $answers = $this->answersIn($script['answers'] ?? null);
+
+        if ((!is_float($weight) && !is_int($weight)) || $weight < 0 || null === $answers) {
+            throw new ScriptNotArmed($file);
+        }
+
+        return ['weight' => (float) $weight, 'answers' => $answers];
+    }
+
+    public function callStarted(): int
+    {
+        $call = count($this->filesOf('start')) + 1;
+
+        while (!$this->published($call.'.start', $this->record($call))) {
+            ++$call;
+        }
+
+        return $call;
+    }
+
+    /**
+     * @throws CallEndedTwice
+     */
+    public function callEnded(int $call): void
+    {
+        if (!$this->published($call.'.end', $this->record($call))) {
+            throw new CallEndedTwice($call);
+        }
+    }
+
+    /**
+     * @return list<ScriptedCall>
+     */
+    public function calls(): array
+    {
+        $calls = [];
+
+        foreach ($this->filesOf('start') as $file) {
+            $started = $this->recordIn($file);
+
+            // Skipped, because only a writer other than this class leaves an empty or partial record, and one such file must not hide the others.
+            if (null === $started) {
+                continue;
+            }
+
+            $ended = $this->recordIn(substr($file, 0, -strlen('start')).'end');
+            $calls[] = new ScriptedCall($started['call'], $started['pid'], $started['at'], $ended['at'] ?? null);
+        }
+
+        usort($calls, static fn (ScriptedCall $one, ScriptedCall $other): int => $one->number <=> $other->number);
+
+        return $calls;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function filesOf(string $kind): array
+    {
+        return glob($this->path.'/*.'.$kind) ?: [];
+    }
+
+    private function published(string $name, string $record): bool
+    {
+        $filesystem = new Filesystem();
+        $temporary = $filesystem->tempnam($this->path, '.record-');
+
+        try {
+            $filesystem->dumpFile($temporary, $record);
+
+            // link() refuses a name that exists, so two workers never take one call number, and the record appears whole or not at all.
+            return @link($temporary, $this->path.'/'.$name);
+        } finally {
+            $filesystem->remove($temporary);
+        }
+    }
+
+    private function record(int $call): string
+    {
+        return json_encode(['call' => $call, 'pid' => getmypid(), 'at' => (float) $this->clock->now()->format('U.u')], JSON_THROW_ON_ERROR);
+    }
+
+    /**
+     * @return array{call: int, pid: int, at: float}|null
+     */
+    private function recordIn(string $file): ?array
+    {
+        $record = $this->decoded($file);
+        $call = $record['call'] ?? null;
+        $pid = $record['pid'] ?? null;
+        $at = $record['at'] ?? null;
+
+        if (!is_int($call) || !is_int($pid) || (!is_float($at) && !is_int($at))) {
+            return null;
+        }
+
+        return ['call' => $call, 'pid' => $pid, 'at' => (float) $at];
+    }
+
+    /**
+     * @return array<mixed>
+     */
+    private function decoded(string $file): array
+    {
+        $contents = is_file($file) ? file_get_contents($file) : false;
+        $decoded = false === $contents ? null : json_decode($contents, true);
+
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    /**
+     * @return non-empty-list<array{content_type: string, body: string}>|null
+     */
+    private function answersIn(mixed $answers): ?array
+    {
+        if (!is_array($answers) || [] === $answers || !array_is_list($answers)) {
+            return null;
+        }
+
+        $read = [];
+
+        foreach ($answers as $answer) {
+            if (!is_array($answer) || !is_string($answer['content_type'] ?? null) || !is_string($answer['body'] ?? null)) {
+                return null;
+            }
+
+            $read[] = ['content_type' => $answer['content_type'], 'body' => $answer['body']];
+        }
+
+        return $read;
+    }
+}
