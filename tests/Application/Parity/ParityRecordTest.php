@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Application\Parity;
 
+use Intakt\Tests\Application\Parity\Fixtures\AbstractCandidateTest;
+use Intakt\Tests\Application\Parity\Fixtures\PlainCandidateTest;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Filesystem\Filesystem;
@@ -173,7 +175,7 @@ final class ParityRecordTest extends TestCase
 
         self::assertSame(
             ['line 1: AbstractCandidateTest is no runnable test class'],
-            $this->scratchTestsAliasing(Fixtures\AbstractCandidateTest::class)->unprovenItems($record),
+            $this->scratchTestsAliasing(AbstractCandidateTest::class)->unprovenItems($record),
         );
     }
 
@@ -183,7 +185,7 @@ final class ParityRecordTest extends TestCase
 
         self::assertSame(
             ['line 1: PlainCandidateTest is no runnable test class'],
-            $this->scratchTestsAliasing(Fixtures\PlainCandidateTest::class)->unprovenItems($record),
+            $this->scratchTestsAliasing(PlainCandidateTest::class)->unprovenItems($record),
         );
     }
 
@@ -247,7 +249,7 @@ final class ParityRecordTest extends TestCase
 
     private function scratchTestsAliasing(string $class): ParityRecord
     {
-        $short = substr($class, strrpos($class, '\\') + 1);
+        $short = array_last(explode('\\', $class));
         class_alias($class, 'Intakt\Tests\Scratch\\'.$short);
 
         return $this->scratchTests([$short.'.php']);

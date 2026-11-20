@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Intakt\Tests\Application\Parity;
 
 use FilesystemIterator;
+use PHPUnit\Framework\TestCase;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
-use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use SplFileInfo;
 

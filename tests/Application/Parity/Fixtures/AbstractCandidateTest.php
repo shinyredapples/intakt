@@ -8,7 +8,8 @@ use PHPUnit\Framework\TestCase;
 
 abstract class AbstractCandidateTest extends TestCase
 {
-    public function testVisible(): void
+    public function testVisible(): bool
     {
+        return true;
     }
 }

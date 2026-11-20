@@ -6,7 +6,8 @@ namespace Intakt\Tests\Application\Parity\Fixtures;
 
 final class PlainCandidateTest
 {
-    public function testVisible(): void
+    public function testVisible(): bool
     {
+        return true;
     }
 }
