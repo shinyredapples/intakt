@@ -17,6 +17,7 @@ use Intakt\Core\Review\Contract\CatchUpOwed;
 use Intakt\Core\Review\Contract\ChangeSource;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\FindingIds;
 use Intakt\Core\Review\Contract\FollowUp;
 use Intakt\Core\Review\Contract\JudgedFindings;
 use Intakt\Core\Review\Contract\JudgeDone;
@@ -141,8 +142,8 @@ final readonly class RoundLedger
 
         $this->append(LedgerEventKind::JudgeDone, new JudgeDone(
             $round->id()->toRfc4122(),
-            $act,
-            array_map(static fn (FollowUp $followUp): string => $followUp->finding->id, $judged->followUps),
+            new FindingIds(...$act),
+            new FindingIds(...array_map(static fn (FollowUp $followUp): string => $followUp->finding->id, $judged->followUps)),
             $this->recordedFindings($judged, $act),
             $judged->dropped,
             $judged->sameCause,
