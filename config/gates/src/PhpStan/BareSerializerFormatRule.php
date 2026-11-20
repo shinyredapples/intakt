@@ -73,9 +73,14 @@ final readonly class BareSerializerFormatRule implements Rule
         $method = $this->methodName($node);
         [$contracts, $position] = self::FORMAT_ARGUMENTS[$method] ?? [[], 0];
         $classes = [] === $contracts ? [] : $this->serializerClasses($scope, $node, $contracts);
-        $names = $this->formatParameterNames($classes, $method, $position);
 
-        if ([] === $classes || !$this->isBareFormat($this->arguments->valueAt($node, $position, $names))) {
+        // judged against each receiver's own signature, because names merged across a union let a named argument that is the format on one receiver hide the format on another
+        $passesBareFormat = array_any(
+            $classes,
+            fn (ClassReflection $class): bool => $this->isBareFormat($this->arguments->valueAt($node, $position, $this->formatParameterNames($class, $method, $position))),
+        );
+
+        if (!$passesBareFormat) {
             return [];
         }
 
@@ -125,15 +130,13 @@ final readonly class BareSerializerFormatRule implements Rule
         ));
     }
 
-    // read from each receiver class, because an implementation may rename the format parameter and a named argument follows the implementation
+    // read from the receiver class, because an implementation may rename the format parameter and a named argument follows the implementation
     /**
-     * @param list<ClassReflection> $classes
-     *
      * @return list<string>
      */
-    private function formatParameterNames(array $classes, string $method, int $position): array
+    private function formatParameterNames(ClassReflection $class, string $method, int $position): array
     {
-        $names = array_merge(...array_map(fn (ClassReflection $class): array => $this->parameterNamesOf($class, $method, $position), $classes));
+        $names = $this->parameterNamesOf($class, $method, $position);
 
         return [] === $names ? [self::CONTRACT_PARAMETER] : array_values(array_unique($names));
     }

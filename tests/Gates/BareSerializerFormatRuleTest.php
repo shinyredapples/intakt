@@ -92,6 +92,20 @@ final class BareSerializerFormatRuleTest extends PhpStanRuleTestCase
         self::assertSame(2, substr_count($findings, 'intakt.bareSerializerFormat'), $findings);
     }
 
+    public function testANamedFormatIsJudgedAgainstEachReceiverOfAUnion(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/First.php', "<?php\n\ndeclare(strict_types=1);\n\nnamespace Intakt\\Sample;\n\nuse Symfony\\Component\\Serializer\\SerializerInterface;\n\nabstract class First implements SerializerInterface\n{\n    public function serialize(mixed \$data, string \$format, array \$context = []): string\n    {\n        return \$format;\n    }\n}\n");
+        $sandbox->write('src/Second.php', "<?php\n\ndeclare(strict_types=1);\n\nnamespace Intakt\\Sample;\n\nuse Symfony\\Component\\Serializer\\SerializerInterface;\n\nabstract class Second implements SerializerInterface\n{\n    public function serialize(mixed \$format, string \$data, array \$context = []): string\n    {\n        return \$data;\n    }\n}\n");
+        $sandbox->write('src/UnionCall.php', "<?php\n\ndeclare(strict_types=1);\n\nnamespace Intakt\\Sample;\n\nuse Symfony\\Component\\Serializer\\Encoder\\JsonEncoder;\n\nfinal readonly class UnionCall\n{\n    /**\n     * @return list<string>\n     */\n    public function check(First|Second \$serializer): array\n    {\n        return [\n            \$serializer->serialize(data: JsonEncoder::FORMAT, format: 'json'),\n            \$serializer->serialize(format: JsonEncoder::FORMAT, data: 'json'),\n            \$serializer->serialize(data: JsonEncoder::FORMAT, format: JsonEncoder::FORMAT),\n        ];\n    }\n}\n");
+
+        $findings = $this->ruleFindingsIn($sandbox);
+
+        self::assertStringContainsString('src/UnionCall.php:17 intakt.bareSerializerFormat', $findings);
+        self::assertStringContainsString('src/UnionCall.php:18 intakt.bareSerializerFormat', $findings);
+        self::assertSame(2, substr_count($findings, 'intakt.bareSerializerFormat'), $findings);
+    }
+
     public function testANullsafeCallWithTheEncoderConstantPassesStaticAnalysis(): void
     {
         $findings = $this->ruleFindingsIn($this->sandboxReturning([
