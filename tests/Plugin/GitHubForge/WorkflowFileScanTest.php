@@ -158,6 +158,97 @@ final class WorkflowFileScanTest extends TestCase
         self::assertSame([['runner', 5]], $this->kindsAndLines($findings));
     }
 
+    public function testABlockRunnerLabelWithATrailingBlankLineIsReportedOnOneLine(): void
+    {
+        $findings = $this->scan($this->withJob("runs-on: |\n  self-hosted\n\ntimeout-minutes: 5"));
+
+        self::assertSame([['runner', 5, 'the job check runs on self-hosted, not a GitHub-hosted runner label']], $this->summary($findings));
+    }
+
+    public function testALineBreakInsideABlockRunnerLabelIsShownEscaped(): void
+    {
+        $findings = $this->scan($this->withJob("runs-on: >-\n  ubuntu\n  latest"));
+
+        self::assertSame([['runner', 5, 'the job check runs on ubuntu\nlatest, not a GitHub-hosted runner label']], $this->summary($findings));
+    }
+
+    public function testABlockRunnerLabelIsLookedUpUntrimmed(): void
+    {
+        $findings = $this->scan($this->withJob("runs-on: |\n  ubuntu-latest"));
+
+        self::assertSame([['runner', 5, 'the job check runs on ubuntu-latest, not a GitHub-hosted runner label']], $this->summary($findings));
+    }
+
+    public function testAJobLevelPermissionsKeyInAnotherCaseIsUnreadableOnItsLine(): void
+    {
+        $findings = $this->scan($this->withJob("runs-on: ubuntu-latest\nPermissions: write-all"));
+
+        self::assertSame([['unreadable', 6, 'the key Permissions matches permissions only when case is ignored, and the scan does not settle how GitHub compares case']], $this->summary($findings));
+    }
+
+    public function testATopLevelJobsKeyInAnotherCaseIsUnreadableInsteadOfNamingNoJobs(): void
+    {
+        $findings = $this->scan("on: push\npermissions: read-all\nJobs:\n  check:\n    runs-on: ubuntu-latest\n");
+
+        self::assertSame([['unreadable', 3, 'the key Jobs matches jobs only when case is ignored, and the scan does not settle how GitHub compares case']], $this->summary($findings));
+    }
+
+    public function testATopLevelTriggerKeyInAnotherCaseIsUnreadableInsteadOfNamingNoTrigger(): void
+    {
+        $findings = $this->scan("ON: pull_request_target\npermissions: read-all\njobs:\n  check:\n    runs-on: ubuntu-latest\n");
+
+        self::assertSame([['unreadable', 1, 'the key ON matches on only when case is ignored, and the scan does not settle how GitHub compares case']], $this->summary($findings));
+    }
+
+    public function testATopLevelPermissionsKeyInAnotherCaseIsUnreadable(): void
+    {
+        $findings = $this->scan("on: push\nPERMISSIONS: write-all\njobs:\n  check:\n    runs-on: ubuntu-latest\n    permissions: read-all\n");
+
+        self::assertSame([['unreadable', 2]], $this->kindsAndLines($findings));
+    }
+
+    public function testARunnerKeyInAnotherCaseIsUnreadableInsteadOfNamingNoRunner(): void
+    {
+        $findings = $this->scan($this->withJob('RUNS-ON: self-hosted'));
+
+        self::assertSame([['unreadable', 5, 'the key RUNS-ON matches runs-on only when case is ignored, and the scan does not settle how GitHub compares case']], $this->summary($findings));
+    }
+
+    public function testACalledWorkflowKeyInAnotherCaseIsUnreadable(): void
+    {
+        $findings = $this->scan($this->withJob("runs-on: ubuntu-latest\nUses: ./.github/workflows/build.yml"));
+
+        self::assertSame([['unreadable', 6]], $this->kindsAndLines($findings));
+    }
+
+    public function testAPassedSecretsKeyInAnotherCaseIsUnreadableAndStillASecret(): void
+    {
+        $findings = $this->scan($this->withJob("runs-on: ubuntu-latest\nSecrets: inherit"));
+
+        self::assertSame([['unreadable', 6], ['secret', 6]], $this->kindsAndLines($findings));
+    }
+
+    public function testAKeyInAnotherCaseIsUnreadableEvenBesideTheExactSpelling(): void
+    {
+        $findings = $this->scan($this->withJob("runs-on: ubuntu-latest\npermissions: read-all\nPermissions: write-all"));
+
+        self::assertSame([['unreadable', 7]], $this->kindsAndLines($findings));
+    }
+
+    public function testEveryCaseVariantOfAKeyIsUnreadableOnItsOwnLine(): void
+    {
+        $findings = $this->scan($this->withJob("runs-on: ubuntu-latest\npermissions: read-all\nPermissions: read-all\nPERMISSIONS: read-all"));
+
+        self::assertSame([['unreadable', 7], ['unreadable', 8]], $this->kindsAndLines($findings));
+    }
+
+    public function testKeysTheScanDoesNotReadByNameMayUseAnyCase(): void
+    {
+        $findings = $this->scan("Name: checks\non: push\npermissions: read-all\njobs:\n  Check:\n    runs-on: ubuntu-latest\n    Timeout-Minutes: 5\n");
+
+        self::assertSame([], $findings);
+    }
+
     public function testAJobWithoutARunnerIsUnreadable(): void
     {
         $findings = $this->scan($this->withJob('timeout-minutes: 5'));

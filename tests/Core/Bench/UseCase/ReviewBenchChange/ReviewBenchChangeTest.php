@@ -57,7 +57,6 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\Messenger\Handler\HandlersLocator;
 use Symfony\Component\Messenger\MessageBus;
 use Symfony\Component\Messenger\Middleware\HandleMessageMiddleware;
-use Symfony\Component\Messenger\Transport\Receiver\ListableReceiverInterface;
 
 #[Group('persistence')]
 #[CoversClass(ReviewBenchChange::class)]
@@ -163,8 +162,6 @@ final class ReviewBenchChangeTest extends KernelTestCase
         };
         $serializer = self::getContainer()->get('serializer.stored');
         $handler = $this->fixture->startHandlerOn($this->fixture->bus);
-        $failures = self::createStub(ListableReceiverInterface::class);
-        $failures->method('all')->willReturn([]);
 
         return new ReviewChange(
             new MessageBus([new HandleMessageMiddleware(new HandlersLocator([RunReviewRound::class => [$handler]]))]),
@@ -176,7 +173,7 @@ final class ReviewBenchChangeTest extends KernelTestCase
             new WorkerOnSleep($this->fixture->clock, $work),
             new FailureInWords(),
             $vendor,
-            new FailedJudgings($failures),
+            $this->fixture->noFailedJudgings(),
         );
     }
 

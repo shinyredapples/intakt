@@ -134,6 +134,48 @@ final class DockerEngineTest extends TestCase
         self::assertSame('/v1.44/images/localhost%3A5000%2Fsample%3Alatest/json', parse_url($url, PHP_URL_PATH));
     }
 
+    public function testTheStandardErrorLogAsksForStandardErrorAloneAndTheWholeLog(): void
+    {
+        $url = '';
+        $engine = $this->engineRecording($url, '');
+
+        $engine->standardErrorHead('abc123', 64);
+
+        self::assertSame('/v1.44/containers/abc123/logs', parse_url($url, PHP_URL_PATH));
+        self::assertSame('stderr=true', parse_url($url, PHP_URL_QUERY));
+    }
+
+    public function testTheStandardErrorLogIsReadWholeUpToItsLimit(): void
+    {
+        $engine = $this->engineAnswering(pack('CxxxN', 2, 8).'one two'."\n");
+
+        self::assertSame("one two\n", $engine->standardErrorHead('abc123', 16));
+    }
+
+    public function testReadingTheStandardErrorLogStopsAtItsLimitAndKeepsTheStartOfACutFrame(): void
+    {
+        $answer = new MockResponse([pack('CxxxN', 2, 4).'one'."\n", pack('CxxxN', 2, 100).'two', str_repeat('x', 97)]);
+        $engine = new DockerEngine(new MockHttpClient($answer), FakeDockerEngine::SOCKET);
+
+        self::assertSame("one\ntw", $engine->standardErrorHead('abc123', 22));
+    }
+
+    public function testAHeaderTheLimitCutsIsDropped(): void
+    {
+        $engine = $this->engineAnswering(pack('CxxxN', 2, 4)."one\n".pack('CxxxN', 2, 4)."two\n");
+
+        self::assertSame("one\n", $engine->standardErrorHead('abc123', 15));
+    }
+
+    public function testAStandardErrorLogTheEngineRefusesFails(): void
+    {
+        $engine = $this->engineAnswering('{"message":"configured logging driver does not support reading"}', 501);
+
+        $this->expectExceptionObject(DockerEngineFailed::refused('containers/abc123/logs', 501, 'configured logging driver does not support reading'));
+
+        $engine->standardErrorHead('abc123', 64);
+    }
+
     public function testAWaitWithoutTheSocketFailsInsteadOfReadingAsADeadline(): void
     {
         $engine = new DockerEngine(new MockHttpClient(new MockResponse('{"StatusCode":0}')), FakeDockerEngine::SOCKET.'.missing');

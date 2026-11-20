@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Review\UseCase\ReviewChange;
 
 use DateTimeImmutable;
+use Intakt\Core\Ledger\Contract\Ledger;
+use Intakt\Core\Ledger\Contract\LedgerPayloads;
+use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Intakt\Core\Review\Contract\RoundEnding;
 use Intakt\Core\Review\Contract\RoundEnds;
 use Intakt\Core\Review\UseCase\JudgeRound\FailedJudgings;
@@ -18,6 +21,7 @@ use PHPUnit\Framework\TestCase;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\Transport\Receiver\ListableReceiverInterface;
+use Symfony\Component\Serializer\SerializerInterface;
 
 #[CoversClass(StoredRoundEndings::class)]
 #[UsesClass(RoundEnding::class)]
@@ -67,6 +71,9 @@ final class StoredRoundEndingsTest extends TestCase
         $transport = self::createStub(ListableReceiverInterface::class);
         $transport->method('all')->willReturn($parked);
 
-        return new StoredRoundEndings(new FailedJudgings($transport), new MockClock($now), new UpperWait(4, 2));
+        $ledger = self::createStub(Ledger::class);
+        $ledger->method('readOfKind')->willReturn(new RecordedEvents([]));
+
+        return new StoredRoundEndings(new FailedJudgings($transport, $ledger, new LedgerPayloads(self::createStub(SerializerInterface::class))), new MockClock($now), new UpperWait(4, 2));
     }
 }

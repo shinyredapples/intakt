@@ -19,15 +19,30 @@ final readonly class JobContainerDefinition
     ) {
     }
 
+    // A new mark for every run, so a job cannot reuse one it saw in an earlier run's output.
+    public function of(JobSpec $spec, string $outputDirectory, EgressRoute $route): JobContainerRequest
+    {
+        $mark = bin2hex(random_bytes(16));
+
+        return new JobContainerRequest(['Entrypoint' => $this->entrypointOf($mark), ...$this->definitionOf($spec, $outputDirectory, $route)], $mark);
+    }
+
+    /**
+     * @return list<string>
+     */
+    // Inline rather than mounted, so it runs in any image with a POSIX shell, and the mark an argument, never the environment, so it is gone once the script runs the job with exec.
+    private function entrypointOf(string $mark): array
+    {
+        return ['/bin/sh', '-c', new Filesystem()->readFile($this->startCheckScript), 'intakt-start-check', $mark];
+    }
+
     /**
      * @return array<string, mixed>
      */
-    public function of(JobSpec $spec, string $outputDirectory, EgressRoute $route): array
+    private function definitionOf(JobSpec $spec, string $outputDirectory, EgressRoute $route): array
     {
         return [
             'Image' => $spec->image,
-            // Passed inline rather than mounted, so the check runs in any image with a POSIX shell and no input path can collide with it.
-            'Entrypoint' => ['/bin/sh', '-c', new Filesystem()->readFile($this->startCheckScript), 'intakt-start-check'],
             'Cmd' => [...array_map(static fn (JobInput $input): string => $input->containerPath, $spec->inputs), '--', ...$spec->command],
             // The orchestrator's own user, so the job can write the output directory only it may read, and never runs as root.
             'User' => sprintf('%d:%d', posix_getuid(), posix_getgid()),
@@ -67,6 +82,8 @@ final readonly class JobContainerDefinition
             'NetworkMode' => $route->networkMode,
             'CapDrop' => ['ALL'],
             'SecurityOpt' => ['no-new-privileges'],
+            // A readable driver, blocking delivery and a size cap: the check's lines are kept whatever the daemon's defaults, and a chatty job cannot fill its disk.
+            'LogConfig' => ['Type' => 'json-file', 'Config' => ['mode' => 'blocking', 'max-size' => '10m', 'max-file' => '3']],
         ];
     }
 

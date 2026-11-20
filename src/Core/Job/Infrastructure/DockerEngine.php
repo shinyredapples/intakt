@@ -182,6 +182,38 @@ final readonly class DockerEngine
         return $this->send('GET', sprintf('containers/%s/logs', $container), ['query' => ['stdout' => 'true', 'tail' => (string) $lines]])->demultiplexed(200);
     }
 
+    // Without a tail and cut after a number of bytes, because the start of the log is what counts and the job could write far more after it.
+    public function standardErrorHead(string $container, int $bytes): string
+    {
+        $path = sprintf('containers/%s/logs', $container);
+
+        try {
+            $response = $this->request('GET', $path, ['query' => ['stderr' => 'true'], 'buffer' => false]);
+
+            return new EngineAnswer($path, $response->getStatusCode(), $this->headOf($response, $bytes))->demultiplexedHead(200);
+        } catch (TransportExceptionInterface $failure) {
+            throw DockerEngineFailed::unreachable($this->socket, $failure);
+        }
+    }
+
+    // The rest is never fetched, so a flood after the head costs no memory.
+    private function headOf(ResponseInterface $response, int $bytes): string
+    {
+        $head = '';
+
+        foreach ($this->client->stream($response) as $chunk) {
+            $head .= $chunk->getContent();
+
+            if (strlen($head) > $bytes) {
+                $response->cancel();
+
+                break;
+            }
+        }
+
+        return substr($head, 0, $bytes);
+    }
+
     /**
      * @return list<JobNetwork>
      */
