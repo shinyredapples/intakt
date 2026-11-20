@@ -21,6 +21,8 @@ final class MateInvocationTest extends TestCase
         self::assertArrayHasKey('server-info', $tools['tools']);
         self::assertArrayHasKey('symfony-services', $tools['tools']);
         self::assertArrayHasKey('symfony-dotenv-check', $tools['tools']);
+        self::assertArrayHasKey('symfony-profiler-list', $tools['tools']);
+        self::assertArrayHasKey('symfony-profiler-get', $tools['tools']);
     }
 
     public function testTheServerInfoToolReportsTheRuntimeOfThisInstall(): void
