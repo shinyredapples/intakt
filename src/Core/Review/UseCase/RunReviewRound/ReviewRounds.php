@@ -128,6 +128,20 @@ final readonly class ReviewRounds
     }
 
     /**
+     * @return list<ReviewRound>
+     */
+    public function ofChange(ReviewRound $round): array
+    {
+        /** @var list<ReviewRound> $rounds */
+        $rounds = $this->entities->createQuery(sprintf('SELECT r FROM %s r WHERE r.subject.project = :project AND r.change.change = :change ORDER BY r.change.number ASC', ReviewRound::class))
+            ->setParameter('project', $round->project())
+            ->setParameter('change', $round->change())
+            ->getResult();
+
+        return $rounds;
+    }
+
+    /**
      * @param Closure(ReviewRound): mixed $work
      */
     public function withLockedRound(Uuid $roundId, Closure $work): void
