@@ -119,7 +119,7 @@ final class HandledMessagesNameTheirBusTest extends TestCase
         $classes = [];
         foreach (self::SCANNED as $directory => $namespace) {
             $root = dirname(__DIR__, 3).'/'.$directory;
-            // The class name, not the attribute syntax: a grouped, qualified or aliased attribute still names it once in the file.
+            // Matches the class name rather than `#[`, because a grouped, qualified or aliased attribute still names the class in its file.
             $files = new Finder()->files()->in($root)->name('*.php')->contains('/\bAs(Command|Query)Handler\b/');
             foreach ($files as $file) {
                 $class = $namespace.str_replace('/', '\\', substr($file->getRelativePathname(), 0, -4));
