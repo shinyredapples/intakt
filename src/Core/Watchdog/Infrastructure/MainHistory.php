@@ -46,6 +46,13 @@ final readonly class MainHistory implements CommitHistory
     // Derived from its plain type, because a key on a security key carries the same fields and then its application.
     private const string SECURITY_KEY = '/\Ask-(?<plain>ssh-ed25519|ecdsa-sha2-nistp256)@openssh\.com\z/';
 
+    // The DER head of a public key on each curve (hex), because only OpenSSL's decode tells a point on the curve from a point off it.
+    private const array CURVE_KEY_HEADS = [
+        'ecdsa-sha2-nistp256' => '3059301306072a8648ce3d020106082a8648ce3d030107034200',
+        'ecdsa-sha2-nistp384' => '3076301006072a8648ce3d020106052b81040022036200',
+        'ecdsa-sha2-nistp521' => '30819b301006072a8648ce3d020106052b8104002303818600',
+    ];
+
     /** @var list<string> */
     private array $ownerKeys;
 
@@ -126,7 +133,9 @@ final readonly class MainHistory implements CommitHistory
     private function isAWholeKey(string $blob, string $type): bool
     {
         $fields = $this->fields($blob);
-        $expected = 1 === preg_match(self::SECURITY_KEY, $type, $securityKey) ? [...self::KEY_FIELDS[$securityKey['plain']], null] : self::KEY_FIELDS[$type] ?? null;
+        $plain = 1 === preg_match(self::SECURITY_KEY, $type, $securityKey) ? $securityKey['plain'] : $type;
+        $expected = self::KEY_FIELDS[$plain] ?? null;
+        $expected = null !== $expected && $plain !== $type ? [...$expected, null] : $expected;
         if (null === $fields || null === $expected || $type !== array_shift($fields) || count($fields) !== count($expected)) {
             return false;
         }
@@ -135,7 +144,23 @@ final readonly class MainHistory implements CommitHistory
             is_int($rule) => strlen($fields[$index]) === $rule,
             is_string($rule) => $fields[$index] === $rule,
             default => '' !== $fields[$index],
-        });
+        }) && $this->isOnItsCurve($plain, $fields);
+    }
+
+    /**
+     * @param list<string> $fields
+     */
+    private function isOnItsCurve(string $plain, array $fields): bool
+    {
+        $head = self::CURVE_KEY_HEADS[$plain] ?? null;
+        if (null === $head) {
+            return true;
+        }
+
+        // A point of the right length may still lie off the curve, and ssh-keygen would then refuse every signature the owner makes.
+        $der = (string) hex2bin($head).$fields[1];
+
+        return false !== openssl_pkey_get_public("-----BEGIN PUBLIC KEY-----\n".chunk_split(base64_encode($der), 64, "\n")."-----END PUBLIC KEY-----\n");
     }
 
     /**

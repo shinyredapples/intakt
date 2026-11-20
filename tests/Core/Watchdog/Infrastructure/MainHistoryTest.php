@@ -42,6 +42,10 @@ use Symfony\Component\Process\Process;
 #[UsesClass(WatchedMain::class)]
 final class MainHistoryTest extends TestCase
 {
+    // The base point of P-256, because a security-key fixture must carry a point that lies on its curve.
+    private const string P256_GENERATOR = "\x04\x6b\x17\xd1\xf2\xe1\x2c\x42\x47\xf8\xbc\xe6\xe5\x63\xa4\x40\xf2\x77\x03\x7d\x81\x2d\xeb\x33\xa0\xf4\xa1\x39\x45\xd8\x98\xc2\x96"
+        ."\x4f\xe3\x42\xe2\xfe\x1a\x7f\x9b\x8e\xe7\xeb\x4a\x7c\x0f\x9e\x16\x2b\xce\x33\x57\x6b\x31\x5e\xce\xcb\xb6\x40\x68\x37\xbf\x51\xf5";
+
     private TemporaryRepository $repository;
     private string $keys;
 
@@ -216,14 +220,15 @@ final class MainHistoryTest extends TestCase
             $repository->commitEmpty('Seen');
             $repository->checkoutNewBranch('other');
         }
+        $priorProcess = getenv('GIT_DIR');
+        $priorServer = $_SERVER['GIT_DIR'] ?? null;
         $_SERVER['GIT_DIR'] = $inherited->path.'/.git';
         putenv('GIT_DIR='.$_SERVER['GIT_DIR']);
 
         try {
             $this->repository->deleteBranch('main');
         } finally {
-            putenv('GIT_DIR');
-            unset($_SERVER['GIT_DIR']);
+            $this->restoreGitDir($priorProcess, $priorServer);
             $mainOfTheInherited = is_file($inherited->path.'/.git/refs/heads/main');
             $mainOfTheTest = is_file($this->repository->path.'/.git/refs/heads/main');
             $inherited->remove();
@@ -354,7 +359,7 @@ final class MainHistoryTest extends TestCase
     public static function securityKeys(): iterable
     {
         yield 'ed25519' => ['ssh-ed25519', [str_repeat("\x01", 32), 'ssh:']];
-        yield 'ecdsa' => ['ecdsa-sha2-nistp256', ['nistp256', "\x04".str_repeat("\x01", 64), 'ssh:']];
+        yield 'ecdsa' => ['ecdsa-sha2-nistp256', ['nistp256', self::P256_GENERATOR, 'ssh:']];
     }
 
     /**
@@ -389,6 +394,9 @@ final class MainHistoryTest extends TestCase
         yield 'a security key without its application' => [self::key('sk-ssh-ed25519@openssh.com', ['sk-ssh-ed25519@openssh.com', str_repeat("\x01", 32)])];
         $securityKeyType = sprintf('sk-%s@openssh.com', 'ecdsa-sha2-nistp384');
         yield 'a security key of a curve without a security key type' => [self::key($securityKeyType, [$securityKeyType, 'nistp384', "\x04".str_repeat("\x01", 96), 'ssh:'])];
+        yield 'an ecdsa point off its curve' => [self::key('ecdsa-sha2-nistp256', ['ecdsa-sha2-nistp256', 'nistp256', "\x04".str_repeat("\x00", 64)])];
+        $securityKeyType = sprintf('sk-%s@openssh.com', 'ecdsa-sha2-nistp256');
+        yield 'a security key point off its curve' => [self::key($securityKeyType, [$securityKeyType, 'nistp256', "\x04".str_repeat("\x01", 64), 'ssh:'])];
         yield 'a key type the check does not know' => [self::key('ssh-unknown', ['ssh-unknown', str_repeat("\x01", 32)])];
         yield 'a second line' => ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIA test\nowner ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIB"];
         yield 'an allowed-signers option' => ['cert-authority ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIA'];
@@ -406,6 +414,17 @@ final class MainHistoryTest extends TestCase
         $this->expectException(OwnerKeyRefused::class);
 
         $this->history([$key]);
+    }
+
+    // The values from before the test, because later tests must inherit the environment the run started with.
+    private function restoreGitDir(string|false $process, mixed $server): void
+    {
+        putenv(false === $process ? 'GIT_DIR' : 'GIT_DIR='.$process);
+        if (null === $server) {
+            unset($_SERVER['GIT_DIR']);
+        } else {
+            $_SERVER['GIT_DIR'] = $server;
+        }
     }
 
     /**
