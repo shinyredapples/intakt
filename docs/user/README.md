@@ -509,7 +509,7 @@ Intakt has a ledger that can store review events (review started, reviewer start
 php bin/console doctrine:migrations:migrate
 ```
 
-The same command also creates the tables where Intakt will keep what it read from a project's GitHub issues: the open issues and pull requests of the last full listing, a marker that lets the next listing ask only for changes, and the reason a task failed for good. The reason stays stored after its issue is closed, so tasks that wait for it stay held. Intakt does not take work from GitHub issues by itself yet: nothing writes to these tables so far, and the automatic intake is still planned.
+The same command also creates the tables where Intakt will keep what it read from a project's GitHub issues: the open issues and pull requests of the last full listing, a marker (the listing's entity tag) that lets Intakt reuse the stored listing when GitHub confirms it unchanged, while a changed listing is read again in full, and the reason a task failed for good. The reason stays stored after its issue is closed, so tasks that wait for it stay held. Intakt does not take work from GitHub issues by itself yet: nothing writes to these tables so far, and the automatic intake is still planned.
 
 ### Choosing the database
 
