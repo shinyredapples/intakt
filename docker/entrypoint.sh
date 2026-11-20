@@ -139,14 +139,20 @@ stop_all() {
     mapfile -t children < <(jobs -p)
     kill -TERM "${children[@]}" 2>/dev/null || true
     # A consumer ignores SIGTERM until its worker exists (upstream/messenger-consume-ignores-early-sigterm), so what still runs after a grace period inside Docker's 10 s stop timeout is killed.
-    # A deadline in microseconds, not a count of pauses, because on a loaded machine every pause overruns and 80 of them passed the stop timeout.
-    local deadline=$(( ${EPOCHREALTIME//[!0-9]/} + 8000000 ))
-    while any_running "${children[@]}" && (( ${EPOCHREALTIME//[!0-9]/} < deadline )); do
+    # A deadline, not a count of pauses, because on a loaded machine every pause overruns and 80 of them passed the stop timeout; read from the uptime, which a wall clock step cannot move (in hundredths of a second).
+    local deadline=$(( $(uptime_ticks) + 800 ))
+    while any_running "${children[@]}" && (( $(uptime_ticks) < deadline )); do
         sleep 0.1
     done
     kill -KILL "${children[@]}" 2>/dev/null || true
     wait
     exit "$1"
+}
+
+uptime_ticks() {
+    local up
+    read -r up _ < /proc/uptime
+    echo $(( 10#${up/./} ))
 }
 
 any_running() {
