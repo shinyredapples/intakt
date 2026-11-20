@@ -12,6 +12,8 @@ Your coding agent says it is done. Intakt tells you whether to believe it: a pan
 
 ## b. One Hugging Face token or provider key, about 5 minutes
 
+First clone and start Intakt as in steps 1 and 2 of path a.
+
 1. Open http://localhost:7781/setup, the first-run page (once path a has played, http://localhost:7781 opens the board instead). Paste the key or token in step 1 ("A key or token for Anthropic, OpenAI or Hugging Face") and press **Keep the key**. Calls are billed to the key's owner.
 2. `docker compose restart intakt`, so the sample project gets its reviewers. Wait until `docker compose ps` shows the container as healthy.
 3. Reload http://localhost:7781/setup: step 2 now reads "1 project is configured." and lists the `sample` project. Then start the live review:
@@ -34,7 +36,7 @@ This path runs a live review, so first do steps 1 and 2 of path b (keep a key, r
 | Finding ids are kept across rounds | `src/Core/Review/Domain/FindingLedger.php` | `tests/Core/Review/Domain/FindingLedgerTest.php`: `testFindingIdsStayStableOverThreeRounds`; `tests/Core/Review/UseCase/RunReviewRound/FindingsAcrossRoundsTest.php`: `testIdsStayStableOverThreeRoundsAndANewFindingGetsTheNextId` |
 | P1 and P2 findings whose quote checks out reach the act list | `src/Core/Review/Contract/JudgedFindings.php`, `src/Core/Review/Contract/Judgement.php` | `tests/Core/Review/UseCase/JudgeRound/JudgeRoundTest.php`: `testAJudgeThatRejectsAP1AndDefersAP2LeavesBothOnTheActList`, `testAnInvalidJudgeAnswerLeavesEveryBlockingFindingOnTheActListAndMakesNoFollowUp` |
 | Figure kinds (measured, counted, estimated) are never added together | `src/Core/Platform/Contract/Figures.php` (throws `MixedFigureKinds`) | `tests/Core/Platform/Contract/FiguresTest.php`: `testATotalOverMeasuredAndEstimatedFiguresIsRefused` |
-| A finding that quotes code absent from the change is dropped before the judge | `src/Core/Review/Domain/QuotesInChange.php`, called by `src/Core/Review/UseCase/JudgeRound/JudgeRoundHandler.php` | `tests/Core/Review/Domain/QuotesInChangeTest.php`: `testAFindingQuotingANameAbsentFromTheChangeIsDropped`, `testAFindingWhoseQuoteIsInTheChangeIsKept` |
+| A finding is dropped before the judge when none of its checked quotes appears in the change | `src/Core/Review/Domain/QuotesInChange.php`, called by `src/Core/Review/UseCase/JudgeRound/JudgeRoundHandler.php` | `tests/Core/Review/Domain/QuotesInChangeTest.php`: `testAFindingQuotingANameAbsentFromTheChangeIsDropped`, `testAFindingWhoseQuoteIsInTheChangeIsKept` |
 
 ## Symfony AI and MCP pieces used
 
@@ -42,7 +44,7 @@ This path runs a live review, so first do steps 1 and 2 of path b (keep a key, r
 - **Agent**: the reviewers and their tool loop (`src/Core/Review/Infrastructure/ReviewerRuns.php`).
 - **Store**: project memory (`src/Core/Memory/Infrastructure/StoreProjectMemory.php`).
 - **AI Bundle**: configures the provider platforms (`config/packages/ai.php`).
-- **MCP Bundle**: two servers. The owner server at `/mcp/owner` has five tools (`list_projects`, `review_status`, `review_verdicts`, `review_act_list`, `start_review`), one resource template (`intakt://rounds/{roundId}/findings`) and progress notifications while `start_review` waits. The review server at `/mcp/review` gives reviewers `read_file`, `list_directory` and `search_files`. Neither has prompts.
+- **MCP Bundle**: two servers. The owner server at `/mcp/owner` has five tools (`list_projects`, `review_status`, `review_verdicts`, `review_act_list`, `start_review`), one resource template (`intakt://rounds/{roundId}/findings`) and progress notifications while `start_review` waits. The review server at `/mcp/review` gives reviewers `read_file`, `list_directory` and `search_files`, which also sends progress. Both `start_review` and `search_files` send progress only when the client supplies a progress token. Neither server has prompts.
 
 Every Symfony and Symfony AI feature in use, with its status: [Highlights](https://shinyredapples.github.io/intakt/).
 
