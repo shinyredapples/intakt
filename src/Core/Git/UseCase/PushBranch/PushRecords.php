@@ -88,9 +88,6 @@ final readonly class PushRecords
         $this->append(LedgerEventKind::ChangeIntended, $this->keyOf($request, $head));
     }
 
-    /**
-     * @throws BranchNotPushed
-     */
     // With how the forge got there, because only a pull request Intakt's identity created is handed to Intakt: docs/architecture/handed-to-intakt.md
     /**
      * @throws BranchNotPushed

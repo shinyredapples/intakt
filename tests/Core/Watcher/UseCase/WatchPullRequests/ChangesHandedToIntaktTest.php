@@ -287,6 +287,117 @@ final class ChangesHandedToIntaktTest extends KernelTestCase
         self::assertCount(1, $this->handedToIntakt());
     }
 
+    public function testTheAuthorOfEachUnchangedPullRequestAnotherAuthorCreatedIsAskedOnceOverAnHourOfTicks(): void
+    {
+        $asked = 0;
+        $authorship = self::createStub(ChangeAuthorship::class);
+        $authorship->method('isCreatedByIntakt')->willReturnCallback(static function () use (&$asked): bool {
+            ++$asked;
+
+            return false;
+        });
+        $this->authorship = $authorship;
+        $open = array_map(fn (int $number): OpenChange => $this->change('https://github.com/acme/widgets/pull/'.$number), range(1, 20));
+
+        foreach (range(1, 60) as $tick) {
+            $this->recognize('alpha', ...$open);
+        }
+
+        self::assertSame([20, 20], [$asked, count($this->notHandedToIntakt())]);
+    }
+
+    public function testAPullRequestAnotherAuthorCreatedIsRecordedAsNotHandedToIntakt(): void
+    {
+        $authorship = self::createStub(ChangeAuthorship::class);
+        $authorship->method('isCreatedByIntakt')->willReturn(false);
+        $this->authorship = $authorship;
+
+        $this->recognize('alpha', $this->change(self::LOOP_PULL));
+
+        self::assertSame([[['project' => 'alpha', 'change' => self::LOOP_PULL, 'head' => str_repeat('a', 40)]], []], [$this->notHandedToIntakt(), $this->handedToIntakt()]);
+    }
+
+    public function testThePullRequestsAuthorIsNotAskedForAPullRequestRecordedAsNotHandedToIntakt(): void
+    {
+        $this->record(LedgerEventKind::ChangeNotHandedToIntakt, ['project' => 'alpha', 'change' => self::LOOP_PULL, 'head' => str_repeat('a', 40)]);
+        $authorship = self::createMock(ChangeAuthorship::class);
+        $authorship->expects(self::never())->method('isCreatedByIntakt');
+        $this->authorship = $authorship;
+
+        $this->recognize('alpha', $this->change(self::LOOP_PULL, 'b'));
+
+        self::assertSame([[], 1], [$this->handedToIntakt(), count($this->notHandedToIntakt())]);
+    }
+
+    public function testANotHandedRecordOfAnotherProjectLeavesTheAuthorOfTheSameAddressToBeAsked(): void
+    {
+        $this->record(LedgerEventKind::ChangeNotHandedToIntakt, ['project' => 'beta', 'change' => self::PULL, 'head' => str_repeat('a', 40)]);
+        $authorship = self::createStub(ChangeAuthorship::class);
+        $authorship->method('isCreatedByIntakt')->willReturn(true);
+        $this->authorship = $authorship;
+
+        $this->recognize('alpha', $this->change(self::PULL));
+
+        self::assertSame([self::PULL], array_column($this->handedToIntakt(), 'change'));
+    }
+
+    public function testAnOpeningThatCreatedThePullRequestHandsItToIntaktDespiteAnEarlierNotHandedRecord(): void
+    {
+        $this->record(LedgerEventKind::ChangeNotHandedToIntakt, ['project' => 'alpha', 'change' => self::PULL, 'head' => str_repeat('a', 40)]);
+        $this->record(LedgerEventKind::ChangeOpened, ['project' => 'alpha', 'branch' => 'feat/7', 'head' => str_repeat('b', 40), 'change' => self::PULL, 'opening' => 'created']);
+
+        $this->recognize('alpha', $this->change(self::PULL, 'b'));
+
+        self::assertSame([self::PULL], array_column($this->handedToIntakt(), 'change'));
+    }
+
+    public function testAPullRequestIntaktOnlyUpdatedGetsNoNotHandedRecordBecauseItsOpeningAlreadySays(): void
+    {
+        $this->record(LedgerEventKind::ChangeOpened, ['project' => 'alpha', 'branch' => 'feat/8', 'head' => str_repeat('a', 40), 'change' => self::LOOP_PULL, 'opening' => 'updated']);
+
+        $this->recognize('alpha', $this->change(self::LOOP_PULL));
+
+        self::assertSame([], $this->notHandedToIntakt());
+    }
+
+    public function testAnAuthorReadThatFailedOnceRecordsNothingAndIsAskedAgainOnTheNextTick(): void
+    {
+        $asked = 0;
+        $authorship = self::createStub(ChangeAuthorship::class);
+        $authorship->method('isCreatedByIntakt')->willReturnCallback(static function () use (&$asked): bool {
+            return 1 === ++$asked ? throw new ForgeReadFailed('unreadable') : false;
+        });
+        $this->authorship = $authorship;
+        $this->recognize('alpha', $this->change(self::LOOP_PULL));
+        $afterFailure = [$this->notHandedToIntakt(), $this->handedToIntakt()];
+
+        $this->recognize('alpha', $this->change(self::LOOP_PULL));
+
+        self::assertSame([[[], []], 2, 1], [$afterFailure, $asked, count($this->notHandedToIntakt())]);
+    }
+
+    public function testARateLimitedAuthorReadRecordsNoNotHandedLine(): void
+    {
+        $authorship = self::createStub(ChangeAuthorship::class);
+        $authorship->method('isCreatedByIntakt')->willThrowException(new ForgeRateLimited(new DateTimeImmutable('2026-11-20T10:10:00+00:00')));
+        $this->authorship = $authorship;
+
+        $this->recognize('alpha', $this->change(self::LOOP_PULL));
+
+        self::assertSame([], $this->notHandedToIntakt());
+    }
+
+    public function testARefusedNotHandedRecordFailsTheRecognition(): void
+    {
+        $authorship = self::createStub(ChangeAuthorship::class);
+        $authorship->method('isCreatedByIntakt')->willReturn(false);
+        $recognizer = new ChangesHandedToIntakt($this->ledger, new WatcherLedger(new InMemoryLedger(0)), $authorship, $this->logger);
+
+        $this->expectException(WatcherEventNotRecorded::class);
+
+        $recognizer->recognizeAmong('alpha', [$this->change(self::LOOP_PULL)]);
+    }
+
     public function testAnEmptyListingReadsNoLedger(): void
     {
         $ledger = self::createMock(Ledger::class);
@@ -375,9 +486,25 @@ final class ChangesHandedToIntaktTest extends KernelTestCase
      */
     private function handedToIntakt(): array
     {
+        return $this->payloadsOf(LedgerEventKind::ChangeHandedToIntakt);
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function notHandedToIntakt(): array
+    {
+        return $this->payloadsOf(LedgerEventKind::ChangeNotHandedToIntakt);
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function payloadsOf(LedgerEventKind $kind): array
+    {
         $payloads = [];
 
-        foreach ($this->ledger->readOfKind(LedgerEventKind::ChangeHandedToIntakt) as $recorded) {
+        foreach ($this->ledger->readOfKind($kind) as $recorded) {
             /** @var array<string, mixed> $payload */
             $payload = json_decode($recorded->event->payload, true, flags: JSON_THROW_ON_ERROR);
             $payloads[] = $payload;

@@ -116,7 +116,8 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         $events = $this->recordedEvents();
         self::assertSame(1, preg_match_all('/ head_pending \{[^}]*pull\\\\\/7/', $events));
         self::assertSame(1, preg_match_all('/ round_queued \{[^}]*pull\\\\\/8/', $events));
-        self::assertStringContainsString('2 events', $events);
+        self::assertSame(2, preg_match_all('/ change_not_handed_to_intakt /', $events));
+        self::assertStringContainsString('4 events', $events);
     }
 
     public function testATickQueuesTheRoundOfAHeadWhoseQueuedRunANewerGreenRunOfTheSameOriginReplaced(): void
@@ -151,6 +152,24 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         self::assertSame(['POST', 'PATCH'], array_map(static fn (array $write): string => explode(' ', $write[0])[0], $github->writes));
         self::assertSame(1, preg_match_all('/ change_handed_to_intakt /', $events));
         self::assertSame(1, preg_match_all('/ change_handed_to_intakt \{[^}]*pull\\\\\/7/', $events));
+    }
+
+    // #8 is the loop's own: Intakt holds no record of it and the author GitHub sets is not Intakt's App.
+    public function testATickRecordsThePullRequestTheAppOpenedAsHandedToIntaktAndTheLoopsOwnAsNotHandedToIntakt(): void
+    {
+        $ledger = self::getContainer()->get(Ledger::class);
+        self::assertInstanceOf(Ledger::class, $ledger);
+        $github = new ScriptedGitHub();
+        $github->createdNumber = 7;
+        new PushRecords($ledger)->open($this->pushOf('feature/7', '1'), str_repeat('1', 40), $github->opener('alpha', 'acme/widgets')->openOrUpdate(new ProposedChange('alpha', 'feature/7', 'main', new ChangeText('Seven', 'E1'))));
+
+        $this->handler(new RecordingCommandBus())(new WatchPullRequests('alpha'));
+
+        $events = $this->recordedEvents();
+        self::assertSame(1, preg_match_all('/ change_handed_to_intakt \{[^}]*pull\\\\\/7/', $events));
+        self::assertSame(0, preg_match_all('/ change_handed_to_intakt \{[^}]*pull\\\\\/8/', $events));
+        self::assertSame(1, preg_match_all('/ change_not_handed_to_intakt \{[^}]*pull\\\\\/8/', $events));
+        self::assertSame(0, preg_match_all('/ change_not_handed_to_intakt \{[^}]*pull\\\\\/7/', $events));
     }
 
     // The first push stops after GitHub created #7 and before `change_opened`, so only the retry writes the record.

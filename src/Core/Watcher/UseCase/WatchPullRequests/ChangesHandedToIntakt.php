@@ -37,31 +37,41 @@ final readonly class ChangesHandedToIntakt
         }
 
         // Every author is read before the first line is appended, because a failure behind an append rolls the tick's transaction back under a line the entity manager still holds, and the ledger's next append then collides with it.
-        foreach ($this->createdByIntaktAmong($project, $open) as $change) {
+        [$created, $notCreated] = $this->authorsAmong($project, $open);
+
+        foreach ($created as $change) {
             $this->records->changeHandedToIntakt($project, $change);
+        }
+
+        // Recorded, because the author the forge sets never changes, so the forge is asked once per pull request and not on every tick.
+        foreach ($notCreated as $change) {
+            $this->records->changeNotHandedToIntakt($project, $change);
         }
     }
 
     /**
      * @param list<OpenChange> $open
      *
-     * @return list<OpenChange>
+     * @return array{list<OpenChange>, list<OpenChange>}
      */
-    private function createdByIntaktAmong(string $project, array $open): array
+    private function authorsAmong(string $project, array $open): array
     {
         $openings = $this->openingsOf($project);
+        $notHanded = $this->addressesOf($project, LedgerEventKind::ChangeNotHandedToIntakt);
         $created = [];
         $undecided = [];
 
         foreach ($this->unhandedAmong($project, $open) as $address => $change) {
-            match ($this->decidedBy($openings[$address] ?? [])) {
+            match ($this->decidedBy($openings[$address] ?? [], isset($notHanded[$address]))) {
                 true => $created[] = $change,
                 null => $undecided[] = $change,
                 false => null,
             };
         }
 
-        return [...$created, ...$this->createdAmongAsked($project, $undecided)];
+        [$createdAsked, $notCreated] = $this->answersAmong($project, $undecided);
+
+        return [[...$created, ...$createdAsked], $notCreated];
     }
 
     /**
@@ -71,7 +81,7 @@ final readonly class ChangesHandedToIntakt
      */
     private function unhandedAmong(string $project, array $open): array
     {
-        $handed = $this->handedOf($project);
+        $handed = $this->addressesOf($project, LedgerEventKind::ChangeHandedToIntakt);
         $unhanded = [];
 
         foreach ($open as $change) {
@@ -85,15 +95,15 @@ final readonly class ChangesHandedToIntakt
         return $unhanded;
     }
 
-    // Only an opening that created the pull request, because Intakt's push also updates an open pull request someone else opened on the same branch; null leaves it to the forge's author, because a record written before openings were recorded does not say, and a push that stopped between the forge's creation and its record left none, while the branch may have moved since.
+    // Only an opening that created the pull request, because Intakt's push also updates an open pull request someone else opened on the same branch, and it decides before a recorded author answer, because Intakt's own creation is the stronger fact; null leaves it to the forge's author, because a record written before openings were recorded does not say, and a push that stopped between the forge's creation and its record left none, while the branch may have moved since.
     /**
      * @param list<mixed> $openings
      */
-    private function decidedBy(array $openings): ?bool
+    private function decidedBy(array $openings, bool $answeredNotCreated): ?bool
     {
         return match (true) {
             in_array(Opening::Created->value, $openings, true) => true,
-            in_array(Opening::Updated->value, $openings, true) => false,
+            $answeredNotCreated, in_array(Opening::Updated->value, $openings, true) => false,
             default => null,
         };
     }
@@ -102,16 +112,19 @@ final readonly class ChangesHandedToIntakt
     /**
      * @param list<OpenChange> $undecided
      *
-     * @return list<OpenChange>
+     * @return array{list<OpenChange>, list<OpenChange>}
      */
-    private function createdAmongAsked(string $project, array $undecided): array
+    private function answersAmong(string $project, array $undecided): array
     {
         $created = [];
+        $notCreated = [];
 
         foreach ($undecided as $change) {
             try {
                 if ($this->authorship->isCreatedByIntakt($change->id)) {
                     $created[] = $change;
+                } else {
+                    $notCreated[] = $change;
                 }
             } catch (ForgeReadFailed $unread) {
                 $this->logger->warning('The author of {change} in {project} could not be read, so it is checked again on the next tick: {reason}', ['change' => $change->id->value, 'project' => $project, 'reason' => $unread->getMessage()]);
@@ -122,7 +135,7 @@ final readonly class ChangesHandedToIntakt
             }
         }
 
-        return $created;
+        return [$created, $notCreated];
     }
 
     /**
@@ -146,19 +159,19 @@ final readonly class ChangesHandedToIntakt
     /**
      * @return array<string, true>
      */
-    private function handedOf(string $project): array
+    private function addressesOf(string $project, LedgerEventKind $kind): array
     {
-        $handed = [];
+        $addresses = [];
 
-        foreach ($this->payloadsOf($project, LedgerEventKind::ChangeHandedToIntakt) as $payload) {
+        foreach ($this->payloadsOf($project, $kind) as $payload) {
             $change = $payload['change'] ?? null;
 
             if (is_string($change)) {
-                $handed[$this->addressOf($change)] = true;
+                $addresses[$this->addressOf($change)] = true;
             }
         }
 
-        return $handed;
+        return $addresses;
     }
 
     /**

@@ -221,8 +221,8 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
 
         $this->tick();
 
-        self::assertSame([LedgerEventKind::ChangeHandedToIntakt, LedgerEventKind::HeadPending, LedgerEventKind::HeadPending], $this->ledger->kinds());
-        self::assertSame('1', $this->ledger->payloads()[0]['change']);
+        self::assertSame([LedgerEventKind::ChangeHandedToIntakt, LedgerEventKind::ChangeNotHandedToIntakt, LedgerEventKind::HeadPending, LedgerEventKind::HeadPending], $this->ledger->kinds());
+        self::assertSame(['1', '2'], array_column(array_slice($this->ledger->payloads(), 0, 2), 'change'));
     }
 
     public function testAPullRequestListedBeforeItsOpeningRecordIsRecordedAsHandedToIntaktOnAnUnchangedListing(): void
@@ -239,7 +239,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         $this->tick();
 
         self::assertSame(1, $this->listing->conditionalAnswers);
-        self::assertSame([LedgerEventKind::HeadPending, LedgerEventKind::ChangeHandedToIntakt], $this->ledger->kinds());
+        self::assertSame([LedgerEventKind::ChangeNotHandedToIntakt, LedgerEventKind::HeadPending, LedgerEventKind::ChangeHandedToIntakt], $this->ledger->kinds());
     }
 
     public function testOneUnreadableAuthorDoesNotKeepAnUnrelatedHeadFromBeingQueued(): void
@@ -1584,8 +1584,10 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         $gate = new BootGate($this->queries, $authors, new BootResults($this->queries, $this->entities, $this->clock, new WatcherLedger(new InMemoryLedger()), $redactor, $logger, $doctrine, new LockFactory(new InMemoryStore())), $ledger, $logger);
         $settle = new SettleHeads(new SettleHead($gate, new StaleVerdicts($this->queries, $this->commands, $rounds, $ledger), new HeadsWithoutRound($ledger, $pending), $starts), $starts, $backOff);
         $projects = new WatchedProjects(['alpha' => ['repository' => 'repo', 'base' => 'main', 'task' => 'Review it.']]);
+        // Without opening records the recognition writes to a ledger of its own, because those tests read only the lines of the heads.
+        $recognition = null === $this->openings ? new ChangesHandedToIntakt(new InMemoryLedger(), new WatcherLedger(new InMemoryLedger()), $this->authorship ?? self::createStub(ChangeAuthorship::class), $logger) : new ChangesHandedToIntakt($this->openings, $ledger, $this->authorship ?? self::createStub(ChangeAuthorship::class), $logger);
 
-        return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $ledger, $this->entities->getConnection(), new ChangesHandedToIntakt($this->openings ?? $this->ledger, $ledger, $this->authorship ?? self::createStub(ChangeAuthorship::class), $logger)), new LookAtHeads(new HeadLocks($pending, $locks, $installWide, $logger), $decisions, $settle));
+        return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $ledger, $this->entities->getConnection(), $recognition), new LookAtHeads(new HeadLocks($pending, $locks, $installWide, $logger), $decisions, $settle));
     }
 
     private function panel(): Panel
