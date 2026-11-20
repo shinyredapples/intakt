@@ -20,6 +20,7 @@ use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Domain\EventRecord;
 use Intakt\Core\Ledger\Infrastructure\DoctrineLedger;
 use Intakt\Tests\Support\KernelTestCase;
+use PDO;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -61,16 +62,9 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
     {
         $this->parkedTasks()->park('sample', 42, BuildQuestion::fromHandedBack(self::QUESTION));
 
-        $rows = $this->connection()->fetchAllAssociative('SELECT project, task, question, choices, recommendation, parked_at FROM build_parked_task');
-        self::assertCount(1, $rows);
-        $task = $rows[0]['task'];
-        $choices = $rows[0]['choices'];
-        self::assertIsNumeric($task);
-        self::assertIsString($choices);
-        // Decoded and converted, because MySQL normalizes stored JSON and drivers differ in how they return integers.
         self::assertSame(
-            ['project' => 'sample', 'task' => 42, 'question' => 'Keep the old flag?', 'choices' => ['keep it', 'drop it'], 'recommendation' => 'drop it', 'parked_at' => '2026-11-20 10:00:00'],
-            [...$rows[0], 'task' => (int) $task, 'choices' => json_decode($choices, true, flags: JSON_THROW_ON_ERROR)],
+            [['project' => 'sample', 'task' => 42, 'question' => 'Keep the old flag?', 'choices' => ['keep it', 'drop it'], 'recommendation' => 'drop it', 'parked_at' => '2026-11-20 10:00:00']],
+            $this->parkedRows(),
         );
         self::assertSame(
             [['kind' => 'build_step_ended', 'payload' => '{"project":"sample","task":"42","step":"build_job","outcome":"asked","failure":null}']],
@@ -87,8 +81,51 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
 
         self::assertSame(
             [['question' => 'Which name?', 'recommendation' => 'a']],
-            $this->connection()->fetchAllAssociative('SELECT question, recommendation FROM build_parked_task'),
+            array_map(static fn (array $row): array => ['question' => $row['question'], 'recommendation' => $row['recommendation']], $this->parkedRows()),
         );
+    }
+
+    public function testAQuestionWithANulCharacterInsideItsTextsIsStoredWhole(): void
+    {
+        $this->parkedTasks()->park('sample', 42, BuildQuestion::fromHandedBack('{"question":"Keep a\u0000b?","choices":["a\u0000b","c"],"recommendation":"a\u0000b"}'));
+
+        self::assertSame(
+            [['question' => "Keep a\0b?", 'choices' => ["a\0b", 'c'], 'recommendation' => "a\0b"]],
+            array_map(static fn (array $row): array => ['question' => $row['question'], 'choices' => $row['choices'], 'recommendation' => $row['recommendation']], $this->parkedRows()),
+        );
+    }
+
+    public function testAParkingInsideACallersTransactionIsRefusedBeforeItWritesAndLeavesThatTransactionOpen(): void
+    {
+        $this->connection()->beginTransaction();
+
+        $failure = $this->failureOfParking($this->parkedTasks());
+        $nesting = $this->connection()->getTransactionNestingLevel();
+        $this->connection()->rollBack();
+
+        self::assertSame([self::NOT_PARKED, 1], [$failure, $nesting]);
+        self::assertSame([], $this->parkedRows());
+        self::assertSame([], $this->ledgerRows());
+    }
+
+    public function testAParkingWhoseTransactionTheDatabaseRolledBackLeavesNoTransactionOpenAndTheEarlierQuestionStored(): void
+    {
+        if (!$this->connection()->getDatabasePlatform() instanceof SQLitePlatform) {
+            self::markTestSkipped('The trigger that rolls the whole transaction back is written in SQLite.');
+        }
+
+        $parked = $this->parkedTasks();
+        $parked->park('sample', 42, BuildQuestion::fromHandedBack(self::QUESTION));
+        $this->connection()->executeStatement("CREATE TRIGGER refuse_event BEFORE INSERT ON ledger_event BEGIN SELECT RAISE(ROLLBACK, 'refused'); END");
+
+        $failure = $this->failureOfParking($parked);
+        $native = $this->connection()->getNativeConnection();
+
+        self::assertSame(self::NOT_PARKED, $failure);
+        self::assertInstanceOf(PDO::class, $native);
+        self::assertSame([false, false], [$this->connection()->isTransactionActive(), $native->inTransaction()]);
+        self::assertSame(['Keep the old flag?'], array_column($this->parkedRows(), 'question'));
+        self::assertCount(1, $this->ledgerRows());
     }
 
     public function testTheLedgerRecordsTheFailedStepAfterAParkingWhoseCommitAReaderRefusedTookItsAskedEventBack(): void
@@ -157,6 +194,23 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
     private function clock(): MockClock
     {
         return new MockClock('2026-11-20 11:00:00', 'Europe/Berlin');
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function parkedRows(): array
+    {
+        $rows = $this->connection()->fetchAllAssociative('SELECT project, task, question, choices, recommendation, parked_at FROM build_parked_task');
+
+        // Decoded and converted, because MySQL normalizes stored JSON and drivers differ in how they return integers.
+        return array_map(static fn (array $row): array => [
+            ...$row,
+            'task' => is_numeric($row['task']) ? (int) $row['task'] : $row['task'],
+            'question' => is_string($row['question']) ? json_decode($row['question'], true, flags: JSON_THROW_ON_ERROR) : $row['question'],
+            'choices' => is_string($row['choices']) ? json_decode($row['choices'], true, flags: JSON_THROW_ON_ERROR) : $row['choices'],
+            'recommendation' => is_string($row['recommendation']) ? json_decode($row['recommendation'], true, flags: JSON_THROW_ON_ERROR) : $row['recommendation'],
+        ], $rows);
     }
 
     /**

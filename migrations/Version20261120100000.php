@@ -38,9 +38,9 @@ final class Version20261120100000 extends AbstractMigration
             ->setColumns(
                 Column::editor()->setUnquotedName('project')->setTypeName(Types::STRING)->setLength(255)->create(),
                 Column::editor()->setUnquotedName('task')->setTypeName(Types::INTEGER)->create(),
-                Column::editor()->setUnquotedName('question')->setTypeName(Types::TEXT)->create(),
+                Column::editor()->setUnquotedName('question')->setTypeName(Types::JSON)->create(),
                 Column::editor()->setUnquotedName('choices')->setTypeName(Types::JSON)->create(),
-                Column::editor()->setUnquotedName('recommendation')->setTypeName(Types::TEXT)->create(),
+                Column::editor()->setUnquotedName('recommendation')->setTypeName(Types::JSON)->create(),
                 Column::editor()->setUnquotedName('parked_at')->setTypeName(Types::DATETIME_IMMUTABLE)->create(),
             )
             ->setPrimaryKeyConstraint(

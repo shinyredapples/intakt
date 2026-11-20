@@ -14,14 +14,15 @@ final readonly class ParkedTaskRecord
 {
     public const string TABLE = 'build_parked_task';
 
-    #[ORM\Column(type: 'text')]
+    // JSON, because an accepted question may hold a NUL character, which PostgreSQL's text cannot store and a JSON escape can.
+    #[ORM\Column(type: 'json')]
     private string $question;
 
     /** @var non-empty-list<string> */
     #[ORM\Column(type: 'json')]
     private array $choices;
 
-    #[ORM\Column(type: 'text')]
+    #[ORM\Column(type: 'json')]
     private string $recommendation;
 
     public function __construct(
@@ -57,10 +58,10 @@ final readonly class ParkedTaskRecord
     }
 
     /**
-     * @return array{task: string, choices: string, parked_at: string}
+     * @return array{task: string, question: string, choices: string, recommendation: string, parked_at: string}
      */
     public static function rowTypes(): array
     {
-        return ['task' => 'integer', 'choices' => 'json', 'parked_at' => 'utc_datetime_immutable'];
+        return ['task' => 'integer', 'question' => 'json', 'choices' => 'json', 'recommendation' => 'json', 'parked_at' => 'utc_datetime_immutable'];
     }
 }

@@ -35,6 +35,11 @@ final readonly class ParkedTasks
      */
     public function park(string $project, int $task, BuildQuestion $question): void
     {
+        // Refused before any write, because inside a caller's transaction the commit only releases a savepoint and the caller could still take the question back.
+        if ($this->connection->isTransactionActive()) {
+            throw TaskNotParked::for($project, $task);
+        }
+
         $record = new ParkedTaskRecord($project, $task, $question, $this->clock->now()->setTimezone(new DateTimeZone('UTC')));
 
         if ($this->storedWithItsAskedStep($record, $project, $task)) {
@@ -76,12 +81,6 @@ final readonly class ParkedTasks
         }
 
         try {
-            if ($this->connection->isTransactionActive()) {
-                $this->connection->rollBack();
-
-                return;
-            }
-
             $native = $this->connection->getNativeConnection();
 
             if ($native instanceof PDO && $native->inTransaction()) {
@@ -90,6 +89,9 @@ final readonly class ParkedTasks
         } catch (Exception|PDOException) {
             // Swallowed, because the caller must learn that the task is not parked, never that the cleanup after it failed too.
         }
+
+        // Closed, because DBAL's count of open transactions can also outlive one the database rolled back itself, and only closing resets it; the connection opens again on its next use.
+        $this->connection->close();
     }
 
     // Because the question is untrusted text, the payload names the task by its number only, as every other step's does.

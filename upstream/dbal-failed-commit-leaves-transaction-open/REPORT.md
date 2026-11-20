@@ -17,7 +17,7 @@ After a refused commit, DBAL and the driver agree: either DBAL rolls the driver'
 
 ## Effect in Intakt
 
-`src/Core/Build/UseCase/BuildTask/ParkedTasks.php` begins and commits its transaction itself instead of calling `transactional()`. After a failed parking, `rollBackWhatTheRefusedCommitLeftOpen()` rolls back through DBAL while DBAL still counts a transaction, and otherwise rolls back the native connection when it is still in a transaction. That native rollback runs only on PDO drivers (`getNativeConnection()` is a `PDO`); on any other driver an open transaction left by a refused commit is not rolled back. A failure of the rollback is swallowed, so the caller gets `TaskNotParked`. `tests/Core/Build/UseCase/BuildTask/ParkedTasksOnSqliteTest.php` forces the refused commit with a reader's shared lock.
+`src/Core/Build/UseCase/BuildTask/ParkedTasks.php` begins and commits its transaction itself instead of calling `transactional()`. After a failed parking, `rollBackWhatTheRefusedCommitLeftOpen()` rolls back the native connection when it is still in a transaction, then closes the DBAL connection to reset its count of open transactions. That native rollback runs only on PDO drivers (`getNativeConnection()` is a `PDO`); on any other driver an open transaction left by a refused commit is not rolled back by Intakt and ends only with the connection the close drops. A failure of the rollback is swallowed, so the caller gets `TaskNotParked`. `tests/Core/Build/UseCase/BuildTask/ParkedTasksOnSqliteTest.php` forces the refused commit with a reader's shared lock.
 
 ## Upstream status
 
