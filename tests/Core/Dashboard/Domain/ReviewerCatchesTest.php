@@ -94,6 +94,13 @@ final class ReviewerCatchesTest extends TestCase
         self::assertSame(['security' => [1, 0, 0]], $this->found(ReviewerCatches::of([$known, $unknown])));
     }
 
+    public function testARoundWhoseReporterRecordedAValueThatIsNoSeverityIsLeftOutRatherThanShownAsZeroBars(): void
+    {
+        $round = $this->judged([$this->act('F1', 'P1')], ['security' => ['F1']], ['security' => ['F1' => 'invalid']]);
+
+        self::assertNull(ReviewerCatches::of([$round]));
+    }
+
     public function testARoundWithAReporterWithoutARoleIsLeftOut(): void
     {
         $round = $this->round()->judgedWith([$this->act('F1', 'P1')], new DateTimeImmutable('2026-10-28T11:10:00+00:00'))->withFindingsByReviewer(['r-9' => ['F1']]);

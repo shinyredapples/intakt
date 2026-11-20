@@ -79,6 +79,7 @@ final readonly class ReviewerCatches
         return [] === $parts ? (string) $last : implode(', ', $parts).' and '.$last;
     }
 
+    // A reported severity that is not a `Severity` leaves the round out like a missing one, because the bars count only P1, P2 and P3 and would show that finding as none.
     private static function isFullyRecorded(ReviewedRound $round): bool
     {
         $reported = $round->findingsByReviewer;
@@ -87,7 +88,7 @@ final readonly class ReviewerCatches
             return false;
         }
 
-        return array_all($reported, static fn (array $ids, string $reviewer): bool => null !== self::roleOf($round, $reviewer) && array_all($ids, static fn (string $id): bool => null !== $round->severityReportedBy($reviewer, $id)));
+        return array_all($reported, static fn (array $ids, string $reviewer): bool => null !== self::roleOf($round, $reviewer) && array_all($ids, static fn (string $id): bool => Severity::tryFrom($round->severityReportedBy($reviewer, $id) ?? '') instanceof Severity));
     }
 
     /**
