@@ -163,9 +163,11 @@ final class PhpGateDependencyStepTest extends TestCase
         $lock = (string) file_get_contents($this->directory.'/composer.lock');
 
         $install = $this->runInProject($this->step->install);
+        new Filesystem()->remove($this->directory.'/vendor');
+        $composer = $this->runInProject('composer install --no-interaction --no-progress --no-scripts --no-plugins --no-autoloader');
 
-        self::assertFalse($install->isSuccessful());
-        self::assertNotSame(1, $install->getExitCode());
+        self::assertFalse($composer->isSuccessful());
+        self::assertSame($composer->getExitCode(), $install->getExitCode());
         self::assertStringNotContainsString('composer.lock changed', $install->getErrorOutput());
         self::assertStringEqualsFile($this->directory.'/composer.lock', $lock);
     }
@@ -281,6 +283,9 @@ final class PhpGateDependencyStepTest extends TestCase
         $pkg = ['name' => 'fixture/pkg', 'version' => '1.0.0'];
 
         yield 'a path package' => ['path', [...$pkg, 'dist' => ['type' => 'path', 'url' => '../pkg']]];
+        yield 'a path package in mixed case with a remote address and a checksum' => ['path mixed', [...$pkg, 'dist' => [...$archive, 'type' => 'Path']]];
+        yield 'a path package in capitals with a remote address and a checksum' => ['path caps', [...$pkg, 'dist' => [...$archive, 'type' => 'PATH']]];
+        yield 'a path source in mixed case' => ['path source', [...$pkg, 'dist' => $archive, 'source' => [...$source, 'type' => 'Path']]];
         yield 'an archive without a checksum' => ['no checksum', [...$pkg, 'dist' => [...$archive, 'shasum' => '']]];
         yield 'an archive with no checksum key and a url that names another commit' => ['other commit', [...$pkg, 'dist' => ['type' => 'zip', 'url' => 'https://archive.invalid/'.str_repeat('b', 40), 'reference' => $commit]]];
         yield 'an archive named by a commit id over http' => ['http commit', [...$pkg, 'dist' => ['type' => 'zip', 'url' => 'http://archive.invalid/'.$commit, 'reference' => $commit]]];
@@ -407,6 +412,29 @@ final class PhpGateDependencyStepTest extends TestCase
 
         self::assertSame(PhpGateSteps::REFUSED, $install->getExitCode());
         self::assertStringContainsString('already holds an install', $install->getErrorOutput());
+    }
+
+    public function testARefusedAddressIsNotShownBecauseItCanHoldCredentials(): void
+    {
+        $this->lockedProject([['name' => 'fixture/pkg', 'version' => '1.0.0', 'dist' => ['type' => 'zip', 'url' => 'ftp://user:hidden-word@archive.invalid/pkg.zip', 'shasum' => str_repeat('a', 40)]]]);
+
+        $install = $this->runInProject($this->step->install);
+
+        self::assertSame(PhpGateSteps::REFUSED, $install->getExitCode());
+        self::assertStringContainsString('"fixture/pkg" has a dist url', $install->getErrorOutput());
+        self::assertStringNotContainsString('hidden-word', $install->getErrorOutput());
+    }
+
+    public function testTheLockedInstallRefusesAManifestThatIsNotValidJsonWithOneLine(): void
+    {
+        new Filesystem()->dumpFile($this->directory.'/composer.json', '{"name":');
+        new Filesystem()->dumpFile($this->directory.'/composer.lock', '{"packages":[],"packages-dev":[]}');
+
+        $install = $this->runInProject($this->step->install);
+
+        self::assertSame(PhpGateSteps::REFUSED, $install->getExitCode());
+        self::assertSame(1, preg_match_all('/\R/u', $install->getErrorOutput()));
+        self::assertDirectoryDoesNotExist($this->directory.'/vendor');
     }
 
     public function testTheLockedInstallRefusesAnUnreadableLockFileWithOneLine(): void
