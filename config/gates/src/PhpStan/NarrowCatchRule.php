@@ -162,15 +162,15 @@ final readonly class NarrowCatchRule implements Rule
     {
         $finder = new NodeFinder();
 
-        if (null !== $finder->findFirstInstanceOf($catch->stmts, Throw_::class)) {
+        if ($finder->findFirstInstanceOf($catch->stmts, Throw_::class) instanceof Node) {
             return true;
         }
 
         $name = $catch->var?->name;
 
-        return is_string($name) && null !== $finder->findFirst(
+        return is_string($name) && $finder->findFirst(
             $catch->stmts,
             static fn (Node $node): bool => $node instanceof Variable && $node->name === $name,
-        );
+        ) instanceof Node;
     }
 }
