@@ -48,7 +48,7 @@ final readonly class FailedJudgings
         return null;
     }
 
-    // In one scan of the ledger, for a reader that asks about many rounds while it holds a lock.
+    // One scan of the ledger for every round, because a reader asking about many rounds holds the change's lock while it reads.
     /**
      * @return array<string, true>
      */
