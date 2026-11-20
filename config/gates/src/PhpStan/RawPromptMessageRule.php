@@ -35,7 +35,7 @@ final readonly class RawPromptMessageRule implements Rule
     // tests build stored conversations as fixtures and never send them to a provider, so only the code that ships is judged
     private const array SHIPPED_FOLDERS = ['/src/', '/bin/'];
 
-    // the decision of 2026-11-19 (#2520) names this one source: the owner's panel configuration as the round reviewer carries it
+    // one name for the argument and the method, because the decision of 2026-11-19 (#2520) allows only the round reviewer's own rolePrompt() as the source
     private const string ROLE_PROMPT = 'rolePrompt';
 
     public function __construct(
