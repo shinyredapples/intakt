@@ -13,6 +13,7 @@ use Intakt\Plugin\Forge\Contract\CiRunOrigin;
 use Intakt\Plugin\Forge\Contract\CiRunState;
 use Intakt\Plugin\Forge\Contract\CiState;
 use Intakt\Plugin\Forge\Contract\CommitId;
+use Intakt\Plugin\Forge\Contract\CommitIdMalformed;
 use Intakt\Plugin\Forge\Contract\ForgeCredentialsRefused;
 use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
@@ -61,6 +62,7 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
 #[UsesClass(CiRunOrigin::class)]
 #[UsesClass(CiState::class)]
 #[UsesClass(CommitId::class)]
+#[UsesClass(CommitIdMalformed::class)]
 #[UsesClass(ForgeCredentialsRefused::class)]
 #[UsesClass(ForgeReadFailed::class)]
 #[UsesClass(OpenChange::class)]
@@ -727,6 +729,15 @@ final class GitHubWatchReadsTest extends TestCase
         $this->listing = 'pulls_bad_moment.json';
 
         $this->expectException(ForgeReadFailed::class);
+
+        $this->reads()->listOpen('alpha', null);
+    }
+
+    public function testAListedPullRequestWithAnAbbreviatedHeadRaisesTheSameReadFailure(): void
+    {
+        $this->listing = 'pulls_short_head.json';
+
+        $this->expectExceptionObject(new ForgeReadFailed('GitHub listed a pull request this forge cannot read.'));
 
         $this->reads()->listOpen('alpha', null);
     }

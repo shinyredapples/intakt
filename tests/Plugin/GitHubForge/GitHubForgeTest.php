@@ -11,6 +11,7 @@ use Intakt\Plugin\Forge\Contract\ChangedFiles;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\ChangeNotFound;
 use Intakt\Plugin\Forge\Contract\CommitId;
+use Intakt\Plugin\Forge\Contract\CommitIdMalformed;
 use Intakt\Plugin\Forge\Contract\CommitRange;
 use Intakt\Plugin\Forge\Contract\Diff;
 use Intakt\Plugin\Forge\Contract\FileContent;
@@ -70,6 +71,7 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
 #[UsesClass(ChangedFile::class)]
 #[UsesClass(ChangedFiles::class)]
 #[UsesClass(CommitId::class)]
+#[UsesClass(CommitIdMalformed::class)]
 #[UsesClass(CommitRange::class)]
 #[UsesClass(Diff::class)]
 #[UsesClass(FileContent::class)]
@@ -167,6 +169,15 @@ final class GitHubForgeTest extends TestCase
         $this->expectException(ForgeReadFailed::class);
 
         $forge->change(new ChangeId(self::PULL));
+    }
+
+    public function testAnAbbreviatedHeadFromGitHubFailsTheReadAsBefore(): void
+    {
+        $this->pullFixture = 'pull_request_short_head.json';
+
+        $this->expectExceptionObject(new ForgeReadFailed('GitHub answered something other than a commit hash.'));
+
+        $this->forge()->change(new ChangeId(self::PULL));
     }
 
     public function testItDetectsAHeadThatMovedDuringReview(): void
