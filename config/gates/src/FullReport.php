@@ -50,7 +50,7 @@ final readonly class FullReport
             return [];
         }
 
-        $gates = array_map(fn (GateReport $report): ?array => $this->entryOf($report), $reports);
+        $gates = array_map($this->entryOf(...), $reports);
         $this->results->remove();
 
         return in_array(null, $gates, true) ? [] : $this->written(['gates' => $gates]);
@@ -86,7 +86,7 @@ final readonly class FullReport
         $kept = $this->keptFindings($report->gate);
         $entry = array_diff_key($line, ['omitted' => true]);
 
-        if (null !== $kept && self::accountsFor($report->gate, $kept, $line)) {
+        if (null !== $kept && $this->accountsFor($report->gate, $kept, $line)) {
             return array_replace($entry, ['findings' => $kept]);
         }
 
@@ -114,7 +114,7 @@ final readonly class FullReport
      * @param list<string>            $kept
      * @param array<array-key, mixed> $line
      */
-    private static function accountsFor(string $gate, array $kept, array $line): bool
+    private function accountsFor(string $gate, array $kept, array $line): bool
     {
         $again = json_decode(GateResult::withFindings($gate, $kept)->toJson(), true);
 
