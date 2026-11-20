@@ -10,6 +10,7 @@ use Intakt\Plugin\Forge\Contract\ForgeCredentialsRefused;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
 use Intakt\Plugin\Forge\Contract\OpenedChange;
+use Intakt\Plugin\Forge\Contract\Opening;
 use Intakt\Plugin\Forge\Contract\ProposedChange;
 use Intakt\Plugin\GitHubForge\Contract\InstallationDoesNotMatchConfiguration;
 use Intakt\Plugin\GitHubForge\Contract\InstallationNotReadBack;
@@ -44,10 +45,10 @@ final readonly class GitHubChangeOpener implements ChangeOpening
 
         // The look-up comes first and a write is never retried, so a crash between the two leaves at most the pull request the next call finds.
         if (null === $open) {
-            return new OpenedChange($repository->pullRequest($this->numberOf($this->send('POST', $repository->path().'/pulls', [...$payload, 'head' => $change->branch]))), true);
+            return new OpenedChange($repository->pullRequest($this->numberOf($this->send('POST', $repository->path().'/pulls', [...$payload, 'head' => $change->branch]))), Opening::Created);
         }
 
-        return new OpenedChange($repository->pullRequest($this->numberOf($this->send('PATCH', $repository->path().'/pulls/'.$open, $payload))), false);
+        return new OpenedChange($repository->pullRequest($this->numberOf($this->send('PATCH', $repository->path().'/pulls/'.$open, $payload))), Opening::Updated);
     }
 
     private function addressOf(string $project): RepositoryAddress

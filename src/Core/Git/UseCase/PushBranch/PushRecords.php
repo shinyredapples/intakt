@@ -92,7 +92,7 @@ final readonly class PushRecords
      */
     public function open(BranchPushRequest $request, string $head, OpenedChange $change): void
     {
-        $this->append(LedgerEventKind::ChangeOpened, [...$this->keyOf($request, $head), 'change' => $change->id->value, self::TEXT_DIGEST => $this->digestOf($request->text), 'opening' => $change->created ? 'created' : 'updated']);
+        $this->append(LedgerEventKind::ChangeOpened, [...$this->keyOf($request, $head), 'change' => $change->id->value, self::TEXT_DIGEST => $this->digestOf($request->text), 'opening' => $change->opening->value]);
     }
 
     // A digest, because the ledger keeps none of the builder's words; the title's length goes first, so no title and body read as another pair.

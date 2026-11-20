@@ -226,11 +226,12 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
     {
         $doctrine = self::getContainer()->get('doctrine');
         self::assertInstanceOf(ManagerRegistry::class, $doctrine);
-        $this->openings = new DoctrineLedger($doctrine, $this->clock);
+        $openings = new DoctrineLedger($doctrine, $this->clock);
+        $this->openings = $openings;
         $this->handler = $this->handler();
         $this->listing->opens('alpha', RecordedForge::change('1', self::PENDING, '2026-11-02T09:00:00Z'));
         $this->tick();
-        self::assertTrue($this->openings->append(new LedgerEvent(LedgerEventKind::ChangeOpened, '{"project":"alpha","branch":"feat\/1","head":"'.str_repeat(self::PENDING, 40).'","change":"1","opening":"created"}'))->succeeded());
+        self::assertTrue($openings->append(new LedgerEvent(LedgerEventKind::ChangeOpened, '{"project":"alpha","branch":"feat\/1","head":"'.str_repeat(self::PENDING, 40).'","change":"1","opening":"created"}'))->succeeded());
 
         $this->tick();
 

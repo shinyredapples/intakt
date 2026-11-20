@@ -26,6 +26,7 @@ use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\ChangeText;
 use Intakt\Plugin\Forge\Contract\OpenedChange;
+use Intakt\Plugin\Forge\Contract\Opening;
 use Intakt\Tests\Core\Git\TemporaryRepository;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -548,7 +549,7 @@ final class PushBranchTest extends TestCase
         $request = $this->scenario->request();
         $head = str_repeat('b', 40);
         $records->intendChange($request, $head);
-        $records->open($request, $head, new OpenedChange(new ChangeId('https://github.com/acme/widgets/pull/1'), true));
+        $records->open($request, $head, new OpenedChange(new ChangeId('https://github.com/acme/widgets/pull/1'), Opening::Created));
 
         $records->intendChange($request, $head);
 

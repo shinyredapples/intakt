@@ -131,7 +131,7 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         self::assertSame(1, preg_match_all('/ round_queued \{[^}]*pull\\\\\/7/', $events));
     }
 
-    // #7 is created by the App's opener, #8 was opened by someone else and only updated by it; the repository is configured in another case than GitHub lists it.
+    // The repository is configured in another case than GitHub lists it, because the push builds its address from the configuration and the listing takes GitHub's.
     public function testATickRecordsThePullRequestIntaktCreatedAsHandedToIntaktAndNotTheOneItOnlyUpdated(): void
     {
         $ledger = self::getContainer()->get(Ledger::class);
@@ -147,7 +147,7 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         $this->handler(new RecordingCommandBus())(new WatchPullRequests('alpha'));
 
         $events = $this->recordedEvents();
-        self::assertSame(['POST', 'PATCH'], array_map(static fn (array $write): string => strstr($write[0], ' ', true), $github->writes));
+        self::assertSame(['POST', 'PATCH'], array_map(static fn (array $write): string => explode(' ', $write[0])[0], $github->writes));
         self::assertSame(1, preg_match_all('/ change_handed_to_intakt /', $events));
         self::assertSame(1, preg_match_all('/ change_handed_to_intakt \{[^}]*pull\\\\\/7/', $events));
     }

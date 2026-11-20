@@ -7,13 +7,12 @@ namespace Intakt\Core\Watcher\UseCase\WatchPullRequests;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Plugin\Forge\Contract\OpenChange;
+use Intakt\Plugin\Forge\Contract\Opening;
 use JsonException;
 
 // Decided from Intakt's own push records alone, because a pull request's author, title, labels and branch are text others can shape: docs/architecture/handed-to-intakt.md
 final readonly class ChangesHandedToIntakt
 {
-    private const string CREATED = 'created';
-
     public function __construct(
         private Ledger $ledger,
         private WatcherLedger $records,
@@ -54,7 +53,7 @@ final readonly class ChangesHandedToIntakt
         foreach ($this->ledger->readOfKind($kind) as $recorded) {
             $payload = $this->decoded($recorded->event->payload);
             $change = $payload['change'] ?? null;
-            $created = LedgerEventKind::ChangeOpened !== $kind || self::CREATED === ($payload['opening'] ?? null);
+            $created = LedgerEventKind::ChangeOpened !== $kind || Opening::Created->value === ($payload['opening'] ?? null);
 
             if ($created && $project === ($payload['project'] ?? null) && is_string($change)) {
                 $addresses[$this->addressOf($change)] = true;

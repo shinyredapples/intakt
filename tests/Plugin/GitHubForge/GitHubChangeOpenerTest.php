@@ -10,6 +10,7 @@ use Intakt\Plugin\Forge\Contract\ChangeTextHoldsSecret;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
 use Intakt\Plugin\Forge\Contract\OpenedChange;
+use Intakt\Plugin\Forge\Contract\Opening;
 use Intakt\Plugin\Forge\Contract\ProposedChange;
 use Intakt\Plugin\GitHubForge\Contract\InstallationToken;
 use Intakt\Plugin\GitHubForge\Domain\ExpectedInstallation;
@@ -72,7 +73,7 @@ final class GitHubChangeOpenerTest extends TestCase
 
         $change = $github->opener()->openOrUpdate(new ProposedChange('widgets', 'task', 'main', new ChangeText('Add the files', 'Evidence: tests pass.')));
 
-        self::assertTrue($change->created);
+        self::assertSame(Opening::Created, $change->opening);
     }
 
     public function testAnOpenPullRequestTheOpenerOnlyUpdatedIsAnsweredAsNotCreated(): void
@@ -82,7 +83,7 @@ final class GitHubChangeOpenerTest extends TestCase
 
         $change = $github->opener()->openOrUpdate(new ProposedChange('widgets', 'task', 'main', new ChangeText('New title', 'New body')));
 
-        self::assertFalse($change->created);
+        self::assertSame(Opening::Updated, $change->opening);
     }
 
     public function testABranchWithAnOpenPullRequestHasItsTextUpdatedInstead(): void
