@@ -17,20 +17,20 @@ M{{ x|round(1) }},{{ base|round(1) }} V{{ (y + r)|round(1) }} Q{{ x|round(1) }},
     {%- for share in [0, 0.5, 1] %}
     {%- set y = above + plot - share * plot %}
     <line x1="{{ left }}" x2="{{ width - right }}" y1="{{ y|round(1) }}" y2="{{ y|round(1) }}" class="{{ share == 0 ? 'c-base' : 'c-grid' }}"/>
-    <text x="{{ left - 6 }}" y="{{ (y + 4)|round(1) }}" class="c-axis" text-anchor="end" aria-hidden="true">{{ share * top }}</text>
+    <text x="{{ left - 6 }}" y="{{ (y + 4)|round(1) }}" class="c-axis" text-anchor="end" aria-hidden="true">{{ (share * top / (divisor|default(1)))|number_format(divisor|default(1) > 1 ? 4 : 0, '.', '') }}</text>
     {%- endfor %}
     {%- for bar in bars %}
     {%- set center = left + step * loop.index0 + step / 2 %}
     {%- set x = center - barWidth / 2 %}
-    {%- set y = base - bar.value / top * plot %}
-    {%- if bar.value > 0 %}
+    {%- set y = base - (bar.value ?? 0) / top * plot %}
+    {%- if (bar.value ?? 0) > 0 %}
     <path d="{{ _self.bar_path(x, y, barWidth, base, true) }}" class="c-bar{{ bar.part is not null ? ' c-whole' }}"/>
     {%- endif %}
     {%- if bar.part is not null and bar.part > 0 %}
     {%- set partTop = base - bar.part / top * plot %}
     <path d="{{ _self.bar_path(x, partTop, barWidth, base, bar.part == bar.value) }}" class="c-bar c-part"/>
     {%- endif %}
-    <text x="{{ center|round(1) }}" y="{{ (y - 6)|round(1) }}" class="c-label" text-anchor="middle" aria-hidden="true">{{ bar.value }}{% if bar.part is not null %} ({{ bar.part }} alone){% endif %}</text>
+    <text x="{{ center|round(1) }}" y="{{ (y - 6)|round(1) }}" class="c-label" text-anchor="middle" aria-hidden="true">{{ bar.directLabel }}{% if bar.part is not null %} ({{ bar.part }} alone){% endif %}</text>
     <text x="{{ center|round(1) }}" y="{{ height - 8 }}" class="c-axis" text-anchor="middle" aria-hidden="true">{{ bar.label }}</text>
     <rect x="{{ (left + step * loop.index0)|round(1) }}" y="{{ above }}" width="{{ step|round(1) }}" height="{{ plot }}" class="c-hit" tabindex="0" role="img" aria-label="{{ bar.inWords }}"
         data-action="pointerenter->chart#pointerEnter pointerleave->chart#pointerLeave focus->chart#focusIn blur->chart#focusOut"
