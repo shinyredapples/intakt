@@ -129,6 +129,16 @@ final class NoPublicSetterRuleTest extends PhpStanRuleTestCase
         self::assertCount(1, explode("\n", $findings));
     }
 
+    public function testAnOverridingTraitSetterOfAVendorParentPassesStaticAnalysis(): void
+    {
+        $this->assertRuleAccepts('vendor-parent-trait-setter');
+    }
+
+    public function testAnOverridingTraitSetterOfARepositoryParentFailsStaticAnalysis(): void
+    {
+        $this->assertRuleRejects('repository-parent-trait-setter', 'src/Renaming.php (in context of class Intakt\Sample\Child):11 intakt.noPublicSetter Method Intakt\Sample\Renaming::setName() is a public setter');
+    }
+
     public function testATraitMethodAliasedToAPublicSetterFailsStaticAnalysis(): void
     {
         $this->assertRuleRejects('aliased-trait-setter', 'src/Person.php:10 intakt.noPublicSetter Method Intakt\Sample\Person::setName() is a public setter');

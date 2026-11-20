@@ -7,6 +7,8 @@ namespace Intakt\Gates\PhpStan;
 use PhpParser\Node\Identifier;
 use PhpParser\Modifiers;
 use PhpParser\Node;
+use PhpParser\Node\Attribute;
+use PhpParser\Node\AttributeGroup;
 use PhpParser\Node\Stmt;
 use PhpParser\Node\Stmt\ClassMethod;
 use PhpParser\Node\Stmt\Trait_;
@@ -61,12 +63,16 @@ final readonly class NoPublicSetterRule implements Rule
         $class = $scope->getClassReflection();
         $name = $method->name->toString();
 
-        // PHPStan analyzes a trait's methods only inside each class that uses it, so they are judged once where the trait declares them, which also covers a trait no class uses
-        if (!$class instanceof ClassReflection || $scope->isInTrait() || !$this->isPublicSetter($method) || $this->vendorDeclares($class, $name)) {
+        if (!$class instanceof ClassReflection || !$this->isPublicSetter($method) || $this->vendorDeclares($class, $name)) {
             return [];
         }
 
-        return [$this->publicSetter($class->getDisplayName(), $name, $method->getStartLine())];
+        if (!$scope->isInTrait()) {
+            return [$this->publicSetter($class->getDisplayName(), $name, $method->getStartLine())];
+        }
+
+        // only a trait method that overrides can be required by a vendor ancestor of the using class; any other trait setter is reported once, where the trait declares it
+        return $this->overrides($method) ? [$this->publicSetter($scope->getTraitReflection()?->getDisplayName() ?? $class->getDisplayName(), $name, $method->getStartLine())] : [];
     }
 
     /**
@@ -74,7 +80,8 @@ final readonly class NoPublicSetterRule implements Rule
      */
     private function settersOfTrait(Trait_ $trait): array
     {
-        $setters = array_filter($trait->getMethods(), $this->isPublicSetter(...));
+        // PHPStan analyzes a trait's methods only inside each class that uses it, so a trait no class uses would go unjudged; a trait setter marked #[Override] (PHP checks that in each using class) is judged there instead, against that class's vendor ancestors
+        $setters = array_filter($trait->getMethods(), fn (ClassMethod $method): bool => $this->isPublicSetter($method) && !$this->overrides($method));
 
         return array_values(array_map(fn (ClassMethod $method): IdentifierRuleError => $this->publicSetter((string) $trait->namespacedName, $method->name->toString(), $method->getStartLine()), $setters));
     }
@@ -140,13 +147,20 @@ final readonly class NoPublicSetterRule implements Rule
             return false;
         }
 
-        return $this->isVendorFile($prototype->getDeclaringClass()->getFileName());
+        $file = $prototype->getDeclaringClass()->getFileName();
+
+        // PHP's own classes have no file; any file of the repository outside vendor/, migrations/ too, is code the repository could rename
+        return false === $file || $this->isOutsideRepositorySources($file);
     }
 
-    // PHP's own classes have no file; any file of the repository outside vendor/ (migrations/ too) is code the repository could rename
-    private function isVendorFile(false|string $file): bool
+    private function isOutsideRepositorySources(string $file): bool
     {
-        return false === $file || !str_starts_with($file, $this->root.'/') || str_starts_with($file, $this->root.'/vendor/');
+        return !str_starts_with($file, $this->root.'/') || str_starts_with($file, $this->root.'/vendor/');
+    }
+
+    private function overrides(ClassMethod $method): bool
+    {
+        return array_any($method->attrGroups, static fn (AttributeGroup $group): bool => array_any($group->attrs, static fn (Attribute $attribute): bool => 'override' === $attribute->name->toLowerString()));
     }
 
     private function publicSetter(string $class, string $method, int $line): IdentifierRuleError
