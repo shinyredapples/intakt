@@ -56,6 +56,8 @@ use Symfony\Component\DependencyInjection\Loader\Configurator\ReferenceConfigura
 use Symfony\Component\DependencyInjection\Parameter;
 use Symfony\Component\DependencyInjection\Reference;
 use Symfony\Component\DependencyInjection\ServiceLocator;
+use Symfony\Component\HttpKernel\Log\Logger;
+use Psr\Log\LogLevel;
 use Symfony\Component\Yaml\Yaml;
 
 // Same sources as Symfony's env processor: the environment, then the secrets vault, then the kept key. Presence is decided at build time because an unset env reference fails when the service is built.
@@ -95,7 +97,8 @@ return static function (ContainerConfigurator $container): void {
 
     // Last, after `.env.local` and the vault, because the env loader that serves it at run time (KeptProviderKeyVariables) is asked only for a name they lack, after the vault's loader.
     $keyProviders = new SymfonyAiProviderCatalog();
-    $keptValues = new KeptProviderKeyVariables(new KeptProviderKeyFile($keptKeyDirectory, $keyProviders), $keyProviders, otherLoaders: [$vault])->loadEnvVars();
+    // The framework's own fallback logger on stderr, because the app's logger is a service of the container being built, and a skipped kept key must not go unnoticed.
+    $keptValues = new KeptProviderKeyVariables(new KeptProviderKeyFile($keptKeyDirectory, $keyProviders), $keyProviders, new Logger(LogLevel::WARNING), [$vault])->loadEnvVars();
 
     // Revealed because an empty secret is as unusable as a missing one; a secret that cannot be decrypted would fail when the service is built.
     $isSet = static function (string $name) use ($environmentValue, $vaultValue, $keptValues): bool {

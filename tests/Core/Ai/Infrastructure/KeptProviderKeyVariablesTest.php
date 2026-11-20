@@ -141,7 +141,10 @@ final class KeptProviderKeyVariablesTest extends TestCase
         $keys = self::createStub(KeptProviderKeys::class);
         $keys->method('read')->willReturn(ProviderKey::recognise('hf_'.self::BODY, $providers));
         $logger = $this->createMock(LoggerInterface::class);
-        $logger->expects(self::once())->method('warning')->with('Another env loader failed, so its variable counts as set and the kept key does not stand in for it.');
+        $logger->expects(self::once())->method('warning')->with(
+            'Another env loader failed, so its variable counts as set and the kept key does not stand in for it.',
+            ['loader' => $failing::class, 'exception_class' => RuntimeException::class],
+        );
 
         new KeptProviderKeyVariables($keys, $providers, $logger, [$failing])->loadEnvVars();
     }
