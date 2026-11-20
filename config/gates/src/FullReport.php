@@ -1,0 +1,61 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Gates;
+
+use JsonException;
+
+final readonly class FullReport
+{
+    // Because Intakt's own .gitignore leaves out var/, and the ASCII-only report keeps a tree whose gates do scan var/ passing.
+    public const string FOLDER = 'var/check';
+
+    /**
+     * @param list<GateReport> $reports
+     */
+    public function __construct(private string $root, private array $reports)
+    {
+    }
+
+    // Because a fresh random name, created exclusively, never writes over or through a file already there, an earlier report included.
+    public function write(): ?string
+    {
+        $contents = $this->contents();
+        $folder = $this->root.'/'.self::FOLDER;
+
+        if (null === $contents || (!is_dir($folder) && !@mkdir($folder, 0777, true))) {
+            return null;
+        }
+
+        $file = self::FOLDER.'/report-'.bin2hex(random_bytes(8)).'.json';
+        $handle = @fopen($this->root.'/'.$file, 'x');
+
+        if (false === $handle) {
+            return null;
+        }
+
+        fwrite($handle, $contents."\n");
+        fclose($handle);
+
+        return $file;
+    }
+
+    // Because the default escaping writes every character past ASCII as \u escapes, so no gate that reads the tree finds a long dash or broken byte in it.
+    private function contents(): ?string
+    {
+        $gates = array_map(static fn (GateReport $report): mixed => json_decode($report->kept ?? $report->line), $this->reports);
+
+        try {
+            return json_encode(['whole' => $this->isWhole(), 'gates' => $gates], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
+        } catch (JsonException) {
+            return null;
+        }
+    }
+
+    // Because a gate whose child kept nothing reports only its line, the report is whole only when no such line lost a finding.
+    private function isWhole(): bool
+    {
+        return array_all($this->reports, static fn (GateReport $report): bool => null !== $report->kept || !$report->lineIsCut());
+    }
+}
