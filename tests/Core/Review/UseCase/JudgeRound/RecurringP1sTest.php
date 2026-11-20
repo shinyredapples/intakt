@@ -14,6 +14,7 @@ use Intakt\Core\Review\Contract\Judgement;
 use Intakt\Core\Review\Contract\RecurringP1Found;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
+use Intakt\Core\Review\Domain\RoundState;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgedRounds;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRound;
 use Intakt\Core\Review\UseCase\JudgeRound\RecurringP1s;
@@ -167,6 +168,42 @@ final class RecurringP1sTest extends KernelTestCase
         self::assertSame([[$b, $a]], $events);
     }
 
+    public function testALegacyRoundCompletedWithoutAJudgingDoesNotHoldUpALaterRecurrence(): void
+    {
+        $this->completedAs($this->fixture->startAtHead(self::CHANGE, self::HEAD_A), null);
+        $first = $this->fixture->startAtHead(self::CHANGE, self::HEAD_A);
+        $second = $this->fixture->startAtHead(self::CHANGE, self::HEAD_B);
+        $this->appendJudgeDone($first, '["F1"]', '{"F1":"k"}');
+        $this->appendJudgeDone($second, '["F1"]', '{"F1":"k"}');
+
+        self::assertEquals([new RecurringP1Found($second, 'F1', 'k', $first)], $this->fixture->recurringP1s($this->fixture->ledger())->foundWith($this->fixture->round($second)));
+    }
+
+    public function testAnEarlierRoundJudgedWithoutAJudgeDoneDoesNotHoldUpALaterRecurrence(): void
+    {
+        $judged = $this->fixture->round($this->fixture->startAtHead(self::CHANGE, self::HEAD_A));
+        $judged->moveTo(RoundState::Judged->value);
+        $this->fixture->entities->flush();
+        $first = $this->fixture->startAtHead(self::CHANGE, self::HEAD_A);
+        $second = $this->fixture->startAtHead(self::CHANGE, self::HEAD_B);
+        $this->appendJudgeDone($first, '["F1"]', '{"F1":"k"}');
+        $this->appendJudgeDone($second, '["F1"]', '{"F1":"k"}');
+
+        self::assertEquals([new RecurringP1Found($second, 'F1', 'k', $first)], $this->fixture->recurringP1s($this->fixture->ledger())->foundWith($this->fixture->round($second)));
+    }
+
+    public function testAnEarlierRoundCompletedAndWaitingForItsJudgingHoldsUpALaterRecurrence(): void
+    {
+        $waiting = $this->fixture->startAtHead(self::CHANGE, self::HEAD_A);
+        $this->completedAs($waiting, '[]');
+        $first = $this->fixture->startAtHead(self::CHANGE, self::HEAD_A);
+        $second = $this->fixture->startAtHead(self::CHANGE, self::HEAD_B);
+        $this->appendJudgeDone($first, '["F1"]', '{"F1":"k"}');
+        $this->appendJudgeDone($second, '["F1"]', '{"F1":"k"}');
+
+        self::assertSame([], $this->fixture->recurringP1s($this->fixture->ledger())->foundWith($this->fixture->round($second)));
+    }
+
     public function testAP1TheJudgeDidNotPutOnTheActListOnTheEarlierHeadDoesNotMakeALaterOneRecurring(): void
     {
         $first = $this->fixture->startAtHead(self::CHANGE, self::HEAD_A);
@@ -275,6 +312,19 @@ final class RecurringP1sTest extends KernelTestCase
     private function repeatedP1(Finding $finding): Finding
     {
         return new Finding('F1', $finding->severity, $finding->file, $finding->line, null, $finding->text, FixableBy::Builder, true, null, null);
+    }
+
+    // No reported findings is how a round completed before migration Version20261101120000 looks: it was never queued for judging.
+    private function completedAs(string $id, ?string $reported): void
+    {
+        $round = $this->fixture->round($id);
+        $round->moveTo(RoundState::Complete->value);
+
+        if (null !== $reported) {
+            $round->keepReportedFindings($reported);
+        }
+
+        $this->fixture->entities->flush();
     }
 
     private function appendJudgeDone(string $round, string $act, string $keys): void
