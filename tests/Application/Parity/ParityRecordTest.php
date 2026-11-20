@@ -6,17 +6,18 @@ namespace Intakt\Tests\Application\Parity;
 
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Filesystem\Filesystem;
 
 #[CoversClass(ParityRecord::class)]
 final class ParityRecordTest extends TestCase
 {
-    private ?string $scratch = null;
+    /** @var list<string> */
+    private array $scratches = [];
 
     protected function tearDown(): void
     {
-        if (null !== $this->scratch) {
-            exec('rm -rf '.escapeshellarg($this->scratch));
-        }
+        new Filesystem()->remove($this->scratches);
+        $this->scratches = [];
     }
 
     public function testEveryDoneParityItemNamesAnIntaktTestThatExists(): void
@@ -118,6 +119,64 @@ final class ParityRecordTest extends TestCase
         );
     }
 
+    public function testTheTwoClassesOfASharedNameAreReportedInTheSameOrderWhateverTheFolderOrder(): void
+    {
+        $first = $this->scratchTests(['A/TwinTest.php', 'B/TwinTest.php'])->unprovenItems('- [x] Item. Intakt: `TwinTest::testIt`');
+        $second = $this->scratchTests(['B/TwinTest.php', 'A/TwinTest.php'])->unprovenItems('- [x] Item. Intakt: `TwinTest::testIt`');
+
+        self::assertSame($first, $second);
+    }
+
+    public function testAMisspelledClassAfterAValidNameIsReported(): void
+    {
+        $record = '- [x] Item. Intakt: `ParityRecordTest::testADoneItemNamingAnExistingTestMethodPasses` and `ParityRecordTes::testNothing`';
+
+        self::assertSame(
+            ['line 1: `ParityRecordTes::testNothing` is not a test name of the form `SomeTest::testName`'],
+            $this->repositoryTests()->unprovenItems($record),
+        );
+    }
+
+    public function testAMisspelledMethodPrefixAfterAValidNameIsReported(): void
+    {
+        $record = '- [x] Item. Intakt: `ParityRecordTest::testADoneItemNamingAnExistingTestMethodPasses` and `ParityRecordTest::tesNothing`';
+
+        self::assertSame(
+            ['line 1: `ParityRecordTest::tesNothing` is not a test name of the form `SomeTest::testName`'],
+            $this->repositoryTests()->unprovenItems($record),
+        );
+    }
+
+    public function testAMethodNameWithParenthesesAfterAValidNameIsReported(): void
+    {
+        $record = '- [x] Item. Intakt: `ParityRecordTest::testADoneItemNamingAnExistingTestMethodPasses` and `ParityRecordTest::testNothing()`';
+
+        self::assertSame(
+            ['line 1: `ParityRecordTest::testNothing()` is not a test name of the form `SomeTest::testName`'],
+            $this->repositoryTests()->unprovenItems($record),
+        );
+    }
+
+    public function testANonPublicMethodIsNoTestMethod(): void
+    {
+        $record = '- [x] Item. Intakt: `ParityRecordTest::testAProtectedHelperIsNoTest`';
+
+        self::assertSame(
+            ['line 1: ParityRecordTest::testAProtectedHelperIsNoTest is no test method of '.self::class],
+            $this->repositoryTests()->unprovenItems($record),
+        );
+    }
+
+    public function testAnIndentedDoneItemIsJudged(): void
+    {
+        $record = '  - [x] A behavior. `test_old.py` [T1]';
+
+        self::assertSame(
+            ['line 1: names no Intakt test after `Intakt:`'],
+            $this->repositoryTests()->unprovenItems($record),
+        );
+    }
+
     public function testATestFileUnderAFixturesFolderIsNoTestClass(): void
     {
         $tests = $this->scratchTests(['Fixtures/OnlyFixtureTest.php', 'A/TwinTest.php', 'Fixtures/TwinTest.php']);
@@ -126,6 +185,10 @@ final class ParityRecordTest extends TestCase
             ['line 1: OnlyFixtureTest is no test class under tests/', 'line 1: TwinTest is no test class under tests/'],
             $tests->unprovenItems('- [x] A behavior. [T1]; Intakt: `OnlyFixtureTest::testIt`, `TwinTest::testIt`'),
         );
+    }
+
+    protected function testAProtectedHelperIsNoTest(): void
+    {
     }
 
     private function repositoryTests(): ParityRecord
@@ -138,15 +201,16 @@ final class ParityRecordTest extends TestCase
      */
     private function scratchTests(array $files): ParityRecord
     {
-        $this->scratch = sys_get_temp_dir().'/intakt-parity-record-'.bin2hex(random_bytes(6));
+        $scratch = sys_get_temp_dir().'/intakt-parity-record-'.bin2hex(random_bytes(6));
+        $this->scratches[] = $scratch;
         foreach ($files as $file) {
-            $path = $this->scratch.'/'.$file;
+            $path = $scratch.'/'.$file;
             if (!is_dir(dirname($path))) {
                 mkdir(dirname($path), 0o700, true);
             }
             touch($path);
         }
 
-        return new ParityRecord($this->scratch, 'Intakt\Tests\Scratch');
+        return new ParityRecord($scratch, 'Intakt\Tests\Scratch');
     }
 }

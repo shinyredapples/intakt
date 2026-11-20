@@ -6,6 +6,7 @@ namespace Intakt\Tests\Application\Parity;
 
 use FilesystemIterator;
 use RecursiveDirectoryIterator;
+use ReflectionMethod;
 use RecursiveIteratorIterator;
 use SplFileInfo;
 
@@ -13,12 +14,14 @@ use SplFileInfo;
 final readonly class ParityRecord
 {
     // GitHub renders `[X]` as checked too, so a capital X must not escape the check.
-    private const string DONE_ITEM = '/^- \[[xX]\] /';
+    private const string DONE_ITEM = '/^\s*- \[[xX]\] /';
 
     private const string INTAKT_PART = 'Intakt:';
 
     // Only `SomeTest::testName` and a bare `testName` count, so a backticked command or class in a remark is no test name.
-    private const string NAMED_TEST = '/`(?:(\w+Test)::)?(test\w+)`/';
+    private const string BACKTICKED = '/`([^`]*)`/';
+
+    private const string NAMED_TEST = '/^(?:(\w+Test)::)?(test\w+)$/';
 
     // Gate fixtures are inputs of other tests, some of them not even valid PHP, so they are never loaded as test classes.
     private const string FIXTURES = '/Fixtures/';
@@ -84,7 +87,13 @@ final readonly class ParityRecord
         }
 
         $problems = [];
-        foreach ($namedTests as [$class, $method]) {
+        foreach ($namedTests as [$class, $method, $malformed]) {
+            if (null !== $malformed) {
+                $problems[] = sprintf('`%s` %s', $method, $malformed);
+
+                continue;
+            }
+
             $problem = $this->problemWith($class, $method, $testClasses);
             if (null !== $problem) {
                 $problems[] = $problem;
@@ -95,7 +104,7 @@ final readonly class ParityRecord
     }
 
     /**
-     * @return list<array{?string, string}>
+     * @return list<array{?string, string, ?string}>
      */
     private function namedTests(string $item): array
     {
@@ -104,13 +113,17 @@ final readonly class ParityRecord
             return [];
         }
 
-        preg_match_all(self::NAMED_TEST, substr($item, $start), $matches, PREG_SET_ORDER);
+        preg_match_all(self::BACKTICKED, substr($item, $start), $tokens);
 
         $class = null;
         $namedTests = [];
-        foreach ($matches as $match) {
-            $class = '' !== $match[1] ? $match[1] : $class;
-            $namedTests[] = [$class, $match[2]];
+        foreach ($tokens[1] as $token) {
+            if (1 === preg_match(self::NAMED_TEST, $token, $match)) {
+                $class = '' !== $match[1] ? $match[1] : $class;
+                $namedTests[] = [$class, $match[2], null];
+            } elseif (str_contains($token, '::') || str_starts_with($token, 'test')) {
+                $namedTests[] = [null, $token, 'is not a test name of the form `SomeTest::testName`'];
+            }
         }
 
         return $namedTests;
@@ -126,6 +139,7 @@ final readonly class ParityRecord
         }
 
         $candidates = $testClasses[$class] ?? [];
+        sort($candidates);
         if (count($candidates) > 1) {
             return sprintf('%s names more than one test class: %s', $class, implode(', ', $candidates));
         }
@@ -135,7 +149,7 @@ final readonly class ParityRecord
             return sprintf('%s is no test class under tests/', $class);
         }
 
-        if (!method_exists($fullName, $method)) {
+        if (!method_exists($fullName, $method) || !new ReflectionMethod($fullName, $method)->isPublic()) {
             return sprintf('%s::%s is no test method of %s', $class, $method, $fullName);
         }
 
