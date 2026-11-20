@@ -21,14 +21,6 @@ final class FindingIdsTest extends TestCase
         self::assertSame(['F1', 'F2'], [...new FindingIds(...['a' => 'F1', 'b' => 'F2'])]);
     }
 
-    public function testIdsStoredUnderKeysEncodeUnderTheSameKeysAndIterateAsAList(): void
-    {
-        $ids = FindingIds::storedAs([1 => 'F3', 4 => 'F1']);
-
-        self::assertSame(['F3', 'F1'], [...$ids]);
-        self::assertSame('{"1":"F3","4":"F1"}', json_encode($ids, JSON_THROW_ON_ERROR));
-    }
-
     public function testAGivenIdIsContained(): void
     {
         self::assertTrue(new FindingIds('F1', 'F2')->contains('F2'));

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\Infrastructure;
 
 use Intakt\Core\Review\Contract\FindingIds;
+use WeakMap;
 use Symfony\Component\DependencyInjection\Attribute\AutoconfigureTag;
 use Symfony\Component\Serializer\Exception\LogicException;
 use Symfony\Component\Serializer\Exception\UnexpectedValueException;
@@ -15,6 +16,14 @@ use Symfony\Component\Serializer\Normalizer\NormalizerInterface;
 #[AutoconfigureTag('serializer.normalizer', ['serializer' => 'stored'])]
 final class StoredFindingIdsNormalizer implements NormalizerInterface, DenormalizerInterface
 {
+    /** @var WeakMap<FindingIds, array<int|string, string>> */
+    private WeakMap $keysRead;
+
+    public function __construct()
+    {
+        $this->keysRead = new WeakMap();
+    }
+
     /**
      * @param array<string, mixed> $context
      *
@@ -26,7 +35,7 @@ final class StoredFindingIdsNormalizer implements NormalizerInterface, Denormali
             throw new LogicException(sprintf('Only "%s" are normalized here.', FindingIds::class));
         }
 
-        return $data->jsonSerialize();
+        return $this->keysRead[$data] ?? [...$data];
     }
 
     /**
@@ -53,7 +62,12 @@ final class StoredFindingIdsNormalizer implements NormalizerInterface, Denormali
             }
         }
 
-        return FindingIds::storedAs($data);
+        $ids = new FindingIds(...array_values($data));
+        if (!array_is_list($data)) {
+            $this->keysRead[$ids] = $data;
+        }
+
+        return $ids;
     }
 
     /**

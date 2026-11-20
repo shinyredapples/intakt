@@ -18,22 +18,9 @@ final readonly class FindingIds implements IteratorAggregate, JsonSerializable
     /** @var list<string> */
     private array $ids;
 
-    /** @var array<int|string, string> */
-    private array $written;
-
     public function __construct(string ...$ids)
     {
         $this->ids = array_values($ids);
-        $this->written = $this->ids;
-    }
-
-    // A row stored with keyed ids reads back in order but is written with the keys it had, so it stays byte for byte the same.
-    /**
-     * @param array<int|string, string> $ids
-     */
-    public static function storedAs(array $ids): self
-    {
-        return clone (new self(...array_values($ids)), ['written' => $ids]);
     }
 
     public function contains(string $id): bool
@@ -49,11 +36,9 @@ final readonly class FindingIds implements IteratorAggregate, JsonSerializable
         return new ArrayIterator($this->ids);
     }
 
-    /**
-     * @return array<int|string, string>
-     */
-    public function jsonSerialize(): array
+    // The JSON list of ids; typed mixed, because JsonSerializable names no list type and a contract signature holds no array of scalars.
+    public function jsonSerialize(): mixed
     {
-        return $this->written;
+        return $this->ids;
     }
 }
