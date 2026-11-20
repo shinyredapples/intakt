@@ -34,7 +34,7 @@ A rule marked "enforced by `bin/check`" is checked by the named gate, whose fail
 - Final classes (abstract classes allowed, anonymous classes exempt): enforced by `bin/check` (`phpstan`).
 - No static properties (the gate does not judge abstract and anonymous classes): enforced by `bin/check` (`phpstan`).
 - No public setters (a `set*` method a vendor interface or parent declares is exempt): enforced by `bin/check` (`phpstan`).
-- No magic methods (any `__*` method other than `__construct` and `__invoke`): enforced by `bin/check` (`phpstan`).
+- No magic methods (any `__*` method; `__construct`, `__invoke` and `__toString` are fine): enforced by `bin/check` (`phpstan`).
 - `readonly` where possible, no static state (also none the gate cannot see, such as `static` variables or static properties of abstract classes), no service locator, constructor injection only.
 - PHP 8.5 where it is clearer: `|>`, `clone()` with overrides, imported `#[NoDiscard]` on results that must not be ignored, `array_first()`/`array_last()`, `Uri\Rfc3986\Uri` for URLs, closures in constant expressions.
 - Worker mode: services keep no per-request state, also not in readonly properties, and `#[KeptForTheProcess]` marks only state that is the same for every request.

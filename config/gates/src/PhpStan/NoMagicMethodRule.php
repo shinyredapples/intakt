@@ -22,8 +22,8 @@ use PHPStan\Rules\RuleErrorBuilder;
  */
 final readonly class NoMagicMethodRule implements Rule
 {
-    // PHP reserves every method name starting with "__" for magic methods and matches method names case-insensitively, so the exemptions are lowercase
-    private const array ALLOWED = ['__construct', '__invoke'];
+    // PHP reserves every method name starting with "__" for magic methods and matches method names case-insensitively, so the exemptions are lowercase; __toString is PHP's own Stringable interface, which static analysis understands
+    private const array ALLOWED = ['__construct', '__invoke', '__tostring'];
 
     private RepositoryCode $repositoryCode;
 
@@ -116,7 +116,7 @@ final readonly class NoMagicMethodRule implements Rule
 
     private function magicMethod(string $class, string $method, int $line): IdentifierRuleError
     {
-        $message = sprintf('Method %s::%s() is a magic method: no magic methods other than __construct() and __invoke(), because PHP calls them implicitly, so what they do is invisible to static analysis, the IDE and readers; declare the property or the method, or give the class a named method for the lookup.', $class, $method);
+        $message = sprintf('Method %s::%s() is a magic method: no magic methods other than __construct() and __invoke() (and __toString() of Stringable), because PHP calls them implicitly, so what they do is invisible to static analysis, the IDE and readers; declare the property or the method, or give the class a named method for the lookup.', $class, $method);
 
         return RuleErrorBuilder::message($message)->identifier('intakt.noMagicMethod')->line($line)->build();
     }

@@ -50,7 +50,7 @@ final readonly class NoPublicTraitSetterRule implements Rule
         return $findings;
     }
 
-    // a trait no analyzed class uses has no vendor ancestor that could require the name, and one class without such an ancestor is enough to make the name the repository's choice
+    // a trait no analyzed class uses is reported because no vendor ancestor can require the name there, and one using class without such an ancestor is enough, since the name is then the repository's choice
     /**
      * @param list<array{string, string, list<string>}> $uses
      */

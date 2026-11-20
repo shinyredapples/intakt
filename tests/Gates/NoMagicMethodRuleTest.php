@@ -75,9 +75,9 @@ final class NoMagicMethodRuleTest extends PhpStanRuleTestCase
         $this->assertRuleAccepts('construct-and-invoke');
     }
 
-    public function testAStringableValueObjectWithToStringFailsStaticAnalysis(): void
+    public function testAStringableValueObjectPassesStaticAnalysis(): void
     {
-        $this->assertRuleRejects('stringable-magic', 'src/Name.php:16 intakt.noMagicMethod Method Intakt\Sample\Name::__toString() is a magic method');
+        $this->assertRuleAccepts('stringable-value-object');
     }
 
     public function testAMagicMethodOutsideTheRepositoryCodeFoldersPassesStaticAnalysis(): void
