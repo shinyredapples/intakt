@@ -29,16 +29,16 @@ final class FailedMessageListenerOrderTest extends KernelTestCase
     }
 
     /**
-     * @return list<class-string>
+     * @return list<string>
      */
     private function failureListenerClasses(): array
     {
         $events = self::getContainer()->get(EventDispatcherInterface::class);
         self::assertInstanceOf(EventDispatcherInterface::class, $events);
 
-        return array_map(
-            static fn (mixed $listener): string => is_array($listener) && is_object($listener[0]) ? $listener[0]::class : (is_object($listener) ? $listener::class : get_debug_type($listener)),
+        return array_values(array_map(
+            static fn (mixed $listener): string => is_array($listener) ? get_debug_type($listener[0]) : get_debug_type($listener),
             $events->getListeners(WorkerMessageFailedEvent::class),
-        );
+        ));
     }
 }
