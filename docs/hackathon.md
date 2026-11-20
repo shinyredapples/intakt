@@ -39,7 +39,8 @@ the dates from [the journey](journey.md#milestones):
   ([review bench](../README.md#review-bench)).
 - **MCP tools and the agent skill:** your agent starts reviews, reads the findings and loops until the verdict is clean
   ([MCP](user/mcp.md), [the skill](../skills/intakt-review/README.md)).
-- **The quality gates:** `bin/check` runs every gate CI runs on every change ([quality gates](architecture/quality-gates.md)).
+- **The quality gates:** CI runs `bin/check` on every change, and runs the journeys separately with `bin/check --journeys`
+  ([quality gates](architecture/quality-gates.md)).
 - **Upstream reports:** likely bugs in Symfony, Symfony AI and other libraries, each with a minimal reproduction, and
   fixes that are in Symfony 8.2.0-BETA2 ([found and fixed upstream](../README.md#found-and-fixed-upstream),
   [upstream reproductions](../upstream/README.md), "Found in the beta" on
