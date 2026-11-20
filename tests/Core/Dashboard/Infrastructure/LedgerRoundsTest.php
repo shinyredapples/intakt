@@ -62,6 +62,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\AI\Platform\Exception\MaxOutputTokensException;
+use Symfony\Component\Serializer\Encoder\JsonEncoder;
 use Symfony\Component\Uid\Uuid;
 
 #[CoversClass(LedgerRounds::class)]
@@ -876,7 +877,7 @@ final class LedgerRoundsTest extends TestCase
     // Serialized as the writers do, so the reader is shown the row it meets in production.
     private function row(LedgerEventKind $kind, object $payload): RecordedEvent
     {
-        return $this->event($kind, StoredSerializerFactory::create()->serialize($payload, 'json'));
+        return $this->event($kind, StoredSerializerFactory::create()->serialize($payload, JsonEncoder::FORMAT));
     }
 
     private function usage(int $prompt, int $completion): TokenUsageRow
