@@ -33,10 +33,32 @@ final class ConfiguredProbesTest extends TestCase
     {
         $probes = $this->configured(['anthropic' => ['main']], new MockHttpClient())->probes();
 
-        self::assertEquals(new DnsProbe('forge.example'), $probes[0]);
+        self::assertEquals(new DnsProbe('forge.example', 3.0), $probes[0]);
     }
 
     public function testTheHttpsProbesReachTheForgeAndEachVendorWithAnEnabledAccount(): void
+    {
+        self::assertSame(
+            ['https://forge.example/', 'https://api.anthropic.com/'],
+            $this->probedUrls(['anthropic' => ['main'], 'openai' => [], 'claude_code' => ['main']], []),
+        );
+    }
+
+    public function testEachEnabledCompatibleAccountIsProbedAtItsOwnBaseUrl(): void
+    {
+        self::assertSame(
+            ['https://forge.example/', 'https://llm.example/v1', 'https://team-llm.example/v1'],
+            $this->probedUrls(['openai_compatible' => ['default', 'team']], ['https://llm.example/v1', 'https://team-llm.example/v1']),
+        );
+    }
+
+    /**
+     * @param array<string, list<string>> $accounts
+     * @param list<string>                $compatibleBaseUrls
+     *
+     * @return list<string>
+     */
+    private function probedUrls(array $accounts, array $compatibleBaseUrls): array
     {
         $urls = [];
         $http = new MockHttpClient(static function (string $method, string $url) use (&$urls): ResponseInterface {
@@ -45,20 +67,21 @@ final class ConfiguredProbesTest extends TestCase
             return new MockResponse('', ['error' => 'Could not resolve host']);
         });
 
-        foreach ($this->configured(['anthropic' => ['main'], 'openai' => [], 'claude_code' => ['main']], $http)->probes() as $probe) {
+        foreach ($this->configured($accounts, $http, $compatibleBaseUrls)->probes() as $probe) {
             if ($probe instanceof HttpsProbe) {
                 $probe->answers();
             }
         }
 
-        self::assertSame(['https://forge.example/', 'https://api.anthropic.com/'], $urls);
+        return $urls;
     }
 
     /**
      * @param array<string, list<string>> $accounts
+     * @param list<string>                $compatibleBaseUrls
      */
-    private function configured(array $accounts, MockHttpClient $http): ConfiguredProbes
+    private function configured(array $accounts, MockHttpClient $http, array $compatibleBaseUrls = []): ConfiguredProbes
     {
-        return new ConfiguredProbes($http, new SymfonyAiProviderCatalog(), $accounts, 'https://forge.example', 3.0);
+        return new ConfiguredProbes($http, new SymfonyAiProviderCatalog(), $accounts, $compatibleBaseUrls, 'https://forge.example', 3.0);
     }
 }

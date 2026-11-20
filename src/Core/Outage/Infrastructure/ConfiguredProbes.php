@@ -18,12 +18,15 @@ final readonly class ConfiguredProbes
 {
     /**
      * @param array<string, list<string>> $accounts
+     * @param list<string>                $compatibleBaseUrls
      */
     public function __construct(
         private HttpClientInterface $http,
         private ProviderCatalog $catalog,
         #[Autowire(param: AiServices::ACCOUNTS)]
         private array $accounts,
+        #[Autowire(param: AiServices::COMPATIBLE_BASE_URLS)]
+        private array $compatibleBaseUrls,
         #[Autowire(param: GitHubForgeServices::API_URL)]
         private string $forgeUrl,
         #[Autowire(param: OutageServices::PROBE_TIMEOUT)]
@@ -44,13 +47,16 @@ final readonly class ConfiguredProbes
         $forge = new Uri($this->forgeUrl);
 
         return [
-            new DnsProbe((string) $forge->getHost()),
+            new DnsProbe((string) $forge->getHost(), $this->timeout),
             new HttpsProbe($this->http, $forge, $this->timeout),
             ...array_map(fn (ProviderDescriptor $vendor): Probe => new HttpsProbe($this->http, $vendor->baseUrl(), $this->timeout), $this->vendorsInUse()),
+            ...array_map(fn (string $url): Probe => new HttpsProbe($this->http, new Uri($url), $this->timeout), $this->compatibleBaseUrls),
         ];
     }
 
     /**
+     * A descriptor's id matches an account key only for a hosted vendor; an OpenAI-compatible account names no descriptor, so its own base URL is probed instead.
+     *
      * @return list<ProviderDescriptor>
      */
     private function vendorsInUse(): array

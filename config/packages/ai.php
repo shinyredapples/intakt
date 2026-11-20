@@ -340,6 +340,11 @@ return static function (ContainerConfigurator $container): void {
     $container->parameters()->set(AiServices::DISABLED_PROVIDERS, $disabled);
     $container->parameters()->set(AiServices::DISABLED_ACCOUNTS, $disabledAccounts);
     $container->parameters()->set(AiServices::ACCOUNTS, $enabledAccounts);
+    // The base URL variable of each enabled OpenAI-compatible account, read when the container runs, so the connectivity check probes the owner's own endpoints.
+    $container->parameters()->set(AiServices::COMPATIBLE_BASE_URLS, array_map(
+        static fn (string $name): string => $env(new Account(Provider::OpenAiCompatible, $name)->variables()[0]),
+        $enabledAccounts[Provider::OpenAiCompatible->value] ?? [],
+    ));
     $container->parameters()->set(AiServices::PROJECTS, $projects);
     $container->parameters()->set(Provider::Codex->parameter(), $configuration[Provider::Codex->configKey()] ?? null);
     $container->parameters()->set(ReviewServices::PANELS, $panels);
