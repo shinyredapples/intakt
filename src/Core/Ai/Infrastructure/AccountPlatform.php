@@ -100,7 +100,7 @@ final readonly class AccountPlatform implements PlatformInterface
         $this->recordFailure($failure);
     }
 
-    // True for an account error, also one already recorded, because the send path logs every other failure itself.
+    // True when the failure itself is an account error, also one already recorded, because the send path logs every other failure itself.
     private function recordFailure(Throwable $failure): bool
     {
         // Once the answer has started, StreamedAnswer wraps the provider's exception, so the cooldown looks through to it.
@@ -117,7 +117,8 @@ final readonly class AccountPlatform implements PlatformInterface
             $coolDown();
         }
 
-        return true;
+        // A wrapped limit still gets the send warning, because the wrapper is what was thrown.
+        return $cause === $failure;
     }
 
     // Matched by the exception type only, because the provider's text can change (plan T5); null for anything else, such as an answer Intakt could not read, because the account answered and stays usable (issue #1831).

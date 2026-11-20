@@ -158,6 +158,18 @@ final class AccountFailoverPlatformTest extends TestCase
         self::assertTrue($this->cooldowns->isCoolingDown($this->account(Account::DEFAULT)));
     }
 
+    public function testAnAccountErrorWrappedWhileSendingKeepsTheCouldNotSendWarning(): void
+    {
+        $logger = new BufferingLogger();
+        $failure = new IncompleteStreamException('Cut off.', 0, new RateLimitExceededException(300));
+
+        $this->accounts($this->answering(static fn (): never => throw $failure), $this->answering('second'), $logger)->invoke('big', 'Review.')->asText();
+
+        /** @var list<array{0: string, 1: string, 2: array<string, mixed>}> $logs */
+        $logs = $logger->cleanLogs();
+        self::assertSame(['Account {account} failed.', 'Account {account} could not send the call.'], array_values(array_filter(array_column($logs, 1), static fn (string $message): bool => str_starts_with($message, 'Account {account} '))));
+    }
+
     public function testAnAccountErrorWhileSendingThatWasAlreadyRecordedLogsNoCallThatCouldNotBeSent(): void
     {
         $logger = new BufferingLogger();
