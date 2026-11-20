@@ -92,6 +92,17 @@ final class ChangesHandedToIntaktTest extends KernelTestCase
         self::assertSame([], $this->handedToIntakt());
     }
 
+    public function testAPullRequestOpenedBeforeOpeningsWereRecordedIsRecordedAsHandedToIntaktAfterALaterPushRecordsItAsCreated(): void
+    {
+        $this->record(LedgerEventKind::ChangeOpened, ['project' => 'alpha', 'branch' => 'feat/7', 'head' => str_repeat('a', 40), 'change' => self::PULL]);
+        $this->recognize('alpha', $this->change(self::PULL));
+        $this->record(LedgerEventKind::ChangeOpened, ['project' => 'alpha', 'branch' => 'feat/7', 'head' => str_repeat('b', 40), 'change' => self::PULL, 'opening' => 'created']);
+
+        $this->recognize('alpha', $this->change(self::PULL, 'b'));
+
+        self::assertCount(1, $this->handedToIntakt());
+    }
+
     public function testAPullRequestIntaktCreatedIsRecordedAsHandedToIntaktEvenAfterIntaktUpdatedIt(): void
     {
         $this->record(LedgerEventKind::ChangeOpened, ['project' => 'alpha', 'branch' => 'feat/7', 'head' => str_repeat('a', 40), 'change' => self::PULL, 'opening' => 'created']);
