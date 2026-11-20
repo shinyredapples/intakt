@@ -145,6 +145,32 @@ final class AccountFailoverPlatformTest extends TestCase
         self::assertFalse($this->cooldowns->isCoolingDown($this->account(Account::DEFAULT)));
     }
 
+    public function testAnAccountErrorWhileSendingIsLoggedAsAFailedAccountAndNotAsACallThatCouldNotBeSent(): void
+    {
+        $logger = new BufferingLogger();
+        $failure = new RateLimitExceededException(300);
+
+        $this->accounts($this->answering(static fn (): never => throw $failure), $this->answering('second'), $logger)->invoke('big', 'Review.')->asText();
+
+        /** @var list<array{0: string, 1: string, 2: array<string, mixed>}> $logs */
+        $logs = $logger->cleanLogs();
+        self::assertSame(['Account {account} failed.'], array_values(array_filter(array_column($logs, 1), static fn (string $message): bool => str_starts_with($message, 'Account {account} '))));
+        self::assertTrue($this->cooldowns->isCoolingDown($this->account(Account::DEFAULT)));
+    }
+
+    public function testAnAccountErrorWhileSendingThatWasAlreadyRecordedLogsNoCallThatCouldNotBeSent(): void
+    {
+        $logger = new BufferingLogger();
+        $failure = new RateLimitExceededException(300);
+        $account = new AccountPlatform($this->account(Account::DEFAULT), $this->answering(static fn (): never => throw $failure), $this->cooldowns, new NativeClock(), $logger, new SendFailures());
+        $this->sendFailing($account);
+        $logger->cleanLogs();
+
+        $this->sendFailing($account);
+
+        self::assertSame([], $logger->cleanLogs());
+    }
+
     // The reviewer's probe, because the judging's failure listener logs the exception it gets with its message and its chain.
     public function testARejectionThatEndsTheCallCarriesNoTextOfTheProvider(): void
     {
@@ -690,6 +716,15 @@ final class AccountFailoverPlatformTest extends TestCase
     private function onDefault(PlatformInterface $platform, AccountCooldowns $cooldowns, ClockInterface $clock): AccountPlatform
     {
         return new AccountPlatform($this->account(Account::DEFAULT), $platform, $cooldowns, $clock, new NullLogger(), new SendFailures());
+    }
+
+    private function sendFailing(AccountPlatform $account): void
+    {
+        try {
+            $account->invoke('big', 'Review.');
+            self::fail('The call was expected to fail while sending.');
+        } catch (RateLimitExceededException) {
+        }
     }
 
     private function loseTheLogin(AccountCooldowns $cooldowns, ClockInterface $clock): void

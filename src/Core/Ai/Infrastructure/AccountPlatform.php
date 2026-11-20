@@ -49,14 +49,14 @@ final readonly class AccountPlatform implements PlatformInterface
             $result = $this->platform->invoke($model, $input, $options);
             // Boundary: records every failure of the account and rethrows it, because a cooldown or a log must follow whatever the platform threw.
         } catch (Throwable $failure) {
-            $this->failed($failure);
+            $accountError = $this->failed($failure);
 
             // A guard for a platform that fails while sending only, because Symfony's HTTP client reports a failed name lookup when the answer is read, which the vendor retries instead.
             if ($failure instanceof TransportExceptionInterface) {
                 $this->failures->unreachable($this->account);
             }
 
-            if (!$this->coolDownAfter($failure) instanceof Closure) {
+            if (!$accountError) {
                 // The failover gets no logger and chains no cause, so this is the only record of why the call was not sent.
                 $this->logger->warning('Account {account} could not send the call.', ['account' => $this->account->key(), 'exception' => $failure]);
             }
@@ -94,17 +94,24 @@ final readonly class AccountPlatform implements PlatformInterface
         return $result;
     }
 
-    private function failed(Throwable $failure): void
+    // True for an account error, also one already recorded, because the send path logs every other failure itself.
+    private function failed(Throwable $failure): bool
     {
         // Once the answer has started, StreamedAnswer wraps the provider's exception, so the cooldown looks through to it.
         $cause = $failure instanceof IncompleteStreamException ? $failure->getPrevious() ?? $failure : $failure;
         $coolDown = $this->coolDownAfter($cause);
 
-        if ($coolDown instanceof Closure && $this->failures->record($this->account, $cause)) {
+        if (!$coolDown instanceof Closure) {
+            return false;
+        }
+
+        if ($this->failures->record($this->account, $cause)) {
             // Logged whole, because the log redacts a key the provider's text echoes.
             $this->logger->warning('Account {account} failed.', ['account' => $this->account->key(), 'exception' => $cause]);
             $coolDown();
         }
+
+        return true;
     }
 
     // Matched by the exception type only, because the provider's text can change (plan T5); null for anything else, such as an answer Intakt could not read, because the account answered and stays usable (issue #1831).
