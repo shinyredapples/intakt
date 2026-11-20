@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\HandBack\UseCase\RunCheckJob;
 
 use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\HandBack\Contract\AcceptedHandBack;
 use Intakt\Core\HandBack\Contract\CheckJob;
 use Intakt\Core\HandBack\Contract\CheckJobOutcome;
@@ -57,6 +58,7 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(LostContentCheck::class)]
 #[UsesClass(ChangedFile::class)]
 #[UsesClass(CheckJob::class)]
+#[UsesClass(Paths::class)]
 #[UsesClass(CheckJobOutcome::class)]
 #[UsesClass(CheckVerdict::class)]
 #[UsesClass(LostContent::class)]
