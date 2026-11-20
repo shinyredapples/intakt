@@ -315,6 +315,11 @@ final readonly class RoundFixture
         return $this->rounds($this->entities);
     }
 
+    public function transactionsOn(EntityManagerInterface $entities): ReviewRounds
+    {
+        return $this->rounds($entities);
+    }
+
     public function round(string $id): ReviewRound
     {
         $this->entities->clear();
