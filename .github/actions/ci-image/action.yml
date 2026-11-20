@@ -1,7 +1,8 @@
 name: CI image
 description: >-
   Makes the CI image available as CI_IMAGE: reuses one already on the runner, else loads the copy a run on main cached
-  for the same inputs, else builds it; a run on main caches a newly built image for later runs. Pull requests never save.
+  for the same inputs, else builds it (after a failed Docker Hub login it fails instead of building); a run on main
+  caches a newly built image for later runs. Pull requests never save.
 runs:
   using: composite
   steps:
