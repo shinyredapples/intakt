@@ -7,33 +7,38 @@ namespace Intakt\Gates\PhpStan;
 use PhpParser\Node;
 use PhpParser\Node\Arg;
 use PhpParser\Node\Expr;
-use PhpParser\Node\Expr\CallLike;
+use PhpParser\Node\Expr\Array_;
+use PhpParser\Node\Expr\BinaryOp\Concat;
 use PhpParser\Node\Expr\MethodCall;
 use PhpParser\Node\Expr\New_;
 use PhpParser\Node\Expr\StaticCall;
 use PhpParser\Node\Identifier;
 use PhpParser\Node\Name;
+use PhpParser\Node\Scalar\InterpolatedString;
+use PhpParser\Node\Scalar\String_;
 use PhpParser\Node\Stmt\Class_;
 use PHPStan\Analyser\Scope;
 use PHPStan\Rules\IdentifierRuleError;
 use PHPStan\Rules\Rule;
 use PHPStan\Rules\RuleErrorBuilder;
+use PHPStan\Type\Constant\ConstantStringType;
 use PHPStan\Type\ObjectType;
+use Symfony\AI\Platform\Message\AssistantMessage;
 use Symfony\AI\Platform\Message\Message;
 use Symfony\AI\Platform\Message\SystemMessage;
 use Symfony\AI\Platform\Message\UserMessage;
 
 /**
- * @implements Rule<CallLike>
+ * @implements Rule<Expr>
  */
 final readonly class RawPromptMessageRule implements Rule
 {
     private const array FACTORIES = ['ofuser', 'forsystem', 'ofassistant'];
 
-    private const array MESSAGES = [UserMessage::class, SystemMessage::class];
+    private const array MESSAGES = [UserMessage::class, SystemMessage::class, AssistantMessage::class];
 
-    // tests build stored conversations as fixtures and never send them to a provider, so only the code that ships is judged
-    private const array SHIPPED_FOLDERS = ['/src/', '/bin/'];
+    // tests build stored conversations as fixtures and never send them to a provider, so every other file (src/, bin/, config/, public/) is judged
+    private const string UNJUDGED_FOLDER = '/tests/';
 
     // one name for the argument and the method, because the decision of 2026-11-19 (#2520) allows only the round reviewer's own rolePrompt() as the source
     private const string ROLE_PROMPT = 'rolePrompt';
@@ -49,7 +54,7 @@ final readonly class RawPromptMessageRule implements Rule
 
     public function getNodeType(): string
     {
-        return CallLike::class;
+        return Expr::class;
     }
 
     /**
@@ -61,7 +66,7 @@ final readonly class RawPromptMessageRule implements Rule
             return [];
         }
 
-        if ($this->buildsAMessage($node, $scope) && !$this->isInside($this->assembly, $scope)) {
+        if (($this->buildsAMessage($node, $scope) || $this->namesAFactory($node, $scope)) && !$this->isInside($this->assembly, $scope)) {
             return [$this->rawMessage($node)];
         }
 
@@ -74,16 +79,33 @@ final readonly class RawPromptMessageRule implements Rule
 
     private function isShipped(string $file): bool
     {
-        return array_any(self::SHIPPED_FOLDERS, fn (string $folder): bool => str_starts_with($file, $this->root.$folder));
+        return str_starts_with($file, $this->root.'/') && !str_starts_with($file, $this->root.self::UNJUDGED_FOLDER);
     }
 
-    private function buildsAMessage(CallLike $node, Scope $scope): bool
+    private function buildsAMessage(Expr $node, Scope $scope): bool
     {
         return match (true) {
             $node instanceof StaticCall => $this->names(Message::class, $node->class, $scope) && $this->callsAFactory($node->name, $scope),
             $node instanceof New_ => array_any(self::MESSAGES, fn (string $message): bool => $this->names($message, $node->class, $scope)),
             default => false,
         };
+    }
+
+    // a factory handed over as a callable (array_map, call_user_func, Closure::fromCallable) builds the same message as the call
+    private function namesAFactory(Expr $node, Scope $scope): bool
+    {
+        return match (true) {
+            $node instanceof Array_ => 2 === count($node->items) && $this->names(Message::class, $node->items[0]->value, $scope) && $this->callsAFactory($node->items[1]->value, $scope),
+            $node instanceof String_, $node instanceof Concat, $node instanceof InterpolatedString => array_any($scope->getType($node)->getConstantStrings(), $this->isAFactoryCallable(...)),
+            default => false,
+        };
+    }
+
+    private function isAFactoryCallable(ConstantStringType $callable): bool
+    {
+        [$class, $method] = explode('::', $callable->getValue(), 2) + ['', ''];
+
+        return strtolower(ltrim($class, '\\')) === strtolower(Message::class) && in_array(strtolower($method), self::FACTORIES, true);
     }
 
     private function names(string $class, Name|Expr|Class_ $reference, Scope $scope): bool
@@ -147,7 +169,7 @@ final readonly class RawPromptMessageRule implements Rule
             && new ObjectType($this->roundReviewer)->isSuperTypeOf($scope->getType($value->var))->yes();
     }
 
-    private function rawMessage(CallLike $node): IdentifierRuleError
+    private function rawMessage(Expr $node): IdentifierRuleError
     {
         $message = sprintf('A model message built from a plain string outside %s: build it through PromptAssembly, with Intakt\'s own text as a literal and untrusted text as FencedText (docs/design/05-architecture/14-threat-model.md#third-party-text).', $this->assembly);
 

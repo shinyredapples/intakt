@@ -60,6 +60,26 @@ final class RawPromptMessageRuleTest extends PhpStanRuleTestCase
         self::assertSame(2, substr_count($findings, 'bin/ask.php:10 intakt.rawPromptMessage'), $findings);
     }
 
+    public function testAnAssistantMessageConstructedOrAFactoryPassedAsACallableArrayOutsideTheAssemblyIsRefused(): void
+    {
+        self::assertSame([16, 22], $this->linesOf($this->ruleFindingsOf('raw-prompt-gate-edge')));
+    }
+
+    public function testAMessageBuiltInShippedConfigurationIsRefused(): void
+    {
+        $this->assertRuleRejects('raw-prompt-gate-edge', 'config/packages/prompt_gate_edge.php:7 intakt.rawPromptMessage');
+    }
+
+    public function testAFactoryNamedByACallableArrayOrStringIsRefusedAndOtherCallablesPass(): void
+    {
+        self::assertSame([20, 21, 22, 23], $this->linesOf($this->ruleFindingsOf('raw-prompt-factory-as-a-value')));
+    }
+
+    public function testTheAssemblyClassMayPassAFactoryAsACallableAndConstructAnAssistantMessage(): void
+    {
+        $this->assertRuleAccepts('raw-prompt-factory-as-a-value-in-the-assembly');
+    }
+
     public function testTheAssemblyClassMayBuildMessages(): void
     {
         $this->assertRuleAccepts('raw-prompt-in-the-assembly');

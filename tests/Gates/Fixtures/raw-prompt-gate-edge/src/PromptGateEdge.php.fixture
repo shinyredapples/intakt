@@ -1,0 +1,24 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt;
+
+use Symfony\AI\Platform\Message\AssistantMessage;
+use Symfony\AI\Platform\Message\Content\Text;
+use Symfony\AI\Platform\Message\Message;
+use Symfony\AI\Platform\Message\UserMessage;
+
+final readonly class PromptGateEdge
+{
+    public function assistant(string $text): AssistantMessage
+    {
+        return new AssistantMessage(new Text($text));
+    }
+
+    /** @return list<UserMessage> */
+    public function user(string $text): array
+    {
+        return array_map([Message::class, 'ofUser'], [$text]);
+    }
+}

@@ -1,0 +1,27 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use Intakt\Core\Review\Contract\FencedText;
+use Symfony\AI\Platform\Message\AssistantMessage;
+use Symfony\AI\Platform\Message\Content\Text;
+use Symfony\AI\Platform\Message\Message;
+use Symfony\AI\Platform\Message\UserMessage;
+
+final readonly class PromptAssembly
+{
+    /**
+     * @return list<UserMessage>
+     */
+    public function users(FencedText ...$bodies): array
+    {
+        return array_map([Message::class, 'ofUser'], array_map(static fn (FencedText $body): string => $body->rendered(), array_values($bodies)));
+    }
+
+    public function answer(FencedText $answer): AssistantMessage
+    {
+        return new AssistantMessage(new Text($answer->rendered()));
+    }
+}

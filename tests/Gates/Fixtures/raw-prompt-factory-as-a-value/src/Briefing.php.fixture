@@ -1,0 +1,35 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use Closure;
+use Symfony\AI\Platform\Message\Message as Msg;
+use Symfony\AI\Platform\Message\ToolCallMessage;
+use Symfony\AI\Platform\Result\ToolCall;
+
+final readonly class Briefing
+{
+    /**
+     * @return list<mixed>
+     */
+    public function messagesFor(string $text, string $factory, ToolCall $call): array
+    {
+        return [
+            call_user_func([Msg::class, 'forSystem'], $text),
+            call_user_func('Symfony\AI\Platform\Message\Message::ofAssistant', $text),
+            Closure::fromCallable(Msg::class.'::OFUSER'),
+            call_user_func([Msg::class, $factory], $text),
+            call_user_func([Msg::class, 'ofToolCall'], $call, $text),
+            [Msg::class, 'ofUser', 'third'],
+            ['Symfony\AI\Platform\Message\Message', 'trim'],
+            'Message::ofUser',
+        ];
+    }
+
+    public function toolAnswer(ToolCall $call): ToolCallMessage
+    {
+        return Msg::ofToolCall($call, 'done');
+    }
+}
