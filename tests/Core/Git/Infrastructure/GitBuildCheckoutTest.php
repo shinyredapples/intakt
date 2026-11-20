@@ -17,10 +17,12 @@ use Intakt\Core\Git\UseCase\MakeBuildClone\BranchNameRefused;
 use Intakt\Core\Git\UseCase\MakeBuildClone\MakeBuildClone;
 use Intakt\Core\Git\UseCase\TakeCheckedHead\TakeCheckedHead;
 use Intakt\Core\Git\UseCase\UpdateMirror\UpdateMirror;
+use Intakt\Tests\Core\Git\PregMatchThatThrows;
 use Intakt\Tests\Core\Git\RecordingClock;
 use Intakt\Tests\Core\Git\TemporaryRepository;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
@@ -56,6 +58,8 @@ final class GitBuildCheckoutTest extends TestCase
 
     protected function tearDown(): void
     {
+        PregMatchThatThrows::disarm();
+
         if (in_array(StatThatThrows::PROTOCOL, stream_get_wrappers(), true)) {
             stream_wrapper_unregister(StatThatThrows::PROTOCOL);
         }
@@ -64,7 +68,16 @@ final class GitBuildCheckoutTest extends TestCase
         $this->remote->remove();
     }
 
-    // No pass-through test for mirrorOf: its try block only matches a name against a pattern, so nothing in it can throw the SPL exception.
+    #[RunInSeparateProcess]
+    public function testAnUnexpectedInvalidArgumentExceptionPassesThroughTheMirrorPath(): void
+    {
+        PregMatchThatThrows::arm();
+
+        $this->expectExceptionObject(new InvalidArgumentException('unexpected'));
+
+        $this->checkout(new Filesystem())->mirrorOf('alpha');
+    }
+
     public function testAProjectNameThatIsNoFolderNameFailsTheMirrorPathWithItsReason(): void
     {
         $this->expectException(BuildCheckoutFailed::class);

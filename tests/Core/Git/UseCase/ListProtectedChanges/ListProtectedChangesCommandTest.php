@@ -17,8 +17,11 @@ use Intakt\Core\Git\UseCase\ListProtectedChanges\ChangedPaths;
 use Intakt\Core\Git\UseCase\ListProtectedChanges\CommitNameRefused;
 use Intakt\Core\Git\UseCase\ListProtectedChanges\ListProtectedChanges;
 use Intakt\Core\Git\UseCase\ListProtectedChanges\ListProtectedChangesCommand;
+use Intakt\Tests\Core\Git\PregMatchThatThrows;
 use Intakt\Tests\Core\Git\TemporaryRepository;
+use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Application;
@@ -56,6 +59,7 @@ final class ListProtectedChangesCommandTest extends TestCase
 
     protected function tearDown(): void
     {
+        PregMatchThatThrows::disarm();
         new Filesystem()->remove($this->mirrors);
         $this->repository->remove();
     }
@@ -89,7 +93,16 @@ final class ListProtectedChangesCommandTest extends TestCase
         self::assertStringEndsWith("touches protected paths: yes\n", $tester->getDisplay());
     }
 
-    // No pass-through test here: the command calls only final classes and realpath() runs before any stream wrapper, so no collaborator can throw the SPL exception.
+    #[RunInSeparateProcess]
+    public function testAnUnexpectedInvalidArgumentExceptionPassesThrough(): void
+    {
+        $head = $this->repository->objectAt('HEAD');
+        $this->expectExceptionObject(new InvalidArgumentException('unexpected'));
+
+        PregMatchThatThrows::arm();
+        $this->whenTheCommandRuns([], $head);
+    }
+
     public function testTheCommandRefusesAHeadThatIsNoFullCommitNameAndExitsWithOne(): void
     {
         $tester = $this->whenTheCommandRuns([], 'feat/side');
