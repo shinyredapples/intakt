@@ -116,7 +116,7 @@ final class StoredJsonTest extends KernelTestCase
 
     public function testAFindingIsWrittenWithItsMergedIdsUnderTheKeyMerged(): void
     {
-        $json = $this->serializer()->serialize($this->finding()->withMerged(new FindingIds('F2')),JsonEncoder::FORMAT);
+        $json = $this->serializer()->serialize($this->finding()->withMerged(new FindingIds('F2')), JsonEncoder::FORMAT);
 
         self::assertStringEndsWith(',"regression":true,"merged":["F2"]}', $json);
     }
