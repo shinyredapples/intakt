@@ -1,0 +1,2 @@
+## Symfony components
+| AssetMapper import map integrity and minimum release age (8.2, `importmap_integrity_algorithms`, `minimum_release_age`) | every module of the dashboard's import map carries a sha384 integrity hash of the file Intakt serves, so the browser refuses changed bytes; `importmap:update` holds back a JavaScript package version younger than 3 days, the same period as the Composer cooldown | done | #2702 (part 1 of #1851), `config/packages/asset_mapper.yaml`, `tests/Application/ImportMapPolicyTest.php` |
