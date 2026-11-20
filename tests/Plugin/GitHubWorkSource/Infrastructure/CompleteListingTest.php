@@ -249,6 +249,51 @@ final class CompleteListingTest extends KernelTestCase
         self::assertSame([7, 7], $this->histories->read);
     }
 
+    public function testWaitsChangedWithoutTheUpdateTimeMovingHaveTheHistoryReadAgain(): void
+    {
+        $this->reads->lists([Issues::task(7, ['intakt'], ['body' => 'Waits for #3'])]);
+        $this->planOf();
+        $this->reads->lists([Issues::task(7, ['intakt'], ['body' => 'Waits for #4'])], 'W/"issues-2"');
+
+        $this->planOf();
+
+        self::assertSame([7, 7], $this->histories->read);
+    }
+
+    public function testLabelsChangedWithoutTheUpdateTimeMovingHaveTheHistoryReadAgain(): void
+    {
+        $this->reads->lists([Issues::task(7, ['intakt'])]);
+        $this->planOf();
+        $this->reads->lists([Issues::task(7, ['intakt', 'priority:high'])], 'W/"issues-2"');
+
+        $this->planOf();
+
+        self::assertSame([7, 7], $this->histories->read);
+    }
+
+    public function testNumericLabelsListedInAnotherOrderKeepTheStoredVouching(): void
+    {
+        $this->reads->lists([Issues::task(7, ['intakt', '1', '01'])]);
+        $this->planOf();
+        $this->reads->lists([Issues::task(7, ['01', 'intakt', '1'])], 'W/"issues-2"');
+
+        $this->planOf();
+
+        self::assertSame([7], $this->histories->read);
+    }
+
+    public function testNumericLabelsTheHistoryHoldsInAnotherOrderAreTheListedLabels(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->graphql = $this->historyAnswer('Issue', '', ['01', '1', 'intakt']);
+        $this->reads->lists([Issues::task(7, ['intakt', '1', '01'])]);
+
+        $plan = $this->listingOver($this->reads, $api->histories())->planOf('alpha');
+
+        self::assertInstanceOf(IntakePlan::class, $plan);
+        self::assertSame([], $this->shortListingReasons());
+    }
+
     public function testAfterTheEligibilityLabelChangesAnUnchangedListingReadsTheHistoryOfEveryRowThatBecameACandidate(): void
     {
         $this->reads->lists([Issues::task(7, ['ready']), Issues::task(8, ['intakt'])]);

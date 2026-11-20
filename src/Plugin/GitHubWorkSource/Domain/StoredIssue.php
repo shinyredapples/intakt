@@ -91,10 +91,10 @@ final class StoredIssue
         $this->vouchedLabels = $vouching->labels;
     }
 
-    // Kept only while the update time stands, because GitHub moves it on every edit of the text and of the labels the history vouches for.
+    // Kept only while the update time and what steers both stand, because an edit in the second of the earlier listing keeps the update time and the history vouched for the earlier labels and references.
     public function keepVouchingOf(self $stored): void
     {
-        if ($this->number !== $stored->number || $this->updatedAt !== $stored->updatedAt) {
+        if ($this->number !== $stored->number || $this->updatedAt !== $stored->updatedAt || !$this->steersAs($stored->labels, $stored->waitsFor, $stored->unreadableWaits, $stored->closedBy)) {
             return;
         }
 
@@ -102,16 +102,12 @@ final class StoredIssue
         $this->vouchedLabels = $stored->vouchedLabels;
     }
 
-    // The numbers a text names, not the text, because only they steer and a row whose listing went unchanged keeps them without the body; labels in any order, because GitHub does not promise one.
+    // The numbers a text names, not the text, because only they steer and a row whose listing went unchanged keeps them without the body.
     public function isListedAs(IssueHistory $history, IssueReferences $references): bool
     {
-        $listed = $this->labels;
-        $held = $history->currentLabels;
-        sort($listed);
-        sort($held);
         $body = $history->body;
 
-        return $listed === $held && $this->waitsFor === $references->waitsFor($body) && $this->unreadableWaits === $references->unreadableWaits($body) && $this->closedBy === $references->closedBy($body);
+        return $this->steersAs($history->currentLabels, $references->waitsFor($body), $references->unreadableWaits($body), $references->closedBy($body));
     }
 
     public function isVouched(): bool
@@ -162,6 +158,22 @@ final class StoredIssue
     public function updatedAt(): DateTimeImmutable
     {
         return $this->instant($this->updatedAt);
+    }
+
+    // Labels in any order, because GitHub does not promise one, and sorted as strings, because a numeric sort holds `1` and `01` equal and leaves them in the order they came.
+    /**
+     * @param list<string> $labels
+     * @param list<int>    $waitsFor
+     * @param list<string> $unreadableWaits
+     * @param list<int>    $closedBy
+     */
+    private function steersAs(array $labels, array $waitsFor, array $unreadableWaits, array $closedBy): bool
+    {
+        $own = $this->labels;
+        sort($own, SORT_STRING);
+        sort($labels, SORT_STRING);
+
+        return $own === $labels && $this->waitsFor === $waitsFor && $this->unreadableWaits === $unreadableWaits && $this->closedBy === $closedBy;
     }
 
     private function moment(DateTimeImmutable $moment): string
