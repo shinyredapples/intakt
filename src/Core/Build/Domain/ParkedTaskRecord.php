@@ -14,14 +14,6 @@ final readonly class ParkedTaskRecord
 {
     public const string TABLE = 'build_parked_task';
 
-    #[ORM\Id]
-    #[ORM\Column(length: 255)]
-    private string $project;
-
-    #[ORM\Id]
-    #[ORM\Column]
-    private int $task;
-
     #[ORM\Column(type: 'text')]
     private string $question;
 
@@ -33,14 +25,16 @@ final readonly class ParkedTaskRecord
     private string $recommendation;
 
     public function __construct(
-        string $project,
-        int $task,
+        #[ORM\Id]
+        #[ORM\Column(length: 255)]
+        private string $project,
+        #[ORM\Id]
+        #[ORM\Column]
+        private int $task,
         BuildQuestion $question,
         #[ORM\Column(name: 'parked_at', type: 'utc_datetime_immutable')]
         private DateTimeImmutable $parkedAt,
     ) {
-        $this->project = $project;
-        $this->task = $task;
         $this->question = $question->question;
         $this->choices = $question->choices;
         $this->recommendation = $question->recommendation;
