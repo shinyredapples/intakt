@@ -26,6 +26,7 @@ use Symfony\AI\Platform\TokenUsage\TokenUsageAggregation;
 use Symfony\AI\Platform\TokenUsage\TokenUsageInterface;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\DependencyInjection\Attribute\Target;
+use Symfony\Component\Serializer\Encoder\JsonEncoder;
 use Symfony\Component\Serializer\SerializerInterface;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Uid\UuidV7;
@@ -220,7 +221,7 @@ final readonly class UsageLedger
      */
     private function record(UsageStarted|UsageSettled|UsageUnsettled $payload, ?Throwable $failure = null): void
     {
-        $usage = $this->serializer->serialize($payload, 'json');
+        $usage = $this->serializer->serialize($payload, JsonEncoder::FORMAT);
         $appended = $this->ledger->append(new LedgerEvent(LedgerEventKind::UsageRecorded, $usage));
         if ($appended->succeeded()) {
             return;

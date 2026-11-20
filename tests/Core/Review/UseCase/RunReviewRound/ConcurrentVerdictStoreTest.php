@@ -41,7 +41,7 @@ final class ConcurrentVerdictStoreTest extends KernelTestCase
 
         self::assertSame([1, 1], [$this->first->calls, $this->second->calls]);
         self::assertSame([ReviewerState::Verdict, ReviewerState::Verdict], [$this->stateOf(0), $this->stateOf(1)]);
-        self::assertSame([LedgerEventKind::ReviewStarted, LedgerEventKind::ReviewerStarted, LedgerEventKind::VerdictReceived], $this->fixture->ledgerKinds());
+        self::assertSame([LedgerEventKind::ReviewStarted, LedgerEventKind::ReviewerStarted, LedgerEventKind::VerdictReceived, LedgerEventKind::ReviewerFindingsRecorded, LedgerEventKind::ReviewerFindingsRecorded], $this->fixture->ledgerKinds());
         self::assertSame([LedgerEventKind::ReviewerStarted, LedgerEventKind::VerdictReceived], $this->other->ledger->kinds());
         self::assertSame(RoundState::Complete, $this->fixture->round($round)->state());
     }

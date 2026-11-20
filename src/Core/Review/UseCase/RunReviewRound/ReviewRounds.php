@@ -33,6 +33,7 @@ final readonly class ReviewRounds
         private EntityManagerInterface $entities,
         private ClockInterface $clock,
         private StoredFindings $findings,
+        private RoundLedger $ledger,
     ) {
     }
 
@@ -76,7 +77,7 @@ final readonly class ReviewRounds
 
     public function completeWhenEveryReviewerIsIn(Uuid $roundId): void
     {
-        $this->withLockedRound($roundId, $this->findings->completeWhenEveryReviewerIsIn(...));
+        $this->withLockedRound($roundId, $this->completeAndRecordWhoReportedWhat(...));
     }
 
     public function stored(string $roundId): ReviewRound
@@ -200,6 +201,14 @@ final readonly class ReviewRounds
             $this->entities->clear();
 
             throw $failure;
+        }
+    }
+
+    // In the transaction that records the verdicts, so the ledger holds which reviewer reported which finding exactly for the rounds whose findings were recorded.
+    private function completeAndRecordWhoReportedWhat(ReviewRound $round): void
+    {
+        foreach ($this->findings->completeWhenEveryReviewerIsIn($round) as $reported) {
+            $this->ledger->reviewerFindingsRecorded($reported);
         }
     }
 

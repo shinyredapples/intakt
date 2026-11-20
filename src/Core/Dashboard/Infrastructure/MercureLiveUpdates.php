@@ -29,8 +29,8 @@ final readonly class MercureLiveUpdates implements LiveUpdates
         try {
             // Private, because the dashboard shows private projects; only a subscriber the dashboard authorizes may read it.
             $this->hub->publish(new Update($event->topic, $event->turboStream, true));
+            // Boundary: logs a failed publication and swallows it, because a hub that is down must never fail the request or the work that published.
         } catch (Throwable $failure) {
-            // Swallowed after a log, because a hub that is down must never fail the request or the work that published.
             $this->logger->warning('A live dashboard update was not published.', ['topic' => $event->topic, 'exception' => $failure]);
         }
     }

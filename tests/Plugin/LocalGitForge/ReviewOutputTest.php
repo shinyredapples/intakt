@@ -22,6 +22,7 @@ use Intakt\Tests\Support\StoredSerializerFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Serializer\Encoder\JsonEncoder;
 use Symfony\Component\Serializer\Normalizer\AbstractNormalizer;
 
 #[CoversClass(ReviewOutput::class)]
@@ -78,7 +79,7 @@ final class ReviewOutputTest extends TestCase
         ];
         $review = new ChangeReview('round-1', 2, Decision::Changes, $verdicts, [$finding], new RoundTokens(2, 100, 60, 30, 5, 20, 120), Cost::inUsd(0.045895), ['a reason']);
 
-        $json = StoredSerializerFactory::create()->serialize(ReviewOutput::of($review), 'json', [AbstractNormalizer::ATTRIBUTES => ReviewOutput::FIELDS]);
+        $json = StoredSerializerFactory::create()->serialize(ReviewOutput::of($review), JsonEncoder::FORMAT, [AbstractNormalizer::ATTRIBUTES => ReviewOutput::FIELDS]);
         $output = json_decode($json, true, flags: JSON_THROW_ON_ERROR);
         self::assertIsArray($output);
 

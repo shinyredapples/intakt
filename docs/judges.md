@@ -1,33 +1,55 @@
-# For judges
+# For judges: Intakt in a few minutes
 
-A short path through Intakt: what it gives you, how to try it with or without a key, what was measured, and where to look next.
+Your coding agent says it is done. Intakt tells you whether to believe it: a panel of reviewers on models from different makers reviews the change, and a judge marks every finding against the task, so every P1 and P2 finding whose quote checks out reaches the act list.
 
-## What Intakt gives you
+## a. No key, about 2 minutes
 
-Your coding agent says it is done; Intakt tells you whether to believe it. A panel of reviewers on models from different makers reviews the change, and a judge marks every finding against the task. Your own agent runs this loop over MCP until the verdict is clean ([MCP details](user/mcp.md)).
+1. `git clone https://github.com/shinyredapples/intakt.git && cd intakt`
+2. `docker compose up -d --wait`: it returns once the container is healthy.
+3. Open http://localhost:7781. You see **Set up Intakt** with two choices: "Watch a recorded real review now" and "Paste one provider key or Hugging Face token and run the demo review".
+4. Open http://localhost:7781/demo and press **Play the demo run**. You see "The demo run is starting: the caption at the bottom of each page names the stage it is in." The caption counts "Stage 1 of 7" up to "Stage 5 of 7: The round is judged: the act list names the findings to fix now."
+5. Press **Open the review** in the caption. The review of `sample-change` in `demo-replay` carries the **Replay** mark. Round 1 reads "Changes requested": `correctness` asked for changes with 4 findings, `security` approved. Under "Findings and the judge's call", F1 (P2, `src/discount.js:3`), F2 (P1, `src/report.js:4`) and F4 (P2) read **Fix now**; F3 reads "Dropped before the judge: none of its 2 quoted code fragments is in the change".
 
-## Try it
+## b. One Hugging Face token or provider key, about 5 minutes
 
-```
-git clone https://github.com/shinyredapples/intakt.git && cd intakt
-docker compose up -d --wait
-```
+First clone and start Intakt as in steps 1 and 2 of path a.
 
-- No key: open http://localhost:7781/demo and press **Play the demo run**. It plays the shipped recording of a real review of the sample change onto the dashboard without calling any model ([details](user/README.md#playing-the-demo-run-in-the-dashboard)).
-- With one provider key or a Hugging Face token: open http://localhost:7781 and save it on the first-run page, run `docker compose restart intakt` so the sample project gets its reviewers, reload the setup page, then press **Start the first review**, or run `docker compose exec intakt php bin/console intakt:demo` for the verdict in the terminal ([reading a verdict](user/README.md#reading-a-verdict)).
+1. Open http://localhost:7781/setup, the first-run page (once path a has played, http://localhost:7781 opens the board instead). Paste the key or token in step 1 ("A key or token for Anthropic, OpenAI or Hugging Face") and press **Keep the key**. Calls are billed to the key's owner.
+2. `docker compose restart intakt`, so the sample project gets its reviewers. Wait until `docker compose ps` shows the container as healthy.
+3. Reload http://localhost:7781/setup: step 2 now reads "1 project is configured." and lists the `sample` project. Then start the live review:
+   - **If you skipped path a:** press **Start the first review** in step 3. Its live review page opens: each reviewer's row fills in as it answers, then the round shows its outcome (`approve`, `changes` or `blocked`) and "Findings and the judge's call" lists the act list, each entry marked **Fix now**.
+   - **If you played path a:** step 3 shows **Open the review** for the recorded run and no start button. Run `docker compose exec intakt php bin/console intakt:demo` instead. It runs the same live review and prints the verdict, each reviewer, the act list and an "Open the review:" line with the address of its review page.
 
-## What was measured
+## c. With your agent over MCP
 
-- [Review bench](../README.md#review-bench), run on 2026-11-16: the panel found 11 of 15 planted defects with 2 false alarms, about 6,800 tokens per change (measured). How the bench works: [the review bench in plain words](guide/review-bench.md).
-- [Timed run](../README.md#timed-run), 2026-11-17, ten runs: warm start median 13.5 s, demo review median 42 s (measured).
+This path runs a live review, so first do steps 1 and 2 of path b (keep a key, restart, wait until healthy): without them the `sample` project has no reviewers.
 
-## Found and fixed upstream
+1. Get the token: `docker compose exec intakt php bin/console intakt:sample:show /app/var/data/sample-repository` prints `Connect an MCP client: claude mcp add ... --header "Authorization: Bearer <token>"`. Step 4 of the first-run page at http://localhost:7781/setup ("Your own agent") shows the address, `http://localhost:7781/mcp/owner`.
+2. Run the printed `claude mcp add` line in the clone, then start `claude` there.
+3. Install the skill: copy `skills/intakt-review` to `~/.claude/skills/intakt-review` ([details](../skills/intakt-review/README.md)).
+4. Say "intakt review the demo". The agent starts the review with `start_review`, fixes only what the act list names inside the container, and reports the verdict, the rounds used and why it stopped.
 
-Running the Symfony AI beta and Symfony 8.2 beta turned up bugs that Intakt reproduced, and fixed or reported upstream: [the table in the README](../README.md#found-and-fixed-upstream), and every reproduction with its report in [`upstream/`](../upstream/README.md).
+## Where to look in the code
 
-## Where to look next
+| Promise | Enforced by | Test |
+|---|---|---|
+| Finding ids are kept across rounds | `src/Core/Review/Domain/FindingLedger.php` | `tests/Core/Review/Domain/FindingLedgerTest.php`: `testFindingIdsStayStableOverThreeRounds`; `tests/Core/Review/UseCase/RunReviewRound/FindingsAcrossRoundsTest.php`: `testIdsStayStableOverThreeRoundsAndANewFindingGetsTheNextId` |
+| P1 and P2 findings whose quote checks out reach the act list | `src/Core/Review/Contract/JudgedFindings.php`, `src/Core/Review/Contract/Judgement.php` | `tests/Core/Review/UseCase/JudgeRound/JudgeRoundTest.php`: `testAJudgeThatRejectsAP1AndDefersAP2LeavesBothOnTheActList`, `testAnInvalidJudgeAnswerLeavesEveryBlockingFindingOnTheActListAndMakesNoFollowUp` |
+| Figure kinds (measured, counted, estimated) are never added together | `src/Core/Platform/Contract/Figures.php` (throws `MixedFigureKinds`) | `tests/Core/Platform/Contract/FiguresTest.php`: `testATotalOverMeasuredAndEstimatedFiguresIsRefused` |
+| A finding is dropped before the judge when none of its checked quotes appears in the change | `src/Core/Review/Domain/QuotesInChange.php`, called by `src/Core/Review/UseCase/JudgeRound/JudgeRoundHandler.php` | `tests/Core/Review/Domain/QuotesInChangeTest.php`: `testAFindingQuotingANameAbsentFromTheChangeIsDropped`, `testAFindingWhoseQuoteIsInTheChangeIsKept` |
 
-- [The review flow](architecture/review-flow.md): the loop inside, drawn.
-- [Symfony in Intakt](guide/symfony-in-intakt.md): the Symfony and Symfony AI parts it uses.
-- [Status](../README.md#status): what works today and what is planned.
-- [Showcase](showcase/README.md) and [Journey](journey.md): this repository built by an AI loop, in figures.
+## Symfony AI and MCP pieces used
+
+- **Platform**: every model call, through `src/Plugin/SymfonyAiVendor/`.
+- **Agent**: the reviewers and their tool loop (`src/Core/Review/Infrastructure/ReviewerRuns.php`).
+- **Store**: project memory (`src/Core/Memory/Infrastructure/StoreProjectMemory.php`).
+- **AI Bundle**: configures the provider platforms (`config/packages/ai.php`).
+- **MCP Bundle**: two servers. The owner server at `/mcp/owner` has five tools (`list_projects`, `review_status`, `review_verdicts`, `review_act_list`, `start_review`), one resource template (`intakt://rounds/{roundId}/findings`) and progress notifications while `start_review` waits. The review server at `/mcp/review` gives reviewers `read_file`, `list_directory` and `search_files`, which also sends progress. Both `start_review` and `search_files` send progress only when the client supplies a progress token. Neither server has prompts.
+
+Every Symfony and Symfony AI feature in use, with its status: [Highlights](https://shinyredapples.github.io/intakt/).
+
+## More
+
+- [The review bench](../README.md#review-bench): how well the panel finds planted defects, measured.
+- [Upstream reproductions](architecture/upstream-reproductions.md): library bugs found while building Intakt.
+- [Connecting an agent through MCP](user/mcp.md).

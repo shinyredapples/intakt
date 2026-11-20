@@ -1,0 +1,48 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Tests\Plugin\GitHubWorkSource;
+
+use Closure;
+use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
+use Intakt\Plugin\GitHubForge\Contract\IssueListing;
+use Intakt\Plugin\GitHubForge\Contract\IssueReads;
+use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
+
+// Answers the next scripted listing and counts every read, because a test must see which reads a tick made.
+final class RecordedIssueReads implements IssueReads
+{
+    public int $listings = 0;
+    /** @var list<?string> */
+    public array $validators = [];
+    // Run once on the next listing, so a test can force what another worker does in the middle of a tick.
+    public ?Closure $during = null;
+    private ?IssueListing $next = null;
+
+    /**
+     * @param list<ListedIssue> $issues
+     */
+    public function lists(array $issues, ?string $validator = 'W/"issues-1"'): void
+    {
+        $this->next = IssueListing::listed($issues, $validator);
+    }
+
+    public function listsUnchanged(): void
+    {
+        $this->next = IssueListing::unchanged();
+    }
+
+    public function listOpen(string $project, ?string $validator): IssueListing
+    {
+        ++$this->listings;
+        $this->validators[] = $validator;
+        $during = $this->during;
+        $this->during = null;
+        if ($during instanceof Closure) {
+            $during();
+        }
+
+        return $this->next ?? throw new ForgeReadFailed('GitHub answered 502 to a read.');
+    }
+}

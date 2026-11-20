@@ -7,7 +7,7 @@
 
 Your coding agent says it is done. Intakt tells you whether to believe it.
 
-A panel of reviewers on models from different makers reviews the change and a judge marks every finding against the task: every P1 and P2 finding whose quote checks out reaches the act list whatever the judge answers. Your own agent runs this loop over MCP until the verdict is clean. On the [review bench](#review-bench), the panel found 11 of 15 planted defects (measured, 2026-11-16).
+A panel of reviewers on models from different AI labs reviews the change and a judge marks every finding against the task: every P1 and P2 finding whose quote checks out reaches the act list whatever the judge answers. Your own agent runs this loop over MCP until the verdict is clean. On the [review bench](#review-bench), the panel found 11 of 15 planted defects (measured, 2026-11-16).
 
 <p align="center">
   <picture>
@@ -33,7 +33,7 @@ With your agent: `claude mcp add --transport http intakt http://localhost:7781/m
 
 The demo run plays the shipped recording of a real review of the sample change onto the dashboard without calling any model, with a caption on every page that names each stage up to the judge's act list ([details](docs/user/README.md#playing-the-demo-run-in-the-dashboard)).
 
-The demo reviews a sample change with two reviewers ([how long it takes](#timed-run)): open http://localhost:7781. A new install opens on a first-run page with two choices: **watch a recorded real review now**, with no key, or **paste one provider key or Hugging Face token and run the demo review**: save it, run `docker compose restart intakt` so the sample project gets its reviewers, reload the setup page, then press **Start the first review**, which opens its live review page. Calls are billed to the key's or token's owner; a Hugging Face token alone puts the reviewers on two makers ([Hugging Face details](docs/user/README.md#running-the-demo-on-a-hugging-face-token)).
+The demo reviews a sample change with two reviewers ([how long it takes](#timed-run)): open http://localhost:7781. A new install opens on a first-run page with two choices: **watch a recorded real review now**, with no key (its **Play the demo run** button plays the tour above; the shipped recording is ready on first start, and the page says why it cannot play if `.env.local` empties `INTAKT_DEMO_RECORDING` or points it at a missing file), or **paste one provider key or Hugging Face token and run the demo review**: save it, run `docker compose restart intakt` so the sample project gets its reviewers, reload the setup page, then press **Start the first review**, which opens its live review page. Calls are billed to the key's or token's owner; a Hugging Face token alone puts the reviewers on models from two AI labs ([Hugging Face details](docs/user/README.md#running-the-demo-on-a-hugging-face-token)).
 
 From the terminal: `docker compose exec intakt php bin/console intakt:demo` runs the same demo review and prints its verdict ([read it](docs/user/README.md#reading-a-verdict)). The [demo walkthrough](docs/guide/demo-walkthrough.md) retells it in plain words; [the review flow](docs/architecture/review-flow.md) draws it inside.
 
@@ -146,6 +146,7 @@ Built for the [Symfony AI & MCP Hackathon](docs/spec.md) (deadline 2026-11-22):
 
 ## Documentation
 
+- [For judges](docs/judges.md): from clone to a played review in a few minutes, and the code behind each promise.
 - [Intakt in plain words](docs/guide/README.md): friendly guides with diagrams, from the big picture to troubleshooting.
 - [Contributing](CONTRIBUTING.md): reporting bugs, suggesting features, sending pull requests, and [how they are handled](CONTRIBUTING.md#how-your-issue-or-pull-request-is-handled).
 - [User guide](docs/user/README.md): for owners running Intakt.
