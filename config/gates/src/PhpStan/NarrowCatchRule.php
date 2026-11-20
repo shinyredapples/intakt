@@ -99,7 +99,7 @@ final readonly class NarrowCatchRule implements Rule
             $this->genericTypesOf($catch),
         );
 
-        return array_values(array_map(fn (string $problem): IdentifierRuleError => $this->finding($catch, $problem), array_filter($problems)));
+        return array_values(array_map(fn (string $problem): IdentifierRuleError => $this->finding($catch, $problem), array_filter($problems, is_string(...))));
     }
 
     /**
