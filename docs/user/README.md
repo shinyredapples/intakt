@@ -148,7 +148,7 @@ Run it inside the container, because the admin API answers only there. It reads 
 
 ## Background work
 
-Intakt has two internal message buses, one for commands and one for questions. Each bus accepts only its own kind of message: a question sent on the command bus, or a command sent on the question bus, is refused before any handler runs.
+Intakt has two internal message buses, one for commands and one for questions. Each bus accepts only its own kind of message: a question sent on the command bus, or a command sent on the question bus, is refused before any handler runs. This covers messages Intakt sends itself; a message a worker takes back from the queue is not checked again.
 
 A review round sends one message per reviewer to a queue, and workers take them from it, so the reviewers of a round run at the same time. It also queues one message that has a worker send the dashboard's project filter again when the round is its project's first; a round that is undone before it is stored leaves none of these messages behind. The queue is a table in your database (`MESSENGER_TRANSPORT_DSN`, `doctrine://default` unless you change it in `.env.local`), created by `php bin/console doctrine:migrations:migrate` together with the other tables. Start as many workers as you want reviewers to run at once:
 
