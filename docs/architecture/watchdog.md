@@ -1,6 +1,6 @@
 # Watchdog over main
 
-`Core/Watchdog` (issue #2969, part 1 of #2914) classifies main's new commits. This part holds the rules only: the contract types in `src/Core/Watchdog/Contract/` and the classifier in `src/Core/Watchdog/Domain/`. Nothing calls it yet: reading main with git (part 2), the console command, the project halt and the owner card come in later issues. The module has no container wiring, so `WatchdogServices` holds no ids yet.
+`Core/Watchdog` (issues #2969 and #2970, parts 1 and 2 of #2914) classifies main's new commits: the contract types in `src/Core/Watchdog/Contract/`, the classifier in `src/Core/Watchdog/Domain/` and `MainHistory`, which reads main with git, in `src/Core/Watchdog/Infrastructure/`. Nothing calls it yet: the console command, the project halt and the owner card come in later issues. The module has no container wiring, so `WatchdogServices` holds no ids yet.
 
 ## Rules
 
@@ -30,6 +30,18 @@ The classifier reads main only through `Contract/CommitHistory`, so its rules ar
 - `firstParentsSince(commit)`: main's first-parent commits after it, oldest first.
 - `signatureOf(commit)`: the commit's `SignatureStatus`.
 
-No implementation exists yet; part 2 reads main with `HardenedGit`.
+## Reading main with git
 
-Tests: `tests/Core/Watchdog/Domain/CommitClassifierTest.php` (a recorded merge is clean, a recorded head passes even when unsigned, an owner-signed commit passes, an unsigned commit and a foreign key are violations, a force push is `history_rewritten`), `tests/Core/Watchdog/Contract/RecordedMergeTest.php` and `tests/Core/Watchdog/Contract/WatchedMainTest.php`.
+`MainHistory` (`src/Core/Watchdog/Infrastructure/MainHistory.php`) implements the port. It takes `HardenedGit`, the repository path and the owner's SSH public keys. Every git call goes through `HardenedGit::call()` (so the repository's hooks, replace refs, grafts and signature programs do not apply) and runs in the repository's real path: `run()` resolves a relative path with `realpath`. Every git and `ssh-keygen` call has the same 60-second timeout. Main is the branch `refs/heads/main`, never the checked-out head. A git call that fails throws; it never becomes an answer.
+
+- `contains(commit)`: `merge-base --is-ancestor <commit> refs/heads/main`; exit 0 is true, exit 1 is false, any other exit (an unknown commit, for example) throws.
+- `firstParentsSince(commit)`: `rev-list --first-parent --reverse <commit>..refs/heads/main`.
+- `signatureOf(commit)`: reads the object format (`rev-parse --show-object-format`) and the raw commit (`cat-file commit`). The headers are read line by line up to the first empty line, so a signature line in the message does not count. The signature header is `gpgsig` for SHA-1 and `gpgsig-sha256` for SHA-256; an unknown object format gives `unknown_key`. No header gives `unsigned`. Otherwise the signed payload is the commit without the header and its continuation lines, and `ssh-keygen -Y verify` checks the signature with namespace `git` against an allowed-signers file that holds only the owner's keys (temporary files, removed afterwards).
+
+The check fails closed: only a successful `ssh-keygen -Y verify` gives `owner_signed`. A signature that is not an SSH signature (a PGP one, for example), two signature headers, no registered owner key, a failed check, a timeout or an `ssh-keygen` that does not start all give `unknown_key`.
+
+Owner keys are strict: each must be one SSH public key, `<type> <base64>` with an optional comment without quotes or control characters. Anything else (a second line, an allowed-signers option such as `cert-authority`, a quote) throws `OwnerKeyRefused` when `MainHistory` is built, so no key can add a line or an option to the allowed-signers file. The comment is dropped; only the type and the key go into the file.
+
+Tests: `tests/Core/Watchdog/Infrastructure/MainHistoryTest.php`, on temporary repositories with forced histories and real `ssh-keygen` keys (a recorded merge is clean, a seeded unsigned commit is an `unsigned` violation, an owner-signed commit passes, a foreign key is an `unknown_key` violation, a PGP signature header and a signed commit without registered keys are `unknown_key`, a force push is `history_rewritten`, a SHA-256 repository's `gpgsig-sha256` header verifies, first parents come oldest first, a relative path reads the same, malformed owner keys are refused). They need `ssh-keygen` and are never skipped without it.
+
+Tests of the rules: `tests/Core/Watchdog/Domain/CommitClassifierTest.php` (a recorded merge is clean, a recorded head passes even when unsigned, an owner-signed commit passes, an unsigned commit and a foreign key are violations, a force push is `history_rewritten`), `tests/Core/Watchdog/Contract/RecordedMergeTest.php` and `tests/Core/Watchdog/Contract/WatchedMainTest.php`.

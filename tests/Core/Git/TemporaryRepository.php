@@ -84,6 +84,18 @@ final readonly class TemporaryRepository
         return $hash;
     }
 
+    public function commitSignedWith(string $keyFile, string $subject): string
+    {
+        $this->git(...self::IDENTITY, ...['-c', 'gpg.format=ssh', '-c', 'user.signingkey='.$keyFile, 'commit', '--quiet', '--allow-empty', '-S', '-m', $subject]);
+
+        return $this->git('rev-parse', 'HEAD');
+    }
+
+    public function resetTo(string $revision): void
+    {
+        $this->git('reset', '--quiet', '--hard', $revision);
+    }
+
     public function diff(string $base, string $head): string
     {
         return $this->git('diff', $base, $head);
