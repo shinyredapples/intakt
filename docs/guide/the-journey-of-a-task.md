@@ -58,6 +58,8 @@ It produces two things, and nothing else leaves the workspace:
 - **the change itself**, as commits in a sealed package (a git *bundle*);
 - **a short description** for the pull request: a summary, the evidence (for example test output), and any new packages it needs.
 
+If it cannot go on without a decision from you, it hands back **a question** instead: the question, its choices and its recommendation. A question comes first: when it leaves one, no package is sent, whatever else it did.
+
 Before it finishes, it runs a **self-check**: no merge commits, nothing that looks like a password or key, description not too long. Catching those itself is much cheaper than being refused afterwards.
 
 Planned: the self-check also runs the project's quick checks, ticks off every piece of evidence the task asks for, and looks for documentation the change made wrong. That last part is a plain report, not an AI's guess: it takes the names, settings and numbers the change removed or changed, lists every place in the project's documentation that still mentions one, and the builder fixes or confirms each before it hands back. Intakt checks before it asks the reviewers because every round of fixes after a review costs about as much as four reviews, and with one account that comes straight out of new work. When the same kind of problem keeps coming back from the reviewers, Intakt suggests a new automatic check as a task; label it to accept it, and the problem is caught before review from then on.
