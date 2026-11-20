@@ -24,7 +24,11 @@ final readonly class FullReport
         $contents = $this->contents();
         $folder = $this->root.'/'.self::FOLDER;
 
-        if (null === $contents || $this->isLinked() || (!@mkdir($folder, 0777, true) && !is_dir($folder)) || $this->isLinked() || !$this->staysInside($folder)) {
+        if (null === $contents || $this->isLinked() || (!@mkdir($folder, 0777, true) && !is_dir($folder))) {
+            return null;
+        }
+
+        if ($this->isLinked() || !$this->staysInside($folder)) {
             return null;
         }
 
@@ -43,6 +47,9 @@ final readonly class FullReport
     }
 
     // Because a var/ or var/check that is a link would put the report outside the checked tree, it is refused before and after mkdir().
+    /**
+     * @phpstan-impure
+     */
     private function isLinked(): bool
     {
         return is_link($this->root.'/var') || is_link($this->root.'/'.self::FOLDER);
