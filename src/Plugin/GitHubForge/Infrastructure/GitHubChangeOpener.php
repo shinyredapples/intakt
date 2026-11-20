@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\GitHubForge\Infrastructure;
 
-use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\ChangeOpening;
 use Intakt\Plugin\Forge\Contract\ChangeTextHoldsSecret;
 use Intakt\Plugin\Forge\Contract\ForgeCredentialsRefused;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
+use Intakt\Plugin\Forge\Contract\OpenedChange;
 use Intakt\Plugin\Forge\Contract\ProposedChange;
 use Intakt\Plugin\GitHubForge\Contract\InstallationDoesNotMatchConfiguration;
 use Intakt\Plugin\GitHubForge\Contract\InstallationNotReadBack;
@@ -30,7 +30,7 @@ final readonly class GitHubChangeOpener implements ChangeOpening
     ) {
     }
 
-    public function openOrUpdate(ProposedChange $change): ChangeId
+    public function openOrUpdate(ProposedChange $change): OpenedChange
     {
         $text = $change->text;
 
@@ -43,11 +43,11 @@ final readonly class GitHubChangeOpener implements ChangeOpening
         $payload = ['title' => $text->title, 'body' => $text->body, 'base' => $change->base];
 
         // The look-up comes first and a write is never retried, so a crash between the two leaves at most the pull request the next call finds.
-        $number = null === $open
-            ? $this->numberOf($this->send('POST', $repository->path().'/pulls', [...$payload, 'head' => $change->branch]))
-            : $this->numberOf($this->send('PATCH', $repository->path().'/pulls/'.$open, $payload));
+        if (null === $open) {
+            return new OpenedChange($repository->pullRequest($this->numberOf($this->send('POST', $repository->path().'/pulls', [...$payload, 'head' => $change->branch]))), true);
+        }
 
-        return $repository->pullRequest($number);
+        return new OpenedChange($repository->pullRequest($this->numberOf($this->send('PATCH', $repository->path().'/pulls/'.$open, $payload))), false);
     }
 
     private function addressOf(string $project): RepositoryAddress

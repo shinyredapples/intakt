@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Watcher\UseCase\WatchPullRequests;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 use Doctrine\Persistence\ManagerRegistry;
+use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
@@ -57,7 +58,7 @@ final class ChangesHandedToIntaktTest extends KernelTestCase
 
     public function testAPullRequestIntaktOpenedIsRecordedAsHandedToIntakt(): void
     {
-        $this->record(LedgerEventKind::ChangeOpened, ['project' => 'alpha', 'branch' => 'feat/7', 'head' => str_repeat('a', 40), 'change' => self::PULL]);
+        $this->record(LedgerEventKind::ChangeOpened, ['project' => 'alpha', 'branch' => 'feat/7', 'head' => str_repeat('a', 40), 'change' => self::PULL, 'opening' => 'created']);
 
         $this->recognize('alpha', $this->change(self::PULL));
 
@@ -66,16 +67,71 @@ final class ChangesHandedToIntaktTest extends KernelTestCase
 
     public function testAPullRequestWithoutAnOpeningRecordOfIntaktIsNotRecordedAsHandedToIntakt(): void
     {
-        $this->record(LedgerEventKind::ChangeOpened, ['project' => 'alpha', 'branch' => 'feat/7', 'head' => str_repeat('a', 40), 'change' => self::PULL]);
+        $this->record(LedgerEventKind::ChangeOpened, ['project' => 'alpha', 'branch' => 'feat/7', 'head' => str_repeat('a', 40), 'change' => self::PULL, 'opening' => 'created']);
 
         $this->recognize('alpha', $this->change(self::LOOP_PULL));
 
         self::assertSame([], $this->handedToIntakt());
     }
 
+    public function testAPullRequestIntaktOnlyUpdatedIsNotRecordedAsHandedToIntakt(): void
+    {
+        $this->record(LedgerEventKind::ChangeOpened, ['project' => 'alpha', 'branch' => 'feat/8', 'head' => str_repeat('a', 40), 'change' => self::LOOP_PULL, 'opening' => 'updated']);
+
+        $this->recognize('alpha', $this->change(self::LOOP_PULL));
+
+        self::assertSame([], $this->handedToIntakt());
+    }
+
+    public function testAnOpeningRecordThatDoesNotSayHowTheForgeGotThereHandsNoPullRequestToIntakt(): void
+    {
+        $this->record(LedgerEventKind::ChangeOpened, ['project' => 'alpha', 'branch' => 'feat/7', 'head' => str_repeat('a', 40), 'change' => self::PULL]);
+
+        $this->recognize('alpha', $this->change(self::PULL));
+
+        self::assertSame([], $this->handedToIntakt());
+    }
+
+    public function testAPullRequestIntaktCreatedIsRecordedAsHandedToIntaktEvenAfterIntaktUpdatedIt(): void
+    {
+        $this->record(LedgerEventKind::ChangeOpened, ['project' => 'alpha', 'branch' => 'feat/7', 'head' => str_repeat('a', 40), 'change' => self::PULL, 'opening' => 'created']);
+        $this->record(LedgerEventKind::ChangeOpened, ['project' => 'alpha', 'branch' => 'feat/7', 'head' => str_repeat('b', 40), 'change' => self::PULL, 'opening' => 'updated']);
+
+        $this->recognize('alpha', $this->change(self::PULL, 'b'));
+
+        self::assertCount(1, $this->handedToIntakt());
+    }
+
+    public function testAnOpeningRecordInTheConfiguredCaseIsRecognizedFromTheAddressTheForgeLists(): void
+    {
+        $this->record(LedgerEventKind::ChangeOpened, ['project' => 'alpha', 'branch' => 'feat/7', 'head' => str_repeat('a', 40), 'change' => self::PULL, 'opening' => 'created']);
+
+        $this->recognize('alpha', $this->change('https://github.com/Acme/Widgets/pull/7'));
+
+        self::assertSame(['https://github.com/Acme/Widgets/pull/7'], array_column($this->handedToIntakt(), 'change'));
+    }
+
+    public function testAPullRequestRecordedAsHandedToIntaktInAnotherCaseGetsNoSecondRecord(): void
+    {
+        $this->record(LedgerEventKind::ChangeOpened, ['project' => 'alpha', 'branch' => 'feat/7', 'head' => str_repeat('a', 40), 'change' => self::PULL, 'opening' => 'created']);
+        $this->recognize('alpha', $this->change('https://github.com/Acme/Widgets/pull/7'));
+
+        $this->recognize('alpha', $this->change(self::PULL));
+
+        self::assertCount(1, $this->handedToIntakt());
+    }
+
+    public function testAnEmptyListingReadsNoLedger(): void
+    {
+        $ledger = self::createMock(Ledger::class);
+        $ledger->expects(self::never())->method('readOfKind');
+
+        new ChangesHandedToIntakt($ledger, new WatcherLedger(new InMemoryLedger()))->recognizeAmong('alpha', []);
+    }
+
     public function testAnOpeningRecordOfAnotherProjectHandsNoPullRequestOfTheSameAddressToIntakt(): void
     {
-        $this->record(LedgerEventKind::ChangeOpened, ['project' => 'beta', 'branch' => 'feat/7', 'head' => str_repeat('a', 40), 'change' => self::PULL]);
+        $this->record(LedgerEventKind::ChangeOpened, ['project' => 'beta', 'branch' => 'feat/7', 'head' => str_repeat('a', 40), 'change' => self::PULL, 'opening' => 'created']);
 
         $this->recognize('alpha', $this->change(self::PULL));
 
@@ -84,7 +140,7 @@ final class ChangesHandedToIntaktTest extends KernelTestCase
 
     public function testAPullRequestIntaktOnlyIntendedToOpenIsNotRecordedAsHandedToIntakt(): void
     {
-        $this->record(LedgerEventKind::ChangeIntended, ['project' => 'alpha', 'branch' => 'feat/7', 'head' => str_repeat('a', 40), 'change' => self::PULL]);
+        $this->record(LedgerEventKind::ChangeIntended, ['project' => 'alpha', 'branch' => 'feat/7', 'head' => str_repeat('a', 40), 'change' => self::PULL, 'opening' => 'created']);
 
         $this->recognize('alpha', $this->change(self::PULL));
 
@@ -93,7 +149,7 @@ final class ChangesHandedToIntaktTest extends KernelTestCase
 
     public function testAPullRequestAlreadyRecordedAsHandedToIntaktGetsNoSecondRecord(): void
     {
-        $this->record(LedgerEventKind::ChangeOpened, ['project' => 'alpha', 'branch' => 'feat/7', 'head' => str_repeat('a', 40), 'change' => self::PULL]);
+        $this->record(LedgerEventKind::ChangeOpened, ['project' => 'alpha', 'branch' => 'feat/7', 'head' => str_repeat('a', 40), 'change' => self::PULL, 'opening' => 'created']);
         $this->recognize('alpha', $this->change(self::PULL));
 
         $this->recognize('alpha', $this->change(self::PULL, 'b'));
@@ -103,7 +159,7 @@ final class ChangesHandedToIntaktTest extends KernelTestCase
 
     public function testOnlyTheIntaktOpenedPullRequestOfAListingIsRecordedAsHandedToIntakt(): void
     {
-        $this->record(LedgerEventKind::ChangeOpened, ['project' => 'alpha', 'branch' => 'feat/7', 'head' => str_repeat('a', 40), 'change' => self::PULL]);
+        $this->record(LedgerEventKind::ChangeOpened, ['project' => 'alpha', 'branch' => 'feat/7', 'head' => str_repeat('a', 40), 'change' => self::PULL, 'opening' => 'created']);
 
         $this->recognize('alpha', $this->change(self::LOOP_PULL), $this->change(self::PULL));
 
@@ -113,7 +169,7 @@ final class ChangesHandedToIntaktTest extends KernelTestCase
     public function testAnUnreadableLedgerLineMentioningThePullRequestDoesNotStopTheRecognition(): void
     {
         self::assertTrue($this->ledger->append(new LedgerEvent(LedgerEventKind::ChangeOpened, '{"project":"alpha","change":"https:\/\/github.com\/acme\/widgets\/pull\/7"'))->succeeded());
-        $this->record(LedgerEventKind::ChangeOpened, ['project' => 'alpha', 'branch' => 'feat/7', 'head' => str_repeat('a', 40), 'change' => self::PULL]);
+        $this->record(LedgerEventKind::ChangeOpened, ['project' => 'alpha', 'branch' => 'feat/7', 'head' => str_repeat('a', 40), 'change' => self::PULL, 'opening' => 'created']);
 
         $this->recognize('alpha', $this->change(self::PULL));
 
@@ -122,7 +178,7 @@ final class ChangesHandedToIntaktTest extends KernelTestCase
 
     public function testARecordTheLedgerRefusesFailsTheRecognition(): void
     {
-        $this->record(LedgerEventKind::ChangeOpened, ['project' => 'alpha', 'branch' => 'feat/7', 'head' => str_repeat('a', 40), 'change' => self::PULL]);
+        $this->record(LedgerEventKind::ChangeOpened, ['project' => 'alpha', 'branch' => 'feat/7', 'head' => str_repeat('a', 40), 'change' => self::PULL, 'opening' => 'created']);
         $recognizer = new ChangesHandedToIntakt($this->ledger, new WatcherLedger(new InMemoryLedger(0)));
 
         $this->expectException(WatcherEventNotRecorded::class);

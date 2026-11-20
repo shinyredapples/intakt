@@ -30,6 +30,15 @@ final readonly class FindChangedPullRequests
         return $this->seen->whileListing($project, fn (): array => $this->listChanged($project));
     }
 
+    // As the last listing that completed saw them, so an unchanged listing still names every open pull request.
+    /**
+     * @return list<OpenChange>
+     */
+    public function openOf(string $project): array
+    {
+        return $this->seen->openOf($project);
+    }
+
     /**
      * @return list<OpenChange>
      *

@@ -41,6 +41,8 @@ final class ScriptedGitHub
 
     public bool $unreachable = false;
 
+    public int $createdNumber = 42;
+
     /** @var list<array<mixed>> */
     private array $comments = [];
 
@@ -65,11 +67,11 @@ final class ScriptedGitHub
         return new GitHubForge($calls, $checked, new SecretScan(dirname(__DIR__, 3), 'gitleaks'), new PostedComments($calls, $checked, self::APP_ID), new VerdictLocks($this->locks), new GitHubAppSetting(self::APP_ID, new NullLogger()));
     }
 
-    public function opener(): GitHubChangeOpener
+    public function opener(string $project = 'widgets', string $repository = 'acme/widgets'): GitHubChangeOpener
     {
         [$calls, $checked] = $this->stack();
 
-        return new GitHubChangeOpener($calls, $checked, new SecretScan(dirname(__DIR__, 3), 'gitleaks'), new WatchedRepositories(['widgets' => ['github' => 'acme/widgets']]));
+        return new GitHubChangeOpener($calls, $checked, new SecretScan(dirname(__DIR__, 3), 'gitleaks'), new WatchedRepositories([$project => ['github' => $repository]]));
     }
 
     /**
@@ -140,7 +142,7 @@ final class ScriptedGitHub
     private function created(string $method, string $url): ResponseInterface
     {
         return match (true) {
-            str_ends_with($url, '/pulls') => new MockResponse(json_encode(['number' => 42], JSON_THROW_ON_ERROR), ['http_code' => 201]),
+            str_ends_with($url, '/pulls') => new MockResponse(json_encode(['number' => $this->createdNumber], JSON_THROW_ON_ERROR), ['http_code' => 201]),
             'PATCH' === $method => new MockResponse(json_encode(['number' => (int) basename($url)], JSON_THROW_ON_ERROR), ['http_code' => 200]),
             default => new MockResponse('{}', ['http_code' => 201]),
         };

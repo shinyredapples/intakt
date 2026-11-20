@@ -30,7 +30,8 @@ final readonly class ChangedHeads
     {
         $this->connection->transactional(function () use ($project): void {
             $changed = ($this->find)($project);
-            $this->handedToIntakt->recognizeAmong($project, $changed);
+            // Every open pull request, not only the changed ones, because one listed before its opening record was written may never change again.
+            $this->handedToIntakt->recognizeAmong($project, $this->find->openOf($project));
             $this->pending->enqueue($project, $changed);
             $this->recordForgotten($project, $this->pending->forgetClosed($project));
         });

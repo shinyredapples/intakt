@@ -25,6 +25,7 @@ use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\ChangeText;
+use Intakt\Plugin\Forge\Contract\OpenedChange;
 use Intakt\Tests\Core\Git\TemporaryRepository;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -46,6 +47,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(AcceptedHandBack::class)]
 #[UsesClass(ChangeText::class)]
 #[UsesClass(ChangeId::class)]
+#[UsesClass(OpenedChange::class)]
 #[UsesClass(LedgerEvent::class)]
 #[UsesClass(AppendResult::class)]
 #[UsesClass(RecordedEvent::class)]
@@ -546,7 +548,7 @@ final class PushBranchTest extends TestCase
         $request = $this->scenario->request();
         $head = str_repeat('b', 40);
         $records->intendChange($request, $head);
-        $records->open($request, $head, 'https://github.com/acme/widgets/pull/1');
+        $records->open($request, $head, new OpenedChange(new ChangeId('https://github.com/acme/widgets/pull/1'), true));
 
         $records->intendChange($request, $head);
 
@@ -564,6 +566,23 @@ final class PushBranchTest extends TestCase
         self::assertInstanceOf(PushedBranch::class, $pushed);
         self::assertSame(1, $this->scenario->changes->calls);
         self::assertSame('https://github.com/acme/widgets/pull/1', $pushed->change->value);
+    }
+
+    public function testTheRecordOfAPullRequestTheForgeCreatedSaysItWasCreated(): void
+    {
+        (void) $this->scenario->push()->push($this->scenario->request());
+
+        self::assertSame('created', $this->scenario->ledger->payloadOf(LedgerEventKind::ChangeOpened)['opening']);
+    }
+
+    public function testTheRecordOfAPullRequestTheForgeOnlyUpdatedSaysItWasUpdated(): void
+    {
+        $push = $this->scenario->push();
+        (void) $push->push($this->scenario->request());
+
+        (void) $push->push($this->scenario->withText($this->scenario->request(), new ChangeText('Corrected title', 'E1: now referenced.')));
+
+        self::assertSame(['created', 'updated'], array_column($this->scenario->ledger->payloadsOf(LedgerEventKind::ChangeOpened), 'opening'));
     }
 
     public function testTheLedgerKeepsADigestOfThePullRequestTextAndNeverTheText(): void

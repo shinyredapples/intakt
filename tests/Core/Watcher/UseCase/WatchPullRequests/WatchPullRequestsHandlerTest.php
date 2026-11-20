@@ -212,7 +212,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         $doctrine = self::getContainer()->get('doctrine');
         self::assertInstanceOf(ManagerRegistry::class, $doctrine);
         $this->openings = new DoctrineLedger($doctrine, $this->clock);
-        self::assertTrue($this->openings->append(new LedgerEvent(LedgerEventKind::ChangeOpened, '{"project":"alpha","branch":"feat\/1","head":"'.str_repeat(self::PENDING, 40).'","change":"1"}'))->succeeded());
+        self::assertTrue($this->openings->append(new LedgerEvent(LedgerEventKind::ChangeOpened, '{"project":"alpha","branch":"feat\/1","head":"'.str_repeat(self::PENDING, 40).'","change":"1","opening":"created"}'))->succeeded());
         $this->handler = $this->handler();
         $this->listing->opens('alpha', RecordedForge::change('1', self::PENDING, '2026-11-02T09:00:00Z'), RecordedForge::change('2', self::PENDING, '2026-11-02T09:00:00Z'));
 
@@ -220,6 +220,22 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
 
         self::assertSame([LedgerEventKind::ChangeHandedToIntakt, LedgerEventKind::HeadPending, LedgerEventKind::HeadPending], $this->ledger->kinds());
         self::assertSame('1', $this->ledger->payloads()[0]['change']);
+    }
+
+    public function testAPullRequestListedBeforeItsOpeningRecordIsRecordedAsHandedToIntaktOnAnUnchangedListing(): void
+    {
+        $doctrine = self::getContainer()->get('doctrine');
+        self::assertInstanceOf(ManagerRegistry::class, $doctrine);
+        $this->openings = new DoctrineLedger($doctrine, $this->clock);
+        $this->handler = $this->handler();
+        $this->listing->opens('alpha', RecordedForge::change('1', self::PENDING, '2026-11-02T09:00:00Z'));
+        $this->tick();
+        self::assertTrue($this->openings->append(new LedgerEvent(LedgerEventKind::ChangeOpened, '{"project":"alpha","branch":"feat\/1","head":"'.str_repeat(self::PENDING, 40).'","change":"1","opening":"created"}'))->succeeded());
+
+        $this->tick();
+
+        self::assertSame(1, $this->listing->conditionalAnswers);
+        self::assertSame([LedgerEventKind::HeadPending, LedgerEventKind::ChangeHandedToIntakt], $this->ledger->kinds());
     }
 
     public function testAPendingHeadIsReadAgainOnceItsReadAgainTimeHasPassedEvenWhenTheListingIsUnchanged(): void

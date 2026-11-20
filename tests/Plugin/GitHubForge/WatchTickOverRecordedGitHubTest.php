@@ -11,9 +11,10 @@ use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Budget\Infrastructure\DoctrineHolds;
 use Intakt\Core\Budget\Infrastructure\DoctrineInstallWideFailures;
+use Intakt\Core\Git\Contract\BranchPushRequest;
+use Intakt\Core\Git\UseCase\PushBranch\PushRecords;
+use Intakt\Core\HandBack\Contract\AcceptedHandBack;
 use Intakt\Core\Ledger\Contract\Ledger;
-use Intakt\Core\Ledger\Contract\LedgerEvent;
-use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelReviewer;
@@ -48,8 +49,10 @@ use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatcherLedger;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchPullRequests;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchPullRequestsHandler;
 use Intakt\Plugin\Forge\Contract\AuthorTrust;
+use Intakt\Plugin\Forge\Contract\ChangeText;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\CommitRange;
+use Intakt\Plugin\Forge\Contract\ProposedChange;
 use Intakt\Plugin\GitHubForge\Domain\ExpectedInstallation;
 use Intakt\Plugin\GitHubForge\Infrastructure\AppJwt;
 use Intakt\Plugin\GitHubForge\Infrastructure\CheckedInstallationTokens;
@@ -128,17 +131,30 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         self::assertSame(1, preg_match_all('/ round_queued \{[^}]*pull\\\\\/7/', $events));
     }
 
-    public function testATickRecordsThePullRequestIntaktOpenedAsHandedToIntaktAndTheOtherNot(): void
+    // #7 is created by the App's opener, #8 was opened by someone else and only updated by it; the repository is configured in another case than GitHub lists it.
+    public function testATickRecordsThePullRequestIntaktCreatedAsHandedToIntaktAndNotTheOneItOnlyUpdated(): void
     {
         $ledger = self::getContainer()->get(Ledger::class);
         self::assertInstanceOf(Ledger::class, $ledger);
-        self::assertTrue($ledger->append(new LedgerEvent(LedgerEventKind::ChangeOpened, json_encode(['project' => 'alpha', 'branch' => 'feat/7', 'head' => str_repeat('1', 40), 'change' => 'https://github.com/acme/widgets/pull/7'], JSON_THROW_ON_ERROR)))->succeeded());
+        $records = new PushRecords($ledger);
+        $github = new ScriptedGitHub();
+        $github->createdNumber = 7;
+        $opener = $github->opener('alpha', 'Acme/Widgets');
+        $records->open($this->pushOf('feature/7', '1'), str_repeat('1', 40), $opener->openOrUpdate(new ProposedChange('alpha', 'feature/7', 'main', new ChangeText('Seven', 'E1'))));
+        $github->openPulls = [['number' => 8, 'head' => ['ref' => 'feature/8']]];
+        $records->open($this->pushOf('feature/8', '2'), self::GREEN, $opener->openOrUpdate(new ProposedChange('alpha', 'feature/8', 'main', new ChangeText('Eight', 'E1'))));
 
         $this->handler(new RecordingCommandBus())(new WatchPullRequests('alpha'));
 
         $events = $this->recordedEvents();
+        self::assertSame(['POST', 'PATCH'], array_map(static fn (array $write): string => strstr($write[0], ' ', true), $github->writes));
         self::assertSame(1, preg_match_all('/ change_handed_to_intakt /', $events));
         self::assertSame(1, preg_match_all('/ change_handed_to_intakt \{[^}]*pull\\\\\/7/', $events));
+    }
+
+    private function pushOf(string $branch, string $head): BranchPushRequest
+    {
+        return new BranchPushRequest('alpha', 'repo', 'origin', $branch, new AcceptedHandBack(null, str_repeat($head, 40), 0), new ChangeText('Title', 'E1'));
     }
 
     private function recordedEvents(): string

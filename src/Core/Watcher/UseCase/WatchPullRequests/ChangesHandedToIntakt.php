@@ -6,13 +6,14 @@ namespace Intakt\Core\Watcher\UseCase\WatchPullRequests;
 
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
-use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Intakt\Plugin\Forge\Contract\OpenChange;
 use JsonException;
 
 // Decided from Intakt's own push records alone, because a pull request's author, title, labels and branch are text others can shape: docs/architecture/handed-to-intakt.md
 final readonly class ChangesHandedToIntakt
 {
+    private const string CREATED = 'created';
+
     public function __construct(
         private Ledger $ledger,
         private WatcherLedger $records,
@@ -20,61 +21,53 @@ final readonly class ChangesHandedToIntakt
     }
 
     /**
-     * @param list<OpenChange> $changed
+     * @param list<OpenChange> $open
      *
      * @throws WatcherEventNotRecorded
      */
-    public function recognizeAmong(string $project, array $changed): void
+    public function recognizeAmong(string $project, array $open): void
     {
-        if ([] === $changed) {
+        if ([] === $open) {
             return;
         }
 
-        $known = $this->knownAmong($project, $this->ledger->readMentioning($this->mentionsOf($changed)));
+        $waiting = array_diff_key($this->addressesOf($project, LedgerEventKind::ChangeOpened), $this->addressesOf($project, LedgerEventKind::ChangeHandedToIntakt));
 
-        foreach ($changed as $change) {
-            $id = $change->id->value;
+        foreach ($open as $change) {
+            $address = $this->addressOf($change->id->value);
 
-            if (isset($known[LedgerEventKind::ChangeOpened->value][$id]) && !isset($known[LedgerEventKind::ChangeHandedToIntakt->value][$id])) {
+            if (isset($waiting[$address])) {
                 $this->records->changeHandedToIntakt($project, $change);
-                $known[LedgerEventKind::ChangeHandedToIntakt->value][$id] = true;
+                unset($waiting[$address]);
             }
         }
     }
 
+    // Only an opening that created the pull request, because Intakt's push also updates an open pull request someone else opened on the same branch.
     /**
-     * @param list<OpenChange> $changed
-     *
-     * @return list<string>
+     * @return array<string, true>
      */
-    private function mentionsOf(array $changed): array
+    private function addressesOf(string $project, LedgerEventKind $kind): array
     {
-        return array_map(static fn (OpenChange $change): string => '"change":'.json_encode($change->id->value, JSON_THROW_ON_ERROR), $changed);
-    }
+        $addresses = [];
 
-    /**
-     * @return array<string, array<string, true>>
-     */
-    private function knownAmong(string $project, RecordedEvents $lines): array
-    {
-        $known = [];
-
-        foreach ($lines as $recorded) {
-            $kind = $recorded->event->kind;
-
-            if (LedgerEventKind::ChangeOpened !== $kind && LedgerEventKind::ChangeHandedToIntakt !== $kind) {
-                continue;
-            }
-
+        foreach ($this->ledger->readOfKind($kind) as $recorded) {
             $payload = $this->decoded($recorded->event->payload);
             $change = $payload['change'] ?? null;
+            $created = LedgerEventKind::ChangeOpened !== $kind || self::CREATED === ($payload['opening'] ?? null);
 
-            if ($project === ($payload['project'] ?? null) && is_string($change)) {
-                $known[$kind->value][$change] = true;
+            if ($created && $project === ($payload['project'] ?? null) && is_string($change)) {
+                $addresses[$this->addressOf($change)] = true;
             }
         }
 
-        return $known;
+        return $addresses;
+    }
+
+    // Without case, because the push names the repository as configured and the listing as the forge spells it, and forge addresses do not tell owners or repositories apart by case.
+    private function addressOf(string $change): string
+    {
+        return strtolower($change);
     }
 
     /**

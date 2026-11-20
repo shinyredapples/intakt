@@ -9,6 +9,7 @@ use Intakt\Plugin\Forge\Contract\ChangeText;
 use Intakt\Plugin\Forge\Contract\ChangeTextHoldsSecret;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
+use Intakt\Plugin\Forge\Contract\OpenedChange;
 use Intakt\Plugin\Forge\Contract\ProposedChange;
 use Intakt\Plugin\GitHubForge\Contract\InstallationToken;
 use Intakt\Plugin\GitHubForge\Domain\ExpectedInstallation;
@@ -34,6 +35,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(WatchedRepositories::class)]
 #[UsesClass(SecretScan::class)]
 #[UsesClass(ChangeId::class)]
+#[UsesClass(OpenedChange::class)]
 #[UsesClass(ChangeText::class)]
 #[UsesClass(ProposedChange::class)]
 #[UsesClass(ChangeTextHoldsSecret::class)]
@@ -60,8 +62,27 @@ final class GitHubChangeOpenerTest extends TestCase
 
         $change = $github->opener()->openOrUpdate(new ProposedChange('widgets', 'task', 'main', new ChangeText('Add the files', 'Evidence: tests pass.')));
 
-        self::assertSame('https://github.com/acme/widgets/pull/42', $change->value);
+        self::assertSame('https://github.com/acme/widgets/pull/42', $change->id->value);
         self::assertSame([['POST '.self::API.'/pulls', ['title' => 'Add the files', 'body' => 'Evidence: tests pass.', 'base' => 'main', 'head' => 'task']]], $github->writes);
+    }
+
+    public function testAPullRequestTheOpenerPostedIsAnsweredAsCreated(): void
+    {
+        $github = new ScriptedGitHub();
+
+        $change = $github->opener()->openOrUpdate(new ProposedChange('widgets', 'task', 'main', new ChangeText('Add the files', 'Evidence: tests pass.')));
+
+        self::assertTrue($change->created);
+    }
+
+    public function testAnOpenPullRequestTheOpenerOnlyUpdatedIsAnsweredAsNotCreated(): void
+    {
+        $github = new ScriptedGitHub();
+        $github->openPulls = [['number' => 7, 'head' => ['ref' => 'task']]];
+
+        $change = $github->opener()->openOrUpdate(new ProposedChange('widgets', 'task', 'main', new ChangeText('New title', 'New body')));
+
+        self::assertFalse($change->created);
     }
 
     public function testABranchWithAnOpenPullRequestHasItsTextUpdatedInstead(): void
@@ -71,7 +92,7 @@ final class GitHubChangeOpenerTest extends TestCase
 
         $change = $github->opener()->openOrUpdate(new ProposedChange('widgets', 'task', 'main', new ChangeText('New title', 'New body')));
 
-        self::assertSame('https://github.com/acme/widgets/pull/7', $change->value);
+        self::assertSame('https://github.com/acme/widgets/pull/7', $change->id->value);
         self::assertSame([['PATCH '.self::API.'/pulls/7', ['title' => 'New title', 'body' => 'New body', 'base' => 'main']]], $github->writes);
     }
 

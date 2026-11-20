@@ -11,6 +11,7 @@ use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Plugin\Forge\Contract\ChangeText;
+use Intakt\Plugin\Forge\Contract\OpenedChange;
 use JsonException;
 
 // One record per phase and per commit the push intends to produce, so a restart reads where the last attempt stopped and never repeats a phase it finished; keyed by project too, because two projects can share history and branch names.
@@ -85,9 +86,13 @@ final readonly class PushRecords
     /**
      * @throws BranchNotPushed
      */
-    public function open(BranchPushRequest $request, string $head, string $change): void
+    // With how the forge got there, because only a pull request Intakt's identity created is handed to Intakt: docs/architecture/handed-to-intakt.md
+    /**
+     * @throws BranchNotPushed
+     */
+    public function open(BranchPushRequest $request, string $head, OpenedChange $change): void
     {
-        $this->append(LedgerEventKind::ChangeOpened, [...$this->keyOf($request, $head), 'change' => $change, self::TEXT_DIGEST => $this->digestOf($request->text)]);
+        $this->append(LedgerEventKind::ChangeOpened, [...$this->keyOf($request, $head), 'change' => $change->id->value, self::TEXT_DIGEST => $this->digestOf($request->text), 'opening' => $change->created ? 'created' : 'updated']);
     }
 
     // A digest, because the ledger keeps none of the builder's words; the title's length goes first, so no title and body read as another pair.

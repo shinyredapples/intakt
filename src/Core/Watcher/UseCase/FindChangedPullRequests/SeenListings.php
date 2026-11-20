@@ -73,6 +73,14 @@ final readonly class SeenListings
     }
 
     /**
+     * @return list<OpenChange>
+     */
+    public function openOf(string $project): array
+    {
+        return array_map(static fn (SeenChange $seen): OpenChange => $seen->asOpenChange(), array_values($this->entities->getRepository(SeenChange::class)->findBy(['project' => $project], ['change' => 'ASC'])));
+    }
+
+    /**
      * @param list<OpenChange> $open
      */
     public function record(string $project, array $open, ?string $validator): void
