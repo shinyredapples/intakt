@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Gates\PhpStan;
 
+use Intakt\Core\Review\Contract\PromptAssembly;
+use Intakt\Core\Review\Contract\ReviewerConversation;
+use Intakt\Core\Review\Domain\RoundReviewer;
+use Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewerHandler;
 use PhpParser\Node;
 use PhpParser\Node\Arg;
 use PhpParser\Node\Expr;
@@ -21,6 +25,9 @@ use PHPStan\Rules\RuleErrorBuilder;
 use PHPStan\Type\Constant\ConstantStringType;
 use PHPStan\Type\ObjectType;
 use PHPStan\Type\Type;
+use Symfony\AI\Platform\Message\Message;
+use Symfony\AI\Platform\Message\SystemMessage;
+use Symfony\AI\Platform\Message\UserMessage;
 
 // Model messages are built only by the assembly class, so Intakt's own text arrives as literals and untrusted text only fenced: docs/design/05-architecture/14-threat-model.md#third-party-text
 /**
@@ -28,14 +35,14 @@ use PHPStan\Type\Type;
  */
 final readonly class RawPromptMessageRule implements Rule
 {
-    public const string ASSEMBLY = 'Intakt\Core\Review\Contract\PromptAssembly';
+    public const string ASSEMBLY = PromptAssembly::class;
     private const array JUDGED_FOLDERS = ['/src/', '/bin/', '/config/'];
-    private const string MESSAGE = 'Symfony\AI\Platform\Message\Message';
+    private const string MESSAGE = Message::class;
     private const array MESSAGE_FACTORIES = ['ofuser', 'forsystem', 'ofassistant'];
-    private const array MESSAGE_CLASSES = ['Symfony\AI\Platform\Message\UserMessage', 'Symfony\AI\Platform\Message\SystemMessage'];
-    private const string CONVERSATION = 'Intakt\Core\Review\Contract\ReviewerConversation';
-    private const string ROLE_HANDLER = 'Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewerHandler';
-    private const string ROUND_REVIEWER = 'Intakt\Core\Review\Domain\RoundReviewer';
+    private const array MESSAGE_CLASSES = [UserMessage::class, SystemMessage::class];
+    private const string CONVERSATION = ReviewerConversation::class;
+    private const string ROLE_HANDLER = ReviewWithReviewerHandler::class;
+    private const string ROUND_REVIEWER = RoundReviewer::class;
     private const string ADVICE = ' builds a model message outside PromptAssembly: build it through '.self::ASSEMBLY.', with Intakt\'s own text as a literal and untrusted text as a FencedText from Fence.';
     private const string ROLE_ADVICE = 'new ReviewerConversation() in ReviewWithReviewerHandler takes a role prompt that is not $reviewer->rolePrompt() of a RoundReviewer: pass the round reviewer\'s rolePrompt() as the role prompt, so only the panel\'s configured prompt reaches PromptAssembly::systemWithRole().';
 
@@ -65,7 +72,7 @@ final readonly class RawPromptMessageRule implements Rule
             default => null,
         };
 
-        return null === $finding ? [] : [$finding];
+        return $finding instanceof IdentifierRuleError ? [$finding] : [];
     }
 
     private function isJudged(Scope $scope): bool
@@ -138,7 +145,7 @@ final readonly class RawPromptMessageRule implements Rule
                 return null;
             }
 
-            if ('rolePrompt' === $argument->name?->toString() || (null === $argument->name && 0 === $position)) {
+            if ('rolePrompt' === $argument->name?->toString() || (!$argument->name instanceof Identifier && 0 === $position)) {
                 return $argument;
             }
         }

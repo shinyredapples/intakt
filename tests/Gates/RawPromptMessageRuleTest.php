@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Gates;
 
+use Intakt\Core\Review\Contract\PromptAssembly;
+use Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewerHandler;
 use Intakt\Gates\PhpStan\RawPromptMessageRule;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -62,7 +64,7 @@ final class RawPromptMessageRuleTest extends PhpStanRuleTestCase
     public function testTheAssemblyClassMayBuildMessages(): void
     {
         $sandbox = $this->emptySandbox();
-        $sandbox->write('src/Core/Review/Contract/PromptAssembly.php', $this->classWithCases('Intakt\Core\Review\Contract\\PromptAssembly', '(string $text)', ['Message::forSystem($text)', 'Message::ofUser($text)', 'new UserMessage(new Text($text))', 'array_map(static fn (string $line): SystemMessage => new SystemMessage($line), [$text])']));
+        $sandbox->write('src/Core/Review/Contract/PromptAssembly.php', $this->classWithCases(PromptAssembly::class, '(string $text)', ['Message::forSystem($text)', 'Message::ofUser($text)', 'new UserMessage(new Text($text))', 'array_map(static fn (string $line): SystemMessage => new SystemMessage($line), [$text])']));
 
         self::assertSame('', $this->ruleFindingsIn($sandbox));
     }
@@ -160,7 +162,7 @@ final class RawPromptMessageRuleTest extends PhpStanRuleTestCase
     {
         $parameters = '(RoundReviewer $reviewer, ?RoundReviewer $maybe, ReviewerConversation $conversation, string $text, UuidV7 $id, array $arguments)';
 
-        return $this->classWithCases('Intakt\Core\Review\UseCase\RunReviewRound\\ReviewWithReviewerHandler', $parameters, $expressions);
+        return $this->classWithCases(ReviewWithReviewerHandler::class, $parameters, $expressions);
     }
 
     /**
