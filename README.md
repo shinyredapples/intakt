@@ -111,6 +111,7 @@ One row per reproduction in `upstream/`, merged first. *Intakt's* marks a pull r
 | symfony/ai | [Failed streamed tool run reports no usage](upstream/ai-agent-streamed-tool-call-cut-stream/) | [comment on #2617](https://github.com/symfony/ai/pull/2617#issuecomment-6876304595) Intakt's, reported |
 | PHPStan | [Readonly type kept after `clone with`](upstream/phpstan-clone-with-readonly-constructor-type/) | [phpstan#14838](https://github.com/phpstan/phpstan/issues/14838) already reported |
 | FrankenPHP | [`php-cli` crashes on SIGTERM](upstream/frankenphp-messenger-consume-sigterm/) | [frankenphp#2479](https://github.com/php/frankenphp/issues/2479) already reported |
+| Doctrine | [A refused commit leaves the transaction open](upstream/dbal-failed-commit-leaves-transaction-open/) | ready to file: fix pull request prepared, not posted yet |
 | MCP SDK | [Three parallel `tools/call` on one session](upstream/mcp-parallel-tools-call-one-session/) | passes, nothing to file |
 | symfony/ai | [Worker-mode state of two models and two MCP sessions](upstream/ai-worker-mode-state/) | passes, nothing to file |
 | symfony/ai | [Structured output with enums and nested lists](upstream/ai-structured-output-enums-nested-lists/) | passes, nothing to file |
