@@ -6,7 +6,6 @@ namespace Intakt\Core\Review\Infrastructure\Repository;
 
 use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\ReviewTool;
-use RuntimeException;
 use Symfony\AI\Agent\Toolbox\Attribute\AsTool;
 use Symfony\AI\Platform\Contract\JsonSchema\Attribute\Schema;
 use Symfony\AI\Platform\Tool\ToolEffectHints;
@@ -31,13 +30,13 @@ final readonly class ReadFile
     public function contentAt(string $real, string $path): string
     {
         if (!is_file($real)) {
-            throw new RuntimeException(sprintf('"%s" is not a file.', $path));
+            throw PathNotReadable::notAFile($path);
         }
 
         $content = file_get_contents($real, length: self::MAX_BYTES + 1);
 
         if (false === $content) {
-            throw new RuntimeException(sprintf('"%s" cannot be read.', $path));
+            throw PathNotReadable::unreadable($path);
         }
 
         // Named by its size, because the answer reaches the provider as JSON, which carries only valid UTF-8, and a binary file holds nothing to review.
@@ -51,7 +50,7 @@ final readonly class ReadFile
 
         // Because the answer reaches the provider as JSON, which carries only valid UTF-8.
         if (!mb_check_encoding($text, 'UTF-8')) {
-            throw new RuntimeException(sprintf('"%s" is not a UTF-8 text file.', $path));
+            throw PathNotReadable::notText($path);
         }
 
         return $truncated ? $text."\n[truncated]" : $text;
@@ -63,7 +62,7 @@ final readonly class ReadFile
         $stream = fopen($real, 'rb');
 
         if (false === $stream) {
-            throw new RuntimeException(sprintf('"%s" cannot be read.', $path));
+            throw PathNotReadable::unreadable($path);
         }
 
         try {
@@ -71,7 +70,7 @@ final readonly class ReadFile
                 $chunk = fread($stream, self::CHUNK_BYTES);
 
                 if (false === $chunk) {
-                    throw new RuntimeException(sprintf('"%s" cannot be read.', $path));
+                    throw PathNotReadable::unreadable($path);
                 }
 
                 if (str_contains($chunk, "\0")) {
@@ -89,6 +88,6 @@ final readonly class ReadFile
     {
         $size = filesize($real);
 
-        return false === $size ? throw new RuntimeException(sprintf('"%s" cannot be read.', $path)) : $size;
+        return false === $size ? throw PathNotReadable::unreadable($path) : $size;
     }
 }
