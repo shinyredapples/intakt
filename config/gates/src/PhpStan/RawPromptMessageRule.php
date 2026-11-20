@@ -112,7 +112,7 @@ final readonly class RawPromptMessageRule implements Rule
     // because `[Message::class, 'ofUser']` is a callable only with exactly the keys 0 and 1, in any written order
     private function callableArrayFinding(Array_ $array, Scope $scope): ?IdentifierRuleError
     {
-        $factories = array_filter(array_map($this->factoryOfCallableArray(...), $scope->getType($array)->getConstantArrays()));
+        $factories = array_filter(array_map($this->factoryOfCallableArray(...), $scope->getType($array)->getConstantArrays()), static fn (?string $factory): bool => null !== $factory);
 
         return [] === $factories ? null : $this->rawMessage('A callable array of Message and '.array_first($factories));
     }
