@@ -111,6 +111,12 @@ services:
         tags:
             - phpstan.rules.rule
     -
+        class: Intakt\Gates\PhpStan\NoPublicTraitSetterRule
+        arguments:
+            root: %currentWorkingDirectory%
+        tags:
+            - phpstan.rules.rule
+    -
         class: Intakt\Gates\PhpStan\TraitSetterDeclarationCollector
         tags:
             - phpstan.collector

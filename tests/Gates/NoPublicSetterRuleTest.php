@@ -8,12 +8,8 @@ use Intakt\Gates\PhpStan\AncestorDeclarations;
 use Intakt\Gates\PhpStan\NoPublicSetterRule;
 use Intakt\Gates\PhpStan\RepositoryCode;
 use Intakt\Gates\PhpStan\SetterMethod;
-use Intakt\Gates\PhpStan\TraitSetterDeclarationCollector;
-use Intakt\Gates\PhpStan\TraitSetterUseCollector;
+use Intakt\Gates\PhpStan\VendorSources;
 use Intakt\Gates\StaticAnalysisGate;
-use Override;
-use PhpParser\Node;
-use PHPStan\Collectors\Collector;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -22,10 +18,9 @@ use PHPUnit\Framework\Attributes\UsesClass;
  * @extends PhpStanRuleTestCase<NoPublicSetterRule>
  */
 #[CoversClass(NoPublicSetterRule::class)]
-#[CoversClass(TraitSetterDeclarationCollector::class)]
-#[CoversClass(TraitSetterUseCollector::class)]
 #[CoversClass(SetterMethod::class)]
-#[CoversClass(AncestorDeclarations::class)]
+#[CoversClass(VendorSources::class)]
+#[UsesClass(AncestorDeclarations::class)]
 #[UsesClass(RepositoryCode::class)]
 #[UsesClass(StaticAnalysisGate::class)]
 final class NoPublicSetterRuleTest extends PhpStanRuleTestCase
@@ -36,15 +31,6 @@ final class NoPublicSetterRuleTest extends PhpStanRuleTestCase
     }
 
     /**
-     * @return list<Collector<covariant Node, mixed>>
-     */
-    #[Override]
-    protected function getCollectors(): array
-    {
-        return [new TraitSetterDeclarationCollector(), new TraitSetterUseCollector()];
-    }
-
-    /**
      * @return iterable<string, non-empty-list<CheckRun|string>>
      */
     public static function casesOfOneRun(): iterable
@@ -52,8 +38,6 @@ final class NoPublicSetterRuleTest extends PhpStanRuleTestCase
         return self::casesOfOnePhpstanRun([
             'AFinalReadonlyServiceWithAPublicSetterFailsStaticAnalysis' => ['public-setter-service', 'src/Mailer.php:13 intakt.noPublicSetter Method Intakt\Sample\Mailer::setSender() is a public setter: no public setters'],
             'AClassImplementingAVendorInterfaceSetterPassesStaticAnalysis' => ['vendor-interface-setter'],
-            'ASetterOfATraitNoClassUsesFailsStaticAnalysis' => ['unused-trait-setter', 'src/Titled.php:9 intakt.noPublicSetter Method Intakt\Sample\Titled::setTitle() is a public setter: no public setters'],
-            'ATraitSetterOverridingAVendorParentInItsOnlyUsingClassPassesStaticAnalysis' => ['vendor-parent-plain-trait-setter'],
         ], 'src/');
     }
 
@@ -138,49 +122,9 @@ final class NoPublicSetterRuleTest extends PhpStanRuleTestCase
         $this->assertRuleRejects('migration-parent-setter', 'src/LocalChild.php:12 intakt.noPublicSetter Method Intakt\Sample\LocalChild::setName() is a public setter');
     }
 
-    public function testASetterOfATraitNoClassUsesFailsStaticAnalysis(): void
+    public function testASetterDeclaredInATraitIsLeftToTheTraitSetterRule(): void
     {
-        $this->assertRuleRejects('unused-trait-setter', 'src/Titled.php:9 intakt.noPublicSetter Method Intakt\Sample\Titled::setTitle() is a public setter');
-    }
-
-    public function testASetterOfAUsedTraitIsReportedOnceWhereTheTraitDeclaresIt(): void
-    {
-        $findings = $this->ruleFindingsOf('used-trait-setter');
-
-        self::assertStringStartsWith('src/Titled.php:9 intakt.noPublicSetter Method Intakt\Sample\Titled::setTitle() is a public setter', $findings);
-        self::assertCount(1, explode("\n", $findings));
-    }
-
-    public function testAnOverridingTraitSetterOfAVendorParentPassesStaticAnalysis(): void
-    {
-        $this->assertRuleAccepts('vendor-parent-trait-setter');
-    }
-
-    public function testATraitSetterOverridingAVendorParentPassesWithoutTheOverrideAttribute(): void
-    {
-        $this->assertRuleAccepts('vendor-parent-plain-trait-setter');
-    }
-
-    public function testATraitSetterIsReportedOnceWhenOneOfItsUsingClassesHasNoVendorParentDeclaringIt(): void
-    {
-        self::assertSame(
-            'src/SharedSetup.php:9 intakt.noPublicSetter Method Intakt\Sample\SharedSetup::setUpBeforeClass() is a public setter',
-            substr($this->ruleFindingsOf('partly-vendor-trait-setter'), 0, 115),
-        );
-    }
-
-    public function testASetterOfAnUnusedTraitFailsStaticAnalysisWithOrWithoutTheOverrideAttribute(): void
-    {
-        $findings = explode("\n", $this->ruleFindingsOf('unused-override-trait-setter'));
-
-        self::assertCount(2, $findings);
-        self::assertStringStartsWith('src/MarkedTrait.php:11 intakt.noPublicSetter Method Intakt\Sample\MarkedTrait::setTitle() is a public setter', $findings[0]);
-        self::assertStringStartsWith('src/PlainTrait.php:9 intakt.noPublicSetter Method Intakt\Sample\PlainTrait::setTitle() is a public setter', $findings[1]);
-    }
-
-    public function testAnOverridingTraitSetterOfARepositoryParentFailsStaticAnalysis(): void
-    {
-        $this->assertRuleRejects('repository-parent-trait-setter', 'src/Renaming.php:11 intakt.noPublicSetter Method Intakt\Sample\Renaming::setName() is a public setter');
+        $this->assertRuleAccepts('used-trait-setter');
     }
 
     public function testATraitMethodAliasedToAPublicSetterFailsStaticAnalysis(): void
