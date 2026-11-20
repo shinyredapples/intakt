@@ -121,10 +121,14 @@ final readonly class StoredFindings
         return $ids;
     }
 
-    // Taken by a judging before it reads anything else, because two rounds of the change judged at once would otherwise each miss the other's judgement, and the first plain read fixes the snapshot under REPEATABLE READ.
+    // Taken by a judging before it reads anything else, because two rounds of the change judged at once would otherwise each miss the other's judgement: under REPEATABLE READ the first plain read fixes the snapshot, so the lock is taken by a write and a locking read, never after a plain lookup. The row exists, because opening the round created it; one that does not is created as a round's opening does.
     public function lockChangeOf(ReviewRound $round): void
     {
-        $this->locked($round->project(), $round->change());
+        $this->entities->getConnection()->executeStatement('UPDATE change_findings SET rounds = rounds WHERE project = ? AND change_ref = ?', [$round->project(), $round->change()]);
+
+        if (!$this->entities->find(ChangeFindings::class, ['project' => $round->project(), 'change' => $round->change()], LockMode::PESSIMISTIC_WRITE) instanceof ChangeFindings) {
+            $this->locked($round->project(), $round->change());
+        }
     }
 
     // False when the round is judged already, so a judgement is recorded once however often the round is judged; the caller holds the round's lock.

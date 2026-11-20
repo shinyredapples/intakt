@@ -35,9 +35,4 @@ final readonly class FlaggedRound
 
         $this->places = $places;
     }
-
-    public function flagsBefore(self $later, string $key): bool
-    {
-        return $this->number < $later->number && $this->head !== $later->head && isset($this->places[$key]);
-    }
 }

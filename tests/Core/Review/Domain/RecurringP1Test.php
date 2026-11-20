@@ -41,31 +41,37 @@ final class RecurringP1Test extends TestCase
 
     public function testHeadsABBJudgedInOrderRecordTwoRecurrences(): void
     {
-        $rule = new RecurringP1();
-        $first = $this->flagging(1, 'A');
-        $second = $this->flagging(2, 'B');
-        $third = $this->flagging(3, 'B');
-
-        $found = [...$rule->foundWhenJudged($first, []), ...$rule->foundWhenJudged($second, [$first]), ...$rule->foundWhenJudged($third, [$first, $second])];
-
-        self::assertSame(['round-2', 'round-3'], $this->roundsOf($found));
+        self::assertSame(['round-2', 'round-3'], $this->recordedJudging(['A', 'B', 'B'], [1, 2, 3]));
     }
 
     public function testHeadsABBJudgedInReverseOrderRecordTheSameTwoRecurrences(): void
     {
-        $rule = new RecurringP1();
-        $first = $this->flagging(1, 'A');
-        $second = $this->flagging(2, 'B');
-        $third = $this->flagging(3, 'B');
-
-        $found = [...$rule->foundWhenJudged($third, []), ...$rule->foundWhenJudged($second, [$third]), ...$rule->foundWhenJudged($first, [$third, $second])];
-
-        self::assertSame(['round-2', 'round-3'], $this->roundsOf($found));
+        self::assertSame(['round-2', 'round-3'], $this->recordedJudging(['A', 'B', 'B'], [3, 2, 1]));
     }
 
-    public function testALaterRoundThatRecurredAlreadyIsNotRecordedAgainWhenAnotherEarlierRoundIsJudged(): void
+    public function testHeadsABAJudgedInOrderRecordOnlyTheRoundOnB(): void
     {
-        $found = new RecurringP1()->foundWhenJudged($this->flagging(1, 'A'), [$this->flagging(3, 'C'), $this->flagging(2, 'B')]);
+        self::assertSame(['round-2'], $this->recordedJudging(['A', 'B', 'A'], [1, 2, 3]));
+    }
+
+    public function testHeadsABAJudgedInReverseOrderRecordOnlyTheRoundOnB(): void
+    {
+        self::assertSame(['round-2'], $this->recordedJudging(['A', 'B', 'A'], [3, 2, 1]));
+    }
+
+    public function testHeadsABCJudgedInAnyOrderRecordTheRoundsOnBAndC(): void
+    {
+        self::assertSame(['round-2', 'round-3'], $this->recordedJudging(['A', 'B', 'C'], [2, 3, 1]));
+    }
+
+    public function testALaterRoundJudgedWhileAnEarlierRoundMayStillBeJudgedRecordsNothingYet(): void
+    {
+        self::assertSame([], new RecurringP1()->foundWhenJudged($this->flagging(3, 'A'), [$this->flagging(2, 'B')], [1]));
+    }
+
+    public function testARoundThatMayStillBeJudgedAfterTheFirstToFlagHoldsNothingBack(): void
+    {
+        $found = new RecurringP1()->foundWhenJudged($this->flagging(2, 'B'), [$this->flagging(1, 'A')], [3]);
 
         self::assertSame(['round-2'], $this->roundsOf($found));
     }
@@ -103,6 +109,29 @@ final class RecurringP1Test extends TestCase
         $finding = 'F'.$number;
 
         return new FlaggedRound($number, $head, new JudgeDone('round-'.$number, [$finding], [], [], p1Keys: [$finding => self::KEY]));
+    }
+
+    // Each round judged in the order given, with the rounds not judged yet still to judge, as a change's rounds meet the rule.
+    /**
+     * @param list<string> $heads
+     * @param list<int>    $order
+     *
+     * @return list<string>
+     */
+    private function recordedJudging(array $heads, array $order): array
+    {
+        $rule = new RecurringP1();
+        $judged = [];
+        $found = [];
+
+        foreach ($order as $number) {
+            $pending = array_values(array_diff($order, [$number], array_map(static fn (FlaggedRound $round): int => $round->number, $judged)));
+            $round = $this->flagging($number, $heads[$number - 1]);
+            $found = [...$found, ...$rule->foundWhenJudged($round, $judged, $pending)];
+            $judged[] = $round;
+        }
+
+        return $this->roundsOf($found);
     }
 
     /**

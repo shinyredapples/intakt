@@ -7,56 +7,68 @@ namespace Intakt\Core\Review\Domain;
 use Intakt\Core\Review\Contract\RecurringP1Found;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
-// A round's P1 recurs when an earlier round (by number) of another head flagged its place; plain code decides it, because no reviewer's text may start an escalation. The rule only grows as rounds are judged, so every judging order ends with the same recurrences.
+// A place recurs on each round that flags it on another head than the first round (by number) that flagged it; plain code decides it, because no reviewer's text may start an escalation. A place is decided only once no earlier round of the change can still be judged, because that round could turn out to be the first, so a decided recurrence stays decided and a judging records exactly the ones it decides, in every judging order.
 #[Exclude]
 final readonly class RecurringP1
 {
     /**
      * @param list<FlaggedRound> $others
+     * @param list<int>          $pending
      *
      * @return list<RecurringP1Found>
      */
-    public function foundWhenJudged(FlaggedRound $judged, array $others): array
+    public function foundWhenJudged(FlaggedRound $judged, array $others, array $pending = []): array
     {
-        return [...$this->recurrencesOf($judged, $others), ...$this->laterRecurrencesAgainst($judged, $others)];
+        $before = $this->decided($others, [...$pending, $judged->number]);
+
+        return array_values(array_filter(
+            $this->decided([...$others, $judged], $pending),
+            static fn (RecurringP1Found $found): bool => !array_any($before, static fn (RecurringP1Found $known): bool => $known->round === $found->round && $known->key === $found->key),
+        ));
     }
 
     /**
-     * @param list<FlaggedRound> $others
+     * @param list<FlaggedRound> $judged
+     * @param list<int>          $pending
      *
      * @return list<RecurringP1Found>
      */
-    private function recurrencesOf(FlaggedRound $round, array $others): array
+    private function decided(array $judged, array $pending): array
     {
         $found = [];
 
-        foreach ($round->places as $key => $finding) {
-            if (array_any($others, static fn (FlaggedRound $earlier): bool => $earlier->flagsBefore($round, $key))) {
-                $found[] = new RecurringP1Found($round->id, $finding, $key);
+        foreach ($this->firstToFlag($judged) as $key => $first) {
+            if (array_any($pending, static fn (int $number): bool => $number < $first->number)) {
+                continue;
             }
-        }
 
-        return $found;
-    }
-
-    // Only a place no other earlier round of another head flagged, because a later round judged first recurred already when that earlier round was judged.
-    /**
-     * @param list<FlaggedRound> $others
-     *
-     * @return list<RecurringP1Found>
-     */
-    private function laterRecurrencesAgainst(FlaggedRound $judged, array $others): array
-    {
-        $found = [];
-
-        foreach ($others as $later) {
-            foreach ($later->places as $key => $finding) {
-                if ($judged->flagsBefore($later, $key) && !array_any($others, static fn (FlaggedRound $earlier): bool => $earlier->flagsBefore($later, $key))) {
-                    $found[] = new RecurringP1Found($later->id, $finding, $key);
+            foreach ($judged as $round) {
+                if ($round->head !== $first->head && isset($round->places[$key])) {
+                    $found[] = new RecurringP1Found($round->id, $round->places[$key], $key);
                 }
             }
         }
 
         return $found;
+    }
+
+    /**
+     * @param list<FlaggedRound> $judged
+     *
+     * @return array<string, FlaggedRound>
+     */
+    private function firstToFlag(array $judged): array
+    {
+        $first = [];
+
+        foreach ($judged as $round) {
+            foreach (array_keys($round->places) as $key) {
+                if (!isset($first[$key]) || $round->number < $first[$key]->number) {
+                    $first[$key] = $round;
+                }
+            }
+        }
+
+        return $first;
     }
 }

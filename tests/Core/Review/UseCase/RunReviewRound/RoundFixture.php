@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Review\UseCase\RunReviewRound;
 
 use Doctrine\DBAL\Configuration;
+use Doctrine\DBAL\Driver\Middleware;
 use Doctrine\DBAL\DriverManager;
 use Doctrine\DBAL\Platforms\SQLitePlatform;
 use Doctrine\ORM\EntityManager;
@@ -236,12 +237,27 @@ final readonly class RoundFixture
 
     public function judge(Vendor $vendor): JudgeRoundHandler
     {
-        return new JudgeRoundHandler(new JudgedRounds($this->rounds($this->entities), $this->storedFindingsOn($this->entities), $this->roundLedger($this->ledger), new ChangeText(new DiffPaths()), new DiffHunks(new DiffPaths()), new DiffPaths(), new StoredVerdicts($this->serializer), $this->noFailedJudgings(), $this->recurringP1s($this->ledger)), $vendor, $this->events);
+        return $this->judgeOn($this->entities, $this->ledger, $vendor);
+    }
+
+    // On the entity manager and ledger the test names, so two workers can judge rounds of one change in the order the test forces.
+    public function judgeOn(EntityManagerInterface $entities, Ledger $ledger, Vendor $vendor): JudgeRoundHandler
+    {
+        return new JudgeRoundHandler(new JudgedRounds($this->rounds($entities, $ledger), $this->storedFindingsOn($entities), $this->roundLedger($ledger), new ChangeText(new DiffPaths()), new DiffHunks(new DiffPaths()), new DiffPaths(), new StoredVerdicts($this->serializer), $this->noFailedJudgings(), $this->recurringP1sOn($entities, $ledger)), $vendor, $this->events);
     }
 
     public function recurringP1s(Ledger $ledger): RecurringP1s
     {
-        return new RecurringP1s($this->rounds($this->entities), $ledger, $this->ledgerPayloads());
+        return $this->recurringP1sOn($this->entities, $ledger);
+    }
+
+    // Another worker's entity manager on its own connection through the middleware, in WAL on SQLite, so the test sees and orders what that worker runs.
+    public function entitiesThrough(Middleware $middleware): EntityManagerInterface
+    {
+        $this->useWalOnSqlite();
+        $connection = DriverManager::getConnection($this->entities->getConnection()->getParams(), new Configuration()->setMiddlewares([$middleware]));
+
+        return new EntityManager($connection, $this->entities->getConfiguration());
     }
 
     // The application's queue, because the round's workflow, taken from the container, queues the judging through the application's bus.
@@ -405,6 +421,11 @@ final readonly class RoundFixture
     private function rounds(EntityManagerInterface $entities, ?Ledger $ledger = null): ReviewRounds
     {
         return new ReviewRounds($entities, $this->clock, $this->storedFindingsOn($entities), $this->roundLedger($ledger ?? $this->ledger));
+    }
+
+    private function recurringP1sOn(EntityManagerInterface $entities, Ledger $ledger): RecurringP1s
+    {
+        return new RecurringP1s($this->rounds($entities, $ledger), $ledger, $this->ledgerPayloads(), new FailedJudgings(new InMemoryTransport(), $ledger, $this->ledgerPayloads()));
     }
 
     private function storedFindingsOn(EntityManagerInterface $entities): StoredFindings

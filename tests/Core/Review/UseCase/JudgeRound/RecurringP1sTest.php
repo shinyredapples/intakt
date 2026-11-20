@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\JudgeRound;
 
+use Intakt\Core\Ledger\Contract\Ledger;
+use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\Decision;
@@ -17,6 +19,7 @@ use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\FlaggedRound;
 use Intakt\Core\Review\Domain\RecurringP1;
 use Intakt\Core\Review\Domain\ReviewRound;
+use Intakt\Core\Review\UseCase\JudgeRound\FailedJudgings;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgedRounds;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRound;
 use Intakt\Core\Review\UseCase\JudgeRound\RecurringP1s;
@@ -25,6 +28,7 @@ use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
 use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\VerdictPerRole;
+use Intakt\Tests\Core\HandBack\RecordingLedger;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
@@ -37,6 +41,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[CoversClass(ReviewRounds::class)]
 #[CoversClass(StoredFindings::class)]
 #[CoversClass(ReviewRound::class)]
+#[UsesClass(FailedJudgings::class)]
 #[UsesClass(RecurringP1::class)]
 #[UsesClass(FlaggedRound::class)]
 #[UsesClass(RecurringP1Found::class)]
@@ -45,6 +50,8 @@ final class RecurringP1sTest extends KernelTestCase
 {
     private const string HEAD_A = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
     private const string HEAD_B = 'cccccccccccccccccccccccccccccccccccccccc';
+    private const string HEAD_C = 'dddddddddddddddddddddddddddddddddddddddd';
+    private const string CHANGE_LOCK = 'UPDATE change_findings';
 
     private RoundFixture $fixture;
 
@@ -94,6 +101,62 @@ final class RecurringP1sTest extends KernelTestCase
         $expected = [$second, $third];
         sort($expected);
         self::assertSame($expected, $rounds);
+    }
+
+    public function testRoundsOnHeadsABAJudgedInOrderRecordOnlyTheRoundOnB(): void
+    {
+        [$first, $second, $third] = [$this->roundAt(self::HEAD_A), $this->roundAt(self::HEAD_B), $this->roundAt(self::HEAD_A)];
+
+        array_map($this->judge(...), [$first, $second, $third]);
+
+        self::assertSame([$second], array_column($this->recurrences(), 'round'));
+    }
+
+    public function testRoundsOnHeadsABAJudgedInReverseOrderRecordOnlyTheRoundOnB(): void
+    {
+        [$first, $second, $third] = [$this->roundAt(self::HEAD_A), $this->roundAt(self::HEAD_B), $this->roundAt(self::HEAD_A)];
+
+        array_map($this->judge(...), [$third, $second, $first]);
+
+        self::assertSame([$second], array_column($this->recurrences(), 'round'));
+    }
+
+    public function testARoundWhoseJudgingFailedForGoodHoldsNoRecurrenceBack(): void
+    {
+        $failed = $this->roundAt(self::HEAD_C);
+        (void) $this->fixture->ledger()->append(new LedgerEvent(LedgerEventKind::JudgingFailed, json_encode(['round' => $failed], JSON_THROW_ON_ERROR)));
+        $this->judge($this->roundAt(self::HEAD_A));
+        $third = $this->roundAt(self::HEAD_B);
+
+        $this->judge($third);
+
+        self::assertSame([$third], array_column($this->recurrences(), 'round'));
+    }
+
+    public function testARoundJudgedWhileAnotherRoundOfTheChangeCommitsItsJudgingRecordsTheRecurrence(): void
+    {
+        [$first, $second] = [$this->roundAt(self::HEAD_A), $this->roundAt(self::HEAD_B)];
+        $ledger = new RecordingLedger();
+        $judgeTheFirst = fn (): null => $this->fixture->judgeOn($this->fixture->entities, $ledger, $this->scripted())(new JudgeRound($first));
+        $worker = $this->fixture->entitiesThrough(new WatchedStatements(self::CHANGE_LOCK, $judgeTheFirst));
+
+        $this->fixture->judgeOn($worker, $ledger, $this->scripted())(new JudgeRound($second));
+
+        self::assertSame([$second], array_column($this->recurrences($ledger), 'round'));
+    }
+
+    // The order MySQL needs: a plain read before the change's lock fixes a REPEATABLE READ snapshot that misses a judging committed while the lock was awaited.
+    public function testAJudgingTakesTheChangesLockBeforeItReadsAnythingButItsRound(): void
+    {
+        $round = $this->roundAt(self::HEAD_A);
+        $watched = new WatchedStatements(self::CHANGE_LOCK, static fn (): null => null);
+
+        $this->fixture->judgeOn($this->fixture->entitiesThrough($watched), new RecordingLedger(), $this->scripted())(new JudgeRound($round));
+
+        $lock = array_find_key($watched->seen, static fn (string $sql): bool => str_starts_with($sql, self::CHANGE_LOCK));
+        self::assertIsInt($lock);
+        self::assertStringContainsString('FROM review_round', $watched->seen[$lock - 1]);
+        self::assertSame([], array_filter(array_slice($watched->seen, 0, $lock), static fn (string $sql): bool => str_contains($sql, 'change_findings')));
     }
 
     public function testAP1NamingNoFileIsNeverRecurring(): void
@@ -164,7 +227,12 @@ final class RecurringP1sTest extends KernelTestCase
 
     private function judge(string $roundId): void
     {
-        $this->fixture->judge(new ScriptedJudgement(new Judgement([])))(new JudgeRound($roundId));
+        $this->fixture->judge($this->scripted())(new JudgeRound($roundId));
+    }
+
+    private function scripted(): ScriptedJudgement
+    {
+        return new ScriptedJudgement(new Judgement([]));
     }
 
     // Names a file of the fixture's checkout, so the P1 gets a key, and is a regression, so the goalpost rule keeps it a P1 in a later round.
@@ -176,10 +244,10 @@ final class RecurringP1sTest extends KernelTestCase
     /**
      * @return list<array{round: string, finding: string, key: string}>
      */
-    private function recurrences(): array
+    private function recurrences(?Ledger $ledger = null): array
     {
         /** @var list<array{round: string, finding: string, key: string}> $payloads */
-        $payloads = array_map(static fn (RecordedEvent $event): mixed => json_decode($event->event->payload, true, 8, JSON_THROW_ON_ERROR), iterator_to_array($this->fixture->ledger()->readOfKind(LedgerEventKind::RecurringP1Found), false));
+        $payloads = array_map(static fn (RecordedEvent $event): mixed => json_decode($event->event->payload, true, 8, JSON_THROW_ON_ERROR), iterator_to_array(($ledger ?? $this->fixture->ledger())->readOfKind(LedgerEventKind::RecurringP1Found), false));
 
         return $payloads;
     }
