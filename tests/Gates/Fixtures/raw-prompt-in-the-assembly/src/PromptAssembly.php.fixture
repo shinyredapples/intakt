@@ -1,0 +1,45 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use Intakt\Core\Review\Contract\FencedText;
+use Intakt\Core\Review\Contract\ReviewerConversation;
+use Symfony\AI\Platform\Message\AssistantMessage;
+use Symfony\AI\Platform\Message\Content\Text;
+use Symfony\AI\Platform\Message\Message;
+use Symfony\AI\Platform\Message\SystemMessage;
+use Symfony\AI\Platform\Message\UserMessage;
+
+final readonly class PromptAssembly
+{
+    /**
+     * @param literal-string $instructions
+     */
+    public function system(string $instructions): SystemMessage
+    {
+        return Message::forSystem($instructions);
+    }
+
+    /**
+     * @param literal-string $instructions
+     */
+    public function systemWithRole(string $instructions, ReviewerConversation $conversation): SystemMessage
+    {
+        return new SystemMessage($instructions."\n\n".$conversation->rolePrompt);
+    }
+
+    /**
+     * @param literal-string $lead
+     */
+    public function user(string $lead, FencedText $body): UserMessage
+    {
+        return new UserMessage(new Text($lead."\n\n".$body->rendered()));
+    }
+
+    public function answer(FencedText $answer): AssistantMessage
+    {
+        return Message::ofAssistant($answer->rendered());
+    }
+}

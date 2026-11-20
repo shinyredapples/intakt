@@ -1,0 +1,22 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use Symfony\AI\Platform\Message\Content\Text;
+use Symfony\AI\Platform\Message\SystemMessage;
+use Symfony\AI\Platform\Message\UserMessage;
+
+final readonly class Briefing
+{
+    public function role(string $role): SystemMessage
+    {
+        return new SystemMessage($role);
+    }
+
+    public function about(string $issueText): UserMessage
+    {
+        return new UserMessage(new Text($issueText));
+    }
+}

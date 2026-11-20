@@ -1,0 +1,27 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use Intakt\Core\Review\Contract\ReviewerConversation;
+use Intakt\Core\Review\Domain\RoundReviewer;
+
+final readonly class ReviewWithReviewerHandler
+{
+    /**
+     * @param array{string, \Symfony\Component\Uid\UuidV7} $arguments
+     */
+    public function conversationFrom(array $arguments): ReviewerConversation
+    {
+        return new ReviewerConversation(...$arguments);
+    }
+
+    /**
+     * @param list<\Symfony\Component\Uid\Uuid> $ids
+     */
+    public function conversationWithUnpackedIds(RoundReviewer $reviewer, array $ids): ReviewerConversation
+    {
+        return new ReviewerConversation($reviewer->rolePrompt(), $reviewer->conversationId(), ...$ids);
+    }
+}

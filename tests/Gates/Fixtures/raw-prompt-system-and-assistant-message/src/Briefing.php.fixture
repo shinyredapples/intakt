@@ -1,0 +1,22 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use Symfony\AI\Platform\Message\AssistantMessage;
+use Symfony\AI\Platform\Message\Message;
+use Symfony\AI\Platform\Message\SystemMessage;
+
+final readonly class Briefing
+{
+    public function role(): SystemMessage
+    {
+        return Message::forSystem('You review for correctness.');
+    }
+
+    public function earlierAnswer(string $answer): AssistantMessage
+    {
+        return Message::ofAssistant($answer);
+    }
+}

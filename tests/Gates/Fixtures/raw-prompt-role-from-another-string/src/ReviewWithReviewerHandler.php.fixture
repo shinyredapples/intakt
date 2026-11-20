@@ -1,0 +1,24 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use Intakt\Core\Review\Contract\ReviewerConversation;
+use Intakt\Core\Review\Domain\RoundReviewer;
+
+final readonly class ReviewWithReviewerHandler
+{
+    public function conversationOf(RoundReviewer $reviewer): ReviewerConversation
+    {
+        return new ReviewerConversation($reviewer->round()->task(), $reviewer->conversationId());
+    }
+
+    public function namedConversationOf(RoundReviewer $reviewer, string $comment): ReviewerConversation
+    {
+        return new ReviewerConversation(
+            id: $reviewer->conversationId(),
+            rolePrompt: $comment,
+        );
+    }
+}

@@ -1,0 +1,17 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+final readonly class Commenter
+{
+    public function __construct(private string $comment)
+    {
+    }
+
+    public function rolePrompt(): string
+    {
+        return $this->comment;
+    }
+}

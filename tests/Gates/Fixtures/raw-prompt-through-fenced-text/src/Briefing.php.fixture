@@ -1,0 +1,25 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use Intakt\Core\Review\Contract\FencedText;
+use Intakt\Core\Review\Contract\ReviewerConversation;
+use Intakt\Core\Review\Contract\UntrustedSource;
+use Symfony\AI\Platform\Message\MessageBag;
+
+final readonly class Briefing
+{
+    public function __construct(private PromptAssembly $assembly)
+    {
+    }
+
+    public function about(ReviewerConversation $conversation, string $issueText): MessageBag
+    {
+        return new MessageBag(
+            $this->assembly->systemWithRole('You review a change.', $conversation),
+            $this->assembly->user('The task:', new FencedText(UntrustedSource::Task, $issueText)),
+        );
+    }
+}

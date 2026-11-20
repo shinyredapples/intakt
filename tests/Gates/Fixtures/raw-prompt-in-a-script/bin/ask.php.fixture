@@ -1,0 +1,11 @@
+<?php
+
+declare(strict_types=1);
+
+use Symfony\AI\Platform\Message\Message;
+use Symfony\AI\Platform\Message\MessageBag;
+
+function messagesFor(string $question, string $factory): MessageBag
+{
+    return new MessageBag(Message::ofUser($question), Message::{$factory}($question));
+}

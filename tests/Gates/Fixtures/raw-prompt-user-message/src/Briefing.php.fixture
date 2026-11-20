@@ -1,0 +1,16 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use Symfony\AI\Platform\Message\Message;
+use Symfony\AI\Platform\Message\UserMessage;
+
+final readonly class Briefing
+{
+    public function about(string $issueText): UserMessage
+    {
+        return Message::ofUser($issueText);
+    }
+}

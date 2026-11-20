@@ -98,3 +98,13 @@ services:
             root: %currentWorkingDirectory%
         tags:
             - phpstan.rules.rule
+    -
+        class: Intakt\Gates\PhpStan\RawPromptMessageRule
+        arguments:
+            root: %currentWorkingDirectory%
+            assembly: Intakt\Core\Review\Contract\PromptAssembly
+            handler: Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewerHandler
+            conversation: Intakt\Core\Review\Contract\ReviewerConversation
+            roundReviewer: Intakt\Core\Review\Domain\RoundReviewer
+        tags:
+            - phpstan.rules.rule
