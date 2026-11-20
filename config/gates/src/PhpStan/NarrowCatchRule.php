@@ -66,7 +66,7 @@ final readonly class NarrowCatchRule implements Rule
 
         $source = (string) file_get_contents($scope->getFile());
 
-        return array_values(array_merge(...array_map(fn (TryCatch $try): array => $this->findingsIn($try, $source), $tries)));
+        return array_merge(...array_map(fn (TryCatch $try): array => $this->findingsIn($try, $source), $tries));
     }
 
     /**
@@ -78,8 +78,10 @@ final readonly class NarrowCatchRule implements Rule
         $before = $try->stmts;
 
         foreach ($try->catches as $catch) {
+            $marked = $this->hasBoundaryCommentAbove($catch, $before, $source);
+
             foreach ($this->genericTypesOf($catch) as $type) {
-                $findings[] = $this->findingFor($type, $catch, $before, $source);
+                $findings[] = $this->findingFor($type, $catch, $marked);
             }
 
             $before = $catch->stmts;
@@ -104,16 +106,13 @@ final readonly class NarrowCatchRule implements Rule
         return in_array(strtolower($name), array_map(strtolower(...), [Throwable::class, ...self::ROOTS]), true);
     }
 
-    /**
-     * @param array<Stmt> $before
-     */
-    private function findingFor(string $type, Catch_ $catch, array $before, string $source): ?IdentifierRuleError
+    private function findingFor(string $type, Catch_ $catch, bool $marked): ?IdentifierRuleError
     {
         if (0 !== strcasecmp($type, Throwable::class)) {
             return $this->finding($catch, sprintf('A catch of %s: name the failures the code expects (a library\'s own exception base or a domain exception); only %s may be caught, and only at a failure boundary.', $type, Throwable::class));
         }
 
-        if (!$this->hasBoundaryCommentAbove($catch, $before, $source)) {
+        if (!$marked) {
             return $this->finding($catch, sprintf('A catch of %s outside a failure boundary: name the failures the code expects, or, where it rethrows or records the failure, put a "// Boundary: <what it protects>" line directly above the catch.', Throwable::class));
         }
 
@@ -149,7 +148,7 @@ final readonly class NarrowCatchRule implements Rule
         );
     }
 
-    // a comment trailing code on its line annotates that code, not the catch below it
+    // because a comment trailing code on its line annotates that code, not the catch below it
     private function startsItsLine(Comment $comment, string $source): bool
     {
         $start = $comment->getStartFilePos();
