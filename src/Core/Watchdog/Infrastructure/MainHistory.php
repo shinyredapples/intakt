@@ -53,6 +53,11 @@ final readonly class MainHistory implements CommitHistory
         'ecdsa-sha2-nistp521' => '30819b301006072a8648ce3d020106052b8104002303818600',
     ];
 
+    // OpenSSH's own minimum, because a shorter modulus is a key ssh-keygen refuses to verify with.
+    private const int RSA_MINIMUM_BITS = 1024;
+
+    private const string UNCOMPRESSED_POINT = "\x04";
+
     /** @var list<string> */
     private array $ownerKeys;
 
@@ -144,21 +149,39 @@ final readonly class MainHistory implements CommitHistory
             is_int($rule) => strlen($fields[$index]) === $rule,
             is_string($rule) => $fields[$index] === $rule,
             default => '' !== $fields[$index],
-        }) && $this->isOnItsCurve($plain, $fields);
+        }) && $this->isAKeyOpenSshReads($plain, $fields);
     }
 
     /**
      * @param list<string> $fields
      */
-    private function isOnItsCurve(string $plain, array $fields): bool
+    private function isAKeyOpenSshReads(string $plain, array $fields): bool
+    {
+        // The second field is the RSA modulus or the ECDSA point, the one part ssh-keygen judges beyond its length.
+        return match ($plain) {
+            'ssh-ed25519' => true,
+            'ssh-rsa' => $this->modulusBits($fields[1]) >= self::RSA_MINIMUM_BITS,
+            default => $this->isOnItsCurve($plain, $fields[1]),
+        };
+    }
+
+    private function modulusBits(string $modulus): int
+    {
+        $significant = ltrim($modulus, "\x00");
+
+        return '' === $significant ? 0 : (strlen($significant) - 1) * 8 + strlen(decbin(ord($significant[0])));
+    }
+
+    private function isOnItsCurve(string $plain, string $point): bool
     {
         $head = self::CURVE_KEY_HEADS[$plain] ?? null;
-        if (null === $head) {
-            return true;
+        // Uncompressed only, because OpenSSH reads no other point form, while OpenSSL would also decode a hybrid one.
+        if (null === $head || !str_starts_with($point, self::UNCOMPRESSED_POINT)) {
+            return false;
         }
 
         // A point of the right length may still lie off the curve, and ssh-keygen would then refuse every signature the owner makes.
-        $der = hex2bin($head).$fields[1];
+        $der = hex2bin($head).$point;
 
         return false !== openssl_pkey_get_public("-----BEGIN PUBLIC KEY-----\n".chunk_split(base64_encode($der), 64, "\n")."-----END PUBLIC KEY-----\n");
     }

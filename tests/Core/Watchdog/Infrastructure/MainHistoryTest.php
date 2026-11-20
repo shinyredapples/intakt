@@ -378,6 +378,24 @@ final class MainHistoryTest extends TestCase
     /**
      * @return iterable<string, array{string}>
      */
+    public static function keysAtTheShapeLimits(): iterable
+    {
+        yield 'an rsa modulus of exactly 1024 bits after a leading zero byte' => [self::key('ssh-rsa', ['ssh-rsa', "\x01\x00\x01", "\x00\x80".str_repeat("\x01", 127)])];
+        yield 'an uncompressed ecdsa point on its curve' => [self::key('ecdsa-sha2-nistp256', ['ecdsa-sha2-nistp256', 'nistp256', self::P256_GENERATOR])];
+    }
+
+    #[DataProvider('keysAtTheShapeLimits')]
+    public function testAnOwnerKeyAtTheShapeLimitsIsAcceptedAndFailsClosedForAForeignSignature(string $key): void
+    {
+        $this->repository->commitEmpty('Seen');
+        $signed = $this->repository->commitSignedWith($this->privateKey('stranger'), 'Foreign change');
+
+        self::assertSame(SignatureStatus::UnknownKey, $this->history([$key])->signatureOf($signed));
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
     public static function refusedKeys(): iterable
     {
         $type = 'ssh-ed25519';
@@ -397,6 +415,9 @@ final class MainHistoryTest extends TestCase
         yield 'an ecdsa point off its curve' => [self::key('ecdsa-sha2-nistp256', ['ecdsa-sha2-nistp256', 'nistp256', "\x04".str_repeat("\x00", 64)])];
         $securityKeyType = sprintf('sk-%s@openssh.com', 'ecdsa-sha2-nistp256');
         yield 'a security key point off its curve' => [self::key($securityKeyType, [$securityKeyType, 'nistp256', "\x04".str_repeat("\x01", 64), 'ssh:'])];
+        yield 'an rsa modulus of zero' => [self::key('ssh-rsa', ['ssh-rsa', "\x01\x00\x01", "\x00"])];
+        yield 'an rsa modulus of 1023 bits' => [self::key('ssh-rsa', ['ssh-rsa', "\x01\x00\x01", "\x00\x7f".str_repeat("\xff", 127)])];
+        yield 'an ecdsa point in hybrid form' => [self::key('ecdsa-sha2-nistp256', ['ecdsa-sha2-nistp256', 'nistp256', "\x07".substr(self::P256_GENERATOR, 1)])];
         yield 'a key type the check does not know' => [self::key('ssh-unknown', ['ssh-unknown', str_repeat("\x01", 32)])];
         yield 'a second line' => ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIA test\nowner ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIB"];
         yield 'an allowed-signers option' => ['cert-authority ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIA'];
