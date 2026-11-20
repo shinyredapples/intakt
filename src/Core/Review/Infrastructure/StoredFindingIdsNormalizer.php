@@ -5,19 +5,19 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\Infrastructure;
 
 use Intakt\Core\Review\Contract\FindingIds;
-use WeakMap;
 use Symfony\Component\DependencyInjection\Attribute\AutoconfigureTag;
 use Symfony\Component\Serializer\Exception\LogicException;
 use Symfony\Component\Serializer\Exception\UnexpectedValueException;
 use Symfony\Component\Serializer\Normalizer\DenormalizerInterface;
 use Symfony\Component\Serializer\Normalizer\NormalizerInterface;
+use WeakMap;
 
 // Only on the stored serializer, because judge_done rows keep finding ids as a JSON list, as they were written before the ids were one value.
 #[AutoconfigureTag('serializer.normalizer', ['serializer' => 'stored'])]
 final class StoredFindingIdsNormalizer implements NormalizerInterface, DenormalizerInterface
 {
     /** @var WeakMap<FindingIds, array<int|string, string>> */
-    private WeakMap $keysRead;
+    private readonly WeakMap $keysRead;
 
     public function __construct()
     {
