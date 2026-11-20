@@ -22,8 +22,10 @@ final readonly class FindingKeys
     private const string CITATION = '/^(.+?)(?::\d+(?:[-:]\d+)?)?\.?$/u';
     private const string QUOTED_OR_SPACE = '/((?<!`)(`+)(?!`)[^\n]+?(?<!`)\2(?!`)|"[^"]*")|\s+/u';
 
-    public function __construct(private NamesCutAtASpace $namesCutAtASpace = new NamesCutAtASpace())
-    {
+    public function __construct(
+        private NamesCutAtASpace $namesCutAtASpace = new NamesCutAtASpace(),
+        private NamesOutsideCitations $namesOutsideCitations = new NamesOutsideCitations(),
+    ) {
     }
 
     public function of(Finding $finding, string $checkoutRoot): ?FindingKey
@@ -53,18 +55,41 @@ final readonly class FindingKeys
         $words = $this->wordsOf($finding->text);
         $citations = array_values(array_filter(array_unique([...$this->codeSpansOf($finding->text), ...$words]), $this->mayNameAFile(...)));
 
+        $withDirectory = $this->withDirectory($citations);
+        $withoutDirectory = $this->withoutDirectory($citations);
+        $atPaths = array_map(fn (string $path): array|false => $this->fileAtPath($checkout, $path), $withDirectory);
+        $carrying = array_map(fn (string $name): array|false => $this->fileCarrying($checkout, $fileNames, $name), $withoutDirectory);
+
         $found = [
             $this->fileOfTheFileField($checkout, $finding->file),
             $this->namesCutAtASpace->anyIn($checkout, $fileNames, [...$words, ...$this->rawWordsOf($finding->text)]) ? false : [],
-            ...array_map(fn (string $path): array|false => $this->fileAtPath($checkout, $path), $this->withDirectory($citations)),
-            ...array_map(fn (string $name): array|false => $this->fileCarrying($checkout, $fileNames, $name), $this->withoutDirectory($citations)),
+            ...$atPaths,
+            ...$carrying,
         ];
 
         if (in_array(false, $found, true)) {
             return null;
         }
 
+        $read = [...$this->citationsOfHashedFiles($withDirectory, $atPaths), ...$this->citationsOfHashedFiles($withoutDirectory, $carrying)];
+
+        if ($this->namesOutsideCitations->anyIn($finding->text, $fileNames, $read)) {
+            return null;
+        }
+
         return array_values(array_column(array_merge(...$found), null, 0));
+    }
+
+    // The file field is one citation by itself, read whole, so only the text is checked for names outside citations.
+    /**
+     * @param list<string>                              $citations
+     * @param list<list<array{string, string}>|false> $files
+     *
+     * @return list<string>
+     */
+    private function citationsOfHashedFiles(array $citations, array $files): array
+    {
+        return array_values(array_filter($citations, static fn (string $citation, int $index): bool => is_array($files[$index] ?? null) && [] !== $files[$index], ARRAY_FILTER_USE_BOTH));
     }
 
     // Each span read whole, so a cited path with a space or any other character stays one path.

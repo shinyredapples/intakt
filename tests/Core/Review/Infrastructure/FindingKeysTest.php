@@ -14,6 +14,7 @@ use Intakt\Core\Review\Domain\FindingKey;
 use Intakt\Core\Review\Infrastructure\CheckoutFileNames;
 use Intakt\Core\Review\Infrastructure\FindingKeys;
 use Intakt\Core\Review\Infrastructure\NamesCutAtASpace;
+use Intakt\Core\Review\Infrastructure\NamesOutsideCitations;
 use Intakt\Tests\Core\Git\TemporaryRepository;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -24,6 +25,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(FindingKey::class)]
 #[CoversClass(CheckoutFileNames::class)]
 #[CoversClass(NamesCutAtASpace::class)]
+#[CoversClass(NamesOutsideCitations::class)]
 #[UsesClass(Checkout::class)]
 #[UsesClass(PathNotInCheckout::class)]
 #[UsesClass(PathOutsideCheckout::class)]
@@ -404,6 +406,34 @@ final class FindingKeysTest extends TestCase
         yield 'a method in plain text' => ['See B.php::run() and src/A.php.'];
         yield 'a line anchor' => ['See B.php#L12 and src/A.php.'];
         yield 'a span with words after the name' => ['See `B.php line 12` and src/A.php.'];
+    }
+
+    #[DataProvider('filesNamedOutsideACitationTheKeyCanRead')]
+    public function testAFileNamedOutsideACitationTheKeyCanReadNeverLeavesTheKeyUnchangedWhenThatFileIsEdited(string $path, string $text): void
+    {
+        $this->write($path, "first\n");
+        $before = $this->keyOf($this->finding($text));
+
+        $this->write($path, "second\n");
+
+        self::assertTrue(null === $before || $before->value !== $this->keyOf($this->finding($text))?->value, $text);
+    }
+
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function filesNamedOutsideACitationTheKeyCanRead(): iterable
+    {
+        yield 'a partial path with a method' => ['src/Core/B.php', 'See Core/B.php::run() and src/A.php.'];
+        yield 'a partial path of a file without an extension' => ['docker/Infra/Dockerfile', 'See Infra/Dockerfile and src/A.php.'];
+        yield 'a name after an equals sign' => ['src/B.php', 'See file=B.php and src/A.php.'];
+        yield 'a name after an at sign' => ['src/B.php', 'See @B.php and src/A.php.'];
+        yield 'a namespace after a path' => ['src/sub/B.php', 'See src/sub/B.php:Intakt\\Core\\X::run() and src/A.php.'];
+        yield 'a method with a slash after a path' => ['src/sub/B.php', 'See src/sub/B.php::Foo/bar() and src/A.php.'];
+        yield 'two line numbers with a slash in backticks' => ['src/sub/B.php', 'See `src/sub/B.php:12/14` and src/A.php.'];
+        yield 'a namespace after a bare name' => ['src/sub/C.php', 'See C.php:Intakt\\Core\\X and src/A.php.'];
+        yield 'a leading slash' => ['src/B.php', 'See /src/B.php and src/A.php.'];
+        yield 'a name in another case' => ['src/B.php', 'See b.PHP and src/A.php.'];
     }
 
     public function testABareWordThatOnlySharesItsFirstLettersWithAFileNameIsNotAFile(): void

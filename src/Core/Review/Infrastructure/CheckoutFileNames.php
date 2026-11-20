@@ -65,6 +65,14 @@ final readonly class CheckoutFileNames
     /**
      * @return list<string>
      */
+    public function namesOfFiles(): array
+    {
+        return array_map(strval(...), array_keys($this->pathsByName));
+    }
+
+    /**
+     * @return list<string>
+     */
     public function pathsNamed(string $name): array
     {
         return $this->pathsByName[$name] ?? [];
