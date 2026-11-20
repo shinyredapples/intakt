@@ -125,7 +125,7 @@ final readonly class RawPromptMessageRule implements Rule
      */
     private function classNamesOf(Type $class): array
     {
-        // PHP resolves a class string with a leading backslash, which PHPStan does not read as a class name
+        // trimmed because PHP resolves a class string with a leading backslash, which PHPStan does not read as a class name
         $written = array_map(static fn (ConstantStringType $constant): string => ltrim($constant->getValue(), '\\'), $class->getConstantStrings());
 
         return array_map(strtolower(...), [...$class->getObjectTypeOrClassStringObjectType()->getObjectClassNames(), ...$written]);
@@ -163,7 +163,7 @@ final readonly class RawPromptMessageRule implements Rule
             return false;
         }
 
-        $known =array_map(static fn (ConstantStringType $constant): string => strtolower($constant->getValue()), $name->getConstantStrings());
+        $known = array_map(static fn (ConstantStringType $constant): string => strtolower($constant->getValue()), $name->getConstantStrings());
 
         return [] === $known || [] !== array_intersect($known, self::FACTORIES);
     }
