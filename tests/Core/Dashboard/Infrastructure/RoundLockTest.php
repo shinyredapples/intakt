@@ -8,11 +8,13 @@ use Intakt\Core\Dashboard\Infrastructure\RoundLock;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
+use RuntimeException;
 use Symfony\Component\EventDispatcher\EventDispatcher;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Controller\ControllerResolver;
+use Symfony\Component\HttpKernel\Event\ExceptionEvent;
 use Symfony\Component\HttpKernel\Event\FinishRequestEvent;
 use Symfony\Component\HttpKernel\HttpKernel;
 use Symfony\Component\HttpKernel\HttpKernelInterface;
@@ -85,6 +87,35 @@ final class RoundLockTest extends TestCase
         $kernel->handle($main, HttpKernelInterface::MAIN_REQUEST, false);
 
         self::assertTrue($heldAfterTheSubRequest);
+        self::assertTrue($locks->createLock(RoundLock::KEY_PREFIX.'round-1')->acquire());
+    }
+
+    // The kernel answers with the error response and skips kernel.finish_request when a response listener throws while that answer is built (#3021, D6).
+    public function testAPressWhoseResponseListenerFailsFreesTheRoundOnceItsRequestIsGone(): void
+    {
+        $locks = new LockFactory(new InMemoryStore());
+        $requests = new RequestStack();
+        $rounds = new RoundLock($locks, $requests);
+        $events = new EventDispatcher();
+        $events->addListener(KernelEvents::FINISH_REQUEST, $rounds);
+        $events->addListener(KernelEvents::EXCEPTION, static function (ExceptionEvent $event): void {
+            $event->setResponse(new Response('failed', 500));
+        });
+        $events->addListener(KernelEvents::RESPONSE, static fn (): never => throw new RuntimeException('a response listener failed'));
+        $kernel = new HttpKernel($events, new ControllerResolver(), $requests);
+        $main = Request::create('/');
+        $main->attributes->set('_controller', static function () use ($rounds): Response {
+            $rounds->tryHolding('round-1');
+
+            throw new RuntimeException('the press failed');
+        });
+
+        $response = $kernel->handle($main);
+        self::assertSame(500, $response->getStatusCode());
+        self::assertFalse($locks->createLock(RoundLock::KEY_PREFIX.'round-1')->acquire());
+        unset($main, $response);
+        gc_collect_cycles();
+
         self::assertTrue($locks->createLock(RoundLock::KEY_PREFIX.'round-1')->acquire());
     }
 

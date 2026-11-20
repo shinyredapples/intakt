@@ -100,7 +100,7 @@ final class StopReviewControllerTest extends DashboardPageTestCase
     {
         $this->runningReviewer();
         $token = $this->token();
-        $held = $this->holdRoundLock('round-1');
+        $held = $this->holdReviewLock('round-1');
 
         $this->browser->request('POST', '/reviews/round-1/reviewers/round-1-security/stop', ['_token' => $token]);
         $held->release();
@@ -108,20 +108,37 @@ final class StopReviewControllerTest extends DashboardPageTestCase
         self::assertResponseRedirects('/reviews/round-1', 303);
         $this->assertNothingRequested();
         $this->browser->followRedirect();
-        self::assertSelectorTextContains('.flash-error', 'Another press for this round is still running, so nothing was stopped.');
+        self::assertSelectorTextContains('.flash-error', 'Another press for this review is still running, so nothing was stopped.');
+    }
+
+    public function testAStopInALaterRoundWaitsForAPressHeldOnTheReviewsFirstRound(): void
+    {
+        $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->startRecordedRoundOf('feat/thing', 'round-2', 2);
+        $this->ledger->startReviewer('round-2', 'security');
+        $token = $this->token();
+        $held = $this->holdReviewLock('round-1');
+
+        $this->browser->request('POST', '/reviews/round-2/reviewers/round-2-security/stop', ['_token' => $token]);
+        $held->release();
+
+        self::assertResponseRedirects('/reviews/round-2', 303);
+        $this->assertNothingRequested();
+        $this->browser->followRedirect();
+        self::assertSelectorTextContains('.flash-error', 'Another press for this review is still running, so nothing was stopped.');
     }
 
     public function testTheRoundStaysLockedUntilTheStopAnswerIsBuilt(): void
     {
         $this->runningReviewer();
         $token = $this->token();
-        $freeWhileAnswering = $this->roundFreeWhileAnswering('round-1');
+        $freeWhileAnswering = $this->reviewFreeWhileAnswering('round-1');
 
         $this->browser->request('POST', '/reviews/round-1/reviewers/round-1-security/stop', ['_token' => $token]);
 
         self::assertResponseStatusCodeSame(303);
         self::assertFalse($freeWhileAnswering());
-        $this->holdRoundLock('round-1')->release();
+        $this->holdReviewLock('round-1')->release();
     }
 
     // A round of its own, because the file of a round another test locked stays in the directory.
@@ -130,26 +147,26 @@ final class StopReviewControllerTest extends DashboardPageTestCase
         $round = 'fresh-'.bin2hex(random_bytes(8));
         $this->ledger->startRecordedRoundOf('feat/thing', $round, 1);
         $this->ledger->startReviewer($round, 'security');
-        $before = self::roundLockFiles();
+        $before = self::reviewLockFiles();
 
         $this->browser->request('POST', '/reviews/'.$round.'/reviewers/'.$round.'-security/stop');
 
         self::assertResponseStatusCodeSame(400);
         self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so nothing was stopped."', BadRequestHttpException::class));
-        self::assertSame([], array_values(array_diff(self::roundLockFiles(), $before)));
+        self::assertSame([], array_values(array_diff(self::reviewLockFiles(), $before)));
     }
 
     public function testAStopForARoundTheLedgerDoesNotKnowLeavesNoLockFileBehind(): void
     {
         $token = $this->token();
-        $before = self::roundLockFiles();
+        $before = self::reviewLockFiles();
         $round = 'unknown-'.bin2hex(random_bytes(8));
 
         $this->browser->request('POST', '/reviews/'.$round.'/reviewers/'.$round.'-security/stop', ['_token' => $token]);
 
         self::assertResponseStatusCodeSame(404);
         self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The ledger shows no running reviewer with this id in an unjudged round."', NotFoundHttpException::class));
-        self::assertSame([], array_values(array_diff(self::roundLockFiles(), $before)));
+        self::assertSame([], array_values(array_diff(self::reviewLockFiles(), $before)));
     }
 
     public function testARefusedStopLeavesTheRoundFreeForTheNextPress(): void
@@ -160,14 +177,14 @@ final class StopReviewControllerTest extends DashboardPageTestCase
 
         self::assertResponseStatusCodeSame(400);
         self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so nothing was stopped."', BadRequestHttpException::class));
-        $this->holdRoundLock('round-1')->release();
+        $this->holdReviewLock('round-1')->release();
     }
 
     public function testAStopIsNotHeldBackByAPressForAnotherRound(): void
     {
         $this->runningReviewer();
         $token = $this->token();
-        $held = $this->holdRoundLock('round-9');
+        $held = $this->holdReviewLock('round-9');
 
         $this->browser->request('POST', '/reviews/round-1/reviewers/round-1-security/stop', ['_token' => $token]);
         $held->release();

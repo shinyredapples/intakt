@@ -26,7 +26,7 @@ final readonly class ReviewStarts
         private LedgerReviewPages $reviews,
         private MessageBusInterface $commands,
         private SampleChangeSource $sample,
-        private RoundLock $rounds,
+        private RoundLock $locks,
     ) {
     }
 
@@ -52,9 +52,9 @@ final readonly class ReviewStarts
             return null;
         }
 
-        // Taken only now, for a round the ledger knows, and released by RoundLock once the answer is built; it keeps two presses that arrive together apart, and RoundNotNext still refuses a second press that comes later.
-        if (!$this->rounds->tryHolding($round)) {
-            return new StartAnswer([self::FLASH_ERROR, 'Another press for this round is still running, so nothing was started.']);
+        // Taken only now, for a round the ledger knows, and released by RoundLock once the answer is built; keyed by the review's first round, so two presses that arrive together from two round pages of one review are kept apart too, and RoundNotNext still refuses a second press that comes later.
+        if (!$this->locks->tryHolding(array_first($review->rounds)->round)) {
+            return new StartAnswer([self::FLASH_ERROR, 'Another press for this review is still running, so nothing was started.']);
         }
 
         return $this->started($this->commandFor($review, $source, $number));

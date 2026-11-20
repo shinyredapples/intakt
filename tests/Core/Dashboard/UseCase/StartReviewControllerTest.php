@@ -273,9 +273,39 @@ final class StartReviewControllerTest extends DashboardPageTestCase
         $this->browser->followRedirect();
 
         self::assertSelectorTextSame('.toast', 'Started round 2.');
-        self::assertSame(['error' => ['Another press for this round is still running, so nothing was started.']], $secondLines);
+        self::assertSame(['error' => ['Another press for this review is still running, so nothing was started.']], $secondLines);
         self::assertSame(1, $presses);
         self::assertSame([1, 2], $this->numbersStartedFor('feat/thing'));
+    }
+
+    // Every round page of one review shows the same start form and posts it to its own round, so a key from the address would let both presses through (#3021, D4 and D5).
+    public function testTwoPressesForTheSameReviewFromTwoOfItsRoundPagesStartOneRoundAndRefuseTheOther(): void
+    {
+        $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->startRecordedRoundOf('feat/thing', 'round-2', 2);
+        $commands = self::createStub(MessageBusInterface::class);
+        self::getContainer()->set('command.bus', $commands);
+        $token = $this->token();
+        $presses = 0;
+        $secondLines = [];
+        $commands->method('dispatch')->willReturnCallback(function (StartReview $command) use ($commands, $token, &$presses, &$secondLines): Envelope {
+            if (1 === ++$presses) {
+                $secondLines = $this->pressInAnotherWorker($commands, '/reviews/round-1/start', ['_token' => $token, 'number' => '3']);
+            }
+            $number = $command->round->number;
+            self::assertIsInt($number);
+            $this->ledger->startRecordedRoundOf($command->round->change, 'round-'.$number.'-'.$presses, $number);
+
+            return new Envelope(new stdClass(), [new HandledStamp('round-3', 'handler')]);
+        });
+
+        $this->browser->request('POST', '/reviews/round-2/start', ['_token' => $token, 'number' => '3']);
+        $this->browser->followRedirect();
+
+        self::assertSelectorTextSame('.toast', 'Started round 3.');
+        self::assertSame(['error' => ['Another press for this review is still running, so nothing was started.']], $secondLines);
+        self::assertSame(1, $presses);
+        self::assertSame([1, 2, 3], $this->numbersStartedFor('feat/thing'));
     }
 
     // A round of its own, because the file of a round another test locked stays in the directory.
@@ -283,26 +313,26 @@ final class StartReviewControllerTest extends DashboardPageTestCase
     {
         $round = 'fresh-'.bin2hex(random_bytes(8));
         $this->ledger->startRecordedRoundOf('feat/thing', $round, 1);
-        $before = self::roundLockFiles();
+        $before = self::reviewLockFiles();
 
         $this->browser->request('POST', '/reviews/'.$round.'/start', ['number' => '2']);
 
         self::assertResponseStatusCodeSame(400);
         self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so nothing was started."', BadRequestHttpException::class));
-        self::assertSame([], array_values(array_diff(self::roundLockFiles(), $before)));
+        self::assertSame([], array_values(array_diff(self::reviewLockFiles(), $before)));
     }
 
     public function testAStartForARoundTheLedgerDoesNotKnowLeavesNoLockFileBehind(): void
     {
         $this->commandBus()->expects(self::never())->method('dispatch');
         $token = $this->token();
-        $before = self::roundLockFiles();
+        $before = self::reviewLockFiles();
 
         $this->browser->request('POST', '/reviews/unknown-'.bin2hex(random_bytes(8)).'/start', ['_token' => $token, 'number' => '2']);
 
         self::assertResponseStatusCodeSame(404);
         self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The ledger holds no review with this round that can be started again."', NotFoundHttpException::class));
-        self::assertSame([], array_values(array_diff(self::roundLockFiles(), $before)));
+        self::assertSame([], array_values(array_diff(self::reviewLockFiles(), $before)));
     }
 
     public function testAStartWhileAnotherPressForTheRoundRunsDispatchesNothingAndSaysSo(): void
@@ -310,14 +340,14 @@ final class StartReviewControllerTest extends DashboardPageTestCase
         $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
         $this->commandBus()->expects(self::never())->method('dispatch');
         $token = $this->token();
-        $held = $this->holdRoundLock('round-1');
+        $held = $this->holdReviewLock('round-1');
 
         $this->browser->request('POST', '/reviews/round-1/start', ['_token' => $token, 'number' => '2']);
         $held->release();
 
         self::assertResponseRedirects('/reviews/round-1', 303);
         $this->browser->followRedirect();
-        self::assertSelectorTextContains('.flash-error', 'Another press for this round is still running, so nothing was started.');
+        self::assertSelectorTextContains('.flash-error', 'Another press for this review is still running, so nothing was started.');
     }
 
     public function testTheRoundStaysLockedUntilTheStartAnswerIsBuilt(): void
@@ -325,13 +355,13 @@ final class StartReviewControllerTest extends DashboardPageTestCase
         $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
         $this->commandBus()->expects(self::once())->method('dispatch')->willReturn(new Envelope(new stdClass(), [new HandledStamp('round-2', 'handler')]));
         $token = $this->token();
-        $freeWhileAnswering = $this->roundFreeWhileAnswering('round-1');
+        $freeWhileAnswering = $this->reviewFreeWhileAnswering('round-1');
 
         $this->browser->request('POST', '/reviews/round-1/start', ['_token' => $token, 'number' => '2']);
 
         self::assertResponseRedirects('/reviews/round-1', 303);
         self::assertFalse($freeWhileAnswering());
-        $this->holdRoundLock('round-1')->release();
+        $this->holdReviewLock('round-1')->release();
     }
 
     public function testAStartIsNotHeldBackByAPressForAnotherRound(): void
@@ -339,7 +369,7 @@ final class StartReviewControllerTest extends DashboardPageTestCase
         $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
         $this->commandBus()->expects(self::once())->method('dispatch')->willReturn(new Envelope(new stdClass(), [new HandledStamp('round-2', 'handler')]));
         $token = $this->token();
-        $held = $this->holdRoundLock('round-9');
+        $held = $this->holdReviewLock('round-9');
 
         $this->browser->request('POST', '/reviews/round-1/start', ['_token' => $token, 'number' => '2']);
         $held->release();
@@ -351,7 +381,7 @@ final class StartReviewControllerTest extends DashboardPageTestCase
     public function testAStartWithoutATokenIsRefusedAlsoWhileTheRoundIsBusy(): void
     {
         $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
-        $held = $this->holdRoundLock('round-1');
+        $held = $this->holdReviewLock('round-1');
 
         $this->browser->request('POST', '/reviews/round-1/start', ['number' => '2']);
         $held->release();

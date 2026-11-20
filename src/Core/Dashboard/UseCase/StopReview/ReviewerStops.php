@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\UseCase\StopReview;
 
+use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\ReviewerOutcome;
 use Intakt\Core\Dashboard\Domain\ReviewerProgress;
@@ -23,7 +24,7 @@ final readonly class ReviewerStops
     public function __construct(
         private LedgerReviewPages $reviews,
         private Ledger $ledger,
-        private RoundLock $rounds,
+        private RoundLock $locks,
     ) {
     }
 
@@ -34,13 +35,15 @@ final readonly class ReviewerStops
     #[NoDiscard('the flash line is the only report of the press')]
     public function requestStopOf(string $round, string $reviewer): ?array
     {
-        if (!in_array($reviewer, $this->runningReviewersOf($round) ?? [], true)) {
+        $review = $this->reviews->reviewOf($round);
+
+        if (!$review instanceof Review || !in_array($reviewer, $this->runningReviewersOf($review, $round) ?? [], true)) {
             return null;
         }
 
-        // Taken only now, for a round the ledger knows, with the key of the start press, so a start and a stop of one round never run at once; RoundLock releases it once the answer is built.
-        if (!$this->rounds->tryHolding($round)) {
-            return [self::FLASH_ERROR, 'Another press for this round is still running, so nothing was stopped.'];
+        // Taken only now, for a round the ledger knows, with the key of the start press (the review's first round), so a start and a stop of one review never run at once; RoundLock releases it once the answer is built.
+        if (!$this->locks->tryHolding(array_first($review->rounds)->round)) {
+            return [self::FLASH_ERROR, 'Another press for this review is still running, so nothing was stopped.'];
         }
 
         return $this->recorded($round, $reviewer)
@@ -55,7 +58,7 @@ final readonly class ReviewerStops
     #[NoDiscard('the flash line is the only report of the press')]
     public function requestStopOfRound(string $round): ?array
     {
-        $running = $this->runningReviewersOf($round);
+        $running = $this->runningReviewersOf($this->reviews->reviewOf($round), $round);
 
         if (null === $running) {
             return null;
@@ -78,9 +81,9 @@ final readonly class ReviewerStops
      * @return list<string>|null
      */
     // Null when the round is unknown or judged, so nothing in it can be stopped any more.
-    private function runningReviewersOf(string $round): ?array
+    private function runningReviewersOf(?Review $review, string $round): ?array
     {
-        $reviewed = array_find($this->reviews->reviewOf($round)->rounds ?? [], static fn (ReviewedRound $candidate): bool => $candidate->round === $round);
+        $reviewed = array_find($review->rounds ?? [],static fn (ReviewedRound $candidate): bool => $candidate->round === $round);
 
         if (!$reviewed instanceof ReviewedRound || ReviewState::Judged === $reviewed->state) {
             return null;

@@ -61,9 +61,9 @@ abstract class DashboardPageTestCase extends WebTestCase
     }
 
     // Taken through the application's factory on the same file store, so it stands for a press of another worker that still runs.
-    protected function holdRoundLock(string $round): LockInterface
+    protected function holdReviewLock(string $firstRound): LockInterface
     {
-        $lock = self::getContainer()->get(LockFactory::class)->createLock(RoundLock::KEY_PREFIX.$round);
+        $lock = self::getContainer()->get(LockFactory::class)->createLock(RoundLock::KEY_PREFIX.$firstRound);
         self::assertTrue($lock->acquire());
 
         return $lock;
@@ -72,17 +72,17 @@ abstract class DashboardPageTestCase extends WebTestCase
     /**
      * @return Closure(): ?bool
      */
-    // Asked by the first listener of the main response, so it tells whether a press arriving while the answer is still built would find the round free.
-    protected function roundFreeWhileAnswering(string $round): Closure
+    // Asked by the first listener of the main response, so it tells whether a press arriving while the answer is still built would find the review free.
+    protected function reviewFreeWhileAnswering(string $firstRound): Closure
     {
         $free = null;
         $locks = self::getContainer()->get(LockFactory::class);
-        self::getContainer()->get('event_dispatcher')->addListener(KernelEvents::RESPONSE, static function (ResponseEvent $event) use ($locks, $round, &$free): void {
+        self::getContainer()->get('event_dispatcher')->addListener(KernelEvents::RESPONSE, static function (ResponseEvent $event) use ($locks, $firstRound, &$free): void {
             if (!$event->isMainRequest()) {
                 return;
             }
 
-            $lock = $locks->createLock(RoundLock::KEY_PREFIX.$round);
+            $lock = $locks->createLock(RoundLock::KEY_PREFIX.$firstRound);
             $free = $lock->acquire();
             $lock->release();
         }, PHP_INT_MAX);
@@ -95,9 +95,9 @@ abstract class DashboardPageTestCase extends WebTestCase
     /**
      * @return list<string>
      */
-    protected static function roundLockFiles(): array
+    protected static function reviewLockFiles(): array
     {
-        $files = glob(self::getContainer()->getParameter('kernel.cache_dir').'/locks/sf.dashboard-round-*');
+        $files = glob(self::getContainer()->getParameter('kernel.cache_dir').'/locks/sf.'.RoundLock::KEY_PREFIX.'*');
 
         return false === $files ? [] : $files;
     }
