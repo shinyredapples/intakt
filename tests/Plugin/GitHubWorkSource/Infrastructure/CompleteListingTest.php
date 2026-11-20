@@ -53,6 +53,7 @@ use Symfony\Component\ErrorHandler\BufferingLogger;
 final class CompleteListingTest extends KernelTestCase
 {
     private const string VALIDATOR = 'W/"issues-1"';
+    private const string SHORT = 'The open-issue listing of project {project} came back short, so nothing is picked and no wait closes this tick: {reason}';
     private const string LABELED_BY_ANA = '{"data":{"repository":{"issue":{"author":{"__typename":"User","login":"ana"},"userContentEdits":{"nodes":[]},"timelineItems":{"pageInfo":{"hasNextPage":false},"nodes":[{"__typename":"LabeledEvent","actor":{"__typename":"User","login":"ana"},"label":{"name":"intakt"}}]}}}}}';
 
     private IntakeStore $store;
@@ -129,11 +130,7 @@ final class CompleteListingTest extends KernelTestCase
         self::assertNull($plan);
         self::assertSame([7, 8], $this->numbersOf($this->store->issuesOf('alpha')));
         self::assertSame(self::VALIDATOR, $this->store->validatorOf('alpha'));
-        $logs = $this->logger->cleanLogs();
-        self::assertCount(1, $logs);
-        self::assertSame(LogLevel::WARNING, $logs[0][0]);
-        self::assertStringContainsString('came back short, so nothing is picked and no wait closes this tick', $logs[0][1]);
-        self::assertSame(['project' => 'alpha', 'reason' => 'GitHub answered 502 to a read.'], array_intersect_key($logs[0][2], ['project' => true, 'reason' => true]));
+        self::assertSame(['GitHub answered 502 to a read.'], $this->shortListingReasons());
     }
 
     public function testAHistoryThatCannotBeReadLeavesTheListingShortAndWritesNothing(): void
@@ -146,7 +143,7 @@ final class CompleteListingTest extends KernelTestCase
 
         self::assertNull($plan);
         self::assertSame([], $this->store->issuesOf('alpha'));
-        self::assertSame('GitHub answered 502 to a read.', $this->logger->cleanLogs()[0][2]['reason'] ?? null);
+        self::assertSame(['GitHub answered 502 to a read.'], $this->shortListingReasons());
     }
 
     public function testRemovingTheRowOfAClosedIssueKeepsItsFailedForGoodReasonSoItsDependentsStayHeld(): void
@@ -232,6 +229,24 @@ final class CompleteListingTest extends KernelTestCase
         $accounts->method('steers')->willReturnCallback(static fn (string $project, string $account): bool => 'ana' === $account);
 
         return new CompleteListing($reads, $histories, $accounts, $this->store, new IntakeRules($label), new IssueReferences(), $this->logger);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function shortListingReasons(): array
+    {
+        return array_values(array_map(static function (mixed $record): string {
+            self::assertIsArray($record);
+            self::assertSame([LogLevel::WARNING, self::SHORT], [$record[0] ?? null, $record[1] ?? null]);
+            $context = $record[2] ?? null;
+            self::assertIsArray($context);
+            self::assertSame('alpha', $context['project'] ?? null);
+            $reason = $context['reason'] ?? null;
+            self::assertIsString($reason);
+
+            return $reason;
+        }, $this->logger->cleanLogs()));
     }
 
     private function rowOf(int $number): StoredIssue
