@@ -26,14 +26,19 @@ final readonly class PhpGateSteps
             if (is_array($manifest["scripts"] ?? null) && array_key_exists($event, $manifest["scripts"])) { $refuse("composer.json defines a ".$event." script, which the locked install never runs, so this head installs every time."); }
         }
         $localArchive = static fn (mixed $url): bool => !is_string($url) || 1 !== preg_match("~^https?://~", $url);
-        $localSource = static fn (mixed $url, bool $git): bool => !is_string($url) || (1 !== preg_match("~^(?:https?|ssh|git|git\+ssh|svn)://~", $url) && (!$git || 1 !== preg_match("~^[^/:@]+@[^/:]+:~", $url)));
+        $localSource = static fn (mixed $url, mixed $type): bool => !is_string($url) || (1 !== preg_match("~^(?:https?|ssh|git|git\+ssh|svn)://~", $url) && ("git" !== $type || 1 !== preg_match("~^[^/:@]+@[^/:]+:~", $url)));
         $lock = json_decode(file_get_contents("composer.lock"), true, 512, JSON_THROW_ON_ERROR);
         foreach ([...$lock["packages"] ?? [], ...$lock["packages-dev"] ?? []] as $package) {
-            $name = (string) ($package["name"] ?? "A package without a name");
-            $unpinned = static fn (string $why) => $refuse($name." ".$why.", so composer.lock does not pin its contents.");
+            $name = $package["name"] ?? null;
+            $shown = match (true) {
+                null === $name => "A package without a name",
+                is_string($name) && 1 === preg_match("~^[a-z0-9]([_.-]?[a-z0-9]+)*/[a-z0-9](([_.]|-{1,2})?[a-z0-9]+)*$~D", $name) => $name,
+                default => "The package named ".json_encode($name, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE),
+            };
+            $unpinned = static fn (string $why) => $refuse($shown." ".$why.", so composer.lock does not pin its contents.");
             if ("path" === ($package["dist"]["type"] ?? null) || "path" === ($package["source"]["type"] ?? null)) { $unpinned("comes from a path repository"); }
             if (isset($package["dist"]["mirrors"]) || isset($package["source"]["mirrors"])) { $unpinned("names mirrors, which Composer may download from first"); }
-            if ("composer-plugin" === ($package["type"] ?? null) && "symfony/runtime" !== $name) { $unpinned("is a Composer plugin, which the locked install skips"); }
+            if (in_array($package["type"] ?? null, ["composer-plugin", "composer-installer"], true) && "symfony/runtime" !== $name) { $unpinned("is a Composer plugin, which the locked install skips"); }
             if (isset($package["dist"]["url"])) {
                 $shasum = $package["dist"]["shasum"] ?? "";
                 if ($localArchive($package["dist"]["url"])) { $unpinned("comes from an archive at a local URL"); }
@@ -41,15 +46,23 @@ final readonly class PhpGateSteps
                 if ("" === $shasum && (1 !== preg_match("~^https://[^?#]+/([0-9a-f]{40})$~D", (string) $package["dist"]["url"], $named) || $named[1] !== ($package["dist"]["reference"] ?? null))) { $unpinned("comes from an archive without a checksum whose URL does not end in its locked commit id"); }
             }
             if (isset($package["source"])) {
-                if ($localSource($package["source"]["url"] ?? null, "git" === ($package["source"]["type"] ?? null))) { $unpinned("comes from a source at a local URL"); }
+                if ($localSource($package["source"]["url"] ?? null, $package["source"]["type"] ?? null)) { $unpinned("comes from a source at a local URL"); }
                 if (1 !== preg_match("~^(?:[0-9a-f]{40}|[0-9a-f]{64})$~D", (string) ($package["source"]["reference"] ?? ""))) { $unpinned("has a source reference that is not a full commit id"); }
             }
         }'
         SH.' '.self::REFUSED;
 
-    // After Composer ran, because the lock entry does not say which hash format the repository uses, so a branch named like a commit id passes the lock guard and only the commit that was checked out can show it: git never resolves such a branch to its own name.
+    // After Composer ran, because the lock entry does not say which hash format the repository uses, so a branch named like a commit id passes the lock guard and only the commit that was checked out can show it: git never resolves such a branch to its own name. Git runs on the checkout's own .git folder with every inherited GIT_ variable removed and no system or global configuration, replace objects or grafts, because an inherited GIT_DIR (or a .git file pointing elsewhere) would read the HEAD of another repository.
     public const string SOURCE_GUARD = <<<'SH'
         php -r '$refuse = static function (string $why) use ($argv): never { fwrite(STDERR, $why."\n"); exit((int) $argv[2]); };
+        $environment = [...array_filter(getenv(), static fn (mixed $name): bool => !str_starts_with((string) $name, "GIT_"), ARRAY_FILTER_USE_KEY), "GIT_CONFIG_NOSYSTEM" => "1", "GIT_CONFIG_GLOBAL" => "/dev/null", "GIT_NO_REPLACE_OBJECTS" => "1", "GIT_NO_LAZY_FETCH" => "1", "GIT_ALLOW_PROTOCOL" => "", "GIT_GRAFT_FILE" => "/dev/null", "GIT_ATTR_NOSYSTEM" => "1"];
+        $checkedOut = static function (string $checkout) use ($environment): string {
+            if (!is_dir($checkout."/.git") || is_link($checkout."/.git")) { return ""; }
+            $git = proc_open(["git", "--git-dir=".$checkout."/.git", "--work-tree=".$checkout, "rev-parse", "--verify", "--quiet", "HEAD"], [1 => ["pipe", "w"], 2 => ["file", "/dev/null", "w"]], $pipes, null, $environment);
+            $head = stream_get_contents($pipes[1]);
+            fclose($pipes[1]);
+            return 0 === proc_close($git) ? trim($head) : "";
+        };
         $manifest = $argv[1]."/composer/installed.json";
         if (!is_file($manifest)) { $refuse("The install left no vendor/composer/installed.json, so the checked out sources cannot be compared with composer.lock."); }
         $installed = json_decode(file_get_contents($manifest), true, 512, JSON_THROW_ON_ERROR);
@@ -58,7 +71,7 @@ final readonly class PhpGateSteps
         foreach ($installed["packages"] ?? [] as $package) {
             if ("source" !== ($package["installation-source"] ?? null)) { continue; }
             $source = $locked[$package["name"]] ?? [];
-            $head = "git" === ($source["type"] ?? null) ? trim((string) shell_exec("git -C ".escapeshellarg($argv[1]."/composer/".$package["install-path"])." rev-parse --verify --quiet HEAD")) : "";
+            $head = "git" === ($source["type"] ?? null) ? $checkedOut($argv[1]."/composer/".$package["install-path"]) : "";
             if ("" === $head || $head !== ($source["reference"] ?? null)) { $refuse($package["name"]." was installed from source and its checked out commit is not its locked reference, so composer.lock does not pin its contents."); }
         }' "$(composer config --no-interaction --no-plugins --absolute vendor-dir)"
         SH.' '.self::REFUSED;
