@@ -50,6 +50,18 @@ final class AttributionLinesTest extends TestCase
         self::assertSame($message, AttributionLines::strippedFrom($message));
     }
 
+    public function testAMessageWithWindowsLineEndingsKeepsThemWhenATrailerIsStripped(): void
+    {
+        self::assertSame("Subject\r\n\r\nBody\r\n", AttributionLines::strippedFrom("Subject\r\n\r\nBody\r\nCo-authored-by: x\r\n"));
+    }
+
+    public function testAParagraphStrippedBetweenWindowsParagraphsLeavesOneWindowsBlankLine(): void
+    {
+        $message = "Subject\r\n\r\nGenerated with a tool\r\n\r\nMore text.\r\n";
+
+        self::assertSame("Subject\r\n\r\nMore text.\r\n", AttributionLines::strippedFrom($message));
+    }
+
     public function testAMessageOfOnlyAttributionBecomesEmpty(): void
     {
         self::assertSame('', AttributionLines::strippedFrom("Co-authored-by: Bot <bot@example.invalid>\n"));

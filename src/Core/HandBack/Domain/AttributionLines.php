@@ -10,7 +10,7 @@ final readonly class AttributionLines
     private const string ATTRIBUTION = '/^(?:[ \t]*co-authored-by[ \t]*:|[^A-Za-z0-9]*generated[ -](?:with|by)\b)/i';
 
     // Because a removed paragraph leaves its blank lines behind, spaces and a Windows line ending included.
-    private const string BLANK_LINES = '/\n(?:[ \t\r]*\n){2,}/';
+    private const string BLANK_LINES = '/\r?\n(?:[ \t\r]*\n){2,}/';
 
     public static function strippedFrom(string $message): string
     {
@@ -22,8 +22,10 @@ final readonly class AttributionLines
             return $message;
         }
 
-        $text = rtrim((string) preg_replace(self::BLANK_LINES, "\n\n", implode("\n", $kept)));
+        // So a message written with Windows line endings does not come back with mixed ones.
+        $ending = str_contains($message, "\r\n") ? "\r\n" : "\n";
+        $text = rtrim((string) preg_replace(self::BLANK_LINES, $ending.$ending, implode("\n", $kept)));
 
-        return '' === $text ? '' : $text."\n";
+        return '' === $text ? '' : $text.$ending;
     }
 }
