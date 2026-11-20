@@ -94,7 +94,7 @@ final class StoredIssue
     // Kept only while the update time and what steers both stand, because an edit in the second of the earlier listing keeps the update time and the history vouched for the earlier labels and references.
     public function keepVouchingOf(self $stored): void
     {
-        if ($this->number !== $stored->number || $this->updatedAt !== $stored->updatedAt || !$this->steersAs($stored->labels, $stored->waitsFor, $stored->unreadableWaits, $stored->closedBy)) {
+        if ($this->number !== $stored->number || $this->updatedAt !== $stored->updatedAt || !$this->hasLabels($stored->labels) || !$this->namesNumbers($stored->waitsFor, $stored->unreadableWaits, $stored->closedBy)) {
             return;
         }
 
@@ -107,7 +107,7 @@ final class StoredIssue
     {
         $body = $history->body;
 
-        return $this->steersAs($history->currentLabels, $references->waitsFor($body), $references->unreadableWaits($body), $references->closedBy($body));
+        return $this->hasLabels($history->currentLabels) && $this->namesNumbers($references->waitsFor($body), $references->unreadableWaits($body), $references->closedBy($body));
     }
 
     public function isVouched(): bool
@@ -160,20 +160,27 @@ final class StoredIssue
         return $this->instant($this->updatedAt);
     }
 
-    // Labels in any order, because GitHub does not promise one, and sorted as strings, because a numeric sort holds `1` and `01` equal and leaves them in the order they came.
+    // In any order, because GitHub does not promise one, and sorted as strings, because a numeric sort holds `1` and `01` equal and leaves them in the order they came.
     /**
      * @param list<string> $labels
-     * @param list<int>    $waitsFor
-     * @param list<string> $unreadableWaits
-     * @param list<int>    $closedBy
      */
-    private function steersAs(array $labels, array $waitsFor, array $unreadableWaits, array $closedBy): bool
+    private function hasLabels(array $labels): bool
     {
         $own = $this->labels;
         sort($own, SORT_STRING);
         sort($labels, SORT_STRING);
 
-        return $own === $labels && $this->waitsFor === $waitsFor && $this->unreadableWaits === $unreadableWaits && $this->closedBy === $closedBy;
+        return $own === $labels;
+    }
+
+    /**
+     * @param list<int>    $waitsFor
+     * @param list<string> $unreadableWaits
+     * @param list<int>    $closedBy
+     */
+    private function namesNumbers(array $waitsFor, array $unreadableWaits, array $closedBy): bool
+    {
+        return $this->waitsFor === $waitsFor && $this->unreadableWaits === $unreadableWaits && $this->closedBy === $closedBy;
     }
 
     private function moment(DateTimeImmutable $moment): string
