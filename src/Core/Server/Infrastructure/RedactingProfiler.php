@@ -48,7 +48,7 @@ final class RedactingProfiler extends Profiler
         $secrets = $this->secretsOf($data);
         $profile->addCollector($this->masked($data));
 
-        // With zend.exception_ignore_args off, the frames of a failed request's exception carry the server array as an argument.
+        // Scrubbed as well, because with zend.exception_ignore_args off the frames of a failed request's exception keep the server array as an argument.
         $failure = $profile->hasCollector('exception') ? $profile->getCollector('exception') : null;
 
         if ($failure instanceof DataCollector) {
