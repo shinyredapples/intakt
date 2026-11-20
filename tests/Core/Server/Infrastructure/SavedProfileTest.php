@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Server\Infrastructure;
 
 use Intakt\Core\Server\Infrastructure\ProfilerCollectorAllowListPass;
+use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use Intakt\Tests\Support\WebTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Psr\Log\LogLevel;
@@ -29,6 +30,7 @@ final class SavedProfileTest extends WebTestCase
     {
         $this->browser = self::createClient(server: ['HTTP_HOST' => 'localhost:7780']);
         $this->browser->disableReboot();
+        new RoundFixture(self::getContainer());
     }
 
     public function testASavedProfileHoldsExactlyTheCollectorsThatMeasureARequest(): void
