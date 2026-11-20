@@ -44,12 +44,18 @@ final readonly class ModelWaits
         $waits = [];
 
         foreach ($this->accounts as $name) {
-            $account = new Account($this->provider, $name);
-            $own = $this->cooldowns->secondsUntilFree($account);
-            $waits[$name] = null === $routerProvider ? $own : max($own, $this->pinnedCooldowns->secondsUntilFree(new PinnedProvider($account, $routerProvider)));
+            $waits[$name] = $this->ofAccount(new Account($this->provider, $name), $routerProvider);
         }
 
         return $waits;
+    }
+
+    // One account's wait by the same read, so AccountPlatform can check a fallback account again right before it sends (issue #2860).
+    public function ofAccount(Account $account, ?string $routerProvider): int
+    {
+        $own = $this->cooldowns->secondsUntilFree($account);
+
+        return null === $routerProvider ? $own : max($own, $this->pinnedCooldowns->secondsUntilFree(new PinnedProvider($account, $routerProvider)));
     }
 
     // 0 while an account can take the model, else the shortest wait, at least a second, so a cooling model is never reported free and chosen again at once; the longest window is listed too, so min() always has a value.

@@ -106,7 +106,8 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
             if (0 === $waits[$name]) {
                 $account = new Account($this->provider, $name);
                 $pinned = null === $routerProvider ? null : new PinnedProvider($account, $routerProvider);
-                $free[$name] = new AccountPlatform($account, $platform, $this->cooldowns, $this->clock, $this->logger, $failures, $this->pinnedCooldowns, $pinned);
+                $recheck = [] === $free ? null : $this->modelWaits;
+                $free[$name] = new AccountPlatform($account, $platform, $this->cooldowns, $this->clock, $this->logger, $failures, $this->pinnedCooldowns, $pinned, $recheck);
             }
         }
 

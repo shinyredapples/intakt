@@ -45,12 +45,20 @@ final readonly class AccountPlatform implements PlatformInterface
         private SendFailures $failures,
         private PinnedProviderCooldowns $pinnedCooldowns,
         private ?PinnedProvider $pinned,
+        // Null for the account the failover tries first, because the read that found it free was just made; a fallback account is read again, since another worker can cool it or its pin while an earlier account is tried.
+        private ?ModelWaits $recheck = null,
     ) {
     }
 
     #[Override]
     public function invoke(string|Model $model, array|string|object $input, array $options = []): DeferredResult
     {
+        // Failed like a limited account, but before anything is recorded or sent, so the failover moves on and the account's own window stays as it is (issue #2860).
+        $wait = $this->recheck?->ofAccount($this->account, $this->pinned?->routerProvider) ?? 0;
+        if (0 < $wait) {
+            throw new RateLimitExceededException($wait);
+        }
+
         $sentAt = $this->clock->now();
         $this->failures->tried($this->account);
 
@@ -161,7 +169,8 @@ final readonly class AccountPlatform implements PlatformInterface
         }
 
         try {
-            $value = trim($answer->getObject()->getHeaders(false)['retry-after'][0] ?? '');
+            // Only RFC 9110 optional whitespace is trimmed, because PHP's default set also strips NUL and other control bytes the check below must see.
+            $value = trim($answer->getObject()->getHeaders(false)['retry-after'][0] ?? '', " \t");
         } catch (ExceptionInterface) {
             return null;
         }
