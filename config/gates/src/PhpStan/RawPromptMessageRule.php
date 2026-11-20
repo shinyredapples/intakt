@@ -91,7 +91,7 @@ final readonly class RawPromptMessageRule implements Rule
         };
     }
 
-    // a factory handed over as a callable (array_map, call_user_func, Closure::fromCallable) builds the same message as the call
+    // judged because a factory handed to array_map(), call_user_func() or Closure::fromCallable() builds the same message as the call
     private function namesAFactory(Expr $node, Scope $scope): bool
     {
         return match (true) {
