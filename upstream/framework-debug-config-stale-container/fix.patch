@@ -1,3 +1,10 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Harald Ponce de Leon <haraldpdl@gmail.com>
+Date: Fri, 20 Nov 2026 21:00:00 +0100
+Subject: [PATCH] [FrameworkBundle] Fix `debug:config` when booting the kernel
+ copy rebuilds the container
+
+---
 diff --git a/src/Symfony/Bundle/FrameworkBundle/Command/ConfigDebugCommand.php b/src/Symfony/Bundle/FrameworkBundle/Command/ConfigDebugCommand.php
 index 51dcc84b..f1859099 100644
 --- a/src/Symfony/Bundle/FrameworkBundle/Command/ConfigDebugCommand.php
