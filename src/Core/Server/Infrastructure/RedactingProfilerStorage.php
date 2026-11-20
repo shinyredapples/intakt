@@ -101,7 +101,7 @@ final readonly class RedactingProfilerStorage implements ProfilerStorageInterfac
     }
 
     /**
-     * @param list<string>                    $credentials
+     * @param list<string>                  $credentials
      * @param Closure(string): list<string> $spellings
      *
      * @return array<string, string>

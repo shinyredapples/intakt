@@ -75,7 +75,12 @@ final class RedactingProfilerStorageTest extends WebTestCase
 
     public function testTheSavedProfileOfARejectedMcpCallHoldsNoBearerToken(): void
     {
-        $this->browser->request('POST', '/mcp/owner', server: ['HTTP_AUTHORIZATION' => 'Bearer '.self::CANARY, 'CONTENT_TYPE' => 'application/json'], content: '{"jsonrpc":"2.0","id":1,"method":"tools/list"}');
+        $this->browser->request(
+            'POST',
+            '/mcp/owner',
+            server: ['HTTP_AUTHORIZATION' => 'Bearer '.self::CANARY, 'CONTENT_TYPE' => 'application/json'],
+            content: '{"jsonrpc":"2.0","id":1,"method":"tools/list"}',
+        );
 
         self::assertResponseStatusCodeSame(401);
         self::assertStringNotContainsString(self::CANARY, serialize($this->savedProfile()));
