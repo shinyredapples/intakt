@@ -84,9 +84,9 @@ final readonly class ScriptDirectory
 
         foreach ($this->filesOf('start') as $file) {
             $number = basename($file, '.start');
-            $started = ctype_digit($number) ? $this->recordIn($file, (int) $number) : null;
+            $started = ctype_digit($number) && (string) (int) $number === $number ? $this->recordIn($file, (int) $number) : null;
 
-            // Skipped, because only a writer other than this class leaves an empty, partial, linked or misnamed record, and one such file must not hide the others.
+            // Skipped, because only a writer other than this class leaves an empty, partial, linked or misnamed record, and one such file must not hide the others; a zero-padded or overflowing name is misnamed, so no call is listed twice.
             if (null === $started) {
                 continue;
             }

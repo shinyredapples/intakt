@@ -189,6 +189,16 @@ final class ScriptDirectoryTest extends TestCase
         self::assertSame([$call], array_map(static fn (ScriptedCall $started): int => $started->number, $scripts->calls()));
     }
 
+    public function testAZeroPaddedLinkAndCopyBesideAPublishedStartDoNotListTheCallTwice(): void
+    {
+        $scripts = $this->scripts();
+        $call = $scripts->callStarted();
+        link($this->path.'/'.$call.'.start', $this->path.'/0'.$call.'.start');
+        copy($this->path.'/'.$call.'.start', $this->path.'/00'.$call.'.start');
+
+        self::assertSame([$call], array_map(static fn (ScriptedCall $started): int => $started->number, $scripts->calls()));
+    }
+
     public function testNoTemporaryFileRemainsAfterARecordIsPublished(): void
     {
         $scripts = $this->scripts();
