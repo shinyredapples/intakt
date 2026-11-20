@@ -57,7 +57,7 @@ final class ScriptDirectoryTest extends TestCase
 
         $call = $scripts->callStarted();
 
-        self::assertEquals([new ScriptedCall(2, (int) getmypid(), $this->ownStart(),1000.0, null)], $scripts->calls());
+        self::assertEquals([new ScriptedCall(2, (int) getmypid(), $this->ownStart(), 1000.0, null)], $scripts->calls());
         self::assertSame(2, $call);
     }
 
@@ -79,7 +79,7 @@ final class ScriptDirectoryTest extends TestCase
 
         $scripts->callEnded($call);
 
-        self::assertEquals([new ScriptedCall(1, (int) getmypid(), $this->ownStart(),1000.0, 1002.5)], $scripts->calls());
+        self::assertEquals([new ScriptedCall(1, (int) getmypid(), $this->ownStart(), 1000.0, 1002.5)], $scripts->calls());
     }
 
     public function testACallCannotEndTwice(): void

@@ -15,13 +15,13 @@ final class VanishedProcess
     /**
      * @return array<string, int>
      */
-    public function url_stat(string $path, int $flags): array
+    public function url_stat(): array
     {
         return ['mode' => 0o100444, 'size' => 100];
     }
 
     // PHP itself warns when an open fails, as it does for a /proc entry that is gone.
-    public function stream_open(string $path, string $mode, int $options, ?string &$openedPath): bool
+    public function stream_open(): bool
     {
         return false;
     }
