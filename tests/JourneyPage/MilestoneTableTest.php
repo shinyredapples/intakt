@@ -98,6 +98,14 @@ final class MilestoneTableTest extends TestCase
         self::assertStringContainsString('| a b c d | g |', $table->text);
     }
 
+    public function testNonAsciiTextInAMilestoneTitleAndGoalIsKeptByteForByte(): void
+    {
+        $table = new MilestoneTable()->region([new Milestone(1, 'Ångström Ålesund ąх…', 'Выход Wąż 😅', null)], []);
+
+        self::assertStringContainsString('| Ångström Ålesund ąх… | Выход Wąż 😅 |', $table->text);
+        self::assertTrue(mb_check_encoding($table->text, 'UTF-8'));
+    }
+
     public function testATildeInAMilestoneGoalIsWrittenAsAnEntitySoItCannotStrikeThrough(): void
     {
         $table = new MilestoneTable()->region([new Milestone(1, 'Demo', '~~draft~~', null)], []);

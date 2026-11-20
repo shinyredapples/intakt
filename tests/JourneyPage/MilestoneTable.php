@@ -47,7 +47,7 @@ final readonly class MilestoneTable
     // Forge text stays literal (no comment, journey marker or Markdown); kramdown cannot backslash-escape `~` or `&`, so they become entities, and each single pass never rewrites its own output.
     private function cell(string $text): string
     {
-        return (string) preg_replace('/\R/', ' ', trim($text))
+        return strtr(trim($text), ["\r\n" => ' ', "\r" => ' ', "\n" => ' '])
             |> (static fn (string $flat): string => addcslashes($flat, self::MARKDOWN_PUNCTUATION))
             |> (static fn (string $escaped): string => strtr($escaped, ['&' => '&amp;', '<' => '&lt;', '~' => '&#126;']));
     }
