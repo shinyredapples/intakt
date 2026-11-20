@@ -74,21 +74,20 @@ final class DemoReviewCommandTest extends TestCase
 {
     private const string ROUND = '0192a000-0000-7000-8000-000000000000';
 
-    // Built once, because each git call costs a process and no case changes the checkout.
-    private static TemporaryRepository $sample;
+    private TemporaryRepository $sample;
 
-    public static function setUpBeforeClass(): void
+    protected function setUp(): void
     {
-        self::$sample = new TemporaryRepository();
-        self::$sample->commitFile('README.md', "base\n");
-        self::$sample->checkoutNewBranch(SampleChange::CHANGE);
-        self::$sample->commitFile('src/Shipping.php', "<?php\n");
-        self::$sample->checkout(SampleChange::BASE);
+        $this->sample = new TemporaryRepository();
+        $this->sample->commitFile('README.md', "base\n");
+        $this->sample->checkoutNewBranch(SampleChange::CHANGE);
+        $this->sample->commitFile('src/Shipping.php', "<?php\n");
+        $this->sample->checkout(SampleChange::BASE);
     }
 
-    public static function tearDownAfterClass(): void
+    protected function tearDown(): void
     {
-        self::$sample->remove();
+        $this->sample->remove();
     }
 
     /**
@@ -208,7 +207,7 @@ final class DemoReviewCommandTest extends TestCase
 
     private function whenTheDemoRuns(ChangeReviews $reviews, string $ownerToken = 'demo-token', ?Panels $panels = null): CommandTester
     {
-        return $this->whenTheDemoIsRun($this->demo(self::$sample->path, new LocalChangeReview($panels ?? $this->onePanel(), $reviews), $ownerToken));
+        return $this->whenTheDemoIsRun($this->demo($this->sample->path, new LocalChangeReview($panels ?? $this->onePanel(), $reviews), $ownerToken));
     }
 
     private function whenTheDemoRunsOn(?string $repository): CommandTester

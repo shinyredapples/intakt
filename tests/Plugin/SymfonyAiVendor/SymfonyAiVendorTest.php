@@ -200,38 +200,27 @@ final class SymfonyAiVendorTest extends KernelTestCase
 
     private const int OUTPUT_LIMIT = 16000;
 
-    // One kernel for the class, because booting it is most of a test's time and only its dispatcher is used; the persistence test boots its own.
-    private static KernelInterface $platformKernel;
+    // A kernel of its own per test, so no listener carries what an earlier test left; only its dispatcher is used, and the persistence test boots its own.
+    private KernelInterface $platformKernel;
 
     private VendorAccountLimit $limit;
 
     private EventDispatcherInterface $dispatcher;
 
     #[Override]
-    public static function setUpBeforeClass(): void
-    {
-        parent::setUpBeforeClass();
-        self::$platformKernel = self::createKernel();
-        self::$platformKernel->boot();
-    }
-
-    #[Override]
-    public static function tearDownAfterClass(): void
-    {
-        self::$platformKernel->shutdown();
-        parent::tearDownAfterClass();
-    }
-
-    #[Override]
     protected function setUp(): void
     {
         $this->limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
-        $container = self::$platformKernel->getContainer();
-        // Reset before each test, because a listener of the shared kernel would otherwise carry what the previous test left.
-        $resetter = $container->get('services_resetter');
-        self::assertInstanceOf(ResetInterface::class, $resetter);
-        $resetter->reset();
-        $this->dispatcher = ScriptedReviewer::in($container)->dispatcher;
+        $this->platformKernel = self::createKernel();
+        $this->platformKernel->boot();
+        $this->dispatcher = ScriptedReviewer::in($this->platformKernel->getContainer())->dispatcher;
+    }
+
+    #[Override]
+    protected function tearDown(): void
+    {
+        $this->platformKernel->shutdown();
+        parent::tearDown();
     }
 
     public function testAStructuredCallReturnsTheVerdictTheModelAnswered(): void
@@ -1238,14 +1227,14 @@ final class SymfonyAiVendorTest extends KernelTestCase
         self::assertArrayNotHasKey('round', $ledger->payloads()[0]);
     }
 
-    public function testATestStartsOnTheSharedDispatcherWithNoListenerAnEarlierTestCalled(): void
+    public function testTheServicesResetterForgetsTheListenersAReviewCalled(): void
     {
         self::assertInstanceOf(TraceableEventDispatcher::class, $this->dispatcher);
         // A review calls the listeners the container declares, because the compiled dispatcher takes no listener at runtime since Symfony 8.2.
         $this->vendor(static fn (): TextResult => self::withUsage(VerdictDocument::fromTheDesign()->json()))->review('alpha', Tier::Strong, $this->request());
         self::assertNotSame([], $this->dispatcher->getCalledListeners());
 
-        $resetter = self::$platformKernel->getContainer()->get('services_resetter');
+        $resetter = $this->platformKernel->getContainer()->get('services_resetter');
         self::assertInstanceOf(ResetInterface::class, $resetter);
         $resetter->reset();
 

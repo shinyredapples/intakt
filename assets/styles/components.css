@@ -736,3 +736,16 @@ details.ev > summary time { margin-left: auto; color: var(--muted); font-size: v
   .tour-caption { bottom: calc(var(--bar) + env(safe-area-inset-bottom)); flex-wrap: wrap; padding: var(--s8) var(--s16); }
   .tour-caption .tour-line { flex-basis: 100%; order: -1; }
 }
+
+/* Trends: stat tiles, the figure big above its label; two per row on a phone (decisions D2 and D7 of issue 2858). */
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(208px, 1fr)); gap: var(--s12); margin: 0; }
+.tile { display: flex; flex-direction: column-reverse; justify-content: flex-end; gap: var(--s4); padding: var(--s12) var(--s16); border-radius: var(--r-card); background: var(--tint); }
+.tile dt { color: var(--muted); font-size: var(--t13); }
+.tile dd { margin: 0; color: var(--ink); font: 700 var(--t28)/1.2 var(--f-body); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.tile[data-no-data] dd { color: var(--muted); font-size: var(--t17); font-weight: 500; }
+.tiles-note { margin: var(--s12) 0 0; font-size: var(--t13); }
+a.fchip { display: inline-flex; align-items: center; text-decoration: none; }
+@media (max-width: 760px) {
+  .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s8); }
+  .tile dd { font-size: var(--t21); }
+}
