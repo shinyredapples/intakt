@@ -5,14 +5,17 @@ declare(strict_types=1);
 namespace Intakt\Plugin\GitHubWorkSource\Infrastructure;
 
 use Doctrine\Common\EventManager;
+use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Intakt\Plugin\GitHubWorkSource\Domain\IntakeValidator;
+use Intakt\Plugin\GitHubWorkSource\Domain\ListingRows;
 use Intakt\Plugin\GitHubWorkSource\Domain\StoredIssue;
 use Intakt\Plugin\GitHubWorkSource\Domain\TaskFailure;
 use Intakt\Plugin\WorkSource\Contract\TaskNotQueued;
 use InvalidArgumentException;
 use LogicException;
+use NoDiscard;
 
 // Every call works in an entity manager of its own on the shared connection: a worker keeps the shared one between ticks, what another worker stored since is the truth, a write must flush only its own rows and never another caller's pending work, and a write that fails leaves nothing behind for a later flush.
 final readonly class IntakeStore
@@ -35,32 +38,21 @@ final readonly class IntakeStore
         return $this->ownManager()->find(IntakeValidator::class, $project)?->value();
     }
 
-    // The rows become those of one complete listing, so an item it no longer shows was closed and its row goes; a forge that sent no validator leaves none stored, so the next listing is a full one.
-    /**
-     * @param list<StoredIssue> $issues
-     */
-    public function record(string $project, array $issues, ?string $validator): void
+    // Written only while the stored validator is still the one the listing was asked with, because otherwise another worker stored a newer listing meanwhile and these rows would replace it with an older one.
+    #[NoDiscard]
+    public function recordIfStill(string $project, ?string $askedWith, ListingRows $rows): bool
     {
-        $listed = [];
-        foreach ($issues as $issue) {
-            if ($issue->project() !== $project) {
-                throw new InvalidArgumentException(sprintf('Issue #%d belongs to project "%s", not to "%s".', $issue->number(), $issue->project(), $project));
+        $listed = $this->listed($project, $rows->issues);
+
+        return $this->ownManager()->wrapInTransaction(function (EntityManagerInterface $manager) use ($project, $askedWith, $listed, $rows): bool {
+            if ($manager->find(IntakeValidator::class, $project, LockMode::PESSIMISTIC_WRITE)?->value() !== $askedWith) {
+                return false;
             }
 
-            $listed[$issue->number()] = $issue;
-        }
+            $this->replaceRows($manager, $project, $listed);
+            $this->recordValidator($manager, $project, $rows->validator);
 
-        $this->ownManager()->wrapInTransaction(function (EntityManagerInterface $manager) use ($project, $listed, $validator): void {
-            $stored = $this->storedIssuesOf($manager, $project);
-            foreach ($listed as $number => $issue) {
-                $this->keep($manager, $stored[$number] ?? null, $issue);
-            }
-
-            foreach (array_diff_key($stored, $listed) as $closed) {
-                $manager->remove($closed);
-            }
-
-            $this->recordValidator($manager, $project, $validator);
+            return true;
         });
     }
 
@@ -94,6 +86,41 @@ final readonly class IntakeStore
         }
 
         return $failures;
+    }
+
+    /**
+     * @param list<StoredIssue> $issues
+     *
+     * @return array<int, StoredIssue>
+     */
+    private function listed(string $project, array $issues): array
+    {
+        $listed = [];
+        foreach ($issues as $issue) {
+            if ($issue->project() !== $project) {
+                throw new InvalidArgumentException(sprintf('Issue #%d belongs to project "%s", not to "%s".', $issue->number(), $issue->project(), $project));
+            }
+
+            $listed[$issue->number()] = $issue;
+        }
+
+        return $listed;
+    }
+
+    // The rows become those of one complete listing, so an item it no longer shows was closed and its row goes; failures stay, because a closed task that failed for good still holds the tasks that wait on it.
+    /**
+     * @param array<int, StoredIssue> $listed
+     */
+    private function replaceRows(EntityManagerInterface $manager, string $project, array $listed): void
+    {
+        $stored = $this->storedIssuesOf($manager, $project);
+        foreach ($listed as $number => $issue) {
+            $this->keep($manager, $stored[$number] ?? null, $issue);
+        }
+
+        foreach (array_diff_key($stored, $listed) as $closed) {
+            $manager->remove($closed);
+        }
     }
 
     // A query and not a repository: the shared configuration's repository factory keeps every manager it built a repository for, with the rows that manager loaded, for the life of the worker.

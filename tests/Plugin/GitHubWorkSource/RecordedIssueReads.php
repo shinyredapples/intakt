@@ -18,6 +18,9 @@ final class RecordedIssueReads implements IssueReads
     public array $validators = [];
     // Run once on the next listing, so a test can force what another worker does in the middle of a tick.
     public ?Closure $during = null;
+    // Each item as it was last scripted, so a scripted history can answer the text and labels GitHub holds.
+    /** @var array<int, ListedIssue> */
+    public array $lastListed = [];
     private ?IssueListing $next = null;
 
     /**
@@ -26,6 +29,9 @@ final class RecordedIssueReads implements IssueReads
     public function lists(array $issues, ?string $validator = 'W/"issues-1"'): void
     {
         $this->next = IssueListing::listed($issues, $validator);
+        foreach ($issues as $issue) {
+            $this->lastListed[$issue->number] = $issue;
+        }
     }
 
     public function listsUnchanged(): void

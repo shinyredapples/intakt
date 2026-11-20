@@ -1,7 +1,21 @@
+parameters:
+    # Empty unless a journey arms a script directory for the process it starts, so every other test-environment process keeps JourneyVendor's answers and the real HTTP client.
+    env(INTAKT_JOURNEY_SCRIPTS): ''
+
 services:
-    # Every review in the test environment goes to this vendor, so a journey's round ends without a key or a provider.
+    # Every review in the test environment goes to this vendor, so a journey's round ends without a key or a provider; with a script directory it is SymfonyAiVendor itself, so the account cap applies and AccountLimitedVendor does not.
     Intakt\Tests\Journeys\Support\JourneyVendor: ~
-    Intakt\Plugin\Vendor\Contract\Vendor: '@Intakt\Tests\Journeys\Support\JourneyVendor'
+    Intakt\Tests\Journeys\Support\ScriptedJourneyVendor:
+        arguments:
+            - !service_closure '@Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiVendor'
+            - '@Intakt\Tests\Journeys\Support\JourneyVendor'
+            - '%env(INTAKT_JOURNEY_SCRIPTS)%'
+    Intakt\Plugin\Vendor\Contract\Vendor: '@Intakt\Tests\Journeys\Support\ScriptedJourneyVendor'
+
+    # Only with a script directory does it answer instead of the real client, so the model calls of a scripted journey reach no provider and record their timing.
+    Intakt\Tests\Journeys\Support\ScriptedHttpClient:
+        decorates: http_client
+        arguments: ['@.inner', '@clock', '%env(INTAKT_JOURNEY_SCRIPTS)%']
 
     # Every pasted key in the test environment is accepted without a call, so a journey can paste a placeholder key into the first-run page.
     Intakt\Tests\Journeys\Support\JourneyKeyCheck: ~
