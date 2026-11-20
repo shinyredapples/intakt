@@ -7,6 +7,7 @@ namespace Intakt\Core\Review\Domain;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
+use Intakt\Core\Review\Contract\AwaitedReviewer;
 use Intakt\Core\Review\Contract\FinishedState;
 use Intakt\Core\Review\Contract\IdentityField;
 use Intakt\Core\Review\Contract\PanelReviewer;
@@ -205,6 +206,7 @@ final class ReviewRound implements HasPlace
     {
         $finished = [];
         $started = 0;
+        $awaited = [];
 
         foreach ($this->reviewers() as $reviewer) {
             $id = $reviewer->id()->toRfc4122();
@@ -215,10 +217,14 @@ final class ReviewRound implements HasPlace
 
             if ($reviewer->isFinished()) {
                 $finished[$id] = in_array($id, $stopped, true) ? FinishedState::Stopped : FinishedState::from($reviewer->state()->value);
+
+                continue;
             }
+
+            $awaited[] = new AwaitedReviewer($reviewer->roleName(), $reviewer->tier());
         }
 
-        return new RoundProgress(count($finished), count($this->reviewers()), RoundState::Judged === $this->state, $finished, $started);
+        return new RoundProgress(count($finished), count($this->reviewers()), RoundState::Judged === $this->state, $finished, $started, $awaited);
     }
 
     public function state(): RoundState

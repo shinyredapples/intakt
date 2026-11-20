@@ -11,6 +11,7 @@ use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Budget\Infrastructure\ConfiguredPrices;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Review\Contract\AwaitedReviewer;
 use Intakt\Core\Review\Contract\ChangeDecision;
 use Intakt\Core\Review\Contract\ChangeReview;
 use Intakt\Core\Review\Contract\ChangeReviewRequest;
@@ -83,6 +84,7 @@ use Symfony\Component\Serializer\SerializerInterface;
 #[UsesClass(Cost::class)]
 #[UsesClass(ConfiguredPrices::class)]
 #[UsesClass(RoundProgress::class)]
+#[UsesClass(AwaitedReviewer::class)]
 #[UsesClass(IgnoredProgress::class)]
 #[UsesClass(ChangeReviewRequest::class)]
 #[UsesClass(FlagProjectAsReplayHandler::class)]
@@ -376,7 +378,7 @@ final class ReviewChangeTest extends KernelTestCase
 
         // The first read of the round reports too, because the caller should see the start before any wait.
         self::assertCount(4, $progress->reported);
-        self::assertEquals(new RoundProgress(0, 2, false), $progress->reported[3]);
+        self::assertEquals(new RoundProgress(0, 2, false, [], 0, [new AwaitedReviewer('role-1', Tier::Standard), new AwaitedReviewer('role-2', Tier::Standard)]), $progress->reported[3]);
     }
 
     public function testTheLastReportSaysTheRoundIsJudgedWhenTheWorkersFinishIt(): void

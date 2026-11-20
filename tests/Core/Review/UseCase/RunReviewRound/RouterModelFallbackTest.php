@@ -17,7 +17,6 @@ use Intakt\Core\Ai\Infrastructure\PinnedProviderCooldownWindows;
 use Intakt\Core\Ai\Infrastructure\SendFailures;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
 use Intakt\Core\Ai\Infrastructure\TypedRejectionConverter;
-use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\PromptCut;
@@ -36,10 +35,10 @@ use Intakt\Core\Review\Infrastructure\ReviewerStopping;
 use Intakt\Core\Review\Infrastructure\ReviewerToolboxFactory;
 use Intakt\Core\Review\Infrastructure\StopRequests;
 use Intakt\Core\Review\Infrastructure\StreamingFallbacks;
-use Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewerHandler;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewerLeases;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewerMoves;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewerMovesToAnotherAccount;
+use Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewerHandler;
 use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\AccountLimitedVendor;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiVendor;
@@ -172,7 +171,12 @@ final class RouterModelFallbackTest extends KernelTestCase
             }
 
             $answer = new TextResult(VerdictDocument::fromTheDesign()->with('verdict', 'approve')->with('resolved', [])->with('findings', [])->json());
-            $answer->getMetadata()->add('token_usage', new TokenUsage(promptTokens: 100, completionTokens: 20, totalTokens: 120, model: $name));
+            $answer->getMetadata()->add('token_usage', new TokenUsage(
+                promptTokens: 100,
+                completionTokens: 20,
+                totalTokens: 120,
+                model: $name,
+            ));
 
             return $answer;
         }, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
