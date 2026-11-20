@@ -39,7 +39,7 @@ final class RecordingWithTrendsKeysTest extends TestCase
         });
 
         $this->expectException(LogicException::class);
-        $this->expectExceptionMessage('No finding of judge_done carries a judge note');
+        $this->expectExceptionMessageMatches('/^No finding of judge_done carries a judge note/');
 
         $this->upgraded($recording);
     }
@@ -49,7 +49,7 @@ final class RecordingWithTrendsKeysTest extends TestCase
         $recording = $this->shippedWith(LedgerEventKind::VerdictReceived, static fn (array $payload): array => ['findings' => 0 === $payload['findings'] ? 1 : 3] + $payload);
 
         $this->expectException(LogicException::class);
-        $this->expectExceptionMessage('More than one reviewer reported findings');
+        $this->expectExceptionMessageMatches('/^More than one reviewer reported findings/');
 
         $this->upgraded($recording);
     }
@@ -66,7 +66,7 @@ final class RecordingWithTrendsKeysTest extends TestCase
         }
 
         $this->expectException(LogicException::class);
-        $this->expectExceptionMessage('exactly one judge_done row');
+        $this->expectExceptionMessageMatches('/^The recording holds 2 judge_done rows, not exactly one/');
 
         $this->upgraded($this->withEvents($shipped, $events));
     }
@@ -76,7 +76,7 @@ final class RecordingWithTrendsKeysTest extends TestCase
         $recording = $this->shippedWith(LedgerEventKind::VerdictReceived, static fn (array $payload): array => 0 === $payload['findings'] ? ['round' => '01a1f261-3829-7222-812d-3260f5198465'] + $payload : $payload);
 
         $this->expectException(LogicException::class);
-        $this->expectExceptionMessage('from another round than its judge_done row');
+        $this->expectExceptionMessageMatches('/^A verdict_received row is from another round than its judge_done row/');
 
         $this->upgraded($recording);
     }
