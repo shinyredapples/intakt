@@ -15,6 +15,7 @@ use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierProviderDisabled;
 use Intakt\Core\Ai\Contract\TierResolutionFailure;
 use Intakt\Core\Ai\Contract\TierResolver;
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Review\Contract\ChangeUnderReview;
 use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\Judgement;
@@ -48,6 +49,7 @@ use Throwable;
 #[UsesClass(Verdict::class)]
 #[UsesClass(Judgement::class)]
 #[UsesClass(JudgeRequest::class)]
+#[UsesClass(Paths::class)]
 #[UsesClass(ProviderRateLimited::class)]
 #[UsesClass(ProviderFailedTransiently::class)]
 #[UsesClass(ProviderRejectedTheKey::class)]
@@ -76,7 +78,7 @@ final class AccountLimitedVendorTest extends TestCase
         $vendor = self::createStub(Vendor::class);
         $vendor->method('judge')->willReturn($judgement);
 
-        $result = $this->vendor($vendor)->judge('intakt', new JudgeRequest('Add a cart.', [], new UuidV7(), []));
+        $result = $this->vendor($vendor)->judge('intakt', new JudgeRequest('Add a cart.', [], new UuidV7(), new Paths()));
 
         self::assertSame($judgement, $result);
     }
@@ -108,7 +110,7 @@ final class AccountLimitedVendorTest extends TestCase
 
         $this->expectException(VendorAccountOut::class);
 
-        $this->vendor($vendor, $this->cooldowns(0))->judge('intakt', new JudgeRequest('Add a cart.', [], new UuidV7(), []));
+        $this->vendor($vendor, $this->cooldowns(0))->judge('intakt', new JudgeRequest('Add a cart.', [], new UuidV7(), new Paths()));
     }
 
     public function testARateLimitWhileEveryAccountOfTheVendorCoolsDownWaitsUntilTheFirstIsFree(): void

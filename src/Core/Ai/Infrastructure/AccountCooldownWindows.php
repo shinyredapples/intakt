@@ -25,6 +25,7 @@ use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\RateLimiter\RateLimit;
 use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\RateLimiter\Storage\CacheStorage;
+use Symfony\Component\Serializer\Encoder\JsonEncoder;
 use Symfony\Component\Serializer\SerializerInterface;
 use Throwable;
 
@@ -250,7 +251,7 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
     private function report(Account $account): void
     {
         $reportedAt = $this->clock->now();
-        $payload = $this->serializer->serialize(new AccountErrorReported($account->key(), $reportedAt), 'json');
+        $payload = $this->serializer->serialize(new AccountErrorReported($account->key(), $reportedAt), JsonEncoder::FORMAT);
         $appended = $this->ledger->append(new LedgerEvent(LedgerEventKind::AccountErrorReported, $payload));
 
         // Marked only once recorded, so a report the ledger refused is made again on the next error; logged, not thrown, for the same reason as a cooldown's record.
@@ -265,7 +266,7 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
 
     private function record(Account $account, DateTimeImmutable $until): void
     {
-        $payload = $this->serializer->serialize(new AccountCooledDown($account->key(), $until), 'json');
+        $payload = $this->serializer->serialize(new AccountCooledDown($account->key(), $until), JsonEncoder::FORMAT);
         $appended = $this->ledger->append(new LedgerEvent(LedgerEventKind::AccountCooledDown, $payload));
 
         // Logged, not thrown, because the cooldown holds without its record and failing here would hide the provider's own error.

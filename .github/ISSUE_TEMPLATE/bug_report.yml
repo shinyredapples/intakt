@@ -1,0 +1,30 @@
+name: Bug report
+description: Intakt does not work as it should.
+body:
+  - type: markdown
+    attributes:
+      value: See [writing a good task](https://github.com/shinyredapples/intakt/blob/main/docs/guide/writing-a-good-task.md).
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened, with any error message
+    validations:
+      required: true
+  - type: textarea
+    id: what-you-expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version (release or commit)
+    validations:
+      required: true

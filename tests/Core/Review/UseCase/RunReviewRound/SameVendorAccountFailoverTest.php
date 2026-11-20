@@ -154,6 +154,7 @@ final class SameVendorAccountFailoverTest extends KernelTestCase
             LedgerEventKind::UsageRecorded,
             LedgerEventKind::UsageRecorded,
             LedgerEventKind::VerdictReceived,
+            LedgerEventKind::ReviewerFindingsRecorded,
         ], $this->fixture->ledgerKinds());
         self::assertSame(['anthropic.default'], $this->payloadValues(LedgerEventKind::AccountCooledDown, 'account'));
         self::assertSame(['anthropic.team'], $this->usageAccounts());
