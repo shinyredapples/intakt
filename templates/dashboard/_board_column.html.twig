@@ -23,6 +23,6 @@
         {{ include('dashboard/components/column_empty.html.twig', {text: board.emptyLineOf(column)}, with_context = false) }}
     {% endfor %}
     {% if crowded %}<button type="button" class="btn secondary sm more-btn">Show {{ cards|length - limit }} more</button>{% endif %}
-    {% if left_out > 0 %}<a class="btn secondary sm more-link" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_BOARD')) }}">Show {{ left_out }} more</a>{% endif %}
+    {% if left_out > 0 %}<a class="btn secondary sm more-link" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_BOARD'), {board: 1}) }}">Show {{ left_out }} more</a>{% endif %}
     </div>
 </section>
