@@ -153,7 +153,7 @@ final class ChangesHandedToIntaktTest extends KernelTestCase
         $this->authorship = $authorship;
         $connection = $this->entities->getConnection();
 
-        // As the tick does: the recognition runs inside its transaction, the rate limit rolls it back, and the same process goes on to append its due heads' lines.
+        // Inside a transaction that is rolled back and followed by an append, because the tick recognizes inside its own transaction and goes on to its due heads' lines after a rate limit.
         $connection->beginTransaction();
         try {
             $this->recognize('alpha', $this->change(self::PULL), $this->change(self::LOOP_PULL));
