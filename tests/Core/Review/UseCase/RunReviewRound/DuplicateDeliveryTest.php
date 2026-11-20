@@ -62,7 +62,7 @@ final class DuplicateDeliveryTest extends KernelTestCase
         $stored = $this->fixture->round($round->id()->toRfc4122());
         self::assertSame(RoundState::Complete, $stored->state());
         self::assertSame(ReviewerState::Verdict, $stored->reviewers()[0]->state());
-        self::assertSame([LedgerEventKind::ReviewStarted, LedgerEventKind::ReviewerStarted, LedgerEventKind::VerdictReceived], $this->fixture->ledgerKinds());
+        self::assertSame([LedgerEventKind::ReviewStarted, LedgerEventKind::ReviewerStarted, LedgerEventKind::VerdictReceived, LedgerEventKind::ReviewerFindingsRecorded], $this->fixture->ledgerKinds());
         self::assertSame([], $second->ledger->kinds());
     }
 
@@ -83,7 +83,7 @@ final class DuplicateDeliveryTest extends KernelTestCase
         $stored = $this->fixture->round($round->id()->toRfc4122());
         self::assertSame(ReviewerState::Verdict, $stored->reviewers()[0]->state());
         self::assertSame([LedgerEventKind::ReviewStarted, LedgerEventKind::ReviewerStarted], $this->fixture->ledgerKinds());
-        self::assertSame([LedgerEventKind::ReviewerStarted, LedgerEventKind::VerdictReceived], $second->ledger->kinds());
+        self::assertSame([LedgerEventKind::ReviewerStarted, LedgerEventKind::VerdictReceived, LedgerEventKind::ReviewerFindingsRecorded], $second->ledger->kinds());
     }
 
     public function testAVerdictOfAWorkerWhoseReviewerWasRestartedLeavesTheRestartedAttemptRunning(): void

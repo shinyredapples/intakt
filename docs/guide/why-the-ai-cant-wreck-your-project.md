@@ -25,7 +25,7 @@ Every builder and reviewer works in a **fresh, throwaway container**:
 
 ## Layer 2: what comes back is data, not commands
 
-A builder hands back **a package of commits and a short description**, nothing else. Intakt then:
+A builder hands back **a package of commits and a short description**, or **a question** when it needs a decision from you, nothing else. A question is plain text that Intakt checks against a fixed shape (a question, a few choices, a recommendation among them) and refuses otherwise; it changes no code. For commits and a description, Intakt then:
 1. checks that the commits really build on the version of the project it was given;
 2. **signs the commits with its own key**, so every commit on the branch is verifiably Intakt's;
 3. scans for anything that looks like a password or key, and refuses the change if it finds one;
@@ -132,7 +132,8 @@ On top, the **Security engineer** runs two separate sessions that never see what
 ## Layer 7: merging exactly what was checked
 
 - Intakt merges **exactly the version that was reviewed and passed CI**. If anything was pushed in between, the merge refuses. The only shortcut: a merge of main without conflicts, or a change that touches only documentation, keeps the reviews for the parts it did not touch, and the touched parts are reviewed again.
-- Main is **protected on GitHub**: no force-pushes, no deletion, required checks. A watchdog also checks that main's history was never rewritten.
+- Intakt **recommends protecting main on GitHub**: no force-pushes, no deletion, required checks. When main is not protected, the dashboard says that the watchdog is its only guard.
+- **A watchdog looks at every new commit on main** (planned) before each step and merge. A merge Intakt made and recorded passes first, before any signature is checked. Any other commit passes only when it is signed with a key you registered. A commit without a signature, a commit signed with a key you did not register, and history that was rewritten (a force push) are violations. A violation is to halt the project: Intakt takes no further step and merges nothing, and shows you the commit and the reason. Only you can lift the halt, after checking the commit. So far Intakt has only the rules that sort the commits; reading main, the halt and your card come later. The design also plans rules based on what GitHub reports (a merged pull request or a push by someone with write access, which shows as "pushed without the gate"); how those and the signature rules work together is still open.
 - If a CI change could reach more than a throwaway machine with read-only access, Intakt **asks you before pushing it**, because GitHub runs a pushed CI setup straight away.
 
 ## When something still goes wrong

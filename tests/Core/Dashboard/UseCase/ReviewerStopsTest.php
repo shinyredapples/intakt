@@ -29,6 +29,7 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
+use Symfony\Component\Serializer\Encoder\JsonEncoder;
 
 #[CoversClass(ReviewerStops::class)]
 #[UsesClass(RoundLock::class)]
@@ -55,7 +56,7 @@ final class ReviewerStopsTest extends TestCase
     {
         $ledger = new DashboardLedger();
         $ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
-        $ledger->append(new LedgerEvent(LedgerEventKind::ReviewerStarted, StoredSerializerFactory::create()->serialize(new ReviewerStarted('round-1', 'round-1-security', 'security', Tier::Strong), 'json')));
+        $ledger->append(new LedgerEvent(LedgerEventKind::ReviewerStarted, StoredSerializerFactory::create()->serialize(new ReviewerStarted('round-1', 'round-1-security', 'security', Tier::Strong), JsonEncoder::FORMAT)));
 
         self::assertSame(['success', 'Asked the reviewer to stop.'], $this->stopsOn($ledger)->requestStopOf('round-1', 'round-1-security'));
     }

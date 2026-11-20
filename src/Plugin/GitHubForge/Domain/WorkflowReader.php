@@ -232,7 +232,7 @@ final readonly class WorkflowReader
             throw new WorkflowFormNotRead($line->number, 'a block value with an indentation indicator');
         }
 
-        return $this->blocks->read($lines, $line->number, $line);
+        return $this->blocks->read($lines, $line);
     }
 
     private function isEmpty(string $rest): bool

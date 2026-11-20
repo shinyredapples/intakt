@@ -4,7 +4,7 @@ How Intakt works, for developers and agents. Each user-visible feature has a pag
 
 Code and conventions:
 - [Module layout](module-layout.md)
-- [Conventions](conventions.md): logging, Doctrine mapping, message handlers, the dependency policy and which release cooldown decides what (Dependabot's or Composer's)
+- [Conventions](conventions.md): logging, Doctrine mapping, message handlers, the dependency policy and which release cooldown decides what (Dependabot's, Composer's or the import map's)
 - [Sample repository](sample-repository.md): the demo's sample change and the review bench (`intakt:bench:review`, `intakt:bench --repeat`, the result file under `var/bench/`, agreement of repeated runs, failure causes printed before the figures)
 - [Retried network git calls](network-git.md)
 - [Bare mirror](mirror.md)
@@ -12,6 +12,7 @@ Code and conventions:
 - [Branch push](branch-push.md)
 - [Hand-back checks](hand-back.md): the bundle a build returns, refused when it touches main, is not a fast-forward, holds a merge or a secret, stripped of attribution and redacted of mounted credentials; the pull request text scanned too, and a failure sent back once, then handed over
 - [Check job](check-job.md): the pre-push check of an accepted bundle in a fresh clone through the gate plugin, the lost-content rule, and the verdict read from the job's output directory only
+- [Watchdog over main](watchdog.md): the rules that classify main's new commits: a recorded merge head passes before any signature check, an owner-signed commit passes, an unsigned commit, an unknown key and a rewrite of main's history are violations
 - [Protected paths of a head](protected-paths.md): the owner's list per project, read from the whole change and each commit; unreadable counts as protected
 - [Work intake from GitHub issues](work-intake.md): the work source contract and the `eligibility_label` watch key
 - [Upstream reproductions](upstream-reproductions.md)
@@ -55,7 +56,7 @@ Builds:
 - [The build lane's review cap and in-flight limit](lanes.md): `ReviewCap` admits a build while fewer heads than the cap wait for a reviewer or are in review; heads waiting for CI, a runner or landing do not count; `HeadsInFlightLimit` admits a build while fewer heads than the limit (twice the cap by default) are in flight, counting every pushed, unmerged head
 - [Builder prompt](builder-prompt.md): the build job's prompt, every untrusted input fenced, and the gate test that proves it
 - [Build task](build-task.md): `intakt:build:task` reads the task, updates the mirror, makes the build clone, runs the build job, checks its hand-back, runs the pre-push check and pushes the branch signed, recording each step in the ledger
-- [Build job](build-job.md): the Claude Code CLI on the tier's model in a job container, and the bundle and pull request text it returns
+- [Build job](build-job.md): the Claude Code CLI on the tier's model in a job container, and the bundle and pull request text it returns, or the structured question it ends with instead
 
 Reviews:
 - [Review flow](review-flow.md)

@@ -53,6 +53,11 @@ final class DashboardLedger implements Ledger
         $this->add(LedgerEventKind::JudgeDone, ['round' => $round, 'act' => [], 'follow_ups' => []]);
     }
 
+    public function judgeRoundAt(string $round, DateTimeImmutable $at): void
+    {
+        $this->add(LedgerEventKind::JudgeDone, ['round' => $round, 'act' => [], 'follow_ups' => []], $at);
+    }
+
     public function startRoundOf(string $change, string $round, int $number): void
     {
         $this->add(LedgerEventKind::ReviewStarted, ['round' => $round, 'project' => 'alpha', 'reviewers' => 2, 'change' => $change, 'number' => $number]);
@@ -91,6 +96,14 @@ final class DashboardLedger implements Ledger
     public function answer(string $round, string $role, int $findings): void
     {
         $this->add(LedgerEventKind::VerdictReceived, $this->reviewer($round, $role) + ['decision' => 0 === $findings ? 'approve' : 'changes', 'findings' => $findings]);
+    }
+
+    /**
+     * @param list<string> $findings
+     */
+    public function reportFindings(string $round, string $role, array $findings): void
+    {
+        $this->add(LedgerEventKind::ReviewerFindingsRecorded, ['round' => $round, 'reviewer' => $round.'-'.$role, 'findings' => $findings]);
     }
 
     public function stopReviewer(string $round, string $role): void
@@ -332,8 +345,8 @@ final class DashboardLedger implements Ledger
     /**
      * @param array<string, mixed> $payload
      */
-    private function add(LedgerEventKind $kind, array $payload): void
+    private function add(LedgerEventKind $kind, array $payload, ?DateTimeImmutable $at = null): void
     {
-        $this->recorded[] = new RecordedEvent(Uuid::v7(), new LedgerEvent($kind, json_encode($payload, JSON_THROW_ON_ERROR)), new DateTimeImmutable('2026-10-28T12:00:00+00:00'));
+        $this->recorded[] = new RecordedEvent(Uuid::v7(), new LedgerEvent($kind, json_encode($payload, JSON_THROW_ON_ERROR)), $at ?? new DateTimeImmutable('2026-10-28T12:00:00+00:00'));
     }
 }

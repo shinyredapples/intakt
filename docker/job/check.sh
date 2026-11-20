@@ -34,7 +34,14 @@ own_git() (
 
 apply() {
     # No template, because git copies its default one of the image (its info/attributes, config and hooks) into the clone, which own_git does not shut out.
-    own_git clone --template= --quiet --no-hardlinks -- "$mirror" "$clone" || return 1
+    # The mirror only is trusted whoever owns it, because git refuses to clone a local repository another user owns and the job's user need not own the mounted mirror.
+    # The upload-pack that serves the clone gets it too, because git drops the clone's -c settings before it starts it; the path goes by a variable so the shell running it never parses the path.
+    (
+        INTAKT_MIRROR="$mirror"
+        export INTAKT_MIRROR
+        own_git -c safe.directory="$mirror" clone --template= --quiet --no-hardlinks \
+            --upload-pack='git -c safe.directory="$INTAKT_MIRROR" upload-pack' -- "$mirror" "$clone"
+    ) || return 1
     # Read before the checkout moves HEAD; an empty mirror has no main to merge.
     main=$(own_git -C "$clone" rev-parse --verify --quiet HEAD) || main=''
     own_git -C "$clone" fetch --quiet --update-head-ok -- "$bundle" "+refs/heads/$branch:refs/heads/$branch" \

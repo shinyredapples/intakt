@@ -7,7 +7,9 @@ namespace Intakt\Tests\Core\Build;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
 use Intakt\Tests\Core\HandBack\BuildHistory;
 use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\TestCase;
+use RuntimeException;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Process\ExecutableFinder;
 use Symfony\Component\Process\Process;
@@ -28,6 +30,9 @@ final class BuildScriptTest extends TestCase
     private string $gates = '4';
     // False removes the variable, so a value the test run itself was started with never reaches the script.
     private string|false $inherited = false;
+    // Seconds the script may run, so a git waiting on a pipe fails its test instead of holding the suite.
+    private int $timeout = 20;
+    private ?string $source = null;
 
     protected function setUp(): void
     {
@@ -397,6 +402,197 @@ final class BuildScriptTest extends TestCase
         self::assertFileDoesNotExist($this->output.'/handback.bundle');
     }
 
+    public function testAnIncludeThatWaitsOnAPipeInTheClonesGitConfigDoesNotStopTheBundleOfTheBranch(): void
+    {
+        // Nobody writes into the pipe, so a git that reads the clone's own settings after the session waits until the job is timed out.
+        $this->givenTheCli(<<<'SH'
+            echo 'built' > built.txt
+            git add built.txt
+            git commit --quiet -m 'feat: build the task'
+            mkfifo "$TMPDIR/settings"
+            git config include.path "$TMPDIR/settings"
+            SH);
+        $this->timeout = 10;
+
+        try {
+            $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+        } finally {
+            $this->releaseThePipe($this->work.'/settings');
+        }
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertSame("built\n", $this->fileAtTheBundlesHead('task', 'built.txt'));
+    }
+
+    public function testACommonFolderTheCliNamesInTheCloneDoesNotStopTheBundleOfTheBranch(): void
+    {
+        // Git reads the settings of the folder a commondir file names, so the include waits on a pipe nobody writes into.
+        $this->givenTheCli(<<<'SH'
+            echo 'built' > built.txt
+            git add built.txt
+            git commit --quiet -m 'feat: build the task'
+            mkfifo "$TMPDIR/settings"
+            cp -R .git "$TMPDIR/common"
+            printf '[include]\n\tpath = %s\n' "$TMPDIR/settings" >> "$TMPDIR/common/config"
+            echo "$TMPDIR/common" > .git/commondir
+            SH);
+        $this->timeout = 10;
+
+        try {
+            $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+        } finally {
+            $this->releaseThePipe($this->work.'/settings');
+        }
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertSame("built\n", $this->fileAtTheBundlesHead('task', 'built.txt'));
+    }
+
+    public function testASha256BuildCloneStillHandsBackABundleOfTheBranchAfterItsSettingsAreReplaced(): void
+    {
+        $this->source = $this->history->folder.'/sha256';
+        foreach ([['init', '--quiet', '--object-format=sha256', '--initial-branch=task', $this->source], ['-C', $this->source, 'commit', '--quiet', '--allow-empty', '-m', 'chore: start']] as $command) {
+            new Process(['git', '-c', 'user.name=test', '-c', 'user.email=test@intakt.invalid', ...$command], null, $this->environment())->mustRun();
+        }
+        $this->givenTheCli('git commit --quiet --allow-empty -m "feat: build the task" && git rev-parse HEAD > "$RECORD/head"');
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertStringStartsWith("# v3 git bundle\n@object-format=sha256\n", $this->outputFile('handback.bundle'));
+        self::assertStringContainsString(trim((string) file_get_contents($this->history->folder.'/head')).' refs/heads/task', $this->outputFile('handback.bundle'));
+    }
+
+    public function testCloneSettingsThatCannotBeReplacedHandNoBundleBack(): void
+    {
+        // A failing remove, because a test cannot make settings the job's own user cannot remove.
+        file_put_contents($this->bin.'/rm', "#!/bin/sh\nexit 1\n");
+        chmod($this->bin.'/rm', 0o755);
+        $this->givenTheCli('echo built > built.txt && git add built.txt && git commit --quiet -m "feat: build"');
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertFileDoesNotExist($this->output.'/handback.bundle');
+        self::assertStringContainsString("no bundle is handed back: the clone's git settings could not be replaced", $this->outputFile('build.log'));
+    }
+
+    public function testARepositoryTheCliMakesAboveACloneWhoseHeadItRemovedDoesNotStopTheBundleOfTheBranch(): void
+    {
+        // Without a HEAD the clone's .git is no repository, so a git that searches upward finds the work area's, whose include waits on a pipe nobody writes into.
+        $this->givenTheCli(<<<'SH'
+            echo 'built' > built.txt
+            git add built.txt
+            git commit --quiet -m 'feat: build the task'
+            git init --quiet "$TMPDIR"
+            mkfifo "$TMPDIR/settings"
+            printf '[include]\n\tpath = %s\n' "$TMPDIR/settings" >> "$TMPDIR/.git/config"
+            rm .git/HEAD
+            SH);
+        $this->timeout = 10;
+
+        try {
+            $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+        } finally {
+            $this->releaseThePipe($this->work.'/settings');
+        }
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertSame("built\n", $this->fileAtTheBundlesHead('task', 'built.txt'));
+    }
+
+    public function testAGitFolderTheCliTurnsIntoALinkHandsNoBundleBackAndLeavesTheLinkedFilesAlone(): void
+    {
+        $this->givenTheCli(<<<'SH'
+            git commit --quiet --allow-empty -m 'feat: build the task'
+            mv .git "$TMPDIR/elsewhere"
+            ln -s "$TMPDIR/elsewhere" .git
+            echo outside > "$TMPDIR/elsewhere/commondir"
+            SH);
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertFileDoesNotExist($this->output.'/handback.bundle');
+        self::assertStringEqualsFile($this->work.'/elsewhere/commondir', "outside\n");
+        self::assertStringContainsString("no bundle is handed back: the clone's git settings could not be replaced", $this->outputFile('build.log'));
+    }
+
+    public function testAnAlternatesFileThatIsAPipeDoesNotStopTheBundleOfTheBranch(): void
+    {
+        // Git reads the alternates file for every object it looks up, so a pipe nobody writes into holds the bundle until the job is timed out.
+        $this->givenTheCli(<<<'SH'
+            echo 'built' > built.txt
+            git add built.txt
+            git commit --quiet -m 'feat: build the task'
+            mkfifo .git/objects/info/alternates
+            SH);
+        $this->timeout = 10;
+
+        try {
+            $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+        } finally {
+            $this->releaseThePipe($this->work.'/clone/.git/objects/info/alternates');
+        }
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertSame("built\n", $this->fileAtTheBundlesHead('task', 'built.txt'));
+    }
+
+    public function testObjectsTheCliMovedOutOfTheCloneAndNamedInAlternatesHandNoBundleBack(): void
+    {
+        $this->givenTheCli(<<<'SH'
+            echo 'built' > built.txt
+            git add built.txt
+            git commit --quiet -m 'feat: build the task'
+            mv .git/objects "$TMPDIR/objects"
+            mkdir -p .git/objects/info
+            echo "$TMPDIR/objects" > .git/objects/info/alternates
+            echo "$TMPDIR/objects" > .git/objects/info/http-alternates
+            SH);
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertFileDoesNotExist($this->output.'/handback.bundle');
+        self::assertFileDoesNotExist($this->work.'/clone/.git/objects/info/alternates');
+        self::assertFileDoesNotExist($this->work.'/clone/.git/objects/info/http-alternates');
+    }
+
+    public function testAnObjectsInfoFolderTheCliTurnsIntoALinkHandsNoBundleBackAndLeavesTheLinkedFilesAlone(): void
+    {
+        $this->givenTheCli(<<<'SH'
+            git commit --quiet --allow-empty -m 'feat: build the task'
+            mkdir "$TMPDIR/elsewhere"
+            echo outside > "$TMPDIR/elsewhere/alternates"
+            rm -rf .git/objects/info
+            ln -s "$TMPDIR/elsewhere" .git/objects/info
+            SH);
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertFileDoesNotExist($this->output.'/handback.bundle');
+        self::assertStringEqualsFile($this->work.'/elsewhere/alternates', "outside\n");
+        self::assertStringContainsString("no bundle is handed back: the clone's git settings could not be replaced", $this->outputFile('build.log'));
+    }
+
+    public function testACliThatTakesAwayEveryPermissionOnTheOutputStillHandsBackTheBundleOfTheBranch(): void
+    {
+        $this->givenTheCli(<<<'SH'
+            echo 'built' > built.txt
+            git add built.txt
+            git commit --quiet -m 'feat: build the task'
+            chmod 000 "$INTAKT_JOB_OUTPUT"
+            SH);
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertSame("built\n", $this->fileAtTheBundlesHead('task', 'built.txt'));
+        self::assertStringContainsString("claude exited with 0\n", $this->outputFile('build.log'));
+    }
+
     public function testWhatAFailedBundleLeftIsNotHandedBack(): void
     {
         $this->givenGitLeavesAPartialBundleAndFails();
@@ -429,6 +625,194 @@ final class BuildScriptTest extends TestCase
         $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
 
         self::assertFileDoesNotExist($this->output.'/pull-request.md');
+    }
+
+    public function testAQuestionTheCliWritesInTheCheckoutIsHandedBack(): void
+    {
+        $this->givenTheCli(<<<'SH'
+            printf '{"question":"Which store?","choices":["SQLite"],"recommendation":"SQLite"}' > QUESTION.json
+            SH);
+
+        $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertSame('{"question":"Which store?","choices":["SQLite"],"recommendation":"SQLite"}', $this->outputFile('question.json'));
+    }
+
+    public function testAQuestionTheBranchAlreadyHeldIsNotHandedBackWhenTheCliLeavesItUntouched(): void
+    {
+        $this->history->commitFile('QUESTION.json', '{"question":"Old?","choices":["a"],"recommendation":"a"}', 'docs: keep an old question');
+        $this->givenTheCli('true');
+
+        $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertFileDoesNotExist($this->output.'/question.json');
+    }
+
+    public function testAQuestionTheBranchAlreadyHeldIsHandedBackWhenTheCliRewritesIt(): void
+    {
+        $this->history->commitFile('QUESTION.json', '{"question":"Old?","choices":["a"],"recommendation":"a"}', 'docs: keep an old question');
+        $this->givenTheCli(<<<'SH'
+            printf '{"question":"New?","choices":["b"],"recommendation":"b"}' > QUESTION.json
+            SH);
+
+        $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertSame('{"question":"New?","choices":["b"],"recommendation":"b"}', $this->outputFile('question.json'));
+    }
+
+    // The checkout converts the line endings, so it holds other bytes than the commit: only the checkout's own bytes at the start tell an untouched question from a rewritten one.
+    #[TestWith(["QUESTION.json text eol=crlf\n"])]
+    #[TestWith(["* text=auto eol=crlf\n"])]
+    public function testAQuestionTheCheckoutConvertsTheLineEndingsOfIsNotHandedBackWhenTheCliLeavesItUntouched(string $attributes): void
+    {
+        $this->history->commitFile('.gitattributes', $attributes, 'chore: check the question out with other line endings');
+        $this->history->commitFile('QUESTION.json', "{\"question\":\"Old?\",\"choices\":[\"a\"],\"recommendation\":\"a\"}\n", 'docs: keep an old question');
+        $this->givenTheCli('cp QUESTION.json "$RECORD/checked-out.json"');
+
+        $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertStringEndsWith("}\r\n", (string) file_get_contents($this->history->folder.'/checked-out.json'));
+        self::assertFileDoesNotExist($this->output.'/question.json');
+    }
+
+    public function testAQuestionTheCheckoutConvertsTheLineEndingsOfIsHandedBackWhenTheCliRewritesIt(): void
+    {
+        $this->history->commitFile('.gitattributes', "QUESTION.json text eol=crlf\n", 'chore: check the question out with other line endings');
+        $this->history->commitFile('QUESTION.json', "{\"question\":\"Old?\",\"choices\":[\"a\"],\"recommendation\":\"a\"}\n", 'docs: keep an old question');
+        $this->givenTheCli(<<<'SH'
+            printf '{"question":"New?","choices":["b"],"recommendation":"b"}' > QUESTION.json
+            SH);
+
+        $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertSame('{"question":"New?","choices":["b"],"recommendation":"b"}', $this->outputFile('question.json'));
+    }
+
+    public function testAQuestionTheBranchAlreadyHeldIsNotHandedBackWhenTheCliOnlyCommitsItsCheckedOutBytes(): void
+    {
+        $this->history->commitFile('QUESTION.json', '{"question":"Old?","choices":["a"],"recommendation":"a"}', 'docs: keep an old question');
+        $this->givenTheCli(<<<'SH'
+            echo 'built' > built.txt
+            git add built.txt
+            git commit --quiet -m 'feat: build the task'
+            SH);
+
+        $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertFileDoesNotExist($this->output.'/question.json');
+        self::assertFileExists($this->output.'/handback.bundle');
+    }
+
+    public function testAnUntouchedQuestionInACloneWhoseGitConfigTheCliBrokeIsNotHandedBack(): void
+    {
+        $this->history->commitFile('QUESTION.json', '{"question":"Old?","choices":["a"],"recommendation":"a"}', 'docs: keep an old question');
+        $this->givenTheCli("echo '[broken' >> .git/config");
+
+        $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertFileDoesNotExist($this->output.'/question.json');
+    }
+
+    // A hash git takes in the clone follows the clone's object format, which the builder can write, so the same bytes would get another hash after the session.
+    public function testAnUntouchedQuestionInACloneWhoseObjectFormatTheCliSwitchedIsNotHandedBack(): void
+    {
+        $this->history->commitFile('QUESTION.json', '{"question":"Old?","choices":["a"],"recommendation":"a"}', 'docs: keep an old question');
+        $this->givenTheCli(<<<'SH'
+            git config core.repositoryformatversion 1
+            git config extensions.objectFormat sha256
+            git config extensions.objectFormat > "$RECORD/object-format"
+            SH);
+
+        $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertSame("sha256\n", (string) file_get_contents($this->history->folder.'/object-format'));
+        self::assertFileDoesNotExist($this->output.'/question.json');
+    }
+
+    public function testARewrittenQuestionInACloneWhoseObjectFormatTheCliSwitchedIsHandedBack(): void
+    {
+        $this->history->commitFile('QUESTION.json', '{"question":"Old?","choices":["a"],"recommendation":"a"}', 'docs: keep an old question');
+        $this->givenTheCli(<<<'SH'
+            git config core.repositoryformatversion 1
+            git config extensions.objectFormat sha256
+            printf '{"question":"New?","choices":["b"],"recommendation":"b"}' > QUESTION.json
+            SH);
+
+        $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertSame('{"question":"New?","choices":["b"],"recommendation":"b"}', $this->outputFile('question.json'));
+    }
+
+    public function testAQuestionWhoseDigestFailedBeforeTheSessionIsNotHandedBackEvenWhenTheCliRewritesIt(): void
+    {
+        $this->history->commitFile('QUESTION.json', '{"question":"Old?","choices":["a"],"recommendation":"a"}', 'docs: keep an old question');
+        $this->givenTheDigestFailsOnItsCall(1);
+        $this->givenTheCli(<<<'SH'
+            printf '{"question":"New?","choices":["b"],"recommendation":"b"}' > QUESTION.json
+            SH);
+
+        $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertFileDoesNotExist($this->output.'/question.json');
+        self::assertStringContainsString("QUESTION.json is not handed back: it could not be hashed before the session\n", $this->outputFile('build.log'));
+    }
+
+    public function testADigestThatFailedBeforeTheSessionIsLoggedEvenWhenTheCliRemovesTheQuestion(): void
+    {
+        $this->history->commitFile('QUESTION.json', '{"question":"Old?","choices":["a"],"recommendation":"a"}', 'docs: keep an old question');
+        $this->givenTheDigestFailsOnItsCall(1);
+        $this->givenTheCli('rm QUESTION.json');
+
+        $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertFileDoesNotExist($this->output.'/question.json');
+        self::assertStringContainsString("QUESTION.json is not handed back: it could not be hashed before the session\n", $this->outputFile('build.log'));
+    }
+
+    public function testAQuestionWhoseDigestFailsAfterTheSessionIsNotHandedBackEvenWhenTheCliRewritesIt(): void
+    {
+        $this->history->commitFile('QUESTION.json', '{"question":"Old?","choices":["a"],"recommendation":"a"}', 'docs: keep an old question');
+        $this->givenTheDigestFailsOnItsCall(2);
+        $this->givenTheCli(<<<'SH'
+            printf '{"question":"New?","choices":["b"],"recommendation":"b"}' > QUESTION.json
+            SH);
+
+        $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertFileDoesNotExist($this->output.'/question.json');
+        self::assertStringContainsString("QUESTION.json is not handed back: it could not be hashed after the session\n", $this->outputFile('build.log'));
+    }
+
+    public function testADigestThatPrintsNothingAfterTheSessionHandsNoQuestionBack(): void
+    {
+        $this->history->commitFile('QUESTION.json', '{"question":"Old?","choices":["a"],"recommendation":"a"}', 'docs: keep an old question');
+        $this->givenTheDigestFailsOnItsCall(2, 0);
+        $this->givenTheCli(<<<'SH'
+            printf '{"question":"New?","choices":["b"],"recommendation":"b"}' > QUESTION.json
+            SH);
+
+        $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertFileDoesNotExist($this->output.'/question.json');
+        self::assertStringContainsString("QUESTION.json is not handed back: it could not be hashed after the session\n", $this->outputFile('build.log'));
+    }
+
+    public function testAQuestionThatIsALinkIsNotHandedBack(): void
+    {
+        $this->givenTheCli('ln -s "$RECORD/prompt.md" QUESTION.json');
+
+        $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertFileDoesNotExist($this->output.'/question.json');
+    }
+
+    public function testAQuestionTheCliWritesIntoTheOutputIsNotHandedBack(): void
+    {
+        $this->givenTheCli('echo planted > "$INTAKT_JOB_OUTPUT/question.json"');
+
+        $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertFileDoesNotExist($this->output.'/question.json');
     }
 
     public function testTheClisOutputGoesToTheLog(): void
@@ -465,6 +849,24 @@ final class BuildScriptTest extends TestCase
     {
         file_put_contents($this->bin.'/claude', "#!/bin/sh\n".$script."\n");
         chmod($this->bin.'/claude', 0o755);
+    }
+
+    // A git still waiting on the pipe would outlive the test, and an empty file takes the pipe's place because git reads its settings more than once.
+    private function releaseThePipe(string $path): void
+    {
+        if (!file_exists($path)) {
+            return;
+        }
+
+        // Read and write, because that open never waits for the other end.
+        $pipe = fopen($path, 'r+');
+        if (false === $pipe) {
+            throw new RuntimeException('the pipe could not be opened');
+        }
+
+        unlink($path);
+        touch($path);
+        fclose($pipe);
     }
 
     // Each sleep reports its own process id, because the CI image has no procps to look it up with.
@@ -559,13 +961,28 @@ final class BuildScriptTest extends TestCase
         chmod($this->bin.'/git', 0o755);
     }
 
+    // Only the given call fails or prints nothing, because the script hashes once before the session and once after it, and each side has a rule of its own.
+    private function givenTheDigestFailsOnItsCall(int $call, int $status = 1): void
+    {
+        $digest = (string) new ExecutableFinder()->find('sha256sum');
+        file_put_contents($this->bin.'/sha256sum', <<<SH
+            #!/bin/sh
+            echo call >> "\$RECORD/digests"
+            if [ "\$(grep -c call "\$RECORD/digests")" -eq {$call} ]; then
+                exit {$status}
+            fi
+            exec '{$digest}' "\$@"
+            SH);
+        chmod($this->bin.'/sha256sum', 0o755);
+    }
+
     private function whenTheBuildRuns(string $branch, string $model, int $allowance = 600): Process
     {
         $run = new Process(
-            ['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-build', $this->history->work, $this->prompt, $branch, $model, '7', (string) $allowance, $this->gates],
+            ['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-build', $this->source ?? $this->history->work, $this->prompt, $branch, $model, '7', (string) $allowance, $this->gates],
             null,
             $this->environment(),
-            timeout: 20,
+            timeout: $this->timeout,
         );
         $run->run();
 
