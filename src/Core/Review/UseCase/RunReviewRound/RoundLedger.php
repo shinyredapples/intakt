@@ -17,6 +17,7 @@ use Intakt\Core\Review\Contract\CatchUpOwed;
 use Intakt\Core\Review\Contract\ChangeSource;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\FindingIds;
 use Intakt\Core\Review\Contract\FollowUp;
 use Intakt\Core\Review\Contract\JudgedFindings;
 use Intakt\Core\Review\Contract\JudgeDone;
@@ -138,8 +139,8 @@ final readonly class RoundLedger
 
         $this->append(LedgerEventKind::JudgeDone, new JudgeDone(
             $round->id()->toRfc4122(),
-            $act,
-            array_map(static fn (FollowUp $followUp): string => $followUp->finding->id, $judged->followUps),
+            new FindingIds(...$act),
+            new FindingIds(...array_map(static fn (FollowUp $followUp): string => $followUp->finding->id, $judged->followUps)),
             $this->recordedFindings($judged, $act),
             $judged->dropped,
             $judged->sameCause,
@@ -157,13 +158,13 @@ final readonly class RoundLedger
     {
         $findings = $judged->findings;
         $entries = [];
-        foreach (new OnePerPlace()->actList($findings, $act, $judged->sameCause) as $entry) {
+        foreach (new OnePerPlace()->actList($findings, $act, iterator_to_array($judged->sameCause)) as $entry) {
             $entries[$entry->id] = $entry;
         }
 
         $shown = array_map(static fn (Finding $finding): Finding => $entries[$finding->id] ?? $finding, $findings);
 
-        return array_map(fn (Finding $finding): JudgeDoneFinding => new JudgeDoneFinding($finding->id, $finding->severity, $finding->text, $finding->merged, $finding->file, $finding->line, $this->storedNote($judged->notes[$finding->id] ?? null)), $shown);
+        return array_map(fn (Finding $finding): JudgeDoneFinding => new JudgeDoneFinding($finding->id, $finding->severity, $finding->text, $finding->merged, $finding->file, $finding->line, $this->storedNote($judged->notes->of($finding->id))), $shown);
     }
 
     // Redacted and then trimmed, because the note is model text that may quote a held credential, and a credential held with edge whitespace leaves that whitespace behind.

@@ -91,7 +91,7 @@ final readonly class StoredFindings
         $notes = array_filter(array_column(array_map(static fn (JudgeDoneFinding $finding): array => [$finding->id, $finding->judgeNote], $judged->findings), 1, 0), static fn (?string $note): bool => null !== $note);
         $reported = array_map(static fn (Finding $finding): Finding => isset($notes[$finding->id]) ? $finding->withJudgeNote($notes[$finding->id]) : $finding, $this->reportedIn($round));
 
-        return new OnePerPlace()->actList($reported, $judged->act, $judged->sameCause);
+        return new OnePerPlace()->actList($reported, [...$judged->act], iterator_to_array($judged->sameCause));
     }
 
     /**

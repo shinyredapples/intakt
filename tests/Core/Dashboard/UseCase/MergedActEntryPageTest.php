@@ -16,6 +16,7 @@ use Intakt\Core\Review\Contract\ChangeReviewRequest;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\FailureInWords;
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\FindingIds;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\IgnoredProgress;
 use Intakt\Core\Review\Contract\JudgedFinding;
@@ -60,6 +61,7 @@ use Symfony\Component\Serializer\SerializerInterface;
 #[CoversClass(ReviewReport::class)]
 #[CoversClass(RoundLedger::class)]
 #[CoversClass(StoredFindings::class)]
+#[UsesClass(FindingIds::class)]
 #[UsesClass(LedgerRounds::class)]
 #[UsesClass(RoundFinding::class)]
 #[UsesClass(OnePerPlace::class)]
@@ -129,7 +131,7 @@ final class MergedActEntryPageTest extends WebTestCase
         $page = $this->browser->request('GET', '/reviews/'.$review->roundId);
 
         self::assertResponseIsSuccessful();
-        self::assertSame([['F1', 'F2, F3', 'P1', 'Text of A.']], array_map(static fn (Finding $entry): array => [$entry->id, implode(', ', $entry->merged), $entry->severity->value, $entry->text], $act));
+        self::assertSame([['F1', 'F2, F3', 'P1', 'Text of A.']], array_map(static fn (Finding $entry): array => [$entry->id, implode(', ', [...$entry->merged]), $entry->severity->value, $entry->text], $act));
         self::assertSame([['P1', 'F1', 'Text of A.', 'Also reported as F2, F3', 'Fix now']], $this->pageRows($page->filter('.finding-card')));
     }
 

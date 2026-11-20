@@ -10,6 +10,7 @@ use Intakt\Core\Review\Contract\ChangeReview;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\FindingIds;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\PanelVerdict;
 use Intakt\Core\Review\Contract\RoundTokens;
@@ -29,6 +30,7 @@ use Symfony\Component\Serializer\Normalizer\AbstractNormalizer;
 #[CoversClass(ReviewOutputVerdict::class)]
 #[UsesClass(ReviewExit::class)]
 #[UsesClass(Cost::class)]
+#[UsesClass(FindingIds::class)]
 final class ReviewOutputTest extends TestCase
 {
     public function testTheOutputCarriesTheExitCodeAndTheFindingsCountPerVerdict(): void
@@ -48,7 +50,7 @@ final class ReviewOutputTest extends TestCase
 
     public function testAnActEntryThatMergesFindingsCarriesTheIdsOfTheMergedFindings(): void
     {
-        $output = $this->whenTheReviewIsWritten(['F2', 'F4']);
+        $output = $this->whenTheReviewIsWritten(new FindingIds('F2', 'F4'));
 
         self::assertIsArray($output['act_list']);
         self::assertIsArray($output['act_list'][0]);
@@ -66,11 +68,9 @@ final class ReviewOutputTest extends TestCase
     }
 
     /**
-     * @param list<string> $merged
-     *
      * @return array<mixed>
      */
-    private function whenTheReviewIsWritten(array $merged = []): array
+    private function whenTheReviewIsWritten(FindingIds $merged = new FindingIds()): array
     {
         $finding = new Finding('F1', Severity::P1, 'src/Feature.php', 3, null, 'Missing check.', FixableBy::Builder, true, 'R1', new Evidence('bin/check', 'failed'))->withMerged($merged);
         $verdicts = [

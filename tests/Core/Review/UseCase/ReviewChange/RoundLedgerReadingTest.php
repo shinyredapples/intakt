@@ -13,10 +13,13 @@ use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\DroppedFinding;
+use Intakt\Core\Review\Contract\FindingIds;
 use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\JudgeDoneFinding;
 use Intakt\Core\Review\Contract\RoundTokens;
+use Intakt\Core\Review\Contract\SameCause;
 use Intakt\Core\Review\Contract\Severity;
+use Intakt\Core\Review\Infrastructure\StoredFindingIdsNormalizer;
 use Intakt\Core\Review\UseCase\ReviewChange\RoundLedgerReading;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenUsageRow;
@@ -42,6 +45,9 @@ use Symfony\Component\Serializer\Encoder\JsonEncoder;
 #[UsesClass(Cost::class)]
 #[UsesClass(ConfiguredPrices::class)]
 #[UsesClass(JudgeDone::class)]
+#[UsesClass(FindingIds::class)]
+#[UsesClass(SameCause::class)]
+#[UsesClass(StoredFindingIdsNormalizer::class)]
 #[UsesClass(JudgeDoneFinding::class)]
 #[UsesClass(DroppedFinding::class)]
 #[UsesClass(UsageStarted::class)]
@@ -319,14 +325,14 @@ final class RoundLedgerReadingTest extends KernelTestCase
         $this->append(LedgerEventKind::JudgeDone, ['same_cause' => ['F1' => 'F2']] + $this->judgeDone('another-round'));
         $this->append(LedgerEventKind::JudgeDone, ['same_cause' => ['F3' => 'F1']] + $this->judgeDone(self::ROUND));
 
-        self::assertSame(['F3' => 'F1'], $this->reading()->judgeDoneOf(self::ROUND)?->sameCause);
+        self::assertSame(['F3' => 'F1'], iterator_to_array($this->reading()->judgeDoneOf(self::ROUND)->sameCause ?? new SameCause()));
     }
 
     public function testAJudgeDoneRowWrittenBeforeCausesWereLinkedReadsAsNoLinks(): void
     {
         $this->append(LedgerEventKind::JudgeDone, $this->judgeDone(self::ROUND));
 
-        self::assertSame([], $this->reading()->judgeDoneOf(self::ROUND)?->sameCause);
+        self::assertSame([], iterator_to_array($this->reading()->judgeDoneOf(self::ROUND)->sameCause ?? new SameCause()));
     }
 
     public function testTheJudgesNotesAreReadFromTheRoundsJudgeDoneRow(): void
@@ -372,7 +378,7 @@ final class RoundLedgerReadingTest extends KernelTestCase
      */
     private function actIdsOf(string $round): array
     {
-        return $this->reading()->judgeDoneOf($round)->act ?? [];
+        return [...$this->reading()->judgeDoneOf($round)->act ?? new FindingIds()];
     }
 
     private function reading(): RoundLedgerReading

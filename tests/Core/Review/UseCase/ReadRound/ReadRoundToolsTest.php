@@ -254,7 +254,7 @@ final class ReadRoundToolsTest extends KernelTestCase
 
         self::assertCount(1, $act->act);
         self::assertSame('F1', $act->act[0]->id);
-        self::assertSame(['F2'], $act->act[0]->merged);
+        self::assertSame(['F2'], [...$act->act[0]->merged]);
     }
 
     public function testTheFindingsResourceListsEveryFindingTheRoundReported(): void
