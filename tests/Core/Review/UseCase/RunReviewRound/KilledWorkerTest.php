@@ -51,7 +51,7 @@ final class KilledWorkerTest extends KernelTestCase
         self::assertSame(1, $vendor->calls);
         self::assertSame(ReviewerState::Verdict, $stored->reviewers()[0]->state());
         self::assertSame(RoundState::Complete, $stored->state());
-        self::assertSame([LedgerEventKind::ReviewStarted, LedgerEventKind::ReviewerStarted, LedgerEventKind::ReviewerStarted, LedgerEventKind::VerdictReceived], $this->fixture->ledgerKinds());
+        self::assertSame([LedgerEventKind::ReviewStarted, LedgerEventKind::ReviewerStarted, LedgerEventKind::ReviewerStarted, LedgerEventKind::VerdictReceived, LedgerEventKind::ReviewerFindingsRecorded], $this->fixture->ledgerKinds());
     }
 
     public function testAReviewerStartedOnceMoreReviewsInANewConversation(): void

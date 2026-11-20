@@ -32,8 +32,9 @@ final readonly class LivePageRendering
 
         try {
             return $this->twig->render($template, [...$context, 'live' => true, 'listener_grants' => self::listenerGrants()]);
+            // Boundary: logs and renders again without the subscription, because a hub that cannot authorize a listener must leave the plain page standing.
         } catch (Throwable $failure) {
-            // Rendered again without the subscription, because a hub that cannot authorize a listener must leave the plain page standing; flashes put back, because the failed attempt read them.
+            // Flashes put back, because the failed attempt read them.
             $flashBag->setAll($flashes);
             $this->logger->warning('A dashboard page was rendered without live updates.', ['template' => $template, 'exception' => $failure]);
 

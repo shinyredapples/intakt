@@ -11,6 +11,7 @@ use Intakt\Plugin\SymfonyAiVendor\Contract\UsageStarted;
 use Intakt\Plugin\SymfonyAiVendor\Contract\UsageUnsettled;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
+use Symfony\Component\Serializer\Encoder\JsonEncoder;
 use Symfony\Component\Serializer\SerializerInterface;
 
 #[CoversClass(UsageStarted::class)]
@@ -25,7 +26,7 @@ final class UsagePayloadsTest extends KernelTestCase
 
     public function testAStartedRowOfARoundIsWrittenWithTodaysKeysAndTierValue(): void
     {
-        $json = $this->serializer()->serialize(new UsageStarted('a call', 'started', 'alpha', Tier::Strong, self::ROUND, 'big'), 'json');
+        $json = $this->serializer()->serialize(new UsageStarted('a call', 'started', 'alpha', Tier::Strong, self::ROUND, 'big'), JsonEncoder::FORMAT);
 
         self::assertSame('{"call":"a call","phase":"started","project":"alpha","tier":"strong","round":"'.self::ROUND.'","model":"big"}', $json);
     }
@@ -34,15 +35,15 @@ final class UsagePayloadsTest extends KernelTestCase
     {
         $started = new UsageStarted('a call', 'started', 'alpha', Tier::Standard, self::ROUND, 'big', 'a-reviewer');
 
-        $json = $this->serializer()->serialize($started, 'json');
+        $json = $this->serializer()->serialize($started, JsonEncoder::FORMAT);
 
         self::assertSame('{"call":"a call","phase":"started","project":"alpha","tier":"standard","round":"'.self::ROUND.'","model":"big","reviewer":"a-reviewer"}', $json);
-        self::assertEquals($started, $this->serializer()->deserialize($json, UsageStarted::class, 'json'));
+        self::assertEquals($started, $this->serializer()->deserialize($json, UsageStarted::class, JsonEncoder::FORMAT));
     }
 
     public function testAStartedRowOutsideARoundHasNoRoundKey(): void
     {
-        $json = $this->serializer()->serialize(new UsageStarted('a call', 'started', 'alpha', Tier::Light, model: 'big'), 'json');
+        $json = $this->serializer()->serialize(new UsageStarted('a call', 'started', 'alpha', Tier::Light, model: 'big'), JsonEncoder::FORMAT);
 
         self::assertSame('{"call":"a call","phase":"started","project":"alpha","tier":"light","model":"big"}', $json);
     }
@@ -51,7 +52,7 @@ final class UsagePayloadsTest extends KernelTestCase
     {
         $row = '{"call":"a call","phase":"started","project":"alpha","tier":"standard","round":"'.self::ROUND.'","model":"big"}';
 
-        $read = $this->serializer()->deserialize($row, UsageStarted::class, 'json');
+        $read = $this->serializer()->deserialize($row, UsageStarted::class, JsonEncoder::FORMAT);
 
         self::assertEquals(new UsageStarted('a call', 'started', 'alpha', Tier::Standard, self::ROUND, 'big'), $read);
     }
@@ -60,14 +61,14 @@ final class UsagePayloadsTest extends KernelTestCase
     {
         $row = '{"call":"a call","phase":"started","project":"alpha","tier":"standard","round":"'.self::ROUND.'"}';
 
-        $read = $this->serializer()->deserialize($row, UsageStarted::class, 'json');
+        $read = $this->serializer()->deserialize($row, UsageStarted::class, JsonEncoder::FORMAT);
 
         self::assertNull($read->model);
     }
 
     public function testASettledRowKeepsCacheCreationAndTheNullTokenFields(): void
     {
-        $json = $this->serializer()->serialize(new UsageSettled('a call', 'settled', [$this->usage()]), 'json');
+        $json = $this->serializer()->serialize(new UsageSettled('a call', 'settled', [$this->usage()]), JsonEncoder::FORMAT);
 
         self::assertSame('{"call":"a call","phase":"settled","usages":['.self::TODAYS_USAGE.']}', $json);
     }
@@ -76,7 +77,7 @@ final class UsagePayloadsTest extends KernelTestCase
     {
         $row = '{"call":"a call","phase":"settled","usages":['.self::TODAYS_USAGE.']}';
 
-        $read = $this->serializer()->deserialize($row, UsageSettled::class, 'json');
+        $read = $this->serializer()->deserialize($row, UsageSettled::class, JsonEncoder::FORMAT);
 
         self::assertEquals(new UsageSettled('a call', 'settled', [$this->usage()]), $read);
     }
@@ -85,7 +86,7 @@ final class UsagePayloadsTest extends KernelTestCase
     {
         $unsettled = new UsageUnsettled('a call', 'unsettled', 'RuntimeException', [$this->usage()]);
 
-        $read = $this->serializer()->deserialize($this->serializer()->serialize($unsettled, 'json'), UsageUnsettled::class, 'json');
+        $read = $this->serializer()->deserialize($this->serializer()->serialize($unsettled, JsonEncoder::FORMAT), UsageUnsettled::class, JsonEncoder::FORMAT);
 
         self::assertEquals($unsettled, $read);
     }
@@ -94,7 +95,7 @@ final class UsagePayloadsTest extends KernelTestCase
     {
         $row = '{"call":"a call","phase":"unsettled","failure":"RuntimeException","usages":[]}';
 
-        $read = $this->serializer()->deserialize($row, UsageUnsettled::class, 'json');
+        $read = $this->serializer()->deserialize($row, UsageUnsettled::class, JsonEncoder::FORMAT);
 
         self::assertEquals(new UsageUnsettled('a call', 'unsettled', 'RuntimeException', []), $read);
     }

@@ -19,7 +19,7 @@ flowchart LR
     U --> L["ProtectedPaths::touchedBy: sorted, each path once"]
 ```
 
-`ChangedPaths` reads, all through `HardenedGit` with `--git-dir=<repository>` and no work tree:
+`ChangedPaths` reads, all through `HardenedGit::callInBareRepository()` (`--git-dir=<repository> --bare`, no work tree):
 
 - main from `symbolic-ref --quiet HEAD`, which must name a branch under `refs/heads/`, resolved once to a commit id with `rev-parse --verify --quiet <branch>^{commit}` (unreadable when the branch names no commit); every later call names that id, never the branch, so a main that moves while the check runs (a mirror update) is compared against the same commit throughout;
 - that the head is a commit (`cat-file -t`), so an annotated tag's id is refused;

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Plugin\LocalGitForge\UseCase\ReviewChange;
 
 use Closure;
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Review\Contract\ChangeDescription;
 use Intakt\Core\Review\Contract\ChangeReview;
 use Intakt\Core\Review\Contract\ChangeReviewRequest;
@@ -133,6 +134,6 @@ final readonly class LocalChangeReview
     {
         $paths = array_map(static fn (ChangedFile $file): string => $file->path, [...$change->diff->files]);
 
-        return new ChangeDescription($change->diff->addedLines() + $change->diff->removedLines(), $paths, []);
+        return new ChangeDescription($change->diff->addedLines() + $change->diff->removedLines(), new Paths(...$paths), []);
     }
 }
