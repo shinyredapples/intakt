@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Dashboard\Infrastructure;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Process\ExecutableFinder;
 use Symfony\Component\Process\Process;
 
 // Runs the image's entrypoint with stand-ins for php and frankenphp, because what is proven here is the order of the start-up steps, not the steps themselves.
@@ -340,6 +341,17 @@ final class EntrypointSampleSeedTest extends TestCase
         self::assertLessThan(self::STOP_TIMEOUT_SECONDS, $seconds);
     }
 
+    public function testAStopOnAMachineWhereEveryPauseOverrunsStillEndsInsideDockersStopTimeout(): void
+    {
+        $this->startEntrypoint(['PATH' => $this->overrunningSleep().':'.$this->stubPrograms().':'.getenv('PATH'), 'CONSUMERS_IGNORE_SIGTERM' => '1']);
+        $this->waitForTheServer();
+
+        $seconds = $this->secondsToStop();
+
+        self::assertSame(0, $this->entrypoint?->getExitCode(), (string) $this->entrypoint?->getErrorOutput());
+        self::assertLessThan(self::STOP_TIMEOUT_SECONDS, $seconds);
+    }
+
     public function testWithoutASampleRepositoryTheStartNeverAsksForTheDashboardAddress(): void
     {
         $this->startEntrypoint([]);
@@ -494,6 +506,18 @@ final class EntrypointSampleSeedTest extends TestCase
         $process->start();
 
         return $process;
+    }
+
+    // A stand-in sleep that takes three times as long as asked, as on a loaded machine (a test pass in CI measured a stop of 10.7 s), so the test forces a stop whose pauses all overrun.
+    private function overrunningSleep(): string
+    {
+        $folder = $this->directory.'/overrunning';
+        $sleep = new ExecutableFinder()->find('sleep');
+        self::assertNotNull($sleep);
+        new Filesystem()->dumpFile($folder.'/sleep', "#!/bin/bash\n[[ \$1 =~ ^[0-9.]+\$ ]] && set -- \"\$(awk -v s=\"\$1\" 'BEGIN { print s * 3 }')\"\nexec ".escapeshellarg($sleep)." \"\$@\"\n");
+        new Filesystem()->chmod($folder.'/sleep', 0755);
+
+        return $folder;
     }
 
     private function awaitFile(string $file): void

@@ -139,8 +139,9 @@ stop_all() {
     mapfile -t children < <(jobs -p)
     kill -TERM "${children[@]}" 2>/dev/null || true
     # A consumer ignores SIGTERM until its worker exists (upstream/messenger-consume-ignores-early-sigterm), so what still runs after a grace period inside Docker's 10 s stop timeout is killed.
-    for _ in {1..80}; do
-        any_running "${children[@]}" || break
+    # A deadline in microseconds, not a count of pauses, because on a loaded machine every pause overruns and 80 of them passed the stop timeout.
+    local deadline=$(( ${EPOCHREALTIME//[!0-9]/} + 8000000 ))
+    while any_running "${children[@]}" && (( ${EPOCHREALTIME//[!0-9]/} < deadline )); do
         sleep 0.1
     done
     kill -KILL "${children[@]}" 2>/dev/null || true
@@ -181,7 +182,7 @@ restart_ended() {
     done
 }
 
-# Bash runs the TERM trap only after a foreground command ends, so a call that takes seconds would add them to the 8 s grace of stop_all and pass Docker's 10 s stop timeout; as a job it is waited for, because wait returns at once on a trapped signal, and stop_all ends it with the other jobs.
+# Bash runs the TERM trap only after a foreground command ends, so a call or pause that takes seconds would add them to the 8 s grace of stop_all and pass Docker's 10 s stop timeout; as a job it is waited for, because wait returns at once on a trapped signal, and stop_all ends it with the other jobs.
 as_job() {
     "$@" &
     wait "$!"
@@ -207,9 +208,9 @@ for _ in $(seq "$MESSENGER_CONSUMERS"); do
 done
 start scheduler_watcher
 
-# A poll instead of wait -n, which blocks on the live children once it has forgotten a dead one; the second is also the pause before an ended consumer starts again, and the TERM trap runs after it, inside Docker's 10 s stop timeout.
+# A poll instead of wait -n, which blocks on the live children once it has forgotten a dead one; the second is also the pause before an ended consumer starts again, and it runs as a job, so the TERM trap runs at once instead of after it.
 while :; do
-    sleep 1
+    as_job sleep 1
     restart_ended
     show_dashboard_address_once
 done
