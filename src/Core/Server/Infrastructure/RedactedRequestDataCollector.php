@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Server\Infrastructure;
 
+use Symfony\Component\DependencyInjection\Attribute\Exclude;
 use Symfony\Component\HttpKernel\DataCollector\RequestDataCollector;
 use Symfony\Component\VarDumper\Cloner\Data;
 
 // The request's server bag also carries the whole environment (APP_SECRET, provider keys, the owner token), and a saved profile is a file that outlives the request, so only what the request itself sent keeps its value.
+// Excluded from the scan of src/, because autoconfiguration would add it as a second request collector; RedactRequestProfilesPass installs it in place of FrameworkBundle's.
+#[Exclude]
 final class RedactedRequestDataCollector extends RequestDataCollector
 {
     public const string MASK = '******';
