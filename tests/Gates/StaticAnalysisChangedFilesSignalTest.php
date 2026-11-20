@@ -94,7 +94,7 @@ final class StaticAnalysisChangedFilesSignalTest extends SandboxTestCase
     private function signalSeenByPhpstan(Sandbox $tree, Mode $mode): string
     {
         $home = $this->emptySandbox();
-        $home->write('vendor/bin/phpstan', "#!/bin/sh\nprintf '%s' \"\${".StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE."-unset}\" > ".self::RECORD."\n");
+        $home->write('vendor/bin/phpstan', "#!/bin/sh\nprintf '%s' \"\${".StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE.'-unset}" > '.self::RECORD."\n");
         chmod($home->root.'/vendor/bin/phpstan', 0o755);
 
         $result = new StaticAnalysisGate()->run(new Workspace($tree->root, $home->root, $mode, 'main'));
