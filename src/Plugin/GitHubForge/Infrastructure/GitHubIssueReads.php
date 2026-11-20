@@ -31,6 +31,7 @@ final readonly class GitHubIssueReads implements IssueReads
         private WatchedRepositories $repositories,
         private GitHubMoments $moments,
         private BudgetReserve $reserve,
+        private ChangedWhileServed $changedWhileServed,
     ) {
     }
 
@@ -47,20 +48,21 @@ final readonly class GitHubIssueReads implements IssueReads
         $issues = $this->allPagesFrom($first, $path);
 
         // The validator belongs to the first page only, so a list of several pages has none and the next listing is full.
-        return IssueListing::listed(array_map($this->listed(...), $issues['issues']), 1 === $issues['pages'] ? $first['etag'] : null);
+        return IssueListing::listed($issues['issues'], 1 === $issues['pages'] ? $first['etag'] : null);
     }
 
     /**
-     * @param array{status: int, body: string, etag: ?string, next: bool} $first
+     * @param array{status: int, body: string, etag: ?string, next: bool, date: ?string} $first
      *
-     * @return array{issues: list<array<mixed>>, pages: int}
+     * @return array{issues: list<ListedIssue>, pages: int}
      */
     private function allPagesFrom(array $first, string $path): array
     {
         $issues = [];
+        $validators = [];
         $answer = $first;
         for ($page = 1;; ++$page) {
-            $listed = $this->issuesOf($answer['body']);
+            $listed = array_map($this->listed(...), $this->issuesOf($answer['body']));
             // Only a missing next link ends the listing, so a short page that still names one means issues went unread.
             if ($answer['next'] && count($listed) < self::PAGE_SIZE) {
                 throw new ForgeReadFailed(sprintf('GitHub answered a short page %d of open issues but names a next page.', $page));
@@ -68,6 +70,8 @@ final readonly class GitHubIssueReads implements IssueReads
 
             $issues = [...$issues, ...$listed];
             if (!$answer['next']) {
+                $this->confirmUnmoved($path, $validators);
+
                 return ['issues' => $issues, 'pages' => $page];
             }
 
@@ -75,7 +79,24 @@ final readonly class GitHubIssueReads implements IssueReads
                 throw new ForgeReadFailed('GitHub lists more open issues than this forge reads.');
             }
 
+            $this->changedWhileServed->refuse($listed, $answer['date'], $page);
+            $validators[$page] = $answer['etag'];
             $answer = $this->get($path, $this->page($page + 1));
+        }
+    }
+
+    // An issue that closes or opens on a page already read moves every later page by one, so an issue at a page boundary is read twice or never; only a 304 for every page read before the last says none of them moved.
+    /**
+     * @param array<int, ?string> $validators
+     *
+     * @throws ForgeReadFailed
+     * @throws ForgeRateLimited
+     */
+    private function confirmUnmoved(string $path, array $validators): void
+    {
+        $moved = array_find_key($validators, fn (?string $validator, int $page): bool => self::NOT_MODIFIED !== $this->get($path, $this->page($page), $validator)['status']);
+        if (null !== $moved) {
+            throw new ForgeReadFailed(sprintf('GitHub did not confirm that page %d of the open issues stayed the same while the later pages were read.', $moved));
         }
     }
 
@@ -180,7 +201,7 @@ final readonly class GitHubIssueReads implements IssueReads
     /**
      * @param array<string, int|string> $query
      *
-     * @return array{status: int, body: string, etag: ?string, next: bool}
+     * @return array{status: int, body: string, etag: ?string, next: bool, date: ?string}
      */
     private function get(string $path, array $query, ?string $validator = null): array
     {
@@ -191,13 +212,13 @@ final readonly class GitHubIssueReads implements IssueReads
         }
 
         // Without a validator there is no earlier listing a 304 could stand for, so taking it as unchanged would report issues never read.
-        return null !== $validator ? ['status' => $answer['status'], 'body' => '', 'etag' => $validator, 'next' => false] : throw new ForgeReadFailed('GitHub answered 304 to a read without a validator.');
+        return null !== $validator ? ['status' => $answer['status'], 'body' => '', 'etag' => $validator, 'next' => false, 'date' => $answer['date']] : throw new ForgeReadFailed('GitHub answered 304 to a read without a validator.');
     }
 
     /**
      * @param array<string, mixed> $options
      *
-     * @return array{status: int, body: string, etag: ?string, next: bool}
+     * @return array{status: int, body: string, etag: ?string, next: bool, date: ?string}
      *
      * @throws ForgeRateLimited
      */
@@ -219,7 +240,7 @@ final readonly class GitHubIssueReads implements IssueReads
             throw new ForgeReadFailed(sprintf('GitHub answered %d to a read.', $status), previous: self::UNAUTHORIZED === $status ? new ForgeCredentialsRefused() : null);
         }
 
-        return ['status' => $status, 'body' => $body, 'etag' => $headers['etag'][0] ?? null, 'next' => $this->namesNext($headers['link'] ?? [])];
+        return ['status' => $status, 'body' => $body, 'etag' => $headers['etag'][0] ?? null, 'next' => $this->namesNext($headers['link'] ?? []), 'date' => $headers['date'][0] ?? null];
     }
 
     /**
