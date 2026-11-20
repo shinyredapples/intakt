@@ -1,5 +1,6 @@
-{# DESIGN.md, Charts: one hue, a hairline grid, a tooltip on hover and focus (value first), and the same points as a real table. #}
-<section class="chart" id="{{ id }}" aria-labelledby="{{ id }}-title" data-controller="chart" data-action="keydown.esc@window->chart#dismiss">
+{# DESIGN.md, Charts: one hue, a hairline grid, a tooltip on hover and focus (value first), and the same points as a real table.
+   A figure, not a labelled section: a chart is no landmark, and the components page shows each chart once per theme. #}
+<figure class="chart" id="{{ id }}" aria-labelledby="{{ id }}-title" data-controller="chart" data-action="keydown.esc@window->chart#dismiss">
     <h3 id="{{ id }}-title">{{ chart.title }}</h3>
     <p class="takeaway">{{ chart.takeaway }}</p>
     <svg class="chart-svg" width="{{ chart.width }}" height="{{ chart.height }}" viewBox="0 0 {{ chart.width }} {{ chart.height }}" role="group" aria-labelledby="{{ id }}-title">
@@ -27,4 +28,4 @@
             </tbody>
         </table>
     </details>
-</section>
+</figure>

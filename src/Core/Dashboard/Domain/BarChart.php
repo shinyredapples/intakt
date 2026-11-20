@@ -7,9 +7,14 @@ namespace Intakt\Core\Dashboard\Domain;
 // The geometry of docs/design/mocks/assets/charts.js, computed on the server so the page needs no script to show the chart.
 final readonly class BarChart
 {
-    private const int SLOT = 20;
+    private const int MIN_SLOT = 20;
 
-    private const int BAR = 14;
+    // A short series spreads over this width, so its first, middle and last labels do not run into each other.
+    private const int MIN_PLOT = 280;
+
+    private const int MAX_BAR = 28;
+
+    private const int BAR_GAP = 6;
 
     private const int RADIUS = 4;
 
@@ -37,7 +42,7 @@ final readonly class BarChart
 
     public function width(): int
     {
-        return self::LEFT + count($this->points) * self::SLOT + self::RIGHT;
+        return self::LEFT + max(self::MIN_PLOT, count($this->points) * self::MIN_SLOT) + self::RIGHT;
     }
 
     public function height(): int
@@ -97,7 +102,7 @@ final readonly class BarChart
         $max = $this->scaleMax();
 
         return array_map(
-            fn (int $index, ChartPoint $point): ChartBar => new ChartBar($point, $this->slotX($index), self::SLOT, $this->outline($index, $point, $max)),
+            fn (int $index, ChartPoint $point): ChartBar => new ChartBar($point, $this->slotX($index), $this->slotWidth(), $this->outline($index, $point, $max)),
             array_keys($this->points),
             $this->points,
         );
@@ -123,8 +128,8 @@ final readonly class BarChart
         // The first and last labels align with their slot's outer edge, so a long label stays inside the chart.
         return match ($index) {
             0 => ['x' => $this->slotX(0), 'text' => $this->points[0]->label, 'anchor' => 'start'],
-            $last => ['x' => $this->slotX($last) + self::SLOT, 'text' => $this->points[$last]->label, 'anchor' => 'end'],
-            default => ['x' => $this->slotX($index) + self::SLOT / 2, 'text' => $this->points[$index]->label, 'anchor' => 'middle'],
+            $last => ['x' => $this->slotX($last) + $this->slotWidth(), 'text' => $this->points[$last]->label, 'anchor' => 'end'],
+            default => ['x' => $this->slotX($index) + $this->slotWidth() / 2, 'text' => $this->points[$index]->label, 'anchor' => 'middle'],
         };
     }
 
@@ -133,8 +138,9 @@ final readonly class BarChart
         if (null === $point->value) {
             return null;
         }
-        $left = $this->slotX($index) + (self::SLOT - self::BAR) / 2;
-        $right = $left + self::BAR;
+        $bar = min(self::MAX_BAR, $this->slotWidth() - self::BAR_GAP);
+        $left = $this->slotX($index) + ($this->slotWidth() - $bar) / 2;
+        $right = $left + $bar;
         $base = $this->y(0.0, $max);
         // A zero keeps a 1 px bar, so it reads apart from missing data, which draws none.
         $top = $base - max(1.0, $point->value / $max * $this->plotHeight());
@@ -154,7 +160,12 @@ final readonly class BarChart
 
     private function slotX(int $index): float
     {
-        return (float) (self::LEFT + $index * self::SLOT);
+        return self::LEFT + $index * $this->slotWidth();
+    }
+
+    private function slotWidth(): float
+    {
+        return ($this->plotRight() - self::LEFT) / count($this->points);
     }
 
     private function y(float $value, float $max): float
