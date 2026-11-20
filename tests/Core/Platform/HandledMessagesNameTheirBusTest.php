@@ -32,14 +32,35 @@ final class HandledMessagesNameTheirBusTest extends TestCase
     ];
 
     #[DataProvider('handledMessages')]
-    public function testEveryHandledMessageImplementsTheMarkerOfTheBusItsHandlerNames(string $message, Bus $bus): void
+    public function testEveryHandledMessageImplementsOnlyTheMarkerOfTheBusItsHandlerNames(string $message, Bus $bus): void
     {
-        $marker = match ($bus) {
-            Bus::Command => CommandMessage::class,
-            Bus::Query => QueryMessage::class,
-        };
+        self::assertTrue(self::carriesOnlyTheMarkerOf($message, $bus), sprintf('%s is handled on %s, so it implements %s and not the other marker.', $message, $bus->value, self::markerOf($bus)));
+    }
 
-        self::assertTrue(is_a($message, $marker, true), sprintf('%s is handled on %s, so it implements %s.', $message, $bus->value, $marker));
+    public function testAMessageWithBothMarkersFailsTheCheckOnEitherBus(): void
+    {
+        $both = new class implements CommandMessage, QueryMessage {};
+
+        self::assertFalse(self::carriesOnlyTheMarkerOf($both::class, Bus::Command) || self::carriesOnlyTheMarkerOf($both::class, Bus::Query));
+    }
+
+    public function testAMessageWithTheMarkerOfItsBusOnlyPassesTheCheck(): void
+    {
+        $command = new class implements CommandMessage {};
+
+        self::assertTrue(self::carriesOnlyTheMarkerOf($command::class, Bus::Command));
+    }
+
+    public function testAMessageWithTheMarkerOfTheOtherBusFailsTheCheck(): void
+    {
+        $query = new class implements QueryMessage {};
+
+        self::assertFalse(self::carriesOnlyTheMarkerOf($query::class, Bus::Command));
+    }
+
+    public function testTheScanFindsAHandlerWhoseAttributeFollowsAnotherInTheSameGroup(): void
+    {
+        self::assertArrayHasKey('Intakt\\Tests\\Core\\Platform\\Handler\\FindRefusedThingHandler handles Intakt\\Tests\\Core\\Platform\\Handler\\FindRefusedThing on query.bus', self::handledMessages());
     }
 
     public function testTheScanFindsHandlersOfBothBuses(): void
@@ -72,6 +93,24 @@ final class HandledMessagesNameTheirBusTest extends TestCase
         return $cases;
     }
 
+    private static function carriesOnlyTheMarkerOf(string $message, Bus $bus): bool
+    {
+        $other = Bus::Command === $bus ? Bus::Query : Bus::Command;
+
+        return is_a($message, self::markerOf($bus), true) && !is_a($message, self::markerOf($other), true);
+    }
+
+    /**
+     * @return class-string
+     */
+    private static function markerOf(Bus $bus): string
+    {
+        return match ($bus) {
+            Bus::Command => CommandMessage::class,
+            Bus::Query => QueryMessage::class,
+        };
+    }
+
     /**
      * @return list<ReflectionClass<object>>
      */
@@ -80,7 +119,8 @@ final class HandledMessagesNameTheirBusTest extends TestCase
         $classes = [];
         foreach (self::SCANNED as $directory => $namespace) {
             $root = dirname(__DIR__, 3).'/'.$directory;
-            $files = new Finder()->files()->in($root)->name('*.php')->contains('/#\[As(Command|Query)Handler\b/');
+            // The class name, not the attribute syntax: a grouped, qualified or aliased attribute still names it once in the file.
+            $files = new Finder()->files()->in($root)->name('*.php')->contains('/\bAs(Command|Query)Handler\b/');
             foreach ($files as $file) {
                 $class = $namespace.str_replace('/', '\\', substr($file->getRelativePathname(), 0, -4));
                 if (class_exists($class)) {
