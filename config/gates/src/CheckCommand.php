@@ -143,12 +143,12 @@ final readonly class CheckCommand
         return [] === $failed ? 0 : 1;
     }
 
-    // Because the verdict, the failed list and the exit code come from the gate lines alone, before any report is written.
     /**
      * @param list<GateReport> $reports
      *
      * @return list<string>
      */
+    // Because the verdict, the failed list and the exit code come from the gate lines alone, before any report is written.
     private function reportOn(array $reports): array
     {
         $failed = [];

@@ -19,12 +19,13 @@ final readonly class FullReport
     }
 
     // Because a fresh random name, created exclusively, never writes over or through a file already there, an earlier report included.
+    // The folder is looked at after mkdir() fails, so a check that loses the race to create it to another check in the same tree still writes.
     public function write(): ?string
     {
         $contents = $this->contents();
         $folder = $this->root.'/'.self::FOLDER;
 
-        if (null === $contents || (!is_dir($folder) && !@mkdir($folder, 0777, true))) {
+        if (null === $contents || (!@mkdir($folder, 0777, true) && !is_dir($folder))) {
             return null;
         }
 
