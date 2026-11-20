@@ -124,3 +124,7 @@ services:
         class: Intakt\Gates\PhpStan\TraitSetterUseCollector
         tags:
             - phpstan.collector
+    -
+        class: Intakt\Gates\PhpStan\AbstractTraitSetterUseCollector
+        tags:
+            - phpstan.collector

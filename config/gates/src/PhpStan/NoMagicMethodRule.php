@@ -116,7 +116,7 @@ final readonly class NoMagicMethodRule implements Rule
 
     private function magicMethod(string $class, string $method, int $line): IdentifierRuleError
     {
-        $message = sprintf('Method %s::%s() is a magic method: no magic methods other than __construct() and __invoke() (and __toString() of Stringable), because PHP calls them implicitly, so what they do is invisible to static analysis, the IDE and readers; declare the property or the method, or give the class a named method for the lookup.', $class, $method);
+        $message = sprintf('Method %s::%s() is a magic method: no magic methods other than __construct(), __invoke() and __toString(), because PHP calls them implicitly, so what they do is invisible to static analysis, the IDE and readers; declare the property or the method, or give the class a named method for the lookup.', $class, $method);
 
         return RuleErrorBuilder::message($message)->identifier('intakt.noMagicMethod')->line($line)->build();
     }

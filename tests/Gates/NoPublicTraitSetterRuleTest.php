@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Gates;
 
+use Intakt\Gates\PhpStan\AbstractTraitSetterUseCollector;
 use Intakt\Gates\PhpStan\AncestorDeclarations;
 use Intakt\Gates\PhpStan\NoPublicTraitSetterRule;
 use Intakt\Gates\PhpStan\RepositoryCode;
@@ -25,6 +26,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[CoversClass(NoPublicTraitSetterRule::class)]
 #[CoversClass(TraitSetterDeclarationCollector::class)]
 #[CoversClass(TraitSetterUseCollector::class)]
+#[CoversClass(AbstractTraitSetterUseCollector::class)]
 #[CoversClass(AncestorDeclarations::class)]
 #[UsesClass(RepositoryCode::class)]
 #[UsesClass(SetterMethod::class)]
@@ -60,7 +62,7 @@ final class NoPublicTraitSetterRuleTest extends PhpStanRuleTestCase
     #[Override]
     protected function getCollectors(): array
     {
-        return [new TraitSetterDeclarationCollector(), new TraitSetterUseCollector()];
+        return [new TraitSetterDeclarationCollector(), new TraitSetterUseCollector(), new AbstractTraitSetterUseCollector()];
     }
 
     /**
@@ -115,6 +117,16 @@ final class NoPublicTraitSetterRuleTest extends PhpStanRuleTestCase
     public function testATraitSetterOverridingAVendorParentPassesWithoutTheOverrideAttribute(): void
     {
         $this->assertRuleAccepts('vendor-parent-plain-trait-setter');
+    }
+
+    public function testAnAbstractTraitSetterThatAVendorParentImplementsPassesStaticAnalysis(): void
+    {
+        $this->assertRuleAccepts('vendor-parent-abstract-trait-setter');
+    }
+
+    public function testAnAbstractTraitSetterNoVendorParentDeclaresFailsStaticAnalysis(): void
+    {
+        $this->assertRuleRejects('used-abstract-trait-setter', 'src/Titled.php:9 intakt.noPublicSetter Method Intakt\Sample\Titled::setTitle() is a public setter');
     }
 
     public function testAChangedFilesRunThatAnalyzesOnlyTheTraitReportsNoTraitSetter(): void

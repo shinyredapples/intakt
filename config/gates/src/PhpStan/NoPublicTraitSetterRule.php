@@ -44,7 +44,7 @@ final readonly class NoPublicTraitSetterRule implements Rule
             return [];
         }
 
-        $uses = array_merge(...array_values($node->get(TraitSetterUseCollector::class)));
+        $uses = array_merge(...array_values($node->get(TraitSetterUseCollector::class)), ...array_merge(...array_values($node->get(AbstractTraitSetterUseCollector::class))));
         $findings = [];
 
         foreach ($node->get(TraitSetterDeclarationCollector::class) as $file => $traits) {
