@@ -1,6 +1,15 @@
 # For judges: Intakt in a few minutes
 
-Your coding agent says it is done. Intakt tells you whether to believe it: a panel of reviewers on models from different makers reviews the change, and a judge marks every finding against the task, so every P1 and P2 finding whose quote checks out reaches the act list.
+Your coding agent says it is done. Intakt tells you whether to believe it: a panel of reviewers on models from different AI labs reviews the change, and a judge marks every finding against the task, so every P1 and P2 finding whose quote checks out reaches the act list.
+
+The video's script and shot list: [docs/video.md](video.md)
+
+## Why this needed Symfony AI and MCP
+
+- **Platform**: one interface over the Anthropic, OpenAI and OpenAI-compatible providers, so one panel mixes models from different AI labs.
+- **Structured output**: every reviewer and judge answers with a schema-valid verdict. **Agent**: the reviewers' tool loop. **Store**: project memory.
+- **Messenger**: each reviewer's run and the judging of a round go to a worker, so a round runs in the background.
+- **MCP Bundle**: your own agent runs the whole review loop as tools: start a review, read the act list, fix, repeat.
 
 ## a. No key, about 2 minutes
 
