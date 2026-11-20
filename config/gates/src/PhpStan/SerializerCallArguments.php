@@ -11,6 +11,7 @@ use PhpParser\Node\Expr\Array_;
 use PhpParser\Node\Expr\MethodCall;
 use PhpParser\Node\Expr\NullsafeMethodCall;
 use PhpParser\Node\Expr\StaticCall;
+use PhpParser\Node\Identifier;
 use PhpParser\Node\Scalar\Int_;
 use PhpParser\Node\Scalar\String_;
 
@@ -25,9 +26,9 @@ final readonly class SerializerCallArguments
 
         foreach ($call->getArgs() as $argument) {
             $values = $this->passedBy($argument);
-            $found = $this->formatIn(null === $passed ? array_filter($values ?? [], is_string(...), \ARRAY_FILTER_USE_KEY) : $values ?? [], $position - (int) $passed, $names);
+            $found = $this->formatIn(null === $passed ? array_filter($values ?? [], is_string(...), ARRAY_FILTER_USE_KEY) : $values ?? [], $position - (int) $passed, $names);
 
-            if (null !== $found) {
+            if ($found instanceof Expr) {
                 return $found;
             }
 
@@ -54,14 +55,14 @@ final readonly class SerializerCallArguments
         );
     }
 
-    // the values one argument passes, keyed as PHP passes them: an integer key is the next positional argument, a string key names its parameter; null when an unpacked value is no literal array the rule can read
+    // keyed as PHP passes the values, because an integer key is the next positional argument and a string key names its parameter; null because an unpacked value that is no readable literal array hides what it passes
     /**
      * @return ?array<int|string, Expr>
      */
     private function passedBy(Arg $argument): ?array
     {
         return match (true) {
-            !$argument->unpack => null === $argument->name ? [$argument->value] : [$argument->name->toString() => $argument->value],
+            !$argument->unpack => $argument->name instanceof Identifier ? [$argument->name->toString() => $argument->value] : [$argument->value],
             $argument->value instanceof Array_ => $this->entriesOf($argument->value),
             default => null,
         };
@@ -95,21 +96,45 @@ final readonly class SerializerCallArguments
      */
     private function withItem(array $entries, ArrayItem $item): ?array
     {
-        if ($item->unpack) {
-            $nested = $item->value instanceof Array_ ? $this->entriesOf($item->value) : null;
+        return match (true) {
+            $item->unpack => $this->withNested($entries, $item->value),
+            !$item->key instanceof Expr => $this->withEntry($entries, null, $item->value),
+            $item->key instanceof Int_, $item->key instanceof String_ => $this->withEntry($entries, $item->key->value, $item->value),
+            default => null,
+        };
+    }
 
-            return null === $nested ? null : [...$entries, ...$nested];
+    /**
+     * @param array<int|string, Expr> $entries
+     *
+     * @return ?array<int|string, Expr>
+     */
+    private function withNested(array $entries, Expr $spread): ?array
+    {
+        $nested = $spread instanceof Array_ ? $this->entriesOf($spread) : null;
+
+        foreach ($nested ?? [] as $key => $value) {
+            $entries = $this->withEntry($entries, is_int($key) ? null : $key, $value);
         }
 
-        if ($item->key instanceof Expr && !$item->key instanceof Int_ && !$item->key instanceof String_) {
-            return null;
+        return null === $nested ? null : $entries;
+    }
+
+    // written through PHP's own array assignment, because that keeps the next free index and the place of an overwritten key as PHP does
+    /**
+     * @param array<int|string, Expr> $entries
+     *
+     * @return array<int|string, Expr>
+     */
+    private function withEntry(array $entries, int|string|null $key, Expr $value): array
+    {
+        if (null === $key) {
+            $entries[] = $value;
+
+            return $entries;
         }
 
-        if (null === $item->key) {
-            $entries[] = $item->value;
-        } else {
-            $entries[$item->key->value] = $item->value;
-        }
+        $entries[$key] = $value;
 
         return $entries;
     }

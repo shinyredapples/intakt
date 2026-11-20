@@ -79,6 +79,8 @@ final class BareSerializerFormatRuleTest extends PhpStanRuleTestCase
             "\$serializer->serialize(...[...['json'], \\Symfony\\Component\\Serializer\\Encoder\\JsonEncoder::FORMAT])",
             "\$serializer->serialize(...\$data, format: \\Symfony\\Component\\Serializer\\Encoder\\JsonEncoder::FORMAT, context: ['json'])",
             "\$serializer->serialize(...\$data, ...['json'])",
+            "\$serializer->serialize(...[5 => \$data, 'json', 6 => \\Symfony\\Component\\Serializer\\Encoder\\JsonEncoder::FORMAT])",
+            "\$serializer->serialize(...[5 => \$data, ...['json'], 6 => \\Symfony\\Component\\Serializer\\Encoder\\JsonEncoder::FORMAT])",
             "\$serializer->serialize(...[\$data, \$data => 'json'])",
         ]));
 
