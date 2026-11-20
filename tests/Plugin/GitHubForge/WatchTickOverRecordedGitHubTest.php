@@ -154,7 +154,7 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         self::assertSame(1, preg_match_all('/ change_handed_to_intakt \{[^}]*pull\\\\\/7/', $events));
     }
 
-    // #8 is the loop's own: Intakt holds no record of it and the author GitHub sets is not Intakt's App.
+    // No record of Intakt for #8, because the loop's own pull requests have none and only the author GitHub sets can tell them apart.
     public function testATickRecordsThePullRequestTheAppOpenedAsHandedToIntaktAndTheLoopsOwnAsNotHandedToIntakt(): void
     {
         $ledger = self::getContainer()->get(Ledger::class);
