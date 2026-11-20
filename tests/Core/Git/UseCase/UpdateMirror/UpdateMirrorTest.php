@@ -10,11 +10,11 @@ use Intakt\Core\Git\Contract\NetworkGit;
 use Intakt\Core\Git\Contract\NetworkGitFailed;
 use Intakt\Core\Git\Contract\WorkTreeInBareRepository;
 use Intakt\Core\Git\Domain\Mirrors;
+use Intakt\Core\Git\Domain\ProjectNameRefused;
 use Intakt\Core\Git\UseCase\UpdateMirror\MirrorNotUpdated;
 use Intakt\Core\Git\UseCase\UpdateMirror\UpdateMirror;
 use Intakt\Tests\Core\Git\RecordingClock;
 use Intakt\Tests\Core\Git\TemporaryRepository;
-use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -29,6 +29,7 @@ use Symfony\Component\Process\Process;
 
 #[CoversClass(UpdateMirror::class)]
 #[CoversClass(Mirrors::class)]
+#[CoversClass(ProjectNameRefused::class)]
 #[UsesClass(HardenedGit::class)]
 #[UsesClass(NetworkGit::class)]
 #[UsesClass(NetworkGitFailed::class)]
@@ -109,7 +110,7 @@ final class UpdateMirrorTest extends TestCase
     #[DataProvider('unsafeNames')]
     public function testAProjectNameThatIsNotASafePathSegmentIsRefused(string $name): void
     {
-        $this->expectException(InvalidArgumentException::class);
+        $this->expectException(ProjectNameRefused::class);
 
         try {
             $this->update($name, $this->remote->path);

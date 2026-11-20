@@ -7,7 +7,6 @@ namespace Intakt\Core\Git\UseCase\MakeBuildClone;
 use Intakt\Core\Git\Domain\SourceLine;
 use Intakt\Core\Git\Domain\TaskBranch;
 use Intakt\Core\Platform\Contract\ReportableFailure;
-use InvalidArgumentException;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\MapInput;
 use Symfony\Component\Console\Command\Command;
@@ -32,7 +31,7 @@ final readonly class MakeBuildCloneCommand
         try {
             $branch = $this->taskBranch($io, $input);
             $this->clones->make($input->project, $branch, $input->directory);
-        } catch (InvalidArgumentException|IOException|ReportableFailure $failure) {
+        } catch (IOException|ReportableFailure $failure) {
             $io->error($failure->getMessage());
 
             return Command::FAILURE;
