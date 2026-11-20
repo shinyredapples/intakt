@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\ServeReviewTools;
 
+use Intakt\Core\Platform\Contract\ReportableFailure;
 use Intakt\Core\Review\UseCase\ServeReviewTools\ReviewCredential;
 use Intakt\Core\Review\UseCase\ServeReviewTools\ReviewCredentialNeedsSecret;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -52,6 +53,13 @@ final class ReviewCredentialTest extends TestCase
     public function testNoCredentialIsIssuedWhileTheSecretIsEmpty(): void
     {
         $this->expectException(ReviewCredentialNeedsSecret::class);
+
+        new ReviewCredential('')->issueFor(self::ROUND);
+    }
+
+    public function testTheMissingSecretIsReportedToTheOperator(): void
+    {
+        $this->expectException(ReportableFailure::class);
 
         new ReviewCredential('')->issueFor(self::ROUND);
     }

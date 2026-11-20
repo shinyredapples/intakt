@@ -113,20 +113,27 @@ final readonly class SearchFiles
      */
     private function matchesIn(SplFileInfo $file, string $text): Generator
     {
-        $content = $file->getSize() <= self::MAX_FILE_BYTES ? file_get_contents($file->getPathname()) : false;
+        $relative = mb_scrub($this->checkout->relative($file->getPathname()), 'UTF-8');
+        $content = $this->sizeOf($file, $relative) <= self::MAX_FILE_BYTES ? file_get_contents($file->getPathname()) : false;
 
         // Because the answer reaches the provider as JSON, which carries only valid UTF-8, a binary file is not searched.
         if (false === $content || !mb_check_encoding($content, 'UTF-8')) {
             return;
         }
 
-        $relative = mb_scrub($this->checkout->relative($file->getPathname()), 'UTF-8');
-
         foreach ($this->lines($content) as $number => $line) {
             if (str_contains($line, $text)) {
                 yield sprintf('%s:%d:%s', $relative, $number, $this->cut(rtrim($line, "\r")));
             }
         }
+    }
+
+    // A named refusal, because a file removed after the walk found it is the reviewed tree changing under the search, not a failure of the server.
+    private function sizeOf(SplFileInfo $file, string $relative): int
+    {
+        $size = filesize($file->getPathname());
+
+        return false === $size ? throw PathNotReadable::unreadable($relative) : $size;
     }
 
     /**

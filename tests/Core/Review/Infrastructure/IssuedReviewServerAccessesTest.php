@@ -9,6 +9,8 @@ use Intakt\Core\Review\Contract\NoReviewServerAccess;
 use Intakt\Core\Review\Infrastructure\IssuedReviewServerAccesses;
 use Intakt\Core\Review\UseCase\ServeReviewTools\ReviewCredential;
 use Intakt\Core\Review\UseCase\ServeReviewTools\ReviewCredentialNeedsSecret;
+use LogicException;
+use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -54,6 +56,22 @@ final class IssuedReviewServerAccessesTest extends TestCase
         } catch (NoReviewServerAccess $blocked) {
             self::assertInstanceOf(ReviewCredentialNeedsSecret::class, $blocked->getPrevious());
         }
+    }
+
+    public function testAnUnexpectedFailureWhileIssuingPassesThroughInsteadOfBlockingTheAccess(): void
+    {
+        $round = new class extends UuidV7 {
+            #[Override]
+            public function toRfc4122(): string
+            {
+                throw new LogicException('The round could not be written.');
+            }
+        };
+
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessageIs('The round could not be written.');
+
+        $this->accesses()->forRound($round);
     }
 
     private function accesses(): IssuedReviewServerAccesses
