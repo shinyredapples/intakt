@@ -24,7 +24,7 @@ final class StoredFindingIdsNormalizer implements NormalizerInterface, Denormali
     public function normalize(mixed $data, ?string $format = null, array $context = []): array
     {
         return match (true) {
-            $data instanceof FindingIds => [...$data],
+            $data instanceof FindingIds => iterator_to_array($data),
             $data instanceof SameCause => iterator_to_array($data),
             default => throw new LogicException(sprintf('Only a "%s" or a "%s" is normalized here.', FindingIds::class, SameCause::class)),
         };
@@ -47,7 +47,7 @@ final class StoredFindingIdsNormalizer implements NormalizerInterface, Denormali
         $strings = $this->stringsIn($data, $type);
 
         if (FindingIds::class === $type) {
-            return new FindingIds(...array_values($strings));
+            return FindingIds::keyed($strings);
         }
 
         $sameCause = new SameCause();

@@ -10,7 +10,7 @@ use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\JudgeDone;
-use Intakt\Core\Review\Contract\JudgeDoneFinding;
+use Intakt\Core\Review\Contract\JudgeNotes;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\ChangeFindings;
 use Intakt\Core\Review\Domain\ChangeRound;
@@ -88,10 +88,16 @@ final readonly class StoredFindings
             return [];
         }
 
-        $notes = array_filter(array_column(array_map(static fn (JudgeDoneFinding $finding): array => [$finding->id, $finding->judgeNote], $judged->findings), 1, 0), static fn (?string $note): bool => null !== $note);
-        $reported = array_map(static fn (Finding $finding): Finding => isset($notes[$finding->id]) ? $finding->withJudgeNote($notes[$finding->id]) : $finding, $this->reportedIn($round));
+        $notes = new JudgeNotes();
+        foreach ($judged->findings as $finding) {
+            if (null !== $finding->judgeNote) {
+                $notes = $notes->with($finding->id, $finding->judgeNote);
+            }
+        }
 
-        return new OnePerPlace()->actList($reported, [...$judged->act], iterator_to_array($judged->sameCause));
+        $reported = array_map(static fn (Finding $finding): Finding => null !== $notes->of($finding->id) ? $finding->withJudgeNote($notes->of($finding->id)) : $finding, $this->reportedIn($round));
+
+        return new OnePerPlace()->actList($reported, array_values(iterator_to_array($judged->act)), iterator_to_array($judged->sameCause));
     }
 
     /**
