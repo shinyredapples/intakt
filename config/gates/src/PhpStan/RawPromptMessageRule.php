@@ -21,8 +21,11 @@ use PHPStan\Analyser\Scope;
 use PHPStan\Rules\IdentifierRuleError;
 use PHPStan\Rules\Rule;
 use PHPStan\Rules\RuleErrorBuilder;
+use PHPStan\Type\Constant\ConstantArrayType;
+use PHPStan\Type\Constant\ConstantIntegerType;
 use PHPStan\Type\Constant\ConstantStringType;
 use PHPStan\Type\ObjectType;
+use PHPStan\Type\Type;
 use Symfony\AI\Platform\Message\AssistantMessage;
 use Symfony\AI\Platform\Message\Message;
 use Symfony\AI\Platform\Message\SystemMessage;
@@ -95,10 +98,26 @@ final readonly class RawPromptMessageRule implements Rule
     private function namesAFactory(Expr $node, Scope $scope): bool
     {
         return match (true) {
-            $node instanceof Array_ => 2 === count($node->items) && $this->names(Message::class, $node->items[0]->value, $scope) && $this->callsAFactory($node->items[1]->value, $scope),
+            $node instanceof Array_ => array_any($scope->getType($node)->getConstantArrays(), $this->isAFactoryCallableArray(...)),
             $node instanceof String_, $node instanceof Concat, $node instanceof InterpolatedString => array_any($scope->getType($node)->getConstantStrings(), $this->isAFactoryCallable(...)),
             default => false,
         };
+    }
+
+    // PHP calls an array only by its keys 0 and 1, whatever order they are written in, so an array with any other key is not a callable
+    private function isAFactoryCallableArray(ConstantArrayType $array): bool
+    {
+        $keys = array_map(static fn (ConstantIntegerType|ConstantStringType $key): int|string => $key->getValue(), $array->getKeyTypes());
+        sort($keys);
+
+        return [0, 1] === $keys
+            && $this->namesMessage($array->getOffsetValueType(new ConstantIntegerType(0)))
+            && $this->isAFactoryName($array->getOffsetValueType(new ConstantIntegerType(1)));
+    }
+
+    private function namesMessage(Type $class): bool
+    {
+        return in_array(strtolower(Message::class), array_map(strtolower(...), $class->getObjectTypeOrClassStringObjectType()->getObjectClassNames()), true);
     }
 
     private function isAFactoryCallable(ConstantStringType $callable): bool
@@ -119,14 +138,17 @@ final readonly class RawPromptMessageRule implements Rule
         return in_array(strtolower($class), array_map(strtolower(...), $named), true);
     }
 
-    // a method name only known at runtime could be any factory, so it counts as one
     private function callsAFactory(Identifier|Expr $name, Scope $scope): bool
     {
-        if ($name instanceof Identifier) {
-            return in_array($name->toLowerString(), self::FACTORIES, true);
-        }
+        return $name instanceof Identifier
+            ? in_array($name->toLowerString(), self::FACTORIES, true)
+            : $this->isAFactoryName($scope->getType($name));
+    }
 
-        $known = array_map(static fn ($constant): string => strtolower($constant->getValue()), $scope->getType($name)->getConstantStrings());
+    // a method name only known at runtime could be any factory, so it counts as one
+    private function isAFactoryName(Type $name): bool
+    {
+        $known = array_map(static fn (ConstantStringType $constant): string => strtolower($constant->getValue()), $name->getConstantStrings());
 
         return [] === $known || [] !== array_intersect($known, self::FACTORIES);
     }

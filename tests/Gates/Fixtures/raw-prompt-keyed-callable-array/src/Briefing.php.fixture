@@ -1,0 +1,29 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use Symfony\AI\Platform\Message\Message;
+
+final readonly class Briefing
+{
+    /**
+     * @param list<string> $parts
+     *
+     * @return list<mixed>
+     */
+    public function messagesFor(string $text, string $factory, array $parts): array
+    {
+        [, $second] = $parts;
+
+        return [
+            call_user_func([1 => 'ofUser', 0 => Message::class], $text),
+            call_user_func(['1' => $factory, '0' => Message::class], $text),
+            ['class' => Message::class, 'method' => 'ofUser'],
+            [0 => Message::class, 2 => 'ofUser'],
+            [Message::class, 'ofUser', ...$parts],
+            $second,
+        ];
+    }
+}
