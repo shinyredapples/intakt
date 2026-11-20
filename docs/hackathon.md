@@ -9,7 +9,8 @@ The first release is the review loop ([spec](spec.md), [plan](plan.md)): a panel
 AI labs reviews a change, a judge marks every finding against the task and tells the builder what to act on, finding
 ids survive from round to round, your own agent runs the loop over MCP until the verdict is clean, a live dashboard
 shows each round as it streams, and `docker compose up` with a sample repository gets a juror to the first verdict in
-five minutes. The larger aim comes after it: you give Intakt a spec, and Intakt turns it into small tasks, builds each
+five minutes: a live review with one provider key or Hugging Face token, or, with none, a recorded real review played
+back. The larger aim comes after it: you give Intakt a spec, and Intakt turns it into small tasks, builds each
 one and merges what passes review.
 
 ## The timeline
@@ -29,8 +30,9 @@ the dates from [the journey](journey.md#milestones):
 
 ## What was achieved
 
-- **The five-minute start and the keyless demo:** clone, `docker compose up`, and a review of the sample change, or a
-  recorded real review played with no provider key ([five-minute start](../README.md#five-minute-start),
+- **The five-minute start and the keyless demo:** clone, `docker compose up`, and a live review of the sample change,
+  which needs one provider key or Hugging Face token; without one, the demo plays a recorded real review of the sample
+  change instead, calling no model ([five-minute start](../README.md#five-minute-start),
   [timed run](../README.md#timed-run)).
 - **The review page:** every round with its reviewers, their verdicts, the findings and the judge's call on each
   ([reading a verdict](user/README.md#reading-a-verdict), [a tour of the dashboard](guide/a-tour-of-the-dashboard.md)).
@@ -39,7 +41,8 @@ the dates from [the journey](journey.md#milestones):
   ([review bench](../README.md#review-bench)).
 - **MCP tools and the agent skill:** your agent starts reviews, reads the findings and loops until the verdict is clean
   ([MCP](user/mcp.md), [the skill](../skills/intakt-review/README.md)).
-- **The quality gates:** CI runs `bin/check` on every change, and runs the journeys separately with `bin/check --journeys`
+- **The quality gates:** CI runs `bin/check`, and the journeys separately with `bin/check --journeys`, on pull requests
+  from this repository and on pushes to main; every CI job skips pull requests from forks
   ([quality gates](architecture/quality-gates.md)).
 - **Upstream reports:** likely bugs in Symfony, Symfony AI and other libraries, each with a minimal reproduction, and
   fixes that are in Symfony 8.2.0-BETA2 ([found and fixed upstream](../README.md#found-and-fixed-upstream),
@@ -47,7 +50,7 @@ the dates from [the journey](journey.md#milestones):
   [Highlights](https://shinyredapples.github.io/intakt/)).
 - **Built by an AI loop:** the repository itself, in figures and examples ([showcase](showcase/README.md)).
 
-Counted on 2026-11-20 from the repository: 7,289 commits on main (counted), 27 upstream reports in `upstream/`
+Counted on 2026-11-20 from the repository: 7,289 commits on main (counted), 27 upstream reproductions in `upstream/`
 (counted). Counted from the GitHub API to 2026-11-13, the latest GitHub count, as listed in
 [the journey](journey.md): 614 merged pull requests (counted) and 773 closed issues (counted, 761 done and 12 dropped).
 
@@ -55,7 +58,10 @@ Counted on 2026-11-20 from the repository: 7,289 commits on main (counted), 27 u
 
 - AI agents in a build loop wrote the code, the docs and the tests.
 - Every change went through a pull request with reviews by models from two AI labs, CI with the repository's quality
-  gates, and an owner approval step for protected paths.
+  gates, and, for a change to protected paths (the checks, CI, the agent rules), the `owner-approval` label: such a
+  change waits for the owner's approval of its head. In the [showcase](showcase/README.md), 23 of the 25 merges with that
+  label have an owner approval on record; #162 was approved by the loop itself, by class (both reviewers classified its
+  `AGENTS.md` change as tightening the rules), and #74's final diff touched no protected path.
 - The owner set the plan, the decisions and the priorities.
 - The repository as an example of this way of working, in figures and examples: [the showcase](showcase/README.md).
 
