@@ -43,7 +43,7 @@ final class SampleProjectDataTest extends TestCase
                 self::assertArrayHasKey('input', $data->price($data->model($provider, $tier)));
             }
         }
-        self::assertArrayHasKey('output', $data->price($data->secondMaker()));
+        self::assertArrayHasKey('output', $data->price($data->secondLab()));
     }
 
     public function testTheShippedRouterUrlHasNoVersionPathBecauseTheBridgeAppendsIt(): void
@@ -56,8 +56,8 @@ final class SampleProjectDataTest extends TestCase
         $data = $this->dataOf($this->valid());
 
         self::assertSame(
-            ['https://router.example.test', '2030-01-02', 'made-up-strong', 'made-up-second-maker', ['input' => 0.5, 'output' => 2]],
-            [$data->routerUrl()->toRawString(), $data->priceDate(), $data->model(Provider::Anthropic, Tier::Strong), $data->secondMaker(), $data->price('made-up-strong')],
+            ['https://router.example.test', '2030-01-02', 'made-up-strong', 'made-up-second-lab', ['input' => 0.5, 'output' => 2]],
+            [$data->routerUrl()->toRawString(), $data->priceDate(), $data->model(Provider::Anthropic, Tier::Strong), $data->secondLab(), $data->price('made-up-strong')],
         );
     }
 
@@ -70,9 +70,9 @@ final class SampleProjectDataTest extends TestCase
 
     public function testAModelWithoutAPriceIsRefused(): void
     {
-        $this->expectExceptionObject($this->broken('prices.made-up-second-maker'));
+        $this->expectExceptionObject($this->broken('prices.made-up-second-lab'));
 
-        $this->dataOf($this->valid())->price('made-up-second-maker');
+        $this->dataOf($this->valid())->price('made-up-second-lab');
     }
 
     /**
@@ -151,7 +151,7 @@ final class SampleProjectDataTest extends TestCase
             'router_url' => 'https://router.example.test',
             'price_date' => '2030-01-02',
             'models' => ['anthropic' => ['strong' => 'made-up-strong']],
-            'second_maker' => 'made-up-second-maker',
+            'second_lab' => 'made-up-second-lab',
             'prices' => ['made-up-strong' => ['input' => 0.5, 'output' => 2]],
         ];
     }

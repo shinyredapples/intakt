@@ -11,14 +11,17 @@ use Intakt\Plugin\Forge\Contract\CiRunOrigin;
 use Intakt\Plugin\Forge\Contract\CiRunState;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
+use Symfony\Component\Clock\ClockInterface;
 
 // Maps what GitHub answered to runs and nothing else, because folding them into pending, red or green is the caller's rule.
 final readonly class GitHubCiRuns
 {
     private const string CHECK_SUITE_EVENT = 'check_suite';
     private const string LINKED_SUITE_PREFIX = 'suite-of-workflow:';
+    // The set time after which the design admits a pending head by age (docs/design/05-architecture/08-merge.md#waiting-for-ci), because an app that started nothing by then is not coming.
+    private const string ABANDONED_AFTER = '30 minutes';
 
-    public function __construct(private GitHubMoments $moments)
+    public function __construct(private GitHubMoments $moments, private ClockInterface $clock)
     {
     }
 
@@ -30,12 +33,13 @@ final readonly class GitHubCiRuns
     public function ofHead(RepositoryAddress $repository, CommitId $head, array $answers): array
     {
         $workflowRuns = $this->onHead($head, $this->entries($answers['workflow_runs'], 'workflow_runs'));
-        $suites = $this->onHead($head, $this->entries($answers['check_suites'], 'check_suites'));
         $runsBySuite = $this->runsBySuite($workflowRuns);
+        // An app that never starts its suite would keep every head pending, so only unlinked suites age out (Actions' queued workflows stay covered by their runs), and only once built, because a malformed suite must fail the read instead of vanishing.
+        $suites = array_map(fn (array $suite): ?CiRun => $this->unlessAbandoned($suite, $this->suiteOf($repository, $suite, $runsBySuite), $runsBySuite), $this->onHead($head, $this->entries($answers['check_suites'], 'check_suites')));
 
         return [
             ...array_map(fn (array $run): CiRun => $this->workflowRunOf($repository, $run), $workflowRuns),
-            ...array_map(fn (array $suite): CiRun => $this->suiteOf($repository, $suite, $runsBySuite), $suites),
+            ...array_values(array_filter($suites)),
         ];
     }
 
@@ -89,6 +93,20 @@ final readonly class GitHubCiRuns
         }
 
         return $bySuite;
+    }
+
+    /**
+     * @param array<mixed>             $suite
+     * @param array<int, array<mixed>> $runsBySuite
+     */
+    private function unlessAbandoned(array $suite, CiRun $built, array $runsBySuite): ?CiRun
+    {
+        $abandoned = !isset($runsBySuite[$this->positive($suite, 'id')])
+            && 'queued' === $this->text($suite, 'status')
+            && 0 === ($suite['latest_check_runs_count'] ?? null)
+            && $this->createdAt($suite) < $this->clock->now()->modify('-'.self::ABANDONED_AFTER);
+
+        return $abandoned ? null : $built;
     }
 
     /**

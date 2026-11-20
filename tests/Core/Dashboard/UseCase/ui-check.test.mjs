@@ -84,6 +84,10 @@ test('the first-run page at /setup is checked', () => {
     assert.ok(PAGES.some((page) => page.name === 'setup' && page.path === '/setup'));
 });
 
+test('the Waiting on you page at /waiting is checked', () => {
+    assert.ok(PAGES.some((page) => page.name === 'waiting' && page.path === '/waiting'));
+});
+
 test('every page is checked in both themes at 1440, 1920 and 390 wide', () => {
     const jobs = jobsFor([{ name: 'projects', path: '/projects' }]);
 

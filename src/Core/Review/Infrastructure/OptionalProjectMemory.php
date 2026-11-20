@@ -33,6 +33,7 @@ final class OptionalProjectMemory implements ProjectMemory
             return $this->memory->relevantTo($query);
         } catch (ProjectMemoryNeedsEmbeddingModel $missing) {
             $this->reportMissingModelOnce($query->project, $missing);
+            // Boundary: logs any other read failure and returns no memory, because project memory is optional and must never fail the review.
         } catch (Throwable $failure) {
             $this->logger->warning('Project memory could not be read; the review goes on without it.', ['project' => $query->project, 'exception' => $failure]);
         }

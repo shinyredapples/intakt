@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\JudgeRound;
 
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Platform\Contract\Redaction;
@@ -73,6 +74,7 @@ use Throwable;
 #[CoversClass(QuotesInChange::class)]
 #[CoversClass(ChangeText::class)]
 #[UsesClass(DiffPaths::class)]
+#[UsesClass(Paths::class)]
 #[CoversClass(CausesInOneHunk::class)]
 #[CoversClass(DiffHunks::class)]
 #[UsesClass(JudgedFindings::class)]
@@ -131,6 +133,15 @@ final class JudgeRoundTest extends KernelTestCase
         $this->fixture->judge(new ScriptedJudgement(new Judgement([new JudgedFinding('F1', Mark::Defer)])))($this->judgingOf($round));
 
         self::assertSame([$reviewer => 'approve'], $this->judgeDonePayloads()[0]['votes']);
+    }
+
+    public function testJudgeDoneRecordsANullKeyForAP1NamingNoFileAndNoneForAP2(): void
+    {
+        $round = $this->roundReporting([$this->finding('A', Severity::P1), $this->finding('B', Severity::P2)]);
+
+        $this->fixture->judge(new ScriptedJudgement(new Judgement([])))($this->judgingOf($round));
+
+        self::assertSame(['F1' => null], $this->judgeDonePayloads()[0]['p1_keys']);
     }
 
     public function testJudgeDoneRecordsAChangesVoteForAP3TheJudgeMarksAct(): void
@@ -335,7 +346,7 @@ final class JudgeRoundTest extends KernelTestCase
 
         $asked = $vendor->asked;
         self::assertInstanceOf(JudgeRequest::class, $asked);
-        self::assertSame(['src/Thing.php'], $asked->changedFiles);
+        self::assertSame(['src/Thing.php'], [...$asked->changedFiles]);
     }
 
     public function testTwoReviewersReportingDifferentFindingsUnderOneIdBothReachTheJudge(): void
@@ -681,7 +692,7 @@ final class JudgeRoundTest extends KernelTestCase
      */
     private function judgeCalls(): array
     {
-        return array_map(static fn (array $payload): array => array_diff_key($payload, ['findings' => true, 'dropped' => true, 'same_cause' => true, 'votes' => true]), $this->judgeDonePayloads());
+        return array_map(static fn (array $payload): array => array_diff_key($payload, ['findings' => true, 'dropped' => true, 'same_cause' => true, 'votes' => true, 'p1_keys' => true]), $this->judgeDonePayloads());
     }
 
     /**
