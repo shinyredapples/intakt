@@ -18,7 +18,8 @@ final readonly class PathOnlyProfilerStorage implements ProfilerStorageInterface
     public function __construct(
         #[AutowireDecorated]
         private ProfilerStorageInterface $storage,
-    ) {}
+    ) {
+    }
 
     public function write(Profile $profile): bool
     {
