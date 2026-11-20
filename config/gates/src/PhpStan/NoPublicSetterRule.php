@@ -92,8 +92,8 @@ final readonly class NoPublicSetterRule implements Rule
         $findings = [];
 
         foreach ($trait->getTraitUses() as $use) {
-            foreach ($this->publicSetterAliases($use, $declared) as $alias) {
-                $findings[] = $this->setters->finding($name, $this->aliasedName($alias))->line($alias->getStartLine())->build();
+            foreach ($this->publicSetterAliases($use, $declared) as [$alias, $setter]) {
+                $findings[] = $this->setters->finding($name, $setter)->line($alias->getStartLine())->build();
             }
         }
 
@@ -111,36 +111,48 @@ final readonly class NoPublicSetterRule implements Rule
             return [];
         }
 
-        $aliases = array_filter($this->publicSetterAliases($use, $class), fn (Alias $alias): bool => !$this->vendorDeclares($class, $this->aliasedName($alias)));
+        $aliases = array_filter($this->publicSetterAliases($use, $class), fn (array $alias): bool => !$this->vendorDeclares($class, $alias[1]));
 
-        return array_values(array_map(fn (Alias $alias): IdentifierRuleError => $this->setters->finding($class->getDisplayName(), $this->aliasedName($alias))->line($alias->getStartLine())->build(), $aliases));
+        return array_values(array_map(fn (array $alias): IdentifierRuleError => $this->setters->finding($class->getDisplayName(), $alias[1])->line($alias[0]->getStartLine())->build(), $aliases));
     }
 
     /**
-     * @return list<Alias>
+     * @return list<array{Alias, string}>
      */
     private function publicSetterAliases(TraitUse $use, ClassReflection $owner): array
     {
-        return array_values(array_filter($use->adaptations, fn (Node $adaptation): bool => $adaptation instanceof Alias && $this->aliasesToPublicSetter($adaptation, $use, $owner)));
-    }
+        $found = [];
 
-    private function aliasesToPublicSetter(Alias $alias, TraitUse $use, ClassReflection $owner): bool
-    {
-        $name = $this->aliasedName($alias);
+        foreach ($use->adaptations as $adaptation) {
+            $setter = $adaptation instanceof Alias ? $this->publicSetterOfAlias($adaptation, $use, $owner) : null;
 
-        // an alias that keeps the trait's name and visibility adds nothing the trait's own declaration did not show
-        if (!$this->setters->isSetterName($name) || (!$alias->newName instanceof Identifier && !$this->widensToPublic($alias, $use))) {
-            return false;
+            if (null !== $setter) {
+                $found[] = [$adaptation, $setter];
+            }
         }
 
+        return $found;
+    }
+
+    // PHP matches method names in any letter case, so the alias is judged by the name the owner really exposes, not by the spelling in the `as` clause
+    private function publicSetterOfAlias(Alias $alias, TraitUse $use, ClassReflection $owner): ?string
+    {
+        $name = $this->aliasedName($alias);
         $native = $owner->getNativeReflection();
+
+        // an alias that keeps the trait's name and visibility adds nothing the trait's own declaration did not show
+        if ((!$alias->newName instanceof Identifier && !$this->widensToPublic($alias, $use)) || !$native->hasMethod($name)) {
+            return null;
+        }
 
         // a method the owner declares itself wins over the alias and is judged as a method, so the alias only counts when it is what callers really get
         if (array_key_exists(strtolower($name), array_change_key_case($native->getBetterReflection()->getImmediateMethods()))) {
-            return false;
+            return null;
         }
 
-        return $native->hasMethod($name) && $native->getMethod($name)->isPublic();
+        $method = $native->getMethod($name);
+
+        return $method->isPublic() && $this->setters->isSetterName($method->getName()) ? $method->getName() : null;
     }
 
     // `setTitle as public` on a method the trait already declares public changes nothing, so the trait's declaration stays its only finding
