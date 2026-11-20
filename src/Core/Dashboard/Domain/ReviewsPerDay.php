@@ -17,7 +17,7 @@ final readonly class ReviewsPerDay
     // One unit of a cost bar is a ten-thousandth of a dollar, the precision a cost reading shows, so the bars stay whole numbers.
     private const int COST_UNIT = 10000;
 
-    // Keyed by UTC start day, oldest first.
+    // Keyed by UTC start day and oldest first, because the day axis of both charts must read left to right in time.
     /**
      * @param array<string, list<ReviewedRound>> $days
      * @param array<string, string>              $names
