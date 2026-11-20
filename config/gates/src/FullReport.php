@@ -18,8 +18,7 @@ final readonly class FullReport
     {
     }
 
-    // Because a fresh random name, created exclusively, never writes over or through a file already there, an earlier report included.
-    // The folder is looked at after mkdir() fails, so a check that loses the race to create it to another check in the same tree still writes.
+    // Because a fresh random name, created exclusively, never writes over an earlier report, and a check that loses the mkdir() race to another check still writes.
     public function write(): ?string
     {
         $contents = $this->contents();

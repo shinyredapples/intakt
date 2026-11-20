@@ -43,9 +43,8 @@ final class FullReportFolderRaceTest extends SandboxTestCase
         $process = new Process([PHP_BINARY, '-r', self::RACE, dirname(__DIR__, 2).'/vendor/autoload.php', $sandbox->root]);
         $process->mustRun();
 
-        $files = json_decode($process->getOutput(), true);
-        self::assertIsArray($files, $process->getOutput());
-        self::assertCount(2, array_unique(array_filter($files, is_string(...))), $process->getOutput());
+        $files = array_filter((array) json_decode($process->getOutput(), true), is_string(...));
+        self::assertCount(2, array_unique($files), $process->getOutput());
         foreach ($files as $file) {
             self::assertFileExists($sandbox->root.'/'.$file);
         }
