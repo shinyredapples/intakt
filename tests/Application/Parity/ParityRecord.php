@@ -4,13 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Application\Parity;
 
-use FilesystemIterator;
-use PHPUnit\Framework\TestCase;
-use RecursiveDirectoryIterator;
-use RecursiveIteratorIterator;
-use ReflectionClass;
-use SplFileInfo;
-
 // Because a done parity item counts toward the takeover only when the Intakt tests it names exist.
 final readonly class ParityRecord
 {
@@ -19,7 +12,7 @@ final readonly class ParityRecord
 
     private const string INTAKT_PART = 'Intakt:';
 
-    // A boundary is a blank line, a list item or a heading; any other line after a done item could hide a name from the check.
+    // Because any other line after a done item could hide a name from the check, only a blank line, a list item or a heading ends one.
     private const string ITEM_BOUNDARY = '/^\s*(?:$|[-*+] |\d+[.)] |#)/';
 
     // Outside a span a backslash escapes the next character, so `\`` opens no span; a run of backticks no equal run closes is unclosed.
@@ -29,9 +22,6 @@ final readonly class ParityRecord
 
     // A token with such a word is meant as a test name, so a near miss like `SomeTest.testName` is reported, not skipped.
     private const string TEST_WORD = '/\w*Test\b|\btest\w*/';
-
-    // Gate fixtures are inputs of other tests, some of them not even valid PHP, so they are never loaded as test classes.
-    private const string FIXTURES = '/Fixtures/';
 
     public function __construct(
         private string $testsDirectory,
@@ -44,7 +34,7 @@ final readonly class ParityRecord
      */
     public function unprovenItems(string $record): array
     {
-        $testClasses = $this->testClassesByShortName();
+        $testClasses = TestClassIndex::of($this->testsDirectory, $this->testsNamespace);
         $findings = [];
         $afterDoneItem = false;
 
@@ -67,32 +57,9 @@ final readonly class ParityRecord
     }
 
     /**
-     * @return array<string, list<string>>
-     */
-    private function testClassesByShortName(): array
-    {
-        $classes = [];
-        $files = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($this->testsDirectory, FilesystemIterator::SKIP_DOTS));
-
-        /** @var SplFileInfo $file */
-        foreach ($files as $file) {
-            $path = substr($file->getPathname(), strlen($this->testsDirectory));
-            if (!str_ends_with($path, 'Test.php') || str_contains($path, self::FIXTURES)) {
-                continue;
-            }
-
-            $classes[$file->getBasename('.php')][] = $this->testsNamespace.str_replace('/', '\\', substr($path, 0, -4));
-        }
-
-        return $classes;
-    }
-
-    /**
-     * @param array<string, list<string>> $testClasses
-     *
      * @return list<string>
      */
-    private function problemsOf(string $item, array $testClasses): array
+    private function problemsOf(string $item, TestClassIndex $testClasses): array
     {
         $namedTests = $this->namedTests($item);
         if ([] === $namedTests) {
@@ -101,7 +68,7 @@ final readonly class ParityRecord
 
         $problems = [];
         foreach ($namedTests as $namedTest) {
-            $problem = is_string($namedTest) ? $namedTest : $this->problemWith($namedTest[0], $namedTest[1], $testClasses);
+            $problem = is_string($namedTest) ? $namedTest : $testClasses->problemWith($namedTest[0], $namedTest[1]);
             if (null !== $problem) {
                 $problems[] = $problem;
             }
@@ -111,7 +78,7 @@ final readonly class ParityRecord
     }
 
     /**
-     * @return list<string|array{?string, string}> a name to resolve, or a problem the text itself already shows
+     * @return list<string|array{?string, string}>
      */
     private function namedTests(string $item): array
     {
@@ -120,25 +87,18 @@ final readonly class ParityRecord
             return [];
         }
 
-        preg_match_all(self::BACKTICKED, substr($item, $start), $tokens, PREG_SET_ORDER | PREG_UNMATCHED_AS_NULL);
-
         $class = null;
         $namedTests = [];
-        foreach ($tokens as $token) {
-            if (null === $token[1]) {
-                if (str_starts_with($token[0], '`')) {
-                    $namedTests[] = 'has a backtick after `Intakt:` that is never closed';
-                }
-
-                continue;
+        foreach ($this->codeSpans(substr($item, $start)) as $span) {
+            $namedTest = null === $span
+                ? 'has a backtick after `Intakt:` that is never closed'
+                : $this->namedTestIn($span, $class);
+            if (is_array($namedTest)) {
+                $class = $namedTest[0];
             }
 
-            $name = trim((string) $token[2]);
-            if (1 === preg_match(self::NAMED_TEST, $name, $match)) {
-                $class = '' !== $match[1] ? $match[1] : $class;
-                $namedTests[] = [$class, $match[2]];
-            } elseif (1 === preg_match(self::TEST_WORD, $name)) {
-                $namedTests[] = sprintf('`%s` is not a test name of the form `SomeTest::testName`', $name);
+            if (null !== $namedTest) {
+                $namedTests[] = $namedTest;
             }
         }
 
@@ -146,32 +106,35 @@ final readonly class ParityRecord
     }
 
     /**
-     * @param array<string, list<string>> $testClasses
+     * @return list<?string>
      */
-    private function problemWith(?string $class, string $method, array $testClasses): ?string
+    private function codeSpans(string $text): array
     {
-        if (null === $class) {
-            return sprintf('`%s` follows no test class', $method);
+        preg_match_all(self::BACKTICKED, $text, $tokens, PREG_SET_ORDER | PREG_UNMATCHED_AS_NULL);
+
+        $spans = [];
+        foreach ($tokens as $token) {
+            if (null !== $token[1]) {
+                $spans[] = trim((string) $token[2]);
+            } elseif (str_starts_with($token[0], '`')) {
+                $spans[] = null;
+            }
         }
 
-        $candidates = $testClasses[$class] ?? [];
-        sort($candidates);
-        if (count($candidates) > 1) {
-            return sprintf('%s names more than one test class: %s', $class, implode(', ', $candidates));
+        return $spans;
+    }
+
+    /**
+     * @return string|array{?string, string}|null
+     */
+    private function namedTestIn(string $span, ?string $previousClass): string|array|null
+    {
+        if (1 === preg_match(self::NAMED_TEST, $span, $match)) {
+            return ['' !== $match[1] ? $match[1] : $previousClass, $match[2]];
         }
 
-        $fullName = array_first($candidates);
-        if (null === $fullName || !class_exists($fullName)) {
-            return sprintf('%s is no test class under tests/', $class);
-        }
-
-        $reflection = new ReflectionClass($fullName);
-        if ($reflection->isAbstract() || !$reflection->isSubclassOf(TestCase::class)) {
-            return sprintf('%s is no runnable test class', $class);
-        }
-
-        if (!$reflection->hasMethod($method) || !$reflection->getMethod($method)->isPublic()) {
-            return sprintf('%s::%s is no test method of %s', $class, $method, $fullName);
+        if (1 === preg_match(self::TEST_WORD, $span)) {
+            return sprintf('`%s` is not a test name of the form `SomeTest::testName`', $span);
         }
 
         return null;
