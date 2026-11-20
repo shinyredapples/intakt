@@ -10,12 +10,12 @@ use Intakt\Core\HandBack\Contract\CheckJob;
 use Intakt\Core\HandBack\Contract\CheckJobOutcome;
 use Intakt\Core\HandBack\Contract\CheckJobs;
 use Intakt\Core\HandBack\Contract\HandBack;
+use Intakt\Core\HandBack\Contract\HandBackBranchRefused;
 use Intakt\Core\HandBack\Contract\HandBackNotChecked;
 use Intakt\Core\HandBack\Contract\RefusedHandBack;
 use Intakt\Core\Job\Contract\DockerEngineFailed;
 use Intakt\Core\Job\Contract\JobEventNotRecorded;
 use Intakt\Core\Job\Contract\JobRefused;
-use InvalidArgumentException;
 use Symfony\Component\Process\Exception\ExceptionInterface;
 use Symfony\Component\Process\Exception\ProcessSignaledException;
 use Symfony\Component\Process\Exception\ProcessTimedOutException;
@@ -41,9 +41,9 @@ final readonly class PrePushCheck
             // The gate's own steps and no path named by the plan, because neither a project's check command nor plan approval is configured yet.
             $outcome = $this->jobs->run(new CheckJob($handBack, $request->image, null, new Paths()));
         } catch (ExceptionInterface $stopped) {
-            // Caught first, because a process failure may also be an InvalidArgumentException, and its message names the whole command line.
+            // Fixed text and never the process's message, because that message names the whole command line.
             return $this->stoppedBy($stopped);
-        } catch (InvalidArgumentException|HandBackNotChecked|RepositoryAttributesRefused|JobRefused|DockerEngineFailed|JobEventNotRecorded $failure) {
+        } catch (HandBackBranchRefused|HandBackNotChecked|RepositoryAttributesRefused|JobRefused|DockerEngineFailed|JobEventNotRecorded $failure) {
             return $failure->getMessage();
         }
 
