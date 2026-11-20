@@ -174,10 +174,8 @@ final readonly class MakeBuildClone
 
     private function initialize(string $directory, string $branch, string $format): void
     {
-        $init = $this->hardened->call(['init', '--quiet', '--initial-branch='.$branch, '--object-format='.$format], $directory);
-
-        // Because git refuses a work tree without a git folder, which init has yet to make; it makes both in the folder it runs in.
-        $this->mustRun(new GitCall($init->command, $init->directory, [...$init->environment, 'GIT_WORK_TREE' => false]), $directory);
+        // The git folder is named, because git refuses the pinned work tree without one; it is the work tree's own .git, so init records no core.worktree.
+        $this->mustRun($this->hardened->call(['--git-dir=.git', 'init', '--quiet', '--initial-branch='.$branch, '--object-format='.$format], $directory), $directory);
     }
 
     private function fetch(string $directory, string $mirror, string $refspec): void
@@ -216,10 +214,7 @@ final readonly class MakeBuildClone
      */
     private function inMirror(string $mirror, array $arguments): GitCall
     {
-        $call = $this->hardened->call(['--git-dir='.$mirror, ...$arguments], $mirror);
-
-        // Because a work tree beside --git-dir would make git treat the bare mirror as a checkout.
-        return new GitCall($call->command, $call->directory, [...$call->environment, 'GIT_WORK_TREE' => false]);
+        return $this->hardened->callInBareRepository($arguments, $mirror);
     }
 
     private function mustRun(GitCall $call, string $directory): string

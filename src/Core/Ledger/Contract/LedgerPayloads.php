@@ -6,6 +6,7 @@ namespace Intakt\Core\Ledger\Contract;
 
 use JsonException;
 use Symfony\Component\DependencyInjection\Attribute\Target;
+use Symfony\Component\Serializer\Encoder\JsonEncoder;
 use Symfony\Component\Serializer\Exception\ExceptionInterface;
 use Symfony\Component\Serializer\Normalizer\AbstractNormalizer;
 use Symfony\Component\Serializer\SerializerInterface;
@@ -101,7 +102,7 @@ final readonly class LedgerPayloads
     private function deserialized(string $json, string $class, array $context): ?object
     {
         try {
-            $payload = $this->serializer->deserialize($json, $class, 'json', $context);
+            $payload = $this->serializer->deserialize($json, $class, JsonEncoder::FORMAT, $context);
         } catch (ExceptionInterface) {
             return null;
         }
