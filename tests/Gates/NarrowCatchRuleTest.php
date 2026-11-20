@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\PhpStan\NarrowCatchRule;
+use Intakt\Gates\PhpStan\RunningCode;
 use Intakt\Gates\StaticAnalysisGate;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -14,6 +15,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
  * @extends PhpStanRuleTestCase<NarrowCatchRule>
  */
 #[CoversClass(NarrowCatchRule::class)]
+#[CoversClass(RunningCode::class)]
 #[UsesClass(StaticAnalysisGate::class)]
 final class NarrowCatchRuleTest extends PhpStanRuleTestCase
 {

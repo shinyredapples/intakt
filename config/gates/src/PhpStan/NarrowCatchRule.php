@@ -14,11 +14,9 @@ use PhpParser\Node\Expr;
 use PhpParser\Node\Expr\ConstFetch;
 use PhpParser\Node\Expr\Throw_;
 use PhpParser\Node\Expr\Variable;
-use PhpParser\Node\FunctionLike;
 use PhpParser\Node\Name;
 use PhpParser\Node\Stmt;
 use PhpParser\Node\Stmt\Catch_;
-use PhpParser\Node\Stmt\ClassLike;
 use PhpParser\Node\Stmt\Nop;
 use PhpParser\Node\Stmt\Return_;
 use PhpParser\Node\Stmt\TryCatch;
@@ -177,7 +175,7 @@ final readonly class NarrowCatchRule implements Rule
     {
         $name = $catch->var?->name;
 
-        return $this->anyRunsIn(
+        return RunningCode::anyIn(
             $catch->stmts,
             fn (Node $node): bool => $node instanceof Throw_
                 || ($node instanceof Return_ && $this->returnsAnOutcome($node))
@@ -185,34 +183,10 @@ final readonly class NarrowCatchRule implements Rule
         );
     }
 
-    // a typed outcome ends the unit of work with the failure recorded in what the caller receives, while a bare return or null drops it
+    // a returned value hands the failure to the caller as a typed outcome, so only a bare return or null drops it
     private function returnsAnOutcome(Return_ $return): bool
     {
         return $return->expr instanceof Expr
             && (!$return->expr instanceof ConstFetch || 'null' !== $return->expr->name->toLowerString());
-    }
-
-    // closures, functions and classes declared in the catch do not run when it does, so what they contain handles nothing
-    /**
-     * @param array<mixed>        $nodes
-     * @param callable(Node):bool $match
-     */
-    private function anyRunsIn(array $nodes, callable $match): bool
-    {
-        foreach ($nodes as $node) {
-            if (is_array($node) && $this->anyRunsIn($node, $match)) {
-                return true;
-            }
-
-            if (!$node instanceof Node || $node instanceof FunctionLike || $node instanceof ClassLike) {
-                continue;
-            }
-
-            if ($match($node) || $this->anyRunsIn(array_map(static fn (string $sub): mixed => $node->{$sub}, $node->getSubNodeNames()), $match)) {
-                return true;
-            }
-        }
-
-        return false;
     }
 }
