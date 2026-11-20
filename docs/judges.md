@@ -14,7 +14,7 @@ docker compose up -d --wait
 ```
 
 - No key: open http://localhost:7781/demo and press **Play the demo run**. It plays the shipped recording of a real review of the sample change onto the dashboard without calling any model ([details](user/README.md#playing-the-demo-run-in-the-dashboard)).
-- With one provider key or a Hugging Face token: open http://localhost:7781 and save it on the first-run page, run `docker compose restart intakt` so the sample project gets its reviewers, then press **Start the first review**, or run `docker compose exec intakt php bin/console intakt:demo` for the verdict in the terminal ([reading a verdict](user/README.md#reading-a-verdict)).
+- With one provider key or a Hugging Face token: open http://localhost:7781 and save it on the first-run page, run `docker compose restart intakt` so the sample project gets its reviewers, reload the setup page, then press **Start the first review**, or run `docker compose exec intakt php bin/console intakt:demo` for the verdict in the terminal ([reading a verdict](user/README.md#reading-a-verdict)).
 
 ## What was measured
 
