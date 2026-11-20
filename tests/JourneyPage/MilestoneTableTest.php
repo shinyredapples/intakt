@@ -84,10 +84,32 @@ final class MilestoneTableTest extends TestCase
         self::assertStringContainsString('| \\\\\`\*\_\{\}\[\]\(\)\#\+\-\.\!\:\|\"\\\'\$\> | g |', $table->text);
     }
 
-    public function testPunctuationOutsideTheListAndLineBreaksAreKeptAsTheyAre(): void
+    public function testPunctuationOutsideTheListIsKeptAsItIs(): void
     {
-        $table = new MilestoneTable()->region([new Milestone(1, " a=b & c; d\r\ne ", 'g', null)], []);
+        $table = new MilestoneTable()->region([new Milestone(1, ' a=b, c; d? ', 'g', null)], []);
 
-        self::assertStringContainsString('| a=b & c; d e | g |', $table->text);
+        self::assertStringContainsString('| a=b, c; d? | g |', $table->text);
+    }
+
+    public function testEachLineBreakInAMilestoneTitleBecomesOneSpace(): void
+    {
+        $table = new MilestoneTable()->region([new Milestone(1, "a\r\nb\rc\nd", 'g', null)], []);
+
+        self::assertStringContainsString('| a b c d | g |', $table->text);
+    }
+
+    public function testATildeInAMilestoneGoalIsWrittenAsAnEntitySoItCannotStrikeThrough(): void
+    {
+        $table = new MilestoneTable()->region([new Milestone(1, 'Demo', '~~draft~~', null)], []);
+
+        self::assertStringContainsString('| Demo | &#126;&#126;draft&#126;&#126; |', $table->text);
+        self::assertStringNotContainsString('~', $table->text);
+    }
+
+    public function testAnAmpersandInAMilestoneGoalIsWrittenAsAnEntitySoNoEntityRenders(): void
+    {
+        $table = new MilestoneTable()->region([new Milestone(1, 'Demo', '&copy; &quot; a < b', null)], []);
+
+        self::assertStringContainsString('| Demo | &amp;copy; &amp;quot; a &lt; b |', $table->text);
     }
 }

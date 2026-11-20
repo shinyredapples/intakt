@@ -45,10 +45,11 @@ final readonly class MilestoneTable
     }
 
     // Forge text stays literal so it can open no comment, write no journey marker and add no Markdown; one addcslashes pass escapes the backslash with the rest, never twice.
+    // Kramdown's backslash escapes do not cover `~` (strikethrough) or `&` (entities), so those become entities in one strtr pass, which never rewrites its own output.
     private function cell(string $text): string
     {
-        return str_replace(["\r", "\n"], ['', ' '], trim($text))
+        return (string) preg_replace('/\R/', ' ', trim($text))
             |> (static fn (string $flat): string => addcslashes($flat, self::MARKDOWN_PUNCTUATION))
-            |> (static fn (string $escaped): string => str_replace('<', '&lt;', $escaped));
+            |> (static fn (string $escaped): string => strtr($escaped, ['&' => '&amp;', '<' => '&lt;', '~' => '&#126;']));
     }
 }
