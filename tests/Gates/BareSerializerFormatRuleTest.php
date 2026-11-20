@@ -79,6 +79,19 @@ final class BareSerializerFormatRuleTest extends PhpStanRuleTestCase
         self::assertStringContainsString('src/Report.php:'.self::FIRST_CASE_LINE.' intakt.bareSerializerFormat', $findings);
     }
 
+    public function testASerializerReachedThroughANullsafeChainGivesExactlyOneFindingPerCall(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/Holder.php', "<?php\n\ndeclare(strict_types=1);\n\nnamespace Intakt\\Sample;\n\nuse Symfony\\Component\\Serializer\\SerializerInterface;\n\nfinal readonly class Holder\n{\n    public function __construct(public SerializerInterface \$serializer)\n    {\n    }\n}\n");
+        $sandbox->write('src/Chains.php', "<?php\n\ndeclare(strict_types=1);\n\nnamespace Intakt\\Sample;\n\nfinal readonly class Chains\n{\n    /**\n     * @return list<mixed>\n     */\n    public function check(?Holder \$holder, Holder \$required, mixed \$data): array\n    {\n        return [\n            \$holder?->serializer->serialize(\$data, 'json'),\n            \$required->serializer->serialize(\$data, 'json'),\n            \$holder?->serializer->serialize(\$data, \\Symfony\\Component\\Serializer\\Encoder\\JsonEncoder::FORMAT),\n        ];\n    }\n}\n");
+
+        $findings = $this->ruleFindingsIn($sandbox);
+
+        self::assertStringContainsString('src/Chains.php:15 intakt.bareSerializerFormat', $findings);
+        self::assertStringContainsString('src/Chains.php:16 intakt.bareSerializerFormat', $findings);
+        self::assertSame(2, substr_count($findings, 'intakt.bareSerializerFormat'), $findings);
+    }
+
     public function testANullsafeCallWithTheEncoderConstantPassesStaticAnalysis(): void
     {
         $findings = $this->ruleFindingsIn($this->sandboxReturning([

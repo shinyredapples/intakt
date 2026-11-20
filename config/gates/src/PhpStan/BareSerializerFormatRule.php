@@ -19,6 +19,7 @@ use PHPStan\Reflection\ParametersAcceptor;
 use PHPStan\Rules\IdentifierRuleError;
 use PHPStan\Rules\Rule;
 use PHPStan\Rules\RuleErrorBuilder;
+use PHPStan\Type\TypeCombinator;
 use Symfony\Component\Serializer\Encoder\DecoderInterface;
 use Symfony\Component\Serializer\Encoder\EncoderInterface;
 use Symfony\Component\Serializer\Normalizer\DenormalizerInterface;
@@ -101,7 +102,7 @@ final readonly class BareSerializerFormatRule implements Rule
         return $value instanceof String_ && self::BARE_FORMAT === $value->value;
     }
 
-    // every class the receiver may be, so a nullable or a union receiver still counts while an unrelated class with a method of the same name does not
+    // every class the receiver may be, so a nullable or a union receiver still counts while an unrelated class with a method of the same name does not; null is removed first, because PHPStan gives no class for a union that holds null, as the receiver $holder?->serializer has
     /**
      * @param list<class-string> $contracts
      *
@@ -116,7 +117,7 @@ final readonly class BareSerializerFormatRule implements Rule
         };
 
         return array_values(array_filter(
-            $receiver->getObjectClassReflections(),
+            TypeCombinator::removeNull($receiver)->getObjectClassReflections(),
             static fn (ClassReflection $class): bool => array_any(
                 $contracts,
                 static fn (string $contract): bool => $class->getName() === $contract || $class->implementsInterface($contract),
