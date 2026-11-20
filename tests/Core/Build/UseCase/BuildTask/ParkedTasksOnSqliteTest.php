@@ -129,9 +129,8 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
 
     private function readerHoldingASharedLock(): Connection
     {
-        $params = $this->connection()->getParams();
-        self::assertArrayHasKey('path', $params);
-        $reader = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'path' => $params['path']]);
+        $path = $this->connection()->getParams()['path'] ?? self::fail('The test database is not an SQLite file.');
+        $reader = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'path' => $path]);
         $reader->beginTransaction();
         $reader->fetchOne('SELECT COUNT(*) FROM ledger_event');
 
