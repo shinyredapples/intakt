@@ -39,6 +39,7 @@ final readonly class GitHubChangeAuthorship implements ChangeAuthorship
         $user = $this->github->ofInstallation($pull->pullRequestPath(), $this->tokens->current()->value)['user'] ?? null;
         $login = is_array($user) ? ($user['login'] ?? null) : null;
 
-        return is_string($login) ? $login : throw TrustNotChecked::becauseTheAnswerIsInvalid();
+        // An empty login is no author: answering "not Intakt" from it would be recorded for good.
+        return is_string($login) && '' !== $login ? $login : throw TrustNotChecked::becauseTheAnswerIsInvalid();
     }
 }

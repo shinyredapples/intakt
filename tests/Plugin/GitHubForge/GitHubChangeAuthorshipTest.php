@@ -94,6 +94,13 @@ final class GitHubChangeAuthorshipTest extends TestCase
         $this->isCreatedByIntakt(RecordedTrust::PULL_WITHOUT_AUTHOR);
     }
 
+    public function testAPullRequestAnswerWithAnEmptyAuthorLoginFailsTheRead(): void
+    {
+        $this->expectException(ForgeReadFailed::class);
+
+        $this->isCreatedByIntakt(RecordedTrust::PULL_WITH_EMPTY_AUTHOR);
+    }
+
     public function testAPullRequestGitHubDoesNotFindFailsTheRead(): void
     {
         $this->expectException(ForgeReadFailed::class);
