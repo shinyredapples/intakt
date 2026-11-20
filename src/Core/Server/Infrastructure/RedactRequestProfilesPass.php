@@ -7,17 +7,18 @@ namespace Intakt\Core\Server\Infrastructure;
 use Symfony\Component\DependencyInjection\Compiler\CompilerPassInterface;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 
-// FrameworkBundle registers the request collector only where the profiler is on (dev and test), so prod keeps no collector to swap; the class is swapped, not decorated, because the collector is also an event subscriber and the session's usage callback.
+// FrameworkBundle defines the profiler only where it is on (dev and test), so prod keeps nothing to swap; the class is swapped, not decorated, because the profiler listener and the test client ask for a Profiler.
 final class RedactRequestProfilesPass implements CompilerPassInterface
 {
-    private const string REQUEST_COLLECTOR = 'data_collector.request';
+    // The lazy one is the proxy the profiler listener holds, and a proxy must be of its real instance's class.
+    private const array PROFILERS = ['profiler', '.lazy_profiler'];
 
     public function process(ContainerBuilder $container): void
     {
-        if (!$container->hasDefinition(self::REQUEST_COLLECTOR)) {
-            return;
+        foreach (self::PROFILERS as $profiler) {
+            if ($container->hasDefinition($profiler)) {
+                $container->getDefinition($profiler)->setClass(RedactingProfiler::class);
+            }
         }
-
-        $container->getDefinition(self::REQUEST_COLLECTOR)->setClass(RedactedRequestDataCollector::class);
     }
 }

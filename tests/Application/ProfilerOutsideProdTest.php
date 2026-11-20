@@ -29,8 +29,7 @@ final class ProfilerOutsideProdTest extends KernelTestCase
         self::assertArrayNotHasKey('profiler_listener', $services);
     }
 
-    // Asked in a process of its own as `debug:container` does, because a kernel cannot be booted in two environments in one process.
-    // In a cache directory of its own each run, because a kernel without debug never checks its compiled container against the configuration that built it.
+    // Asked in a process and a fresh cache directory of its own, because a kernel boots in one environment per process and, without debug, never rebuilds a container compiled from an earlier configuration.
     /**
      * @return array<mixed>
      */

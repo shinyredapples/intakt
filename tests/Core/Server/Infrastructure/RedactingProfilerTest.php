@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Server\Infrastructure;
 
-use Intakt\Core\Server\Infrastructure\RedactedRequestDataCollector;
+use Intakt\Core\Server\Infrastructure\RedactingProfiler;
 use Intakt\Core\Server\Infrastructure\RedactRequestProfilesPass;
 use Intakt\Tests\Support\WebTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -14,9 +14,9 @@ use Symfony\Component\HttpKernel\Profiler\Profile;
 use Symfony\Component\HttpKernel\Profiler\Profiler;
 
 // A saved profile is a file on disk that outlives the request, so the environment's secrets must not reach it (#2721).
-#[CoversClass(RedactedRequestDataCollector::class)]
+#[CoversClass(RedactingProfiler::class)]
 #[CoversClass(RedactRequestProfilesPass::class)]
-final class RedactedRequestDataCollectorTest extends WebTestCase
+final class RedactingProfilerTest extends WebTestCase
 {
     private const string CANARY = 'synthetic-secret-2721';
 
@@ -34,7 +34,7 @@ final class RedactedRequestDataCollectorTest extends WebTestCase
         $this->browser->request('GET', '/reviews', server: ['APP_SECRET' => self::CANARY]);
 
         self::assertStringNotContainsString(self::CANARY, serialize($this->savedProfile()));
-        self::assertSame(RedactedRequestDataCollector::MASK, $this->requestCollector()->getRequestServer(raw: true)->get('APP_SECRET'));
+        self::assertSame(RedactingProfiler::MASK, $this->requestCollector()->getRequestServer(raw: true)->get('APP_SECRET'));
     }
 
     public function testASavedProfileHoldsNoBearerToken(): void
