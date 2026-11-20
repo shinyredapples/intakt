@@ -101,7 +101,7 @@ AI Mate: project diagnostic tools, exposed through the `vendor/bin/mate` CLI.
 
 ### Tools for looking inside the app
 
-Measured facts beat reading code. These are dev tools: nothing of them is in the image, and application code never uses them.
+Measured facts beat reading code. Mate and the profiler are dev tools: they are not in the image, and application code never uses them. The console commands below are read-only and work in any environment.
 
 - Mate (`vendor/bin/mate tools:call <tool> --<param>=<value>`), by purpose:
   - Services: `symfony-services` finds services by id, class or tag; `symfony-service-detail` shows how one is wired.
