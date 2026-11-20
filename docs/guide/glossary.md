@@ -18,6 +18,7 @@ The words used across Intakt's guides and dashboard, in plain terms. Each entry 
 | **Catch-up review** | a reviewer's review done later, after a substitute took its place | [engine room](the-engine-room.md#reviewers-substitutes-and-catch-ups) |
 | **Checks / gates** | the project's automatic tests and rules (`bin/check`) | [journey](the-journey-of-a-task.md#3-checking) |
 | **CI** | the project's full check run again on the pushed version, on a machine the builder does not control: today GitHub's machines; planned: a fresh container Intakt starts by default, or GitHub's machines where the project sets it | [engine room](the-engine-room.md#ci-the-second-opinion) |
+| **Cooldown (for a release)** | the 3 days Intakt waits before it takes a new release of a PHP or dashboard JavaScript package | [Symfony in Intakt](symfony-in-intakt.md#waiting-before-taking-a-new-release) |
 | **Core panel** | the reviewers every change gets | [how it works](how-intakt-works.md#which-reviewers-look-at-a-change) |
 | **Cycle** | one round of build, check and review | [engine room](the-engine-room.md#cycles-and-generations-second-chances) |
 | **Designer** (planned) | an AI agent that plans and judges your project's screens: automatic checks, scores with a reason, and your taste learned by choosing between two versions | [how it works](how-intakt-works.md#the-idea-in-one-sentence) |
@@ -32,7 +33,9 @@ The words used across Intakt's guides and dashboard, in plain terms. Each entry 
 | **Hands-off** | a label meaning you work on this item yourself and Intakt stays off it until you remove it (planned) | [steering](steering-intakt.md#taking-an-item-over-by-hand-and-giving-it-back) |
 | **Head** | the latest commit of a pull request | |
 | **Hold** | a pause that lifts by itself when its reason is gone | [how it works](how-intakt-works.md#when-something-gets-stuck) |
+| **Import map** | the list that tells the browser where each JavaScript module of the dashboard lives (`importmap.php`) | [Symfony in Intakt](symfony-in-intakt.md#waiting-before-taking-a-new-release) |
 | **In-flight limit** | how much finished but not yet merged work may exist, whatever it waits for, before builders pause; twice the review cap by default | [engine room](the-engine-room.md#queues-who-is-next) |
+| **Integrity hash** | a fingerprint (sha384) of a module's exact bytes in the import map; the browser refuses a module that does not match it | [Symfony in Intakt](symfony-in-intakt.md#waiting-before-taking-a-new-release) |
 | **Issue / task** | one piece of work; on GitHub it is an issue | [writing a good task](writing-a-good-task.md) |
 | **Job** | one build, one check or one review, in its own container | [containers](containers-and-services.md) |
 | **Journey check** | a run that starts a fresh copy of Intakt and walks one path a person takes, to prove the whole product still works | [checking the whole product](checking-the-whole-product.md) |
