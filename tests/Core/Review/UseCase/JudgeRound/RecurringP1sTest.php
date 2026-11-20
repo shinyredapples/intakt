@@ -116,6 +116,57 @@ final class RecurringP1sTest extends KernelTestCase
         self::assertEquals([$b => $a, $again => $a], $this->recurrences());
     }
 
+    public function testRoundsOnHeadsBAndAAfterAJudgedSecondThirdFirstRecordOnlyTheRoundOnB(): void
+    {
+        $a = $this->completedAt(self::CHANGE, self::HEAD_A, $this->keyedP1());
+        $b = $this->completedAt(self::CHANGE, self::HEAD_B, $this->repeatedP1($this->keyedP1()));
+        $again = $this->completedAt(self::CHANGE, self::HEAD_A, $this->repeatedP1($this->keyedP1()));
+
+        array_map($this->judged(...), [$b, $again, $a]);
+
+        self::assertEquals([$b => $a], $this->recurrences());
+    }
+
+    public function testARoundJudgedBeforeAnEarlierRoundOfTheChangeFindsNothingYet(): void
+    {
+        $first = $this->fixture->startAtHead(self::CHANGE, self::HEAD_A);
+        $second = $this->fixture->startAtHead(self::CHANGE, self::HEAD_B);
+        $this->appendJudgeDone($second, '["F1"]', '{"F1":"k"}');
+
+        self::assertSame([], $this->fixture->recurringP1s($this->fixture->ledger())->foundWith($this->fixture->round($second)));
+    }
+
+    public function testJudgingTheEarlierRoundLastFindsTheRecurrenceOfTheLaterRoundJudgedBeforeIt(): void
+    {
+        $first = $this->fixture->startAtHead(self::CHANGE, self::HEAD_A);
+        $second = $this->fixture->startAtHead(self::CHANGE, self::HEAD_B);
+        $this->appendJudgeDone($second, '["F1"]', '{"F1":"k"}');
+        $this->appendJudgeDone($first, '["F1"]', '{"F1":"k"}');
+
+        self::assertEquals([new RecurringP1Found($second, 'F1', 'k', $first)], $this->fixture->recurringP1s($this->fixture->ledger())->foundWith($this->fixture->round($first)));
+    }
+
+    public function testReturningToTheFirstHeadJudgedFirstLeavesOnlyTheOtherHeadRecurring(): void
+    {
+        $a = $this->fixture->startAtHead(self::CHANGE, self::HEAD_A);
+        $b = $this->fixture->startAtHead(self::CHANGE, self::HEAD_B);
+        $again = $this->fixture->startAtHead(self::CHANGE, self::HEAD_A);
+        $recurring = $this->fixture->recurringP1s($this->fixture->ledger());
+        $events = [];
+
+        foreach ([$again, $b, $a] as $round) {
+            $this->appendJudgeDone($round, '["F1"]', '{"F1":"k"}');
+
+            foreach ($recurring->foundWith($this->fixture->round($round)) as $found) {
+                $events[] = [$found->round, $found->firstRound];
+                $payload = json_encode(['round' => $found->round, 'finding' => $found->finding, 'key' => $found->key, 'first_round' => $found->firstRound], JSON_THROW_ON_ERROR);
+                self::assertTrue($this->fixture->ledger()->append(new LedgerEvent(LedgerEventKind::RecurringP1Found, $payload))->succeeded());
+            }
+        }
+
+        self::assertSame([[$b, $a]], $events);
+    }
+
     public function testAP1TheJudgeDidNotPutOnTheActListOnTheEarlierHeadDoesNotMakeALaterOneRecurring(): void
     {
         $first = $this->fixture->startAtHead(self::CHANGE, self::HEAD_A);

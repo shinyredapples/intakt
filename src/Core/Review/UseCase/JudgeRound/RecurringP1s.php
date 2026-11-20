@@ -13,7 +13,7 @@ use Intakt\Core\Review\Contract\RecurringP1Found;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
 
-// Decided from every judged round of the change, not only from earlier ones, so rounds judged out of order record the same events as rounds judged in order.
+// A round's events are decided only once every earlier round of the change is judged, because an event is never taken back and an earlier round judged later could be the first to flag the place; so rounds judged out of order record the same events as rounds judged in order.
 final readonly class RecurringP1s
 {
     public function __construct(
@@ -24,6 +24,7 @@ final readonly class RecurringP1s
     }
 
     // Called under the change's lock after the round's judge_done is appended, so the round's own keys are read with the others and no other judging of the change commits in between.
+    // Covers every settled round, not only this one, because judging an earlier round can settle later rounds judged before it.
     /**
      * @return list<RecurringP1Found>
      */
@@ -31,14 +32,42 @@ final readonly class RecurringP1s
     {
         $rounds = $this->headsOf($this->rounds->ofChange($round));
         $flagged = $this->flagged($rounds);
+        $settled = $this->settled($rounds, $flagged);
         $recorded = $this->recorded($rounds);
+        $keys = [];
         $found = [];
 
-        foreach (array_keys($flagged[$round->id()->toRfc4122()] ?? []) as $key) {
-            array_push($found, ...$this->recurrencesOf($key, $rounds, $flagged));
+        foreach (array_intersect_key($flagged, $settled) as $places) {
+            $keys += $places;
+        }
+
+        foreach (array_keys($keys) as $key) {
+            array_push($found, ...$this->recurrencesOf((string) $key, $settled, $flagged));
         }
 
         return array_values(array_filter($found, static fn (RecurringP1Found $recurrence): bool => !isset($recorded[$recurrence->round][$recurrence->key])));
+    }
+
+    // The rounds up to the first one not judged yet, in round-number order: for these the first round that flagged a place is final.
+    /**
+     * @param array<string, string>                $rounds
+     * @param array<string, array<string, string>> $flagged
+     *
+     * @return array<string, string>
+     */
+    private function settled(array $rounds, array $flagged): array
+    {
+        $settled = [];
+
+        foreach ($rounds as $id => $head) {
+            if (!isset($flagged[$id])) {
+                break;
+            }
+
+            $settled[$id] = $head;
+        }
+
+        return $settled;
     }
 
     // Each round's head by its id, in round-number order; a round stored before identities were recorded names no head, so it cannot tell another head from its own and is left out.

@@ -134,9 +134,10 @@ final readonly class StoredFindings
     }
 
     // The change's finding row, the lock a completing round takes after its own, so two judgings of one change read each other's judge_done in turn instead of each missing the other's.
+    // Taken without the plain existence read, because under MySQL's REPEATABLE READ the first plain read fixes the transaction's snapshot, and one taken before waiting here would hide the judge_done of the judging that held the lock; a judged round completed through this row, so it exists.
     public function lockChangeOf(ReviewRound $round): void
     {
-        $this->locked($round->project(), $round->change());
+        $this->lockedRow($round->project(), $round->change()) ?? throw ChangeFindingsNotFound::for($round->project(), $round->change());
     }
 
     // Every verdict of the round at once, when it completes, so a round reaches the ledger as one step that the recorded round number orders against the other rounds of the change.
@@ -198,11 +199,16 @@ final readonly class StoredFindings
     private function locked(string $project, string $change): ChangeFindings
     {
         $this->createIfMissing($project, $change);
+
+        return $this->lockedRow($project, $change) ?? throw ChangeFindingsNotFound::for($project, $change);
+    }
+
+    private function lockedRow(string $project, string $change): ?ChangeFindings
+    {
         // Locked with a write, because on SQLite only a write takes the lock, and a snapshot gone stale then fails here, where the transaction starts over, rather than in the flush, which closes the entity manager.
         $this->entities->getConnection()->executeStatement('UPDATE change_findings SET rounds = rounds WHERE project = ? AND change_ref = ?', [$project, $change]);
-        $stored = $this->entities->find(ChangeFindings::class, ['project' => $project, 'change' => $change], LockMode::PESSIMISTIC_WRITE);
 
-        return $stored ?? throw ChangeFindingsNotFound::for($project, $change);
+        return $this->entities->find(ChangeFindings::class, ['project' => $project, 'change' => $change], LockMode::PESSIMISTIC_WRITE);
     }
 
     // A row that does not exist yet cannot be locked, so two first rounds of a change can both find none; the one whose insert loses takes the other's row instead of failing.
