@@ -67,6 +67,7 @@ final class CiMainJobTest extends TestCase
         self::assertSame("github.event_name == 'pull_request'", $upload['if'] ?? null);
         self::assertMatchesRegularExpression('/^actions\/upload-artifact@[0-9a-f]{40}$/', $upload['uses'] ?? '');
         self::assertSame('tested-tree-${{ steps.tested-tree.outputs.tree }}', $upload['with']['name'] ?? null);
+        self::assertTrue($upload['with']['overwrite'] ?? null);
     }
 
     /**

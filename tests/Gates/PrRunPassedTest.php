@@ -32,6 +32,7 @@ final class PrRunPassedTest extends SandboxTestCase
         yield 'a run that tested another tree (another base branch, or an older base)' => ['example/intakt', [['tested-tree-merged', false]], 'no'];
         yield 'a run whose record expired' => ['example/intakt', [['tested-tree-pushed', true]], 'no'];
         yield 'a run with no record' => ['example/intakt', [], 'no'];
+        yield 'a run whose artifact name only ends with the pushed tree\'s record' => ['example/intakt', [['report tested-tree-pushed', false]], 'no'];
         yield 'a fork\'s run that tested the pushed tree' => ['fork/intakt', [['tested-tree-pushed', false]], 'no'];
     }
 

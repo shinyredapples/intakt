@@ -221,6 +221,8 @@ jobs:
           name: tested-tree-${{ steps.tested-tree.outputs.tree }}
           path: ${{ runner.temp }}/tested-tree
           retention-days: 30
+          # A re-run of the workflow uploads the same name again; replacing it keeps a passing check green.
+          overwrite: true
   # The journeys on the change itself, so one that breaks the first install or the live review page fails its own pull
   # request instead of the next nightly run. The steps and container options are those of the journeys job of journeys.yml.
   journeys:

@@ -15,11 +15,14 @@ runs=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$
     --jq ".workflow_runs[] | select(.head_repository.full_name == \"$GITHUB_REPOSITORY\") | .id")
 for run in $runs; do
     names=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run/artifacts" --jq '.artifacts[] | select(.expired | not) | .name')
-    for name in $names; do
+    # One name per line, read whole: a name with a space must not match on one of its words.
+    while IFS= read -r name; do
         if [ "$name" = "tested-tree-$2" ]; then
             echo yes
             exit 0
         fi
-    done
+    done <<NAMES
+$names
+NAMES
 done
 echo no
