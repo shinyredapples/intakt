@@ -39,8 +39,7 @@ final readonly class NextLinks
         return array_merge(...array_map($this->relationsIn(...), $values[1]));
     }
 
-    // Only the first `rel` of a link counts and relation types compare without case, because RFC 8288 says so.
-    // A quoted-pair stands for its character (RFC 9110, 5.6.4), because otherwise `rel="ne\xt"` would hide a next page.
+    // Only the first `rel` of a link counts, relation types compare without case and a quoted-pair stands for its character, because RFC 8288 and RFC 9110 say so.
     /**
      * @return list<string>
      */
