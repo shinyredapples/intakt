@@ -39,7 +39,7 @@ final readonly class IntakeStore
         return $this->ownManager()->find(IntakeValidator::class, $project)?->state() ?? IntakeState::none();
     }
 
-    // The rows become those of one complete listing, written only while the generation is still the one the listing was read against, checked under that row's lock: a sync that committed meanwhile holds newer rows, also when neither listing had a validator to compare.
+    // The generation and not the validator is compared under the row's lock, because a sync that committed meanwhile holds newer rows also when neither listing had a validator to compare.
     /**
      * @param list<StoredIssue> $issues
      */
