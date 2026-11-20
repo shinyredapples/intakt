@@ -34,6 +34,7 @@ use RuntimeException;
 use Symfony\AI\Platform\Exception\AuthenticationException;
 use Symfony\AI\Platform\Exception\IncompleteStreamException;
 use Symfony\AI\Platform\Exception\RateLimitExceededException;
+use Symfony\AI\Platform\Exception\RetryableExceptionInterface;
 use Symfony\AI\Platform\Exception\RuntimeException as PlatformRuntimeException;
 use Symfony\AI\Platform\Exception\ServerException;
 use Symfony\AI\Platform\PlatformInterface;
@@ -168,6 +169,24 @@ final class AccountFailoverPlatformTest extends TestCase
         /** @var list<array{0: string, 1: string, 2: array<string, mixed>}> $logs */
         $logs = $logger->cleanLogs();
         self::assertSame(['Account {account} failed.', 'Account {account} could not send the call.'], array_values(array_filter(array_column($logs, 1), static fn (string $message): bool => str_starts_with($message, 'Account {account} '))));
+    }
+
+    public function testARetryableWrapperAroundALimitWhileSendingLogsNoCallThatCouldNotBeSent(): void
+    {
+        $logger = new BufferingLogger();
+        $failure = new class('Cut off.', 0, new RateLimitExceededException(300)) extends IncompleteStreamException implements RetryableExceptionInterface {};
+        $account = new AccountPlatform($this->account(Account::DEFAULT), $this->answering(static fn (): never => throw $failure), $this->cooldowns, new NativeClock(), $logger, new SendFailures());
+
+        try {
+            $account->invoke('big', 'Review.');
+            self::fail('The call was expected to fail while sending.');
+        } catch (IncompleteStreamException $thrown) {
+            self::assertSame($failure, $thrown);
+        }
+
+        /** @var list<array{0: string, 1: string, 2: array<string, mixed>}> $logs */
+        $logs = $logger->cleanLogs();
+        self::assertSame(['Account {account} failed.'], array_column($logs, 1));
     }
 
     public function testAnAccountErrorWhileSendingThatWasAlreadyRecordedLogsNoCallThatCouldNotBeSent(): void

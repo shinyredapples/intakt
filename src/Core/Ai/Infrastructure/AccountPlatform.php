@@ -107,8 +107,11 @@ final readonly class AccountPlatform implements PlatformInterface
         $cause = $failure instanceof IncompleteStreamException ? $failure->getPrevious() ?? $failure : $failure;
         $coolDown = $this->coolDownAfter($cause);
 
+        // A wrapper that is retryable itself counts as an account error, as it did when the thrown exception was classified.
+        $thrownIsAccountError = $cause === $failure || $failure instanceof RetryableExceptionInterface;
+
         if (!$coolDown instanceof Closure) {
-            return false;
+            return $failure instanceof RetryableExceptionInterface;
         }
 
         if ($this->failures->record($this->account, $cause)) {
@@ -118,7 +121,7 @@ final readonly class AccountPlatform implements PlatformInterface
         }
 
         // A wrapped limit still gets the send warning, because the wrapper is what was thrown.
-        return $cause === $failure;
+        return $thrownIsAccountError;
     }
 
     // Matched by the exception type only, because the provider's text can change (plan T5); null for anything else, such as an answer Intakt could not read, because the account answered and stays usable (issue #1831).
