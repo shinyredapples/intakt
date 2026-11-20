@@ -18,6 +18,11 @@ final class PinnableClock implements ClockInterface
     /** @var (Closure(): void)|null */
     private ?Closure $onSleep = null;
 
+    private bool $working = false;
+
+    // A time-zone view runs the work through the clock it came from, so work that sleeps through any view finds the one guard already raised.
+    private ?self $origin = null;
+
     public function __construct(private readonly ClockInterface $real)
     {
     }
@@ -33,21 +38,8 @@ final class PinnableClock implements ClockInterface
      */
     public function workOnEachSleep(Closure $work): void
     {
-        // The guard lives in the closure, so every time-zone view of this clock shares it: work that sleeps through any view must not start itself again.
-        $working = false;
-        $this->onSleep = static function () use ($work, &$working): void {
-            if ($working) {
-                return;
-            }
-
-            $working = true;
-
-            try {
-                $work();
-            } finally {
-                $working = false;
-            }
-        };
+        $clock = $this->origin ?? $this;
+        $clock->onSleep = $work;
     }
 
     public function now(): DateTimeImmutable
@@ -57,9 +49,7 @@ final class PinnableClock implements ClockInterface
 
     public function sleep(float|int $seconds): void
     {
-        if ($this->onSleep instanceof Closure) {
-            ($this->onSleep)();
-        }
+        ($this->origin ?? $this)->work();
 
         ($this->pinned ?? $this->real)->sleep($seconds);
     }
@@ -68,8 +58,24 @@ final class PinnableClock implements ClockInterface
     {
         $clock = new self($this->real->withTimeZone($timezone));
         $clock->pinned = $this->pinned?->withTimeZone($timezone);
-        $clock->onSleep = $this->onSleep;
+        $clock->origin = $this->origin ?? $this;
 
         return $clock;
+    }
+
+    // A handler the work runs may sleep on this clock too; it must not start the work again inside itself.
+    private function work(): void
+    {
+        if (!$this->onSleep instanceof Closure || $this->working) {
+            return;
+        }
+
+        $this->working = true;
+
+        try {
+            ($this->onSleep)();
+        } finally {
+            $this->working = false;
+        }
     }
 }
