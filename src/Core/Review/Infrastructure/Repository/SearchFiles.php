@@ -9,7 +9,6 @@ use FilesystemIterator;
 use Generator;
 use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\ReviewTool;
-use InvalidArgumentException;
 use RecursiveCallbackFilterIterator;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
@@ -17,6 +16,7 @@ use SplFileInfo;
 use Symfony\AI\Agent\Toolbox\Attribute\AsTool;
 use Symfony\AI\Platform\Contract\JsonSchema\Attribute\Schema;
 use Symfony\AI\Platform\Tool\ToolEffectHints;
+use UnexpectedValueException;
 
 #[AsTool(name: ReviewTool::SearchFiles->value, description: 'Finds the lines of the repository at the head under review that contain a text; answers path:line:text.', effectHints: new ToolEffectHints(readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false))]
 final readonly class SearchFiles
@@ -41,13 +41,13 @@ final readonly class SearchFiles
         #[Schema(description: 'File or directory to search, relative to the repository root; "." is the root.')] string $path = '.',
     ): string {
         if ('' === $text) {
-            throw new InvalidArgumentException('The text to find is empty.');
+            throw SearchTextEmpty::create();
         }
 
         $matches = [];
         $bytes = 0;
 
-        foreach ($this->matches($this->checkout->resolve($path), $text) as $match) {
+        foreach ($this->matches($this->checkout->resolve($path), $text, $path) as $match) {
             $bytes += strlen($match) + 1;
 
             if (count($matches) >= self::MAX_MATCHES || $bytes > self::MAX_ANSWER_BYTES) {
@@ -63,11 +63,11 @@ final readonly class SearchFiles
     /**
      * @return Generator<string>
      */
-    private function matches(string $real, string $text): Generator
+    private function matches(string $real, string $text, string $path): Generator
     {
         $searched = 0;
 
-        foreach ($this->files($real) as $file) {
+        foreach ($this->files($real, $path) as $file) {
             yield from $this->matchesIn($file, $text);
             $this->fileSearched?->__invoke(++$searched);
         }
@@ -76,7 +76,7 @@ final readonly class SearchFiles
     /**
      * @return Generator<SplFileInfo>
      */
-    private function files(string $real): Generator
+    private function files(string $real, string $path): Generator
     {
         if (is_file($real)) {
             yield new SplFileInfo($real);
@@ -86,7 +86,7 @@ final readonly class SearchFiles
 
         // Because a link in the code under review can point out of the checkout, symlinks are not followed.
         $entries = new RecursiveIteratorIterator(new RecursiveCallbackFilterIterator(
-            new RecursiveDirectoryIterator($real, FilesystemIterator::SKIP_DOTS),
+            $this->directory($real, $path),
             static fn (SplFileInfo $entry): bool => '.git' !== $entry->getFilename() && !$entry->isLink(),
         ), RecursiveIteratorIterator::LEAVES_ONLY, RecursiveIteratorIterator::CATCH_GET_CHILD);
 
@@ -95,6 +95,16 @@ final readonly class SearchFiles
             if ($entry->isFile()) {
                 yield $entry;
             }
+        }
+    }
+
+    // A named refusal, because the reviewed code chose the path: a pipe or an unopenable directory is its doing, not a failure of the server.
+    private function directory(string $real, string $path): RecursiveDirectoryIterator
+    {
+        try {
+            return new RecursiveDirectoryIterator($real, FilesystemIterator::SKIP_DOTS);
+        } catch (UnexpectedValueException $unopened) {
+            throw PathNotReadable::unsearchable($path, $unopened);
         }
     }
 
