@@ -73,6 +73,19 @@ final class GateChildFullResultTest extends SandboxTestCase
         self::assertTrue(new CheckRun($check)->passed('dashes'), $check->output);
     }
 
+    public function testAChildIgnoresAnInheritedHandOffWhenTheScratchFolderWouldBeInsideTheCheckedTree(): void
+    {
+        $home = $this->fakeGatesHome();
+        $home->write('config/gates/run-gate.php', '<?php require '.var_export(dirname(__DIR__, 2).'/config/gates/run-gate.php', true).';');
+        $tree = $this->emptySandbox();
+        $tree->write('tmp/.keep', '');
+
+        $check = new ProcessRunner()->run([PHP_BINARY, $home->root.'/bin/check', '--root='.$tree->root, '--only=dashes'], $home->root, [GateSlots::VARIABLE => '1', 'TMPDIR' => $tree->root.'/tmp', GateChildren::FULL_RESULT_VARIABLE => $tree->root.'/inherited.json']);
+
+        self::assertTrue(new CheckRun($check)->passed('dashes'), $check->output);
+        self::assertFileDoesNotExist($tree->root.'/inherited.json');
+    }
+
     public function testAChildWritesItsWholeResultWhereTheHandOffNames(): void
     {
         $sandbox = $this->sandboxWithTwelveDashes();

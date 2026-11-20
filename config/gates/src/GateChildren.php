@@ -72,7 +72,8 @@ final readonly class GateChildren
         $children = [];
 
         foreach ($gates as $gate) {
-            $handOff = $scratch instanceof ScratchDirectory ? [self::FULL_RESULT_VARIABLE => self::wholeResultFile($scratch, $gate)] : [];
+            // Because a child inherits bin/check's environment, a hand-off set outside would otherwise still name a file when there is no scratch folder.
+            $handOff = [self::FULL_RESULT_VARIABLE => $scratch instanceof ScratchDirectory ? self::wholeResultFile($scratch, $gate) : false];
             $children[$gate] = new ChildCommand([PHP_BINARY, $this->home.'/'.self::ENTRY, $gate, ...$arguments], $this->directory(), [...LowPriority::environmentFor($gate, $this->runningTheChangesCode, $this->slots), ...$handOff]);
         }
 
