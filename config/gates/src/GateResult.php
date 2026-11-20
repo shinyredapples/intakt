@@ -79,7 +79,7 @@ final readonly class GateResult
     // Because the line keeps ten findings cut to 300 columns, the full report needs every finding as the gate wrote it.
     public function toFullJson(): string
     {
-        $findings = array_map(self::scrubbed(...), $this->findings);
+        $findings = array_map($this->scrubbed(...), $this->findings);
 
         return json_encode(['gate' => $this->gate, 'ok' => $this->isPassing(), 'findings' => $findings] + $this->extrasList(), self::JSON_FLAGS | JSON_INVALID_UTF8_SUBSTITUTE);
     }
@@ -123,7 +123,7 @@ final readonly class GateResult
     private function shorten(string $finding): string
     {
         // Because the kept result is scrubbed too, scrubbing before the fold gives the same line from both, whatever the substitute character is.
-        $oneLine = trim((string) preg_replace('/\s+/', ' ', self::scrubbed($finding)));
+        $oneLine = trim((string) preg_replace('/\s+/', ' ', $this->scrubbed($finding)));
 
         // The environment gate reports a missing mbstring through here, so the cut must work without it.
         if (!function_exists('mb_strimwidth')) {
@@ -136,7 +136,7 @@ final readonly class GateResult
     }
 
     // Because a broken byte would make the kept result unreadable, it gets the same replacement the line shows, so the kept findings still give the line.
-    private static function scrubbed(string $finding): string
+    private function scrubbed(string $finding): string
     {
         return function_exists('mb_scrub') ? mb_scrub($finding, 'UTF-8') : $finding;
     }
