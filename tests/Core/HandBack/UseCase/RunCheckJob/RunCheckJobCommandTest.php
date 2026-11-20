@@ -12,6 +12,7 @@ use Intakt\Core\HandBack\Contract\CheckJob;
 use Intakt\Core\HandBack\Contract\CheckJobOutcome;
 use Intakt\Core\HandBack\Contract\CheckVerdict;
 use Intakt\Core\HandBack\Contract\HandBack;
+use Intakt\Core\HandBack\Contract\HandBackBranchRefused;
 use Intakt\Core\HandBack\Contract\HandBackNotChecked;
 use Intakt\Core\HandBack\Contract\HandBackRefusal;
 use Intakt\Core\HandBack\Contract\RefusedHandBack;
@@ -38,12 +39,14 @@ use Intakt\Core\Job\Contract\JobId;
 use Intakt\Core\Job\Contract\JobInput;
 use Intakt\Core\Job\Contract\JobLimits;
 use Intakt\Core\Job\Contract\JobOutput;
+use Intakt\Core\Job\Contract\JobRefused;
 use Intakt\Core\Job\Contract\JobResult;
 use Intakt\Core\Job\Contract\JobRunner;
 use Intakt\Core\Job\Contract\JobSpec;
 use Intakt\Plugin\Forge\Contract\JobCredentials;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
 use Intakt\Tests\Core\HandBack\BuildHistory;
+use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -89,6 +92,8 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(JobEnd::class)]
 #[UsesClass(JobOutput::class)]
 #[UsesClass(DockerEngineFailed::class)]
+#[UsesClass(HandBackBranchRefused::class)]
+#[UsesClass(JobRefused::class)]
 final class RunCheckJobCommandTest extends TestCase
 {
     private const string SCRIPT = __DIR__.'/../../../../../docker/job/check.sh';
@@ -197,6 +202,39 @@ final class RunCheckJobCommandTest extends TestCase
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringContainsString('there is no socket at /var/run/docker.sock', $this->flat($tester));
+    }
+
+    public function testABranchThatIsMainIsStillPrintedAndFails(): void
+    {
+        $this->history->commit('Build work');
+
+        $tester = $this->executed($this->runnerLeaving([]), ['branch' => 'main']);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString('the task\'s branch "main" is main itself', $this->flat($tester));
+    }
+
+    public function testAJobTheRunnerRefusesIsStillPrintedAndFails(): void
+    {
+        $this->history->commit('Build work');
+        $runner = self::createStub(JobRunner::class);
+        $runner->method('run')->willThrowException(JobRefused::alreadyRunning(new JobId('check-demo')));
+
+        $tester = $this->executed($runner, []);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString('The job "check-demo" is already running.', $this->flat($tester));
+    }
+
+    public function testAnUnexpectedInvalidArgumentExceptionPassesThroughTheCommand(): void
+    {
+        $this->history->commit('Build work');
+        $runner = self::createStub(JobRunner::class);
+        $runner->method('run')->willThrowException(new InvalidArgumentException('a bug in the runner'));
+
+        $this->expectExceptionObject(new InvalidArgumentException('a bug in the runner'));
+
+        $this->executed($runner, []);
     }
 
     /**

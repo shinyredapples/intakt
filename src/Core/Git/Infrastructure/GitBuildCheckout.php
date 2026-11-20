@@ -9,12 +9,12 @@ use Intakt\Core\Git\Contract\BuildCheckout;
 use Intakt\Core\Git\Contract\BuildCheckoutFailed;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Core\Git\Domain\Mirrors;
+use Intakt\Core\Git\Domain\ProjectNameRefused;
 use Intakt\Core\Git\Domain\TaskBranch;
 use Intakt\Core\Git\UseCase\MakeBuildClone\MakeBuildClone;
 use Intakt\Core\Git\UseCase\TakeCheckedHead\TakeCheckedHead;
 use Intakt\Core\Git\UseCase\UpdateMirror\UpdateMirror;
 use Intakt\Core\Platform\Contract\ReportableFailure;
-use InvalidArgumentException;
 use Override;
 use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Lock\Exception\ExceptionInterface as LockFailure;
@@ -36,9 +36,8 @@ final readonly class GitBuildCheckout implements BuildCheckout
         try {
             $this->mirrors->update($project, $remote);
         } catch (ProcessFailure $stopped) {
-            // Caught first, because a process failure may also be an InvalidArgumentException, and its message must never be the recorded one.
             throw BuildCheckoutFailed::stopped($stopped);
-        } catch (InvalidArgumentException|IOException|RepositoryAttributesRefused|LockFailure|ReportableFailure $failure) {
+        } catch (IOException|RepositoryAttributesRefused|LockFailure|ReportableFailure $failure) {
             throw BuildCheckoutFailed::because($failure);
         }
     }
@@ -50,7 +49,7 @@ final readonly class GitBuildCheckout implements BuildCheckout
             $this->clones->make($project, new TaskBranch($branch), $directory);
         } catch (ProcessFailure $stopped) {
             throw BuildCheckoutFailed::stopped($stopped);
-        } catch (InvalidArgumentException|IOException|RepositoryAttributesRefused|ReportableFailure $failure) {
+        } catch (IOException|RepositoryAttributesRefused|ReportableFailure $failure) {
             throw BuildCheckoutFailed::because($failure);
         }
     }
@@ -62,7 +61,7 @@ final readonly class GitBuildCheckout implements BuildCheckout
             $this->heads->take($project, $head, $directory);
         } catch (ProcessFailure $stopped) {
             throw BuildCheckoutFailed::stopped($stopped);
-        } catch (InvalidArgumentException|RepositoryAttributesRefused|ReportableFailure $failure) {
+        } catch (RepositoryAttributesRefused|ReportableFailure $failure) {
             throw BuildCheckoutFailed::because($failure);
         }
     }
@@ -72,7 +71,7 @@ final readonly class GitBuildCheckout implements BuildCheckout
     {
         try {
             return $this->mirrorPaths->pathOf($project);
-        } catch (InvalidArgumentException $failure) {
+        } catch (ProjectNameRefused $failure) {
             throw BuildCheckoutFailed::because($failure);
         }
     }
