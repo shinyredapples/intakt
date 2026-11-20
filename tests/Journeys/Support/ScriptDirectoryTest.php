@@ -14,6 +14,8 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(ScriptedCall::class)]
 #[UsesClass(ScriptNotArmed::class)]
 #[UsesClass(CallEndedTwice::class)]
+#[UsesClass(RecordNotPublished::class)]
+#[UsesClass(ProcParents::class)]
 final class ScriptDirectoryTest extends TestCase
 {
     private string $path;
@@ -55,7 +57,7 @@ final class ScriptDirectoryTest extends TestCase
 
         $call = $scripts->callStarted();
 
-        self::assertEquals([new ScriptedCall(2, (int) getmypid(), 1000.0, null)], $scripts->calls());
+        self::assertEquals([new ScriptedCall(2, (int) getmypid(), $this->ownStart(),1000.0, null)], $scripts->calls());
         self::assertSame(2, $call);
     }
 
@@ -77,7 +79,7 @@ final class ScriptDirectoryTest extends TestCase
 
         $scripts->callEnded($call);
 
-        self::assertEquals([new ScriptedCall(1, (int) getmypid(), 1000.0, 1002.5)], $scripts->calls());
+        self::assertEquals([new ScriptedCall(1, (int) getmypid(), $this->ownStart(),1000.0, 1002.5)], $scripts->calls());
     }
 
     public function testACallCannotEndTwice(): void
@@ -87,6 +89,32 @@ final class ScriptDirectoryTest extends TestCase
         $scripts->callEnded($call);
 
         $this->expectException(CallEndedTwice::class);
+
+        $scripts->callEnded($call);
+    }
+
+    public function testANameTakenByALinkToNothingIsSkippedLikeAnyTakenName(): void
+    {
+        new Filesystem()->symlink($this->path.'/nothing', $this->path.'/1.start');
+
+        self::assertSame(2, $this->scripts()->callStarted());
+    }
+
+    public function testALinkFailureForAFreeNameFailsTheCallInsteadOfTryingTheNextNumber(): void
+    {
+        $scripts = new ScriptDirectory($this->path, new MockClock('@1000'), static fn (string $temporary, string $file): bool => false);
+
+        $this->expectException(RecordNotPublished::class);
+
+        $scripts->callStarted();
+    }
+
+    public function testALinkFailureForAFreeEndNameFailsTheEndInsteadOfCountingAsASecondEnd(): void
+    {
+        $scripts = new ScriptDirectory($this->path, new MockClock('@1000'), static fn (string $temporary, string $file): bool => str_ends_with($file, '.start') && link($temporary, $file));
+        $call = $scripts->callStarted();
+
+        $this->expectException(RecordNotPublished::class);
 
         $scripts->callEnded($call);
     }
@@ -136,5 +164,10 @@ final class ScriptDirectoryTest extends TestCase
     private function scripts(): ScriptDirectory
     {
         return new ScriptDirectory($this->path, new MockClock('@1000'));
+    }
+
+    private function ownStart(): int
+    {
+        return (int) new ProcParents()->startOf((int) getmypid());
     }
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Journeys\Support;
 
+use Closure;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\Filesystem\Filesystem;
 
@@ -12,9 +13,13 @@ final readonly class ScriptDirectory
 {
     private const string SCRIPT = 'script.json';
 
+    /**
+     * @param Closure(string, string): bool $link
+     */
     public function __construct(
         private string $path,
         private ClockInterface $clock,
+        private Closure $link = link(...),
     ) {
     }
 
@@ -45,6 +50,9 @@ final readonly class ScriptDirectory
         return ['weight' => (float) $weight, 'answers' => $answers];
     }
 
+    /**
+     * @throws RecordNotPublished
+     */
     public function callStarted(): int
     {
         $call = count($this->filesOf('start')) + 1;
@@ -58,6 +66,7 @@ final readonly class ScriptDirectory
 
     /**
      * @throws CallEndedTwice
+     * @throws RecordNotPublished
      */
     public function callEnded(int $call): void
     {
@@ -82,7 +91,7 @@ final readonly class ScriptDirectory
             }
 
             $ended = $this->recordIn(substr($file, 0, -strlen('start')).'end');
-            $calls[] = new ScriptedCall($started['call'], $started['pid'], $started['at'], $ended['at'] ?? null);
+            $calls[] = new ScriptedCall($started['call'], $started['pid'], $started['start'], $started['at'], $ended['at'] ?? null);
         }
 
         usort($calls, static fn (ScriptedCall $one, ScriptedCall $other): int => $one->number <=> $other->number);
@@ -100,41 +109,53 @@ final readonly class ScriptDirectory
         return false === $files ? [] : $files;
     }
 
+    // False only when the name was taken; any other failure throws, because retrying it would never end.
     private function published(string $name, string $record): bool
     {
         $filesystem = new Filesystem();
         $temporary = $filesystem->tempnam($this->path, '.record-');
+        $file = $this->path.'/'.$name;
 
         try {
             $filesystem->dumpFile($temporary, $record);
 
             // link() refuses a name that exists, so two workers never take one call number, and the record appears whole or not at all.
-            return @link($temporary, $this->path.'/'.$name);
+            $linked = @($this->link)($temporary, $file);
         } finally {
             $filesystem->remove($temporary);
         }
+
+        if (!$linked && !is_link($file) && !file_exists($file)) {
+            throw new RecordNotPublished($file);
+        }
+
+        return $linked;
     }
 
     private function record(int $call): string
     {
-        return json_encode(['call' => $call, 'pid' => getmypid(), 'at' => (float) $this->clock->now()->format('U.u')], JSON_THROW_ON_ERROR);
+        $pid = (int) getmypid();
+        $start = new ProcParents()->startOf($pid) ?? throw new RecordNotPublished($this->path.'/'.$call);
+
+        return json_encode(['call' => $call, 'pid' => $pid, 'start' => $start, 'at' => (float) $this->clock->now()->format('U.u')], JSON_THROW_ON_ERROR);
     }
 
     /**
-     * @return array{call: int, pid: int, at: float}|null
+     * @return array{call: int, pid: int, start: int, at: float}|null
      */
     private function recordIn(string $file): ?array
     {
         $record = $this->decoded($file);
         $call = $record['call'] ?? null;
         $pid = $record['pid'] ?? null;
+        $start = $record['start'] ?? null;
         $at = $record['at'] ?? null;
 
-        if (!is_int($call) || !is_int($pid) || (!is_float($at) && !is_int($at))) {
+        if (!is_int($call) || !is_int($pid) || !is_int($start) || (!is_float($at) && !is_int($at))) {
             return null;
         }
 
-        return ['call' => $call, 'pid' => $pid, 'at' => (float) $at];
+        return ['call' => $call, 'pid' => $pid, 'start' => $start, 'at' => (float) $at];
     }
 
     /**

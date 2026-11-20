@@ -9,6 +9,7 @@ final readonly class ScriptedCall
     public function __construct(
         public int $number,
         public int $pid,
+        public int $processStart,
         public float $startedAt,
         public ?float $endedAt,
     ) {

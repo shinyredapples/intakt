@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Journeys\Support;
 
+use Intakt\Tests\Journeys\Support\Fixtures\VanishedProcess;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Clock\MonotonicClock;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Process\ExecutableFinder;
 use Symfony\Component\Process\Process;
@@ -52,10 +54,42 @@ final class ProcParentsTest extends TestCase
         self::assertNull(new ProcParents()->parentOf(self::NO_PROCESS));
     }
 
+    public function testAPidThatNoProcessHasHasNoStartTime(): void
+    {
+        self::assertNull(new ProcParents()->startOf(self::NO_PROCESS));
+    }
+
+    public function testAProcessStartedLaterHasALaterStartTime(): void
+    {
+        $child = new Process(['sleep', '5']);
+        $child->start();
+
+        try {
+            $proc = new ProcParents();
+
+            self::assertGreaterThanOrEqual((int) $proc->startOf((int) getmypid()), (int) $proc->startOf((int) $child->getPid()));
+        } finally {
+            $child->stop(0);
+        }
+    }
+
+    public function testAProcessThatEndsBetweenFindingAndReadingItsEntryHasNoParentAndRaisesNoWarning(): void
+    {
+        stream_wrapper_register(VanishedProcess::SCHEME, VanishedProcess::class);
+
+        try {
+            self::assertNull(new ProcParents(VanishedProcess::SCHEME.'://proc')->parentOf(200));
+        } finally {
+            stream_wrapper_unregister(VanishedProcess::SCHEME);
+        }
+    }
+
     private function waitUntilNamed(int $pid, string $name): void
     {
+        $clock = new MonotonicClock();
+
         for ($tries = 0; $tries < 100 && !str_contains((string) file_get_contents('/proc/'.$pid.'/stat'), $name); ++$tries) {
-            usleep(10_000);
+            $clock->sleep(0.01);
         }
 
         self::assertStringContainsString($name, (string) file_get_contents('/proc/'.$pid.'/stat'));

@@ -24,11 +24,13 @@ final class ConsumerProcess
 
     /**
      * @param Closure(int): ?int $parentOf
+     * @param Closure(int): ?int $startOf
      */
     public function __construct(
         private readonly Process $process,
         private readonly ClockInterface $clock,
         private readonly Closure $parentOf,
+        private readonly Closure $startOf,
     ) {
     }
 
@@ -40,7 +42,9 @@ final class ConsumerProcess
         $process = new Process(self::command($concurrency), $projectDirectory, $variables, null, null);
         $process->start();
 
-        return new self($process, new MonotonicClock(), new ProcParents()->parentOf(...));
+        $proc = new ProcParents();
+
+        return new self($process, new MonotonicClock(), $proc->parentOf(...), $proc->startOf(...));
     }
 
     /**
@@ -72,12 +76,12 @@ final class ConsumerProcess
         return $ended && $elapsed <= $seconds ? $elapsed : null;
     }
 
-    // Asked before a journey kills a recorded worker PID, so a PID the system gave to another process after the worker ended is never killed.
-    public function isWorker(int $pid): bool
+    // Asked before a journey kills a recorded worker (its PID and start time from its call record), so a PID the system gave to another process after the worker ended is never killed, also not a replacement worker of the same consumer.
+    public function isWorker(int $pid, int $processStart): bool
     {
         $consumer = $this->process->getPid();
 
-        if (null === $consumer || !$this->process->isRunning()) {
+        if (null === $consumer || !$this->process->isRunning() || ($this->startOf)($pid) !== $processStart) {
             return false;
         }
 

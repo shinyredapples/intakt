@@ -16,6 +16,8 @@ use Symfony\Component\HttpClient\Response\MockResponse;
 #[UsesClass(ScriptDirectory::class)]
 #[UsesClass(ScriptedCall::class)]
 #[UsesClass(ScriptNotArmed::class)]
+#[UsesClass(KeptScript::class)]
+#[UsesClass(ProcParents::class)]
 final class ScriptedHttpClientTest extends TestCase
 {
     private string $path;
@@ -49,7 +51,7 @@ final class ScriptedHttpClientTest extends TestCase
 
         self::assertSame('{"answer":1}', $response->getContent());
         self::assertSame(['application/json'], $response->getHeaders()['content-type']);
-        self::assertEquals([new ScriptedCall(1, (int) getmypid(), 1000.0, 1002.0)], new ScriptDirectory($this->path, $clock)->calls());
+        self::assertEquals([new ScriptedCall(1, (int) getmypid(), (int) new ProcParents()->startOf((int) getmypid()), 1000.0, 1002.0)], new ScriptDirectory($this->path, $clock)->calls());
     }
 
     public function testTheScriptReadByTheFirstCallStaysForTheWholeProcess(): void
@@ -83,6 +85,55 @@ final class ScriptedHttpClientTest extends TestCase
         $client = new ScriptedHttpClient(new MockHttpClient(), $clock, $this->path)->withOptions(['timeout' => 5]);
 
         self::assertSame('scripted', $client->request('GET', 'https://localhost/')->getContent());
+    }
+
+    public function testAClientWithOtherOptionsKeepsTheScriptItsOriginReadBeforeTheScriptWasArmedAgain(): void
+    {
+        $clock = new MockClock('@1000');
+        $scripts = new ScriptDirectory($this->path, $clock);
+        $scripts->arm(0.0, [['content_type' => 'text/plain', 'body' => 'original']]);
+        $client = new ScriptedHttpClient(new MockHttpClient(), $clock, $this->path);
+        $client->request('GET', 'https://localhost/')->getContent();
+        $scripts->arm(0.0, [['content_type' => 'text/plain', 'body' => 'armed again']]);
+
+        self::assertSame('original', $client->withOptions(['timeout' => 5])->request('GET', 'https://localhost/')->getContent());
+    }
+
+    public function testTheOriginKeepsTheScriptAClientWithOtherOptionsReadFirst(): void
+    {
+        $clock = new MockClock('@1000');
+        $scripts = new ScriptDirectory($this->path, $clock);
+        $scripts->arm(0.0, [['content_type' => 'text/plain', 'body' => 'original']]);
+        $client = new ScriptedHttpClient(new MockHttpClient(), $clock, $this->path);
+        $client->withOptions(['timeout' => 5])->request('GET', 'https://localhost/')->getContent();
+        $scripts->arm(0.0, [['content_type' => 'text/plain', 'body' => 'armed again']]);
+
+        self::assertSame('original', $client->request('GET', 'https://localhost/')->getContent());
+    }
+
+    public function testAResetIsPassedOnToTheRealClient(): void
+    {
+        $real = new MockHttpClient(new MockResponse('real'));
+        $client = new ScriptedHttpClient($real, new MockClock(), '');
+        $client->request('GET', 'https://localhost/')->getContent();
+
+        $client->reset();
+
+        self::assertSame(0, $real->getRequestsCount());
+    }
+
+    public function testAResetKeepsTheScriptReadFirst(): void
+    {
+        $clock = new MockClock('@1000');
+        $scripts = new ScriptDirectory($this->path, $clock);
+        $scripts->arm(0.0, [['content_type' => 'text/plain', 'body' => 'original']]);
+        $client = new ScriptedHttpClient(new MockHttpClient(), $clock, $this->path);
+        $client->request('GET', 'https://localhost/')->getContent();
+        $scripts->arm(0.0, [['content_type' => 'text/plain', 'body' => 'armed again']]);
+
+        $client->reset();
+
+        self::assertSame('original', $client->request('GET', 'https://localhost/')->getContent());
     }
 
     public function testAScriptedResponseIsStreamedLikeAnyOther(): void
