@@ -83,7 +83,7 @@ final readonly class ReviewerStops
     // Null when the round is unknown or judged, so nothing in it can be stopped any more.
     private function runningReviewersOf(?Review $review, string $round): ?array
     {
-        $reviewed = array_find($review->rounds ?? [],static fn (ReviewedRound $candidate): bool => $candidate->round === $round);
+        $reviewed = array_find($review->rounds ?? [], static fn (ReviewedRound $candidate): bool => $candidate->round === $round);
 
         if (!$reviewed instanceof ReviewedRound || ReviewState::Judged === $reviewed->state) {
             return null;
