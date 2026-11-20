@@ -16,6 +16,12 @@ doctrine:
             Doctrine\DBAL\Platforms\PostgreSQLPlatform: identity
         auto_mapping: false
         mappings:
+            Build:
+                type: attribute
+                is_bundle: false
+                dir: '%kernel.project_dir%/src/Core/Build/Domain'
+                prefix: 'Intakt\Core\Build\Domain'
+                alias: Build
             Budget:
                 type: attribute
                 is_bundle: false
