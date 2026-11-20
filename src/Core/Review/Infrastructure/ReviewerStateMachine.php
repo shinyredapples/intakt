@@ -35,5 +35,12 @@ final class ReviewerStateMachine
     // Both places, because a message can reach the failure transport while its reviewer waits in the queue (handed back) or still looks running; a state machine transition has one input place, so the attribute is repeated.
     #[Transition(from: ReviewerState::Queued, to: ReviewerState::Blocked)]
     #[Transition(from: ReviewerState::Running, to: ReviewerState::Blocked)]
+    #[Transition(from: ReviewerState::Interrupted, to: ReviewerState::Blocked)]
     public const string BLOCK = ReviewerTransition::Block->value;
+
+    #[Transition(from: ReviewerState::Running, to: ReviewerState::Interrupted)]
+    public const string INTERRUPT = ReviewerTransition::Interrupt->value;
+
+    #[Transition(from: ReviewerState::Interrupted, to: ReviewerState::Running)]
+    public const string RESUME = ReviewerTransition::Resume->value;
 }

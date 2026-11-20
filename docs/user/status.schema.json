@@ -70,7 +70,7 @@
                                                 "properties": {
                                                     "role": {"type": "string"},
                                                     "tier": {"type": "string"},
-                                                    "progress": {"enum": ["running", "verdict", "failed", "blocked", "stopped"]}
+                                                    "progress": {"enum": ["running", "interrupted", "verdict", "failed", "blocked", "stopped"]}
                                                 }
                                             }
                                         }

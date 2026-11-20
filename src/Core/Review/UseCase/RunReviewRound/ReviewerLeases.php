@@ -60,6 +60,12 @@ final readonly class ReviewerLeases
         $this->record($reviewer, fn (RoundReviewer $stored) => $this->moves->fail($stored, $failure));
     }
 
+    // Neither a failure nor a restart, because an outage is a wait and only a real failure may use up a limit.
+    public function recordInterrupted(RoundReviewer $reviewer): void
+    {
+        $this->record($reviewer, fn (RoundReviewer $stored) => $this->moves->interrupt($stored));
+    }
+
     // Blocked with the reason, because no provider is left to review and a retry would only wait for one the owner named a way around.
     public function recordOutage(RoundReviewer $reviewer, string $reason): void
     {
@@ -100,6 +106,12 @@ final readonly class ReviewerLeases
 
         if (ReviewerState::Queued === $reviewer->state()) {
             $this->moves->start($reviewer, $now);
+
+            return;
+        }
+
+        if (ReviewerState::Interrupted === $reviewer->state()) {
+            $this->moves->resume($reviewer, $now);
 
             return;
         }

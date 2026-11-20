@@ -12,4 +12,6 @@ enum ReviewerTransition: string
     case Fail = 'fail';
     case Requeue = 'requeue';
     case Block = 'block';
+    case Interrupt = 'interrupt';
+    case Resume = 'resume';
 }
