@@ -67,6 +67,9 @@ class FakePage {
         if (selector === 'button[data-copy]') {
             return this.buttons;
         }
+        if (selector === 'details.why') {
+            return this.whys;
+        }
         assert.equal(selector, 'details.why[open]');
 
         return this.whys.filter((why) => why.open);
@@ -135,9 +138,30 @@ class FakeSlowClipboard {
     }
 }
 
-function pageWithACommand({ clipboard = new FakeClipboard(), phone = false } = {}) {
+// One list for the phone query, as a browser keeps it, so a resize across 760 px tells every listener.
+class FakeMediaQueryList {
+    listeners = [];
+
+    constructor(matches) {
+        this.matches = matches;
+    }
+
+    addEventListener(type, listener) {
+        assert.equal(type, 'change');
+        this.listeners.push(listener);
+    }
+
+    cross(matches) {
+        this.matches = matches;
+        this.listeners.forEach((listener) => listener({ matches }));
+    }
+}
+
+function pageWithACommand({ clipboard = new FakeClipboard(), phone = false, whys = [] } = {}) {
     const page = new FakePage();
+    page.whys.push(...whys);
     const timers = new FakeTimers();
+    const media = new FakeMediaQueryList(phone);
     const view = {
         navigator: clipboard === null ? {} : { clipboard },
         setTimeout: (callback, delay) => timers.setTimeout(callback, delay),
@@ -145,14 +169,14 @@ function pageWithACommand({ clipboard = new FakeClipboard(), phone = false } = {
         matchMedia: (query) => {
             assert.equal(query, '(max-width: 760px)');
 
-            return { matches: phone };
+            return media;
         },
     };
     copyCommands(page, view);
     const button = new FakeCopyButton();
     page.buttons.push(button);
 
-    return { page, timers, clipboard, button };
+    return { page, timers, clipboard, button, media };
 }
 
 // The clipboard answers with a promise, so its outcome shows only once the pending reactions ran.
@@ -348,6 +372,71 @@ test('another key or a closed Why changes nothing', () => {
 
     assert.equal(open.open, true);
     assert.equal(open.summary.focused, false);
+});
+
+test('on a phone every Why the page renders stays closed', () => {
+    const why = new FakeWhy(false);
+
+    pageWithACommand({ phone: true, whys: [why] });
+
+    assert.equal(why.open, false);
+});
+
+test('on a wide screen every Why the page renders is opened', () => {
+    const whys = [new FakeWhy(false), new FakeWhy(false)];
+
+    pageWithACommand({ whys });
+
+    assert.deepEqual(whys.map((why) => why.open), [true, true]);
+});
+
+test('a Turbo visit on a wide screen opens every Why of the new page', () => {
+    const { page } = pageWithACommand();
+    const why = new FakeWhy(false);
+    page.whys.push(why);
+
+    page.dispatch('turbo:load');
+
+    assert.equal(why.open, true);
+});
+
+test('a Turbo visit on a phone leaves every Why of the new page closed', () => {
+    const { page } = pageWithACommand({ phone: true });
+    const why = new FakeWhy(false);
+    page.whys.push(why);
+
+    page.dispatch('turbo:load');
+
+    assert.equal(why.open, false);
+});
+
+test('narrowing a wide window to phone width closes every Why', () => {
+    const whys = [new FakeWhy(false), new FakeWhy(false)];
+    const { media } = pageWithACommand({ whys });
+
+    media.cross(true);
+
+    assert.deepEqual(whys.map((why) => why.open), [false, false]);
+});
+
+test('widening a phone window past 760 px opens every Why', () => {
+    const whys = [new FakeWhy(false), new FakeWhy(false)];
+    const { media } = pageWithACommand({ phone: true, whys });
+
+    media.cross(false);
+
+    assert.deepEqual(whys.map((why) => why.open), [true, true]);
+});
+
+test('a page Turbo caches keeps every Why closed and moves no focus', () => {
+    const why = new FakeWhy(false);
+    const { page } = pageWithACommand({ whys: [why] });
+    assert.equal(why.open, true);
+
+    page.dispatch('turbo:before-cache');
+
+    assert.equal(why.open, false);
+    assert.equal(why.summary.focused, false);
 });
 
 test('Escape on a phone with every Why closed moves no focus', () => {
