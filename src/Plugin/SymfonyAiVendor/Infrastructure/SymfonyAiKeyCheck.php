@@ -48,6 +48,7 @@ final readonly class SymfonyAiKeyCheck implements KeyCheck
                 ->asText();
         } catch (AuthenticationException) {
             return KeyCheckOutcome::Refused;
+            // Boundary: logs any other provider failure and answers not checked, because a check that cannot answer must not refuse a key.
         } catch (Throwable $failure) {
             // Only the class, because a provider's text can echo the request headers that carry the key, and a key not yet kept is no held credential the log redacts.
             $this->logger->warning('A provider key could not be checked.', ['provider' => $key->provider(), 'exception_class' => $failure::class]);

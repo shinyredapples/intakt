@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Git\Infrastructure;
 
+use Intakt\Core\Git\Domain\ProtectedPathRefused;
 use Intakt\Core\Git\Domain\ProtectedPaths;
 use Intakt\Core\Git\Infrastructure\ProtectedPathsConfiguration;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -14,6 +15,7 @@ use Symfony\Component\Config\Definition\Processor;
 
 #[CoversClass(ProtectedPathsConfiguration::class)]
 #[UsesClass(ProtectedPaths::class)]
+#[UsesClass(ProtectedPathRefused::class)]
 final class ProtectedPathsConfigurationTest extends TestCase
 {
     public function testAListOfFilesAndFoldersIsAccepted(): void
