@@ -22,7 +22,7 @@ final class DashboardSecondStartJourneyTest extends JourneyTestCase
     private const string ENDED_TEXT = 'Judged.';
     private const string STARTED = 'Started round 2.';
     private const string REFUSED = 'Round 2 was asked for, but the next round of this change is round 3.';
-    // A round's own block, not one of its parts, whose ids go on after the round id.
+    // Anchored at both ends, because the ids of a round's parts go on after the round id and only the round's own block counts as a round.
     private const string ROUND_BLOCK = '/^round-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/';
 
     private string $directory = '';
@@ -95,7 +95,8 @@ final class DashboardSecondStartJourneyTest extends JourneyTestCase
 
         self::assertSame('2', $form->getPhpValues()['number'] ?? null);
         self::assertSame(1, $this->roundsOn($review));
-        self::assertSame(self::STARTED, $this->lineAfterPressing($dashboard, $form, $review, '.toast'));
+        self::assertSame($review, $this->redirectOfPressing($dashboard, $form));
+        self::assertSame(self::STARTED, $dashboard->followRedirect()->filter('.toast')->text());
         self::assertSame(2, $this->roundsOn($review));
 
         return $form;
@@ -104,26 +105,21 @@ final class DashboardSecondStartJourneyTest extends JourneyTestCase
     // The form of the page as it was before the first press, so its number is the stale one a double submit sends.
     private function pressTheSameStartAgain(KernelBrowser $dashboard, Form $form, string $review): void
     {
-        self::assertSame(self::REFUSED, $this->lineAfterPressing($dashboard, $form, $review, '.flash-error'));
+        self::assertSame($review, $this->redirectOfPressing($dashboard, $form));
+        self::assertSame(self::REFUSED, $dashboard->followRedirect()->filter('.flash-error')->text());
         self::assertSame(2, $this->roundsOn($review));
     }
 
-    // The redirect is read before it is followed, because both presses answer with the same redirect and only the line on the page tells them apart.
-    private function lineAfterPressing(KernelBrowser $dashboard, Form $form, string $review, string $line): string
+    // Not followed here, because both presses answer with the same redirect and only the line on the page the caller then follows to tells them apart.
+    private function redirectOfPressing(KernelBrowser $dashboard, Form $form): string
     {
         $dashboard->followRedirects(false);
+        $dashboard->submit($form);
+        $response = $dashboard->getResponse();
 
-        try {
-            $dashboard->submit($form);
-            $response = $dashboard->getResponse();
+        self::assertSame(303, $response->getStatusCode());
 
-            self::assertSame(303, $response->getStatusCode());
-            self::assertSame($review, parse_url((string) $response->headers->get('Location'), PHP_URL_PATH));
-
-            return $dashboard->followRedirect()->filter($line)->text();
-        } finally {
-            $dashboard->followRedirects(true);
-        }
+        return (string) parse_url((string) $response->headers->get('Location'), PHP_URL_PATH);
     }
 
     // Read on the instance's own server, so the rounds are the ones its database holds and not this journey's kernel's.
