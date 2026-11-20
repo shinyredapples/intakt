@@ -44,8 +44,7 @@ final readonly class MilestoneTable
         return '| '.implode(' | ', [$this->cell($milestone->title), $this->cell($milestone->goal), $due, $lastText, count($done).' / '.$open]).' |';
     }
 
-    // Forge text stays literal so it can open no comment, write no journey marker and add no Markdown; one addcslashes pass escapes the backslash with the rest, never twice.
-    // Kramdown's backslash escapes do not cover `~` (strikethrough) or `&` (entities), so those become entities in one strtr pass, which never rewrites its own output.
+    // Forge text stays literal (no comment, journey marker or Markdown); kramdown cannot backslash-escape `~` or `&`, so they become entities, and each single pass never rewrites its own output.
     private function cell(string $text): string
     {
         return (string) preg_replace('/\R/', ' ', trim($text))
