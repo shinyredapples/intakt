@@ -51,45 +51,49 @@ final readonly class ChangesHandedToIntakt
     {
         $openings = $this->openingsOf($project);
         $intended = $this->intendedHeadsOf($project);
-        $handed = $this->handedOf($project);
         $created = [];
-        $askable = true;
+        $undecided = [];
+
+        foreach ($this->unhandedAmong($project, $open) as $address => $change) {
+            match ($this->decidedBy($openings[$address] ?? null, isset($intended[$change->head->hash]))) {
+                true => $created[] = $change,
+                null => $undecided[] = $change,
+                false => null,
+            };
+        }
+
+        return [...$created, ...$this->createdAmongAsked($project, $undecided)];
+    }
+
+    /**
+     * @param list<OpenChange> $open
+     *
+     * @return array<string, OpenChange>
+     */
+    private function unhandedAmong(string $project, array $open): array
+    {
+        $handed = $this->handedOf($project);
+        $unhanded = [];
 
         foreach ($open as $change) {
             $address = $this->addressOf($change->id->value);
 
-            if (isset($handed[$address])) {
-                continue;
-            }
-
-            $recorded = $openings[$address] ?? null;
-            $answer = match (true) {
-                null !== $recorded => $this->decidedBy($recorded),
-                // A push that stopped after the forge created the pull request but before its record left only the intent for that head; the forge's author decides whether it was this App's creation.
-                isset($intended[$change->head->hash]) => null,
-                default => false,
-            };
-
-            if (null === $answer && $askable) {
-                [$answer, $askable] = $this->askedAbout($project, $change);
-            }
-
-            if (true === $answer) {
-                $created[] = $change;
-                $handed[$address] = true;
+            if (!isset($handed[$address])) {
+                $unhanded[$address] ??= $change;
             }
         }
 
-        return $created;
+        return $unhanded;
     }
 
-    // Only an opening that created the pull request, because Intakt's push also updates an open pull request someone else opened on the same branch; null leaves it to the forge, because a record written before openings were recorded does not say.
+    // Only an opening that created the pull request, because Intakt's push also updates an open pull request someone else opened on the same branch; null leaves it to the forge's author, because a record written before openings were recorded does not say, and a push that stopped between the forge's creation and its record left only the intent for that head.
     /**
-     * @param list<mixed> $openings
+     * @param list<mixed>|null $openings
      */
-    private function decidedBy(array $openings): ?bool
+    private function decidedBy(?array $openings, bool $intended): ?bool
     {
         return match (true) {
+            null === $openings => $intended ? null : false,
             in_array(Opening::Created->value, $openings, true) => true,
             in_array(Opening::Updated->value, $openings, true) => false,
             default => null,
@@ -98,21 +102,29 @@ final readonly class ChangesHandedToIntakt
 
     // An unanswered author leaves only that pull request for the next tick, which asks again, because one unreadable pull request must not hold back the listing and the queueing of the others; after a rate limit no further author is asked on this tick, as the forge would refuse each.
     /**
-     * @return array{?bool, bool}
+     * @param list<OpenChange> $undecided
+     *
+     * @return list<OpenChange>
      */
-    private function askedAbout(string $project, OpenChange $change): array
+    private function createdAmongAsked(string $project, array $undecided): array
     {
-        try {
-            return [$this->authorship->isCreatedByIntakt($change->id), true];
-        } catch (ForgeReadFailed $unread) {
-            $this->logger->warning('The author of {change} in {project} could not be read, so it is checked again on the next tick: {reason}', ['change' => $change->id->value, 'project' => $project, 'reason' => $unread->getMessage()]);
+        $created = [];
 
-            return [null, true];
-        } catch (ForgeRateLimited $limited) {
-            $this->logger->warning('The author of {change} in {project} was not read under the rate limit, so it is checked again on the next tick: {reason}', ['change' => $change->id->value, 'project' => $project, 'reason' => $limited->getMessage()]);
+        foreach ($undecided as $change) {
+            try {
+                if ($this->authorship->isCreatedByIntakt($change->id)) {
+                    $created[] = $change;
+                }
+            } catch (ForgeReadFailed $unread) {
+                $this->logger->warning('The author of {change} in {project} could not be read, so it is checked again on the next tick: {reason}', ['change' => $change->id->value, 'project' => $project, 'reason' => $unread->getMessage()]);
+            } catch (ForgeRateLimited $limited) {
+                $this->logger->warning('The author of {change} in {project} was not read under the rate limit, so it is checked again on the next tick: {reason}', ['change' => $change->id->value, 'project' => $project, 'reason' => $limited->getMessage()]);
 
-            return [null, false];
+                break;
+            }
         }
+
+        return $created;
     }
 
     /**
