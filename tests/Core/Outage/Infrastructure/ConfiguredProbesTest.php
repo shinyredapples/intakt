@@ -109,7 +109,7 @@ final class ConfiguredProbesTest extends TestCase
         );
     }
 
-    // A zone ID names a host on the local link, and reaching it says nothing about reaching the outside.
+    // Not probed, because a zone ID names a host on the local link and reaching it says nothing about reaching the outside.
     public function testAScopedIpv6BaseUrlAddsNoProbe(): void
     {
         self::assertSame(
