@@ -85,10 +85,13 @@ final readonly class ParityRecord
 
         $problems = [];
         foreach ($namedTests as [$class, $method]) {
-            $problems[] = $this->problemWith($class, $method, $testClasses);
+            $problem = $this->problemWith($class, $method, $testClasses);
+            if (null !== $problem) {
+                $problems[] = $problem;
+            }
         }
 
-        return array_values(array_filter($problems));
+        return $problems;
     }
 
     /**
