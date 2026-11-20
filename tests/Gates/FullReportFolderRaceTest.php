@@ -11,7 +11,7 @@ use Symfony\Component\Process\Process;
 #[CoversClass(FullReport::class)]
 final class FullReportFolderRaceTest extends SandboxTestCase
 {
-    // Because the competing writer must create var/check between this writer's look and its mkdir(), a child process replaces mkdir() in the gates' namespace to force that order.
+    // A child process replaces mkdir() in the gates' namespace so that a competing writer creates var/check immediately before the first writer calls the real mkdir(), forcing the lost race.
     private const string RACE = <<<'PHP'
         namespace Intakt\Gates {
             function mkdir(string $directory, int $permissions = 0777, bool $recursive = false): bool
