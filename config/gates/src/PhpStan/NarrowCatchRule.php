@@ -78,20 +78,28 @@ final readonly class NarrowCatchRule implements Rule
         $before = $try->stmts;
 
         foreach ($try->catches as $catch) {
-            foreach ($this->genericTypesOf($catch) as $type) {
-                $problem = 0 === strcasecmp($type, Throwable::class)
-                    ? $this->throwableProblem($catch, $before, $source)
-                    : sprintf('A catch of %s: name the failures the code expects (a library\'s own exception base or a domain exception); only %s may be caught, and only at a failure boundary.', $type, Throwable::class);
-
-                if (null !== $problem) {
-                    $findings[] = $this->finding($catch, $problem);
-                }
-            }
-
+            $findings = [...$findings, ...$this->findingsOf($catch, $before, $source)];
             $before = $catch->stmts;
         }
 
         return $findings;
+    }
+
+    /**
+     * @param array<Stmt> $before
+     *
+     * @return list<IdentifierRuleError>
+     */
+    private function findingsOf(Catch_ $catch, array $before, string $source): array
+    {
+        $problems = array_map(
+            fn (string $type): ?string => 0 === strcasecmp($type, Throwable::class)
+                ? $this->throwableProblem($catch, $before, $source)
+                : sprintf('A catch of %s: name the failures the code expects (a library\'s own exception base or a domain exception); only %s may be caught, and only at a failure boundary.', $type, Throwable::class),
+            $this->genericTypesOf($catch),
+        );
+
+        return array_values(array_map(fn (string $problem): IdentifierRuleError => $this->finding($catch, $problem), array_filter($problems)));
     }
 
     /**
