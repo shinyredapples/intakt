@@ -66,6 +66,7 @@ final class RecurringP1sTest extends KernelTestCase
         $found = $this->payloadsOf(LedgerEventKind::RecurringP1Found)[0];
 
         self::assertIsArray($done['p1_keys']);
+        self::assertIsString($found['finding']);
         self::assertSame($done['p1_keys'][$found['finding']], $found['key']);
     }
 
@@ -163,13 +164,15 @@ final class RecurringP1sTest extends KernelTestCase
         $first = $this->judged($this->completedAt(self::CHANGE, self::HEAD_A, $this->keyedP1()));
         $this->judged($this->completedAt(self::CHANGE, self::HEAD_A, $this->repeatedP1($this->keyedP1())));
         $third = $this->judged($this->completedAt(self::CHANGE, self::HEAD_B, $this->repeatedP1($this->keyedP1())));
-        $key = $this->payloadsOf(LedgerEventKind::JudgeDone)[2]['p1_keys'];
-        self::assertIsArray($key);
+        $keys = $this->payloadsOf(LedgerEventKind::JudgeDone)[2]['p1_keys'];
+        self::assertIsArray($keys);
+        $key = $keys['F1'];
+        self::assertIsString($key);
 
         $printed = $this->ledgerEvents();
 
         self::assertStringContainsString(' judge_done {"round":"'.$third.'"', $printed);
-        self::assertStringContainsString(' recurring_p1_found {"round":"'.$third.'","finding":"F1","key":"'.$key['F1'].'","first_round":"'.$first.'"}', $printed);
+        self::assertStringContainsString(' recurring_p1_found {"round":"'.$third.'","finding":"F1","key":"'.$key.'","first_round":"'.$first.'"}', $printed);
         self::assertSame(1, substr_count($printed, ' recurring_p1_found '));
     }
 
@@ -206,7 +209,7 @@ final class RecurringP1sTest extends KernelTestCase
         return new Finding('A', Severity::P1, null, null, null, 'The bus loses a message.', FixableBy::Builder, false, null, null);
     }
 
-    // The console command of the install, reading the database the rounds were recorded in.
+    // The install's own console command, because the evidence must be what an operator reads from the database the rounds were recorded in.
     private function ledgerEvents(): string
     {
         $kernel = self::$kernel;
@@ -217,7 +220,7 @@ final class RecurringP1sTest extends KernelTestCase
         return $tester->getDisplay();
     }
 
-    // Under its ledger id and marked as a repeat, as a reviewer reports an open finding again on a later head.
+    // Under its ledger id and marked as a repeat, because a later round reports an open finding that way and a new id would not reach its judge.
     private function repeatedP1(Finding $finding): Finding
     {
         return new Finding('F1', $finding->severity, $finding->file, $finding->line, null, $finding->text, FixableBy::Builder, true, null, null);
@@ -235,9 +238,14 @@ final class RecurringP1sTest extends KernelTestCase
      */
     private function recurrences(): array
     {
-        $found = $this->payloadsOf(LedgerEventKind::RecurringP1Found);
+        $recurrences = [];
 
-        return array_combine(array_column($found, 'round'), array_column($found, 'first_round'));
+        foreach ($this->payloadsOf(LedgerEventKind::RecurringP1Found) as $found) {
+            self::assertIsString($found['round']);
+            $recurrences[$found['round']] = $found['first_round'];
+        }
+
+        return $recurrences;
     }
 
     /**

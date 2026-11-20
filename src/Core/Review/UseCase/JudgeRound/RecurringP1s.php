@@ -35,17 +35,17 @@ final readonly class RecurringP1s
         $found = [];
 
         foreach (array_keys($flagged[$round->id()->toRfc4122()] ?? []) as $key) {
-            array_push($found, ...$this->recurrencesOf((string) $key, $rounds, $flagged, $recorded));
+            array_push($found, ...$this->recurrencesOf($key, $rounds, $flagged));
         }
 
-        return $found;
+        return array_values(array_filter($found, static fn (RecurringP1Found $recurrence): bool => !isset($recorded[$recurrence->round][$recurrence->key])));
     }
 
-    // A round stored before identities were recorded names no head, so it cannot tell another head from its own and is left out.
+    // Each round's head by its id, in round-number order; a round stored before identities were recorded names no head, so it cannot tell another head from its own and is left out.
     /**
      * @param list<ReviewRound> $rounds
      *
-     * @return array<string, string> head by round id, in round-number order
+     * @return array<string, string>
      */
     private function headsOf(array $rounds): array
     {
@@ -62,11 +62,11 @@ final readonly class RecurringP1s
         return $heads;
     }
 
-    // One scan of the judge_done events for every round of the change, because the change's lock is held while it runs.
+    // One scan of the judge_done events for every round of the change, because the change's lock is held while it runs; each round's flagged places as finding id by P1 key.
     /**
      * @param array<string, string> $rounds
      *
-     * @return array<string, array<string, string>> finding id by P1 key, by round id
+     * @return array<string, array<string, string>>
      */
     private function flagged(array $rounds): array
     {
@@ -122,23 +122,22 @@ final readonly class RecurringP1s
         return $recorded;
     }
 
-    // Every round on another head than the first one that flagged the key gets one event, once, so a count of recurrences reads distinct heads from the rounds the events name.
+    // Every round on another head than the first one that flagged the key, because a round on the first head flags it again on code that may not have moved; the caller leaves out the ones recorded already.
     /**
      * @param array<string, string>                $rounds
      * @param array<string, array<string, string>> $flagged
-     * @param array<string, array<string, true>>   $recorded
      *
      * @return list<RecurringP1Found>
      */
-    private function recurrencesOf(string $key, array $rounds, array $flagged, array $recorded): array
+    private function recurrencesOf(string $key, array $rounds, array $flagged): array
     {
         $flagging = array_filter($rounds, static fn (string $id): bool => isset($flagged[$id][$key]), ARRAY_FILTER_USE_KEY);
         $first = (string) array_key_first($flagging);
         $found = [];
 
         foreach ($flagging as $id => $head) {
-            if ($head !== $flagging[$first] && !isset($recorded[$id][$key])) {
-                $found[] = new RecurringP1Found((string) $id, $flagged[$id][$key], $key, $first);
+            if ($head !== $flagging[$first]) {
+                $found[] = new RecurringP1Found($id, $flagged[$id][$key], $key, $first);
             }
         }
 
