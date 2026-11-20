@@ -12,7 +12,7 @@ use Symfony\Component\DependencyInjection\Attribute\Exclude;
 final readonly class RecurringP1
 {
     /**
-     * @param list<FlaggedRound> $others the change's other judged rounds
+     * @param list<FlaggedRound> $others
      *
      * @return list<RecurringP1Found>
      */
@@ -31,8 +31,8 @@ final readonly class RecurringP1
         $found = [];
 
         foreach ($round->places as $key => $finding) {
-            if (array_any($others, static fn (FlaggedRound $earlier): bool => $earlier->flagsBefore($round, (string) $key))) {
-                $found[] = new RecurringP1Found($round->id, $finding, (string) $key);
+            if (array_any($others, static fn (FlaggedRound $earlier): bool => $earlier->flagsBefore($round, $key))) {
+                $found[] = new RecurringP1Found($round->id, $finding, $key);
             }
         }
 
@@ -51,8 +51,8 @@ final readonly class RecurringP1
 
         foreach ($others as $later) {
             foreach ($later->places as $key => $finding) {
-                if ($judged->flagsBefore($later, (string) $key) && !array_any($others, static fn (FlaggedRound $earlier): bool => $earlier->flagsBefore($later, (string) $key))) {
-                    $found[] = new RecurringP1Found($later->id, $finding, (string) $key);
+                if ($judged->flagsBefore($later, $key) && !array_any($others, static fn (FlaggedRound $earlier): bool => $earlier->flagsBefore($later, $key))) {
+                    $found[] = new RecurringP1Found($later->id, $finding, $key);
                 }
             }
         }
