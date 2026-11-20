@@ -88,6 +88,15 @@ final class ScriptedHttpClientTest extends TestCase
         self::assertSame('scripted', $client->request('GET', 'https://localhost/')->getContent());
     }
 
+    public function testAScriptedRequestKeepsTheBaseUriGivenThroughOtherOptions(): void
+    {
+        $clock = new MockClock('@1000');
+        new ScriptDirectory($this->path, $clock)->arm(0.0, [['content_type' => 'text/plain', 'body' => 'scripted']]);
+        $client = new ScriptedHttpClient(new MockHttpClient(), $clock, $this->path)->withOptions(['base_uri' => 'https://localhost/']);
+
+        self::assertSame('https://localhost/sample', $client->request('GET', '/sample')->getInfo('url'));
+    }
+
     public function testAClientWithOtherOptionsKeepsTheScriptItsOriginReadBeforeTheScriptWasArmedAgain(): void
     {
         $clock = new MockClock('@1000');

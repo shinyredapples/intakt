@@ -16,12 +16,16 @@ use Symfony\Contracts\Service\ResetInterface;
 // The test environment's HTTP client: with a script directory it answers every call from the armed script after holding it for the script's weight, so a consumer's model calls overlap measurably and reach no provider; without one it is the real client.
 final readonly class ScriptedHttpClient implements HttpClientInterface, ResetInterface
 {
+    private MockHttpClient $scripted;
+
     public function __construct(
         private HttpClientInterface $inner,
         private ClockInterface $clock,
         private string $directory,
         private KeptScript $kept = new KeptScript(),
+        ?MockHttpClient $scripted = null,
     ) {
+        $this->scripted = $scripted ?? new MockHttpClient($this->answer(...));
     }
 
     /**
@@ -34,7 +38,7 @@ final readonly class ScriptedHttpClient implements HttpClientInterface, ResetInt
             return $this->inner->request($method, $url, $options);
         }
 
-        return new MockHttpClient($this->answer(...))->request($method, $url, $options);
+        return $this->scripted->request($method, $url, $options);
     }
 
     #[Override]
@@ -44,16 +48,17 @@ final readonly class ScriptedHttpClient implements HttpClientInterface, ResetInt
             return $this->inner->stream($responses, $timeout);
         }
 
-        return new MockHttpClient()->stream($responses, $timeout);
+        return $this->scripted->stream($responses, $timeout);
     }
 
+    // The scripted client takes the options too, so a scripted request is sent with the same defaults (a base_uri, headers) the real one would be.
     /**
      * @param array<mixed> $options
      */
     #[Override]
     public function withOptions(array $options): static
     {
-        return new self($this->inner->withOptions($options), $this->clock, $this->directory, $this->kept);
+        return new self($this->inner->withOptions($options), $this->clock, $this->directory, $this->kept, $this->scripted->withOptions($options));
     }
 
     // Passed on to the real client, since this decorator took over its kernel.reset tag; the kept script is left alone on purpose.

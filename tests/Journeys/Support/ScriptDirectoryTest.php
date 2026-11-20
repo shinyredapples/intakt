@@ -135,6 +135,60 @@ final class ScriptDirectoryTest extends TestCase
         $scripts->callStarted();
     }
 
+    public function testARecordRejectedBecauseItLandedBehindALinkIsNotReadBack(): void
+    {
+        $path = $this->path;
+        $throughALinkToTheNextName = static function (string $temporary, string $file) use ($path): bool {
+            symlink($path.'/2.start', $file);
+
+            return link($temporary, $path.'/2.start');
+        };
+        $scripts = new ScriptDirectory($this->path, new MockClock('@1000'), $throughALinkToTheNextName);
+
+        try {
+            $scripts->callStarted();
+            self::fail('The publication was expected to be rejected.');
+        } catch (RecordNotPublished) {
+            self::assertSame([], $scripts->calls());
+        }
+    }
+
+    public function testARecordRejectedBecauseItLandedBehindALinkLeavesNoFileWhereItLanded(): void
+    {
+        $path = $this->path;
+        $throughALink = static function (string $temporary, string $file) use ($path): bool {
+            symlink($path.'/elsewhere', $file);
+
+            return link($temporary, $path.'/elsewhere');
+        };
+
+        try {
+            new ScriptDirectory($this->path, new MockClock('@1000'), $throughALink)->callStarted();
+            self::fail('The publication was expected to be rejected.');
+        } catch (RecordNotPublished) {
+            self::assertFileDoesNotExist($this->path.'/elsewhere');
+        }
+    }
+
+    public function testALinkAtAStartNameToTheNextNameDoesNotShowTheNextCallTwice(): void
+    {
+        symlink($this->path.'/2.start', $this->path.'/1.start');
+        $scripts = $this->scripts();
+
+        $call = $scripts->callStarted();
+
+        self::assertSame([$call], array_map(static fn (ScriptedCall $started): int => $started->number, $scripts->calls()));
+    }
+
+    public function testAStartRecordUnderTheNameOfAnotherCallIsSkippedByTheReader(): void
+    {
+        $scripts = $this->scripts();
+        $call = $scripts->callStarted();
+        link($this->path.'/'.$call.'.start', $this->path.'/7.start');
+
+        self::assertSame([$call], array_map(static fn (ScriptedCall $started): int => $started->number, $scripts->calls()));
+    }
+
     public function testNoTemporaryFileRemainsAfterARecordIsPublished(): void
     {
         $scripts = $this->scripts();

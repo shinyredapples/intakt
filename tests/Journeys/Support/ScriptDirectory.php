@@ -83,14 +83,15 @@ final readonly class ScriptDirectory
         $calls = [];
 
         foreach ($this->filesOf('start') as $file) {
-            $started = $this->recordIn($file);
+            $number = basename($file, '.start');
+            $started = ctype_digit($number) ? $this->recordIn($file, (int) $number) : null;
 
-            // Skipped, because only a writer other than this class leaves an empty or partial record, and one such file must not hide the others.
+            // Skipped, because only a writer other than this class leaves an empty, partial, linked or misnamed record, and one such file must not hide the others.
             if (null === $started) {
                 continue;
             }
 
-            $ended = $this->recordIn(substr($file, 0, -strlen('start')).'end');
+            $ended = $this->recordIn($this->path.'/'.$number.'.end', (int) $number);
             $calls[] = new ScriptedCall($started['call'], $started['pid'], $started['start'], $started['at'], $ended['at'] ?? null);
         }
 
@@ -122,6 +123,11 @@ final readonly class ScriptDirectory
             // link() refuses a name that exists, so two workers never take one call number, and the record appears whole or not at all.
             $linked = @($this->link)($temporary, $file);
             $landed = $linked && $this->isTheSameFile($file, $temporary);
+
+            // A link() through a symbolic link at the name reports success and creates the link's target, which must not stay behind as a record under another name.
+            if ($linked && !$landed) {
+                $this->removeOtherNamesOf($temporary);
+            }
         } finally {
             $filesystem->remove($temporary);
         }
@@ -143,6 +149,15 @@ final readonly class ScriptDirectory
         return false !== $atName && false !== $record && $atName['dev'] === $record['dev'] && $atName['ino'] === $record['ino'];
     }
 
+    private function removeOtherNamesOf(string $temporary): void
+    {
+        foreach (array_diff((array) scandir($this->path), ['.', '..', basename($temporary)]) as $name) {
+            if ($this->isTheSameFile($this->path.'/'.$name, $temporary)) {
+                new Filesystem()->remove($this->path.'/'.$name);
+            }
+        }
+    }
+
     private function record(int $call): string
     {
         $pid = (int) getmypid();
@@ -154,15 +169,15 @@ final readonly class ScriptDirectory
     /**
      * @return array{call: int, pid: int, start: int, at: float}|null
      */
-    private function recordIn(string $file): ?array
+    private function recordIn(string $file, int $number): ?array
     {
-        $record = $this->decoded($file);
+        $record = is_link($file) ? [] : $this->decoded($file);
         $call = $record['call'] ?? null;
         $pid = $record['pid'] ?? null;
         $start = $record['start'] ?? null;
         $at = $record['at'] ?? null;
 
-        if (!is_int($call) || !is_int($pid) || !is_int($start) || (!is_float($at) && !is_int($at))) {
+        if ($number !== $call || !is_int($pid) || !is_int($start) || (!is_float($at) && !is_int($at))) {
             return null;
         }
 
