@@ -50,9 +50,13 @@ final readonly class TierPlatform implements TierInvoker
         $outages = [];
 
         foreach ([$own, ...$this->resolver->substitutes($project, $tier)] as $model) {
-            // Per model, because a model that pins a router provider can cool while another model of the same provider is free.
-            $key = $model->provider->value."\n".$model->model;
-            $outages[$key] ??= $this->outageOf($model);
+            // Per provider, judged by the first model listed on it (the tier's own model, else its first substitute there): an outage takes the whole provider out, so a cooling pin never moves the tier to another router of the same provider, and the substitute model the ledger records for a provider is always the one that answers.
+            $key = $model->provider->value;
+            if (array_key_exists($key, $outages)) {
+                continue;
+            }
+
+            $outages[$key] = $this->outageOf($model);
             if (!$outages[$key] instanceof ProviderOutage) {
                 $this->recordSwitch($own, $model);
 
@@ -121,13 +125,12 @@ final readonly class TierPlatform implements TierInvoker
         return 0 < $wait ? ProviderOutage::coolingDown($provider, $wait) : null;
     }
 
-    // The provider's own platform reads each account's window together with the model's pinned router provider (AccountFailoverPlatform), so a pin that outlasts its account window still keeps the model out; the account windows alone stay the floor for a platform that cannot tell.
+    // The provider's own platform reads each account's window together with the model's pinned router provider (AccountFailoverPlatform) in one read, so a pin that outlasts its account window still keeps the model out, and a window that ends while the platform is built is not kept by an earlier provider-wide read; the account windows alone decide for a platform that cannot tell.
     private function secondsUntilFree(ResolvedModel $model): int
     {
-        $wait = $this->cooldowns->secondsUntilAnAccountIsFree($model->provider);
         $platform = $this->platforms->has($model->provider->value) ? $this->platforms->get($model->provider->value) : null;
 
-        return $platform instanceof AccountFailoverPlatform ? max($wait, $platform->modelWaits()->secondsUntilFree($model->model)) : $wait;
+        return $platform instanceof AccountFailoverPlatform ? $platform->modelWaits()->secondsUntilFree($model->model) : $this->cooldowns->secondsUntilAnAccountIsFree($model->provider);
     }
 
     private function recordSwitch(ResolvedModel $own, ResolvedModel $answering): void
