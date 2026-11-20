@@ -31,7 +31,6 @@ final readonly class BuildContext
 
         try {
             $this->write($plan, $directory, $file);
-            // Boundary: removes the context folder and rethrows, because an archive that failed must not leave a folder behind in the temporary directory.
         } catch (Throwable $failure) {
             $filesystem->remove($folder);
 
