@@ -11,9 +11,10 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(DnsProbe::class)]
 final class DnsProbeTest extends TestCase
 {
-    public function testAHostTheSystemResolvesAnswers(): void
+    public function testAnAddressLiteralAnswersWithoutAResolver(): void
     {
-        self::assertTrue(new DnsProbe('localhost', 3.0)->answers());
+        // A name like localhost depends on the machine's hosts file; an address literal does not.
+        self::assertTrue(new DnsProbe('127.0.0.1', 3.0)->answers());
     }
 
     public function testAFailedLookupCountsAsNoAnswer(): void
