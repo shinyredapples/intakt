@@ -29,7 +29,7 @@ final readonly class JobContainers
     }
 
     // The proxy is closed after the job's container is gone, because the engine removes no network a container still uses.
-    public function runToEnd(JobSpec $spec, string $outputDirectory): JobEnd
+    public function runToEnd(JobSpec $spec, string $outputDirectory): ContainerEnd
     {
         $this->refuseImageVolumes($spec);
 
@@ -43,14 +43,17 @@ final readonly class JobContainers
         }
     }
 
-    private function runInContainer(JobSpec $spec, string $outputDirectory, EgressRoute $route): JobEnd
+    // The log is read before the container is removed, because the engine keeps it only as long as the container.
+    private function runInContainer(JobSpec $spec, string $outputDirectory, EgressRoute $route): ContainerEnd
     {
-        $container = $this->engine->create('intakt-job-'.$spec->id->value, $this->definition->of($spec, $outputDirectory, $route));
+        $request = $this->definition->of($spec, $outputDirectory, $route);
+        $container = $this->engine->create('intakt-job-'.$spec->id->value, $request->definition);
 
         try {
             $this->engine->start($container);
+            $end = $this->awaitEnd($container, $this->clock->now()->modify(sprintf('+%d seconds', $spec->limits->seconds)));
 
-            return $this->awaitEnd($container, $this->clock->now()->modify(sprintf('+%d seconds', $spec->limits->seconds)));
+            return new ContainerEnd($end, $this->engine->standardErrorHead($container, StartCheckLog::MAX_BYTES), $request->mark);
         } finally {
             $this->engine->remove($container);
         }

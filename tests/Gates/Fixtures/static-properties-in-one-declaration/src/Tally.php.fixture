@@ -1,0 +1,16 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+final class Tally
+{
+    private static int $passed = 0,
+        $failed = 0;
+
+    public function total(): int
+    {
+        return self::$passed + self::$failed;
+    }
+}

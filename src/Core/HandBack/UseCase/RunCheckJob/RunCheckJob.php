@@ -83,7 +83,7 @@ final readonly class RunCheckJob implements CheckJobs
         }
 
         $repository = $this->absolute($job->handBack->repository);
-        $lost = $this->lostContent->of($repository, $accepted->head, $job->namedByThePlan);
+        $lost = $this->lostContent->of($repository, $accepted->head, [...$job->namedByThePlan]);
 
         if ([] !== $lost) {
             return new CheckJobOutcome(CheckVerdict::LostContent, lostContent: $lost);

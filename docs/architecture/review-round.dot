@@ -1,5 +1,6 @@
 // The state machines of a review round (plan task T9, parts 2 and 3; the judged place from T12). Render with: dot -Tsvg review-round.dot
-// The places and transitions are the cases of RoundState, RoundTransition, ReviewerState and ReviewerTransition in src/Core/Review/Domain/, which config/packages/workflow.php turns into the two workflows.
+// The places and transitions are the cases of RoundState, RoundTransition, ReviewerState and ReviewerTransition in src/Core/Review/Domain/. The attributes of src/Core/Review/Infrastructure/ReviewRoundStateMachine.php declare the review_round workflow and those of src/Core/Review/Infrastructure/ReviewerStateMachine.php the reviewer workflow.
+// This drawing adds the guards and side effects by hand; review-round-machine.dot and reviewer-machine.dot are the two machines as bin/console workflow:dump review_round and workflow:dump reviewer generate them.
 digraph review_round {
     rankdir=LR;
     node [shape=circle, fontname="Helvetica"];

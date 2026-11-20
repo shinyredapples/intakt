@@ -1,23 +1,28 @@
 #!/bin/sh
 # Runs before every job's command, so a job that cannot do what it was told says so at once instead of failing halfway.
-# Usage: start-check.sh [input path ...] -- command [argument ...]
+# Usage: start-check.sh mark [input path ...] -- command [argument ...]
 # Reads INTAKT_JOB_OUTPUT (the output directory) and INTAKT_JOB_EGRESS (the allowlisted hosts, space-separated).
 # Only shell built-ins, rm and curl, so it runs in any job image with a POSIX shell.
 set -u
+# Before any assignment, because bash as the image's sh turns allexport on when the image's environment sets SHELLOPTS=allexport, and would export the mark.
+set +a
 set -f
 
+# Kept in an unexported variable and shifted off, so the job's command never sees it and cannot forge a line that carries it.
+# Unset first, because a variable the image imports through its environment stays exported, and exec would hand the mark to the job.
+unset intakt_mark
+intakt_mark="${1:-}"
+[ "$#" -gt 0 ] && shift
 output="${INTAKT_JOB_OUTPUT:-/output}"
 failed=''
-lines=''
 
+# Standard error only, because the orchestrator reads the result from the container's log up to the mode line, which the job runs after and cannot rewrite.
 log() {
-    printf 'intakt-start-check: %s\n' "$1" >&2
+    printf 'intakt-start-check %s: %s\n' "$intakt_mark" "$1" >&2
 }
 
 fail() {
     log "$1: $2"
-    lines="$lines$1: $2
-"
     case " $failed " in
         *" $1 "*) ;;
         *) failed="${failed:+$failed }$1" ;;
@@ -79,11 +84,6 @@ done
 for host in ${INTAKT_JOB_EGRESS:-}; do
     egress "$host"
 done
-
-# The report ends with a line of its own, so the orchestrator can tell a whole report from a cut one.
-if ! (printf '%send\n' "$lines" > "$output/.intakt-start-check") 2>/dev/null; then
-    log "output: cannot write the report"
-fi
 
 if [ -n "$failed" ]; then
     INTAKT_REDUCED_MODE="$failed"
