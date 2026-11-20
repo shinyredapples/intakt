@@ -35,7 +35,7 @@ final readonly class StaticAnalysisGate extends PhpFilesToolGate
     #[Override]
     protected function environment(PhpFileSelection $selection): array
     {
-        return [self::CHANGED_FILES_ONLY_VARIABLE => $selection->isSubset ? '1' : false];
+        return [self::CHANGED_FILES_ONLY_VARIABLE => $selection->isSubset() ? '1' : false];
     }
 
     protected function findings(ProcessResult $result): array

@@ -9,7 +9,7 @@ final readonly class PhpFileSelection
     /**
      * @param list<string> $files
      */
-    private function __construct(public array $files, public bool $isSubset)
+    private function __construct(public array $files, private int $filesLeftOut)
     {
     }
 
@@ -18,14 +18,20 @@ final readonly class PhpFileSelection
      */
     public static function everyFile(array $files): self
     {
-        return new self($files, false);
+        return new self($files, 0);
     }
 
     /**
      * @param list<string> $files
+     * @param list<string> $inScope
      */
-    public static function someFiles(array $files): self
+    public static function of(array $files, array $inScope): self
     {
-        return new self($files, true);
+        return new self($files, count(array_diff($inScope, $files)));
+    }
+
+    public function isSubset(): bool
+    {
+        return $this->filesLeftOut > 0;
     }
 }

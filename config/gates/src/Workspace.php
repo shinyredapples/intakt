@@ -78,9 +78,7 @@ final readonly class Workspace
             return PhpFileSelection::everyFile($this->allPhpFilesOrFail());
         }
 
-        $changed = $this->scope->changedPhpFiles($mergeBase);
-
-        return [] === array_diff($this->scope->allPhpFiles(), $changed) ? PhpFileSelection::everyFile($changed) : PhpFileSelection::someFiles($changed);
+        return PhpFileSelection::of($this->scope->changedPhpFiles($mergeBase), $this->scope->allPhpFiles());
     }
 
     /**
