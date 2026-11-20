@@ -40,7 +40,7 @@
             <span class="outcome">{{ choice.outcome }}</span>
         </li>
     {% endfor %}
-        <li><a class="btn secondary sm" href="{{ item.link ?? path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_BOARD')) }}">{{ item.linkLabel }}</a></li>
+        <li><a class="btn secondary sm" href="{{ item.link ?? path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_BOARD'), {board: 1}) }}">{{ item.linkLabel }}</a></li>
     </ul>
 </article>
 {% endfor %}

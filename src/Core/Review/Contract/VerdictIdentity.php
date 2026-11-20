@@ -9,7 +9,6 @@ use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\CommitRange;
 use Intakt\Plugin\Forge\Contract\HeadMove;
 use Intakt\Plugin\Forge\Contract\HeadMoveKind;
-use InvalidArgumentException;
 
 final readonly class VerdictIdentity
 {
@@ -29,7 +28,7 @@ final readonly class VerdictIdentity
         $parts = explode(self::SEPARATOR, $recorded);
 
         if (count(IdentityField::cases()) !== count($parts)) {
-            throw new InvalidArgumentException('A recorded verdict identity has five parts separated by dots.');
+            throw new RecordedIdentityMalformed('A recorded verdict identity has five parts separated by dots.');
         }
 
         [$head, $base, $taskRevision, $checkCommand, $panelPolicy] = $parts;
