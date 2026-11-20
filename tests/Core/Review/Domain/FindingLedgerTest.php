@@ -379,6 +379,42 @@ final class FindingLedgerTest extends TestCase
         self::assertSame([Severity::P2, Severity::P3], array_map(static fn (TrackedFinding $tracked): Severity => $tracked->latest->severity, $ledger->all()));
     }
 
+    public function testAVerdictTellsTheLedgerIdsItsFindingsWereTrackedUnder(): void
+    {
+        $ledger = new FindingLedger();
+
+        self::assertSame(['F1', 'F2'], $ledger->recordVerdict(1, $this->verdict([], [$this->finding('a'), $this->finding('b')])));
+    }
+
+    public function testAFindingAReviewerReportsAgainIsTrackedUnderItsEarlierId(): void
+    {
+        $ledger = new FindingLedger();
+        $ledger->recordVerdict(1, $this->verdict([], [$this->finding('a'), $this->finding('b')]));
+
+        self::assertSame(['F2', 'F3'], $ledger->recordVerdict(2, $this->verdict([], [$this->finding('F2', true), $this->finding('c')])));
+    }
+
+    public function testTwoReviewersRepeatingOneFindingInARoundAreBothTrackedUnderItsId(): void
+    {
+        $ledger = new FindingLedger();
+        $ledger->recordVerdict(1, $this->verdict([], [$this->finding('a')]));
+
+        self::assertSame([['F1'], ['F1']], [$ledger->recordVerdict(2, $this->verdict([], [$this->finding('F1', true)])), $ledger->recordVerdict(2, $this->verdict([], [$this->finding('F1', true)]))]);
+    }
+
+    public function testAFailedReviewIsTrackedUnderNoId(): void
+    {
+        self::assertSame([], new FindingLedger()->recordVerdict(1, Verdict::noTools()));
+    }
+
+    public function testALedgerApartForARoundTracksItsNewFindingsUnderTheRoundsPrefix(): void
+    {
+        $earlier = new FindingLedger();
+        $earlier->recordVerdict(1, $this->verdict([], [$this->finding('a')]));
+
+        self::assertSame(['F1', 'R3-F2'], FindingLedger::apartFor(3, $earlier->all())->recordVerdict(3, $this->verdict([], [$this->finding('F1', true), $this->finding('b')])));
+    }
+
     /**
      * @param list<string>  $resolved
      * @param list<Finding> $findings

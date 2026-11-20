@@ -12,6 +12,7 @@ use Intakt\Core\Review\Contract\RoundTokens;
 use Intakt\Plugin\LocalGitForge\Infrastructure\VisiblePath;
 use Symfony\Component\DependencyInjection\Attribute\Target;
 use Symfony\Component\Serializer\Encoder\JsonEncode;
+use Symfony\Component\Serializer\Encoder\JsonEncoder;
 use Symfony\Component\Serializer\Normalizer\AbstractNormalizer;
 use Symfony\Component\Serializer\SerializerInterface;
 
@@ -29,7 +30,7 @@ final readonly class ReviewReport
 
     public function asJson(ChangeReview $review): string
     {
-        return $this->serializer->serialize(ReviewOutput::of($review), 'json', [
+        return $this->serializer->serialize(ReviewOutput::of($review), JsonEncoder::FORMAT, [
             AbstractNormalizer::ATTRIBUTES => ReviewOutput::FIELDS,
             JsonEncode::OPTIONS => JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES,
         ]);
