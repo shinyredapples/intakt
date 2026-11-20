@@ -224,6 +224,27 @@ final class CompleteListingTest extends KernelTestCase
         self::assertSame([8, 7], $this->histories->read);
     }
 
+    public function testAnUnchangedAnswerDoesNotRelabelRowsAnotherSyncStoredWhileItsRequestWasInFlight(): void
+    {
+        $reads = new RecordedIssueReads();
+        $listing = $this->listing($reads);
+        $rules = new IntakeRules('intakt');
+        $reads->lists([Issues::task(7)], 'W/"a"');
+        $listing->sync('alpha', $rules);
+        $reads->listsUnchanged();
+        $reads->during = static function () use ($listing, $rules, $reads): void {
+            $reads->lists([Issues::task(8)], 'W/"b"');
+            $listing->sync('alpha', $rules);
+            $reads->listsUnchanged();
+        };
+
+        $synced = $listing->sync('alpha', $rules);
+
+        self::assertSame([8], array_map(static fn (QueuedIssue $task): int => $task->number(), $synced->items));
+        self::assertSame([8], array_map(static fn (StoredIssue $issue): int => $issue->number(), $this->store->issuesOf('alpha')));
+        self::assertSame('W/"b"', $this->store->validatorOf('alpha'));
+    }
+
     private function listing(IssueReads $reads): CompleteListing
     {
         return new CompleteListing($reads, $this->histories, new GrantedAccounts(), $this->store, new IssueReferences(), $this->logger);

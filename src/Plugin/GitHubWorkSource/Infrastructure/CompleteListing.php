@@ -46,7 +46,10 @@ final readonly class CompleteListing
             return $this->short($project, $short);
         }
 
-        $this->store->record($project, $issues, $listing->isUnchanged() ? $validator : $listing->validator);
+        if (!$this->store->recordIfStill($project, $validator, $issues, $listing->isUnchanged() ? $validator : $listing->validator)) {
+            // Another sync stored a complete listing while this one's request was in flight; its rows are the newer truth.
+            $issues = $this->store->issuesOf($project);
+        }
 
         return SyncedListing::complete(array_map(static fn (StoredIssue $issue): QueuedIssue => $issue->queued(), $issues));
     }

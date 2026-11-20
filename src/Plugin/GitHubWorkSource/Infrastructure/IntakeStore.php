@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Plugin\GitHubWorkSource\Infrastructure;
 
 use Doctrine\Common\EventManager;
+use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Intakt\Plugin\GitHubWorkSource\Domain\IntakeValidator;
@@ -41,6 +42,39 @@ final readonly class IntakeStore
      */
     public function record(string $project, array $issues, ?string $validator): void
     {
+        $listed = $this->listed($project, $issues);
+        $this->ownManager()->wrapInTransaction(function (EntityManagerInterface $manager) use ($project, $listed, $validator): void {
+            $this->replaceRows($manager, $project, $listed, $validator);
+        });
+    }
+
+    // Checked and written under the validator row's lock, because a sync that committed while this one's request was in flight holds newer rows that this one's older validator must not relabel.
+    /**
+     * @param list<StoredIssue> $issues
+     */
+    public function recordIfStill(string $project, ?string $read, array $issues, ?string $validator): bool
+    {
+        $listed = $this->listed($project, $issues);
+
+        return true === $this->ownManager()->wrapInTransaction(function (EntityManagerInterface $manager) use ($project, $read, $listed, $validator): bool {
+            $stored = $manager->find(IntakeValidator::class, $project, LockMode::PESSIMISTIC_WRITE);
+            if ($stored?->value() !== $read) {
+                return false;
+            }
+
+            $this->replaceRows($manager, $project, $listed, $validator);
+
+            return true;
+        });
+    }
+
+    /**
+     * @param list<StoredIssue> $issues
+     *
+     * @return array<int, StoredIssue>
+     */
+    private function listed(string $project, array $issues): array
+    {
         $listed = [];
         foreach ($issues as $issue) {
             if ($issue->project() !== $project) {
@@ -50,18 +84,24 @@ final readonly class IntakeStore
             $listed[$issue->number()] = $issue;
         }
 
-        $this->ownManager()->wrapInTransaction(function (EntityManagerInterface $manager) use ($project, $listed, $validator): void {
-            $stored = $this->storedIssuesOf($manager, $project);
-            foreach ($listed as $number => $issue) {
-                $this->keep($manager, $stored[$number] ?? null, $issue);
-            }
+        return $listed;
+    }
 
-            foreach (array_diff_key($stored, $listed) as $closed) {
-                $manager->remove($closed);
-            }
+    /**
+     * @param array<int, StoredIssue> $listed
+     */
+    private function replaceRows(EntityManagerInterface $manager, string $project, array $listed, ?string $validator): void
+    {
+        $stored = $this->storedIssuesOf($manager, $project);
+        foreach ($listed as $number => $issue) {
+            $this->keep($manager, $stored[$number] ?? null, $issue);
+        }
 
-            $this->recordValidator($manager, $project, $validator);
-        });
+        foreach (array_diff_key($stored, $listed) as $closed) {
+            $manager->remove($closed);
+        }
+
+        $this->recordValidator($manager, $project, $validator);
     }
 
     // Apart from the issue rows, so a task that is closed after it failed for good still holds the tasks that wait on it.

@@ -292,6 +292,34 @@ final class IntakeStoreTest extends KernelTestCase
         new IntakeStore(self::createStub(EntityManagerInterface::class))->issuesOf('alpha');
     }
 
+    public function testAListingIsRecordedWhenTheStoredValidatorIsStillTheOneItWasReadWith(): void
+    {
+        $this->store->record('alpha', [$this->stored(Issues::task(7))], 'W/"a"');
+
+        $recorded = $this->store->recordIfStill('alpha', 'W/"a"', [$this->stored(Issues::task(8))], 'W/"b"');
+
+        self::assertTrue($recorded);
+        self::assertSame([8], array_map(static fn (StoredIssue $issue): int => $issue->number(), $this->store->issuesOf('alpha')));
+        self::assertSame('W/"b"', $this->store->validatorOf('alpha'));
+    }
+
+    public function testAListingIsNotRecordedWhenAnotherSyncStoredANewerValidatorMeanwhile(): void
+    {
+        $this->store->record('alpha', [$this->stored(Issues::task(8))], 'W/"b"');
+
+        $recorded = $this->store->recordIfStill('alpha', 'W/"a"', [$this->stored(Issues::task(7))], 'W/"a"');
+
+        self::assertFalse($recorded);
+        self::assertSame([8], array_map(static fn (StoredIssue $issue): int => $issue->number(), $this->store->issuesOf('alpha')));
+        self::assertSame('W/"b"', $this->store->validatorOf('alpha'));
+    }
+
+    public function testAFirstListingIsRecordedWhenNoValidatorWasStoredYet(): void
+    {
+        self::assertTrue($this->store->recordIfStill('alpha', null, [$this->stored(Issues::task(7))], 'W/"a"'));
+        self::assertSame('W/"a"', $this->store->validatorOf('alpha'));
+    }
+
     private function stored(ListedIssue $listed, string $project = 'alpha'): StoredIssue
     {
         $references = new IssueReferences();
