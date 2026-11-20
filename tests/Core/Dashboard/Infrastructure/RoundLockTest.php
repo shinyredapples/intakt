@@ -90,7 +90,7 @@ final class RoundLockTest extends TestCase
         self::assertTrue($locks->createLock(RoundLock::KEY_PREFIX.'round-1')->acquire());
     }
 
-    // The kernel answers with the error response and skips kernel.finish_request when a response listener throws while that answer is built (#3021, D6).
+    // Freed by auto-release and not by the listener, because the kernel skips kernel.finish_request when a response listener throws while the error answer is built (#3021, D6).
     public function testAPressWhoseResponseListenerFailsFreesTheRoundOnceItsRequestIsGone(): void
     {
         $locks = new LockFactory(new InMemoryStore());
