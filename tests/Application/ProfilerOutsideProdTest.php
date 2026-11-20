@@ -4,10 +4,11 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Application;
 
+use Intakt\Kernel;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversNothing;
+use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\Filesystem\Filesystem;
-use Symfony\Component\Process\Process;
 
 // The profiler is a development tool: dev and test hold it to measure a request, the production container must not hold it at all (#2721, D1).
 #[CoversNothing]
@@ -22,34 +23,35 @@ final class ProfilerOutsideProdTest extends KernelTestCase
 
     public function testTheProductionContainerHoldsNoProfilerService(): void
     {
-        $services = $this->servicesOfTheProductionContainer();
-
-        self::assertArrayHasKey('router', $services);
-        self::assertArrayNotHasKey(self::PROFILER, $services);
-        self::assertArrayNotHasKey('profiler_listener', $services);
+        $this->withTheProductionContainer(static function (ContainerInterface $container): void {
+            self::assertTrue($container->has('router'));
+            self::assertFalse($container->has(self::PROFILER));
+            self::assertFalse($container->has('profiler_listener'));
+        });
     }
 
-    // Asked in a process and a fresh cache directory of its own, because a kernel boots in one environment per process and, without debug, never rebuilds a container compiled from an earlier configuration.
+    // A cache directory of its own, because a kernel without debug never rebuilds a container compiled from an earlier configuration.
     /**
-     * @return array<mixed>
+     * @param callable(ContainerInterface): void $check
      */
-    private function servicesOfTheProductionContainer(): array
+    private function withTheProductionContainer(callable $check): void
     {
-        $root = dirname(__DIR__, 2);
-        $cache = $root.'/var/cache/profiler-prod-'.bin2hex(random_bytes(8));
+        $cache = dirname(__DIR__, 2).'/var/cache/profiler-prod-'.bin2hex(random_bytes(8));
+        $previous = $_SERVER['APP_CACHE_DIR'] ?? null;
+        $_SERVER['APP_CACHE_DIR'] = $cache;
+        $kernel = new Kernel('prod', false);
 
         try {
-            $console = new Process([PHP_BINARY, 'bin/console', 'debug:container', '--format=json'], $root, ['APP_ENV' => 'prod', 'APP_DEBUG' => '0', 'APP_CACHE_DIR' => $cache]);
-            $console->mustRun();
+            $kernel->boot();
+            $check($kernel->getContainer());
         } finally {
+            $kernel->shutdown();
+            if (null === $previous) {
+                unset($_SERVER['APP_CACHE_DIR']);
+            } else {
+                $_SERVER['APP_CACHE_DIR'] = $previous;
+            }
             new Filesystem()->remove($cache);
         }
-
-        $listing = json_decode($console->getOutput(), true, flags: JSON_THROW_ON_ERROR);
-        self::assertIsArray($listing);
-        self::assertIsArray($listing['definitions']);
-        self::assertIsArray($listing['aliases']);
-
-        return [...$listing['definitions'], ...$listing['aliases']];
     }
 }
