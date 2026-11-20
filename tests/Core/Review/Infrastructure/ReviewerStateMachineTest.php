@@ -17,7 +17,7 @@ use Symfony\Component\Workflow\Registry;
 use Symfony\Component\Workflow\Transition;
 use Symfony\Component\Workflow\WorkflowInterface;
 
-// The expected values are the literal strings of the machine as config/packages/workflow.php built it, so the attributes are compared with that machine and not with themselves.
+// The expected values are the literal strings of the machine as the removed config/packages/workflow.php built it, so the attributes are compared with that machine and not with themselves.
 #[CoversClass(ReviewerStateMachine::class)]
 #[UsesClass(RoundReviewer::class)]
 #[UsesClass(ReviewerState::class)]
