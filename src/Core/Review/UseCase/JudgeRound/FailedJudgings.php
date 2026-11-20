@@ -48,11 +48,11 @@ final readonly class FailedJudgings
         return null;
     }
 
-    // One scan of the ledger for every round, because a reader asking about many rounds holds the change's lock while it reads.
+    // One scan of each place for every round, because a reader asking about many rounds holds the change's lock while it reads.
     /**
      * @return array<string, true>
      */
-    public function recordedRounds(): array
+    public function failedRounds(): array
     {
         $rounds = [];
 
@@ -64,23 +64,35 @@ final readonly class FailedJudgings
             }
         }
 
+        foreach ($this->parked() as $parked) {
+            $message = $parked->getMessage();
+
+            if ($message instanceof JudgeRound) {
+                $rounds[$message->roundId] = true;
+            }
+        }
+
         return $rounds;
     }
 
-    // A transport that cannot be listed shows no failure, because reading it with get() would hand its messages out.
     private function isParked(string $roundId): bool
     {
-        if (!$this->failed instanceof ListableReceiverInterface) {
-            return false;
-        }
-
-        foreach ($this->failed->all() as $parked) {
+        foreach ($this->parked() as $parked) {
             if ($this->judges($parked, $roundId)) {
                 return true;
             }
         }
 
         return false;
+    }
+
+    // A transport that cannot be listed shows no failure, because reading it with get() would hand its messages out.
+    /**
+     * @return iterable<Envelope>
+     */
+    private function parked(): iterable
+    {
+        return $this->failed instanceof ListableReceiverInterface ? $this->failed->all() : [];
     }
 
     private function judges(Envelope $parked, string $roundId): bool

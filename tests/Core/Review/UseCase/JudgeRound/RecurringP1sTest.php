@@ -36,6 +36,8 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\Messenger\Envelope;
+use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
 
 #[Group('persistence')]
 #[CoversClass(RecurringP1s::class)]
@@ -160,6 +162,19 @@ final class RecurringP1sTest extends KernelTestCase
         $this->judge($fourth);
 
         self::assertSame([$third, $fourth], array_column($this->recurrences(), 'round'));
+    }
+
+    public function testARoundWhoseJudgingIsParkedHoldsNoRecurrenceBack(): void
+    {
+        [$first, $second, $third] = [$this->roundAt(self::HEAD_C), $this->roundAt(self::HEAD_A), $this->roundAt(self::HEAD_B)];
+        $this->judge($second);
+        $parked = new InMemoryTransport();
+        $parked->send(new Envelope(new JudgeRound($first)));
+        $keys = $this->judgeDoneOf($second)['p1_keys'];
+
+        $found = $this->fixture->recurringP1s($this->fixture->ledger(), $parked)->foundWhenJudged($this->fixture->round($third), new JudgeDone($third, array_keys($keys), [], [], p1Keys: $keys));
+
+        self::assertSame([$third], array_column($found, 'round'));
     }
 
     public function testARoundStillCollectingHoldsNoRecurrenceBack(): void

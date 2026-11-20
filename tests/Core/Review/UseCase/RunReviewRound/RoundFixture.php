@@ -85,6 +85,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
+use Symfony\Component\Messenger\Transport\Receiver\ReceiverInterface;
 use Symfony\Component\Serializer\Encoder\JsonEncoder;
 use Symfony\Component\Serializer\SerializerInterface;
 use Symfony\Component\Uid\Uuid;
@@ -246,9 +247,9 @@ final readonly class RoundFixture
         return new JudgeRoundHandler(new JudgedRounds($this->rounds($entities, $ledger), $this->storedFindingsOn($entities), $this->roundLedger($ledger), new ChangeText(new DiffPaths()), new DiffHunks(new DiffPaths()), new DiffPaths(), new StoredVerdicts($this->serializer), $this->noFailedJudgings(), $this->recurringP1sOn($entities, $ledger)), $vendor, $this->events);
     }
 
-    public function recurringP1s(Ledger $ledger): RecurringP1s
+    public function recurringP1s(Ledger $ledger, ReceiverInterface $failed = new InMemoryTransport()): RecurringP1s
     {
-        return $this->recurringP1sOn($this->entities, $ledger);
+        return $this->recurringP1sOn($this->entities, $ledger, $failed);
     }
 
     // Another worker's entity manager on its own connection through the middleware, in WAL on SQLite, so the test sees and orders what that worker runs.
@@ -423,9 +424,9 @@ final readonly class RoundFixture
         return new ReviewRounds($entities, $this->clock, $this->storedFindingsOn($entities), $this->roundLedger($ledger ?? $this->ledger));
     }
 
-    private function recurringP1sOn(EntityManagerInterface $entities, Ledger $ledger): RecurringP1s
+    private function recurringP1sOn(EntityManagerInterface $entities, Ledger $ledger, ReceiverInterface $failed = new InMemoryTransport()): RecurringP1s
     {
-        return new RecurringP1s($this->rounds($entities, $ledger), $ledger, $this->ledgerPayloads(), new FailedJudgings(new InMemoryTransport(), $ledger, $this->ledgerPayloads()));
+        return new RecurringP1s($this->rounds($entities, $ledger), $ledger, $this->ledgerPayloads(), new FailedJudgings($failed, $ledger, $this->ledgerPayloads()));
     }
 
     private function storedFindingsOn(EntityManagerInterface $entities): StoredFindings

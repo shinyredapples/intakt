@@ -82,7 +82,7 @@ final readonly class RecurringP1s
         return $flagged;
     }
 
-    // Only a complete round waits for its judging, which ends judged or failed for good, and both settle what it held back; a round still collecting may never complete, so it holds nothing back.
+    // Only a complete round waits for its judging, which ends judged or failed for good (recorded, or parked when the record could not be dispatched), and each settles what it held back; a round still collecting may never complete, so it holds nothing back.
     /**
      * @param array<string, ReviewRound> $others
      *
@@ -91,7 +91,7 @@ final readonly class RecurringP1s
     private function waiting(array $others): array
     {
         $complete = array_filter($others, static fn (ReviewRound $other): bool => RoundState::Complete === $other->state());
-        $failed = [] === $complete ? [] : $this->failedJudgings->recordedRounds();
+        $failed = [] === $complete ? [] : $this->failedJudgings->failedRounds();
 
         return array_values(array_map(static fn (ReviewRound $other): int => $other->number(), array_diff_key($complete, $failed)));
     }
