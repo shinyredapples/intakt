@@ -8,6 +8,9 @@ use Intakt\Core\Ai\Contract\ReviewServerAccess;
 use Intakt\Core\Review\Contract\NoReviewServerAccess;
 use Intakt\Core\Review\Infrastructure\IssuedReviewServerAccesses;
 use Intakt\Core\Review\UseCase\ServeReviewTools\ReviewCredential;
+use Intakt\Core\Review\UseCase\ServeReviewTools\ReviewCredentialNeedsSecret;
+use LogicException;
+use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -16,6 +19,7 @@ use Symfony\Component\Uid\UuidV7;
 #[CoversClass(IssuedReviewServerAccesses::class)]
 #[UsesClass(ReviewServerAccess::class)]
 #[UsesClass(ReviewCredential::class)]
+#[UsesClass(ReviewCredentialNeedsSecret::class)]
 #[UsesClass(NoReviewServerAccess::class)]
 final class IssuedReviewServerAccessesTest extends TestCase
 {
@@ -42,6 +46,32 @@ final class IssuedReviewServerAccessesTest extends TestCase
         $this->expectException(NoReviewServerAccess::class);
 
         new IssuedReviewServerAccesses(new ReviewCredential(''), 'http://localhost:7780/mcp/review')->forRound(new UuidV7());
+    }
+
+    public function testTheBlockedAccessKeepsTheMissingSecretAsItsReason(): void
+    {
+        try {
+            new IssuedReviewServerAccesses(new ReviewCredential(''), 'http://localhost:7780/mcp/review')->forRound(new UuidV7());
+            self::fail('An access was issued without a secret.');
+        } catch (NoReviewServerAccess $blocked) {
+            self::assertInstanceOf(ReviewCredentialNeedsSecret::class, $blocked->getPrevious());
+        }
+    }
+
+    public function testAnUnexpectedFailureWhileIssuingPassesThroughInsteadOfBlockingTheAccess(): void
+    {
+        $round = new class extends UuidV7 {
+            #[Override]
+            public function toRfc4122(): string
+            {
+                throw new LogicException('The round could not be written.');
+            }
+        };
+
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessageIs('The round could not be written.');
+
+        $this->accesses()->forRound($round);
     }
 
     private function accesses(): IssuedReviewServerAccesses

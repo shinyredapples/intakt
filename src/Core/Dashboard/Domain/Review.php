@@ -27,6 +27,16 @@ final readonly class Review
         return array_all($this->rounds, static fn (ReviewedRound $round): bool => $round->isReplay());
     }
 
+    // Lowest number, then lowest id, and not the first element, because the reader puts the round of the address first among rounds of equal number (older rounds have none), and every page of one review must name the same round.
+    public function firstRound(): string
+    {
+        $ids = array_map(static fn (ReviewedRound $round): string => $round->round, $this->rounds);
+        $numbers = array_map(static fn (ReviewedRound $round): int => $round->number ?? 0, $this->rounds);
+        array_multisort($numbers, SORT_NUMERIC, $ids, SORT_STRING);
+
+        return $ids[0];
+    }
+
     public function latest(): ReviewedRound
     {
         return array_last($this->rounds);
