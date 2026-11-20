@@ -77,7 +77,7 @@
 {% set catches = trends.reviewerCatches %}
 {% set outcomes = trends.judgeOutcomes %}
 <div class="charts">
-    <section class="chart wide" id="chart-catches" aria-labelledby="chart-catches-title" data-controller="chart">
+    <section class="chart wide" id="chart-catches" aria-labelledby="chart-catches-title" data-controller="chart" data-action="keydown.esc@window->chart#dismiss">
         <h2 id="chart-catches-title">Which reviewer caught what</h2>
         {% if catches is null %}
         {{ _self.no_chart('Fills in once a judged review records which reviewer reported each finding.') }}
@@ -108,7 +108,7 @@
         {% endif %}
         {{ _self.tip() }}
     </section>
-    <section class="chart" id="chart-judge" aria-labelledby="chart-judge-title" data-controller="chart">
+    <section class="chart" id="chart-judge" aria-labelledby="chart-judge-title" data-controller="chart" data-action="keydown.esc@window->chart#dismiss">
         <h2 id="chart-judge-title">What the judge did</h2>
         {% if outcomes is null %}
         {{ _self.no_chart('Fills in once the judge has marked the findings of a review.') }}

@@ -90,7 +90,7 @@
 ] %}
 <section class="comp-sec" id="c-charts"><h2>Charts</h2><p>Server-drawn SVG in one hue, a hairline grid and a direct label on every bar; the solid part of a bar is its share, the lighter rest its whole. Every bar takes keyboard focus and shows its value first in a tooltip. "Show as table" lists the same numbers. Missing data reads "No data", never zero.</p>
 <div class="spec-cols">{% for theme in themes %}<div class="spec" data-theme="{{ theme }}"><h3>{{ theme|capitalize }}</h3>
-    <div class="cgrp chart" data-controller="chart"><h4>Bar chart</h4>
+    <div class="cgrp chart" data-controller="chart" data-action="keydown.esc@window->chart#dismiss"><h4>Bar chart</h4>
         <p class="takeaway">The security reviewer found the most P1 findings, 3, and 2 of them no other reviewer found.</p>
         {{ include(c ~ 'bar_chart.html.twig', {name: 'Sample findings of one reviewer by severity', bars: sample_bars, top: 6}, with_context = false) }}
         <details class="c-table"><summary>Show as table</summary><table>

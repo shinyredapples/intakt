@@ -269,6 +269,17 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
         self::assertSame(array_fill(0, 10, 'chart'), $marks->each(static fn (Crawler $mark): string => (string) $mark->closest('[data-controller]')?->attr('data-controller')));
     }
 
+    // WCAG 1.4.13: a tip shown by the pointer alone is dismissed without moving the pointer or the focus, so Escape is heard at page scope, not on the bar.
+    public function testEscapeAnywhereOnThePageDismissesEachChartsTip(): void
+    {
+        $this->givenAJudgedRoundWithTwoReporters();
+
+        $page = $this->browser->request('GET', '/trends');
+
+        self::assertSame(['keydown.esc@window->chart#dismiss', 'keydown.esc@window->chart#dismiss'], $page->filter('[data-controller="chart"]')->each(static fn (Crawler $chart): string => (string) $chart->attr('data-action')));
+        self::assertSame([], array_filter($page->filter('.chart .c-hit')->each(static fn (Crawler $mark): string => (string) $mark->attr('data-action')), static fn (string $action): bool => str_contains($action, 'keydown')));
+    }
+
     public function testAChartWithoutDataReadsNoDataAndDrawsNoBar(): void
     {
         $this->ledger->startRound('r-1', 'alpha');

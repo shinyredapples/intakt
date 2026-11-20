@@ -3,7 +3,7 @@ import { Controller } from '@hotwired/stimulus';
 // Kept clear of the chart's edge, as in the mocks' charts.js, so a tip over the first or last bar is not cut off.
 const GAP = 8;
 
-// Pointer and focus are tracked apart, as the toast controller does, so the tip stays while either still holds a mark; Escape hides it until the next pointer or focus.
+// Pointer and focus are tracked apart, as the toast controller does, so the tip stays while either still holds a mark; Escape, heard at page scope (WCAG 1.4.13), hides it until the next pointer or focus.
 export default class extends Controller {
     static targets = ['tip'];
 

@@ -34,7 +34,7 @@ final class ShowComponentsControllerTest extends DashboardPageTestCase
         yield 'copy field' => ['.copy code + button.btn'];
         yield 'bar' => ['.window .bar'];
         yield 'last-known bar' => ['.window .bar.last-known'];
-        yield 'bar chart with its tooltip' => ['[data-controller="chart"] svg.chart-svg .c-hit[tabindex="0"][aria-label]'];
+        yield 'bar chart with its tooltip' => ['[data-controller="chart"][data-action="keydown.esc@window->chart#dismiss"] svg.chart-svg .c-hit[tabindex="0"][aria-label]'];
         yield 'chart table view' => ['[data-controller="chart"] details.c-table table'];
         yield 'chart without data' => ['.takeaway[data-no-data]'];
         yield 'banner' => ['.banner.broken'];

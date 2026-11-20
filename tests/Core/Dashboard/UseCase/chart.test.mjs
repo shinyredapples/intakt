@@ -130,3 +130,13 @@ test('Escape hides the tip while pointer and focus stay, until the next trigger'
     chart.pointerEnter({ currentTarget: mark, params: READING });
     assert.equal(chart.tipTarget.hidden, false);
 });
+
+test('Escape hides a tip the pointer alone holds while the focus is elsewhere', () => {
+    const chart = chartOf(600);
+    chart.pointerEnter({ currentTarget: box(300, 1050, 100, 150), params: READING });
+
+    chart.dismiss();
+    assert.equal(chart.tipTarget.hidden, true);
+    chart.focusOut();
+    assert.equal(chart.tipTarget.hidden, true);
+});
