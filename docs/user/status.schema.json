@@ -10,7 +10,7 @@
         "change": {"type": "string"},
         "round": {"type": "string", "minLength": 1},
         "number": {"type": ["integer", "null"]},
-        "mark": {"description": "live, or replay for a recording played back, whose verdicts were never given on the change. On a project, the project's own flag; on an entry, the mark of the round it names (the latest round for a review lane or waiting entry, the last judged round for an outcome), never one mark for the whole review.", "enum": ["live", "replay"]}
+        "mark": {"description": "live, or replay for a recording played back, whose verdicts were never given on the change. On a project, the project's own flag; on an entry, the mark of the round it names (the latest round for a review lane or waiting entry, the last ended round for an outcome, judged or ended without the judge's call such as a failed judging), never one mark for the whole review.", "enum": ["live", "replay"]}
     },
     "properties": {
         "generated_at": {"$ref": "#/definitions/moment"},
@@ -140,18 +140,19 @@
                         }
                     },
                     "last_outcomes": {
-                        "description": "The last judged round of each change, newest first, at most ten.",
+                        "description": "The last ended round of each change (judged, or ended without the judge's call), newest first by when it was judged or ended (a judging parked in the failure transport without a recorded failure time sorts by when its round started), at most ten; it stays while a next round of the change runs.",
                         "type": "array",
                         "maxItems": 10,
                         "items": {
                             "type": "object",
                             "additionalProperties": false,
-                            "required": ["change", "mark", "round", "number", "decision", "judged_at"],
+                            "required": ["change", "mark", "round", "number", "end", "decision", "judged_at"],
                             "properties": {
                                 "change": {"$ref": "#/definitions/change"},
                                 "mark": {"$ref": "#/definitions/mark"},
                                 "round": {"$ref": "#/definitions/round"},
                                 "number": {"$ref": "#/definitions/number"},
+                                "end": {"description": "judged, judging_failed for a judging that failed for good, or no_outcome_in_time for a round neither judged nor failed in its judging at its upper wait; decision and judged_at are null unless judged.", "enum": ["judged", "judging_failed", "no_outcome_in_time"]},
                                 "decision": {"enum": ["approve", "changes", "blocked", null]},
                                 "judged_at": {"oneOf": [{"$ref": "#/definitions/moment"}, {"type": "null"}]}
                             }

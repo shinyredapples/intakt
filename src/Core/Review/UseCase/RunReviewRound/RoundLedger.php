@@ -25,6 +25,7 @@ use Intakt\Core\Review\Contract\JudgingFailed;
 use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\ReviewerBlocked;
 use Intakt\Core\Review\Contract\ReviewerFailed;
+use Intakt\Core\Review\Contract\ReviewerFindingsRecorded;
 use Intakt\Core\Review\Contract\ReviewerStarted;
 use Intakt\Core\Review\Contract\ReviewerStopped;
 use Intakt\Core\Review\Contract\ReviewStarted;
@@ -82,6 +83,16 @@ final readonly class RoundLedger
             findings: count($verdict->findings),
             mode: $this->modes->of($reviewer->round()->project()),
             reason: $verdict->blockedReason(),
+        ));
+    }
+
+    // Under the ids of the change's finding ledger, because those are the ids the act list and the judge's merges name, so the dashboard can tell which reviewers reported an act entry.
+    public function reviewerFindingsRecorded(ReportedFindings $reported): void
+    {
+        $this->append(LedgerEventKind::ReviewerFindingsRecorded, new ReviewerFindingsRecorded(
+            $reported->reviewer->round()->id()->toRfc4122(),
+            $reported->reviewer->id()->toRfc4122(),
+            $reported->findings,
         ));
     }
 
@@ -197,7 +208,7 @@ final readonly class RoundLedger
         return ['round' => $reviewer->round()->id()->toRfc4122(), 'reviewer' => $reviewer->id()->toRfc4122(), 'role' => $reviewer->roleName(), 'tier' => $reviewer->tier()];
     }
 
-    private function append(LedgerEventKind $kind, ReviewStarted|ReviewerStarted|VerdictReceived|CatchUpOwed|ReviewerFailed|ReviewerBlocked|ReviewerStopped|JudgeDone|JudgingFailed $payload): void
+    private function append(LedgerEventKind $kind, ReviewStarted|ReviewerStarted|VerdictReceived|CatchUpOwed|ReviewerFailed|ReviewerBlocked|ReviewerStopped|JudgeDone|JudgingFailed|ReviewerFindingsRecorded $payload): void
     {
         $result = $this->ledger->append(new LedgerEvent($kind, $this->serializer->serialize($payload, JsonEncoder::FORMAT)));
 

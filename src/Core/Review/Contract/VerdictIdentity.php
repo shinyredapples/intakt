@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Contract;
 
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\CommitRange;
 use Intakt\Plugin\Forge\Contract\HeadMove;
@@ -54,7 +55,7 @@ final readonly class VerdictIdentity
             return VerdictStanding::stale($changed);
         }
 
-        return VerdictStanding::keptExceptFor($changed, $move->paths);
+        return VerdictStanding::keptExceptFor($changed, new Paths(...$move->paths));
     }
 
     /**

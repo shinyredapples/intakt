@@ -11,14 +11,15 @@ use Intakt\Core\Git\Domain\ChangeNotRead;
 use Intakt\Core\Git\Domain\ProtectedChanges;
 use Intakt\Core\Git\Domain\ProtectedPaths;
 use Intakt\Core\Git\UseCase\ListProtectedChanges\ChangedPaths;
+use Intakt\Core\Git\UseCase\ListProtectedChanges\CommitNameRefused;
 use Intakt\Core\Git\UseCase\ListProtectedChanges\ListProtectedChanges;
 use Intakt\Tests\Core\Git\TemporaryRepository;
-use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(ListProtectedChanges::class)]
+#[CoversClass(CommitNameRefused::class)]
 #[CoversClass(ChangedPaths::class)]
 #[CoversClass(ProtectedChanges::class)]
 #[CoversClass(ChangeNotRead::class)]
@@ -284,7 +285,7 @@ final class ListProtectedChangesTest extends TestCase
 
     public function testAHeadThatIsNoObjectNameIsRefused(): void
     {
-        $this->expectException(InvalidArgumentException::class);
+        $this->expectException(CommitNameRefused::class);
         $this->expectExceptionMessageIsOrContains('"main" is not a full commit name');
 
         $this->whenTheHeadIsListed('main');

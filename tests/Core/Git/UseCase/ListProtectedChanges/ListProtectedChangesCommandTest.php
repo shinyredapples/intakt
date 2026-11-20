@@ -9,13 +9,19 @@ use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Domain\ChangedPath;
 use Intakt\Core\Git\Domain\ChangeNotRead;
 use Intakt\Core\Git\Domain\Mirrors;
+use Intakt\Core\Git\Domain\ProjectNameRefused;
 use Intakt\Core\Git\Domain\ProtectedChanges;
+use Intakt\Core\Git\Domain\ProtectedPathRefused;
 use Intakt\Core\Git\Domain\ProtectedPaths;
 use Intakt\Core\Git\UseCase\ListProtectedChanges\ChangedPaths;
+use Intakt\Core\Git\UseCase\ListProtectedChanges\CommitNameRefused;
 use Intakt\Core\Git\UseCase\ListProtectedChanges\ListProtectedChanges;
 use Intakt\Core\Git\UseCase\ListProtectedChanges\ListProtectedChangesCommand;
+use Intakt\Tests\Core\Git\PregMatchThatThrows;
 use Intakt\Tests\Core\Git\TemporaryRepository;
+use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Application;
@@ -30,7 +36,10 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(ChangeNotRead::class)]
 #[UsesClass(ProtectedChanges::class)]
 #[UsesClass(ProtectedPaths::class)]
+#[UsesClass(ProtectedPathRefused::class)]
+#[UsesClass(CommitNameRefused::class)]
 #[UsesClass(Mirrors::class)]
+#[UsesClass(ProjectNameRefused::class)]
 #[UsesClass(HardenedGit::class)]
 #[UsesClass(GitCall::class)]
 final class ListProtectedChangesCommandTest extends TestCase
@@ -83,6 +92,16 @@ final class ListProtectedChangesCommandTest extends TestCase
         self::assertStringEndsWith("touches protected paths: yes\n", $tester->getDisplay());
     }
 
+    #[RunInSeparateProcess]
+    public function testAnUnexpectedInvalidArgumentExceptionPassesThrough(): void
+    {
+        $head = $this->repository->objectAt('HEAD');
+        $this->expectExceptionObject(new InvalidArgumentException('unexpected'));
+
+        PregMatchThatThrows::define();
+        $this->whenTheCommandRuns([], $head);
+    }
+
     public function testTheCommandRefusesAHeadThatIsNoFullCommitNameAndExitsWithOne(): void
     {
         $tester = $this->whenTheCommandRuns([], 'feat/side');
@@ -97,6 +116,14 @@ final class ListProtectedChangesCommandTest extends TestCase
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringContainsString('is not a project name that can be a folder name', $tester->getDisplay());
+    }
+
+    public function testTheCommandRefusesAProtectedPathThatIsNoPathOfTheRepositoryAndExitsWithOne(): void
+    {
+        $tester = $this->whenTheCommandRuns(['alpha' => ['../outside']], $this->repository->objectAt('HEAD'));
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString('"../outside" is not a protected path', $tester->getDisplay());
     }
 
     /**

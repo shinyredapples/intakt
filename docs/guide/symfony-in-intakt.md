@@ -136,6 +136,16 @@ As a second safety net, a worker (one loaded copy of Intakt) does not live forev
 - **Validator and Serializer:** a reviewer's verdict is checked field by field; an unknown field or a missing one is refused rather than guessed. *(in progress)*
 - **Quality gates:** `bin/check` runs every check (static analysis, code style, tests and Intakt's own rules) the same way on your machine and in CI. The walks through a freshly started install (the journeys, see [Checking the whole product](checking-the-whole-product.md)) run separately, with `bin/check --journeys`. *(in use)*
 
+## Waiting before taking a new release
+
+A brand-new release of a package is the one most likely to be broken or, rarely, tampered with: such problems are usually spotted and the release pulled within a few days. So Intakt holds every fresh release back for 3 days, a **cooldown**. *(built)*
+
+- **PHP packages:** Composer leaves out any version published less than 3 days ago, and the checks fail when the lock file holds one, except for the owner's one-time exception for Symfony 8.2.0-BETA2.
+- **The dashboard's JavaScript packages:** the import map (the list in `importmap.php` that tells the browser where each JavaScript module of the dashboard lives) follows the same rule: while the newest release is less than 3 days old, `bin/console importmap:update` holds it back and can move the pin to an older release that is old enough.
+- **A fingerprint on every module:** the import map the browser receives pins each module by its **integrity hash** (sha384), a fingerprint of the exact file Intakt serves. If the file's bytes change after the fingerprint was taken, the browser refuses to run it.
+
+Both are set in `config/packages/asset_mapper.yaml`; the exact rules are in [the user guide](../user/README.md#the-release-cooldown-for-dependencies).
+
 ## Finding bugs in the beta
 
 Symfony AI is new, and Intakt uses it hard on purpose. `upstream/` holds likely bugs in any library Intakt uses, not only Symfony AI: some are in Symfony Config, the Serializer, Messenger, DoctrineBundle, FrankenPHP or PHPStan. When something looks like a bug in one of them, Intakt writes the smallest possible test that shows it, keeps it under `upstream/`, and, with the owner's OK, reports it to that project. The report text waits in the same folder until the owner approves it. When a Symfony AI bug is small and clear (the fix stays in one package, the right behavior is not in doubt, nothing that others rely on breaks, and nobody upstream is already fixing it), Intakt can also prepare the fix itself: a patch and the pull request text, waiting in the same folder for the owner to approve and send. `intakt:upstream:run` re-runs all of them against the pinned versions, so it is obvious when a bug has been fixed upstream. Each report also notes whether the bug is still there in the next version being built upstream, whether someone already reported it there, and what to do next (file it, point to the existing report, or drop it). The current list is in the "Found in the beta" section of the [highlights page](https://shinyredapples.github.io/intakt/) (its rows are in [`docs/highlights.d/`](../highlights.d/)), and the checks fail when a folder under `upstream/` is missing from it.
