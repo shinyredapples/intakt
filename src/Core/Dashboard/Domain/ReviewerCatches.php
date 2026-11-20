@@ -37,7 +37,7 @@ final readonly class ReviewerCatches
 
         ksort($tallies);
 
-        return new self(array_values(array_map(static fn (string $role, array $tally): ReviewerCatch => new ReviewerCatch($role, $tally['found'], $tally['alone']), array_keys($tallies), $tallies)));
+        return new self(array_map(static fn (string $role, array $tally): ReviewerCatch => new ReviewerCatch($role, $tally['found'], $tally['alone']), array_keys($tallies), $tallies));
     }
 
     public function scaleTop(): int

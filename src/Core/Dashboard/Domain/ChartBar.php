@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\Domain;
 
-// One bar of a Trends chart: the reading comes first in its tooltip and its label, the detail second (DESIGN.md, Charts); the part is the share of the bar marked inside it.
+// The reading leads the tooltip and the label, because DESIGN.md's charts put the value first; the part is marked inside the bar so no second color is needed.
 final readonly class ChartBar
 {
     public function __construct(

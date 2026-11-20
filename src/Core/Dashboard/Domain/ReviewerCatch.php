@@ -6,7 +6,7 @@ namespace Intakt\Core\Dashboard\Domain;
 
 use Intakt\Core\Review\Contract\Severity;
 
-// What the reviewers of one role reported, per severity, and how much of it no other reviewer of its round reported.
+// Kept per role, not per reviewer id, because every round gives its reviewers new ids while the role stays (D3 of #2863).
 final readonly class ReviewerCatch
 {
     /**

@@ -110,9 +110,7 @@ final readonly class ReviewedRound
     // Null for an id the round holds no severity for, such as a mark kept without its finding, so a count never guesses one.
     public function severityOf(string $id): ?string
     {
-        $finding = array_find([...$this->findings, ...$this->mergedFindings, ...$this->dropped], static fn (RoundFinding $finding): bool => $finding->id === $id);
-
-        return $finding?->severity;
+        return $this->findingOf($this, $id)?->severity;
     }
 
     public function reviewOutcome(): ?ReviewOutcome
@@ -220,5 +218,11 @@ final readonly class ReviewedRound
     private function isReplayMarked(self $round): bool
     {
         return ReplayMark::Replay === $round->mark;
+    }
+
+    // Read through a round for the same reason as `isReplayMarked()`: PHPStan keeps the constructor's empty lists for `$this`.
+    private function findingOf(self $round, string $id): ?RoundFinding
+    {
+        return array_find([...$round->findings, ...$round->mergedFindings, ...$round->dropped], static fn (RoundFinding $finding): bool => $finding->id === $id);
     }
 }
