@@ -11,7 +11,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpKernel\Profiler\Profile;
 use Symfony\Component\HttpKernel\Profiler\ProfilerStorageInterface;
 
-// The profiler writes the request's full URL and client address beside the collectors, outside their allow-list, and a query string can carry a credential; dropped wherever the profiler is defined, and gone with it in prod.
+// Because a query string can carry a credential and the profiler saves the full URL and client address outside the collector allow-list (docs/architecture/development-diagnostics.md).
 #[AsDecorator('profiler.storage', onInvalid: ContainerInterface::IGNORE_ON_INVALID_REFERENCE)]
 final readonly class PathOnlyProfilerStorage implements ProfilerStorageInterface
 {
@@ -29,6 +29,9 @@ final readonly class PathOnlyProfilerStorage implements ProfilerStorageInterface
         return $this->storage->write($profile);
     }
 
+    /**
+     * @return array<array-key, mixed>
+     */
     public function find(?string $ip, ?string $url, ?int $limit, ?string $method, ?int $start = null, ?int $end = null, ?string $statusCode = null, ?Closure $filter = null): array
     {
         return $this->storage->find($ip, $url, $limit, $method, $start, $end, $statusCode, $filter);
