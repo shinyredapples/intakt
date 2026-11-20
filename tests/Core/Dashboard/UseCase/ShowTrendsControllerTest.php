@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
+use DateTimeImmutable;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Budget\Contract\Prices;
 use Intakt\Core\Budget\Infrastructure\ConfiguredPrices;
@@ -12,6 +13,7 @@ use Intakt\Core\Dashboard\Domain\ChartScale;
 use Intakt\Core\Dashboard\Domain\JudgeOutcomes;
 use Intakt\Core\Dashboard\Domain\ReviewerCatch;
 use Intakt\Core\Dashboard\Domain\ReviewerCatches;
+use Intakt\Core\Dashboard\Domain\ReviewsPerDay;
 use Intakt\Core\Dashboard\Domain\ReviewTrends;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\SampleChangeSource;
@@ -31,6 +33,7 @@ use Symfony\Component\DomCrawler\Crawler;
 #[UsesClass(ReviewerCatches::class)]
 #[UsesClass(ReviewerCatch::class)]
 #[UsesClass(JudgeOutcomes::class)]
+#[UsesClass(ReviewsPerDay::class)]
 #[UsesClass(ChartBar::class)]
 #[UsesClass(ChartScale::class)]
 #[UsesClass(SampleChangeSource::class)]
@@ -220,11 +223,11 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
 
         $page = $this->browser->request('GET', '/trends');
 
-        self::assertSame(['Which reviewer caught what', 'What the judge did'], $page->filter('.chart h2')->each(static fn (Crawler $title): string => $title->text()));
+        self::assertSame(['Which reviewer caught what', 'What the judge did'], $page->filter('#chart-catches h2, #chart-judge h2')->each(static fn (Crawler $title): string => $title->text()));
         self::assertSame([
             'The correctness reviewer found the most P1 findings, 1, and 0 of them no other reviewer found.',
             'The judge kept 1 of 3 findings and rejected 1.',
-        ], $page->filter('.chart .takeaway')->each(static fn (Crawler $takeaway): string => $takeaway->text()));
+        ], $page->filter('#chart-catches > .takeaway, #chart-judge > .takeaway')->each(static fn (Crawler $takeaway): string => $takeaway->text()));
         self::assertSame(['Correctness', 'Security'], $page->filter('#chart-catches figcaption')->each(static fn (Crawler $role): string => $role->text()));
     }
 
@@ -260,7 +263,7 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
     {
         $this->givenAJudgedRoundWithTwoReporters();
 
-        $marks = $this->browser->request('GET', '/trends')->filter('.chart .c-hit');
+        $marks = $this->browser->request('GET', '/trends')->filter('#chart-catches .c-hit, #chart-judge .c-hit');
 
         self::assertCount(10, $marks);
         self::assertSame(array_fill(0, 10, '0'), $marks->each(static fn (Crawler $mark): string => (string) $mark->attr('tabindex')));
@@ -276,8 +279,8 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
 
         $page = $this->browser->request('GET', '/trends');
 
-        self::assertSame(['keydown.esc@window->chart#dismiss', 'keydown.esc@window->chart#dismiss'], $page->filter('[data-controller="chart"]')->each(static fn (Crawler $chart): string => (string) $chart->attr('data-action')));
-        self::assertSame([], array_filter($page->filter('.chart .c-hit')->each(static fn (Crawler $mark): string => (string) $mark->attr('data-action')), static fn (string $action): bool => str_contains($action, 'keydown')));
+        self::assertSame(array_fill(0, 3, 'keydown.esc@window->chart#dismiss'), $page->filter('[data-controller="chart"]')->each(static fn (Crawler $chart): string => (string) $chart->attr('data-action')));
+        self::assertSame([], array_filter($page->filter('#chart-catches .c-hit, #chart-judge .c-hit')->each(static fn (Crawler $mark): string => (string) $mark->attr('data-action')), static fn (string $action): bool => str_contains($action, 'keydown')));
     }
 
     public function testAChartWithoutDataReadsNoDataAndDrawsNoBar(): void
@@ -286,9 +289,10 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
 
         $page = $this->browser->request('GET', '/trends');
 
-        self::assertSame(['No data', 'No data'], $page->filter('.chart .takeaway[data-no-data]')->each(static fn (Crawler $takeaway): string => $takeaway->text()));
+        self::assertSame(['No data', 'No data'], $page->filter('#chart-catches .takeaway[data-no-data], #chart-judge .takeaway[data-no-data]')->each(static fn (Crawler $takeaway): string => $takeaway->text()));
         self::assertSelectorNotExists('.chart svg');
         self::assertSelectorNotExists('.chart table');
+        self::assertCount(0, $page->filter('.chart-svg'));
     }
 
     public function testRoundsWithoutAReporterRecordLeaveTheReviewerChartWithoutDataWhileTheJudgeChartCounts(): void
@@ -376,7 +380,7 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
 
         $page = $this->browser->request('GET', '/trends');
 
-        self::assertSame(['No data', 'No data'], $page->filter('.chart .takeaway')->each(static fn (Crawler $takeaway): string => $takeaway->text()));
+        self::assertSame(['No data', 'No data'], $page->filter('#chart-catches > .takeaway, #chart-judge > .takeaway')->each(static fn (Crawler $takeaway): string => $takeaway->text()));
     }
 
     public function testAnUnreadableFindingLeavesBothChartsWithoutDataRatherThanCountingTheRest(): void
@@ -385,7 +389,7 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
 
         $page = $this->browser->request('GET', '/trends');
 
-        self::assertSame(['No data', 'No data'], $page->filter('.chart .takeaway')->each(static fn (Crawler $takeaway): string => $takeaway->text()));
+        self::assertSame(['No data', 'No data'], $page->filter('#chart-catches > .takeaway, #chart-judge > .takeaway')->each(static fn (Crawler $takeaway): string => $takeaway->text()));
     }
 
     public function testThePageLoadsTheScriptsThatStartTheTooltipController(): void
@@ -395,7 +399,99 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
         $page = $this->browser->request('GET', '/trends');
 
         self::assertCount(1, $page->filter('script[type="importmap"]'));
-        self::assertCount(2, $page->filter('[data-controller="chart"]'));
+        self::assertCount(3, $page->filter('[data-controller="chart"]'));
+    }
+
+    public function testTheTrendsPageShowsThePlaceholderLineWhenReviewsRanOnFewerThanThreeDays(): void
+    {
+        $this->ledger->startRoundAt('r-1', new DateTimeImmutable('2026-10-26T10:00:00+00:00'));
+        $this->ledger->startRoundAt('r-2', new DateTimeImmutable('2026-10-27T10:00:00+00:00'));
+
+        $page = $this->browser->request('GET', '/trends');
+
+        self::assertSame('Reviews and cost per day', $page->filter('#chart-per-day h2')->text());
+        self::assertSame('Shows once there are reviews on 3 days', $page->filter('#chart-per-day .takeaway[data-no-data]')->text());
+        self::assertCount(0, $page->filter('#chart-per-day svg'));
+        self::assertCount(0, $page->filter('#chart-per-day table'));
+    }
+
+    public function testWithReviewsOnThreeDaysTheTrendsPageDrawsChartThreeAndItsTableListsTheSameNumbers(): void
+    {
+        $this->givenReviewsOnThreeDaysWithOnePricedRound();
+
+        $page = $this->browser->request('GET', '/trends');
+
+        self::assertSame(['Rounds per day', 'Estimated cost per day (USD)'], $page->filter('#chart-per-day figcaption')->each(static fn (Crawler $caption): string => $caption->text()));
+        self::assertCount(2, $page->filter('#chart-per-day svg.chart-svg'));
+        $labels = $page->filter('#chart-per-day .c-label')->each(static fn (Crawler $label): string => $label->text());
+        self::assertSame(['1', '2', '1', 'No data', '0.0030', 'No data'], $labels);
+        $rows = $page->filter('#chart-per-day tbody tr')->each(static fn (Crawler $row): array => $row->filter('td')->each(static fn (Crawler $cell): string => $cell->text()));
+        self::assertSame([['Oct 26', '1', 'No data'], ['Oct 27', '2', '0.0030'], ['Oct 28', '1', 'No data']], $rows);
+        self::assertSame(array_merge(array_column($rows, 1), array_column($rows, 2)), $labels);
+        self::assertSame('estimated', $page->filter('#chart-per-day .figure-kind')->attr('data-kind'));
+    }
+
+    public function testEveryChartThreeMarkIsKeyboardFocusableAndLabelsItsValueFirst(): void
+    {
+        $this->givenReviewsOnThreeDaysWithOnePricedRound();
+
+        $marks = $this->browser->request('GET', '/trends')->filter('#chart-per-day .c-hit');
+
+        self::assertCount(6, $marks);
+        self::assertSame(array_fill(0, 6, '0'), $marks->each(static fn (Crawler $mark): string => (string) $mark->attr('tabindex')));
+        self::assertSame(['1 round, Oct 26', '2 rounds, Oct 27', '1 round, Oct 28', 'No data, Oct 26, no cost estimate', '0.0030 USD, estimated, Oct 27', 'No data, Oct 28, no cost estimate'], $marks->each(static fn (Crawler $mark): string => (string) $mark->attr('aria-label')));
+        self::assertCount(4, $this->browser->request('GET', '/trends')->filter('#chart-per-day path.c-bar'));
+    }
+
+    public function testWithReviewsOnTwentyDaysEveryBarKeepsAPositiveWidthAndTheAxisLabelsThinWhileTheTableNamesEveryDay(): void
+    {
+        self::getContainer()->set(Prices::class, new ConfiguredPrices(['model-a' => ['input' => 2.0, 'output' => 10.0, 'cache_read' => 0.2, 'cache_write' => 2.5]], '2026-11-13'));
+
+        $first = new DateTimeImmutable('2026-10-01T10:00:00+00:00');
+
+        for ($day = 1; $day <= 20; ++$day) {
+            $this->ledger->startRoundAt('r-'.$day, $first->modify(sprintf('+%d days', $day - 1)));
+            $this->ledger->useTokens('r-'.$day, 1000, 100);
+        }
+
+        $page = $this->browser->request('GET', '/trends');
+
+        $paths = $page->filter('#chart-per-day path.c-bar')->each(static fn (Crawler $path): string => (string) $path->attr('d'));
+        self::assertCount(40, $paths);
+
+        foreach ($paths as $path) {
+            if (1 !== preg_match('/^M([\d.]+),.*? H([\d.]+) /', $path, $edges)) {
+                self::fail('Not a bar path: '.$path);
+            }
+
+            self::assertGreaterThan((float) $edges[1], (float) $edges[2], $path);
+        }
+
+        $axis = $page->filter('#chart-per-day svg')->first()->filter('text.c-axis[text-anchor="middle"]')->each(static fn (Crawler $label): string => $label->text());
+        self::assertSame(['Oct 1', 'Oct 5', 'Oct 9', 'Oct 13', 'Oct 17'], $axis);
+        self::assertCount(20, $page->filter('#chart-per-day tbody tr'));
+        self::assertCount(40, $page->filter('#chart-per-day .c-hit'));
+    }
+
+    public function testLeavingOutTheDemoAlsoLeavesItsDaysOutOfChartThree(): void
+    {
+        $this->ledger->startRoundAt('r-1', new DateTimeImmutable('2026-10-26T10:00:00+00:00'));
+        $this->ledger->startRoundAt('r-2', new DateTimeImmutable('2026-10-27T10:00:00+00:00'));
+        $this->ledger->startRoundAt('r-3', new DateTimeImmutable('2026-10-28T10:00:00+00:00'));
+        $this->storeRoundAs('r-3', ReplayMark::Replay);
+
+        self::assertCount(0, $this->browser->request('GET', '/trends')->filter('#chart-per-day .takeaway[data-no-data]'));
+        self::assertSame('Shows once there are reviews on 3 days', $this->browser->request('GET', '/trends?demo=0')->filter('#chart-per-day .takeaway[data-no-data]')->text());
+    }
+
+    private function givenReviewsOnThreeDaysWithOnePricedRound(): void
+    {
+        self::getContainer()->set(Prices::class, new ConfiguredPrices(['model-a' => ['input' => 2.0, 'output' => 10.0, 'cache_read' => 0.2, 'cache_write' => 2.5]], '2026-11-13'));
+        $this->ledger->startRoundAt('r-1', new DateTimeImmutable('2026-10-26T10:00:00+00:00'));
+        $this->ledger->startRoundAt('r-2', new DateTimeImmutable('2026-10-27T10:00:00+00:00'));
+        $this->ledger->startRoundAt('r-3', new DateTimeImmutable('2026-10-27T15:00:00+00:00'));
+        $this->ledger->startRoundAt('r-4', new DateTimeImmutable('2026-10-28T10:00:00+00:00'));
+        $this->ledger->useTokens('r-2', 1000, 100);
     }
 
     /**
