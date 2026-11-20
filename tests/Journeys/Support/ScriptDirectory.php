@@ -121,15 +121,26 @@ final readonly class ScriptDirectory
 
             // link() refuses a name that exists, so two workers never take one call number, and the record appears whole or not at all.
             $linked = @($this->link)($temporary, $file);
+            $landed = $linked && $this->isTheSameFile($file, $temporary);
         } finally {
             $filesystem->remove($temporary);
         }
 
-        if (!$linked && !is_link($file) && !file_exists($file)) {
+        // A link that reports success but did not put the record at the name itself (it went through a link someone put there) never claims the number.
+        if ($linked !== $landed || (!$linked && !is_link($file) && !file_exists($file))) {
             throw new RecordNotPublished($file);
         }
 
         return $linked;
+    }
+
+    private function isTheSameFile(string $name, string $temporary): bool
+    {
+        clearstatcache(true, $name);
+        $atName = @lstat($name);
+        $record = @stat($temporary);
+
+        return false !== $atName && false !== $record && $atName['dev'] === $record['dev'] && $atName['ino'] === $record['ino'];
     }
 
     private function record(int $call): string

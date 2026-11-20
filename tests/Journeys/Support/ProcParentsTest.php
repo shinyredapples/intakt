@@ -6,6 +6,7 @@ namespace Intakt\Tests\Journeys\Support;
 
 use Intakt\Tests\Journeys\Support\Fixtures\VanishedProcess;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Clock\MonotonicClock;
 use Symfony\Component\Filesystem\Filesystem;
@@ -13,6 +14,7 @@ use Symfony\Component\Process\ExecutableFinder;
 use Symfony\Component\Process\Process;
 
 #[CoversClass(ProcParents::class)]
+#[UsesClass(ProcessEntry::class)]
 final class ProcParentsTest extends TestCase
 {
     // Above the largest PID Linux hands out (pid_max is at most 2^22), so no process has it.
@@ -57,6 +59,26 @@ final class ProcParentsTest extends TestCase
     public function testAPidThatNoProcessHasHasNoStartTime(): void
     {
         self::assertNull(new ProcParents()->startOf(self::NO_PROCESS));
+    }
+
+    public function testAProcessEntryHoldsTheParentAndTheStartTimeOfTheProcess(): void
+    {
+        $child = new Process(['sleep', '5']);
+        $child->start();
+
+        try {
+            $pid = (int) $child->getPid();
+            $proc = new ProcParents();
+
+            self::assertEquals(new ProcessEntry((int) getmypid(), (int) $proc->startOf($pid)), $proc->entryOf($pid));
+        } finally {
+            $child->stop(0);
+        }
+    }
+
+    public function testAPidThatNoProcessHasHasNoEntry(): void
+    {
+        self::assertNull(new ProcParents()->entryOf(self::NO_PROCESS));
     }
 
     public function testAProcessStartedLaterHasALaterStartTime(): void

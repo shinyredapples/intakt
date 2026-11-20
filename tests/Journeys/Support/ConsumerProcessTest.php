@@ -13,6 +13,7 @@ use Symfony\Component\Process\Process;
 
 #[CoversClass(ConsumerProcess::class)]
 #[UsesClass(ProcParents::class)]
+#[UsesClass(ProcessEntry::class)]
 final class ConsumerProcessTest extends TestCase
 {
     private const int CONSUMER = 100;
@@ -38,7 +39,7 @@ final class ConsumerProcessTest extends TestCase
     public function testAnExitWithinTheLimitReturnsTheMeasuredSeconds(): void
     {
         $clock = new MockClock('@1000');
-        $consumer = new ConsumerProcess($this->runningUntil($clock, 1000.5), $clock, $this->parents([]), $this->starts([]));
+        $consumer = new ConsumerProcess($this->runningUntil($clock, 1000.5), $clock, $this->entries([]));
         $consumer->signal(SIGTERM);
 
         self::assertEqualsWithDelta(0.5, $consumer->endedWithin(1.0), 0.001);
@@ -47,7 +48,7 @@ final class ConsumerProcessTest extends TestCase
     public function testAnExitObservedAfterTheDeadlineCountsAsLate(): void
     {
         $clock = new MockClock('@1000');
-        $consumer = new ConsumerProcess($this->exitsBetweenTheLastPollAndTheCheck($clock, 1001.0), $clock, $this->parents([]), $this->starts([]));
+        $consumer = new ConsumerProcess($this->exitsBetweenTheLastPollAndTheCheck($clock, 1001.0), $clock, $this->entries([]));
         $consumer->signal(SIGTERM);
 
         self::assertNull($consumer->endedWithin(1.0));
@@ -56,7 +57,7 @@ final class ConsumerProcessTest extends TestCase
     public function testAConsumerStillRunningAtTheDeadlineCountsAsLate(): void
     {
         $clock = new MockClock('@1000');
-        $consumer = new ConsumerProcess($this->runningUntil($clock, 2000.0), $clock, $this->parents([]), $this->starts([]));
+        $consumer = new ConsumerProcess($this->runningUntil($clock, 2000.0), $clock, $this->entries([]));
         $consumer->signal(SIGTERM);
 
         self::assertNull($consumer->endedWithin(1.0));
@@ -65,7 +66,7 @@ final class ConsumerProcessTest extends TestCase
     public function testAnExitRightAtTheLimitIsInTime(): void
     {
         $clock = new MockClock('@1000');
-        $consumer = new ConsumerProcess($this->runningUntil($clock, 1001.0), $clock, $this->parents([]), $this->starts([]));
+        $consumer = new ConsumerProcess($this->runningUntil($clock, 1001.0), $clock, $this->entries([]));
         $consumer->signal(SIGTERM);
 
         self::assertEqualsWithDelta(1.0, $consumer->endedWithin(1.0), 0.001);
@@ -73,42 +74,42 @@ final class ConsumerProcessTest extends TestCase
 
     public function testAChildOfTheConsumerIsItsWorker(): void
     {
-        $consumer = new ConsumerProcess($this->runningUntil(new MockClock('@1000'), 2000.0), new MockClock(), $this->parents([200 => self::CONSUMER]), $this->starts([200 => self::START, self::CONSUMER => self::START]));
+        $consumer = $this->running($this->entries([200 => new ProcessEntry(self::CONSUMER, self::START)]));
 
         self::assertTrue($consumer->isWorker(200, self::START));
     }
 
     public function testAProcessStartedThroughAShellOfTheConsumerIsItsWorker(): void
     {
-        $consumer = new ConsumerProcess($this->runningUntil(new MockClock('@1000'), 2000.0), new MockClock(), $this->parents([200 => 150, 150 => self::CONSUMER]), $this->starts([200 => self::START, self::CONSUMER => self::START]));
+        $consumer = $this->running($this->entries([200 => new ProcessEntry(150, self::START), 150 => new ProcessEntry(self::CONSUMER, self::START)]));
 
         self::assertTrue($consumer->isWorker(200, self::START));
     }
 
     public function testARecordedPidReusedByAnotherProcessIsNoWorker(): void
     {
-        $consumer = new ConsumerProcess($this->runningUntil(new MockClock('@1000'), 2000.0), new MockClock(), $this->parents([200 => 1]), $this->starts([200 => self::START, self::CONSUMER => self::START]));
+        $consumer = $this->running($this->entries([200 => new ProcessEntry(1, self::START)]));
 
         self::assertFalse($consumer->isWorker(200, self::START));
     }
 
     public function testAPidThatIsGoneIsNoWorker(): void
     {
-        $consumer = new ConsumerProcess($this->runningUntil(new MockClock('@1000'), 2000.0), new MockClock(), $this->parents([]), $this->starts([]));
+        $consumer = $this->running($this->entries([]));
 
         self::assertFalse($consumer->isWorker(200, self::START));
     }
 
     public function testTheConsumerItselfIsNoWorker(): void
     {
-        $consumer = new ConsumerProcess($this->runningUntil(new MockClock('@1000'), 2000.0), new MockClock(), $this->parents([self::CONSUMER => 1]), $this->starts([200 => self::START, self::CONSUMER => self::START]));
+        $consumer = $this->running($this->entries([self::CONSUMER => new ProcessEntry(1, self::START)]));
 
         self::assertFalse($consumer->isWorker(self::CONSUMER, self::START));
     }
 
     public function testNoProcessIsAWorkerOfAConsumerThatHasEnded(): void
     {
-        $consumer = new ConsumerProcess($this->runningUntil(new MockClock('@1000'), 0.0), new MockClock(), $this->parents([200 => self::CONSUMER]), $this->starts([200 => self::START, self::CONSUMER => self::START]));
+        $consumer = new ConsumerProcess($this->runningUntil(new MockClock('@1000'), 0.0), new MockClock(), $this->entries([200 => new ProcessEntry(self::CONSUMER, self::START)]));
 
         self::assertFalse($consumer->isWorker(200, self::START));
     }
@@ -120,7 +121,7 @@ final class ConsumerProcessTest extends TestCase
 
         try {
             $proc = new ProcParents();
-            $consumer = new ConsumerProcess($this->runningAs((int) getmypid()), new MockClock(), $proc->parentOf(...), $proc->startOf(...));
+            $consumer = new ConsumerProcess($this->runningAs((int) getmypid()), new MockClock(), $proc->entryOf(...));
             $pid = (int) $child->getPid();
 
             self::assertTrue($consumer->isWorker($pid, (int) $proc->startOf($pid)));
@@ -131,16 +132,23 @@ final class ConsumerProcessTest extends TestCase
 
     public function testAReplacementWorkerOfTheSameConsumerThatGotTheRecordedPidIsNoWorker(): void
     {
-        $consumer = new ConsumerProcess($this->runningUntil(new MockClock('@1000'), 2000.0), new MockClock(), $this->parents([200 => self::CONSUMER]), $this->starts([200 => self::START + 1]));
+        $consumer = $this->running($this->entries([200 => new ProcessEntry(self::CONSUMER, self::START + 1)]));
 
         self::assertFalse($consumer->isWorker(200, self::START));
     }
 
-    public function testAProcessWhoseStartTimeCannotBeReadIsNoWorker(): void
+    public function testAPidTakenByAReplacementWorkerRightAfterItsFirstReadIsNoWorker(): void
     {
-        $consumer = new ConsumerProcess($this->runningUntil(new MockClock('@1000'), 2000.0), new MockClock(), $this->parents([200 => self::CONSUMER]), $this->starts([]));
+        $reads = 0;
+        // The recorded process, already moved away from the consumer, at the first read; a replacement worker of the consumer that took its PID at every later read.
+        $entryOf = static fn (int $pid): ?ProcessEntry => 200 !== $pid ? null : (0 === $reads++ ? new ProcessEntry(1, self::START) : new ProcessEntry(self::CONSUMER, self::START + 1));
 
-        self::assertFalse($consumer->isWorker(200, self::START));
+        self::assertFalse($this->running($entryOf)->isWorker(200, self::START));
+    }
+
+    private function running(Closure $entryOf): ConsumerProcess
+    {
+        return new ConsumerProcess($this->runningUntil(new MockClock('@1000'), 2000.0), new MockClock(), $entryOf);
     }
 
     private function runningUntil(MockClock $clock, float $end): Process
@@ -174,22 +182,12 @@ final class ConsumerProcessTest extends TestCase
     }
 
     /**
-     * @param array<int, int> $parents
+     * @param array<int, ProcessEntry> $entries
      *
-     * @return Closure(int): ?int
+     * @return Closure(int): ?ProcessEntry
      */
-    private function parents(array $parents): Closure
+    private function entries(array $entries): Closure
     {
-        return static fn (int $pid): ?int => $parents[$pid] ?? null;
-    }
-
-    /**
-     * @param array<int, int> $starts
-     *
-     * @return Closure(int): ?int
-     */
-    private function starts(array $starts): Closure
-    {
-        return static fn (int $pid): ?int => $starts[$pid] ?? null;
+        return static fn (int $pid): ?ProcessEntry => $entries[$pid] ?? null;
     }
 }

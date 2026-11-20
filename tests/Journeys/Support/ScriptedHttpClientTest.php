@@ -18,6 +18,7 @@ use Symfony\Component\HttpClient\Response\MockResponse;
 #[UsesClass(ScriptNotArmed::class)]
 #[UsesClass(KeptScript::class)]
 #[UsesClass(ProcParents::class)]
+#[UsesClass(ProcessEntry::class)]
 final class ScriptedHttpClientTest extends TestCase
 {
     private string $path;

@@ -16,6 +16,7 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(CallEndedTwice::class)]
 #[UsesClass(RecordNotPublished::class)]
 #[UsesClass(ProcParents::class)]
+#[UsesClass(ProcessEntry::class)]
 final class ScriptDirectoryTest extends TestCase
 {
     private string $path;
@@ -117,6 +118,21 @@ final class ScriptDirectoryTest extends TestCase
         $this->expectException(RecordNotPublished::class);
 
         $scripts->callEnded($call);
+    }
+
+    public function testALinkThatLandsBehindALinkPutAtTheNameAfterTheScanDoesNotClaimTheNumber(): void
+    {
+        $path = $this->path;
+        $throughALink = static function (string $temporary, string $file) use ($path): bool {
+            symlink($path.'/elsewhere', $file);
+
+            return link($temporary, $path.'/elsewhere');
+        };
+        $scripts = new ScriptDirectory($this->path, new MockClock('@1000'), $throughALink);
+
+        $this->expectException(RecordNotPublished::class);
+
+        $scripts->callStarted();
     }
 
     public function testNoTemporaryFileRemainsAfterARecordIsPublished(): void

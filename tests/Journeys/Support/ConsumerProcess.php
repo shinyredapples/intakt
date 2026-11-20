@@ -23,14 +23,12 @@ final class ConsumerProcess
     private ?float $signalledAt = null;
 
     /**
-     * @param Closure(int): ?int $parentOf
-     * @param Closure(int): ?int $startOf
+     * @param Closure(int): ?ProcessEntry $entryOf
      */
     public function __construct(
         private readonly Process $process,
         private readonly ClockInterface $clock,
-        private readonly Closure $parentOf,
-        private readonly Closure $startOf,
+        private readonly Closure $entryOf,
     ) {
     }
 
@@ -42,9 +40,7 @@ final class ConsumerProcess
         $process = new Process(self::command($concurrency), $projectDirectory, $variables, null, null);
         $process->start();
 
-        $proc = new ProcParents();
-
-        return new self($process, new MonotonicClock(), $proc->parentOf(...), $proc->startOf(...));
+        return new self($process, new MonotonicClock(), new ProcParents()->entryOf(...));
     }
 
     /**
@@ -80,19 +76,21 @@ final class ConsumerProcess
     public function isWorker(int $pid, int $processStart): bool
     {
         $consumer = $this->process->getPid();
+        // One read for the start time and the parent, because a PID reused between two reads would pair the recorded worker's start with the parent of the process that took its PID.
+        $worker = ($this->entryOf)($pid);
 
-        if (null === $consumer || !$this->process->isRunning() || ($this->startOf)($pid) !== $processStart) {
+        if (null === $consumer || !$this->process->isRunning() || null === $worker || $worker->start !== $processStart) {
             return false;
         }
 
-        $parent = ($this->parentOf)($pid);
+        $parent = $worker->parent;
 
         for ($depth = 1; null !== $parent && $depth <= self::WORKER_DEPTH; ++$depth) {
             if ($consumer === $parent) {
                 return true;
             }
 
-            $parent = ($this->parentOf)($parent);
+            $parent = ($this->entryOf)($parent)?->parent;
         }
 
         return false;
