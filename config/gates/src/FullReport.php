@@ -88,9 +88,19 @@ final readonly class FullReport
     private function encoded(string $json): ?string
     {
         try {
-            return json_encode(json_decode($json, flags: JSON_THROW_ON_ERROR), JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
+            return json_encode($this->decoded($json), JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
         } catch (JsonException) {
             return null;
+        }
+    }
+
+    // Because object mode keeps an empty {} as an object, but only the array mode GateReport validates with accepts every key, such as one starting with a NUL byte.
+    private function decoded(string $json): mixed
+    {
+        try {
+            return json_decode($json, flags: JSON_THROW_ON_ERROR);
+        } catch (JsonException) {
+            return json_decode($json, true, flags: JSON_THROW_ON_ERROR);
         }
     }
 }

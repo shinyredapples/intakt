@@ -168,6 +168,25 @@ final class FullReportTest extends SandboxTestCase
         ]);
     }
 
+    public function testASummaryLineWithAKeyThatObjectsCannotHoldStillGivesAReportOfEveryGate(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $line = json_encode(['gate' => 'dashes', 'ok' => false, 'findings' => ['notes.md:1'], 'omitted' => 0, 'note' => ["\0key" => 'fixture']], GateResult::JSON_FLAGS);
+        $first = GateReport::fromChild('dashes', new ProcessResult(1, $line."\n", ''));
+        $other = GateResult::failedBecause('comments', 'kept.php:1');
+        self::assertSame($line, $first->line);
+
+        $file = new FullReport($sandbox->root, [$first, GateReport::fromChild('comments', new ProcessResult(1, $other->toJson()."\n", ''))])->write();
+
+        self::assertNotNull($file);
+        $gates = $this->reportIn($sandbox->root.'/'.$file)->get('gates')->items();
+        self::assertSame([['notes.md:1'], ['kept.php:1'], "\0key"], [
+            array_map(static fn (JsonNode $finding): string => $finding->text(), $gates[0]->get('findings')->items()),
+            array_map(static fn (JsonNode $finding): string => $finding->text(), $gates[1]->get('findings')->items()),
+            (string) array_key_first($gates[0]->get('note')->entries()),
+        ]);
+    }
+
     private function sandboxWithTwelveDashes(): Sandbox
     {
         $sandbox = $this->emptySandbox();
