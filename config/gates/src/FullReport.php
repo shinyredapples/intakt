@@ -102,11 +102,13 @@ final readonly class FullReport
         $kept = false === $text ? null : json_decode($text, true);
         $findings = is_array($kept) && $gate === ($kept['gate'] ?? null) ? ($kept['findings'] ?? null) : null;
 
-        if (!is_array($findings) || !array_is_list($findings) || !array_all($findings, static fn (mixed $finding): bool => is_string($finding))) {
+        if (!is_array($findings) || !array_is_list($findings)) {
             return null;
         }
 
-        return $findings;
+        $texts = array_values(array_filter($findings, is_string(...)));
+
+        return count($texts) === count($findings) ? $texts : null;
     }
 
     // Because only findings that give the very line the gate printed may replace it, the kept ones are cut again and compared.

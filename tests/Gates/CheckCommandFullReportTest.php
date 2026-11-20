@@ -62,9 +62,12 @@ final class CheckCommandFullReportTest extends SandboxTestCase
     {
         $report = json_decode((string) file_get_contents($sandbox->root.'/'.$this->reportNamedBy($run)), true, flags: JSON_THROW_ON_ERROR);
         self::assertIsArray($report);
+        self::assertIsArray($report['gates']);
+        self::assertIsArray($report['gates'][0]);
+        self::assertIsArray($report['gates'][0]['findings']);
 
         return array_values(array_filter(
-            $report['gates'][0]['findings'] ?? [],
+            $report['gates'][0]['findings'],
             static fn (mixed $finding): bool => is_string($finding) && str_contains($finding, 'U+2014'),
         ));
     }

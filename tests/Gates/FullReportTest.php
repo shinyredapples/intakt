@@ -28,8 +28,8 @@ final class FullReportTest extends SandboxTestCase
 
         $report = $this->reportOf($results, $this->lineOf($result));
 
-        self::assertSame($this->numbered(25), $report['gates'][0]['findings']);
-        self::assertArrayNotHasKey('omitted', $report['gates'][0]);
+        self::assertSame($this->numbered(25), $report['findings']);
+        self::assertArrayNotHasKey('omitted', $report);
     }
 
     public function testAKeptResultWithFewerFindingsThanItsLineAccountsForNamesNoReport(): void
@@ -56,7 +56,7 @@ final class FullReportTest extends SandboxTestCase
 
         $report = $this->reportOf($results, $this->lineOf(GateResult::failedBecause('cs', "caf\u{E9} is wrong")));
 
-        self::assertSame(['gate' => 'cs', 'ok' => false, 'findings' => ["caf\u{E9} is wrong"]], $report['gates'][0]);
+        self::assertSame(['gate' => 'cs', 'ok' => false, 'findings' => ["caf\u{E9} is wrong"]], $report);
     }
 
     public function testAChildThatKeepsNothingAndHasAFindingAtTheCutWidthNamesNoReport(): void
@@ -74,7 +74,7 @@ final class FullReportTest extends SandboxTestCase
 
         $report = $this->reportOf($this->resultsKeeping(), $this->lineOf(GateResult::failedBecause('cs', $finding)));
 
-        self::assertSame([$finding], $report['gates'][0]['findings']);
+        self::assertSame([$finding], $report['findings']);
     }
 
     public function testKeptFindingsWrittenAsAnObjectWithTheKeyZeroCountAsTheFindings(): void
@@ -83,7 +83,7 @@ final class FullReportTest extends SandboxTestCase
 
         $report = $this->reportOf($results, $this->lineOf(GateResult::failedBecause('cs', 'kept finding')));
 
-        self::assertSame(['kept finding'], $report['gates'][0]['findings']);
+        self::assertSame(['kept finding'], $report['findings']);
     }
 
     public function testKeptFindingsWrittenAsAnObjectWithAnotherKeyFallBackToTheLine(): void
@@ -92,7 +92,7 @@ final class FullReportTest extends SandboxTestCase
 
         $report = $this->reportOf($results, $this->lineOf(GateResult::failedBecause('cs', 'line finding')));
 
-        self::assertSame(['line finding'], $report['gates'][0]['findings']);
+        self::assertSame(['line finding'], $report['findings']);
     }
 
     public function testAResultKeptForAnotherGateFallsBackToTheLine(): void
@@ -101,7 +101,7 @@ final class FullReportTest extends SandboxTestCase
 
         $report = $this->reportOf($results, $this->lineOf(GateResult::failedBecause('cs', 'line finding')));
 
-        self::assertSame(['line finding'], $report['gates'][0]['findings']);
+        self::assertSame(['line finding'], $report['findings']);
     }
 
     public function testTheReportIsWrittenInAsciiUnderTheCheckFolderWithARandomName(): void
@@ -170,15 +170,20 @@ final class FullReportTest extends SandboxTestCase
     }
 
     /**
-     * @return array{gates: list<array<string, mixed>>}
+     * @return array<array-key, mixed>
      */
     private function reportOf(ScratchDirectory $results, GateReport $report): array
     {
         $named = $this->fullReportIn($results)->writtenFor([$report]);
         self::assertArrayHasKey('report', $named);
 
-        /** @var array{gates: list<array<string, mixed>>} */
-        return json_decode((string) file_get_contents($this->sandbox()->root.'/'.$named['report']), true, flags: JSON_THROW_ON_ERROR);
+        $written = json_decode((string) file_get_contents($this->sandbox()->root.'/'.($named['report'] ?? '')), true, flags: JSON_THROW_ON_ERROR);
+        self::assertIsArray($written);
+        self::assertIsArray($written['gates']);
+        self::assertCount(1, $written['gates']);
+        self::assertIsArray($written['gates'][0]);
+
+        return $written['gates'][0];
     }
 
     private function sandbox(): Sandbox
