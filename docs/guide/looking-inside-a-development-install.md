@@ -16,10 +16,16 @@ The answer to each request names its profile in the `X-Debug-Token` header.
 
 `vendor/bin/mate tools:call symfony-profiler-list --format=json` lists the latest profiles, newest first, when you did not keep the token.
 
+`php bin/instance` keeps everything it writes, the profiles too, in a scratch folder that it removes when it stops, and tells the command you give it where that folder is. So run the request and Mate as that command:
+
+```
+APP_ENV=dev php bin/instance -- sh -c 'curl -si "$INTAKT_INSTANCE_URL/"; vendor/bin/mate tools:call symfony-profiler-list --format=json'
+```
+
 There is no toolbar and no `/_profiler` page; these two tools are the way to read a profile.
 
 ## What is not in the image
 
 Mate and the profiler belong to the development install. The container image has neither: it is built without the development packages, and a production install saves no profiles at all.
 
-For the other tools of the same kind (the services, the environment and the read-only console commands), see [Looking inside the development install with Mate](../user/README.md).
+For the other tools of the same kind (the services, the environment and the read-only console commands), see [Looking inside the development install with Mate](../user/README.md#looking-inside-the-development-install-with-mate).

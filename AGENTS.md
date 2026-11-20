@@ -106,7 +106,7 @@ Measured facts beat reading code. These are dev tools: nothing of them is in the
 - Mate (`vendor/bin/mate tools:call <tool> --<param>=<value>`), by purpose:
   - Services: `symfony-services` finds services by id, class or tag; `symfony-service-detail` shows how one is wired.
   - Environment: `symfony-dotenv-check` says which `.env*` file declares a variable and whether it resolves (masked); `server-info` reports the PHP runtime.
-  - Profiler: after a request to a running development install (`APP_ENV=dev`), `symfony-profiler-list` lists the saved profiles, newest first, and `symfony-profiler-get --token=<X-Debug-Token>` shows one with its collectors (`db`, `messenger`, `time`, `memory`).
+  - Profiler: after a request to a running development install (`APP_ENV=dev`), `symfony-profiler-list` lists the saved profiles, newest first, and `symfony-profiler-get --token=<X-Debug-Token>` shows one with its collectors (`db`, `messenger`, `time`, `memory`). With `bin/instance`, run Mate as its command (`bin/instance -- <command>`), since the profiles live in its scratch cache.
 - Read-only console commands:
   - `bin/console debug:container <id>`: what a service is and what it is wired to.
   - `bin/console debug:router`: which route a path reaches.
