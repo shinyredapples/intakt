@@ -222,7 +222,8 @@ final class ReviewTrendsTest extends TestCase
     {
         $replayed = $this->replayed('r-2')->withOutcomes([new ReviewerOutcome('r-2-security', 'security', 'standard', new DateTimeImmutable('2026-10-28T11:00:00+00:00'))])
             ->judgedWith([$this->act('F1', 'P1')], new DateTimeImmutable('2026-10-28T11:10:00+00:00'))
-            ->withReportedSeverities(['F1' => 'P1'])
+            ->judgedOnItsOwnMarks()
+            ->withSeveritiesByReviewer(['r-2-security' => ['F1' => 'P1']])
             ->withFindingsByReviewer(['r-2-security' => ['F1']]);
 
         $counted = ReviewTrends::counting([$replayed]);

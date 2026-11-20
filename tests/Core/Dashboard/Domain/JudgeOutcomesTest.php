@@ -61,7 +61,24 @@ final class JudgeOutcomesTest extends TestCase
 
     public function testARoundWithAnUnreadableFindingIsLeftOutSoTheRestNeverReadsAsTheWhole(): void
     {
-        $round = $this->round()->judgedWith([$this->finding('F1', JudgeCall::Act)], new DateTimeImmutable('2026-10-28T11:10:00+00:00'))->withUnreadableFindings();
+        $round = $this->judged([$this->finding('F1', JudgeCall::Act)])->withFindingsMissing();
+
+        self::assertNull(JudgeOutcomes::of([$round]));
+    }
+
+    public function testAFallbackRoundIsLeftOutSoItsUnmarkedP3AddsNothingToRejected(): void
+    {
+        $judged = $this->judged([$this->finding('F1', JudgeCall::NotActedOn)]);
+        $fallback = $this->judged([$this->finding('F2', JudgeCall::Act), $this->finding('F3', JudgeCall::NotActedOn)])->judgedByFallback();
+
+        $outcomes = JudgeOutcomes::of([$judged, $fallback]);
+
+        self::assertSame([0, 1, 1], [$outcomes?->kept, $outcomes?->rejected, $outcomes?->total()]);
+    }
+
+    public function testARoundWrittenBeforeTheFallbackWasRecordedIsLeftOut(): void
+    {
+        $round = $this->round()->judgedWith([$this->finding('F1', JudgeCall::NotActedOn)], new DateTimeImmutable('2026-10-28T11:10:00+00:00'));
 
         self::assertNull(JudgeOutcomes::of([$round]));
     }
@@ -106,7 +123,7 @@ final class JudgeOutcomesTest extends TestCase
      */
     private function judged(array $findings): ReviewedRound
     {
-        return $this->round()->judgedWith($findings, new DateTimeImmutable('2026-10-28T11:10:00+00:00'));
+        return $this->round()->judgedWith($findings, new DateTimeImmutable('2026-10-28T11:10:00+00:00'))->judgedOnItsOwnMarks();
     }
 
     private function round(): ReviewedRound

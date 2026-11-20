@@ -98,12 +98,21 @@ final class DashboardLedger implements Ledger
         $this->add(LedgerEventKind::VerdictReceived, $this->reviewer($round, $role) + ['decision' => 0 === $findings ? 'approve' : 'changes', 'findings' => $findings]);
     }
 
+    // Written as rows were before reporters' severities were recorded.
     /**
      * @param list<string> $findings
      */
     public function reportFindings(string $round, string $role, array $findings): void
     {
         $this->add(LedgerEventKind::ReviewerFindingsRecorded, ['round' => $round, 'reviewer' => $round.'-'.$role, 'findings' => $findings]);
+    }
+
+    /**
+     * @param array<string, string> $severities by finding id, as RoundLedger writes them
+     */
+    public function reportRatedFindings(string $round, string $role, array $severities): void
+    {
+        $this->add(LedgerEventKind::ReviewerFindingsRecorded, ['round' => $round, 'reviewer' => $round.'-'.$role, 'findings' => array_keys($severities), 'severities' => $severities]);
     }
 
     public function stopReviewer(string $round, string $role): void
@@ -141,6 +150,7 @@ final class DashboardLedger implements Ledger
             'act' => array_keys(array_filter($marks, static fn (string $mark): bool => 'act' === $mark)),
             'follow_ups' => array_keys(array_filter($marks, static fn (string $mark): bool => 'defer' === $mark)),
             'findings' => array_map(static fn (string $id): array => ['id' => $id, 'severity' => 'P2', 'text' => 'Text of '.$id.'.'], array_keys($marks)),
+            'fallback' => false,
         ]);
     }
 

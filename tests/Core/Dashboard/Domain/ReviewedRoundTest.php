@@ -26,17 +26,22 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(RoundFinding::class)]
 final class ReviewedRoundTest extends TestCase
 {
-    public function testAReportedSeverityIsReadByFindingIdAndAnUnknownIdHasNone(): void
+    public function testAReportedSeverityIsReadPerReviewerSoTwoReviewersKeepTheirOwnForOneId(): void
     {
-        $round = $this->round()->withReportedSeverities(['F1' => 'P2', 'F2' => 'P3']);
+        $round = $this->round()->withSeveritiesByReviewer(['r-1' => ['F1' => 'P2'], 'r-2' => ['F1' => 'P1']]);
 
-        self::assertSame(['P2', 'P3', null], array_map($round->reportedSeverityOf(...), ['F1', 'F2', 'F3']));
+        self::assertSame(['P2', 'P1', null, null], [$round->severityReportedBy('r-1', 'F1'), $round->severityReportedBy('r-2', 'F1'), $round->severityReportedBy('r-1', 'F2'), $round->severityReportedBy('r-3', 'F1')]);
     }
 
-    public function testEveryFindingCountsAsReadUntilTheRoundIsMarkedOtherwise(): void
+    public function testEveryFindingCountsAsRecordedUntilTheRoundIsMarkedOtherwise(): void
     {
-        self::assertTrue($this->round()->everyFindingRead);
-        self::assertFalse($this->round()->withUnreadableFindings()->everyFindingRead);
+        self::assertTrue($this->round()->everyFindingRecorded);
+        self::assertFalse($this->round()->withFindingsMissing()->everyFindingRecorded);
+    }
+
+    public function testWhetherTheJudgeFellBackIsUnknownUntilItsRowSays(): void
+    {
+        self::assertSame([null, true, false], [$this->round()->judgeFellBack, $this->round()->judgedByFallback()->judgeFellBack, $this->round()->judgedOnItsOwnMarks()->judgeFellBack]);
     }
 
     public function testAJudgedRoundDecidedAsChangesGivesChangesRequested(): void

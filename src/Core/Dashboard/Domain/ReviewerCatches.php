@@ -8,7 +8,7 @@ use DateTimeImmutable;
 use Intakt\Core\Review\Contract\Severity;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
-// Read from the recorded reporters alone, as the "Caught by one reviewer only" tile is, so a round without a full record, or with a reported finding whose severity or reporter's role is unknown, is left out instead of guessed (D1 of #2858).
+// Read from the recorded reporters alone, as the "Caught by one reviewer only" tile is, each under the severity its own reporter gave, so a round without a full record, or with a reported finding whose severity or reporter's role is unknown, is left out instead of guessed (D1 of #2858).
 #[Exclude]
 final readonly class ReviewerCatches
 {
@@ -83,11 +83,11 @@ final readonly class ReviewerCatches
     {
         $reported = $round->findingsByReviewer;
 
-        if (!$round->judgedAt instanceof DateTimeImmutable || !$round->everyFindingRead || null === $reported) {
+        if (!$round->judgedAt instanceof DateTimeImmutable || !$round->findingTextRecorded || !$round->everyFindingRecorded || null === $reported || null === $round->severitiesByReviewer) {
             return false;
         }
 
-        return array_all($reported, static fn (array $ids, string $reviewer): bool => null !== self::roleOf($round, $reviewer) && array_all($ids, static fn (string $id): bool => null !== $round->reportedSeverityOf($id)));
+        return array_all($reported, static fn (array $ids, string $reviewer): bool => null !== self::roleOf($round, $reviewer) && array_all($ids, static fn (string $id): bool => null !== $round->severityReportedBy($reviewer, $id)));
     }
 
     /**
@@ -102,7 +102,7 @@ final readonly class ReviewerCatches
             $tallies[$role] ??= ['found' => [], 'alone' => []];
 
             foreach (array_unique($ids) as $id) {
-                $severity = (string) $round->reportedSeverityOf($id);
+                $severity = (string) $round->severityReportedBy($reviewer, $id);
                 $tallies[$role]['found'][$severity] = ($tallies[$role]['found'][$severity] ?? 0) + 1;
                 $tallies[$role]['alone'][$severity] = ($tallies[$role]['alone'][$severity] ?? 0) + (self::isReportedByNoOtherReviewer($round, $reviewer, $id) ? 1 : 0);
             }

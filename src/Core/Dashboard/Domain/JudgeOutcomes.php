@@ -7,7 +7,7 @@ namespace Intakt\Core\Dashboard\Domain;
 use DateTimeImmutable;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
-// Counted over the judged rounds that recorded every finding the judge saw, all of them readable, because a round kept only as the judge's marks cannot tell a rejected finding from one never recorded.
+// Counted over the judged rounds that recorded every finding the judge saw and marked, all of them readable, and that recorded the judge's own marks (not the fallback for an answer that cannot be read), because a round kept only as the judge's marks, or one with an unmarked P3, cannot tell a rejected finding from one never recorded or never judged.
 #[Exclude]
 final readonly class JudgeOutcomes
 {
@@ -24,7 +24,7 @@ final readonly class JudgeOutcomes
      */
     public static function of(array $rounds): ?self
     {
-        $counted = array_values(array_filter($rounds, static fn (ReviewedRound $round): bool => $round->judgedAt instanceof DateTimeImmutable && $round->findingTextRecorded && $round->everyFindingRead));
+        $counted = array_values(array_filter($rounds, static fn (ReviewedRound $round): bool => $round->judgedAt instanceof DateTimeImmutable && $round->findingTextRecorded && $round->everyFindingRecorded && false === $round->judgeFellBack));
 
         if ([] === $counted) {
             return null;

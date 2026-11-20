@@ -21,6 +21,7 @@ use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Core\Review\Contract\SampleChange;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\DomCrawler\Crawler;
 
@@ -292,7 +293,7 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
 
     public function testAnEntryRaisedByItsMergeCountsForItsReviewerUnderTheSeverityItReported(): void
     {
-        $this->givenTwoReportersWhoseEntriesMerged(['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of F1.', 'merged' => ['F2'], 'reported_severity' => 'P2']);
+        $this->givenTwoReportersWhoseEntriesMerged(['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of F1.', 'merged' => ['F2']], ['F1' => 'P2'], ['F2' => 'P1']);
 
         $page = $this->browser->request('GET', '/trends');
 
@@ -300,11 +301,71 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
         self::assertSame(['0 (0 alone)', '1 (0 alone)', '0 (0 alone)'], $page->filter('#chart-catches figure')->first()->filter('.c-label')->each(static fn (Crawler $label): string => $label->text()));
     }
 
-    public function testAMergingEntryWrittenBeforeItsReportedSeverityWasRecordedLeavesTheReviewerChartWithoutData(): void
+    // Decision 4 of #2981: the severity comes from each reporter's own row, not from one lookup per finding id.
+    public function testTwoReportersRepeatingOneFindingAtDifferentSeveritiesEachCountUnderTheirOwn(): void
     {
-        $this->givenTwoReportersWhoseEntriesMerged(['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of F1.', 'merged' => ['F2']]);
+        $this->givenTwoReporters(['F1' => 'P2'], ['F1' => 'P1']);
+        $this->judgeDone(['act' => ['F1'], 'findings' => [['id' => 'F1', 'severity' => 'P2', 'text' => 'The issue persists.', 'merged' => []]], 'fallback' => false]);
+
+        $page = $this->browser->request('GET', '/trends');
+
+        self::assertSame(['0 (0 alone)', '1 (0 alone)', '0 (0 alone)'], $page->filter('#chart-catches figure')->first()->filter('.c-label')->each(static fn (Crawler $label): string => $label->text()));
+        self::assertSame(['1 (0 alone)', '0 (0 alone)', '0 (0 alone)'], $page->filter('#chart-catches figure')->last()->filter('.c-label')->each(static fn (Crawler $label): string => $label->text()));
+    }
+
+    public function testReporterRowsWrittenBeforeTheirSeveritiesWereRecordedLeaveTheReviewerChartWithoutData(): void
+    {
+        $this->givenTwoReportersWithoutSeverities();
+        $this->judgeDone(['act' => ['F1'], 'findings' => [['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of F1.', 'merged' => []], ['id' => 'F2', 'severity' => 'P1', 'text' => 'Text of F2.', 'merged' => []]], 'fallback' => false]);
 
         self::assertSame('No data', $this->browser->request('GET', '/trends')->filter('#chart-catches .takeaway')->text());
+    }
+
+    // Decision 5 of #2981: the fallback for an answer that cannot be read leaves a P3 unmarked, which is not the judge's rejection.
+    public function testAFallbackRoundsUnmarkedP3AddsNothingToRejected(): void
+    {
+        $this->ledger->startRound('r-1', 'alpha');
+        $this->ledger->judgeFindings('r-1', ['F1' => 'reject']);
+        $this->ledger->startRound('r-2', 'alpha');
+        $this->ledger->append(new LedgerEvent(LedgerEventKind::JudgeDone, (string) json_encode(['round' => 'r-2', 'act' => ['F1'], 'follow_ups' => [], 'findings' => [['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of F1.'], ['id' => 'F2', 'severity' => 'P3', 'text' => 'Text of F2.']], 'fallback' => true])));
+
+        $page = $this->browser->request('GET', '/trends');
+
+        self::assertSame('The judge kept 0 of 1 findings and rejected 1.', $page->filter('#chart-judge .takeaway')->text());
+    }
+
+    public function testAJudgeRowWrittenBeforeTheFallbackWasRecordedLeavesTheJudgeChartWithoutData(): void
+    {
+        $this->ledger->startRound('r-1', 'alpha');
+        $this->ledger->append(new LedgerEvent(LedgerEventKind::JudgeDone, '{"round":"r-1","act":[],"follow_ups":[],"findings":[{"id":"F1","severity":"P3","text":"A finding"}]}'));
+
+        self::assertSame('No data', $this->browser->request('GET', '/trends')->filter('#chart-judge .takeaway')->text());
+    }
+
+    /**
+     * @return iterable<string, array{array<string, mixed>}>
+     */
+    public static function marksMissingFromTheFindings(): iterable
+    {
+        yield 'an act id' => [['act' => ['F1'], 'findings' => []]];
+        yield 'a follow-up id' => [['follow_ups' => ['F1'], 'findings' => []]];
+        yield 'a merged id' => [['act' => ['F1'], 'findings' => [['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of F1.', 'merged' => ['F2']]]]];
+        yield 'an unreadable entry' => [['act' => ['F1'], 'findings' => [null]]];
+    }
+
+    // Decision 6 of #2981: a round counts only when every id the judge marked is among its recorded findings.
+    /**
+     * @param array<string, mixed> $row
+     */
+    #[DataProvider('marksMissingFromTheFindings')]
+    public function testAMarkedIdMissingFromTheFindingsLeavesBothChartsWithoutData(array $row): void
+    {
+        $this->givenTwoReporters(['F1' => 'P1'], []);
+        $this->judgeDone($row + ['fallback' => false]);
+
+        $page = $this->browser->request('GET', '/trends');
+
+        self::assertSame(['No data', 'No data'], $page->filter('.chart .takeaway')->each(static fn (Crawler $takeaway): string => $takeaway->text()));
     }
 
     public function testAnUnreadableFindingLeavesBothChartsWithoutDataRatherThanCountingTheRest(): void
@@ -327,48 +388,64 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
     }
 
     /**
-     * @param array<string, mixed> $entry
+     * @param array<string, mixed>  $entry
+     * @param array<string, string> $correctness
+     * @param array<string, string> $security
      */
-    private function givenTwoReportersWhoseEntriesMerged(array $entry): void
+    private function givenTwoReportersWhoseEntriesMerged(array $entry, array $correctness = ['F1' => 'P1'], array $security = ['F2' => 'P1']): void
     {
-        $this->ledger->startRound('r-1', 'alpha');
-
-        foreach (['correctness', 'security'] as $role) {
-            $this->ledger->startReviewer('r-1', $role);
-            $this->ledger->answer('r-1', $role, 1);
-        }
-
-        $this->ledger->reportFindings('r-1', 'correctness', ['F1']);
-        $this->ledger->reportFindings('r-1', 'security', ['F2']);
-        $this->ledger->append(new LedgerEvent(LedgerEventKind::JudgeDone, (string) json_encode([
-            'round' => 'r-1',
-            'act' => ['F1'],
-            'follow_ups' => [],
-            'findings' => [$entry, ['id' => 'F2', 'severity' => 'P1', 'text' => 'Text of F2.', 'merged' => []]],
-        ])));
+        $this->givenTwoReporters($correctness, $security);
+        $this->judgeDone(['act' => ['F1'], 'findings' => [$entry, ['id' => 'F2', 'severity' => 'P1', 'text' => 'Text of F2.', 'merged' => []]], 'fallback' => false]);
     }
 
     private function givenAJudgedRoundWithTwoReporters(): void
     {
+        $this->givenTwoReporters(['F1' => 'P1'], ['F2' => 'P2']);
+        $this->judgeDone([
+            'act' => ['F1'],
+            'findings' => [
+                ['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of F1.', 'merged' => ['F2']],
+                ['id' => 'F2', 'severity' => 'P2', 'text' => 'Text of F2.', 'merged' => []],
+                ['id' => 'F3', 'severity' => 'P3', 'text' => 'Text of F3.', 'merged' => []],
+            ],
+            'fallback' => false,
+        ]);
+    }
+
+    /**
+     * @param array<string, string> $correctness
+     * @param array<string, string> $security
+     */
+    private function givenTwoReporters(array $correctness, array $security): void
+    {
+        $this->givenTwoAnsweringReviewers();
+        $this->ledger->reportRatedFindings('r-1', 'correctness', $correctness);
+        $this->ledger->reportRatedFindings('r-1', 'security', $security);
+    }
+
+    private function givenTwoReportersWithoutSeverities(): void
+    {
+        $this->givenTwoAnsweringReviewers();
+        $this->ledger->reportFindings('r-1', 'correctness', ['F1']);
+        $this->ledger->reportFindings('r-1', 'security', ['F2']);
+    }
+
+    private function givenTwoAnsweringReviewers(): void
+    {
         $this->ledger->startRound('r-1', 'alpha');
 
         foreach (['correctness', 'security'] as $role) {
             $this->ledger->startReviewer('r-1', $role);
             $this->ledger->answer('r-1', $role, 1);
         }
+    }
 
-        $this->ledger->reportFindings('r-1', 'correctness', ['F1']);
-        $this->ledger->reportFindings('r-1', 'security', ['F2']);
-        $this->ledger->append(new LedgerEvent(LedgerEventKind::JudgeDone, (string) json_encode([
-            'round' => 'r-1',
-            'act' => ['F1'],
-            'follow_ups' => [],
-            'findings' => [
-                ['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of F1.', 'merged' => ['F2'], 'reported_severity' => 'P1'],
-                ['id' => 'F2', 'severity' => 'P2', 'text' => 'Text of F2.', 'merged' => []],
-                ['id' => 'F3', 'severity' => 'P3', 'text' => 'Text of F3.', 'merged' => []],
-            ],
-        ])));
+    /**
+     * @param array<string, mixed> $row
+     */
+    private function judgeDone(array $row): void
+    {
+        $this->ledger->append(new LedgerEvent(LedgerEventKind::JudgeDone, (string) json_encode(array_merge(['round' => 'r-1', 'act' => [], 'follow_ups' => []], $row))));
     }
 
     private function givenALiveAndAReplayedRound(): void

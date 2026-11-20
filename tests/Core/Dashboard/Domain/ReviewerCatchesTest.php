@@ -49,7 +49,7 @@ final class ReviewerCatchesTest extends TestCase
 
     public function testAnEntryMergingTheFindingsOfTwoReviewersCountsForBothAndAloneForNeither(): void
     {
-        $round = $this->judged([$this->act('F1', 'P1', ['F2'])], ['security' => ['F1'], 'correctness' => ['F2']], ['F1' => 'P1', 'F2' => 'P2']);
+        $round = $this->judged([$this->act('F1', 'P1', ['F2'])], ['security' => ['F1'], 'correctness' => ['F2']], ['correctness' => ['F2' => 'P2']]);
 
         $catches = ReviewerCatches::of([$round]);
 
@@ -59,7 +59,7 @@ final class ReviewerCatchesTest extends TestCase
 
     public function testADroppedFindingCountsUnderItsSeverityAndAloneWhenNoOtherReviewerReportedIt(): void
     {
-        $round = $this->judged([], ['security' => ['F1']], ['F1' => 'P3'])->withDropped([new RoundFinding('F1', 'P3', 'Quotes code the change does not hold.')]);
+        $round = $this->judged([], ['security' => ['F1']], ['security' => ['F1' => 'P3']])->withDropped([new RoundFinding('F1', 'P3', 'Quotes code the change does not hold.')]);
 
         self::assertSame(['security' => [0, 0, 1]], $this->alone(ReviewerCatches::of([$round])));
     }
@@ -124,14 +124,14 @@ final class ReviewerCatchesTest extends TestCase
 
     public function testTiedReviewersEachKeepTheirOwnCountOfP1sNoOtherReviewerFound(): void
     {
-        $round = $this->judged([$this->act('F1', 'P1', ['F2', 'F3']), $this->act('F4', 'P1')], ['security' => ['F1', 'F4'], 'correctness' => ['F2', 'F3']], ['F1' => 'P1', 'F2' => 'P1', 'F3' => 'P1']);
+        $round = $this->judged([$this->act('F1', 'P1', ['F2', 'F3']), $this->act('F4', 'P1')], ['security' => ['F1', 'F4'], 'correctness' => ['F2', 'F3']], ['correctness' => ['F2' => 'P1', 'F3' => 'P1']]);
 
         self::assertSame('The correctness and security reviewers found the most P1 findings, 2 each; the correctness reviewer alone found 0 and the security reviewer alone found 1.', ReviewerCatches::of([$round])?->takeaway());
     }
 
     public function testAnEntryRaisedByAMergeCountsUnderTheSeverityItsOwnReviewerGave(): void
     {
-        $round = $this->judged([$this->act('F1', 'P1', ['F2'])], ['correctness' => ['F1'], 'security' => ['F2']], ['F1' => 'P2', 'F2' => 'P1']);
+        $round = $this->judged([$this->act('F1', 'P1', ['F2'])], ['correctness' => ['F1'], 'security' => ['F2']], ['correctness' => ['F1' => 'P2'], 'security' => ['F2' => 'P1']]);
 
         $catches = ReviewerCatches::of([$round]);
 
@@ -139,16 +139,29 @@ final class ReviewerCatchesTest extends TestCase
         self::assertSame('The security reviewer found the most P1 findings, 1, and 0 of them no other reviewer found.', $catches?->takeaway());
     }
 
-    public function testAnEntryThatMergedOthersWithoutItsReportedSeverityLeavesItsRoundOut(): void
+    public function testTwoReviewersRepeatingOneFindingAtDifferentSeveritiesEachCountTheirOwn(): void
     {
-        $round = $this->judged([$this->act('F1', 'P1', ['F2'])], ['correctness' => ['F1'], 'security' => ['F2']], ['F2' => 'P1']);
+        $round = $this->judged([$this->act('F1', 'P2')], ['correctness' => ['F1'], 'security' => ['F1']], ['security' => ['F1' => 'P1']]);
+
+        $catches = ReviewerCatches::of([$round]);
+
+        self::assertSame(['correctness' => [0, 1, 0], 'security' => [1, 0, 0]], $this->found($catches));
+        self::assertSame('The security reviewer found the most P1 findings, 1, and 0 of them no other reviewer found.', $catches?->takeaway());
+    }
+
+    public function testARoundWhoseReporterRowsHoldNoSeveritiesIsLeftOut(): void
+    {
+        $round = $this->round()
+            ->withOutcomes([$this->reviewer('security')])
+            ->judgedWith([$this->act('F1', 'P1')], new DateTimeImmutable('2026-10-28T11:10:00+00:00'))
+            ->withFindingsByReviewer(['r-1-security' => ['F1']]);
 
         self::assertNull(ReviewerCatches::of([$round]));
     }
 
-    public function testARoundWithAnUnreadableFindingIsLeftOut(): void
+    public function testARoundWithAFindingMissingFromItsRecordIsLeftOut(): void
     {
-        $round = $this->judged([$this->act('F1', 'P1')], ['security' => ['F1']])->withUnreadableFindings();
+        $round = $this->judged([$this->act('F1', 'P1')], ['security' => ['F1']])->withFindingsMissing();
 
         self::assertNull(ReviewerCatches::of([$round]));
     }
@@ -200,19 +213,25 @@ final class ReviewerCatchesTest extends TestCase
     }
 
     /**
-     * @param list<RoundFinding>          $findings
-     * @param array<string, list<string>> $reportedByRole
-     * @param array<string, string>       $reported
+     * @param list<RoundFinding>                   $findings
+     * @param array<string, list<string>>          $reportedByRole
+     * @param array<string, array<string, string>> $severityByRole
      */
-    // Only the entries that merged nothing are read at their own severity, because a merge may have raised an entry's one, as the ledger reader does.
-    private function judged(array $findings, array $reportedByRole, array $reported = []): ReviewedRound
+    // Each reviewer rates an id as the entry of that id reads unless the test gives its own severity, the way a reporter row records it.
+    private function judged(array $findings, array $reportedByRole, array $severityByRole = []): ReviewedRound
     {
-        $unmerged = array_filter($findings, static fn (RoundFinding $finding): bool => [] === $finding->merged);
+        $entries = array_column(array_map(static fn (RoundFinding $finding): array => [$finding->id, $finding->severity], $findings), 1, 0);
+        $severities = [];
+
+        foreach ($reportedByRole as $role => $ids) {
+            $rated = array_map(static fn (string $id): ?string => $severityByRole[$role][$id] ?? $entries[$id] ?? null, array_combine($ids, $ids));
+            $severities['r-1-'.$role] = array_filter($rated, static fn (?string $severity): bool => null !== $severity);
+        }
 
         return $this->round()
             ->withOutcomes(array_map($this->reviewer(...), array_keys($reportedByRole)))
             ->judgedWith($findings, new DateTimeImmutable('2026-10-28T11:10:00+00:00'))
-            ->withReportedSeverities($reported + array_column(array_map(static fn (RoundFinding $finding): array => [$finding->id, (string) $finding->severity], $unmerged), 1, 0))
+            ->withSeveritiesByReviewer($severities)
             ->withFindingsByReviewer(array_combine(array_map(static fn (string $role): string => 'r-1-'.$role, array_keys($reportedByRole)), array_values($reportedByRole)));
     }
 
