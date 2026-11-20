@@ -21,9 +21,11 @@ use Intakt\Core\Review\Contract\FollowUp;
 use Intakt\Core\Review\Contract\JudgedFindings;
 use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\JudgeDoneFinding;
+use Intakt\Core\Review\Contract\JudgingFailed;
 use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\ReviewerBlocked;
 use Intakt\Core\Review\Contract\ReviewerFailed;
+use Intakt\Core\Review\Contract\ReviewerFindingsRecorded;
 use Intakt\Core\Review\Contract\ReviewerStarted;
 use Intakt\Core\Review\Contract\ReviewerStopped;
 use Intakt\Core\Review\Contract\ReviewStarted;
@@ -84,6 +86,16 @@ final readonly class RoundLedger
         ));
     }
 
+    // Under the ids of the change's finding ledger, because those are the ids the act list and the judge's merges name, so the dashboard can tell which reviewers reported an act entry.
+    public function reviewerFindingsRecorded(ReportedFindings $reported): void
+    {
+        $this->append(LedgerEventKind::ReviewerFindingsRecorded, new ReviewerFindingsRecorded(
+            $reported->reviewer->round()->id()->toRfc4122(),
+            $reported->reviewer->id()->toRfc4122(),
+            $reported->findings,
+        ));
+    }
+
     // Written with the verdict in one transaction, so a substitute's verdict never counts without its owed catch-up; the substitute's model goes with it, because the dashboard then names the reviewer by the model that answered.
     public function catchUpOwed(RoundReviewer $reviewer, Provider $substitute): void
     {
@@ -108,6 +120,12 @@ final readonly class RoundLedger
     public function reviewerStopped(RoundReviewer $reviewer): void
     {
         $this->append(LedgerEventKind::ReviewerStopped, new ReviewerStopped(...$this->identify($reviewer)));
+    }
+
+    // The only trace of a judging that failed for good, because Messenger dispatches its failure message instead of parking it in the failure transport.
+    public function judgingFailed(ReviewRound $round): void
+    {
+        $this->append(LedgerEventKind::JudgingFailed, new JudgingFailed($round->id()->toRfc4122()));
     }
 
     // The judged findings go with the call, because the dashboard renders from the ledger alone and needs what each act id stands for.
@@ -190,7 +208,7 @@ final readonly class RoundLedger
         return ['round' => $reviewer->round()->id()->toRfc4122(), 'reviewer' => $reviewer->id()->toRfc4122(), 'role' => $reviewer->roleName(), 'tier' => $reviewer->tier()];
     }
 
-    private function append(LedgerEventKind $kind, ReviewStarted|ReviewerStarted|VerdictReceived|CatchUpOwed|ReviewerFailed|ReviewerBlocked|ReviewerStopped|JudgeDone $payload): void
+    private function append(LedgerEventKind $kind, ReviewStarted|ReviewerStarted|VerdictReceived|CatchUpOwed|ReviewerFailed|ReviewerBlocked|ReviewerStopped|JudgeDone|JudgingFailed|ReviewerFindingsRecorded $payload): void
     {
         $result = $this->ledger->append(new LedgerEvent($kind, $this->serializer->serialize($payload, JsonEncoder::FORMAT)));
 

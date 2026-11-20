@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\IndexResolvedFindings;
 
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Memory\Contract\MemoryEntry;
 use Intakt\Core\Memory\Contract\MemoryIndex;
 use Intakt\Core\Memory\Contract\MemoryQuery;
@@ -67,6 +68,7 @@ use Throwable;
 #[UsesClass(MemoryDocuments::class)]
 #[UsesClass(MemoryEntry::class)]
 #[UsesClass(MemoryQuery::class)]
+#[UsesClass(Paths::class)]
 #[UsesClass(RelevantMemory::class)]
 #[UsesClass(ProjectMemoryNeedsEmbeddingModel::class)]
 final class IndexResolvedFindingsTest extends KernelTestCase
@@ -100,7 +102,7 @@ final class IndexResolvedFindingsTest extends KernelTestCase
 
         $this->fixture->indexing($this->index)(new IndexResolvedFindings($second));
 
-        $expected = new MemoryEntry('alpha', 'Resolved finding: Text a'.PHP_EOL.'Cause: The rule a.'.PHP_EOL.'Evidence: probe a: output a', ['src/A.php']);
+        $expected = new MemoryEntry('alpha', 'Resolved finding: Text a'.PHP_EOL.'Cause: The rule a.'.PHP_EOL.'Evidence: probe a: output a', new Paths('src/A.php'));
         self::assertEquals([$expected], $this->remembered(['src/A.php']));
     }
 
@@ -111,7 +113,7 @@ final class IndexResolvedFindingsTest extends KernelTestCase
 
         $this->fixture->indexing($this->index)(new IndexResolvedFindings($second));
 
-        self::assertSame([], $this->memory->relevantTo(new MemoryQuery('beta', ['src/A.php'], 100000))->entries);
+        self::assertSame([], $this->memory->relevantTo(new MemoryQuery('beta', new Paths('src/A.php'), 100000))->entries);
     }
 
     public function testAFindingStillOpenAfterTheRoundIsNotIndexed(): void
@@ -282,7 +284,7 @@ final class IndexResolvedFindingsTest extends KernelTestCase
      */
     private function remembered(array $files): array
     {
-        return $this->memory->relevantTo(new MemoryQuery('alpha', $files, 100000))->entries;
+        return $this->memory->relevantTo(new MemoryQuery('alpha', new Paths(...$files), 100000))->entries;
     }
 
     private function indexFailingWith(Throwable $failure): MemoryIndex

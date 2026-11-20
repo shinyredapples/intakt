@@ -60,7 +60,7 @@ final readonly class GitHubWatchReads implements OpenChanges, HeadChecks
         $later = $complete ? [] : $this->laterPulls($repository);
 
         // The validator belongs to the first page only, and a reopened older pull request can fill page two without changing a full page one, so such a list has none and the next listing is full.
-        return OpenChangeListing::listed(array_map($this->openChange(...), [...$pulls, ...$later]), $complete ? $first['etag'] : null);
+        return OpenChangeListing::listed($this->onceEach(array_map($this->openChange(...), [...$pulls, ...$later])), $complete ? $first['etag'] : null);
     }
 
     public function ciStateOf(string $project, CommitId $head): CiState
@@ -119,6 +119,22 @@ final readonly class GitHubWatchReads implements OpenChanges, HeadChecks
         } catch (ChangeNotFound|InvalidArgumentException|Exception $invalid) {
             throw new ForgeReadFailed('GitHub listed a pull request this forge cannot read.', $invalid->getCode(), previous: $invalid);
         }
+    }
+
+    /**
+     * @param list<OpenChange> $changes
+     *
+     * @return list<OpenChange>
+     */
+    private function onceEach(array $changes): array
+    {
+        // Pages shift between reads when a pull request opens or closes, so one pull request can come on two pages and must still be listed once.
+        $byId = [];
+        foreach ($changes as $change) {
+            $byId[$change->id->value] ??= $change;
+        }
+
+        return array_values($byId);
     }
 
     /**

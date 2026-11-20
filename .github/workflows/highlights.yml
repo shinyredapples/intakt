@@ -20,6 +20,7 @@ permissions:
 jobs:
   build:
     if: github.repository == 'shinyredapples/intakt' && github.ref == 'refs/heads/main'
+    # GitHub's image pulls from Docker Hub unthrottled; a CI_RUNS_ON runner needs a Docker Hub login this job lacks.
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     # jekyll-build-pages reads the repository's Pages settings (jekyll-github-metadata): without pages: read its token
@@ -62,7 +63,7 @@ jobs:
   publish:
     needs: build
     if: github.repository == 'shinyredapples/intakt' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-24.04
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-24.04"') }}
     timeout-minutes: 5
     permissions:
       pages: &pages-write write
