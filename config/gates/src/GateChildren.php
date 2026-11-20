@@ -35,12 +35,15 @@ final readonly class GateChildren
     public function reportsOf(array $gates, array $arguments): array
     {
         $scratch = ScratchDirectory::create(self::SCRATCH_PREFIX);
-        $results = $this->resultsOf($this->slots->launchOrder($gates, $this->runningTheChangesCode), $this->childrenOf($gates, $arguments, $scratch));
 
-        $reports = array_map(static fn (string $gate): GateReport => self::keptIn($scratch, GateReport::fromChild($gate, $results[$gate])), $gates);
-        $scratch?->remove();
+        // Because the folder holds every child's whole result, it goes whatever ends the run.
+        try {
+            $results = $this->resultsOf($this->slots->launchOrder($gates, $this->runningTheChangesCode), $this->childrenOf($gates, $arguments, $scratch), $scratch);
 
-        return $reports;
+            return array_map(static fn (string $gate): GateReport => self::keptIn($scratch, GateReport::fromChild($gate, $results[$gate])), $gates);
+        } finally {
+            $scratch?->remove();
+        }
     }
 
     /**
@@ -85,13 +88,14 @@ final readonly class GateChildren
      *
      * @return array<string, ProcessResult>
      */
-    private function resultsOf(array $waiting, array $children): array
+    private function resultsOf(array $waiting, array $children, ?ScratchDirectory $scratch): array
     {
         $running = [];
         $results = [];
-        // Because one Ctrl-C or kill meant for bin/check must reach every child running at that moment.
-        $forwarding = StopSignalForwarding::through(static function () use (&$running): void {
+        // Because one Ctrl-C or kill meant for bin/check must reach every child running at that moment, and bin/check then dies of that signal before any finally runs.
+        $forwarding = StopSignalForwarding::through(static function () use (&$running, $scratch): void {
             self::stopAll($running);
+            $scratch?->remove();
         });
 
         while ([] !== $waiting || [] !== $running) {

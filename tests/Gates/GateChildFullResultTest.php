@@ -19,6 +19,7 @@ use Intakt\Gates\ScratchDirectory;
 use Intakt\Gates\StopSignalForwarding;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Symfony\Component\Process\Process;
 
 #[CoversClass(GateChildren::class)]
 #[CoversClass(CheckCommand::class)]
@@ -35,6 +36,8 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[UsesClass(StopSignalForwarding::class)]
 final class GateChildFullResultTest extends SandboxTestCase
 {
+    private const int SAFETY_LIMIT_NANOSECONDS = 90_000_000_000;
+
     public function testTheParentCollectsTheWholeResultEachChildKeeps(): void
     {
         $sandbox = $this->sandboxWithTwelveDashes();
@@ -77,6 +80,52 @@ final class GateChildFullResultTest extends SandboxTestCase
 
         self::assertSame('kept before', file_get_contents($sandbox->root.'/whole.json'));
         self::assertSame(1, $child->exitCode, $child->output);
+    }
+
+    public function testACheckLeavesNoScratchFolderBehind(): void
+    {
+        $temporary = $this->emptySandbox();
+
+        $check = new ProcessRunner()->run([PHP_BINARY, $this->fakeGatesHome()->root.'/bin/check', '--root='.$this->emptySandbox()->root, '--only=cs'], $temporary->root, [GateSlots::VARIABLE => '1', 'TMPDIR' => $temporary->root]);
+
+        self::assertSame(0, $check->exitCode, $check->output);
+        self::assertSame([], glob($temporary->root.'/intakt-gate-results-*'));
+    }
+
+    public function testAnInterruptedCheckLeavesNoScratchFolderBehind(): void
+    {
+        $home = $this->fakeGatesHome();
+        $temporary = $this->emptySandbox();
+        $check = new Process([PHP_BINARY, $home->root.'/bin/check', '--root='.$this->emptySandbox()->root, '--only=commits'], $home->root, [GateSlots::VARIABLE => '1', 'TMPDIR' => $temporary->root]);
+        $check->start();
+        $this->awaitFile($home->root.'/commits.pid');
+
+        $check->signal(15);
+        $check->wait();
+
+        self::assertSame([], glob($temporary->root.'/intakt-gate-results-*'));
+    }
+
+    private function fakeGatesHome(): Sandbox
+    {
+        $real = dirname(__DIR__, 2);
+        $home = $this->sandboxWith('gate-children');
+        $home->write('bin/check', (string) file_get_contents($real.'/bin/check'));
+        $home->symlink('vendor', $real.'/vendor');
+
+        return $home;
+    }
+
+    // Because the child writes its process id once it runs, the signal must wait for it; the limit only ends a hang.
+    private function awaitFile(string $file): void
+    {
+        $until = hrtime(true) + self::SAFETY_LIMIT_NANOSECONDS;
+
+        while ('' === (string) @file_get_contents($file) && hrtime(true) < $until) {
+            usleep(10000);
+        }
+
+        self::assertFileExists($file);
     }
 
     private function sandboxWithTwelveDashes(): Sandbox
