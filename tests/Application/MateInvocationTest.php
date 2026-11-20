@@ -37,12 +37,11 @@ final class MateInvocationTest extends TestCase
 
     public function testTheProfilerToolsReadTheProfilesOfTheCacheThatAppCacheDirNames(): void
     {
-        // bin/instance hands its scratch cache to the app and to the command it runs through APP_CACHE_DIR.
         $cache = sys_get_temp_dir().'/intakt-mate-profiler-'.bin2hex(random_bytes(6));
         $profile = new Profile('a1b2c3');
         $profile->setMethod('GET');
         $profile->setUrl('http://localhost/');
-        $profile->setTime(time());
+        $profile->setTime(1_795_000_000);
         $profile->setStatusCode(200);
 
         try {
