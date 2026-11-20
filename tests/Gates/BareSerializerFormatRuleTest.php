@@ -5,6 +5,11 @@ declare(strict_types=1);
 namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\PhpStan\BareSerializerFormatRule;
+use PhpParser\Node\Expr\MethodCall;
+use PhpParser\Node\Expr\Variable;
+use PhpParser\Node\Identifier;
+use PhpParser\Node\VariadicPlaceholder;
+use PHPStan\Analyser\Scope;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 
@@ -30,6 +35,8 @@ final class BareSerializerFormatRuleTest extends PhpStanRuleTestCase
         yield 'named format arguments' => [["\$serializer->serialize(\$data, format: 'json')", "\$serializer->deserialize(format: 'json', type: \\stdClass::class, data: \$data)", "\$encoder->supportsEncoding(format: 'json')"]];
         yield 'normalizers, encoders and decoders' => [["\$normalizer->normalize(\$data, 'json')", "\$denormalizer->denormalize(\$data, \\stdClass::class, 'json')", "\$encoder->encode(\$data, 'json')", "\$decoder->decode('{}', 'json')"]];
         yield 'format support checks' => [["\$normalizer->supportsNormalization(\$data, 'json')", "\$denormalizer->supportsDenormalization(\$data, \\stdClass::class, 'json')", "\$encoder->supportsEncoding('json')", "\$decoder->supportsDecoding('json')"]];
+        yield 'braced names and unpacked arguments' => [["\$serializer->{'serialize'}(\$data, 'json')", "\$serializer->serialize(...[\$data, 'json'])", "\$serializer->serialize(...['data' => \$data, 'format' => 'json'])", "\$serializer->serialize(\$data, ...['json'])"]];
+        yield 'an override that renames the format parameter' => [["\$renamed->serialize(format: \$data, encoding: 'json')", "\$renamed->serialize(\$data, 'json')"]];
     }
 
     /**
@@ -77,6 +84,48 @@ final class BareSerializerFormatRuleTest extends PhpStanRuleTestCase
         self::assertSame('', $findings);
     }
 
+    public function testAJsonArgumentThatIsNotTheRenamedFormatParameterPassesStaticAnalysis(): void
+    {
+        $findings = $this->ruleFindingsIn($this->sandboxReturning([
+            "\$renamed->serialize(format: 'json', encoding: \\Symfony\\Component\\Serializer\\Encoder\\JsonEncoder::FORMAT)",
+            "\$renamed->serialize('json', \\Symfony\\Component\\Serializer\\Encoder\\JsonEncoder::FORMAT)",
+        ]));
+
+        self::assertSame('', $findings);
+    }
+
+    public function testAFirstClassCallableOfAFormatMethodPassesStaticAnalysis(): void
+    {
+        $findings = $this->ruleFindingsIn($this->sandboxReturning([
+            '$serializer->serialize(...)',
+            '$encoder->encode(...)',
+            '$other->serialize(...)',
+            '\Symfony\Component\Serializer\Serializer::serialize(...)',
+        ]));
+
+        self::assertSame('', $findings);
+    }
+
+    public function testAFirstClassCallableOfASameNamedMethodIsNoFinding(): void
+    {
+        $node = new MethodCall(new Variable('other'), new Identifier('encode'), [new VariadicPlaceholder()]);
+
+        $errors = new BareSerializerFormatRule()->processNode($node, $this->createStub(Scope::class));
+
+        self::assertSame([], $errors);
+    }
+
+    public function testABareJsonFormatPassedToTheParentSerializerFailsStaticAnalysis(): void
+    {
+        $sandbox = $this->sandboxReturning([]);
+        $sandbox->write('src/JsonShortcut.php', "<?php\n\ndeclare(strict_types=1);\n\nnamespace Intakt\\Sample;\n\nclass JsonShortcut extends \\Symfony\\Component\\Serializer\\Serializer\n{\n    public function asJson(mixed \$data): string\n    {\n        return parent::serialize(\$data, 'json');\n    }\n\n    public function asConstant(mixed \$data, string \$format): string\n    {\n        return parent::serialize(\$data, \$format).self::serialize('json', \$format);\n    }\n}\n");
+
+        $findings = $this->ruleFindingsIn($sandbox);
+
+        self::assertStringContainsString('src/JsonShortcut.php:11 intakt.bareSerializerFormat', $findings);
+        self::assertStringNotContainsString('src/JsonShortcut.php:16', $findings);
+    }
+
     /**
      * @param list<string> $expressions
      */
@@ -84,6 +133,7 @@ final class BareSerializerFormatRuleTest extends PhpStanRuleTestCase
     {
         $sandbox = $this->emptySandbox();
         $sandbox->write('src/Other.php', "<?php\n\ndeclare(strict_types=1);\n\nnamespace Intakt\\Sample;\n\nfinal readonly class Other\n{\n    public function serialize(mixed \$data, string \$format): string\n    {\n        return \$format;\n    }\n}\n");
+        $sandbox->write('src/RenamedSerializer.php', "<?php\n\ndeclare(strict_types=1);\n\nnamespace Intakt\\Sample;\n\nuse Symfony\\Component\\Serializer\\SerializerInterface;\n\nfinal readonly class RenamedSerializer implements SerializerInterface\n{\n    public function serialize(mixed \$format, string \$encoding, array \$context = []): string\n    {\n        return \$encoding;\n    }\n\n    public function deserialize(mixed \$data, string \$type, string \$format, array \$context = []): mixed\n    {\n        return \$data;\n    }\n}\n");
         $sandbox->write('src/Report.php', $this->classReturning($expressions));
 
         return $sandbox;
@@ -102,6 +152,7 @@ final class BareSerializerFormatRuleTest extends PhpStanRuleTestCase
             '\Symfony\Component\Serializer\Encoder\EncoderInterface $encoder',
             '\Symfony\Component\Serializer\Encoder\DecoderInterface $decoder',
             'Other $other',
+            'RenamedSerializer $renamed',
             'mixed $data',
         ]);
         $methods = array_map(
