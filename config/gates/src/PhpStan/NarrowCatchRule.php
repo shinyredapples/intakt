@@ -77,7 +77,7 @@ final readonly class NarrowCatchRule implements Rule
         return array_values(array_filter($names, $this->isGeneric(...)));
     }
 
-    // class names compare case-insensitively, as PHP resolves them
+    // in any case, because PHP resolves class names case-insensitively and \runtimeexception catches the same class
     private function isGeneric(string $name): bool
     {
         return in_array(strtolower($name), array_map(strtolower(...), [Throwable::class, ...self::ROOTS]), true);
