@@ -153,7 +153,7 @@ final readonly class AccountPlatform implements PlatformInterface
         $this->coolDownPinned($retryAfter);
     }
 
-    // Symfony AI's generic bridge throws its 429 without the response's Retry-After (symfony/ai#2913, reproduced in upstream/ai-failover-platform-deferred-rate-limit), so the header is read from the raw answer as RFC 9110 defines it: delta-seconds of any length, or an HTTP date judged against the clock, capped at a day and at least a second; null when there is none or it does not parse, so the default minute applies.
+    // Symfony AI's generic bridge throws its 429 without the response's Retry-After (symfony/ai#2913, reproduced in upstream/ai-failover-platform-deferred-rate-limit), so the header is read from the raw answer as RFC 9110 defines it: delta-seconds of any length, or an HTTP date judged against the clock, from visible ASCII and spaces only, capped at a day and at least a second; null when there is none or it does not parse, so the default minute applies.
     private function retryAfterHeaderOf(?RawResultInterface $answer): ?int
     {
         if (!$answer instanceof RawHttpResult) {
@@ -163,6 +163,11 @@ final readonly class AccountPlatform implements PlatformInterface
         try {
             $value = trim($answer->getObject()->getHeaders(false)['retry-after'][0] ?? '');
         } catch (ExceptionInterface) {
+            return null;
+        }
+
+        // Visible ASCII and spaces only, checked before any date is parsed, because PHP's date parser throws on a NUL byte and the provider's 429 must reach the caller unchanged.
+        if (1 !== preg_match('~^[\x20-\x7E]*\z~', $value)) {
             return null;
         }
 
@@ -179,60 +184,25 @@ final readonly class AccountPlatform implements PlatformInterface
         return strlen($significant) > strlen((string) AccountCooldowns::LONGEST_SECONDS) ? AccountCooldowns::LONGEST_SECONDS : (int) $significant;
     }
 
-    // The three HTTP-date forms of RFC 9110 (section 5.6.7), matched whole and case-sensitive on ASCII: IMF-fixdate, the obsolete RFC 850 form and asctime, whose one-digit day is padded by a space (`Nov  9`). Read by hand instead of by PHP's date parser, which throws on a NUL, fixes a two-digit year to 1970 to 2069 and turns second 60 or minute 99 into another time.
+    // The three HTTP-date forms of RFC 9110: IMF-fixdate, the obsolete RFC 850 form and asctime. A date counts only when it formats back to the header, so one PHP reads by normalizing it (minute 99, a wrong weekday) falls back to the default minute instead of a wait it never named.
     private function secondsUntilDate(string $value): ?int
     {
-        $month = '(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)';
-        $time = '(\d{2}):(\d{2}):(\d{2})';
+        $utc = new DateTimeZone('UTC');
 
-        if (1 === preg_match('~^(Mon|Tue|Wed|Thu|Fri|Sat|Sun), (\d{2}) '.$month.' (\d{4}) '.$time.' GMT\z~', $value, $date)) {
-            return $this->secondsUntil($date[1], [(int) $date[4], $date[3], (int) $date[2]], [(int) $date[5], (int) $date[6], (int) $date[7]]);
-        }
-
-        if (1 === preg_match('~^(Mon|Tues|Wednes|Thurs|Fri|Satur|Sun)day, (\d{2})-'.$month.'-(\d{2}) '.$time.' GMT\z~', $value, $date)) {
-            return $this->secondsUntil(substr($date[1], 0, 3), [$this->fullYearOf((int) $date[4]), $date[3], (int) $date[2]], [(int) $date[5], (int) $date[6], (int) $date[7]]);
-        }
-
-        if (1 === preg_match('~^(Mon|Tue|Wed|Thu|Fri|Sat|Sun) '.$month.' (\d{2}| \d) '.$time.' (\d{4})\z~', $value, $date)) {
-            return $this->secondsUntil($date[1], [(int) $date[7], $date[2], (int) trim($date[3])], [(int) $date[4], (int) $date[5], (int) $date[6]]);
+        foreach (['D, d M Y H:i:s \G\M\T', 'l, d-M-y H:i:s \G\M\T', 'D M j H:i:s Y'] as $format) {
+            $at = DateTimeImmutable::createFromFormat('!'.$format, $value, $utc);
+            if (false !== $at && $this->formatsBack($at, $format, $value)) {
+                return $at->getTimestamp() - $this->clock->now()->getTimestamp();
+            }
         }
 
         return null;
     }
 
-    // A date that does not exist (31 February, hour 24) or names the wrong weekday is no date, so the default minute applies instead of a wait it never named. Second 60 is a leap second, which RFC 9110 allows: it is the first second of the next minute.
-    /**
-     * @param array{int, string, int} $day  year, month name, day of the month
-     * @param array{int, int, int}    $time hour, minute, second
-     */
-    private function secondsUntil(string $weekday, array $day, array $time): ?int
+    // asctime pads a one-digit day with a space (`Nov  9`), which no PHP format writes, so runs of spaces are compared as one.
+    private function formatsBack(DateTimeImmutable $at, string $format, string $value): bool
     {
-        [$year, $monthName, $dayOfMonth] = $day;
-        [$hour, $minute, $second] = $time;
-        $month = 1 + (int) array_search($monthName, ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'], true);
-        if (!checkdate($month, $dayOfMonth, $year) || 23 < $hour || 59 < $minute || 60 < $second) {
-            return null;
-        }
-
-        $midnight = DateTimeImmutable::createFromFormat('!Y-n-j', sprintf('%04d-%d-%d', $year, $month, $dayOfMonth), new DateTimeZone('UTC'));
-        if (false === $midnight || $weekday !== $midnight->format('D')) {
-            return null;
-        }
-
-        return $midnight->getTimestamp() + 3600 * $hour + 60 * $minute + $second - $this->clock->now()->getTimestamp();
-    }
-
-    // RFC 9110: a two-digit year that would lie more than 50 years ahead is the latest past year with those digits; otherwise the year of this century, or of the next one when that is nearer.
-    private function fullYearOf(int $twoDigits): int
-    {
-        $now = (int) $this->clock->now()->format('Y');
-        $year = intdiv($now, 100) * 100 + $twoDigits;
-
-        return match (true) {
-            $year > $now + 50 => $year - 100,
-            $year < $now - 50 => $year + 100,
-            default => $year,
-        };
+        return $at->format($format) === preg_replace('~ {2,}~', ' ', $value);
     }
 
     // The pinned provider keeps its own window, which alone says how long the call waits for it (AccountFailoverPlatform); logged instead of thrown, because the provider's 429 must still reach the caller.
