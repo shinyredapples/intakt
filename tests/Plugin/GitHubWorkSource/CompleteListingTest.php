@@ -19,6 +19,7 @@ use Intakt\Plugin\GitHubWorkSource\Domain\ItemReading;
 use Intakt\Plugin\GitHubWorkSource\Domain\QueuedIssue;
 use Intakt\Plugin\GitHubWorkSource\Domain\StoredIssue;
 use Intakt\Plugin\GitHubWorkSource\Domain\SyncedListing;
+use Intakt\Plugin\GitHubWorkSource\Domain\ValidatorChange;
 use Intakt\Plugin\GitHubWorkSource\Domain\Vouching;
 use Intakt\Plugin\GitHubWorkSource\Infrastructure\CompleteListing;
 use Intakt\Plugin\GitHubWorkSource\Infrastructure\IntakeStore;
@@ -43,6 +44,7 @@ use Psr\Log\LoggerInterface;
 #[UsesClass(ItemReading::class)]
 #[UsesClass(QueuedIssue::class)]
 #[UsesClass(Vouching::class)]
+#[UsesClass(ValidatorChange::class)]
 final class CompleteListingTest extends KernelTestCase
 {
     private IntakeStore $store;

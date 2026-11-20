@@ -18,6 +18,7 @@ use Intakt\Plugin\GitHubWorkSource\Domain\ItemReading;
 use Intakt\Plugin\GitHubWorkSource\Domain\QueuedIssue;
 use Intakt\Plugin\GitHubWorkSource\Domain\StoredIssue;
 use Intakt\Plugin\GitHubWorkSource\Domain\SyncedListing;
+use Intakt\Plugin\GitHubWorkSource\Domain\ValidatorChange;
 use Intakt\Plugin\GitHubWorkSource\Domain\Vouching;
 use Psr\Log\LoggerInterface;
 use Throwable;
@@ -46,8 +47,8 @@ final readonly class CompleteListing
             return $this->short($project, $short);
         }
 
-        if (!$this->store->recordIfStill($project, $validator, $issues, $listing->isUnchanged() ? $validator : $listing->validator)) {
-            // Another sync stored a complete listing while this one's request was in flight; its rows are the newer truth.
+        if (!$this->store->recordIfStill($project, $issues, new ValidatorChange($validator, $listing->isUnchanged() ? $validator : $listing->validator))) {
+            // The stored rows are answered instead, because the sync that stored its listing while this request was in flight holds the newer truth.
             $issues = $this->store->issuesOf($project);
         }
 

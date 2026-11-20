@@ -20,6 +20,7 @@ use Intakt\Plugin\GitHubWorkSource\Domain\ItemReading;
 use Intakt\Plugin\GitHubWorkSource\Domain\QueuedIssue;
 use Intakt\Plugin\GitHubWorkSource\Domain\StoredIssue;
 use Intakt\Plugin\GitHubWorkSource\Domain\TaskFailure;
+use Intakt\Plugin\GitHubWorkSource\Domain\ValidatorChange;
 use Intakt\Plugin\GitHubWorkSource\Domain\Vouching;
 use Intakt\Plugin\GitHubWorkSource\Infrastructure\IntakeStore;
 use Intakt\Plugin\WorkSource\Contract\TaskNotQueued;
@@ -38,6 +39,7 @@ use WeakReference;
 #[CoversClass(StoredIssue::class)]
 #[CoversClass(IntakeValidator::class)]
 #[CoversClass(TaskFailure::class)]
+#[CoversClass(ValidatorChange::class)]
 #[CoversClass(Vouching::class)]
 #[UsesClass(ItemReading::class)]
 #[UsesClass(QueuedIssue::class)]
@@ -296,7 +298,7 @@ final class IntakeStoreTest extends KernelTestCase
     {
         $this->store->record('alpha', [$this->stored(Issues::task(7))], 'W/"a"');
 
-        $recorded = $this->store->recordIfStill('alpha', 'W/"a"', [$this->stored(Issues::task(8))], 'W/"b"');
+        $recorded = $this->store->recordIfStill('alpha', [$this->stored(Issues::task(8))], new ValidatorChange('W/"a"', 'W/"b"'));
 
         self::assertTrue($recorded);
         self::assertSame([8], array_map(static fn (StoredIssue $issue): int => $issue->number(), $this->store->issuesOf('alpha')));
@@ -307,7 +309,7 @@ final class IntakeStoreTest extends KernelTestCase
     {
         $this->store->record('alpha', [$this->stored(Issues::task(8))], 'W/"b"');
 
-        $recorded = $this->store->recordIfStill('alpha', 'W/"a"', [$this->stored(Issues::task(7))], 'W/"a"');
+        $recorded = $this->store->recordIfStill('alpha', [$this->stored(Issues::task(7))], new ValidatorChange('W/"a"', 'W/"a"'));
 
         self::assertFalse($recorded);
         self::assertSame([8], array_map(static fn (StoredIssue $issue): int => $issue->number(), $this->store->issuesOf('alpha')));
@@ -316,7 +318,7 @@ final class IntakeStoreTest extends KernelTestCase
 
     public function testAFirstListingIsRecordedWhenNoValidatorWasStoredYet(): void
     {
-        self::assertTrue($this->store->recordIfStill('alpha', null, [$this->stored(Issues::task(7))], 'W/"a"'));
+        self::assertTrue($this->store->recordIfStill('alpha', [$this->stored(Issues::task(7))], new ValidatorChange(null, 'W/"a"')));
         self::assertSame('W/"a"', $this->store->validatorOf('alpha'));
     }
 

@@ -11,6 +11,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Intakt\Plugin\GitHubWorkSource\Domain\IntakeValidator;
 use Intakt\Plugin\GitHubWorkSource\Domain\StoredIssue;
 use Intakt\Plugin\GitHubWorkSource\Domain\TaskFailure;
+use Intakt\Plugin\GitHubWorkSource\Domain\ValidatorChange;
 use Intakt\Plugin\WorkSource\Contract\TaskNotQueued;
 use InvalidArgumentException;
 use LogicException;
@@ -44,7 +45,8 @@ final readonly class IntakeStore
     {
         $listed = $this->listed($project, $issues);
         $this->ownManager()->wrapInTransaction(function (EntityManagerInterface $manager) use ($project, $listed, $validator): void {
-            $this->replaceRows($manager, $project, $listed, $validator);
+            $this->replaceRows($manager, $project, $listed);
+            $this->recordValidator($manager, $project, $validator);
         });
     }
 
@@ -52,17 +54,18 @@ final readonly class IntakeStore
     /**
      * @param list<StoredIssue> $issues
      */
-    public function recordIfStill(string $project, ?string $read, array $issues, ?string $validator): bool
+    public function recordIfStill(string $project, array $issues, ValidatorChange $validator): bool
     {
         $listed = $this->listed($project, $issues);
 
-        return true === $this->ownManager()->wrapInTransaction(function (EntityManagerInterface $manager) use ($project, $read, $listed, $validator): bool {
+        return true === $this->ownManager()->wrapInTransaction(function (EntityManagerInterface $manager) use ($project, $listed, $validator): bool {
             $stored = $manager->find(IntakeValidator::class, $project, LockMode::PESSIMISTIC_WRITE);
-            if ($stored?->value() !== $read) {
+            if ($stored?->value() !== $validator->from) {
                 return false;
             }
 
-            $this->replaceRows($manager, $project, $listed, $validator);
+            $this->replaceRows($manager, $project, $listed);
+            $this->recordValidator($manager, $project, $validator->to);
 
             return true;
         });
@@ -90,7 +93,7 @@ final readonly class IntakeStore
     /**
      * @param array<int, StoredIssue> $listed
      */
-    private function replaceRows(EntityManagerInterface $manager, string $project, array $listed, ?string $validator): void
+    private function replaceRows(EntityManagerInterface $manager, string $project, array $listed): void
     {
         $stored = $this->storedIssuesOf($manager, $project);
         foreach ($listed as $number => $issue) {
@@ -100,8 +103,6 @@ final readonly class IntakeStore
         foreach (array_diff_key($stored, $listed) as $closed) {
             $manager->remove($closed);
         }
-
-        $this->recordValidator($manager, $project, $validator);
     }
 
     // Apart from the issue rows, so a task that is closed after it failed for good still holds the tasks that wait on it.

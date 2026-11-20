@@ -23,7 +23,7 @@ Issue #2906, part 1 of #2666. Three Doctrine entities in `Plugin/GitHubWorkSourc
 `Infrastructure\IntakeStore` persists them:
 
 - `record(project, issues, ?validator)` makes the project's rows those of one complete listing in one flush: a stored item is updated in place (`StoredIssue::replaceWith`), a new one is added, a stored item the listing no longer shows loses its row, and the validator is stored, replaced, or removed when the forge sent none, so the next listing is a full one. An issue of another project is an `InvalidArgumentException`, and nothing is written. Failures are never touched.
-- `recordIfStill(project, read, issues, ?validator)` does the same as `record()` only while the stored validator is still `read` (the one the listing was requested with, `null` for none), and answers whether it recorded. It reads the validator row with `LockMode::PESSIMISTIC_WRITE` in the same transaction as the write, so a competing writer waits on that row where the database supports row locks.
+- `recordIfStill(project, issues, Domain\ValidatorChange)` does the same as `record()`, storing the change's `to`, only while the stored validator is still the change's `from` (the one the listing was requested with, `null` for none), and answers whether it recorded. It reads the validator row with `LockMode::PESSIMISTIC_WRITE` in the same transaction as the write, so a competing writer waits on that row where the database supports row locks.
 - `issuesOf(project)` and `validatorOf(project)` read them back.
 - `failForGood(project, number, reason)` stores or replaces the reason, only for a task the stored rows show (`TaskNotQueued` otherwise); `failuresOf(project)` answers the reasons by number.
 
