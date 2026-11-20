@@ -12,6 +12,7 @@ Code and conventions:
 - [Branch push](branch-push.md)
 - [Hand-back checks](hand-back.md): the bundle a build returns, refused when it touches main, is not a fast-forward, holds a merge or a secret, stripped of attribution and redacted of mounted credentials; the pull request text scanned too, and a failure sent back once, then handed over
 - [Check job](check-job.md): the pre-push check of an accepted bundle in a fresh clone through the gate plugin, the lost-content rule, and the verdict read from the job's output directory only
+- [Watchdog over main](watchdog.md): the rules that classify main's new commits: a recorded merge head passes before any signature check, an owner-signed commit passes, an unsigned commit, an unknown key and a rewrite of main's history are violations
 - [Protected paths of a head](protected-paths.md): the owner's list per project, read from the whole change and each commit; unreadable counts as protected
 - [Work intake from GitHub issues](work-intake.md): the work source contract and the `eligibility_label` watch key
 - [Upstream reproductions](upstream-reproductions.md)
