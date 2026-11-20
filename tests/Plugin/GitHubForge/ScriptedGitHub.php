@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\GitHubForge;
 
+use DateTimeImmutable;
 use Intakt\Plugin\GitHubForge\Domain\ExpectedInstallation;
 use Intakt\Plugin\GitHubForge\Infrastructure\AppJwt;
 use Intakt\Plugin\GitHubForge\Infrastructure\CheckedInstallationTokens;
@@ -46,6 +47,9 @@ final class ScriptedGitHub
     public bool $unreachable = false;
 
     public bool $appRefused = false;
+
+    // Every call whose path ends so answers that the rate limit is used up, as GitHub does until the reset.
+    public ?string $rateLimitedEnding = null;
 
     /** @var list<array<mixed>> */
     private array $comments = [];
@@ -105,6 +109,10 @@ final class ScriptedGitHub
     {
         if ($this->unreachable) {
             throw new TransportException('Connection refused for '.$url);
+        }
+
+        if (null !== $this->rateLimitedEnding && str_ends_with((string) parse_url($url, PHP_URL_PATH), $this->rateLimitedEnding)) {
+            return new MockResponse('{"message":"API rate limit exceeded"}', ['http_code' => 403, 'response_headers' => ['x-ratelimit-remaining' => '0', 'x-ratelimit-reset' => (string) new DateTimeImmutable('2026-11-25 10:10:00 UTC')->getTimestamp(), 'x-ratelimit-resource' => 'core']]);
         }
 
         return 'GET' === $method ? $this->read($url) : $this->write($method, $url, $options);

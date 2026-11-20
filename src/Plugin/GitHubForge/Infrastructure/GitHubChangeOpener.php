@@ -8,6 +8,7 @@ use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\ChangeOpening;
 use Intakt\Plugin\Forge\Contract\ChangeTextHoldsSecret;
 use Intakt\Plugin\Forge\Contract\ForgeCredentialsRefused;
+use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
 use Intakt\Plugin\Forge\Contract\ProposedChange;
@@ -137,6 +138,8 @@ final readonly class GitHubChangeOpener implements ChangeOpening
             $body = $response->getContent(false);
         } catch (ExceptionInterface $failure) {
             throw $this->unreachable($failure::class);
+        } catch (ForgeRateLimited $paused) {
+            throw $this->paused($paused);
         }
 
         if ($status < 200 || $status >= 300) {
@@ -150,6 +153,12 @@ final readonly class GitHubChangeOpener implements ChangeOpening
     private function unreachable(string $failure): ForgeWriteFailed
     {
         return new ForgeWriteFailed(sprintf('GitHub could not be reached for a pull request call (%s).', $failure));
+    }
+
+    // A write failure, because the push step records only that, and a pause must stop the push before anything is written; not chained for the same reason as above.
+    private function paused(ForgeRateLimited $paused): ForgeWriteFailed
+    {
+        return new ForgeWriteFailed('No pull request call while GitHub is paused: '.$paused->getMessage());
     }
 
     /**

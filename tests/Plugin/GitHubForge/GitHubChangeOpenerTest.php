@@ -7,6 +7,7 @@ namespace Intakt\Tests\Plugin\GitHubForge;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\ChangeText;
 use Intakt\Plugin\Forge\Contract\ChangeTextHoldsSecret;
+use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
 use Intakt\Plugin\Forge\Contract\ProposedChange;
@@ -41,6 +42,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(ProposedChange::class)]
 #[UsesClass(ChangeTextHoldsSecret::class)]
 #[UsesClass(ForgeReadFailed::class)]
+#[UsesClass(ForgeRateLimited::class)]
 #[UsesClass(ForgeWriteFailed::class)]
 #[UsesClass(RateLimitReadings::class)]
 #[UsesClass(InstallationToken::class)]
@@ -148,6 +150,23 @@ final class GitHubChangeOpenerTest extends TestCase
     public function testAProjectWithoutAGitHubRepositoryIsRefusedBeforeThePush(): void
     {
         $this->assertWriteFailsWith('has no GitHub repository', fn () => new ScriptedGitHub()->opener()->refuseForeignChange('unknown', 'task'));
+    }
+
+    public function testABranchIsRefusedBeforeThePushAsAFailedWriteWhileThePullRequestLookUpIsRateLimited(): void
+    {
+        $github = new ScriptedGitHub();
+        $github->rateLimitedEnding = '/pulls';
+
+        $this->assertWriteFailsWith('rate limited until', fn () => $github->opener()->refuseForeignChange('widgets', 'task'));
+    }
+
+    public function testAPullRequestIsNeitherOpenedNorUpdatedButFailsAsAWriteWhileGitHubIsRateLimited(): void
+    {
+        $github = new ScriptedGitHub();
+        $github->rateLimitedEnding = '/pulls';
+
+        $this->assertWriteFailsWith('rate limited until', fn () => $github->opener()->openOrUpdate(new ProposedChange('widgets', 'task', 'main', new ChangeText('T', 'B'))));
+        self::assertSame([], $github->writes);
     }
 
     public function testAnOpenPullRequestOfThisAppIsKnownWhateverTheCaseOfItsLogin(): void
