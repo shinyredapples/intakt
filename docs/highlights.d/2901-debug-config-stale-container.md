@@ -1,0 +1,2 @@
+## Found in the beta
+| `debug:config` fails with "Can not change config enabled because it has already been read." when the cached container is stale (any extension name; on 8.2 also on a cold cache now and then) | found | #2901, `upstream/framework-debug-config-stale-container/` (`reproduce.php`, `fix.patch` for symfony/symfony 6.4) | recheck needed before filing: affects 6.4.50 to 8.2.x-dev, no duplicate found, fix pull request prepared |

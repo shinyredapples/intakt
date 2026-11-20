@@ -97,6 +97,7 @@ One row per reproduction in `upstream/`, merged first. *Intakt's* marks a pull r
 | symfony/ai | [Codex: tools the CLI ran come back as tool calls](upstream/ai-codex-platform-cli-tool-calls/) | [#2875](https://github.com/symfony/ai/pull/2875) Intakt's, merged |
 | symfony/ai | [`#[Positive]` gets a boolean `exclusiveMinimum`](upstream/ai-platform-positive-boolean-exclusive-minimum/) | [#2888](https://github.com/symfony/ai/pull/2888) Intakt's, merged |
 | Doctrine | [PostgreSQL without `server_version` fails](upstream/doctrine-bundle-postgresql-empty-server-version/) | [DoctrineBundle#2335](https://github.com/doctrine/DoctrineBundle/pull/2335) Intakt's, merged |
+| Symfony | [`debug:config` fails when the cached container is stale](upstream/framework-debug-config-stale-container/) | not filed yet, fix prepared |
 | symfony/symfony | [NaN skips config validation](upstream/config-nan-skips-validation/) | [#67911](https://github.com/symfony/symfony/pull/67911) Intakt's, merged |
 | symfony/symfony | [`messenger:consume` ignores an early SIGTERM](upstream/messenger-consume-ignores-early-sigterm/) | [#67912](https://github.com/symfony/symfony/pull/67912) Intakt's, merged |
 | symfony/symfony | [Serializer list accepts any object](upstream/serializer-object-collection-accepts-any-object/) | [#67913](https://github.com/symfony/symfony/pull/67913) Intakt's, merged |
