@@ -55,12 +55,11 @@ final readonly class ConfiguredProbes
     }
 
     /**
-     * A descriptor's id matches an account key only for a hosted vendor; an OpenAI-compatible account names no descriptor, so its own base URL is probed instead.
-     *
      * @return list<ProviderDescriptor>
      */
     private function vendorsInUse(): array
     {
+        // A descriptor's id matches an account key only for a hosted vendor; an OpenAI-compatible account names no descriptor, so its own base URL is probed instead.
         return array_values(array_filter(
             $this->catalog->descriptors(),
             fn (ProviderDescriptor $vendor): bool => [] !== ($this->accounts[$vendor->id()] ?? []),
