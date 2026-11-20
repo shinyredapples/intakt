@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Infrastructure;
 
-use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\RoundCosts;
 use Intakt\Core\Review\Contract\SessionSummaries;
@@ -39,7 +38,7 @@ final readonly class StoredSessionSummaries implements SessionSummaries
         return new SessionSummary(
             $this->toolCalls->countedIn($round),
             $this->costs->costOf($roundId),
-            new Paths(...$this->toolCalls->filesReadIn($round)),
+            $this->toolCalls->filesReadIn($round),
             $checking,
             $this->findings->reportedIn($round),
             $this->resolvedAmong($checking, $this->findings->resolvedIdsOf($round)),

@@ -8,7 +8,6 @@ use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LivePageRendering;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
-use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\SessionSummaries;
@@ -31,7 +30,6 @@ use Twig\Environment;
 #[UsesClass(LedgerReviewPages::class)]
 #[UsesClass(LivePageRendering::class)]
 #[UsesClass(SessionSummary::class)]
-#[UsesClass(Paths::class)]
 #[UsesClass(ToolCallCount::class)]
 #[UsesClass(Cost::class)]
 #[UsesClass(Finding::class)]
@@ -64,7 +62,7 @@ final class ReviewPageWithoutHubTest extends DashboardPageTestCase
     {
         $this->givenARunningRound();
         $summaries = self::createStub(SessionSummaries::class);
-        $summaries->method('ofRound')->willReturn(new SessionSummary([new ToolCallCount('read_file', 2)], Cost::inUsd(0.3), new Paths('src/A.php'), [], [], [], false));
+        $summaries->method('ofRound')->willReturn(new SessionSummary([new ToolCallCount('read_file', 2)], Cost::inUsd(0.3), ['src/A.php'], [], [], [], false));
         self::getContainer()->set(SessionSummaries::class, $summaries);
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
@@ -121,7 +119,7 @@ final class ReviewPageWithoutHubTest extends DashboardPageTestCase
         $this->ledger->startRoundOf('feat/thing', 'round-2', 2);
         $finding = new Finding('F1', Severity::P2, 'src/A.php', 1, null, 'Fix it.', FixableBy::Builder, false, null, null);
         $summaries = self::createStub(SessionSummaries::class);
-        $summaries->method('ofRound')->willReturn(new SessionSummary([], Cost::none(), new Paths(), [$finding], [], [], false));
+        $summaries->method('ofRound')->willReturn(new SessionSummary([], Cost::none(), [], [$finding], [], [], false));
         self::getContainer()->set(SessionSummaries::class, $summaries);
 
         $crawler = $this->browser->request('GET', '/reviews/round-2');

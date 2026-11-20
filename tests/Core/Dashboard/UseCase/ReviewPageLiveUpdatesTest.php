@@ -21,7 +21,6 @@ use Intakt\Core\Dashboard\Infrastructure\LivePageRendering;
 use Intakt\Core\Dashboard\Infrastructure\MercureLiveUpdates;
 use Intakt\Core\Dashboard\Infrastructure\MercureRoundUpdates;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
-use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Review\Contract\ChangesWithoutFindings;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
@@ -74,7 +73,6 @@ use Twig\Environment;
 #[UsesClass(RoundProgress::class)]
 #[UsesClass(FinishedState::class)]
 #[UsesClass(SessionSummary::class)]
-#[UsesClass(Paths::class)]
 #[UsesClass(ToolCallCount::class)]
 #[UsesClass(Cost::class)]
 #[UsesClass(MercureRoundUpdates::class)]
@@ -1128,7 +1126,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
     public function testAPageOpenedBeforeTheRoundStartsCountsTheToolCallsByKindInPlainWords(): void
     {
-        [$round, $id, $page] = $this->givenAPageLoadedBeforeTheRoundStartsWithTheSummary(new SessionSummary([new ToolCallCount('read_file', 2), new ToolCallCount('search_files', 1)], Cost::inUsd(0.1), new Paths('src/discount.js'), [], [], [], false));
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeTheRoundStartsWithTheSummary(new SessionSummary([new ToolCallCount('read_file', 2), new ToolCallCount('search_files', 1)], Cost::inUsd(0.1), ['src/discount.js'], [], [], [], false));
 
         $this->publishedUpdates()->summaryChanged($round);
 
@@ -1140,7 +1138,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
     public function testAPageOpenedBeforeTheRoundStartsKeepsEachFindingIdOfTheLiveSummaryOnOneLineBesideALongText(): void
     {
         $long = new Finding('F1', Severity::P2, 'src/discount.js', 3, null, str_repeat('The discount is applied twice when the cart holds a voucher. ', 6), FixableBy::Builder, false, null, null);
-        [$round, $id, $page] = $this->givenAPageLoadedBeforeTheRoundStartsWithTheSummary(new SessionSummary([], Cost::inUsd(0.1), new Paths(), [], [$long], [], false));
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeTheRoundStartsWithTheSummary(new SessionSummary([], Cost::inUsd(0.1), [], [], [$long], [], false));
 
         $this->publishedUpdates()->summaryChanged($round);
 
@@ -1263,10 +1261,10 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
     public function testThePageHoldsEveryPartOfTheSessionSummaryTheStreamReplaces(): void
     {
-        $this->givenARunningRoundWithTheSummary(new SessionSummary([new ToolCallCount('read_file', 1)], Cost::inUsd(0.1), new Paths('src/A.php'), [], [], [], false));
+        $this->givenARunningRoundWithTheSummary(new SessionSummary([new ToolCallCount('read_file', 1)], Cost::inUsd(0.1), ['src/A.php'], [], [], [], false));
         $page = $this->browser->request('GET', '/reviews/round-1');
 
-        $streams = $this->stream('summary_changed', ['round' => 'round-1', 'summary' => new SessionSummary([], Cost::none(), new Paths(), [], [], [], false)]);
+        $streams = $this->stream('summary_changed', ['round' => 'round-1', 'summary' => new SessionSummary([], Cost::none(), [], [], [], [], false)]);
 
         $targets = new Crawler($streams)->filter('turbo-stream[action="replace"]')->each(static fn (Crawler $stream): string => (string) $stream->attr('target'));
         self::assertCount(4, $targets);
@@ -1298,11 +1296,11 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
     public function testASummaryPushedToThePageLeavesTheReviewWideCostAlone(): void
     {
-        $this->givenARunningRoundWithTheSummary(new SessionSummary([], Cost::inUsd(0.1), new Paths(), [], [], [], false));
+        $this->givenARunningRoundWithTheSummary(new SessionSummary([], Cost::inUsd(0.1), [], [], [], [], false));
         $page = $this->browser->request('GET', '/reviews/round-1');
         $before = $page->filter('.ls-cost dd')->eq(1)->text();
 
-        $updated = $this->replaced($page, $this->stream('summary_changed', ['round' => 'round-1', 'summary' => new SessionSummary([], Cost::inUsd(0.9), new Paths(), [], [], [], false)]));
+        $updated = $this->replaced($page, $this->stream('summary_changed', ['round' => 'round-1', 'summary' => new SessionSummary([], Cost::inUsd(0.9), [], [], [], [], false)]));
 
         self::assertStringStartsWith('0.9000 USD,', $updated->filter('.ls-cost dd')->first()->text());
         self::assertSame($before, $updated->filter('.ls-cost dd')->eq(1)->text());
@@ -1310,11 +1308,11 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
     public function testASummaryPushedToThePageRendersFindingIdsAsHighlightButtons(): void
     {
-        $this->givenARunningRoundWithTheSummary(new SessionSummary([], Cost::inUsd(0.1), new Paths(), [], [], [], false));
+        $this->givenARunningRoundWithTheSummary(new SessionSummary([], Cost::inUsd(0.1), [], [], [], [], false));
         $page = $this->browser->request('GET', '/reviews/round-1');
         $reported = new Finding('F7', Severity::P2, 'src/A.php', 3, null, 'Name it.', FixableBy::Builder, false, null, null);
 
-        $updated = $this->replaced($page, $this->stream('summary_changed', ['round' => 'round-1', 'summary' => new SessionSummary([], Cost::none(), new Paths(), [], [$reported], [], false)]));
+        $updated = $this->replaced($page, $this->stream('summary_changed', ['round' => 'round-1', 'summary' => new SessionSummary([], Cost::none(), [], [], [$reported], [], false)]));
 
         self::assertSame('F7', $updated->filter('#round-round-1-summary-findings .ls-findings button')->attr('data-highlight-finding'));
     }
@@ -1398,7 +1396,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
     {
         $this->browser->disableReboot();
         $summaries = self::createStub(SessionSummaries::class);
-        $summaries->method('ofRound')->willReturn(new SessionSummary([], Cost::inUsd(0.1), new Paths(), [], [], [], false));
+        $summaries->method('ofRound')->willReturn(new SessionSummary([], Cost::inUsd(0.1), [], [], [], [], false));
         self::getContainer()->set(SessionSummaries::class, $summaries);
         $this->givenTheHubRecordsWhatIsPublished();
         $round = Uuid::v7();

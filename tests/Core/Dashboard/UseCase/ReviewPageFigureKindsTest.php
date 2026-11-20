@@ -8,7 +8,6 @@ use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Budget\Contract\Prices;
 use Intakt\Core\Budget\Infrastructure\ConfiguredPrices;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
-use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Platform\Contract\FigureKind;
 use Intakt\Core\Review\Contract\SessionSummaries;
 use Intakt\Core\Review\Contract\SessionSummary;
@@ -22,7 +21,6 @@ use Twig\Environment;
 #[UsesClass(Cost::class)]
 #[UsesClass(ConfiguredPrices::class)]
 #[UsesClass(SessionSummary::class)]
-#[UsesClass(Paths::class)]
 final class ReviewPageFigureKindsTest extends DashboardPageTestCase
 {
     public function testAReviewOfThreeJudgedRoundsCarriesOneLabelInTheSummaryAndOnePerTableOfTheNewestRound(): void
@@ -164,7 +162,7 @@ final class ReviewPageFigureKindsTest extends DashboardPageTestCase
         $twig = self::getContainer()->get(Environment::class);
         self::assertInstanceOf(Environment::class, $twig);
 
-        $stream = $twig->render('dashboard/stream/summary_changed.stream.html.twig', ['round' => 'round-1', 'summary' => new SessionSummary([], Cost::inUsd(0.9, '2026-11-13'), new Paths(), [], [], [], false)]);
+        $stream = $twig->render('dashboard/stream/summary_changed.stream.html.twig', ['round' => 'round-1', 'summary' => new SessionSummary([], Cost::inUsd(0.9, '2026-11-13'), [], [], [], [], false)]);
 
         $cost = new Crawler($stream)->filter('turbo-stream[target="round-round-1-summary-cost"]');
         self::assertSame('0.9000 USD, prices of 2026-11-13', new Crawler($cost->filter('template')->html())->text());
@@ -276,7 +274,7 @@ final class ReviewPageFigureKindsTest extends DashboardPageTestCase
         $this->ledger->startReviewer('round-1', 'correctness');
         $this->ledger->useTokens('round-1', 1000, 300);
         $summaries = self::createStub(SessionSummaries::class);
-        $summaries->method('ofRound')->willReturn(new SessionSummary([], $cost, new Paths(), [], [], [], false));
+        $summaries->method('ofRound')->willReturn(new SessionSummary([], $cost, [], [], [], [], false));
         self::getContainer()->set(SessionSummaries::class, $summaries);
     }
 
