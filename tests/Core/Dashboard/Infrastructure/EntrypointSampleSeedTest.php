@@ -346,6 +346,7 @@ final class EntrypointSampleSeedTest extends TestCase
     {
         $this->startEntrypoint(['PATH' => $this->overrunningSleep().':'.$this->stubPrograms().':'.getenv('PATH'), 'CONSUMERS_IGNORE_SIGTERM' => '1']);
         $this->waitForTheServer();
+        $this->waitForTheCall('the poll sleeps');
         $this->waitForTheConsumersToIgnoreTheStop();
 
         $seconds = $this->secondsToStop();
@@ -516,7 +517,7 @@ final class EntrypointSampleSeedTest extends TestCase
         $folder = $this->directory.'/overrunning';
         $sleep = new ExecutableFinder()->find('sleep');
         self::assertNotNull($sleep);
-        new Filesystem()->dumpFile($folder.'/sleep', "#!/bin/bash\ncase \$1 in 0.1) set -- 0.3;; 1) set -- 3;; esac\nexec ".escapeshellarg($sleep)." \"\$@\"\n");
+        new Filesystem()->dumpFile($folder.'/sleep', "#!/bin/bash\ncase \$1 in 0.1) set -- 0.3;; 1) echo 'the poll sleeps' >> \"\$CALLS\"; set -- 3;; esac\nexec ".escapeshellarg($sleep)." \"\$@\"\n");
         new Filesystem()->chmod($folder.'/sleep', 0755);
 
         return $folder;
@@ -641,13 +642,15 @@ final class EntrypointSampleSeedTest extends TestCase
 
     private function waitForTheConsumersToIgnoreTheStop(): void
     {
+        // The async consumer (MESSENGER_CONSUMERS is 1) and the scheduler watcher: a count of the consumers seen so far would pass with only the first one up.
+        $consumers = 2;
         $deadline = hrtime(true) + self::SECONDS_TO_WAIT * 1_000_000_000;
 
-        while (hrtime(true) < $deadline && substr_count($this->calls(), 'a consumer ignores the stop') < substr_count($this->calls(), 'messenger:consume')) {
+        while (hrtime(true) < $deadline && substr_count($this->calls(), 'a consumer ignores the stop') < $consumers) {
             usleep(50_000);
         }
 
-        self::assertSame(substr_count($this->calls(), 'messenger:consume'), substr_count($this->calls(), 'a consumer ignores the stop'), (string) $this->entrypoint?->getErrorOutput());
+        self::assertSame($consumers, substr_count($this->calls(), 'a consumer ignores the stop'), (string) $this->entrypoint?->getErrorOutput());
     }
 
     private function waitForTheServer(): void
