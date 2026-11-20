@@ -17,6 +17,7 @@ use Intakt\Core\Watchdog\Contract\Violation;
 use Intakt\Core\Watchdog\Contract\WatchedMain;
 use Intakt\Core\Watchdog\Domain\CommitClassifier;
 use Intakt\Core\Watchdog\Infrastructure\MainHistory;
+use Intakt\Core\Watchdog\Infrastructure\OwnerKey;
 use Intakt\Core\Watchdog\Infrastructure\OwnerKeyRefused;
 use Intakt\Tests\Core\Git\TemporaryRepository;
 use Override;
@@ -30,6 +31,7 @@ use Symfony\Component\Process\Exception\ProcessFailedException;
 use Symfony\Component\Process\Process;
 
 #[CoversClass(MainHistory::class)]
+#[CoversClass(OwnerKey::class)]
 #[CoversClass(OwnerKeyRefused::class)]
 #[CoversClass(MainHistoryRewritten::class)]
 #[UsesClass(HardenedGit::class)]
