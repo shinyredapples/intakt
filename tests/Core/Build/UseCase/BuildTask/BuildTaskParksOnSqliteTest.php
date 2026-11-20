@@ -144,7 +144,7 @@ final class BuildTaskParksOnSqliteTest extends KernelTestCase
         self::assertSame([BuildStep::Task, BuildStep::Mirror, BuildStep::Clone], $outcome->passedSteps());
         self::assertSame(
             [['project' => 'alpha', 'task' => 7, 'question' => '"PLANT-question: keep the old flag?"', 'recommendation' => '"drop it"']],
-            array_map(static fn (array $row): array => [...$row, 'task' => (int) $row['task']], $this->connection()->fetchAllAssociative('SELECT project, task, question, recommendation FROM build_parked_task')),
+            array_map(static fn (array $row): array => [...$row, 'task' => is_numeric($row['task']) ? (int) $row['task'] : $row['task']], $this->connection()->fetchAllAssociative('SELECT project, task, question, recommendation FROM build_parked_task')),
         );
         self::assertSame(
             [
