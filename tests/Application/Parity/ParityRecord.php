@@ -19,10 +19,16 @@ final readonly class ParityRecord
 
     private const string INTAKT_PART = 'Intakt:';
 
-    // Only `SomeTest::testName` and a bare `testName` count, so a backticked command or class in a remark is no test name.
-    private const string BACKTICKED = '/(?<!`)(`+)(?!`)(.+?)(?<!`)\1(?!`)/';
+    // A boundary is a blank line, a list item or a heading; any other line after a done item could hide a name from the check.
+    private const string ITEM_BOUNDARY = '/^\s*(?:$|[-*+] |\d+[.)] |#)/';
+
+    // Outside a span a backslash escapes the next character, so `\`` opens no span; a run of backticks no equal run closes is unclosed.
+    private const string BACKTICKED = '/\\\\.|(`++)(.*?)(?<!`)\1(?!`)|`++/';
 
     private const string NAMED_TEST = '/^(?:(\w+Test)::)?(test\w+)$/';
+
+    // A token with such a word is meant as a test name, so a near miss like `SomeTest.testName` is reported, not skipped.
+    private const string TEST_WORD = '/\w*Test\b|\btest\w*/';
 
     // Gate fixtures are inputs of other tests, some of them not even valid PHP, so they are never loaded as test classes.
     private const string FIXTURES = '/Fixtures/';
@@ -40,9 +46,15 @@ final readonly class ParityRecord
     {
         $testClasses = $this->testClassesByShortName();
         $findings = [];
+        $afterDoneItem = false;
 
         foreach (explode("\n", $record) as $index => $line) {
-            if (1 !== preg_match(self::DONE_ITEM, $line)) {
+            if ($afterDoneItem && 1 !== preg_match(self::ITEM_BOUNDARY, $line)) {
+                $findings[] = sprintf('line %d: a done item must stay on one line', $index + 1);
+            }
+
+            $afterDoneItem = 1 === preg_match(self::DONE_ITEM, $line);
+            if (!$afterDoneItem) {
                 continue;
             }
 
@@ -88,14 +100,8 @@ final readonly class ParityRecord
         }
 
         $problems = [];
-        foreach ($namedTests as [$class, $method, $malformed]) {
-            if (null !== $malformed) {
-                $problems[] = sprintf('`%s` %s', $method, $malformed);
-
-                continue;
-            }
-
-            $problem = $this->problemWith($class, $method, $testClasses);
+        foreach ($namedTests as $namedTest) {
+            $problem = is_string($namedTest) ? $namedTest : $this->problemWith($namedTest[0], $namedTest[1], $testClasses);
             if (null !== $problem) {
                 $problems[] = $problem;
             }
@@ -105,7 +111,7 @@ final readonly class ParityRecord
     }
 
     /**
-     * @return list<array{?string, string, ?string}>
+     * @return list<string|array{?string, string}> a name to resolve, or a problem the text itself already shows
      */
     private function namedTests(string $item): array
     {
@@ -114,27 +120,29 @@ final readonly class ParityRecord
             return [];
         }
 
-        preg_match_all(self::BACKTICKED, substr($item, $start), $tokens);
+        preg_match_all(self::BACKTICKED, substr($item, $start), $tokens, PREG_SET_ORDER | PREG_UNMATCHED_AS_NULL);
 
         $class = null;
         $namedTests = [];
-        foreach (array_filter(array_map(trim(...), $tokens[2]), $this->looksLikeATestName(...)) as $token) {
-            if (1 !== preg_match(self::NAMED_TEST, $token, $match)) {
-                $namedTests[] = [null, $token, 'is not a test name of the form `SomeTest::testName`'];
+        foreach ($tokens as $token) {
+            if (null === $token[1]) {
+                if (str_starts_with($token[0], '`')) {
+                    $namedTests[] = 'has a backtick after `Intakt:` that is never closed';
+                }
 
                 continue;
             }
 
-            $class = '' !== $match[1] ? $match[1] : $class;
-            $namedTests[] = [$class, $match[2], null];
+            $name = trim((string) $token[2]);
+            if (1 === preg_match(self::NAMED_TEST, $name, $match)) {
+                $class = '' !== $match[1] ? $match[1] : $class;
+                $namedTests[] = [$class, $match[2]];
+            } elseif (1 === preg_match(self::TEST_WORD, $name)) {
+                $namedTests[] = sprintf('`%s` is not a test name of the form `SomeTest::testName`', $name);
+            }
         }
 
         return $namedTests;
-    }
-
-    private function looksLikeATestName(string $token): bool
-    {
-        return str_contains($token, '::') || str_starts_with($token, 'test');
     }
 
     /**

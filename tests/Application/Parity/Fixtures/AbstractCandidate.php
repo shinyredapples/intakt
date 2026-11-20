@@ -6,7 +6,8 @@ namespace Intakt\Tests\Application\Parity\Fixtures;
 
 use PHPUnit\Framework\TestCase;
 
-abstract class AbstractCandidateTest extends TestCase
+// Not named *Test.php, so PHPUnit never collects it; the parity tests alias it to a test name.
+abstract class AbstractCandidate extends TestCase
 {
     public function testVisible(): bool
     {

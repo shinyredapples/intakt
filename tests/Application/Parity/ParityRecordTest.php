@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Application\Parity;
 
-use Intakt\Tests\Application\Parity\Fixtures\AbstractCandidateTest;
-use Intakt\Tests\Application\Parity\Fixtures\PlainCandidateTest;
+use Intakt\Tests\Application\Parity\Fixtures\AbstractCandidate;
+use Intakt\Tests\Application\Parity\Fixtures\PlainCandidate;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Filesystem\Filesystem;
@@ -175,7 +175,7 @@ final class ParityRecordTest extends TestCase
 
         self::assertSame(
             ['line 1: AbstractCandidateTest is no runnable test class'],
-            $this->scratchTestsAliasing(AbstractCandidateTest::class)->unprovenItems($record),
+            $this->scratchTestsAliasing(AbstractCandidate::class, 'AbstractCandidateTest')->unprovenItems($record),
         );
     }
 
@@ -185,7 +185,7 @@ final class ParityRecordTest extends TestCase
 
         self::assertSame(
             ['line 1: PlainCandidateTest is no runnable test class'],
-            $this->scratchTestsAliasing(PlainCandidateTest::class)->unprovenItems($record),
+            $this->scratchTestsAliasing(PlainCandidate::class, 'PlainCandidateTest')->unprovenItems($record),
         );
     }
 
@@ -197,6 +197,95 @@ final class ParityRecordTest extends TestCase
             ['line 1: ParityRecordTest::testNothing is no test method of '.self::class],
             $this->repositoryTests()->unprovenItems($record),
         );
+    }
+
+    public function testAMissingNameAfterAnEscapedBacktickOnADoneItemIsReported(): void
+    {
+        $record = '- [x] Item. Intakt: `ParityRecordTest::testAnIndentedDoneItemIsJudged` (literal \` example) and `ParityRecordTest::testNothing`';
+
+        self::assertSame(
+            ['line 1: ParityRecordTest::testNothing is no test method of '.self::class],
+            $this->repositoryTests()->unprovenItems($record),
+        );
+    }
+
+    public function testAnEscapedBacktickBesideValidNamesIsNotReported(): void
+    {
+        $record = '- [x] Item. Intakt: `ParityRecordTest::testAnIndentedDoneItemIsJudged` (literal \` example) and `testABareMethodAfterAClassIsCheckedOnThatClass`';
+
+        self::assertSame([], $this->repositoryTests()->unprovenItems($record));
+    }
+
+    public function testANameWithASingleColonAfterAValidNameIsReportedAsMalformed(): void
+    {
+        $record = '- [x] Item. Intakt: `ParityRecordTest::testAnIndentedDoneItemIsJudged` and `ParityRecordTest:testNothing`';
+
+        self::assertSame(
+            ['line 1: `ParityRecordTest:testNothing` is not a test name of the form `SomeTest::testName`'],
+            $this->repositoryTests()->unprovenItems($record),
+        );
+    }
+
+    public function testANameWithAnArrowAfterAValidNameIsReportedAsMalformed(): void
+    {
+        $record = '- [x] Item. Intakt: `ParityRecordTest::testAnIndentedDoneItemIsJudged` and `ParityRecordTest->testNothing`';
+
+        self::assertSame(
+            ['line 1: `ParityRecordTest->testNothing` is not a test name of the form `SomeTest::testName`'],
+            $this->repositoryTests()->unprovenItems($record),
+        );
+    }
+
+    public function testANameWithADotAfterAValidNameIsReportedAsMalformed(): void
+    {
+        $record = '- [x] Item. Intakt: `ParityRecordTest::testAnIndentedDoneItemIsJudged` and `ParityRecordTest.testNothing`';
+
+        self::assertSame(
+            ['line 1: `ParityRecordTest.testNothing` is not a test name of the form `SomeTest::testName`'],
+            $this->repositoryTests()->unprovenItems($record),
+        );
+    }
+
+    public function testAWordThatOnlyContainsTestIsNoNearMiss(): void
+    {
+        $record = '- [x] Item. Intakt: `ParityRecordTest::testAnIndentedDoneItemIsJudged` (see `attest.Contest`, `Testing::run` and `latest`)';
+
+        self::assertSame([], $this->repositoryTests()->unprovenItems($record));
+    }
+
+    public function testADoneItemWithAnUnclosedBacktickAfterIntaktIsReported(): void
+    {
+        $record = '- [x] Item. Intakt: `ParityRecordTest::testAnIndentedDoneItemIsJudged` and `ParityRecordTest::testNothing';
+
+        self::assertSame(
+            ['line 1: has a backtick after `Intakt:` that is never closed'],
+            $this->repositoryTests()->unprovenItems($record),
+        );
+    }
+
+    public function testANonBlankLineDirectlyAfterADoneItemIsReportedAsADoneItemOverMoreThanOneLine(): void
+    {
+        $record = "- [x] Item. Intakt: `ParityRecordTest::testAnIndentedDoneItemIsJudged`\n  and `ParityRecordTest::testNothing`";
+
+        self::assertSame(
+            ['line 2: a done item must stay on one line'],
+            $this->repositoryTests()->unprovenItems($record),
+        );
+    }
+
+    public function testAListItemOrHeadingOrBlankLineDirectlyAfterADoneItemIsNoContinuation(): void
+    {
+        $done = '- [x] Item. Intakt: `ParityRecordTest::testAnIndentedDoneItemIsJudged`';
+        $record = implode("\n", [$done, '- [ ] Next item.', $done, '## Next section', $done, '', 'A paragraph.', $done, '  * A nested item.', $done, '1. A numbered item.']);
+
+        self::assertSame([], $this->repositoryTests()->unprovenItems($record));
+    }
+
+    public function testANonBlankLineAfterAnUncheckedItemIsNotJudged(): void
+    {
+        $record = "- [ ] Item. Intakt: `NoSuchParityTest::testAnything`\n  and more words";
+
+        self::assertSame([], $this->repositoryTests()->unprovenItems($record));
     }
 
     public function testAnIndentedDoneItemIsJudged(): void
@@ -247,11 +336,12 @@ final class ParityRecordTest extends TestCase
         return new ParityRecord($scratch, 'Intakt\Tests\Scratch');
     }
 
-    private function scratchTestsAliasing(string $class): ParityRecord
+    // A class alias lives for the whole process, so each call takes its own folder and alias, and a repeated run raises no warning.
+    private function scratchTestsAliasing(string $class, string $testName): ParityRecord
     {
-        $short = array_last(explode('\\', $class));
-        class_alias($class, 'Intakt\Tests\Scratch\\'.$short);
+        $folder = 'Run'.bin2hex(random_bytes(6));
+        class_alias($class, 'Intakt\Tests\Scratch\\'.$folder.'\\'.$testName);
 
-        return $this->scratchTests([$short.'.php']);
+        return $this->scratchTests([$folder.'/'.$testName.'.php']);
     }
 }
