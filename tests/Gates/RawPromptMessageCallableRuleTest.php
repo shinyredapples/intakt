@@ -34,6 +34,14 @@ final class RawPromptMessageCallableRuleTest extends PhpStanRuleTestCase
         self::assertStringContainsString('src/Sample/Report.php:18 intakt.rawPromptMessage Message::forSystem()', $findings);
     }
 
+    public function testAFirstClassCallableNamedThroughAKnownStringIsRefused(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/Sample/Report.php', "<?php\n\ndeclare(strict_types=1);\n\nnamespace Intakt\\Sample;\n\nuse Symfony\\AI\\Platform\\Message\\Message;\n\nfunction messages(): mixed\n{\n    return Message::{'ofUser'}(...);\n}\n");
+
+        self::assertStringContainsString('src/Sample/Report.php:11 intakt.rawPromptMessage Message::ofUser()', $this->ruleFindingsIn($sandbox));
+    }
+
     public function testTheAssemblyClassMayUseAMessageFactoryAsACallable(): void
     {
         $sandbox = $this->emptySandbox();

@@ -82,11 +82,24 @@ final readonly class RawPromptMessageRule implements Rule
 
     private function factoryFinding(StaticCall $call, Scope $scope): ?IdentifierRuleError
     {
-        if (!$call->name instanceof Identifier || !in_array($call->name->toLowerString(), self::MESSAGE_FACTORIES, true) || null === $this->namedClass($call->class, [self::MESSAGE], $scope)) {
+        $factory = array_find($this->methodNamesOf($call, $scope), static fn (string $name): bool => in_array(strtolower($name), self::MESSAGE_FACTORIES, true));
+
+        if (null === $factory || null === $this->namedClass($call->class, [self::MESSAGE], $scope)) {
             return null;
         }
 
-        return $this->rawMessage('Message::'.$call->name->toString().'()');
+        return $this->rawMessage('Message::'.$factory.'()');
+    }
+
+    // because `Message::{'ofUser'}()` and `Message::$method()` name the factory through a string PHPStan may know
+    /**
+     * @return list<string>
+     */
+    private function methodNamesOf(StaticCall $call, Scope $scope): array
+    {
+        return $call->name instanceof Identifier
+            ? [$call->name->toString()]
+            : array_map(static fn (ConstantStringType $name): string => $name->getValue(), $scope->getType($call->name)->getConstantStrings());
     }
 
     private function constructionFinding(New_ $construction, Scope $scope): ?IdentifierRuleError
@@ -118,13 +131,16 @@ final readonly class RawPromptMessageRule implements Rule
         return array_find($candidates, static fn (string $candidate): bool => array_any($names, static fn (string $name): bool => 0 === strcasecmp(ltrim($name, '\\'), $candidate)));
     }
 
-    // because `$message::ofUser()` names the class through an object and `new $class()` through a class-name string
+    // because `$message::ofUser()` names the class through an object and `new $class()` through a class-name string, constant or typed `class-string<...>`
     /**
      * @return list<string>
      */
     private function classNamesOf(Type $type): array
     {
-        return [...$type->getObjectClassNames(), ...array_map(static fn (ConstantStringType $name): string => $name->getValue(), $type->getConstantStrings())];
+        return [
+            ...$type->getObjectTypeOrClassStringObjectType()->getObjectClassNames(),
+            ...array_map(static fn (ConstantStringType $name): string => $name->getValue(), $type->getConstantStrings()),
+        ];
     }
 
     private function rolePromptIsProven(New_ $construction, Scope $scope): bool

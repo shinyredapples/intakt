@@ -61,6 +61,123 @@ final class RawPromptMessageRuleTest extends PhpStanRuleTestCase
         self::assertStringContainsString('Message::ofUser() builds a model message outside PromptAssembly: build it through Intakt\Core\Review\Contract\PromptAssembly', $this->ruleFindingsIn($sandbox));
     }
 
+    public function testAFactoryNamedThroughAKnownStringIsRefused(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/Sample/Report.php', <<<'PHP'
+            <?php
+
+            declare(strict_types=1);
+
+            namespace Intakt\Sample;
+
+            use Symfony\AI\Platform\Message\Message;
+
+            final readonly class Report
+            {
+                public function write(string $text, bool $system): void
+                {
+                    Message::{'ofUser'}($text);
+                    $method = 'forSystem';
+                    Message::$method($text);
+                    $either = $system ? 'forSystem' : 'ofAssistant';
+                    Message::$either($text);
+                }
+            }
+            PHP);
+
+        $findings = $this->ruleFindingsIn($sandbox);
+
+        self::assertSame(3, substr_count($findings, 'intakt.rawPromptMessage'), $findings);
+        foreach ([13, 15, 17] as $line) {
+            self::assertStringContainsString('src/Sample/Report.php:'.$line.' intakt.rawPromptMessage', $findings);
+        }
+    }
+
+    public function testAMethodNamedThroughAnUnknownOrOtherStringIsNotJudged(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/Sample/Report.php', <<<'PHP'
+            <?php
+
+            declare(strict_types=1);
+
+            namespace Intakt\Sample;
+
+            use Symfony\AI\Platform\Message\Message;
+
+            final readonly class Report
+            {
+                public function write(string $text, string $method): mixed
+                {
+                    $other = 'ofUserLater';
+
+                    return [Message::$method($text), Message::$other($text)];
+                }
+            }
+            PHP);
+
+        self::assertStringNotContainsString('intakt.rawPromptMessage', $this->ruleFindingsIn($sandbox));
+    }
+
+    public function testATypedClassStringNamingAMessageClassIsRefused(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/Sample/Report.php', <<<'PHP'
+            <?php
+
+            declare(strict_types=1);
+
+            namespace Intakt\Sample;
+
+            use Symfony\AI\Platform\Message\Message;
+            use Symfony\AI\Platform\Message\SystemMessage;
+
+            final readonly class Report
+            {
+                /**
+                 * @param class-string<Message> $factory
+                 * @param class-string<SystemMessage> $message
+                 */
+                public function write(string $text, string $factory, string $message): void
+                {
+                    $factory::ofUser($text);
+                    new $message($text);
+                }
+            }
+            PHP);
+
+        $findings = $this->ruleFindingsIn($sandbox);
+
+        self::assertStringContainsString('src/Sample/Report.php:18 intakt.rawPromptMessage', $findings);
+        self::assertStringContainsString('src/Sample/Report.php:19 intakt.rawPromptMessage', $findings);
+    }
+
+    public function testATypedClassStringNamingAnotherClassPasses(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/Sample/Report.php', <<<'PHP'
+            <?php
+
+            declare(strict_types=1);
+
+            namespace Intakt\Sample;
+
+            final readonly class Report
+            {
+                /**
+                 * @param class-string<\ArrayObject<int, string>> $class
+                 */
+                public function write(string $text, string $class, string $anyClass): array
+                {
+                    return [new $class([$text]), new $anyClass($text)];
+                }
+            }
+            PHP);
+
+        self::assertStringNotContainsString('intakt.rawPromptMessage', $this->ruleFindingsIn($sandbox));
+    }
+
     public function testTheAssemblyClassMayBuildMessages(): void
     {
         $sandbox = $this->emptySandbox();
