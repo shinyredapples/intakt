@@ -115,8 +115,8 @@ final class BareSerializerFormatRuleTest extends PhpStanRuleTestCase
     {
         $node = new MethodCall(new Variable('other'), new Identifier('encode'), [new VariadicPlaceholder()]);
 
-        /** @var Scope&CollectedDataEmitter&DependencyTracker&NodeCallbackInvoker $scope */
         $scope = self::createStubForIntersectionOfInterfaces([Scope::class, CollectedDataEmitter::class, DependencyTracker::class, NodeCallbackInvoker::class]);
+        self::assertTrue($scope instanceof Scope && $scope instanceof CollectedDataEmitter && $scope instanceof DependencyTracker && $scope instanceof NodeCallbackInvoker);
 
         $errors = new BareSerializerFormatRule()->processNode($node, $scope);
 
