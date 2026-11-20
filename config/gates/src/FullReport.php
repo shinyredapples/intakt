@@ -35,6 +35,7 @@ final readonly class FullReport
             return null;
         }
 
+        // TODO(#2652): a short write still gets a report key, because it is not detected yet.
         fwrite($handle, $contents."\n");
         fclose($handle);
 
