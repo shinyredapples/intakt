@@ -130,7 +130,7 @@ final readonly class RawPromptMessageRule implements Rule
         return array_map(strtolower(...), [...$class->getObjectTypeOrClassStringObjectType()->getObjectClassNames(), ...$written]);
     }
 
-    // PHP resolves a class string with one leading backslash, which PHPStan does not read as a class name, and refuses one with two
+    // stripped once only, because PHP resolves a class string with one leading backslash (which PHPStan does not read as a class name) and refuses one with two
     private function classStringAsPhpResolvesIt(string $class): string
     {
         return str_starts_with($class, '\\') ? substr($class, 1) : $class;
