@@ -90,6 +90,26 @@ final class StoredIssue
         $this->vouchedLabels = $vouching->labels;
     }
 
+    // Only while the item is unchanged, because an edit or a label since may come from an account without write access.
+    public function vouchingWhileUnchanged(ListedIssue $listed): ?Vouching
+    {
+        if (null === $this->trusted || $this->updatedAt !== $this->moment($listed->updatedAt)) {
+            return null;
+        }
+
+        return new Vouching($this->trusted, $this->vouchedLabels);
+    }
+
+    public function isVouched(): bool
+    {
+        return null !== $this->trusted;
+    }
+
+    public function author(): string
+    {
+        return $this->author;
+    }
+
     // Copied field by field, because a newer reading of a stored item must update its row, not add a second one.
     public function replaceWith(self $newer): void
     {
