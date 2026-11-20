@@ -139,7 +139,7 @@ final readonly class GateResult
             return implode('', array_slice(self::characters($oneLine), 0, self::MAXIMUM_FINDING_LENGTH - 3)).'...';
         }
 
-        return mb_strimwidth($oneLine, 0, self::MAXIMUM_FINDING_LENGTH, '...');
+        return mb_strimwidth($oneLine, 0, self::MAXIMUM_FINDING_LENGTH, '...', 'UTF-8');
     }
 
     // Because shorten() cuts by display width, the cut check measures the same way, and by characters where mbstring is missing.

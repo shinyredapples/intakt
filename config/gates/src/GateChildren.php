@@ -34,7 +34,7 @@ final readonly class GateChildren
      */
     public function reportsOf(array $gates, array $arguments): array
     {
-        $scratch = ScratchDirectory::create(self::SCRATCH_PREFIX);
+        $scratch = $this->scratchOutsideTheTree();
 
         // Because the folder holds every child's whole result, it goes whatever ends the run.
         try {
@@ -44,6 +44,21 @@ final readonly class GateChildren
         } finally {
             $scratch?->remove();
         }
+    }
+
+    // Because gates scan every file under the checked tree, a scratch folder there would put one gate's whole result into the scan of the next.
+    private function scratchOutsideTheTree(): ?ScratchDirectory
+    {
+        $scratch = ScratchDirectory::create(self::SCRATCH_PREFIX);
+        $tree = realpath($this->root);
+
+        if (!$scratch instanceof ScratchDirectory || false === $tree || !str_starts_with((string) realpath($scratch->path), rtrim($tree, '/').'/')) {
+            return $scratch;
+        }
+
+        $scratch->remove();
+
+        return null;
     }
 
     /**

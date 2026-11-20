@@ -50,6 +50,29 @@ final class GateChildFullResultTest extends SandboxTestCase
         self::assertStringEndsWith('"omitted":2}', $reports[0]->line);
     }
 
+    public function testNoChildKeepsAWholeResultWhenTheScratchFolderWouldBeInsideTheCheckedTree(): void
+    {
+        $sandbox = $this->sandboxWithTwelveDashes();
+        $slots = GateSlots::chosen('1', 1, 1);
+        self::assertInstanceOf(GateSlots::class, $slots);
+
+        $reports = new GateChildren(dirname(__DIR__, 2), sys_get_temp_dir(), $slots, [])->reportsOf(['dashes'], ['--root='.$sandbox->root, '--only=dashes']);
+
+        self::assertNull($reports[0]->kept);
+    }
+
+    public function testALaterGateDoesNotScanAnEarlierGatesWholeResultWhenTheTemporaryFolderIsInsideTheCheckedTree(): void
+    {
+        $home = $this->fakeGatesHome();
+        $home->write('config/gates/run-gate.php', $this->dashedCommitsThenTheRealDashes());
+        $tree = $this->emptySandbox();
+        $tree->write('tmp/.keep', '');
+
+        $check = new ProcessRunner()->run([PHP_BINARY, $home->root.'/bin/check', '--root='.$tree->root, '--only=commits,dashes'], $home->root, [GateSlots::VARIABLE => '1', 'TMPDIR' => $tree->root.'/tmp']);
+
+        self::assertTrue(new CheckRun($check)->passed('dashes'), $check->output);
+    }
+
     public function testAChildWritesItsWholeResultWhereTheHandOffNames(): void
     {
         $sandbox = $this->sandboxWithTwelveDashes();
@@ -79,6 +102,17 @@ final class GateChildFullResultTest extends SandboxTestCase
         $child = $this->childIn($sandbox, [GateChildren::FULL_RESULT_VARIABLE => $sandbox->root.'/whole.json']);
 
         self::assertSame('kept before', file_get_contents($sandbox->root.'/whole.json'));
+        self::assertSame(1, $child->exitCode, $child->output);
+    }
+
+    public function testAChildCreatesNothingWhereADanglingLinkInPlaceOfItsWholeResultPoints(): void
+    {
+        $sandbox = $this->sandboxWithTwelveDashes();
+        $sandbox->symlink('whole.json', $sandbox->root.'/target.json');
+
+        $child = $this->childIn($sandbox, [GateChildren::FULL_RESULT_VARIABLE => $sandbox->root.'/whole.json']);
+
+        self::assertFileDoesNotExist($sandbox->root.'/target.json');
         self::assertSame(1, $child->exitCode, $child->output);
     }
 
@@ -114,6 +148,24 @@ final class GateChildFullResultTest extends SandboxTestCase
         $home->symlink('vendor', $real.'/vendor');
 
         return $home;
+    }
+
+    // Because the commits child must leave a long dash in its whole result before the real dashes gate scans the tree.
+    private function dashedCommitsThenTheRealDashes(): string
+    {
+        $real = var_export(dirname(__DIR__, 2), true);
+
+        return <<<PHP
+            <?php
+            if ('dashes' === \$argv[1]) {
+                require {$real}.'/config/gates/run-gate.php';
+            }
+            require {$real}.'/vendor/autoload.php';
+            \$result = Intakt\\Gates\\GateResult::failedBecause('commits', "subject \\u{2014} example");
+            echo \$result->toJson(), "\\n";
+            file_put_contents((string) getenv('INTAKT_GATE_FULL_RESULT'), \$result->toFullJson());
+            exit(1);
+            PHP;
     }
 
     // Because the child writes its process id once it runs, the signal must wait for it; the limit only ends a hang.

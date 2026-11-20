@@ -33,6 +33,20 @@ final class GateReportKeptResultTest extends TestCase
         self::assertTrue($report->lineIsCut());
     }
 
+    public function testUnderAnotherInternalEncodingA160WideCharacterFindingIsStillTreatedAsCut(): void
+    {
+        $encoding = mb_internal_encoding();
+        mb_internal_encoding('ISO-8859-1');
+
+        try {
+            $report = $this->reportOf(GateResult::withFindings('dashes', [str_repeat('界', 160)]));
+        } finally {
+            mb_internal_encoding($encoding);
+        }
+
+        self::assertTrue($report->lineIsCut());
+    }
+
     public function testAChildThatKeepsNothingWithOneShortFindingIsNotCut(): void
     {
         self::assertFalse($this->reportOf(GateResult::withFindings('dashes', ['notes.md:1 U+2014']))->lineIsCut());
