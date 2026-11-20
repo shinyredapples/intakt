@@ -41,6 +41,17 @@ final class HttpsProbeTest extends TestCase
         self::assertSame([], preg_grep('/^(authorization|x-api-key|cookie)\s*:/i', $headers));
     }
 
+    public function testUserinfoInTheUrlIsNeitherSentAsBasicAuthNorKeptInTheUrl(): void
+    {
+        $response = new MockResponse('', ['http_code' => 200]);
+        new HttpsProbe(new MockHttpClient($response), new Uri('https://user:secret@llm.example/v1'), 3.0)->answers();
+
+        self::assertSame('https://llm.example/v1', $response->getRequestUrl());
+        $headers = $response->getRequestOptions()['headers'];
+        self::assertIsArray($headers);
+        self::assertSame([], preg_grep('/^authorization\s*:/i', $headers));
+    }
+
     public function testTheProbeWaitsAtMostItsTimeout(): void
     {
         $response = new MockResponse('', ['http_code' => 200]);
