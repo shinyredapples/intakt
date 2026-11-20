@@ -9,6 +9,7 @@ use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\GitHubForge\Contract\IssueListing;
 use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
 use Intakt\Plugin\GitHubForge\Infrastructure\ChangedWhileServed;
+use Intakt\Plugin\GitHubForge\Infrastructure\EntityTags;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubCalls;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubIssueReads;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubMoments;
@@ -20,6 +21,7 @@ use PHPUnit\Framework\TestCase;
 
 #[CoversClass(GitHubIssueReads::class)]
 #[CoversClass(ChangedWhileServed::class)]
+#[CoversClass(EntityTags::class)]
 #[CoversClass(IssueListing::class)]
 #[CoversClass(ListedIssue::class)]
 #[UsesClass(RepositoryAddress::class)]

@@ -31,4 +31,18 @@ final readonly class ChangedWhileServed
             throw new ForgeReadFailed(sprintf('Issue #%d on page %d of the open issues changed in the seconds GitHub served the page, so a close and reopen while the later pages were read cannot be ruled out.', $recent->number, $page));
         }
     }
+
+    // The 304s confirm the earlier pages one at a time, so an issue that opens ahead of a page boundary for one read and is gone for every confirmation passes them, yet lists the next page's first issue twice; a gap instead needs a listed issue to close and reopen, which changes its `updated_at` and so its page's `ETag`.
+    /**
+     * @param list<ListedIssue> $issues
+     *
+     * @throws ForgeReadFailed
+     */
+    public function refuseListedTwice(array $issues): void
+    {
+        $twice = array_find_key(array_count_values(array_map(static fn (ListedIssue $issue): int => $issue->number, $issues)), static fn (int $count): bool => $count > 1);
+        if (null !== $twice) {
+            throw new ForgeReadFailed(sprintf('GitHub listed issue #%d on two pages, so the open issues moved while they were read.', $twice));
+        }
+    }
 }

@@ -24,8 +24,6 @@ final readonly class GitHubIssueReads implements IssueReads
     private const int MAX_PAGES = 10;
     private const int NOT_MODIFIED = 304;
     private const int UNAUTHORIZED = 401;
-    // RFC 9110 entity-tag: an optional weak marker, then a quoted run of etagc bytes.
-    private const string ENTITY_TAG = '~\A(?:W/)?"[\x21\x23-\x7E\x80-\xFF]*"\z~';
 
     public function __construct(
         private GitHubCalls $calls,
@@ -34,6 +32,7 @@ final readonly class GitHubIssueReads implements IssueReads
         private GitHubMoments $moments,
         private BudgetReserve $reserve,
         private ChangedWhileServed $changedWhileServed,
+        private EntityTags $entityTags,
     ) {
     }
 
@@ -72,7 +71,7 @@ final readonly class GitHubIssueReads implements IssueReads
 
             $issues = [...$issues, ...$listed];
             if (!$answer['next']) {
-                $this->refuseListedTwice($issues);
+                $this->changedWhileServed->refuseListedTwice($issues);
                 $this->confirmUnmoved($path, $validators);
 
                 return ['issues' => $issues, 'pages' => $page];
@@ -88,22 +87,7 @@ final readonly class GitHubIssueReads implements IssueReads
         }
     }
 
-    // The 304s of the earlier pages come one at a time, so an issue that opens ahead of a page boundary for one read and is gone again for every confirmation goes unseen by them; it still shows the later page's first issue a second time.
-    /**
-     * @param list<ListedIssue> $issues
-     *
-     * @throws ForgeReadFailed
-     */
-    private function refuseListedTwice(array $issues): void
-    {
-        $twice = array_find_key(array_count_values(array_map(static fn (ListedIssue $issue): int => $issue->number, $issues)), static fn (int $count): bool => $count > 1);
-        if (null !== $twice) {
-            throw new ForgeReadFailed(sprintf('GitHub listed issue #%d on two pages, so the open issues moved while they were read.', $twice));
-        }
-    }
-
     // An issue that closes or opens on a page already read moves every later page by one, so an issue at a page boundary is read twice or never; only a 304 for every page read before the last says none of them moved.
-    // A gap needs an issue open for one page and closed for the next; a page that listed it confirms only while it is open with the same `updated_at`, which a close and reopen changes, and one that did not list it forces the opening between two later reads, which lists an issue twice.
     /**
      * @param array<int, ?string> $validators
      *
@@ -258,13 +242,7 @@ final readonly class GitHubIssueReads implements IssueReads
             throw new ForgeReadFailed(sprintf('GitHub answered %d to a read.', $status), previous: self::UNAUTHORIZED === $status ? new ForgeCredentialsRefused() : null);
         }
 
-        $etag = $headers['etag'][0] ?? null;
-        // Sent back as `If-None-Match`, where a `*` or a bare token would match whatever the page holds now.
-        if (null !== $etag && 1 !== preg_match(self::ENTITY_TAG, $etag)) {
-            throw new ForgeReadFailed('GitHub answered a validator that is not an entity tag.');
-        }
-
-        return ['status' => $status, 'body' => $body, 'etag' => $etag, 'next' => $this->namesNext($headers['link'] ?? []), 'date' => $headers['date'][0] ?? null];
+        return ['status' => $status, 'body' => $body, 'etag' => $this->entityTags->checked($headers['etag'][0] ?? null), 'next' => $this->namesNext($headers['link'] ?? []), 'date' => $headers['date'][0] ?? null];
     }
 
     /**
