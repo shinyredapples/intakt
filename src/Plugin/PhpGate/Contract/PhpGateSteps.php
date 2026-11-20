@@ -85,39 +85,55 @@ final readonly class PhpGateSteps
     }'
     SH_WRAP;
 
-    // The package name is validated before it becomes a path, because a lock file is data and a name holding a dot-dot part would leave the vendor folder. The environment is rebuilt without GIT_ variables, because git follows GIT_COMMON_DIR and similar settings even with an explicit git directory.
+    // Each checkout is found at the install path Composer recorded in installed.json, because Composer clones to the package name as written, plus any target-dir, so a path built from the lock would miss a checkout. The lock guard refuses an existing installed.json, so this one is the locked install's own. A recorded path must stay inside the vendor folder, because a lock file is data. The environment is rebuilt without GIT_ variables, because git follows GIT_COMMON_DIR and similar settings even with an explicit git directory.
     private const string SOURCE_GUARD_SCRIPT = <<<'SH_WRAP'
     php -r '$refused = (int) $argv[2];
     $refuse = static function (string $what) use ($refused): never { fwrite(STDERR, $what."\n"); exit($refused); };
     $show = static fn (string $value): string => (string) json_encode($value, JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE | JSON_PARTIAL_OUTPUT_ON_ERROR);
+    $read = static function (string $file) use ($refuse, $show): mixed {
+        $text = @file_get_contents($file);
+        if (!is_string($text)) { $refuse($show($file)." cannot be read."); }
+        try { return json_decode($text, true, 512, JSON_THROW_ON_ERROR); } catch (JsonException) { $refuse($show($file)." is not valid JSON."); }
+    };
     $answer = $argv[1] ?? "";
     $vendor = str_ends_with($answer, "\nx") ? substr($answer, 0, -2) : "";
     if ("" === $vendor) { $refuse("composer config could not report the vendor folder, so it is unknown where the source checkouts are."); }
-    $text = @file_get_contents("composer.lock");
-    if (!is_string($text)) { $refuse("composer.lock cannot be read."); }
-    try { $lock = json_decode($text, true, 512, JSON_THROW_ON_ERROR); } catch (JsonException) { $refuse("composer.lock is not valid JSON."); }
-    $environment = array_filter(getenv(), static fn (string $name): bool => !str_starts_with(strtoupper($name), "GIT_"), ARRAY_FILTER_USE_KEY);
-    $environment = [...$environment, "GIT_CONFIG_NOSYSTEM" => "1", "GIT_CONFIG_GLOBAL" => "/dev/null", "GIT_NO_REPLACE_OBJECTS" => "1"];
+    $lock = $read("composer.lock");
+    $locked = [];
     foreach (["packages", "packages-dev"] as $list) {
         $packages = is_array($lock) ? ($lock[$list] ?? []) : null;
         if (!is_array($packages)) { $refuse("composer.lock has no valid ".$show($list)." list."); }
         foreach ($packages as $package) {
             $name = is_array($package) && is_string($package["name"] ?? null) ? strtolower($package["name"]) : null;
             if (null === $name || 1 !== preg_match("#^[a-z0-9][a-z0-9_.-]*/[a-z0-9][a-z0-9_.-]*$#D", $name)) { $refuse("composer.lock holds a package without a usable name in ".$show($list)."."); }
-            $reference = is_array($package["source"] ?? null) && is_string($package["source"]["reference"] ?? null) ? $package["source"]["reference"] : null;
-            if (null === $reference) { continue; }
-            $label = "package ".$show($name);
-            $git = $vendor."/".$name."/.git";
-            if (is_link($git)) { $refuse("The source checkout of ".$label." has a .git that is a link."); }
-            if (!file_exists($git)) { continue; }
-            if (!is_dir($git)) { $refuse("The source checkout of ".$label." has a .git that is not a directory."); }
-            if (is_link($git."/commondir") || file_exists($git."/commondir")) { $refuse("The source checkout of ".$label." has a commondir file, so git would read another repository."); }
-            $process = proc_open(["git", "--git-dir=".$git, "-c", "core.graftsFile=/dev/null", "rev-parse", "--verify", "HEAD"], [1 => ["pipe", "w"], 2 => ["file", "/dev/null", "w"]], $pipes, null, $environment);
-            $head = is_resource($process) ? trim((string) stream_get_contents($pipes[1])) : "";
-            $status = is_resource($process) ? proc_close($process) : 1;
-            if (0 !== $status) { $refuse("git could not read the HEAD of the source checkout of ".$label."."); }
-            if ($head !== $reference) { $refuse("The source checkout of ".$label." is at ".$show($head).", not at the locked commit."); }
+            $source = is_array($package["source"] ?? null) ? $package["source"] : [];
+            $locked[$name] = [is_string($source["reference"] ?? null) ? $source["reference"] : null, strtolower(is_string($source["type"] ?? null) ? $source["type"] : "")];
         }
+    }
+    $installed = $read($vendor."/composer/installed.json");
+    $packages = is_array($installed) ? ($installed["packages"] ?? null) : null;
+    if (!is_array($packages)) { $refuse("The installed.json of the vendor folder has no valid package list."); }
+    $environment = array_filter(getenv(), static fn (string $name): bool => !str_starts_with(strtoupper($name), "GIT_"), ARRAY_FILTER_USE_KEY);
+    $environment = [...$environment, "GIT_CONFIG_NOSYSTEM" => "1", "GIT_CONFIG_GLOBAL" => "/dev/null", "GIT_NO_REPLACE_OBJECTS" => "1"];
+    foreach ($packages as $package) {
+        if (!is_array($package) || "source" !== ($package["installation-source"] ?? null)) { continue; }
+        $name = strtolower(is_string($package["name"] ?? null) ? $package["name"] : "");
+        $label = "package ".$show($name);
+        [$reference, $type] = $locked[$name] ?? [null, ""];
+        if (null === $reference) { $refuse("The vendor folder holds ".$label." from source, but the lock names no source reference for it."); }
+        if ("git" !== $type) { $refuse("The locked ".$label." is installed from a source that is not git, so its commit cannot be checked."); }
+        $path = $package["install-path"] ?? null;
+        if (!is_string($path) || 1 !== preg_match("#^\.\.(/[^/]+)+$#D", $path) || [] !== array_intersect(array_slice(explode("/", $path), 1), [".", ".."])) { $refuse("The source checkout of ".$label." has an install path outside the vendor folder."); }
+        $git = $vendor."/composer/".$path."/.git";
+        if (is_link($git)) { $refuse("The source checkout of ".$label." has a .git that is a link."); }
+        if (!file_exists($git)) { $refuse("The source checkout of ".$label." has no .git, so its commit cannot be checked."); }
+        if (!is_dir($git)) { $refuse("The source checkout of ".$label." has a .git that is not a directory."); }
+        if (is_link($git."/commondir") || file_exists($git."/commondir")) { $refuse("The source checkout of ".$label." has a commondir file, so git would read another repository."); }
+        $process = proc_open(["git", "--git-dir=".$git, "-c", "core.graftsFile=/dev/null", "rev-parse", "--verify", "HEAD"], [1 => ["pipe", "w"], 2 => ["file", "/dev/null", "w"]], $pipes, null, $environment);
+        $head = is_resource($process) ? trim((string) stream_get_contents($pipes[1])) : "";
+        $status = is_resource($process) ? proc_close($process) : 1;
+        if (0 !== $status) { $refuse("git could not read the HEAD of the source checkout of ".$label."."); }
+    if ($head !== $reference) { $refuse("The source checkout of ".$label." is at ".$show($head).", not at the locked commit."); }
     }'
     SH_WRAP;
 
