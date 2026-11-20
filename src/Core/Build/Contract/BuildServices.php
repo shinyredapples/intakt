@@ -10,4 +10,6 @@ final readonly class BuildServices
     public const string ROUTING = 'intakt.build.routing';
 
     public const string SLOTS = 'intakt.build.slots';
+
+    public const string TOOL_TIME_LIMIT = 'intakt.build.tool_time_limit_seconds';
 }

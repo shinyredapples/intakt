@@ -4,7 +4,7 @@ How Intakt works, for developers and agents. Each user-visible feature has a pag
 
 Code and conventions:
 - [Module layout](module-layout.md)
-- [Conventions](conventions.md): logging, Doctrine mapping, message handlers, the dependency policy and which release cooldown decides what (Dependabot's or Composer's)
+- [Conventions](conventions.md): logging, Doctrine mapping, message handlers, the dependency policy and which release cooldown decides what (Dependabot's, Composer's or the import map's)
 - [Sample repository](sample-repository.md): the demo's sample change and the review bench (`intakt:bench:review`, `intakt:bench --repeat`, the result file under `var/bench/`, agreement of repeated runs, failure causes printed before the figures)
 - [Retried network git calls](network-git.md)
 - [Bare mirror](mirror.md)
@@ -12,22 +12,24 @@ Code and conventions:
 - [Branch push](branch-push.md)
 - [Hand-back checks](hand-back.md): the bundle a build returns, refused when it touches main, is not a fast-forward, holds a merge or a secret, stripped of attribution and redacted of mounted credentials; the pull request text scanned too, and a failure sent back once, then handed over
 - [Check job](check-job.md): the pre-push check of an accepted bundle in a fresh clone through the gate plugin, the lost-content rule, and the verdict read from the job's output directory only
+- [Watchdog over main](watchdog.md): the rules that classify main's new commits: a recorded merge head passes before any signature check, an owner-signed commit passes, an unsigned commit, an unknown key and a rewrite of main's history are violations
 - [Protected paths of a head](protected-paths.md): the owner's list per project, read from the whole change and each commit; unreadable counts as protected
-- [Work intake from GitHub issues](work-intake.md): the work source contract and the `eligibility_label` watch key
+- [Work intake from GitHub issues](work-intake.md): the work source contract, the `eligibility_label` watch key and the stored state of the GitHub work source
 - [Upstream reproductions](upstream-reproductions.md)
 - [The published highlights page](highlights-page.md): where the assembled `docs/highlights.md` is published
-- [Development diagnostics (Mate)](development-diagnostics.md)
+- [Development diagnostics (Mate)](development-diagnostics.md): Mate's tools, and the Symfony profiler in `dev` and `test` with its allow-list of collectors
 
 Checks, CI and releases:
 - [Quality gates](quality-gates.md): also the `workflows` gate, zizmor over the GitHub Actions workflows in `.github/`, offline; an inline `# zizmor: ignore[<audit>]` without a reason on the same line fails it
 - [The journey page](journey-page.md): `bin/journey` regenerates the At a glance table, the milestone table and the chart regions of `docs/journey.md` from the GitHub API and `docs/journey/usage.jsonl`, writing only between marker comments, and draws the charts and the Mermaid timeline as SVG files in `docs/journey/`
 - [Journeys](journeys.md): the harness, the test vendor, the recording hub, the live round driver, the dashboard of the journey's own, the watcher start and the round stream check the journeys use, and each journey (first install and setup, live review progress on the dashboard); a failing journey names itself and its step, and the live review progress journey has a forced-break proof; `bin/journey-alarm` files or updates one urgent task for a red run
-- [CI](ci.md): also the journeys, on every pull request and push to main and on main nightly and on demand. Dependabot updates every image CI and the app use weekly, once a release is 3 days old, except images on GHCR, such as gitleaks (no wait). Every image is pinned by tag and digest except the database images in `.github/ci/databases.Dockerfile`, which carry a tag only: whoever has registry access appends `@sha256:<index digest>` to each of its lines, and Dependabot then keeps tag and digest current like the other images.
+- [CI](ci.md): also the journeys, on every push to main, on a pull request that needs the app image or touches the journeys' test code, and on main nightly and on demand. Dependabot updates every image CI and the app use weekly, once a release is 3 days old, except images on GHCR, such as gitleaks (no wait). Every image is pinned by tag and digest except the database images in `.github/ci/databases.Dockerfile`, which carry a tag only: whoever has registry access appends `@sha256:<index digest>` to each of its lines, and Dependabot then keeps tag and digest current like the other images.
 - [Releases](releases.md)
 - [Requirements](requirements-and-parity.md): the [external commands](requirements.md) and the [parity](parity.md) behaviors
 
 Running Intakt:
 - [Instance and probes](instance-and-probes.md)
+- [Connectivity check and outage state](outage.md): offline only when the forge's DNS lookup and every HTTPS probe of the forge and the vendors in use fail; any HTTP status counts as an answer; no credential is sent
 - [Container image](container-image.md)
 - [The demo with docker compose](demo-with-docker-compose.md)
 - [The demo recording](demo-recording.md): `intakt:demo:record` writes the ledger events and the captured live updates of a change's review rounds into one file, with the date, the models and the Intakt version, `intakt:demo:replay` writes its ledger events into the demo project and publishes its live updates at the recorded pace, and `intakt:demo:remove` deletes the demo project with its replayed ledger rows

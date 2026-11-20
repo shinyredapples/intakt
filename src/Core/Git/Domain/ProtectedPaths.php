@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Git\Domain;
 
-use InvalidArgumentException;
-
 // The owner's list for one project, never a file of the repository, because a change could otherwise edit the list that judges it.
 final readonly class ProtectedPaths
 {
@@ -21,13 +19,13 @@ final readonly class ProtectedPaths
     /**
      * @param list<string> $entries
      *
-     * @throws InvalidArgumentException
+     * @throws ProtectedPathRefused
      */
     public function __construct(array $entries)
     {
         foreach ($entries as $entry) {
             if (1 !== preg_match(self::WELL_FORMED, $entry)) {
-                throw new InvalidArgumentException(sprintf('"%s" is not a protected path: name a file or a folder relative to the repository root, without an empty, "." or ".." part', $entry));
+                throw ProtectedPathRefused::entry($entry);
             }
         }
 

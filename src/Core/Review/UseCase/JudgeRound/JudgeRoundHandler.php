@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\UseCase\JudgeRound;
 
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Platform\Contract\AsCommandHandler;
 use Intakt\Core\Review\Contract\DroppedFinding;
 use Intakt\Core\Review\Contract\Finding;
@@ -92,7 +93,7 @@ final readonly class JudgeRoundHandler
         }
 
         try {
-            return $this->vendor->judge($round->project(), new JudgeRequest($round->task(), $findings, $round->id(), $this->rounds->filesOf($round)));
+            return $this->vendor->judge($round->project(), new JudgeRequest($round->task(), $findings, $round->id(), new Paths(...$this->rounds->filesOf($round))));
         } catch (ProviderRateLimited $limited) {
             throw JudgeLimited::after($limited->retryAfterSeconds);
         } catch (VendorAccountBusy|ProviderFailedTransiently) {

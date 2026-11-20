@@ -6,13 +6,19 @@ namespace Intakt\Tests\Core\Dashboard\Domain;
 
 use DateTimeImmutable;
 use Intakt\Core\Budget\Contract\Cost;
+use Intakt\Core\Dashboard\Domain\ChartScale;
 use Intakt\Core\Dashboard\Domain\JudgeCall;
+use Intakt\Core\Dashboard\Domain\JudgeOutcomes;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
+use Intakt\Core\Dashboard\Domain\ReviewerCatch;
+use Intakt\Core\Dashboard\Domain\ReviewerCatches;
+use Intakt\Core\Dashboard\Domain\ReviewerOutcome;
 use Intakt\Core\Dashboard\Domain\ReviewTrends;
 use Intakt\Core\Dashboard\Domain\RoundFinding;
 use Intakt\Core\Dashboard\Domain\RoundPlace;
 use Intakt\Core\Dashboard\Domain\RoundStart;
 use Intakt\Core\Review\Contract\ReplayMark;
+use Intakt\Core\Review\Contract\Severity;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -23,6 +29,11 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(RoundFinding::class)]
 #[UsesClass(Cost::class)]
 #[UsesClass(TokenFigures::class)]
+#[UsesClass(JudgeOutcomes::class)]
+#[UsesClass(ReviewerCatches::class)]
+#[UsesClass(ReviewerCatch::class)]
+#[UsesClass(ReviewerOutcome::class)]
+#[UsesClass(ChartScale::class)]
 final class ReviewTrendsTest extends TestCase
 {
     public function testWithNoRoundEveryFigureButTheCountHasNoData(): void
@@ -32,6 +43,7 @@ final class ReviewTrendsTest extends TestCase
         self::assertFalse($trends->anyReview);
         self::assertSame(0, $trends->roundsRun());
         self::assertNull($trends->seriousActFindings());
+        self::assertNull($trends->caughtByOneReviewerOnlyPercent());
         self::assertNull($trends->medianTimeToVerdict());
         self::assertNull($trends->costPerRound());
     }
@@ -87,6 +99,64 @@ final class ReviewTrendsTest extends TestCase
         $marks = $this->round('r-2', 'alpha')->judgedWith([new RoundFinding('F2', null, null)->calledBy(JudgeCall::Act)], new DateTimeImmutable('2026-10-28T11:10:00+00:00'));
 
         self::assertSame(1, ReviewTrends::counting([$this->judgedWith([$this->act('F1', 'P2')]), $marks])->seriousActFindings());
+    }
+
+    public function testAnActEntryWhoseFindingsCameFromTwoReviewersIsNotCaughtByOneReviewerOnly(): void
+    {
+        $round = $this->judgedWith([$this->act('F1', 'P2', ['F2']), $this->act('F3', 'P2')])->withFindingsByReviewer(['x' => ['F1', 'F3'], 'y' => ['F2']]);
+
+        self::assertSame(50, ReviewTrends::counting([$round])->caughtByOneReviewerOnlyPercent());
+    }
+
+    public function testAnActEntryMergingTwoFindingsOfOneReviewerIsCaughtByOneReviewerOnly(): void
+    {
+        $round = $this->judgedWith([$this->act('F1', 'P2', ['F2'])])->withFindingsByReviewer(['x' => ['F1', 'F2'], 'y' => []]);
+
+        self::assertSame(100, ReviewTrends::counting([$round])->caughtByOneReviewerOnlyPercent());
+    }
+
+    public function testTwoReviewersReportingOneTrackedFindingAreTwoReviewersOfItsEntry(): void
+    {
+        $round = $this->judgedWith([$this->act('F1', 'P2')])->withFindingsByReviewer(['x' => ['F1'], 'y' => ['F1']]);
+
+        self::assertSame(0, ReviewTrends::counting([$round])->caughtByOneReviewerOnlyPercent());
+    }
+
+    public function testTheOneReviewerShareIsRoundedToAWholePercent(): void
+    {
+        $round = $this->judgedWith([$this->act('F1', 'P2'), $this->act('F2', 'P2'), $this->act('F3', 'P2')])->withFindingsByReviewer(['x' => ['F1', 'F2', 'F3'], 'y' => ['F2', 'F3']]);
+
+        self::assertSame(33, ReviewTrends::counting([$round])->caughtByOneReviewerOnlyPercent());
+    }
+
+    public function testRoundsWithoutARecordOfWhoReportedWhatAreLeftOutOfTheOneReviewerShare(): void
+    {
+        $recorded = $this->judgedWith([$this->act('F1', 'P2')])->withFindingsByReviewer(['x' => ['F1'], 'y' => []]);
+        $unrecorded = $this->round('r-2', 'alpha')->judgedWith([$this->act('F1', 'P2', ['F2'])], new DateTimeImmutable('2026-10-28T11:10:00+00:00'));
+
+        self::assertSame(100, ReviewTrends::counting([$recorded, $unrecorded])->caughtByOneReviewerOnlyPercent());
+    }
+
+    public function testTheOneReviewerShareHasNoDataWhileNoJudgedRoundRecordsWhoReportedWhat(): void
+    {
+        $unrecorded = $this->judgedWith([$this->act('F1', 'P2', ['F2'])]);
+        $unjudged = $this->round('r-2', 'alpha')->withFindingsByReviewer(['x' => ['F1']]);
+
+        self::assertNull(ReviewTrends::counting([$unrecorded, $unjudged])->caughtByOneReviewerOnlyPercent());
+    }
+
+    public function testTheOneReviewerShareHasNoDataWhenTheRecordedRoundsHaveNoActEntry(): void
+    {
+        $round = $this->judgedWith([new RoundFinding('F1', 'P3', 'Deferred.')->calledBy(JudgeCall::FollowUp)])->withFindingsByReviewer(['x' => ['F1']]);
+
+        self::assertNull(ReviewTrends::counting([$round])->caughtByOneReviewerOnlyPercent());
+    }
+
+    public function testAnActEntryNoRecordedReviewerReportedIsLeftOutOfTheOneReviewerShare(): void
+    {
+        $round = $this->judgedWith([$this->act('F1', 'P2'), new RoundFinding('F9', null, null)->calledBy(JudgeCall::Act)])->withFindingsByReviewer(['x' => ['F1']]);
+
+        self::assertSame(100, ReviewTrends::counting([$round])->caughtByOneReviewerOnlyPercent());
     }
 
     public function testTheMedianTimeRunsFromRoundStartToTheVerdictAndSkipsUnjudgedRounds(): void
@@ -146,6 +216,21 @@ final class ReviewTrendsTest extends TestCase
         self::assertFalse($trends->includesTheDemo());
         self::assertTrue($trends->canLeaveOutTheDemo());
         self::assertTrue($trends->demoLeftOut);
+    }
+
+    public function testLeavingOutTheDemoTakesItsRoundsOutOfBothCharts(): void
+    {
+        $replayed = $this->replayed('r-2')->withOutcomes([new ReviewerOutcome('r-2-security', 'security', 'standard', new DateTimeImmutable('2026-10-28T11:00:00+00:00'))])
+            ->judgedWith([$this->act('F1', 'P1')], new DateTimeImmutable('2026-10-28T11:10:00+00:00'))
+            ->judgedOnItsOwnMarks()
+            ->withSeveritiesByReviewer(['r-2-security' => ['F1' => 'P1']])
+            ->withFindingsByReviewer(['r-2-security' => ['F1']]);
+
+        $counted = ReviewTrends::counting([$replayed]);
+        $leftOut = ReviewTrends::leavingOutTheDemo([$replayed]);
+
+        self::assertSame([1, 1], [$counted->judgeOutcomes()?->kept, $counted->reviewerCatches()?->reviewers[0]->found(Severity::P1)]);
+        self::assertSame([null, null], [$leftOut->judgeOutcomes(), $leftOut->reviewerCatches()]);
     }
 
     public function testLeavingOutAnOnlyDemoReviewStillCountsAsAReviewHavingRun(): void

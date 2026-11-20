@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\HandBack\UseCase\RunCheckJob;
 
 use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\HandBack\Contract\AcceptedHandBack;
 use Intakt\Core\HandBack\Contract\CheckJob;
 use Intakt\Core\HandBack\Contract\CheckJobOutcome;
@@ -52,6 +53,7 @@ use Symfony\Component\Filesystem\Filesystem;
 #[CoversClass(CheckJobOutcome::class)]
 #[CoversClass(CheckVerdict::class)]
 #[UsesClass(CheckJob::class)]
+#[UsesClass(Paths::class)]
 #[UsesClass(LostContent::class)]
 #[UsesClass(PhpGate::class)]
 #[UsesClass(CheckHandBack::class)]
@@ -151,7 +153,7 @@ final class RunCheckJobTest extends TestCase
         $gate->method('registryHosts')->willReturn([]);
 
         (void) $this->checkJob($this->runnerLeaving(new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput(['check-result' => "passed\n"]))), $gate)
-            ->run(new CheckJob(new HandBack($this->history->mirror, 'task', $this->history->bundle('main..task'), false, new JobCredentials()), 'job-image', null, []));
+            ->run(new CheckJob(new HandBack($this->history->mirror, 'task', $this->history->bundle('main..task'), false, new JobCredentials()), 'job-image', null, new Paths()));
 
         self::assertTrue($this->ranSpec()->egress->isNone());
     }
@@ -457,7 +459,7 @@ final class RunCheckJobTest extends TestCase
         $this->history->startMerge('main');
         $this->history->commitFile('named.txt', "1\n", 'Merge main and create an unrelated file at the named path');
 
-        $job = new CheckJob(new HandBack($this->history->mirror, 'task', $this->history->bundle('main..task'), true, new JobCredentials()), 'job-image', null, ['named.txt']);
+        $job = new CheckJob(new HandBack($this->history->mirror, 'task', $this->history->bundle('main..task'), true, new JobCredentials()), 'job-image', null, new Paths('named.txt'));
 
         $outcome = $this->whenTheJobLeaves(['check-result' => "passed\n"], $job);
 
@@ -500,7 +502,7 @@ final class RunCheckJobTest extends TestCase
      */
     private function job(string $bundle, ?string $command, array $named): CheckJob
     {
-        return new CheckJob(new HandBack($this->history->mirror, 'task', $bundle, false, new JobCredentials()), 'job-image', $command, $named);
+        return new CheckJob(new HandBack($this->history->mirror, 'task', $bundle, false, new JobCredentials()), 'job-image', $command, new Paths(...$named));
     }
 
     private function checkJob(JobRunner $runner, ?Gate $gate = null): RunCheckJob

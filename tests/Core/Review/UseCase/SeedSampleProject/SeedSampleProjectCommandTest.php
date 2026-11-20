@@ -109,7 +109,7 @@ final class SeedSampleProjectCommandTest extends TestCase
         }
     }
 
-    public function testWithOnlyTheRouterTheSecondMakersModelIsPriced(): void
+    public function testWithOnlyTheRouterTheSecondAiLabsModelIsPriced(): void
     {
         $this->seed(Provider::OpenAiCompatible);
 
@@ -143,7 +143,7 @@ final class SeedSampleProjectCommandTest extends TestCase
         self::assertStringContainsString('its panel on anthropic and openai', $display);
     }
 
-    public function testAHuggingFaceTokenAlonePutsTheTwoReviewersOnModelsOfTwoMakers(): void
+    public function testAHuggingFaceTokenAlonePutsTheTwoReviewersOnModelsOfTwoAiLabs(): void
     {
         $display = $this->seed(Provider::OpenAiCompatible)->getDisplay();
 
@@ -198,14 +198,14 @@ final class SeedSampleProjectCommandTest extends TestCase
         self::assertStringContainsString('The price table is dated 2030-01-02', new Filesystem()->readFile($this->configuration()));
     }
 
-    public function testWithOnlyTheRouterTheSecondMakerIsTheOneTheDataFileNames(): void
+    public function testWithOnlyTheRouterTheSecondAiLabIsTheOneTheDataFileNames(): void
     {
         $this->givenADataFile();
         $this->compatibleBaseUrl = 'https://router.example.test';
 
         $this->seed(Provider::OpenAiCompatible);
 
-        self::assertSame(['made-up-router', 'made-up-second-maker'], $this->reviewerModels());
+        self::assertSame(['made-up-router', 'made-up-second-lab'], $this->reviewerModels());
     }
 
     public function testTheOpenAiCompatibleEndpointCountsAtTheRouterUrlOfTheDataFile(): void
@@ -377,12 +377,12 @@ final class SeedSampleProjectCommandTest extends TestCase
                 'openai' => ['strong' => 'made-up-strong', 'standard' => 'made-up-standard', 'light' => 'made-up-strong'],
                 'openai_compatible' => ['strong' => 'made-up-router', 'standard' => 'made-up-router', 'light' => 'made-up-router'],
             ],
-            'second_maker' => 'made-up-second-maker',
+            'second_lab' => 'made-up-second-lab',
             'prices' => [
                 'made-up-strong' => ['input' => 7, 'output' => 70],
                 'made-up-standard' => ['input' => 0.7, 'output' => 7],
                 'made-up-router' => ['input' => 1, 'output' => 2],
-                'made-up-second-maker' => ['input' => 3, 'output' => 4],
+                'made-up-second-lab' => ['input' => 3, 'output' => 4],
             ],
         ]));
         $this->data = new SampleProjectData($file);

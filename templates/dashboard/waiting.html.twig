@@ -21,7 +21,7 @@
 {% else %}
 <div class="wait-list">
 {% for item in items %}
-<article class="wait-item" aria-labelledby="wait-{{ loop.index }}">
+<article class="wait-item needs" aria-labelledby="wait-{{ loop.index }}">
     <h2 class="wait-lead" id="wait-{{ loop.index }}"><span class="dot needs"></span>{{ item.lead }}</h2>
     {{ include('dashboard/components/meta.html.twig', {facts: [
         {text: 'All projects'},
@@ -40,7 +40,7 @@
             <span class="outcome">{{ choice.outcome }}</span>
         </li>
     {% endfor %}
-        <li><a class="btn secondary sm" href="{{ item.link ?? path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_BOARD')) }}">{{ item.linkLabel }}</a></li>
+        <li><a class="btn secondary sm" href="{{ item.link ?? path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_BOARD'), {board: 1}) }}">{{ item.linkLabel }}</a></li>
     </ul>
 </article>
 {% endfor %}

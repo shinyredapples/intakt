@@ -25,14 +25,17 @@ use Intakt\Core\Review\Contract\JudgingFailed;
 use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\ReviewerBlocked;
 use Intakt\Core\Review\Contract\ReviewerFailed;
+use Intakt\Core\Review\Contract\ReviewerFindingsRecorded;
 use Intakt\Core\Review\Contract\ReviewerStarted;
 use Intakt\Core\Review\Contract\ReviewerStopped;
 use Intakt\Core\Review\Contract\ReviewStarted;
+use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictReceived;
 use Intakt\Core\Review\Domain\OnePerPlace;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundReviewer;
+use Intakt\Core\Review\Infrastructure\FindingKeys;
 use Intakt\Core\ReviewerForLoop\Contract\ProjectModes;
 use Symfony\Component\DependencyInjection\Attribute\Target;
 use Symfony\Component\Serializer\Encoder\JsonEncoder;
@@ -48,6 +51,7 @@ final readonly class RoundLedger
         private SerializerInterface $serializer,
         private TierResolver $tiers,
         private Redactor $redactor,
+        private FindingKeys $keys,
     ) {
     }
 
@@ -82,6 +86,17 @@ final readonly class RoundLedger
             findings: count($verdict->findings),
             mode: $this->modes->of($reviewer->round()->project()),
             reason: $verdict->blockedReason(),
+        ));
+    }
+
+    // Under the ids of the change's finding ledger, because those are the ids the act list and the judge's merges name, so the dashboard can tell which reviewers reported an act entry.
+    public function reviewerFindingsRecorded(ReportedFindings $reported): void
+    {
+        $this->append(LedgerEventKind::ReviewerFindingsRecorded, new ReviewerFindingsRecorded(
+            $reported->reviewer->round()->id()->toRfc4122(),
+            $reported->reviewer->id()->toRfc4122(),
+            $reported->findings,
+            $reported->severities,
         ));
     }
 
@@ -133,7 +148,26 @@ final readonly class RoundLedger
             $judged->dropped,
             $judged->sameCause,
             $votes,
+            $this->p1KeysOf($round, $judged),
+            $judged->fallback,
         ));
+    }
+
+    // Keyed at the head the round judged, because only the reviewed checkout holds the files a P1 named as the reviewers saw them.
+    /**
+     * @return array<string, ?string>
+     */
+    private function p1KeysOf(ReviewRound $round, JudgedFindings $judged): array
+    {
+        $keys = [];
+
+        foreach ($judged->findings as $finding) {
+            if (Severity::P1 === $finding->severity) {
+                $keys[$finding->id] = $this->keys->of($finding, $round->checkoutRoot())?->value;
+            }
+        }
+
+        return $keys;
     }
 
     // An act entry is recorded as the act list holds it (highest severity, merged ids), so the review page shows it the way the console does; the merged findings stay recorded for their ids.
@@ -197,7 +231,7 @@ final readonly class RoundLedger
         return ['round' => $reviewer->round()->id()->toRfc4122(), 'reviewer' => $reviewer->id()->toRfc4122(), 'role' => $reviewer->roleName(), 'tier' => $reviewer->tier()];
     }
 
-    private function append(LedgerEventKind $kind, ReviewStarted|ReviewerStarted|VerdictReceived|CatchUpOwed|ReviewerFailed|ReviewerBlocked|ReviewerStopped|JudgeDone|JudgingFailed $payload): void
+    private function append(LedgerEventKind $kind, ReviewStarted|ReviewerStarted|VerdictReceived|CatchUpOwed|ReviewerFailed|ReviewerBlocked|ReviewerStopped|JudgeDone|JudgingFailed|ReviewerFindingsRecorded $payload): void
     {
         $result = $this->ledger->append(new LedgerEvent($kind, $this->serializer->serialize($payload, JsonEncoder::FORMAT)));
 

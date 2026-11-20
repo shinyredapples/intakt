@@ -7,10 +7,10 @@ namespace Intakt\Core\HandBack\UseCase\CheckHandBack;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Core\HandBack\Contract\AcceptedHandBack;
 use Intakt\Core\HandBack\Contract\HandBack;
+use Intakt\Core\HandBack\Contract\HandBackBranchRefused;
 use Intakt\Core\HandBack\Contract\HandBackNotChecked;
 use Intakt\Core\HandBack\Contract\HandBackRefusal;
 use Intakt\Core\HandBack\Contract\RefusedHandBack;
-use InvalidArgumentException;
 use NoDiscard;
 
 // A check that cannot run (HandBackNotChecked) is the install's fault, not the build's, so it is thrown and never counts as a failure of the task.
@@ -24,7 +24,7 @@ final readonly class RouteHandBack
     }
 
     /**
-     * @throws InvalidArgumentException
+     * @throws HandBackBranchRefused
      * @throws HandBackNotChecked
      * @throws RepositoryAttributesRefused
      * @throws HandBackRoundNotRecorded
