@@ -23,6 +23,7 @@ use PHPStan\Analyser\Scope;
 use PHPStan\Rules\IdentifierRuleError;
 use PHPStan\Rules\Rule;
 use PHPStan\Rules\RuleErrorBuilder;
+use PHPStan\Type\Constant\ConstantArrayType;
 use PHPStan\Type\Constant\ConstantIntegerType;
 use PHPStan\Type\Constant\ConstantStringType;
 use PHPStan\Type\ObjectType;
@@ -111,22 +112,31 @@ final readonly class RawPromptMessageRule implements Rule
     // because `[Message::class, 'ofUser']` is a callable only with exactly the keys 0 and 1, in any written order
     private function callableArrayFinding(Array_ $array, Scope $scope): ?IdentifierRuleError
     {
-        foreach ($scope->getType($array)->getConstantArrays() as $constantArray) {
-            $keys = array_map(static fn (Type $key): ?int => $key instanceof ConstantIntegerType ? $key->getValue() : null, $constantArray->getKeyTypes());
-            if (2 !== count($keys) || !in_array(0, $keys, true) || !in_array(1, $keys, true)) {
-                continue;
-            }
+        $factories = array_filter(array_map($this->factoryOfCallableArray(...), $scope->getType($array)->getConstantArrays()));
 
-            $class = $constantArray->getValueTypes()[array_search(0, $keys, true)];
-            $method = $constantArray->getValueTypes()[array_search(1, $keys, true)];
-            $factory = array_find(array_map(static fn (ConstantStringType $name): string => $name->getValue(), $method->getConstantStrings()), static fn (string $name): bool => in_array(strtolower($name), self::MESSAGE_FACTORIES, true));
+        return [] === $factories ? null : $this->rawMessage('A callable array of Message and '.array_first($factories));
+    }
 
-            if ($this->namesMessage($this->classNamesOf($class)) && (null !== $factory || ([] === $method->getConstantStrings() && $method->isString()->yes()))) {
-                return $this->rawMessage('A callable array of Message and '.($factory ?? 'a factory name'));
-            }
+    private function factoryOfCallableArray(ConstantArrayType $array): ?string
+    {
+        $keys = array_map(static fn (Type $key): ?int => $key instanceof ConstantIntegerType ? $key->getValue() : null, $array->getKeyTypes());
+        $class = array_search(0, $keys, true);
+        $method = array_search(1, $keys, true);
+
+        if (2 !== count($keys) || false === $class || false === $method || !$this->namesMessage($this->classNamesOf($array->getValueTypes()[$class]))) {
+            return null;
         }
 
-        return null;
+        return $this->factoryNamed($array->getValueTypes()[$method]);
+    }
+
+    // a method name known only at run time may be a factory, so it counts as one
+    private function factoryNamed(Type $method): ?string
+    {
+        $names = array_map(static fn (ConstantStringType $name): string => $name->getValue(), $method->getConstantStrings());
+
+        return array_find($names, static fn (string $name): bool => in_array(strtolower($name), self::MESSAGE_FACTORIES, true))
+            ?? ([] === $names && $method->isString()->yes() ? 'a factory name' : null);
     }
 
     private function callableStringFinding(String_ $string): ?IdentifierRuleError
