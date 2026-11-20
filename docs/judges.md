@@ -13,12 +13,14 @@ Your coding agent says it is done. Intakt tells you whether to believe it: a pan
 ## b. One Hugging Face token or provider key, about 5 minutes
 
 1. On http://localhost:7781, paste the key or token in step 1 ("A key or token for Anthropic, OpenAI or Hugging Face") and press **Keep the key**. Calls are billed to the key's owner.
-2. `docker compose restart intakt`, so the sample project gets its reviewers.
-3. Press **Start the first review** in step 3. Its live review page opens: each reviewer's row fills in as it answers, then the round shows its outcome (`approve`, `changes` or `blocked`) and "Findings and the judge's call" lists the act list, each entry marked **Fix now**.
+2. `docker compose restart intakt`, so the sample project gets its reviewers. Wait until `docker compose ps` shows the container as healthy.
+3. Reload http://localhost:7781: step 2 now reads "1 project is configured." and lists the `sample` project. Press **Start the first review** in step 3. Its live review page opens: each reviewer's row fills in as it answers, then the round shows its outcome (`approve`, `changes` or `blocked`) and "Findings and the judge's call" lists the act list, each entry marked **Fix now**.
 
 From the terminal, `docker compose exec intakt php bin/console intakt:demo` runs the same review and prints the verdict, each reviewer and the act list.
 
 ## c. With your agent over MCP
+
+This path runs a live review, so first do steps 1 and 2 of path b (keep a key, restart, wait until healthy): without them the `sample` project has no reviewers.
 
 1. Get the token: `docker compose exec intakt php bin/console intakt:sample:show /app/var/data/sample-repository` prints `Connect an MCP client: claude mcp add ... --header "Authorization: Bearer <token>"`. Step 4 of the first-run page ("Your own agent") shows the address, `http://localhost:7781/mcp/owner`.
 2. Run the printed `claude mcp add` line in the clone, then start `claude` there.
