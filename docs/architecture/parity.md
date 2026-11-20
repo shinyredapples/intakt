@@ -2,6 +2,8 @@
 
 Only behaviors the switch needs ([plan](../plan.md), M6 to M8). Each line: the requirement, then the existing loop's test that shows it today (file, and a test name where one states it). Before takeover each line gets the Intakt test that shows the same behavior (T73). Intakt task in brackets.
 
+A done line (`- [x]`, also `- [X]`) names its Intakt tests after `Intakt:`, each as `` `SomeTest::testName` ``; a bare `` `testName` `` belongs to the class named last before it on that line, and other backticked words (a command, a gate) are no test names. `tests/Application/Parity/ParityRecordTest.php` fails when a done line names no Intakt test, or names a class that no `*Test.php` file under `tests/` declares (outside `Fixtures/` folders, with one file of that name only) or a method that class lacks. Whether a named test passes is shown by the suite that runs it. Open lines (`- [ ]`) are not judged yet.
+
 ## Intake and shaping
 - [ ] An `idea` issue is never built, even with the eligibility label. `test_github.py::test_ready_issues_skip_idea_issues_even_when_labelled_ready` [T47]
 - [ ] Only trusted authors' task text and `Waits for` notes count. `test_unblock.py::test_an_untrusted_issue_body_does_not_count_but_a_trusted_comment_does` [T47]
@@ -29,7 +31,7 @@ Only behaviors the switch needs ([plan](../plan.md), M6 to M8). Each line: the r
 - [ ] Composer changes beyond routine go to the owner, naming the packages. `test_policy.py`, `test_owner_approval.py::test_composer_changes_beyond_routine_wait_for_the_owner_and_name_the_new_packages` [T52]
 - [x] The orchestrator pushes only signed commits. `test_gitops.py::test_push_refuses_unsigned_commits` [T53]; Intakt: `SignedCommitsTest::testTheCheckRefusesACommitThatIsNotSigned` and `testTheCheckRefusesACommitSignedByAnotherKey` (a push signs every new commit first and checks the whole branch before it writes anything)
 - [x] A crash after the push or after opening the pull request neither pushes again nor opens a second one. `test_lanes.py::test_a_crash_after_the_push_neither_pushes_again_nor_opens_a_second_pull_request` [T53]; Intakt: `PushBranchTest::testACrashAfterThePushNeitherPushesAgainNorOpensASecondPullRequest` and `testACrashAfterOpeningThePullRequestOpensNoSecondOne`
-- [x] Transient git network failures are retried; persistent ones fail with git's message. `test_network_git.py` [T46]
+- [x] Transient git network failures are retried; persistent ones fail with git's message. `test_network_git.py` [T46]; Intakt: `NetworkGitTest::testAFailingCallIsRetriedAfterTenAndThenThirtySeconds` and `testACallThatFailsThreeTimesFailsWithGitsMessage`
 - [ ] Forge calls use the App's installation token; nothing falls back to another credential. `test_app_auth.py` [T37]
 
 ## CI
