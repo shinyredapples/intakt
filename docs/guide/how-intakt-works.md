@@ -172,8 +172,8 @@ It also avoids waste on purpose: it keeps descriptions and reviews short, doesn'
 
 ## Keeping you in the picture
 
-- **The dashboard** shows what is being built, what is in review, what is on hold, and a "Waiting on you" column with only the things that truly need a person, each with the exact click or comment to make.
-- **Notifications** go to your phone only for those things, once each: every card in "Waiting on you" was sent to you, and nothing is sent without a card ([how alerts work](a-tour-of-the-dashboard.md#alerts-and-notifications)).
+- **The dashboard** shows what is being built, what is in review, what is on hold, and a Waiting on you page that today lists the outages of AI accounts Intakt can no longer read, each with what to do. The board's Waiting on you column, with a card for everything that truly needs a person, is planned.
+- **Notifications** (planned) will go to your phone only for those things, once each: every card in the "Waiting on you" column will have been sent to you, and nothing will be sent without a card ([how alerts work](a-tour-of-the-dashboard.md#alerts-and-notifications)).
 - **What Intakt approved by itself** is listed on the dashboard for a week, so you can spot a wrong call without anything ever waiting on you or notifying you.
 
 ## Words you will see

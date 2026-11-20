@@ -11,6 +11,8 @@ use Intakt\Core\Dashboard\Domain\ReviewTrends;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\SampleChangeSource;
 use Intakt\Core\Dashboard\UseCase\ShowTrends\ShowTrendsController;
+use Intakt\Core\Ledger\Contract\LedgerEvent;
+use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Core\Review\Contract\SampleChange;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -77,7 +79,7 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
         self::assertSame('2 review rounds over every project', $page->filter('.page-head .meta span')->text());
     }
 
-    public function testTheOneReviewerTileReadsNoDataEvenWhenActEntriesHaveMerges(): void
+    public function testTheOneReviewerTileReadsNoDataForRoundsWithoutARecordOfWhoReportedWhatEvenWhenActEntriesHaveMerges(): void
     {
         $this->ledger->startRound('r-1', 'alpha');
         $this->ledger->judgeOneEntryOf('r-1', 'F1', 'F2');
@@ -85,7 +87,39 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
         $page = $this->browser->request('GET', '/trends');
 
         self::assertSame('No data', $this->tiles($page)['Caught by one reviewer only']);
-        self::assertStringContainsString('The ledger does not record which reviewer reported each finding', $page->filter('.tiles-note')->text());
+        self::assertStringContainsString('"Caught by one reviewer only" counts only the rounds with a full record of which reviewer reported each finding.', $page->filter('.tiles-note')->text());
+    }
+
+    public function testTheOneReviewerTileShowsTheShareOfActEntriesOnlyOneReviewerReported(): void
+    {
+        $this->ledger->startRound('r-1', 'alpha');
+        $this->ledger->reportFindings('r-1', 'correctness', ['F1']);
+        $this->ledger->reportFindings('r-1', 'security', ['F2']);
+        $this->ledger->judgeOneEntryOf('r-1', 'F1', 'F2');
+        $this->ledger->startRound('r-2', 'alpha');
+        $this->ledger->reportFindings('r-2', 'correctness', ['F1']);
+        $this->ledger->reportFindings('r-2', 'security', []);
+        $this->ledger->judgeFindings('r-2', ['F1' => 'act']);
+        $this->ledger->startRound('r-3', 'alpha');
+        $this->ledger->judgeOneEntryOf('r-3', 'F1', 'F2');
+
+        $page = $this->browser->request('GET', '/trends');
+
+        self::assertSame('50%', $this->tiles($page)['Caught by one reviewer only']);
+    }
+
+    public function testAnUnreadableReportCannotTurnAJoinedEntryIntoAOneReviewerCatch(): void
+    {
+        $this->ledger->startRound('r-1', 'alpha');
+        $this->ledger->answer('r-1', 'correctness', 1);
+        $this->ledger->answer('r-1', 'security', 1);
+        $this->ledger->reportFindings('r-1', 'correctness', ['F1']);
+        $this->ledger->append(new LedgerEvent(LedgerEventKind::ReviewerFindingsRecorded, '{"round":"r-1","reviewer":"r-1-security","findings":[7]}'));
+        $this->ledger->judgeOneEntryOf('r-1', 'F1', 'F2');
+
+        $page = $this->browser->request('GET', '/trends');
+
+        self::assertSame('No data', $this->tiles($page)['Caught by one reviewer only']);
     }
 
     public function testTheCostTileIsTheMeanOverEveryPricedRound(): void
