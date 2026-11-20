@@ -87,8 +87,8 @@ final readonly class BarChart
     {
         $last = count($this->points) - 1;
         $labels = [];
-        foreach (array_unique([0, intdiv($last, 2), $last]) as $index) {
-            $labels[] = $this->axisLabel($index, $last);
+        foreach (array_intersect_key($this->points, array_flip([0, intdiv($last, 2), $last])) as $index => $point) {
+            $labels[] = $this->axisLabel($index, $point, $last);
         }
 
         return $labels;
@@ -108,7 +108,7 @@ final readonly class BarChart
         );
     }
 
-    // All zero or no data: a scale of 1, as in the mock, never 0.
+    // A scale of 1 when every point is zero or missing, because a scale of 0 would divide by zero, as the mock notes.
     private function scaleMax(): float
     {
         $highest = max(0, ...array_map(static fn (ChartPoint $point): int => $point->value ?? 0, $this->points));
@@ -123,13 +123,13 @@ final readonly class BarChart
     /**
      * @return array{x: float, text: string, anchor: string}
      */
-    private function axisLabel(int $index, int $last): array
+    private function axisLabel(int $index, ChartPoint $point, int $last): array
     {
         // The first and last labels align with their slot's outer edge, so a long label stays inside the chart.
         return match ($index) {
-            0 => ['x' => $this->slotX(0), 'text' => $this->points[0]->label, 'anchor' => 'start'],
-            $last => ['x' => $this->slotX($last) + $this->slotWidth(), 'text' => $this->points[$last]->label, 'anchor' => 'end'],
-            default => ['x' => $this->slotX($index) + $this->slotWidth() / 2, 'text' => $this->points[$index]->label, 'anchor' => 'middle'],
+            0 => ['x' => $this->slotX(0), 'text' => $point->label, 'anchor' => 'start'],
+            $last => ['x' => $this->slotX($last) + $this->slotWidth(), 'text' => $point->label, 'anchor' => 'end'],
+            default => ['x' => $this->slotX($index) + $this->slotWidth() / 2, 'text' => $point->label, 'anchor' => 'middle'],
         };
     }
 

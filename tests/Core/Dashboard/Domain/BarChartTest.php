@@ -98,6 +98,7 @@ final class BarChartTest extends TestCase
         foreach (array_values($values) as $index => $value) {
             $points[] = new ChartPoint('p'.$index, $value);
         }
+        self::assertNotEmpty($points);
 
         return new BarChart('Rounds per day', 'A takeaway.', 'Day', 'Rounds', $points);
     }

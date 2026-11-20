@@ -6,7 +6,7 @@ namespace Intakt\Core\Dashboard\Domain;
 
 final readonly class ChartPoint
 {
-    // DESIGN.md, Charts: missing data reads "No data" in the tooltip and the table, never zero.
+    // Missing data reads "No data", never zero, because a zero would claim a count nobody recorded (DESIGN.md, Charts).
     public const string NO_DATA = 'No data';
 
     /**
