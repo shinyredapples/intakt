@@ -49,7 +49,7 @@ final readonly class AccountPlatform implements PlatformInterface
             $result = $this->platform->invoke($model, $input, $options);
             // Boundary: records every failure of the account and rethrows it, because a cooldown or a log must follow whatever the platform threw.
         } catch (Throwable $failure) {
-            $accountError = $this->failed($failure);
+            $accountError = $this->recordFailure($failure);
 
             // A guard for a platform that fails while sending only, because Symfony's HTTP client reports a failed name lookup when the answer is read, which the vendor retries instead.
             if ($failure instanceof TransportExceptionInterface) {
@@ -94,8 +94,14 @@ final readonly class AccountPlatform implements PlatformInterface
         return $result;
     }
 
+    // Void, because Symfony AI's onError and the stream listener take a callback that returns nothing.
+    private function failed(Throwable $failure): void
+    {
+        $this->recordFailure($failure);
+    }
+
     // True for an account error, also one already recorded, because the send path logs every other failure itself.
-    private function failed(Throwable $failure): bool
+    private function recordFailure(Throwable $failure): bool
     {
         // Once the answer has started, StreamedAnswer wraps the provider's exception, so the cooldown looks through to it.
         $cause = $failure instanceof IncompleteStreamException ? $failure->getPrevious() ?? $failure : $failure;
