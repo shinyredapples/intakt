@@ -68,6 +68,38 @@ final class InterruptedReviewerTest extends KernelTestCase
         self::assertNull($stored->failure());
     }
 
+    public function testAnOutageReportedAfterTheReviewCeilingStillWaitsWithItsSession(): void
+    {
+        $this->fixture->start(1);
+        $id = $this->fixture->bus->messages[0]->reviewerId;
+        $leases = $this->fixture->leases($this->fixture->entities);
+        $reviewer = $leases->take($id);
+        $reviewer->recordAgentSession('session-1');
+        $this->fixture->entities->flush();
+        $this->fixture->clock->modify('+1 hour');
+
+        $leases->recordInterrupted($reviewer);
+
+        $stored = $this->fixture->reviewer($id);
+        self::assertSame(ReviewerState::Interrupted, $stored->state());
+        self::assertSame('session-1', $stored->agentSessionId());
+        self::assertNull($stored->failure());
+    }
+
+    public function testAResultReportedAfterTheReviewCeilingStillFailsTheReviewer(): void
+    {
+        $this->fixture->start(1);
+        $leases = $this->fixture->leases($this->fixture->entities);
+        $reviewer = $leases->take($this->fixture->bus->messages[0]->reviewerId);
+        $this->fixture->clock->modify('+1 hour');
+
+        $leases->recordFailure($reviewer, 'the model refused');
+
+        $stored = $this->fixture->reviewer($reviewer->id()->toRfc4122());
+        self::assertSame(ReviewerState::Failed, $stored->state());
+        self::assertSame('the reviewer had no result within the review ceiling', $stored->failure());
+    }
+
     public function testARealFailureStillMovesTheReviewerToFailedWithTheFailureStored(): void
     {
         $this->fixture->start(1);

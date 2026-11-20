@@ -63,7 +63,7 @@ final readonly class ReviewerLeases
     // Neither a failure nor a restart, because an outage is a wait and only a real failure may use up a limit.
     public function recordInterrupted(RoundReviewer $reviewer): void
     {
-        $this->record($reviewer, fn (RoundReviewer $stored) => $this->moves->interrupt($stored));
+        $this->record($reviewer, fn (RoundReviewer $stored) => $this->moves->interrupt($stored), pastTheCeiling: true);
     }
 
     // Blocked with the reason, because no provider is left to review and a retry would only wait for one the owner named a way around.
@@ -134,13 +134,13 @@ final readonly class ReviewerLeases
      *
      * @return T|null
      */
-    private function record(RoundReviewer $reviewer, Closure $move): mixed
+    private function record(RoundReviewer $reviewer, Closure $move, bool $pastTheCeiling = false): mixed
     {
         $attempts = 0;
 
         while (true) {
             try {
-                return $this->recordOnce($reviewer, $move);
+                return $this->recordOnce($reviewer, $move, $pastTheCeiling);
             } catch (ReviewEventNotRecorded $refused) {
                 // A new transaction, because the result is already in hand and only a fresh snapshot can write after another reviewer committed.
                 if (++$attempts < self::STORE_ATTEMPTS && $this->entities->isOpen()) {
@@ -160,11 +160,11 @@ final readonly class ReviewerLeases
      *
      * @return T|null
      */
-    private function recordOnce(RoundReviewer $reviewer, Closure $move): mixed
+    private function recordOnce(RoundReviewer $reviewer, Closure $move, bool $pastTheCeiling): mixed
     {
         $now = $this->clock->now();
 
-        return $this->inOneTransaction(function () use ($reviewer, $move, $now): mixed {
+        return $this->inOneTransaction(function () use ($reviewer, $move, $now, $pastTheCeiling): mixed {
             $stored = $this->lockedRow($reviewer->id());
 
             // Left alone unless it is this worker's own attempt, because anything else was decided while the vendor call ran and stands.
@@ -172,7 +172,8 @@ final readonly class ReviewerLeases
                 return null;
             }
 
-            if (!$this->withinTheHold($stored, $now)) {
+            // An outage may outlast the ceiling, and it stays a wait rather than a failure; only a result is refused after it.
+            if (!$pastTheCeiling && !$this->withinTheHold($stored, $now)) {
                 $this->moves->fail($stored, self::CEILING_PASSED);
 
                 return null;
