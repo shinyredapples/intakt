@@ -12,7 +12,7 @@ final readonly class PhpGateSteps
 
     public const string CHECK = 'bin/check --fast';
 
-    // A status Composer never exits with, so a caller can tell "this head installs every time" from an install that failed (Composer exits 1 for its own failures too).
+    // A status Composer's own failures do not use, so a caller can tell "this head installs every time" from an install that failed (Composer exits 1 for its own failures too).
     public const int REFUSED = 78;
 
     // Before Composer runs, because Composer resolves anew without a lock file or with config.lock off (an explicit null too: only a missing key means the default), the split install never runs the root's package-event scripts, and a lock entry that does not pin its contents could install other code for the same lock inputs: a path package, a mirror the guard cannot check, a URL outside the known remote schemes, whose bytes the lock may not name (a stream wrapper such as compress.zlib:// reads a local file; a user@host:path URL is remote only for a git source, because Composer reads an archive URL of that form as a path), a plugin the install skips (its type compared in lowercase, as Composer lowercases it when loading the lock; symfony/runtime's work is redone by the generation), a checksum Composer skips, an archive with neither a checksum nor an https URL that ends in its locked commit id, or a source whose reference does not look like a full commit id.
@@ -33,7 +33,7 @@ final readonly class PhpGateSteps
             $shown = match (true) {
                 null === $name => "A package without a name",
                 is_string($name) && 1 === preg_match("~^[a-z0-9]([_.-]?[a-z0-9]+)*/[a-z0-9](([_.]|-{1,2})?[a-z0-9]+)*$~D", $name) => $name,
-                default => "The package named ".json_encode($name, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE),
+                default => "The package named ".json_encode($name, JSON_INVALID_UTF8_SUBSTITUTE),
             };
             $unpinned = static fn (string $why) => $refuse($shown." ".$why.", so composer.lock does not pin its contents.");
             if ("path" === ($package["dist"]["type"] ?? null) || "path" === ($package["source"]["type"] ?? null)) { $unpinned("comes from a path repository"); }
@@ -54,17 +54,18 @@ final readonly class PhpGateSteps
         }'
         SH.' '.self::REFUSED;
 
-    // After Composer ran, because the lock entry does not say which hash format the repository uses, so a branch named like a commit id passes the lock guard and only the commit that was checked out can show it: git never resolves such a branch to its own name. Git runs on the checkout's own .git folder with every inherited GIT_ variable removed and no system or global configuration, replace objects or grafts, because an inherited GIT_DIR (or a .git file pointing elsewhere) would read the HEAD of another repository. Composer's standard error is dropped while it names the vendor folder, because a warning there (an undetected root version) would put a second line beside a refusal; when Composer fails, no installed.json is found and the guard refuses.
+    // After Composer ran, because the lock entry does not say which hash format the repository uses, so a branch named like a commit id passes the lock guard and only the commit that was checked out can show it: git never resolves such a branch to its own name. Git runs on the checkout's own .git folder with every inherited GIT_ variable removed and no system or global configuration, replace objects or grafts, because an inherited GIT_DIR (or a .git file pointing elsewhere) would read the HEAD of another repository; a .git/commondir file is refused too, because git follows it even with an explicit --git-dir and a clone Composer makes never has one. The guard trusts the checkout's .git folder as git clone wrote it: it removes what the environment can inject and refuses the redirections a fresh clone never contains, and further git internals are out of scope because the locked install (scripts and plugins off) does not produce them. Composer's standard error is dropped while it names the vendor folder, because a warning there (an undetected root version) would put a second line beside a refusal; when Composer fails, the vendor folder comes back empty and the guard refuses on its own line instead of looking for /composer/installed.json.
     public const string SOURCE_GUARD = <<<'SH'
         php -r '$refuse = static function (string $why) use ($argv): never { fwrite(STDERR, $why."\n"); exit((int) $argv[2]); };
         $environment = [...array_filter(getenv(), static fn (mixed $name): bool => !str_starts_with((string) $name, "GIT_"), ARRAY_FILTER_USE_KEY), "GIT_CONFIG_NOSYSTEM" => "1", "GIT_CONFIG_GLOBAL" => "/dev/null", "GIT_NO_REPLACE_OBJECTS" => "1", "GIT_NO_LAZY_FETCH" => "1", "GIT_ALLOW_PROTOCOL" => "", "GIT_GRAFT_FILE" => "/dev/null", "GIT_ATTR_NOSYSTEM" => "1"];
         $checkedOut = static function (string $checkout) use ($environment): string {
-            if (!is_dir($checkout."/.git") || is_link($checkout."/.git")) { return ""; }
+            if (!is_dir($checkout."/.git") || is_link($checkout."/.git") || file_exists($checkout."/.git/commondir") || is_link($checkout."/.git/commondir")) { return ""; }
             $git = proc_open(["git", "--git-dir=".$checkout."/.git", "--work-tree=".$checkout, "rev-parse", "--verify", "--quiet", "HEAD"], [1 => ["pipe", "w"], 2 => ["file", "/dev/null", "w"]], $pipes, null, $environment);
             $head = stream_get_contents($pipes[1]);
             fclose($pipes[1]);
             return 0 === proc_close($git) ? trim($head) : "";
         };
+        if ("" === $argv[1]) { $refuse("Composer could not name the vendor folder, so the checked out sources cannot be compared with composer.lock."); }
         $manifest = $argv[1]."/composer/installed.json";
         if (!is_file($manifest)) { $refuse("The install left no vendor/composer/installed.json, so the checked out sources cannot be compared with composer.lock."); }
         $installed = json_decode(file_get_contents($manifest), true, 512, JSON_THROW_ON_ERROR);

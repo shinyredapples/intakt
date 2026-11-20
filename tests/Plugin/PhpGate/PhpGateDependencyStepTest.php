@@ -398,6 +398,27 @@ final class PhpGateDependencyStepTest extends TestCase
         self::assertSame("The package named \"fixture\\/local\\nsecond line\" comes from a path repository, so composer.lock does not pin its contents.\n", $guard->getErrorOutput());
     }
 
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function unicodeLineBreaks(): iterable
+    {
+        yield 'next line U+0085' => ["\u{85}", '\u0085'];
+        yield 'line separator U+2028' => ["\u{2028}", '\u'.'2028'];
+    }
+
+    #[DataProvider('unicodeLineBreaks')]
+    public function testTheLockGuardNamesAPackageWhoseNameHoldsAUnicodeLineBreakEscapedOnOneLine(string $break, string $escaped): void
+    {
+        $this->lockFileWith(['name' => 'fixture/local'.$break.'second', 'version' => '1.0.0', 'dist' => ['type' => 'path', 'url' => './package']]);
+
+        $guard = $this->runInProject(PhpGateSteps::LOCK_GUARD);
+
+        self::assertSame(PhpGateSteps::REFUSED, $guard->getExitCode());
+        self::assertSame(1, preg_match_all('/\R/u', $guard->getErrorOutput()));
+        self::assertSame('The package named "fixture\/local'.$escaped."second\" comes from a path repository, so composer.lock does not pin its contents.\n", $guard->getErrorOutput());
+    }
+
     public function testTheLockGuardAcceptsTheSymfonyRuntimePluginBecauseTheGenerationRedoesItsWork(): void
     {
         $this->lockFileWith(['name' => 'symfony/runtime', 'version' => '8.0.0', 'type' => 'composer-plugin', 'dist' => $this->commitArchive()]);
@@ -663,6 +684,27 @@ final class PhpGateDependencyStepTest extends TestCase
         self::assertStringContainsString('fixture/git was installed from source', $guard->getErrorOutput());
     }
 
+    public function testTheSourceGuardRefusesAnUnlockedCheckoutWhoseCommondirLeadsToARepositoryWhoseBranchIsOnTheLockedCommit(): void
+    {
+        $this->gitPackage('first');
+        $this->projectWithGitSource(trim($this->mustRun('git -C package rev-parse HEAD')));
+        $this->mustRun('composer update --no-interaction --no-plugins --no-scripts --no-install');
+        $this->mustRun('composer install --no-interaction --no-progress --no-scripts --no-plugins --no-autoloader');
+        $this->mustRun('git -C vendor/fixture/git commit -q --allow-empty -m unlocked');
+        new Filesystem()->dumpFile($this->directory.'/vendor/fixture/git/.git/HEAD', "ref: refs/heads/fixture-branch\n");
+        new Filesystem()->dumpFile($this->directory.'/vendor/fixture/git/.git/commondir', $this->directory.'/package/.git');
+        self::assertSame(
+            trim($this->mustRun('git -C package rev-parse HEAD')),
+            trim($this->mustRun('git --git-dir=vendor/fixture/git/.git rev-parse HEAD')),
+            'Git must follow the commondir to the locked commit, or this test proves nothing.',
+        );
+
+        $guard = $this->runInProject(PhpGateSteps::SOURCE_GUARD);
+
+        self::assertSame(PhpGateSteps::REFUSED, $guard->getExitCode());
+        self::assertStringContainsString('fixture/git was installed from source', $guard->getErrorOutput());
+    }
+
     public function testTheSourceGuardRefusesABranchNamedLikeASha256CommitIdInASha1RepositoryAfterTheBranchAdvanced(): void
     {
         $branch = str_repeat('a', 64);
@@ -730,6 +772,18 @@ final class PhpGateDependencyStepTest extends TestCase
 
         self::assertSame(PhpGateSteps::REFUSED, $guard->getExitCode());
         self::assertStringContainsString('installed.json', $guard->getErrorOutput());
+    }
+
+    public function testTheSourceGuardRefusesOnItsOwnLineWhenComposerCannotNameTheVendorFolder(): void
+    {
+        new Filesystem()->dumpFile($this->directory.'/composer.json', '{');
+        new Filesystem()->dumpFile($this->directory.'/composer.lock', '{"packages": []}');
+        self::assertFalse($this->runInProject('composer config --no-interaction --no-plugins --absolute vendor-dir')->isSuccessful(), 'The fixture must make Composer fail, or this test proves nothing.');
+
+        $guard = $this->runInProject(PhpGateSteps::SOURCE_GUARD);
+
+        self::assertSame(PhpGateSteps::REFUSED, $guard->getExitCode());
+        self::assertSame("Composer could not name the vendor folder, so the checked out sources cannot be compared with composer.lock.\n", $guard->getErrorOutput());
     }
 
     public function testTheLockedInstallEndsWithTheSourceGuard(): void
