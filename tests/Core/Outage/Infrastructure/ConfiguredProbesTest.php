@@ -117,8 +117,42 @@ final class ConfiguredProbesTest extends TestCase
         yield 'an unclosed bracket' => ['http://[bad'];
         yield 'a trailing space' => ['https://llm.example/v1 '];
         yield 'a leading space' => [' https://llm.example/v1'];
-        yield 'a space in the path' => ['https://llm.example/my path'];
-        yield 'a non-ASCII host' => ["https://m\u{00FC}nchen.example/v1"];
+        yield 'a trailing line feed' => ["https://llm.example/my path\n"];
+        yield 'a tab in the path' => ["https://llm.example/my\tpath"];
+        yield 'backslashes for slashes' => ['https:\\\\llm.example\\my path'];
+        yield 'an empty host before a space' => ['https:///v1/my path'];
+        yield 'no authority before a space' => ['https:llm.example/my path'];
+        yield 'a space in the host' => ['https://llm example/v1'];
+        yield 'plain http with a non-ASCII host' => ["http://m\u{00FC}nchen.example/v1"];
+    }
+
+    #[DataProvider('baseUrlsOnlyTheHttpClientAccepts')]
+    public function testAnAnsweringBaseUrlTheHttpClientAcceptsIsOnlineWithEveryOtherProbeFailing(string $url, string $origin): void
+    {
+        $http = new MockHttpClient(static fn (string $method, string $requested): ResponseInterface => $requested === $origin
+            ? new MockResponse('', ['http_code' => 500])
+            : new MockResponse('', ['error' => 'Could not resolve host']));
+
+        self::assertSame(Reachability::Online, $this->httpsReachability($http, $url));
+    }
+
+    #[DataProvider('baseUrlsOnlyTheHttpClientAccepts')]
+    public function testABaseUrlTheHttpClientAcceptsIsRequestedAtItsAsciiOrigin(string $url, string $origin): void
+    {
+        self::assertSame(['https://forge.example/', $origin], $this->probedUrls(['openai_compatible' => ['default']], [$url]));
+    }
+
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function baseUrlsOnlyTheHttpClientAccepts(): iterable
+    {
+        yield 'a non-ASCII host' => ["https://m\u{00FC}nchen.example/v1", 'https://xn--mnchen-3ya.example/'];
+        yield 'a non-ASCII host with a port' => ["https://m\u{00FC}nchen.example:8443/v1", 'https://xn--mnchen-3ya.example:8443/'];
+        yield 'a space in the path' => ['https://llm.example/my path', 'https://llm.example/'];
+        yield 'an uppercase scheme and a space' => ['HTTPS://LLM.example/my path', 'https://llm.example/'];
+        yield 'an address literal with a port and a space' => ['https://[2001:db8::1]:8443/my path', 'https://[2001:0db8:0000:0000:0000:0000:0000:0001]:8443/'];
+        yield 'a credential with a space' => ['https://user:pa ss@llm.example/v1?key=a b', 'https://llm.example/'];
     }
 
     // Only the HTTPS probes run here: the DNS probe would look up the forge's name on the real network.

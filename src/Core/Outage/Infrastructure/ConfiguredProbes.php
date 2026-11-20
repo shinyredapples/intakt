@@ -12,6 +12,7 @@ use Intakt\Plugin\Vendor\Contract\ProviderDescriptor;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Uri\Rfc3986\Uri;
+use Uri\WhatWg\Url;
 
 // The hosts come from the forge's and the vendors' own configuration, so the check never needs a setting of its own.
 final readonly class ConfiguredProbes
@@ -61,9 +62,27 @@ final readonly class ConfiguredProbes
     {
         // A base URL is free text from the environment: an unparseable one would make the check throw, and a plain HTTP answer (a local proxy, say) is not the network.
         return array_values(array_filter(
-            array_map(Uri::parse(...), $this->compatibleBaseUrls),
+            array_map(static fn (string $text): ?Uri => Uri::parse($text) ?? self::lenientOrigin($text), $this->compatibleBaseUrls),
             static fn (?Uri $url): bool => 'https' === $url?->getScheme() && '' !== (string) $url->getHost(),
         ));
+    }
+
+    // The provider's HTTP client requests a base URL the strict parser rejects (an internationalized host, a space in the path), so its endpoint is in use and its origin is probed.
+    private static function lenientOrigin(string $text): ?Uri
+    {
+        // The lenient parser repairs what the HTTP client refuses: surrounding whitespace, a tab or line break, backslashes, and a missing authority (it reads `https:///v1` as host `v1`).
+        if ($text !== trim($text, "\x00..\x20") || false !== strpbrk($text, "\\\r\n\t") || 1 !== preg_match('#^https://[^/?\#]#i', $text)) {
+            return null;
+        }
+
+        $url = Url::parse($text);
+        $host = $url?->getAsciiHost();
+
+        if (null === $url || null === $host || '' === $host) {
+            return null;
+        }
+
+        return Uri::parse('https://'.$host.(null === $url->getPort() ? '' : ':'.$url->getPort()));
     }
 
     /**

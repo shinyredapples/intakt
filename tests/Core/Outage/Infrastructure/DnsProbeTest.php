@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Outage\Infrastructure;
 use Intakt\Core\Outage\Infrastructure\DnsProbe;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Process\Process;
 
 #[CoversClass(DnsProbe::class)]
 final class DnsProbeTest extends TestCase
@@ -31,6 +32,18 @@ final class DnsProbeTest extends TestCase
         } finally {
             putenv(false === $before ? 'PHP_BINARY' : 'PHP_BINARY='.$before);
         }
+    }
+
+    public function testALookupWhoseProcessCannotBeBuiltCountsAsNoAnswer(): void
+    {
+        $probing = <<<'PHP'
+            require $argv[1];
+            exit(new Intakt\Core\Outage\Infrastructure\DnsProbe('127.0.0.1', 3.0)->answers() ? 1 : 0);
+            PHP;
+
+        $withoutProcOpen = new Process([\PHP_BINARY, '-d', 'disable_functions=proc_open', '-r', $probing, dirname(__DIR__, 4).'/vendor/autoload.php']);
+
+        self::assertSame(0, $withoutProcOpen->run(), $withoutProcOpen->getErrorOutput().$withoutProcOpen->getOutput());
     }
 
     public function testALookupSlowerThanTheTimeoutIsStoppedAtTheTimeout(): void
