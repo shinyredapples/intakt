@@ -8,6 +8,7 @@ use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Dashboard\Domain\Board;
 use Intakt\Core\Dashboard\Domain\UpNext;
 use Intakt\Core\Dashboard\Domain\UpNextRound;
+use Intakt\Core\Dashboard\Domain\UpNextState;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
@@ -26,6 +27,7 @@ use PHPUnit\Framework\TestCase;
 
 #[CoversClass(UpNext::class)]
 #[CoversClass(UpNextRound::class)]
+#[CoversClass(UpNextState::class)]
 #[UsesClass(Board::class)]
 #[UsesClass(LedgerReviewPages::class)]
 #[UsesClass(LedgerRounds::class)]
@@ -50,7 +52,7 @@ final class UpNextTest extends TestCase
         $rounds = $this->upNext()->rounds();
 
         self::assertCount(1, $rounds);
-        self::assertTrue($rounds[0]->isRunning());
+        self::assertSame(UpNextState::Running, $rounds[0]->state);
         self::assertSame(['security', 'tests'], $rounds[0]->reviewers);
         self::assertSame(self::FIRST, $rounds[0]->round);
     }
@@ -62,7 +64,8 @@ final class UpNextTest extends TestCase
         $rounds = $this->upNext()->rounds();
 
         self::assertCount(1, $rounds);
-        self::assertFalse($rounds[0]->isRunning());
+        self::assertSame(UpNextState::Waiting, $rounds[0]->state);
+        self::assertSame("waiting to start", $rounds[0]->status());
     }
 
     public function testRunningRoundsComeBeforeWaitingOnes(): void
@@ -91,6 +94,51 @@ final class UpNextTest extends TestCase
         $this->ledger->answer(self::FIRST, 'security', 0);
 
         self::assertSame(['tests'], $this->upNext()->rounds()[0]->reviewers);
+    }
+
+    public function testARoundWhoseReviewersAllAnsweredStaysListedAsJudgingUntilTheVerdict(): void
+    {
+        $this->ledger->startRoundOf('feat/a', self::FIRST, 1);
+        foreach (['correctness', 'tests'] as $role) {
+            $this->ledger->startReviewer(self::FIRST, $role);
+            $this->ledger->answer(self::FIRST, $role, 0);
+        }
+
+        $rounds = $this->upNext()->rounds();
+
+        self::assertSame([self::FIRST], array_map(static fn (UpNextRound $round): string => $round->round, $rounds));
+        self::assertSame('judging', $rounds[0]->status());
+    }
+
+    public function testARoundWithOneReviewerAnsweredAndTheNextNotStartedStaysListedAsInProgress(): void
+    {
+        $this->ledger->startRoundOf('feat/a', self::FIRST, 1);
+        $this->ledger->startReviewer(self::FIRST, 'security');
+        $this->ledger->answer(self::FIRST, 'security', 0);
+
+        $rounds = $this->upNext()->rounds();
+
+        self::assertCount(1, $rounds);
+        self::assertSame('in progress, no reviewer running', $rounds[0]->status());
+    }
+
+    public function testARoundWhoseOnlyStartedReviewerFailedStaysListedAsInProgress(): void
+    {
+        $this->ledger->startRoundOf('feat/a', self::FIRST, 1);
+        $this->ledger->startReviewer(self::FIRST, 'security');
+        $this->ledger->failReviewer(self::FIRST, 'security', 'The provider timed out.');
+
+        self::assertSame(UpNextState::BetweenReviewers, $this->upNext()->rounds()[0]->state);
+    }
+
+    public function testARoundInProgressWithoutARunningReviewerComesBeforeAWaitingOne(): void
+    {
+        $this->ledger->startRoundOf('feat/a', self::FIRST, 1);
+        $this->ledger->startRoundOf('feat/b', self::SECOND, 1);
+        $this->ledger->startReviewer(self::SECOND, 'security');
+        $this->ledger->stopReviewer(self::SECOND, 'security');
+
+        self::assertSame([self::SECOND, self::FIRST], array_map(static fn (UpNextRound $round): string => $round->round, $this->upNext()->rounds()));
     }
 
     public function testWithNothingRunningOrWaitingTheListIsEmptyAndSaysSo(): void

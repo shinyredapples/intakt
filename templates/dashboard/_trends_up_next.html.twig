@@ -6,7 +6,7 @@
     {% else %}
     <ul>
         {% for entry in up_next.rounds %}
-        <li><a href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_REVIEW'), {round: entry.round}) }}">{{ entry.project }}: {{ entry.change }}</a> <span class="muted">{{ entry.running ? 'running: ' ~ entry.reviewers|join(', ') : 'waiting to start' }}</span></li>
+        <li><a href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_REVIEW'), {round: entry.round}) }}">{{ entry.project }}: {{ entry.change }}</a> <span class="muted">{{ entry.status }}</span></li>
         {% endfor %}
     </ul>
     {% endif %}

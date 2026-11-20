@@ -18,7 +18,7 @@ final readonly class UpNext
     // From the board's own cards, so the list never tells a different story than the board; a judged or ended round is not in progress.
     public static function of(Board $board): self
     {
-        $running = [];
+        $inProgress = [];
         $waiting = [];
 
         foreach ($board->cardsIn(BoardColumn::InReview) as $card) {
@@ -32,17 +32,30 @@ final readonly class UpNext
                 static fn (ReviewerOutcome $outcome): string => $outcome->role,
                 array_filter($round->outcomes, static fn (ReviewerOutcome $outcome): bool => ReviewerProgress::Running === $outcome->progress),
             ));
-            $entry = new UpNextRound($round->round, $round->project, $round->change, $roles);
+            $entry = new UpNextRound($round->round, $round->project, $round->change, self::stateOf($round, $roles), $roles);
 
-            // Because a round with no reviewer started has not begun, while one whose reviewers all answered waits on the judge and is in neither list.
-            if ([] !== $roles) {
-                $running[] = $entry;
-            } elseif ([] === $round->outcomes) {
+            if ($entry->state->isInProgress()) {
+                $inProgress[] = $entry;
+            } else {
                 $waiting[] = $entry;
             }
         }
 
-        return new self([...$running, ...$waiting]);
+        return new self([...$inProgress, ...$waiting]);
+    }
+
+    // A round stays listed until the judge is done or the round ends, because the board keeps it In review all that time, also once no reviewer runs.
+    /**
+     * @param list<string> $running
+     */
+    private static function stateOf(ReviewedRound $round, array $running): UpNextState
+    {
+        return match (true) {
+            [] !== $running => UpNextState::Running,
+            [] === $round->outcomes => UpNextState::Waiting,
+            count($round->outcomes) >= $round->reviewers => UpNextState::Judging,
+            default => UpNextState::BetweenReviewers,
+        };
     }
 
     /**
