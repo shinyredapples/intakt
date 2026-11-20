@@ -82,7 +82,7 @@ final class ScriptedHttpClient implements HttpClientInterface
         yield $this->event('message_stop', ['type' => 'message_stop']);
 
         $directory->callEnded($call);
-        $this->weight .=str_repeat('w', $directory->weightInBytes());
+        $this->weight .= str_repeat('w', $directory->weightInBytes());
     }
 
     private function delta(string $text): string
