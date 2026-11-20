@@ -42,7 +42,20 @@ final class ProfilerAllowListTest extends TestCase
 
     public function testASavedDevelopmentProfileHoldsExactlyTheCollectorsThatMeasureARequest(): void
     {
-        $this->kernel = new Kernel('dev', true);
+        self::assertSame(['db', 'memory', 'messenger', 'time'], $this->collectorsOfASavedProfile(new Kernel('dev', true)));
+    }
+
+    public function testASavedDevelopmentProfileWithoutDebugHoldsTheSameCollectors(): void
+    {
+        self::assertSame(['db', 'memory', 'messenger', 'time'], $this->collectorsOfASavedProfile(new Kernel('dev', false)));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function collectorsOfASavedProfile(Kernel $kernel): array
+    {
+        $this->kernel = $kernel;
         $request = Request::create('/mcp/review', 'POST');
 
         $response = $this->kernel->handle($request);
@@ -54,6 +67,7 @@ final class ProfilerAllowListTest extends TestCase
         self::assertNotNull($profile);
         $collectors = array_keys($profile->getCollectors());
         sort($collectors);
-        self::assertSame(['db', 'memory', 'messenger', 'time'], $collectors);
+
+        return $collectors;
     }
 }

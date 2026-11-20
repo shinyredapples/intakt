@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Application;
 
+use Intakt\Core\Server\Infrastructure\PathOnlyProfilerStorage;
 use Intakt\Core\Server\Infrastructure\ProfileOnlyRequestMeasuresPass;
 use Intakt\Kernel;
 use Intakt\Tests\Support\WebTestCase;
@@ -13,6 +14,7 @@ use Symfony\Component\BrowserKit\Cookie;
 use Symfony\Component\HttpKernel\KernelInterface;
 
 #[CoversClass(ProfileOnlyRequestMeasuresPass::class)]
+#[CoversClass(PathOnlyProfilerStorage::class)]
 #[UsesClass(Kernel::class)]
 final class SavedProfileSecretsTest extends WebTestCase
 {
@@ -25,6 +27,8 @@ final class SavedProfileSecretsTest extends WebTestCase
     private const string SESSION_CANARY = 'canary-session-b6a1';
 
     private const string BODY_CANARY = 'canary-body-e05f';
+
+    private const string QUERY_CANARY = 'canary-query-3c7b';
 
     protected function tearDown(): void
     {
@@ -52,6 +56,19 @@ final class SavedProfileSecretsTest extends WebTestCase
         foreach ([self::ENVIRONMENT_CANARY, self::SERVER_CANARY, self::BEARER_CANARY, self::SESSION_CANARY, self::BODY_CANARY] as $canary) {
             self::assertStringNotContainsString($canary, $saved);
         }
+    }
+
+    public function testASavedProfileHoldsNeitherTheQueryNorTheClientAddressOfItsRequest(): void
+    {
+        $client = self::createClient();
+        $client->enableProfiler();
+
+        $client->request('POST', '/mcp/review?access_token='.self::QUERY_CANARY, [], [], ['REMOTE_ADDR' => '192.0.2.44']);
+
+        self::assertResponseStatusCodeSame(401);
+        $saved = $this->savedProfile($client->getKernel(), (string) $client->getResponse()->headers->get('X-Debug-Token'));
+        self::assertStringNotContainsString(self::QUERY_CANARY, $saved);
+        self::assertStringNotContainsString('192.0.2.44', $saved);
     }
 
     public function testARequestOfATestThatDoesNotAskForAProfileSavesNone(): void

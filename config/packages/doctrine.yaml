@@ -53,6 +53,12 @@ doctrine:
                 prefix: 'Intakt\Core\Watcher\Domain'
                 alias: Watcher
 
+when@dev:
+    doctrine:
+        dbal:
+            # Also with APP_DEBUG=0, whose default leaves the db collector of a saved profile without its queries.
+            profiling: true
+
 when@test:
     doctrine:
         dbal:

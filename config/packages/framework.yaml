@@ -38,7 +38,7 @@ framework:
                         507: [GET, HEAD, PUT, DELETE, OPTIONS, TRACE]
                         510: [GET, HEAD, PUT, DELETE, OPTIONS, TRACE]
 
-# Profiles let a change be measured on a running install; prod and the image define no profiler, and ProfileOnlyRequestMeasuresPass keeps only the collectors that measure a request.
+# Profiles let a change be measured on a running install; prod and the image define no profiler, and ProfileOnlyRequestMeasuresPass keeps only the collectors that measure a request; PathOnlyProfilerStorage drops the query string and client address of what it saves.
 when@dev:
     framework:
         profiler:
