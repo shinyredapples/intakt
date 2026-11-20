@@ -152,6 +152,30 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         self::assertSame(1, preg_match_all('/ change_handed_to_intakt \{[^}]*pull\\\\\/7/', $events));
     }
 
+    // The first push stops after GitHub created #7 and before `change_opened`, so only the retry writes the record.
+    public function testATickRecordsAPullRequestTheAppCreatedBeforeAnInterruptedPushAsHandedToIntakt(): void
+    {
+        $ledger = self::getContainer()->get(Ledger::class);
+        self::assertInstanceOf(Ledger::class, $ledger);
+        $records = new PushRecords($ledger);
+        $github = new ScriptedGitHub();
+        $github->createdNumber = 7;
+        $opener = $github->opener('alpha', 'acme/widgets');
+        $proposal = new ProposedChange('alpha', 'feature/7', 'main', new ChangeText('Seven', 'E1'));
+        $push = $this->pushOf('feature/7', '1');
+        $records->intendChange($push, str_repeat('1', 40));
+        $opener->openOrUpdate($proposal);
+        $github->openPulls = [['number' => 7, 'head' => ['ref' => 'feature/7'], 'user' => ['login' => 'intakt[bot]', 'type' => 'Bot']]];
+        $records->intendChange($push, str_repeat('1', 40));
+        $records->open($push, str_repeat('1', 40), $opener->openOrUpdate($proposal));
+
+        $this->handler(new RecordingCommandBus())(new WatchPullRequests('alpha'));
+
+        $events = $this->recordedEvents();
+        self::assertSame(['POST', 'PATCH'], array_map(static fn (array $write): string => explode(' ', $write[0])[0], $github->writes));
+        self::assertSame(1, preg_match_all('/ change_handed_to_intakt \{[^}]*pull\\\\\/7/', $events));
+    }
+
     private function pushOf(string $branch, string $head): BranchPushRequest
     {
         return new BranchPushRequest('alpha', 'repo', 'origin', $branch, new AcceptedHandBack(null, str_repeat($head, 40), 0), new ChangeText('Title', 'E1'));

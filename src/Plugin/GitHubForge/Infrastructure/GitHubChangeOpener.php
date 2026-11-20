@@ -15,6 +15,7 @@ use Intakt\Plugin\Forge\Contract\ProposedChange;
 use Intakt\Plugin\GitHubForge\Contract\InstallationDoesNotMatchConfiguration;
 use Intakt\Plugin\GitHubForge\Contract\InstallationNotReadBack;
 use Intakt\Plugin\GitHubForge\Contract\InstallationTokenNotMinted;
+use Intakt\Plugin\GitHubForge\Contract\TrustNotChecked;
 use JsonException;
 use Symfony\Contracts\HttpClient\Exception\ExceptionInterface;
 
@@ -28,6 +29,7 @@ final readonly class GitHubChangeOpener implements ChangeOpening
         private CheckedInstallationTokens $tokens,
         private SecretScan $secrets,
         private WatchedRepositories $repositories,
+        private SteeringIdentities $identities,
     ) {
     }
 
@@ -40,7 +42,7 @@ final readonly class GitHubChangeOpener implements ChangeOpening
         }
 
         $repository = $this->addressOf($change->project);
-        $open = $this->numberOfOpenPullRequest($repository, $change->branch);
+        $open = $this->openPullRequestOf($repository, $change->branch);
         $payload = ['title' => $text->title, 'body' => $text->body, 'base' => $change->base];
 
         // The look-up comes first and a write is never retried, so a crash between the two leaves at most the pull request the next call finds.
@@ -48,7 +50,29 @@ final readonly class GitHubChangeOpener implements ChangeOpening
             return new OpenedChange($repository->pullRequest($this->numberOf($this->send('POST', $repository->path().'/pulls', [...$payload, 'head' => $change->branch]))), Opening::Created);
         }
 
-        return new OpenedChange($repository->pullRequest($this->numberOf($this->send('PATCH', $repository->path().'/pulls/'.$open, $payload))), Opening::Updated);
+        $opening = $this->wasCreatedByThisApp($open) ? Opening::Created : Opening::Updated;
+
+        return new OpenedChange($repository->pullRequest($this->numberOf($this->send('PATCH', $repository->path().'/pulls/'.$this->numberOf($open), $payload))), $opening);
+    }
+
+    /**
+     * @param array<mixed> $pull
+     */
+    private function wasCreatedByThisApp(array $pull): bool
+    {
+        // A push that stopped after GitHub created the pull request but before its record finds it open on the retry; GitHub alone sets the author, so only this App's own bot account marks it as Intakt's creation.
+        $author = $pull['user'] ?? null;
+        $login = is_array($author) ? ($author['login'] ?? null) : null;
+
+        if (!is_string($login) || !$this->identities->isBot($login)) {
+            return false;
+        }
+
+        try {
+            return $this->identities->isOwn($login);
+        } catch (TrustNotChecked $unchecked) {
+            throw new ForgeWriteFailed('The author of the open pull request could not be checked against this App: '.$unchecked->getMessage(), 0, $unchecked);
+        }
     }
 
     private function addressOf(string $project): RepositoryAddress
@@ -60,7 +84,10 @@ final readonly class GitHubChangeOpener implements ChangeOpening
         }
     }
 
-    private function numberOfOpenPullRequest(RepositoryAddress $repository, string $branch): ?int
+    /**
+     * @return array<mixed>|null
+     */
+    private function openPullRequestOf(RepositoryAddress $repository, string $branch): ?array
     {
         $query = ['state' => 'open', 'head' => $repository->headOf($branch), 'per_page' => 100];
         $listed = $this->decoded($this->request('GET', $repository->path().'/pulls', ['query' => $query]));
@@ -71,7 +98,7 @@ final readonly class GitHubChangeOpener implements ChangeOpening
 
         foreach ($listed as $pull) {
             if (is_array($pull) && is_array($pull['head'] ?? null) && ($pull['head']['ref'] ?? null) === $branch) {
-                return $this->numberOf($pull);
+                return $pull;
             }
         }
 

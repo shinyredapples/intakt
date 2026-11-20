@@ -17,6 +17,8 @@ use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokenMinter;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokens;
 use Intakt\Plugin\GitHubForge\Infrastructure\PostedComments;
 use Intakt\Plugin\GitHubForge\Infrastructure\SecretScan;
+use Intakt\Plugin\GitHubForge\Infrastructure\SteeringIdentities;
+use Intakt\Plugin\GitHubForge\Infrastructure\TrustAnswers;
 use Intakt\Plugin\GitHubForge\Infrastructure\VerdictLocks;
 use Intakt\Plugin\GitHubForge\Infrastructure\WatchedRepositories;
 use Psr\Log\NullLogger;
@@ -42,6 +44,9 @@ final class ScriptedGitHub
     public bool $unreachable = false;
 
     public int $createdNumber = 42;
+
+    // Null refuses `/app`, because a retry must fail when it cannot check the author of an open pull request against the App.
+    public ?string $appSlug = 'intakt';
 
     /** @var list<array<mixed>> */
     private array $comments = [];
@@ -69,13 +74,13 @@ final class ScriptedGitHub
 
     public function opener(string $project = 'widgets', string $repository = 'acme/widgets'): GitHubChangeOpener
     {
-        [$calls, $checked] = $this->stack();
+        [$calls, $checked, $jwt] = $this->stack();
 
-        return new GitHubChangeOpener($calls, $checked, new SecretScan(dirname(__DIR__, 3), 'gitleaks'), new WatchedRepositories([$project => ['github' => $repository]]));
+        return new GitHubChangeOpener($calls, $checked, new SecretScan(dirname(__DIR__, 3), 'gitleaks'), new WatchedRepositories([$project => ['github' => $repository]]), new SteeringIdentities(new TrustAnswers($calls), $jwt, ''));
     }
 
     /**
-     * @return array{GitHubCalls, CheckedInstallationTokens}
+     * @return array{GitHubCalls, CheckedInstallationTokens, AppJwt}
      */
     private function stack(): array
     {
@@ -90,7 +95,7 @@ final class ScriptedGitHub
         $calls = new GitHubCalls($http, $readings, $tokens);
         $checked = new CheckedInstallationTokens($readBack, $tokens);
 
-        return [$calls, $checked];
+        return [$calls, $checked, $jwt];
     }
 
     /**
@@ -107,7 +112,13 @@ final class ScriptedGitHub
 
     private function read(string $url): ResponseInterface
     {
-        if (str_ends_with((string) parse_url($url, PHP_URL_PATH), '/pulls')) {
+        $path = (string) parse_url($url, PHP_URL_PATH);
+
+        if ('/app' === $path) {
+            return null === $this->appSlug ? new MockResponse('{"message":"Refused"}', ['http_code' => 401]) : new MockResponse(json_encode(['slug' => $this->appSlug], JSON_THROW_ON_ERROR), ['http_code' => 200]);
+        }
+
+        if (str_ends_with($path, '/pulls')) {
             return new MockResponse(json_encode($this->openPulls, JSON_THROW_ON_ERROR), ['http_code' => 200]);
         }
 
