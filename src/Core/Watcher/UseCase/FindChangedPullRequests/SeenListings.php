@@ -11,6 +11,7 @@ use Intakt\Core\Watcher\Domain\ListingValidator;
 use Intakt\Core\Watcher\Domain\SeenChange;
 use Intakt\Plugin\Forge\Contract\OpenChange;
 use Symfony\Component\Lock\LockFactory;
+use Throwable;
 
 final readonly class SeenListings
 {
@@ -28,6 +29,7 @@ final readonly class SeenListings
      * @return T
      *
      * @throws ListingInProgress
+     * @throws Throwable
      */
     public function whileListing(string $project, Closure $listing): mixed
     {
@@ -70,6 +72,14 @@ final readonly class SeenListings
         }
 
         return $changed;
+    }
+
+    /**
+     * @return list<OpenChange>
+     */
+    public function openOf(string $project): array
+    {
+        return array_map(static fn (SeenChange $seen): OpenChange => $seen->asOpenChange(), $this->entities->getRepository(SeenChange::class)->findBy(['project' => $project], ['change' => 'ASC']));
     }
 
     /**
