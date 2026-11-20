@@ -12,8 +12,7 @@ final readonly class ParityRecord
 
     private const string INTAKT_PART = 'Intakt:';
 
-    // Because any other line after a done item could hide a name from the check, only a blank line, a list item or a heading ends one.
-    // A heading is one to six `#` and then whitespace or the line end, so a line starting with an issue number such as `#12` is none.
+    // Because any other line could hide a name, only a blank line, a list item or a heading (not an issue number such as `#12`) ends a done item.
     private const string ITEM_BOUNDARY = '/^\s*(?:$|[-*+] |\d+[.)] |#{1,6}(?:\s|$))/';
 
     // Outside a span a backslash escapes the next character, so `\`` opens no span; a run of backticks no equal run closes is unclosed.
