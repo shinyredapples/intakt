@@ -1,0 +1,124 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Tests\Gates;
+
+use Intakt\Gates\GateReport;
+use Intakt\Gates\GateResult;
+use Intakt\Gates\ProcessResult;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
+use PHPUnit\Framework\TestCase;
+
+#[CoversClass(GateReport::class)]
+#[UsesClass(GateResult::class)]
+#[UsesClass(ProcessResult::class)]
+final class GateReportKeptResultTest extends TestCase
+{
+    public function testAKeptResultWhoseFindingsGiveTheLineIsAccepted(): void
+    {
+        $result = GateResult::withFindings('dashes', $this->elevenFindings());
+
+        $report = $this->reportOf($result)->keeping($result->toFullJson());
+
+        self::assertSame($result->toFullJson(), $report->kept);
+    }
+
+    public function testAChildThatKeepsNothingWithOneFindingOf160WideCharactersIsTreatedAsCut(): void
+    {
+        $report = $this->reportOf(GateResult::withFindings('dashes', [str_repeat('界', 160)]));
+
+        self::assertNull($report->kept);
+        self::assertTrue($report->lineIsCut());
+    }
+
+    public function testAChildThatKeepsNothingWithOneShortFindingIsNotCut(): void
+    {
+        self::assertFalse($this->reportOf(GateResult::withFindings('dashes', ['notes.md:1 U+2014']))->lineIsCut());
+    }
+
+    public function testALineThatOmitsFindingsIsCut(): void
+    {
+        self::assertTrue($this->reportOf(GateResult::withFindings('dashes', $this->elevenFindings()))->lineIsCut());
+    }
+
+    public function testWhitespaceTheLineFoldsIsNoCut(): void
+    {
+        self::assertFalse($this->reportOf(GateResult::withFindings('dashes', ["notes.md:1\n\n   U+2014"]))->lineIsCut());
+    }
+
+    public function testWithASpaceAsSubstituteCharacterAKeptResultWithABrokenByteNextToASpaceIsAccepted(): void
+    {
+        $substitute = mb_substitute_character();
+        mb_substitute_character(32);
+
+        try {
+            $result = GateResult::withFindings('dashes', ["notes.md:1 broken \xFFbyte", ...$this->elevenFindings(2, 11)]);
+            $kept = $result->toFullJson();
+            $report = $this->reportOf($result)->keeping($kept);
+        } finally {
+            mb_substitute_character($substitute);
+        }
+
+        self::assertSame($kept, $report->kept);
+    }
+
+    public function testAKeptResultWithItsFindingsUnderTheKeyZeroIsAccepted(): void
+    {
+        $kept = '{"gate":"dashes","ok":false,"findings":{"0":"notes.md:1 U+2014"},"omitted":0}';
+
+        $report = $this->reportOf(GateResult::withFindings('dashes', ['notes.md:1 U+2014']))->keeping($kept);
+
+        self::assertSame($kept, $report->kept);
+    }
+
+    public function testAKeptResultWithItsFindingsUnderOtherKeysFallsBackToTheLine(): void
+    {
+        $kept = '{"gate":"dashes","ok":false,"findings":{"first":"notes.md:1 U+2014"},"omitted":0}';
+
+        self::assertNull($this->reportOf(GateResult::withFindings('dashes', ['notes.md:1 U+2014']))->keeping($kept)->kept);
+    }
+
+    public function testAKeptResultOfAnotherGateFallsBackToTheLine(): void
+    {
+        $kept = GateResult::withFindings('cs', ['notes.md:1 U+2014'])->toFullJson();
+
+        self::assertNull($this->reportOf(GateResult::withFindings('dashes', ['notes.md:1 U+2014']))->keeping($kept)->kept);
+    }
+
+    public function testAKeptResultWithOtherFindingsThanItsLineFallsBackToTheLine(): void
+    {
+        $kept = GateResult::withFindings('dashes', $this->elevenFindings(1, 10))->toFullJson();
+
+        self::assertNull($this->reportOf(GateResult::withFindings('dashes', $this->elevenFindings()))->keeping($kept)->kept);
+    }
+
+    public function testAKeptResultThatIsNoJsonFallsBackToTheLine(): void
+    {
+        self::assertNull($this->reportOf(GateResult::passed('dashes'))->keeping('{"gate":')->kept);
+    }
+
+    public function testAKeptResultLeavesTheLineAndTheVerdictAlone(): void
+    {
+        $result = GateResult::withFindings('dashes', $this->elevenFindings());
+        $report = $this->reportOf($result);
+
+        $keeping = $report->keeping($result->toFullJson());
+
+        self::assertSame([$report->line, false], [$keeping->line, $keeping->isPassing()]);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function elevenFindings(int $first = 1, int $last = 11): array
+    {
+        return array_map(static fn (int $number): string => 'notes.md:'.$number.' U+2014', range($first, $last));
+    }
+
+    private function reportOf(GateResult $result): GateReport
+    {
+        return GateReport::fromChild($result->gate, new ProcessResult($result->isPassing() ? 0 : 1, $result->toJson()."\n", ''));
+    }
+}

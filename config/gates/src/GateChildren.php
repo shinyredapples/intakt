@@ -6,7 +6,11 @@ namespace Intakt\Gates;
 
 final readonly class GateChildren
 {
+    public const string FULL_RESULT_VARIABLE = 'INTAKT_GATE_FULL_RESULT';
+
     private const string ENTRY = 'config/gates/run-gate.php';
+
+    private const string SCRATCH_PREFIX = 'intakt-gate-results';
 
     private const int POLL_MICROSECONDS = 10000;
 
@@ -30,9 +34,13 @@ final readonly class GateChildren
      */
     public function reportsOf(array $gates, array $arguments): array
     {
-        $results = $this->resultsOf($this->slots->launchOrder($gates, $this->runningTheChangesCode), $this->childrenOf($gates, $arguments));
+        $scratch = ScratchDirectory::create(self::SCRATCH_PREFIX);
+        $results = $this->resultsOf($this->slots->launchOrder($gates, $this->runningTheChangesCode), $this->childrenOf($gates, $arguments, $scratch));
 
-        return array_map(static fn (string $gate): GateReport => GateReport::fromChild($gate, $results[$gate]), $gates);
+        $reports = array_map(static fn (string $gate): GateReport => self::keptIn($scratch, GateReport::fromChild($gate, $results[$gate])), $gates);
+        $scratch?->remove();
+
+        return $reports;
     }
 
     /**
@@ -41,15 +49,34 @@ final readonly class GateChildren
      *
      * @return array<string, ChildCommand>
      */
-    private function childrenOf(array $gates, array $arguments): array
+    private function childrenOf(array $gates, array $arguments, ?ScratchDirectory $scratch): array
     {
         $children = [];
 
         foreach ($gates as $gate) {
-            $children[$gate] = new ChildCommand([PHP_BINARY, $this->home.'/'.self::ENTRY, $gate, ...$arguments], $this->directory(), LowPriority::environmentFor($gate, $this->runningTheChangesCode, $this->slots));
+            $handOff = $scratch instanceof ScratchDirectory ? [self::FULL_RESULT_VARIABLE => self::wholeResultFile($scratch, $gate)] : [];
+            $children[$gate] = new ChildCommand([PHP_BINARY, $this->home.'/'.self::ENTRY, $gate, ...$arguments], $this->directory(), [...LowPriority::environmentFor($gate, $this->runningTheChangesCode, $this->slots), ...$handOff]);
         }
 
         return $children;
+    }
+
+    private static function wholeResultFile(ScratchDirectory $scratch, string $gate): string
+    {
+        return $scratch->path.'/'.$gate.'.json';
+    }
+
+    private static function keptIn(?ScratchDirectory $scratch, GateReport $report): GateReport
+    {
+        $file = $scratch instanceof ScratchDirectory ? self::wholeResultFile($scratch, $report->gate) : null;
+
+        if (null === $file || !is_file($file) || !is_readable($file)) {
+            return $report;
+        }
+
+        $kept = file_get_contents($file);
+
+        return false === $kept ? $report : $report->keeping($kept);
     }
 
     /**
