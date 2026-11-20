@@ -6,7 +6,6 @@ namespace Intakt\Tests\Core\Dashboard\Domain;
 
 use DateTimeImmutable;
 use DateTimeZone;
-use LogicException;
 use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Dashboard\Domain\ChartBar;
 use Intakt\Core\Dashboard\Domain\ChartScale;
@@ -15,6 +14,7 @@ use Intakt\Core\Dashboard\Domain\ReviewsPerDay;
 use Intakt\Core\Dashboard\Domain\RoundPlace;
 use Intakt\Core\Dashboard\Domain\RoundStart;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
+use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
