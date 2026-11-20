@@ -24,8 +24,8 @@ final readonly class RecordingWithTrendsKeys
     public function of(Recording $recording): Recording
     {
         $events = array_values(array_filter($recording->events, static fn (RecordedLedgerEvent $event): bool => LedgerEventKind::ReviewerFindingsRecorded !== $event->kind));
-        $judged = $this->payloadOf($events, LedgerEventKind::JudgeDone);
         $verdicts = array_values(array_filter($events, static fn (RecordedLedgerEvent $event): bool => LedgerEventKind::VerdictReceived === $event->kind));
+        $judged = $this->judgementOfTheOneRound($events, $verdicts);
         $completing = end($verdicts);
 
         if (!$completing instanceof RecordedLedgerEvent) {
@@ -100,20 +100,29 @@ final readonly class RecordingWithTrendsKeys
         return substr($id, 0, -12).sprintf('%012x', hexdec(substr($id, -12)) + $step);
     }
 
+    // One judgement and one round only, because the reporter rows and the fallback key are derived from that judgement alone (the shipped file holds one round).
     /**
      * @param list<RecordedLedgerEvent> $events
+     * @param list<RecordedLedgerEvent> $verdicts
      *
      * @return array<string, mixed>
      */
-    private function payloadOf(array $events, LedgerEventKind $kind): array
+    private function judgementOfTheOneRound(array $events, array $verdicts): array
     {
-        foreach ($events as $event) {
-            if ($kind === $event->kind) {
-                return $this->decoded($event->payload);
+        $judgements = array_values(array_filter($events, static fn (RecordedLedgerEvent $event): bool => LedgerEventKind::JudgeDone === $event->kind));
+
+        if (1 !== count($judgements)) {
+            throw new LogicException(sprintf('The recording holds %d judge_done rows, not exactly one judge_done row, so the recording cannot tell which round each finding belongs to.', count($judgements)));
+        }
+
+        $judged = $this->decoded($judgements[0]->payload);
+        foreach ($verdicts as $verdict) {
+            if (($this->decoded($verdict->payload)['round'] ?? null) !== ($judged['round'] ?? null)) {
+                throw new LogicException('A verdict_received row is from another round than its judge_done row, so the recording cannot tell which round each finding belongs to.');
             }
         }
 
-        throw new LogicException(sprintf('The recording holds no %s row.', $kind->value));
+        return $judged;
     }
 
     /**
