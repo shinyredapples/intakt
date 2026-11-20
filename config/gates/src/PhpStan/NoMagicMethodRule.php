@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Gates\PhpStan;
 
+use PhpParser\Node\Identifier;
 use PhpParser\Node;
 use PhpParser\Node\Stmt;
 use PhpParser\Node\Stmt\ClassMethod;
@@ -87,7 +88,7 @@ final readonly class NoMagicMethodRule implements Rule
             return [];
         }
 
-        $aliases = array_filter($use->adaptations, fn (Node $adaptation): bool => $adaptation instanceof Alias && null !== $adaptation->newName && $this->isMagic($adaptation->newName->toString()));
+        $aliases = array_filter($use->adaptations, fn (Node $adaptation): bool => $adaptation instanceof Alias && $adaptation->newName instanceof Identifier && $this->isMagic($adaptation->newName->toString()));
 
         return array_values(array_map(fn (Alias $alias): IdentifierRuleError => $this->magicMethod($class->getDisplayName(), (string) $alias->newName, $alias->getStartLine()), $aliases));
     }

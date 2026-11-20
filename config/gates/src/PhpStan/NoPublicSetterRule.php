@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Gates\PhpStan;
 
+use PhpParser\Node\Identifier;
 use PhpParser\Modifiers;
 use PhpParser\Node;
 use PhpParser\Node\Stmt;
@@ -99,7 +100,7 @@ final readonly class NoPublicSetterRule implements Rule
     {
         $name = $this->aliasedName($alias);
 
-        if (null === $alias->newName && Modifiers::PUBLIC !== $alias->newModifier) {
+        if (!$alias->newName instanceof Identifier && Modifiers::PUBLIC !== $alias->newModifier) {
             return false;
         }
 
