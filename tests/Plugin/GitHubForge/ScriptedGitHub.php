@@ -17,6 +17,8 @@ use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokenMinter;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokens;
 use Intakt\Plugin\GitHubForge\Infrastructure\PostedComments;
 use Intakt\Plugin\GitHubForge\Infrastructure\SecretScan;
+use Intakt\Plugin\GitHubForge\Infrastructure\SteeringIdentities;
+use Intakt\Plugin\GitHubForge\Infrastructure\TrustAnswers;
 use Intakt\Plugin\GitHubForge\Infrastructure\VerdictLocks;
 use Intakt\Plugin\GitHubForge\Infrastructure\WatchedRepositories;
 use Psr\Log\NullLogger;
@@ -31,7 +33,9 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
 // Keeps each write with its decoded body and answers 201 unless a test refuses its path once, because a test must see every write the forge sent and in which order; lists the comments posted so far, so a retry can find its own.
 final class ScriptedGitHub
 {
+    public const string OWN_LOGIN = 'acme-intakt[bot]';
     private const string APP_ID = '12345';
+    private const string APP_SLUG = 'acme-intakt';
 
     /** @var list<array{string, array<mixed>}> */
     public array $writes = [];
@@ -40,6 +44,8 @@ final class ScriptedGitHub
     public array $openPulls = [];
 
     public bool $unreachable = false;
+
+    public bool $appRefused = false;
 
     /** @var list<array<mixed>> */
     private array $comments = [];
@@ -67,13 +73,14 @@ final class ScriptedGitHub
 
     public function opener(): GitHubChangeOpener
     {
-        [$calls, $checked] = $this->stack();
+        [$calls, $checked, $jwt] = $this->stack();
+        $identities = new SteeringIdentities(new TrustAnswers($calls), $jwt, '');
 
-        return new GitHubChangeOpener($calls, $checked, new SecretScan(dirname(__DIR__, 3), 'gitleaks'), new WatchedRepositories(['widgets' => ['github' => 'acme/widgets']]));
+        return new GitHubChangeOpener($calls, $checked, new SecretScan(dirname(__DIR__, 3), 'gitleaks'), new WatchedRepositories(['widgets' => ['github' => 'acme/widgets']]), $identities);
     }
 
     /**
-     * @return array{GitHubCalls, CheckedInstallationTokens}
+     * @return array{GitHubCalls, CheckedInstallationTokens, AppJwt}
      */
     private function stack(): array
     {
@@ -88,7 +95,7 @@ final class ScriptedGitHub
         $calls = new GitHubCalls($http, $readings, $tokens);
         $checked = new CheckedInstallationTokens($readBack, $tokens);
 
-        return [$calls, $checked];
+        return [$calls, $checked, $jwt];
     }
 
     /**
@@ -105,6 +112,10 @@ final class ScriptedGitHub
 
     private function read(string $url): ResponseInterface
     {
+        if ('/app' === parse_url($url, PHP_URL_PATH)) {
+            return $this->appRefused ? new MockResponse('{"message":"Refused"}', ['http_code' => 401]) : new MockResponse(json_encode(['id' => (int) self::APP_ID, 'slug' => self::APP_SLUG], JSON_THROW_ON_ERROR), ['http_code' => 200]);
+        }
+
         if (str_ends_with((string) parse_url($url, PHP_URL_PATH), '/pulls')) {
             return new MockResponse(json_encode($this->openPulls, JSON_THROW_ON_ERROR), ['http_code' => 200]);
         }

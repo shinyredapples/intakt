@@ -14,6 +14,7 @@ use Intakt\Plugin\Forge\Contract\ProposedChange;
 use Intakt\Plugin\GitHubForge\Contract\InstallationDoesNotMatchConfiguration;
 use Intakt\Plugin\GitHubForge\Contract\InstallationNotReadBack;
 use Intakt\Plugin\GitHubForge\Contract\InstallationTokenNotMinted;
+use Intakt\Plugin\GitHubForge\Contract\TrustNotChecked;
 use JsonException;
 use Symfony\Contracts\HttpClient\Exception\ExceptionInterface;
 
@@ -27,6 +28,7 @@ final readonly class GitHubChangeOpener implements ChangeOpening
         private CheckedInstallationTokens $tokens,
         private SecretScan $secrets,
         private WatchedRepositories $repositories,
+        private SteeringIdentities $identities,
     ) {
     }
 
@@ -70,11 +72,31 @@ final readonly class GitHubChangeOpener implements ChangeOpening
 
         foreach ($listed as $pull) {
             if (is_array($pull) && is_array($pull['head'] ?? null) && ($pull['head']['ref'] ?? null) === $branch) {
-                return $this->numberOf($pull);
+                return $this->isOpenedByThisApp($pull) ? $this->numberOf($pull) : throw new ForgeWriteFailed(sprintf('The open pull request of branch %s was not opened by this App, so Intakt leaves it alone.', $branch));
             }
         }
 
         return null;
+    }
+
+    /**
+     * @param array<mixed> $pull
+     */
+    private function isOpenedByThisApp(array $pull): bool
+    {
+        // The existing loop may own a pull request on a branch of the same name, and its title, body and base stay its own.
+        $user = $pull['user'] ?? null;
+        $login = is_array($user) ? ($user['login'] ?? null) : null;
+
+        if (!is_string($login)) {
+            return false;
+        }
+
+        try {
+            return $this->identities->isOwn($login);
+        } catch (TrustNotChecked $unchecked) {
+            throw new ForgeWriteFailed('The owner of the open pull request could not be checked: '.$unchecked->getMessage(), 0, $unchecked);
+        }
     }
 
     /**
