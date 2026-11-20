@@ -7,10 +7,13 @@ namespace Intakt\Tests\Core\Ai\Infrastructure;
 use Closure;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
+use Intakt\Core\Ai\Contract\EveryProviderOut;
 use Intakt\Core\Ai\Contract\PinnedProvider;
 use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Ai\Contract\ProviderOutage;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Ai\Contract\TierRequest;
 use Intakt\Core\Ai\Infrastructure\AccountFailoverPlatform;
 use Intakt\Core\Ai\Infrastructure\AccountPlatform;
 use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
@@ -24,6 +27,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 use Symfony\AI\Platform\Exception\RateLimitExceededException;
+use Symfony\AI\Platform\Model;
 use Symfony\AI\Platform\PlatformInterface;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
 use Symfony\Component\Cache\Adapter\ArrayAdapter;
@@ -48,6 +52,9 @@ use Throwable;
 #[UsesClass(Account::class)]
 #[UsesClass(Provider::class)]
 #[UsesClass(Tier::class)]
+#[UsesClass(TierRequest::class)]
+#[UsesClass(EveryProviderOut::class)]
+#[UsesClass(ProviderOutage::class)]
 final class TierPlatformPinnedProviderTest extends TestCase
 {
     private const string PINNED = 'owner/model:router';
@@ -55,6 +62,8 @@ final class TierPlatformPinnedProviderTest extends TestCase
     private const Provider ROUTER = Provider::OpenAiCompatible;
 
     private const array SUBSTITUTE = ['provider' => Provider::Anthropic->value, 'model' => 'other'];
+
+    private const array FALLBACK = ['provider' => Provider::OpenAiCompatible->value, 'model' => 'owner/model:other-router'];
 
     private MockClock $clock;
 
@@ -125,14 +134,55 @@ final class TierPlatformPinnedProviderTest extends TestCase
         self::assertSame([self::ROUTER, self::PINNED], [$answering->provider, $answering->model]);
     }
 
-    // Only the first model listed on a provider counts, so a cooling pin does not move the tier to another router of the same provider, and the substitute recorded for a provider is always the model that answered.
-    public function testASubstituteOnTheTiersOwnProviderIsSkippedSoTheTierGoesToTheNextProvider(): void
+    // Issue #2825: a substitute on the tier's own provider that names another router provider answers while the first pin cools, before any other provider.
+    public function testAPinnedFallbackOnTheTiersOwnProviderAnswersWhileThePinCools(): void
     {
         $this->pins->coolDown($this->pin(), 120);
 
-        $answering = $this->tiers($this->router(MockPlatformFactory::createPlatform('first')), [['provider' => self::ROUTER->value, 'model' => 'owner/other:other-router'], self::SUBSTITUTE])->answering('demo', Tier::Strong);
+        $answering = $this->tiers($this->router(MockPlatformFactory::createPlatform('first')), [self::FALLBACK, self::SUBSTITUTE])->answering('demo', Tier::Strong);
+
+        self::assertSame([self::ROUTER, self::FALLBACK['model']], [$answering->provider, $answering->model]);
+    }
+
+    public function testWhenThePinnedFallbackCoolsTooTheTierGoesToTheNextProvider(): void
+    {
+        $this->pins->coolDown($this->pin(), 120);
+        $this->pins->coolDown(new PinnedProvider(new Account(self::ROUTER, Account::DEFAULT), 'other-router'), 30);
+
+        $answering = $this->tiers($this->router(MockPlatformFactory::createPlatform('first')), [self::FALLBACK, self::SUBSTITUTE])->answering('demo', Tier::Strong);
 
         self::assertSame([Provider::Anthropic, 'other'], [$answering->provider, $answering->model]);
+    }
+
+    public function testWhenTheOwnModelAndItsPinnedFallbackCoolTheOutageNamesTheProviderOnce(): void
+    {
+        $this->pins->coolDown($this->pin(), 120);
+        $this->pins->coolDown(new PinnedProvider(new Account(self::ROUTER, Account::DEFAULT), 'other-router'), 30);
+
+        $out = $this->failureOf(fn (): object => $this->tiers($this->router(MockPlatformFactory::createPlatform('first')), [self::FALLBACK])->answering('demo', Tier::Strong));
+
+        self::assertInstanceOf(EveryProviderOut::class, $out);
+        self::assertSame('Every provider of the tier is out: openai_compatible for 120 s.', $out->getMessage());
+    }
+
+    // Issue #2825, the whole call: the pinned model's 429 cools only its pin, and the next selection goes to the pinned fallback, which answers on the same account at once.
+    public function testAPinned429IsFollowedByTheCallCompletingThroughThePinnedFallback(): void
+    {
+        $sent = [];
+        $router = MockPlatformFactory::createPlatform(static function (string|Model $model) use (&$sent): string {
+            $name = $model instanceof Model ? $model->getName() : $model;
+            $sent[] = $name;
+
+            return self::PINNED === $name ? throw new RateLimitExceededException(60) : 'reviewed by the fallback';
+        });
+        $tiers = $this->tiers($this->router($router), [self::FALLBACK, self::SUBSTITUTE]);
+
+        $limited = $this->failureOf(fn (): object => $tiers->invoke($tiers->answering('demo', Tier::Strong), new TierRequest('Review.')));
+        $answer = $tiers->invoke($tiers->answering('demo', Tier::Strong), new TierRequest('Review.'))->asText();
+
+        self::assertInstanceOf(EveryAccountCoolingDown::class, $limited);
+        self::assertSame('reviewed by the fallback', $answer);
+        self::assertSame([self::PINNED, self::FALLBACK['model']], $sent);
     }
 
     private function router(PlatformInterface $account): AccountFailoverPlatform

@@ -50,24 +50,31 @@ final readonly class TierPlatform implements TierInvoker
         $outages = [];
 
         foreach ([$own, ...$this->resolver->substitutes($project, $tier)] as $model) {
-            // Per provider, judged by the first model listed on it (the tier's own model, else its first substitute there): an outage takes the whole provider out, so a cooling pin never moves the tier to another router of the same provider, and the substitute model the ledger records for a provider is always the one that answers.
             $key = $model->provider->value;
-            if (array_key_exists($key, $outages)) {
+            if (array_key_exists($key, $outages) && !$this->isFallbackOnTheOwnProvider($own, $model)) {
                 continue;
             }
 
-            $outages[$key] = $this->outageOf($model);
-            if (!$outages[$key] instanceof ProviderOutage) {
+            $outage = $this->outageOf($model);
+            if (!$outage instanceof ProviderOutage) {
                 $this->recordSwitch($own, $model);
 
                 return $model;
             }
+
+            $outages[$key] ??= $outage;
         }
 
         /** @var non-empty-list<ProviderOutage> $out */
-        $out = array_values(array_filter($outages));
+        $out = array_values($outages);
 
         throw new EveryProviderOut($out);
+    }
+
+    // The tier's own provider is judged per model, so a substitute there that names another router provider (a pinned fallback) answers while the first one's pin cools (issue #2825); it is the same provider, so it owes no catch-up and the ledger records no substitute. Every other provider is judged once, by the first model listed on it, so the substitute model the ledger records for it (RoundLedger, the first substitute on it) is always the one that answers; an outage lists each provider once, by the reason of its first model.
+    private function isFallbackOnTheOwnProvider(ResolvedModel $own, ResolvedModel $model): bool
+    {
+        return $model !== $own && $model->provider === $own->provider;
     }
 
     // Invoked on the provider's own bundle platform because its catalog-based model router and model_catalog already know the configured model.
@@ -136,6 +143,12 @@ final readonly class TierPlatform implements TierInvoker
     private function recordSwitch(ResolvedModel $own, ResolvedModel $answering): void
     {
         if ($answering === $own) {
+            return;
+        }
+
+        if ($answering->provider === $own->provider) {
+            $this->logger->info('Model {own} cannot be served right now, so the review goes to {fallback} on the same provider.', ['own' => $own->model, 'fallback' => $answering->model]);
+
             return;
         }
 
