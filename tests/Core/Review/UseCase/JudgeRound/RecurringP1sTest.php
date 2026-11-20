@@ -137,7 +137,9 @@ final class RecurringP1sTest extends KernelTestCase
     {
         [$first, $second] = [$this->roundAt(self::HEAD_A), $this->roundAt(self::HEAD_B)];
         $ledger = new RecordingLedger();
-        $judgeTheFirst = fn (): null => $this->fixture->judgeOn($this->fixture->entities, $ledger, $this->scripted())(new JudgeRound($first));
+        $judgeTheFirst = function () use ($ledger, $first): void {
+            $this->fixture->judgeOn($this->fixture->entities, $ledger, $this->scripted())(new JudgeRound($first));
+        };
         $worker = $this->fixture->entitiesThrough(new WatchedStatements(self::CHANGE_LOCK, $judgeTheFirst));
 
         $this->fixture->judgeOn($worker, $ledger, $this->scripted())(new JudgeRound($second));

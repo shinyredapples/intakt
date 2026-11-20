@@ -111,7 +111,7 @@ final class RecurringP1Test extends TestCase
         return new FlaggedRound($number, $head, new JudgeDone('round-'.$number, [$finding], [], [], p1Keys: [$finding => self::KEY]));
     }
 
-    // Each round judged in the order given, with the rounds not judged yet still to judge, as a change's rounds meet the rule.
+    // The rounds not judged yet are passed as still to judge, because that is how a change's rounds meet the rule in a judging order.
     /**
      * @param list<string> $heads
      * @param list<int>    $order

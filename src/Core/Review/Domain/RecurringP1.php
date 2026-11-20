@@ -38,14 +38,26 @@ final readonly class RecurringP1
         $found = [];
 
         foreach ($this->firstToFlag($judged) as $key => $first) {
-            if (array_any($pending, static fn (int $number): bool => $number < $first->number)) {
-                continue;
+            if (!array_any($pending, static fn (int $number): bool => $number < $first->number)) {
+                $found = [...$found, ...$this->recurrencesOf($key, $first, $judged)];
             }
+        }
 
-            foreach ($judged as $round) {
-                if ($round->head !== $first->head && isset($round->places[$key])) {
-                    $found[] = new RecurringP1Found($round->id, $round->places[$key], $key);
-                }
+        return $found;
+    }
+
+    /**
+     * @param list<FlaggedRound> $judged
+     *
+     * @return list<RecurringP1Found>
+     */
+    private function recurrencesOf(string $key, FlaggedRound $first, array $judged): array
+    {
+        $found = [];
+
+        foreach ($judged as $round) {
+            if ($round->head !== $first->head && isset($round->places[$key])) {
+                $found[] = new RecurringP1Found($round->id, $round->places[$key], $key);
             }
         }
 
