@@ -49,7 +49,6 @@ final readonly class ScriptDirectory
         }
     }
 
-
     public function holdWhileScripted(int $call): void
     {
         if (!is_file($this->path.'/'.self::HOLD)) {
