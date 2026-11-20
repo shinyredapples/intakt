@@ -436,6 +436,9 @@ final class FindingKeysTest extends TestCase
         yield 'a name in another case' => ['src/B.php', 'See b.PHP and src/A.php.'];
         yield 'a partial path that is not the start of the file\'s path' => ['src/B.php', 'See Core/B.php::run() and src/A.php.'];
         yield 'a namespace after the bare name of a nested file' => ['src/sub/B.php', 'src/A.php and B.php:Intakt\\Core\\X break.'];
+        yield 'a final sigma for a sigma' => ['src/σ.php', 'See @ς.php and src/A.php.'];
+        yield 'a long s for an s' => ['src/Task.php', 'See @Taſk.php and src/A.php.'];
+        yield 'a Kelvin sign for a k' => ['src/Task.php', "See @Tas\u{212A}.php and src/A.php."];
     }
 
     public function testABareWordThatOnlySharesItsFirstLettersWithAFileNameIsNotAFile(): void
