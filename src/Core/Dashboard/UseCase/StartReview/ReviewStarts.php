@@ -53,7 +53,7 @@ final readonly class ReviewStarts
         }
 
         // Taken only now, for a round the ledger knows, and released by RoundLock once the answer is built; keyed by the review's first round, so two presses that arrive together from two round pages of one review are kept apart too, and RoundNotNext still refuses a second press that comes later.
-        if (!$this->locks->tryHolding(array_first($review->rounds)->round)) {
+        if (!$this->locks->tryHolding($review->firstRound())) {
             return new StartAnswer([self::FLASH_ERROR, 'Another press for this review is still running, so nothing was started.']);
         }
 

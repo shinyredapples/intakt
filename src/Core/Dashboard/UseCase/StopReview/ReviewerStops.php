@@ -42,7 +42,7 @@ final readonly class ReviewerStops
         }
 
         // Taken only now, for a round the ledger knows, with the key of the start press (the review's first round), so a start and a stop of one review never run at once; RoundLock releases it once the answer is built.
-        if (!$this->locks->tryHolding(array_first($review->rounds)->round)) {
+        if (!$this->locks->tryHolding($review->firstRound())) {
             return [self::FLASH_ERROR, 'Another press for this review is still running, so nothing was stopped.'];
         }
 
