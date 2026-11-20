@@ -9,6 +9,7 @@ use Intakt\Core\Dashboard\Domain\ReviewerOutcome;
 use Intakt\Core\Dashboard\Domain\ReviewerProgress;
 use Intakt\Core\Dashboard\Domain\ReviewState;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
+use Intakt\Core\Dashboard\Infrastructure\RoundLock;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
@@ -22,6 +23,7 @@ final readonly class ReviewerStops
     public function __construct(
         private LedgerReviewPages $reviews,
         private Ledger $ledger,
+        private RoundLock $rounds,
     ) {
     }
 
@@ -34,6 +36,11 @@ final readonly class ReviewerStops
     {
         if (!in_array($reviewer, $this->runningReviewersOf($round) ?? [], true)) {
             return null;
+        }
+
+        // Taken only now, for a round the ledger knows, with the key of the start press, so a start and a stop of one round never run at once; RoundLock releases it once the answer is built.
+        if (!$this->rounds->tryHolding($round)) {
+            return [self::FLASH_ERROR, 'Another press for this round is still running, so nothing was stopped.'];
         }
 
         return $this->recorded($round, $reviewer)

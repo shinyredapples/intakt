@@ -7,6 +7,7 @@ namespace Intakt\Core\Dashboard\UseCase\StartReview;
 use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\RoundSource;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
+use Intakt\Core\Dashboard\Infrastructure\RoundLock;
 use Intakt\Core\Dashboard\Infrastructure\SampleChangeSource;
 use Intakt\Core\Platform\Contract\ReportableFailure;
 use Intakt\Core\Review\Contract\ChangeSource;
@@ -25,6 +26,7 @@ final readonly class ReviewStarts
         private LedgerReviewPages $reviews,
         private MessageBusInterface $commands,
         private SampleChangeSource $sample,
+        private RoundLock $rounds,
     ) {
     }
 
@@ -48,6 +50,11 @@ final readonly class ReviewStarts
 
         if (!$review instanceof Review || !$source instanceof RoundSource) {
             return null;
+        }
+
+        // Taken only now, for a round the ledger knows, and released by RoundLock once the answer is built; it keeps two presses that arrive together apart, and RoundNotNext still refuses a second press that comes later.
+        if (!$this->rounds->tryHolding($round)) {
+            return new StartAnswer([self::FLASH_ERROR, 'Another press for this round is still running, so nothing was started.']);
         }
 
         return $this->started($this->commandFor($review, $source, $number));
