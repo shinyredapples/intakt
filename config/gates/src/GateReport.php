@@ -62,11 +62,13 @@ final readonly class GateReport
         $whole = json_decode($kept, true);
         $findings = is_array($whole) && $this->gate === ($whole['gate'] ?? null) ? ($whole['findings'] ?? null) : null;
 
-        if (!is_array($findings) || !array_is_list($findings) || !array_all($findings, static fn (mixed $finding): bool => is_string($finding))) {
+        $strings = is_array($findings) && array_is_list($findings) ? array_values(array_filter($findings, is_string(...))) : null;
+
+        if (null === $strings || count($strings) !== count($findings)) {
             return $this;
         }
 
-        $recut = $this->shownOf(GateResult::withFindings($this->gate, $findings)->toJson());
+        $recut = $this->shownOf(GateResult::withFindings($this->gate, $strings)->toJson());
         $shown = $this->shownOf($this->line);
 
         return [$recut['findings'], $recut['omitted']] === [$shown['findings'], $shown['omitted']] ? new self($this->gate, $this->line, $kept) : $this;
