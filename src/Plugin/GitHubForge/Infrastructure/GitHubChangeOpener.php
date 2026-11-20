@@ -84,7 +84,7 @@ final readonly class GitHubChangeOpener implements ChangeOpening
      */
     private function isOpenedByThisApp(array $pull): bool
     {
-        // The existing loop may own a pull request on a branch of the same name, and its title, body and base stay its own.
+        // Checked, because the existing loop may own a pull request on a branch of the same name, and its title, body and base must stay its own.
         $user = $pull['user'] ?? null;
         $login = is_array($user) ? ($user['login'] ?? null) : null;
 
