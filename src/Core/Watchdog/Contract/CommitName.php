@@ -12,7 +12,7 @@ final readonly class CommitName
     public static function full(string $name, string $role): string
     {
         if (1 !== preg_match(self::FULL, $name)) {
-            throw new CommitNameNotFull(\sprintf('The %s "%s" is not a full commit name.', $role, $name));
+            throw new CommitNameNotFull(sprintf('The %s "%s" is not a full commit name.', $role, $name));
         }
 
         return $name;

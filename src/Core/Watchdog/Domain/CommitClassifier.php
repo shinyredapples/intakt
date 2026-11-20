@@ -36,7 +36,7 @@ final readonly class CommitClassifier
         $violations = [];
         foreach ($this->history->firstParentsSince($main->lastSeenHead) as $commit) {
             $violation = $this->judge($main, $commit);
-            if (null !== $violation) {
+            if ($violation instanceof Violation) {
                 $violations[] = new MainViolation($commit, $violation);
             }
         }
