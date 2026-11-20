@@ -31,11 +31,11 @@ final readonly class StaticAnalysisGate extends PhpFilesToolGate
         ];
     }
 
-    // PHPStan cannot tell a changed-files subset from a full file list (both are files on its command line), so the gate tells the rules that need every using class.
+    // PHPStan cannot tell a changed-files subset from a full file list (both are files on its command line), so the gate tells the rules that need every using class, and removes a value the caller exported so that only the gate can switch a check off.
     #[Override]
     protected function environment(Workspace $workspace): array
     {
-        return $workspace->analyzesSomePhpFilesOnly() ? [self::CHANGED_FILES_ONLY_VARIABLE => '1'] : [];
+        return [self::CHANGED_FILES_ONLY_VARIABLE => $workspace->analyzesSomePhpFilesOnly() ? '1' : false];
     }
 
     protected function findings(ProcessResult $result): array

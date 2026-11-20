@@ -23,4 +23,9 @@ final readonly class Ledger
     {
         return ['currency'];
     }
+
+    public function set2(): int
+    {
+        return 2;
+    }
 }

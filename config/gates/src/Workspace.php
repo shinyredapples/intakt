@@ -107,7 +107,12 @@ final readonly class Workspace
 
         $mergeBase = $this->mergeBase();
 
-        return null !== $mergeBase && !$this->changesWhatEveryPhpFileDependsOn($mergeBase);
+        if (null === $mergeBase || $this->changesWhatEveryPhpFileDependsOn($mergeBase)) {
+            return false;
+        }
+
+        // Because a change can touch every PHP file in scope, the answer comes from the list phpstan gets, not from the mode.
+        return [] !== array_diff($this->scope->allPhpFiles(), $this->scope->changedPhpFiles($mergeBase));
     }
 
     public function changesGateTests(): bool

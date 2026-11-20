@@ -32,7 +32,7 @@ abstract readonly class PhpFilesToolGate extends PhpFilesGate
     }
 
     /**
-     * @return array<string, string>
+     * @return array<string, string|false>
      */
     protected function environment(Workspace $workspace): array
     {

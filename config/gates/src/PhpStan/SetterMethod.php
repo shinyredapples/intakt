@@ -11,8 +11,8 @@ use PHPStan\Rules\RuleErrorBuilder;
 // one definition of a setter and its finding for both setter rules and their collectors, so what a trait collects cannot drift from what the rules report
 final readonly class SetterMethod
 {
-    // "set" in any letter case, since PHP matches method names case-insensitively, not followed by a lowercase letter, so setName(), SetName() and set_name() are setters while settle(), setup() and Settings() are words of their own
-    private const string NAME = '~^[sS][eE][tT](?![a-z])~';
+    // "set" in any letter case, since PHP matches method names case-insensitively, followed by an uppercase letter, an underscore or nothing, so setName(), SetName(), set_name() and set() are setters while settle(), setup(), Settings() and set2() are not
+    private const string NAME = '~^[sS][eE][tT](?:[A-Z_]|$)~';
 
     public function isPublicSetter(ClassMethod $method): bool
     {

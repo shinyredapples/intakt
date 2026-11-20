@@ -66,6 +66,21 @@ final class StaticAnalysisChangedFilesSignalTest extends SandboxTestCase
         self::assertSame('unset', $this->signalSeenByPhpstan($tree, Mode::Full));
     }
 
+    public function testAFullRunRemovesASignalItsCallerExported(): void
+    {
+        $tree = $this->branchChanging('src/Report.php');
+        putenv(StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE.'=1');
+
+        self::assertSame('unset', $this->signalSeenByPhpstan($tree, Mode::Full));
+    }
+
+    public function testAChangedFilesRunThatChangesEveryPhpFileDoesNotSignalIt(): void
+    {
+        $tree = $this->branchChanging('src/Base.php');
+
+        self::assertSame('unset', $this->signalSeenByPhpstan($tree, Mode::ChangedFilesOnly));
+    }
+
     public function testAChangedFilesRunThatAnalyzesEveryPhpFileBecauseAGateDefinitionChangedDoesNotSignalIt(): void
     {
         $tree = $this->branchChanging('src/Report.php', 'config/gates/phpstan.neon');
@@ -82,7 +97,7 @@ final class StaticAnalysisChangedFilesSignalTest extends SandboxTestCase
         $tree->git('switch', '--quiet', '--create', 'change');
 
         foreach ($paths as $path) {
-            $tree->write($path, "<?php\n");
+            $tree->write($path, "<?php\n\n// Changed.\n");
         }
 
         $tree->commitAll('feat: change');
