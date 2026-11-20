@@ -30,7 +30,7 @@ final readonly class DnsProbe implements Probe
             return false;
         }
 
-        // Building the process is part of the attempt: without `proc_open` the constructor itself throws.
+        // The process is built inside the attempt, because without `proc_open` its constructor already throws.
         try {
             return 0 === new PhpProcess($this->lookup, null, ['INTAKT_PROBE_HOST' => $this->host], php: [$php, ...$finder->findArguments()])
                 ->setTimeout($this->timeout)
