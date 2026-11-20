@@ -1,5 +1,6 @@
-{#- Both ways of counting under their own targets, because the demo chip is a tab's own choice: a tab shows one of them and Turbo leaves a target the page does not hold. An empty variant is left out, so the page's start-first-review form, which carries a token, is never replaced by a pushed copy. Morphed, so open tables and the tooltips' state survive a push. -#}
+{#- Both ways of counting under their own targets, because the demo chip is a tab's own choice: a tab shows one of them and Turbo leaves a target the page does not hold. The head is always pushed, so the round count and the demo link follow the tiles. An empty variant's figures are left out, so the page's start-first-review form, which carries a token, is never replaced by a pushed copy. Morphed, so open tables and the tooltips' state survive a push. -#}
 {% for variant in variants %}
+<turbo-stream action="replace" method="morph" target="{{ variant.head }}"><template>{{ include('dashboard/_trends_head.html.twig', {trends: variant.trends, target: variant.head}, with_context = false) }}</template></turbo-stream>
 {% if variant.trends.anyReview %}
 <turbo-stream action="replace" method="morph" target="{{ variant.target }}"><template>{{ include('dashboard/_trends_figures.html.twig', {trends: variant.trends, target: variant.target, sample_can_start: false}, with_context = false) }}</template></turbo-stream>
 {% endif %}

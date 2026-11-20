@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\Infrastructure;
 
+use Closure;
 use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Dashboard\Contract\DashboardTopics;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
+use Intakt\Core\Dashboard\Contract\LiveUpdates;
 use Intakt\Core\Dashboard\Domain\Board;
 use Intakt\Core\Dashboard\Domain\ReviewTrends;
 use Intakt\Core\Dashboard\Domain\UpNext;
@@ -29,6 +31,7 @@ use Intakt\Tests\Support\FixedRoundEndings;
 use Intakt\Tests\Support\KernelTestCase;
 use Intakt\Tests\Support\ReplayMarkBus;
 use Intakt\Tests\Support\StoredSerializerFactory;
+use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use RuntimeException;
@@ -63,6 +66,9 @@ final class LiveTrendsTest extends KernelTestCase
     private PublishedLiveEvents $live;
 
     private BufferingLogger $log;
+
+    /** @var list<string> */
+    private array $replays = [];
 
     protected function setUp(): void
     {
@@ -103,13 +109,96 @@ final class LiveTrendsTest extends KernelTestCase
         self::assertCount(1, new Crawler($this->live->events[0]->turboStream)->filter('turbo-stream[target="trends-figures-without-demo"]'));
     }
 
-    public function testAnInstallWithoutAReviewPushesOnlyUpNextSoThePagesStartFormStaysItsOwn(): void
+    public function testAnInstallWithoutAReviewPushesNoFiguresSoThePagesStartFormStaysItsOwn(): void
     {
         $this->updates($this->ledger)->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(0, 2, false));
 
         $streams = new Crawler($this->live->events[0]->turboStream);
-        self::assertCount(1, $streams->filter('turbo-stream'));
-        self::assertStringContainsString('Nothing running or queued.', $streams->filter('template')->html());
+        self::assertCount(0, $streams->filter('turbo-stream[target^="trends-figures-"]'));
+        self::assertStringNotContainsString('_token', $this->live->events[0]->turboStream);
+        self::assertStringContainsString('Nothing running or queued.', $streams->filter('turbo-stream[target="trends-up-next"] template')->html());
+    }
+
+    public function testTheFirstJudgmentAlsoRefreshesTheHeadersRoundCount(): void
+    {
+        $this->judgedRound();
+
+        $this->updates($this->ledger)->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(1, 1, true));
+
+        $head = new Crawler($this->live->events[0]->turboStream)->filter('turbo-stream[action="replace"][method="morph"][target="trends-head-with-demo"] template');
+        self::assertStringContainsString('1 review round over every project', $head->html());
+    }
+
+    public function testADemoPlayedAfterTheTabOpenedPushesTheLinkThatLeavesItOut(): void
+    {
+        $this->ledger->startRoundOf('feat/demo', self::ROUND, 1);
+        $this->ledger->judgeRound(self::ROUND);
+        $this->replays = ['alpha'];
+
+        $this->updates($this->ledger)->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(1, 1, true));
+
+        $head = new Crawler($this->live->events[0]->turboStream)->filter('turbo-stream[target="trends-head-with-demo"] template');
+        self::assertStringContainsString('Includes the recorded demo review', $head->html());
+        self::assertStringContainsString('Leave out the demo review', $head->html());
+    }
+
+    public function testAStoppedReviewerPublishesUpNextAgain(): void
+    {
+        $this->ledger->startRoundOf('feat/a', self::ROUND, 1);
+        $this->ledger->startReviewer(self::ROUND, 'security');
+        $this->ledger->stopReviewer(self::ROUND, 'security');
+
+        $this->updates($this->ledger)->reviewerStopped(Uuid::fromString(self::ROUND), 'security');
+
+        $item = new Crawler($this->live->events[0]->turboStream)->filter('#trends-up-next li');
+        self::assertStringContainsString('in progress, no reviewer running', $item->text());
+    }
+
+    public function testAWorkerThatMissesTheLockLeavesItsChangeToTheHolderWhichPublishesItAfterReadingAgain(): void
+    {
+        $this->ledger->startRoundOf('feat/a', self::ROUND, 1);
+        $locks = new LockFactory(new InMemoryStore());
+        $second = null;
+        $updates = new class($this->live, function () use (&$second): void {
+            $this->ledger->startReviewer(self::ROUND, 'security');
+            self::assertInstanceOf(LiveTrends::class, $second);
+            $second->publishLatest(Uuid::fromString(self::ROUND));
+        }) implements LiveUpdates {
+            private bool $interleaved = false;
+
+            public function __construct(private readonly PublishedLiveEvents $live, private readonly Closure $whilePublishing)
+            {
+            }
+
+            #[Override]
+            public function publish(LiveEvent $event): void
+            {
+                $this->live->publish($event);
+
+                if (!$this->interleaved) {
+                    $this->interleaved = true;
+                    ($this->whilePublishing)();
+                }
+            }
+        };
+        $second = $this->liveTrends($this->ledger, $this->live, $locks);
+
+        $this->liveTrends($this->ledger, $updates, $locks)->publishLatest(Uuid::fromString(self::ROUND));
+
+        self::assertCount(2, $this->live->events);
+        self::assertStringContainsString('waiting to start', $this->live->events[0]->turboStream);
+        self::assertStringContainsString('running: security', $this->live->events[1]->turboStream);
+    }
+
+    public function testAWorkerThatMissesTheLockPublishesNothingItself(): void
+    {
+        $locks = new LockFactory(new InMemoryStore());
+        $held = $locks->createLock('dashboard-trends');
+        self::assertTrue($held->acquire(false));
+
+        $this->liveTrends($this->ledger, $this->live, $locks)->publishLatest(Uuid::fromString(self::ROUND));
+
+        self::assertSame([], $this->live->events);
     }
 
     public function testAStartedReviewerListsItsRoundAsRunningInUpNext(): void
@@ -155,12 +244,17 @@ final class LiveTrendsTest extends KernelTestCase
 
     private function updates(Ledger $ledger): TrendsRoundUpdates
     {
+        return new TrendsRoundUpdates($this->round, $this->liveTrends($ledger, $this->live, new LockFactory(new InMemoryStore())));
+    }
+
+    private function liveTrends(Ledger $ledger, LiveUpdates $updates, LockFactory $locks): LiveTrends
+    {
         $twig = self::getContainer()->get(Environment::class);
         self::assertInstanceOf(Environment::class, $twig);
         $costs = self::createStub(RoundCosts::class);
         $costs->method('costOf')->willReturn(Cost::inUsd(0.5));
-        $pages = new LedgerReviewPages($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), new ReplayMarks(new ReplayMarkBus()));
+        $pages = new LedgerReviewPages($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), new ReplayMarks(new ReplayMarkBus($this->replays)));
 
-        return new TrendsRoundUpdates($this->round, new LiveTrends($pages, $twig, $this->live, new LockFactory(new InMemoryStore()), $this->log));
+        return new LiveTrends($pages, $twig, $updates, $locks, $this->log);
     }
 }

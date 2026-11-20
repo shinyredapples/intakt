@@ -1,0 +1,24 @@
+{#- Replaced by the live push under an id that names the variant, like the figures, so the round count, the demo note and the demo link never fall behind the tiles. -#}
+{% set route = constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_TRENDS') %}
+<div id="{{ target }}" class="page-head">
+    <div>
+        <h1>Trends</h1>
+        <p class="lead">How the reviews went, over every project. The figures fill in as reviews add up.</p>
+        {% if trends.anyReview %}
+        {{ include('dashboard/components/meta.html.twig', {facts: [
+            {icon: 'rounds', text: trends.roundsRun ~ (trends.roundsRun == 1 ? ' review round' : ' review rounds') ~ ' over every project'},
+        ]|merge(trends.includesTheDemo ? [{text: 'Includes the recorded demo review'}] : [])
+         |merge(trends.demoLeftOut and trends.canLeaveOutTheDemo ? [{text: 'Leaves out the recorded demo review'}] : [])}, with_context = false) }}
+        {% endif %}
+    </div>
+    {# A link, not a stored choice, so the address says what the figures count (D1 of #2858). #}
+    {% if trends.canLeaveOutTheDemo %}
+    <div class="actions">
+        {% if trends.demoLeftOut %}
+        <a class="fchip" href="{{ path(route) }}">Count the demo review</a>
+        {% else %}
+        <a class="fchip" href="{{ path(route, {(constant('Intakt\\Core\\Dashboard\\UseCase\\ShowTrends\\ShowTrendsController::LEAVE_OUT_DEMO')): '0'}) }}">Leave out the demo review</a>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>

@@ -22,6 +22,8 @@ final readonly class LiveTrends
     public const string TEMPLATE = 'dashboard/stream/trends.stream.html.twig';
     public const string TARGET_WITH_DEMO = 'trends-figures-with-demo';
     public const string TARGET_WITHOUT_DEMO = 'trends-figures-without-demo';
+    public const string HEAD_WITH_DEMO = 'trends-head-with-demo';
+    public const string HEAD_WITHOUT_DEMO = 'trends-head-without-demo';
 
     private const string LOCK = 'dashboard-trends';
 
@@ -72,8 +74,8 @@ final readonly class LiveTrends
         if ($signature !== $published) {
             $this->updates->publish(new LiveEvent(DashboardTopics::SHELL, $this->twig->render(self::TEMPLATE, [
                 'variants' => [
-                    ['target' => self::TARGET_WITH_DEMO, 'trends' => ReviewTrends::counting($rounds)],
-                    ['target' => self::TARGET_WITHOUT_DEMO, 'trends' => ReviewTrends::leavingOutTheDemo($rounds)],
+                    ['head' => self::HEAD_WITH_DEMO, 'target' => self::TARGET_WITH_DEMO, 'trends' => ReviewTrends::counting($rounds)],
+                    ['head' => self::HEAD_WITHOUT_DEMO, 'target' => self::TARGET_WITHOUT_DEMO, 'trends' => ReviewTrends::leavingOutTheDemo($rounds)],
                 ],
                 'up_next' => $upNext,
             ])));

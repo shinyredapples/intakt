@@ -12,7 +12,7 @@ use Symfony\Component\DependencyInjection\Attribute\AsDecorator;
 use Symfony\Component\DependencyInjection\Attribute\AutowireDecorated;
 use Symfony\Component\Uid\Uuid;
 
-// A round change and a reviewer start only, because those add a round to the figures, move a round into Done or change who is running; a tool call or a text changes none of them.
+// A round change and a reviewer's start or stop only, because those add a round to the figures, move a round into Done or change who is running; a tool call or a text changes none of them.
 #[AsDecorator(RoundUpdates::class)]
 final readonly class TrendsRoundUpdates implements RoundUpdates
 {
@@ -64,6 +64,7 @@ final readonly class TrendsRoundUpdates implements RoundUpdates
     public function reviewerStopped(Uuid $round, string $reviewer): void
     {
         $this->round->reviewerStopped($round, $reviewer);
+        $this->trends->publishLatest($round);
     }
 
     #[Override]
