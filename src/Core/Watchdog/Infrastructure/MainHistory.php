@@ -22,7 +22,7 @@ final readonly class MainHistory implements CommitHistory
     // One limit for every git and ssh-keygen call, because a hung call must not hold the watchdog forever.
     private const float TIMEOUT_SECONDS = 60;
 
-    // Git names the signature header after the repository's object format.
+    // One header per object format, because git names the signature header after the hash the repository uses.
     private const array SIGNATURE_HEADERS = ['sha1' => 'gpgsig', 'sha256' => 'gpgsig-sha256'];
 
     private const string SSH_ARMOR = '-----BEGIN SSH SIGNATURE-----';
@@ -150,53 +150,49 @@ final readonly class MainHistory implements CommitHistory
         return $process;
     }
 
-    // Read line by line up to the first empty line, because a signature header in the message is not a header.
+    // Only the lines up to the first empty line, because a signature header in the message is not a header.
     /**
      * @return array{payload: string, signature: string}|null
      */
     private function split(string $object, string $header): ?array
     {
-        $lines = explode("\n", $object);
-        $payload = [];
-        $signature = [];
-        $inSignature = false;
-        foreach ($lines as $index => $line) {
-            if ('' === $line) {
-                return $this->signedParts([...$payload, ...array_slice($lines, $index)], $signature);
-            }
-            if (str_starts_with($line, $header.' ')) {
-                // A second signature header makes the signature ambiguous, so the commit gets an empty signature that no key verifies.
-                if ([] !== $signature) {
-                    return ['payload' => '', 'signature' => ''];
-                }
-                $signature[] = substr($line, strlen($header) + 1);
-                $inSignature = true;
-                continue;
-            }
-            if ($inSignature && str_starts_with($line, ' ')) {
-                $signature[] = substr($line, 1);
-                continue;
-            }
-            $inSignature = false;
-            $payload[] = $line;
+        $end = strpos($object, "\n\n");
+        $headers = explode("\n", false === $end ? $object : substr($object, 0, $end));
+        $message = false === $end ? '' : substr($object, $end);
+        $signatureLines = $this->signatureLines($headers, $header);
+        // A second signature header makes the signature ambiguous, so the commit gets an empty signature that no key verifies.
+        if (null === $signatureLines) {
+            return ['payload' => '', 'signature' => ''];
         }
-
-        return $this->signedParts($payload, $signature);
-    }
-
-    /**
-     * @param list<string> $payload
-     * @param list<string> $signature
-     *
-     * @return array{payload: string, signature: string}|null
-     */
-    private function signedParts(array $payload, array $signature): ?array
-    {
-        if ([] === $signature) {
+        if ([] === $signatureLines) {
             return null;
         }
 
-        return ['payload' => implode("\n", $payload), 'signature' => implode("\n", $signature)."\n"];
+        $signature = array_map(static fn (int $index): string => substr($headers[$index], 1), $signatureLines);
+        $signature[0] = substr($headers[$signatureLines[0]], strlen($header) + 1);
+
+        return ['payload' => implode("\n", array_diff_key($headers, array_flip($signatureLines))).$message, 'signature' => implode("\n", $signature)."\n"];
+    }
+
+    /**
+     * @param list<string> $headers
+     *
+     * @return list<int>|null
+     */
+    private function signatureLines(array $headers, string $header): ?array
+    {
+        $lines = [];
+        foreach ($headers as $index => $line) {
+            $starts = str_starts_with($line, $header.' ');
+            if ($starts && [] !== $lines) {
+                return null;
+            }
+            if ($starts || ([] !== $lines && array_last($lines) === $index - 1 && str_starts_with($line, ' '))) {
+                $lines[] = $index;
+            }
+        }
+
+        return $lines;
     }
 
     private function ownerSigned(string $payload, string $signature): bool

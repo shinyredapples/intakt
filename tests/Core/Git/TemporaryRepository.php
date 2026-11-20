@@ -91,6 +91,20 @@ final readonly class TemporaryRepository
         return $this->git('rev-parse', 'HEAD');
     }
 
+    public function rawCommit(string $revision): string
+    {
+        return $this->run(['cat-file', 'commit', $revision], null);
+    }
+
+    // Written as given, because a crafted header (a second signature, for example) is what git itself never writes.
+    public function commitObject(string $object): string
+    {
+        $hash = $this->run(['hash-object', '-t', 'commit', '-w', '--stdin', '--literally'], $object);
+        $this->git('update-ref', 'HEAD', $hash);
+
+        return $hash;
+    }
+
     public function resetTo(string $revision): void
     {
         $this->git('reset', '--quiet', '--hard', $revision);

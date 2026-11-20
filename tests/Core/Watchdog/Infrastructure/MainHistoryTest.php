@@ -113,6 +113,17 @@ final class MainHistoryTest extends TestCase
         self::assertSame(SignatureStatus::UnknownKey, $this->history([$this->publicKey('owner')])->signatureOf($commit));
     }
 
+    public function testACommitWithASecondSignatureHeaderIsAnUnknownKeyEvenWhenTheFirstVerifies(): void
+    {
+        $this->repository->commitEmpty('Seen');
+        $signed = $this->repository->rawCommit($this->repository->commitSignedWith($this->privateKey('owner'), 'Owner change'));
+        [$headers, $message] = explode("\n\n", $signed, 2);
+        $signature = substr($headers, (int) strpos($headers, "\ngpgsig "));
+        $commit = $this->repository->commitObject($headers.$signature."\n\n".$message);
+
+        self::assertSame(SignatureStatus::UnknownKey, $this->history([$this->publicKey('owner')])->signatureOf($commit));
+    }
+
     public function testASignatureHeaderInTheCommitMessageLeavesTheCommitUnsigned(): void
     {
         $this->repository->commitEmpty('Seen');
