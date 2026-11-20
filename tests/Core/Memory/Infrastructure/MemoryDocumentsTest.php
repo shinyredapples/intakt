@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Memory\Infrastructure;
 
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Memory\Contract\MemoryEntry;
 use Intakt\Core\Memory\Infrastructure\MemoryDocuments;
 use Intakt\Core\Memory\Infrastructure\StoredMemoryIsMalformed;
@@ -18,14 +19,15 @@ use Symfony\AI\Store\Document\VectorDocument;
 #[CoversClass(MemoryDocuments::class)]
 #[CoversClass(StoredMemoryIsMalformed::class)]
 #[UsesClass(MemoryEntry::class)]
+#[UsesClass(Paths::class)]
 final class MemoryDocumentsTest extends TestCase
 {
     public function testFileListsThatJoinToTheSameTextGetDistinctIds(): void
     {
         $documents = new MemoryDocuments();
 
-        $first = $documents->toDocument(new MemoryEntry('alpha', 'Same note.', ['a b.php']));
-        $second = $documents->toDocument(new MemoryEntry('alpha', 'Same note.', ['a', 'b.php']));
+        $first = $documents->toDocument(new MemoryEntry('alpha', 'Same note.', new Paths('a b.php')));
+        $second = $documents->toDocument(new MemoryEntry('alpha', 'Same note.', new Paths('a', 'b.php')));
 
         self::assertNotEquals($first->getId(), $second->getId());
     }
@@ -34,8 +36,8 @@ final class MemoryDocumentsTest extends TestCase
     {
         $documents = new MemoryDocuments();
 
-        $first = $documents->toDocument(new MemoryEntry('alpha', 'Same note.', ['a.php']));
-        $second = $documents->toDocument(new MemoryEntry('beta', 'Same note.', ['a.php']));
+        $first = $documents->toDocument(new MemoryEntry('alpha', 'Same note.', new Paths('a.php')));
+        $second = $documents->toDocument(new MemoryEntry('beta', 'Same note.', new Paths('a.php')));
 
         self::assertNotEquals($first->getId(), $second->getId());
     }
@@ -44,7 +46,21 @@ final class MemoryDocumentsTest extends TestCase
     {
         $entry = new MemoryDocuments()->toEntry($this->document(['project' => 'alpha', 'entry' => 'A note.', 'files' => ['a.php', 'b.php']]));
 
-        self::assertEquals(new MemoryEntry('alpha', 'A note.', ['a.php', 'b.php']), $entry);
+        self::assertEquals(new MemoryEntry('alpha', 'A note.', new Paths('a.php', 'b.php')), $entry);
+    }
+
+    public function testTheFilesAreStoredAsAPlainList(): void
+    {
+        $document = new MemoryDocuments()->toDocument(new MemoryEntry('alpha', 'A note.', new Paths('a.php', 'b.php')));
+
+        self::assertSame(['a.php', 'b.php'], $document->getMetadata()['files']);
+    }
+
+    public function testTheIdIsTheHashOfTheProjectTheFileListAndTheText(): void
+    {
+        $document = new MemoryDocuments()->toDocument(new MemoryEntry('alpha', 'A note.', new Paths('a.php', 'b.php')));
+
+        self::assertSame(hash('sha256', '["alpha",["a.php","b.php"],"A note."]'), $document->getId());
     }
 
     public function testTheProjectFilterKeepsADocumentOfThatProject(): void
@@ -106,8 +122,8 @@ final class MemoryDocumentsTest extends TestCase
     {
         $documents = new MemoryDocuments();
 
-        $first = $documents->toDocument(new MemoryEntry('alpha', 'Same note.', ['a.php']));
-        $second = $documents->toDocument(new MemoryEntry('alpha', 'Same note.', ['a.php']));
+        $first = $documents->toDocument(new MemoryEntry('alpha', 'Same note.', new Paths('a.php')));
+        $second = $documents->toDocument(new MemoryEntry('alpha', 'Same note.', new Paths('a.php')));
 
         self::assertEquals($first->getId(), $second->getId());
     }

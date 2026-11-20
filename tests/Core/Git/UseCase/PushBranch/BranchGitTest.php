@@ -118,7 +118,7 @@ final class BranchGitTest extends TestCase
 
         $stopped = $this->stopped(fn (): string => new BranchGit(new HardenedGit())->lines($this->gitDirectory(), ['symbolic-ref', '--quiet', 'HEAD']));
 
-        self::assertSame('The branch was not pushed: git symbolic-ref could not be prepared, because the look at its repository was stopped', $stopped->getMessage());
+        self::assertSame('The branch was not pushed: git symbolic-ref could not be prepared, because the look at its repository was stopped or found no bare repository', $stopped->getMessage());
         self::assertNull($stopped->getPrevious());
     }
 

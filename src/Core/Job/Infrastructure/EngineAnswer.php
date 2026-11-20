@@ -46,6 +46,21 @@ final readonly class EngineAnswer
         return $text;
     }
 
+    // For a log cut after a number of bytes: the frame the cut splits keeps what arrived of it, and a header the cut splits is dropped.
+    public function demultiplexedHead(int ...$statuses): string
+    {
+        $this->refuseOtherThan($statuses);
+        $text = '';
+
+        for ($offset = 0; strlen($this->body) - $offset >= self::FRAME_HEADER_BYTES; $offset += self::FRAME_HEADER_BYTES + $length) {
+            $header = unpack('Cstream/x3/Nlength', $this->body, $offset);
+            $length = is_array($header) && is_int($header['length']) ? $header['length'] : throw DockerEngineFailed::unexpected($this->call);
+            $text .= substr($this->body, $offset + self::FRAME_HEADER_BYTES, $length);
+        }
+
+        return $text;
+    }
+
     // A build answers one JSON object per line and reports a failed step as an error line after a 200, so the lines decide; only the image id the engine names on completion makes a build without an error a success.
     public function built(int ...$statuses): ImageBuild
     {

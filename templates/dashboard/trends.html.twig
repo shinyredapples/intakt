@@ -51,13 +51,14 @@
 </div>
 {% else %}
 {% set cost = trends.costPerRound %}
+{% set oneReviewerOnly = trends.caughtByOneReviewerOnlyPercent %}
 <dl class="tiles" aria-label="Review figures">
     {{ _self.tile('Review rounds run', trends.roundsRun, false) }}
     {{ _self.tile('P1 and P2 findings on act lists', trends.seriousActFindings, false) }}
-    {{ _self.tile('Caught by one reviewer only', trends.caughtByOneReviewerOnlyPercent is null ? null : trends.caughtByOneReviewerOnlyPercent ~ '%', false) }}
+    {{ _self.tile('Caught by one reviewer only', oneReviewerOnly is null ? null : oneReviewerOnly ~ '%', false) }}
     {{ _self.tile('Median time from round start to verdict', trends.medianTimeToVerdict, false) }}
     {{ _self.tile('Cost per round', cost is null ? null : cost.reading, true) }}
 </dl>
-<p class="tiles-note muted">{% if cost is not null %}Cost per round is the mean of the rounds with a known estimate, {{ cost.priceDateReading }}. {% endif %}The ledger does not record which reviewer reported each finding, so "Caught by one reviewer only" has no data yet.</p>
+<p class="tiles-note muted">{% if cost is not null %}Cost per round is the mean of the rounds with a known estimate, {{ cost.priceDateReading }}. {% endif %}"Caught by one reviewer only" counts only the rounds with a full record of which reviewer reported each finding.</p>
 {% endif %}
 {% endblock %}

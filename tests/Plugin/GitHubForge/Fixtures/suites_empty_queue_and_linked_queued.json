@@ -1,0 +1,25 @@
+{
+ "total_count": 2,
+ "check_suites": [
+  {
+   "id": 401,
+   "head_sha": "1111111111111111111111111111111111111111",
+   "status": "queued",
+   "conclusion": null,
+   "created_at": "2026-11-02T09:01:00Z",
+   "app": {"name": "LintApp"},
+   "latest_check_runs_count": 0,
+   "pull_requests": [{"number": 7}]
+  },
+  {
+   "id": 501,
+   "head_sha": "1111111111111111111111111111111111111111",
+   "status": "queued",
+   "conclusion": null,
+   "created_at": "2026-11-02T09:01:00Z",
+   "app": {"name": "GitHub Actions"},
+   "latest_check_runs_count": 0,
+   "pull_requests": []
+  }
+ ]
+}
