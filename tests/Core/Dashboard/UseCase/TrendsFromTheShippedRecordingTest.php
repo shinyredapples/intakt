@@ -91,7 +91,8 @@ final class TrendsFromTheShippedRecordingTest extends DashboardPageTestCase
 
         self::assertNotEmpty($this->rowsOf($page, '#chart-catches'), 'Which reviewer caught what has no row.');
         self::assertNotEmpty($this->rowsOf($page, '#chart-judge'), 'What the judge did has no row.');
-        self::assertSame([], $page->filter('.chart .takeaway[data-no-data]')->each(static fn (Crawler $takeaway): string => $takeaway->text()));
+        self::assertSame([], $page->filter('#chart-catches .takeaway[data-no-data], #chart-judge .takeaway[data-no-data]')->each(static fn (Crawler $takeaway): string => $takeaway->text()));
+        self::assertSame(['Shows once there are reviews on 3 days'], $page->filter('#chart-per-day .takeaway[data-no-data]')->each(static fn (Crawler $takeaway): string => $takeaway->text()));
         self::assertSame([
             ['Correctness', 'P1', '1', '1'], ['Correctness', 'P2', '3', '3'], ['Correctness', 'P3', '0', '0'],
             ['Security', 'P1', '0', '0'], ['Security', 'P2', '0', '0'], ['Security', 'P3', '0', '0'],
