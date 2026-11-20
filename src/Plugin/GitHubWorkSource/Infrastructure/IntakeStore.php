@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\GitHubWorkSource\Infrastructure;
 
+use Doctrine\Common\EventManager;
 use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Intakt\Plugin\GitHubWorkSource\Domain\IntakeValidator;
@@ -11,6 +12,7 @@ use Intakt\Plugin\GitHubWorkSource\Domain\StoredIssue;
 use Intakt\Plugin\GitHubWorkSource\Domain\TaskFailure;
 use Intakt\Plugin\WorkSource\Contract\TaskNotQueued;
 use InvalidArgumentException;
+use LogicException;
 
 // Every call works in an entity manager of its own on the shared connection: a worker keeps the shared one between ticks, what another worker stored since is the truth, a write must flush only its own rows and never another caller's pending work, and a write that fails leaves nothing behind for a later flush.
 final readonly class IntakeStore
@@ -96,7 +98,13 @@ final readonly class IntakeStore
 
     private function ownManager(): EntityManagerInterface
     {
-        return new EntityManager($this->entities->getConnection(), $this->entities->getConfiguration(), $this->entities->getEventManager());
+        // Without the shared event manager the mapping's listeners would not run, so another kind is refused instead of replaced.
+        $events = $this->entities->getEventManager();
+        if (!$events instanceof EventManager) {
+            throw new LogicException(sprintf('The intake store needs a %s, %s given.', EventManager::class, $events::class));
+        }
+
+        return new EntityManager($this->entities->getConnection(), $this->entities->getConfiguration(), $events);
     }
 
     /**

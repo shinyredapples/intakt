@@ -25,6 +25,7 @@ use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Plugin\GitHubWorkSource\Issues;
 use Intakt\Tests\Support\KernelTestCase;
 use InvalidArgumentException;
+use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -240,6 +241,13 @@ final class IntakeStoreTest extends KernelTestCase
         $this->expectException(TaskNotQueued::class);
 
         $this->store->failForGood('alpha', 7, 'reason');
+    }
+
+    public function testAnEntityManagerWhoseEventsCannotBeSharedIsRefused(): void
+    {
+        $this->expectException(LogicException::class);
+
+        new IntakeStore(self::createStub(EntityManagerInterface::class))->issuesOf('alpha');
     }
 
     private function stored(ListedIssue $listed, string $project = 'alpha'): StoredIssue
