@@ -19,7 +19,8 @@ use Symfony\Component\Process\Process;
 #[Group('serial')]
 final class KeptKeyBuildWarningTest extends TestCase
 {
-    private const string VAULT_ENVIRONMENT = 'kept_key_build_warning_test';
+    // Starts with the prefix .gitignore leaves out for test vaults, so a run stopped before tearDown leaves no key git would offer to commit.
+    private const string VAULT_ENVIRONMENT_PREFIX = 'ai_providers_test_kept_key_build_warning';
 
     private const string COMPILE = <<<'PHP'
         require 'vendor/autoload.php';
@@ -32,6 +33,7 @@ final class KeptKeyBuildWarningTest extends TestCase
     protected function tearDown(): void
     {
         new Filesystem()->remove([$this->vaultDirectory(), $this->keptKeyDirectory()]);
+        $this->removeTheVaultsFolderWhenEmpty();
     }
 
     public function testAVaultLoaderThatFailsWhileTheContainerIsBuiltIsReportedOnStandardError(): void
@@ -42,26 +44,61 @@ final class KeptKeyBuildWarningTest extends TestCase
         $providers = new SymfonyAiProviderCatalog();
         new KeptProviderKeyFile($this->keptKeyDirectory(), $providers)->keep(ProviderKey::recognise('hf_abcdefgh12345678', $providers));
 
-        $build = new Process([PHP_BINARY, '-r', self::COMPILE], dirname(__DIR__, 2));
-        $build->mustRun(null, [
-            'APP_RUNTIME_ENV' => self::VAULT_ENVIRONMENT,
-            'INTAKT_PROVIDER_KEY_DIR' => $this->keptKeyDirectory(),
+        $build = $this->build([
+            'APP_RUNTIME_ENV' => $this->vaultEnvironment(),
             // Base64 of the wrong length, so libsodium throws when the vault's loader reveals a secret.
             'SYMFONY_DECRYPTION_SECRET' => base64_encode('too short for a key pair'),
-            'OPENAI_COMPATIBLE_BASE_URL' => false,
-            'OPENAI_COMPATIBLE_API_KEY' => false,
-            'SHELL_VERBOSITY' => false,
         ]);
 
         self::assertStringContainsString('Another env loader failed, so its variable counts as set and the kept key does not stand in for it.', $build->getErrorOutput());
         self::assertStringNotContainsString('provider.example', $build->getErrorOutput());
     }
 
-    private function vaultDirectory(): string
+    public function testAnUnreadableKeptFileWhileTheContainerIsBuiltIsReportedOnStandardError(): void
     {
-        return dirname(__DIR__, 2).'/config/secrets/'.self::VAULT_ENVIRONMENT;
+        new Filesystem()->dumpFile($this->keptKeyDirectory().'/provider-key.json', '{"provider": "huggingface", "key": "not a key of any form"}');
+
+        $build = $this->build([]);
+
+        self::assertStringContainsString('The kept provider key could not be read, so it is not used.', $build->getErrorOutput());
+        self::assertStringNotContainsString('not a key of any form', $build->getErrorOutput());
     }
 
+    /** @param array<string, string> $environment */
+    private function build(array $environment): Process
+    {
+        $build = new Process([PHP_BINARY, '-r', self::COMPILE], dirname(__DIR__, 2));
+
+        return $build->mustRun(null, [
+            ...$environment,
+            'INTAKT_PROVIDER_KEY_DIR' => $this->keptKeyDirectory(),
+            'OPENAI_COMPATIBLE_BASE_URL' => false,
+            'OPENAI_COMPATIBLE_API_KEY' => false,
+            'SHELL_VERBOSITY' => false,
+        ]);
+    }
+
+    private function vaultDirectory(): string
+    {
+        return dirname(__DIR__, 2).'/config/secrets/'.$this->vaultEnvironment();
+    }
+
+    // Because the framework keeps its vault env loader whenever config/secrets/ exists, so a folder left empty here would change every container built after this test.
+    private function removeTheVaultsFolderWhenEmpty(): void
+    {
+        $vaults = dirname($this->vaultDirectory());
+        if (is_dir($vaults) && [] === array_diff((array) scandir($vaults), ['.', '..'])) {
+            rmdir($vaults);
+        }
+    }
+
+    // Because every test worker has a TMPDIR of its own, each gets a vault folder of its own and none removes another's.
+    private function vaultEnvironment(): string
+    {
+        return self::VAULT_ENVIRONMENT_PREFIX.'_'.hash('xxh128', sys_get_temp_dir());
+    }
+
+    // Under the worker's own TMPDIR, so no test reads or writes the install's kept key in var/data and none removes another worker's.
     private function keptKeyDirectory(): string
     {
         return sys_get_temp_dir().'/kept-key-build-warning-test';
