@@ -16,6 +16,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Serializer\Encoder\JsonEncoder;
 
 #[CoversClass(Verdict::class)]
 #[UsesClass(Finding::class)]
@@ -117,7 +118,7 @@ final class VerdictTest extends TestCase
             ->with('resolved', [])
             ->withFinding('id', $failureId)
             ->withFinding('file', 'src/Thing.php');
-        $verdict = StoredSerializerFactory::create()->deserialize($answer->json(), Verdict::class, 'json');
+        $verdict = StoredSerializerFactory::create()->deserialize($answer->json(), Verdict::class, JsonEncoder::FORMAT);
 
         self::assertSame(Decision::Changes, $verdict->asRecorded()->verdict);
     }
@@ -139,7 +140,7 @@ final class VerdictTest extends TestCase
             ->with('verdict', 'changes')
             ->with('resolved', [])
             ->withFinding('id', $failureId);
-        $verdict = StoredSerializerFactory::create()->deserialize($answer->json(), Verdict::class, 'json');
+        $verdict = StoredSerializerFactory::create()->deserialize($answer->json(), Verdict::class, JsonEncoder::FORMAT);
 
         self::assertSame([$failureId], $verdict->claimedFailureIds());
     }
