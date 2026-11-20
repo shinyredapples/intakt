@@ -43,8 +43,10 @@ use Intakt\Plugin\LocalGitForge\UseCase\CheckVerdictIdentity\CheckVerdictIdentit
 use Intakt\Plugin\LocalGitForge\UseCase\CheckVerdictIdentity\CheckVerdictIdentityInput;
 use Intakt\Plugin\LocalGitForge\UseCase\CheckVerdictIdentity\RecordedIdentityUnreadable;
 use Intakt\Tests\Core\Git\TemporaryRepository;
+use Intakt\Tests\Plugin\Forge\CommitIdCheckThatThrows;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Application;
@@ -207,6 +209,18 @@ final class CheckVerdictIdentityCommandTest extends TestCase
         $this->expectExceptionObject(new InvalidArgumentException('a programming error'));
 
         $this->whenTheCommandRuns([], $panels);
+    }
+
+    #[RunInSeparateProcess]
+    public function testAnUnexpectedInvalidArgumentWhileReadingTheReviewedIdentityPassesThrough(): void
+    {
+        $unexpected = str_repeat('f', 40);
+        CommitIdCheckThatThrows::defineFor($unexpected);
+        $reviewed = $unexpected.substr($this->recordedIdentity(), 40);
+
+        $this->expectExceptionObject(new InvalidArgumentException('unexpected'));
+
+        $this->whenTheCommandRuns(['--reviewed' => $reviewed]);
     }
 
     public function testAMissingRepositoryFailsNamingThePath(): void

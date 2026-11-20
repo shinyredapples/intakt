@@ -45,9 +45,12 @@ use Intakt\Plugin\GitHubForge\Infrastructure\PullRequestAddress;
 use Intakt\Plugin\GitHubForge\Infrastructure\RateLimitReadings;
 use Intakt\Plugin\GitHubForge\Infrastructure\SecretScan;
 use Intakt\Plugin\GitHubForge\Infrastructure\VerdictLocks;
+use Intakt\Tests\Plugin\Forge\CommitIdCheckThatThrows;
+use InvalidArgumentException;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
@@ -176,6 +179,16 @@ final class GitHubForgeTest extends TestCase
         $this->pullFixture = 'pull_request_short_head.json';
 
         $this->expectExceptionObject(new ForgeReadFailed('GitHub answered something other than a commit hash.'));
+
+        $this->forge()->change(new ChangeId(self::PULL));
+    }
+
+    #[RunInSeparateProcess]
+    public function testAnUnexpectedInvalidArgumentWhileReadingAHashFromGitHubPassesThrough(): void
+    {
+        CommitIdCheckThatThrows::defineFor(str_repeat('1', 40));
+
+        $this->expectExceptionObject(new InvalidArgumentException('unexpected'));
 
         $this->forge()->change(new ChangeId(self::PULL));
     }
