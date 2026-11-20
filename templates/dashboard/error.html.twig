@@ -14,5 +14,5 @@
 {% if reference %}
 <p class="muted">If you report this, give the reference <code>{{ reference }}</code>.</p>
 {% endif %}
-<p><a class="btn primary" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_BOARD')) }}">Back to the board</a></p>
+<p><a class="btn primary" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_BOARD'), {board: 1}) }}">Back to the board</a></p>
 {% endblock %}
