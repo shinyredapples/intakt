@@ -7,7 +7,8 @@ namespace Intakt\Tests\Application\Parity;
 use FilesystemIterator;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
-use ReflectionMethod;
+use PHPUnit\Framework\TestCase;
+use ReflectionClass;
 use SplFileInfo;
 
 // Because a done parity item counts toward the takeover only when the Intakt tests it names exist.
@@ -19,7 +20,7 @@ final readonly class ParityRecord
     private const string INTAKT_PART = 'Intakt:';
 
     // Only `SomeTest::testName` and a bare `testName` count, so a backticked command or class in a remark is no test name.
-    private const string BACKTICKED = '/`([^`]*)`/';
+    private const string BACKTICKED = '/(?<!`)(`+)(?!`)(.+?)(?<!`)\1(?!`)/';
 
     private const string NAMED_TEST = '/^(?:(\w+Test)::)?(test\w+)$/';
 
@@ -117,7 +118,7 @@ final readonly class ParityRecord
 
         $class = null;
         $namedTests = [];
-        foreach (array_filter($tokens[1], $this->looksLikeATestName(...)) as $token) {
+        foreach (array_filter(array_map(trim(...), $tokens[2]), $this->looksLikeATestName(...)) as $token) {
             if (1 !== preg_match(self::NAMED_TEST, $token, $match)) {
                 $namedTests[] = [null, $token, 'is not a test name of the form `SomeTest::testName`'];
 
@@ -156,7 +157,12 @@ final readonly class ParityRecord
             return sprintf('%s is no test class under tests/', $class);
         }
 
-        if (!method_exists($fullName, $method) || !new ReflectionMethod($fullName, $method)->isPublic()) {
+        $reflection = new ReflectionClass($fullName);
+        if ($reflection->isAbstract() || !$reflection->isSubclassOf(TestCase::class)) {
+            return sprintf('%s is no runnable test class', $class);
+        }
+
+        if (!$reflection->hasMethod($method) || !$reflection->getMethod($method)->isPublic()) {
             return sprintf('%s::%s is no test method of %s', $class, $method, $fullName);
         }
 

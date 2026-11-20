@@ -167,6 +167,36 @@ final class ParityRecordTest extends TestCase
         );
     }
 
+    public function testAnAbstractTestClassIsNoRunnableTestClass(): void
+    {
+        $record = '- [x] Item. Intakt: `AbstractCandidateTest::testVisible`';
+
+        self::assertSame(
+            ['line 1: AbstractCandidateTest is no runnable test class'],
+            $this->scratchTestsAliasing(Fixtures\AbstractCandidateTest::class)->unprovenItems($record),
+        );
+    }
+
+    public function testAClassThatIsNoPhpunitTestCaseIsNoRunnableTestClass(): void
+    {
+        $record = '- [x] Item. Intakt: `PlainCandidateTest::testVisible`';
+
+        self::assertSame(
+            ['line 1: PlainCandidateTest is no runnable test class'],
+            $this->scratchTestsAliasing(Fixtures\PlainCandidateTest::class)->unprovenItems($record),
+        );
+    }
+
+    public function testAMissingNameInADoubleBacktickSpanAfterAValidNameIsReported(): void
+    {
+        $record = '- [x] Item. Intakt: `ParityRecordTest::testAnIndentedDoneItemIsJudged` and ``ParityRecordTest::testNothing``';
+
+        self::assertSame(
+            ['line 1: ParityRecordTest::testNothing is no test method of '.self::class],
+            $this->repositoryTests()->unprovenItems($record),
+        );
+    }
+
     public function testAnIndentedDoneItemIsJudged(): void
     {
         $record = '  - [x] A behavior. `test_old.py` [T1]';
@@ -213,5 +243,13 @@ final class ParityRecordTest extends TestCase
         }
 
         return new ParityRecord($scratch, 'Intakt\Tests\Scratch');
+    }
+
+    private function scratchTestsAliasing(string $class): ParityRecord
+    {
+        $short = substr($class, strrpos($class, '\\') + 1);
+        class_alias($class, 'Intakt\Tests\Scratch\\'.$short);
+
+        return $this->scratchTests([$short.'.php']);
     }
 }
