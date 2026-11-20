@@ -32,6 +32,23 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[UsesClass(StaticAnalysisGate::class)]
 final class NoPublicTraitSetterRuleTest extends PhpStanRuleTestCase
 {
+    private string|false $changedFilesOnly = false;
+
+    #[Override]
+    protected function setUp(): void
+    {
+        $this->changedFilesOnly = getenv(StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE);
+        putenv(StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE);
+        parent::setUp();
+    }
+
+    #[Override]
+    protected function tearDown(): void
+    {
+        putenv(false === $this->changedFilesOnly ? StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE : StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE.'='.$this->changedFilesOnly);
+        parent::tearDown();
+    }
+
     protected function ruleFor(string $root): NoPublicTraitSetterRule
     {
         return new NoPublicTraitSetterRule($root);
@@ -100,6 +117,25 @@ final class NoPublicTraitSetterRuleTest extends PhpStanRuleTestCase
         $this->assertRuleAccepts('vendor-parent-plain-trait-setter');
     }
 
+    public function testAChangedFilesRunThatAnalyzesOnlyTheTraitReportsNoTraitSetter(): void
+    {
+        putenv(StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE.'=1');
+
+        self::assertSame('', $this->ruleFindingsIn($this->traitWithoutItsUsingClass()));
+    }
+
+    public function testARunThatAnalyzesOnlyTheTraitWithoutTheSignalReportsItsSetter(): void
+    {
+        self::assertStringStartsWith('src/SharedSetup.php:11 intakt.noPublicSetter Method Intakt\Sample\SharedSetup::setUpBeforeClass() is a public setter', $this->ruleFindingsIn($this->traitWithoutItsUsingClass()));
+    }
+
+    public function testASignalOtherThanOneKeepsTheTraitSetterCheckOn(): void
+    {
+        putenv(StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE.'=true');
+
+        self::assertStringStartsWith('src/SharedSetup.php:11 intakt.noPublicSetter', $this->ruleFindingsIn($this->traitWithoutItsUsingClass()));
+    }
+
     public function testATraitSetterIsReportedOnceWhenOneOfItsUsingClassesHasNoVendorParentDeclaringIt(): void
     {
         $findings = $this->ruleFindingsOf('partly-vendor-trait-setter');
@@ -121,5 +157,14 @@ final class NoPublicTraitSetterRuleTest extends PhpStanRuleTestCase
     public function testATraitSetterOutsideTheRepositoryCodeFoldersPassesStaticAnalysis(): void
     {
         $this->assertRuleAccepts('trait-setter-migration');
+    }
+
+    // as a changed-files run sees it when only the trait changed: the class that uses it is not analyzed
+    private function traitWithoutItsUsingClass(): Sandbox
+    {
+        $sandbox = $this->sandboxWith('vendor-parent-trait-setter');
+        unlink($sandbox->root.'/src/SampleTest.php');
+
+        return $sandbox;
     }
 }

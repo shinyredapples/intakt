@@ -26,9 +26,17 @@ abstract readonly class PhpFilesToolGate extends PhpFilesGate
             return GateResult::failedBecause($this->name(), 'missing tool '.$this->tool());
         }
 
-        $result = $workspace->command([$workspace->tool($this->tool()), ...$this->arguments($workspace, $files)]);
+        $result = $workspace->command([$workspace->tool($this->tool()), ...$this->arguments($workspace, $files)], $this->environment($workspace));
 
         return $this->resultOf($result, $workspace);
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    protected function environment(Workspace $workspace): array
+    {
+        return [];
     }
 
     private function resultOf(ProcessResult $result, Workspace $workspace): GateResult

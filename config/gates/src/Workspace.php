@@ -99,6 +99,17 @@ final readonly class Workspace
         return Mode::ChangedFilesOnly === $this->mode;
     }
 
+    public function analyzesSomePhpFilesOnly(): bool
+    {
+        if (Mode::ChangedFilesOnly !== $this->mode) {
+            return false;
+        }
+
+        $mergeBase = $this->mergeBase();
+
+        return null !== $mergeBase && !$this->changesWhatEveryPhpFileDependsOn($mergeBase);
+    }
+
     public function changesGateTests(): bool
     {
         $mergeBase = $this->mergeBase();
@@ -193,11 +204,16 @@ final readonly class Workspace
             throw new ScopeFailure('no base branch found, pass --base=<ref>');
         }
 
-        if ($this->changesAnyOf($mergeBase, [...self::GATE_DEFINITIONS, ...self::CONTAINER_CONFIGURATION]) || $this->changesImportedServices($mergeBase)) {
+        if ($this->changesWhatEveryPhpFileDependsOn($mergeBase)) {
             return $this->allPhpFilesOrFail();
         }
 
         return $this->scope->changedPhpFiles($mergeBase);
+    }
+
+    private function changesWhatEveryPhpFileDependsOn(string $mergeBase): bool
+    {
+        return $this->changesAnyOf($mergeBase, [...self::GATE_DEFINITIONS, ...self::CONTAINER_CONFIGURATION]) || $this->changesImportedServices($mergeBase);
     }
 
     /**

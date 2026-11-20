@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Gates\PhpStan;
 
+use Intakt\Gates\StaticAnalysisGate;
 use PhpParser\Node;
 use PHPStan\Analyser\Scope;
 use PHPStan\Node\CollectedDataNode;
@@ -38,6 +39,11 @@ final readonly class NoPublicTraitSetterRule implements Rule
      */
     public function processNode(Node $node, Scope $scope): array
     {
+        // A subset run misses the classes that use a trait and would report their vendor setters; only the gate's explicit signal turns the check off, so a direct phpstan call, a test or a full run judges trait setters.
+        if ('1' === getenv(StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE)) {
+            return [];
+        }
+
         $uses = array_merge(...array_values($node->get(TraitSetterUseCollector::class)));
         $findings = [];
 

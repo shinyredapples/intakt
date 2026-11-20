@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Gates;
 
-use Override;
 use PHPUnit\Framework\Assert;
 
 trait UsesSandboxes
@@ -13,7 +12,6 @@ trait UsesSandboxes
     private array $sandboxes = [];
 
     // The class owns one sandbox for its phpstan runs, because dumping this repository's test container takes seconds, no fixture changes it, and the container is baked into the folder it was dumped in. Created fresh before the class, removed after it.
-    #[Override]
     public static function setUpBeforeClass(): void
     {
         parent::setUpBeforeClass();
