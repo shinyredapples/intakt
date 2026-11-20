@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Infrastructure\Repository {
     // Removes the file between the walk that found it and its stat, a moment no test can time, then stats it for real, so the stat raises its warning; the size is read through stat() because the name filesize() resolves here.
+    // A function cannot be undefined, so it stays in place for every later test in the process; any other file name passes through to a real stat, so those tests see the size as before.
     function filesize(string $filename): int|false
     {
         if ('vanishes.txt' === basename($filename)) {
@@ -46,21 +47,6 @@ namespace Intakt\Tests\Core\Review\Infrastructure\Repository {
             $this->checkout->remove();
         }
 
-        // Throws every warning that is not silenced, as the error handler of a debug kernel does, because the refusal must not depend on the handler.
-        private function throwWarnings(): void
-        {
-            // Because PHPUnit lowers the reporting level while a test runs, which would hide the warning from this handler as a silenced one.
-            $this->reporting = error_reporting(E_ALL);
-
-            set_error_handler(static function (int $level, string $message): bool {
-                if (0 === (error_reporting() & $level)) {
-                    return false;
-                }
-
-                throw new ErrorException($message, 0, $level);
-            });
-        }
-
         public function testAFileRemovedBeforeItsSizeIsReadIsRefusedAsNotReadableUnderAHandlerThatThrowsWarnings(): void
         {
             $this->checkout->write('vanishes.txt', 'needle');
@@ -81,6 +67,21 @@ namespace Intakt\Tests\Core\Review\Infrastructure\Repository {
             $this->expectExceptionMessageIs('"src/vanishes.txt" cannot be read.');
 
             new SearchFiles($this->checkout->checkout)('needle', 'src');
+        }
+
+        // Throws every warning that is not silenced, as the error handler of a debug kernel does, because the refusal must not depend on the handler.
+        private function throwWarnings(): void
+        {
+            // Because PHPUnit lowers the reporting level while a test runs, which would hide the warning from this handler as a silenced one.
+            $this->reporting = error_reporting(E_ALL);
+
+            set_error_handler(static function (int $level, string $message): bool {
+                if (0 === (error_reporting() & $level)) {
+                    return false;
+                }
+
+                throw new ErrorException($message, 0, $level);
+            });
         }
     }
 }
