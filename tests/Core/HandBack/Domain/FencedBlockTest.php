@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\HandBack\Domain;
 
 use Intakt\Core\HandBack\Domain\FencedBlock;
+use Intakt\Core\HandBack\Domain\MarkdownPart;
 use Intakt\Core\HandBack\Domain\MarkdownText;
 use Intakt\Core\HandBack\Domain\OpenListItems;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -14,6 +15,7 @@ use PHPUnit\Framework\TestCase;
 
 #[CoversClass(FencedBlock::class)]
 #[UsesClass(MarkdownText::class)]
+#[UsesClass(MarkdownPart::class)]
 #[UsesClass(OpenListItems::class)]
 final class FencedBlockTest extends TestCase
 {

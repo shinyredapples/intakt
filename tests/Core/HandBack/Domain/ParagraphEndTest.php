@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\HandBack\Domain;
 
+use Intakt\Core\HandBack\Domain\MarkdownPart;
 use Intakt\Core\HandBack\Domain\MarkdownText;
 use Intakt\Core\HandBack\Domain\ParagraphEnd;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -13,6 +14,7 @@ use PHPUnit\Framework\TestCase;
 
 #[CoversClass(ParagraphEnd::class)]
 #[UsesClass(MarkdownText::class)]
+#[UsesClass(MarkdownPart::class)]
 final class ParagraphEndTest extends TestCase
 {
     private const string FIRST_LINE = 'a `';

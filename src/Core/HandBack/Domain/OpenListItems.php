@@ -17,6 +17,7 @@ final readonly class OpenListItems
         private string $text,
         private array $columns,
         private int $nextLine,
+        private string $lineAbove = '',
     ) {
     }
 
@@ -30,14 +31,17 @@ final readonly class OpenListItems
     {
         $columns = $this->columns;
         $nextLine = $this->nextLine;
+        $lineAbove = $this->lineAbove;
 
         while ($nextLine < $position && $nextLine <= strlen($this->text)) {
             $lineEnd = MarkdownText::lineEndAt($this->text, $nextLine);
-            $columns = $this->afterLine($columns, MarkdownText::withSpacesForTabs(substr($this->text, $nextLine, $lineEnd - $nextLine)));
+            $line = MarkdownText::withSpacesForTabs(substr($this->text, $nextLine, $lineEnd - $nextLine));
+            $columns = $this->afterLine($columns, $lineAbove, $line);
+            $lineAbove = $line;
             $nextLine = $lineEnd + 1;
         }
 
-        return new self($this->text, $columns, $nextLine);
+        return new self($this->text, $columns, $nextLine, $lineAbove);
     }
 
     // A deeper item whose content column the indent does not reach has ended at the line, so the line belongs to the innermost item it reaches.
@@ -61,16 +65,19 @@ final readonly class OpenListItems
     {
         $read = $this->readUpTo(MarkdownText::lineStartAt($this->text, $start) + 1);
 
-        return new self($this->text, $read->columns, max($read->nextLine, MarkdownText::lineEndAt($this->text, $end) + 1));
+        // A part over several lines is a block of its own, so the line after it continues no paragraph.
+        $overSeveralLines = str_contains(substr($this->text, $start, $end - $start), "\n");
+
+        return new self($this->text, $read->columns, max($read->nextLine, MarkdownText::lineEndAt($this->text, $end) + 1), $overSeveralLines ? '' : $read->lineAbove);
     }
 
-    // A blank line ends nothing, and a marker starts an item only up to three columns past the content of the item it is in (https://spec.commonmark.org/0.31.2/#list-items).
+    // A blank line ends nothing, and a marker starts an item only up to three columns past the content of the item it is in (https://spec.commonmark.org/0.31.2/#list-items). Outside a list, an item that cannot interrupt a paragraph (an empty marker line, an ordered item not numbered 1) continues the paragraph above it.
     /**
      * @param list<int> $columns
      *
      * @return list<int>
      */
-    private function afterLine(array $columns, string $line): array
+    private function afterLine(array $columns, string $lineAbove, string $line): array
     {
         if ('' === trim($line)) {
             return $columns;
@@ -83,8 +90,9 @@ final readonly class OpenListItems
         }
 
         $column = MarkdownText::listItemColumnOf($line);
+        $continuesTheParagraph = [] === $columns && MarkdownText::continuesAParagraph($lineAbove, $line);
 
-        if (null !== $column && $indent <= (array_last($columns) ?? 0) + self::MOST_INDENT) {
+        if (null !== $column && !$continuesTheParagraph && $indent <= (array_last($columns) ?? 0) + self::MOST_INDENT) {
             $columns[] = $column;
         }
 

@@ -22,20 +22,41 @@ final readonly class EvidenceItems
     public static function countIn(string $task): int
     {
         $lines = array_map(MarkdownText::withSpacesForTabs(...), explode("\n", MarkdownText::visibleProse($task)));
+        $column = null;
 
         foreach (array_keys($lines) as $index) {
-            $heading = self::headingLines($lines, $index);
+            // A heading or label indented into an open item's content (an example inside the task) is part of that item, not the section's start.
+            $column = self::endsTheList($lines, $index, $column) ? null : $column;
+            $section = self::sectionStartingAt($lines, $index, $column);
 
-            if ($heading > 0 && 1 === preg_match(self::EVIDENCE_HEADING_TEXT, $lines[$index])) {
-                return self::topLevelItems(array_slice($lines, $index + $heading));
+            if (null !== $section) {
+                return self::topLevelItems($section);
             }
 
-            if (1 === preg_match(self::EVIDENCE_LABEL, $lines[$index])) {
-                return self::topLevelItems(self::untilTheLabelListEnds(array_slice($lines, $index + 1)));
-            }
+            $column = self::isTopLevelItem($lines, $index, $column) ? self::contentColumnOf($lines[$index]) : $column;
         }
 
         return 0;
+    }
+
+    /**
+     * @param list<string> $lines
+     *
+     * @return list<string>|null
+     */
+    private static function sectionStartingAt(array $lines, int $index, ?int $column): ?array
+    {
+        if (null !== $column && self::indentOf($lines[$index]) >= $column) {
+            return null;
+        }
+
+        $heading = self::headingLines($lines, $index);
+
+        if ($heading > 0 && 1 === preg_match(self::EVIDENCE_HEADING_TEXT, $lines[$index])) {
+            return array_slice($lines, $index + $heading);
+        }
+
+        return 1 === preg_match(self::EVIDENCE_LABEL, $lines[$index]) ? self::untilTheLabelListEnds(array_slice($lines, $index + 1)) : null;
     }
 
     // A plain `Evidence:` label has no end of its own, so its list also ends where the text after the first item starts. Such a line has no indent, so it is never inside an item and can be cut before the items are walked.
@@ -88,7 +109,7 @@ final readonly class EvidenceItems
                 break;
             }
 
-            if (self::isTopLevelItem($line, $column)) {
+            if (self::isTopLevelItem($lines, $index, $column)) {
                 ++$count;
                 $column = self::contentColumnOf($line);
             }
@@ -106,10 +127,19 @@ final readonly class EvidenceItems
         return self::indentOf($lines[$index]) < ($column ?? PHP_INT_MAX) && self::headingLines($lines, $index) > 0;
     }
 
-    // An item indented to the content of the item above is nested in it (https://spec.commonmark.org/0.31.2/#list-items).
-    private static function isTopLevelItem(string $line, ?int $column): bool
+    // An item indented to the content of the item above is nested in it, and outside a list an item that cannot interrupt a paragraph (an empty marker line, an ordered item not numbered 1) continues the paragraph line above it (https://spec.commonmark.org/0.31.2/#list-items).
+    /**
+     * @param list<string> $lines
+     */
+    private static function isTopLevelItem(array $lines, int $index, ?int $column): bool
     {
-        return null !== self::contentColumnOf($line) && self::indentOf($line) <= 3 && (null === $column || self::indentOf($line) < $column);
+        $line = $lines[$index];
+
+        if (null === self::contentColumnOf($line) || self::indentOf($line) > 3 || (null !== $column && self::indentOf($line) >= $column)) {
+            return false;
+        }
+
+        return null !== $column || !MarkdownText::continuesAParagraph($lines[$index - 1] ?? '', $line);
     }
 
     // A paragraph after a blank line, indented less than the item's content, is outside the list, because Markdown no longer reads it as part of the item.

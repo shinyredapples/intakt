@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\HandBack\Domain;
 use Intakt\Core\HandBack\Domain\CodeSpans;
 use Intakt\Core\HandBack\Domain\EvidenceItems;
 use Intakt\Core\HandBack\Domain\FencedBlock;
+use Intakt\Core\HandBack\Domain\MarkdownPart;
 use Intakt\Core\HandBack\Domain\MarkdownText;
 use Intakt\Core\HandBack\Domain\OpenListItems;
 use Intakt\Core\HandBack\Domain\ParagraphEnd;
@@ -16,6 +17,7 @@ use PHPUnit\Framework\TestCase;
 
 #[CoversClass(EvidenceItems::class)]
 #[UsesClass(MarkdownText::class)]
+#[UsesClass(MarkdownPart::class)]
 #[UsesClass(CodeSpans::class)]
 #[UsesClass(FencedBlock::class)]
 #[UsesClass(OpenListItems::class)]
@@ -225,5 +227,25 @@ final class EvidenceItemsTest extends TestCase
     public function testOnlyTheFirstEvidenceSectionCounts(): void
     {
         self::assertSame(1, EvidenceItems::countIn("## Evidence\n- E1\n\n## Evidence\n- E1\n- E2\n"));
+    }
+
+    public function testAnItemWhoseMarkerLineIsEmptyIsCounted(): void
+    {
+        self::assertSame(2, EvidenceItems::countIn("## Evidence\n-\n  Show the test output.\n- Show the exit code."));
+    }
+
+    public function testAnEvidenceHeadingNestedInAnExampleItemIsNotTheSection(): void
+    {
+        self::assertSame(2, EvidenceItems::countIn("- Example\n\n  ## Evidence\n  - Example output.\n\n## Evidence\n- Real output.\n- Exit code."));
+    }
+
+    public function testAHeadingRightAfterTheListEndsTheSection(): void
+    {
+        self::assertSame(1, EvidenceItems::countIn("## Evidence\n- Show the test output.\n## Notes\n- This is not evidence."));
+    }
+
+    public function testAnOrderedItemNotNumberedOneDoesNotInterruptAParagraph(): void
+    {
+        self::assertSame(1, EvidenceItems::countIn("## Evidence\n- Show the output.\n\nSee step\n10. of the guide.\n"));
     }
 }

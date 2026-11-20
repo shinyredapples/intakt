@@ -14,17 +14,9 @@ final readonly class MarkdownText
 
     private const string COMMENT_END = '-->';
 
-    private const string FENCE = 'fence';
+    private const string LIST_ITEM = '/^( *)([-*+]|(\d{1,9})[.)])(?:( +)\S|( *)$)/';
 
-    private const string FENCE_AFTER_A_MARKER = 'fence after a marker';
-
-    private const string CODE = 'code';
-
-    private const string COMMENT = 'comment';
-
-    private const string LITERAL = 'literal';
-
-    private const string LIST_ITEM = '/^( *)([-*+]|\d{1,9}[.)])( +)\S/';
+    private const string ATX_HEADING = '/^ {0,3}#{1,6}(?:[ \t]|$)/';
 
     private const string THEMATIC_BREAK = '/^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/';
 
@@ -50,12 +42,24 @@ final readonly class MarkdownText
 
     public static function listItemColumnOf(string $line): ?int
     {
-        if (1 === preg_match(self::THEMATIC_BREAK, $line) || 1 !== preg_match(self::LIST_ITEM, $line, $match)) {
+        if (1 === preg_match(self::THEMATIC_BREAK, $line) || 1 !== preg_match(self::LIST_ITEM, $line, $match, PREG_UNMATCHED_AS_NULL)) {
             return null;
         }
 
-        // Five or more spaces after the marker start indented code inside the item, so its content begins one space after the marker.
-        return strlen($match[1]) + strlen($match[2]) + (strlen($match[3]) > 4 ? 1 : strlen($match[3]));
+        // Five or more spaces after the marker start indented code inside the item, so its content begins one space after the marker; an item whose marker line is empty starts its content one space after the marker too (https://spec.commonmark.org/0.31.2/#list-items).
+        $spaces = strlen($match[4] ?? '');
+
+        return strlen($match[1]) + strlen($match[2]) + (0 === $spaces || $spaces > 4 ? 1 : $spaces);
+    }
+
+    // Outside a list, an item whose marker line is empty, or an ordered item not numbered 1, does not interrupt a paragraph, so right after a paragraph line it is text (https://spec.commonmark.org/0.31.2/#list-items). The line above is a paragraph line unless it is blank or an ATX heading.
+    public static function continuesAParagraph(string $lineAbove, string $line): bool
+    {
+        if ('' === trim($lineAbove) || 1 === preg_match(self::ATX_HEADING, $lineAbove) || 1 !== preg_match(self::LIST_ITEM, $line, $match, PREG_UNMATCHED_AS_NULL)) {
+            return false;
+        }
+
+        return null === $match[4] || (null !== $match[3] && 1 !== (int) $match[3]);
     }
 
     public static function lineStartAt(string $text, int $position): int
@@ -91,16 +95,16 @@ final readonly class MarkdownText
             $kind = self::kindOf($text, $match, $items);
             $start = self::startOf($kind, $text, $match[0][1]);
             $part = match ($kind) {
-                self::FENCE, self::FENCE_AFTER_A_MARKER => FencedBlock::at($text, $start, $items),
-                self::CODE => ($codeSpans = $codeSpans->inTheParagraphAt($start))->spanOrLiteralAt($start, $offset),
-                self::LITERAL => $match['fence'][0],
+                MarkdownPart::Fence, MarkdownPart::FenceAfterAMarker => FencedBlock::at($text, $start, $items),
+                MarkdownPart::Code => ($codeSpans = $codeSpans->inTheParagraphAt($start))->spanOrLiteralAt($start, $offset),
+                MarkdownPart::Literal => $match['fence'][0],
                 default => self::commentAt($text, $start),
             };
             $read .= substr($text, $offset, $start - $offset).self::shown($kind, $part, $fenced);
             $offset = $start + strlen($part);
 
             // A code span or a literal run shows its lines as text, so only the lines of a fence or a comment hold no list items.
-            if (self::CODE !== $kind && self::LITERAL !== $kind) {
+            if (MarkdownPart::Code !== $kind && MarkdownPart::Literal !== $kind) {
                 $items = $items->passOver($start, $offset);
             }
         }
@@ -124,34 +128,34 @@ final readonly class MarkdownText
     /**
      * @param array<array{string, int}> $match
      */
-    private static function kindOf(string $text, array $match, OpenListItems $items): string
+    private static function kindOf(string $text, array $match, OpenListItems $items): MarkdownPart
     {
         $start = $match[0][1];
         $fence = $match['fence'][0] ?? '';
 
         return match (true) {
-            '' === $fence => '' !== ($match['code'][0] ?? '') ? self::CODE : self::COMMENT,
-            FencedBlock::opensAt($text, $start, $items) => $start > 0 && "\n" !== $text[$start - 1] ? self::FENCE_AFTER_A_MARKER : self::FENCE,
-            str_ends_with($fence, '`') => self::CODE,
-            default => self::LITERAL,
+            '' === $fence => '' !== ($match['code'][0] ?? '') ? MarkdownPart::Code : MarkdownPart::Comment,
+            FencedBlock::opensAt($text, $start, $items) => $start > 0 && "\n" !== $text[$start - 1] ? MarkdownPart::FenceAfterAMarker : MarkdownPart::Fence,
+            str_ends_with($fence, '`') => MarkdownPart::Code,
+            default => MarkdownPart::Literal,
         };
     }
 
     // A backtick run indented too far to open a fence still opens or closes a code span, so the part starts at the run, not at the indent.
-    private static function startOf(string $kind, string $text, int $match): int
+    private static function startOf(MarkdownPart $kind, string $text, int $match): int
     {
-        return $match + (self::CODE === $kind ? strspn($text, " \t", $match) : 0);
+        return $match + (MarkdownPart::Code === $kind ? strspn($text, " \t", $match) : 0);
     }
 
     /**
      * @param callable(string): string $fenced
      */
-    private static function shown(string $kind, string $part, callable $fenced): string
+    private static function shown(MarkdownPart $kind, string $part, callable $fenced): string
     {
         return match ($kind) {
-            self::FENCE_AFTER_A_MARKER => self::afterTheOpeningLine($part, $fenced),
-            self::FENCE => $fenced($part),
-            self::CODE, self::LITERAL => $part,
+            MarkdownPart::FenceAfterAMarker => self::afterTheOpeningLine($part, $fenced),
+            MarkdownPart::Fence => $fenced($part),
+            MarkdownPart::Code, MarkdownPart::Literal => $part,
             default => self::lineBreaksOf($part),
         };
     }

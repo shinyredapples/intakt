@@ -41,8 +41,14 @@ final readonly class FencedBlock
     // A fence is indented up to three columns from where its container's content starts, so inside a list item it may sit further right, while four or more past that column make indented code. The indent is counted in columns, a tab to its tab stop, as the content column was; right after a list marker the item's content starts at the fence, so only up to three blanks may come before it.
     public static function opensAt(string $text, int $start, ?OpenListItems $items = null): bool
     {
-        if (MarkdownText::lineStartAt($text, $start) !== $start) {
-            return strspn($text, self::BLANK, $start) <= self::MOST_INDENT;
+        $lineStart = MarkdownText::lineStartAt($text, $start);
+
+        // After a marker the fence opens only where the item's content starts: five or more spaces after the marker make the item's content start one space after it, so the run is indented code.
+        if ($lineStart !== $start) {
+            $upToTheRun = MarkdownText::withSpacesForTabs(substr($text, $lineStart, $start + strspn($text, self::BLANK, $start) - $lineStart));
+
+            return strspn($text, self::BLANK, $start) <= self::MOST_INDENT
+                && MarkdownText::listItemColumnOf($upToTheRun.'x') === strlen($upToTheRun);
         }
 
         $indent = self::indentColumnsAt($text, $start);

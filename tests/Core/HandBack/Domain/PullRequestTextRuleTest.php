@@ -9,6 +9,7 @@ use Intakt\Core\HandBack\Contract\PullRequestTextVerdict;
 use Intakt\Core\HandBack\Domain\CodeSpans;
 use Intakt\Core\HandBack\Domain\EvidenceItems;
 use Intakt\Core\HandBack\Domain\FencedBlock;
+use Intakt\Core\HandBack\Domain\MarkdownPart;
 use Intakt\Core\HandBack\Domain\MarkdownText;
 use Intakt\Core\HandBack\Domain\OpenListItems;
 use Intakt\Core\HandBack\Domain\ParagraphEnd;
@@ -23,6 +24,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(PullRequestTextVerdict::class)]
 #[UsesClass(EvidenceItems::class)]
 #[UsesClass(MarkdownText::class)]
+#[UsesClass(MarkdownPart::class)]
 #[UsesClass(CodeSpans::class)]
 #[UsesClass(FencedBlock::class)]
 #[UsesClass(OpenListItems::class)]
@@ -309,5 +311,20 @@ final class PullRequestTextRuleTest extends TestCase
             ],
             array_map(static fn (PullRequestTextVerdict $verdict): string => $verdict->reason(), PullRequestTextVerdict::cases()),
         );
+    }
+
+    public function testAFenceFiveSpacesAfterAMarkerIsIndentedCodeSoAHiddenReferenceStaysHidden(): void
+    {
+        self::assertSame([1], PullRequestTextRule::judge("## Evidence\n- Show the output.", "-     ~~~\n\n     <!-- E1 -->")->missingItems);
+    }
+
+    public function testAnOrderedItemNotNumberedOneAfterAParagraphLineOpensNoFenceInAnItem(): void
+    {
+        self::assertSame([1], PullRequestTextRule::judge("## Evidence\n- Show the output.", "text\n10. x\n    ~~~\n    <!-- E1 -->\n    ~~~")->missingItems);
+    }
+
+    public function testAnOrderedItemNotNumberedOneAfterABlankLineStillOpensAFenceInIt(): void
+    {
+        self::assertSame([], PullRequestTextRule::judge("## Evidence\n- Show the output.", "text\n\n10. x\n    ~~~\n    <!-- E1 -->\n    ~~~")->missingItems);
     }
 }

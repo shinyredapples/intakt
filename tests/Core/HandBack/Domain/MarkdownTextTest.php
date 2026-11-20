@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\HandBack\Domain;
 
 use Intakt\Core\HandBack\Domain\CodeSpans;
 use Intakt\Core\HandBack\Domain\FencedBlock;
+use Intakt\Core\HandBack\Domain\MarkdownPart;
 use Intakt\Core\HandBack\Domain\MarkdownText;
 use Intakt\Core\HandBack\Domain\OpenListItems;
 use Intakt\Core\HandBack\Domain\ParagraphEnd;
@@ -14,6 +15,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(MarkdownText::class)]
+#[UsesClass(MarkdownPart::class)]
 #[UsesClass(CodeSpans::class)]
 #[UsesClass(FencedBlock::class)]
 #[UsesClass(OpenListItems::class)]

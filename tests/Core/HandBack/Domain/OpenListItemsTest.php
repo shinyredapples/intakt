@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\HandBack\Domain;
 
+use Intakt\Core\HandBack\Domain\MarkdownPart;
 use Intakt\Core\HandBack\Domain\MarkdownText;
 use Intakt\Core\HandBack\Domain\OpenListItems;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -12,6 +13,7 @@ use PHPUnit\Framework\TestCase;
 
 #[CoversClass(OpenListItems::class)]
 #[UsesClass(MarkdownText::class)]
+#[UsesClass(MarkdownPart::class)]
 final class OpenListItemsTest extends TestCase
 {
     private const string NESTED = "- a\n  - b\nx";
