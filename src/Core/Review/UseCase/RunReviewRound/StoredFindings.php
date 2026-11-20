@@ -89,13 +89,18 @@ final readonly class StoredFindings
         }
 
         $notes = new JudgeNotes();
-        foreach ($judged->findings as $finding) {
+        // The last entry of a repeated id first, because its missing note clears an earlier one.
+        foreach (array_column($judged->findings, null, 'id') as $finding) {
             if (null !== $finding->judgeNote) {
                 $notes = $notes->with($finding->id, $finding->judgeNote);
             }
         }
 
-        $reported = array_map(static fn (Finding $finding): Finding => null !== $notes->of($finding->id) ? $finding->withJudgeNote($notes->of($finding->id)) : $finding, $this->reportedIn($round));
+        $reported = array_map(static function (Finding $finding) use ($notes): Finding {
+            $note = $notes->of($finding->id);
+
+            return null !== $note ? $finding->withJudgeNote($note) : $finding;
+        }, $this->reportedIn($round));
 
         return new OnePerPlace()->actList($reported, array_values(iterator_to_array($judged->act)), iterator_to_array($judged->sameCause));
     }

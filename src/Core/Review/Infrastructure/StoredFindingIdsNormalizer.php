@@ -47,7 +47,12 @@ final class StoredFindingIdsNormalizer implements NormalizerInterface, Denormali
         $strings = $this->stringsIn($data, $type);
 
         if (FindingIds::class === $type) {
-            return FindingIds::keyed($strings);
+            $ids = new FindingIds();
+            foreach ($strings as $key => $id) {
+                $ids = $ids->with($key, $id);
+            }
+
+            return $ids;
         }
 
         $sameCause = new SameCause();

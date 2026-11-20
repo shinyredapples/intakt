@@ -47,6 +47,7 @@ use Intakt\Tests\Core\Review\UseCase\RunReviewRound\VerdictPerRole;
 use Intakt\Tests\Support\WebTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Component\DomCrawler\Crawler;
@@ -133,6 +134,30 @@ final class MergedActEntryPageTest extends WebTestCase
         self::assertResponseIsSuccessful();
         self::assertSame([['F1', 'F2, F3', 'P1', 'Text of A.']], array_map(static fn (Finding $entry): array => [$entry->id, implode(', ', [...$entry->merged]), $entry->severity->value, $entry->text], $act));
         self::assertSame([['P1', 'F1', 'Text of A.', 'Also reported as F2, F3', 'Fix now']], $this->pageRows($page->filter('.finding-card')));
+    }
+
+    // No writer repeats an id in one row, so only a hand-edited or damaged row shows this: the last entry of the id decides, also when it has no note.
+    #[DataProvider('lastNotesOfARepeatedId')]
+    public function testAJudgeRowRepeatingAFindingIdGivesTheActEntryTheNoteOfTheLastOne(string $lastNote, ?string $expected): void
+    {
+        $review = $this->reviewed([$this->findingAt('A', Severity::P2)]);
+        $row = '{"round":"'.$review->roundId.'","act":["F1"],"follow_ups":[],"findings":[{"id":"F1","severity":"P2","text":"Text of A.","judge_note":"old"},{"id":"F1","severity":"P2","text":"Text of A.","judge_note":'.$lastNote.'}]}';
+        $judged = $this->serializer()->deserialize($row, JudgeDone::class, 'json');
+        self::assertInstanceOf(JudgeDone::class, $judged);
+
+        $act = $this->fixture->findingStore()->actListOf($this->fixture->round($review->roundId), $judged);
+
+        self::assertSame([$expected], array_map(static fn (Finding $entry): ?string => $entry->judgeNote(), $act));
+    }
+
+    /**
+     * @return iterable<string, array{string, ?string}>
+     */
+    public static function lastNotesOfARepeatedId(): iterable
+    {
+        yield 'a note replaces the earlier one' => ['"new"', 'new'];
+        yield 'an empty note replaces the earlier one' => ['""', ''];
+        yield 'no note clears the earlier one' => ['null', null];
     }
 
     // The symbol is place, because only a quote is checked against the change, so a finding with an absent symbol and no quote must reach the judge.

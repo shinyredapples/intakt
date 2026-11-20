@@ -491,6 +491,17 @@ final class LedgerRoundsTest extends TestCase
         self::assertSame([null, null], [$review?->rounds[0]->findings[0]->file, $review?->rounds[0]->findings[0]->line]);
     }
 
+    public function testAJudgeRowWhoseActAndFollowUpListsShareAKeyShowsBothMarkedFindings(): void
+    {
+        $review = $this->reviewOf(
+            'r1',
+            $this->event(LedgerEventKind::ReviewStarted, self::START),
+            $this->event(LedgerEventKind::JudgeDone, '{"round":"r1","act":{"old":"F2"},"follow_ups":{"old":"F3"},"findings":[],"dropped":[],"same_cause":[],"votes":[]}'),
+        );
+
+        self::assertSame(['F2', 'F3'], array_map(static fn (RoundFinding $finding): string => $finding->id, $review->rounds[0]->findings ?? []));
+    }
+
     public function testAnActEntryThatMergesFindingsIsOneRowNamingTheMergedIds(): void
     {
         $review = $this->reviewOf(

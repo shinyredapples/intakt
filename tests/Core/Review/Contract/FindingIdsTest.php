@@ -21,6 +21,19 @@ final class FindingIdsTest extends TestCase
         self::assertSame(['F1', 'F2'], [...new FindingIds(...['a' => 'F1', 'b' => 'F2'])]);
     }
 
+    public function testAnIdAddedUnderAKeyKeepsThatKey(): void
+    {
+        self::assertSame([1 => 'F1', 'old' => 'F2'], iterator_to_array(new FindingIds()->with(1, 'F1')->with('old', 'F2')));
+    }
+
+    public function testAddingAnIdLeavesTheOriginalIdsAsTheyWere(): void
+    {
+        $ids = new FindingIds('F1');
+        $ids->with('old', 'F2');
+
+        self::assertSame(['F1'], iterator_to_array($ids));
+    }
+
     public function testTheIdsAreCounted(): void
     {
         self::assertCount(2, new FindingIds('F1', 'F2'));

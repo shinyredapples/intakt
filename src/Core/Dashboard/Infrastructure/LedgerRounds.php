@@ -267,7 +267,10 @@ final class LedgerRounds
     {
         $recordedIds = array_map(static fn (RoundFinding $finding): string => $finding->id, $recorded);
 
-        return array_map(static fn (string $id): RoundFinding => new RoundFinding($id, null, null), array_values(array_diff(array_unique([...$judge->act, ...$judge->followUps]), $recordedIds)));
+        // As lists, because a key that both stored lists use would let the follow-up replace the act id.
+        $marked = [...array_values(iterator_to_array($judge->act)), ...array_values(iterator_to_array($judge->followUps))];
+
+        return array_map(static fn (string $id): RoundFinding => new RoundFinding($id, null, null), array_values(array_diff(array_unique($marked), $recordedIds)));
     }
 
     private function addReviewerRow(RecordedEvent $recorded): void

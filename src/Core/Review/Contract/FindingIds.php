@@ -24,13 +24,13 @@ final readonly class FindingIds implements IteratorAggregate, Countable, JsonSer
         $this->ids = array_values($ids);
     }
 
-    // Keys kept, because a row written with a keyed list must be written back unchanged.
-    /**
-     * @param array<array-key, string> $ids
-     */
-    public static function keyed(array $ids): self
+    // The key is kept, because a row written with a keyed list must be written back unchanged.
+    public function with(int|string $key, string $id): self
     {
-        return clone (new self(), ['ids' => $ids]);
+        $ids = $this->ids;
+        $ids[$key] = $id;
+
+        return clone ($this, ['ids' => $ids]);
     }
 
     public function contains(string $id): bool
