@@ -39,6 +39,10 @@ final readonly class ReviewedRound
     public ?DateTimeImmutable $judgedAt;
     public ?ReplayMark $mark;
 
+    // Null for a round completed before the ledger recorded who reported what, because such a round must read as unknown, never as a round whose reviewers reported nothing.
+    /** @var array<string, list<string>>|null */
+    public ?array $findingsByReviewer;
+
     // The mark is null until the round is read with its review, because the start row does not say whether the round is a replay. The speed factor is null for every round but a demo replay that stored one.
     public function __construct(
         RoundStart $start,
@@ -64,6 +68,7 @@ final readonly class ReviewedRound
         $this->outcome = null;
         $this->judgedAt = null;
         $this->mark = null;
+        $this->findingsByReviewer = null;
     }
 
     // A replay shows like a live round, so the pages mark it, because its verdicts were never given on the change.
@@ -174,6 +179,15 @@ final readonly class ReviewedRound
     public function decidedAs(Decision $outcome): self
     {
         return clone ($this, ['outcome' => $outcome]);
+    }
+
+    // Keyed by reviewer id, with the ids of the change's finding ledger, because those are the ids the act entries and their merges name.
+    /**
+     * @param array<string, list<string>> $findings
+     */
+    public function withFindingsByReviewer(array $findings): self
+    {
+        return clone ($this, ['findingsByReviewer' => $findings]);
     }
 
     public function markedAs(ReplayMark $mark): self

@@ -4,18 +4,19 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Contract;
 
+use Intakt\Core\Git\Contract\Paths;
+
 final readonly class ChangeDescription
 {
     public const string FULL_REVIEW_LABEL = 'review:full';
 
     /**
      * @param non-negative-int $lines
-     * @param list<string>     $paths
      * @param list<string>     $labels
      */
     public function __construct(
         public int $lines,
-        public array $paths,
+        public Paths $paths,
         public array $labels,
     ) {
     }
