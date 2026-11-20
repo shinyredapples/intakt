@@ -1,0 +1,12 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample\Tests;
+
+use Intakt\Sample\BriefsTheReviewer;
+
+final readonly class BriefingTest
+{
+    use BriefsTheReviewer;
+}

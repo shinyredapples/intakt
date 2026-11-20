@@ -65,7 +65,8 @@ final readonly class RawPromptMessageRule implements Rule
      */
     public function processNode(Node $node, Scope $scope): array
     {
-        if (!$this->isShipped($scope->getFile())) {
+        // a trait's own file, not the file of the class using it, because the folder a line is written in decides whether it is judged
+        if (!$this->isShipped($scope->getTraitReflection()?->getFileName() ?? $scope->getFile())) {
             return [];
         }
 

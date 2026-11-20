@@ -115,6 +115,11 @@ final class RawPromptMessageRuleTest extends PhpStanRuleTestCase
         $this->assertRuleAccepts('raw-prompt-message-in-a-test');
     }
 
+    public function testAShippedTraitUsedOnlyByATestIsJudgedByTheFileItIsWrittenIn(): void
+    {
+        $this->assertRuleRejects('raw-prompt-shipped-trait-used-by-a-test', 'src/BriefsTheReviewer.php (in context of class Intakt\Sample\Tests\BriefingTest):14 intakt.rawPromptMessage');
+    }
+
     public function testAReviewerConversationInTheHandlerReadingTheRoundReviewersRolePromptPasses(): void
     {
         $this->assertRuleAccepts('raw-prompt-role-of-the-round-reviewer');

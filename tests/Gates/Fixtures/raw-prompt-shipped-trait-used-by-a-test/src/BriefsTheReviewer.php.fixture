@@ -1,0 +1,16 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use Symfony\AI\Platform\Message\SystemMessage;
+use Symfony\AI\Platform\Message\Message;
+
+trait BriefsTheReviewer
+{
+    public function briefing(string $instructions): SystemMessage
+    {
+        return Message::forSystem($instructions);
+    }
+}
