@@ -131,7 +131,8 @@ final readonly class SearchFiles
     // A named refusal, because a file removed after the walk found it is the reviewed tree changing under the search, not a failure of the server.
     private function sizeOf(SplFileInfo $file, string $relative): int
     {
-        $size = filesize($file->getPathname());
+        // Silenced, because a handler that throws warnings (a debug kernel) would otherwise turn the failed stat into an ErrorException before the refusal below.
+        $size = @filesize($file->getPathname());
 
         return false === $size ? throw PathNotReadable::unreadable($relative) : $size;
     }

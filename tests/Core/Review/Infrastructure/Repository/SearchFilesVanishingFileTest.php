@@ -3,16 +3,22 @@
 declare(strict_types=1);
 
 namespace Intakt\Core\Review\Infrastructure\Repository {
-    // Stands in for a file removed between the walk that found it and its stat, a moment no test can time; every other file keeps its size, read through stat() because the name filesize() resolves here.
+    // Removes the file between the walk that found it and its stat, a moment no test can time, then stats it for real, so the stat raises its warning; the size is read through stat() because the name filesize() resolves here.
     function filesize(string $filename): int|false
     {
-        $stat = 'vanishes.txt' === basename($filename) ? false : stat($filename);
+        if ('vanishes.txt' === basename($filename)) {
+            unlink($filename);
+            clearstatcache(true, $filename);
+        }
+
+        $stat = stat($filename);
 
         return false === $stat ? false : $stat['size'];
     }
 }
 
 namespace Intakt\Tests\Core\Review\Infrastructure\Repository {
+    use ErrorException;
     use Intakt\Core\Review\Contract\Checkout;
     use Intakt\Core\Review\Infrastructure\Repository\PathNotReadable;
     use Intakt\Core\Review\Infrastructure\Repository\SearchFiles;
@@ -26,6 +32,7 @@ namespace Intakt\Tests\Core\Review\Infrastructure\Repository {
     final class SearchFilesVanishingFileTest extends TestCase
     {
         private ReviewCheckout $checkout;
+        private int $reporting;
 
         protected function setUp(): void
         {
@@ -34,12 +41,30 @@ namespace Intakt\Tests\Core\Review\Infrastructure\Repository {
 
         protected function tearDown(): void
         {
+            restore_error_handler();
+            error_reporting($this->reporting);
             $this->checkout->remove();
         }
 
-        public function testAFileWhoseSizeCannotBeReadIsRefusedAsNotReadable(): void
+        // Throws every warning that is not silenced, as the error handler of a debug kernel does, because the refusal must not depend on the handler.
+        private function throwWarnings(): void
+        {
+            // Because PHPUnit lowers the reporting level while a test runs, which would hide the warning from this handler as a silenced one.
+            $this->reporting = error_reporting(\E_ALL);
+
+            set_error_handler(static function (int $level, string $message, string $file, int $line): bool {
+                if (0 === (error_reporting() & $level)) {
+                    return false;
+                }
+
+                throw new ErrorException($message, 0, $level, $file, $line);
+            });
+        }
+
+        public function testAFileRemovedBeforeItsSizeIsReadIsRefusedAsNotReadableUnderAHandlerThatThrowsWarnings(): void
         {
             $this->checkout->write('vanishes.txt', 'needle');
+            $this->throwWarnings();
 
             $this->expectException(PathNotReadable::class);
             $this->expectExceptionMessageIs('"vanishes.txt" cannot be read.');
@@ -50,6 +75,7 @@ namespace Intakt\Tests\Core\Review\Infrastructure\Repository {
         public function testAFileThatVanishesDuringADirectorySearchIsRefusedAsNotReadable(): void
         {
             $this->checkout->write('src/vanishes.txt', 'needle');
+            $this->throwWarnings();
 
             $this->expectException(PathNotReadable::class);
             $this->expectExceptionMessageIs('"src/vanishes.txt" cannot be read.');
