@@ -91,7 +91,7 @@ final readonly class CallRecords
         return array_values($workers);
     }
 
-    // An empty file is a record whose name was created before its content, by a writer that does not publish atomically: not there yet, rather than broken.
+    // Skipped while empty, because a writer that does not publish atomically creates the name before its content, so the record is not there yet rather than broken.
     private static function written(string $file): bool
     {
         clearstatcache(true, $file);

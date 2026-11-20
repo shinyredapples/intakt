@@ -77,7 +77,7 @@ final class CallRecordsTest extends TestCase
         CallRecords::in($this->directory);
     }
 
-    // The moment a writer that creates its file before it writes leaves open: the name is there, the record is not yet.
+    // Forced by hand, because a writer that creates its file before it writes leaves this moment open only briefly: the name is there, the record is not yet.
     public function testAStartRecordThatIsStillEmptyIsNotCountedYet(): void
     {
         $this->record(1, 'start', ['pid' => 100, 'at' => 1.0]);

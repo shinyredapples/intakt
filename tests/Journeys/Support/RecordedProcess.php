@@ -40,7 +40,7 @@ final readonly class RecordedProcess
             return null;
         }
 
-        // The fields after the process name, which may itself hold spaces and parentheses: the state is field 3, the start time field 22.
+        // Counted from the last parenthesis, because the process name may itself hold spaces and parentheses: the state is field 3, the start time field 22.
         $started = explode(' ', substr($stat, $name + 2))[19] ?? null;
 
         return is_numeric($started) ? (int) $started : null;

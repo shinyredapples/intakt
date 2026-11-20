@@ -243,9 +243,8 @@ final class ConcurrentConsumerJourneyTest extends JourneyTestCase
         self::assertNotSame([], $this->workersStillRunning(), 'no worker outlived the killed consumer');
     }
 
+    // Only the recorded workers that are still the same process (number and start), because a number whose call ended long ago may have been given to an unrelated process since.
     /**
-     * Only the recorded workers that are still the same process (number and start), because a number whose call ended long ago may have been given to an unrelated process since.
-     *
      * @return list<int>
      */
     private function workersStillRunning(): array

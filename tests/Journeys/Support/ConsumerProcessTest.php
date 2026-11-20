@@ -13,7 +13,7 @@ use Symfony\Component\Process\Process;
 #[UsesClass(MonotonicSeconds::class)]
 final class ConsumerProcessTest extends TestCase
 {
-    // The exit is only observed after the deadline passed, the order a poll can see it in: late, whatever the measured time.
+    // Late whatever the measured time, because a poll can first see the exit after the deadline passed, and that exit was not seen in time.
     public function testAnExitObservedAfterTheDeadlineIsLate(): void
     {
         $process = new Process([PHP_BINARY, '-r', 'usleep(200000);']);

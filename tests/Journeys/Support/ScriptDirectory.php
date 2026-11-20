@@ -86,7 +86,7 @@ final readonly class ScriptDirectory
         return false === $megabytes ? 0 : max(0, (int) $megabytes) * 1024 * 1024;
     }
 
-    // Written in full under a name no reader globs for, before it is published.
+    // Written in full under a name no reader globs for, so a reader never sees the record before it is complete.
     private function record(): string
     {
         if (!is_dir($this->path.'/calls') && !@mkdir($this->path.'/calls', 0o777, true) && !is_dir($this->path.'/calls')) {
