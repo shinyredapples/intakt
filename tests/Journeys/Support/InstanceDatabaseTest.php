@@ -32,7 +32,16 @@ final class InstanceDatabaseTest extends TestCase
         $database = new InstanceDatabase($this->pdo);
 
         self::assertSame(2, $database->queued(self::MESSAGE));
-        self::assertSame(1, $database->fetchedNotAcknowledged(self::MESSAGE));
+    }
+
+    public function testFetchedMessagesOfEveryClassAreCountedInTheDefaultQueueOnly(): void
+    {
+        $this->message('default', '2026-11-01 00:00:00');
+        $this->message('default', null);
+        $this->pdo->exec('INSERT INTO messenger_messages (body, headers, queue_name, delivered_at) VALUES (\'O:1:"y":0:{}\', \'{"type":"Other"}\', \'default\', \'2026-11-01 00:00:00\')');
+        $this->message('failed', '2026-11-01 00:00:00');
+
+        self::assertSame(2, new InstanceDatabase($this->pdo)->fetchedNotAcknowledged());
     }
 
     public function testWaitingMessagesOfEveryClassAreCountedInTheDefaultQueueOnly(): void
@@ -52,7 +61,7 @@ final class InstanceDatabaseTest extends TestCase
 
         $database->makeFetchedMessagesAvailable();
 
-        self::assertSame(0, $database->fetchedNotAcknowledged(self::MESSAGE));
+        self::assertSame(0, $database->fetchedNotAcknowledged());
         self::assertSame(1, $database->queued(self::MESSAGE));
     }
 

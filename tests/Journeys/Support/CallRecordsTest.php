@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace Intakt\Tests\Journeys\Support;
 
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 use Symfony\Component\Filesystem\Filesystem;
 
 #[CoversClass(CallRecords::class)]
+#[UsesClass(RecordedProcess::class)]
 final class CallRecordsTest extends TestCase
 {
     private string $directory = '';
@@ -96,6 +98,24 @@ final class CallRecordsTest extends TestCase
         self::assertSame([1, 0], [$calls->started(), $calls->ended()]);
     }
 
+    public function testARecordWithoutTheStartOfItsProcessIsRefused(): void
+    {
+        file_put_contents($this->directory.'/calls/1.start', json_encode(['pid' => 100, 'at' => 1.0], JSON_THROW_ON_ERROR));
+
+        $this->expectException(RuntimeException::class);
+
+        CallRecords::in($this->directory);
+    }
+
+    public function testEachWorkerIsNamedOnceByItsNumberAndStart(): void
+    {
+        $this->record(1, 'start', ['pid' => 100, 'started' => 7, 'at' => 1.0]);
+        $this->record(2, 'start', ['pid' => 100, 'started' => 7, 'at' => 2.0]);
+        $this->record(3, 'start', ['pid' => 100, 'started' => 9, 'at' => 3.0]);
+
+        self::assertEquals([new RecordedProcess(100, 7), new RecordedProcess(100, 9)], CallRecords::in($this->directory)->workers());
+    }
+
     public function testARecordThatIsNoJsonIsRefused(): void
     {
         file_put_contents($this->directory.'/calls/1.start', 'not json');
@@ -110,6 +130,6 @@ final class CallRecordsTest extends TestCase
      */
     private function record(int $call, string $kind, array $data): void
     {
-        file_put_contents($this->directory.'/calls/'.$call.'.'.$kind, json_encode($data, JSON_THROW_ON_ERROR));
+        file_put_contents($this->directory.'/calls/'.$call.'.'.$kind, json_encode(['started' => 1, ...$data], JSON_THROW_ON_ERROR));
     }
 }

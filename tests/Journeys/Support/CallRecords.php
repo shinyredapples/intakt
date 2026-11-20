@@ -10,7 +10,7 @@ use RuntimeException;
 final readonly class CallRecords
 {
     /**
-     * @param list<array{call: int, pid: int, start: float, end: ?float}> $calls
+     * @param list<array{call: int, pid: int, started: int, start: float, end: ?float}> $calls
      */
     private function __construct(public array $calls)
     {
@@ -28,7 +28,7 @@ final readonly class CallRecords
 
             $call = (int) basename($file, '.start');
             $end = $directory.'/calls/'.$call.'.end';
-            $calls[] = ['call' => $call, 'pid' => self::pidIn($file), 'start' => self::momentIn($file), 'end' => self::written($end) ? self::momentIn($end) : null];
+            $calls[] = ['call' => $call, 'pid' => self::pidIn($file), 'started' => self::processStartIn($file), 'start' => self::momentIn($file), 'end' => self::written($end) ? self::momentIn($end) : null];
         }
 
         usort($calls, static fn (array $a, array $b): int => $a['call'] <=> $b['call']);
@@ -77,6 +77,20 @@ final readonly class CallRecords
         return array_values(array_unique(array_column($this->calls, 'pid')));
     }
 
+    /**
+     * @return list<RecordedProcess>
+     */
+    public function workers(): array
+    {
+        $workers = [];
+
+        foreach ($this->calls as $call) {
+            $workers[$call['pid'].':'.$call['started']] = new RecordedProcess($call['pid'], $call['started']);
+        }
+
+        return array_values($workers);
+    }
+
     // An empty file is a record whose name was created before its content, by a writer that does not publish atomically: not there yet, rather than broken.
     private static function written(string $file): bool
     {
@@ -90,6 +104,13 @@ final readonly class CallRecords
         $pid = self::read($file)['pid'] ?? null;
 
         return is_int($pid) ? $pid : throw new RuntimeException('The call record '.$file.' names no process.');
+    }
+
+    private static function processStartIn(string $file): int
+    {
+        $started = self::read($file)['started'] ?? null;
+
+        return is_int($started) ? $started : throw new RuntimeException('The call record '.$file.' names no process start.');
     }
 
     private static function momentIn(string $file): float

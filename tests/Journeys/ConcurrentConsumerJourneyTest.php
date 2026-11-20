@@ -17,6 +17,7 @@ use Intakt\Tests\Journeys\Support\ConsumerProcess;
 use Intakt\Tests\Journeys\Support\InstanceDatabase;
 use Intakt\Tests\Journeys\Support\JourneyTestCase;
 use Intakt\Tests\Journeys\Support\MonotonicSeconds;
+use Intakt\Tests\Journeys\Support\RecordedProcess;
 use Intakt\Tests\Journeys\Support\ReviewServer;
 use Intakt\Tests\Journeys\Support\ScriptDirectory;
 use PHPUnit\Framework\Attributes\CoversNothing;
@@ -194,32 +195,34 @@ final class ConcurrentConsumerJourneyTest extends JourneyTestCase
         $this->consumeToTheLimit([]);
 
         self::assertSame($waiting - 1, $this->database()->waiting(), 'the consumer did not handle exactly one message');
-        self::assertSame(1, $this->database()->fetchedNotAcknowledged(ReviewWithReviewer::class), 'the default fetch size left no fetched message behind');
+        self::assertSame(1, $this->database()->fetchedNotAcknowledged(), 'the default fetch size left no fetched message behind');
         // As the transport's redelivery time would, so the replacement can fetch it.
         $this->database()->makeFetchedMessagesAvailable();
 
         $this->consumeToTheLimit(['--fetch-size=1']);
 
         self::assertSame($waiting - 2, $this->database()->waiting(), 'the replacement did not handle exactly one message');
-        self::assertSame(0, $this->database()->fetchedNotAcknowledged(ReviewWithReviewer::class), 'a fetch size of one left a fetched message behind');
-        self::assertSame(1, CallRecords::in($this->script)->ended());
+        self::assertSame(0, $this->database()->fetchedNotAcknowledged(), 'a fetch size of one left a fetched message behind');
     }
 
-    // A parallel worker checks the memory limit after each message, ends past it, and the consumer starts another in its place (ParallelExecutionStrategy::replaceChannel()); the consumer itself stays below the limit and goes on. Each call leaves more than the limit in its worker, so a worker never makes a second call.
+    // A parallel worker checks the memory limit after each message, ends past it, and the consumer starts another in its place (ParallelExecutionStrategy::replaceChannel()); the consumer itself stays below the limit and goes on. Each call leaves more than the limit in its worker, so a worker never makes a second call. Two rounds, so more calls run than the consumer has workers, whichever reviewers the limit step left.
     private function replaceAWorkerPastTheMemoryLimit(): void
     {
         $this->clearTheScript();
         file_put_contents($this->script.'/'.ScriptDirectory::WEIGHT, (string) self::WORKER_WEIGHT_MB);
         $consumer = $this->consume(['--concurrency='.self::CONCURRENCY, '--memory-limit='.self::MEMORY_LIMIT_MB.'M', '--time-limit=200']);
 
-        // The last reviewer the limit step left comes first, so its round is judged before the next one opens.
+        // The reviewers the limit step left come first, so their round is judged before the next one opens.
+        $this->waitForJudge();
+        $this->openRound();
         $this->waitForJudge();
         $this->openRound();
         $this->waitForJudge();
         $calls = CallRecords::in($this->script);
 
-        self::assertSame([3, 3], [$calls->started(), $calls->ended()]);
-        self::assertCount(3, $calls->processes(), 'a worker past the memory limit made another call');
+        self::assertSame($calls->started(), $calls->ended());
+        self::assertGreaterThanOrEqual(2 * self::CONCURRENCY, $calls->started());
+        self::assertCount($calls->started(), $calls->processes(), 'a worker past the memory limit made another call');
         self::assertTrue($consumer->running(), 'the consumer ended at the memory limit of its workers: '.$consumer->output());
         $this->endGracefully($consumer);
     }
@@ -240,8 +243,9 @@ final class ConcurrentConsumerJourneyTest extends JourneyTestCase
         self::assertNotSame([], $this->workersStillRunning(), 'no worker outlived the killed consumer');
     }
 
-    // Only the recorded processes that still run with this test's script directory, because a number whose call ended long ago may have been given to an unrelated process since.
     /**
+     * Only the recorded workers that are still the same process (number and start), because a number whose call ended long ago may have been given to an unrelated process since.
+     *
      * @return list<int>
      */
     private function workersStillRunning(): array
@@ -250,9 +254,7 @@ final class ConcurrentConsumerJourneyTest extends JourneyTestCase
             return [];
         }
 
-        $script = new ScriptDirectory($this->script);
-
-        return array_values(array_filter(CallRecords::in($this->script)->processes(), $script->runsIn(...)));
+        return array_map(static fn (RecordedProcess $worker): int => $worker->pid, array_values(array_filter(CallRecords::in($this->script)->workers(), static fn (RecordedProcess $worker): bool => $worker->stillRuns())));
     }
 
     private function openRound(): void
@@ -321,7 +323,7 @@ final class ConcurrentConsumerJourneyTest extends JourneyTestCase
      */
     private function consume(array $options): ConsumerProcess
     {
-        $consumer = ConsumerProcess::start(self::TRANSPORT, $options, [...$this->environment(), self::QUEUE_VARIABLE => self::SHARED_QUEUE, ScriptDirectory::VARIABLE => $this->script, 'DASHBOARD_PORT' => (string) $this->server?->port, 'REVIEW_MCP_BASE_URL' => (string) $this->server?->address()]);
+        $consumer = ConsumerProcess::start(self::TRANSPORT, $options, [...$this->environment(), self::QUEUE_VARIABLE => self::SHARED_QUEUE, 'JOURNEY_SCRIPT' => $this->script, 'DASHBOARD_PORT' => (string) $this->server?->port, 'REVIEW_MCP_BASE_URL' => (string) $this->server?->address()]);
         $this->consumers[] = $consumer;
 
         return $consumer;

@@ -12,8 +12,6 @@ final readonly class ScriptDirectory
     public const string RELEASE = 'release';
     public const string HOLD = 'hold';
     public const string WEIGHT = 'weight';
-    // The variable the consumer's processes name the script directory in, so the journey can tell its own workers from a process that was given a recorded number since.
-    public const string VARIABLE = 'JOURNEY_SCRIPT';
     // Under the journey's 240 seconds, so a call nobody releases ends on its own and a failed journey leaves no process waiting.
     private const float HOLD_SECONDS = 90.0;
     private const int POLL_MICROSECONDS = 20000;
@@ -51,13 +49,6 @@ final readonly class ScriptDirectory
         }
     }
 
-    // Read from the process's environment, because a recorded process number the system has given to another process since must never be taken for a worker.
-    public function runsIn(int $pid): bool
-    {
-        $environment = @file_get_contents('/proc/'.$pid.'/environ');
-
-        return false !== $environment && str_contains("\0".$environment, "\0".self::VARIABLE.'='.$this->path."\0");
-    }
 
     public function holdWhileScripted(int $call): void
     {
@@ -104,7 +95,8 @@ final readonly class ScriptDirectory
         }
 
         $record = $this->path.'/calls/'.getmypid().'-'.bin2hex(random_bytes(6)).'.record';
-        file_put_contents($record, json_encode(['pid' => getmypid(), 'at' => MonotonicSeconds::now()], JSON_THROW_ON_ERROR));
+        $process = RecordedProcess::current();
+        file_put_contents($record, json_encode(['pid' => $process->pid, 'started' => $process->started, 'at' => MonotonicSeconds::now()], JSON_THROW_ON_ERROR));
 
         return $record;
     }

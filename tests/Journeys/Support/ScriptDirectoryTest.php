@@ -9,17 +9,14 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 use Symfony\Component\Filesystem\Filesystem;
-use Symfony\Component\Process\Process;
 
 #[CoversClass(ScriptDirectory::class)]
 #[UsesClass(CallRecords::class)]
 #[UsesClass(MonotonicSeconds::class)]
+#[UsesClass(RecordedProcess::class)]
 final class ScriptDirectoryTest extends TestCase
 {
     private string $directory = '';
-
-    /** @var list<Process> */
-    private array $processes = [];
 
     protected function setUp(): void
     {
@@ -29,24 +26,7 @@ final class ScriptDirectoryTest extends TestCase
 
     protected function tearDown(): void
     {
-        foreach ($this->processes as $process) {
-            $process->stop(0);
-        }
-
         new Filesystem()->remove($this->directory);
-    }
-
-    /**
-     * @param array<string,string> $environment
-     */
-    private function sleeper(array $environment): Process
-    {
-        // Without the variable unless named, because the test run itself could carry one.
-        $process = new Process([PHP_BINARY, '-r', 'sleep(20);'], null, [ScriptDirectory::VARIABLE => false, ...$environment]);
-        $process->start();
-        $this->processes[] = $process;
-
-        return $process;
     }
 
     public function testEachCallGetsItsOwnNumberAndRecordsItsStartAndEnd(): void
@@ -61,6 +41,7 @@ final class ScriptDirectoryTest extends TestCase
         $calls = CallRecords::in($this->directory);
         self::assertSame([2, 1], [$calls->started(), $calls->ended()]);
         self::assertSame([getmypid()], $calls->processes());
+        self::assertEquals([RecordedProcess::current()], $calls->workers());
     }
 
     public function testACallTakesTheNextNumberWhenAnotherWriterHoldsItsName(): void
@@ -94,38 +75,6 @@ final class ScriptDirectoryTest extends TestCase
         $this->expectException(RuntimeException::class);
 
         $script->callEnded($call);
-    }
-
-    public function testAProcessThatRunsWithTheScriptDirectoryIsItsWorker(): void
-    {
-        $process = $this->sleeper([ScriptDirectory::VARIABLE => $this->directory]);
-
-        self::assertTrue(new ScriptDirectory($this->directory)->runsIn((int) $process->getPid()));
-    }
-
-    // A recorded process number the system has given to another process since: it must never be taken for a worker.
-    public function testAProcessThatRunsWithoutTheScriptDirectoryIsNotItsWorker(): void
-    {
-        $process = $this->sleeper([]);
-
-        self::assertFalse(new ScriptDirectory($this->directory)->runsIn((int) $process->getPid()));
-    }
-
-    public function testAProcessThatRunsWithAnotherScriptDirectoryNamedAlikeIsNotItsWorker(): void
-    {
-        $process = $this->sleeper([ScriptDirectory::VARIABLE => $this->directory.'-other']);
-
-        self::assertFalse(new ScriptDirectory($this->directory)->runsIn((int) $process->getPid()));
-    }
-
-    public function testAProcessThatEndedIsNotItsWorker(): void
-    {
-        $process = new Process([PHP_BINARY, '-r', ''], null, [ScriptDirectory::VARIABLE => $this->directory]);
-        $process->start();
-        $pid = (int) $process->getPid();
-        $process->wait();
-
-        self::assertFalse(new ScriptDirectory($this->directory)->runsIn($pid));
     }
 
     public function testACallIsNotHeldWithoutAHoldFile(): void

@@ -39,10 +39,10 @@ final readonly class InstanceDatabase
         return $this->count('SELECT COUNT(*) FROM '.self::QUEUE.' WHERE queue_name = ?', [self::DEFAULT_QUEUE]);
     }
 
-    // Counted apart, because the Doctrine transport hands a delivered message out again only after redeliver_timeout.
-    public function fetchedNotAcknowledged(string $messageClass): int
+    // Counted apart, because the Doctrine transport hands a delivered message out again only after redeliver_timeout. Of every class, because a fetch takes the oldest waiting messages, whichever class an earlier step left first in line.
+    public function fetchedNotAcknowledged(): int
     {
-        return $this->count('SELECT COUNT(*) FROM '.self::QUEUE.' WHERE queue_name = ? AND delivered_at IS NOT NULL AND (body || headers) LIKE ?', [self::DEFAULT_QUEUE, '%'.str_replace('\\', '%', $messageClass).'%']);
+        return $this->count('SELECT COUNT(*) FROM '.self::QUEUE.' WHERE queue_name = ? AND delivered_at IS NOT NULL', [self::DEFAULT_QUEUE]);
     }
 
     public function makeFetchedMessagesAvailable(): void
