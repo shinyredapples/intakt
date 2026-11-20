@@ -52,7 +52,7 @@ final class ProbedConnectivityTest extends TestCase
 
     private function answering(): Probe
     {
-        $probe = $this->createStub(Probe::class);
+        $probe = self::createStub(Probe::class);
         $probe->method('answers')->willReturn(true);
 
         return $probe;
@@ -60,7 +60,7 @@ final class ProbedConnectivityTest extends TestCase
 
     private function failing(): Probe
     {
-        $probe = $this->createStub(Probe::class);
+        $probe = self::createStub(Probe::class);
         $probe->method('answers')->willReturn(false);
 
         return $probe;

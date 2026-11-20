@@ -36,10 +36,9 @@ final class HttpsProbeTest extends TestCase
         self::assertSame('HEAD', $response->getRequestMethod());
         self::assertSame('https://api.example/', $response->getRequestUrl());
         self::assertEmpty($response->getRequestOptions()['body'] ?? '');
-        self::assertSame([], array_filter(
-            $response->getRequestOptions()['headers'],
-            static fn (string $header): bool => 1 === preg_match('/^(authorization|x-api-key|cookie)\s*:/i', $header),
-        ));
+        $headers = $response->getRequestOptions()['headers'];
+        self::assertIsArray($headers);
+        self::assertSame([], preg_grep('/^(authorization|x-api-key|cookie)\s*:/i', $headers));
     }
 
     public function testTheProbeWaitsAtMostItsTimeout(): void
