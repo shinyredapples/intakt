@@ -4,7 +4,7 @@ Draft, not posted. Versions: `doctrine/dbal` 4.6.0, PHP 8.5.12, SQLite through `
 
 ## What happens
 
-`Connection::commit()` lowers the nesting level in a `finally` block, also when the driver's commit throws. On PostgreSQL and MySQL a failed COMMIT ends the transaction, but SQLite keeps it open when the COMMIT is refused because another connection holds a read lock (`SQLITE_BUSY`). `transactional()` then calls `rollBack()`, which finds nesting level 0 and throws `NoActiveTransaction`, replacing the original error. The native transaction stays open: the connection still sees its uncommitted rows, and its next writes join that transaction. `reproduce.php` holds a read transaction on a second PDO connection while `transactional()` inserts a row, and prints:
+`Connection::commit()` lowers the nesting level in a `finally` block, also when the driver's commit throws. On PostgreSQL and MySQL a failed COMMIT ends the transaction, but SQLite keeps it open when the COMMIT is refused because another connection holds a read lock (`SQLITE_BUSY`). `transactional()` then calls `rollBack()`, which finds nesting level 0 and throws `NoActiveTransaction`, replacing the original error. The native transaction stays open: the connection still sees its uncommitted rows, and its next writes join that transaction. Intakt's own rollback of that open transaction, which discards the uncommitted row, runs only on PDO drivers (see "Effect in Intakt"). `reproduce.php` holds a read transaction on a second PDO connection while `transactional()` inserts a row, and prints:
 
 ```
 transactional() threw Doctrine\DBAL\Exception\NoActiveTransaction: There is no active transaction.
