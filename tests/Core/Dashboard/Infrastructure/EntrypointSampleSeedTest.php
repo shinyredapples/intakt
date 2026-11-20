@@ -331,7 +331,7 @@ final class EntrypointSampleSeedTest extends TestCase
 
     public function testAStopDuringASlowHealthCheckEndsInsideDockersStopTimeout(): void
     {
-        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml', 'CURL_SECONDS' => '5', 'CONSUMERS_IGNORE_SIGTERM' => '1']);
+        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml', 'CURL_SECONDS' => '9', 'CONSUMERS_IGNORE_SIGTERM' => '1']);
         $this->waitForTheCall("\ncurl ");
         $this->waitForTheConsumersToIgnoreTheStop();
 
@@ -511,13 +511,13 @@ final class EntrypointSampleSeedTest extends TestCase
         return $process;
     }
 
-    // A stand-in sleep that makes the entrypoint's pauses (its stop's tenth of a second and its poll's second) take three times as long, as on a loaded machine (a test pass measured a stop of 10.7 s), so the test forces a stop whose pauses all overrun.
+    // A stand-in sleep that makes the entrypoint's pauses (its stop's tenth of a second and its poll's second) take three times as long, as on a loaded machine (a test pass measured a stop of 10.7 s), so the test forces a stop whose pauses all overrun; the poll's pause lasts 9 s, so it is still open while the test waits for the consumers and sends the stop (the stop ends it as a job).
     private function overrunningSleep(): string
     {
         $folder = $this->directory.'/overrunning';
         $sleep = new ExecutableFinder()->find('sleep');
         self::assertNotNull($sleep);
-        new Filesystem()->dumpFile($folder.'/sleep', "#!/bin/bash\ncase \$1 in 0.1) set -- 0.3;; 1) echo 'the poll sleeps' >> \"\$CALLS\"; set -- 3;; esac\nexec ".escapeshellarg($sleep)." \"\$@\"\n");
+        new Filesystem()->dumpFile($folder.'/sleep', "#!/bin/bash\ncase \$1 in 0.1) set -- 0.3;; 1) echo 'the poll sleeps' >> \"\$CALLS\"; set -- 9;; esac\nexec ".escapeshellarg($sleep)." \"\$@\"\n");
         new Filesystem()->chmod($folder.'/sleep', 0755);
 
         return $folder;
