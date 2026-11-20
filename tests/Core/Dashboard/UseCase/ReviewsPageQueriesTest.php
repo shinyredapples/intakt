@@ -13,6 +13,7 @@ use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Bridge\Doctrine\DataCollector\DoctrineDataCollector;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
+use Symfony\Component\HttpKernel\Profiler\Profile;
 use Symfony\Component\HttpKernel\Profiler\Profiler;
 
 // Measured with the profiler on the real Doctrine ledger, because a page that reads the ledger once per round shows up only in the number of its queries.
@@ -56,7 +57,9 @@ final class ReviewsPageQueriesTest extends WebTestCase
         $this->browser->enableProfiler();
         $this->browser->request('GET', '/reviews');
         self::assertResponseIsSuccessful();
-        $queries = $this->browser->getProfile()->getCollector('db');
+        $profile = $this->browser->getProfile();
+        self::assertInstanceOf(Profile::class, $profile);
+        $queries = $profile->getCollector('db');
         self::assertInstanceOf(DoctrineDataCollector::class, $queries);
 
         return $queries->getQueryCount();

@@ -33,6 +33,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
+use Symfony\Component\HttpKernel\Profiler\Profile;
 use Symfony\Component\HttpKernel\Profiler\Profiler;
 use Symfony\Component\Messenger\DataCollector\MessengerDataCollector;
 use Symfony\Component\VarDumper\Cloner\Data;
@@ -106,10 +107,28 @@ final class StartReviewMessagesTest extends WebTestCase
         $this->browser->request('POST', '/reviews/'.$round.'/start', ['_token' => $token, 'number' => '2']);
 
         self::assertResponseStatusCodeSame(303);
-        $messages = $this->browser->getProfile()->getCollector('messenger');
+        $profile = $this->browser->getProfile();
+        self::assertInstanceOf(Profile::class, $profile);
+        $messages = $profile->getCollector('messenger');
         self::assertInstanceOf(MessengerDataCollector::class, $messages);
 
-        return array_map(static fn (Data $message): array => [(string) $message['bus'], (string) $message['message']['value']->getType()], array_values($messages->getMessages()));
+        return array_map($this->busAndClassOf(...), array_values($messages->getMessages()));
+    }
+
+    /**
+     * @return array{string, string}
+     */
+    private function busAndClassOf(mixed $message): array
+    {
+        self::assertInstanceOf(Data::class, $message);
+        $bus = $message['bus'];
+        $dispatched = $message['message'];
+        self::assertIsString($bus);
+        self::assertInstanceOf(Data::class, $dispatched);
+        $value = $dispatched['value'];
+        self::assertInstanceOf(Data::class, $value);
+
+        return [$bus, (string) $value->getType()];
     }
 
     private function givenTheProjectReviewsWithTwoReviewers(): void
