@@ -28,6 +28,7 @@ rules:
     - Intakt\Gates\PhpStan\ContainerUnknownHasIdRule
     - Intakt\Gates\PhpStan\ContainerUnknownParameterRule
     - Intakt\Gates\PhpStan\ContainerUnknownGetIdRule
+    - Intakt\Gates\PhpStan\BareSerializerFormatRule
 
 services:
     -
@@ -94,6 +95,18 @@ services:
             - phpstan.rules.rule
     -
         class: Intakt\Gates\PhpStan\NoStaticPropertyRule
+        arguments:
+            root: %currentWorkingDirectory%
+        tags:
+            - phpstan.rules.rule
+    -
+        class: Intakt\Gates\PhpStan\RawPromptMessageRule
+        arguments:
+            root: %currentWorkingDirectory%
+        tags:
+            - phpstan.rules.rule
+    -
+        class: Intakt\Gates\PhpStan\RawPromptMessageCallableRule
         arguments:
             root: %currentWorkingDirectory%
         tags:
