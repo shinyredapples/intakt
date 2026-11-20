@@ -26,6 +26,7 @@ use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\OpenChange;
 use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Core\Watcher\UseCase\FindChangedPullRequests\RecordedForge;
+use Intakt\Tests\Core\Watcher\UseCase\FindChangedPullRequests\RecordingLogger;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -49,8 +50,8 @@ final class ChangesHandedToIntaktTest extends KernelTestCase
     private const string LOOP_PULL = 'https://github.com/acme/widgets/pull/8';
 
     private DoctrineLedger $ledger;
-    private EntityManagerInterface $entities;
     private ChangeAuthorship $authorship;
+    private RecordingLogger $logger;
 
     protected function setUp(): void
     {
@@ -58,11 +59,11 @@ final class ChangesHandedToIntaktTest extends KernelTestCase
         self::assertInstanceOf(ManagerRegistry::class, $registry);
         $entities = $registry->getManager();
         self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        $this->entities = $entities;
         EmptyDatabase::in(self::getContainer());
         new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
         $this->ledger = new DoctrineLedger($registry, new MockClock('2026-11-20T10:00:00+00:00'));
         $this->authorship = self::createStub(ChangeAuthorship::class);
+        $this->logger = new RecordingLogger();
     }
 
     public function testAPullRequestIntaktOpenedIsRecordedAsHandedToIntakt(): void
@@ -127,59 +128,100 @@ final class ChangesHandedToIntaktTest extends KernelTestCase
         self::assertSame([self::PULL], array_column($this->handedToIntakt(), 'change'));
     }
 
-    public function testAnAuthorTheForgeCannotReadFailsTheRecognitionWithNothingRecorded(): void
+    public function testAnAuthorTheForgeCannotReadLeavesThatPullRequestUnrecordedAndSaysSo(): void
     {
         $this->record(LedgerEventKind::ChangeOpened, ['project' => 'alpha', 'branch' => 'feat/7', 'head' => str_repeat('a', 40), 'change' => self::PULL]);
         $authorship = self::createStub(ChangeAuthorship::class);
         $authorship->method('isCreatedByIntakt')->willThrowException(new ForgeReadFailed('unreadable'));
         $this->authorship = $authorship;
 
-        try {
-            $this->recognize('alpha', $this->change(self::PULL));
-            self::fail('An author the forge cannot read must fail the recognition.');
-        } catch (ForgeReadFailed) {
-            self::assertSame([], $this->handedToIntakt());
-        }
+        $this->recognize('alpha', $this->change(self::PULL));
+
+        self::assertSame([], $this->handedToIntakt());
+        self::assertSame([['change' => self::PULL, 'project' => 'alpha', 'reason' => 'unreadable']], array_column($this->logger->logged, 1));
     }
 
-    public function testTheLedgerStillTakesTheTicksNextLineAfterAnAuthorReadIsRateLimitedBehindARecognition(): void
+    public function testAPullRequestWhoseAuthorWasUnreadableIsRecordedOnceTheForgeAnswers(): void
     {
         $this->record(LedgerEventKind::ChangeOpened, ['project' => 'alpha', 'branch' => 'feat/7', 'head' => str_repeat('a', 40), 'change' => self::PULL]);
+        $unreadable = self::createStub(ChangeAuthorship::class);
+        $unreadable->method('isCreatedByIntakt')->willThrowException(new ForgeReadFailed('unreadable'));
+        $this->authorship = $unreadable;
+        $this->recognize('alpha', $this->change(self::PULL));
+        $readable = self::createStub(ChangeAuthorship::class);
+        $readable->method('isCreatedByIntakt')->willReturn(true);
+        $this->authorship = $readable;
+
+        $this->recognize('alpha', $this->change(self::PULL));
+
+        self::assertSame([self::PULL], array_column($this->handedToIntakt(), 'change'));
+    }
+
+    public function testAnUnreadableAuthorDoesNotKeepAnotherPullRequestFromBeingRecorded(): void
+    {
         $this->record(LedgerEventKind::ChangeOpened, ['project' => 'alpha', 'branch' => 'feat/8', 'head' => str_repeat('a', 40), 'change' => self::LOOP_PULL]);
+        $this->record(LedgerEventKind::ChangeOpened, ['project' => 'alpha', 'branch' => 'feat/7', 'head' => str_repeat('a', 40), 'change' => self::PULL, 'opening' => 'created']);
         $authorship = self::createStub(ChangeAuthorship::class);
-        $authorship->method('isCreatedByIntakt')->willReturnCallback(
+        $authorship->method('isCreatedByIntakt')->willThrowException(new ForgeReadFailed('unreadable'));
+        $this->authorship = $authorship;
+
+        $this->recognize('alpha', $this->change(self::LOOP_PULL), $this->change(self::PULL));
+
+        self::assertSame([self::PULL], array_column($this->handedToIntakt(), 'change'));
+    }
+
+    public function testARateLimitedAuthorReadAsksNoFurtherAuthorAndRecordsThoseAlreadyDecided(): void
+    {
+        $third = 'https://github.com/acme/widgets/pull/9';
+        $this->record(LedgerEventKind::ChangeOpened, ['project' => 'alpha', 'branch' => 'feat/7', 'head' => str_repeat('a', 40), 'change' => self::PULL]);
+        $this->record(LedgerEventKind::ChangeOpened, ['project' => 'alpha', 'branch' => 'feat/8', 'head' => str_repeat('a', 40), 'change' => self::LOOP_PULL]);
+        $this->record(LedgerEventKind::ChangeOpened, ['project' => 'alpha', 'branch' => 'feat/9', 'head' => str_repeat('a', 40), 'change' => $third]);
+        $authorship = self::createMock(ChangeAuthorship::class);
+        $authorship->expects(self::exactly(2))->method('isCreatedByIntakt')->willReturnCallback(
             static fn (ChangeId $change): bool => self::PULL === $change->value ? true : throw new ForgeRateLimited(new DateTimeImmutable('2026-11-20T10:10:00+00:00')),
         );
         $this->authorship = $authorship;
-        $connection = $this->entities->getConnection();
 
-        // Inside a transaction that is rolled back and followed by an append, because the tick recognizes inside its own transaction and goes on to its due heads' lines after a rate limit.
-        $connection->beginTransaction();
-        try {
-            $this->recognize('alpha', $this->change(self::PULL), $this->change(self::LOOP_PULL));
-            self::fail('A rate-limited author read must fail the recognition.');
-        } catch (ForgeRateLimited) {
-            $connection->rollBack();
-        }
+        $this->recognize('alpha', $this->change(self::PULL), $this->change(self::LOOP_PULL), $this->change($third));
 
-        self::assertSame([], $this->handedToIntakt());
-        $this->record(LedgerEventKind::HeadPending, ['project' => 'alpha', 'change' => '1']);
+        self::assertSame([self::PULL], array_column($this->handedToIntakt(), 'change'));
     }
 
-    public function testNoLineIsAppendedBeforeEveryAuthorIsRead(): void
+    public function testAPullRequestTheAppCreatedBeforeItsOpeningWasRecordedIsRecordedWithoutAnotherPush(): void
     {
-        $this->record(LedgerEventKind::ChangeOpened, ['project' => 'alpha', 'branch' => 'feat/7', 'head' => str_repeat('a', 40), 'change' => self::PULL, 'opening' => 'created']);
-        $this->record(LedgerEventKind::ChangeOpened, ['project' => 'alpha', 'branch' => 'feat/8', 'head' => str_repeat('a', 40), 'change' => self::LOOP_PULL]);
+        $this->record(LedgerEventKind::ChangeIntended, ['project' => 'alpha', 'branch' => 'feat/7', 'head' => str_repeat('a', 40)]);
         $authorship = self::createStub(ChangeAuthorship::class);
-        $authorship->method('isCreatedByIntakt')->willThrowException(new ForgeReadFailed('unreadable'));
+        $authorship->method('isCreatedByIntakt')->willReturnCallback(static fn (ChangeId $change): bool => self::PULL === $change->value);
         $this->authorship = $authorship;
 
-        try {
-            $this->recognize('alpha', $this->change(self::PULL), $this->change(self::LOOP_PULL));
-            self::fail('An author the forge cannot read must fail the recognition.');
-        } catch (ForgeReadFailed) {
-            self::assertSame([], $this->handedToIntakt());
-        }
+        $this->recognize('alpha', $this->change(self::PULL));
+
+        self::assertSame([self::PULL], array_column($this->handedToIntakt(), 'change'));
+    }
+
+    public function testAPullRequestAtAnIntendedHeadThatAnotherAuthorCreatedIsNotRecorded(): void
+    {
+        $this->record(LedgerEventKind::ChangeIntended, ['project' => 'alpha', 'branch' => 'feat/8', 'head' => str_repeat('a', 40)]);
+        $authorship = self::createStub(ChangeAuthorship::class);
+        $authorship->method('isCreatedByIntakt')->willReturn(false);
+        $this->authorship = $authorship;
+
+        $this->recognize('alpha', $this->change(self::LOOP_PULL));
+
+        self::assertSame([], $this->handedToIntakt());
+    }
+
+    public function testTheForgeIsNotAskedForAPullRequestWhoseHeadNoPushOfTheProjectIntended(): void
+    {
+        $this->record(LedgerEventKind::ChangeIntended, ['project' => 'beta', 'branch' => 'feat/8', 'head' => str_repeat('a', 40)]);
+        $this->record(LedgerEventKind::ChangeIntended, ['project' => 'alpha', 'branch' => 'feat/8', 'head' => str_repeat('b', 40)]);
+        $authorship = self::createMock(ChangeAuthorship::class);
+        $authorship->expects(self::never())->method('isCreatedByIntakt');
+        $this->authorship = $authorship;
+
+        $this->recognize('alpha', $this->change(self::LOOP_PULL));
+
+        self::assertSame([], $this->handedToIntakt());
     }
 
     public function testEveryPullRequestIntaktCreatedIsRecordedOnceAllAuthorsAreRead(): void
@@ -240,7 +282,7 @@ final class ChangesHandedToIntaktTest extends KernelTestCase
         $ledger = self::createMock(Ledger::class);
         $ledger->expects(self::never())->method('readOfKind');
 
-        new ChangesHandedToIntakt($ledger, new WatcherLedger(new InMemoryLedger()), $this->authorship)->recognizeAmong('alpha', []);
+        new ChangesHandedToIntakt($ledger, new WatcherLedger(new InMemoryLedger()), $this->authorship, $this->logger)->recognizeAmong('alpha', []);
     }
 
     public function testAnOpeningRecordOfAnotherProjectHandsNoPullRequestOfTheSameAddressToIntakt(): void
@@ -293,7 +335,7 @@ final class ChangesHandedToIntaktTest extends KernelTestCase
     public function testARecordTheLedgerRefusesFailsTheRecognition(): void
     {
         $this->record(LedgerEventKind::ChangeOpened, ['project' => 'alpha', 'branch' => 'feat/7', 'head' => str_repeat('a', 40), 'change' => self::PULL, 'opening' => 'created']);
-        $recognizer = new ChangesHandedToIntakt($this->ledger, new WatcherLedger(new InMemoryLedger(0)), $this->authorship);
+        $recognizer = new ChangesHandedToIntakt($this->ledger, new WatcherLedger(new InMemoryLedger(0)), $this->authorship, $this->logger);
 
         $this->expectException(WatcherEventNotRecorded::class);
 
@@ -310,7 +352,7 @@ final class ChangesHandedToIntaktTest extends KernelTestCase
 
     private function recognize(string $project, OpenChange ...$changed): void
     {
-        new ChangesHandedToIntakt($this->ledger, new WatcherLedger($this->ledger), $this->authorship)->recognizeAmong($project, array_values($changed));
+        new ChangesHandedToIntakt($this->ledger, new WatcherLedger($this->ledger), $this->authorship, $this->logger)->recognizeAmong($project, array_values($changed));
     }
 
     private function change(string $id, string $head = 'a'): OpenChange

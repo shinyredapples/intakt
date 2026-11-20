@@ -83,6 +83,7 @@ use Intakt\Plugin\Forge\Contract\AuthorTrust;
 use Intakt\Plugin\Forge\Contract\ChangeAuthorship;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\CommitRange;
+use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\HeadMove;
 use Intakt\Plugin\Forge\Contract\HeadMoveKind;
 use Intakt\Tests\Application\EmptyDatabase;
@@ -178,6 +179,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
     private bool $trustCheckDown = false;
     // Read from its own ledger, because the in-memory one reads nothing back.
     private ?Ledger $openings = null;
+    private ?ChangeAuthorship $authorship = null;
 
     protected function setUp(): void
     {
@@ -238,6 +240,24 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
 
         self::assertSame(1, $this->listing->conditionalAnswers);
         self::assertSame([LedgerEventKind::HeadPending, LedgerEventKind::ChangeHandedToIntakt], $this->ledger->kinds());
+    }
+
+    public function testOneUnreadableAuthorDoesNotKeepAnUnrelatedHeadFromBeingQueued(): void
+    {
+        $doctrine = self::getContainer()->get('doctrine');
+        self::assertInstanceOf(ManagerRegistry::class, $doctrine);
+        $this->openings = new DoctrineLedger($doctrine, $this->clock);
+        self::assertTrue($this->openings->append(new LedgerEvent(LedgerEventKind::ChangeOpened, '{"project":"alpha","change":"1"}'))->succeeded());
+        $authorship = self::createStub(ChangeAuthorship::class);
+        $authorship->method('isCreatedByIntakt')->willThrowException(new ForgeReadFailed('Author unavailable'));
+        $this->authorship = $authorship;
+        $this->handler = $this->handler();
+        $this->listing->opens('alpha', RecordedForge::change('1', self::PENDING, '2026-11-02T09:00:00Z'), RecordedForge::change('2', self::PENDING, '2026-11-02T09:00:00Z'));
+
+        $this->tick();
+
+        self::assertSame([LedgerEventKind::HeadPending, LedgerEventKind::HeadPending], $this->ledger->kinds());
+        self::assertSame(['1', '2'], array_column($this->ledger->payloads(), 'change'));
     }
 
     public function testAPendingHeadIsReadAgainOnceItsReadAgainTimeHasPassedEvenWhenTheListingIsUnchanged(): void
@@ -1540,7 +1560,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         $settle = new SettleHeads(new SettleHead($gate, new StaleVerdicts($this->queries, $this->commands, $rounds, $ledger), new HeadsWithoutRound($ledger, $pending), $starts), $starts, $backOff);
         $projects = new WatchedProjects(['alpha' => ['repository' => 'repo', 'base' => 'main', 'task' => 'Review it.']]);
 
-        return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $ledger, $this->entities->getConnection(), new ChangesHandedToIntakt($this->openings ?? $this->ledger, $ledger, self::createStub(ChangeAuthorship::class))), new LookAtHeads(new HeadLocks($pending, $locks, $installWide, $logger), $decisions, $settle));
+        return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $ledger, $this->entities->getConnection(), new ChangesHandedToIntakt($this->openings ?? $this->ledger, $ledger, $this->authorship ?? self::createStub(ChangeAuthorship::class), $logger)), new LookAtHeads(new HeadLocks($pending, $locks, $installWide, $logger), $decisions, $settle));
     }
 
     private function panel(): Panel

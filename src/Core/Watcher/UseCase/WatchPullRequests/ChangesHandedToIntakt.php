@@ -12,6 +12,7 @@ use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\OpenChange;
 use Intakt\Plugin\Forge\Contract\Opening;
 use JsonException;
+use Psr\Log\LoggerInterface;
 
 // Decided from Intakt's own push records, and from the author the forge sets only where a record does not say, because a pull request's title, labels and branch are text others can shape: docs/architecture/handed-to-intakt.md
 final readonly class ChangesHandedToIntakt
@@ -20,6 +21,7 @@ final readonly class ChangesHandedToIntakt
         private Ledger $ledger,
         private WatcherLedger $records,
         private ChangeAuthorship $authorship,
+        private LoggerInterface $logger,
     ) {
     }
 
@@ -27,8 +29,6 @@ final readonly class ChangesHandedToIntakt
      * @param list<OpenChange> $open
      *
      * @throws WatcherEventNotRecorded
-     * @throws ForgeReadFailed
-     * @throws ForgeRateLimited
      */
     public function recognizeAmong(string $project, array $open): void
     {
@@ -36,7 +36,7 @@ final readonly class ChangesHandedToIntakt
             return;
         }
 
-        // Every author is read before the first line is appended, because a forge read that fails behind an append rolls the tick's transaction back under a line the entity manager still holds, and the ledger's next append then collides with it.
+        // Every author is read before the first line is appended, because a failure behind an append rolls the tick's transaction back under a line the entity manager still holds, and the ledger's next append then collides with it.
         foreach ($this->createdByIntaktAmong($project, $open) as $change) {
             $this->records->changeHandedToIntakt($project, $change);
         }
@@ -46,25 +46,35 @@ final readonly class ChangesHandedToIntakt
      * @param list<OpenChange> $open
      *
      * @return list<OpenChange>
-     *
-     * @throws ForgeReadFailed
-     * @throws ForgeRateLimited
      */
     private function createdByIntaktAmong(string $project, array $open): array
     {
         $openings = $this->openingsOf($project);
+        $intended = $this->intendedHeadsOf($project);
         $handed = $this->handedOf($project);
         $created = [];
+        $askable = true;
 
         foreach ($open as $change) {
             $address = $this->addressOf($change->id->value);
-            $recorded = $openings[$address] ?? null;
 
-            if (null === $recorded || isset($handed[$address])) {
+            if (isset($handed[$address])) {
                 continue;
             }
 
-            if ($this->isCreatedByIntakt($recorded, $change)) {
+            $recorded = $openings[$address] ?? null;
+            $answer = match (true) {
+                null !== $recorded => $this->decidedBy($recorded),
+                // A push that stopped after the forge created the pull request but before its record left only the intent for that head; the forge's author decides whether it was this App's creation.
+                isset($intended[$change->head->hash]) => null,
+                default => false,
+            };
+
+            if (null === $answer && $askable) {
+                [$answer, $askable] = $this->askedAbout($project, $change);
+            }
+
+            if (true === $answer) {
                 $created[] = $change;
                 $handed[$address] = true;
             }
@@ -73,21 +83,36 @@ final readonly class ChangesHandedToIntakt
         return $created;
     }
 
-    // Only an opening that created the pull request, because Intakt's push also updates an open pull request someone else opened on the same branch.
+    // Only an opening that created the pull request, because Intakt's push also updates an open pull request someone else opened on the same branch; null leaves it to the forge, because a record written before openings were recorded does not say.
     /**
      * @param list<mixed> $openings
-     *
-     * @throws ForgeReadFailed
-     * @throws ForgeRateLimited
      */
-    private function isCreatedByIntakt(array $openings, OpenChange $change): bool
+    private function decidedBy(array $openings): ?bool
     {
         return match (true) {
             in_array(Opening::Created->value, $openings, true) => true,
             in_array(Opening::Updated->value, $openings, true) => false,
-            // Asked of the forge, because a record written before openings were recorded does not say whether the App created the pull request.
-            default => $this->authorship->isCreatedByIntakt($change->id),
+            default => null,
         };
+    }
+
+    // An unanswered author leaves only that pull request for the next tick, which asks again, because one unreadable pull request must not hold back the listing and the queueing of the others; after a rate limit no further author is asked on this tick, as the forge would refuse each.
+    /**
+     * @return array{?bool, bool}
+     */
+    private function askedAbout(string $project, OpenChange $change): array
+    {
+        try {
+            return [$this->authorship->isCreatedByIntakt($change->id), true];
+        } catch (ForgeReadFailed $unread) {
+            $this->logger->warning('The author of {change} in {project} could not be read, so it is checked again on the next tick: {reason}', ['change' => $change->id->value, 'project' => $project, 'reason' => $unread->getMessage()]);
+
+            return [null, true];
+        } catch (ForgeRateLimited $limited) {
+            $this->logger->warning('The author of {change} in {project} was not read under the rate limit, so it is checked again on the next tick: {reason}', ['change' => $change->id->value, 'project' => $project, 'reason' => $limited->getMessage()]);
+
+            return [null, false];
+        }
     }
 
     /**
@@ -97,8 +122,12 @@ final readonly class ChangesHandedToIntakt
     {
         $openings = [];
 
-        foreach ($this->payloadsOf($project, LedgerEventKind::ChangeOpened) as $address => $payloads) {
-            $openings[$address] = array_map(static fn (array $payload): mixed => $payload['opening'] ?? null, $payloads);
+        foreach ($this->payloadsOf($project, LedgerEventKind::ChangeOpened) as $payload) {
+            $change = $payload['change'] ?? null;
+
+            if (is_string($change)) {
+                $openings[$this->addressOf($change)][] = $payload['opening'] ?? null;
+            }
         }
 
         return $openings;
@@ -107,13 +136,41 @@ final readonly class ChangesHandedToIntakt
     /**
      * @return array<string, true>
      */
-    private function handedOf(string $project): array
+    private function intendedHeadsOf(string $project): array
     {
-        return array_map(static fn (): bool => true, $this->payloadsOf($project, LedgerEventKind::ChangeHandedToIntakt));
+        $heads = [];
+
+        foreach ($this->payloadsOf($project, LedgerEventKind::ChangeIntended) as $payload) {
+            $head = $payload['head'] ?? null;
+
+            if (is_string($head)) {
+                $heads[$head] = true;
+            }
+        }
+
+        return $heads;
     }
 
     /**
-     * @return array<string, list<array<mixed>>>
+     * @return array<string, true>
+     */
+    private function handedOf(string $project): array
+    {
+        $handed = [];
+
+        foreach ($this->payloadsOf($project, LedgerEventKind::ChangeHandedToIntakt) as $payload) {
+            $change = $payload['change'] ?? null;
+
+            if (is_string($change)) {
+                $handed[$this->addressOf($change)] = true;
+            }
+        }
+
+        return $handed;
+    }
+
+    /**
+     * @return list<array<mixed>>
      */
     private function payloadsOf(string $project, LedgerEventKind $kind): array
     {
@@ -121,10 +178,9 @@ final readonly class ChangesHandedToIntakt
 
         foreach ($this->ledger->readOfKind($kind) as $recorded) {
             $payload = $this->decoded($recorded->event->payload);
-            $change = $payload['change'] ?? null;
 
-            if ($project === ($payload['project'] ?? null) && is_string($change)) {
-                $payloads[$this->addressOf($change)][] = $payload;
+            if ($project === ($payload['project'] ?? null)) {
+                $payloads[] = $payload;
             }
         }
 
