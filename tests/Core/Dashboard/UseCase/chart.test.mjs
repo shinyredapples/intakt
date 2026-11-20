@@ -10,6 +10,7 @@ function box(left, top, width, height) {
 
 function chartOf(width) {
     const chart = new ChartController();
+    chart.connect();
     chart.element = box(100, 1000, width, 300);
     const reading = new FakeElement();
     const detail = new FakeElement();
@@ -24,8 +25,11 @@ function chartOf(width) {
     return chart;
 }
 
+const READING = { reading: '3 P1 findings', detail: 'Security reviewer, 2 found by it alone' };
+const OTHER = { reading: '1 P2 finding', detail: 'Correctness reviewer, 0 found by it alone' };
+
 function shownOver(chart, mark) {
-    chart.show({ currentTarget: mark, params: { reading: '3 P1 findings', detail: 'Security reviewer, 2 found by it alone' } });
+    chart.pointerEnter({ currentTarget: mark, params: READING });
 
     return chart.tipTarget;
 }
@@ -57,11 +61,72 @@ test('a tip over the last mark stays inside the chart', () => {
     assert.equal(tip.style.left, '480px');
 });
 
-test('leaving the mark hides the tip', () => {
+test('the pointer leaving the mark hides the tip', () => {
     const chart = chartOf(600);
     shownOver(chart, box(300, 1050, 100, 150));
 
-    chart.hide();
+    chart.pointerLeave();
 
     assert.equal(chart.tipTarget.hidden, true);
+});
+
+test('focus shows the tip and blur hides it', () => {
+    const chart = chartOf(600);
+
+    chart.focusIn({ currentTarget: box(300, 1050, 100, 150), params: READING });
+    assert.equal(chart.tipTarget.hidden, false);
+
+    chart.focusOut();
+    assert.equal(chart.tipTarget.hidden, true);
+});
+
+test('the pointer leaving keeps the tip while the mark still has focus', () => {
+    const chart = chartOf(600);
+    const mark = box(300, 1050, 100, 150);
+    chart.focusIn({ currentTarget: mark, params: READING });
+    chart.pointerEnter({ currentTarget: mark, params: READING });
+
+    chart.pointerLeave();
+
+    assert.equal(chart.tipTarget.hidden, false);
+    assert.equal(chart.tipTarget.querySelector('strong').textContent, '3 P1 findings');
+});
+
+test('blur keeps the tip while the pointer is still over the mark', () => {
+    const chart = chartOf(600);
+    const mark = box(300, 1050, 100, 150);
+    chart.focusIn({ currentTarget: mark, params: READING });
+    chart.pointerEnter({ currentTarget: mark, params: READING });
+
+    chart.focusOut();
+
+    assert.equal(chart.tipTarget.hidden, false);
+});
+
+test('the pointer leaving another mark goes back to the focused mark', () => {
+    const chart = chartOf(600);
+    chart.focusIn({ currentTarget: box(300, 1050, 100, 150), params: READING });
+    chart.pointerEnter({ currentTarget: box(500, 1050, 100, 150), params: OTHER });
+    assert.equal(chart.tipTarget.querySelector('strong').textContent, '1 P2 finding');
+
+    chart.pointerLeave();
+
+    assert.equal(chart.tipTarget.hidden, false);
+    assert.equal(chart.tipTarget.querySelector('strong').textContent, '3 P1 findings');
+    assert.equal(chart.tipTarget.style.left, '190px');
+});
+
+test('Escape hides the tip while pointer and focus stay, until the next trigger', () => {
+    const chart = chartOf(600);
+    const mark = box(300, 1050, 100, 150);
+    chart.focusIn({ currentTarget: mark, params: READING });
+    chart.pointerEnter({ currentTarget: mark, params: READING });
+
+    chart.dismiss();
+    assert.equal(chart.tipTarget.hidden, true);
+    chart.pointerLeave();
+    assert.equal(chart.tipTarget.hidden, true);
+
+    chart.pointerEnter({ currentTarget: mark, params: READING });
+    assert.equal(chart.tipTarget.hidden, false);
 });
