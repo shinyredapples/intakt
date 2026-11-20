@@ -63,8 +63,8 @@ final readonly class CallCredentials
         $map = [];
 
         foreach ($headers as $name => $value) {
-            [$name, $value] = is_int($name) && is_string($value) && str_contains($value, ':') ? array_map(trim(...), explode(':', $value, 2)) : [$name, $value];
-            $map[$name] = $value;
+            $line = is_int($name) && is_string($value) && str_contains($value, ':') ? array_map(trim(...), explode(':', $value, 2)) : null;
+            $map[null === $line ? $name : $line[0]] = null === $line ? $value : $line[1] ?? '';
         }
 
         return $map;
