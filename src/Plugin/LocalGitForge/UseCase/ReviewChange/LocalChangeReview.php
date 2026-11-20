@@ -93,6 +93,7 @@ final readonly class LocalChangeReview
 
         try {
             return new QueuedRound($this->reviews->start($request($snapshot)), $snapshot);
+            // Boundary: removes the snapshot and rethrows the start failure (unless removal itself throws), because no queued round owns it once the start failed.
         } catch (Throwable $failure) {
             $forge->removeSnapshot($snapshot);
 

@@ -50,6 +50,14 @@ final class VaultTestsLeaveNoVaultFolderBehindTest extends TestCase
         self::assertSame($this->vaultsBefore, is_dir($this->vaults()));
     }
 
+    public function testTheKeptKeyBuildWarningTestLeavesNoVaultsFolderBehind(): void
+    {
+        $process = $this->runInOneProcess('tests/Application/KeptKeyBuildWarningTest.php');
+
+        self::assertSame(0, $process->getExitCode(), $process->getOutput().$process->getErrorOutput());
+        self::assertSame($this->vaultsBefore, is_dir($this->vaults()));
+    }
+
     private function vaults(): string
     {
         return dirname(__DIR__, 2).'/config/secrets';

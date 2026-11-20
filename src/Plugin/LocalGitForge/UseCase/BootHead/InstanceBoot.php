@@ -58,6 +58,7 @@ final readonly class InstanceBoot
                 $target->commit,
                 fn (string $snapshot): BootOutcome => $this->withScratchHomeOf($snapshot, fn (): BootOutcome => $this->bootIn($snapshot, $instance)),
             );
+            // Boundary: turns any crash of the boot into a crashed outcome, so the caller records it instead of failing with it.
         } catch (Throwable $crash) {
             return BootOutcome::crashed($crash->getMessage());
         }
