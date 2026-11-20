@@ -26,6 +26,8 @@ use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Symfony\Bundle\FrameworkBundle\Console\Application;
+use Symfony\Component\Console\Tester\CommandTester;
 
 #[Group('persistence')]
 #[CoversClass(RecurringP1s::class)]
@@ -156,6 +158,21 @@ final class RecurringP1sTest extends KernelTestCase
         self::assertSame(1, $ledger->readsOfKind[LedgerEventKind::JudgeDone->value]);
     }
 
+    public function testAThreeRoundTaskOverTwoHeadsPrintsTheJudgeDoneKeysAndARecurringP1FoundInTheLedgerEvents(): void
+    {
+        $first = $this->judged($this->completedAt(self::CHANGE, self::HEAD_A, $this->keyedP1()));
+        $this->judged($this->completedAt(self::CHANGE, self::HEAD_A, $this->repeatedP1($this->keyedP1())));
+        $third = $this->judged($this->completedAt(self::CHANGE, self::HEAD_B, $this->repeatedP1($this->keyedP1())));
+        $key = $this->payloadsOf(LedgerEventKind::JudgeDone)[2]['p1_keys'];
+        self::assertIsArray($key);
+
+        $printed = $this->ledgerEvents();
+
+        self::assertStringContainsString(' judge_done {"round":"'.$third.'"', $printed);
+        self::assertStringContainsString(' recurring_p1_found {"round":"'.$third.'","finding":"F1","key":"'.$key['F1'].'","first_round":"'.$first.'"}', $printed);
+        self::assertSame(1, substr_count($printed, ' recurring_p1_found '));
+    }
+
     // Only this round's reviewer messages, so the rounds started before are not delivered again.
     private function completedAt(string $change, string $head, Finding $finding): string
     {
@@ -187,6 +204,17 @@ final class RecurringP1sTest extends KernelTestCase
     private function unkeyedP1(): Finding
     {
         return new Finding('A', Severity::P1, null, null, null, 'The bus loses a message.', FixableBy::Builder, false, null, null);
+    }
+
+    // The console command of the install, reading the database the rounds were recorded in.
+    private function ledgerEvents(): string
+    {
+        $kernel = self::$kernel;
+        self::assertNotNull($kernel);
+        $tester = new CommandTester(new Application($kernel)->find('intakt:ledger:events'));
+        $tester->execute([]);
+
+        return $tester->getDisplay();
     }
 
     // Under its ledger id and marked as a repeat, as a reviewer reports an open finding again on a later head.
