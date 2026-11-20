@@ -52,7 +52,7 @@ final class BarChartTest extends TestCase
 
     public function testABarIsRoundedFourPixelsAtTheTopOnlyAndCappedAt28PxWide(): void
     {
-        self::assertSame('M57,154 V87 Q57,83 61,83 H81 Q85,83 85,87 V154 Z',$this->chartOf(3, null, 0, 6)->bars()[0]->outline);
+        self::assertSame('M57,154 V87 Q57,83 61,83 H81 Q85,83 85,87 V154 Z', $this->chartOf(3, null, 0, 6)->bars()[0]->outline);
     }
 
     public function testMissingDataDrawsNoBarButKeepsItsSlot(): void
