@@ -85,9 +85,9 @@ final readonly class BenchChangeCheckout
     private function build(string $directory, string $name, string $tree): string
     {
         $this->filesystem->mkdir($directory);
-        $call = $this->hardened->call(['init', '--quiet', '--initial-branch='.self::BASE], $directory);
-        // Without the pinned work tree, because git init refuses one without a git directory.
-        new Process($call->command, $call->directory, [...$call->environment, 'GIT_WORK_TREE' => false], timeout: self::TIMEOUT_SECONDS)->mustRun();
+        // The git folder is named, because git init refuses the pinned work tree without one.
+        $call = $this->hardened->call(['--git-dir=.git', 'init', '--quiet', '--initial-branch='.self::BASE], $directory);
+        new Process($call->command, $call->directory, $call->environment, timeout: self::TIMEOUT_SECONDS)->mustRun();
         $this->commit($directory, $this->fixtures.'/base', 'Add the shop helpers');
         $this->git($directory, 'switch', '--quiet', '--create', 'bench/'.$name);
         $this->commit($directory, $tree, 'Change '.$name);
