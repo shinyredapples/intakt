@@ -262,6 +262,7 @@ final class IntakeStoreTest extends KernelTestCase
         $failures = $this->store->failuresOf('alpha');
         $plan = new IntakeRules('intakt')->planOf(array_map(static fn (StoredIssue $issue): QueuedIssue => $issue->queued(), $this->store->issuesOf('alpha')), $failures);
         self::assertSame([7 => 'the build ran out of attempts'], $failures);
+        self::assertSame([8], array_map(static fn (StoredIssue $issue): int => $issue->queued()->number(), $this->store->issuesOf('alpha')));
         self::assertSame([], $plan->ready);
         self::assertSame(['depends on #7, which failed for good: the build ran out of attempts'], array_map(static fn ($held): string => $held->reason, $plan->held));
     }
