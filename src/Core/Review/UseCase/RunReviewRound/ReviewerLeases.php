@@ -131,8 +131,7 @@ final readonly class ReviewerLeases
     /**
      * @template T
      *
-     * @param Closure(RoundReviewer): T $move
-     *
+     * @param Closure(RoundReviewer): T        $move
      * @param (Closure(RoundReviewer): T)|null $afterTheCeiling
      *
      * @return T|null
@@ -159,8 +158,7 @@ final readonly class ReviewerLeases
     /**
      * @template T
      *
-     * @param Closure(RoundReviewer): T $move
-     *
+     * @param Closure(RoundReviewer): T        $move
      * @param Closure(RoundReviewer): (T|null) $afterTheCeiling
      *
      * @return T|null
