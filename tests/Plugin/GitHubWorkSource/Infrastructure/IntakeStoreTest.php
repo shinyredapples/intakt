@@ -171,7 +171,7 @@ final class IntakeStoreTest extends KernelTestCase
     {
         $this->record('alpha', [$this->stored(Issues::task(7))], 'W/"a"');
         $failing = new class {
-            public function onFlush(): void
+            public function onFlush(): never
             {
                 throw new RuntimeException('The flush failed after the removal was scheduled.');
             }
