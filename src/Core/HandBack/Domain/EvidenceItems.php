@@ -142,7 +142,7 @@ final readonly class EvidenceItems
         return null !== $column || !MarkdownText::continuesAParagraph($lines[$index - 1] ?? '', $line);
     }
 
-    // A paragraph after a blank line, indented less than the item's content, is outside the list, because Markdown no longer reads it as part of the item.
+    // A paragraph after a blank line, or an ATX heading with or without one, indented less than the item's content, is outside the list, because Markdown no longer reads it as part of the item.
     /**
      * @param list<string> $section
      */
@@ -150,8 +150,12 @@ final readonly class EvidenceItems
     {
         $line = $section[$index];
 
-        return $index > 0 && '' === trim($section[$index - 1]) && '' !== trim($line)
-            && null === self::contentColumnOf($line) && self::indentOf($line) < ($column ?? 0);
+        if (null === $column || self::indentOf($line) >= $column) {
+            return false;
+        }
+
+        return 1 === preg_match(self::ATX_HEADING, $line)
+            || ($index > 0 && '' === trim($section[$index - 1]) && '' !== trim($line) && null === self::contentColumnOf($line));
     }
 
     /**

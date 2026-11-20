@@ -43,12 +43,13 @@ final readonly class FencedBlock
     {
         $lineStart = MarkdownText::lineStartAt($text, $start);
 
-        // After a marker the fence opens only where the item's content starts: five or more spaces after the marker make the item's content start one space after it, so the run is indented code.
+        // After a marker the fence opens only where the item's content starts: five or more spaces after the marker make the item's content start one space after it, so the run is indented code. A marker that continues the paragraph above it starts no item, so the run after it opens nothing either.
         if ($lineStart !== $start) {
             $upToTheRun = MarkdownText::withSpacesForTabs(substr($text, $lineStart, $start + strspn($text, self::BLANK, $start) - $lineStart));
 
             return strspn($text, self::BLANK, $start) <= self::MOST_INDENT
-                && MarkdownText::listItemColumnOf($upToTheRun.'x') === strlen($upToTheRun);
+                && MarkdownText::listItemColumnOf($upToTheRun.'x') === strlen($upToTheRun)
+                && ($items ?? OpenListItems::of($text))->readUpTo($lineStart)->letsAnItemStartOn(substr($text, $lineStart, MarkdownText::lineEndAt($text, $start) - $lineStart));
         }
 
         $indent = self::indentColumnsAt($text, $start);

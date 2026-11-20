@@ -71,4 +71,14 @@ final class OpenListItemsTest extends TestCase
     {
         self::assertNull(OpenListItems::of("* * *\n  y")->readUpTo(6)->columnFor(2));
     }
+
+    public function testAnOrderedMarkerNotNumberedOneStartsNoItemRightAfterAParagraphLine(): void
+    {
+        self::assertFalse(OpenListItems::of("A paragraph\n2. ~~~")->readUpTo(12)->letsAnItemStartOn('2. ~~~'));
+    }
+
+    public function testAMarkerAfterACommentFillingItsLineStartsAnItem(): void
+    {
+        self::assertSame(4, OpenListItems::of("<!-- note -->\n10. Example\n    y")->passOver(0, 13)->readUpTo(26)->columnFor(4));
+    }
 }

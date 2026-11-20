@@ -60,15 +60,23 @@ final readonly class OpenListItems
         return $column;
     }
 
+    // A marker on the line after the lines read starts an item unless it continues the paragraph above it, so a fence right after a marker that cannot start an item opens nothing.
+    public function letsAnItemStartOn(string $line): bool
+    {
+        $line = MarkdownText::withSpacesForTabs($line);
+
+        return !$this->continuesTheParagraph($this->withoutEndedItems($this->columns, strspn($line, ' ')), $this->lineAbove, $line);
+    }
+
     // The first line of a fenced block or an HTML comment is read, because a list marker before the part still starts an item; its other lines are not, because what they show or hide is no structure.
     public function passOver(int $start, int $end): self
     {
         $read = $this->readUpTo(MarkdownText::lineStartAt($this->text, $start) + 1);
 
-        // A part over several lines is a block of its own, so the line after it continues no paragraph.
-        $overSeveralLines = str_contains(substr($this->text, $start, $end - $start), "\n");
+        // A part over several lines, or one that fills its line, is a block of its own (an HTML comment alone on its line is an HTML block), so the line after it continues no paragraph.
+        $isABlock = str_contains(substr($this->text, $start, $end - $start), "\n") || $this->fillsItsLine($start, $end);
 
-        return new self($this->text, $read->columns, max($read->nextLine, MarkdownText::lineEndAt($this->text, $end) + 1), $overSeveralLines ? '' : $read->lineAbove);
+        return new self($this->text, $read->columns, max($read->nextLine, MarkdownText::lineEndAt($this->text, $end) + 1), $isABlock ? '' : $read->lineAbove);
     }
 
     // A blank line ends nothing, and a marker starts an item only up to three columns past the content of the item it is in (https://spec.commonmark.org/0.31.2/#list-items). Outside a list, an item that cannot interrupt a paragraph (an empty marker line, an ordered item not numbered 1) continues the paragraph above it.
@@ -84,18 +92,43 @@ final readonly class OpenListItems
         }
 
         $indent = strspn($line, ' ');
-
-        while ([] !== $columns && array_last($columns) > $indent) {
-            array_pop($columns);
-        }
-
+        $columns = $this->withoutEndedItems($columns, $indent);
         $column = MarkdownText::listItemColumnOf($line);
-        $continuesTheParagraph = [] === $columns && MarkdownText::continuesAParagraph($lineAbove, $line);
 
-        if (null !== $column && !$continuesTheParagraph && $indent <= (array_last($columns) ?? 0) + self::MOST_INDENT) {
+        if (null !== $column && !$this->continuesTheParagraph($columns, $lineAbove, $line) && $indent <= (array_last($columns) ?? 0) + self::MOST_INDENT) {
             $columns[] = $column;
         }
 
         return $columns;
+    }
+
+    /**
+     * @param list<int> $columns
+     *
+     * @return list<int>
+     */
+    private function withoutEndedItems(array $columns, int $indent): array
+    {
+        while ([] !== $columns && array_last($columns) > $indent) {
+            array_pop($columns);
+        }
+
+        return $columns;
+    }
+
+    /**
+     * @param list<int> $columns
+     */
+    private function continuesTheParagraph(array $columns, string $lineAbove, string $line): bool
+    {
+        return [] === $columns && MarkdownText::continuesAParagraph($lineAbove, $line);
+    }
+
+    private function fillsItsLine(int $start, int $end): bool
+    {
+        $lineStart = MarkdownText::lineStartAt($this->text, $start);
+        $lineEnd = MarkdownText::lineEndAt($this->text, $end);
+
+        return '' === trim(substr($this->text, $lineStart, $start - $lineStart)) && '' === trim(substr($this->text, $end, $lineEnd - $end));
     }
 }

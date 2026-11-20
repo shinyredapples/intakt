@@ -248,4 +248,9 @@ final class EvidenceItemsTest extends TestCase
     {
         self::assertSame(1, EvidenceItems::countIn("## Evidence\n- Show the output.\n\nSee step\n10. of the guide.\n"));
     }
+
+    public function testAnAtxHeadingOutdentedFromAnItemEndsTheListWithoutABlankLine(): void
+    {
+        self::assertSame(1, EvidenceItems::countIn("- Example\n## Notes\n  ## Evidence\n- Show the result."));
+    }
 }
