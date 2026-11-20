@@ -6,10 +6,13 @@ namespace Intakt\Tests\Core\Server\Infrastructure;
 
 use Intakt\Core\Server\Infrastructure\RedactingProfiler;
 use Intakt\Core\Server\Infrastructure\RedactRequestProfilesPass;
+use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use Intakt\Tests\Support\WebTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
+use Psr\Log\LogLevel;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Component\HttpKernel\DataCollector\RequestDataCollector;
+use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Profiler\Profile;
 use Symfony\Component\HttpKernel\Profiler\Profiler;
 
@@ -27,6 +30,7 @@ final class RedactingProfilerTest extends WebTestCase
         $this->browser = self::createClient(server: ['HTTP_HOST' => 'localhost:7780']);
         $this->browser->disableReboot();
         $this->browser->enableProfiler();
+        new RoundFixture(self::getContainer());
     }
 
     public function testASavedProfileHoldsNoValueOfAnEnvironmentVariable(): void
@@ -35,6 +39,22 @@ final class RedactingProfilerTest extends WebTestCase
 
         self::assertStringNotContainsString(self::CANARY, serialize($this->savedProfile()));
         self::assertSame(RedactingProfiler::MASK, $this->requestCollector()->getRequestServer(raw: true)->get('APP_SECRET'));
+    }
+
+    public function testTheSavedTraceOfAFailedRequestHoldsNoValueOfAnEnvironmentVariable(): void
+    {
+        $ignoredArguments = ini_set('zend.exception_ignore_args', '0');
+
+        try {
+            $this->browser->request('POST', '/setup/first-review', server: ['APP_SECRET' => self::CANARY]);
+        } finally {
+            ini_set('zend.exception_ignore_args', (string) $ignoredArguments);
+        }
+
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so nothing was started."', BadRequestHttpException::class));
+        $saved = serialize($this->savedProfile());
+        self::assertStringNotContainsString(self::CANARY, $saved);
+        self::assertStringNotContainsString(substr(self::CANARY, 0, 15), $saved);
     }
 
     public function testASavedProfileHoldsNoBearerToken(): void
