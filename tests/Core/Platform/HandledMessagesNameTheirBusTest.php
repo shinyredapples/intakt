@@ -34,28 +34,28 @@ final class HandledMessagesNameTheirBusTest extends TestCase
     #[DataProvider('handledMessages')]
     public function testEveryHandledMessageImplementsOnlyTheMarkerOfTheBusItsHandlerNames(string $message, Bus $bus): void
     {
-        self::assertTrue(self::carriesOnlyTheMarkerOf($message, $bus), sprintf('%s is handled on %s, so it implements %s and not the other marker.', $message, $bus->value, self::markerOf($bus)));
+        self::assertTrue($this->carriesOnlyTheMarkerOf($message, $bus), sprintf('%s is handled on %s, so it implements %s and not the other marker.', $message, $bus->value, $this->markerOf($bus)));
     }
 
     public function testAMessageWithBothMarkersFailsTheCheckOnEitherBus(): void
     {
         $both = new class implements CommandMessage, QueryMessage {};
 
-        self::assertFalse(self::carriesOnlyTheMarkerOf($both::class, Bus::Command) || self::carriesOnlyTheMarkerOf($both::class, Bus::Query));
+        self::assertFalse($this->carriesOnlyTheMarkerOf($both::class, Bus::Command) || $this->carriesOnlyTheMarkerOf($both::class, Bus::Query));
     }
 
     public function testAMessageWithTheMarkerOfItsBusOnlyPassesTheCheck(): void
     {
         $command = new class implements CommandMessage {};
 
-        self::assertTrue(self::carriesOnlyTheMarkerOf($command::class, Bus::Command));
+        self::assertTrue($this->carriesOnlyTheMarkerOf($command::class, Bus::Command));
     }
 
     public function testAMessageWithTheMarkerOfTheOtherBusFailsTheCheck(): void
     {
         $query = new class implements QueryMessage {};
 
-        self::assertFalse(self::carriesOnlyTheMarkerOf($query::class, Bus::Command));
+        self::assertFalse($this->carriesOnlyTheMarkerOf($query::class, Bus::Command));
     }
 
     public function testTheScanFindsAHandlerWhoseAttributeFollowsAnotherInTheSameGroup(): void
@@ -93,17 +93,17 @@ final class HandledMessagesNameTheirBusTest extends TestCase
         return $cases;
     }
 
-    private static function carriesOnlyTheMarkerOf(string $message, Bus $bus): bool
+    private function carriesOnlyTheMarkerOf(string $message, Bus $bus): bool
     {
         $other = Bus::Command === $bus ? Bus::Query : Bus::Command;
 
-        return is_a($message, self::markerOf($bus), true) && !is_a($message, self::markerOf($other), true);
+        return is_a($message, $this->markerOf($bus), true) && !is_a($message, $this->markerOf($other), true);
     }
 
     /**
      * @return class-string
      */
-    private static function markerOf(Bus $bus): string
+    private function markerOf(Bus $bus): string
     {
         return match ($bus) {
             Bus::Command => CommandMessage::class,
