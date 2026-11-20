@@ -53,9 +53,17 @@ doctrine:
                 prefix: 'Intakt\Core\Watcher\Domain'
                 alias: Watcher
 
+when@dev:
+    doctrine:
+        dbal:
+            # Also with APP_DEBUG=0, whose default leaves the db collector of a saved profile without its queries.
+            profiling: true
+
 when@test:
     doctrine:
         dbal:
+            # Also with APP_DEBUG=0, whose default leaves the db collector of an opted-in test profile without its queries.
+            profiling: true
             # "TEST_TOKEN" is typically set by ParaTest
             dbname_suffix: '_test%env(default::TEST_TOKEN)%'
 
