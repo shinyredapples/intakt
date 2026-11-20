@@ -133,9 +133,18 @@ final class GitHubIssueHistoriesTest extends TestCase
 
     public function testAnAnswerWithoutThePagingFlagFailsTheRead(): void
     {
-        $api = $this->answeringWith('history_edited.json', '"pageInfo":{"hasNextPage":false},', '');
+        $api = $this->answeringWith('history_edited.json', '"timelineItems":{"pageInfo":{"hasNextPage":false},', '"timelineItems":{');
 
-        $this->expectException(ForgeReadFailed::class);
+        $this->expectExceptionObject(new ForgeReadFailed('GitHub answered a label history this forge cannot read whole.'));
+
+        $api->histories()->of('alpha', 12, $this->listedAt());
+    }
+
+    public function testAnAnswerWithoutTheLabelsPagingFlagFailsTheRead(): void
+    {
+        $api = $this->answeringWith('history_edited.json', '"labels":{"pageInfo":{"hasNextPage":false},', '"labels":{');
+
+        $this->expectExceptionObject(new ForgeReadFailed('GitHub answered labels this forge cannot read whole.'));
 
         $api->histories()->of('alpha', 12, $this->listedAt());
     }
@@ -180,6 +189,55 @@ final class GitHubIssueHistoriesTest extends TestCase
         $api = $this->answeringWith('history_edited.json', '"updatedAt":"2026-11-10T10:00:00Z",', '');
 
         $this->expectException(ForgeReadFailed::class);
+
+        $api->histories()->of('alpha', 12, $this->listedAt());
+    }
+
+    public function testTheHistoryHoldsTheBodyAndTheLabelsTheItemHasBesideIt(): void
+    {
+        $history = $this->answering('history_edited.json')->histories()->of('alpha', 12, $this->listedAt());
+
+        self::assertSame('Waits for #3', $history->body);
+        self::assertSame(['intakt', 'priority:high'], $history->currentLabels);
+    }
+
+    public function testAnEmptyBodyIsReadAsTheEmptyText(): void
+    {
+        self::assertSame('', $this->answering('history_unedited.json')->histories()->of('alpha', 12, $this->listedAt())->body);
+    }
+
+    public function testAnAnswerWithoutTheBodyFailsTheRead(): void
+    {
+        $api = $this->answeringWith('history_edited.json', '"body":"Waits for #3",', '');
+
+        $this->expectException(ForgeReadFailed::class);
+
+        $api->histories()->of('alpha', 12, $this->listedAt());
+    }
+
+    public function testAnAnswerWithMoreLabelsThanOnePageFailsTheRead(): void
+    {
+        $api = $this->answeringWith('history_edited.json', '"labels":{"pageInfo":{"hasNextPage":false}', '"labels":{"pageInfo":{"hasNextPage":true}');
+
+        $this->expectExceptionObject(new ForgeReadFailed('GitHub answered labels this forge cannot read whole.'));
+
+        $api->histories()->of('alpha', 12, $this->listedAt());
+    }
+
+    public function testALabelWithoutItsNameFailsTheRead(): void
+    {
+        $api = $this->answeringWith('history_edited.json', '{"name":"priority:high"}]', '{}]');
+
+        $this->expectException(ForgeReadFailed::class);
+
+        $api->histories()->of('alpha', 12, $this->listedAt());
+    }
+
+    public function testAnUpdateTimeWithANulByteFailsTheReadInsteadOfRaisingAValueError(): void
+    {
+        $api = $this->answeringWith('history_edited.json', '"updatedAt":"2026-11-10T10:00:00Z"', '"updatedAt":"2026-11-10T10:00:00Z\u0000"');
+
+        $this->expectExceptionObject(new ForgeReadFailed('GitHub answered a moment this forge cannot read.'));
 
         $api->histories()->of('alpha', 12, $this->listedAt());
     }

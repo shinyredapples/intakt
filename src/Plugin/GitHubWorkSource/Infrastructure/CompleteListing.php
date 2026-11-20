@@ -7,6 +7,7 @@ namespace Intakt\Plugin\GitHubWorkSource\Infrastructure;
 use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\GitHubForge\Contract\IssueHistories;
+use Intakt\Plugin\GitHubForge\Contract\IssueHistory;
 use Intakt\Plugin\GitHubForge\Contract\IssueListing;
 use Intakt\Plugin\GitHubForge\Contract\IssueReads;
 use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
@@ -107,11 +108,23 @@ final readonly class CompleteListing
                 continue;
             }
 
-            $row->vouch(Vouching::of($row->author(), $this->histories->of($project, $row->number(), $row->updatedAt()), $steers));
+            $row->vouch(Vouching::of($row->author(), $this->historyOf($project, $row), $steers));
             $vouched[] = $row->number();
         }
 
         return $vouched;
+    }
+
+    // Compared with the row, because an edit in the second of the listing keeps the update time and its history would vouch for text and labels the listing does not hold.
+    private function historyOf(string $project, StoredIssue $row): IssueHistory
+    {
+        $history = $this->histories->of($project, $row->number(), $row->updatedAt());
+        $body = $history->body;
+        if (!$row->isListedWith($history->currentLabels, $this->references->waitsFor($body), $this->references->unreadableWaits($body), $this->references->closedBy($body))) {
+            throw new ForgeReadFailed(sprintf('GitHub holds #%d with other text or labels than it was listed with, so its history is not of the listed item.', $row->number()));
+        }
+
+        return $history;
     }
 
     /**

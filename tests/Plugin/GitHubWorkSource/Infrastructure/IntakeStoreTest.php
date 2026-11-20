@@ -352,7 +352,7 @@ final class IntakeStoreTest extends KernelTestCase
     private function vouched(ListedIssue $listed): StoredIssue
     {
         $issue = $this->stored($listed);
-        $history = new IssueHistory($listed->author, array_map(static fn (string $label): LabelApplication => new LabelApplication($label, 'ana'), $listed->labels));
+        $history = new IssueHistory($listed->author, array_map(static fn (string $label): LabelApplication => new LabelApplication($label, 'ana'), $listed->labels), $listed->body, $listed->labels);
         $issue->vouch(Vouching::of($listed->author, $history, static fn (string $account): bool => in_array($account, self::WRITERS, true)));
 
         return $issue;

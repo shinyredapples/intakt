@@ -101,6 +101,22 @@ final class StoredIssue
         $this->vouchedLabels = $stored->vouchedLabels;
     }
 
+    // The numbers a text names, not the text, because only they steer and a row whose listing went unchanged keeps them without the body; labels in any order, because GitHub does not promise one.
+    /**
+     * @param list<string> $labels
+     * @param list<int>    $waitsFor
+     * @param list<string> $unreadableWaits
+     * @param list<int>    $closedBy
+     */
+    public function isListedWith(array $labels, array $waitsFor, array $unreadableWaits, array $closedBy): bool
+    {
+        $held = $this->labels;
+        sort($held);
+        sort($labels);
+
+        return $held === $labels && $this->waitsFor === $waitsFor && $this->unreadableWaits === $unreadableWaits && $this->closedBy === $closedBy;
+    }
+
     public function isVouched(): bool
     {
         return null !== $this->trusted;

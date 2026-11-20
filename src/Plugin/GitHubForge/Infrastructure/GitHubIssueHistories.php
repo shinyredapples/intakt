@@ -28,7 +28,7 @@ final readonly class GitHubIssueHistories implements IssueHistories
     // Suffixed, because GraphQL names an App by its bare slug (`renovate`) while the trust check tells an App from a person by the `[bot]` the REST API adds.
     private const string APP = 'Bot';
     private const string APP_SUFFIX = '[bot]';
-    // Issue or pull request, because the listing holds both and a pull request's closing keyword steers only by its history; the update time is read beside the history, because only a history of the listed update time is the history of the listed text and labels.
+    // Issue or pull request, because the listing holds both and a pull request's closing keyword steers only by its history; the update time, the body and the labels are read beside the history, because only a history of the listed text and labels vouches for them and the update time alone has whole seconds.
     private const string QUERY = <<<'GRAPHQL'
         query ($owner: String!, $name: String!, $number: Int!, $events: Int!) {
           repository(owner: $owner, name: $name) {
@@ -36,8 +36,12 @@ final readonly class GitHubIssueHistories implements IssueHistories
               __typename
               ... on Comment {
                 updatedAt
+                body
                 author { __typename login }
                 userContentEdits(first: 1) { nodes { editor { __typename login } } }
+              }
+              ... on Labelable {
+                labels(first: $events) { pageInfo { hasNextPage } nodes { name } }
               }
               ... on Issue {
                 timelineItems(first: $events, itemTypes: [LABELED_EVENT, UNLABELED_EVENT]) {
@@ -80,7 +84,7 @@ final readonly class GitHubIssueHistories implements IssueHistories
             throw new ForgeReadFailed(sprintf('GitHub changed #%d after it was listed, so its history may be of other text and labels.', $number));
         }
 
-        return new IssueHistory($this->lastEditorOf($issue), $this->labelsOf($issue));
+        return new IssueHistory($this->lastEditorOf($issue), $this->labelsOf($issue), $this->bodyOf($issue), $this->currentLabelsOf($issue));
     }
 
     /**
@@ -174,6 +178,33 @@ final readonly class GitHubIssueHistories implements IssueHistories
         }
 
         return array_values($applied);
+    }
+
+    /**
+     * @param array<mixed> $issue
+     */
+    private function bodyOf(array $issue): string
+    {
+        $body = $issue['body'] ?? null;
+
+        // Empty is allowed, because an item without a description has the empty body.
+        return is_string($body) ? $body : throw new ForgeReadFailed('GitHub answered a history read without the body.');
+    }
+
+    /**
+     * @param array<mixed> $issue
+     *
+     * @return list<string>
+     */
+    private function currentLabelsOf(array $issue): array
+    {
+        $labels = $this->at($issue, 'labels');
+        $nodes = is_array($labels) ? ($labels['nodes'] ?? null) : null;
+        if (!is_array($labels) || !is_array($nodes) || false !== $this->at($labels, 'pageInfo', 'hasNextPage')) {
+            throw new ForgeReadFailed('GitHub answered labels this forge cannot read whole.');
+        }
+
+        return array_values(array_map(fn (mixed $label): string => $this->text(is_array($label) ? $label : [], 'name'), $nodes));
     }
 
     /**

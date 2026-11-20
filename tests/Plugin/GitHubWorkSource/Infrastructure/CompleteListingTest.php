@@ -54,7 +54,6 @@ final class CompleteListingTest extends KernelTestCase
 {
     private const string VALIDATOR = 'W/"issues-1"';
     private const string SHORT = 'The open-issue listing of project {project} came back short, so nothing is picked and no wait closes this tick: {reason}';
-    private const string LABELED_BY_ANA = '{"data":{"repository":{"issueOrPullRequest":{"__typename":"Issue","updatedAt":"2026-11-10T10:00:00Z","author":{"__typename":"User","login":"ana"},"userContentEdits":{"nodes":[]},"timelineItems":{"pageInfo":{"hasNextPage":false},"nodes":[{"__typename":"LabeledEvent","actor":{"__typename":"User","login":"ana"},"label":{"name":"intakt"}}]}}}}}';
 
     private IntakeStore $store;
     private RecordedIssueReads $reads;
@@ -69,7 +68,7 @@ final class CompleteListingTest extends KernelTestCase
         new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
         $this->store = new IntakeStore($entities);
         $this->reads = new RecordedIssueReads();
-        $this->histories = new ScriptedHistories();
+        $this->histories = new ScriptedHistories($this->reads);
         $this->logger = new BufferingLogger();
     }
 
@@ -108,7 +107,7 @@ final class CompleteListingTest extends KernelTestCase
         $api->pages = [1 => $this->page(2, 100), 2 => $this->page(1, 1)];
         $api->namingNext = [1];
         $api->stable = true;
-        $api->graphql = self::LABELED_BY_ANA;
+        $api->graphql = $this->historyAnswer('Issue', '', ['intakt']);
 
         $plan = $this->listingOver($api->reads(), $api->histories())->planOf('alpha');
 
@@ -149,8 +148,8 @@ final class CompleteListingTest extends KernelTestCase
     public function testAnOpenPullRequestWithAClosingKeywordHasItsHistoryReadWithoutLeavingTheListingShort(): void
     {
         $api = new RecordedIssueApi();
-        $api->graphql = str_replace('"Issue"', '"PullRequest"', self::LABELED_BY_ANA);
-        $this->reads->lists([Issues::task(7), Issues::pullRequest(12, 'Closes #7')]);
+        $api->graphql = $this->historyAnswer('PullRequest', 'Closes #7', []);
+        $this->reads->lists([Issues::pullRequest(12, 'Closes #7')]);
 
         $plan = $this->listingOver($this->reads, $api->histories())->planOf('alpha');
 
@@ -159,10 +158,50 @@ final class CompleteListingTest extends KernelTestCase
         self::assertSame([], $this->shortListingReasons());
     }
 
+    // The update time has whole seconds, so an edit in the second of the listing keeps it: only the text the history holds tells whose text it vouches for.
+    public function testABodyEditedInTheSecondOfTheListingLeavesTheListingShortInsteadOfVouchingForTheListedText(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->graphql = $this->historyAnswer('PullRequest', 'No closing keyword', []);
+        $this->reads->lists([Issues::pullRequest(12, 'Closes #7')]);
+
+        $plan = $this->listingOver($this->reads, $api->histories())->planOf('alpha');
+
+        self::assertNull($plan);
+        self::assertSame([], $this->store->issuesOf('alpha'));
+        self::assertSame(['GitHub holds #12 with other text or labels than it was listed with, so its history is not of the listed item.'], $this->shortListingReasons());
+    }
+
+    public function testLabelsChangedInTheSecondOfTheListingLeaveTheListingShortInsteadOfVouchingForTheListedLabels(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->graphql = $this->historyAnswer('Issue', '', ['intakt', 'ready']);
+        $this->reads->lists([Issues::task(7)]);
+
+        $plan = $this->listingOver($this->reads, $api->histories())->planOf('alpha');
+
+        self::assertNull($plan);
+        self::assertSame([], $this->store->issuesOf('alpha'));
+        self::assertSame(['GitHub holds #7 with other text or labels than it was listed with, so its history is not of the listed item.'], $this->shortListingReasons());
+    }
+
+    public function testABodyEditedInTheSecondOfTheListingWithTheSameReferencesIsVouchedForTheListedReferences(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->graphql = $this->historyAnswer('Issue', "Waits for #3\n\nThanks for the review.", ['intakt']);
+        $this->reads->lists([Issues::task(7, ['intakt'], ['body' => 'Waits for #3'])]);
+
+        $plan = $this->listingOver($this->reads, $api->histories())->planOf('alpha');
+
+        self::assertInstanceOf(IntakePlan::class, $plan);
+        self::assertTrue($this->rowOf(7)->isVouched());
+        self::assertSame([], $this->shortListingReasons());
+    }
+
     public function testAnItemChangedBetweenTheListingAndItsHistoryReadLeavesTheListingShortAndWritesNothing(): void
     {
         $api = new RecordedIssueApi();
-        $api->graphql = str_replace('2026-11-10T10:00:00Z', '2026-11-10T10:05:00Z', self::LABELED_BY_ANA);
+        $api->graphql = $this->historyAnswer('Issue', '', ['intakt'], '2026-11-10T10:05:00Z');
         $this->reads->lists([Issues::task(7)]);
 
         $plan = $this->listingOver($this->reads, $api->histories())->planOf('alpha');
@@ -299,6 +338,25 @@ final class CompleteListingTest extends KernelTestCase
     private function numbersOf(array $items): array
     {
         return array_map(static fn (StoredIssue|QueuedIssue $item): int => $item->number(), $items);
+    }
+
+    // Written by `ana` and every label applied by her, so only the text, the labels and the update time differ between the tests.
+    /**
+     * @param list<string> $labels
+     */
+    private function historyAnswer(string $type, string $body, array $labels, string $updatedAt = '2026-11-10T10:00:00Z'): string
+    {
+        $item = [
+            '__typename' => $type,
+            'updatedAt' => $updatedAt,
+            'body' => $body,
+            'labels' => ['pageInfo' => ['hasNextPage' => false], 'nodes' => array_map(static fn (string $label): array => ['name' => $label], $labels)],
+            'author' => ['__typename' => 'User', 'login' => 'ana'],
+            'userContentEdits' => ['nodes' => []],
+            'timelineItems' => ['pageInfo' => ['hasNextPage' => false], 'nodes' => array_map(static fn (string $label): array => ['__typename' => 'LabeledEvent', 'actor' => ['__typename' => 'User', 'login' => 'ana'], 'label' => ['name' => $label]], $labels)],
+        ];
+
+        return json_encode(['data' => ['repository' => ['issueOrPullRequest' => $item]]], JSON_THROW_ON_ERROR);
     }
 
     private function page(int $from, int $count): string
