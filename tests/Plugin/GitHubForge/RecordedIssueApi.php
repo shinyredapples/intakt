@@ -65,7 +65,7 @@ final class RecordedIssueApi
     {
         [$calls, $checked] = $this->wiring();
 
-        return new GitHubIssueHistories($calls, $checked, new WatchedRepositories(['alpha' => ['github' => 'acme/widgets'], 'beta' => []]));
+        return new GitHubIssueHistories($calls, $checked, new WatchedRepositories(['alpha' => ['github' => 'acme/widgets'], 'beta' => []]), new GitHubMoments());
     }
 
     /**
