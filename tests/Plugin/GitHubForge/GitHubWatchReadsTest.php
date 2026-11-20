@@ -7,6 +7,7 @@ namespace Intakt\Tests\Plugin\GitHubForge;
 use Intakt\Core\Watcher\Domain\AdmissionDecision;
 use Intakt\Core\Watcher\Domain\HeadAdmission;
 use Intakt\Plugin\Forge\Contract\ChangeId;
+use Intakt\Plugin\Forge\Contract\ChangeIdEmpty;
 use Intakt\Plugin\Forge\Contract\ChangeNotFound;
 use Intakt\Plugin\Forge\Contract\CiRun;
 use Intakt\Plugin\Forge\Contract\CiRunOrigin;
@@ -56,6 +57,7 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
 #[UsesClass(AdmissionDecision::class)]
 #[UsesClass(PullRequestAddress::class)]
 #[UsesClass(ChangeId::class)]
+#[UsesClass(ChangeIdEmpty::class)]
 #[UsesClass(ChangeNotFound::class)]
 #[UsesClass(CiRun::class)]
 #[UsesClass(CiRunOrigin::class)]
@@ -720,6 +722,18 @@ final class GitHubWatchReadsTest extends TestCase
         $this->expectException(ForgeReadFailed::class);
 
         $this->reads()->listOpen('alpha', null);
+    }
+
+    public function testAListedPullRequestWhoseAddressIsOnlyWhitespaceRaisesAReadFailure(): void
+    {
+        $this->listing = 'pulls_blank_address.json';
+
+        try {
+            $this->reads()->listOpen('alpha', null);
+            self::fail('A blank address is no change this forge can read.');
+        } catch (ForgeReadFailed $failure) {
+            self::assertInstanceOf(ChangeIdEmpty::class, $failure->getPrevious());
+        }
     }
 
     public function testAListedPullRequestWithAMomentItCannotReadRaisesAReadFailure(): void
