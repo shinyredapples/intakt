@@ -1,0 +1,63 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Core\Outage\Infrastructure;
+
+use Intakt\Core\Ai\Contract\AiServices;
+use Intakt\Core\Outage\Contract\OutageServices;
+use Intakt\Plugin\GitHubForge\Contract\GitHubForgeServices;
+use Intakt\Plugin\Vendor\Contract\ProviderCatalog;
+use Intakt\Plugin\Vendor\Contract\ProviderDescriptor;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
+use Symfony\Contracts\HttpClient\HttpClientInterface;
+use Uri\Rfc3986\Uri;
+
+// The hosts come from the forge's and the vendors' own configuration, so the check never needs a setting of its own.
+final readonly class ConfiguredProbes
+{
+    /**
+     * @param array<string, list<string>> $accounts
+     */
+    public function __construct(
+        private HttpClientInterface $http,
+        private ProviderCatalog $catalog,
+        #[Autowire(param: AiServices::ACCOUNTS)]
+        private array $accounts,
+        #[Autowire(param: GitHubForgeServices::API_URL)]
+        private string $forgeUrl,
+        #[Autowire(param: OutageServices::PROBE_TIMEOUT)]
+        private float $timeout,
+    ) {
+    }
+
+    public function connectivity(): ProbedConnectivity
+    {
+        return new ProbedConnectivity($this->probes());
+    }
+
+    /**
+     * @return list<Probe>
+     */
+    public function probes(): array
+    {
+        $forge = new Uri($this->forgeUrl);
+
+        return [
+            new DnsProbe((string) $forge->getHost()),
+            new HttpsProbe($this->http, $forge, $this->timeout),
+            ...array_map(fn (ProviderDescriptor $vendor): Probe => new HttpsProbe($this->http, $vendor->baseUrl(), $this->timeout), $this->vendorsInUse()),
+        ];
+    }
+
+    /**
+     * @return list<ProviderDescriptor>
+     */
+    private function vendorsInUse(): array
+    {
+        return array_values(array_filter(
+            $this->catalog->descriptors(),
+            fn (ProviderDescriptor $vendor): bool => [] !== ($this->accounts[$vendor->id()] ?? []),
+        ));
+    }
+}

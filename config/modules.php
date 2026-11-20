@@ -15,6 +15,7 @@ return [
     'Core/Ledger',
     'Core/Mcp',
     'Core/Memory',
+    'Core/Outage',
     'Core/Platform',
     'Core/Review',
     'Core/ReviewerForLoop',
