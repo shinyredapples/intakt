@@ -57,6 +57,22 @@ final class BoardPhoneLandingTest extends DashboardPageTestCase
         self::assertResponseHeaderSame('Vary', self::VARY);
     }
 
+    public function testADesktopUserAgentWithoutClientHintsSeesTheBoard(): void
+    {
+        $this->browser->request('GET', '/', server: ['HTTP_USER_AGENT' => self::DESKTOP_CHROME]);
+
+        self::assertResponseIsSuccessful();
+        self::assertResponseHeaderSame('Vary', self::VARY);
+    }
+
+    public function testAHeadRequestFromAPhoneGetsTheRedirectAndVary(): void
+    {
+        $this->browser->request('HEAD', '/', server: ['HTTP_USER_AGENT' => self::IPHONE_SAFARI]);
+
+        self::assertResponseRedirects('/waiting', Response::HTTP_SEE_OTHER);
+        self::assertResponseHeaderSame('Vary', self::VARY);
+    }
+
     public function testTheBoardLinkWithTheFlagIsNotRedirectedOnAPhone(): void
     {
         $page = $this->browser->request('GET', '/?board=1', server: ['HTTP_USER_AGENT' => self::IPHONE_SAFARI]);
