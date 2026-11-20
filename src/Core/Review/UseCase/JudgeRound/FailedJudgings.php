@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\UseCase\JudgeRound;
 
+use DateTimeImmutable;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
@@ -32,13 +33,19 @@ final readonly class FailedJudgings
     // The ledger record alone, which commits together with the queued publication, so it tells whether the round's outcome is published already.
     public function isRecorded(string $roundId): bool
     {
+        return $this->recordedAt($roundId) instanceof DateTimeImmutable;
+    }
+
+    // When the ledger recorded the round's judging as failed, so a status can place the failure among later outcomes.
+    public function recordedAt(string $roundId): ?DateTimeImmutable
+    {
         foreach ($this->ledger->readOfKind(LedgerEventKind::JudgingFailed) as $recorded) {
             if ($roundId === $this->payloads->of($recorded, JudgingFailed::class)?->round) {
-                return true;
+                return $recorded->recordedAt;
             }
         }
 
-        return false;
+        return null;
     }
 
     // A transport that cannot be listed shows no failure, because reading it with get() would hand its messages out.
