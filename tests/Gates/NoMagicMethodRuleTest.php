@@ -84,4 +84,43 @@ final class NoMagicMethodRuleTest extends PhpStanRuleTestCase
     {
         $this->assertRuleAccepts('magic-method-migration');
     }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function otherMagicMethods(): iterable
+    {
+        yield '__clone' => ['src/Snapshot.php:14 intakt.noMagicMethod Method Intakt\Sample\Snapshot::__clone() is a magic method'];
+        yield '__destruct' => ['src/Snapshot.php:19 intakt.noMagicMethod Method Intakt\Sample\Snapshot::__destruct() is a magic method'];
+        yield '__serialize' => ['src/Snapshot.php:27 intakt.noMagicMethod Method Intakt\Sample\Snapshot::__serialize() is a magic method'];
+        yield '__unserialize' => ['src/Snapshot.php:35 intakt.noMagicMethod Method Intakt\Sample\Snapshot::__unserialize() is a magic method'];
+        yield '__debugInfo' => ['src/Snapshot.php:43 intakt.noMagicMethod Method Intakt\Sample\Snapshot::__debugInfo() is a magic method'];
+        yield '__set_state' => ['src/Snapshot.php:51 intakt.noMagicMethod Method Intakt\Sample\Snapshot::__set_state() is a magic method'];
+    }
+
+    #[DataProvider('otherMagicMethods')]
+    public function testAClassWithAnyOtherMagicMethodFailsStaticAnalysis(string $expectedFinding): void
+    {
+        $this->assertRuleRejects('other-magic-methods', $expectedFinding);
+    }
+
+    public function testAMagicMethodOfATraitNoClassUsesFailsStaticAnalysis(): void
+    {
+        $this->assertRuleRejects('unused-trait-magic', 'src/Dynamic.php:9 intakt.noMagicMethod Method Intakt\Sample\Dynamic::__get() is a magic method');
+    }
+
+    public function testATraitMethodAliasedToAMagicMethodFailsStaticAnalysis(): void
+    {
+        $this->assertRuleRejects('aliased-trait-magic', 'src/Finder.php:10 intakt.noMagicMethod Method Intakt\Sample\Finder::__call() is a magic method');
+    }
+
+    public function testAMagicMethodDeclaredByAnInterfaceFailsStaticAnalysis(): void
+    {
+        $this->assertRuleRejects('interface-magic', 'src/DynamicAccess.php:9 intakt.noMagicMethod Method Intakt\Sample\DynamicAccess::__get() is a magic method');
+    }
+
+    public function testATraitWithNamedMethodsAndPlainAliasesPassesStaticAnalysis(): void
+    {
+        $this->assertRuleAccepts('trait-with-named-methods');
+    }
 }

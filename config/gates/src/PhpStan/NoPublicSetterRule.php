@@ -4,8 +4,13 @@ declare(strict_types=1);
 
 namespace Intakt\Gates\PhpStan;
 
+use PhpParser\Modifiers;
 use PhpParser\Node;
+use PhpParser\Node\Stmt;
 use PhpParser\Node\Stmt\ClassMethod;
+use PhpParser\Node\Stmt\Trait_;
+use PhpParser\Node\Stmt\TraitUse;
+use PhpParser\Node\Stmt\TraitUseAdaptation\Alias;
 use PHPStan\Analyser\Scope;
 use PHPStan\Reflection\ClassReflection;
 use PHPStan\Rules\IdentifierRuleError;
@@ -13,23 +18,23 @@ use PHPStan\Rules\Rule;
 use PHPStan\Rules\RuleErrorBuilder;
 
 /**
- * @implements Rule<ClassMethod>
+ * @implements Rule<Stmt>
  */
 final readonly class NoPublicSetterRule implements Rule
 {
-    // "set" not followed by a lowercase letter, so setName() and set_name() are setters while settle() and setup() are words of their own
-    private const string SETTER = '~^set(?![a-z])~';
+    // "set" in any letter case, since PHP matches method names case-insensitively, not followed by a lowercase letter, so setName(), SetName() and set_name() are setters while settle(), setup() and Settings() are words of their own
+    private const string SETTER = '~^[sS][eE][tT](?![a-z])~';
 
     private RepositoryCode $repositoryCode;
 
-    public function __construct(string $root)
+    public function __construct(private string $root)
     {
         $this->repositoryCode = new RepositoryCode($root);
     }
 
     public function getNodeType(): string
     {
-        return ClassMethod::class;
+        return Stmt::class;
     }
 
     /**
@@ -37,17 +42,75 @@ final readonly class NoPublicSetterRule implements Rule
      */
     public function processNode(Node $node, Scope $scope): array
     {
+        $findings = match (true) {
+            $node instanceof ClassMethod => $this->setterOfClass($node, $scope),
+            $node instanceof Trait_ => $this->settersOfTrait($node),
+            $node instanceof TraitUse => $this->settersByTraitAlias($node, $scope),
+            default => [],
+        };
+
+        return $this->repositoryCode->contains($scope->getFile()) ? $findings : [];
+    }
+
+    /**
+     * @return list<IdentifierRuleError>
+     */
+    private function setterOfClass(ClassMethod $method, Scope $scope): array
+    {
+        $class = $scope->getClassReflection();
+        $name = $method->name->toString();
+
+        // PHPStan analyzes a trait's methods only inside each class that uses it, so they are judged once where the trait declares them, which also covers a trait no class uses
+        if (!$class instanceof ClassReflection || $scope->isInTrait() || !$this->isPublicSetter($method) || $this->vendorDeclares($class, $name)) {
+            return [];
+        }
+
+        return [$this->publicSetter($class->getDisplayName(), $name, $method->getStartLine())];
+    }
+
+    /**
+     * @return list<IdentifierRuleError>
+     */
+    private function settersOfTrait(Trait_ $trait): array
+    {
+        $setters = array_filter($trait->getMethods(), $this->isPublicSetter(...));
+
+        return array_values(array_map(fn (ClassMethod $method): IdentifierRuleError => $this->publicSetter((string) $trait->namespacedName, $method->name->toString(), $method->getStartLine()), $setters));
+    }
+
+    /**
+     * @return list<IdentifierRuleError>
+     */
+    private function settersByTraitAlias(TraitUse $use, Scope $scope): array
+    {
         $class = $scope->getClassReflection();
 
-        if (!$class instanceof ClassReflection || !$this->isPublicSetter($node) || !$this->repositoryCode->contains($scope->getFile())) {
+        if (!$class instanceof ClassReflection) {
             return [];
         }
 
-        if ($this->vendorDeclares($class, $node->name->toString())) {
-            return [];
+        $aliases = array_filter($use->adaptations, fn (Node $adaptation): bool => $adaptation instanceof Alias && $this->aliasesToPublicSetter($adaptation, $class));
+
+        return array_values(array_map(fn (Alias $alias): IdentifierRuleError => $this->publicSetter($class->getDisplayName(), $this->aliasedName($alias), $alias->getStartLine()), $aliases));
+    }
+
+    // an alias that keeps the trait's name and visibility adds nothing the trait's own declaration did not show
+    private function aliasesToPublicSetter(Alias $alias, ClassReflection $class): bool
+    {
+        $name = $this->aliasedName($alias);
+
+        if (null === $alias->newName && Modifiers::PUBLIC !== $alias->newModifier) {
+            return false;
         }
 
-        return [$this->publicSetter($class->getDisplayName(), $node->name->toString())];
+        $native = $class->getNativeReflection();
+
+        return 1 === preg_match(self::SETTER, $name) && $native->hasMethod($name) && $native->getMethod($name)->isPublic() && !$this->vendorDeclares($class, $name);
+    }
+
+    private function aliasedName(Alias $alias): string
+    {
+        return ($alias->newName ?? $alias->method)->toString();
     }
 
     private function isPublicSetter(ClassMethod $method): bool
@@ -76,15 +139,19 @@ final readonly class NoPublicSetterRule implements Rule
             return false;
         }
 
-        $file = $prototype->getDeclaringClass()->getFileName();
-
-        return false === $file || !$this->repositoryCode->contains($file);
+        return $this->isVendorFile($prototype->getDeclaringClass()->getFileName());
     }
 
-    private function publicSetter(string $class, string $method): IdentifierRuleError
+    // PHP's own classes have no file; any file of the repository outside vendor/ (migrations/ too) is code the repository could rename
+    private function isVendorFile(false|string $file): bool
+    {
+        return false === $file || !str_starts_with($file, $this->root.'/') || str_starts_with($file, $this->root.'/vendor/');
+    }
+
+    private function publicSetter(string $class, string $method, int $line): IdentifierRuleError
     {
         $message = sprintf('Method %s::%s() is a public setter: no public setters, because an object changed after construction can be seen half set up and changed by any caller; pass the value to the constructor, or return a new instance from a with*() method (clone() with overrides).', $class, $method);
 
-        return RuleErrorBuilder::message($message)->identifier('intakt.noPublicSetter')->build();
+        return RuleErrorBuilder::message($message)->identifier('intakt.noPublicSetter')->line($line)->build();
     }
 }

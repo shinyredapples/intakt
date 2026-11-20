@@ -95,4 +95,47 @@ final class NoPublicSetterRuleTest extends PhpStanRuleTestCase
     {
         $this->assertRuleAccepts('public-setter-migration');
     }
+
+    public function testASetterWithAnUppercaseSetPrefixFailsStaticAnalysis(): void
+    {
+        $this->assertRuleRejects('mixed-case-setter', 'src/Upper.php:11 intakt.noPublicSetter Method Intakt\Sample\Upper::SetName() is a public setter');
+    }
+
+    public function testASetterWithAnAllCapitalsSetPrefixFailsStaticAnalysis(): void
+    {
+        $this->assertRuleRejects('mixed-case-setter', 'src/Upper.php:16 intakt.noPublicSetter Method Intakt\Sample\Upper::SETLabel() is a public setter');
+    }
+
+    public function testAMethodWhoseCapitalizedNameOnlyStartsWithTheLettersSetIsNotReported(): void
+    {
+        self::assertStringNotContainsString('Settings()', $this->ruleFindingsOf('mixed-case-setter'));
+    }
+
+    public function testASetterOverridingAParentInTheMigrationsFolderFailsStaticAnalysis(): void
+    {
+        $this->assertRuleRejects('migration-parent-setter', 'src/LocalChild.php:12 intakt.noPublicSetter Method Intakt\Sample\LocalChild::setName() is a public setter');
+    }
+
+    public function testASetterOfATraitNoClassUsesFailsStaticAnalysis(): void
+    {
+        $this->assertRuleRejects('unused-trait-setter', 'src/Titled.php:9 intakt.noPublicSetter Method Intakt\Sample\Titled::setTitle() is a public setter');
+    }
+
+    public function testASetterOfAUsedTraitIsReportedOnceWhereTheTraitDeclaresIt(): void
+    {
+        $findings = $this->ruleFindingsOf('used-trait-setter');
+
+        self::assertStringStartsWith('src/Titled.php:9 intakt.noPublicSetter Method Intakt\Sample\Titled::setTitle() is a public setter', $findings);
+        self::assertCount(1, explode("\n", $findings));
+    }
+
+    public function testATraitMethodAliasedToAPublicSetterFailsStaticAnalysis(): void
+    {
+        $this->assertRuleRejects('aliased-trait-setter', 'src/Person.php:10 intakt.noPublicSetter Method Intakt\Sample\Person::setName() is a public setter');
+    }
+
+    public function testATraitMethodAliasedToAPrivateSetterPassesStaticAnalysis(): void
+    {
+        $this->assertRuleAccepts('trait-with-named-methods');
+    }
 }
