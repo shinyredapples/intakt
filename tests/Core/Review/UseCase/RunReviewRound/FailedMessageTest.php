@@ -27,7 +27,6 @@ use Symfony\Component\EventDispatcher\EventDispatcher;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\Event\WorkerMessageFailedEvent;
 use Symfony\Component\Messenger\EventListener\SendFailedMessageToFailureTransportListener;
-use Symfony\Component\Messenger\EventListener\StopWorkerOnMessageLimitListener;
 use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
 use Symfony\Component\Messenger\Worker;
 use Symfony\Component\Uid\Uuid;
@@ -104,9 +103,8 @@ final class FailedMessageTest extends KernelTestCase
         $dispatcher = new EventDispatcher();
         $dispatcher->addListener(WorkerMessageFailedEvent::class, $this->fixture->failedMessages());
         $dispatcher->addSubscriber(new SendFailedMessageToFailureTransportListener(new ServiceLocator(['async' => static fn (): InMemoryTransport => $failed])));
-        $dispatcher->addSubscriber(new StopWorkerOnMessageLimitListener(1));
 
-        new Worker(['async' => $incoming], new FailingBus(), $dispatcher, clock: $this->fixture->clock)->run(['sleep' => 0]);
+        new Worker(['async' => $incoming], new FailingBus(), $dispatcher, clock: $this->fixture->clock)->run(['sleep' => 0, 'stop_when_empty' => true]);
 
         self::assertCount(1, $failed->getSent());
         self::assertCount(1, $incoming->getRejected());
