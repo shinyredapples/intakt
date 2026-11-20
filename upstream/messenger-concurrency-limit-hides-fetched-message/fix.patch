@@ -1,0 +1,324 @@
+From cd74271e763c95c33660df8d0edcac582ac46375 Mon Sep 17 00:00:00 2001
+From: Harald Ponce de Leon <haraldpdl@gmail.com>
+Date: Fri, 20 Nov 2026 17:11:33 +0000
+Subject: [Messenger][Doctrine] Make the fetched messages a stopped worker did
+ not reach available again
+
+With --fetch-size (and in 8.2 with --concurrency, whose fetch size defaults to the concurrency), Connection::get() marks the whole batch as delivered. When the worker stops before it reaches the rest of the batch (--limit, --time-limit, --memory-limit, a signal), those messages stay hidden until redeliver_timeout. The Doctrine transport now implements CloseableTransportInterface: on close(), which the worker calls once it stopped, it resets delivered_at of the messages it fetched and that were neither acknowledged nor rejected, unless they were delivered again since.
+---
+ .../Transport/DoctrineIntegrationTest.php     | 75 +++++++++++++++++++
+ .../Tests/Transport/DoctrineReceiverTest.php  | 10 +++
+ .../Tests/Transport/DoctrineTransportTest.php | 12 +++
+ .../Bridge/Doctrine/Transport/Connection.php  | 50 ++++++++++++-
+ .../Doctrine/Transport/DoctrineReceiver.php   | 12 ++-
+ .../Doctrine/Transport/DoctrineTransport.php  |  8 +-
+ 6 files changed, 164 insertions(+), 3 deletions(-)
+
+diff --git a/src/Symfony/Component/Messenger/Bridge/Doctrine/Tests/Transport/DoctrineIntegrationTest.php b/src/Symfony/Component/Messenger/Bridge/Doctrine/Tests/Transport/DoctrineIntegrationTest.php
+index 95db7f94..2286fb2b 100644
+--- a/src/Symfony/Component/Messenger/Bridge/Doctrine/Tests/Transport/DoctrineIntegrationTest.php
++++ b/src/Symfony/Component/Messenger/Bridge/Doctrine/Tests/Transport/DoctrineIntegrationTest.php
+@@ -17,8 +17,17 @@ use Doctrine\DBAL\Schema\DefaultSchemaManagerFactory;
+ use Doctrine\DBAL\Tools\DsnParser;
+ use PHPUnit\Framework\Attributes\RequiresPhpExtension;
+ use PHPUnit\Framework\TestCase;
++use Symfony\Component\EventDispatcher\EventDispatcher;
+ use Symfony\Component\Messenger\Bridge\Doctrine\Tests\Fixtures\DummyMessage;
+ use Symfony\Component\Messenger\Bridge\Doctrine\Transport\Connection;
++use Symfony\Component\Messenger\Bridge\Doctrine\Transport\DoctrineTransport;
++use Symfony\Component\Messenger\Envelope;
++use Symfony\Component\Messenger\EventListener\StopWorkerOnMessageLimitListener;
++use Symfony\Component\Messenger\Handler\HandlersLocator;
++use Symfony\Component\Messenger\MessageBus;
++use Symfony\Component\Messenger\Middleware\HandleMessageMiddleware;
++use Symfony\Component\Messenger\Transport\Serialization\PhpSerializer;
++use Symfony\Component\Messenger\Worker;
+ 
+ #[RequiresPhpExtension('pdo_sqlite')]
+ class DoctrineIntegrationTest extends TestCase
+@@ -74,6 +83,72 @@ class DoctrineIntegrationTest extends TestCase
+         $this->assertNotSame('2000-01-01 00:00:00', $this->driverConnection->fetchOne('SELECT delivered_at FROM messenger_messages WHERE id = ?', [$encoded[0]['id']]));
+     }
+ 
++    public function testReleaseMakesTheFetchedMessagesThatWereNotHandledAvailableAgain()
++    {
++        $this->connection->send('{"message": "acked"}', ['type' => DummyMessage::class]);
++        $this->connection->send('{"message": "rejected"}', ['type' => DummyMessage::class]);
++        $this->connection->send('{"message": "not reached"}', ['type' => DummyMessage::class]);
++        $fetched = $this->connection->get(3);
++        $this->connection->ack($fetched[0]['id']);
++        $this->connection->reject($fetched[1]['id']);
++
++        $this->assertNull($this->connection->get());
++
++        $this->connection->release();
++
++        $next = $this->connection->get();
++        $this->assertSame('{"message": "not reached"}', $next[0]['body']);
++        $this->assertSame(1, (int) $this->driverConnection->fetchOne('SELECT COUNT(*) FROM messenger_messages'));
++    }
++
++    public function testReleaseKeepsAMessageDeliveredAgainSinceItWasFetched()
++    {
++        $this->connection->send('{"message": "Hi"}', ['type' => DummyMessage::class]);
++        $fetched = $this->connection->get();
++
++        // the redeliver timeout passed and another worker received the message
++        $this->driverConnection->executeStatement('UPDATE messenger_messages SET delivered_at = ? WHERE id = ?', ['2099-01-01 00:00:00', $fetched[0]['id']]);
++
++        $this->connection->release();
++
++        $this->assertSame('2099-01-01 00:00:00', $this->driverConnection->fetchOne('SELECT delivered_at FROM messenger_messages WHERE id = ?', [$fetched[0]['id']]));
++    }
++
++    public function testReleaseMakesAMessageKeptAliveAvailableAgain()
++    {
++        $this->connection->send('{"message": "Hi"}', ['type' => DummyMessage::class]);
++        $fetched = $this->connection->get();
++
++        // the keepalive must write another delivery time than the fetch
++        time_sleep_until(floor(microtime(true)) + 1.01);
++        $this->connection->keepalive($fetched[0]['id']);
++
++        $this->connection->release();
++
++        $this->assertSame('{"message": "Hi"}', $this->connection->get()[0]['body']);
++    }
++
++    public function testAWorkerStoppedByItsMessageLimitReleasesTheRestOfTheFetchedMessages()
++    {
++        $transport = new DoctrineTransport($this->connection, new PhpSerializer());
++        $transport->send(new Envelope(new DummyMessage('first')));
++        $transport->send(new Envelope(new DummyMessage('second')));
++
++        $handled = [];
++        $bus = new MessageBus([new HandleMessageMiddleware(new HandlersLocator([
++            DummyMessage::class => [static function (DummyMessage $message) use (&$handled) { $handled[] = $message->getMessage(); }],
++        ]))]);
++        $dispatcher = new EventDispatcher();
++        $dispatcher->addSubscriber(new StopWorkerOnMessageLimitListener(1));
++
++        (new Worker(['transport' => $transport], $bus, $dispatcher))->run(['sleep' => 0, 'fetch_size' => 2]);
++
++        $this->assertSame(['first'], $handled);
++        $next = $this->connection->get();
++        $this->assertNotNull($next, 'The message the worker did not reach waits for the redeliver timeout.');
++        $this->assertStringContainsString('second', $next[0]['body']);
++    }
++
+     public function testSendWithDelay()
+     {
+         $this->connection->send('{"message": "Hi i am delayed"}', ['type' => DummyMessage::class], 600000);
+diff --git a/src/Symfony/Component/Messenger/Bridge/Doctrine/Tests/Transport/DoctrineReceiverTest.php b/src/Symfony/Component/Messenger/Bridge/Doctrine/Tests/Transport/DoctrineReceiverTest.php
+index 7ddbb7bc..9a903962 100644
+--- a/src/Symfony/Component/Messenger/Bridge/Doctrine/Tests/Transport/DoctrineReceiverTest.php
++++ b/src/Symfony/Component/Messenger/Bridge/Doctrine/Tests/Transport/DoctrineReceiverTest.php
+@@ -365,6 +365,16 @@ class DoctrineReceiverTest extends TestCase
+         $receiver->keepalive($envelope);
+     }
+ 
++    public function testCloseReleasesTheFetchedMessages()
++    {
++        $connection = $this->createMock(Connection::class);
++        $receiver = new DoctrineReceiver($connection, $this->createSerializer());
++
++        $connection->expects($this->once())->method('release');
++
++        $receiver->close();
++    }
++
+     public function testAckRetriesADeadlockReportedByTheConnection()
+     {
+         $driverConnection = $this->createMock(\Doctrine\DBAL\Connection::class);
+diff --git a/src/Symfony/Component/Messenger/Bridge/Doctrine/Tests/Transport/DoctrineTransportTest.php b/src/Symfony/Component/Messenger/Bridge/Doctrine/Tests/Transport/DoctrineTransportTest.php
+index 901b9d77..85e1cccf 100644
+--- a/src/Symfony/Component/Messenger/Bridge/Doctrine/Tests/Transport/DoctrineTransportTest.php
++++ b/src/Symfony/Component/Messenger/Bridge/Doctrine/Tests/Transport/DoctrineTransportTest.php
+@@ -117,6 +117,18 @@ class DoctrineTransportTest extends TestCase
+         $transport->keepalive($envelope);
+     }
+ 
++    public function testCloseReleasesTheFetchedMessages()
++    {
++        $transport = $this->getTransport(
++            null,
++            $connection = $this->createMock(Connection::class)
++        );
++
++        $connection->expects($this->once())->method('release');
++
++        $transport->close();
++    }
++
+     private function getTransport(?SerializerInterface $serializer = null, ?Connection $connection = null): DoctrineTransport
+     {
+         $serializer ??= $this->createStub(SerializerInterface::class);
+diff --git a/src/Symfony/Component/Messenger/Bridge/Doctrine/Transport/Connection.php b/src/Symfony/Component/Messenger/Bridge/Doctrine/Transport/Connection.php
+index a0680183..9d4f4621 100644
+--- a/src/Symfony/Component/Messenger/Bridge/Doctrine/Transport/Connection.php
++++ b/src/Symfony/Component/Messenger/Bridge/Doctrine/Transport/Connection.php
+@@ -61,6 +61,13 @@ class Connection implements ResetInterface
+ 
+     private bool $autoSetup;
+ 
++    /**
++     * The delivery time of the messages get() returned that were neither acknowledged nor rejected yet, by id.
++     *
++     * @var array<string, \DateTimeImmutable>
++     */
++    private array $deliveredAt = [];
++
+     /**
+      * Constructor.
+      *
+@@ -247,6 +254,10 @@ class Connection implements ResetInterface
+ 
+             $this->driverConnection->commit();
+ 
++            foreach ($doctrineEnvelopes as $doctrineEnvelope) {
++                $this->deliveredAt[$doctrineEnvelope['id']] = $now;
++            }
++
+             return $doctrineEnvelopes;
+         } catch (\Throwable $e) {
+             if ($this->driverConnection->isTransactionActive()) {
+@@ -264,6 +275,8 @@ class Connection implements ResetInterface
+ 
+     public function ack(string $id): bool
+     {
++        unset($this->deliveredAt[$id]);
++
+         try {
+             return $this->driverConnection->delete($this->configuration['table_name'], ['id' => $id]) > 0;
+         } catch (DBALException $exception) {
+@@ -273,6 +286,8 @@ class Connection implements ResetInterface
+ 
+     public function reject(string $id): bool
+     {
++        unset($this->deliveredAt[$id]);
++
+         try {
+             return $this->driverConnection->delete($this->configuration['table_name'], ['id' => $id]) > 0;
+         } catch (DBALException $exception) {
+@@ -296,7 +311,7 @@ class Connection implements ResetInterface
+                 ->set('delivered_at', '?')
+                 ->where('id = ?');
+             $this->executeStatement($queryBuilder->getSQL(), [
+-                new \DateTimeImmutable('UTC'),
++                $now = new \DateTimeImmutable('UTC'),
+                 $id,
+             ], [
+                 Types::DATETIME_IMMUTABLE,
+@@ -304,6 +319,39 @@ class Connection implements ResetInterface
+         } catch (\Throwable $e) {
+             throw new TransportException($e->getMessage(), 0, $e);
+         }
++
++        if (isset($this->deliveredAt[$id])) {
++            $this->deliveredAt[$id] = $now;
++        }
++    }
++
++    /**
++     * Makes the messages get() returned that were neither acknowledged nor rejected available again,
++     * unless they were delivered again since, e.g. to another worker after the redeliver timeout.
++     */
++    public function release(): void
++    {
++        $deliveredAt = $this->deliveredAt;
++        $this->deliveredAt = [];
++
++        try {
++            $queryBuilder = $this->driverConnection->createQueryBuilder()
++                ->update($this->configuration['table_name'])
++                ->set('delivered_at', 'NULL')
++                ->where('delivered_at = ?')
++                ->andWhere('id = ?');
++
++            foreach ($deliveredAt as $id => $at) {
++                $this->executeStatement($queryBuilder->getSQL(), [
++                    $at,
++                    $id,
++                ], [
++                    Types::DATETIME_IMMUTABLE,
++                ]);
++            }
++        } catch (DBALException $exception) {
++            throw new TransportException($exception->getMessage(), 0, $exception);
++        }
+     }
+ 
+     public function setup(): void
+diff --git a/src/Symfony/Component/Messenger/Bridge/Doctrine/Transport/DoctrineReceiver.php b/src/Symfony/Component/Messenger/Bridge/Doctrine/Transport/DoctrineReceiver.php
+index a44d922d..6b27ed74 100644
+--- a/src/Symfony/Component/Messenger/Bridge/Doctrine/Transport/DoctrineReceiver.php
++++ b/src/Symfony/Component/Messenger/Bridge/Doctrine/Transport/DoctrineReceiver.php
+@@ -18,6 +18,7 @@ use Symfony\Component\Messenger\Exception\LogicException;
+ use Symfony\Component\Messenger\Exception\MessageDecodingFailedException;
+ use Symfony\Component\Messenger\Exception\TransportException;
+ use Symfony\Component\Messenger\Stamp\TransportMessageIdStamp;
++use Symfony\Component\Messenger\Transport\CloseableTransportInterface;
+ use Symfony\Component\Messenger\Transport\Receiver\KeepaliveReceiverInterface;
+ use Symfony\Component\Messenger\Transport\Receiver\ListableReceiverInterface;
+ use Symfony\Component\Messenger\Transport\Receiver\MessageCountAwareInterface;
+@@ -27,7 +28,7 @@ use Symfony\Component\Messenger\Transport\Serialization\SerializerInterface;
+ /**
+  * @author Vincent Touzet <vincent.touzet@gmail.com>
+  */
+-class DoctrineReceiver implements ListableReceiverInterface, MessageCountAwareInterface, KeepaliveReceiverInterface
++class DoctrineReceiver implements ListableReceiverInterface, MessageCountAwareInterface, KeepaliveReceiverInterface, CloseableTransportInterface
+ {
+     private const MAX_RETRIES = 3;
+     private int $retryingSafetyCounter = 0;
+@@ -101,6 +102,15 @@ class DoctrineReceiver implements ListableReceiverInterface, MessageCountAwareIn
+         });
+     }
+ 
++    /**
++     * Makes the fetched messages that were neither acknowledged nor rejected available again,
++     * e.g. the rest of a batch fetched with --fetch-size when the worker stops.
++     */
++    public function close(): void
++    {
++        $this->connection->release();
++    }
++
+     public function getMessageCount(): int
+     {
+         try {
+diff --git a/src/Symfony/Component/Messenger/Bridge/Doctrine/Transport/DoctrineTransport.php b/src/Symfony/Component/Messenger/Bridge/Doctrine/Transport/DoctrineTransport.php
+index 710d2396..1f9bef38 100644
+--- a/src/Symfony/Component/Messenger/Bridge/Doctrine/Transport/DoctrineTransport.php
++++ b/src/Symfony/Component/Messenger/Bridge/Doctrine/Transport/DoctrineTransport.php
+@@ -15,6 +15,7 @@ use Doctrine\DBAL\Connection as DbalConnection;
+ use Doctrine\DBAL\Schema\Schema;
+ use Doctrine\DBAL\Schema\Table;
+ use Symfony\Component\Messenger\Envelope;
++use Symfony\Component\Messenger\Transport\CloseableTransportInterface;
+ use Symfony\Component\Messenger\Transport\Receiver\KeepaliveReceiverInterface;
+ use Symfony\Component\Messenger\Transport\Receiver\ListableReceiverInterface;
+ use Symfony\Component\Messenger\Transport\Receiver\MessageCountAwareInterface;
+@@ -25,7 +26,7 @@ use Symfony\Component\Messenger\Transport\TransportInterface;
+ /**
+  * @author Vincent Touzet <vincent.touzet@gmail.com>
+  */
+-class DoctrineTransport implements TransportInterface, SetupableTransportInterface, MessageCountAwareInterface, ListableReceiverInterface, KeepaliveReceiverInterface
++class DoctrineTransport implements TransportInterface, SetupableTransportInterface, MessageCountAwareInterface, ListableReceiverInterface, KeepaliveReceiverInterface, CloseableTransportInterface
+ {
+     private DoctrineReceiver $receiver;
+     private DoctrineSender $sender;
+@@ -61,6 +62,11 @@ class DoctrineTransport implements TransportInterface, SetupableTransportInterfa
+         $this->getReceiver()->keepalive($envelope, $seconds);
+     }
+ 
++    public function close(): void
++    {
++        $this->getReceiver()->close();
++    }
++
+     public function getMessageCount(): int
+     {
+         return $this->getReceiver()->getMessageCount();
+-- 
+2.47.3
+

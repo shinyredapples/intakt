@@ -109,6 +109,7 @@ One row per reproduction in `upstream/`, merged first. *Intakt's* marks a pull r
 | symfony/ai | [Failover misses a deferred 429](upstream/ai-failover-platform-deferred-rate-limit/) | [#2944](https://github.com/symfony/ai/issues/2944) Intakt's, reported |
 | symfony/ai | [Claude Code: response format passed as `Array`](upstream/ai-claude-code-platform-structured-output/) | [#2962](https://github.com/symfony/ai/issues/2962) Intakt's, reported |
 | symfony/ai | [Failed streamed tool run reports no usage](upstream/ai-agent-streamed-tool-call-cut-stream/) | [comment on #2617](https://github.com/symfony/ai/pull/2617#issuecomment-6876304595) Intakt's, reported |
+| symfony/symfony | [Messenger: a stopped worker hides the rest of its fetched batch](upstream/messenger-concurrency-limit-hides-fetched-message/) | fix pull request ready, not filed yet |
 | PHPStan | [Readonly type kept after `clone with`](upstream/phpstan-clone-with-readonly-constructor-type/) | [phpstan#14838](https://github.com/phpstan/phpstan/issues/14838) already reported |
 | FrankenPHP | [`php-cli` crashes on SIGTERM](upstream/frankenphp-messenger-consume-sigterm/) | [frankenphp#2479](https://github.com/php/frankenphp/issues/2479) already reported |
 | MCP SDK | [Three parallel `tools/call` on one session](upstream/mcp-parallel-tools-call-one-session/) | passes, nothing to file |
