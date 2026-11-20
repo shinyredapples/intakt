@@ -174,7 +174,7 @@ final class IntakeStoreTest extends KernelTestCase
     {
         $this->record('alpha', [$this->stored(Issues::task(7))], 'W/"a"');
         $failing = new class {
-            public function onFlush(): void
+            public function onFlush(): never
             {
                 throw new RuntimeException('The flush failed.');
             }
@@ -338,8 +338,8 @@ final class IntakeStoreTest extends KernelTestCase
     public function testAFirstListingLosesWithoutAnExceptionWhenAnotherSyncInsertedTheProjectsStateWhileItWrote(): void
     {
         $connection = $this->entities->getConnection();
-        $competing = new class($connection) {
-            public function __construct(private readonly Connection $connection)
+        $competing = new readonly class($connection) {
+            public function __construct(private Connection $connection)
             {
             }
 
