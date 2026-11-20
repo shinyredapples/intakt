@@ -33,7 +33,7 @@ final class RawPromptMessageRuleTest extends PhpStanRuleTestCase
     {
         yield 'the message factories' => [['Message::ofUser($text)', "Message::forSystem('Be brief.')", 'Message::ofAssistant($text)', 'message::OFUSER($text)', '\Symfony\AI\Platform\Message\Message::forSystem($text)']];
         yield 'the message classes' => [['new UserMessage(new Text($text))', 'new SystemMessage($text)', 'new \Symfony\AI\Platform\Message\UserMessage(new Text($text))', 'new (SystemMessage::class)($text)']];
-        yield 'less direct forms' => [['Message::ofUser(...)', '$message::ofUser($text)', 'array_map(Message::forSystem(...), [$text])']];
+        yield 'less direct forms' => [['$message::ofUser($text)', '(Message::class)::forSystem($text)', "new ('Symfony\\AI\\Platform\\Message\\UserMessage')(new Text(\$text))"]];
     }
 
     /**

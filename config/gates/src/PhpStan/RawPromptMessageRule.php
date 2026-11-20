@@ -18,7 +18,6 @@ use PhpParser\Node\Identifier;
 use PhpParser\Node\Name;
 use PhpParser\Node\Stmt\Class_;
 use PHPStan\Analyser\Scope;
-use PHPStan\Node\StaticMethodCallableNode;
 use PHPStan\Rules\IdentifierRuleError;
 use PHPStan\Rules\Rule;
 use PHPStan\Rules\RuleErrorBuilder;
@@ -66,8 +65,6 @@ final readonly class RawPromptMessageRule implements Rule
 
         $finding = match (true) {
             $node instanceof StaticCall => $this->factoryFinding($node, $scope),
-            // because PHPStan hands a first-class callable `Message::ofUser(...)` over as its own node
-            $node instanceof StaticMethodCallableNode => $this->factoryFinding($node->getOriginalNode(), $scope),
             $node instanceof New_ => $this->constructionFinding($node, $scope),
             default => null,
         };
