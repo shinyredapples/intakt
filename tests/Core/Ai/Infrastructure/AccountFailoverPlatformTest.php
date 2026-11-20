@@ -20,6 +20,7 @@ use Intakt\Core\Ai\Infrastructure\AccountPlatform;
 use Intakt\Core\Ai\Infrastructure\AccountStreamAnswered;
 use Intakt\Core\Ai\Infrastructure\AccountStreamFailures;
 use Intakt\Core\Ai\Infrastructure\CodexAccountFailure;
+use Intakt\Core\Ai\Infrastructure\ModelWaits;
 use Intakt\Core\Ai\Infrastructure\SendFailures;
 use Intakt\Core\Ai\Infrastructure\TypedRejectionConverter;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
@@ -59,6 +60,7 @@ use Throwable;
 
 // On the native clock, because the cooldowns are RateLimiter windows, which read the system time themselves.
 #[CoversClass(AccountFailoverPlatform::class)]
+#[UsesClass(ModelWaits::class)]
 #[CoversClass(AccountPlatform::class)]
 #[CoversClass(AccountStreamFailures::class)]
 #[CoversClass(AccountStreamAnswered::class)]

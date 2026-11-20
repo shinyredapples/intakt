@@ -11,7 +11,6 @@ use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
 use Intakt\Core\Ai\Contract\EveryEndpointUnreachable;
 use Intakt\Core\Ai\Contract\EveryKeyRejected;
 use Intakt\Core\Ai\Contract\KeyRejected;
-use Intakt\Core\Ai\Contract\ModelWaits;
 use Intakt\Core\Ai\Contract\PinnedProvider;
 use Intakt\Core\Ai\Contract\PinnedProviderCooldowns;
 use Intakt\Core\Ai\Contract\Provider;
@@ -33,8 +32,10 @@ use Throwable;
 
 // The accounts of one provider in the owner's order; excluded from the container because config/packages/ai.php defines one per provider with its accounts.
 #[Exclude]
-final readonly class AccountFailoverPlatform implements PlatformInterface, ModelWaits
+final readonly class AccountFailoverPlatform implements PlatformInterface
 {
+    private ModelWaits $modelWaits;
+
     /**
      * @param non-empty-array<string, PlatformInterface> $platforms
      */
@@ -46,13 +47,14 @@ final readonly class AccountFailoverPlatform implements PlatformInterface, Model
         private LoggerInterface $logger,
         private PinnedProviderCooldowns $pinnedCooldowns,
     ) {
+        $this->modelWaits = new ModelWaits($provider, array_keys($platforms), $cooldowns, $pinnedCooldowns);
     }
 
     #[Override]
     public function invoke(string|Model $model, array|string|object $input, array $options = []): DeferredResult
     {
         $failures = new SendFailures();
-        $routerProvider = $this->routerProviderOf($model);
+        $routerProvider = $this->modelWaits->routerProviderOf($model);
         $waits = $this->waits($routerProvider);
         $free = $this->freeAccounts($waits, $failures, $routerProvider);
         if ([] === $free) {
@@ -71,12 +73,9 @@ final readonly class AccountFailoverPlatform implements PlatformInterface, Model
     }
 
     // The same read invoke() decides by, so tier selection never picks a model whose every account waits for its pin (issue #2860).
-    #[Override]
-    public function secondsUntilModelIsFree(string|Model $model): int
+    public function modelWaits(): ModelWaits
     {
-        $waits = $this->waits($this->routerProviderOf($model));
-
-        return in_array(0, $waits, true) ? 0 : min([AccountCooldowns::LONGEST_SECONDS, ...$waits]);
+        return $this->modelWaits;
     }
 
     #[Override]
@@ -85,29 +84,13 @@ final readonly class AccountFailoverPlatform implements PlatformInterface, Model
         return array_first($this->platforms)->getModelCatalog();
     }
 
-    // Read without the options after a question mark, because Symfony AI's catalog takes them from the model name too. Only a router's `owner/model:provider` shape pins (`deepinfra` in `moonshotai/Kimi-K3.1-Pro:deepinfra`): exactly one slash and one colon, no whitespace or control character in any part, anchored at the very end, so a native id with colons (`ft:gpt-4o-mini:org::id`), a tag without an owner (`llama3:8b`), a nested owner (`owner/group/model:router`) or a name with a newline anywhere pins nothing.
-    private function routerProviderOf(string|Model $model): ?string
-    {
-        $name = explode('?', $model instanceof Model ? $model->getName() : $model, 2)[0];
-
-        return 1 === preg_match('~^[^/:[:space:][:cntrl:]]+/[^/:[:space:][:cntrl:]]+:([^/:[:space:][:cntrl:]]+)\z~', $name, $pin) ? $pin[1] : null;
-    }
-
-    // The one read that decides both which accounts are free and how long the call waits when none is: per account the longer of its own window and its pinned provider's, each read once from its store. A wait is 0 only for an account that had neither when read, so a call that finds no free account always reports a wait of at least a second, whatever ended or started between two reads.
+    // The one read that decides both which accounts are free and how long the call waits when none is (ModelWaits).
     /**
      * @return array<string, int>
      */
     private function waits(?string $routerProvider): array
     {
-        $waits = [];
-
-        foreach (array_keys($this->platforms) as $name) {
-            $account = new Account($this->provider, $name);
-            $own = $this->cooldowns->secondsUntilFree($account);
-            $waits[$name] = null === $routerProvider ? $own : max($own, $this->pinnedCooldowns->secondsUntilFree(new PinnedProvider($account, $routerProvider)));
-        }
-
-        return $waits;
+        return $this->modelWaits->perAccount($routerProvider);
     }
 
     /**

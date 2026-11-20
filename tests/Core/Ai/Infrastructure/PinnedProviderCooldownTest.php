@@ -6,12 +6,14 @@ namespace Intakt\Tests\Core\Ai\Infrastructure;
 
 use Closure;
 use Intakt\Core\Ai\Contract\Account;
+use Intakt\Core\Ai\Contract\AccountCooldowns;
 use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
 use Intakt\Core\Ai\Contract\PinnedProvider;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Infrastructure\AccountCooldownWindows;
 use Intakt\Core\Ai\Infrastructure\AccountFailoverPlatform;
 use Intakt\Core\Ai\Infrastructure\AccountPlatform;
+use Intakt\Core\Ai\Infrastructure\ModelWaits;
 use Intakt\Core\Ai\Infrastructure\PinnedProviderCooldownWindows;
 use Intakt\Core\Ai\Infrastructure\SendFailures;
 use Intakt\Core\Ai\Infrastructure\TypedRejectionConverter;
@@ -39,6 +41,7 @@ use Throwable;
 // The accounts never cool down here unless a test says so, so the pinned windows on the mocked clock alone decide.
 #[CoversClass(AccountFailoverPlatform::class)]
 #[CoversClass(AccountPlatform::class)]
+#[CoversClass(ModelWaits::class)]
 #[UsesClass(PinnedProviderCooldownWindows::class)]
 #[UsesClass(PinnedProvider::class)]
 #[UsesClass(AccountCooldownWindows::class)]
@@ -189,6 +192,8 @@ final class PinnedProviderCooldownTest extends TestCase
         yield 'a trailing newline' => ["owner/model:router\n", ['router', "router\n"]];
         yield 'a newline before the colon' => ["owner/model\n:router", ['router']];
         yield 'a nested owner' => ['owner/group/model:router', ['router']];
+        yield 'a no-break space in the model' => ["owner/mo\u{00A0}del:router", ['router']];
+        yield 'a next-line character in the model' => ["owner/mo\u{0085}del:router", ['router']];
         yield 'a tag without an owner' => ['llama3:8b', ['8b']];
         yield 'a fine-tune id' => ['ft:gpt-4o-mini:org:custom:id', ['id']];
     }
@@ -215,6 +220,21 @@ final class PinnedProviderCooldownTest extends TestCase
 
         self::assertInstanceOf(EveryAccountCoolingDown::class, $out);
         self::assertSame([120, 120, 0], [$out->secondsUntilAnAccountIsFree, $accounts->secondsUntilFree(new Account(Provider::OpenAiCompatible, Account::DEFAULT)), $pins->secondsUntilFree($this->deepinfra(Account::DEFAULT))]);
+    }
+
+    // Forced order: the account store throws while saving its window; the pin still cools for the 429's wait and the caller gets the provider's own 429, not the store's error.
+    public function testAnAccountStoreThatThrowsWhileSavingCostsThePinNeitherItsCooldownNorTheCallerThe429(): void
+    {
+        $accounts = self::createStub(AccountCooldowns::class);
+        $accounts->method('coolDown')->willThrowException(new RuntimeException('The disk is full.'));
+        $limited = new RateLimitExceededException(120);
+        $platform = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => new FailingWhenRead($limited)], $accounts, $this->clock, new NullLogger(), $this->pins);
+        $answer = $platform->invoke(self::PINNED, 'Review.');
+
+        $out = $this->failureOf(static fn (): string => $answer->asText());
+
+        self::assertSame($limited, $out);
+        self::assertSame(120, $this->pins->secondsUntilFree($this->deepinfra(Account::DEFAULT)));
     }
 
     private function accounts(PlatformInterface $default, PlatformInterface $team): AccountFailoverPlatform

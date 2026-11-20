@@ -10,6 +10,7 @@ use Intakt\Core\Ai\Contract\PinnedProvider;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Infrastructure\AccountFailoverPlatform;
 use Intakt\Core\Ai\Infrastructure\AccountPlatform;
+use Intakt\Core\Ai\Infrastructure\ModelWaits;
 use Intakt\Core\Ai\Infrastructure\PinnedProviderCooldownWindows;
 use Intakt\Core\Ai\Infrastructure\ProjectModelCatalog;
 use Intakt\Core\Ai\Infrastructure\SendFailures;
@@ -35,6 +36,7 @@ use Throwable;
 #[CoversClass(AccountPlatform::class)]
 #[CoversClass(AccountFailoverPlatform::class)]
 #[UsesClass(PinnedProviderCooldownWindows::class)]
+#[UsesClass(ModelWaits::class)]
 #[UsesClass(PinnedProvider::class)]
 #[UsesClass(ProjectModelCatalog::class)]
 #[UsesClass(EveryAccountCoolingDown::class)]
@@ -80,7 +82,15 @@ final class PinnedProviderRetryAfterHeaderTest extends TestCase
     public static function retryAfterHeaders(): iterable
     {
         yield 'delta seconds' => ['137', 137];
-        yield 'an HTTP date' => ['Thu, 19 Nov 2026 12:02:00 GMT', 120];
+        yield 'delta seconds with leading zeros' => ['000000000137', 137];
+        yield 'delta seconds beyond a day, capped' => ['1000000000', 86400];
+        yield 'delta seconds too long for an integer, capped' => ['99999999999999999999999', 86400];
+        yield 'zero' => ['0', 1];
+        yield 'an IMF-fixdate' => ['Thu, 19 Nov 2026 12:02:00 GMT', 120];
+        yield 'an RFC 850 date' => ['Thursday, 19-Nov-26 12:02:00 GMT', 120];
+        yield 'an asctime date' => ['Thu Nov 19 12:02:00 2026', 120];
+        yield 'a date beyond a day, capped' => ['Sat, 21 Nov 2026 12:00:00 GMT', 86400];
+        yield 'a past date' => ['Thu, 19 Nov 2026 11:00:00 GMT', 1];
     }
 
     #[DataProvider('unreadableRetryAfters')]
@@ -101,6 +111,8 @@ final class PinnedProviderRetryAfterHeaderTest extends TestCase
         yield 'no header' => [''];
         yield 'a word' => ['soon'];
         yield 'a negative number' => ['-5'];
+        yield 'a date PHP would normalize' => ['Thu, 19 Nov 2026 12:99:00 GMT'];
+        yield 'a date with the wrong weekday' => ['Fri, 19 Nov 2026 12:02:00 GMT'];
     }
 
     /**

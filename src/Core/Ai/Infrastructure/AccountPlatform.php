@@ -136,7 +136,7 @@ final readonly class AccountPlatform implements PlatformInterface
         };
     }
 
-    // A spent plan's limit comes without a reset (CodexAccountFailure), so only it waits for the plan's measured reset; the pin cools in a finally block after the account, so neither failing store costs the other its window.
+    // A spent plan's limit comes without a reset (CodexAccountFailure), so only it waits for the plan's measured reset. The account cools before the pin, and a failing write of either is logged and costs neither the other its window nor the caller the provider's 429.
     private function coolDownLimited(?int $retryAfter): void
     {
         try {
@@ -145,12 +145,15 @@ final readonly class AccountPlatform implements PlatformInterface
             } else {
                 $this->cooldowns->coolDown($this->account, $retryAfter);
             }
-        } finally {
-            $this->coolDownPinned($retryAfter);
+            // Boundary: any failure of the account store is logged, because the provider's 429 must still reach the caller and the pin must still cool.
+        } catch (Throwable $notSaved) {
+            $this->logger->warning('The cooldown of account {account} could not be saved.', ['account' => $this->account->key(), 'exception' => $notSaved]);
         }
+
+        $this->coolDownPinned($retryAfter);
     }
 
-    // Symfony AI's generic bridge throws its 429 without the response's Retry-After (symfony/ai#2913, noted in upstream/ai-failover-platform-deferred-rate-limit), so the header is read from the raw answer: delta-seconds, or an HTTP date judged against the clock; null when there is none or it does not parse, so the default minute applies.
+    // Symfony AI's generic bridge throws its 429 without the response's Retry-After (symfony/ai#2913, reproduced in upstream/ai-failover-platform-deferred-rate-limit), so the header is read from the raw answer as RFC 9110 defines it: delta-seconds of any length, or an HTTP date judged against the clock, capped at a day and at least a second; null when there is none or it does not parse, so the default minute applies.
     private function retryAfterHeaderOf(?RawResultInterface $answer): ?int
     {
         if (!$answer instanceof RawHttpResult) {
@@ -163,16 +166,41 @@ final readonly class AccountPlatform implements PlatformInterface
             return null;
         }
 
-        if (1 === preg_match('~^\d{1,9}\z~', $value)) {
-            return max(1, (int) $value);
-        }
+        $seconds = 1 === preg_match('~^\d+\z~', $value) ? $this->delaySecondsOf($value) : $this->secondsUntilDate($value);
 
-        $at = DateTimeImmutable::createFromFormat('!D, d M Y H:i:s \G\M\T', $value, new DateTimeZone('UTC'));
-
-        return false === $at ? null : max(1, $at->getTimestamp() - $this->clock->now()->getTimestamp());
+        return null === $seconds ? null : max(1, min(AccountCooldowns::LONGEST_SECONDS, $seconds));
     }
 
-    // The pinned provider keeps its own window, which alone says how long the call waits for it (AccountFailoverPlatform); logged instead of thrown, because the provider's 429 must still reach the caller and the account still cools down.
+    // Judged by the digits that matter, because a delay too long for an integer is still a valid delay of at least a day.
+    private function delaySecondsOf(string $digits): int
+    {
+        $significant = ltrim($digits, '0');
+
+        return strlen($significant) > strlen((string) AccountCooldowns::LONGEST_SECONDS) ? AccountCooldowns::LONGEST_SECONDS : (int) $significant;
+    }
+
+    // The three HTTP-date forms of RFC 9110: IMF-fixdate, the obsolete RFC 850 form and asctime. A date counts only when it formats back to the header, so one PHP reads by normalizing it (minute 99, a wrong weekday) falls back to the default minute instead of a wait it never named.
+    private function secondsUntilDate(string $value): ?int
+    {
+        $utc = new DateTimeZone('UTC');
+
+        foreach (['D, d M Y H:i:s \G\M\T', 'l, d-M-y H:i:s \G\M\T', 'D M j H:i:s Y'] as $format) {
+            $at = DateTimeImmutable::createFromFormat('!'.$format, $value, $utc);
+            if (false !== $at && $this->formatsBack($at, $format, $value)) {
+                return $at->getTimestamp() - $this->clock->now()->getTimestamp();
+            }
+        }
+
+        return null;
+    }
+
+    // asctime pads a one-digit day with a space (`Nov  9`), which no PHP format writes, so runs of spaces are compared as one.
+    private function formatsBack(DateTimeImmutable $at, string $format, string $value): bool
+    {
+        return $at->format($format) === preg_replace('~ {2,}~', ' ', $value);
+    }
+
+    // The pinned provider keeps its own window, which alone says how long the call waits for it (AccountFailoverPlatform); logged instead of thrown, because the provider's 429 must still reach the caller.
     private function coolDownPinned(?int $retryAfter): void
     {
         if (!$this->pinned instanceof PinnedProvider) {

@@ -9,7 +9,6 @@ use Intakt\Core\Ai\Contract\AiServices;
 use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
 use Intakt\Core\Ai\Contract\EveryKeyRejected;
 use Intakt\Core\Ai\Contract\EveryProviderOut;
-use Intakt\Core\Ai\Contract\ModelWaits;
 use Intakt\Core\Ai\Contract\ProviderOutage;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
@@ -128,7 +127,7 @@ final readonly class TierPlatform implements TierInvoker
         $wait = $this->cooldowns->secondsUntilAnAccountIsFree($model->provider);
         $platform = $this->platforms->has($model->provider->value) ? $this->platforms->get($model->provider->value) : null;
 
-        return $platform instanceof ModelWaits ? max($wait, $platform->secondsUntilModelIsFree($model->model)) : $wait;
+        return $platform instanceof AccountFailoverPlatform ? max($wait, $platform->modelWaits()->secondsUntilFree($model->model)) : $wait;
     }
 
     private function recordSwitch(ResolvedModel $own, ResolvedModel $answering): void

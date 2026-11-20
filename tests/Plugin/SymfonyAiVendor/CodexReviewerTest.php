@@ -26,6 +26,7 @@ use Intakt\Core\Ai\Infrastructure\CompletedCodexTurn;
 use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
 use Intakt\Core\Ai\Infrastructure\ConfinedCodexClient;
 use Intakt\Core\Ai\Infrastructure\IsolatedCodexCli;
+use Intakt\Core\Ai\Infrastructure\ModelWaits;
 use Intakt\Core\Ai\Infrastructure\ProjectModelCatalog;
 use Intakt\Core\Ai\Infrastructure\SendFailures;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
@@ -114,6 +115,7 @@ use Throwable;
 #[UsesClass(CodexEffort::class)]
 #[UsesClass(CodexTokenRefresh::class)]
 #[UsesClass(AccountFailoverPlatform::class)]
+#[UsesClass(ModelWaits::class)]
 #[UsesClass(AccountPlatform::class)]
 #[UsesClass(AccountCooldownWindows::class)]
 #[UsesClass(AccountErrorReported::class)]

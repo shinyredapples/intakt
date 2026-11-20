@@ -12,6 +12,7 @@ use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Infrastructure\AccountFailoverPlatform;
 use Intakt\Core\Ai\Infrastructure\AccountPlatform;
 use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
+use Intakt\Core\Ai\Infrastructure\ModelWaits;
 use Intakt\Core\Ai\Infrastructure\SendFailures;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
 use Intakt\Core\Ai\Infrastructure\TypedRejectionConverter;
@@ -75,6 +76,7 @@ use Throwable;
 // The real path of a failed name lookup: the Anthropic bridge built by its own factory over an HTTP client whose response fails when it is read, as Symfony's client reports a lookup, so no second account is tried and the vendor asks the reviewer again.
 #[CoversClass(SymfonyAiVendor::class)]
 #[CoversClass(AccountFailoverPlatform::class)]
+#[UsesClass(ModelWaits::class)]
 #[CoversClass(ProviderUnreachable::class)]
 #[UsesClass(AccountPlatform::class)]
 #[UsesClass(SendFailures::class)]

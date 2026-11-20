@@ -19,6 +19,7 @@ use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
 use Intakt\Core\Ai\Infrastructure\ConfinedClaudeCodeClient;
 use Intakt\Core\Ai\Infrastructure\FinishedProcessResult;
 use Intakt\Core\Ai\Infrastructure\IsolatedClaudeCodeCli;
+use Intakt\Core\Ai\Infrastructure\ModelWaits;
 use Intakt\Core\Ai\Infrastructure\ProjectModelCatalog;
 use Intakt\Core\Ai\Infrastructure\RemovedAfterRun;
 use Intakt\Core\Ai\Infrastructure\SendFailures;
@@ -106,6 +107,7 @@ use Symfony\Component\Uid\UuidV7;
 #[CoversClass(SymfonyAiVendor::class)]
 #[CoversClass(AccountPlatform::class)]
 #[UsesClass(AccountFailoverPlatform::class)]
+#[UsesClass(ModelWaits::class)]
 #[UsesClass(AccountCooldownWindows::class)]
 #[UsesClass(AccountStreamFailures::class)]
 #[UsesClass(SendFailures::class)]
