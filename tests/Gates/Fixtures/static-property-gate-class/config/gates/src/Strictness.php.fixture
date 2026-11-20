@@ -1,0 +1,15 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Gates\Sample;
+
+final class Strictness
+{
+    private static ?int $level = null;
+
+    public function level(): int
+    {
+        return self::$level ??= 9;
+    }
+}
