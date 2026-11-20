@@ -14,6 +14,7 @@ use Intakt\Core\Dashboard\Domain\RoundStart;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\TestWith;
 use Symfony\Component\DomCrawler\Crawler;
 use Twig\Environment;
 
@@ -52,16 +53,27 @@ final class BarChartTemplateTest extends KernelTestCase
         self::assertSame([], $zeroDay);
     }
 
-    public function testBarsStayAtLeastATenthOfAUnitWideWhenThousandsOfDaysAreDrawn(): void
+    #[TestWith([365])]
+    #[TestWith([1897])]
+    #[TestWith([2500])]
+    #[TestWith([3001])]
+    #[TestWith([5000])]
+    #[TestWith([7777])]
+    public function testEveryBarStaysAtLeastATenthOfAUnitWideInItsWrittenCoordinatesWhenThousandsOfDaysAreDrawn(int $days): void
     {
-        $bars = array_map(static fn (int $day): ChartBar => new ChartBar('d'.$day, 1, '1 round', 'd'.$day), range(1, 5000));
-        $path = (string) $this->render($bars, 1)->filter('path.c-bar')->first()->attr('d');
+        $twig = self::getContainer()->get(Environment::class);
+        self::assertInstanceOf(Environment::class, $twig);
+        $html = $twig->render('dashboard/components/bar_chart.html.twig', ['name' => 'Rounds', 'top' => 2, 'bars' => array_fill(0, $days, new ChartBar('Day', 1, '1 round', 'Day'))]);
 
-        if (1 !== preg_match('/^M([\d.]+),.* H[\d.]+ Q([\d.]+),/', $path, $edges)) {
-            self::fail('Not a bar path: '.$path);
+        self::assertSame($days, preg_match_all('/<path d="M([\d.]+),[^"]* H[\d.]+ Q([\d.]+),[^"]*" class="c-bar"/', $html, $edges));
+        $collapsed = [];
+        foreach ($edges[1] as $bar => $leftEdge) {
+            if (round((float) $edges[2][$bar] - (float) $leftEdge, 1) < 0.1) {
+                $collapsed[] = $bar;
+            }
         }
 
-        self::assertGreaterThanOrEqual(0.1, round((float) $edges[2] - (float) $edges[1], 1));
+        self::assertSame([], $collapsed);
     }
 
     private function costChart(): Crawler

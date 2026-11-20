@@ -14,8 +14,11 @@
 {%- set axisEvery = max(1, (max(bars|map(bar => bar.label|length)) * 8 + 6) / step)|round(0, 'ceil') -%}
 {%- set labelEvery = max(1, (max(bars|map(bar => (bar.shown ?? bar.value)|length)) * 8 + 6) / step)|round(0, 'ceil') -%}
 {%- macro bar_path(x, y, w, base, rounded) -%}
+{#- The right edge is the written left edge plus the written width, because rounding the two edges apart can give a narrow bar the same number for both. -#}
+{%- set x = x|round(1) -%}
+{%- set w = max(0.1, w|round(1)) -%}
 {%- set r = rounded ? min(4, w / 2, base - y) : 0 -%}
-M{{ x|round(1) }},{{ base|round(1) }} V{{ (y + r)|round(1) }} Q{{ x|round(1) }},{{ y|round(1) }} {{ (x + r)|round(1) }},{{ y|round(1) }} H{{ (x + w - r)|round(1) }} Q{{ (x + w)|round(1) }},{{ y|round(1) }} {{ (x + w)|round(1) }},{{ (y + r)|round(1) }} V{{ base|round(1) }} Z
+M{{ x }},{{ base|round(1) }} V{{ (y + r)|round(1) }} Q{{ x }},{{ y|round(1) }} {{ (x + r)|round(1) }},{{ y|round(1) }} H{{ (x + w - r)|round(1) }} Q{{ (x + w)|round(1) }},{{ y|round(1) }} {{ (x + w)|round(1) }},{{ (y + r)|round(1) }} V{{ base|round(1) }} Z
 {%- endmacro -%}
 <svg class="chart-svg" viewBox="0 0 {{ width }} {{ height }}" width="{{ width }}" height="{{ height }}" role="group" aria-label="{{ name }}">
     {%- for share in [0, 0.5, 1] %}
