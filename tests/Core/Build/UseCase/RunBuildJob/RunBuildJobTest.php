@@ -14,6 +14,7 @@ use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\Domain\GatesAtOnce;
 use Intakt\Core\Build\Domain\GatesByDefault;
 use Intakt\Core\Build\Domain\QuestionRefused;
+use Intakt\Core\Build\UseCase\RunBuildJob\BuildCloneIsNoFolder;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuilderNotOnClaudeCode;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
@@ -34,7 +35,6 @@ use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\PromptCut;
 use Intakt\Core\Review\Contract\UntrustedSource;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
-use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -46,6 +46,7 @@ use Symfony\Component\Filesystem\Filesystem;
 #[CoversClass(BuildJobOutcome::class)]
 #[CoversClass(BuildVerdict::class)]
 #[CoversClass(BuilderNotOnClaudeCode::class)]
+#[CoversClass(BuildCloneIsNoFolder::class)]
 #[UsesClass(BuildJob::class)]
 #[UsesClass(BuildBrief::class)]
 #[UsesClass(BuilderPrompt::class)]
@@ -252,7 +253,7 @@ final class RunBuildJobTest extends TestCase
 
     public function testACloneThatIsNoFolderIsRefused(): void
     {
-        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionObject(BuildCloneIsNoFolder::at($this->folder.'/missing'));
 
         (void) $this->runBuilds(new JobOutput([]))->run(new BuildJob('demo', $this->folder.'/missing', 'task', new BuildBrief('x', [], null), Tier::Standard, 'img'));
     }

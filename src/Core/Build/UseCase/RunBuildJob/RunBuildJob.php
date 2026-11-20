@@ -26,7 +26,6 @@ use Intakt\Core\Job\Contract\JobResult;
 use Intakt\Core\Job\Contract\JobRunner;
 use Intakt\Core\Job\Contract\JobSpec;
 use Intakt\Plugin\Gate\Contract\Gate;
-use InvalidArgumentException;
 use NoDiscard;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Filesystem\Filesystem;
@@ -93,7 +92,7 @@ final readonly class RunBuildJob
     }
 
     /**
-     * @throws InvalidArgumentException
+     * @throws BuildCloneIsNoFolder
      * @throws TierResolutionFailure
      * @throws BuilderNotOnClaudeCode
      * @throws JobRefused
@@ -130,7 +129,7 @@ final readonly class RunBuildJob
         $absolute = realpath($path);
 
         if (false === $absolute || !is_dir($absolute)) {
-            throw new InvalidArgumentException(sprintf('The build clone "%s" is no folder.', $path));
+            throw BuildCloneIsNoFolder::at($path);
         }
 
         return $absolute;

@@ -8,9 +8,9 @@ use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Core\Git\Domain\Mirrors;
+use Intakt\Core\Git\Domain\ProjectNameRefused;
 use Intakt\Core\Git\Domain\SourceLine;
 use Intakt\Core\Git\Domain\TaskBranch;
-use InvalidArgumentException;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Process\Exception\ExceptionInterface;
 use Symfony\Component\Process\Process;
@@ -30,7 +30,8 @@ final readonly class MakeBuildClone
     }
 
     /**
-     * @throws InvalidArgumentException
+     * @throws ProjectNameRefused
+     * @throws BranchNameRefused
      * @throws BuildCloneNotMade
      * @throws RepositoryAttributesRefused
      * @throws ExceptionInterface
@@ -94,7 +95,7 @@ final readonly class MakeBuildClone
         $ref = $this->branchRef($mirror, $branch);
 
         if ($ref === $main) {
-            throw new InvalidArgumentException(sprintf('the task\'s branch "%s" is main itself', $branch));
+            throw BranchNameRefused::mainItself($branch);
         }
 
         return $ref;
@@ -106,7 +107,7 @@ final readonly class MakeBuildClone
         $checked = $this->run($this->inMirror($mirror, ['check-ref-format', '--branch', $branch]));
 
         if (!$checked->isSuccessful() || trim($checked->getOutput()) !== $branch) {
-            throw new InvalidArgumentException(sprintf('"%s" is not a branch name git accepts', $branch));
+            throw BranchNameRefused::notAcceptedByGit($branch);
         }
 
         return self::BRANCHES.$branch;
