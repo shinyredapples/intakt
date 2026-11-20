@@ -8,8 +8,8 @@
 {%- set plot = height - above - below -%}
 {%- set base = above + plot -%}
 {%- set step = (width - left - right) / bars|length -%}
-{#- A bar keeps a gap of 16 while it can and a share of its slot once slots grow narrow, so a long history never draws a bar of no or negative width. -#}
-{%- set barWidth = min(40, max(step - 16, step * 0.6)) -%}
+{#- A bar keeps a gap of 16 while it can and a share of its slot once slots grow narrow, and never drops below 0.1 so a long history never draws a bar of no width. -#}
+{%- set barWidth = max(0.1, min(40, max(step - 16, step * 0.6))) -%}
 {#- Labels show on every n-th bar once they would overlap (about 8 units a character at the chart's type size), because a long history crowds them; the tooltips and the table still name every bar. -#}
 {%- set axisEvery = max(1, (max(bars|map(bar => bar.label|length)) * 8 + 6) / step)|round(0, 'ceil') -%}
 {%- set labelEvery = max(1, (max(bars|map(bar => (bar.shown ?? bar.value)|length)) * 8 + 6) / step)|round(0, 'ceil') -%}
@@ -26,12 +26,13 @@ M{{ x|round(1) }},{{ base|round(1) }} V{{ (y + r)|round(1) }} Q{{ x|round(1) }},
     {%- for bar in bars %}
     {%- set center = left + step * loop.index0 + step / 2 %}
     {%- set x = center - barWidth / 2 %}
-    {%- set y = base - (bar.value ?? 0) / top * plot %}
+    {#- A positive value stands at least 1 unit tall, because a bar lost to rounding would read as zero or as No data. #}
+    {%- set y = (bar.value ?? 0) > 0 ? base - max(bar.value / top * plot, 1) : base %}
     {%- if (bar.value ?? 0) > 0 %}
     <path d="{{ _self.bar_path(x, y, barWidth, base, true) }}" class="c-bar{{ bar.part is not null ? ' c-whole' }}"/>
     {%- endif %}
     {%- if bar.part is not null and bar.part > 0 %}
-    {%- set partTop = base - bar.part / top * plot %}
+    {%- set partTop = base - max(bar.part / top * plot, 1) %}
     <path d="{{ _self.bar_path(x, partTop, barWidth, base, bar.part == bar.value) }}" class="c-bar c-part"/>
     {%- endif %}
     {%- if loop.index0 % labelEvery == 0 %}
