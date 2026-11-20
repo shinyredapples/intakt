@@ -246,7 +246,7 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
     {
         $done = new JudgeDone(self::ROUND, ['f1'], ['f2'], [new JudgeDoneFinding('f1', Severity::P1, 'A bug.'), new JudgeDoneFinding('f2', Severity::P3, 'A nit.')]);
 
-        self::assertSame('{"round":"'.self::ROUND.'","act":["f1"],"follow_ups":["f2"],"findings":[{"id":"f1","severity":"P1","text":"A bug.","merged":[],"file":null,"line":null,"judge_note":null},{"id":"f2","severity":"P3","text":"A nit.","merged":[],"file":null,"line":null,"judge_note":null}],"dropped":[],"same_cause":[],"votes":[]}', $this->written($done));
+        self::assertSame('{"round":"'.self::ROUND.'","act":["f1"],"follow_ups":["f2"],"findings":[{"id":"f1","severity":"P1","text":"A bug.","merged":[],"file":null,"line":null,"judge_note":null,"reported_severity":null},{"id":"f2","severity":"P3","text":"A nit.","merged":[],"file":null,"line":null,"judge_note":null,"reported_severity":null}],"dropped":[],"same_cause":[],"votes":[]}', $this->written($done));
     }
 
     public function testADoneJudgeListsEachDroppedFindingWithItsIdPlaceAndReason(): void
@@ -291,9 +291,9 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
         $payload = $ledger->payloads()[0];
         self::assertSame(['F1', 'F2'], $payload['act']);
         self::assertSame([
-            ['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of F1.', 'merged' => ['F2'], 'file' => 'src/A.php', 'line' => 7, 'judge_note' => null],
-            ['id' => 'F2', 'severity' => 'P1', 'text' => 'Text of F2.', 'merged' => [], 'file' => 'src/A.php', 'line' => 7, 'judge_note' => null],
-            ['id' => 'F3', 'severity' => 'P3', 'text' => 'Text of F3.', 'merged' => [], 'file' => 'src/A.php', 'line' => 8, 'judge_note' => null],
+            ['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of F1.', 'merged' => ['F2'], 'file' => 'src/A.php', 'line' => 7, 'judge_note' => null, 'reported_severity' => 'P2'],
+            ['id' => 'F2', 'severity' => 'P1', 'text' => 'Text of F2.', 'merged' => [], 'file' => 'src/A.php', 'line' => 7, 'judge_note' => null, 'reported_severity' => 'P1'],
+            ['id' => 'F3', 'severity' => 'P3', 'text' => 'Text of F3.', 'merged' => [], 'file' => 'src/A.php', 'line' => 8, 'judge_note' => null, 'reported_severity' => 'P3'],
         ], $payload['findings']);
     }
 

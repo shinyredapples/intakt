@@ -161,9 +161,22 @@ final readonly class RoundLedger
             $entries[$entry->id] = $entry;
         }
 
-        $shown = array_map(static fn (Finding $finding): Finding => $entries[$finding->id] ?? $finding, $findings);
+        return array_map(fn (Finding $reported): JudgeDoneFinding => $this->recordedFinding($entries[$reported->id] ?? $reported, $reported, $judged), $findings);
+    }
 
-        return array_map(fn (Finding $finding): JudgeDoneFinding => new JudgeDoneFinding($finding->id, $finding->severity, $finding->text, $finding->merged, $finding->file, $finding->line, $this->storedNote($judged->notes[$finding->id] ?? null)), $shown);
+    // The entry's severity may be raised by its merges, so the reported one goes beside it for the dashboard's count of which reviewer caught what.
+    private function recordedFinding(Finding $shown, Finding $reported, JudgedFindings $judged): JudgeDoneFinding
+    {
+        return new JudgeDoneFinding(
+            $shown->id,
+            $shown->severity,
+            $shown->text,
+            $shown->merged,
+            $shown->file,
+            $shown->line,
+            $this->storedNote($judged->notes[$shown->id] ?? null),
+            $reported->severity,
+        );
     }
 
     // Redacted and then trimmed, because the note is model text that may quote a held credential, and a credential held with edge whitespace leaves that whitespace behind.
