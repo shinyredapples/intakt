@@ -17,7 +17,7 @@ Code and conventions:
 - [Work intake from GitHub issues](work-intake.md): the work source contract, the `eligibility_label` watch key and the stored state of the GitHub work source
 - [Upstream reproductions](upstream-reproductions.md)
 - [The published highlights page](highlights-page.md): where the assembled `docs/highlights.md` is published
-- [Development diagnostics (Mate)](development-diagnostics.md)
+- [Development diagnostics (Mate)](development-diagnostics.md): Mate's tools, and the Symfony profiler in `dev` and `test` with its allow-list of collectors
 
 Checks, CI and releases:
 - [Quality gates](quality-gates.md): also the `workflows` gate, zizmor over the GitHub Actions workflows in `.github/`, offline; an inline `# zizmor: ignore[<audit>]` without a reason on the same line fails it
@@ -42,6 +42,7 @@ Running Intakt:
 Forges and identity:
 - [Forge contract and the local git forge](forge-contract.md): forge writes, open pull request listing, verdict identity
 - [GitHub App identity](github-app-identity.md)
+- [Pull requests handed to Intakt](handed-to-intakt.md): an open pull request whose `change_opened` line says Intakt's App created it gets one `change_handed_to_intakt` line; when no opening record decides, the author GitHub sets does, and an answer that it is someone else gets a `change_not_handed_to_intakt` line. A recorded answer, either way, means the forge is not asked again; title, labels and branch never decide
 - [Workflow risk scan](workflow-risk-scan.md): one workflow file against the hosted, read-only, secret-free envelope; any form the strict line reader does not read is `unreadable`; the changed paths that are part of the CI definition; the head's, main's and the merged workflows of a change and whether its push waits for the owner; holding a risky CI change until the owner's `approve <sha>`, with its complete diff on the issue
 
 Models and budget:
