@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\Domain;
 
+use DateTimeImmutable;
 use Intakt\Core\Review\Contract\Severity;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
@@ -66,7 +67,7 @@ final readonly class ReviewerCatches
     {
         $reported = $round->findingsByReviewer;
 
-        if (null === $round->judgedAt || null === $reported) {
+        if (!$round->judgedAt instanceof DateTimeImmutable || null === $reported) {
             return false;
         }
 
