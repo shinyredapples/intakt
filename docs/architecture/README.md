@@ -41,7 +41,7 @@ Running Intakt:
 Forges and identity:
 - [Forge contract and the local git forge](forge-contract.md): forge writes, open pull request listing, verdict identity
 - [GitHub App identity](github-app-identity.md)
-- [Pull requests handed to Intakt](handed-to-intakt.md): an open pull request whose `change_opened` line says Intakt's App created it gets one `change_handed_to_intakt` line; nothing the forge reports about it decides
+- [Pull requests handed to Intakt](handed-to-intakt.md): an open pull request whose `change_opened` line says Intakt's App created it gets one `change_handed_to_intakt` line; when no opening record decides, the author GitHub sets does, and an answer that it is someone else gets a `change_not_handed_to_intakt` line. A recorded answer, either way, means the forge is not asked again; title, labels and branch never decide
 - [Workflow risk scan](workflow-risk-scan.md): one workflow file against the hosted, read-only, secret-free envelope; any form the strict line reader does not read is `unreadable`; the changed paths that are part of the CI definition; the head's, main's and the merged workflows of a change and whether its push waits for the owner; holding a risky CI change until the owner's `approve <sha>`, with its complete diff on the issue
 
 Models and budget:
