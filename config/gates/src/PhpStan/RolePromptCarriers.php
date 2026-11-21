@@ -79,18 +79,22 @@ final readonly class RolePromptCarriers
      */
     public function traitFindings(Trait_ $trait, Scope $scope): array
     {
-        $findings = [];
-        foreach (new NodeFinder()->findInstanceOf($trait->stmts, New_::class) as $construction) {
-            $names = $this->traitClassNamesOf($construction->class, $scope);
-            $carrier = null === $names ? null : $this->classNames->matching($names, array_keys(self::BUILDERS))[0] ?? null;
-            $finding = null === $names ? RuleErrorBuilder::message(self::TRAIT_ADVICE)->identifier('intakt.reviewerRole') : (null === $carrier ? null : $this->misplaced($carrier));
+        $findings = array_map(fn (New_ $construction): ?IdentifierRuleError => $this->traitConstructionFinding($construction, $scope), new NodeFinder()->findInstanceOf($trait->stmts, New_::class));
 
-            if ($finding instanceof RuleErrorBuilder) {
-                $findings[] = $finding->line($construction->getStartLine())->build();
-            }
+        return array_values(array_filter($findings, static fn (?IdentifierRuleError $finding): bool => $finding instanceof IdentifierRuleError));
+    }
+
+    private function traitConstructionFinding(New_ $construction, Scope $scope): ?IdentifierRuleError
+    {
+        $names = $this->traitClassNamesOf($construction->class, $scope);
+
+        if (null === $names) {
+            return RuleErrorBuilder::message(self::TRAIT_ADVICE)->identifier('intakt.reviewerRole')->line($construction->getStartLine())->build();
         }
 
-        return $findings;
+        $carrier = $this->classNames->matching($names, array_keys(self::BUILDERS))[0] ?? null;
+
+        return null === $carrier ? null : $this->misplaced($carrier)->line($construction->getStartLine())->build();
     }
 
     // null when the class is known only at run time: `self`, `static` and `parent` name the using class, and a variable's type is known only inside it

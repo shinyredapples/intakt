@@ -542,7 +542,7 @@ final class RawPromptMessageRuleTest extends PhpStanRuleTestCase
     }
 
     /**
-     * @return iterable<string, array{string, string, string, string}>
+     * @return iterable<string, array{string, string, string}>
      */
     public static function carrierUnions(): iterable
     {
