@@ -15,9 +15,9 @@ final readonly class UpNext
     /** @var list<ReviewedRound> */
     public array $waitingToStart;
 
-    // A round counts as in progress from its first reviewer's start, so a round whose reviewers all answered stays listed until the judge decides it.
+    // A round counts as in progress from its first reviewer's start, so a round whose reviewers all answered stays listed until the judge decides it; the reviews come in the board's order.
     /**
-     * @param list<Review> $reviews in the board's order
+     * @param list<Review> $reviews
      */
     public function __construct(array $reviews)
     {

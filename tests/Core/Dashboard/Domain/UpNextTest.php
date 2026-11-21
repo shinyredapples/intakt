@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Dashboard\Domain;
 
 use DateTimeImmutable;
+use DateTimeZone;
 use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Dashboard\Domain\Board;
 use Intakt\Core\Dashboard\Domain\Review;
@@ -16,6 +17,7 @@ use Intakt\Core\Dashboard\Domain\UpNext;
 use Intakt\Core\Review\Contract\RoundEnding;
 use Intakt\Core\Review\Contract\RoundEnds;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
+use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -102,7 +104,13 @@ final class UpNextTest extends TestCase
 
     private function round(string $round, string $startedAt, string $change = 'feat/a'): ReviewedRound
     {
-        return new ReviewedRound(new RoundStart($round, 'alpha', 2), new RoundPlace($change, 1), new DateTimeImmutable($startedAt), null);
+        $moment = DateTimeImmutable::createFromFormat(DATE_ATOM, $startedAt, new DateTimeZone('UTC'));
+
+        if (false === $moment) {
+            throw new LogicException('Not a time: '.$startedAt);
+        }
+
+        return new ReviewedRound(new RoundStart($round, 'alpha', 2), new RoundPlace($change, 1), $moment, null);
     }
 
     private function reviewer(string $id, string $role): ReviewerOutcome
