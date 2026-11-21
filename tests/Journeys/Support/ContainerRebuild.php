@@ -31,7 +31,7 @@ final readonly class ContainerRebuild
         return is_string($class) ? $buildDirectory.'/'.$class.'.php' : throw new LogicException('The kernel names no container class.');
     }
 
-    // Only the loader, because without it the next process's kernel compiles again from the settings it is given, into a new directory beside the one the worker uses.
+    // Only the loader, because without it the next process's kernel compiles again from the settings it is given, into a new directory beside the one the worker uses; no other process compiles one in between, because the instance boots a kernel only for a command or request the journey sends, and the journey waits for this warmup before it sends one.
     /**
      * @param array<string,string> $environment
      */
