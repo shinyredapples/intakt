@@ -17,7 +17,7 @@ The video's script and shot list: [docs/video.md](video.md)
 2. `docker compose up -d --wait`: it returns once the container is healthy.
 3. Open http://localhost:7781. You see **Set up Intakt** with two choices: "Watch a recorded review" and "Run it live with your key".
 4. Open http://localhost:7781/demo and press **Play the demo run**. You see "The demo run is starting: the caption at the bottom of each page names the stage it is in." The page moves on to the review as it fills; the caption's dots walk five stages up to "Done: To fix lists what the change still needs." and then the caption closes itself.
-5. Press **Open the review** in the caption. The review of `sample-change` in `demo-replay` carries the **Replay** mark. Round 1 reads "Changes requested": `correctness` asked for changes with 4 findings, `security` approved. Under "Findings and the judge's call", F1 (P2, `src/discount.js:3`), F2 (P1, `src/report.js:4`) and F4 (P2) read **Fix now**; F3 reads "Dropped before the judge: none of its 2 quoted code fragments is in the change".
+5. You are now on the review. The review of `sample-change` in `demo-replay` carries the **Replay** mark. Round 1 reads "Changes requested": `correctness` asked for changes with 4 findings, `security` approved. Under "Findings and the judge's call", F1 (P2, `src/discount.js:3`), F2 (P1, `src/report.js:4`) and F4 (P2) read **Fix now**; F3 reads "Dropped before the judge: none of its 2 quoted code fragments is in the change".
 
 ## b. One Hugging Face token or provider key, about 5 minutes
 
