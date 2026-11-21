@@ -1,4 +1,6 @@
-Evidence for #1460, rebuilt on commit 0979af95e (the product code of this head).
+Evidence for #1460, rebuilt on commit 7a315b037 (the last product-code commit of the branch).
+The later merge of main (ea14ef18b) changes no board file: only the review page's reviewer
+model cells (_reviewer_cells, _reviewer_model_cell, _now_reviewer, round_changed) and FindingText.
 
 Install: APP_ENV=test, APP_DEBUG=0, a fresh SQLite database migrated with doctrine:migrations:migrate,
 served by PHP's built-in server on localhost:7780 (DASHBOARD_PORT). The ledger holds two rounds:
