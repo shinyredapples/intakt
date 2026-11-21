@@ -479,6 +479,8 @@
     round: "One build, its checks and its review. Sending work back starts the next round.",
     protected: "Files that always need your approval to change, such as secret handling or CI. You choose them per project.",
     reserve: "The smallest part of the week's capacity kept for this project, even when other projects are busy.",
+    fix: "The act list: findings the judge kept to fix before approval.",
+    checked: "Judged: the judge weighed every reviewer's findings and gave the verdict.",
   };
   let termTip;
   function showTerm(t) {

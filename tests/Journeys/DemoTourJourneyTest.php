@@ -92,7 +92,7 @@ final class DemoTourJourneyTest extends JourneyTestCase
 
         self::assertSame('The reviewers reported no findings, so the judge had nothing to mark.', $page->filter('#round-'.self::SECOND.'-judged')->text());
         self::assertSame('Stage 7 of 7', $page->filter('#tour-caption .tour-count')->text());
-        self::assertSame('The new round is judged with nothing left to fix, so the findings are closed.', $page->filter('#tour-caption .tour-line')->text());
+        self::assertSame('Pass 2 is checked: nothing left to fix.', $page->filter('#tour-caption .tour-line')->text());
     }
 
     /**

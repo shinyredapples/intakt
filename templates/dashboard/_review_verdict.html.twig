@@ -1,0 +1,71 @@
+{#- The answer first (#3133): the latest round's outcome in plain words, the findings to fix, the story of the panel and its reviewers. Its own partial, because the judged round's live update replaces it by its id. -#}
+{%- set latest = review.rounds|last -%}
+{%- set judged = review.lastJudgedRound -%}
+{%- set outcome = latest.reviewOutcome -%}
+{%- set outcomes = enum('Intakt\\Core\\Dashboard\\Domain\\ReviewOutcome') -%}
+{#- The worst first, so a P1 leads the list. -#}
+{%- set fix = review.openFindings|sort((a, b) => (a.severity ?? 'P9') <=> (b.severity ?? 'P9')) -%}
+{%- set term = 'dashboard/components/term.html.twig' -%}
+{%- set tone = outcome is null ? 'running' : (outcome is same as(outcomes.Approved) ? 'approved' : (outcome is same as(outcomes.Failed) ? 'failed' : 'changes')) -%}
+<section class="vc vc-{{ tone }}" id="review-verdict" aria-labelledby="review-verdict-state">
+    <div class="vc-head">
+        <div class="vc-main">
+            <p class="vc-state" id="review-verdict-state">
+                {{- include('dashboard/components/icon.html.twig', {name: outcome.icon ?? 'clock'}, with_context = false) -}}
+                <span>{{ outcome is null ? 'Checking' : outcome.plainWords }}</span>
+            </p>
+            <p class="vc-facts">
+                <span>{{ include(term, {term: 'round', words: 'Pass ' ~ (latest.number ?? review.rounds|length)}, with_context = false) }}</span>
+                {%- if latest.isJudged %}<span>{{ include(term, {term: 'checked', words: 'Checked'}, with_context = false) }}</span>{% endif -%}
+                {%- if latest.isReplay %}{{ include('dashboard/components/chip.html.twig', {label: 'Replay', on_page: true, extra: 'replay-mark'}, with_context = false) }}{% endif -%}
+            </p>
+        </div>
+        {{ include('dashboard/components/character.html.twig', {character: enum('Intakt\\Core\\Dashboard\\Domain\\Character').Judge, size: 48}, with_context = false) }}
+    </div>
+    {% if latest.ending is not null and outcome is not null and outcome is not same as(outcomes.ChangesRequested) %}
+    <p class="vc-why">{{ latest.ending.reason }}</p>
+    {% endif %}
+    {% if judged is not null and (fix is not empty or judged.dropped is not empty) %}
+    {% set severities = fix|map(f => f.severity ?? '?') %}
+    <p class="vc-count">
+        {%- if fix is not empty %}<strong>{{ fix|length }} to fix</strong>{% endif -%}
+        {%- for severity in severities|reduce((carry, s) => s in carry ? carry : carry|merge([s]), [])|sort %}
+        <span class="sev sev-{{ severity|lower }}{% if severity == 'P2' %} needs{% endif %}">{{ severities|filter(s => s == severity)|length }} {{ severity }}</span>
+        {%- endfor -%}
+        {%- if judged.dropped is not empty %}<span class="muted">{{ judged.dropped|length }} dropped</span>{% endif -%}
+    </p>
+    {% endif %}
+    {% if fix is not empty %}
+    <h2 class="vc-label">{{ include(term, {term: 'fix', words: 'To fix'}, with_context = false) }}</h2>
+    <ul class="vc-fix" aria-label="To fix">
+        {% for finding in fix %}
+        <li><a class="vc-row" href="#round-{{ judged.round }}-finding-{{ finding.id }}">
+            <span class="sev sev-{{ (finding.severity ?? '')|lower }}{% if finding.severity == 'P2' %} needs{% endif %}">{{ finding.severity ?? '?' }}</span>
+            <span class="vc-title">{% if finding.headline is null %}Text not recorded.{% else %}{{ include('dashboard/_finding_spans.html.twig', {spans: finding_spans(finding.headline)}, with_context = false) }}{% endif %}</span>
+            {% if finding.place is not null %}<span class="mono vc-place">{{ finding.place }}</span>{% endif %}
+        </a></li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+    {% set approving = latest.outcomes|filter(o => o.outcome is same as(outcomes.Approved)) %}
+    {% set catching = latest.outcomes|filter(o => o.outcome is same as(outcomes.ChangesRequested) and (o.findings ?? 0) > 0) %}
+    {% if approving is not empty and catching is not empty %}
+    {% set approver = approving|first %}
+    {% set catcher = catching|first %}
+    {% if approver.lab is not null and catcher.lab is not null and approver.lab is not same as(catcher.lab) %}
+    <p class="vc-story">The {{ approver.role }} reviewer ({{ approver.lab.value }}) approved; the {{ catcher.role }} reviewer ({{ catcher.lab.value }}) found {{ catcher.findings }} {{ catcher.findings == 1 ? 'finding' : 'findings' }}.</p>
+    {% endif %}
+    {% endif %}
+    {% if latest.outcomes is not empty %}
+    <ul class="vc-panel" aria-label="Reviewers">
+        {% for reviewer in latest.outcomes %}
+        {% set said = reviewer.outcome %}
+        <li class="vc-reviewer" title="{{ reviewer.modelInWords }}">
+            {{ include('dashboard/components/character.html.twig', {character: enum('Intakt\\Core\\Dashboard\\Domain\\Character').CodeReviewer, size: 24}, with_context = false) }}
+            <span class="vc-who"><span class="vc-model">{{ reviewer.modelName }}</span>{% if reviewer.lab is not null %} <span class="vc-lab">{{ reviewer.lab.value }}</span>{% endif %}</span>
+            <span class="vc-said">{% if said is not null %}{{ include('dashboard/components/icon.html.twig', {name: said.icon, small: true}, with_context = false) }}{{ said.plainWords }}{% else %}{{ reviewer.progress.value }}{% endif %}</span>
+        </li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+</section>

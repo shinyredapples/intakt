@@ -13,7 +13,7 @@
     <ul class="finding-cards" aria-label="Findings of round {{ reviewed.round }}">
         {% for finding in reviewed.findings %}
         <li class="finding-card" id="round-{{ reviewed.round }}-finding-{{ finding.id }}" data-finding="{{ finding.ids|join(' ') }}">
-            <span class="sev">{{ finding.severity ?? 'Severity not recorded' }}</span>
+            <span class="sev sev-{{ (finding.severity ?? '')|lower }}{% if finding.severity == 'P2' %} needs{% endif %}">{{ finding.severity ?? 'Severity not recorded' }}</span>
             <div class="fc-body">
                 <p class="fc-title"><span class="mono fc-id">{{ finding.id }}</span> <span class="fc-text">{{ include('dashboard/_finding_text.html.twig', {finding: finding, missing: 'Text not recorded.'}, with_context = false) }}</span></p>
                 <p class="fc-place{% if finding.place is not null %} mono{% endif %}">{{ finding.place ?? 'File and line not recorded' }}</p>
@@ -30,7 +30,7 @@
     <ul class="finding-cards" aria-label="Findings of round {{ reviewed.round }} dropped before the judge">
         {% for finding in reviewed.dropped %}
         <li class="finding-card" id="round-{{ reviewed.round }}-dropped-{{ finding.id }}" data-finding="{{ finding.id }}" data-dropped="{{ finding.id }}">
-            <span class="sev">{{ finding.severity ?? 'Severity not recorded' }}</span>
+            <span class="sev sev-{{ (finding.severity ?? '')|lower }}{% if finding.severity == 'P2' %} needs{% endif %}">{{ finding.severity ?? 'Severity not recorded' }}</span>
             <div class="fc-body">
                 <p class="fc-title"><span class="mono fc-id">{{ finding.id }}</span> <span class="fc-text">{{ include('dashboard/_finding_text.html.twig', {finding: finding, missing: 'Text not recorded.'}, with_context = false) }}</span></p>
                 <p class="fc-place{% if finding.place is not null %} mono{% endif %}">{{ finding.place ?? 'File and line not recorded' }}</p>

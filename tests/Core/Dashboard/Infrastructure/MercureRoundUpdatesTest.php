@@ -11,6 +11,7 @@ use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Infrastructure\ComponentOptions;
 use Intakt\Core\Dashboard\Infrastructure\FindingSpans;
+use Intakt\Core\Dashboard\Infrastructure\GlossaryExplanations;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\MercureLiveUpdates;
@@ -738,6 +739,8 @@ final class MercureRoundUpdatesTest extends TestCase
         // Registered because a judged finding's text shows its backtick spans as code.
         $twig->addFunction(new TwigFunction('finding_spans', new FindingSpans()->of(...)));
         $twig->addFunction(new TwigFunction('finding_title_spans', new FindingSpans()->ofATitle(...)));
+        // Registered because the verdict card explains its plain words through glossary terms.
+        $twig->addFunction(new TwigFunction('glossary_explanation', new GlossaryExplanations()->of(...)));
 
         return new MercureRoundUpdates(
             $this->live($publisher),

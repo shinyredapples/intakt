@@ -5,10 +5,11 @@
     <thead><tr><th class="num">Prompt</th><th class="num">Cache read</th><th class="num">Cache write</th><th class="num">Cached</th><th class="num">Completion</th><th class="num">Total</th><th>Cost{% if (labeled ?? true) and reviewed.cost.usd is not null %} {{ include('dashboard/components/figure_kind.html.twig', {kind: enum('Intakt\\Core\\Platform\\Contract\\FigureKind').Estimated, at: 'round-' ~ reviewed.round ~ '-cost'}, with_context = false) }}{% endif %}</th></tr></thead>
     <tbody>
         <tr>
-            {% for tokens in [reviewed.tokens.prompt, reviewed.tokens.cacheRead, reviewed.tokens.cacheWrite, reviewed.tokens.cached, reviewed.tokens.completion, reviewed.tokens.total] %}
-            <td class="num">{{ tokens }}</td>
+            {#- Each cell names its column, so a phone stacks the figures under their labels instead of cutting the table (#3133). -#}
+            {% for label, tokens in {'Prompt': reviewed.tokens.prompt, 'Cache read': reviewed.tokens.cacheRead, 'Cache write': reviewed.tokens.cacheWrite, 'Cached': reviewed.tokens.cached, 'Completion': reviewed.tokens.completion, 'Total': reviewed.tokens.total} %}
+            <td class="num" data-label="{{ label }}">{{ tokens }}</td>
             {% endfor %}
-            <td>{{ include('dashboard/components/cost_plain.html.twig', {cost: reviewed.cost}, with_context = false) }}</td>
+            <td data-label="Cost">{{ include('dashboard/components/cost_plain.html.twig', {cost: reviewed.cost}, with_context = false) }}</td>
         </tr>
     </tbody>
 </table>

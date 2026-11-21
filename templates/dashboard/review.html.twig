@@ -18,7 +18,8 @@
 {% set active = review.activeRound %}
 {% set judged = review.lastJudgedRound %}
 {% set open = review.openFindings %}
-{% set can_start = review.source is not null and review.nextNumber is not null %}
+{# A replay is a recording, so a keyless visitor is offered no next round to start on it (#3133). #}
+{% set can_start = review.source is not null and review.nextNumber is not null and not review.everyRoundIsAReplay %}
 {% set chip = 'dashboard/components/chip.html.twig' %}
 {# Each round carries its own mark, because a replay round can follow a live round of the same change. #}
 {% set replay_chip = {label: 'Replay', on_page: true, extra: 'replay-mark'} %}
@@ -26,24 +27,8 @@
     <div>
         <h1>Review of {{ review.change ?: 'round ' ~ round }} in {{ review.project }}</h1>
         {% if review.everyRoundIsAReplay %}
-        <p class="replay-mark">{{ include(chip, {label: 'Replay', on_page: true}, with_context = false) }} A recording played back: its verdicts were never given on this change and never count as one.</p>
-        {% endif %}
-        {% if review.source is not null %}
-        <p class="task-sentence">{{ review.source.task }}</p>
-        {% else %}
-        <p class="task-sentence muted">Task not recorded.</p>
-        {% endif %}
-        {# One kind label in this line, on the cost, because it is the one estimate among the facts (decision D5 of #2206). #}
-        {{ include('dashboard/components/meta.html.twig', {facts: [
-            {text: review.project},
-            {text: review.change ?: 'round ' ~ round, mono: true},
-            {icon: 'rounds', text: review.rounds|length ~ (review.rounds|length == 1 ? ' round' : ' rounds')},
-            {icon: 'tokens', markup: totals.tokens(review)},
-            {icon: 'wallet', text: 'Cost: ', markup: totals.cost(review)},
-            {icon: 'clock', text: 'Latest round started ' ~ latest.startedAt|date('Y-m-d H:i:s', 'UTC') ~ ' UTC'},
-        ]}, with_context = false) }}
-        {% if not can_start %}
-        <p class="no-start muted">No button here: the latest round was started before Intakt recorded the repository, base and task it needs to start the next one.</p>
+        {# The verdict card's Replay chip shows it; the sentence stays for a screen reader (#3133). #}
+        <p class="replay-mark sr-only">A recording played back: its verdicts were never given on this change and never count as one.</p>
         {% endif %}
     </div>
     {% if can_start or active is not null %}
@@ -69,6 +54,31 @@
     </div>
     {% endif %}
 </div>
+{{ include('dashboard/_review_verdict.html.twig', {review: review}, with_context = false) }}
+{% if review.source is not null %}
+<p class="task-sentence">{{ review.source.task }}</p>
+{% endif %}
+{# Closed on a phone and open from 761 px wide (assets/task-panes.js), so the answer stays on the first phone screen (#3133). #}
+<details class="rv-details" data-open-wide>
+    <summary>Details {{ include('dashboard/components/icon.html.twig', {name: 'chevron', small: true, extra: 'chev'}, with_context = false) }}</summary>
+    <div class="page-head">
+        {# One kind label in this line, on the cost, because it is the one estimate among the facts (decision D5 of #2206). #}
+        {{ include('dashboard/components/meta.html.twig', {facts: [
+            {text: review.project},
+            {text: review.change ?: 'round ' ~ round, mono: true},
+            {icon: 'rounds', text: review.rounds|length ~ (review.rounds|length == 1 ? ' round' : ' rounds')},
+            {icon: 'tokens', markup: totals.tokens(review)},
+            {icon: 'wallet', text: 'Cost: ', markup: totals.cost(review)},
+            {icon: 'clock', text: 'Latest round started ' ~ latest.startedAt|date('Y-m-d H:i:s', 'UTC') ~ ' UTC'},
+        ]}, with_context = false) }}
+        {% if review.source is null %}
+        <p class="task-sentence muted">Task not recorded.</p>
+        {% endif %}
+        {% if not can_start and not review.everyRoundIsAReplay %}
+        <p class="no-start muted">No button here: the latest round was started before Intakt recorded the repository, base and task it needs to start the next one.</p>
+        {% endif %}
+    </div>
+</details>
 {% if active is not null %}
 <section class="state-block" aria-labelledby="state-block-title">
     <div class="sb-head">
@@ -113,7 +123,8 @@
 {% if reviewed.isJudged %}
 <section class="section round" id="round-{{ reviewed.round }}">
     {# Only the newest round opens on arrival, because its verdict is what the reader came for and older rounds would push it down. A judged round followed by a round still in review stays closed, because only the newest round opens. #}
-    <details class="ev"{% if loop.last %} open{% endif %}>
+    {# On a phone the verdict card above lists its findings, so the newest round folds there too (assets/task-panes.js) and a row of the card opens it (#3133). #}
+    <details class="ev"{% if loop.last %} open data-open-wide{% endif %}>
         <summary class="ev-head">
             <h2>Round {{ reviewed.number ?? '(number not recorded)' }}</h2>
             {% if reviewed.isReplay %}{{ include(chip, replay_chip, with_context = false) }}{% endif %}

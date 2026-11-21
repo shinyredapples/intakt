@@ -163,6 +163,8 @@ Use the plain wording in UI copy. Where the term must stay, mark it with `.term`
 | round | round (review round in running text) | One build, its checks and its review. Sending work back starts the next round. |
 | protected path | protected files | Files that always need your approval to change, such as secret handling or CI. You choose them per project. |
 | floor | reserve | The smallest part of the week's capacity kept for this project, even when other projects are busy. |
+| act list | to fix | The act list: findings the judge kept to fix before approval. |
+| judged | checked | Judged: the judge weighed every reviewer's findings and gave the verdict. |
 
 ## Awkward data and states
 

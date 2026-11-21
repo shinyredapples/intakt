@@ -30,16 +30,17 @@ enum TourStage: string
         return self::ofTheReviewers($latest);
     }
 
+    // At most about 15 words in the dashboard's plain words, so the caption stays one line on a phone (#3133).
     public function sentence(): string
     {
         return match ($this) {
-            self::ChangeArrives => 'A change arrives, and Intakt opens review round 1 on it.',
-            self::ReviewersRead => 'The reviewers read the change; what each one writes streams into its row.',
-            self::FindingsArrive => 'The first verdicts are in: each reviewer that answered shows its findings.',
-            self::JudgeWeighs => 'Every reviewer has answered; the judge weighs their findings and builds the act list.',
-            self::RoundEnds => 'The round is judged: the act list names the findings to fix now.',
-            self::NextRound => 'The change comes back as a new round, and the reviewers read it again.',
-            self::FindingsClosed => 'The new round is judged with nothing left to fix, so the findings are closed.',
+            self::ChangeArrives => 'A change arrives; pass 1 starts.',
+            self::ReviewersRead => 'The AI reviewers read the change.',
+            self::FindingsArrive => 'The first findings are in.',
+            self::JudgeWeighs => 'The judge weighs every finding.',
+            self::RoundEnds => 'Checked: the review shows what to fix.',
+            self::NextRound => 'The fixed change comes back for pass 2.',
+            self::FindingsClosed => 'Pass 2 is checked: nothing left to fix.',
         };
     }
 

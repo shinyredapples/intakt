@@ -49,6 +49,15 @@ enum ReviewOutcome: string
         };
     }
 
+    // The verdict card's plain words; the value stays the technical term the CLI, MCP and docs use.
+    public function plainWords(): string
+    {
+        return match ($this) {
+            self::ChangesRequested => 'Changes needed',
+            default => $this->value,
+        };
+    }
+
     // The check mark is Approved's alone, so a judged round that was not approved never reads as a pass.
     public function icon(): string
     {

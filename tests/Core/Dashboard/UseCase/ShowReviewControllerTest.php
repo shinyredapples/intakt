@@ -90,7 +90,8 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-2');
 
-        self::assertSame('Replay A recording played back: its verdicts were never given on this change and never count as one.', $crawler->filter('.page-head .replay-mark')->text());
+        self::assertSame('A recording played back: its verdicts were never given on this change and never count as one.', $crawler->filter('.page-head .replay-mark')->text());
+        self::assertSame('Replay', $crawler->filter('#review-verdict .replay-mark')->text());
     }
 
     public function testTheReviewPageOfALiveProjectShowsNoReplayMark(): void
@@ -537,17 +538,17 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews/round-2');
 
         self::assertSame('Review of feat/thing in alpha', $crawler->filter('.page-head h1')->text());
-        self::assertCount(1, $crawler->filter('.page-head p.task-sentence'));
+        self::assertCount(1, $crawler->filter('p.task-sentence'));
         self::assertCount(1, $crawler->filter('.page-head p.meta'));
     }
 
-    public function testThePageHeadShowsTheTaskSentenceOfTheLatestRoundUnderTheTitle(): void
+    public function testTheTaskSentenceOfTheLatestRoundFollowsTheVerdictCard(): void
     {
         $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame('Add the thing.', $crawler->filter('.page-head h1 + p.task-sentence')->text());
+        self::assertSame('Add the thing.', $crawler->filter('#review-verdict + p.task-sentence')->text());
     }
 
     public function testThePageHeadSaysTheTaskWasNotRecordedWhenTheRoundHasNoSource(): void

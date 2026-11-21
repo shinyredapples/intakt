@@ -7,6 +7,7 @@ const { switchTaskPanes } = await import(new URL('assets/task-panes.js', root));
 const TAB = '.ttabs [data-pane]';
 const FINDING_BUTTON = '[data-highlight-finding]';
 const FINDING_LINK = 'a.sb-finding';
+const OPEN_WIDE = 'details[data-open-wide]';
 const TIMELINE_ENTRY = 'li[data-finding]';
 const ROUND = 'details.ev';
 const PHONE = '(max-width: 760px)';
@@ -81,6 +82,7 @@ class FakePage {
     tabs = [];
     panes = new Map();
     entries = [];
+    details = [{ open: false }];
     focused = null;
 
     constructor() {
@@ -150,7 +152,10 @@ class FakePage {
     }
 
     querySelectorAll(selector) {
-        assert.ok([TAB, TIMELINE_ENTRY].includes(selector));
+        assert.ok([TAB, TIMELINE_ENTRY, OPEN_WIDE].includes(selector));
+        if (selector === OPEN_WIDE) {
+            return this.details;
+        }
 
         return selector === TAB ? this.tabs : this.entries;
     }
@@ -171,6 +176,15 @@ function reviewPage(view) {
 
     return page;
 }
+
+test('the review details start closed on a phone, open beside the panes, and follow the width', () => {
+    const page = reviewPageOnAPhone();
+    assert.equal(page.details[0].open, false);
+    page.view.resize(false);
+    assert.equal(page.details[0].open, true);
+    page.view.resize(true);
+    assert.equal(page.details[0].open, false);
+});
 
 test('on a phone each pane is a tab panel labelled by its tab and a Tab stop', () => {
     const page = reviewPageOnAPhone();
@@ -270,8 +284,8 @@ function findingButton(id) {
     return button;
 }
 
-function findingLink(href) {
-    const link = new FakeTarget([FINDING_LINK]);
+function findingLink(href, selector = FINDING_LINK) {
+    const link = new FakeTarget([selector]);
     link.setAttribute('href', href);
 
     return link;
@@ -311,6 +325,15 @@ test('a finding link in the state block brings the timeline back, where its entr
     page.click({ target: page.tabs[1] });
 
     page.click({ target: findingLink('#round-1-finding-F1') });
+
+    assert.equal(page.grid.getAttribute('data-pane'), 'timeline');
+});
+
+test('a row of the verdict card brings the timeline back, where its entry is', () => {
+    const page = reviewPageOnAPhone();
+    page.click({ target: page.tabs[1] });
+
+    page.click({ target: findingLink('#round-1-finding-F1', 'a.vc-row') });
 
     assert.equal(page.grid.getAttribute('data-pane'), 'timeline');
 });

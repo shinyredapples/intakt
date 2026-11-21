@@ -1,9 +1,16 @@
+    {% set unfinished = reviewed.state.name != 'Judged' %}
+    {# A judged round shows its findings first; its ids, times, verdict sentence, reviewers and tokens wait behind Details (#3133). The findings move up with the same partial and heading. #}
+    {% if not unfinished %}
+    <div class="character-row">{{ include('dashboard/components/character.html.twig', {character: constant('Intakt\\Core\\Dashboard\\Domain\\Character::Judge'), size: 24}, with_context = false) }}<h3>Findings and the judge's call</h3></div>
+    {{ include('dashboard/_judged_round.html.twig', {reviewed: reviewed}, with_context = false) }}
+    <details class="round-more">
+    <summary>Details {{ include('dashboard/components/icon.html.twig', {name: 'chevron', small: true, extra: 'chev'}, with_context = false) }}</summary>
+    {% endif %}
     {{ include('dashboard/components/meta.html.twig', {facts: [
         {text: reviewed.round, mono: true},
         {icon: 'clock', text: 'Started ' ~ reviewed.startedAt|date('Y-m-d H:i:s', 'UTC') ~ ' UTC'},
     ]}, with_context = false) }}
 
-    {% set unfinished = reviewed.state.name != 'Judged' %}
     <p id="round-{{ reviewed.round }}-state">{% if not unfinished %}Judged.{% else %}{{ reviewed.outcomes|filter(o => o.progress.name != 'Running')|length }} of {{ reviewed.reviewers }} reviewers finished.{% endif %}</p>
     {% set running = unfinished and not reviewed.hasEnded %}
     {# Its own partial and always rendered, because the judged round's live update replaces it and a page opened before the judging needs the element. #}
@@ -37,9 +44,14 @@
     </div>
     {% endif %}
 
+    {% if unfinished %}
     <div class="character-row">{{ include('dashboard/components/character.html.twig', {character: constant('Intakt\\Core\\Dashboard\\Domain\\Character::Judge'), size: 24}, with_context = false) }}<h3>Findings and the judge's call</h3></div>
     {# Its own partial, because the judged round's live update replaces it with the same markup a reload renders. #}
     {{ include('dashboard/_judged_round.html.twig', {reviewed: reviewed}, with_context = false) }}
+    {% endif %}
 
     <h3>Tokens and cost</h3>
     {{ include('dashboard/_round_tokens.html.twig', {reviewed: reviewed, labeled: labeled}, with_context = false) }}
+    {% if not unfinished %}
+    </details>
+    {% endif %}

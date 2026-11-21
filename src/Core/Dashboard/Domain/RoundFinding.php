@@ -40,6 +40,16 @@ final readonly class RoundFinding
         return null === $this->line ? $this->file : $this->file.':'.$this->line;
     }
 
+    // The first sentence of the text, so a finding fits one row of the verdict card; the full text stays on its card.
+    public function headline(): ?string
+    {
+        if (null === $this->text) {
+            return null;
+        }
+
+        return 1 === preg_match('/^.+?[.!?](?=\s|$)/s', $this->text, $match) ? $match[0] : $this->text;
+    }
+
     public function callInWords(): string
     {
         return $this->call->inWords();

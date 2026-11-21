@@ -825,3 +825,61 @@ a.fchip { display: inline-flex; align-items: center; text-decoration: none; }
   .wait-item .act li { justify-items: stretch; }
   .wait-item .act .btn { width: 100%; }
 }
+
+/* Review page, answer first (issue 3133): the verdict card under the title, then the task, then the Details disclosure. Green only for Approved and red only for Failed, as the outcome chip; P1 red, P2 amber through .needs. */
+.vc { margin: 0 0 var(--s16); padding: var(--s16) var(--s24); border-radius: var(--r-card); background: var(--tint); border-left: 3px solid var(--muted); }
+.vc-approved { border-left-color: var(--primary); }
+.vc-failed { border-left-color: var(--red); }
+.vc-changes { border-left-color: var(--ink); }
+.vc-head { display: flex; align-items: flex-start; gap: var(--s12); }
+.vc-main { flex: 1; min-width: 0; }
+.vc-head > .character { flex: none; }
+.vc-state { display: flex; align-items: center; gap: var(--s8); margin: 0; font: 600 var(--t28)/1.15 var(--f-head); }
+.vc-state .i { width: 28px; height: 28px; }
+.vc-approved .vc-state .i { color: var(--primary); }
+.vc-failed .vc-state .i { color: var(--red); }
+.vc-facts { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s4) var(--s12); margin: var(--s4) 0 0; color: var(--muted); font-size: var(--t13); }
+.vc-why { margin: var(--s8) 0 0; }
+.vc-count { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s8); margin: var(--s12) 0 0; font-size: var(--t15); }
+.vc-label { margin: var(--s16) 0 var(--s8); font-size: var(--t15); }
+.vc-fix { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s4); }
+.vc-row { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: baseline; gap: 0 var(--s8); min-height: 44px; padding: var(--s8) var(--s12); border-radius: var(--r-btn); background: var(--raised); color: var(--ink); text-decoration: none; }
+.vc-row:hover { background: var(--page); }
+.vc-row:hover .vc-title { text-decoration: underline; }
+.vc-title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.vc-title code { padding: 0 var(--s4); border-radius: var(--r-chip); background: var(--tint); }
+.vc-place { grid-column: 2; color: var(--muted); font-size: var(--t13); overflow-wrap: anywhere; }
+.vc-story { margin: var(--s12) 0 0; }
+.vc-panel { list-style: none; display: flex; flex-wrap: wrap; gap: var(--s8); margin: var(--s12) 0 0; padding: 0; }
+.vc-reviewer { display: flex; align-items: center; gap: var(--s8); padding: var(--s4) var(--s12) var(--s4) var(--s4); border-radius: var(--r-btn); background: var(--raised); font-size: var(--t13); }
+.vc-who { display: grid; line-height: 1.25; }
+.vc-model { font-weight: 600; }
+.vc-lab { color: var(--muted); }
+.vc-said { display: inline-flex; align-items: center; gap: var(--s4); color: var(--muted); }
+.sev.sev-p1 { background: var(--red); color: var(--on-btn); }
+.sev.needs { background: var(--amber); color: var(--ink-fixed); }
+.rv-details, .round-more { margin: 0 0 var(--s16); }
+.rv-details > summary, .round-more > summary { display: inline-flex; align-items: center; gap: var(--s4); min-height: 44px; color: var(--muted); font: 600 var(--t13)/1 var(--f-head); cursor: pointer; }
+.rv-details > .page-head { display: block; margin: 0; }
+/* The label stays whole: each fact is inline text that wraps, so a long model id breaks inside the figure and never splits "Cost:" into letters. */
+.rv-details .meta span { display: inline; }
+.rv-details .meta .i { vertical-align: -2px; margin-right: var(--s4); }
+.round-more { margin-top: var(--s16); }
+/* An outcome chip in a round's head or reviewer row wraps inside its box on a phone instead of being cut ("Changes requeste"). */
+details.ev > summary .chip, .round .ledger .chip { max-width: 100%; height: auto; min-height: 24px; white-space: normal; }
+@media (max-width: 760px) {
+  .vc { padding: var(--s12) var(--s16); }
+  .vc-state { font-size: var(--t21); }
+  .vc-state .i { width: 22px; height: 22px; }
+  .vc-head > .character { width: 40px; height: 40px; }
+  /* A term stands alone as a tap target, so it takes the phone's 44 px floor like a meta line's term. */
+  .vc .term { display: inline-flex; align-items: center; min-height: 44px; }
+  .vc-facts { margin-top: 0; }
+  .vc-label { margin: var(--s8) 0 var(--s4); }
+  /* The tokens table stacks each figure under its label instead of scrolling off the right edge. */
+  .ledger.tokens thead { display: none; }
+  .ledger.tokens tr { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s8) var(--s12); }
+  .ledger.tokens td { display: grid; padding: 0; border: 0; text-align: left; }
+  .ledger.tokens td::before { content: attr(data-label); color: var(--muted); font-size: var(--t13); }
+  .ledger.tokens td:last-child { grid-column: 1 / -1; }
+}

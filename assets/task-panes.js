@@ -1,6 +1,10 @@
 const TAB = '.ttabs [data-pane]';
 const FINDING_BUTTON = '[data-highlight-finding]';
 const FINDING_LINK = 'a.sb-finding';
+// A row of the verdict card's To fix list links to the same finding card.
+const CARD_LINK = 'a.vc-row';
+// A disclosure the page opens from the width where both panes are shown and closes on a phone, so the answer stays on the first phone screen.
+const OPEN_WIDE = 'details[data-open-wide]';
 const TIMELINE_ENTRY = 'li[data-finding]';
 const ROUND = 'details.ev';
 // The width below which the stylesheet shows the tabs and only one pane.
@@ -68,7 +72,7 @@ function tabFor(page, tab, event) {
 // A finding of a round still running has no timeline entry until the judge marks it, and hiding the live log would then show nothing in its place.
 function hasTimelineEntry(page, target) {
     const button = target?.closest?.(FINDING_BUTTON);
-    const link = button ? null : target?.closest?.(FINDING_LINK);
+    const link = button ? null : (target?.closest?.(FINDING_LINK) ?? target?.closest?.(CARD_LINK));
     const finding = button?.getAttribute?.('data-highlight-finding');
     const anchor = link?.getAttribute?.('href')?.replace(/^#/, '');
     if (!finding && !anchor) {
@@ -93,6 +97,9 @@ function foldRound(event) {
 
 // The tabs are hidden while both panes are shown, so the panes are then a section and an aside named by their headings; on a phone each is a tab panel named by its tab and a Tab stop, so a live log with nothing focusable in it yet is still reached.
 function fitPanes(page, onPhone) {
+    for (const details of page.querySelectorAll(OPEN_WIDE)) {
+        details.open = !onPhone;
+    }
     for (const tab of page.querySelectorAll(TAB)) {
         const pane = page.getElementById(tab.getAttribute('aria-controls'));
         if (!pane) {

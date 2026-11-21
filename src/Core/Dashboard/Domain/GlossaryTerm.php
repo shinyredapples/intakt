@@ -13,6 +13,8 @@ enum GlossaryTerm: string
     case Round = 'round';
     case ProtectedFiles = 'protected';
     case Reserve = 'reserve';
+    case ToFix = 'fix';
+    case Checked = 'checked';
 
     public function explanation(): string
     {
@@ -23,6 +25,8 @@ enum GlossaryTerm: string
             self::Round => 'One build, its checks and its review. Sending work back starts the next round.',
             self::ProtectedFiles => 'Files that always need your approval to change, such as secret handling or CI. You choose them per project.',
             self::Reserve => "The smallest part of the week's capacity kept for this project, even when other projects are busy.",
+            self::ToFix => 'The act list: findings the judge kept to fix before approval.',
+            self::Checked => "Judged: the judge weighed every reviewer's findings and gave the verdict.",
         };
     }
 }
