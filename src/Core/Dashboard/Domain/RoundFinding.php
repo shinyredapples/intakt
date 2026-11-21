@@ -30,12 +30,12 @@ final readonly class RoundFinding
         $this->call = JudgeCall::NotActedOn;
     }
 
-    // Looked up by the quote the ledger row recorded, because the page never gets the change text and must not search it again.
     /**
      * @return list<NearLine>
      */
     public function nearLinesOf(string $quote): array
     {
+        // Looked up by the quote the ledger row recorded, because the page never gets the change text and must not search it again.
         return array_find($this->nearest, static fn (QuoteNearLines $near): bool => $near->quote === $quote)->lines ?? [];
     }
 

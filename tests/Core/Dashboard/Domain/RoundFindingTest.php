@@ -43,6 +43,17 @@ final class RoundFindingTest extends TestCase
         self::assertSame([], $this->droppedWith(new QuoteNearLines('ghostName', [new NearLine('src/A.php', 2, 'hostName();')]))->nearLinesOf('ghost'));
     }
 
+    public function testALongQuoteAndAQuoteEqualToItsFirstPartEachHaveTheirOwnNearLines(): void
+    {
+        $short = 'ghostName'.str_repeat('.', 151);
+        $long = $short.' + phantomWidget';
+        $forLong = new NearLine('src/B.php', 4, 'phantomWidgetReal();');
+        $forShort = new NearLine('src/A.php', 2, 'ghostTitle();');
+        $finding = $this->droppedWith(new QuoteNearLines($long, [$forLong]), new QuoteNearLines($short, [$forShort]));
+
+        self::assertSame([[$forLong], [$forShort]], [$finding->nearLinesOf($long), $finding->nearLinesOf($short)]);
+    }
+
     private function droppedWith(QuoteNearLines ...$nearest): RoundFinding
     {
         return new RoundFinding('F1', 'P2', 'Call `ghostName`.', nearest: array_values($nearest));
