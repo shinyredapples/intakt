@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Dashboard\Infrastructure;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Process\ExecutableFinder;
 use Symfony\Component\Process\Process;
 
 // Runs the image's entrypoint with stand-ins for php and frankenphp, because what is proven here is the order of the start-up steps, not the steps themselves.
@@ -23,6 +24,12 @@ final class EntrypointSampleSeedTest extends TestCase
 
     // Docker's default stop timeout: a container that still runs after it is killed, so the entrypoint's cleanup is cut off.
     private const int STOP_TIMEOUT_SECONDS = 10;
+
+    // A marked operation is held open until the stop ends it; the fallback outlasts every wait for readiness, so the stop always finds it still running, and still ends a stand-in a failed test leaves behind.
+    private const int SECONDS_TO_HOLD = self::SECONDS_TO_WAIT * 2;
+
+    // Past the nine seconds the marked operations were once held for, because the parallel test workers can hold the consumers back that long and readiness then found both ended.
+    private const int SECONDS_UNTIL_LATE_READINESS = 10;
 
     private string $directory;
 
@@ -330,14 +337,47 @@ final class EntrypointSampleSeedTest extends TestCase
 
     public function testAStopDuringASlowHealthCheckEndsInsideDockersStopTimeout(): void
     {
-        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml', 'CURL_SECONDS' => '5', 'CONSUMERS_IGNORE_SIGTERM' => '1']);
+        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml', 'CURL_SECONDS' => (string) self::SECONDS_TO_HOLD, 'CONSUMERS_IGNORE_SIGTERM' => '1']);
         $this->waitForTheCall("\ncurl ");
+        $this->waitForTheConsumersToIgnoreTheStop();
 
         $seconds = $this->secondsToStop();
 
         self::assertSame(0, $this->entrypoint?->getExitCode(), (string) $this->entrypoint?->getErrorOutput());
         self::assertStringNotContainsString('the slow curl ended', $this->calls(), 'the stop waited for the health check');
         self::assertLessThan(self::STOP_TIMEOUT_SECONDS, $seconds);
+    }
+
+    public function testAStopOnAMachineWhereEveryPauseOverrunsStillEndsInsideDockersStopTimeout(): void
+    {
+        $this->startEntrypoint(['PATH' => $this->overrunningSleep().':'.$this->stubPrograms().':'.getenv('PATH'), 'CONSUMERS_IGNORE_SIGTERM' => '1']);
+        $this->waitForTheServer();
+        $this->waitForTheCall('the poll sleeps');
+        $this->waitForTheConsumersToIgnoreTheStop();
+
+        $seconds = $this->secondsToStop();
+
+        self::assertSame(0, $this->entrypoint?->getExitCode(), (string) $this->entrypoint?->getErrorOutput());
+        self::assertLessThan(self::STOP_TIMEOUT_SECONDS, $seconds);
+    }
+
+    public function testTheMarkedPollAndTheSlowHealthCheckAreStillOpenWhenTheConsumersAreReadyLate(): void
+    {
+        $environment = ['CALLS' => $this->callsFile(), 'CURL_SECONDS' => (string) self::SECONDS_TO_HOLD];
+        $poll = new Process([$this->overrunningSleep().'/sleep', '1'], $this->directory, $environment);
+        $curl = new Process([$this->stubPrograms().'/curl'], $this->directory, $environment);
+        $poll->start();
+        $curl->start();
+
+        usleep(self::SECONDS_UNTIL_LATE_READINESS * 1_000_000);
+
+        self::assertTrue($poll->isRunning(), 'the marked poll ended before the stop');
+        self::assertTrue($curl->isRunning(), 'the slow curl ended before the stop');
+        $poll->signal(self::TERMINATE);
+        $curl->signal(self::TERMINATE);
+        $poll->wait();
+        $curl->wait();
+        self::assertStringNotContainsString('the slow curl ended', $this->calls());
     }
 
     public function testWithoutASampleRepositoryTheStartNeverAsksForTheDashboardAddress(): void
@@ -496,6 +536,18 @@ final class EntrypointSampleSeedTest extends TestCase
         return $process;
     }
 
+    // A stand-in sleep that makes the stop's pauses of a tenth of a second take three times as long, as on a loaded machine (a test pass measured a stop of 10.7 s), so the test forces a stop whose pauses all overrun; it holds the poll's one-second pause open until the stop ends it as a job, so the pause is still running when the test sends the stop.
+    private function overrunningSleep(): string
+    {
+        $folder = $this->directory.'/overrunning';
+        $sleep = new ExecutableFinder()->find('sleep');
+        self::assertNotNull($sleep);
+        new Filesystem()->dumpFile($folder.'/sleep', "#!/bin/bash\ncase \$1 in 0.1) set -- 0.3;; 1) echo 'the poll sleeps' >> \"\$CALLS\"; set -- ".self::SECONDS_TO_HOLD.";; esac\nexec ".escapeshellarg($sleep)." \"\$@\"\n");
+        new Filesystem()->chmod($folder.'/sleep', 0755);
+
+        return $folder;
+    }
+
     private function awaitFile(string $file): void
     {
         $deadline = hrtime(true) + self::SECONDS_TO_WAIT * 1_000_000_000;
@@ -565,11 +617,11 @@ final class EntrypointSampleSeedTest extends TestCase
         $programs = $this->directory.'/stubs';
         $filesystem = new Filesystem();
         // A consumer started without --quiet prints Symfony's banner (the success line to standard output, the comments to standard error) only once the review block is out (bounded), so the test forces the order a slow consumer start takes; with CONSUMERS_IGNORE_SIGTERM a consumer ignores the stop like one whose worker does not exist yet (upstream/messenger-consume-ignores-early-sigterm), so the stop runs its whole grace period; with SHOW_SECONDS the review block takes that long and notes its end, so the test forces a stop that arrives while it runs.
-        $filesystem->dumpFile($programs.'/php', "#!/bin/bash\necho \"php \$*\" >> \"\$CALLS\"\ncase \"\$*\" in *messenger:consume*) [[ \" \$* \" == *' --quiet '* ]] || { for _ in {1..600}; do grep -q intakt:sample:show \"\$CALLS\" && break; sleep 0.1; done; sleep 0.3; echo ' [OK] Consuming messages from transport.'; echo ' // Quit the worker with CONTROL-C.' >&2; }; [[ -n \${CONSUMERS_IGNORE_SIGTERM:-} ]] && trap '' TERM; exec sleep 60 </dev/null >/dev/null 2>&1;; *intakt:sample:seed*) [[ -e var/cache/test/image-container ]] && { echo 'the image container survived until the seed' >&2; exit 3; }; echo \"\$MCP_OWNER_TOKEN \$MCP_OWNER_ACCESS\" > \"\$CALLS.seen\"; echo \"\${OPENAI_COMPATIBLE_BASE_URL:-} \${OPENAI_COMPATIBLE_API_KEY:-}\" > \"\$CALLS.compatible\"; [[ -n \${SECRETS_SEEN:-} ]] && echo \"\$APP_SECRET \$MERCURE_JWT_SECRET\" > \"\$SECRETS_SEEN\"; mkdir -p var/cache/test; touch var/cache/test/seeded-container; exit \"\${SEED_STATUS:-0}\";; *intakt:demo:create*) exit \"\${CREATE_STATUS:-0}\";; *intakt:ai:tiers*) exit \"\${TIERS_STATUS:-0}\";; *intakt:sample:show*) [[ -n \${SHOW_SECONDS:-} ]] && { sleep \"\$SHOW_SECONDS\" </dev/null >/dev/null 2>&1; echo 'the slow show ended' >> \"\$CALLS\"; }; echo 'the review block'; exit \"\${SHOW_STATUS:-0}\";; esac\nexit 0\n");
+        $filesystem->dumpFile($programs.'/php', "#!/bin/bash\necho \"php \$*\" >> \"\$CALLS\"\ncase \"\$*\" in *messenger:consume*) [[ \" \$* \" == *' --quiet '* ]] || { for _ in {1..600}; do grep -q intakt:sample:show \"\$CALLS\" && break; sleep 0.1; done; sleep 0.3; echo ' [OK] Consuming messages from transport.'; echo ' // Quit the worker with CONTROL-C.' >&2; }; [[ -n \${CONSUMERS_IGNORE_SIGTERM:-} ]] && { trap '' TERM; echo 'a consumer ignores the stop' >> \"\$CALLS\"; }; exec sleep 60 </dev/null >/dev/null 2>&1;; *intakt:sample:seed*) [[ -e var/cache/test/image-container ]] && { echo 'the image container survived until the seed' >&2; exit 3; }; echo \"\$MCP_OWNER_TOKEN \$MCP_OWNER_ACCESS\" > \"\$CALLS.seen\"; echo \"\${OPENAI_COMPATIBLE_BASE_URL:-} \${OPENAI_COMPATIBLE_API_KEY:-}\" > \"\$CALLS.compatible\"; [[ -n \${SECRETS_SEEN:-} ]] && echo \"\$APP_SECRET \$MERCURE_JWT_SECRET\" > \"\$SECRETS_SEEN\"; mkdir -p var/cache/test; touch var/cache/test/seeded-container; exit \"\${SEED_STATUS:-0}\";; *intakt:demo:create*) exit \"\${CREATE_STATUS:-0}\";; *intakt:ai:tiers*) exit \"\${TIERS_STATUS:-0}\";; *intakt:sample:show*) [[ -n \${SHOW_SECONDS:-} ]] && { sleep \"\$SHOW_SECONDS\" </dev/null >/dev/null 2>&1; echo 'the slow show ended' >> \"\$CALLS\"; }; echo 'the review block'; exit \"\${SHOW_STATUS:-0}\";; esac\nexit 0\n");
         // The server notes its run only after the scheduler watcher (bounded): the entrypoint starts them in parallel, so the test forces the order it must survive.
         $filesystem->dumpFile($programs.'/frankenphp', "#!/bin/bash\ncase \"\$*\" in *validate*) ;; *) for _ in {1..600}; do grep -q scheduler_watcher \"\$CALLS\" && break; sleep 0.1; done;; esac\necho \"frankenphp \$*\" >> \"\$CALLS\"\ncase \"\$*\" in *validate*) [[ -n \${SECRETS_SEEN:-} ]] && echo \"\$APP_SECRET \$MERCURE_JWT_SECRET\" > \"\$SECRETS_SEEN\"; exit 0;; esac\necho 'the server started'\nexec sleep 60 </dev/null >/dev/null 2>&1\n");
-        // The health check answers only once the server runs and after CURL_FAILURES refused calls, so the test forces a start where the server is not up yet; with CURL_SECONDS every call takes that long and notes its end, so the test forces a stop that arrives while one runs.
-        $filesystem->dumpFile($programs.'/curl', "#!/bin/bash\necho \"curl \$*\" >> \"\$CALLS\"\n[[ -n \${CURL_SECONDS:-} ]] && { sleep \"\$CURL_SECONDS\" </dev/null >/dev/null 2>&1; echo 'the slow curl ended' >> \"\$CALLS\"; }\ngrep -q '^frankenphp run' \"\$CALLS\" || exit 7\n(( \$(grep -c '^curl ' \"\$CALLS\") > \${CURL_FAILURES:-0} )) || exit 7\nexit 0\n");
+        // The health check answers only once the server runs and after CURL_FAILURES refused calls, so the test forces a start where the server is not up yet; with CURL_SECONDS every call takes that long and notes its end, so the test forces a stop that arrives while one runs; the TERM trap is its first statement and kills the pause only once one started ($! stays empty until then), so a stop in any order ends the call and no pause outlives the test.
+        $filesystem->dumpFile($programs.'/curl', "#!/bin/bash\ntrap '[[ -n \$! ]] && kill \$! 2>/dev/null; exit 143' TERM\necho \"curl \$*\" >> \"\$CALLS\"\n[[ -n \${CURL_SECONDS:-} ]] && { sleep \"\$CURL_SECONDS\" </dev/null >/dev/null 2>&1 & wait \$!; echo 'the slow curl ended' >> \"\$CALLS\"; }\ngrep -q '^frankenphp run' \"\$CALLS\" || exit 7\n(( \$(grep -c '^curl ' \"\$CALLS\") > \${CURL_FAILURES:-0} )) || exit 7\nexit 0\n");
         $filesystem->chmod([$programs.'/php', $programs.'/frankenphp', $programs.'/curl'], 0755);
 
         return $programs;
@@ -611,6 +663,19 @@ final class EntrypointSampleSeedTest extends TestCase
     private function waitForMorePolls(): void
     {
         usleep(2_500_000);
+    }
+
+    private function waitForTheConsumersToIgnoreTheStop(): void
+    {
+        // The async consumer (MESSENGER_CONSUMERS is 1) and the scheduler watcher: a count of the consumers seen so far would pass with only the first one up.
+        $consumers = 2;
+        $deadline = hrtime(true) + self::SECONDS_TO_WAIT * 1_000_000_000;
+
+        while (hrtime(true) < $deadline && substr_count($this->calls(), 'a consumer ignores the stop') < $consumers) {
+            usleep(50_000);
+        }
+
+        self::assertSame($consumers, substr_count($this->calls(), 'a consumer ignores the stop'), (string) $this->entrypoint?->getErrorOutput());
     }
 
     private function waitForTheServer(): void

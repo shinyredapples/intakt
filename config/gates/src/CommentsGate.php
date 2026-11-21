@@ -15,11 +15,11 @@ final readonly class CommentsGate extends PhpFilesGate
         return 'comments';
     }
 
-    protected function check(Workspace $workspace, array $files): GateResult
+    protected function check(Workspace $workspace, PhpFileSelection $selection): GateResult
     {
         $findings = [];
 
-        foreach ($files as $path) {
+        foreach ($selection->files as $path) {
             foreach ($this->violationsIn($workspace->root.'/'.$path) as $violation) {
                 $findings[] = $path.' '.$violation;
             }
