@@ -52,6 +52,16 @@ export class FakeElement {
     removeAttribute(name) {
         this.attributes.delete(name);
     }
+
+    toggleAttribute(name, force) {
+        if (force) {
+            this.setAttribute(name, '');
+        } else {
+            this.removeAttribute(name);
+        }
+
+        return force;
+    }
 }
 
 export class FakeClick {

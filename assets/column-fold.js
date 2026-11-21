@@ -41,11 +41,7 @@ function fold(button) {
     const column = button.closest('.col');
     const open = button.classList.contains('col-fold');
 
-    if (open) {
-        column.setAttribute(OPENED, '');
-    } else {
-        column.removeAttribute(OPENED);
-    }
+    column.toggleAttribute(OPENED, open);
     column.classList.toggle('collapsed', !open);
     column.querySelector('.col-fold').setAttribute('aria-expanded', String(open));
     // The pressed button disappears with the state it changed, so the focus goes to the one that changes it back.

@@ -100,4 +100,19 @@ final class BoardColumnMapTest extends DashboardPageTestCase
 
         self::assertSame(array_fill(0, 9, '-1'), $page->filter('.board > section.col')->each(static fn (Crawler $column): string => (string) $column->attr('tabindex')));
     }
+
+    // Hide sits in the head above the cards, so after a jump to an open Done the next Tab reaches Hide and the one after it the first card, in the order the reader sees; the strip is left out because the stylesheet hides it on an open column.
+    public function testAfterAJumpToAnOpenDoneTheNextTabReachesHideAndThenItsFirstCard(): void
+    {
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+        $this->ledger->judgeRound('round-1');
+
+        $done = $this->browser->request('GET', '/')->filter('.board > section#col-done');
+
+        self::assertStringNotContainsString('collapsed', (string) $done->attr('class'));
+        $stops = $done->filter('a[href], button:not(.col-fold), summary, [tabindex="0"]');
+        self::assertGreaterThanOrEqual(2, $stops->count());
+        self::assertSame('Hide', $stops->eq(0)->text());
+        self::assertNotNull($stops->eq(1)->closest('.col-cards'));
+    }
 }

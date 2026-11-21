@@ -141,8 +141,11 @@ class FakePage extends FakeTarget {
         this.switcher = new FakeSwitcher();
     }
 
+    // The rail, which runs down the side from the top of a wide screen.
+    rail = { getBoundingClientRect: () => ({ top: 0, bottom: 800 }) };
+
     querySelector(selector) {
-        return { '.board': this.board, '.stagemap': this.map, '.colswitch': this.switcher }[selector];
+        return { '.board': this.board, '.stagemap': this.map, '.colswitch': this.switcher, '.rail-in': this.rail }[selector];
     }
 
     getElementById(id) {
@@ -152,6 +155,7 @@ class FakePage extends FakeTarget {
 
 class FakeView extends FakeTarget {
     scrolledBy = null;
+    innerHeight = 800;
 
     constructor(reducedMotion = false) {
         super();
@@ -285,6 +289,45 @@ test('a jump to a column that already starts below the map leaves the page where
     page.dispatch('click', { target: map.segments[6] });
 
     assert.equal(view.scrolledBy, null);
+});
+
+test('a switcher button near the bottom of a phone scrolls the page down until a column behind the bottom bar starts just below the switcher', () => {
+    const { page, view, board, switcher } = boardOnAPage({ inset: 16 });
+    // A 390 by 800 view with the phone's 64 px rail fixed along its bottom edge.
+    page.rail = { getBoundingClientRect: () => ({ top: 736, bottom: 800 }) };
+    switcher.bar.bottom = 700;
+    board.columns.forEach((column) => { column.top = 760; });
+
+    page.dispatch('click', { target: switcher.buttons[6] });
+
+    assert.deepEqual(view.scrolledBy, { top: 60, behavior: 'smooth' });
+    assert.deepEqual(board.columns[6].focusedWith, { preventScroll: true });
+});
+
+test('a column that starts between the switcher and the phone\'s bottom bar leaves the page where it is', () => {
+    const { page, view, board, switcher } = boardOnAPage({ inset: 16 });
+    page.rail = { getBoundingClientRect: () => ({ top: 736, bottom: 800 }) };
+    switcher.bar.bottom = 600;
+    board.columns.forEach((column) => { column.top = 735; });
+
+    page.dispatch('click', { target: switcher.buttons[6] });
+
+    assert.equal(view.scrolledBy, null);
+});
+
+test('on a wide screen the side rail covers nothing, so only a column below the viewport moves the page', () => {
+    const { page, view, board, map } = boardOnAPage();
+    map.bar.bottom = 700;
+    board.columns.forEach((column) => { column.top = 790; });
+
+    page.dispatch('click', { target: map.segments[6] });
+
+    assert.equal(view.scrolledBy, null);
+
+    board.columns.forEach((column) => { column.top = 820; });
+    page.dispatch('click', { target: map.segments[6] });
+
+    assert.deepEqual(view.scrolledBy, { top: 120, behavior: 'smooth' });
 });
 
 test('under reduced motion the page comes back up at once too', () => {

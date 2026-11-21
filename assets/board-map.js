@@ -3,6 +3,7 @@ const MAP = '.stagemap';
 const SWITCHER = '.colswitch';
 const JUMP = '.sm-seg, .colswitch button';
 const COLUMN = ':scope > .col';
+const BOTTOM_BAR = '.rail-in';
 // The slack assets/board-edge.js allows, so a column within a rounding error of the edge counts as in view.
 const SLACK = 4;
 // The mock's pause after the last scroll event of a swipe, so the switcher follows where the board settled rather than every frame on the way.
@@ -58,7 +59,7 @@ function startOf(column, columns) {
     return column.offsetLeft - columns[0].offsetLeft;
 }
 
-// The focus follows the jump, so the next Tab reaches the column's first card or strip rather than the first column's; preventScroll leaves the motion to the scrolls.
+// The focus follows the jump, so the next Tab reaches the column's first control (Hide on an open Backlog or Done, a card, or the strip) rather than the first column's; preventScroll leaves the motion to the scrolls.
 function jumpTo(page, view, jump) {
     const id = jump.getAttribute('aria-controls');
     const column = id ? page.getElementById(id) : null;
@@ -68,13 +69,23 @@ function jumpTo(page, view, jump) {
     }
     const behavior = view.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
     board.scrollTo({ left: startOf(column, columnsOf(board)), behavior });
-    // The phone's switcher stays pinned while the page scrolls down a long column, so a shorter column the reader jumps to would start, or even end, above the viewport; the page comes back up until the column starts just below the switcher.
+    // The phone's switcher stays pinned while the page scrolls down a long column, so a shorter column the reader jumps to would start, or even end, above the viewport, and a switcher scrolled near the bottom leaves the column behind the bottom bar; either way the page moves until the column starts just below the switcher.
     const bar = jump.closest(`${MAP}, ${SWITCHER}`);
-    const hidden = bar ? bar.getBoundingClientRect().bottom - column.getBoundingClientRect().top : 0;
-    if (hidden > 0) {
-        view.scrollBy({ top: -hidden, behavior });
+    if (bar) {
+        const below = bar.getBoundingClientRect().bottom;
+        const top = column.getBoundingClientRect().top;
+        if (top < below || top >= visibleBottom(page, view, below)) {
+            view.scrollBy({ top: top - below, behavior });
+        }
     }
     column.focus({ preventScroll: true });
+}
+
+// On a phone the rail is a fixed bar along the bottom of the viewport and covers what lies behind it; on a wider screen it runs down the side, starting above the map, and covers nothing below.
+function visibleBottom(page, view, below) {
+    const rail = page.querySelector(BOTTOM_BAR)?.getBoundingClientRect();
+
+    return rail && rail.top > below && rail.bottom >= view.innerHeight - SLACK ? rail.top : view.innerHeight;
 }
 
 function markMap(page) {
