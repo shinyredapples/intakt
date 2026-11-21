@@ -1,0 +1,28 @@
+light 1440: map Columns 1 to 6 of 9Waiting on youBacklogReadyPlannedBuildingCheckingIn reviewMergingDone; switcher hidden; board 1136 of 1624
+light 1920: map Columns 1 to 8 of 9Waiting on youBacklogReadyPlannedBuildingCheckingIn reviewMergingDone; switcher hidden; board 1584 of 1624
+light 390: map hidden; switcher Waiting on you 0 tasks [pressed] | Backlog 0 tasks | Ready 0 tasks | Planned 0 tasks | Building 0 tasks | Checking 0 tasks | In review 1 task | Merging 0 tasks | Done 1 task; board 390 of 3382
+dark 1440: map Columns 1 to 6 of 9Waiting on youBacklogReadyPlannedBuildingCheckingIn reviewMergingDone; switcher hidden; board 1136 of 1624
+dark 1920: map Columns 1 to 8 of 9Waiting on youBacklogReadyPlannedBuildingCheckingIn reviewMergingDone; switcher hidden; board 1584 of 1624
+dark 390: map hidden; switcher Waiting on you 0 tasks [pressed] | Backlog 0 tasks | Ready 0 tasks | Planned 0 tasks | Building 0 tasks | Checking 0 tasks | In review 1 task | Merging 0 tasks | Done 1 task; board 390 of 3382
+light 1440 after clicking the Done segment: Columns 4 to 9 of 9, in view: col-planned col-building col-checking col-in-review col-merging col-done
+light 390 after tapping In review: pressed In review, column at 16 px
+light 390 after a swipe to the last column: pressed Done
+dark 1440 after clicking the Done segment: Columns 4 to 9 of 9, in view: col-planned col-building col-checking col-in-review col-merging col-done
+dark 390 after tapping In review: pressed In review, column at 16 px
+dark 390 after a swipe to the last column: pressed Done
+
+Keyboard walk-through (1440, light):
+1. Rail Board entry: 3 x Tab -> a.nav "Board" ring=true
+   Enter -> http://localhost:7781/?board=1
+2. Who is working: 12 x Tab -> summary "Who is working2 working" ring=true
+   Enter -> open=true
+   Escape -> open=false, focus summary "Who is working2 working" ring=true
+   Space -> open=true
+3. Backlog strip: 11 x Tab -> button.col-fold "Show Backlog0 tasks" ring=true
+   Space -> collapsed=false, focus button.btn.quiet.sm.col-hide "Hide Backlog" ring=true
+   Escape -> collapsed=true, focus button.col-fold "Show Backlog0 tasks" ring=true
+   Enter -> collapsed=false, focus button.btn.quiet.sm.col-hide "Hide Backlog" ring=true
+4. Column map, In review segment: 4 x Shift+Tab -> button.sm-seg "In review" ring=true
+   Enter -> Columns 4 to 9 of 9, focus section#col-in-review.col "In review" ring=true
+5. First card in In review: 1 x Tab -> a.card "#sample-change-2demo-replayReplay Review of sample" ring=true
+   Enter -> /reviews/01a1f262-3829-7222-812d-3260f5198464
