@@ -16,7 +16,7 @@ final class ReadmeRoadmapPictureTest extends TestCase
     {
         $picture = $this->picture();
 
-        self::assertSame(1, preg_match('/<source media="\(prefers-color-scheme: dark\)" srcset="docs\/assets\/roadmap-dark\.svg" width="560" height="156">/', $picture));
+        self::assertSame(1, preg_match('/<source media="\(prefers-color-scheme: dark\)" srcset="docs\/assets\/roadmap-dark\.svg" width="420" height="245">/', $picture));
         self::assertFileExists($this->root().'/docs/assets/roadmap-dark.svg');
     }
 
@@ -28,7 +28,7 @@ final class ReadmeRoadmapPictureTest extends TestCase
         self::assertFileExists($this->root().'/docs/assets/roadmap-light.svg');
     }
 
-    // The README shows the image smaller than its 760 by 212 view box, so the size must keep that ratio.
+    // A page may show the image at another size than its 480 by 280 view box, so the size must keep that ratio.
     public function testTheRoadmapPictureKeepsTheAspectRatioOfBothImageFiles(): void
     {
         $width = (int) $this->imgAttribute('width');
@@ -37,10 +37,21 @@ final class ReadmeRoadmapPictureTest extends TestCase
         foreach (['light', 'dark'] as $theme) {
             $svg = (string) file_get_contents($this->root().'/docs/assets/roadmap-'.$theme.'.svg');
 
-            self::assertStringContainsString('viewBox="0 0 760 212"', $svg);
+            self::assertStringContainsString('viewBox="0 0 480 280"', $svg);
         }
-        self::assertLessThanOrEqual(760, $width);
-        self::assertSame((int) round($width * 212 / 760), $height);
+        self::assertLessThanOrEqual(480, $width);
+        self::assertSame((int) round($width * 280 / 480), $height);
+    }
+
+    // A 390 px wide phone shows the 480 wide view box at 0.81 of its size, so 15 px text still shows at about 12 px.
+    public function testBothRoadmapImagesKeepEveryFontSizeReadableOnA390PixelWideScreen(): void
+    {
+        foreach (['light', 'dark'] as $theme) {
+            $svg = (string) file_get_contents($this->root().'/docs/assets/roadmap-'.$theme.'.svg');
+
+            self::assertGreaterThan(0, preg_match_all('/font-size:\s*(\d+(?:\.\d+)?)px/', $svg, $sizes));
+            self::assertGreaterThanOrEqual(12.0, min(array_map(floatval(...), $sizes[1])) * 390 / 480);
+        }
     }
 
     // GitHub shows an SVG as an image, so the octopus must be inside the file and the file small enough to load fast.
