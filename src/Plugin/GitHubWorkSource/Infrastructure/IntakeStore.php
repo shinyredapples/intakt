@@ -225,9 +225,7 @@ final readonly class IntakeStore
      */
     public function failuresOf(string $project): array
     {
-        return $this->readOf($project, function () use ($project): array {
-            return $this->reasonsOf($this->ownManager(), $project);
-        });
+        return $this->readOf($project, fn(): array => $this->reasonsOf($this->ownManager(), $project));
     }
 
     // Read once the lock is held, because a failure recorded since the plan was made must keep its task from being picked: the pick is ordered before any failure that commits after this read.

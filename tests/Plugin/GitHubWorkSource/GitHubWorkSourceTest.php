@@ -34,9 +34,10 @@ use Intakt\Plugin\GitHubWorkSource\Infrastructure\IntakeStore;
 use Intakt\Plugin\WorkSource\Contract\HeldTask;
 use Intakt\Plugin\WorkSource\Contract\NothingPicked;
 use Intakt\Plugin\WorkSource\Contract\Task;
+use Intakt\Plugin\WorkSource\Contract\TaskNotQueued;
+use Intakt\Plugin\WorkSource\Contract\WorkerState;
 use Intakt\Plugin\WorkSource\Contract\WorkPick;
 use Intakt\Plugin\WorkSource\Contract\WorkQueue;
-use Intakt\Plugin\WorkSource\Contract\WorkerState;
 use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Plugin\GitHubForge\RecordedIssueApi;
 use Intakt\Tests\Support\KernelTestCase;
@@ -251,7 +252,7 @@ final class GitHubWorkSourceTest extends KernelTestCase
 
     public function testATaskThatIsNotInTheListingCannotBeMarkedFailed(): void
     {
-        $this->expectException(\Intakt\Plugin\WorkSource\Contract\TaskNotQueued::class);
+        $this->expectException(TaskNotQueued::class);
 
         $this->source()->failedForGood('alpha', 99, 'no such task');
     }

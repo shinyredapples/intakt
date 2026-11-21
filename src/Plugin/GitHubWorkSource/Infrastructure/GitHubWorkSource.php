@@ -15,10 +15,10 @@ use Intakt\Plugin\GitHubWorkSource\Domain\QueuedIssue;
 use Intakt\Plugin\WorkSource\Contract\HeldTask;
 use Intakt\Plugin\WorkSource\Contract\NothingPicked;
 use Intakt\Plugin\WorkSource\Contract\Task;
+use Intakt\Plugin\WorkSource\Contract\WorkerState;
 use Intakt\Plugin\WorkSource\Contract\WorkPick;
 use Intakt\Plugin\WorkSource\Contract\WorkQueue;
 use Intakt\Plugin\WorkSource\Contract\WorkSource;
-use Intakt\Plugin\WorkSource\Contract\WorkerState;
 use Psr\Log\LoggerInterface;
 
 final readonly class GitHubWorkSource implements WorkSource
