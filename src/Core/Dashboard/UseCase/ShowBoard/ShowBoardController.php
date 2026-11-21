@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Intakt\Core\Dashboard\UseCase\ShowBoard;
 
 use Intakt\Core\Dashboard\Contract\DashboardRoutes;
-use Intakt\Core\Dashboard\Domain\BoardColumn;
 use Intakt\Core\Dashboard\Domain\FailingHead;
 use Intakt\Core\Dashboard\Infrastructure\LedgerFailingHeads;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
@@ -58,7 +57,8 @@ final readonly class ShowBoardController
             'failing' => array_map($this->redacted(...), $this->failingHeads->in($events)),
             'failing_mains' => array_map($this->redactedMain(...), $this->failingMains->in($events)),
             'working' => $board->whoIsWorking(),
-            'columns' => BoardColumn::cases(),
+            'columns' => $board->shownColumns(),
+            'coming_next' => $board->comingNext(),
         ])));
     }
 

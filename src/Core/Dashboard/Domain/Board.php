@@ -82,6 +82,23 @@ final readonly class Board
         return array_values(array_diff(array_unique($projects), $busy));
     }
 
+    // From the counts over every project, so the project filter never hides or shows a column.
+    /**
+     * @return list<BoardColumn>
+     */
+    public function shownColumns(): array
+    {
+        return array_values(array_filter(BoardColumn::cases(), fn (BoardColumn $column): bool => !$column->foldsIntoComingNext($this->countOf($column))));
+    }
+
+    /**
+     * @return list<BoardColumn>
+     */
+    public function comingNext(): array
+    {
+        return array_values(array_filter(BoardColumn::cases(), fn (BoardColumn $column): bool => $column->foldsIntoComingNext($this->countOf($column))));
+    }
+
     // Null while the column holds a card, because only an empty column says what lands there and when (#2731).
     public function emptyLineOf(BoardColumn $column): ?string
     {
@@ -104,7 +121,7 @@ final readonly class Board
         return $column->startsCollapsed();
     }
 
-    // Done is the last of nine columns and lies past the edge of a laptop's board, so opening it alone is not enough to show the finished review on arrival.
+    // Done is the last column and can lie past the edge of a narrow board, so opening it alone is not enough to show the finished review on arrival.
     public function startsScrolledToDone(): bool
     {
         return $this->everyColumnButDoneIsEmpty() && 0 < $this->countOf(BoardColumn::Done);
