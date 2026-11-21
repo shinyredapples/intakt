@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\HandBack\Infrastructure;
 use FilesystemIterator;
 use Intakt\Core\HandBack\Domain\DependencySnapshotKey;
 use Intakt\Core\HandBack\Infrastructure\DependencySnapshotCountRefused;
+use Intakt\Core\HandBack\Infrastructure\DependencySnapshotFiles;
 use Intakt\Core\HandBack\Infrastructure\DependencySnapshotLease;
 use Intakt\Core\HandBack\Infrastructure\DependencySnapshots;
 use Intakt\Core\Job\Contract\JobEgress;
@@ -30,6 +31,7 @@ use Symfony\Component\Lock\Store\FlockStore;
 use Symfony\Component\Process\Process;
 
 #[CoversClass(DependencySnapshots::class)]
+#[CoversClass(DependencySnapshotFiles::class)]
 #[CoversClass(DependencySnapshotLease::class)]
 #[CoversClass(DependencySnapshotCountRefused::class)]
 #[UsesClass(DependencySnapshotKey::class)]
@@ -501,7 +503,7 @@ final class DependencySnapshotsTest extends TestCase
         return new DependencySnapshots($this->directory.'/store', $count, new LockFactory(new FlockStore($this->directory.'/locks')));
     }
 
-    // Saves the key of lock "b" at a count of 1 in a process of its own and returns what the stand-ins and the failed save wrote to its error output.
+    // The error output is returned whole, because it is the only proof that the stand-in refused the call before the save failed.
     private function saveOfBWhereThisFails(string $call): string
     {
         $process = new Process([PHP_BINARY, '-r', self::FAILING_CALL, dirname(__DIR__, 4), $this->directory, $this->install('b'), $call]);

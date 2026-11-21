@@ -4,14 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Core\HandBack\Infrastructure;
 
-use FilesystemIterator;
 use Intakt\Core\HandBack\Contract\HandBackServices;
 use Intakt\Core\HandBack\Domain\DependencySnapshotKey;
 use Intakt\Core\Job\Contract\JobInput;
 use NoDiscard;
-use RecursiveDirectoryIterator;
-use RecursiveIteratorIterator;
-use SplFileInfo;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
@@ -136,35 +132,8 @@ final readonly class DependencySnapshots
     {
         $incoming = $this->root.'/'.self::INCOMING;
         new Filesystem()->mirror($install, $incoming);
-        $this->makeReadOnly($incoming);
-        $this->moveWhole($incoming, $snapshot);
-    }
-
-    // PHP's own rename, because Filesystem::rename() falls back to a copy and a delete when it fails, and a fallback stopped part way would leave a partial snapshot under a valid key.
-    private function moveWhole(string $from, string $to): void
-    {
-        if (!rename($from, $to)) {
-            throw new IOException(sprintf('Failed to rename "%s" to "%s".', $from, $to), path: $from);
-        }
-    }
-
-    // Links are left alone, because chmod follows a link and would change whatever it points at. The first failure stops the save, so a snapshot that is not read-only everywhere never gets its key.
-    private function makeReadOnly(string $snapshot): void
-    {
-        foreach ($this->treeOf($snapshot) as $entry) {
-            if (!$entry->isLink()) {
-                $this->changeMode($entry->getPathname(), $entry->isDir() || 0 !== ($entry->getPerms() & 0o100) ? 0o555 : 0o444);
-            }
-        }
-
-        $this->changeMode($snapshot, 0o555);
-    }
-
-    private function changeMode(string $path, int $mode): void
-    {
-        if (!chmod($path, $mode)) {
-            throw new IOException(sprintf('Failed to change the mode of "%s".', $path), path: $path);
-        }
+        new DependencySnapshotFiles()->makeReadOnly($incoming);
+        new DependencySnapshotFiles()->moveWhole($incoming, $snapshot);
     }
 
     private function markUsed(DependencySnapshotKey $key): void
@@ -184,13 +153,9 @@ final readonly class DependencySnapshots
     // Filesystem::dumpFile() writes the order to a temporary `.uses<random>` file beside it and renames it, so a crash before that rename leaves the temporary file behind.
     private function removeInterruptedUseWrites(): void
     {
-        foreach ($this->entriesOf($this->root) as $name) {
-            $path = $this->root.'/'.$name;
+        $paths = array_map(fn (string $name): string => $this->root.'/'.$name, $this->entriesOf($this->root));
 
-            if (self::USES !== $name && str_starts_with($name, self::USES) && is_file($path) && !is_link($path)) {
-                new Filesystem()->remove($path);
-            }
-        }
+        new Filesystem()->remove(array_filter($paths, fn (string $path): bool => str_starts_with(basename($path), self::USES) && $this->root.'/'.self::USES !== $path && is_file($path) && !is_link($path)));
     }
 
     private function removeEvictionLeftovers(): void
@@ -263,7 +228,7 @@ final readonly class DependencySnapshots
 
         try {
             $evicting = $this->root.'/'.self::EVICTING.$name;
-            $this->moveWhole($this->root.'/'.$name, $evicting);
+            new DependencySnapshotFiles()->moveWhole($this->root.'/'.$name, $evicting);
             $this->remove($evicting);
             new Filesystem()->remove($this->root.'/'.self::PINS.'/'.$name);
 
@@ -316,7 +281,7 @@ final readonly class DependencySnapshots
 
         chmod($folder, 0o755);
 
-        foreach ($this->treeOf($folder) as $entry) {
+        foreach (new DependencySnapshotFiles()->treeOf($folder) as $entry) {
             if ($entry->isDir() && !$entry->isLink()) {
                 chmod($entry->getPathname(), 0o755);
             }
@@ -327,16 +292,5 @@ final readonly class DependencySnapshots
         if (!rmdir($folder)) {
             throw new IOException(sprintf('Failed to remove the folder "%s".', $folder), path: $folder);
         }
-    }
-
-    /**
-     * @return iterable<SplFileInfo>
-     */
-    private function treeOf(string $directory): iterable
-    {
-        return new RecursiveIteratorIterator(
-            new RecursiveDirectoryIterator($directory, FilesystemIterator::SKIP_DOTS),
-            RecursiveIteratorIterator::SELF_FIRST,
-        );
     }
 }
