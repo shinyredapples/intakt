@@ -110,8 +110,8 @@ How each folder was checked and filed: [`upstream/`](upstream/README.md).
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/team-dark-1x.webp 1x, docs/assets/team-dark.webp 2x" width="760" height="116">
-    <img src="docs/assets/team-light-1x.webp" srcset="docs/assets/team-light-1x.webp 1x, docs/assets/team-light.webp 2x" alt="The Intakt team: the octopus conductor with a baton, then the Tech lead, Developer, Code reviewer, Judge, Security engineer, Designer, AI engineer and Maintainer, each drawn as an animal with its tool" width="760" height="113" loading="lazy">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/team-dark.webp" width="760" height="116">
+    <img src="docs/assets/team-light.webp" alt="The Intakt team: the octopus conductor with a baton, then the Tech lead, Developer, Code reviewer, Judge, Security engineer, Designer, AI engineer and Maintainer, each drawn as an animal with its tool" width="760" height="113" loading="lazy">
   </picture>
   <br>
   The octopus conducts: Tech lead, Developer, Code reviewer, Judge, Security engineer, Designer, AI engineer and Maintainer, in that order.
