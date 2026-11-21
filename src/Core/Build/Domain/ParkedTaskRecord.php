@@ -7,7 +7,7 @@ namespace Intakt\Core\Build\Domain;
 use DateTimeImmutable;
 use Doctrine\ORM\Mapping as ORM;
 
-// Written with one insert on the connection, because a flush on the ledger's shared manager would also write another holder's pending change.
+// Written with one insert on the connection, because a row kept out of the entity manager's identity map is not lost when a failed parking calls resetManager().
 #[ORM\Entity]
 #[ORM\Table(name: self::TABLE)]
 final readonly class ParkedTaskRecord
