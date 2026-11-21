@@ -130,13 +130,13 @@ final readonly class RawPromptMessageRule implements Rule
         return $this->factoryNamed($array->getValueTypes()[$method]);
     }
 
-    // a method name known only at run time may be a factory, so it counts as one
+    // a method name known only at run time may be a factory, so any type that may be a string counts as one, `?string` too
     private function factoryNamed(Type $method): ?string
     {
         $names = array_map(static fn (ConstantStringType $name): string => $name->getValue(), $method->getConstantStrings());
 
         return array_find($names, static fn (string $name): bool => in_array(strtolower($name), self::MESSAGE_FACTORIES, true))
-            ?? ([] === $names && $method->isString()->yes() ? 'a factory name' : null);
+            ?? ([] === $names && !$method->isString()->no() ? 'a factory name' : null);
     }
 
     private function callableStringFinding(String_ $string): ?IdentifierRuleError

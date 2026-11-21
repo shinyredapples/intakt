@@ -186,6 +186,7 @@ final class RawPromptMessageRuleTest extends PhpStanRuleTestCase
         yield 'a literal array' => ['[Message::class, \'ofUser\']'];
         yield 'a keyed reordered array' => ['[1 => \'ofUser\', 0 => Message::class]'];
         yield 'a method known only at run time' => ['[Message::class, $method]'];
+        yield 'a nullable method known only at run time' => ['[Message::class, $nullableMethod]'];
         yield 'a single backslash class in an array' => ['[\'\\Symfony\\AI\\Platform\\Message\\Message\', \'ofUser\']'];
         yield 'a callable string' => ['\'Symfony\\AI\\Platform\\Message\\Message::forSystem\''];
         yield 'a single backslash callable string' => ['\'\\Symfony\\AI\\Platform\\Message\\Message::forSystem\''];
@@ -197,7 +198,7 @@ final class RawPromptMessageRuleTest extends PhpStanRuleTestCase
     public function testALiteralCallableOfAMessageFactoryOutsideTheAssemblyIsRefused(string $expression): void
     {
         $sandbox = $this->emptySandbox();
-        $sandbox->write('src/Sample/Report.php', $this->classWithCases('Intakt\Sample\\Report', '(string $text, string $method)', [$expression]));
+        $sandbox->write('src/Sample/Report.php', $this->classWithCases('Intakt\Sample\\Report', '(string $text, string $method, ?string $nullableMethod, int $number)', [$expression]));
 
         self::assertStringContainsString('src/Sample/Report.php:'.self::FIRST_CASE_LINE.' intakt.rawPromptMessage', $this->ruleFindingsIn($sandbox));
     }
@@ -212,6 +213,7 @@ final class RawPromptMessageRuleTest extends PhpStanRuleTestCase
         yield 'the keys 1 and 2' => ['[1 => \'ofUser\', 2 => Message::class]'];
         yield 'another class' => ['[\\ArrayObject::class, \'ofUser\']'];
         yield 'another method' => ['[Message::class, \'ofUserLater\']'];
+        yield 'a number in place of the method' => ['[Message::class, $number]'];
         yield 'two leading backslashes in an array' => ['[\'\\\\\\\\Symfony\\AI\\Platform\\Message\\Message\', \'ofUser\']'];
         yield 'two leading backslashes in a callable string' => ['\'\\\\\\\\Symfony\\AI\\Platform\\Message\\Message::ofUser\''];
     }
@@ -220,7 +222,7 @@ final class RawPromptMessageRuleTest extends PhpStanRuleTestCase
     public function testAnythingButALiteralMessageCallablePasses(string $expression): void
     {
         $sandbox = $this->emptySandbox();
-        $sandbox->write('src/Sample/Report.php', $this->classWithCases('Intakt\Sample\\Report', '(string $text, string $method)', [$expression]));
+        $sandbox->write('src/Sample/Report.php', $this->classWithCases('Intakt\Sample\\Report', '(string $text, string $method, ?string $nullableMethod, int $number)', [$expression]));
 
         self::assertStringNotContainsString('intakt.rawPromptMessage', $this->ruleFindingsIn($sandbox));
     }
