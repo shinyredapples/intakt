@@ -377,10 +377,10 @@ final class BuildJobImageCommandTest extends TestCase
         return $names;
     }
 
+    // In the archive's own order through tar, because PharData indexes entries by name and keeps only one of two alike.
     /**
      * @return list<string>
      */
-    // In the archive's own order through tar, because PharData indexes entries by name and keeps only one of two alike.
     private function entriesInTheSentContext(): array
     {
         $listing = new Process(['tar', '-tf', $this->context]);
