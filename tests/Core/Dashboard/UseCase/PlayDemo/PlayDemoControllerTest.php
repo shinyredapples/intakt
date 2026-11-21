@@ -274,7 +274,7 @@ final class PlayDemoControllerTest extends DashboardPageTestCase
         $at = $this->demoPage()->filter('aside#tour-caption')->attr('data-tour-at');
 
         self::assertSame('[id="round-demo-round-2-now-phase"]', $at);
-        self::assertStringNotContainsString('demo-round-1', (string) $at);
+        self::assertStringNotContainsString('demo-round-1', $at);
     }
 
     public function testBeforeADemoRunTheComposeDemoPagesHoldOnlyTheEmptyCaption(): void
