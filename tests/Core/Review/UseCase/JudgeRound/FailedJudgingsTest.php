@@ -4,8 +4,12 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\JudgeRound;
 
+use DateTimeImmutable;
 use Intakt\Core\Ledger\Contract\Ledger;
+use Intakt\Core\Ledger\Contract\LedgerEvent;
+use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
+use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Intakt\Core\Review\UseCase\JudgeRound\FailedJudgings;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRound;
@@ -19,6 +23,7 @@ use Symfony\Component\Messenger\Bridge\Doctrine\Transport\DoctrineTransport;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\Transport\Receiver\ReceiverInterface;
 use Symfony\Component\Serializer\SerializerInterface;
+use Symfony\Component\Uid\Uuid;
 
 // On the application's Doctrine transports, which the test environment otherwise replaces with in-memory ones, because the failure transport shares the queue table with the async one.
 #[Group('persistence')]
@@ -116,6 +121,27 @@ final class FailedJudgingsTest extends KernelTestCase
 
         self::assertTrue($this->judgings($this->failed)->hasFailed(self::ROUND));
         self::assertSame(2, $this->failed->getMessageCount());
+    }
+
+    public function testTheFailedRoundsAreTheRoundsRecordedAsFailedAndTheRoundsWhoseJudgingIsParked(): void
+    {
+        $recorded = '0192a000-0000-7000-8000-000000000002';
+        $ledger = self::createStub(Ledger::class);
+        $ledger->method('readOfKind')->willReturn(new RecordedEvents([new RecordedEvent(Uuid::v7(), new LedgerEvent(LedgerEventKind::JudgingFailed, '{"round":"'.$recorded.'"}'), new DateTimeImmutable('2026-11-20T12:00:00+00:00'))]));
+        $this->failed->send(new Envelope(new JudgeRound(self::ROUND)));
+        $this->failed->send(new Envelope(new PublishVerdict('0192a000-0000-7000-8000-000000000003')));
+
+        $failed = new FailedJudgings($this->failed, $ledger, self::getContainer()->get(LedgerPayloads::class))->failedRounds();
+
+        self::assertEqualsCanonicalizing([self::ROUND, $recorded], array_keys($failed));
+    }
+
+    public function testAFailureTransportThatCannotBeListedAddsNoFailedRound(): void
+    {
+        $unlisted = $this->createMock(ReceiverInterface::class);
+        $unlisted->expects($this->never())->method('get');
+
+        self::assertSame([], $this->judgings($unlisted)->failedRounds());
     }
 
     private function judgings(ReceiverInterface $failed): FailedJudgings

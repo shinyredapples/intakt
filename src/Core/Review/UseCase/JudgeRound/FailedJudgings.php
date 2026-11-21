@@ -10,7 +10,6 @@ use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Review\Contract\JudgingFailed;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
-use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\Transport\Receiver\ListableReceiverInterface;
 use Symfony\Component\Messenger\Transport\Receiver\ReceiverInterface;
 
@@ -48,26 +47,50 @@ final readonly class FailedJudgings
         return null;
     }
 
-    // A transport that cannot be listed shows no failure, because reading it with get() would hand its messages out.
-    private function isParked(string $roundId): bool
+    // Every round whose judging failed, recorded or parked, read once from each place, because a caller deciding many rounds under a lock should not list the failure transport once per round.
+    /**
+     * @return array<string, true>
+     */
+    public function failedRounds(): array
     {
-        if (!$this->failed instanceof ListableReceiverInterface) {
-            return false;
-        }
+        $failed = $this->parkedRounds();
 
-        foreach ($this->failed->all() as $parked) {
-            if ($this->judges($parked, $roundId)) {
-                return true;
+        foreach ($this->ledger->readOfKind(LedgerEventKind::JudgingFailed) as $recorded) {
+            $round = $this->payloads->of($recorded, JudgingFailed::class)?->round;
+
+            if (null !== $round) {
+                $failed[$round] = true;
             }
         }
 
-        return false;
+        return $failed;
     }
 
-    private function judges(Envelope $parked, string $roundId): bool
+    private function isParked(string $roundId): bool
     {
-        $message = $parked->getMessage();
+        return isset($this->parkedRounds()[$roundId]);
+    }
 
-        return $message instanceof JudgeRound && $message->roundId === $roundId;
+    // A transport that cannot be listed shows no failure, because reading it with get() would hand its messages out.
+    /**
+     * @return array<string, true>
+     */
+    private function parkedRounds(): array
+    {
+        if (!$this->failed instanceof ListableReceiverInterface) {
+            return [];
+        }
+
+        $parked = [];
+
+        foreach ($this->failed->all() as $envelope) {
+            $message = $envelope->getMessage();
+
+            if ($message instanceof JudgeRound) {
+                $parked[$message->roundId] = true;
+            }
+        }
+
+        return $parked;
     }
 }
