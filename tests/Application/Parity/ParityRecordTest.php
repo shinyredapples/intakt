@@ -32,6 +32,141 @@ final class ParityRecordTest extends TestCase
         self::assertSame([], $this->repositoryTests()->unprovenItems($record));
     }
 
+    public function testEveryJudgedSectionIsAHeadingOfTheRecord(): void
+    {
+        $record = (string) file_get_contents(dirname(__DIR__, 3).'/docs/architecture/parity.md');
+
+        foreach (ParityRecord::JUDGED_SECTIONS as $section) {
+            self::assertStringContainsString("\n## ".$section."\n", $record);
+        }
+    }
+
+    public function testTheOpenItemsOfTheJudgedSectionsAreTheBehaviorsNotBuiltYet(): void
+    {
+        $record = (string) file_get_contents(dirname(__DIR__, 3).'/docs/architecture/parity.md');
+
+        self::assertSame([
+            'Intake and shaping: A task waits until every `Waits for #n` issue is closed; a line naming the task\'s own pull request is no wait, and a pull request target counts as the task it closes for that task\'s failure and stall, but releases only on that pull request\'s confirmed merge into main.',
+            'Intake and shaping: Projects get free slots in share order; urgent work first; a project at share 0 is paused for builds and reviews.',
+            'Intake and shaping: A task split creates its parts in order with `Waits for` lines, and the original becomes an umbrella.',
+            'Intake and shaping: A task is never split twice; an interrupted split ends on the first part once.',
+            'Intake and shaping: An umbrella closes only on trusted notes when its parts close.',
+            'Build and hand-back: Builder and reviewer egress is limited to an allowlist; the vendor login is unreadable to the model\'s commands.',
+            'Build and hand-back: Builds run the project\'s own PHP, never a fallback.',
+            'Build and hand-back: Only a green check pushes; the pre-check in the session catches refusals first.',
+            'Build and hand-back: Every Evidence item is referenced; a miss goes back once, a second miss goes to the reviewers.',
+            'Build and hand-back: A body over the cap goes back once with its commits kept.',
+            'Build and hand-back: Composer changes beyond routine go to the owner, naming the packages.',
+            'CI: Red CI goes back before any reviewer and uses no cycle; the third bounce in a row counts.',
+            'CI: The CI excerpt is redacted, fenced and capped.',
+            'CI: A missed CI start is nudged once; a pull request the forge reports in conflict with main is not nudged but goes to Intakt\'s checked registry-file merge, or to a builder as a merge-main rework; an unreadable workflow fails closed.',
+        ], $this->repositoryTests()->notBuiltItems($record));
+    }
+
+    public function testAnOpenItemOfAJudgedSectionThatSaysNothingAfterIntaktIsReportedWithItsLine(): void
+    {
+        $record = "## CI\n- [ ] A behavior. `test_old.py` [T1]";
+
+        self::assertSame(
+            ['line 2: an open item must say after `Intakt:` what is not built yet'],
+            $this->repositoryTests()->unprovenItems($record),
+        );
+    }
+
+    public function testAnOpenItemOfAJudgedSectionNamingOnlyExistingTestsWithoutSayingWhatIsNotBuiltIsReported(): void
+    {
+        $record = "## Build and hand-back\n- [ ] A behavior. [T1]; Intakt: `ParityRecordTest::testAnIndentedDoneItemIsJudged`";
+
+        self::assertSame(
+            ['line 2: an open item must say after `Intakt:` what is not built yet'],
+            $this->repositoryTests()->unprovenItems($record),
+        );
+    }
+
+    public function testAnOpenItemOfAJudgedSectionThatSaysNotBuiltYetOnlyBeforeIntaktIsReported(): void
+    {
+        $record = "## CI\n- [ ] A behavior, not built yet. [T1]; Intakt: `ParityRecordTest::testAnIndentedDoneItemIsJudged`";
+
+        self::assertSame(
+            ['line 2: an open item must say after `Intakt:` what is not built yet'],
+            $this->repositoryTests()->unprovenItems($record),
+        );
+    }
+
+    public function testAnOpenItemOfAJudgedSectionNamingAMissingTestIsReported(): void
+    {
+        $record = "## Intake and shaping\n- [ ] A behavior. [T1]; Intakt: `NoSuchParityTest::testAnything` (not built yet: the rest, T1)";
+
+        self::assertSame(
+            ['line 2: NoSuchParityTest is no test class under tests/'],
+            $this->repositoryTests()->unprovenItems($record),
+        );
+    }
+
+    public function testAnOpenItemOfAJudgedSectionThatSaysWhatIsNotBuiltYetPasses(): void
+    {
+        $record = "## CI\n- [ ] A behavior. [T1]; Intakt: `ParityRecordTest::testAnIndentedDoneItemIsJudged` (not built yet: the rest, T1)\n- [ ] Another. [T2]; Intakt: not built yet (T2)";
+
+        self::assertSame([], $this->repositoryTests()->unprovenItems($record));
+    }
+
+    public function testAnOpenItemOfAJudgedSectionThatSaysWhatIsNotBuiltYetIsListedByItsSectionAndFirstSentence(): void
+    {
+        $record = "## CI\n- [ ] A behavior. Done later. [T1]; Intakt: not built yet (T1)";
+
+        self::assertSame(['CI: A behavior.'], $this->repositoryTests()->notBuiltItems($record));
+    }
+
+    public function testADoneItemOfAJudgedSectionIsNotListedAsNotBuiltThoughItsRemarkNamesAMissingPart(): void
+    {
+        $record = '## CI'."\n".'- [x] A behavior. [T1]; Intakt: `ParityRecordTest::testAnIndentedDoneItemIsJudged` (not built yet: the lane, T2)';
+
+        self::assertSame([], $this->repositoryTests()->notBuiltItems($record));
+    }
+
+    public function testAnOpenItemOutsideTheJudgedSectionsIsNeitherJudgedNorListed(): void
+    {
+        $record = "## CI\n- [ ] A behavior. [T1]; Intakt: not built yet (T1)\n## Reviews\n- [ ] Another. `test_old.py` [T2]; Intakt: `NoSuchParityTest::testAnything`\n  and more words";
+        $parity = $this->repositoryTests();
+
+        self::assertSame([], $parity->unprovenItems($record));
+        self::assertSame(['CI: A behavior.'], $parity->notBuiltItems($record));
+    }
+
+    public function testAHeadingThatOnlyStartsLikeAJudgedSectionNameDoesNotTurnOnJudging(): void
+    {
+        $record = "## CI later\n- [ ] A behavior. `test_old.py` [T1]";
+
+        self::assertSame([], $this->repositoryTests()->unprovenItems($record));
+    }
+
+    public function testADeeperHeadingInsideAJudgedSectionKeepsItJudged(): void
+    {
+        $record = "## CI\n### Details\n- [ ] A behavior. `test_old.py` [T1]";
+
+        self::assertSame(
+            ['line 3: an open item must say after `Intakt:` what is not built yet'],
+            $this->repositoryTests()->unprovenItems($record),
+        );
+    }
+
+    public function testATopLevelHeadingEndsAJudgedSection(): void
+    {
+        $record = "## CI\n# Appendix\n- [ ] A behavior. `test_old.py` [T1]";
+
+        self::assertSame([], $this->repositoryTests()->unprovenItems($record));
+    }
+
+    public function testANonBlankLineDirectlyAfterAnOpenItemOfAJudgedSectionIsReported(): void
+    {
+        $record = "## CI\n- [ ] A behavior. [T1]; Intakt: not built yet (T1)\n  and `NoSuchParityTest::testAnything`";
+
+        self::assertSame(
+            ['line 3: an open item of a judged section must stay on one line'],
+            $this->repositoryTests()->unprovenItems($record),
+        );
+    }
+
     public function testADoneItemNamingAnExistingTestMethodPasses(): void
     {
         $record = '- [x] A behavior. `test_old.py::test_it` [T1]; Intakt: `ParityRecordTest::testADoneItemNamingAnExistingTestMethodPasses`';
