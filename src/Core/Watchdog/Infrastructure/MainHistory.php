@@ -149,10 +149,12 @@ final readonly class MainHistory implements CommitHistory
         $dotGit = $directory.'/.git';
         $target = is_file($dotGit) ? $this->gitFileTarget($dotGit, $directory) : $dotGit;
 
-        return realpath($target) ?: '';
+        $resolved = realpath($target);
+
+        return false === $resolved ? '' : $resolved;
     }
 
-    // A linked work tree or a submodule has a .git file that names its git directory.
+    // Because a linked work tree or a submodule has a .git file that names its git directory.
     private function gitFileTarget(string $dotGit, string $directory): string
     {
         $content = @file_get_contents($dotGit);

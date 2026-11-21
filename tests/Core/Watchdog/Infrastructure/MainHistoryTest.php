@@ -459,7 +459,7 @@ final class MainHistoryTest extends TestCase
         $this->repository->commitEmpty('Tip');
         $bin = $this->keys.'/shallow-bin';
         mkdir($bin);
-        $git = escapeshellarg(new ExecutableFinder()->find('git'));
+        $git = escapeshellarg((string) new ExecutableFinder()->find('git'));
         $shallow = escapeshellarg($this->repository->path.'/.git/shallow');
         $script = "#!/bin/sh\ncase \" \$* \" in\n    *\" --is-shallow-repository \"*)\n        ".$git." \"\$@\" || exit \$?\n        printf '%s\\n' ".escapeshellarg($cut).' > '.$shallow."\n        ;;\n    *) exec ".$git." \"\$@\" ;;\nesac\n";
         file_put_contents($bin.'/git', $script);
