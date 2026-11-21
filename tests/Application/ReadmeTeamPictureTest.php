@@ -69,19 +69,20 @@ final class ReadmeTeamPictureTest extends TestCase
         self::assertSame('lazy', $this->imgAttribute('loading'));
     }
 
-    public function testTheTeamPictureSitsUnderTheOpeningAndIsFollowedByTheRolesInOrder(): void
+    // Below the five-minute start, because the first screen shows the product itself: the screenshot of the review page (#3142).
+    public function testTheTeamPictureSitsAfterTheProductScreenshotAndIsFollowedByTheRolesInOrder(): void
     {
         $readme = $this->readme();
 
-        $opening = strpos($readme, 'Your coding agent says it is done.');
-        self::assertIsInt($opening, 'The README opens with the hook line.');
-        $picture = (int) strpos($readme, '<picture>', $opening);
-        $links = (int) strpos($readme, 'PHP 8.5, Symfony AI');
+        $screenshot = strpos($readme, '](docs/assets/dashboard-review.png)');
+        self::assertIsInt($screenshot, 'The README shows the review page on its first screen.');
+        $picture = (int) strpos($readme, '<picture>', $screenshot);
+        $release = (int) strpos($readme, '## The first release');
         $line = 'Tech lead, Developer, Code reviewer, Judge, Security engineer, Designer, AI engineer and Maintainer';
 
-        self::assertGreaterThan($opening, $picture);
-        self::assertLessThan($links, $picture);
-        self::assertStringContainsString($line, substr($readme, $picture, $links - $picture));
+        self::assertGreaterThan($screenshot, $picture);
+        self::assertLessThan($release, $picture);
+        self::assertStringContainsString($line, substr($readme, $picture, $release - $picture));
     }
 
     private function picture(): string
