@@ -525,6 +525,28 @@ final class JudgeRoundTest extends KernelTestCase
         );
     }
 
+    public function testAHeldCredentialOnANearestChangedLineIsRecordedRedacted(): void
+    {
+        $round = $this->roundReporting([$this->quoting('A', Severity::P1, '`newThing` is not defined.')]);
+        $previous = $_SERVER['APP_SECRET'] ?? null;
+        $_SERVER['APP_SECRET'] = 'new';
+
+        try {
+            $this->fixture->judge(new ScriptedJudgement(new Judgement([])))($this->judgingOf($round));
+        } finally {
+            if (null === $previous) {
+                unset($_SERVER['APP_SECRET']);
+            } else {
+                $_SERVER['APP_SECRET'] = $previous;
+            }
+        }
+
+        self::assertSame(
+            [['quote' => '[redacted]Thing', 'lines' => [['file' => 'src/Thing.php', 'line' => 1, 'text' => '[redacted]']]]],
+            $this->judgeDonePayloads()[0]['dropped'][0]['nearest'],
+        );
+    }
+
     public function testAFindingDroppedForItsQuotesIsRecordedWithTheNearestChangedLines(): void
     {
         $round = $this->roundReporting([$this->quoting('A', Severity::P1, '`newThing` is not defined.')]);

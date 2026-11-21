@@ -6,6 +6,7 @@ namespace Intakt\Core\Review\UseCase\JudgeRound;
 
 use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Platform\Contract\AsCommandHandler;
+use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Review\Contract\DroppedFinding;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\JudgedFindings;
@@ -31,6 +32,7 @@ final readonly class JudgeRoundHandler
         private JudgedRounds $rounds,
         private Vendor $vendor,
         private EventDispatcherInterface $events,
+        private Redactor $redactor,
     ) {
     }
 
@@ -80,7 +82,8 @@ final readonly class JudgeRoundHandler
 
             // Read once and only for a round that drops a finding, because most rounds drop none.
             $addedLines ??= $this->rounds->addedLinesOf($round);
-            $dropped[] = DroppedFinding::of($finding, $reason, new NearestChangedLines()->forQuotesOf($finding->text, $addedLines));
+            // Redacted, because a changed line may hold a credential and the judge_done row is printed and served as it is stored.
+            $dropped[] = DroppedFinding::of($finding, $reason, new NearestChangedLines($this->redactor->redact(...))->forQuotesOf($finding->text, $addedLines));
         }
 
         return [$kept, $dropped];

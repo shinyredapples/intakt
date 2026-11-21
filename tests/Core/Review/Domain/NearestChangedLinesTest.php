@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\Domain;
 
+use Closure;
 use Intakt\Core\Review\Contract\NearLine;
 use Intakt\Core\Review\Contract\QuoteNearLines;
 use Intakt\Core\Review\Domain\NearestChangedLines;
@@ -99,11 +100,35 @@ final class NearestChangedLinesTest extends TestCase
         self::assertSame([['src/A.php', 2]], $this->placesOf($nearest[1]));
     }
 
-    public function testAtMostFiveQuotesAreRecordedPerFinding(): void
+    public function testEveryCountedQuoteOfAFindingWithManyQuotesGetsItsLines(): void
     {
-        $text = implode(' ', array_map(static fn (int $n): string => '`dropReason'.$n.'`', range(1, 7)));
+        $text = '`reasonOne` `reasonTwo` `reasonThree` `reasonFour` `reasonFive` `reasonSix`';
 
-        self::assertCount(NearestChangedLines::MAX_QUOTES, $this->nearestFor($text, [['src/A.php', 1, '$reason = 1;']]));
+        self::assertCount(6, $this->nearestFor($text, [['src/A.php', 1, '$reason = 1;']]));
+    }
+
+    public function testALineInAFileWhosePathIsNotUtf8IsLeftOut(): void
+    {
+        $nearest = $this->nearestFor('`dropReason` is unused.', [["src/A\xFF.php", 1, '$reason = 1;'], ['src/B.php', 2, '$reason = 2;']]);
+
+        self::assertSame([['src/B.php', 2]], $this->placesOf($nearest[0]));
+    }
+
+    public function testAChangedLineIsRedactedBeforeItIsCutSoACredentialAcrossTheCutLeavesNoPart(): void
+    {
+        $line = '$reason = \''.str_repeat('a', NearestChangedLines::MAX_LINE_LENGTH - 16).'held-secret-value\';';
+
+        $text = $this->nearestFor('`dropReason` is unused.', [['src/A.php', 1, $line]], self::redactingHeldSecret(...))[0]->lines[0]->text;
+
+        self::assertStringNotContainsString('held', $text);
+        self::assertStringEndsWith('[reda', $text);
+    }
+
+    public function testAQuoteIsStoredRedacted(): void
+    {
+        $nearest = $this->nearestFor('`dropReason(held-secret-value)` is unused.', [['src/A.php', 1, '$dropReason = $heldSecretValue;']], self::redactingHeldSecret(...));
+
+        self::assertSame('dropReason([redacted])', $nearest[0]->quote);
     }
 
     public function testAQuoteInAFencedBlockIsNotLookedFor(): void
@@ -113,12 +138,18 @@ final class NearestChangedLinesTest extends TestCase
 
     /**
      * @param list<array{string, int, string}> $changedLines
+     * @param ?Closure(string): string         $redact
      *
      * @return list<QuoteNearLines>
      */
-    private function nearestFor(string $findingText, array $changedLines): array
+    private function nearestFor(string $findingText, array $changedLines, ?Closure $redact = null): array
     {
-        return new NearestChangedLines()->forQuotesOf($findingText, $changedLines);
+        return new NearestChangedLines($redact ?? static fn (string $text): string => $text)->forQuotesOf($findingText, $changedLines);
+    }
+
+    private static function redactingHeldSecret(string $text): string
+    {
+        return str_replace('held-secret-value', '[redacted]', $text);
     }
 
     /**

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Domain;
 
+use Closure;
 use Intakt\Core\Review\Contract\NearLine;
 use Intakt\Core\Review\Contract\QuoteNearLines;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
@@ -12,8 +13,7 @@ use Symfony\Component\DependencyInjection\Attribute\Exclude;
 #[Exclude]
 final readonly class NearestChangedLines
 {
-    // Bounds what a dropped finding adds to its ledger row, because the row is read on every dashboard page that shows the round.
-    public const int MAX_QUOTES = 5;
+    // Bounds what each quote of a dropped finding adds to its ledger row, because the row is read on every dashboard page that shows the round.
     public const int MAX_LINES_PER_QUOTE = 3;
     public const int MAX_LINE_LENGTH = 160;
     // Split at an underscore, a digit and a change of case, because a quote may spell a name in another case style (fooBar, foo_bar, FOO_BAR).
@@ -22,12 +22,21 @@ final readonly class NearestChangedLines
     private const int MIN_PART_LENGTH = 3;
 
     /**
+     * @param Closure(string): string $redact
+     */
+    public function __construct(private Closure $redact)
+    {
+    }
+
+    /**
      * @param list<array{string, int, string}> $changedLines
      *
      * @return list<QuoteNearLines>
      */
     public function forQuotesOf(string $findingText, array $changedLines): array
     {
+        // A path Git quoted into bytes that are not UTF-8 is left out, because the ledger row is JSON and a scrubbed path would name another file.
+        $changedLines = array_values(array_filter($changedLines, static fn (array $changed): bool => mb_check_encoding($changed[0], 'UTF-8')));
         $partsOfLines = array_map(fn (array $changed): array => $this->partsOf($changed[2]), $changedLines);
         $recorded = [];
 
@@ -35,11 +44,11 @@ final readonly class NearestChangedLines
             $lines = $this->nearestTo($this->partsOf(implode(' ', $names)), $changedLines, $partsOfLines);
 
             if ([] !== $lines) {
-                $recorded[] = new QuoteNearLines($this->cut($quote), $lines);
+                $recorded[] = new QuoteNearLines($this->stored($quote), $lines);
             }
         }
 
-        return array_slice($recorded, 0, self::MAX_QUOTES);
+        return $recorded;
     }
 
     /**
@@ -58,14 +67,18 @@ final readonly class NearestChangedLines
 
             // At least half of the quote's parts, because one common part such as "name" or "value" alone would make nearly every line close.
             if ($shared > 0 && 2 * $shared >= count($parts)) {
-                $scored[] = [$shared, new NearLine($file, $line, $this->cut($text))];
+                $scored[] = [$shared, $index];
             }
         }
 
         // Stable, so lines that share as many parts keep their order in the diff.
         usort($scored, static fn (array $a, array $b): int => $b[0] <=> $a[0]);
 
-        return array_slice(array_column($scored, 1), 0, self::MAX_LINES_PER_QUOTE);
+        return array_map(function (array $score) use ($changedLines): NearLine {
+            [$file, $line, $text] = $changedLines[$score[1]];
+
+            return new NearLine($file, $line, $this->stored($text));
+        }, array_slice($scored, 0, self::MAX_LINES_PER_QUOTE));
     }
 
     /**
@@ -79,9 +92,9 @@ final readonly class NearestChangedLines
         return array_values(array_unique(array_filter($parts, static fn (string $part): bool => strlen($part) >= self::MIN_PART_LENGTH)));
     }
 
-    // Scrubbed, because a diff line may hold bytes that are not UTF-8, and the ledger row is JSON.
-    private function cut(string $text): string
+    // Scrubbed, because a diff line may hold bytes that are not UTF-8 and the ledger row is JSON; redacted before it is cut, because a credential cut in two no longer has the shape the redaction knows.
+    private function stored(string $text): string
     {
-        return mb_substr(mb_scrub(trim($text), 'UTF-8'), 0, self::MAX_LINE_LENGTH, 'UTF-8');
+        return mb_substr(trim(($this->redact)(mb_scrub($text, 'UTF-8'))), 0, self::MAX_LINE_LENGTH, 'UTF-8');
     }
 }
