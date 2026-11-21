@@ -39,4 +39,16 @@ final class PanelOrderAfterClockStepTest extends KernelTestCase
             array_map(static fn (RoundReviewer $reviewer): string => $reviewer->roleName(), $fixture->round($id->toRfc4122())->reviewers()),
         );
     }
+
+    public function testReviewersStoredBeforeThePanelPositionKeepTheOrderOfTheirIds(): void
+    {
+        $fixture = new RoundFixture(self::getContainer());
+        $command = $fixture->commandFor('before-position', 1);
+        $round = new ReviewRound(Uuid::v7(), $command->target, new ChangeRound('before-position', 1, null));
+        $member = $command->panel->reviewers[0];
+        $earlier = new RoundReviewer(new UuidV7('01a18cae-0000-7000-8000-000000000001'), $round, $member, 0);
+        $later = new RoundReviewer(new UuidV7('01a18cae-0000-7000-8000-000000000002'), $round, $member, 0);
+
+        self::assertSame([-1, 1], [$earlier->panelOrder($later), $later->panelOrder($earlier)]);
+    }
 }

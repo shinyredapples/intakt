@@ -25,8 +25,6 @@ final class ReviewRound implements HasPlace
     // The properties are not readonly because the lazy proxy a reviewer holds for its round sets them again when it loads.
     /** @var Collection<int, RoundReviewer> */
     #[ORM\OneToMany(targetEntity: RoundReviewer::class, mappedBy: 'round', cascade: ['persist'])]
-    // Ordered by panel position, because PostgreSQL returns unordered rows in storage order and a clock step can put a later UUIDv7 first; the id breaks ties of rows stored before the position.
-    #[ORM\OrderBy(['position' => 'ASC', 'id' => 'ASC'])]
     private Collection $reviewers;
 
     #[ORM\Column(length: 16, enumType: RoundState::class)]
@@ -186,12 +184,16 @@ final class ReviewRound implements HasPlace
         $this->resolvedFindingIds = $json;
     }
 
+    // In panel order, because PostgreSQL returns the stored rows in storage order, which an update changes.
     /**
      * @return list<RoundReviewer>
      */
     public function reviewers(): array
     {
-        return array_values($this->reviewers->toArray());
+        $reviewers = array_values($this->reviewers->toArray());
+        usort($reviewers, static fn (RoundReviewer $one, RoundReviewer $other): int => $one->panelOrder($other));
+
+        return $reviewers;
     }
 
     public function everyReviewerFinished(): bool
