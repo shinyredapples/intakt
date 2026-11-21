@@ -328,6 +328,36 @@ final class ReplaysRecordingTest extends TestCase
         }
     }
 
+    public function testAReplayWhoseFirstAppendFailsAsksForAPlainRetryAndNotForTheRemovalOfTheDemoProject(): void
+    {
+        $this->ledger->failAppend(1);
+
+        try {
+            $this->replays()->replay($this->recordedRun(), 1.0);
+            self::fail('The replay went on after a failed append.');
+        } catch (ReplayStopped $stopped) {
+            self::assertStringEndsWith('Nothing was written, so replay this recording again.', $stopped->getMessage());
+            self::assertStringNotContainsString('intakt:demo:remove', $stopped->getMessage());
+        }
+    }
+
+    public function testARecordingWhoseFirstAppendFailedReplaysInFullOnADirectRetryBesideTheEarlierReplay(): void
+    {
+        $this->replays()->replay($this->recording([$this->row(LedgerEventKind::ReviewStarted, '{"round":"earlier-round","project":"sample"}', 0)]), 1.0);
+        $this->ledger->failAppend(2);
+
+        try {
+            $this->replays()->replay($this->recordedRun(), 1.0);
+            self::fail('The replay went on after a failed append.');
+        } catch (ReplayStopped) {
+        }
+
+        $this->ledger->failAppend(0);
+        $this->replays()->replay($this->recordedRun(), 1.0);
+
+        self::assertCount(6, $this->appended());
+    }
+
     public function testARecordingWhoseRoundIsAlreadyInTheLedgerIsRefusedBeforeAnyRowIsWritten(): void
     {
         $this->replays()->replay($this->recordedRun(), 1.0);
