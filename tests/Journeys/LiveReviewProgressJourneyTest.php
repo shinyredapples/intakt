@@ -147,9 +147,8 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
         foreach ($updates as $update) {
             preg_match_all('#<li class="character-row">(?:<img [^>]+>)+<span><strong>([^<]+)</strong> \((?:<span id="round-'.$round.'-now-reviewer-[^"]+-model">)?([^<)]+)(?:</span>)?\): <span id="round-'.$round.'-now-reviewer-[^"]+-state">(.+?)</span></li>#s', $update->getData(), $rows, PREG_SET_ORDER);
             $now = [...$now, ...array_map(static fn (array $row): array => [$row[1], $row[2], trim(strip_tags($row[3]))], $rows)];
-            // The raw id from the title, because the table names the model and its AI lab while the current state block keeps the id.
-            preg_match_all('#<template><tr><td>([^<]+)</td>\s*<td(?: id="round-'.$round.'-reviewer-[^"]+-model")?(?: title="([^"]+)")?>([^<]+)</td>#', $update->getData(), $rows, PREG_SET_ORDER);
-            $table = [...$table, ...array_map(static fn (array $row): array => [$row[1], '' === $row[2] ? $row[3] : $row[2]], $rows)];
+            preg_match_all('#<template><tr><td>([^<]+)</td>\s*<td(?: id="round-'.$round.'-reviewer-[^"]+-model")?>([^<]+)</td>#', $update->getData(), $rows, PREG_SET_ORDER);
+            $table = [...$table, ...array_map(static fn (array $row): array => [$row[1], $row[2]], $rows)];
         }
 
         self::assertSame(['correctness', 'security'], array_values(array_unique(array_column($now, 0))));

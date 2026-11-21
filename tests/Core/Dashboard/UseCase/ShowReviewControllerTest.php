@@ -212,6 +212,16 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         self::assertSame(['Kimi K3.1 (Moonshot AI)', 'moonshotai/Kimi-K3.1:deepinfra'], [$cell->text(), $cell->attr('title')]);
     }
 
+    public function testAReviewerOnAModelIdThatTwigReadsAsFalseStillHasItsIdInTheTitle(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->startReviewerOn('round-1', 'correctness', '0');
+
+        $cell = $this->browser->request('GET', '/reviews/round-1')->filter('#round-round-1-reviewer-round-1-correctness-model');
+
+        self::assertSame(['0', '0'], [$cell->text(), $cell->attr('title')]);
+    }
+
     public function testAReviewerWhoseModelWasNotRecordedHasNoTitleOnItsModelCell(): void
     {
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);

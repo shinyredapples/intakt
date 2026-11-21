@@ -53,8 +53,10 @@ final readonly class ReviewerOutcome
         }
 
         $lab = AiLab::of($this->model);
+        $name = AiLab::modelName($this->model);
 
-        return $lab instanceof AiLab ? AiLab::modelName($this->model).' ('.$lab->value.')' : $this->model;
+        // The id alone also for a bare lab namespace ("anthropic/"), because it names no model to put before the lab.
+        return $lab instanceof AiLab && '' !== $name ? $name.' ('.$lab->value.')' : $this->model;
     }
 
     public function outcome(): ?ReviewOutcome

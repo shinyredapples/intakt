@@ -62,6 +62,20 @@ final class ReviewerOutcomeTest extends TestCase
         self::assertSame('acme/robot-7', $reviewer->modelAndLab());
     }
 
+    public function testAReviewerOnANameThatOnlyStartsLikeAKnownFamilyIsShownByItsIdAlone(): void
+    {
+        $reviewer = new ReviewerOutcome('r1', 'correctness', 'standard', new DateTimeImmutable('2026-11-13 10:00:00'), 'acme/gptish');
+
+        self::assertSame('acme/gptish', $reviewer->modelAndLab());
+    }
+
+    public function testAReviewerOnABareLabNamespaceIsShownByItsIdAlone(): void
+    {
+        $reviewer = new ReviewerOutcome('r1', 'correctness', 'standard', new DateTimeImmutable('2026-11-13 10:00:00'), 'anthropic/');
+
+        self::assertSame('anthropic/', $reviewer->modelAndLab());
+    }
+
     public function testAReviewerWhoseModelWasNotRecordedIsShownByItsTier(): void
     {
         self::assertSame('standard tier, model not recorded', $this->reviewer()->modelAndLab());

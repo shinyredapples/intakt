@@ -26,7 +26,7 @@ enum AiLab: string
 
         return array_find(self::cases(), static fn (self $lab): bool => array_any(
             $lab->markers(),
-            static fn (string $marker): bool => str_starts_with($id, $marker) || str_starts_with($name, $marker),
+            static fn (string $marker): bool => self::startsWith($id, $marker) || self::startsWith($name, $marker),
         ));
     }
 
@@ -50,7 +50,7 @@ enum AiLab: string
     private function markers(): array
     {
         return match ($this) {
-            self::Anthropic => ['anthropic/', 'claude'],
+            self::Anthropic => ['anthropic/', 'claude', 'opus', 'sonnet', 'haiku'],
             self::OpenAi => ['openai/', 'gpt'],
             self::Google => ['google/', 'gemini', 'gemma'],
             self::MoonshotAi => ['moonshotai/', 'kimi'],
@@ -61,6 +61,16 @@ enum AiLab: string
             self::Meta => ['meta-llama/', 'llama'],
             self::XAi => ['x-ai/', 'xai/', 'grok'],
         };
+    }
+
+    // A family name only as a whole word, because "acme/gptish" is not a GPT; a namespace ends at its slash already.
+    private static function startsWith(string $part, string $marker): bool
+    {
+        if (!str_starts_with($part, $marker)) {
+            return false;
+        }
+
+        return str_ends_with($marker, '/') || 1 !== preg_match('/^[a-z]/', substr($part, strlen($marker)));
     }
 
     private static function withoutHost(string $model): string
