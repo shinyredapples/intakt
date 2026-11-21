@@ -188,7 +188,7 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         $push = $this->pushOf('feature/7', '1');
         $records->intendChange($push, str_repeat('1', 40));
         $opener->openOrUpdate($proposal);
-        $github->openPulls = [['number' => 7, 'head' => ['ref' => 'feature/7'], 'user' => ['login' => 'intakt[bot]', 'type' => 'Bot']]];
+        $github->openPulls = [['number' => 7, 'head' => ['ref' => 'feature/7'], 'base' => ['ref' => 'main'], 'user' => ['login' => 'intakt[bot]', 'type' => 'Bot']]];
         $records->intendChange($push, str_repeat('1', 40));
         $records->open($push, str_repeat('1', 40), $opener->openOrUpdate($proposal));
 

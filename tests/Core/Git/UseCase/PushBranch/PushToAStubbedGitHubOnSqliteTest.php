@@ -66,7 +66,7 @@ final class PushToAStubbedGitHubOnSqliteTest extends KernelTestCase
 
     public function testAPushForABranchWithThisAppsOwnOpenPullRequestUpdatesItAndRecordsItOnSqlite(): void
     {
-        $this->github->openPulls = [['number' => 7, 'head' => ['ref' => PushScenario::BRANCH], 'user' => ['login' => 'intakt[bot]']]];
+        $this->github->openPulls = [['number' => 7, 'head' => ['ref' => PushScenario::BRANCH], 'base' => ['ref' => 'main'], 'user' => ['login' => 'intakt[bot]']]];
 
         $pushed = $this->scenario->pushThrough($this->github->opener(), $this->ledger)->push($this->scenario->request());
 

@@ -129,7 +129,7 @@ final class PushToAStubbedGitHubTest extends TestCase
 
     public function testABranchWhoseOpenPullRequestIsThisAppsOwnIsPushedAndItsPullRequestUpdated(): void
     {
-        $this->github->openPulls = [['number' => 7, 'head' => ['ref' => PushScenario::BRANCH], 'user' => ['login' => 'intakt[bot]']]];
+        $this->github->openPulls = [['number' => 7, 'head' => ['ref' => PushScenario::BRANCH], 'base' => ['ref' => 'main'], 'user' => ['login' => 'intakt[bot]']]];
 
         $pushed = $this->scenario->pushThrough($this->github->opener())->push($this->scenario->request());
 

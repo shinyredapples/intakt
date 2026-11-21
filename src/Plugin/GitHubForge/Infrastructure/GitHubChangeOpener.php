@@ -37,7 +37,7 @@ final readonly class GitHubChangeOpener implements ChangeOpening
 
     public function refuseForeignChange(ProposedChange $change): void
     {
-        $this->numberOfOpenPullRequest($this->addressOf($change->project), $change->branch);
+        $this->ownPullRequestsOf($this->addressOf($change->project), $change->branch);
     }
 
     public function openOrUpdate(ProposedChange $change): OpenedChange
@@ -50,7 +50,7 @@ final readonly class GitHubChangeOpener implements ChangeOpening
 
         $repository = $this->addressOf($change->project);
         // Asked again, because another account can open a pull request of the branch between the check before the push and this write.
-        $open = $this->numberOfOpenPullRequest($repository, $change->branch);
+        $open = $this->ownNumberToBase($this->ownPullRequestsOf($repository, $change->branch), $change->base);
         $payload = ['title' => $text->title, 'body' => $text->body, 'base' => $change->base];
 
         // The look-up comes first and a write is never retried, so a crash between the two leaves at most the pull request the next call finds.
@@ -71,7 +71,10 @@ final readonly class GitHubChangeOpener implements ChangeOpening
     }
 
     // Every listed match is checked, never only the first, because the branch can have open pull requests to several bases and a push moves the head of each.
-    private function numberOfOpenPullRequest(RepositoryAddress $repository, string $branch): ?int
+    /**
+     * @return array<int, mixed> the base ref of each of this App's own open pull requests of the branch, by number
+     */
+    private function ownPullRequestsOf(RepositoryAddress $repository, string $branch): array
     {
         $own = [];
 
@@ -79,11 +82,30 @@ final readonly class GitHubChangeOpener implements ChangeOpening
             $pull = is_array($entry) ? $entry : [];
 
             if ($this->isOfBranch($pull, $branch)) {
-                $own[] = $this->ownNumberOf($pull);
+                $own[$this->ownNumberOf($pull)] = is_array($pull['base'] ?? null) ? ($pull['base']['ref'] ?? null) : null;
             }
         }
 
-        return array_first($own);
+        return $own;
+    }
+
+    // Only the own pull request to the change's base is updated, because sending the base to one opened to another base would retarget it.
+    /**
+     * @param array<int, mixed> $own
+     */
+    private function ownNumberToBase(array $own, string $base): ?int
+    {
+        foreach ($own as $number => $ref) {
+            if (!is_string($ref) || '' === $ref) {
+                throw new ForgeWriteFailed('GitHub listed this App\'s open pull request of the branch without its base, so the branch is left alone.');
+            }
+
+            if ($ref === $base) {
+                return $number;
+            }
+        }
+
+        return null;
     }
 
     // One page only, because offset pages read one after the other can shift and skip a pull request that stays open throughout; one answer is one listing, and only one that is not full shows it holds them all.
@@ -109,7 +131,7 @@ final readonly class GitHubChangeOpener implements ChangeOpening
         return array_is_list($listed) && str_starts_with(ltrim($body), '[') ? $listed : throw new ForgeWriteFailed('GitHub answered the pull request look-up with something other than a list.');
     }
 
-    // A listed entry whose branch cannot be read is refused, because it may be another account's pull request of this branch.
+    // A listed entry whose branch cannot be read, or is empty, is refused, because the listing is of this branch and the entry may be another account's pull request of it.
     /**
      * @param array<mixed> $pull
      */
@@ -117,7 +139,7 @@ final readonly class GitHubChangeOpener implements ChangeOpening
     {
         $ref = is_array($pull['head'] ?? null) ? ($pull['head']['ref'] ?? null) : null;
 
-        return is_string($ref) ? $ref === $branch : throw new ForgeWriteFailed('GitHub listed an open pull request without its branch, so the branch is left alone.');
+        return is_string($ref) && '' !== $ref ? $ref === $branch : throw new ForgeWriteFailed('GitHub listed an open pull request without its branch, so the branch is left alone.');
     }
 
     /**
