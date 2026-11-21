@@ -13,7 +13,6 @@ use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FindingIds;
 use Intakt\Core\Review\Contract\FixableBy;
-use Intakt\Core\Review\Contract\ListedFindingIds;
 use Intakt\Core\Review\Contract\PanelVerdict;
 use Intakt\Core\Review\Contract\RoundEnds;
 use Intakt\Core\Review\Contract\RoundTokens;
@@ -42,7 +41,6 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(FigureKind::class)]
 #[UsesClass(TokenFigures::class)]
 #[UsesClass(FindingIds::class)]
-#[UsesClass(ListedFindingIds::class)]
 final class ReviewReportTest extends TestCase
 {
     private const string SCHEMA = __DIR__.'/../../../docs/user/review-output.schema.json';
@@ -64,7 +62,7 @@ final class ReviewReportTest extends TestCase
 
     public function testAnActEntryThatMergesFindingsNamesTheIdsOfTheMergedFindings(): void
     {
-        $merged = new Finding('F1', Severity::P1, 'src/Feature.php', 3, null, 'Missing check.', FixableBy::Builder, false, null, null)->withMerged(new ListedFindingIds('F2', 'F4'));
+        $merged = new Finding('F1', Severity::P1, 'src/Feature.php', 3, null, 'Missing check.', FixableBy::Builder, false, null, null)->withMerged(new FindingIds('F2', 'F4'));
         $review = $this->review(Decision::Changes);
 
         $lines = $this->report()->asLines(new ChangeReview($review->roundId, $review->round, $review->decision, $review->verdicts, [$merged], $review->tokens, $review->cost, $review->reasons));

@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\Infrastructure;
 
 use Intakt\Core\Review\Contract\FindingIds;
-use Intakt\Core\Review\Contract\ListedFindingIds;
 use Symfony\Component\DependencyInjection\Attribute\AutoconfigureTag;
 use Symfony\Component\Serializer\Exception\LogicException;
 use Symfony\Component\Serializer\Exception\UnexpectedValueException;
@@ -19,7 +18,7 @@ final class StoredFindingIdsNormalizer implements NormalizerInterface, Denormali
     /**
      * @param array<string, mixed> $context
      *
-     * @return array<int|string, string>
+     * @return list<string>
      */
     public function normalize(mixed $data, ?string $format = null, array $context = []): array
     {
@@ -27,7 +26,7 @@ final class StoredFindingIdsNormalizer implements NormalizerInterface, Denormali
             throw new LogicException(sprintf('Only "%s" are normalized here.', FindingIds::class));
         }
 
-        return $data instanceof KeyedFindingIds ? $data->stored : [...$data];
+        return [...$data];
     }
 
     /**
@@ -38,7 +37,7 @@ final class StoredFindingIdsNormalizer implements NormalizerInterface, Denormali
         return $data instanceof FindingIds;
     }
 
-    // A stored row is read back as data, so ids that are not strings fail instead of reading as none; keys are kept as they were, because the rows were read without checking them before the ids were one value.
+    // A stored row is read back as data, so ids that are not strings fail instead of reading as none; keys are dropped in order, because the code only ever wrote lists and rows were read without checking keys before the ids were one value.
     /**
      * @param array<string, mixed> $context
      */
@@ -54,7 +53,7 @@ final class StoredFindingIdsNormalizer implements NormalizerInterface, Denormali
             }
         }
 
-        return array_is_list($data) ? new ListedFindingIds(...$data) : new KeyedFindingIds($data);
+        return new FindingIds(...array_values($data));
     }
 
     /**
@@ -67,7 +66,7 @@ final class StoredFindingIdsNormalizer implements NormalizerInterface, Denormali
 
     public function getSupportedTypes(?string $format): array
     {
-        return [FindingIds::class => true, ListedFindingIds::class => true, KeyedFindingIds::class => true];
+        return [FindingIds::class => true];
     }
 
     private function notIds(): UnexpectedValueException

@@ -7,7 +7,6 @@ namespace Intakt\Tests\Core\Review\Infrastructure;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FindingIds;
 use Intakt\Core\Review\Contract\FixableBy;
-use Intakt\Core\Review\Contract\ListedFindingIds;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Infrastructure\StoredFindingNormalizer;
 use Intakt\Tests\Support\StoredSerializerFactory;
@@ -21,7 +20,6 @@ use Symfony\Component\Serializer\Normalizer\NormalizerInterface;
 #[CoversClass(StoredFindingNormalizer::class)]
 #[UsesClass(Finding::class)]
 #[UsesClass(FindingIds::class)]
-#[UsesClass(ListedFindingIds::class)]
 #[UsesClass(StoredSerializerFactory::class)]
 final class StoredFindingNormalizerTest extends TestCase
 {
@@ -98,6 +96,6 @@ final class StoredFindingNormalizerTest extends TestCase
 
     private function finding(): Finding
     {
-        return new Finding('F1', Severity::P1, 'src/A.php', 7, null, 'Broken.', FixableBy::Builder, false, null, null, merged: new ListedFindingIds('F2'));
+        return new Finding('F1', Severity::P1, 'src/A.php', 7, null, 'Broken.', FixableBy::Builder, false, null, null, merged: new FindingIds('F2'));
     }
 }

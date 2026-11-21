@@ -22,7 +22,6 @@ use Intakt\Core\Review\Contract\JudgedFindings;
 use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\JudgeDoneFinding;
 use Intakt\Core\Review\Contract\Judgement;
-use Intakt\Core\Review\Contract\ListedFindingIds;
 use Intakt\Core\Review\Contract\Mark;
 use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\ReviewerBlocked;
@@ -64,7 +63,6 @@ use Symfony\Component\Serializer\SerializerInterface;
 #[UsesClass(Verdict::class)]
 #[UsesClass(JudgedFindings::class)]
 #[UsesClass(FindingIds::class)]
-#[UsesClass(ListedFindingIds::class)]
 #[UsesClass(StoredFindingIdsNormalizer::class)]
 #[UsesClass(ResolvedModel::class)]
 #[UsesClass(ProjectNotConfigured::class)]
@@ -256,7 +254,7 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
 
     public function testADoneJudgeIsWrittenWithItsActListFollowUpsAndFindings(): void
     {
-        $done = new JudgeDone(self::ROUND, new ListedFindingIds('f1'), new ListedFindingIds('f2'), [new JudgeDoneFinding('f1', Severity::P1, 'A bug.'), new JudgeDoneFinding('f2', Severity::P3, 'A nit.')]);
+        $done = new JudgeDone(self::ROUND, new FindingIds('f1'), new FindingIds('f2'), [new JudgeDoneFinding('f1', Severity::P1, 'A bug.'), new JudgeDoneFinding('f2', Severity::P3, 'A nit.')]);
 
         self::assertSame('{"round":"'.self::ROUND.'","act":["f1"],"follow_ups":["f2"],"findings":[{"id":"f1","severity":"P1","text":"A bug.","merged":[],"file":null,"line":null,"judge_note":null},{"id":"f2","severity":"P3","text":"A nit.","merged":[],"file":null,"line":null,"judge_note":null}],"dropped":[],"same_cause":[],"votes":[],"p1_keys":[],"fallback":null}', $this->written($done));
     }
@@ -332,12 +330,12 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
 
     public function testADoneJudgeWithoutFollowUpsStillWritesTheKey(): void
     {
-        self::assertSame('{"round":"'.self::ROUND.'","act":[],"follow_ups":[],"findings":[],"dropped":[],"same_cause":[],"votes":[],"p1_keys":[],"fallback":null}', $this->written(new JudgeDone(self::ROUND, new ListedFindingIds(), new ListedFindingIds(), [])));
+        self::assertSame('{"round":"'.self::ROUND.'","act":[],"follow_ups":[],"findings":[],"dropped":[],"same_cause":[],"votes":[],"p1_keys":[],"fallback":null}', $this->written(new JudgeDone(self::ROUND, new FindingIds(), new FindingIds(), [])));
     }
 
     public function testADoneJudgeWithMergedIdsIsWrittenInTodaysFormat(): void
     {
-        $done = new JudgeDone(self::ROUND, new ListedFindingIds('F1', 'F3'), new ListedFindingIds('F4'), [new JudgeDoneFinding('F1', Severity::P1, 'A bug.', new ListedFindingIds('F3'))], [], ['F3' => 'F1']);
+        $done = new JudgeDone(self::ROUND, new FindingIds('F1', 'F3'), new FindingIds('F4'), [new JudgeDoneFinding('F1', Severity::P1, 'A bug.', new FindingIds('F3'))], [], ['F3' => 'F1']);
 
         self::assertSame(self::MERGED_ROW, $this->written($done));
     }
@@ -351,27 +349,12 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
         self::assertSame(self::MERGED_ROW, $this->written($done));
     }
 
-    public function testAJudgeRowWithKeyedIdListsIsWrittenAgainUnchanged(): void
+    public function testAJudgeRowWithAKeyedActListReadsInOrderAndIsWrittenBackAsAList(): void
     {
-        $row = '{"round":"'.self::ROUND.'","act":{"1":"F3","2":"F1"},"follow_ups":{"4":"F2"},"findings":[],"dropped":[],"same_cause":[],"votes":[],"p1_keys":[],"fallback":null}';
-        $done = $this->serializer()->deserialize($row, JudgeDone::class, JsonEncoder::FORMAT);
+        $done = $this->serializer()->deserialize('{"round":"'.self::ROUND.'","act":{"3":"F3","1":"F1"},"follow_ups":[],"findings":[],"dropped":[],"same_cause":[],"votes":[],"p1_keys":[],"fallback":null}', JudgeDone::class, JsonEncoder::FORMAT);
 
         self::assertInstanceOf(JudgeDone::class, $done);
-        self::assertSame(['F3', 'F1'], [...$done->act]);
-        self::assertSame($row, $this->written($done));
-    }
-
-    public function testTwoJudgeRowsReadByOneSerializerKeepTheirOwnKeys(): void
-    {
-        $first = '{"round":"'.self::ROUND.'","act":{"3":"F3","1":"F1"},"follow_ups":[],"findings":[],"dropped":[],"same_cause":[],"votes":[],"p1_keys":[],"fallback":null}';
-        $second = str_replace('"3":"F3"', '"9":"F3"', $first);
-        $one = $this->serializer()->deserialize($first, JudgeDone::class, JsonEncoder::FORMAT);
-        $two = $this->serializer()->deserialize($second, JudgeDone::class, JsonEncoder::FORMAT);
-
-        self::assertInstanceOf(JudgeDone::class, $one);
-        self::assertInstanceOf(JudgeDone::class, $two);
-        self::assertSame($second, $this->written($two));
-        self::assertSame($first, $this->written($one));
+        self::assertSame('{"round":"'.self::ROUND.'","act":["F3","F1"],"follow_ups":[],"findings":[],"dropped":[],"same_cause":[],"votes":[],"p1_keys":[],"fallback":null}', $this->written($done));
     }
 
     public function testAJudgeRowWrittenBeforeActEntriesWereRecordedReadsWithNoMergedIds(): void
@@ -412,7 +395,7 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
 
     public function testADoneJudgeRecordsEachReviewersCountedVoteAndReadsItBack(): void
     {
-        $written = $this->written(new JudgeDone(self::ROUND, new ListedFindingIds(), new ListedFindingIds(), [], votes: ['reviewer-a' => Decision::Approve, 'reviewer-b' => Decision::Blocked]));
+        $written = $this->written(new JudgeDone(self::ROUND, new FindingIds(), new FindingIds(), [], votes: ['reviewer-a' => Decision::Approve, 'reviewer-b' => Decision::Blocked]));
 
         $done = $this->serializer()->deserialize($written, JudgeDone::class, JsonEncoder::FORMAT);
 

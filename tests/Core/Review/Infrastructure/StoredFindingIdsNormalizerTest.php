@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Review\Infrastructure;
 
 use Intakt\Core\Review\Contract\FindingIds;
-use Intakt\Core\Review\Contract\ListedFindingIds;
-use Intakt\Core\Review\Infrastructure\KeyedFindingIds;
 use Intakt\Core\Review\Infrastructure\StoredFindingIdsNormalizer;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -17,18 +15,16 @@ use Symfony\Component\Serializer\Exception\UnexpectedValueException;
 
 #[CoversClass(StoredFindingIdsNormalizer::class)]
 #[UsesClass(FindingIds::class)]
-#[UsesClass(ListedFindingIds::class)]
-#[UsesClass(KeyedFindingIds::class)]
 final class StoredFindingIdsNormalizerTest extends TestCase
 {
     public function testFindingIdsAreWrittenAsAList(): void
     {
-        self::assertSame(['F1', 'F2'], new StoredFindingIdsNormalizer()->normalize(new ListedFindingIds('F1', 'F2')));
+        self::assertSame(['F1', 'F2'], new StoredFindingIdsNormalizer()->normalize(new FindingIds('F1', 'F2')));
     }
 
     public function testNoFindingIdsAreWrittenAsAnEmptyList(): void
     {
-        self::assertSame([], new StoredFindingIdsNormalizer()->normalize(new ListedFindingIds()));
+        self::assertSame([], new StoredFindingIdsNormalizer()->normalize(new FindingIds()));
     }
 
     public function testAnyOtherValueIsNotNormalized(): void
@@ -40,7 +36,7 @@ final class StoredFindingIdsNormalizerTest extends TestCase
 
     public function testFindingIdsAreSupportedForWriting(): void
     {
-        self::assertTrue(new StoredFindingIdsNormalizer()->supportsNormalization(new ListedFindingIds()));
+        self::assertTrue(new StoredFindingIdsNormalizer()->supportsNormalization(new FindingIds()));
     }
 
     public function testAPlainListIsNotSupportedForWriting(): void
@@ -56,30 +52,13 @@ final class StoredFindingIdsNormalizerTest extends TestCase
         self::assertSame(['F1', 'F2'], [...$ids]);
     }
 
-    public function testStringsUnderKeysAreReadAsFindingIdsInTheirOrder(): void
-    {
-        $ids = new StoredFindingIdsNormalizer()->denormalize([1 => 'F1', 'a' => 'F2'], FindingIds::class);
-
-        self::assertInstanceOf(FindingIds::class, $ids);
-        self::assertSame(['F1', 'F2'], [...$ids]);
-    }
-
-    public function testStringsUnderKeysAreWrittenAgainUnderTheSameKeys(): void
+    public function testAKeyedListIsReadInOrderAndWrittenBackAsAList(): void
     {
         $normalizer = new StoredFindingIdsNormalizer();
-        $ids = $normalizer->denormalize([1 => 'F1', 'a' => 'F2'], FindingIds::class);
+        $ids = $normalizer->denormalize([1 => 'F3', 'a' => 'F1'], FindingIds::class);
 
         self::assertInstanceOf(FindingIds::class, $ids);
-        self::assertSame([1 => 'F1', 'a' => 'F2'], $normalizer->normalize($ids));
-    }
-
-    public function testAnotherNormalizerWritesTheKeysOfAValueItDidNotRead(): void
-    {
-        $ids = new StoredFindingIdsNormalizer()->denormalize([1 => 'F3', 4 => 'F1'], FindingIds::class);
-
-        self::assertInstanceOf(FindingIds::class, $ids);
-        self::assertSame([1 => 'F3', 4 => 'F1'], new StoredFindingIdsNormalizer()->normalize($ids));
-        self::assertSame('["F3","F1"]', json_encode($ids, JSON_THROW_ON_ERROR));
+        self::assertSame(['F3', 'F1'], $normalizer->normalize($ids));
     }
 
     public function testAValueThatIsNoArrayFailsToRead(): void
@@ -108,6 +87,6 @@ final class StoredFindingIdsNormalizerTest extends TestCase
 
     public function testFindingIdsAreNamedAsCacheable(): void
     {
-        self::assertSame([FindingIds::class => true, ListedFindingIds::class => true, KeyedFindingIds::class => true], new StoredFindingIdsNormalizer()->getSupportedTypes(null));
+        self::assertSame([FindingIds::class => true], new StoredFindingIdsNormalizer()->getSupportedTypes(null));
     }
 }

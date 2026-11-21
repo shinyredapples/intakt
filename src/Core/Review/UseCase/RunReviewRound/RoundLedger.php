@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\UseCase\RunReviewRound;
 
+use Intakt\Core\Review\Contract\FindingIds;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
@@ -22,7 +23,6 @@ use Intakt\Core\Review\Contract\JudgedFindings;
 use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\JudgeDoneFinding;
 use Intakt\Core\Review\Contract\JudgingFailed;
-use Intakt\Core\Review\Contract\ListedFindingIds;
 use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\ReviewerBlocked;
 use Intakt\Core\Review\Contract\ReviewerFailed;
@@ -143,8 +143,8 @@ final readonly class RoundLedger
 
         $this->append(LedgerEventKind::JudgeDone, new JudgeDone(
             $round->id()->toRfc4122(),
-            new ListedFindingIds(...$act),
-            new ListedFindingIds(...array_map(static fn (FollowUp $followUp): string => $followUp->finding->id, $judged->followUps)),
+            new FindingIds(...$act),
+            new FindingIds(...array_map(static fn (FollowUp $followUp): string => $followUp->finding->id, $judged->followUps)),
             $this->recordedFindings($judged, $act),
             $judged->dropped,
             $judged->sameCause,
