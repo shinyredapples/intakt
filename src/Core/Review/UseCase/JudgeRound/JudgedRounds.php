@@ -30,6 +30,7 @@ final readonly class JudgedRounds
         private DiffPaths $paths,
         private StoredVerdicts $verdicts,
         private FailedJudgings $failedJudgings,
+        private RecordRecurringP1s $recurringP1s,
     ) {
     }
 
@@ -75,8 +76,11 @@ final readonly class JudgedRounds
     {
         $recorded = false;
         $this->rounds->withLockedRound($round->id(), function (ReviewRound $locked) use ($judged, &$recorded): void {
+            $this->findings->lockChangeOf($locked);
+
             if (!$this->failedJudgings->isRecorded($locked->id()->toRfc4122()) && $this->findings->markJudged($locked)) {
                 $this->ledger->judgeDone($locked, $judged, $this->votesOf($locked, $judged));
+                $this->recurringP1s->of($locked);
                 $recorded = true;
             }
         });

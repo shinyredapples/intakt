@@ -33,6 +33,7 @@ use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\ChangeText;
 use Intakt\Plugin\Forge\Contract\ChangeTextHoldsSecret;
 use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
+use Intakt\Plugin\Forge\Contract\OpenedChange;
 use Intakt\Tests\Core\Git\TemporaryRepository;
 use Intakt\Tests\Core\Git\UseCase\PushBranch\PushScenario;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -63,6 +64,7 @@ use Throwable;
 #[UsesClass(AcceptedHandBack::class)]
 #[UsesClass(ChangeText::class)]
 #[UsesClass(ChangeId::class)]
+#[UsesClass(OpenedChange::class)]
 #[UsesClass(LedgerEvent::class)]
 #[UsesClass(AppendResult::class)]
 #[UsesClass(RecordedEvent::class)]

@@ -48,6 +48,11 @@ final class DashboardLedger implements Ledger
         $this->add(LedgerEventKind::ReviewStarted, ['round' => $round, 'project' => $project, 'reviewers' => 2]);
     }
 
+    public function startRoundAt(string $round, DateTimeImmutable $at): void
+    {
+        $this->add(LedgerEventKind::ReviewStarted, ['round' => $round, 'project' => 'alpha', 'reviewers' => 2], $at);
+    }
+
     public function judgeRound(string $round): void
     {
         $this->add(LedgerEventKind::JudgeDone, ['round' => $round, 'act' => [], 'follow_ups' => []]);
@@ -98,12 +103,21 @@ final class DashboardLedger implements Ledger
         $this->add(LedgerEventKind::VerdictReceived, $this->reviewer($round, $role) + ['decision' => 0 === $findings ? 'approve' : 'changes', 'findings' => $findings]);
     }
 
+    // Without severities, because rows written before reporters' severities were recorded hold none.
     /**
      * @param list<string> $findings
      */
     public function reportFindings(string $round, string $role, array $findings): void
     {
         $this->add(LedgerEventKind::ReviewerFindingsRecorded, ['round' => $round, 'reviewer' => $round.'-'.$role, 'findings' => $findings]);
+    }
+
+    /**
+     * @param array<string, string> $severities
+     */
+    public function reportRatedFindings(string $round, string $role, array $severities): void
+    {
+        $this->add(LedgerEventKind::ReviewerFindingsRecorded, ['round' => $round, 'reviewer' => $round.'-'.$role, 'findings' => array_keys($severities), 'severities' => $severities]);
     }
 
     public function stopReviewer(string $round, string $role): void
@@ -141,6 +155,7 @@ final class DashboardLedger implements Ledger
             'act' => array_keys(array_filter($marks, static fn (string $mark): bool => 'act' === $mark)),
             'follow_ups' => array_keys(array_filter($marks, static fn (string $mark): bool => 'defer' === $mark)),
             'findings' => array_map(static fn (string $id): array => ['id' => $id, 'severity' => 'P2', 'text' => 'Text of '.$id.'.'], array_keys($marks)),
+            'fallback' => false,
         ]);
     }
 
@@ -187,6 +202,16 @@ final class DashboardLedger implements Ledger
             'act' => ['F1'],
             'follow_ups' => [],
             'findings' => [['id' => 'F1', 'severity' => 'P1', 'text' => $text, 'merged' => [], 'file' => 'src/A.php', 'line' => 7]],
+        ]);
+    }
+
+    public function judgeToFixIn(string $round, string $file, ?int $line): void
+    {
+        $this->add(LedgerEventKind::JudgeDone, [
+            'round' => $round,
+            'act' => ['F1'],
+            'follow_ups' => [],
+            'findings' => [['id' => 'F1', 'severity' => 'P2', 'text' => 'Review this file.', 'merged' => [], 'file' => $file, ...(null === $line ? [] : ['line' => $line])]],
         ]);
     }
 

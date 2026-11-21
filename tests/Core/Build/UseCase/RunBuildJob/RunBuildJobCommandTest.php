@@ -298,6 +298,7 @@ final class RunBuildJobCommandTest extends TestCase
             $this->runner ?? $runner,
             new PhpGate(),
             new GatesAtOnce(12, 1),
+            1500,
             new Filesystem(),
             self::SCRIPT,
             $this->folder.'/prompts',

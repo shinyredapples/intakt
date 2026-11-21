@@ -19,7 +19,14 @@ use Intakt\Core\Budget\Domain\ItemFailureRecord;
 use Intakt\Core\Budget\Domain\SharedHoldRecord;
 use Intakt\Core\Budget\Infrastructure\DoctrineHolds;
 use Intakt\Core\Budget\Infrastructure\DoctrineInstallWideFailures;
+use Intakt\Core\Ledger\Contract\Ledger;
+use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\RecordedEvent;
+use Intakt\Core\Ledger\Contract\RecordedEvents;
+use Intakt\Core\Ledger\Domain\EventRecord;
+use Intakt\Core\Ledger\Infrastructure\DoctrineLedger;
+use Intakt\Core\Ledger\Infrastructure\UtcDateTimeImmutableType;
 use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Review\Contract\BootAt;
 use Intakt\Core\Review\Contract\BootHarness;
@@ -52,6 +59,7 @@ use Intakt\Core\Watcher\UseCase\FindChangedPullRequests\SeenListings;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\BootGate;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\BootResults;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\ChangedHeads;
+use Intakt\Core\Watcher\UseCase\WatchPullRequests\ChangesHandedToIntakt;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\DiscardedRounds;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\FailedHeads;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\HeadBackOff;
@@ -72,8 +80,10 @@ use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatcherLedger;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchPullRequests;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchPullRequestsHandler;
 use Intakt\Plugin\Forge\Contract\AuthorTrust;
+use Intakt\Plugin\Forge\Contract\ChangeAuthorship;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\CommitRange;
+use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\HeadMove;
 use Intakt\Plugin\Forge\Contract\HeadMoveKind;
 use Intakt\Tests\Application\EmptyDatabase;
@@ -113,6 +123,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[CoversClass(RoundStarts::class)]
 #[CoversClass(StaleVerdicts::class)]
 #[CoversClass(WatcherLedger::class)]
+#[CoversClass(ChangesHandedToIntakt::class)]
 #[CoversClass(WatchedProjects::class)]
 #[CoversClass(WatchedProject::class)]
 #[UsesClass(WatchPullRequests::class)]
@@ -138,6 +149,12 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[UsesClass(BootOutcome::class)]
 #[UsesClass(MainCommit::class)]
 #[UsesClass(MarkVerdictsStale::class)]
+#[UsesClass(DoctrineLedger::class)]
+#[UsesClass(RecordedEvent::class)]
+#[UsesClass(RecordedEvents::class)]
+#[UsesClass(EventRecord::class)]
+#[UsesClass(LedgerEvent::class)]
+#[UsesClass(UtcDateTimeImmutableType::class)]
 final class WatchPullRequestsHandlerTest extends KernelTestCase
 {
     private const string PENDING = 'a';
@@ -160,6 +177,9 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
     private WatchPullRequestsHandler $handler;
     private bool $authorTrusted = true;
     private bool $trustCheckDown = false;
+    // Read from its own ledger, because the in-memory one reads nothing back.
+    private ?Ledger $openings = null;
+    private ?ChangeAuthorship $authorship = null;
 
     protected function setUp(): void
     {
@@ -188,6 +208,81 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
 
         self::assertSame([], $this->commands->started);
         self::assertSame([LedgerEventKind::HeadPending], $this->ledger->kinds());
+    }
+
+    public function testATickRecordsTheListedPullRequestIntaktOpenedAsHandedToIntaktBeforeItsHeadDecision(): void
+    {
+        $doctrine = self::getContainer()->get('doctrine');
+        self::assertInstanceOf(ManagerRegistry::class, $doctrine);
+        $this->openings = new DoctrineLedger($doctrine, $this->clock);
+        self::assertTrue($this->openings->append(new LedgerEvent(LedgerEventKind::ChangeOpened, '{"project":"alpha","branch":"feat\/1","head":"'.str_repeat(self::PENDING, 40).'","change":"1","opening":"created"}'))->succeeded());
+        $this->handler = $this->handler();
+        $this->listing->opens('alpha', RecordedForge::change('1', self::PENDING, '2026-11-02T09:00:00Z'), RecordedForge::change('2', self::PENDING, '2026-11-02T09:00:00Z'));
+
+        $this->tick();
+
+        self::assertSame([LedgerEventKind::ChangeHandedToIntakt, LedgerEventKind::HandOverPublicationQueued, LedgerEventKind::ChangeNotHandedToIntakt, LedgerEventKind::HeadPending, LedgerEventKind::HeadPending], $this->ledger->kinds());
+        self::assertSame(['1', '1', '2'], array_column(array_slice($this->ledger->payloads(), 0, 3), 'change'));
+    }
+
+    public function testAPullRequestListedBeforeItsOpeningRecordIsRecordedAsHandedToIntaktOnAnUnchangedListing(): void
+    {
+        $doctrine = self::getContainer()->get('doctrine');
+        self::assertInstanceOf(ManagerRegistry::class, $doctrine);
+        $openings = new DoctrineLedger($doctrine, $this->clock);
+        $this->openings = $openings;
+        $this->handler = $this->handler();
+        $this->listing->opens('alpha', RecordedForge::change('1', self::PENDING, '2026-11-02T09:00:00Z'));
+        $this->tick();
+        self::assertTrue($openings->append(new LedgerEvent(LedgerEventKind::ChangeOpened, '{"project":"alpha","branch":"feat\/1","head":"'.str_repeat(self::PENDING, 40).'","change":"1","opening":"created"}'))->succeeded());
+
+        $this->tick();
+
+        self::assertSame(1, $this->listing->conditionalAnswers);
+        self::assertSame([LedgerEventKind::ChangeNotHandedToIntakt, LedgerEventKind::HeadPending, LedgerEventKind::ChangeHandedToIntakt, LedgerEventKind::HandOverPublicationQueued], $this->ledger->kinds());
+    }
+
+    public function testOneUnreadableAuthorDoesNotKeepAnUnrelatedHeadFromBeingQueued(): void
+    {
+        $doctrine = self::getContainer()->get('doctrine');
+        self::assertInstanceOf(ManagerRegistry::class, $doctrine);
+        $this->openings = new DoctrineLedger($doctrine, $this->clock);
+        self::assertTrue($this->openings->append(new LedgerEvent(LedgerEventKind::ChangeOpened, '{"project":"alpha","change":"1"}'))->succeeded());
+        $authorship = self::createStub(ChangeAuthorship::class);
+        $authorship->method('isCreatedByIntakt')->willThrowException(new ForgeReadFailed('Author unavailable'));
+        $this->authorship = $authorship;
+        $this->handler = $this->handler();
+        $this->listing->opens('alpha', RecordedForge::change('1', self::PENDING, '2026-11-02T09:00:00Z'), RecordedForge::change('2', self::PENDING, '2026-11-02T09:00:00Z'));
+
+        $this->tick();
+
+        self::assertSame([LedgerEventKind::HeadPending, LedgerEventKind::HeadPending], $this->ledger->kinds());
+        self::assertSame(['1', '2'], array_column($this->ledger->payloads(), 'change'));
+    }
+
+    public function testATickThatOverlapsAnotherWhileItReadsAnAuthorRecordsNoSecondHandOver(): void
+    {
+        $doctrine = self::getContainer()->get('doctrine');
+        self::assertInstanceOf(ManagerRegistry::class, $doctrine);
+        $this->openings = new DoctrineLedger($doctrine, $this->clock);
+        self::assertTrue($this->openings->append(new LedgerEvent(LedgerEventKind::ChangeOpened, '{"project":"alpha","change":"1"}'))->succeeded());
+        $overlapped = false;
+        $authorship = self::createStub(ChangeAuthorship::class);
+        $authorship->method('isCreatedByIntakt')->willReturnCallback(function () use (&$overlapped): bool {
+            if (!$overlapped) {
+                $overlapped = true;
+                $this->tick();
+            }
+
+            return true;
+        });
+        $this->authorship = $authorship;
+        $this->handler = $this->handler();
+        $this->listing->opens('alpha', RecordedForge::change('1', self::PENDING, '2026-11-02T09:00:00Z'));
+
+        $this->tick();
+
+        self::assertSame([LedgerEventKind::ChangeHandedToIntakt, LedgerEventKind::HandOverPublicationQueued, LedgerEventKind::HeadPending], $this->ledger->kinds());
     }
 
     public function testAPendingHeadIsReadAgainOnceItsReadAgainTimeHasPassedEvenWhenTheListingIsUnchanged(): void
@@ -1489,8 +1584,10 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         $gate = new BootGate($this->queries, $authors, new BootResults($this->queries, $this->entities, $this->clock, new WatcherLedger(new InMemoryLedger()), $redactor, $logger, $doctrine, new LockFactory(new InMemoryStore())), $ledger, $logger);
         $settle = new SettleHeads(new SettleHead($gate, new StaleVerdicts($this->queries, $this->commands, $rounds, $ledger), new HeadsWithoutRound($ledger, $pending), $starts), $starts, $backOff);
         $projects = new WatchedProjects(['alpha' => ['repository' => 'repo', 'base' => 'main', 'task' => 'Review it.']]);
+        // Without opening records the recognition writes to a ledger of its own, because those tests read only the lines of the heads.
+        $recognition = $this->openings instanceof Ledger ? new ChangesHandedToIntakt($this->openings, $ledger, $this->authorship ?? self::createStub(ChangeAuthorship::class), $logger, $this->commands) : new ChangesHandedToIntakt(new InMemoryLedger(), new WatcherLedger(new InMemoryLedger()), $this->authorship ?? self::createStub(ChangeAuthorship::class), $logger, $this->commands);
 
-        return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $ledger, $this->entities->getConnection()), new LookAtHeads(new HeadLocks($pending, $locks, $installWide, $logger), $decisions, $settle));
+        return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $ledger, $this->entities->getConnection(), $recognition), new LookAtHeads(new HeadLocks($pending, $locks, $installWide, $logger), $decisions, $settle));
     }
 
     private function panel(): Panel

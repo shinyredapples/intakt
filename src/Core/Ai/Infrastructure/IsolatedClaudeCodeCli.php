@@ -49,8 +49,8 @@ final readonly class IsolatedClaudeCodeCli implements ModelClientInterface
 
         try {
             $run = $this->client()->request($model, $payload, [...$options, 'mcp_config' => $configuration]);
+            // Boundary: removes the bearer file on any failure to start the run and rethrows, because no run will read it.
         } catch (Throwable $notStarted) {
-            // No run will read the file, so nothing else would remove the bearer it holds.
             new Filesystem()->remove($configuration);
 
             throw $notStarted;

@@ -319,14 +319,14 @@ final class RoundLedgerReadingTest extends KernelTestCase
         $this->append(LedgerEventKind::JudgeDone, ['same_cause' => ['F1' => 'F2']] + $this->judgeDone('another-round'));
         $this->append(LedgerEventKind::JudgeDone, ['same_cause' => ['F3' => 'F1']] + $this->judgeDone(self::ROUND));
 
-        self::assertSame(['F3' => 'F1'], $this->reading()->judgeDoneOf(self::ROUND)?->sameCause);
+        self::assertSame(['F3' => 'F1'], iterator_to_array($this->reading()->judgeDoneOf(self::ROUND)->sameCause ?? []));
     }
 
     public function testAJudgeDoneRowWrittenBeforeCausesWereLinkedReadsAsNoLinks(): void
     {
         $this->append(LedgerEventKind::JudgeDone, $this->judgeDone(self::ROUND));
 
-        self::assertSame([], $this->reading()->judgeDoneOf(self::ROUND)?->sameCause);
+        self::assertSame([], iterator_to_array($this->reading()->judgeDoneOf(self::ROUND)->sameCause ?? ['missing' => 'row']));
     }
 
     public function testTheJudgesNotesAreReadFromTheRoundsJudgeDoneRow(): void
@@ -372,7 +372,7 @@ final class RoundLedgerReadingTest extends KernelTestCase
      */
     private function actIdsOf(string $round): array
     {
-        return $this->reading()->judgeDoneOf($round)->act ?? [];
+        return [...$this->reading()->judgeDoneOf($round)->act ?? []];
     }
 
     private function reading(): RoundLedgerReading

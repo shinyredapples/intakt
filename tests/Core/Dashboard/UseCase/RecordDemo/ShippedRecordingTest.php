@@ -24,6 +24,8 @@ final class ShippedRecordingTest extends TestCase
 {
     private const string SHIPPED = '/fixtures/demo/sample-change-review.json';
 
+    private const string HOME_FOLDER = '~/(home|Users|root)/~';
+
     public function testTheShippedRecordingReadsWithTheCurrentRecordingFormat(): void
     {
         $recording = $this->shipped();
@@ -38,6 +40,29 @@ final class ShippedRecordingTest extends TestCase
 
         self::assertCount(2, array_keys($kinds, LedgerEventKind::VerdictReceived, true));
         self::assertContains(LedgerEventKind::JudgeDone, $kinds);
+    }
+
+    // The Trends charts read who reported what and whether the judge answered, so the keyless demo fills them only while the recording holds both (#3053, #3221).
+    public function testTheShippedRecordingHoldsWhatEachReviewerReportedAndTheJudgesOwnAnswer(): void
+    {
+        $events = $this->shipped()->events;
+        $reported = array_filter($events, static fn (RecordedLedgerEvent $event): bool => LedgerEventKind::ReviewerFindingsRecorded === $event->kind);
+        $judged = array_values(array_filter($events, static fn (RecordedLedgerEvent $event): bool => LedgerEventKind::JudgeDone === $event->kind));
+
+        self::assertCount(2, $reported);
+        $reviewers = array_map(static function (RecordedLedgerEvent $event): string {
+            $payload = json_decode($event->payload, true, flags: JSON_THROW_ON_ERROR);
+            self::assertIsArray($payload);
+            self::assertIsString($payload['reviewer'] ?? null);
+
+            return $payload['reviewer'];
+        }, $reported);
+        self::assertCount(2, array_unique($reviewers));
+        self::assertCount(1, $judged);
+        $answer = json_decode($judged[0]->payload, true, flags: JSON_THROW_ON_ERROR);
+        self::assertIsArray($answer);
+        self::assertArrayHasKey('fallback', $answer);
+        self::assertFalse($answer['fallback']);
     }
 
     public function testTheImagePointsTheDemoAtTheShippedRecording(): void
@@ -55,9 +80,66 @@ final class ShippedRecordingTest extends TestCase
     }
 
     #[DataProvider('privateText')]
-    public function testTheShippedRecordingHoldsNoLocalPathHostOrToken(string $pattern): void
+    public function testTheShippedRecordingHoldsNoLocalPathHostOrTokenInItsTextOrAnyDecodedPayload(string $pattern): void
     {
-        self::assertDoesNotMatchRegularExpression($pattern, $this->text());
+        // Only the places are compared, so a failure names where the text is without printing it into the CI log.
+        self::assertSame([], $this->placesMatching($pattern, $this->text()));
+    }
+
+    // The file stores each payload as a JSON string with escaped slashes, so a path quoted in one only shows once decoded (#3232).
+    public function testAHomeFolderQuotedInsideOneLedgerPayloadIsFoundByThePrivateTextCheck(): void
+    {
+        $text = $this->shippedWith('repository', '/home/someone/work');
+
+        self::assertDoesNotMatchRegularExpression(self::HOME_FOLDER, $text);
+        self::assertSame(['the payload of ledger event 0'], $this->placesMatching(self::HOME_FOLDER, $text));
+    }
+
+    public function testAPayloadThatHoldsPrivateTextIsReportedByItsPlaceWithoutItsText(): void
+    {
+        $places = $this->placesMatching(self::HOME_FOLDER, $this->shippedWith('task', 'synthetic-private-task in /home/someone/work'));
+
+        self::assertNotSame([], $places);
+        self::assertStringNotContainsString('synthetic-private-task', implode("\n", $places));
+        self::assertStringNotContainsString('/home/someone', implode("\n", $places));
+    }
+
+    // Encoding the payload again would write the tab as \t, which the pattern's \s does not match.
+    public function testABearerHeaderWithATabInsideOneLedgerPayloadIsFound(): void
+    {
+        $text = $this->shippedWith('task', "Authorization: Bearer\tsynthetic-credential");
+
+        self::assertSame(['the payload of ledger event 0'], $this->placesMatching($this->privateTextPattern('a bearer header'), $text));
+    }
+
+    public function testAFolderWhoseNameOnlyStartsWithTmpIsNotTheSystemTempFolder(): void
+    {
+        $pattern = $this->privateTextPattern('the system temp folder');
+
+        self::assertDoesNotMatchRegularExpression($pattern, '/tmp-backup/work');
+        self::assertDoesNotMatchRegularExpression($pattern, '/tmp.d/work');
+        self::assertDoesNotMatchRegularExpression($pattern, '/var/tmp/work');
+        self::assertDoesNotMatchRegularExpression($pattern, '/tmp+backup/work');
+        self::assertDoesNotMatchRegularExpression($pattern, '/tmp~/work');
+        self::assertMatchesRegularExpression($pattern, '/tmp/work');
+        self::assertMatchesRegularExpression($pattern, 'a workspace in /tmp.');
+        self::assertMatchesRegularExpression($pattern, 'a workspace in "/tmp", kept');
+        self::assertMatchesRegularExpression($pattern, '/tmp');
+    }
+
+    // The file text holds the payload with escaped slashes, so a deeper temp folder reads as a backslash before "/tmp" there.
+    public function testADeeperTempFolderInsideOneLedgerPayloadIsNotTheSystemTempFolder(): void
+    {
+        $text = $this->shippedWith('repository', '/var/tmp/work');
+
+        self::assertSame([], $this->placesMatching($this->privateTextPattern('the system temp folder'), $text));
+    }
+
+    public function testTheRootTempFolderInsideOneLedgerPayloadIsFoundInThatPayloadOnly(): void
+    {
+        $text = $this->shippedWith('repository', '/tmp/work');
+
+        self::assertSame(['the payload of ledger event 0'], $this->placesMatching($this->privateTextPattern('the system temp folder'), $text));
     }
 
     /**
@@ -65,11 +147,93 @@ final class ShippedRecordingTest extends TestCase
      */
     public static function privateText(): iterable
     {
-        yield 'a home folder' => ['~/(home|Users|root)/~'];
+        yield 'a home folder' => [self::HOME_FOLDER];
         yield 'a machine folder' => ['~/(srv|opt|mnt)/~'];
+        // The backslash keeps an escaped deeper path ("\/var\/tmp") out; the decoded strings still show a root temp folder.
+        yield 'the system temp folder' => ['~(?<![\w./\\\\-])/tmp(?=$|[/\s"\'),;:]|\.(?!\w))~'];
         yield 'a provider or forge token' => ['~\b(sk-|ghp_|gho_|github_pat_|xox[bp]-)~'];
         yield 'a private key' => ['~PRIVATE KEY~'];
         yield 'a bearer header' => ['~Bearer\s+\S~i'];
+        yield 'an email address' => ['~[\w.+-]+@[\w-]+(\.[\w-]+)+~'];
+    }
+
+    private function privateTextPattern(string $name): string
+    {
+        foreach (self::privateText() as $label => [$pattern]) {
+            if ($name === $label) {
+                return $pattern;
+            }
+        }
+
+        self::fail(sprintf('No private-text pattern is named "%s".', $name));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function placesMatching(string $pattern, string $text): array
+    {
+        $matching = [];
+        foreach ($this->scannedPlaces($text) as $place => $strings) {
+            if ([] !== preg_grep($pattern, $strings)) {
+                $matching[] = $place;
+            }
+        }
+
+        return $matching;
+    }
+
+    /**
+     * @return array<string, list<string>>
+     */
+    private function scannedPlaces(string $text): array
+    {
+        $recording = new RecordingFormat(StoredSerializerFactory::create())->read($text);
+        $places = ['the file text' => [$text], 'a string of the decoded file' => $this->strings(json_decode($text, true, flags: JSON_THROW_ON_ERROR))];
+        foreach ($recording->events as $index => $event) {
+            $places[sprintf('the payload of ledger event %d', $index)] = $this->strings(json_decode($event->payload, true, flags: JSON_THROW_ON_ERROR));
+        }
+
+        foreach ($recording->updates as $index => $update) {
+            $places[sprintf('the data of live update %d', $index)] = [$update->data];
+        }
+
+        return $places;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function strings(mixed $decoded): array
+    {
+        if (is_string($decoded)) {
+            return [$decoded];
+        }
+
+        if (!is_array($decoded)) {
+            return [];
+        }
+
+        $strings = [];
+        foreach ($decoded as $key => $value) {
+            $strings = [...$strings, ...(is_string($key) ? [$key] : []), ...$this->strings($value)];
+        }
+
+        return $strings;
+    }
+
+    private function shippedWith(string $field, string $value): string
+    {
+        $shipped = $this->shipped();
+        $first = $shipped->events[0];
+        /** @var array<string, mixed> $payload */
+        $payload = json_decode($first->payload, true, flags: JSON_THROW_ON_ERROR);
+        $payload[$field] = $value;
+        $events = [new RecordedLedgerEvent($first->id, $first->kind, json_encode($payload, JSON_THROW_ON_ERROR), $first->recordedAt), ...array_slice($shipped->events, 1)];
+
+        return new RecordingFormat(StoredSerializerFactory::create())->write(
+            new Recording($shipped->reviewedAt, $shipped->intaktVersion, $shipped->models, $shipped->project, $shipped->change, $events, $shipped->updates),
+        );
     }
 
     private function shipped(): Recording

@@ -33,9 +33,8 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
 // Keeps each write with its decoded body and answers 201 unless a test refuses its path once, because a test must see every write the forge sent and in which order; lists the comments posted so far, so a retry can find its own.
 final class ScriptedGitHub
 {
-    public const string OWN_LOGIN = 'acme-intakt[bot]';
+    public const string OWN_LOGIN = 'intakt[bot]';
     private const string APP_ID = '12345';
-    private const string APP_SLUG = 'acme-intakt';
     // A literal moment (2026-11-25 10:10:00 UTC), because the reset must be ten minutes after the clock of the stack whatever time the test runs.
     private const string RATE_LIMIT_RESET = '1795601400';
 
@@ -47,7 +46,10 @@ final class ScriptedGitHub
 
     public bool $unreachable = false;
 
-    public bool $appRefused = false;
+    public int $createdNumber = 42;
+
+    // Null refuses `/app`, because a retry must fail when it cannot check the author of an open pull request against the App.
+    public ?string $appSlug = 'intakt';
 
     // Every call whose path ends so answers that the rate limit is used up, as GitHub does until the reset.
     public ?string $rateLimitedEnding = null;
@@ -76,12 +78,11 @@ final class ScriptedGitHub
         return new GitHubForge($calls, $checked, new SecretScan(dirname(__DIR__, 3), 'gitleaks'), new PostedComments($calls, $checked, self::APP_ID), new VerdictLocks($this->locks), new GitHubAppSetting(self::APP_ID, new NullLogger()));
     }
 
-    public function opener(): GitHubChangeOpener
+    public function opener(string $project = 'widgets', string $repository = 'acme/widgets'): GitHubChangeOpener
     {
         [$calls, $checked, $jwt] = $this->stack();
-        $identities = new SteeringIdentities(new TrustAnswers($calls), $jwt, '');
 
-        return new GitHubChangeOpener($calls, $checked, new SecretScan(dirname(__DIR__, 3), 'gitleaks'), new WatchedRepositories(['widgets' => ['github' => 'acme/widgets']]), $identities);
+        return new GitHubChangeOpener($calls, $checked, new SecretScan(dirname(__DIR__, 3), 'gitleaks'), new WatchedRepositories([$project => ['github' => $repository]]), new SteeringIdentities(new TrustAnswers($calls), $jwt, ''));
     }
 
     /**
@@ -121,11 +122,13 @@ final class ScriptedGitHub
 
     private function read(string $url): ResponseInterface
     {
-        if ('/app' === parse_url($url, PHP_URL_PATH)) {
-            return $this->appRefused ? new MockResponse('{"message":"Refused"}', ['http_code' => 401]) : new MockResponse(json_encode(['id' => (int) self::APP_ID, 'slug' => self::APP_SLUG], JSON_THROW_ON_ERROR), ['http_code' => 200]);
+        $path = (string) parse_url($url, PHP_URL_PATH);
+
+        if ('/app' === $path) {
+            return null === $this->appSlug ? new MockResponse('{"message":"Refused"}', ['http_code' => 401]) : new MockResponse(json_encode(['slug' => $this->appSlug], JSON_THROW_ON_ERROR), ['http_code' => 200]);
         }
 
-        if (str_ends_with((string) parse_url($url, PHP_URL_PATH), '/pulls')) {
+        if (str_ends_with($path, '/pulls')) {
             return new MockResponse(json_encode($this->openPulls, JSON_THROW_ON_ERROR), ['http_code' => 200]);
         }
 
@@ -160,7 +163,7 @@ final class ScriptedGitHub
     private function created(string $method, string $url): ResponseInterface
     {
         return match (true) {
-            str_ends_with($url, '/pulls') => new MockResponse(json_encode(['number' => 42], JSON_THROW_ON_ERROR), ['http_code' => 201]),
+            str_ends_with($url, '/pulls') => new MockResponse(json_encode(['number' => $this->createdNumber], JSON_THROW_ON_ERROR), ['http_code' => 201]),
             'PATCH' === $method => new MockResponse(json_encode(['number' => (int) basename($url)], JSON_THROW_ON_ERROR), ['http_code' => 200]),
             default => new MockResponse('{}', ['http_code' => 201]),
         };

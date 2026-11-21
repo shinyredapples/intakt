@@ -17,5 +17,5 @@ interface ChangeOpening
      * @throws ChangeTextHoldsSecret
      * @throws ForgeWriteFailed
      */
-    public function openOrUpdate(ProposedChange $change): ChangeId;
+    public function openOrUpdate(ProposedChange $change): OpenedChange;
 }

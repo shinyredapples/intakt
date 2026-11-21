@@ -111,7 +111,7 @@ final readonly class ReviewRounds
         };
     }
 
-    // A forge status belongs to a commit, so only a later round that reviewed the same head speaks for it; a round of another head of the change leaves this head's status to this round.
+    // A forge status belongs to a commit, so only a later round that reviewed the same head speaks for it; a round of another head of the change leaves this head's status to this round. Compared as stored, because a round stores its address canonically (StoredFindings::openRound()), and an old spelling that migration Version20261122100000 left apart keeps its own numbering, which another sequence's numbers would not order.
     public function judgedAfter(ReviewRound $round): bool
     {
         /** @var list<ReviewRound> $later */
@@ -125,6 +125,36 @@ final readonly class ReviewRounds
         $head = $round->identity()->commits->head;
 
         return array_any($later, static fn (ReviewRound $other): bool => $other->identity()->commits->head->hash === $head->hash);
+    }
+
+    // Without letter case, because the watcher names the pull request as the forge lists it and the round as the push or the request named it.
+    public function latestJudgedAt(string $project, string $change, string $head): ?ReviewRound
+    {
+        /** @var list<ReviewRound> $rounds */
+        $rounds = $this->entities->createQuery(sprintf('SELECT r FROM %s r WHERE r.subject.project = :project AND LOWER(r.change.change) = :change AND r.state = :judged ORDER BY r.change.number DESC, r.id DESC', ReviewRound::class))
+            ->setParameter('project', $project)
+            ->setParameter('change', strtolower($change))
+            ->setParameter('judged', RoundState::Judged->value)
+            ->getResult();
+
+        $atHead = array_filter($rounds, static fn (ReviewRound $round): bool => $round->identity()->commits->head->hash === $head);
+
+        return $this->newestAcrossSpellings($this->highestNumberedPerSpelling($atHead));
+    }
+
+    // Compared as stored, as judgedAfter() compares them, so the rounds come as one numbered sequence.
+    /**
+     * @return list<ReviewRound>
+     */
+    public function ofChange(ReviewRound $round): array
+    {
+        /** @var list<ReviewRound> $rounds */
+        $rounds = $this->entities->createQuery(sprintf('SELECT r FROM %s r WHERE r.subject.project = :project AND r.change.change = :change ORDER BY r.change.number ASC', ReviewRound::class))
+            ->setParameter('project', $round->project())
+            ->setParameter('change', $round->change())
+            ->getResult();
+
+        return $rounds;
     }
 
     /**
@@ -227,6 +257,40 @@ final readonly class ReviewRounds
         if ($this->entities->find(ReplayProject::class, $round->project()) instanceof ReplayProject) {
             $round->markAsReplay();
         }
+    }
+
+    // Within one spelling by round number as judgedAfter() orders them, because an id follows a clock that can go back and would pick a round the publication then drops as superseded; the rounds come highest number first.
+    /**
+     * @param array<ReviewRound> $rounds
+     *
+     * @return array<string, ReviewRound>
+     */
+    private function highestNumberedPerSpelling(array $rounds): array
+    {
+        $highest = [];
+
+        foreach ($rounds as $round) {
+            $highest[$round->change()] ??= $round;
+        }
+
+        return $highest;
+    }
+
+    // Across spellings by id, because each spelling numbers its rounds from one, so a number says nothing about which spelling reviewed last.
+    /**
+     * @param array<string, ReviewRound> $rounds
+     */
+    private function newestAcrossSpellings(array $rounds): ?ReviewRound
+    {
+        $newest = null;
+
+        foreach ($rounds as $round) {
+            if (null === $newest || $round->id()->compare($newest->id()) > 0) {
+                $newest = $round;
+            }
+        }
+
+        return $newest;
     }
 
     private function newId(): UuidV7

@@ -58,6 +58,21 @@ final readonly class WatcherLedger
         $this->append(LedgerEventKind::HeadForgotten, ['project' => $project, 'change' => $closed->id->value, 'head' => $closed->head->hash]);
     }
 
+    public function changeHandedToIntakt(string $project, OpenChange $change): void
+    {
+        $this->append(LedgerEventKind::ChangeHandedToIntakt, ['project' => $project, 'change' => $change->id->value, 'head' => $change->head->hash]);
+    }
+
+    public function handOverPublicationQueued(string $project, OpenChange $change): void
+    {
+        $this->append(LedgerEventKind::HandOverPublicationQueued, ['project' => $project, 'change' => $change->id->value, 'head' => $change->head->hash]);
+    }
+
+    public function changeNotHandedToIntakt(string $project, OpenChange $change): void
+    {
+        $this->append(LedgerEventKind::ChangeNotHandedToIntakt, ['project' => $project, 'change' => $change->id->value, 'head' => $change->head->hash]);
+    }
+
     public function headHandedOver(HeadFailure $failure, int $failures, DateTimeImmutable $retryAt): void
     {
         $this->append(LedgerEventKind::HeadHandedOver, $this->failureOf($failure, $failures, $retryAt));

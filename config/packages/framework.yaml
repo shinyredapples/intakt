@@ -19,10 +19,10 @@ framework:
 
     # Reads and review posts of the GitHub API; retry_failed wraps the client in RetryableHttpClient, so a failed read is tried again (the review post turns it off for itself).
     # The http_codes are Symfony's defaults without 429, because the forge raises a 429 as a rate limit and waits for the reset it names; 0 is a dropped connection.
+    # Its base_uri is set in github_forge.php, from the parameter the connectivity check probes too.
     http_client:
         scoped_clients:
             github.client:
-                base_uri: 'https://api.github.com'
                 headers:
                     X-GitHub-Api-Version: '2022-11-28'
                 retry_failed:
@@ -38,6 +38,15 @@ framework:
                         507: [GET, HEAD, PUT, DELETE, OPTIONS, TRACE]
                         510: [GET, HEAD, PUT, DELETE, OPTIONS, TRACE]
 
+# Profiles let a change be measured on a running install; prod and the image define no profiler, and ProfileOnlyRequestMeasuresPass keeps only the collectors that measure a request; PathOnlyProfilerStorage drops the query string and client address of what it saves.
+when@dev:
+    framework:
+        profiler:
+            collect: true
+
 when@test:
     framework:
         test: true
+        # Collects only for a test that calls the client's enableProfiler(), so the suite does not pay for profiles it never reads.
+        profiler:
+            collect: false

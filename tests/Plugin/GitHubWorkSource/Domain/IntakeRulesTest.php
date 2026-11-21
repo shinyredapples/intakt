@@ -414,6 +414,6 @@ final class IntakeRulesTest extends TestCase
      */
     private function history(string $lastEditor, array $applications): IssueHistory
     {
-        return new IssueHistory($lastEditor, array_map(static fn (string $label, string $account): LabelApplication => new LabelApplication($label, $account), array_keys($applications), array_values($applications)));
+        return new IssueHistory($lastEditor, array_map(static fn (string $label, string $account): LabelApplication => new LabelApplication($label, $account), array_keys($applications), array_values($applications)), '', array_keys($applications));
     }
 }

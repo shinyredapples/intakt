@@ -1,0 +1,16 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use Override;
+
+trait Renaming
+{
+    #[Override]
+    public function setName(string $name): string
+    {
+        return strtolower($name);
+    }
+}

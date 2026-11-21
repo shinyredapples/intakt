@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Review\Contract;
 
 use Intakt\Core\Review\Contract\Checkout;
+use Intakt\Core\Review\Contract\CheckoutNotADirectory;
 use Intakt\Core\Review\Contract\PathNotInCheckout;
 use Intakt\Core\Review\Contract\PathOutsideCheckout;
 use Intakt\Tests\Core\Review\Infrastructure\Repository\ReviewCheckout;
-use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -17,6 +17,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(Checkout::class)]
 #[UsesClass(PathOutsideCheckout::class)]
 #[UsesClass(PathNotInCheckout::class)]
+#[UsesClass(CheckoutNotADirectory::class)]
 final class CheckoutTest extends TestCase
 {
     private ReviewCheckout $fixture;
@@ -88,7 +89,7 @@ final class CheckoutTest extends TestCase
 
     public function testACheckoutThatIsNotADirectoryIsRefused(): void
     {
-        $this->expectException(InvalidArgumentException::class);
+        $this->expectException(CheckoutNotADirectory::class);
 
         new Checkout('/nonexistent/checkout');
     }

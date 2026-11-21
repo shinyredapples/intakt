@@ -8,6 +8,7 @@ use Intakt\Core\Dashboard\Contract\DashboardRoutes;
 use Intakt\Core\Dashboard\Domain\ReviewTrends;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LivePageRendering;
+use Intakt\Core\Dashboard\Infrastructure\PublishedBench;
 use Intakt\Core\Dashboard\Infrastructure\SampleChangeSource;
 use Intakt\Core\Review\Contract\ChangeSource;
 use Symfony\Component\HttpFoundation\Request;
@@ -23,6 +24,7 @@ final readonly class ShowTrendsController
         private LedgerReviewPages $reviews,
         private SampleChangeSource $sample,
         private LivePageRendering $pages,
+        private PublishedBench $bench,
     ) {
     }
 
@@ -34,6 +36,7 @@ final readonly class ShowTrendsController
 
         return new Response($this->pages->render($request, 'dashboard/trends.html.twig', [
             'trends' => $trends,
+            'bench' => $this->bench->headline(),
             'sample_can_start' => $this->sample->source() instanceof ChangeSource,
         ]));
     }

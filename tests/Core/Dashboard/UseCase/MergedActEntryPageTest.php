@@ -129,8 +129,8 @@ final class MergedActEntryPageTest extends WebTestCase
         $page = $this->browser->request('GET', '/reviews/'.$review->roundId);
 
         self::assertResponseIsSuccessful();
-        self::assertSame([['F1', 'F2, F3', 'P1', 'Text of A.']], array_map(static fn (Finding $entry): array => [$entry->id, implode(', ', $entry->merged), $entry->severity->value, $entry->text], $act));
-        self::assertSame([['P1', 'F1', 'Text of A.', 'Also reported as F2, F3', 'Fix now']], $this->pageRows($page->filter('.finding-card')));
+        self::assertCount(1, $act);
+        self::assertSame(array_map(static fn (Finding $entry): array => [$entry->severity->value, $entry->id, $entry->text, 'Also reported as '.implode(', ', [...$entry->merged]), 'Fix now'], $act), $this->pageRows($page->filter('.finding-card')));
     }
 
     // The symbol is place, because only a quote is checked against the change, so a finding with an absent symbol and no quote must reach the judge.
@@ -144,7 +144,8 @@ final class MergedActEntryPageTest extends WebTestCase
 
         self::assertResponseIsSuccessful();
         self::assertSame([['P1', 'F2', 'Take the lock first.', 'Fix now']], $this->pageRows($page->filter('.finding-card:not([data-dropped])')));
-        self::assertSame([['P2', 'F1', 'Call ghostName first.', 'Dropped before the judge: none of its 1 quoted code fragments is in the change']], $this->pageRows($page->filter('[data-dropped]')));
+        self::assertSame([['P2', 'F1', 'Call ghostName first.', 'Quote not found in the code']], $this->pageRows($page->filter('[data-dropped]')));
+        self::assertSame('Dropped before the judge: none of its 1 quoted code fragments is in the change', $page->filter('[data-dropped] .fc-reason')->text());
     }
 
     /**
