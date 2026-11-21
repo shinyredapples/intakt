@@ -250,7 +250,7 @@ final class CheckHandBackSecretsTest extends TestCase
         return 'sk_live_'.bin2hex(random_bytes(12));
     }
 
-    // Built at run time, so the repository holds no large file; random bytes with NUL runs, so git and the scanner both see binary content that does not compress away.
+    // Built at run time, so the repository holds no large file; NUL runs, so git and the scanner both see binary content. It repeats one random block, so it compresses readily and only its raw size is large.
     private function largeBinary(): string
     {
         return str_repeat(random_bytes(4096).str_repeat("\0", 4096), 640);
