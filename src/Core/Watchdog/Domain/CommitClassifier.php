@@ -8,6 +8,7 @@ use Intakt\Core\Watchdog\Contract\Classification;
 use Intakt\Core\Watchdog\Contract\CommitHistory;
 use Intakt\Core\Watchdog\Contract\MainHistoryRewritten;
 use Intakt\Core\Watchdog\Contract\MainViolation;
+use Intakt\Core\Watchdog\Contract\RecordedMerge;
 use Intakt\Core\Watchdog\Contract\SignatureStatus;
 use Intakt\Core\Watchdog\Contract\Violation;
 use Intakt\Core\Watchdog\Contract\WatchedMain;
@@ -44,9 +45,12 @@ final readonly class CommitClassifier
      */
     private function violationsOnTheWalk(WatchedMain $main): array
     {
+        $walk = $this->history->firstParentsSince($main->lastSeenHead);
+        $covered = [] === $walk ? [] : $this->broughtInByRecordedMerges($main->recordedMerges);
+
         $violations = [];
-        foreach ($this->history->firstParentsSince($main->lastSeenHead) as $commit) {
-            $violation = $this->judge($main, $commit);
+        foreach ($walk as $commit) {
+            $violation = $this->judge($main, $covered, $commit);
             if ($violation instanceof Violation) {
                 $violations[] = new MainViolation($commit, $violation);
             }
@@ -55,10 +59,30 @@ final readonly class CommitClassifier
         return $violations;
     }
 
-    // A recorded head passes before its signature is read, because Intakt's own merge is trusted by its record, not by a key.
-    private function judge(WatchedMain $main, string $commit): ?Violation
+    /**
+     * @param list<RecordedMerge> $merges
+     *
+     * @return array<string, true>
+     */
+    private function broughtInByRecordedMerges(array $merges): array
     {
-        if ($main->isRecordedHead($commit)) {
+        $covered = [];
+        foreach ($merges as $merge) {
+            foreach ($this->history->broughtInBy($merge) as $commit) {
+                $covered[$commit] = true;
+            }
+        }
+
+        return $covered;
+    }
+
+    // A recorded head, and what its merge brought in above its base, pass before any signature is read, because Intakt's own merge is trusted by its record, not by a key.
+    /**
+     * @param array<string, true> $covered
+     */
+    private function judge(WatchedMain $main, array $covered, string $commit): ?Violation
+    {
+        if ($main->isRecordedHead($commit) || isset($covered[$commit])) {
             return null;
         }
 

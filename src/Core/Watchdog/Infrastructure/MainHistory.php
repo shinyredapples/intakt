@@ -9,6 +9,7 @@ use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Core\Watchdog\Contract\CommitHistory;
 use Intakt\Core\Watchdog\Contract\MainHistoryRewritten;
 use Intakt\Core\Watchdog\Contract\MainNotRead;
+use Intakt\Core\Watchdog\Contract\RecordedMerge;
 use Intakt\Core\Watchdog\Contract\SignatureStatus;
 use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
@@ -129,6 +130,21 @@ final readonly class MainHistory implements CommitHistory
     }
 
     /**
+     * @return list<string>
+     *
+     * @throws MainNotRead
+     * @throws RuntimeException
+     */
+    public function broughtInBy(RecordedMerge $merge): array
+    {
+        $this->mustBeReadable();
+        // Read with no shallow entries, because a cut during the read would hide what the base already held and pass it as brought in; a pruned commit then fails the read. The trailing -- keeps a file named like the base from making it ambiguous.
+        $brought = trim($this->read(['rev-list', $merge->head, '--not', $merge->base, '--'], self::NO_SHALLOW_ENTRIES));
+
+        return '' === $brought ? [] : explode("\n", $brought);
+    }
+
+    /**
      * @throws MainNotRead
      * @throws RuntimeException
      */
@@ -239,13 +255,14 @@ final readonly class MainHistory implements CommitHistory
 
     /**
      * @param list<string> $arguments
+     * @param list<string> $options
      *
      * @throws MainNotRead
      * @throws RuntimeException
      */
-    private function read(array $arguments): string
+    private function read(array $arguments, array $options = []): string
     {
-        $answer = $this->run($arguments);
+        $answer = $this->run($arguments, options: $options);
 
         return $answer->isSuccessful() ? $answer->getOutput() : throw new ProcessFailedException($answer);
     }
