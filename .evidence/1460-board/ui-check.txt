@@ -1,3 +1,57 @@
+board light 1440: HTTP 200
+board light 1920: HTTP 200
+board light 390: HTTP 200
+board dark 1440: HTTP 200
+board dark 1920: HTTP 200
+board dark 390: HTTP 200
+components light 1440: HTTP 200
+components light 1920: HTTP 200
+components light 390: HTTP 200
+components dark 1440: HTTP 200
+components dark 1920: HTTP 200
+components dark 390: HTTP 200
+projects light 1440: HTTP 200
+projects light 1920: HTTP 200
+projects light 390: HTTP 200
+projects dark 1440: HTTP 200
+projects dark 1920: HTTP 200
+projects dark 390: HTTP 200
+reviews light 1440: HTTP 200
+reviews light 1920: HTTP 200
+reviews light 390: HTTP 200
+reviews dark 1440: HTTP 200
+reviews dark 1920: HTTP 200
+reviews dark 390: HTTP 200
+search light 1440: HTTP 200
+search light 1920: HTTP 200
+search light 390: HTTP 200
+search dark 1440: HTTP 200
+search dark 1920: HTTP 200
+search dark 390: HTTP 200
+setup light 1440: HTTP 200
+setup light 1920: HTTP 200
+setup light 390: HTTP 200
+setup dark 1440: HTTP 200
+setup dark 1920: HTTP 200
+setup dark 390: HTTP 200
+trends light 1440: HTTP 200
+trends light 1920: HTTP 200
+trends light 390: HTTP 200
+trends dark 1440: HTTP 200
+trends dark 1920: HTTP 200
+trends dark 390: HTTP 200
+waiting light 1440: HTTP 200
+waiting light 1920: HTTP 200
+waiting light 390: HTTP 200
+waiting dark 1440: HTTP 200
+waiting dark 1920: HTTP 200
+waiting dark 390: HTTP 200
+review light 1440: HTTP 200
+review light 1920: HTTP 200
+review light 390: HTTP 200
+review dark 1440: HTTP 200
+review dark 1920: HTTP 200
+review dark 390: HTTP 200
 board light 1440: axe critical 0, serious 0, moderate 0, minor 0
 board light 1920: axe critical 0, serious 0, moderate 0, minor 0
 board light 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
@@ -5,17 +59,11 @@ board dark 1440: axe critical 0, serious 0, moderate 0, minor 0
 board dark 1920: axe critical 0, serious 0, moderate 0, minor 0
 board dark 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
 components light 1440: axe critical 0, serious 0, moderate 0, minor 0
-  error: HTTP 500 for <install>/components
 components light 1920: axe critical 0, serious 0, moderate 0, minor 0
-  error: HTTP 500 for <install>/components
 components light 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
-  error: HTTP 500 for <install>/components
 components dark 1440: axe critical 0, serious 0, moderate 0, minor 0
-  error: HTTP 500 for <install>/components
 components dark 1920: axe critical 0, serious 0, moderate 0, minor 0
-  error: HTTP 500 for <install>/components
 components dark 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
-  error: HTTP 500 for <install>/components
 projects light 1440: axe critical 0, serious 0, moderate 0, minor 0
 projects light 1920: axe critical 0, serious 0, moderate 0, minor 0
 projects light 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
@@ -41,17 +89,11 @@ setup dark 1440: axe critical 0, serious 0, moderate 0, minor 0
 setup dark 1920: axe critical 0, serious 0, moderate 0, minor 0
 setup dark 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
 trends light 1440: axe critical 0, serious 0, moderate 0, minor 0
-  error: HTTP 500 for <install>/trends
 trends light 1920: axe critical 0, serious 0, moderate 0, minor 0
-  error: HTTP 500 for <install>/trends
 trends light 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
-  error: HTTP 500 for <install>/trends
 trends dark 1440: axe critical 0, serious 0, moderate 0, minor 0
-  error: HTTP 500 for <install>/trends
 trends dark 1920: axe critical 0, serious 0, moderate 0, minor 0
-  error: HTTP 500 for <install>/trends
 trends dark 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
-  error: HTTP 500 for <install>/trends
 waiting light 1440: axe critical 0, serious 0, moderate 0, minor 0
 waiting light 1920: axe critical 0, serious 0, moderate 0, minor 0
 waiting light 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
@@ -64,5 +106,4 @@ review light 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor fi
 review dark 1440: axe critical 0, serious 0, moderate 0, minor 0
 review dark 1920: axe critical 0, serious 0, moderate 0, minor 0
 review dark 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
-UI check: 54 runs, 0 serious or critical axe violations, 0 phone floor findings, 12 page errors.
-Screenshots in var/ui-check/
+UI check: 54 runs, 0 serious or critical axe violations, 0 phone floor findings, 0 page errors.
