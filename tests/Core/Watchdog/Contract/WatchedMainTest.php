@@ -42,4 +42,39 @@ final class WatchedMainTest extends TestCase
 
         new WatchedMain('HEAD', []);
     }
+
+    public function testFullNamesOfTheRepositorysLengthPass(): void
+    {
+        $main = new WatchedMain(self::SEEN, [new RecordedMerge(self::HEAD, self::BASE)]);
+
+        $main->mustNameFullCommitsOfLength(40);
+
+        $this->addToAssertionCount(1);
+    }
+
+    public function testASha1LengthBaseInASha256RepositoryIsRefused(): void
+    {
+        $main = new WatchedMain(str_repeat('a', 64), [new RecordedMerge(str_repeat('c', 64), self::BASE)]);
+        $this->expectExceptionObject(new CommitNameNotFull('The recorded merge base "'.self::BASE.'" is not a full commit name of this repository (64 characters).'));
+
+        $main->mustNameFullCommitsOfLength(64);
+    }
+
+    public function testASha1LengthRecordedHeadInASha256RepositoryIsRefused(): void
+    {
+        $main = new WatchedMain(str_repeat('a', 64), [new RecordedMerge(self::HEAD, str_repeat('b', 64))]);
+        $this->expectException(CommitNameNotFull::class);
+        $this->expectExceptionMessage('recorded merge head');
+
+        $main->mustNameFullCommitsOfLength(64);
+    }
+
+    public function testASha256LengthSeenHeadInASha1RepositoryIsRefused(): void
+    {
+        $main = new WatchedMain(str_repeat('a', 64), []);
+        $this->expectException(CommitNameNotFull::class);
+        $this->expectExceptionMessage('last seen head');
+
+        $main->mustNameFullCommitsOfLength(40);
+    }
 }

@@ -182,6 +182,77 @@ final class CheckMainCommandTest extends TestCase
         self::assertSame(Command::SUCCESS, $tester->getStatusCode());
     }
 
+    public function testASha256RecordedMergeBaseCutToFortyCharactersExitsWithTwo(): void
+    {
+        $this->repository->remove();
+        $this->repository = new TemporaryRepository('sha256');
+        [$seen, $merge] = $this->seenCommitAndMergeOfATaskBranch();
+
+        $tester = $this->whenTheCommandRuns($seen, ['--recorded-merge' => [substr($seen, 0, 40).'..'.$merge]]);
+
+        self::assertSame(Command::INVALID, $tester->getStatusCode());
+        self::assertStringContainsString('recorded merge base', $tester->getDisplay());
+        self::assertStringNotContainsString('main is clean', $tester->getDisplay());
+    }
+
+    public function testASha256LastSeenHeadCutToFortyCharactersExitsWithTwo(): void
+    {
+        $this->repository->remove();
+        $this->repository = new TemporaryRepository('sha256');
+        $seen = $this->repository->commitEmpty('Seen');
+
+        $tester = $this->whenTheCommandRuns(substr($seen, 0, 40), []);
+
+        self::assertSame(Command::INVALID, $tester->getStatusCode());
+        self::assertStringContainsString('last seen head', $tester->getDisplay());
+    }
+
+    public function testASha256LengthLastSeenHeadInASha1RepositoryExitsWithTwo(): void
+    {
+        $this->repository->commitEmpty('Seen');
+
+        $tester = $this->whenTheCommandRuns(str_repeat('a', 64), []);
+
+        self::assertSame(Command::INVALID, $tester->getStatusCode());
+    }
+
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function unicodeControls(): iterable
+    {
+        yield 'a next line' => ["\u{0085}", '\u{0085}'];
+        yield 'a line separator' => ["\u{2028}", '\u{2028}'];
+        yield 'a paragraph separator' => ["\u{2029}", '\u{2029}'];
+        yield 'a right-to-left override' => ["\u{202E}", '\u{202E}'];
+    }
+
+    #[DataProvider('unicodeControls')]
+    public function testAUnicodeControlInAReasonIsPrintedEscaped(string $control, string $escaped): void
+    {
+        $tester = $this->whenTheCommandRunsIn($this->repository->path.'/missing'.$control.'path', str_repeat('a', 40), []);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringNotContainsString($control, $tester->getDisplay());
+        self::assertStringContainsString('missing'.$escaped.'path', $tester->getDisplay());
+    }
+
+    public function testAReasonThatIsNotUtf8HasItsHighBytesPrintedEscaped(): void
+    {
+        $tester = $this->whenTheCommandRunsIn($this->repository->path."/missing\xC2path", str_repeat('a', 40), []);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringNotContainsString("\xC2", $tester->getDisplay());
+        self::assertStringContainsString('missing\302path', $tester->getDisplay());
+    }
+
+    public function testAPrintableUnicodeCharacterInAReasonIsKept(): void
+    {
+        $tester = $this->whenTheCommandRunsIn($this->repository->path.'/missing-Ä', str_repeat('a', 40), []);
+
+        self::assertStringContainsString('missing-Ä', $tester->getDisplay());
+    }
+
     /**
      * @return iterable<string, array{string}>
      */

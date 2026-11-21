@@ -26,6 +26,7 @@ final readonly class CheckMain
     public function classified(string $repository, WatchedMain $main, array $ownerKeys): Classification
     {
         $history = new MainHistory($this->git, $repository, $ownerKeys, $this->filesystem);
+        $main->mustNameFullCommitsOfLength($history->commitNameLength());
 
         return new CommitClassifier($history)->classify($main);
     }

@@ -20,6 +20,8 @@ final readonly class CheckMainCommand
 {
     public const string NAME = 'intakt:watchdog:check';
 
+    private const string UNICODE_CONTROLS = '/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u';
+
     public function __construct(
         private CheckMain $check,
     ) {
@@ -71,6 +73,9 @@ final readonly class CheckMainCommand
     private function printable(string $text): string
     {
         // Because a path or git's output can hold a newline or an escape sequence, which would forge a line of this report or steer the terminal; the error block escapes formatter tags itself.
-        return addcslashes($text, "\0..\37\177\\");
+        $escaped = addcslashes($text, "\0..\37\177\\");
+
+        // Unicode's own controls and line breaks (a next line, a line separator, a direction override) do the same; text that is not UTF-8 has every byte above ASCII escaped, because no character can be told apart in it.
+        return preg_replace_callback(self::UNICODE_CONTROLS, static fn (array $match): string => sprintf('\u{%04X}', mb_ord($match[0], 'UTF-8')), $escaped) ?? addcslashes($escaped, "\200..\377");
     }
 }
