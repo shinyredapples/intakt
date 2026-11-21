@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Budget\Contract\Prices;
 use Intakt\Core\Budget\Infrastructure\ConfiguredPrices;
+use Intakt\Core\Dashboard\Domain\BenchHeadline;
 use Intakt\Core\Dashboard\Domain\ChartBar;
 use Intakt\Core\Dashboard\Domain\ChartScale;
 use Intakt\Core\Dashboard\Domain\JudgeOutcomes;
@@ -16,6 +17,7 @@ use Intakt\Core\Dashboard\Domain\ReviewerCatches;
 use Intakt\Core\Dashboard\Domain\ReviewsPerDay;
 use Intakt\Core\Dashboard\Domain\ReviewTrends;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
+use Intakt\Core\Dashboard\Infrastructure\PublishedBench;
 use Intakt\Core\Dashboard\Infrastructure\SampleChangeSource;
 use Intakt\Core\Dashboard\UseCase\ShowTrends\ShowTrendsController;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
@@ -30,6 +32,8 @@ use Symfony\Component\DomCrawler\Crawler;
 #[CoversClass(ShowTrendsController::class)]
 #[CoversClass(LedgerReviewPages::class)]
 #[UsesClass(ReviewTrends::class)]
+#[UsesClass(PublishedBench::class)]
+#[UsesClass(BenchHeadline::class)]
 #[UsesClass(ReviewerCatches::class)]
 #[UsesClass(ReviewerCatch::class)]
 #[UsesClass(JudgeOutcomes::class)]
@@ -49,8 +53,68 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
         self::assertResponseIsSuccessful();
         self::assertSame('No reviews yet', $page->filter('main .empty h2')->text());
         self::assertSame(1, preg_match('~octopus-waiting-light[^"]*\.webp$~', $page->filter('main .empty img.character')->attr('src') ?? ''));
-        self::assertSelectorNotExists('.tiles');
-        self::assertSelectorNotExists('.page-head .meta');
+        self::assertSame([], $this->tiles($page));
+        self::assertSame(['bench'], $page->filter('.tiles .tile')->each(static fn (Crawler $tile): string => (string) $tile->attr('data-tile')));
+    }
+
+    public function testTheFirstTileIsThePublishedBenchResultMarkedMeasuredWithTheDateOfItsRunAsVisibleText(): void
+    {
+        $bench = $this->publishedBench();
+        $this->ledger->startRound('r-1', 'alpha');
+
+        $tile = $this->browser->request('GET', '/trends')->filter('.tiles .tile')->first();
+
+        self::assertSame(['bench', $bench->reading()], [$tile->attr('data-tile'), $tile->filter('dd')->getNode(0)?->firstChild?->textContent]);
+        self::assertSame('measured', $tile->filter('.figure-kind')->attr('data-kind'));
+        self::assertSame([$bench->ranOn, 'Run of '.$bench->ranOn], [$tile->filter('dd time.tile-date')->attr('datetime'), $tile->filter('dd time.tile-date')->text()]);
+    }
+
+    public function testTheBenchTilesFocusableLabelCarriesItsFalseAlarms(): void
+    {
+        $bench = $this->publishedBench();
+
+        $label = $this->browser->request('GET', '/trends')->filter('[data-tile="bench"] dt .term');
+
+        self::assertSame('0', $label->attr('tabindex'));
+        self::assertStringEndsWith('; '.$bench->falseAlarms.' false alarms.', $label->filter('.term-tip')->text());
+    }
+
+    public function testABenchRunWithOneFalseAlarmNamesItInTheSingular(): void
+    {
+        self::getContainer()->set(PublishedBench::class, new PublishedBench(__DIR__.'/ShowTrends/a-bench-run-with-one-false-alarm.md'));
+
+        $tip = $this->browser->request('GET', '/trends')->filter('[data-tile="bench"] dt .term-tip');
+
+        self::assertStringEndsWith('; 1 false alarm.', $tip->text());
+    }
+
+    public function testThePassesTileExplainsAStandaloneReviewPassWithoutCallingItABuild(): void
+    {
+        $this->ledger->startRound('r-1', 'alpha');
+
+        $tile = $this->browser->request('GET', '/trends')->filter('[data-tile="passes"]');
+
+        self::assertSame('1', $tile->filter('dd')->text());
+        self::assertSame('Review passes started, whether run on their own or for a build.', $tile->filter('.term-tip')->text());
+    }
+
+    public function testWithoutAReadableBenchTableThereIsNoBenchTile(): void
+    {
+        self::getContainer()->set(PublishedBench::class, new PublishedBench($this->projectDir().'/no-such-readme.md'));
+        $this->ledger->startRound('r-1', 'alpha');
+
+        $page = $this->browser->request('GET', '/trends');
+
+        self::assertSame(['passes'], $page->filter('.tiles .tile')->each(static fn (Crawler $tile): string => (string) $tile->attr('data-tile')));
+    }
+
+    public function testTheTilesComeBeforeTheFirstChart(): void
+    {
+        $this->givenAJudgedRoundWithTwoReporters();
+
+        $page = $this->browser->request('GET', '/trends');
+
+        self::assertSame(['tiles', 'charts'], $page->filter('main .tiles, main .charts')->each(static fn (Crawler $block): string => (string) $block->attr('class')));
     }
 
     public function testWithoutTheSampleChangeTheOneActionOpensTheSetupPagesFirstReviewStep(): void
@@ -86,24 +150,22 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
         $page = $this->browser->request('GET', '/trends');
 
         self::assertSame([
-            'Review rounds run' => '2',
-            'P1 and P2 findings on act lists' => '2',
-            'Caught by one reviewer only' => 'No data',
-            'Median time from round start to verdict' => '0 s',
-            'Cost per round' => 'No data',
+            'Passes' => '2',
+            'To fix' => '2',
+            'Time to verdict' => '0 s',
         ], $this->tiles($page));
-        self::assertSame('2 review rounds over every project', $page->filter('.page-head .meta span')->text());
+        self::assertSelectorNotExists('.page-head .meta');
     }
 
-    public function testTheOneReviewerTileReadsNoDataForRoundsWithoutARecordOfWhoReportedWhatEvenWhenActEntriesHaveMerges(): void
+    public function testTheOneReviewerTileIsLeftOutForRoundsWithoutARecordOfWhoReportedWhatEvenWhenActEntriesHaveMerges(): void
     {
         $this->ledger->startRound('r-1', 'alpha');
         $this->ledger->judgeOneEntryOf('r-1', 'F1', 'F2');
 
         $page = $this->browser->request('GET', '/trends');
 
-        self::assertSame('No data', $this->tiles($page)['Caught by one reviewer only']);
-        self::assertStringContainsString('"Caught by one reviewer only" counts only the rounds with a full record of which reviewer reported each finding.', $page->filter('.tiles-note')->text());
+        self::assertArrayNotHasKey('One reviewer only', $this->tiles($page));
+        self::assertSelectorNotExists('.tiles-note');
     }
 
     public function testTheOneReviewerTileShowsTheShareOfActEntriesOnlyOneReviewerReported(): void
@@ -121,7 +183,22 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
 
         $page = $this->browser->request('GET', '/trends');
 
-        self::assertSame('50%', $this->tiles($page)['Caught by one reviewer only']);
+        self::assertSame('50%', $this->tiles($page)['One reviewer only']);
+    }
+
+    public function testTheOneReviewerTooltipNamesTheFindingsKeptToFixOverPassesWithAFullReporterRecord(): void
+    {
+        $this->ledger->startRound('r-1', 'alpha');
+        $this->ledger->reportFindings('r-1', 'correctness', ['F1']);
+        $this->ledger->reportFindings('r-1', 'security', []);
+        $this->ledger->judgeFindings('r-1', ['F1' => 'act']);
+
+        $page = $this->browser->request('GET', '/trends');
+
+        self::assertSame(
+            'Share of the findings kept to fix that only one reviewer of the pass reported, over passes with a full record of who reported what.',
+            $page->filter('[data-tile="alone"] .term-tip')->text(),
+        );
     }
 
     public function testAnUnreadableReportCannotTurnAJoinedEntryIntoAOneReviewerCatch(): void
@@ -135,7 +212,7 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
 
         $page = $this->browser->request('GET', '/trends');
 
-        self::assertSame('No data', $this->tiles($page)['Caught by one reviewer only']);
+        self::assertArrayNotHasKey('One reviewer only', $this->tiles($page));
     }
 
     public function testTheCostTileIsTheMeanOverEveryPricedRound(): void
@@ -148,17 +225,17 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
 
         $page = $this->browser->request('GET', '/trends');
 
-        self::assertSame(['2', '0.0060 USD'], [$this->tiles($page)['Review rounds run'], $this->tiles($page)['Cost per round']]);
+        self::assertSame(['2', '0.0060 USD'], [$this->tiles($page)['Passes'], $this->tiles($page)['Cost per pass']]);
     }
 
-    public function testAFigureWithoutDataReadsNoDataNeverZero(): void
+    public function testATileWhoseFigureHasNoDataIsLeftOutNeverShownAsZero(): void
     {
         $this->ledger->startRound('r-1', 'alpha');
 
         $page = $this->browser->request('GET', '/trends');
 
-        self::assertSame(['1', 'No data', 'No data', 'No data', 'No data'], array_values($this->tiles($page)));
-        self::assertCount(4, $page->filter('.tile[data-no-data]'));
+        self::assertSame(['Passes' => '1'], $this->tiles($page));
+        self::assertSelectorNotExists('.tile[data-no-data]');
     }
 
     public function testTheCostTileCarriesTheEstimatedLabelAndThePriceDate(): void
@@ -169,44 +246,43 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
 
         $page = $this->browser->request('GET', '/trends');
 
-        self::assertSame('0.0030 USD', $this->tiles($page)['Cost per round']);
-        self::assertSame('estimated', $page->filter('.tile dt .figure-kind')->attr('data-kind'));
-        self::assertStringStartsWith('Cost per round is the mean of the rounds with a known estimate, prices of 2026-11-13.', $page->filter('.tiles-note')->text());
+        self::assertSame('0.0030 USD', $this->tiles($page)['Cost per pass']);
+        self::assertSame('estimated', $page->filter('[data-tile="trends-cost"] dt .figure-kind')->attr('data-kind'));
+        self::assertSame('Mean of the passes with a cost estimate, prices of 2026-11-13.', $page->filter('[data-tile="trends-cost"] .term-tip')->text());
     }
 
-    public function testAReplayedReviewIsNamedInTheMetaLineAndTheChipLeavesItOut(): void
+    public function testAReplayedReviewIsCountedAndThePressedToggleLeavesItOut(): void
     {
         $this->givenALiveAndAReplayedRound();
 
         $page = $this->browser->request('GET', '/trends');
 
-        self::assertSame(['2 review rounds over every project', 'Includes the recorded demo review'], $page->filter('.page-head .meta span')->each(static fn (Crawler $fact): string => $fact->text()));
-        $chip = $page->filter('.page-head .actions a.fchip');
-        self::assertSame('Leave out the demo review', $chip->text());
-        self::assertSame('/trends?demo=0', $chip->attr('href'));
+        self::assertSame('2', $this->tiles($page)['Passes']);
+        $chip = $page->filter('.page-head form.actions button.demo-toggle');
+        self::assertSame(['Demo review', 'true'], [$chip->text(), $chip->attr('aria-pressed')]);
+        self::assertSame(['get', '/trends'], [$page->filter('.page-head form.actions')->attr('method'), $page->filter('.page-head form.actions')->attr('action')]);
+        self::assertSame(['demo' => '0'], $page->filter('.page-head form.actions')->form()->getValues());
     }
 
-    public function testWithTheDemoLeftOutOnlyLiveRoundsCountAndTheChipCountsItAgain(): void
+    public function testWithTheDemoLeftOutOnlyLiveRoundsCountAndTheUnpressedToggleCountsItAgain(): void
     {
         $this->givenALiveAndAReplayedRound();
 
         $page = $this->browser->request('GET', '/trends?demo=0');
 
-        self::assertSame('1', $this->tiles($page)['Review rounds run']);
-        self::assertSame(['1 review round over every project', 'Leaves out the recorded demo review'], $page->filter('.page-head .meta span')->each(static fn (Crawler $fact): string => $fact->text()));
-        $chip = $page->filter('.page-head .actions a.fchip');
-        self::assertSame('Count the demo review', $chip->text());
-        self::assertSame('/trends', $chip->attr('href'));
+        self::assertSame('1', $this->tiles($page)['Passes']);
+        $chip = $page->filter('.page-head form.actions button.demo-toggle');
+        self::assertSame(['Demo review', 'false'], [$chip->text(), $chip->attr('aria-pressed')]);
+        self::assertSame([], $page->filter('.page-head form.actions')->form()->getValues());
     }
 
-    public function testWithoutAReplayedReviewThereIsNoDemoChip(): void
+    public function testWithoutAReplayedReviewThereIsNoDemoToggle(): void
     {
         $this->ledger->startRound('r-1', 'alpha');
 
-        $page = $this->browser->request('GET', '/trends?demo=0');
+        $this->browser->request('GET', '/trends?demo=0');
 
         self::assertSelectorNotExists('.page-head .actions');
-        self::assertSame(['1 review round over every project'], $page->filter('.page-head .meta span')->each(static fn (Crawler $fact): string => $fact->text()));
     }
 
     public function testTheRailListsTrendsAfterProjectsAndMarksItCurrentOnTheTrendsPage(): void
@@ -253,7 +329,7 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
             $page->filter('#chart-catches tbody tr')->each(static fn (Crawler $row): string => sprintf('%s (%s alone)', $row->filter('td')->eq(2)->text(), $row->filter('td')->eq(3)->text())),
         );
         self::assertSame(
-            ['Kept on the act list' => '1', 'Merged as duplicate' => '1', 'Deferred to a follow-up issue' => '0', 'Rejected' => '1'],
+            ['Kept to fix' => '1', 'Merged as duplicate' => '1', 'Deferred to a follow-up issue' => '0', 'Rejected' => '1'],
             array_column($page->filter('#chart-judge tbody tr')->each(static fn (Crawler $row): array => [$row->filter('td')->eq(0)->text(), $row->filter('td')->eq(1)->text()]), 1, 0),
         );
         self::assertSame(['1', '1', '0', '1'], $page->filter('#chart-judge .c-label')->each(static fn (Crawler $label): string => $label->text()));
@@ -569,12 +645,25 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
     {
         $tiles = [];
 
-        foreach ($page->filter('.tiles .tile') as $tile) {
+        foreach ($page->filter('.tiles .tile:not([data-tile="bench"])') as $tile) {
             $crawler = new Crawler($tile);
-            $label = $crawler->filter('dt')->getNode(0)?->firstChild->textContent ?? '';
+            $label = $crawler->filter('dt .term')->getNode(0)?->firstChild->textContent ?? '';
             $tiles[trim($label)] = $crawler->filter('dd')->text();
         }
 
         return $tiles;
+    }
+
+    private function publishedBench(): BenchHeadline
+    {
+        $bench = new PublishedBench($this->projectDir().'/README.md')->headline();
+        self::assertNotNull($bench, 'The README has no readable review bench table.');
+
+        return $bench;
+    }
+
+    private function projectDir(): string
+    {
+        return self::getContainer()->getParameter('kernel.project_dir');
     }
 }
