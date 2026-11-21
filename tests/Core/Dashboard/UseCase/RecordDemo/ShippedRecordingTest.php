@@ -129,9 +129,27 @@ final class ShippedRecordingTest extends TestCase
         self::assertDoesNotMatchRegularExpression($pattern, '/tmp-backup/work');
         self::assertDoesNotMatchRegularExpression($pattern, '/tmp.d/work');
         self::assertDoesNotMatchRegularExpression($pattern, '/var/tmp/work');
+        self::assertDoesNotMatchRegularExpression($pattern, '/tmp+backup/work');
+        self::assertDoesNotMatchRegularExpression($pattern, '/tmp~/work');
         self::assertMatchesRegularExpression($pattern, '/tmp/work');
         self::assertMatchesRegularExpression($pattern, 'a workspace in /tmp.');
+        self::assertMatchesRegularExpression($pattern, 'a workspace in "/tmp", kept');
         self::assertMatchesRegularExpression($pattern, '/tmp');
+    }
+
+    // The file text holds the payload with escaped slashes, so a deeper temp folder reads as a backslash before "/tmp" there.
+    public function testADeeperTempFolderInsideOneLedgerPayloadIsNotTheSystemTempFolder(): void
+    {
+        $text = $this->shippedWith('repository', '/var/tmp/work');
+
+        self::assertSame([], $this->placesMatching($this->privateTextPattern('the system temp folder'), $text));
+    }
+
+    public function testTheRootTempFolderInsideOneLedgerPayloadIsFoundInThatPayloadOnly(): void
+    {
+        $text = $this->shippedWith('repository', '/tmp/work');
+
+        self::assertSame(['the payload of ledger event 0'], $this->placesMatching($this->privateTextPattern('the system temp folder'), $text));
     }
 
     /**
@@ -141,7 +159,8 @@ final class ShippedRecordingTest extends TestCase
     {
         yield 'a home folder' => [self::HOME_FOLDER];
         yield 'a machine folder' => ['~/(srv|opt|mnt)/~'];
-        yield 'the system temp folder' => ['~(?<![\w./-])/tmp(?![\w-]|\.\w)~'];
+        // The backslash keeps an escaped deeper path ("\/var\/tmp") out; the decoded strings still show a root temp folder.
+        yield 'the system temp folder' => ['~(?<![\w./\\\\-])/tmp(?=$|[/\s"\'),;:]|\.(?!\w))~'];
         yield 'a provider or forge token' => ['~\b(sk-|ghp_|gho_|github_pat_|xox[bp]-)~'];
         yield 'a private key' => ['~PRIVATE KEY~'];
         yield 'a bearer header' => ['~Bearer\s+\S~i'];
