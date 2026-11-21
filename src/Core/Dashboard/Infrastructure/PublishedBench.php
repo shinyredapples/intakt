@@ -79,8 +79,7 @@ final readonly class PublishedBench
         return [$defects, $planted, $falseAlarms];
     }
 
-    // A count beyond the integer range is refused rather than clamped, so the tile never shows a figure the README does not hold.
-    // A zero-padded count such as 02 is refused too: the bench never writes one, so it marks a table of another shape.
+    // A count beyond the integer range or zero-padded (02) is refused rather than read, so the tile never shows a figure the README does not hold as written.
     private function countOf(string $digits): ?int
     {
         $count = filter_var($digits, FILTER_VALIDATE_INT, ['options' => ['min_range' => 0]]);
