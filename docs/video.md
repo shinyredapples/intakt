@@ -4,11 +4,11 @@ The script and shot list of Intakt's hackathon video. Every shot is the real pro
 
 | Time | Shot | Voice-over |
 |---|---|---|
-| 0:00 to 0:05.5 | Cold open on the keyless demo's review page: both reviewers asked for changes; the verdict card says "Changes needed: 5 things to fix", with the P1 shell injection in `src/report.js` that both reviewers reported. | Two reviewers read this change. Both found a shell injection. |
+| 0:00 to 0:05.5 | Cold open on the README's review bench table: Claude `opus` alone found 12 of the 15 planted defects; the panel on Claude and GPT found 15 of 15 (measured, 2026-11-21). | One reviewer alone missed three planted defects. Together they caught all fifteen. |
 | 0:05.5 to 0:07.6 | The octopus conductor lifts its baton; the logo. | This is Intakt. |
 | 0:07.6 to 0:13.56 | A terminal, sped up: `git clone`, `docker compose up -d --wait`; then the first-run page and **Play the demo run** on `/demo`. | Two commands, no key: clone, compose up, and watch a real recorded review. |
-| 0:13.56 to 0:23.55 | The demo's live review page: two reviewers on models from two AI labs, findings F1 to F8 arriving on the beat. | Reviewers on models from two AI labs read the change, live. Every finding carries an id, a priority and a quote from the code. |
-| 0:23.55 to 0:31.55 | The quote check: F2's quotes (`customerName`, `execSync`) check out against the diff in a terminal; in this recording every finding passes the check. | Before the judge, each quote is checked against the code. A quote that is not there drops the finding. |
+| 0:13.56 to 0:23.55 | The demo's live review page: `correctness` on Claude (`opus`) and `security` on GPT (`gpt-6.2-sol`), findings F1 to F8 arriving on the beat. | Reviewers on Claude and GPT read the change, live. |
+| 0:23.55 to 0:31.55 | A scripted terminal shot of the quote check: F2's quotes (`customerName`, `execSync`) are found in the change, and a finding whose only quote is not in the change is dropped. The shipped recording drops no finding, so this shot is not taken from it. | A finding that quotes code that is not there never reaches the list. |
 | 0:31.55 to 0:37.55 | The judge merges the duplicates (F5 and F7 into F2, F6 into F1); the verdict card "Changes needed: 5 things to fix". | The judge merges what both reviewers found into one list to fix. |
 | 0:37.55 to 0:51.5 | A real Claude Code session drives the loop over MCP: the dashboard full frame, a small card with the agent's current step (start a review, read what to fix, fix, start the next pass). | Or hand it to your agent, over MCP. Claude Code starts a review, reads what to fix, fixes it, and runs the next pass until it is clean. |
 | 0:51.5 to 0:53.6 | The stop: that session's second pass running, the baton held high. | |
@@ -19,7 +19,7 @@ The script and shot list of Intakt's hackathon video. Every shot is the real pro
 
 The keyless demo ends after its first round ([the demo walkthrough](guide/demo-walkthrough.md): the shipped review has one round); the second pass is not part of it and comes only from the real Claude Code session, which needs a model key.
 
-The figure in the voice-over comes from the README's [review bench](../README.md#review-bench) (the panel on Claude and GPT, measured, 2026-11-21).
+The figures in the voice-over at 0:00 and 1:01.55 come from the README's [review bench](../README.md#review-bench): Claude `opus` alone found 12 of 15 planted defects, the panel on Claude and GPT 15 of 15 (measured, 2026-11-21).
 
 Notes on the precise behavior behind some lines of the voice-over:
 
