@@ -1,6 +1,8 @@
-# Differences from the existing loop
+# Differences from the earlier loop
 
-Intakt is to replace the existing loop for the owner's own use ([plan](../plan.md#replacing-the-existing-loop)). The loop is a reference, not a source: where Intakt deliberately does a thing another way, the difference is listed here, with the reason and where it is built. Each task that adds a deliberate difference adds it to this page; the parity list of behaviors that must stay the same is in [Parity](parity.md).
+The earlier loop is the build loop that developed Intakt: the owner's own build loop, which builds, reviews and merges this repository's pull requests until Intakt takes over.
+
+Intakt is to replace that loop for the owner's own use ([plan](../plan.md#replacing-the-earlier-loop)). The loop is a reference, not a source: where Intakt deliberately does a thing another way, the difference is listed here, with the reason and where it is built. Each task that adds a deliberate difference adds it to this page; the parity list of behaviors that must stay the same is in [Parity](parity.md).
 
 ## Waits for notes only in the task text
 
