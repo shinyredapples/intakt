@@ -70,6 +70,29 @@ final class FullReportRetentionTest extends SandboxTestCase
         }
     }
 
+    public function testPruningLeavesAHandMadeNameEndingInANewlineAlone(): void
+    {
+        $root = $this->emptySandbox()->root;
+        $this->seedFile($root, "report-0123456789abcdef.json\n", self::OLD - 100);
+        $this->seedReports($root, 25, self::OLD);
+
+        $this->writeReportInto($root);
+
+        self::assertFileExists($root.'/'.FullReport::FOLDER."/report-0123456789abcdef.json\n");
+    }
+
+    public function testPruningLeavesAFolderNamedLikeAGeneratedReport(): void
+    {
+        $root = $this->emptySandbox()->root;
+        $this->seedReports($root, 25, self::OLD);
+        mkdir($root.'/'.FullReport::FOLDER.'/report-0000000000000000.json');
+        touch($root.'/'.FullReport::FOLDER.'/report-0000000000000000.json', 1);
+
+        $this->writeReportInto($root);
+
+        self::assertDirectoryExists($root.'/'.FullReport::FOLDER.'/report-0000000000000000.json');
+    }
+
     public function testTheReportJustWrittenIsKeptEvenWhenNineteenOtherReportsAreDatedInTheFuture(): void
     {
         $root = $this->emptySandbox()->root;
@@ -153,7 +176,7 @@ final class FullReportRetentionTest extends SandboxTestCase
     {
         $listed = scandir($root.'/'.FullReport::FOLDER);
         self::assertIsArray($listed);
-        $names = array_values(array_filter($listed, static fn (string $name): bool => 1 === preg_match('~^report-[0-9a-f]{16}\.json$~', $name)));
+        $names = array_values(preg_grep(FullReport::GENERATED, $listed));
         sort($names);
 
         return $names;

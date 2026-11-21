@@ -9,7 +9,8 @@ final readonly class FullReport
     // Because Intakt's own .gitignore leaves out var/, and the ASCII-only report keeps a tree whose gates do scan var/ passing.
     public const string FOLDER = 'var/check';
 
-    private const string GENERATED = '~^report-[0-9a-f]{16}\.json$~';
+    // Because $ also matches before a final newline, \z ends the name, so a hand-made name ending in a newline never counts as generated.
+    public const string GENERATED = '~\Areport-[0-9a-f]{16}\.json\z~';
 
     private const int KEPT = 20;
 
@@ -86,7 +87,11 @@ final readonly class FullReport
     {
         $names = @scandir($folder);
 
-        return false === $names ? [] : array_values(array_filter($names, static fn (string $name): bool => 1 === preg_match(self::GENERATED, $name)));
+        if (false === $names) {
+            return [];
+        }
+
+        return array_values(preg_grep(self::GENERATED, $names));
     }
 
     // Because a report the summary names must hold everything, a failed or short write leaves no file, and its warning never reaches stdout between the JSON lines.
