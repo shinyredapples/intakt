@@ -257,6 +257,47 @@ final class NarrowCatchRuleTest extends PhpStanRuleTestCase
         self::assertSame('', $this->ruleFindingsIn($sandbox));
     }
 
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function lineEndings(): iterable
+    {
+        yield 'LF' => ["\n"];
+        yield 'CRLF' => ["\r\n"];
+        yield 'CR' => ["\r"];
+    }
+
+    #[DataProvider('lineEndings')]
+    public function testABoundaryCommentOnItsOwnLinePassesAndOneTrailingCodeFailsWithAnyLineEnding(string $ending): void
+    {
+        $sandbox = $this->emptySandbox();
+        $source = <<<'PHP'
+            <?php
+            function marked(callable $work): void {
+                try {
+                    $work();
+                }
+                // Boundary: preserves failures for the caller
+                catch (Throwable $failure) {
+                    throw $failure;
+                }
+            }
+            function trailing(callable $work): void {
+                try {
+                    $work(); // Boundary: preserves failures for the caller
+                } catch (Throwable $failure) {
+                    throw $failure;
+                }
+            }
+            PHP;
+        $sandbox->write('src/Boundary.php', str_replace("\n", $ending, $source));
+
+        $findings = $this->ruleFindingsIn($sandbox);
+
+        self::assertSame(1, substr_count($findings, 'intakt.narrowCatch'), $findings);
+        self::assertStringContainsString('src/Boundary.php:14 intakt.narrowCatch', $findings);
+    }
+
     public function testLibraryExceptionsSharingARootsShortNamePassStaticAnalysis(): void
     {
         $this->assertRuleAccepts('narrow-catch-library-exceptions');

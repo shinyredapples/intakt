@@ -165,10 +165,9 @@ final readonly class NarrowCatchRule implements Rule
     // because a comment trailing code on its line annotates that code, not the catch below it
     private function startsItsLine(Comment $comment, string $source): bool
     {
-        $start = $comment->getStartFilePos();
-        $lineStart = false === ($newline = strrpos(substr($source, 0, $start), "\n")) ? 0 : $newline + 1;
+        $lines = preg_split('/\R/', substr($source, 0, $comment->getStartFilePos())) ?: [''];
 
-        return '' === trim(substr($source, $lineStart, $start - $lineStart));
+        return '' === trim((string) array_last($lines));
     }
 
     private function rethrowsOrRecords(Catch_ $catch): bool
