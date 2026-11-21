@@ -32,6 +32,13 @@
 .step-details { margin: 0 0 var(--s16); }
 .step-details > summary { min-height: 44px; display: flex; align-items: center; gap: var(--s8); cursor: pointer; color: var(--link); font-weight: 600; }
 
+/* The element the demo tour talks about: a ring in the primary colour, which arrives with one soft pulse. */
+[data-tour-focus] { outline: 3px solid var(--primary); outline-offset: 6px; border-radius: var(--r-btn); scroll-margin: 96px 0 160px; animation: tour-focus 1.2s ease-out 1; }
+@keyframes tour-focus { from { outline-offset: 16px; outline-color: transparent; } }
+@media (prefers-reduced-motion: reduce) {
+  [data-tour-focus] { animation: none; }
+}
+
 @media (max-width: 760px) {
   .review-strip { padding: var(--s12) var(--s4); gap: var(--s4); }
   .review-strip li + li::before { left: calc(var(--s4) / -2 - 5px); top: 26px; width: 6px; height: 6px; }
