@@ -1,0 +1,31 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+final readonly class Ledger
+{
+    public function settle(int $amount): int
+    {
+        return -$amount;
+    }
+
+    public function setup(): string
+    {
+        return 'ready';
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function settings(): array
+    {
+        return ['currency'];
+    }
+
+    public function set2(): int
+    {
+        return 2;
+    }
+}

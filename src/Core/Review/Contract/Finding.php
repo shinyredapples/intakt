@@ -14,9 +14,6 @@ use Symfony\Component\Validator\Constraints\Valid;
 #[Exclude]
 final readonly class Finding
 {
-    /**
-     * @param list<string> $merged
-     */
     public function __construct(
         #[NotBlank]
         public string $id,
@@ -36,7 +33,7 @@ final readonly class Finding
         public bool $regression = false,
         // Ignored, so the schema never asks a reviewer for it and an answer naming it is refused; only plain code merges findings, and StoredFindingNormalizer keeps it in stored JSON.
         #[Ignore]
-        public array $merged = [],
+        public FindingIds $merged = new FindingIds(),
         // Ignored, so the schema never asks a reviewer for it, because only the judge's reason for a rejected or deferred P1 or P2 belongs here; private, so the MCP answers that json_encode findings keep their shape; StoredFindingNormalizer keeps it in stored JSON.
         #[Ignore]
         private ?string $judge_note = null,
@@ -58,10 +55,7 @@ final readonly class Finding
         return clone ($this, ['severity' => $severity]);
     }
 
-    /**
-     * @param list<string> $ids
-     */
-    public function withMerged(array $ids): self
+    public function withMerged(FindingIds $ids): self
     {
         return clone ($this, ['merged' => $ids]);
     }

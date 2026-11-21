@@ -37,7 +37,7 @@ final class GateChildExtensionsTest extends SandboxTestCase
     {
         $check = $this->runBinCheck('');
 
-        self::assertStringContainsString('{"result":"pass","failed":[]}', $check->output, $check->errors);
+        self::assertStringContainsString('{"result":"pass","failed":[],"report":"var/check/report-', $check->output, $check->errors);
         self::assertSame(0, $check->exitCode);
     }
 
