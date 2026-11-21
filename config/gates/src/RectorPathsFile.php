@@ -66,7 +66,8 @@ final readonly class RectorPathsFile
     private static function decoded(string $file, string $contents): mixed
     {
         try {
-            return json_decode($contents, true, 2, JSON_THROW_ON_ERROR);
+            // Decoded without associative arrays, so a JSON object such as {"0": "src/A.php"} stays an object and fails the list check.
+            return json_decode($contents, false, 2, JSON_THROW_ON_ERROR);
         } catch (JsonException $failure) {
             throw new ScopeFailure('the rector paths file '.$file.' does not decode: '.$failure->getMessage(), 0, $failure);
         }

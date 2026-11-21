@@ -103,6 +103,7 @@ final class RectorPathsFileTest extends TestCase
         yield 'an empty file' => ['', 'does not decode'];
         yield 'an empty list' => ['[]', 'holds no list of paths'];
         yield 'an object' => ['{"a": "src/A.php"}', 'holds no list of paths'];
+        yield 'an object with list keys' => ['{"0": "src/A.php"}', 'holds no list of paths'];
         yield 'a path that is not a string' => ['["src/A.php", 1]', 'holds no list of paths'];
         yield 'an empty path' => ['["src/A.php", ""]', 'holds no list of paths'];
         yield 'a nested list' => ['[["src/A.php"]]', 'does not decode'];
