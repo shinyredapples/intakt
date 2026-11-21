@@ -8,7 +8,7 @@ use Closure;
 use DateTimeImmutable;
 use Doctrine\DBAL\Configuration;
 use Doctrine\DBAL\DriverManager;
-use Doctrine\DBAL\Logging\Middleware as LoggingMiddleware;
+use Doctrine\DBAL\Logging\Middleware;
 use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Event\PrePersistEventArgs;
@@ -525,7 +525,7 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
 
             public function log(mixed $level, string|Stringable $message, array $context = []): void
             {
-                if (null === $this->late || !str_starts_with((string) ($context['sql'] ?? ''), 'UPDATE budget_outage_notice ')) {
+                if (!$this->late instanceof Closure || !str_starts_with(is_string($context['sql'] ?? null) ? $context['sql'] : '', 'UPDATE budget_outage_notice ')) {
                     return;
                 }
 
@@ -534,7 +534,7 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
                 $record();
             }
         };
-        $connection = DriverManager::getConnection($this->entities->getConnection()->getParams(), new Configuration()->setMiddlewares([new LoggingMiddleware($hook)]));
+        $connection = DriverManager::getConnection($this->entities->getConnection()->getParams(), new Configuration()->setMiddlewares([new Middleware($hook)]));
         $notices = new DoctrineOutageNotices(new EntityManager($connection, $this->entities->getConfiguration()), new LockFactory(new InMemoryStore()), self::createStub(LoggerInterface::class));
 
         $notices->noticeOnce(new UsageReadingsStayedAway(new Account(Provider::ClaudeCode, 'main'), new DateTimeImmutable('2026-11-02T08:00:00+00:00'), new DateTimeImmutable('2026-11-02T11:00:00+00:00')));
