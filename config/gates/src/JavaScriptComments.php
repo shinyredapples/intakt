@@ -17,6 +17,11 @@ final readonly class JavaScriptComments implements CommentLanguage
         return self::LINE_SYNTAX;
     }
 
+    public function holdsPhpCode(): bool
+    {
+        return false;
+    }
+
     public function commentsIn(string $source): array
     {
         return new JavaScriptLexer($source)->comments();
