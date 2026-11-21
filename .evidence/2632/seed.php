@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-// Seeds the Waiting on you page of a bin/instance install (#2632): two outages still waiting, one ended by a reading taken now, two reviews running.
+// Seeds a bin/instance install for the Waiting on you evidence of #2632, because a fresh install has no outage and no running review to show.
 
 use Doctrine\ORM\EntityManagerInterface;
 use Intakt\Core\Ai\Contract\Account;
@@ -41,7 +41,7 @@ if ('page' === $mode) {
         [LedgerEventKind::ReviewStarted, ['round' => '0195f3a0-0000-7000-8000-000000000001', 'project' => 'alpha', 'reviewers' => 2, 'change' => '42', 'number' => 2]],
         [LedgerEventKind::ReviewStarted, ['round' => '0195f3a0-0000-7000-8000-000000000002', 'project' => 'beta', 'reviewers' => 2, 'change' => '7', 'number' => 1]],
     ] as [$kind, $payload]) {
-        (void) $ledger->append(new LedgerEvent($kind, json_encode($payload, JSON_THROW_ON_ERROR)));
+        $appended[] = $ledger->append(new LedgerEvent($kind, json_encode($payload, JSON_THROW_ON_ERROR)));
     }
     $mode = 'end';
 }

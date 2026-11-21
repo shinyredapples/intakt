@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Intakt\Core\Budget\Infrastructure;
 
 use DateTimeImmutable;
-use DateTimeZone;
 use Doctrine\ORM\EntityManagerInterface;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Budget\Contract\MeasuredUse;
@@ -111,11 +110,11 @@ final readonly class DoctrineMeasuredUse implements MeasuredUse
             ->getQuery()
             ->getSingleScalarResult();
 
-        return null === $latest ? null : new DateTimeImmutable($latest, new DateTimeZone('UTC'));
+        /** @var DateTimeImmutable|null */
+        return $this->entities->getConnection()->convertToPHPValue($latest, 'utc_datetime_immutable');
     }
 
-    // One statement, so two workers ending one outage at once need no lock; the earlier reading wins, because a slow writer can store its reading after a later one.
-    // A reading of the account between the outage and this one already ended it, so a notice with no end from before ends were kept stays without one instead of ending now.
+    // One statement, so two workers ending one outage at once need no lock; the earlier reading wins, because a slow writer can store its reading after a later one; a reading between the outage and this one already ended it, so a notice left with no end from before ends were kept is not ended now.
     private function endOutagesBefore(WindowReadingRecord $record, ?DateTimeImmutable $previous): void
     {
         $query = $this->entities->createQueryBuilder()
