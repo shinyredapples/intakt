@@ -155,6 +155,21 @@ final class HighlightsWorkflowTest extends TestCase
         self::assertSame([], $this->secretReferencesBesidesTheLogin($this->withBuildSteps($steps)));
     }
 
+    public function testAValueUnderAKeyNamedIfOutsideAJobOrStepConditionIsAPlainString(): void
+    {
+        $steps = [['uses' => 'x', 'env' => ['if' => 'keep secrets out of the log'], 'with' => ['if' => 'secrets stay out']]];
+
+        self::assertSame([], $this->secretReferencesBesidesTheLogin($this->withBuildSteps($steps)));
+    }
+
+    public function testAJobConditionAndAStepConditionReadingSecretsAreFound(): void
+    {
+        $workflow = $this->withBuildSteps([['if' => "secrets.STEP != ''", 'run' => 'true']]);
+        $workflow['jobs']['build']['if'] = "secrets.JOB != ''";
+
+        self::assertSame(["secrets.STEP != ''", "secrets.JOB != ''"], $this->secretReferencesBesidesTheLogin($workflow));
+    }
+
     public function testASecretAnywhereOutsideTheStepsIsFound(): void
     {
         $workflow = ['env' => ['TOP' => '${{ secrets.TOP }}'], 'jobs' => ['build' => [
@@ -203,7 +218,7 @@ final class HighlightsWorkflowTest extends TestCase
     private function secretReferencesBesidesTheLogin(mixed $node, string $path = ''): array
     {
         if (is_string($node)) {
-            return array_values(array_filter($this->expressions($node, str_ends_with($path, '/if')), $this->readsSecrets(...)));
+            return array_values(array_filter($this->expressions($node, 1 === preg_match('#^/jobs/[^/]+(?:/steps/\d+)?/if$#', $path)), $this->readsSecrets(...)));
         }
 
         if (!is_array($node)) {
@@ -232,7 +247,7 @@ final class HighlightsWorkflowTest extends TestCase
         return ['jobs' => ['build' => ['steps' => $steps]]];
     }
 
-    // GitHub reads an if: value as an expression even without ${{ }}, so it is scanned whole; other values only inside it.
+    // GitHub reads a job or step if: as an expression even without ${{ }}, so it is scanned whole; other values only inside it.
     /**
      * @return list<string>
      */
