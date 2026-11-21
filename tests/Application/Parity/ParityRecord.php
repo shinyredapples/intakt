@@ -21,8 +21,8 @@ final readonly class ParityRecord
     // GitHub renders a `*`, `+` or numbered item as a list item too, so in a judged section any item without the exact checkbox is reported, not skipped.
     private const string LIST_ITEM = '/^\s*(?:[-*+]|\d+[.)])(?:\s|$)/';
 
-    // Because the words alone can stand in a sentence that denies them, only the record's own form counts, and it must name the task that builds the rest.
-    private const string NOT_BUILT = '/(?:^\s*|\(|; )not built yet(?: \(|: )[^)]*?\b(T\d+)\b/';
+    // Because the words alone can stand in a sentence that denies them, only the record's own form counts: it names the tasks that build the rest, and it is closed and ends the line, so no later remark can take it back.
+    private const string NOT_BUILT = '/(?:^\s*|\(|; )not built yet(?| \((?:[^()]*, )?(T\d+(?: and T\d+)*)\)|: (?:[^()]*, )?(T\d+(?: and T\d+)*)\)?)\s*$/';
 
     private const string NOT_BUILT_FORM = 'an open item must say after `Intakt:` what is not built yet, as `not built yet (<what>, T<n>)` or `not built yet: <what>, T<n>`';
 
@@ -61,15 +61,16 @@ final readonly class ParityRecord
     }
 
     /**
-     * @return array<string, string>
+     * @return array<string, list<string>>
      */
     public function notBuiltItems(string $record): array
     {
         $items = [];
-        foreach ($this->linesWithSections($record) as [, $line, $section]) {
-            $task = $this->isJudgedOpenItem($line, $section) ? $this->notBuiltTaskOf($line) : null;
-            if (null !== $task) {
-                $items[sprintf('%s: %s', $section, $this->nameOf($line))] = $task;
+        foreach ($this->linesWithSections($record) as [$number, $line, $section]) {
+            $tasks = $this->isJudgedOpenItem($line, $section) ? $this->notBuiltTasksOf($line) : null;
+            if (null !== $tasks) {
+                // The line number keeps two items that start with the same sentence apart, so neither drops out of the list.
+                $items[sprintf('%s, line %d: %s', $section, $number, $this->nameOf($line))] = $tasks;
             }
         }
 
@@ -121,7 +122,7 @@ final readonly class ParityRecord
         }
 
         $problems = $names->problemsOf($line) ?? [];
-        if (null === $this->notBuiltTaskOf($line)) {
+        if (null === $this->notBuiltTasksOf($line)) {
             $problems[] = self::NOT_BUILT_FORM;
         }
 
@@ -133,14 +134,17 @@ final readonly class ParityRecord
         return in_array($section, self::JUDGED_SECTIONS, true) && 1 === preg_match(self::OPEN_ITEM, $line);
     }
 
-    private function notBuiltTaskOf(string $item): ?string
+    /**
+     * @return ?list<string>
+     */
+    private function notBuiltTasksOf(string $item): ?array
     {
         $start = strpos($item, IntaktTestNames::INTAKT_PART);
         if (false === $start || 1 !== preg_match(self::NOT_BUILT, substr($item, $start + strlen(IntaktTestNames::INTAKT_PART)), $status)) {
             return null;
         }
 
-        return $status[1];
+        return explode(' and ', $status[1]);
     }
 
     private function nameOf(string $item): string
