@@ -10,7 +10,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversNothing]
 final class ReadmeRoadmapPictureTest extends TestCase
 {
-    private const array MILESTONES = ['M0 Unblock', 'M1 Review core', 'M2 Panel and rounds', 'M3 Agents and memory', 'M4 Live dashboard', 'M5 Demo', 'M6 Shadow', 'M7 Builder half', 'M8 Switch'];
+    private const array MILESTONES = ['M0 Unblock', 'M1 Review core', 'M2 Panel and rounds', 'M3 Agents and memory', 'M4 Live dashboard', 'M5 Demo', 'M6 Runs alongside', 'M7 Builder half', 'M8 Switch'];
 
     public function testTheRoadmapPictureServesTheDarkImageForADarkColorScheme(): void
     {
@@ -59,7 +59,7 @@ final class ReadmeRoadmapPictureTest extends TestCase
     {
         $alt = $this->imgAttribute('alt');
 
-        self::assertStringContainsString('started 24 Oct', $alt);
+        self::assertStringContainsString('started 24 Oct by a custom build loop', $alt);
         self::assertStringContainsString('we are here', $alt);
         self::assertStringContainsString('22 Nov', $alt);
         foreach (self::MILESTONES as $milestone) {

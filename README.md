@@ -141,7 +141,7 @@ Development continues after the hackathon: [the hackathon page](docs/hackathon.m
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/roadmap-dark.svg" width="560" height="156">
-    <img src="docs/assets/roadmap-light.svg" alt="Intakt roadmap: started 24 Oct; done: M0 Unblock, M1 Review core, M2 Panel and rounds, M3 Agents and memory, M4 Live dashboard; we are here, with the octopus: M5 Demo, the hackathon release, 22 Nov; next: M6 Shadow, M7 Builder half (Intakt builds as well as reviews), M8 Switch (Intakt builds itself)" width="560" height="156" loading="lazy">
+    <img src="docs/assets/roadmap-light.svg" alt="Intakt roadmap: started 24 Oct by a custom build loop; done: M0 Unblock, M1 Review core, M2 Panel and rounds, M3 Agents and memory, M4 Live dashboard; we are here, with the octopus: M5 Demo, the hackathon release, 22 Nov; next: M6 Runs alongside (beside the build loop), M7 Builder half (Intakt builds as well as reviews), M8 Switch (Intakt builds itself)" width="560" height="156" loading="lazy">
   </picture>
 </p>
 
