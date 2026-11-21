@@ -77,7 +77,8 @@ Counted on 2026-11-20 from the repository: 7,289 commits on main (counted), 27 u
 Development continues. The next milestones, from [the plan](plan.md) and the
 [GitHub milestones](https://github.com/shinyredapples/intakt/milestones):
 
-- **M6 Shadow:** Intakt reviews pull requests on GitHub and posts the result.
+- **M6 Runs alongside (the shadow phase):** Intakt runs beside the build loop that developed it, takes the place of
+  one of its reviewers on pull requests on GitHub, and its verdict counts.
 - **M7 Builder half:** Intakt builds a task from an issue to a pull request.
 - **M8 Switch:** Intakt runs its own loop.
 
