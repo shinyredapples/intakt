@@ -48,6 +48,9 @@ final class ShippedRecordingTest extends TestCase
         $judged = array_values(array_filter($events, static fn (RecordedLedgerEvent $event): bool => LedgerEventKind::JudgeDone === $event->kind));
 
         self::assertCount(2, $reported);
+        $reviewers = array_map(static fn (RecordedLedgerEvent $event): mixed => json_decode($event->payload, true, flags: JSON_THROW_ON_ERROR)['reviewer'] ?? null, $reported);
+        self::assertCount(2, array_unique($reviewers));
+        self::assertNotContains(null, $reviewers);
         self::assertCount(1, $judged);
         $answer = json_decode($judged[0]->payload, true, flags: JSON_THROW_ON_ERROR);
         self::assertIsArray($answer);
