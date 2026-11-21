@@ -34,19 +34,16 @@ final class TrendsTileStylesTest extends TestCase
     public function testOnAPhoneATilesTooltipSpansTwoColumnsAndTheGapBetweenThem(): void
     {
         $phoneRules = $this->rulesOf(implode("\n", $this->phoneBlocks()[1]));
-        self::assertMatchesRegularExpression('/gap:\s*(var\(--s\d+\));/', $phoneRules['.tiles'] ?? '', 'the phone grid names its gap');
-        preg_match('/gap:\s*(var\(--s\d+\));/', $phoneRules['.tiles'] ?? '', $gap);
 
-        self::assertStringContainsString('width: calc(200% + '.$gap[1].');', $phoneRules['.tile .term-tip'] ?? '');
+        self::assertStringContainsString('width: calc(200% + '.$this->phoneGap().');', $phoneRules['.tile .term-tip'] ?? '');
         self::assertMatchesRegularExpression('/right:\s*auto;/', $phoneRules['.tile .term-tip'] ?? '');
     }
 
     public function testOnAPhoneTheMiddleTilesTooltipIsCenteredOnItSoItStaysInsideTheGrid(): void
     {
         $phoneRules = $this->rulesOf(implode("\n", $this->phoneBlocks()[1]));
-        preg_match('/gap:\s*(var\(--s\d+\));/', $phoneRules['.tiles'] ?? '', $gap);
 
-        self::assertStringContainsString('left: calc(-50% - '.($gap[1] ?? '?').' / 2);', $phoneRules['.tile:nth-child(3n+2) .term-tip'] ?? '');
+        self::assertStringContainsString('left: calc(-50% - '.$this->phoneGap().' / 2);', $phoneRules['.tile:nth-child(3n+2) .term-tip'] ?? '');
     }
 
     public function testOnAPhoneTheLastTileOfARowOpensItsTooltipToTheLeft(): void
@@ -73,6 +70,16 @@ final class TrendsTileStylesTest extends TestCase
         preg_match_all('/@media \(max-width: 760px\) \{(.*?)\n\}/s', $this->sheet(), $blocks);
 
         return [$blocks[0], $blocks[1]];
+    }
+
+    private function phoneGap(): string
+    {
+        $grid = $this->rulesOf(implode("\n", $this->phoneBlocks()[1]))['.tiles'] ?? '';
+        if (1 !== preg_match('/gap:\s*(var\(--s\d+\));/', $grid, $gap)) {
+            self::fail('The phone grid names no gap.');
+        }
+
+        return $gap[1];
     }
 
     private function sheetOutsideThePhoneRules(): string
