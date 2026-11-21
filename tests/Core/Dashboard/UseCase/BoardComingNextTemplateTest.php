@@ -35,8 +35,8 @@ final class BoardComingNextTemplateTest extends DashboardPageTestCase
         self::assertStringNotContainsString('Building,', $html);
     }
 
-    // No install can put a card in Planned yet (#3155, decision 2), so the template is handed the lists a board with a Planned task would give it.
-    public function testAPlannedColumnThatHoldsATaskRendersInItsPlaceWithItsHeadAndCountAndLeavesTheComingNextLine(): void
+    // No install can put a card in Planned yet (#3155, decision 2), so the template is handed the lists a board with a Planned task would give it; the count is the empty board's own, and the test pins the column's place, head and count.
+    public function testAShownPlannedColumnRendersInItsPlaceWithItsHeadAndCountAndLeavesTheComingNextLine(): void
     {
         $html = $this->board(
             [BoardColumn::WaitingOnYou, BoardColumn::Planned, BoardColumn::InReview, BoardColumn::Done],
