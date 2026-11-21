@@ -219,6 +219,12 @@ final class MainHistoryTest extends TestCase
             {
                 return $this->history->signatureOf($commit);
             }
+
+            #[Override]
+            public function broughtInBy(RecordedMerge $merge): array
+            {
+                return $this->history->broughtInBy($merge);
+            }
         };
 
         $classification = new CommitClassifier($forcePushAfterTheAncestryCheck)->classify(new WatchedMain($seen, []));
