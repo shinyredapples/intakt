@@ -126,12 +126,14 @@ final class MainHistoryTest extends TestCase
     public function testACommitWithASecondSignatureHeaderIsAnUnknownKeyEvenWhenTheFirstVerifies(): void
     {
         $this->repository->commitEmpty('Seen');
-        $original = $this->repository->commitSignedWith($this->privateKey('owner'), 'Owner change');
-        $signed = $this->repository->rawCommit($original);
-        [$headers, $message] = explode("\n\n", $signed, 2);
-        $signature = substr($headers, (int) strpos($headers, "\ngpgsig "));
-        self::assertSame($original, $this->repository->commitObject($signed), 'The crafted commit must start from the exact bytes the owner signed.');
-        $commit = $this->repository->commitObject($headers.$signature."\n\n".$message);
+        [$headers, $message] = explode("\n\n", $this->repository->rawCommit($this->repository->commitEmpty('Owner change')), 2);
+        // The owner signs a payload that already holds the second header, so a parser that strips only the first header rebuilds exactly the signed bytes.
+        $second = "\ngpgsig -----BEGIN SSH SIGNATURE-----";
+        $payload = $this->keys.'/payload';
+        file_put_contents($payload, $headers.$second."\n\n".$message);
+        new Process(['ssh-keygen', '-q', '-Y', 'sign', '-n', 'git', '-f', $this->privateKey('owner'), $payload])->mustRun();
+        $signature = str_replace("\n", "\n ", rtrim((string) file_get_contents($payload.'.sig')));
+        $commit = $this->repository->commitObject($headers."\ngpgsig ".$signature.$second."\n\n".$message);
 
         self::assertSame(SignatureStatus::UnknownKey, $this->history([$this->publicKey('owner')])->signatureOf($commit));
     }
@@ -446,6 +448,8 @@ final class MainHistoryTest extends TestCase
         yield 'a security key point off its curve' => [self::key($securityKeyType, [$securityKeyType, 'nistp256', "\x04".str_repeat("\x01", 64), 'ssh:'])];
         yield 'an rsa modulus of zero' => [self::key('ssh-rsa', ['ssh-rsa', "\x01\x00\x01", "\x00"])];
         yield 'an rsa modulus encoded as a negative mpint' => [self::key('ssh-rsa', ['ssh-rsa', "\x01\x00\x01", "\x80".str_repeat("\x01", 127)])];
+        yield 'an rsa exponent encoded as a negative mpint' => [self::key('ssh-rsa', ['ssh-rsa', "\x80\x01", "\x00\x80".str_repeat("\x01", 127)])];
+        yield 'an rsa exponent of zero' => [self::key('ssh-rsa', ['ssh-rsa', "\x00\x00", "\x00\x80".str_repeat("\x01", 127)])];
         yield 'an rsa modulus of 1023 bits' => [self::key('ssh-rsa', ['ssh-rsa', "\x01\x00\x01", "\x00\x7f".str_repeat("\xff", 127)])];
         yield 'an ecdsa point in hybrid form' => [self::key('ecdsa-sha2-nistp256', ['ecdsa-sha2-nistp256', 'nistp256', "\x07".substr(self::P256_GENERATOR, 1)])];
         yield 'a key type the check does not know' => [self::key('ssh-unknown', ['ssh-unknown', str_repeat("\x01", 32)])];

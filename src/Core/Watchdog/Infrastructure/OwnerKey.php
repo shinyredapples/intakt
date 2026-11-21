@@ -95,12 +95,18 @@ final readonly class OwnerKey
      */
     private static function isAKeyOpenSshReads(string $plain, array $fields): bool
     {
-        // Only the second field, because it holds the RSA modulus or the ECDSA point, the one part ssh-keygen judges beyond its length.
+        // The RSA exponent must be a positive number, and the second field holds the RSA modulus or the ECDSA point, the one part ssh-keygen judges beyond its length.
         return match ($plain) {
             'ssh-ed25519' => true,
-            'ssh-rsa' => self::modulusBits($fields[1]) >= self::RSA_MINIMUM_BITS,
+            'ssh-rsa' => self::isAPositiveNumber($fields[0]) && self::modulusBits($fields[1]) >= self::RSA_MINIMUM_BITS,
             default => self::isOnItsCurve($plain, $fields[1]),
         };
+    }
+
+    private static function isAPositiveNumber(string $mpint): bool
+    {
+        // Not positive when the top bit is set, because that makes the SSH number negative, nor when only zero bytes are left.
+        return '' !== $mpint && ord($mpint[0]) < 0x80 && '' !== ltrim($mpint, "\x00");
     }
 
     private static function modulusBits(string $modulus): int

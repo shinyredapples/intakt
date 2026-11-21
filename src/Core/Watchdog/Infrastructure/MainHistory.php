@@ -81,6 +81,7 @@ final readonly class MainHistory implements CommitHistory
     /**
      * @throws RepositoryAttributesRefused
      * @throws RuntimeException
+     * @throws IOException
      */
     public function signatureOf(string $commit): SignatureStatus
     {
@@ -204,6 +205,9 @@ final readonly class MainHistory implements CommitHistory
         return $lines;
     }
 
+    /**
+     * @throws IOException
+     */
     private function ownerSigned(string $payload, string $signature): bool
     {
         if (!str_starts_with($signature, self::SSH_ARMOR."\n") || [] === $this->ownerKeys) {
