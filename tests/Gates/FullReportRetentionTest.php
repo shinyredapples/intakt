@@ -151,7 +151,9 @@ final class FullReportRetentionTest extends SandboxTestCase
      */
     private function generatedReportsIn(string $root): array
     {
-        $names = array_values(preg_grep('~^report-[0-9a-f]{16}\.json$~', scandir($root.'/'.FullReport::FOLDER) ?: []) ?: []);
+        $listed = scandir($root.'/'.FullReport::FOLDER);
+        self::assertIsArray($listed);
+        $names = array_values(array_filter($listed, static fn (string $name): bool => 1 === preg_match('~^report-[0-9a-f]{16}\.json$~', $name)));
         sort($names);
 
         return $names;

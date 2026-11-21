@@ -68,16 +68,26 @@ final readonly class FullReport
     {
         $times = [];
 
-        foreach (preg_grep(self::GENERATED, @scandir($folder) ?: []) ?: [] as $name) {
+        foreach ($this->generatedNamesIn($folder) as $name) {
             $path = $folder.'/'.$name;
-            $time = $name === $written || is_link($path) || !is_file($path) ? false : @filemtime($path);
 
-            if (false !== $time) {
-                $times[$path] = $time;
+            if ($name !== $written && !is_link($path) && is_file($path)) {
+                $times[$path] = (int) @filemtime($path);
             }
         }
 
         return $times;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function generatedNamesIn(string $folder): array
+    {
+        $names = @scandir($folder);
+        $generated = false === $names ? false : preg_grep(self::GENERATED, $names);
+
+        return false === $generated ? [] : array_values($generated);
     }
 
     // Because a report the summary names must hold everything, a failed or short write leaves no file, and its warning never reaches stdout between the JSON lines.
