@@ -108,7 +108,7 @@ final class ParityRecordTest extends TestCase
             'Operations, line 90: Drain stops build admission on every slot while the review lane runs; unlike the reference, drain wins over pause, because a drain also stops merges and the strictest hold decides.',
             'Operations, line 91: A crash in one build slot is recovered without touching another slot\'s step.',
             'Operations, line 92: Each project\'s prompts and posted text name only that project.',
-        ],array_keys(self::notBuiltItemsOfTheRecord()));
+        ], array_keys(self::notBuiltItemsOfTheRecord()));
     }
 
     /**
