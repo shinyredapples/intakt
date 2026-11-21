@@ -4,13 +4,11 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\Infrastructure;
 
-use Intakt\Core\Budget\Contract\EndedOutageNotice;
 use Intakt\Core\Budget\Contract\OutageNotice;
 use Intakt\Core\Budget\Contract\OwnerNotices;
 use Intakt\Core\Dashboard\Contract\DashboardServices;
 use Intakt\Core\Dashboard\Domain\HandledLine;
 use Intakt\Core\Dashboard\Domain\MeanwhileLine;
-use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\WaitingItem;
 use Intakt\Core\Dashboard\Domain\WaitingPage;
 use Symfony\Component\Clock\ClockInterface;

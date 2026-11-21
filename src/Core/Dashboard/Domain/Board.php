@@ -42,7 +42,7 @@ final readonly class Board
      */
     public function runningReviews(): array
     {
-        return array_reverse(array_values(array_filter($this->cards, static fn (Review $card): bool => null !== $card->activeRound())));
+        return array_reverse(array_values(array_filter($this->cards, static fn (Review $card): bool => $card->activeRound() instanceof ReviewedRound)));
     }
 
     // From the cards in their order, so the newest review's reviewers come first.

@@ -157,8 +157,8 @@ final class LiveWaitingPageTest extends KernelTestCase
         $published = new PublishedLiveEvents();
         $other = $this->pageOn($published);
         $notices = $this->notices;
-        $live = new class($published, $notices, $other) implements LiveUpdates {
-            public function __construct(private readonly PublishedLiveEvents $published, private readonly ChangingOwnerNotices $notices, private readonly LiveWaitingPage $other)
+        $live = new readonly class($published, $notices, $other) implements LiveUpdates {
+            public function __construct(private PublishedLiveEvents $published, private ChangingOwnerNotices $notices, private LiveWaitingPage $other)
             {
             }
 
