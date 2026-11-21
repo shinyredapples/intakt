@@ -9,6 +9,8 @@ use Intakt\Core\Dashboard\Domain\RoundFinding;
 use Intakt\Core\Dashboard\Infrastructure\LedgerPayload;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
+use Intakt\Core\Review\Contract\CountedQuotes;
+use Intakt\Core\Review\Contract\QuotesCounted;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -18,6 +20,8 @@ use Symfony\Component\DomCrawler\Crawler;
 #[CoversClass(RoundFinding::class)]
 #[UsesClass(LedgerRounds::class)]
 #[UsesClass(LedgerPayload::class)]
+#[UsesClass(CountedQuotes::class)]
+#[UsesClass(QuotesCounted::class)]
 final class JudgedRoundFindingsPageTest extends DashboardPageTestCase
 {
     public function testAJudgedFindingIsACardWithItsSeverityChipFileAndLineAndTheCallInWords(): void
@@ -150,7 +154,104 @@ final class JudgedRoundFindingsPageTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame([['P2', 'F1', 'Call ghostName first <b>now</b>.', 'src/A.php:3', 'Dropped before the judge: none of its 1 quoted code fragments is in the change']], $this->cardsOf($crawler->filter('#round-round-1 [data-dropped]')));
+        self::assertSame([['P2', 'F1', 'Call ghostName first <b>now</b>.', 'src/A.php:3', 'Quote not found in the code']], $this->cardsOf($crawler->filter('#round-round-1 [data-dropped]')));
+        self::assertSame('Dropped before the judge: none of its 1 quoted code fragments is in the change', $crawler->filter('#round-round-1 [data-dropped] .fc-reason')->text());
+    }
+
+    public function testTheQuotedCodeDisclosureOfADroppedFindingStartsClosed(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeWithOnlyADroppedFinding('round-1', 'Call `ghostName`.', 'none of its 1 quoted code fragments is in the change');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        $disclosure = $crawler->filter('#round-round-1 [data-dropped] details.fc-quotes');
+        self::assertSame('Quoted code', $disclosure->filter('summary')->text());
+        self::assertNull($disclosure->attr('open'));
+    }
+
+    public function testTheQuotedCodeDisclosureEscapesTheQuoteAndTheReason(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeWithOnlyADroppedFinding('round-1', 'Call `<img src=x onerror=ghost(1)>`.', '<b onclick=alert(1)>none</b>');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        $disclosure = $crawler->filter('#round-round-1 [data-dropped] details.fc-quotes');
+        self::assertCount(0, $disclosure->filter('img, b'));
+        self::assertSame(['<img src=x onerror=ghost(1)>'], $this->quotesIn($disclosure));
+        self::assertSame('Dropped before the judge: <b onclick=alert(1)>none</b>', $disclosure->filter('.fc-reason')->text());
+    }
+
+    public function testADroppedFindingWithNoCheckedQuotesShowsOnlyTheReason(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeWithOnlyADroppedFinding('round-1', 'Read `orders.log` at line `42`.', 'none of its 1 quoted code fragments is in the change');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        $disclosure = $crawler->filter('#round-round-1 [data-dropped] details.fc-quotes');
+        self::assertSame('Quoted code Dropped before the judge: none of its 1 quoted code fragments is in the change', $disclosure->text());
+    }
+
+    public function testADroppedFindingWithAStrayBacktickListsOnlyTheQuoteTheCheckCounted(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeWithOnlyADroppedFinding('round-1', 'A stray ` appears before `ghostName`.', 'none of its 1 quoted code fragments is in the change');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame(['ghostName'], $this->quotesIn($crawler->filter('#round-round-1 [data-dropped] details.fc-quotes')));
+    }
+
+    public function testADroppedFindingWithAFencedSuggestedFixListsNoLineOfTheBlock(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeWithOnlyADroppedFinding('round-1', "`ghostName` is not defined. Suggested fix:\n```js\nrun(`otherName`);\n```", 'none of its 1 quoted code fragments is in the change');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame(['ghostName'], $this->quotesIn($crawler->filter('#round-round-1 [data-dropped] details.fc-quotes')));
+    }
+
+    public function testTheListedQuotesAreAsManyAsTheRecordedReasonCountsAndSayWhatIsNotChecked(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeWithOnlyADroppedFinding('round-1', 'Substring matches can include other customers (for example, `ann` matching `joanne`), and the relative `orders.log` depends on where it runs.', 'none of its 2 quoted code fragments is in the change');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        $disclosure = $crawler->filter('#round-round-1 [data-dropped] details.fc-quotes');
+        self::assertSame(['ann', 'joanne'], $this->quotesIn($disclosure));
+        self::assertSame('File names, numbers and suggested-fix blocks are not checked.', $disclosure->filter('.fc-unchecked')->text());
+    }
+
+    public function testARepeatedQuoteIsListedEachTimeTheRecordedReasonCountsIt(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeWithOnlyADroppedFinding('round-1', 'Call `ghostName` once, not `ghostName` twice.', 'none of its 2 quoted code fragments is in the change');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame(['ghostName', 'ghostName'], $this->quotesIn($crawler->filter('#round-round-1 [data-dropped] details.fc-quotes')));
+    }
+
+    public function testAQuoteThatWrapsOntoTheNextLineKeepsItsLineBreak(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeWithOnlyADroppedFinding('round-1', "Call `ghostName(\n    other)` here.", 'none of its 1 quoted code fragments is in the change');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame("ghostName(\n    other)", $crawler->filter('#round-round-1 [data-dropped] details.fc-quotes .fc-quote-list code')->text(normalizeWhitespace: false));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function quotesIn(Crawler $disclosure): array
+    {
+        return $disclosure->filter('.fc-quote-list code')->each(static fn (Crawler $code): string => $code->text());
     }
 
     public function testADroppedFindingCanBeReachedByFindingNavigation(): void

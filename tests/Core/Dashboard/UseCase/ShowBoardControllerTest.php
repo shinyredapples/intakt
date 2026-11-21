@@ -8,6 +8,7 @@ use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Dashboard\Domain\Board;
 use Intakt\Core\Dashboard\Domain\BoardColumn;
+use Intakt\Core\Dashboard\Domain\Character;
 use Intakt\Core\Dashboard\Domain\FailingHead;
 use Intakt\Core\Dashboard\Domain\HeadFault;
 use Intakt\Core\Dashboard\Domain\Headline;
@@ -39,6 +40,7 @@ use Symfony\Component\HttpFoundation\Response;
 #[UsesClass(LedgerRounds::class)]
 #[UsesClass(Board::class)]
 #[UsesClass(BoardColumn::class)]
+#[UsesClass(Character::class)]
 #[UsesClass(Review::class)]
 #[UsesClass(ReviewedRound::class)]
 #[UsesClass(ReviewOutcome::class)]
@@ -311,14 +313,43 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         self::assertCount(0, $lead->filter('b'));
     }
 
-    public function testTheBoardShowsTheNineColumnsInTheOrderOfTheDesign(): void
+    public function testAFreshInstallsBoardShowsWaitingOnYouInReviewAndDoneInTheOrderOfTheDesign(): void
     {
         $page = $this->browser->request('GET', '/');
 
         self::assertSame(
-            ['Waiting on you', 'Backlog', 'Ready', 'Planned', 'Building', 'Checking', 'In review', 'Merging', 'Done'],
+            ['Waiting on you', 'In review', 'Done'],
             $page->filter('.board > section.col .col-head h3')->each(static fn (Crawler $name): string => $name->text()),
         );
+    }
+
+    public function testAFreshInstallsBoardNamesTheEmptyColumnsOfFeaturesNotRunningYetInOneComingNextLine(): void
+    {
+        $line = $this->browser->request('GET', '/')->filter('p.coming-next');
+
+        self::assertCount(1, $line);
+        self::assertSame('Coming next Backlog, Ready, Planned, Building, Checking and Merging show here once a task is in one of them', $line->text());
+        self::assertSame(['Coming next'], $line->filter('.chip')->each(static fn (Crawler $chip): string => $chip->text()));
+    }
+
+    // A label and no control, because the line has nothing to open (#3154).
+    public function testTheComingNextLineIsTextWithoutAButtonOrLink(): void
+    {
+        $line = $this->browser->request('GET', '/')->filter('p.coming-next');
+
+        self::assertCount(0, $line->filter('button, a, [tabindex]'));
+    }
+
+    public function testABoardWithReviewsKeepsTheEmptyColumnsOfFeaturesNotRunningYetInTheComingNextLine(): void
+    {
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+        $this->ledger->judgeRound('round-1');
+        $this->ledger->startRoundOf('43', 'round-2', 1);
+
+        $page = $this->browser->request('GET', '/');
+
+        self::assertCount(0, $page->filter('#col-backlog, #col-ready, #col-planned, #col-building, #col-checking, #col-merging'));
+        self::assertCount(1, $page->filter('p.coming-next'));
     }
 
     public function testAReviewWhoseLatestRoundRunsIsACardInInReview(): void
@@ -360,7 +391,7 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
 
         $page = $this->browser->request('GET', '/');
 
-        $empty = array_values(array_filter(BoardColumn::cases(), static fn (BoardColumn $column): bool => BoardColumn::InReview !== $column));
+        $empty = [BoardColumn::WaitingOnYou, BoardColumn::Done];
         self::assertSame(
             array_map(static fn (BoardColumn $column): string => $column->value.': '.$column->emptyLine(), $empty),
             $page->filter('.board > section.col')->reduce(static fn (Crawler $column): bool => 1 === $column->filter('.col-empty')->count())->each(static fn (Crawler $column): string => $column->filter('h3')->text().': '.$column->filter('.col-empty')->text()),
@@ -400,15 +431,16 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         self::assertStringNotContainsString('needs', (string) $count->attr('class'));
     }
 
-    public function testOnlyBacklogAndDoneStartCollapsedWhileAReviewRuns(): void
+    // Backlog folds too once it holds a task, but it holds none yet, so it is in the Coming next line instead of on the board.
+    public function testOnlyDoneStartsCollapsedWhileAReviewRuns(): void
     {
         $this->ledger->startRoundOf('42', 'round-1', 1);
 
         $page = $this->browser->request('GET', '/');
 
-        self::assertSame(['col-backlog', 'col-done'], $page->filter('.board > section.col.collapsed')->each(static fn (Crawler $column): string => (string) $column->attr('id')));
-        self::assertCount(2, $page->filter('.board .col-fold'));
-        self::assertCount(2, $page->filter('.board .col-hide'));
+        self::assertSame(['col-done'], $page->filter('.board > section.col.collapsed')->each(static fn (Crawler $column): string => (string) $column->attr('id')));
+        self::assertCount(1, $page->filter('.board .col-fold'));
+        self::assertCount(1, $page->filter('.board .col-hide'));
     }
 
     public function testTheFinishedReviewsCardIsVisibleOnArrivalWhenNothingElseIsOnTheBoard(): void
@@ -467,7 +499,6 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         $page = $this->browser->request('GET', '/');
 
         self::assertSame('Show Done1 task', $this->column($page, 'Done')->filter('button.col-fold')->text());
-        self::assertSame('Show Backlog0 tasks', $this->column($page, 'Backlog')->filter('button.col-fold')->text());
         self::assertSame(['Show ', ' task'], $this->column($page, 'Done')->filter('button.col-fold .sr-only')->each(static fn (Crawler $hidden): string => $hidden->text(normalizeWhitespace: false)));
         self::assertNull($this->column($page, 'Done')->filter('button.col-fold')->attr('aria-label'));
     }
@@ -485,9 +516,11 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
 
     public function testACollapsedColumnOffersHideInItsHeadNamingTheColumn(): void
     {
-        $hide = $this->column($this->browser->request('GET', '/'), 'Backlog')->filter('.col-head button.col-hide');
+        $this->ledger->startRoundOf('42', 'round-1', 1);
 
-        self::assertSame(['Hide', 'Hide Backlog', 'button'], [$hide->text(), $hide->attr('aria-label'), $hide->attr('type')]);
+        $hide = $this->column($this->browser->request('GET', '/'), 'Done')->filter('.col-head button.col-hide');
+
+        self::assertSame(['Hide', 'Hide Done', 'button'], [$hide->text(), $hide->attr('aria-label'), $hide->attr('type')]);
     }
 
     public function testAnOpenColumnHasNoStripAndNoHide(): void
@@ -659,6 +692,21 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         self::assertStringStartsWith('correctness', $lanes->filter('.who')->text());
     }
 
+    public function testEachLaneLinksToTheReviewPageOfTheRoundItIsWorkingOn(): void
+    {
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+        $this->ledger->startReviewer('round-1', 'correctness');
+        $this->ledger->startRoundOf('43', 'round-2', 3);
+        $this->ledger->startReviewer('round-2', 'security');
+
+        $lanes = $this->browser->request('GET', '/')->filter('.working a.lane');
+
+        self::assertSame(
+            [['/reviews/round-1', 'Round 1'], ['/reviews/round-2', 'Round 3']],
+            $lanes->each(static fn (Crawler $lane): array => [$lane->attr('href'), $lane->filter('.meta span')->last()->text()]),
+        );
+    }
+
     public function testEachLaneShowsADecorative24PixelMeerkatInBothThemes(): void
     {
         $this->ledger->startRoundOf('42', 'round-1', 1);
@@ -783,12 +831,12 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         self::assertCount(0, $this->browser->request('GET', '/')->filter('a[href="/setup"]'));
     }
 
-    public function testOnAFreshInstallEveryColumnSaysWhatWillAppearInIt(): void
+    public function testOnAFreshInstallEveryShownColumnSaysWhatWillAppearInIt(): void
     {
         $page = $this->browser->request('GET', '/');
 
         self::assertSame(
-            array_map(static fn (BoardColumn $column): string => $column->emptyLine(), BoardColumn::cases()),
+            array_map(static fn (BoardColumn $column): string => $column->emptyLine(), [BoardColumn::WaitingOnYou, BoardColumn::InReview, BoardColumn::Done]),
             $page->filter('.board > section.col .col-empty')->each(static fn (Crawler $empty): string => $empty->text()),
         );
     }

@@ -17,7 +17,7 @@ one and merges what passes review.
 
 The repository's first commit with content is from 2026-10-26, the first day of the hackathon; the commit of
 2026-10-24 is GitHub's empty initial commit. Everything else was built inside the window. The milestones reached, with
-the dates from [the journey](journey.md#milestones):
+the dates from [the journey's milestones](journey.md#milestones) and, for 2026-10-27, its [timeline](journey.md#timeline):
 
 - **2026-10-26:** the design is written and the first pull requests are merged.
 - **2026-10-27:** 31 plan tasks with acceptance criteria, in the milestones M1 to M5.
@@ -37,7 +37,7 @@ the dates from [the journey](journey.md#milestones):
 - **The review page:** every round with its reviewers, their verdicts, the findings and the judge's call on each
   ([reading a verdict](user/README.md#reading-a-verdict), [a tour of the dashboard](guide/a-tour-of-the-dashboard.md)).
 - **Trends:** figures about the reviews of every project as tiles ([the Trends page](user/README.md#the-trends-page)).
-- **The review bench:** the panel found 11 of 15 planted defects (measured, 2026-11-16) with 2 false alarms
+- **The review bench:** a panel on Claude and GPT caught all 15 planted defects (measured, 2026-11-21, 3 false alarms); on open models the panel caught 11 of 15 (2026-11-16) with 2 false alarms
   ([review bench](../README.md#review-bench)).
 - **MCP tools and the agent skill:** your agent starts reviews, reads the findings and loops until the verdict is clean
   ([MCP](user/mcp.md), [the skill](../skills/intakt-review/README.md)).
