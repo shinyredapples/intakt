@@ -67,7 +67,7 @@ final readonly class Verdict
         return array_values(array_unique(array_intersect($ids, self::FAILED_REVIEWS)));
     }
 
-    // A reviewer's own blocked that names findings asks for changes, because every view and the quorum read the stored decision; Intakt's failure verdicts stay blocked.
+    // A reviewer's own blocked that names findings asks for changes, because every view and the quorum read the stored decision; Intakt's failure verdicts stay blocked. Apply it only to a fresh verdict, never to a stored one, because a stored verdict reads back with origin Reviewer and a stored failure verdict would turn into changes.
     public function asRecorded(): self
     {
         if (Decision::Blocked !== $this->verdict || [] === $this->findings || VerdictOrigin::Intakt === $this->origin) {

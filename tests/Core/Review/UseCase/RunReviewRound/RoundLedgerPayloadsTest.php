@@ -309,6 +309,21 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
         ], $payload['findings']);
     }
 
+    public function testAP2MergedIntoAnActEntryAtOnePlaceKeepsItsJudgesNoteOnItsOwnRecord(): void
+    {
+        $round = new RoundFixture(self::getContainer())->start(1);
+        $ledger = new InMemoryLedger();
+        $findings = [$this->findingAt('F1', Severity::P1, 7), $this->findingAt('F2', Severity::P2, 7)];
+        $judgement = new Judgement([new JudgedFinding('F1', Mark::Act), new JudgedFinding('F2', Mark::Defer, note: 'Not reachable.')]);
+
+        $this->roundLedger($ledger)->judgeDone($round, JudgedFindings::of($judgement, $findings), []);
+
+        self::assertSame([
+            ['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of F1.', 'merged' => ['F2'], 'file' => 'src/A.php', 'line' => 7, 'judge_note' => null],
+            ['id' => 'F2', 'severity' => 'P2', 'text' => 'Text of F2.', 'merged' => [], 'file' => 'src/A.php', 'line' => 7, 'judge_note' => 'Not reachable.'],
+        ], $ledger->payloads()[0]['findings']);
+    }
+
     public function testAJudgeRowWrittenWithoutFileAndLineStillReadsWithBothNull(): void
     {
         $finding = self::getContainer()->get('serializer.stored')->deserialize('{"id":"f1","severity":"P1","text":"A bug."}', JudgeDoneFinding::class, JsonEncoder::FORMAT);
