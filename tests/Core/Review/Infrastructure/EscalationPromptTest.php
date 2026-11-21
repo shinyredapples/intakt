@@ -68,7 +68,7 @@ final class EscalationPromptTest extends TestCase
 
         $shown = $this->findingFirst($this->finding('src/B.php', 'The check is skipped.'), $rest.$cited);
 
-        self::assertStringStartsWith($cited, $this->contentOf($shown));
+        self::assertSame($cited, substr($this->contentOf($shown), 0, strlen($cited)));
         self::assertStringContainsString(sprintf('Intakt cut this text: %d of %d bytes', PromptCut::CEILING_BYTES, strlen($cited.$rest)), $shown);
     }
 

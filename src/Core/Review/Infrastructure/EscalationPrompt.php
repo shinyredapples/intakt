@@ -71,7 +71,7 @@ final readonly class EscalationPrompt
         return false === $sections ? [$diff] : $sections;
     }
 
-    // A path cited without a directory matches a file of that name in any directory, as a reviewer often names only the file.
+    // A bare name matches a file of that name in any directory, because a reviewer often names only the file.
     /**
      * @param list<string> $cited
      */
@@ -91,7 +91,7 @@ final readonly class EscalationPrompt
             return $this->fence->wrap(UntrustedSource::Diff, $all);
         }
 
-        // Cut at a character boundary, so a multibyte character is never split.
+        // Because a multibyte character must never be split, as PromptCut does.
         $shown = $ofCited.mb_strcut($rest, 0, PromptCut::CEILING_BYTES - strlen($ofCited), 'UTF-8');
 
         return $this->fence->wrap(UntrustedSource::Diff, $shown)->cut(strlen($shown), strlen($all));
