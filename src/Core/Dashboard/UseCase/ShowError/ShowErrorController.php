@@ -126,6 +126,6 @@ final readonly class ShowErrorController
     {
         $note = null === $reference ? '' : sprintf('<p>Reference: <code>%s</code></p>', htmlspecialchars($reference));
 
-        return sprintf('<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Intakt</title></head><body><h1>Intakt</h1><p>%s</p>%s<p><a href="/">Back to the board</a></p></body></html>', htmlspecialchars($message), $note);
+        return sprintf('<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Intakt</title></head><body><h1>Intakt</h1><p>%s</p>%s<p><a href="/?board=1">Back to the board</a></p></body></html>', htmlspecialchars($message), $note);
     }
 }

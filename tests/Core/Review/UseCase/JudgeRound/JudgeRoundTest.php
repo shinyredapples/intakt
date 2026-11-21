@@ -123,6 +123,7 @@ final class JudgeRoundTest extends KernelTestCase
         $this->fixture->judge(new ScriptedJudgement($judgement))($this->judgingOf($round));
 
         self::assertSame([['round' => $round->id()->toRfc4122(), 'act' => ['F1', 'F2'], 'follow_ups' => ['F3']]], $this->judgeCalls());
+        self::assertFalse($this->judgeDonePayloads()[0]['fallback']);
     }
 
     public function testJudgeDoneRecordsEachReviewersVoteAsTheQuorumCountsIt(): void
@@ -435,6 +436,24 @@ final class JudgeRoundTest extends KernelTestCase
         self::assertSame([['round' => $round->id()->toRfc4122(), 'act' => ['F1', 'F2'], 'follow_ups' => []]], $this->judgeCalls());
     }
 
+    // Decision 5 of #2981: the dashboard leaves such a round out of the judge's chart, because its unmarked P3 is no rejection of the judge's.
+    public function testAnInvalidJudgeAnswerIsRecordedAsTheFallback(): void
+    {
+        $fallback = $this->completedRound();
+        $this->fixture->judge(new ScriptedJudgement(Judgement::everyBlockingFindingActs([$this->finding('F1', Severity::P1), $this->finding('F2', Severity::P2), $this->finding('F3', Severity::P3)])))($this->judgingOf($fallback));
+
+        self::assertTrue($this->judgeDonePayloads()[0]['fallback']);
+    }
+
+    // The fallback marks every finding when none is a P3, so only the place that chooses it can tell; the marks cannot (PR #2989, second review round).
+    public function testAFallbackThatMarksEveryFindingIsStillRecordedAsTheFallback(): void
+    {
+        $fallback = $this->completedRound();
+        $this->fixture->judge(new ScriptedJudgement(Judgement::everyBlockingFindingActs([$this->finding('F1', Severity::P1), $this->finding('F2', Severity::P1), $this->finding('F3', Severity::P1)])))($this->judgingOf($fallback));
+
+        self::assertTrue($this->judgeDonePayloads()[0]['fallback']);
+    }
+
     public function testAJudgedRoundDeliveredAgainAsksTheJudgeNothingAndRecordsNoSecondJudgeDone(): void
     {
         $round = $this->completedRound();
@@ -692,7 +711,7 @@ final class JudgeRoundTest extends KernelTestCase
      */
     private function judgeCalls(): array
     {
-        return array_map(static fn (array $payload): array => array_diff_key($payload, ['findings' => true, 'dropped' => true, 'same_cause' => true, 'votes' => true, 'p1_keys' => true]), $this->judgeDonePayloads());
+        return array_map(static fn (array $payload): array => array_diff_key($payload, ['findings' => true, 'dropped' => true, 'same_cause' => true, 'votes' => true, 'p1_keys' => true, 'fallback' => true]), $this->judgeDonePayloads());
     }
 
     /**

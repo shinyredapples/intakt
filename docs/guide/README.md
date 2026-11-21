@@ -26,5 +26,6 @@ Guides that explain Intakt without assuming you know how it is built. Each one d
 | [Checking the whole product](checking-the-whole-product.md) | what the journey checks cover and how to run one |
 | [A demo walkthrough](demo-walkthrough.md) | a guided first run with the sample project, and recording a review to play it back |
 | [The review bench](review-bench.md) | how well the reviewers find mistakes, and what measuring it costs |
+| [Looking inside a development install](looking-inside-a-development-install.md) | reading what a request did from its profile, in a development install only |
 | [Glossary](glossary.md) | every word in the guides, with a link to where it is explained |
 | [How Intakt uses Symfony](symfony-in-intakt.md) | which Symfony and Symfony AI parts do what |

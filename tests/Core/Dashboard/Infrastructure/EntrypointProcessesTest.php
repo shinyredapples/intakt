@@ -33,7 +33,7 @@ final class EntrypointProcessesTest extends TestCase
 
     private string $directory;
 
-    /** @var array<string, string> */
+    /** @var array<string, false|string> */
     private array $environment;
 
     protected function setUp(): void
@@ -43,6 +43,9 @@ final class EntrypointProcessesTest extends TestCase
         new Filesystem()->mkdir($this->directory);
         $this->environment = [
             'PATH' => $this->standInPrograms().':'.getenv('PATH'),
+            // In the test's folder, because every start removes the cache it builds again, and this one runs in the checkout.
+            'APP_CACHE_DIR' => $this->directory.'/cache',
+            'APP_BUILD_DIR' => false,
             'MESSENGER_CONSUMERS' => '2',
             'WORKER_MEMORY_CEILING_MB' => '256',
             'APP_SECRET' => self::SECRET,
@@ -226,7 +229,7 @@ final class EntrypointProcessesTest extends TestCase
         $filesystem = new Filesystem();
         $loop = "while :; do sleep 1; done\n";
 
-        $filesystem->dumpFile($programs.'/php', "#!/bin/bash\ncase \"\$*\" in *migrate*) exit 0;; esac\n".$loop);
+        $filesystem->dumpFile($programs.'/php', "#!/bin/bash\ncase \"\$*\" in '-r '*) printf 'APP_ENV=test\\nAPP_CACHE_DIR=%s\\nAPP_BUILD_DIR=\\n' \"\$APP_CACHE_DIR\"; exit 0;; *migrate*|*cache:warmup*) exit 0;; esac\n".$loop);
         $filesystem->dumpFile($programs.'/frankenphp', "#!/bin/bash\ncase \"\$*\" in *validate*) exit 0;; esac\n".$loop);
         // The entrypoint's one second poll runs a tenth as long, so a restart takes tenths of a second; the 0.1 second steps of its stop and every other sleep keep their length, so the grace period stays 8 seconds.
         $filesystem->dumpFile($programs.'/sleep', "#!/bin/bash\n[[ \"\$*\" == 1 ]] && set -- 0.1\nexec \"\$(PATH=\${PATH#*:} command -v sleep)\" \"\$@\"\n");
@@ -240,7 +243,7 @@ final class EntrypointProcessesTest extends TestCase
     {
         $programs = $this->directory.'/rejecting-stubs';
         $filesystem = new Filesystem();
-        $filesystem->dumpFile($programs.'/php', "#!/bin/bash\ncase \"\$*\" in *migrate*) exit 0;; esac\necho \"started: php \$*\" >&2\nexec sleep 300\n");
+        $filesystem->dumpFile($programs.'/php', "#!/bin/bash\ncase \"\$*\" in '-r '*) printf 'APP_ENV=test\\nAPP_CACHE_DIR=%s\\nAPP_BUILD_DIR=\\n' \"\$APP_CACHE_DIR\"; exit 0;; *migrate*|*cache:warmup*) exit 0;; esac\necho \"started: php \$*\" >&2\nexec sleep 300\n");
         $filesystem->dumpFile($programs.'/frankenphp', "#!/bin/bash\ncase \"\$*\" in *validate*) echo '".self::CADDYFILE_REJECTED."' >&2; exit 1;; esac\necho \"started: frankenphp \$*\" >&2\nexec sleep 300\n");
         $filesystem->chmod([$programs.'/php', $programs.'/frankenphp'], 0755);
 

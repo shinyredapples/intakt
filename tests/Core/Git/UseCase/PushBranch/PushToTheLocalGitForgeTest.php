@@ -32,6 +32,7 @@ use Intakt\Plugin\Forge\Contract\ChangeText;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\CommitRange;
 use Intakt\Plugin\Forge\Contract\Diff;
+use Intakt\Plugin\Forge\Contract\OpenedChange;
 use Intakt\Plugin\LocalGitForge\Contract\LocalRepository;
 use Intakt\Plugin\LocalGitForge\Infrastructure\LocalGitForge;
 use Intakt\Plugin\LocalGitForge\Infrastructure\NameStatusParser;
@@ -56,6 +57,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(AcceptedHandBack::class)]
 #[UsesClass(ChangeText::class)]
 #[UsesClass(ChangeId::class)]
+#[UsesClass(OpenedChange::class)]
 #[UsesClass(LedgerEvent::class)]
 #[UsesClass(AppendResult::class)]
 #[UsesClass(RecordedEvent::class)]

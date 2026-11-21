@@ -69,11 +69,25 @@ final class RecordingLedger implements Ledger
      */
     public function payloadOf(LedgerEventKind $kind): array
     {
-        $event = array_first(array_filter($this->events, static fn (LedgerEvent $event): bool => $event->kind === $kind)) ?? throw new LogicException('No such event was recorded.');
-        /** @var array<string, string> $payload */
-        $payload = json_decode($event->payload, true, flags: JSON_THROW_ON_ERROR);
+        return array_first($this->payloadsOf($kind)) ?? throw new LogicException('No such event was recorded.');
+    }
 
-        return $payload;
+    /**
+     * @return list<array<string, string>>
+     */
+    public function payloadsOf(LedgerEventKind $kind): array
+    {
+        $payloads = [];
+
+        foreach ($this->events as $event) {
+            if ($event->kind === $kind) {
+                /** @var array<string, string> $payload */
+                $payload = json_decode($event->payload, true, flags: JSON_THROW_ON_ERROR);
+                $payloads[] = $payload;
+            }
+        }
+
+        return $payloads;
     }
 
     /**

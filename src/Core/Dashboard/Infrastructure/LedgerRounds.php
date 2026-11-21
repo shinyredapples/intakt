@@ -48,7 +48,7 @@ final class LedgerRounds
     /** @var array<string, array<string, ReviewerOutcome>> */
     private array $outcomes = [];
 
-    /** @var array<string, array{findings: list<RoundFinding>, dropped: list<RoundFinding>, textRecorded: bool, at: DateTimeImmutable, votes: array<string, Decision>}> */
+    /** @var array<string, array{findings: list<RoundFinding>, dropped: list<RoundFinding>, everyRecorded: bool, fallback: ?bool, textRecorded: bool, at: DateTimeImmutable, votes: array<string, Decision>}> */
     private array $judged = [];
 
     /** @var array<string, ReplayMark> */
@@ -56,6 +56,10 @@ final class LedgerRounds
 
     /** @var array<string, array<string, list<string>>> */
     private array $findingsByReviewer = [];
+
+    // Null for a reviewer whose row was written before reporters' severities were recorded, because such a round must be left out of the reviewer chart, never guessed.
+    /** @var array<string, array<string, array<string, string>|null>> */
+    private array $severitiesByReviewer = [];
 
     private readonly LedgerTokens $tokens;
 
@@ -207,7 +211,15 @@ final class LedgerRounds
 
         if ($judge instanceof JudgeDone) {
             $findings = $this->payloads->judgedFindingsOf($recorded);
-            $this->judged += [$judge->round => ['findings' => $this->judgedFindings($judge, $findings ?? []), 'dropped' => $this->droppedFindings($recorded), 'textRecorded' => null !== $findings, 'at' => $recorded->recordedAt, 'votes' => $judge->votes]];
+            $this->judged += [$judge->round => [
+                'findings' => $this->judgedFindings($judge, $findings ?? []),
+                'dropped' => $this->droppedFindings($recorded),
+                'everyRecorded' => $this->payloads->isEveryJudgedFindingRecorded($recorded, $judge),
+                'fallback' => $judge->fallback,
+                'textRecorded' => null !== $findings,
+                'at' => $recorded->recordedAt,
+                'votes' => $judge->votes,
+            ]];
         }
     }
 
@@ -217,6 +229,7 @@ final class LedgerRounds
 
         if ($row instanceof ReviewerFindingsRecorded) {
             $this->findingsByReviewer[$row->round][$row->reviewer] = $row->findings;
+            $this->severitiesByReviewer[$row->round][$row->reviewer] = $row->severities;
         }
     }
 
@@ -236,11 +249,11 @@ final class LedgerRounds
     // A marked id keeps its row without its text, because the judge's call is recorded even where the finding's text is not (rounds judged before it was, or an unreadable entry).
     private function judgedFindings(JudgeDone $judge, array $findings): array
     {
-        $recorded = array_map(static fn (JudgeDoneFinding $finding): RoundFinding => new RoundFinding($finding->id, $finding->severity->value, $finding->text, $finding->merged, $finding->file, $finding->line), $findings);
+        $recorded = array_map(static fn (JudgeDoneFinding $finding): RoundFinding => new RoundFinding($finding->id, $finding->severity->value, $finding->text, [...$finding->merged], $finding->file, $finding->line), $findings);
 
         return array_map(static fn (RoundFinding $finding): RoundFinding => match (true) {
-            in_array($finding->id, $judge->act, true) => $finding->calledBy(JudgeCall::Act),
-            in_array($finding->id, $judge->followUps, true) => $finding->calledBy(JudgeCall::FollowUp),
+            $judge->act->contains($finding->id) => $finding->calledBy(JudgeCall::Act),
+            $judge->followUps->contains($finding->id) => $finding->calledBy(JudgeCall::FollowUp),
             default => $finding,
         }, [...$this->entriesOf($recorded), ...$this->markedOnly($judge, $recorded)]);
     }
@@ -310,6 +323,16 @@ final class LedgerRounds
 
         $judged = $this->judged[$round->round] ?? null;
 
+        $completed = match ($judged['fallback'] ?? null) {
+            true => $completed->judgedByFallback(),
+            false => $completed->judgedOnItsOwnMarks(),
+            null => $completed,
+        };
+
+        if (null !== $judged && !$judged['everyRecorded']) {
+            $completed = $completed->withFindingsMissing();
+        }
+
         return match (true) {
             null === $judged => $this->endedOrRunning($completed),
             $judged['textRecorded'] => $this->decided($completed->judgedWith($judged['findings'], $judged['at'])->withDropped($judged['dropped']), $judged['votes']),
@@ -329,7 +352,14 @@ final class LedgerRounds
         $answered = array_filter($round->outcomes, static fn (ReviewerOutcome $outcome): bool => ReviewerProgress::Answered === $outcome->progress);
         $unrecorded = array_filter($answered, static fn (ReviewerOutcome $outcome): bool => !array_key_exists($outcome->id, $reported));
 
-        return [] === $unrecorded ? $round->withFindingsByReviewer($reported) : $round;
+        if ([] !== $unrecorded) {
+            return $round;
+        }
+
+        $severities = $this->severitiesByReviewer[$round->round] ?? [];
+        $rated = array_filter($severities, static fn (?array $rated): bool => null !== $rated);
+
+        return count($rated) === count($reported) ? $round->withFindingsByReviewer($reported)->withSeveritiesByReviewer($rated) : $round->withFindingsByReviewer($reported);
     }
 
     private function endedOrRunning(ReviewedRound $round): ReviewedRound

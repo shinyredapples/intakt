@@ -9,17 +9,19 @@ use Intakt\Core\Platform\Contract\ReportableFailure;
 use Intakt\Core\Review\Contract\ChangeDescription;
 use Intakt\Core\Review\Contract\IdentityField;
 use Intakt\Core\Review\Contract\Panels;
+use Intakt\Core\Review\Contract\RecordedIdentityMalformed;
+use Intakt\Core\Review\Contract\ReviewTermMalformed;
 use Intakt\Core\Review\Contract\ReviewTerms;
 use Intakt\Core\Review\Contract\VerdictIdentity;
 use Intakt\Core\Review\Contract\VerdictStanding;
 use Intakt\Plugin\Forge\Contract\Change;
 use Intakt\Plugin\Forge\Contract\ChangedFile;
 use Intakt\Plugin\Forge\Contract\ChangeId;
+use Intakt\Plugin\Forge\Contract\CommitIdMalformed;
 use Intakt\Plugin\LocalGitForge\Contract\LocalRepository;
 use Intakt\Plugin\LocalGitForge\Infrastructure\LocalGitForge;
 use Intakt\Plugin\LocalGitForge\Infrastructure\NameStatusParser;
 use Intakt\Plugin\LocalGitForge\Infrastructure\VisiblePath;
-use InvalidArgumentException;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\MapInput;
 use Symfony\Component\Console\Command\Command;
@@ -68,7 +70,7 @@ final readonly class CheckVerdictIdentityCommand
     {
         try {
             return VerdictIdentity::fromRecorded($recorded);
-        } catch (InvalidArgumentException $invalid) {
+        } catch (RecordedIdentityMalformed|ReviewTermMalformed|CommitIdMalformed $invalid) {
             throw new RecordedIdentityUnreadable('--reviewed is not a recorded verdict identity: '.$invalid->getMessage(), $invalid->getCode(), $invalid);
         }
     }
