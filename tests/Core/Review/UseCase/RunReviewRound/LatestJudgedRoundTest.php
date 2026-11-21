@@ -87,7 +87,7 @@ final class LatestJudgedRoundTest extends KernelTestCase
         self::assertNull($fixture->transactions()->latestJudgedAt('alpha', self::PULL, str_repeat('0', 40)));
     }
 
-    // Judged on another pull request and written under an old spelling of this one, as an install stored it before rounds were stored canonically and migration Version20261122100000 left it apart; its id is newer than any round judged after the clock went back.
+    // Judged on another pull request and written under an old spelling of this one, because only a round an older install stored apart (migration Version20261122100000 left it so) forms a second sequence whose id can be newer than the rounds judged after the clock went back.
     private function roundLeftUnderAnOldSpelling(RoundFixture $fixture): void
     {
         $this->judgedRound($fixture, self::ANOTHER_PULL);
