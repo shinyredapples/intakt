@@ -23,7 +23,7 @@
         {% for outcome in reviewed.outcomes %}
             {% set progress = outcome.progress.name %}
             <tr>
-                {{ include('dashboard/_reviewer_cells.html.twig', {round: reviewed.round, outcome: outcome}, with_context = false) }}
+                {{ include('dashboard/_reviewer_cells.html.twig', {round: reviewed.round, outcome: outcome, with_lab: true}, with_context = false) }}
                 {% if stoppable %}
                 <td id="round-{{ reviewed.round }}-reviewer-{{ outcome.id }}-stop">{% if progress == 'Running' %}<form method="post" action="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::STOP_REVIEW'), {round: reviewed.round, reviewer: outcome.id}) }}" class="stop-reviewer">
                     <input type="hidden" name="_token" value="{{ csrf_token(constant('Intakt\\Core\\Dashboard\\UseCase\\StopReview\\StopReviewController::TOKEN_ID')) }}">

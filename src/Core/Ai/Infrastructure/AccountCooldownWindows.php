@@ -145,8 +145,18 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
 
         $until = $this->clock->now()->modify(sprintf('+%d seconds', $seconds));
 
+        $pool = new PoolRememberingItsSave($this->pool);
+        $consumed = $this->windowsEndingAt($until, $pool)->create($account->key())->consume();
+
         // Refused while a cooldown already runs, which is kept as it is, because only a call already in flight can still be limited then.
-        if (!$this->windowsEndingAt($until)->create($account->key())->consume()->isAccepted()) {
+        if (!$consumed->isAccepted()) {
+            return;
+        }
+
+        // A cache that refuses the save still accepts the token, so the account would read free while its event said it cooled: the cache's own result decides, under the limiter's lock, so another worker's window is never taken for this one.
+        if (!$pool->isSaved()) {
+            $this->logger->warning('The cooldown of account {account} could not be saved.', ['account' => $account->key()]);
+
             return;
         }
 
@@ -156,15 +166,15 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
     // No token, so reading the window never starts or saves one.
     private function window(Account $account): RateLimit
     {
-        return $this->windowsEndingAt($this->clock->now())->create($account->key())->consume(0);
+        return $this->windowsEndingAt($this->clock->now(), $this->pool)->create($account->key())->consume(0);
     }
 
     // Anchored at the end so the fixed window closes at the vendor's reset; one month because it is the shortest interval the RateLimiter anchors.
-    private function windowsEndingAt(DateTimeImmutable $end): RateLimiterFactory
+    private function windowsEndingAt(DateTimeImmutable $end, CacheItemPoolInterface $pool): RateLimiterFactory
     {
         $config = ['id' => self::LIMITER, 'policy' => 'fixed_window', 'limit' => 1, 'interval' => '1 month', 'anchor_at' => $end];
 
-        return new RateLimiterFactory($config, new CacheStorage($this->pool), $this->locks);
+        return new RateLimiterFactory($config, new CacheStorage($pool), $this->locks);
     }
 
     // Beside the window in the same pool, so every worker sees why the account cools down; the account key holds a provider name and an account name the owner configured, never outside input.

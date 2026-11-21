@@ -67,7 +67,7 @@ final readonly class Verdict
         return array_values(array_unique(array_intersect($ids, self::FAILED_REVIEWS)));
     }
 
-    // A reviewer's own blocked that names findings asks for changes, because every view and the quorum read the stored decision; Intakt's failure verdicts stay blocked.
+    // A reviewer's own blocked that names findings asks for changes, because every view and the quorum read the stored decision; Intakt's failure verdicts stay blocked. Apply it only to a fresh verdict, never to a stored one, because a stored verdict reads back with origin Reviewer and a stored failure verdict would turn into changes.
     public function asRecorded(): self
     {
         if (Decision::Blocked !== $this->verdict || [] === $this->findings || VerdictOrigin::Intakt === $this->origin) {
@@ -91,7 +91,7 @@ final readonly class Verdict
         return Decision::Blocked === $this->verdict && array_any($this->findings, static fn (Finding $finding): bool => self::REVIEWER_STOPPED === $finding->id);
     }
 
-    // An approval, or a changes verdict of P3 findings only, which the quorum counts as approval when the judge defers or rejects them all; the guards that refuse an approval refuse both, because the judge's marks come only after them. It reads the verdict as recorded, because a reviewer's blocked with findings is recorded as changes after the guards ran.
+    // An approval, or a changes verdict of P3 findings only, which the quorum counts as approval when the judge defers or rejects them all; the guards that refuse an approval refuse both, because the judge's marks come only after them. It reads the verdict as recorded, because a reviewer's blocked with findings is recorded as changes after the guards ran; like asRecorded(), only on a fresh verdict, because the guards check a reviewer's answer before it is stored.
     #[Ignore]
     public function mayCountAsApproval(): bool
     {

@@ -39,10 +39,13 @@ use Intakt\Core\Review\Domain\ReviewSubject;
 use Intakt\Core\Review\Domain\ReviewTarget;
 use Intakt\Core\Review\Domain\RoundReviewer;
 use Intakt\Core\Review\Domain\TrackedFinding;
+use Intakt\Core\Review\Infrastructure\AddedLinesInCheckout;
 use Intakt\Core\Review\Infrastructure\ChangeText;
+use Intakt\Core\Review\Infrastructure\DiffAddedLines;
 use Intakt\Core\Review\Infrastructure\DiffHunks;
 use Intakt\Core\Review\Infrastructure\DiffPaths;
 use Intakt\Core\Review\Infrastructure\FindingKeys;
+use Intakt\Core\Review\Infrastructure\KeptVerdicts;
 use Intakt\Core\Review\Infrastructure\StopRequests;
 use Intakt\Core\Review\UseCase\IndexResolvedFindings\IndexResolvedFindings;
 use Intakt\Core\Review\UseCase\IndexResolvedFindings\IndexResolvedFindingsHandler;
@@ -52,6 +55,7 @@ use Intakt\Core\Review\UseCase\JudgeRound\JudgeRound;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRoundHandler;
 use Intakt\Core\Review\UseCase\JudgeRound\PublishJudgedRound;
 use Intakt\Core\Review\UseCase\JudgeRound\RecordFailedJudgingHandler;
+use Intakt\Core\Review\UseCase\JudgeRound\RecordRecurringP1s;
 use Intakt\Core\Review\UseCase\JudgeRound\RecurringP1s;
 use Intakt\Core\Review\UseCase\ReadVerdicts\StoredVerdicts;
 use Intakt\Core\Review\UseCase\ReadVerdicts\VerdictsOfRoundHandler;
@@ -111,6 +115,7 @@ final readonly class RoundFixture
     public function __construct(
         private TestContainer $container,
         private ProjectModes $modes = new ConfiguredProjectModes([]),
+        private string $checkoutRoot = __DIR__,
     ) {
         $entities = $container->get('doctrine.orm.entity_manager');
         $this->entities = $entities;
@@ -236,12 +241,22 @@ final readonly class RoundFixture
 
     public function judge(Vendor $vendor): JudgeRoundHandler
     {
-        return new JudgeRoundHandler(new JudgedRounds($this->rounds($this->entities), $this->storedFindingsOn($this->entities), $this->roundLedger($this->ledger), new ChangeText(new DiffPaths()), new DiffHunks(new DiffPaths()), new DiffPaths(), new StoredVerdicts($this->serializer), $this->noFailedJudgings(), $this->recurringP1s($this->ledger)), $vendor, $this->events);
+        return new JudgeRoundHandler(new JudgedRounds($this->rounds($this->entities), $this->storedFindingsOn($this->entities), $this->roundLedger($this->ledger), new ChangeText(new DiffPaths()), new DiffHunks(new DiffPaths()), new AddedLinesInCheckout(new DiffAddedLines(new DiffPaths()), $this->container->get(Redactor::class)), new DiffPaths(), new StoredVerdicts($this->serializer), $this->noFailedJudgings(), $this->recordRecurringP1s($this->ledger)), $vendor, $this->events, $this->container->get(Redactor::class));
     }
 
     public function recurringP1s(Ledger $ledger, InMemoryTransport $failed = new InMemoryTransport()): RecurringP1s
     {
         return new RecurringP1s($this->rounds($this->entities), $ledger, $this->ledgerPayloads(), new FailedJudgings($failed, $ledger, $this->ledgerPayloads()));
+    }
+
+    public function keptVerdicts(): KeptVerdicts
+    {
+        return new KeptVerdicts($this->entities, new MockClock('2026-11-21 10:00:00'));
+    }
+
+    private function recordRecurringP1s(Ledger $ledger): RecordRecurringP1s
+    {
+        return new RecordRecurringP1s($this->recurringP1s($ledger), $this->keptVerdicts(), $this->roundLedger($ledger));
     }
 
     // The application's queue, because the round's workflow, taken from the container, queues the judging through the application's bus.
@@ -264,7 +279,7 @@ final readonly class RoundFixture
 
     public function failedJudgingRecorder(MessageBusInterface $commands, LoggerInterface $logger): RecordFailedJudgingHandler
     {
-        return new RecordFailedJudgingHandler($this->transactions(), $this->roundLedger($this->ledger), $this->noFailedJudgings(), $this->storedFindingsOn($this->entities), $this->recurringP1s($this->ledger), $commands, $logger);
+        return new RecordFailedJudgingHandler($this->transactions(), $this->roundLedger($this->ledger), $this->noFailedJudgings(), $this->storedFindingsOn($this->entities), $this->recordRecurringP1s($this->ledger), $commands, $logger);
     }
 
     public function indexing(MemoryIndex $memory): IndexResolvedFindingsHandler
@@ -404,7 +419,7 @@ final readonly class RoundFixture
 
     private function subject(): ReviewSubject
     {
-        return new ReviewSubject('alpha', __DIR__, self::TASK, self::DIFF);
+        return new ReviewSubject('alpha', $this->checkoutRoot, self::TASK, self::DIFF);
     }
 
     private function rounds(EntityManagerInterface $entities, ?Ledger $ledger = null): ReviewRounds

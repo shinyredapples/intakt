@@ -86,11 +86,40 @@ final class PlayDemoControllerTest extends DashboardPageTestCase
         self::assertSame(['Play the demo run'], $page->filter('main .btn.primary')->each(static fn (Crawler $button): string => $button->text()));
     }
 
-    public function testTheDemoPageListsTheSevenStagesTheCaptionNames(): void
+    public function testTheDemoPageDrawsTheFourStepsOfAReviewInsteadOfListingTheStages(): void
     {
         $page = $this->demoPage();
 
-        self::assertSame(array_map(static fn (TourStage $stage): string => $stage->sentence(), TourStage::cases()), $page->filter('ol.tour-stages li')->each(static fn (Crawler $line): string => $line->text()));
+        self::assertSame(['The change', 'Two AI labs', 'Checks every finding', 'To fix'], $page->filter('ol.review-strip .rs-label')->each(static fn (Crawler $label): string => $label->text()));
+        self::assertCount(0, $page->filter('ol.tour-stages'));
+    }
+
+    public function testTheDemoPageShowsTheNoKeyNeededFactAsAChip(): void
+    {
+        $page = $this->demoPage();
+
+        self::assertSame(['No key needed', 'Replay, not a verdict'], $page->filter('.demo-facts .chip')->each(static fn (Crawler $chip): string => $chip->text()));
+    }
+
+    public function testTheDemoPageSaysItInOneShortLine(): void
+    {
+        $page = $this->demoPage();
+
+        self::assertSame(['A real review, recorded and played back.'], $page->filter('main .demo p:not(.demo-facts):not([hidden])')->each(static fn (Crawler $line): string => $line->text()));
+    }
+
+    public function testWhenTheRunIsReadyTheButtonStandsForTheReadinessLine(): void
+    {
+        $page = $this->demoPage();
+
+        self::assertSame('', $page->filter('.demo-readiness[hidden]')->text());
+    }
+
+    public function testAfterTheRunTheDemoPageOffersNoPlayAgain(): void
+    {
+        $this->demoRunAt(1);
+
+        self::assertCount(0, $this->demoPage()->filter('main .demo button, main .demo .btn'));
     }
 
     public function testOutsideTheComposeDemoThePageSaysWhyAndOffersNoButton(): void
@@ -137,10 +166,75 @@ final class PlayDemoControllerTest extends DashboardPageTestCase
         $this->browser->request('POST', '/demo', ['_token' => $token]);
 
         self::assertResponseStatusCodeSame(303);
-        self::assertResponseRedirects('/demo');
+        self::assertMatchesRegularExpression('~^/demo\?play=[0-9a-f]{32}$~', (string) $this->browser->getResponse()->headers->get('Location'));
         self::assertEquals([new PlayDemoRun()], array_map(static fn (Envelope $sent): object => $sent->getMessage(), $this->queued()));
         $this->browser->followRedirect();
         self::assertSelectorTextContains('.flash-success', 'The demo run is starting');
+    }
+
+    public function testThePagePlaysRedirectReachesTellsTheTourToFollowTheRun(): void
+    {
+        $token = $this->tokenFromThePage();
+        $this->browser->request('POST', '/demo', ['_token' => $token]);
+
+        $page = $this->browser->followRedirect();
+
+        self::assertSame(['The demo run is starting: the caption at the bottom of each page names the stage it is in.'], $page->filter('[data-tour-follow]')->each(static fn (Crawler $line): string => $line->text()));
+    }
+
+    public function testALaterVisitToTheDemoPageDoesNotTellTheTourToFollow(): void
+    {
+        $token = $this->tokenFromThePage();
+        $this->browser->request('POST', '/demo', ['_token' => $token]);
+        $this->browser->followRedirect();
+
+        self::assertCount(0, $this->demoPage()->filter('[data-tour-follow]'));
+    }
+
+    public function testAVisitFromAnotherTabBeforePlaysRedirectArrivesLeavesTheFollowToTheRedirect(): void
+    {
+        $token = $this->tokenFromThePage();
+        $this->browser->request('POST', '/demo', ['_token' => $token]);
+        $redirect = (string) $this->browser->getResponse()->headers->get('Location');
+
+        $otherTab = $this->demoPage();
+        $page = $this->browser->request('GET', $redirect);
+
+        self::assertCount(0, $otherTab->filter('[data-tour-follow]'));
+        self::assertCount(1, $page->filter('[data-tour-follow]'));
+    }
+
+    public function testAPlaySignThatNoPlayGaveDoesNotTellTheTourToFollow(): void
+    {
+        $token = $this->tokenFromThePage();
+        $this->browser->request('POST', '/demo', ['_token' => $token]);
+
+        $page = $this->browser->request('GET', '/demo?play='.str_repeat('0', 32));
+
+        self::assertResponseIsSuccessful();
+        self::assertCount(0, $page->filter('[data-tour-follow]'));
+    }
+
+    public function testAPlaySignInAnotherShapeIsIgnored(): void
+    {
+        $page = $this->browser->request('GET', '/demo?play=started');
+
+        self::assertResponseIsSuccessful();
+        self::assertCount(0, $page->filter('[data-tour-follow]'));
+    }
+
+    public function testASuccessLineFromAnotherFormDoesNotTellTheTourToFollow(): void
+    {
+        $this->demoPage();
+        $session = $this->browser->getRequest()->getSession();
+        self::assertInstanceOf(FlashBagAwareSessionInterface::class, $session);
+        $session->getFlashBag()->add('success', 'The provider key is kept.');
+        $session->save();
+
+        $page = $this->demoPage();
+
+        self::assertSame('The provider key is kept.', $page->filter('.flash-success')->text());
+        self::assertCount(0, $page->filter('[data-tour-follow]'));
     }
 
     public function testPressingPlayWithoutAValidTokenStartsNothing(): void
@@ -190,7 +284,7 @@ final class PlayDemoControllerTest extends DashboardPageTestCase
         foreach (['/', '/projects', '/reviews', '/demo', '/reviews/demo-round-1'] as $path) {
             $page = $this->browser->request('GET', $path);
             self::assertResponseIsSuccessful();
-            self::assertSame('Stage 1 of 7', $page->filter('aside#tour-caption .tour-count')->text(), $path);
+            self::assertSame('Step 1 of 5', $page->filter('aside#tour-caption .tour-dots')->attr('aria-label'), $path);
         }
     }
 
@@ -222,7 +316,40 @@ final class PlayDemoControllerTest extends DashboardPageTestCase
         $this->ledger->append(new LedgerEvent(LedgerEventKind::JudgeDone, '{"round":"demo-round-1","act":[],"follow_ups":[]}'));
         $this->demoRunAt(2);
 
-        self::assertSame(TourStage::NextRound->value, $this->demoPage()->filter('aside#tour-caption')->attr('data-stage'));
+        self::assertSame(TourStage::ChangeArrives->value, $this->demoPage()->filter('aside#tour-caption')->attr('data-stage'));
+    }
+
+    public function testOnlyTheCaptionOfTheLastStageSaysItIsTheLast(): void
+    {
+        $this->demoRunAt(1);
+        self::assertCount(0, $this->demoPage()->filter('aside#tour-caption[data-tour-last]'));
+
+        $this->ledger->append(new LedgerEvent(LedgerEventKind::JudgeDone, '{"round":"demo-round-1","act":[],"follow_ups":[]}'));
+
+        self::assertSame(TourStage::RoundEnds->value, $this->demoPage()->filter('aside#tour-caption[data-tour-last]')->attr('data-stage'));
+    }
+
+    public function testTheCaptionShowsOneDotPerStageWithTheCurrentOneMarkedAndNoStageCount(): void
+    {
+        $this->demoRunAt(1);
+
+        $caption = $this->demoPage()->filter('aside#tour-caption');
+
+        self::assertCount(TourStage::count(), $caption->filter('.tour-dot'));
+        self::assertCount(1, $caption->filter('.tour-dot.now'));
+        self::assertDoesNotMatchRegularExpression('/Stage \d+ of/', $caption->text());
+    }
+
+    public function testTheCaptionPointsAtTheElementsOfItsOwnRoundOnly(): void
+    {
+        $this->demoRunAt(1);
+        $this->ledger->append(new LedgerEvent(LedgerEventKind::JudgeDone, '{"round":"demo-round-1","act":[],"follow_ups":[]}'));
+        $this->demoRunAt(2);
+
+        $at = $this->demoPage()->filter('aside#tour-caption')->attr('data-tour-at');
+
+        self::assertSame('[id="round-demo-round-2-now-phase"]', $at);
+        self::assertStringNotContainsString('demo-round-1', $at);
     }
 
     public function testBeforeADemoRunTheComposeDemoPagesHoldOnlyTheEmptyCaption(): void
@@ -252,14 +379,22 @@ final class PlayDemoControllerTest extends DashboardPageTestCase
         self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "No route found for "GET http://localhost:7780/no-such-page""', NotFoundHttpException::class));
     }
 
-    public function testTheFirstRunPageOffersPlayTheDemoRunAsASecondaryButton(): void
+    public function testTheFirstRunPageOffersPlayTheDemoRunAsItsOnePrimaryButton(): void
     {
         $page = $this->browser->request('GET', '/setup');
 
         self::assertResponseIsSuccessful();
         self::assertSame('/demo', $page->filter('form.play-demo')->attr('action'));
-        self::assertSame('Play the demo run', $page->filter('form.play-demo .btn.secondary')->text());
+        self::assertSame(['Play the demo run'], $page->filter('main .btn.primary')->each(static fn (Crawler $button): string => $button->text()));
         self::assertNotSame('', $page->filter('form.play-demo input[name=_token]')->attr('value'));
+    }
+
+    public function testWithoutTheChoicesTheFirstRunPageShowsTheNoKeyNeededChipBesidePlay(): void
+    {
+        $page = $this->browser->request('GET', '/setup');
+
+        self::assertSame('No key needed', $page->filter('.play-demo-offer .chip')->text());
+        self::assertCount(0, $page->filter('.play-demo-offer p'));
     }
 
     public function testTheFirstRunPageOffersNoDemoRunOnceItIsInTheLedger(): void

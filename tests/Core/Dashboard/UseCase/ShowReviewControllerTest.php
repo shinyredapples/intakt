@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Dashboard\UseCase;
 use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Budget\Contract\Prices;
 use Intakt\Core\Budget\Infrastructure\ConfiguredPrices;
+use Intakt\Core\Dashboard\Domain\AiLab;
 use Intakt\Core\Dashboard\Domain\JudgeCall;
 use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
@@ -69,6 +70,7 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 #[UsesClass(ReplayMarks::class)]
 #[UsesClass(ReplayedStart::class)]
 #[UsesClass(ReviewOutcome::class)]
+#[UsesClass(AiLab::class)]
 final class ShowReviewControllerTest extends DashboardPageTestCase
 {
     public function testTheReviewPageShowsEveryRoundOfTheChangeInOrder(): void
@@ -197,7 +199,37 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame([['correctness', 'kimi-k3', 'Changes requested', '2'], ['security', 'model-b', 'Approved', '0']], $this->rowsOf($crawler->filter('table.reviewers tbody tr')));
+        self::assertSame([['correctness', 'Kimi K3 (Moonshot AI)', 'Changes requested', '2'], ['security', 'model-b', 'Approved', '0']], $this->rowsOf($crawler->filter('table.reviewers tbody tr')));
+    }
+
+    public function testAReviewersModelCellKeepsTheRawModelIdInItsTitle(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->startReviewerOn('round-1', 'correctness', 'moonshotai/Kimi-K3.1:deepinfra');
+
+        $cell = $this->browser->request('GET', '/reviews/round-1')->filter('#round-round-1-reviewer-round-1-correctness-model');
+
+        self::assertSame(['Kimi K3.1 (Moonshot AI)', 'moonshotai/Kimi-K3.1:deepinfra'], [$cell->text(), $cell->attr('title')]);
+    }
+
+    public function testAReviewerOnAModelIdThatTwigReadsAsFalseStillHasItsIdInTheTitle(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->startReviewerOn('round-1', 'correctness', '0');
+
+        $cell = $this->browser->request('GET', '/reviews/round-1')->filter('#round-round-1-reviewer-round-1-correctness-model');
+
+        self::assertSame(['0', '0'], [$cell->text(), $cell->attr('title')]);
+    }
+
+    public function testAReviewerWhoseModelWasNotRecordedHasNoTitleOnItsModelCell(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->startReviewer('round-1', 'correctness');
+
+        $cell = $this->browser->request('GET', '/reviews/round-1')->filter('#round-round-1-reviewer-round-1-correctness-model');
+
+        self::assertSame(['standard tier, model not recorded', null], [$cell->text(), $cell->attr('title')]);
     }
 
     public function testAJudgedRoundsReviewersTableHasNoEmptyColumn(): void
@@ -292,7 +324,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
         self::assertSame(['Role', 'Model', 'Outcome', 'Findings counted', 'Stop'], $crawler->filter('table.reviewers thead th')->each(static fn (Crawler $header): string => self::wordsOf($header)));
-        self::assertSame([['correctness', 'kimi-k3', 'running', 'no answer yet', 'Stop this reviewer']], $this->rowsOf($crawler->filter('table.reviewers tbody tr')));
+        self::assertSame([['correctness', 'Kimi K3 (Moonshot AI)', 'running', 'no answer yet', 'Stop this reviewer']], $this->rowsOf($crawler->filter('table.reviewers tbody tr')));
     }
 
     public function testTheReviewPageShowsAVerdictRecordedInTheRemovedShadowModeLikeAnOrdinaryOne(): void

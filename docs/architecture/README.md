@@ -12,7 +12,7 @@ Code and conventions:
 - [Branch push](branch-push.md)
 - [Hand-back checks](hand-back.md): the bundle a build returns, refused when it touches main, is not a fast-forward, holds a merge or a secret, stripped of attribution and redacted of mounted credentials; the pull request text scanned too, and a failure sent back once, then handed over
 - [Check job](check-job.md): the pre-push check of an accepted bundle in a fresh clone through the gate plugin, the lost-content rule, and the verdict read from the job's output directory only
-- [Watchdog over main](watchdog.md): the rules that classify main's new commits: a recorded merge head passes before any signature check, an owner-signed commit passes, an unsigned commit, an unknown key and a rewrite of main's history are violations
+- [Watchdog over main](watchdog.md): the rules that classify main's new commits: a recorded merge head and the commits its merge brought in above its base pass before any signature check, an owner-signed commit passes, an unsigned commit, an unknown key and a rewrite of main's history are violations
 - [Protected paths of a head](protected-paths.md): the owner's list per project, read from the whole change and each commit; unreadable counts as protected
 - [Work intake from GitHub issues](work-intake.md): the work source contract, the `eligibility_label` watch key and the stored state of the GitHub work source
 - [Upstream reproductions](upstream-reproductions.md)
@@ -36,13 +36,13 @@ Running Intakt:
 - [Persistence](persistence.md)
 - [Job containers](job-containers.md): a fresh container per job through the Docker Engine API, the egress allowlist through a per-job proxy, the start check and its reduced mode, the memory-kill cause, and the cleanup after a crash
 - [Job images](job-images.md): a project's job image from its devcontainer, its Dockerfile or one generated from `composer.json`, and the probe that checks its PHP and extensions
-- [Differences from the existing loop](differences-from-the-existing-loop.md): what Intakt deliberately does another way than the loop it replaces, and why
+- [Differences from the earlier loop](differences-from-the-earlier-loop.md): what Intakt deliberately does another way than the build loop that developed Intakt, and why
 - [MCP server for the owner](mcp-server.md)
 
 Forges and identity:
 - [Forge contract and the local git forge](forge-contract.md): forge writes, open pull request listing, verdict identity
 - [GitHub App identity](github-app-identity.md)
-- [Pull requests handed to Intakt](handed-to-intakt.md): an open pull request whose `change_opened` line says Intakt's App created it gets one `change_handed_to_intakt` line; when no opening record decides, the author GitHub sets does, and an answer that it is someone else gets a `change_not_handed_to_intakt` line. A recorded answer, either way, means the forge is not asked again; title, labels and branch never decide
+- [Pull requests handed to Intakt](handed-to-intakt.md): an open pull request whose `change_opened` line says Intakt's App created it gets one `change_handed_to_intakt` line; when no opening record decides, the author GitHub sets does, and an answer that it is someone else gets a `change_not_handed_to_intakt` line. A recorded answer, either way, means the forge is not asked again; title, labels and branch never decide. Intakt's review of a handed-over pull request is published in any mode, and an approved protected head gets a `pending` status, an owner ask in comments of its own listing every protected path and one `owner_asked` line once the ask is posted, and a head judged before the hand-over is published once it is recognized
 - [Workflow risk scan](workflow-risk-scan.md): one workflow file against the hosted, read-only, secret-free envelope; any form the strict line reader does not read is `unreadable`; the changed paths that are part of the CI definition; the head's, main's and the merged workflows of a change and whether its push waits for the owner; holding a risky CI change until the owner's `approve <sha>`, with its complete diff on the issue
 
 Models and budget:

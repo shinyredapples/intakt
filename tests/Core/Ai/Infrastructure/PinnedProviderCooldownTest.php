@@ -17,6 +17,7 @@ use Intakt\Core\Ai\Infrastructure\ModelWaits;
 use Intakt\Core\Ai\Infrastructure\PinnedProviderCooldownWindows;
 use Intakt\Core\Ai\Infrastructure\SendFailures;
 use Intakt\Core\Ai\Infrastructure\TypedRejectionConverter;
+use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Tests\Core\Budget\ReadingsInMemory;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use Intakt\Tests\Support\StoredSerializerFactory;
@@ -57,6 +58,8 @@ final class PinnedProviderCooldownTest extends TestCase
     private const string PINNED = 'moonshotai/Kimi-K3.1-Pro:deepinfra';
 
     private const string FALLBACK = 'moonshotai/Kimi-K3.1-Pro:together';
+
+    private const string UNPINNED = 'moonshotai/Kimi-K3.1-Pro';
 
     private MockClock $clock;
 
@@ -325,6 +328,34 @@ final class PinnedProviderCooldownTest extends TestCase
         self::assertSame($limited, $out);
         self::assertSame(120, $this->pins->secondsUntilFree($this->deepinfra(Account::DEFAULT)));
         self::assertNotContains('The cooldown of account {account} could not be saved.', array_column($logger->cleanLogs(), 1));
+    }
+
+    // Forced order: the account store's cache refuses the window's save without throwing, so the account stays free; the refusal is logged instead of recorded as a cooldown and the caller gets the provider's own 429. A pinned 429 never writes the account window (issue #2861), so a model that pins nothing drives the write.
+    public function testAnAccountWindowTheCacheRefusesIsLoggedAndRecordsNoCooldown(): void
+    {
+        $pool = new class extends ArrayAdapter {
+            #[Override]
+            public function save(CacheItemInterface $item): bool
+            {
+                return false;
+            }
+        };
+        $clock = new NativeClock();
+        $provider = Provider::OpenAiCompatible;
+        $ledger = new InMemoryLedger();
+        $logger = new BufferingLogger();
+        $accounts = new AccountCooldownWindows(new ReadingsInMemory($clock), $pool, new LockFactory(new InMemoryStore()), $clock, $ledger, $logger, StoredSerializerFactory::create(), [$provider->value => [Account::DEFAULT]]);
+        $limited = new RateLimitExceededException(120);
+        $platform = new AccountFailoverPlatform($provider, [Account::DEFAULT => new FailingWhenRead($limited)], $accounts, $this->clock, $logger, $this->pins);
+        $answer = $platform->invoke(self::UNPINNED, 'Review.');
+
+        $out = $this->failureOf(static fn (): string => $answer->asText());
+
+        self::assertSame($limited, $out);
+        self::assertSame(0, $this->pins->secondsUntilFree($this->deepinfra(Account::DEFAULT)));
+        self::assertSame(0, $accounts->secondsUntilFree(new Account($provider, Account::DEFAULT)));
+        self::assertNotContains(LedgerEventKind::AccountCooledDown, $ledger->kinds());
+        self::assertContains('The cooldown of account {account} could not be saved.', array_column($logger->cleanLogs(), 1));
     }
 
     private function accounts(PlatformInterface $default, PlatformInterface $team): AccountFailoverPlatform
