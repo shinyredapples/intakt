@@ -74,7 +74,7 @@ final class ReadmeTeamPictureTest extends TestCase
     {
         $readme = $this->readme();
 
-        $screenshot = strpos($readme, '](docs/assets/dashboard-review.png)');
+        $screenshot = strpos($readme, 'src="docs/assets/dashboard-review.png"');
         self::assertIsInt($screenshot, 'The README shows the review page on its first screen.');
         $picture = (int) strpos($readme, '<picture>', $screenshot);
         $release = (int) strpos($readme, '## The first release');
