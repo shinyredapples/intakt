@@ -5,16 +5,19 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Dashboard\Domain;
 
 use DateTimeImmutable;
+use Intakt\Core\Dashboard\Domain\AiLab;
 use Intakt\Core\Dashboard\Domain\ReviewerOutcome;
 use Intakt\Core\Dashboard\Domain\ReviewOutcome;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\ReviewerForLoop\Contract\ProjectMode;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(ReviewerOutcome::class)]
 #[CoversClass(ReviewOutcome::class)]
+#[UsesClass(AiLab::class)]
 final class ReviewerOutcomeTest extends TestCase
 {
     /**
@@ -43,6 +46,39 @@ final class ReviewerOutcomeTest extends TestCase
         $reviewer = new ReviewerOutcome('r1', 'correctness', 'standard', new DateTimeImmutable('2026-11-13 10:00:00'), '');
 
         self::assertSame('standard tier, model not recorded', $reviewer->modelInWords());
+    }
+
+    public function testAReviewerOnAModelOfAKnownAiLabIsShownAsModelAndAiLab(): void
+    {
+        $reviewer = new ReviewerOutcome('r1', 'correctness', 'standard', new DateTimeImmutable('2026-11-13 10:00:00'), 'moonshotai/Kimi-K3.1:deepinfra');
+
+        self::assertSame('Kimi K3.1 (Moonshot AI)', $reviewer->modelAndLab());
+    }
+
+    public function testAReviewerOnAModelOfAnUnknownAiLabIsShownByItsIdAlone(): void
+    {
+        $reviewer = new ReviewerOutcome('r1', 'correctness', 'standard', new DateTimeImmutable('2026-11-13 10:00:00'), 'acme/robot-7');
+
+        self::assertSame('acme/robot-7', $reviewer->modelAndLab());
+    }
+
+    public function testAReviewerOnANameThatOnlyStartsLikeAKnownFamilyIsShownByItsIdAlone(): void
+    {
+        $reviewer = new ReviewerOutcome('r1', 'correctness', 'standard', new DateTimeImmutable('2026-11-13 10:00:00'), 'acme/gptish');
+
+        self::assertSame('acme/gptish', $reviewer->modelAndLab());
+    }
+
+    public function testAReviewerOnABareLabNamespaceIsShownByItsIdAlone(): void
+    {
+        $reviewer = new ReviewerOutcome('r1', 'correctness', 'standard', new DateTimeImmutable('2026-11-13 10:00:00'), 'anthropic/');
+
+        self::assertSame('anthropic/', $reviewer->modelAndLab());
+    }
+
+    public function testAReviewerWhoseModelWasNotRecordedIsShownByItsTier(): void
+    {
+        self::assertSame('standard tier, model not recorded', $this->reviewer()->modelAndLab());
     }
 
     public function testAFailedReviewerGivesFailed(): void
