@@ -388,6 +388,19 @@ final class RecurringP1sTest extends KernelTestCase
         self::assertSame([], $this->payloadsOf(LedgerEventKind::EscalationVerdictReused));
     }
 
+    public function testAP1WhoseTextChangedRecursUnderItsNewKeyWithoutReusingTheVerdictKeptUnderTheOldKey(): void
+    {
+        $first = $this->judged($this->completedAt(self::CHANGE, self::HEAD_A, $this->keyedP1()));
+        $this->keepVerdictOfFirstRound(EscalationOutcome::Confirmed, $first);
+        $edited = new Finding('A', Severity::P1, 'RecordingBus.php', 3, null, 'The bus drops a message.', FixableBy::Builder, false, null, null);
+        $this->judged($this->completedAt(self::CHANGE, self::HEAD_A, $this->repeatedP1($edited)));
+        $this->judged($this->completedAt(self::CHANGE, self::HEAD_B, $this->repeatedP1($edited)));
+
+        $found = $this->payloadsOf(LedgerEventKind::RecurringP1Found);
+
+        self::assertSame([1, false, []], [count($found), $this->keyOfFirstRound() === ($found[0]['key'] ?? null), $this->payloadsOf(LedgerEventKind::EscalationVerdictReused)]);
+    }
+
     public function testAP1NamingNoRegularFileGetsNoKeyAndReusesNoKeptVerdict(): void
     {
         $this->fixture->keptVerdicts()->keep('', new EscalationVerdict(EscalationOutcome::Confirmed, 'Seeded.'), 'r1');

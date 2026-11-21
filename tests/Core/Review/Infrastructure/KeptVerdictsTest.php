@@ -27,12 +27,15 @@ final class KeptVerdictsTest extends KernelTestCase
 {
     private KeptVerdicts $verdicts;
 
+    private EntityManagerInterface $entities;
+
     protected function setUp(): void
     {
         $entities = self::getContainer()->get(EntityManagerInterface::class);
         self::assertInstanceOf(EntityManagerInterface::class, $entities);
         EmptyDatabase::in(self::getContainer());
         new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        $this->entities = $entities;
         $this->verdicts = new KeptVerdicts($entities, new MockClock('2026-11-21 10:00:00'));
     }
 
@@ -50,6 +53,36 @@ final class KeptVerdictsTest extends KernelTestCase
         $this->verdicts->keep('finding-utc', new EscalationVerdict(EscalationOutcome::Confirmed, 'It holds.'), 'round-one');
 
         self::assertSame('2026-11-21T10:00:00+00:00', $this->verdicts->ofKey('finding-utc')?->recordedAt->format('c'));
+    }
+
+    public function testAKeptVerdictReadBackFromTheDatabaseKeepsItsUtcMomentInAnotherDefaultZone(): void
+    {
+        $this->verdicts->keep('finding-reloaded', new EscalationVerdict(EscalationOutcome::Confirmed, 'It holds.'), 'round-one');
+        $this->entities->clear();
+        $zone = date_default_timezone_get();
+        date_default_timezone_set('Europe/Berlin');
+
+        try {
+            $read = $this->verdicts->ofKey('finding-reloaded')?->recordedAt->format('c');
+        } finally {
+            date_default_timezone_set($zone);
+        }
+
+        self::assertSame('2026-11-21T10:00:00+00:00', $read);
+    }
+
+    public function testAVerdictAnotherWriterKeptAfterTheLookupIsRefusedAsAlreadyKeptAndTheEntityManagerStaysOpen(): void
+    {
+        $this->verdicts->keep('finding-raced', new EscalationVerdict(EscalationOutcome::Confirmed, 'It holds.'), 'round-one');
+        $this->entities->clear();
+        $loser = new KeptVerdicts(new StaleLookups($this->entities), new MockClock('2026-11-21 10:00:00'));
+
+        try {
+            $loser->keep('finding-raced', new EscalationVerdict(EscalationOutcome::Rejected, 'It does not.'), 'round-two');
+            self::fail('A second verdict for one key was kept.');
+        } catch (VerdictAlreadyKept) {
+            self::assertSame([true, EscalationOutcome::Confirmed], [$this->entities->isOpen(), $this->verdicts->ofKey('finding-raced')?->outcome]);
+        }
     }
 
     public function testAnUnknownKeyFindsNoKeptVerdict(): void

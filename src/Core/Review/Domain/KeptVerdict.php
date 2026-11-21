@@ -24,7 +24,7 @@ final readonly class KeptVerdict
         public string $reasons,
         #[ORM\Column(length: 36)]
         public string $round,
-        #[ORM\Column(name: 'recorded_at')]
+        #[ORM\Column(name: 'recorded_at', type: 'utc_datetime_immutable')]
         public DateTimeImmutable $recordedAt,
     ) {
     }
