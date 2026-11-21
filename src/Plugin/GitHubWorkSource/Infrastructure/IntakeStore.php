@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Intakt\Plugin\GitHubWorkSource\Infrastructure;
 
 use Doctrine\Common\EventManager;
+use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\Exception as DbalException;
 use Doctrine\DBAL\Exception\RetryableException;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\DBAL\LockMode;
@@ -23,6 +25,7 @@ use NoDiscard;
 use PDO;
 use SQLite3;
 use SQLite3Exception;
+use Throwable;
 
 // Every call works in an entity manager of its own on the shared connection: a worker keeps the shared one between ticks, what another worker stored since is the truth, a write must flush only its own rows and never another caller's pending work, and a write that fails leaves nothing behind for a later flush.
 final readonly class IntakeStore
@@ -69,7 +72,7 @@ final readonly class IntakeStore
         $listed = $this->listed($project, $rows->issues);
 
         try {
-            return $this->ownManager()->wrapInTransaction(function (EntityManagerInterface $manager) use ($project, $readBefore, $listed, $rows): bool {
+            return $this->inTransaction($this->ownManager(), function (EntityManagerInterface $manager) use ($project, $readBefore, $listed, $rows): bool {
                 $sync = $manager->find(IntakeValidator::class, $project, LockMode::PESSIMISTIC_WRITE);
                 if (($sync?->state() ?? SyncState::neverSynced())->generation !== $readBefore->generation) {
                     return false;
@@ -91,6 +94,41 @@ final readonly class IntakeStore
             $this->rollBackARefusedCommit();
 
             return $this->lostAfter($failure, $project, $readBefore);
+        }
+    }
+
+    // Not the manager's own wrapInTransaction(): a server that aborts a deadlock victim's transaction itself refuses the rollback that follows, and that refusal would replace the deadlock, so the write would escape as a failure instead of being named as held.
+    /**
+     * @param callable(EntityManagerInterface): bool $write
+     */
+    private function inTransaction(EntityManagerInterface $manager, callable $write): bool
+    {
+        $connection = $manager->getConnection();
+        $connection->beginTransaction();
+        try {
+            $written = $write($manager);
+            $manager->flush();
+            $connection->commit();
+
+            return $written;
+        } catch (Throwable $failure) {
+            $manager->close();
+            $this->rollBackAfter($connection);
+
+            throw $failure;
+        }
+    }
+
+    // DBAL counts the transaction as ended before it asks the driver, so a refused rollback leaves the connection usable, and the failure that ended the write is still thrown.
+    private function rollBackAfter(Connection $connection): void
+    {
+        if (!$connection->isTransactionActive()) {
+            return;
+        }
+
+        try {
+            $connection->rollBack();
+        } catch (DbalException) {
         }
     }
 

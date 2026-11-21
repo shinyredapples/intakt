@@ -7,7 +7,9 @@ namespace Intakt\Tests\Plugin\GitHubWorkSource\Infrastructure;
 use DateTimeZone;
 use Doctrine\Common\EventManager;
 use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\Driver\PDO\Exception as PdoDriverException;
 use Doctrine\DBAL\DriverManager;
+use Doctrine\DBAL\Exception\DeadlockException;
 use Doctrine\DBAL\Exception\RetryableException;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManager;
@@ -38,6 +40,8 @@ use Intakt\Tests\Plugin\GitHubWorkSource\WriterBetweenWriteAndCommit;
 use Intakt\Tests\Support\KernelTestCase;
 use InvalidArgumentException;
 use LogicException;
+use PDO;
+use PDOException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\TestWith;
@@ -416,6 +420,38 @@ final class IntakeStoreTest extends KernelTestCase
             $first->close();
             unlink($file);
         }
+    }
+
+    public function testADeadlockWhoseTransactionTheDatabaseAlreadyAbortedIsNamedAsHeldAndWritesNothing(): void
+    {
+        $connection = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'memory' => true]);
+        $events = new EventManager();
+        $manager = new EntityManager($connection, $this->entities->getConfiguration(), $events);
+        new SchemaTool($manager)->createSchema([$manager->getClassMetadata(IntakeValidator::class), $manager->getClassMetadata(StoredIssue::class)]);
+        $events->addEventListener([Events::onFlush], new readonly class($connection) {
+            public function __construct(private Connection $connection)
+            {
+            }
+
+            // A server such as InnoDB rolls the victim's transaction back itself before it reports the deadlock.
+            public function onFlush(): never
+            {
+                $native = $this->connection->getNativeConnection();
+                if ($native instanceof PDO) {
+                    $native->rollBack();
+                }
+
+                throw new DeadlockException(PdoDriverException::new(new PDOException('Deadlock found when trying to get lock')), null);
+            }
+        });
+        $store = new IntakeStore($manager);
+
+        $held = $this->heldWhileRecording($store, $store->syncStateOf('alpha'));
+
+        self::assertInstanceOf(ProjectHeldByAnotherWriter::class, $held);
+        self::assertInstanceOf(DeadlockException::class, $held->getPrevious());
+        self::assertSame(0, $store->syncStateOf('alpha')->generation);
+        self::assertSame(0, $connection->getTransactionNestingLevel());
     }
 
     public function testAFirstWriteThatFailsWhileNoOtherWorkerStoredAListingLetsTheFailureThrough(): void
