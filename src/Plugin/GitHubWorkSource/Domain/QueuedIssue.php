@@ -118,7 +118,7 @@ final readonly class QueuedIssue
 
         return $this->isTrusted() === $other->trusted
             && Priority::labelsIn($own) === Priority::labelsIn($fresh)
-            && self::sorted($own) === self::sorted($fresh);
+            && $this->sorted($own) === $this->sorted($fresh);
     }
 
     private function namesNumbers(ItemReading $other): bool
@@ -132,7 +132,7 @@ final readonly class QueuedIssue
      */
     private function hasLabels(array $labels): bool
     {
-        return self::sorted($this->reading->listed->labels) === self::sorted($labels);
+        return $this->sorted($this->reading->listed->labels) === $this->sorted($labels);
     }
 
     /**
@@ -140,7 +140,7 @@ final readonly class QueuedIssue
      *
      * @return list<string>
      */
-    private static function sorted(array $labels): array
+    private function sorted(array $labels): array
     {
         sort($labels, SORT_STRING);
 
