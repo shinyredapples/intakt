@@ -209,7 +209,7 @@ final class UsageLedgerTest extends TestCase
         return new DeferredResult($converter, new InMemoryRawResult());
     }
 
-    // A mapping failure whose extractor then throws too, counting how often the usage is read.
+    // Counts the reads, because a settlement that scanned the rounds twice ran a failing extractor twice (issue #2564).
     private function roundWithUnreadableUsage(int &$reads): DeferredResult
     {
         $extractor = self::createStub(TokenUsageExtractorInterface::class);
