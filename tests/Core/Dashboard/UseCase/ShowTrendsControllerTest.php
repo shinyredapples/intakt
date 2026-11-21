@@ -584,7 +584,8 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
         $page = $this->browser->request('GET', '/trends');
 
         self::assertCount(1, $page->filter('#chart-catches .chart-legend'));
-        self::assertSame(['', 'Also found by others'], $page->filter('#chart-catches .chart-legend > span')->each(static fn (Crawler $item): string => $item->filter('.term')->count() > 0 ? '' : $item->text()));
+        self::assertSame(['Found by one reviewer only', 'Also found by others'], $page->filter('#chart-catches .chart-legend > span')->each(static fn (Crawler $item): string => $item->text()));
+        self::assertSelectorNotExists('#chart-catches .chart-legend .term');
         self::assertSame(['sr-only', 'sr-only'], $page->filter('#chart-catches > .takeaway, #chart-judge > .takeaway')->each(static fn (Crawler $takeaway): string => (string) preg_replace('~^takeaway ~', '', (string) $takeaway->attr('class'))));
         self::assertSelectorNotExists('.chart-key');
     }
@@ -598,6 +599,7 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
 
         self::assertSame(['Correctness'], $page->filter('#chart-catches figcaption')->each(static fn (Crawler $role): string => $role->text()));
         self::assertSelectorNotExists('#chart-catches.wide');
+        self::assertCount(1, $page->filter('#chart-catches .multiples.one'));
     }
 
     public function testAChartWhoseFiguresAreAllZeroIsLeftOut(): void

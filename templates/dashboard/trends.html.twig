@@ -86,8 +86,8 @@
     <section class="chart{{ drawnReviewers|length > 1 ? ' wide' }}" id="chart-catches" aria-labelledby="chart-catches-title" data-controller="chart" data-action="keydown.esc@window->chart#dismiss">
         {{ _self.title('chart-catches', 'Catches by reviewer', kinds.Counted) }}
         <p class="takeaway sr-only">{{ catches.takeaway }}</p>
-        <p class="legend chart-legend"><span><i class="c-swatch"></i>{{ _self.hint('One reviewer only', 'Findings no other reviewer of the same pass reported; the label after each count says how many.', 'legend-alone') }}</span><span><i class="c-swatch c-whole"></i>Also found by others</span></p>
-        <div class="multiples">
+        <p class="legend chart-legend"><span><i class="c-swatch"></i>Found by one reviewer only</span><span><i class="c-swatch c-whole"></i>Also found by others</span></p>
+        <div class="multiples{{ drawnReviewers|length == 1 ? ' one' }}">
             {% for reviewer in drawnReviewers %}
             <figure class="multiple">
                 <figcaption class="sub-h">{{ reviewer.role|capitalize }}</figcaption>
