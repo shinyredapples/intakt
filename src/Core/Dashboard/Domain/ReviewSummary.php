@@ -8,6 +8,9 @@ use DateTimeImmutable;
 
 final readonly class ReviewSummary
 {
+    // One wording for a round started before Intakt recorded its change, so the review list and Trends' Up next name it alike.
+    public const string UNNAMED_CHANGE = 'Unnamed change';
+
     public string $round;
     public string $project;
     public int $reviewers;
@@ -35,6 +38,6 @@ final readonly class ReviewSummary
     // Titled by change and round, because a round id is 36 characters a reader cannot tell apart.
     public function title(): string
     {
-        return sprintf('%s, round %s', '' === $this->change ? 'Unnamed change' : $this->change, $this->number ?? 'not numbered');
+        return sprintf('%s, round %s', '' === $this->change ? self::UNNAMED_CHANGE : $this->change, $this->number ?? 'not numbered');
     }
 }

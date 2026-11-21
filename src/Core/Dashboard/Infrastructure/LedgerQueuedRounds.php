@@ -1,0 +1,77 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Core\Dashboard\Infrastructure;
+
+use Intakt\Core\Dashboard\Domain\QueuedRound;
+use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\RecordedEvents;
+
+// The latest watcher line of a pull request decides, as in LedgerWaitingHeads, so a newer head or a closed pull request ends the wait; a started round is left out because from its start it is a review the board shows.
+final readonly class LedgerQueuedRounds
+{
+    // Newest queue line first, because Up next lists them after the board's cards, which come newest first.
+    /**
+     * @return list<QueuedRound>
+     */
+    public function in(RecordedEvents $events): array
+    {
+        $latest = [];
+        $started = [];
+
+        foreach ($events as $order => $recorded) {
+            $kind = $recorded->event->kind;
+            $payload = LedgerPayload::of($recorded);
+
+            if (LedgerEventKind::ReviewStarted === $kind && is_string($payload['round'] ?? null)) {
+                $started[$payload['round']] = true;
+
+                continue;
+            }
+
+            $line = $this->watcherLineOf($kind, $payload, $order);
+
+            if (null !== $line) {
+                // Keyed by project, then pull request, so no name either side sends can make two keys meet.
+                $latest[$line['project']][$line['change']] = $line['queued'];
+            }
+        }
+
+        return $this->waiting($latest, $started);
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     *
+     * @return array{project: string, change: string, queued: array{order: int, round: QueuedRound}|null}|null
+     */
+    private function watcherLineOf(LedgerEventKind $kind, array $payload, int $order): ?array
+    {
+        $project = $payload['project'] ?? null;
+        $change = $payload['change'] ?? null;
+
+        if (!in_array($kind, WatcherLines::ALL, true) || !is_string($project) || !is_string($change)) {
+            return null;
+        }
+
+        $round = $payload['round'] ?? null;
+        $queued = LedgerEventKind::RoundQueued === $kind && is_string($round) && '' !== $round ? ['order' => $order, 'round' => new QueuedRound($round, $project, $change)] : null;
+
+        return ['project' => $project, 'change' => $change, 'queued' => $queued];
+    }
+
+    /**
+     * @param array<array-key, array<array-key, array{order: int, round: QueuedRound}|null>> $latest
+     * @param array<string, true>                                                            $started
+     *
+     * @return list<QueuedRound>
+     */
+    private function waiting(array $latest, array $started): array
+    {
+        $waiting = array_filter(array_merge([], ...array_map(static fn (array $changes): array => array_values(array_filter($changes)), array_values($latest))), static fn (array $queued): bool => !isset($started[$queued['round']->round]));
+        usort($waiting, static fn (array $one, array $other): int => $other['order'] <=> $one['order']);
+
+        return array_map(static fn (array $queued): QueuedRound => $queued['round'], $waiting);
+    }
+}
