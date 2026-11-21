@@ -26,6 +26,7 @@ use PhpParser\Node\Name;
 use PhpParser\Node\Scalar\String_;
 use PhpParser\Node\Stmt\Class_;
 use PHPStan\Analyser\Scope;
+use PHPStan\Reflection\ClassReflection;
 use PHPStan\Rules\IdentifierRuleError;
 use PHPStan\Rules\Rule;
 use PHPStan\Rules\RuleErrorBuilder;
@@ -50,7 +51,6 @@ final readonly class RawPromptMessageRule implements Rule
     private const array MESSAGE_FACTORIES = ['ofuser', 'forsystem', 'ofassistant'];
     private const array MESSAGE_CLASSES = [UserMessage::class, SystemMessage::class];
     private const string CONVERSATION = ReviewerConversation::class;
-    private const string ROLE_HANDLER = ReviewWithReviewerHandler::class;
     private const string ROUND_REVIEWER = RoundReviewer::class;
     private const string ADVICE = ' builds a model message outside PromptAssembly: build it through '.self::ASSEMBLY.', with Intakt\'s own text as a literal and untrusted text as a FencedText from Fence.';
     private const string ROLE_ADVICE = 'new ReviewerConversation() in ReviewWithReviewerHandler takes a role prompt that is not $reviewer->rolePrompt() of a RoundReviewer: pass the round reviewer\'s rolePrompt() as the role prompt, so only the panel\'s configured prompt reaches PromptAssembly::systemWithRole().';
@@ -207,7 +207,7 @@ final readonly class RawPromptMessageRule implements Rule
 
     private function isBuiltByItsBuilder(string $carrier, Scope $scope): bool
     {
-        return null === $scope->getTraitReflection()
+        return !$scope->getTraitReflection() instanceof ClassReflection
             && array_any(self::BUILDERS[$carrier], fn (string $builder): bool => $this->isInClass($scope, $builder));
     }
 
