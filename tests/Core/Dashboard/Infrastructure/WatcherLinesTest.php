@@ -16,7 +16,7 @@ final class WatcherLinesTest extends TestCase
     public function testTheFailingHeadsSplitCoversEveryWatcherLineOnce(): void
     {
         $split = [...LedgerFailingHeads::FAILED, ...LedgerFailingHeads::SETTLED];
-        self::assertEqualsCanonicalizing(self::namesOf(WatcherLines::ALL), self::namesOf($split));
+        self::assertEqualsCanonicalizing($this->namesOf(WatcherLines::ALL), $this->namesOf($split));
         self::assertCount(count(WatcherLines::ALL), $split);
     }
 
@@ -25,7 +25,7 @@ final class WatcherLinesTest extends TestCase
      *
      * @return list<string>
      */
-    private static function namesOf(array $kinds): array
+    private function namesOf(array $kinds): array
     {
         return array_values(array_map(static fn (LedgerEventKind $kind): string => $kind->name, $kinds));
     }
