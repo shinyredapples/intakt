@@ -27,7 +27,7 @@
     <h3 class="verdict-to-fix">To fix</h3>
     <ul class="verdict-findings">
         {% for finding in open %}
-        <li><a href="#round-{{ judged }}-finding-{{ finding.id }}"><span class="sev">{{ finding.severity ?? '?' }}</span><span class="vf-title">{{ include('dashboard/_finding_text.html.twig', {finding: finding, missing: 'Text not recorded.'}, with_context = false) }}</span>{% if finding.place is not null %}<span class="mono vf-place">{{ finding.place }}</span>{% endif %}</a></li>
+        <li><a href="#round-{{ judged }}-finding-{{ finding.id }}"><span class="sev">{{ finding.severity ?? '?' }}</span><span class="vf-title">{{ include('dashboard/_finding_text.html.twig', {finding: finding, missing: 'Text not recorded.'}, with_context = false) }}</span>{% if finding.place is not null %}{{ include('dashboard/_verdict_place.html.twig', {place: finding.place}, with_context = false) }}{% endif %}</a></li>
         {% endfor %}
     </ul>
     {% endif %}

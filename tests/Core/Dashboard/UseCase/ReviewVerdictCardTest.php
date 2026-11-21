@@ -92,6 +92,41 @@ final class ReviewVerdictCardTest extends DashboardPageTestCase
         }
     }
 
+    public function testTheLineOfAPlaceIsKeptApartFromItsPathSoACutPathStillShowsIt(): void
+    {
+        $this->givenAChangesRound();
+        $this->ledger->judgeToFixAtLine7OfA('round-1', 'The total is off by one.');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame(['src/A.php', ':7'], [$crawler->filter('.vf-place .vf-path')->text(), $crawler->filter('.vf-place .vf-line')->text()]);
+    }
+
+    public function testAnApprovedRoundWhoseJudgeRejectedAFindingListsNothingToFix(): void
+    {
+        $this->ledger->startRoundOfQuorum('feat/thing', 'round-1', 'all');
+        $this->ledger->answer('round-1', 'correctness', 0);
+        $this->ledger->answer('round-1', 'security', 0);
+        $this->ledger->judgeFindings('round-1', ['F1' => 'reject']);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame('Approved', $crawler->filter('.verdict-card .verdict-words')->text());
+        self::assertCount(0, $crawler->filter('.verdict-card .verdict-findings'));
+    }
+
+    public function testABlockedRoundWithoutAnEndingSaysTheReviewersCouldNotGiveAVerdict(): void
+    {
+        $this->ledger->startRoundOfQuorum('feat/thing', 'round-1', 'all');
+        $this->ledger->blockReviewer('round-1', 'correctness', 'The diff is too large.');
+        $this->ledger->blockReviewer('round-1', 'security', 'The diff is too large.');
+        $this->ledger->judgeRound('round-1');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame('Blocked: the reviewers could not give a verdict on this change', $crawler->filter('.verdict-card .verdict-words')->text());
+    }
+
     public function testAFindingWithoutAPlaceShowsNoPlace(): void
     {
         $this->givenAChangesRoundWith(['F1' => 'act']);

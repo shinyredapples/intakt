@@ -621,8 +621,11 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
 .verdict-findings { margin: 0; padding: 0; list-style: none; }
 .verdict-findings a { display: flex; gap: var(--s8); align-items: baseline; min-height: 44px; padding: var(--s4) 0; color: var(--ink); text-decoration: none; }
 .verdict-findings a:hover .vf-title { text-decoration: underline; }
-.verdict-findings .vf-title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.verdict-findings .vf-place { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: var(--t13); }
+.verdict-findings .vf-title { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The place keeps up to half the line whatever the text's length, and only its path is cut, so the line number always shows. */
+.verdict-findings .vf-place { display: flex; flex: 0 0 auto; max-width: 50%; min-width: 0; white-space: nowrap; color: var(--muted); font-size: var(--t13); }
+.verdict-findings .vf-path { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.verdict-findings .vf-line { flex: none; }
 .sb-finding code, .finding-card code, .verdict-findings code { padding: 0 var(--s4); border-radius: var(--r-chip); background: var(--tint); }
 /* A judged round's findings are cards like the Now block's in one column, because a table column squeezed each finding to 110 px on a phone. */
 .finding-cards { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s8); }
