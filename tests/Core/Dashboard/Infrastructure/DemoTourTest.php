@@ -199,7 +199,7 @@ final class DemoTourTest extends TestCase
     public function testEveryStageSentenceIsAtMostNineWords(): void
     {
         foreach (TourStage::cases() as $stage) {
-            self::assertLessThanOrEqual(9, count(preg_split('/\s+/', $stage->sentence(), -1, PREG_SPLIT_NO_EMPTY)), $stage->value);
+            self::assertLessThanOrEqual(9, substr_count($stage->sentence(), ' ') + 1, $stage->value);
         }
     }
 
