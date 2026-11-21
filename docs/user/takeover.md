@@ -54,7 +54,7 @@ Do the steps in this order: the loop and Intakt both stop before the pull reques
 
    For the container image, the project file is the one on the data volume that `INTAKT_CONFIG` names in `intakt.env` (for example `INTAKT_CONFIG=/app/var/data/intakt.yaml`). Edit that file, in the folder you mounted at `/app/var/data` or with `docker cp intakt.yaml intakt:/app/var/data/intakt.yaml`. Do not edit `config/intakt.yaml` inside the container: it is lost with the container at the `docker rm` of step 6. Nothing else is needed here: the container builds its cache again from that file on every start, before any worker runs (step 6).
 6. **Start Intakt.** Start its service again, or the container: `docker rm intakt`, then the same `docker run` as before with the same data volume (see [Running the container image](README.md#running-the-container-image)), from the shell where you exported the key in step 4, with `-e GITHUB_APP_PRIVATE_KEY` (the name alone) added. `intakt.env` must still set `INTAKT_CONFIG`, so this start reads the label and the mode of step 5. The database stays in the volume.
-7. **Remove the co-existence Apps.** Only now, with no open pull request of theirs left (step 2): on GitHub, uninstall each co-existence App from your account and delete it, then delete its private key wherever you kept a copy.
+7. **Remove the co-existence Apps.** Only now, with no open pull request of theirs left (step 3): on GitHub, uninstall each co-existence App from your account and delete it, then delete its private key wherever you kept a copy.
 8. **Check.** Run `php bin/console intakt:forge:installation` again (`docker exec intakt php bin/console intakt:forge:installation` for the container; it must still pass) and `php bin/console intakt:status`. The takeover is done once Intakt has merged its first task built from the loop's label.
 
 ## Rollback
@@ -67,7 +67,7 @@ The rollback returns the project to the loop. It needs the loop's state from ste
 4. **Restart the loop.** On the loop's side, start its service again from the state it kept. It still holds its own Apps, which never changed.
 5. **Check.** The loop picks up the next task with its label and its open pull requests again, and an open pull request of a project that was in `mode: reviewer-for-loop` gets the loop's own review and moves on to merge. A pull request Intakt opened during the takeover was opened as the loop's App, so the loop now treats it as its own: let the loop finish it, or close it.
 
-Intakt now holds the loop's App values. To run Intakt beside the loop again, it needs co-existence Apps once more: create new ones, set their three values and run `php bin/console intakt:forge:installation` before you start Intakt. With them, set a project that should review for the loop back to `mode: reviewer-for-loop` (see [Reviewer-for-loop mode](README.md#reviewer-for-loop-mode)).
+Intakt still holds the loop's App values. Remove Intakt's copy of them (the three `GITHUB_APP_*` values of step 4 of the takeover, wherever you set them), or remove its container (`docker rm intakt`), and keep it stopped until co-existence Apps exist again. To run Intakt beside the loop again, it needs co-existence Apps once more: create new ones, set their three values and run `php bin/console intakt:forge:installation` before you start Intakt. With them, set a project that should review for the loop back to `mode: reviewer-for-loop` (see [Reviewer-for-loop mode](README.md#reviewer-for-loop-mode)).
 
 ## Record of the rollback test
 
