@@ -79,6 +79,25 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
         self::assertStringEndsWith('; '.$bench->falseAlarms.' false alarms.', $label->filter('.term-tip')->text());
     }
 
+    public function testABenchRunWithOneFalseAlarmNamesItInTheSingular(): void
+    {
+        self::getContainer()->set(PublishedBench::class, new PublishedBench(__DIR__.'/ShowTrends/a-bench-run-with-one-false-alarm.md'));
+
+        $tip = $this->browser->request('GET', '/trends')->filter('[data-tile="bench"] dt .term-tip');
+
+        self::assertStringEndsWith('; 1 false alarm.', $tip->text());
+    }
+
+    public function testThePassesTileExplainsAStandaloneReviewPassWithoutCallingItABuild(): void
+    {
+        $this->ledger->startRound('r-1', 'alpha');
+
+        $tile = $this->browser->request('GET', '/trends')->filter('[data-tile="passes"]');
+
+        self::assertSame('1', $tile->filter('dd')->text());
+        self::assertSame('Review passes started, whether run on their own or for a build.', $tile->filter('.term-tip')->text());
+    }
+
     public function testWithoutAReadableBenchTableThereIsNoBenchTile(): void
     {
         self::getContainer()->set(PublishedBench::class, new PublishedBench($this->projectDir().'/no-such-readme.md'));

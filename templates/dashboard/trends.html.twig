@@ -48,10 +48,11 @@
 {% if bench is not null or trends.anyReview %}
 <dl class="tiles" aria-label="Review figures">
     {% if bench is not null %}
-    {{ _self.tile('Defects found', bench.reading, 'Planted defects the review panel found on the review bench; ' ~ bench.falseAlarms ~ ' false alarms.', 'bench', kinds.Measured, bench.ranOn) }}
+    {{ _self.tile('Defects found', bench.reading, 'Planted defects the review panel found on the review bench; ' ~ bench.falseAlarms ~ (bench.falseAlarms == 1 ? ' false alarm.' : ' false alarms.'), 'bench', kinds.Measured, bench.ranOn) }}
     {% endif %}
     {% if trends.anyReview %}
-    {{ _self.tile('Passes', trends.roundsRun, glossary_explanation('round'), 'passes') }}
+    {#- Not the glossary's round, which is a whole build, because this counts every review pass started, a review of its own included. -#}
+    {{ _self.tile('Passes', trends.roundsRun, 'Review passes started, whether run on their own or for a build.', 'passes') }}
     {{ _self.tile('To fix', trends.seriousActFindings, 'P1 and P2 findings the judge kept for the builder to fix (the act list).', 'to-fix') }}
     {{ _self.tile('One reviewer only', oneReviewerOnly is null ? null : oneReviewerOnly ~ '%', 'Share of the findings kept to fix that only one reviewer of the pass reported, over passes with a full record of who reported what.', 'alone') }}
     {{ _self.tile('Time to verdict', trends.medianTimeToVerdict, 'Median time from the start of a pass to its verdict.', 'verdict-time') }}
