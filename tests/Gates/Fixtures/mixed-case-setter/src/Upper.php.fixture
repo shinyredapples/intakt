@@ -1,0 +1,25 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+final class Upper
+{
+    private string $name = '';
+
+    public function SetName(string $name): void
+    {
+        $this->name = $name;
+    }
+
+    public function SETLabel(string $label): void
+    {
+        $this->name = $label;
+    }
+
+    public function Settings(): string
+    {
+        return $this->name;
+    }
+}
