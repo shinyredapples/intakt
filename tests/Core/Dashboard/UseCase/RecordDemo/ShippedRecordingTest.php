@@ -24,6 +24,8 @@ final class ShippedRecordingTest extends TestCase
 {
     private const string SHIPPED = '/fixtures/demo/sample-change-review.json';
 
+    private const string HOME_FOLDER = '~/(home|Users|root)/~';
+
     public function testTheShippedRecordingReadsWithTheCurrentRecordingFormat(): void
     {
         $recording = $this->shipped();
@@ -69,9 +71,19 @@ final class ShippedRecordingTest extends TestCase
     }
 
     #[DataProvider('privateText')]
-    public function testTheShippedRecordingHoldsNoLocalPathHostOrToken(string $pattern): void
+    public function testTheShippedRecordingHoldsNoLocalPathHostOrTokenInItsTextOrAnyDecodedPayload(string $pattern): void
     {
-        self::assertDoesNotMatchRegularExpression($pattern, $this->text());
+        self::assertSame([], $this->textsMatching($pattern, $this->text()));
+    }
+
+    // The file stores each payload as a JSON string with escaped slashes, so a path quoted in one only shows once decoded (#3232).
+    public function testAHomeFolderQuotedInsideOneLedgerPayloadIsFoundByThePrivateTextCheck(): void
+    {
+        $format = new RecordingFormat(StoredSerializerFactory::create());
+        $text = $format->write($this->withRepository('/home/someone/work', $this->shipped()));
+
+        self::assertDoesNotMatchRegularExpression(self::HOME_FOLDER, $text);
+        self::assertNotSame([], $this->textsMatching(self::HOME_FOLDER, $text));
     }
 
     /**
@@ -79,11 +91,52 @@ final class ShippedRecordingTest extends TestCase
      */
     public static function privateText(): iterable
     {
-        yield 'a home folder' => ['~/(home|Users|root)/~'];
+        yield 'a home folder' => [self::HOME_FOLDER];
         yield 'a machine folder' => ['~/(srv|opt|mnt)/~'];
+        yield 'the system temp folder' => ['~(?<![\w./-])/tmp\b~'];
         yield 'a provider or forge token' => ['~\b(sk-|ghp_|gho_|github_pat_|xox[bp]-)~'];
         yield 'a private key' => ['~PRIVATE KEY~'];
         yield 'a bearer header' => ['~Bearer\s+\S~i'];
+        yield 'an email address' => ['~[\w.+-]+@[\w-]+(\.[\w-]+)+~'];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function textsMatching(string $pattern, string $text): array
+    {
+        return array_values(array_filter($this->scannedTexts($text), static fn (string $scanned): bool => 1 === preg_match($pattern, $scanned)));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function scannedTexts(string $text): array
+    {
+        $recording = new RecordingFormat(StoredSerializerFactory::create())->read($text);
+
+        return [
+            $text,
+            $this->unescaped($text),
+            ...array_map(fn (RecordedLedgerEvent $event): string => $this->unescaped($event->payload), $recording->events),
+            ...array_map(static fn (CapturedUpdate $update): string => $update->data, $recording->updates),
+        ];
+    }
+
+    private function unescaped(string $json): string
+    {
+        return json_encode(json_decode($json, flags: JSON_THROW_ON_ERROR), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+    }
+
+    private function withRepository(string $repository, Recording $shipped): Recording
+    {
+        $first = $shipped->events[0];
+        /** @var array<string, mixed> $payload */
+        $payload = json_decode($first->payload, true, flags: JSON_THROW_ON_ERROR);
+        $payload['repository'] = $repository;
+        $events = [new RecordedLedgerEvent($first->id, $first->kind, json_encode($payload, JSON_THROW_ON_ERROR), $first->recordedAt), ...array_slice($shipped->events, 1)];
+
+        return new Recording($shipped->reviewedAt, $shipped->intaktVersion, $shipped->models, $shipped->project, $shipped->change, $events, $shipped->updates);
     }
 
     private function withoutFallback(RecordedLedgerEvent $event): RecordedLedgerEvent
