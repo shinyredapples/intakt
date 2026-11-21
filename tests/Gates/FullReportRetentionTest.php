@@ -122,7 +122,7 @@ final class FullReportRetentionTest extends SandboxTestCase
     }
 
     /**
-     * @return list<string> the names, newest first
+     * @return list<string>
      */
     private function seedReports(string $root, int $count, int $time): array
     {

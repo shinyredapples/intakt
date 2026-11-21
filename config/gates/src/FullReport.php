@@ -62,7 +62,7 @@ final readonly class FullReport
     }
 
     /**
-     * @return array<string, int> each path with its modification time
+     * @return array<string, int>
      */
     private function otherGeneratedReportsIn(string $folder, string $written): array
     {
