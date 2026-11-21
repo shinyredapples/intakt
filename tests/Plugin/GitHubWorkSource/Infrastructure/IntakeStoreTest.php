@@ -6,6 +6,7 @@ namespace Intakt\Tests\Plugin\GitHubWorkSource\Infrastructure;
 
 use DateTimeZone;
 use Doctrine\Common\EventManager;
+use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\DriverManager;
 use Doctrine\DBAL\Exception\RetryableException;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
@@ -327,6 +328,89 @@ final class IntakeStoreTest extends KernelTestCase
             self::assertInstanceOf(RetryableException::class, $held->getPrevious());
             self::assertSame('winner', $loser->syncStateOf('alpha')->validator);
             self::assertSame([], $loser->issuesOf('alpha'));
+        } finally {
+            $second->close();
+            $first->close();
+            unlink($file);
+        }
+    }
+
+    public function testACommitRefusedWhileAnotherWorkerReadsRollsBackItsGenerationAndTheNextWriteSucceeds(): void
+    {
+        $file = (string) tempnam(sys_get_temp_dir(), 'intake');
+        $first = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'path' => $file]);
+        $second = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'path' => $file]);
+        try {
+            $first->executeStatement('PRAGMA busy_timeout=0');
+            $events = new EventManager();
+            $manager = new EntityManager($first, $this->entities->getConfiguration(), $events);
+            new SchemaTool($manager)->createSchema([$manager->getClassMetadata(IntakeValidator::class), $manager->getClassMetadata(StoredIssue::class)]);
+            $reading = new readonly class($second) {
+                public function __construct(private Connection $other)
+                {
+                }
+
+                public function onFlush(): void
+                {
+                    $this->other->beginTransaction();
+                    $this->other->fetchOne('SELECT COUNT(*) FROM work_source_validator');
+                }
+            };
+            $events->addEventListener([Events::onFlush], $reading);
+            $store = new IntakeStore($manager);
+
+            $held = $this->heldWhileRecording($store, $store->syncStateOf('alpha'));
+            $second->rollBack();
+            $events->removeEventListener([Events::onFlush], $reading);
+
+            self::assertInstanceOf(ProjectHeldByAnotherWriter::class, $held);
+            self::assertSame(0, $store->syncStateOf('alpha')->generation);
+            self::assertSame(0, $first->getTransactionNestingLevel());
+            self::assertTrue($store->recordIfStill('alpha', $store->syncStateOf('alpha'), new ListingRows([$this->stored(Issues::task(7))], 'after')));
+            self::assertSame(1, $store->syncStateOf('alpha')->generation);
+        } finally {
+            $second->close();
+            $first->close();
+            unlink($file);
+        }
+    }
+
+    public function testAWriteRefusedWhileAnotherWorkersCommitWaitsForThisOneIsNamedAsHeld(): void
+    {
+        $file = (string) tempnam(sys_get_temp_dir(), 'intake');
+        $first = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'path' => $file]);
+        $second = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'path' => $file]);
+        try {
+            $first->executeStatement('PRAGMA busy_timeout=0');
+            $second->executeStatement('PRAGMA busy_timeout=0');
+            $events = new EventManager();
+            $manager = new EntityManager($first, $this->entities->getConfiguration(), $events);
+            new SchemaTool($manager)->createSchema([$manager->getClassMetadata(IntakeValidator::class), $manager->getClassMetadata(StoredIssue::class)]);
+            $events->addEventListener([Events::onFlush], new readonly class($second) {
+                public function __construct(private Connection $other)
+                {
+                }
+
+                // The commit waits for the read lock of the store under test and keeps its pending lock, which also refuses the store's re-read of the sync state.
+                public function onFlush(): void
+                {
+                    $this->other->executeStatement('BEGIN IMMEDIATE');
+                    $this->other->executeStatement("INSERT INTO work_source_validator (project, validator, generation) VALUES ('alpha', 'winner', 1)");
+                    try {
+                        $this->other->executeStatement('COMMIT');
+                    } catch (RetryableException) {
+                        return;
+                    }
+
+                    throw new LogicException('The commit of the other worker must wait for the store under test.');
+                }
+            });
+            $store = new IntakeStore($manager);
+
+            $held = $this->heldWhileRecording($store, $store->syncStateOf('alpha'));
+
+            self::assertInstanceOf(ProjectHeldByAnotherWriter::class, $held);
+            self::assertInstanceOf(RetryableException::class, $held->getPrevious());
         } finally {
             $second->close();
             $first->close();

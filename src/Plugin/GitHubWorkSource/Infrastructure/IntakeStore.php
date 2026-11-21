@@ -20,6 +20,7 @@ use Intakt\Plugin\WorkSource\Contract\TaskNotQueued;
 use InvalidArgumentException;
 use LogicException;
 use NoDiscard;
+use PDO;
 
 // Every call works in an entity manager of its own on the shared connection: a worker keeps the shared one between ticks, what another worker stored since is the truth, a write must flush only its own rows and never another caller's pending work, and a write that fails leaves nothing behind for a later flush.
 final readonly class IntakeStore
@@ -68,14 +69,33 @@ final readonly class IntakeStore
                 return true;
             });
         } catch (UniqueConstraintViolationException|RetryableException $failure) {
+            $this->rollBackARefusedCommit();
+
             return $this->lostAfter($failure, $project, $readBefore);
+        }
+    }
+
+    // SQLite keeps a transaction open when it refuses its COMMIT as busy, while DBAL already counts it as ended and never rolls it back: left open, its uncommitted generation would be read back as another worker's and hold the write lock for every later call on the connection.
+    private function rollBackARefusedCommit(): void
+    {
+        $connection = $this->entities->getConnection();
+        $native = $connection->getNativeConnection();
+        if (!$connection->isTransactionActive() && $native instanceof PDO && $native->inTransaction()) {
+            $native->rollBack();
         }
     }
 
     private function lostAfter(UniqueConstraintViolationException|RetryableException $failure, string $project, SyncState $readBefore): false
     {
+        try {
+            $stored = $this->syncStateOf($project);
+        } catch (RetryableException $refusal) {
+            // Another worker's commit is under way and its pending lock refuses even the read, so nothing says yet whether it stores a newer listing.
+            throw ProjectHeldByAnotherWriter::of($project, $refusal);
+        }
+
         // The first sync of a project finds no row to lock, so a worker that commits the row after it was read makes the insert collide (or, on SQLite in WAL mode, the stale read snapshot refuses the write). It loses only when the newer listing is really stored.
-        if ($this->syncStateOf($project)->generation !== $readBefore->generation) {
+        if ($stored->generation !== $readBefore->generation) {
             return false;
         }
 
