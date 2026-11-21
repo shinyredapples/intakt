@@ -64,11 +64,20 @@ final class DiffAddedLinesTest extends TestCase
         self::assertSame([], $this->addedIn("@@ -1 +1 @@\n-a\n+b\n"));
     }
 
+    public function testAnAddedLineCarriesTheNewSideOfItsOwnHunkAndItsIndexInIt(): void
+    {
+        $diff = "diff --git a/src/A.php b/src/A.php\n@@ -1 +1 @@\n-a\n+b\n@@ -10,3 +10,4 @@\n keep\n-gone\n+first\n+second\n\n\\ No newline at end of file\n";
+
+        $added = new DiffAddedLines(new DiffPaths())->in($diff);
+
+        self::assertSame([['b', 0], ["keep\nfirst\nsecond\n", 1], ["keep\nfirst\nsecond\n", 2]], array_map(static fn (array $line): array => [$line[3], $line[4]], $added));
+    }
+
     /**
      * @return list<array{string, int, string}>
      */
     private function addedIn(string $diff): array
     {
-        return new DiffAddedLines(new DiffPaths())->in($diff);
+        return array_map(static fn (array $line): array => [$line[0], $line[1], $line[2]], new DiffAddedLines(new DiffPaths())->in($diff));
     }
 }

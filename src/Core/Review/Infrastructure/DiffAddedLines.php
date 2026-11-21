@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Infrastructure;
 
-// Gives each line a diff adds with its file and its number in the changed file, because a dropped quote's nearest lines are shown at their place; a line starting with "diff --git " or "@@" is always a header, since every hunk line starts with a space, "+", "-" or "\".
+// Gives each line a diff adds with its file and its number in the changed file, because a dropped quote's nearest lines are shown at their place, and with the new side of its hunk (its context and added lines) and its index among them, because a credential of several lines is redacted only when its lines are seen together; a line starting with "diff --git " or "@@" is always a header, since every hunk line starts with a space, "+", "-" or "\".
 final readonly class DiffAddedLines
 {
     private const string HUNK = '~^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@~';
@@ -14,7 +14,7 @@ final readonly class DiffAddedLines
     }
 
     /**
-     * @return list<array{string, int, string}>
+     * @return list<array{string, int, string, string, int}>
      */
     public function in(string $diff): array
     {
@@ -29,7 +29,7 @@ final readonly class DiffAddedLines
     }
 
     /**
-     * @return list<array{string, int, string}>
+     * @return list<array{string, int, string, string, int}>
      */
     private function addedIn(string $file): array
     {
@@ -49,29 +49,35 @@ final readonly class DiffAddedLines
     }
 
     /**
-     * @return list<array{string, int, string}>
+     * @return list<array{string, int, string, string, int}>
      */
     private function addedInHunk(string $path, string $hunk): array
     {
-        $lines = array_map(static fn (string $line): string => rtrim($line, "\r"), explode("\n", $hunk));
+        // Without the line break that ends the hunk, because the empty text after it is no line of the file.
+        $lines = array_map(static fn (string $line): string => rtrim($line, "\r"), explode("\n", str_ends_with($hunk, "\n") ? substr($hunk, 0, -1) : $hunk));
         if (1 !== preg_match(self::HUNK, array_shift($lines), $header)) {
             return [];
         }
 
-        $next = (int) $header[1];
+        $first = (int) $header[1];
+        $newSide = [];
         $added = [];
 
         foreach ($lines as $line) {
-            if (str_starts_with($line, '+')) {
-                $added[] = [$path, $next, substr($line, 1)];
+            // A removed line and a "\ No newline" note are left out, because neither holds a line of the changed file; an empty line counts, because it is a blank context line whose space a tool trimmed.
+            if ('' !== $line && !str_starts_with($line, '+') && !str_starts_with($line, ' ')) {
+                continue;
             }
 
-            // Not counted for a removed line or a "\ No newline" note, because neither holds a line of the changed file; an empty line counts, because it is a blank context line whose space a tool trimmed.
-            if ('' === $line || str_starts_with($line, '+') || str_starts_with($line, ' ')) {
-                ++$next;
+            if (str_starts_with($line, '+')) {
+                $added[] = count($newSide);
             }
+
+            $newSide[] = substr($line, 1);
         }
 
-        return $added;
+        $text = implode("\n", $newSide);
+
+        return array_map(static fn (int $index): array => [$path, $first + $index, $newSide[$index], $text, $index], $added);
     }
 }

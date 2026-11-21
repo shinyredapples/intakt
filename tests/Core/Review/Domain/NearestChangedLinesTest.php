@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Review\Domain;
 
 use Closure;
+use Intakt\Core\Platform\Contract\Redaction;
 use Intakt\Core\Review\Contract\NearLine;
 use Intakt\Core\Review\Contract\QuoteNearLines;
 use Intakt\Core\Review\Domain\NearestChangedLines;
 use Intakt\Core\Review\Domain\QuotesInChange;
+use Intakt\Core\Review\Infrastructure\DiffAddedLines;
+use Intakt\Core\Review\Infrastructure\DiffPaths;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -17,6 +20,9 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(QuoteNearLines::class)]
 #[CoversClass(NearLine::class)]
 #[UsesClass(QuotesInChange::class)]
+#[UsesClass(DiffAddedLines::class)]
+#[UsesClass(DiffPaths::class)]
+#[UsesClass(Redaction::class)]
 final class NearestChangedLinesTest extends TestCase
 {
     public function testAQuoteSharingNamePartsWithAChangedLineRecordsThatLineWithItsFileAndNumber(): void
@@ -131,14 +137,60 @@ final class NearestChangedLinesTest extends TestCase
         self::assertSame('dropReason([redacted])', $nearest[0]->quote);
     }
 
+    public function testAPrivateKeyBodyLineOfADiffIsNotRecorded(): void
+    {
+        $body = 'MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC7signing9Key+x';
+        $dashes = str_repeat('-', 5);
+        $diff = "diff --git a/config/jwt.pem b/config/jwt.pem\n--- /dev/null\n+++ b/config/jwt.pem\n@@ -0,0 +1,3 @@\n+".$dashes.'BEGIN PRIVATE KEY'.$dashes."\n+".$body."\n+".$dashes.'END PRIVATE KEY'.$dashes."\n";
+
+        $nearest = $this->nearestFor('`signingKey` is never rotated.', new DiffAddedLines(new DiffPaths())->in($diff), new Redaction()->redact(...));
+
+        self::assertSame([], $nearest);
+    }
+
+    public function testALineIsTakenFromItsRedactedHunkWhenNoRedactionSpansALineBreak(): void
+    {
+        $hunk = "context\n\$reason = 'held-secret-value';\ncontext";
+
+        $nearest = $this->nearestFor('`dropReason` is unused.', [['src/A.php', 2, "\$reason = 'held-secret-value';", $hunk, 1]], $this->redactingHeldSecret(...));
+
+        self::assertEquals([new NearLine('src/A.php', 2, "\$reason = '[redacted]';")], $nearest[0]->lines);
+    }
+
+    public function testALineLeftOutWithItsHunkTakesNoPlaceAmongTheKeptLines(): void
+    {
+        $leftOut = ['src/A.php', 1, '$dropReason = 0;', "\$dropReason = 0;\nheld-secret\n-value", 0];
+        $kept = array_map(static fn (int $line): array => ['src/B.php', $line, '$reason = '.$line.';'], range(1, 3));
+
+        $nearest = $this->nearestFor('`dropReason` is unused.', [$leftOut, ...$kept], static fn (string $text): string => str_replace("held-secret\n-value", '[redacted]', $text));
+
+        self::assertSame([['src/B.php', 1], ['src/B.php', 2], ['src/B.php', 3]], $this->placesOf($nearest[0]));
+    }
+
+    public function testAHeldCredentialWithBytesThatAreNotUtf8IsRedacted(): void
+    {
+        $secret = "credential\xFFsecretFixture";
+
+        $nearest = $this->nearestFor('`customerName` is missing.', [['src/A.php', 1, '$customer = "'.$secret.'";']], static fn (string $text): string => str_replace($secret, '[redacted]', $text));
+
+        self::assertSame('$customer = "[redacted]";', $nearest[0]->lines[0]->text);
+    }
+
+    public function testALineInAFileWhosePathHoldsACredentialIsLeftOut(): void
+    {
+        $nearest = $this->nearestFor('`dropReason` is unused.', [['src/held-secret-value.php', 1, '$reason = 1;'], ['src/B.php', 2, '$reason = 2;']], $this->redactingHeldSecret(...));
+
+        self::assertSame([['src/B.php', 2]], $this->placesOf($nearest[0]));
+    }
+
     public function testAQuoteInAFencedBlockIsNotLookedFor(): void
     {
         self::assertSame([], $this->nearestFor("Fix:\n```\n\$dropReason = 1;\n```\n", [['src/A.php', 1, '$reason = 1;']]));
     }
 
     /**
-     * @param list<array{string, int, string}> $changedLines
-     * @param ?Closure(string): string         $redact
+     * @param list<array{0: string, 1: int, 2: string, 3?: string, 4?: int}> $changedLines
+     * @param ?Closure(string): string                                       $redact
      *
      * @return list<QuoteNearLines>
      */

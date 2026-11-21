@@ -53,7 +53,7 @@ final readonly class JudgedRounds
     }
 
     /**
-     * @return list<array{string, int, string}>
+     * @return list<array{string, int, string, string, int}>
      */
     public function addedLinesOf(ReviewRound $round): array
     {
