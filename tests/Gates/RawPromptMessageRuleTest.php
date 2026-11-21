@@ -12,7 +12,13 @@ use Intakt\Core\Review\UseCase\SeedSampleProject\SampleProject;
 use Intakt\Gates\PhpStan\ClassNames;
 use Intakt\Gates\PhpStan\RawPromptMessageRule;
 use Intakt\Gates\PhpStan\RolePromptCarriers;
+use Intakt\Gates\PhpStan\RunTimeTraitConstructionCollector;
+use Intakt\Gates\PhpStan\UsedTraitCollector;
+use Intakt\Gates\StaticAnalysisGate;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiVendor;
+use Override;
+use PhpParser\Node;
+use PHPStan\Collectors\Collector;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 
@@ -22,6 +28,8 @@ use PHPUnit\Framework\Attributes\DataProvider;
 #[CoversClass(RawPromptMessageRule::class)]
 #[CoversClass(RolePromptCarriers::class)]
 #[CoversClass(ClassNames::class)]
+#[CoversClass(RunTimeTraitConstructionCollector::class)]
+#[CoversClass(UsedTraitCollector::class)]
 final class RawPromptMessageRuleTest extends PhpStanRuleTestCase
 {
     private const string MESSAGE_IMPORTS = "use Symfony\\AI\\Platform\\Message\\Content\\Text;\nuse Symfony\\AI\\Platform\\Message\\Message;\nuse Symfony\\AI\\Platform\\Message\\SystemMessage;\nuse Symfony\\AI\\Platform\\Message\\UserMessage;\n";
@@ -33,9 +41,35 @@ final class RawPromptMessageRuleTest extends PhpStanRuleTestCase
     private const int FIRST_CASE_LINE = 23;
     private const int TRAIT_CASE_LINE = 14;
 
+    private string|false $changedFilesOnly = false;
+
+    #[Override]
+    protected function setUp(): void
+    {
+        $this->changedFilesOnly = getenv(StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE);
+        putenv(StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE);
+        parent::setUp();
+    }
+
+    #[Override]
+    protected function tearDown(): void
+    {
+        putenv(false === $this->changedFilesOnly ? StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE : StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE.'='.$this->changedFilesOnly);
+        parent::tearDown();
+    }
+
     protected function ruleFor(string $root): RawPromptMessageRule
     {
         return new RawPromptMessageRule($root);
+    }
+
+    /**
+     * @return array<Collector<Node, mixed>>
+     */
+    #[Override]
+    protected function getCollectors(): array
+    {
+        return [new RunTimeTraitConstructionCollector(), new UsedTraitCollector()];
     }
 
     /**
@@ -525,10 +559,93 @@ final class RawPromptMessageRuleTest extends PhpStanRuleTestCase
     public function testATraitMethodDoesNotTakeTheTypeOfAClassStringAssignedInItsFile(): void
     {
         $sandbox = $this->emptySandbox();
-        $sandbox->write('src/Core/Review/UseCase/RunReviewRound/Builds.php', "<?php\n\nnamespace Intakt\\Core\\Review\\UseCase\\RunReviewRound;\n\nuse ArrayObject;\nuse Intakt\\Core\\Review\\Contract\\ReviewerConversation;\nuse Symfony\\Component\\Uid\\UuidV7;\n\n\$class = ArrayObject::class;\n\ntrait Builds\n{\n    /** @param class-string<ReviewerConversation> \$class */\n    public function build(string \$class, string \$prompt, UuidV7 \$id): ReviewerConversation\n    {\n        return new \$class(\$prompt, \$id);\n    }\n}\n");
+        $sandbox->write('src/Core/Review/UseCase/RunReviewRound/Builds.php', "<?php\n\nnamespace Intakt\\Core\\Review\\UseCase\\RunReviewRound;\n\nuse ArrayObject;\nuse Intakt\\Core\\Review\\Contract\\ReviewerConversation;\nuse Symfony\\Component\\Uid\\UuidV7;\n\n\$class = ArrayObject::class;\n\ntrait Builds\n{\n    public function build(string \$class, string \$prompt, UuidV7 \$id): object\n    {\n        return new \$class(\$prompt, \$id);\n    }\n}\n");
         $sandbox->write(self::HANDLER, "<?php\n\nnamespace Intakt\\Core\\Review\\UseCase\\RunReviewRound;\n\nfinal class ReviewWithReviewerHandler\n{\n    use Builds;\n}\n");
 
-        self::assertStringContainsString('src/Core/Review/UseCase/RunReviewRound/Builds.php:16 intakt.reviewerRole', $this->ruleFindingsIn($sandbox));
+        self::assertStringContainsString('src/Core/Review/UseCase/RunReviewRound/Builds.php (in context of class Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewerHandler):15 intakt.reviewerRole A trait builds an object whose class PHPStan cannot name', $this->ruleFindingsIn($sandbox));
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function usedTraitRunTimeClasses(): iterable
+    {
+        yield 'a plain string' => ['new $text(\'x\', $text)'];
+        yield 'a value of no known type' => ['new $anything()'];
+        yield 'a known class or a plain string' => ['new (\'\' === $text ? \ArrayObject::class : $text)()'];
+    }
+
+    #[DataProvider('usedTraitRunTimeClasses')]
+    public function testAUsedTraitBuildingAClassPhpStanCannotNameIsRefused(string $expression): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/Sample/Builds.php', $this->traitBuilding('Intakt\Sample', $expression));
+        $sandbox->write('src/Sample/Builder.php', "<?php\n\ndeclare(strict_types=1);\n\nnamespace Intakt\\Sample;\n\nfinal class Builder\n{\n    use Builds;\n}\n");
+
+        $findings = $this->ruleFindingsIn($sandbox);
+
+        self::assertSame(1, substr_count($findings, 'intakt.reviewerRole'), $findings);
+        self::assertStringContainsString('src/Sample/Builds.php (in context of class Intakt\Sample\Builder):'.self::TRAIT_CASE_LINE.' intakt.reviewerRole A trait builds an object whose class PHPStan cannot name', $findings);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function usedTraitNamedOtherClasses(): iterable
+    {
+        yield 'one of two other class constants' => ['new ($text ? \ArrayObject::class : \stdClass::class)()'];
+        yield 'a class string it assigns itself' => ['new ($text = \ArrayObject::class)()'];
+        yield 'the using class' => ['new self()'];
+        yield 'the using class at run time' => ['new static()'];
+    }
+
+    #[DataProvider('usedTraitNamedOtherClasses')]
+    public function testAUsedTraitBuildingOnlyNamedOtherClassesPasses(string $expression): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/Sample/Builds.php', $this->traitBuilding('Intakt\Sample', $expression));
+        $sandbox->write('src/Sample/Builder.php', "<?php\n\ndeclare(strict_types=1);\n\nnamespace Intakt\\Sample;\n\nfinal class Builder\n{\n    use Builds;\n}\n");
+
+        self::assertSame('', $this->ruleFindingsIn($sandbox));
+    }
+
+    public function testATraitCanInstantiateAnUnrelatedResolvedClass(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/Sample/Builds.php', "<?php\nnamespace Intakt\\Sample;\n\nuse ArrayObject;\nuse stdClass;\n\ntrait Builds\n{\n    public function build(bool \$wrapped): object\n    {\n        \$class = \$wrapped ? ArrayObject::class : stdClass::class;\n\n        return new \$class();\n    }\n}\n\nfinal class Builder\n{\n    use Builds;\n}\n");
+
+        self::assertSame('', $this->ruleFindingsIn($sandbox));
+    }
+
+    public function testATraitUsedOnlyByATraitNoClassUsesIsJudgedWhereItIsDeclared(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/Sample/Builds.php', $this->traitBuilding('Intakt\Sample', 'new $text(\'x\', $text)'));
+        $sandbox->write('src/Sample/BuildsMore.php', "<?php\n\ndeclare(strict_types=1);\n\nnamespace Intakt\\Sample;\n\ntrait BuildsMore\n{\n    use Builds;\n}\n");
+
+        self::assertStringContainsString('src/Sample/Builds.php:'.self::TRAIT_CASE_LINE.' intakt.reviewerRole A trait no class uses', $this->ruleFindingsIn($sandbox));
+    }
+
+    public function testATraitATraitOfAClassUsesIsJudgedInThatClass(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/Sample/Builds.php', $this->traitBuilding('Intakt\Sample', 'new $role(\'x\', $text)'));
+        $sandbox->write('src/Sample/BuildsMore.php', "<?php\n\ndeclare(strict_types=1);\n\nnamespace Intakt\\Sample;\n\ntrait BuildsMore\n{\n    use Builds;\n}\n");
+        $sandbox->write('src/Sample/Builder.php', "<?php\n\ndeclare(strict_types=1);\n\nnamespace Intakt\\Sample;\n\nfinal class Builder\n{\n    use BuildsMore;\n}\n");
+
+        $findings = $this->ruleFindingsIn($sandbox);
+
+        self::assertStringContainsString('src/Sample/Builds.php (in context of class Intakt\Sample\Builder):'.self::TRAIT_CASE_LINE.' intakt.reviewerRole new ReviewerRole() outside', $findings);
+        self::assertStringNotContainsString('A trait no class uses', $findings);
+    }
+
+    public function testAnUnusedTraitIsNotJudgedInARunOfChangedFilesOnly(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/Sample/Builds.php', $this->traitBuilding('Intakt\Sample', 'new $text(\'x\', $text)'));
+        putenv(StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE.'=1');
+
+        self::assertSame('', $this->ruleFindingsIn($sandbox));
     }
 
     public function testATraitMethodBuildingFromItsOwnTypedClassStringIsRefusedAsThatCarrier(): void

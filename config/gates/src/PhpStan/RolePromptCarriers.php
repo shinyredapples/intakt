@@ -10,7 +10,9 @@ use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundReviewer;
 use Intakt\Core\Review\Infrastructure\ConfiguredPanels;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewerHandler;
+use Closure;
 use Intakt\Core\Review\UseCase\SeedSampleProject\SampleProject;
+use Intakt\Gates\StaticAnalysisGate;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiVendor;
 use PhpParser\Node\Arg;
 use PhpParser\Node\Expr;
@@ -25,6 +27,7 @@ use PhpParser\Node\Stmt\Class_;
 use PhpParser\Node\Stmt\Trait_;
 use PhpParser\NodeFinder;
 use PHPStan\Analyser\Scope;
+use PHPStan\Node\CollectedDataNode;
 use PHPStan\Rules\IdentifierRuleError;
 use PHPStan\Rules\RuleErrorBuilder;
 use PHPStan\Type\ObjectType;
@@ -37,7 +40,8 @@ final readonly class RolePromptCarriers
     private const string RETRY = SymfonyAiVendor::class;
     private const string ROLE_ADVICE = 'new ReviewerConversation() in ReviewWithReviewerHandler takes a role prompt that is not $reviewer->rolePrompt() of a RoundReviewer: pass the round reviewer\'s rolePrompt() as the role prompt, so only the panel\'s configured prompt reaches PromptAssembly::systemWithRole().';
     private const string RETRY_ADVICE = 'new ReviewerConversation() in SymfonyAiVendor takes a role prompt that is not the rolePrompt of an existing ReviewerConversation: copy the stopped conversation\'s rolePrompt, so only the panel\'s configured prompt reaches PromptAssembly::systemWithRole().';
-    private const string TRAIT_ADVICE = 'A trait builds an object whose class is known only in the class that uses it: a trait body is outside ConfiguredPanels, SampleProject, ReviewRound, ReviewWithReviewerHandler and SymfonyAiVendor, so it may not build a ReviewerRole, RoundReviewer or ReviewerConversation; name the class it builds, or build the object in a class.';
+    private const string TRAIT_ADVICE = 'A trait no class uses builds an object whose class is known only in a class that uses it: a trait body is outside ConfiguredPanels, SampleProject, ReviewRound, ReviewWithReviewerHandler and SymfonyAiVendor, so it may not build a ReviewerRole, RoundReviewer or ReviewerConversation; name the class it builds, or build the object in a class.';
+    private const string UNNAMED_ADVICE = 'A trait builds an object whose class PHPStan cannot name, so it may be a ReviewerRole, RoundReviewer or ReviewerConversation, and a trait body is outside ConfiguredPanels, SampleProject, ReviewRound, ReviewWithReviewerHandler and SymfonyAiVendor; type the class string with the classes it may name (a class-string<...> or X::class), or build the object in a class.';
     private const array BUILDERS = [
         ReviewerRole::class => [ConfiguredPanels::class, SampleProject::class],
         RoundReviewer::class => [ReviewRound::class],
@@ -75,38 +79,82 @@ final readonly class RolePromptCarriers
         return null;
     }
 
-    // PHPStan analyzes a trait's body only inside a class that uses it, so the trait is judged where it is declared, without the using class's types: a trait body is outside every builder, and a class it names only at run time may be a carrier
+    // PHPStan analyzes a trait's body only inside a class that uses it, so a class the trait names literally is judged where the trait is declared: a trait body is outside every builder
     /**
      * @return list<IdentifierRuleError>
      */
     public function traitFindings(Trait_ $trait): array
     {
-        $findings = array_map($this->traitConstructionFinding(...), new NodeFinder()->findInstanceOf($trait->stmts, New_::class));
+        $findings = array_map($this->namedTraitConstructionFinding(...), $this->constructionsIn($trait));
 
         return array_values(array_filter($findings, static fn (?IdentifierRuleError $finding): bool => $finding instanceof IdentifierRuleError));
     }
 
-    // because inside a using class the trait's method has its own types, so a class expression typed as a carrier is named here by that carrier; a literal name is left to traitFindings(), which already names it
+    /**
+     * @return list<int>
+     */
+    public function runTimeConstructionLines(Trait_ $trait): array
+    {
+        $runTime = array_filter($this->constructionsIn($trait), fn (New_ $construction): bool => null === $this->traitClassNamesOf($construction->class));
+
+        return array_values(array_map(static fn (New_ $construction): int => $construction->getStartLine(), $runTime));
+    }
+
+    // because a trait no analyzed class uses has no method types, any class it names only at run time may be a carrier; a used trait's are judged in usedTraitFinding(). A subset run misses the classes that use a trait, so only the gate's explicit signal skips this, as for trait setters.
+    /**
+     * @param Closure(string): bool $isJudged
+     *
+     * @return list<IdentifierRuleError>
+     */
+    public function unusedTraitFindings(CollectedDataNode $collected, Closure $isJudged): array
+    {
+        if ('1' === getenv(StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE)) {
+            return [];
+        }
+
+        $used = array_merge(...array_merge(...array_values($collected->get(UsedTraitCollector::class))));
+        $findings = [];
+
+        foreach ($collected->get(RunTimeTraitConstructionCollector::class) as $file => $traits) {
+            foreach ($isJudged($file) ? $traits : [] as [$trait, $lines]) {
+                $findings = array_any($used, static fn (string $name): bool => 0 === strcasecmp($name, $trait))
+                    ? $findings
+                    : [...$findings, ...array_map(static fn (int $line): IdentifierRuleError => RuleErrorBuilder::message(self::TRAIT_ADVICE)->identifier('intakt.reviewerRole')->file($file)->line($line)->build(), $lines)];
+            }
+        }
+
+        return $findings;
+    }
+
+    // because inside a using class the trait's method has its own types: a class expression PHPStan names fully is judged by those names, one it cannot name may be a carrier; a literal name is left to traitFindings(), which already names it
     private function usedTraitFinding(New_ $construction, Scope $scope): ?IdentifierRuleError
     {
         if (null !== $this->traitClassNamesOf($construction->class)) {
             return null;
         }
 
-        $carrier = $this->classNames->namedAmong($construction->class, array_keys(self::BUILDERS), $scope)[0] ?? null;
+        $names = $this->classNames->fullyNamed($construction->class, $scope);
+
+        if (null === $names) {
+            return RuleErrorBuilder::message(self::UNNAMED_ADVICE)->identifier('intakt.reviewerRole')->build();
+        }
+
+        $carrier = $this->classNames->matching($names, array_keys(self::BUILDERS))[0] ?? null;
 
         return null === $carrier ? null : $this->misplaced($carrier)->build();
     }
 
-    private function traitConstructionFinding(New_ $construction): ?IdentifierRuleError
+    /**
+     * @return list<New_>
+     */
+    private function constructionsIn(Trait_ $trait): array
     {
-        $names = $this->traitClassNamesOf($construction->class);
+        return new NodeFinder()->findInstanceOf($trait->stmts, New_::class);
+    }
 
-        if (null === $names) {
-            return RuleErrorBuilder::message(self::TRAIT_ADVICE)->identifier('intakt.reviewerRole')->line($construction->getStartLine())->build();
-        }
-
-        $carrier = $this->classNames->matching($names, array_keys(self::BUILDERS))[0] ?? null;
+    private function namedTraitConstructionFinding(New_ $construction): ?IdentifierRuleError
+    {
+        $carrier = $this->classNames->matching($this->traitClassNamesOf($construction->class) ?? [], array_keys(self::BUILDERS))[0] ?? null;
 
         return null === $carrier ? null : $this->misplaced($carrier)->line($construction->getStartLine())->build();
     }

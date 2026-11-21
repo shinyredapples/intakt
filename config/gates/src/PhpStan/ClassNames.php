@@ -10,6 +10,7 @@ use PhpParser\Node\Stmt\Class_;
 use PHPStan\Analyser\Scope;
 use PHPStan\Type\Constant\ConstantStringType;
 use PHPStan\Type\Type;
+use PHPStan\Type\TypeUtils;
 
 final readonly class ClassNames
 {
@@ -27,6 +28,21 @@ final readonly class ClassNames
         };
 
         return $this->matching($names, $candidates);
+    }
+
+    // null when a part of the class expression's type names no class, such as a plain `string` or `object`, so the class is known only at run time
+    /**
+     * @return list<string>|null
+     */
+    public function fullyNamed(Name|Expr|Class_ $class, Scope $scope): ?array
+    {
+        if (!$class instanceof Expr) {
+            return $class instanceof Name ? [$scope->resolveName($class)] : [];
+        }
+
+        $parts = array_map($this->ofType(...), TypeUtils::flattenTypes($scope->getType($class)));
+
+        return array_any($parts, static fn (array $names): bool => [] === $names) ? null : array_values(array_unique(array_merge(...$parts)));
     }
 
     // because `$message::ofUser()` names the class through an object and `new $class()` through a class-name string, constant or typed `class-string<...>`
