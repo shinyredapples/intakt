@@ -669,7 +669,6 @@ final class MainHistoryTest extends TestCase
         $this->history([$key]);
     }
 
-    // The values from before the test, because later tests must inherit the environment the run started with.
     // A git in front of the real one writes the shallow entry right after git answered the named query, because only that forces the cut between two reads; the search path to restore is returned.
     private function cutShallowAfterGitAnswers(string $option, string $entry): string
     {
@@ -686,6 +685,7 @@ final class MainHistoryTest extends TestCase
         return $path;
     }
 
+    // The values from before the test, because later tests must inherit the environment the run started with.
     private function restoreGitDir(string|false $process, mixed $server): void
     {
         putenv(false === $process ? 'GIT_DIR' : 'GIT_DIR='.$process);
