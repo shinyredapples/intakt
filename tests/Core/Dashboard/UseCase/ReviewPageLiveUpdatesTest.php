@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
+use DateTimeImmutable;
 use DOMNode;
 use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
@@ -896,6 +897,61 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertSame([['correctness', 'standard tier, model not recorded', 'answered', 'no answer yet', '']], $this->rowsOf($updated));
     }
 
+    public function testARoundUpdateGivesAReviewerTheTableAlreadyListsTheModelOfTheSubstituteThatAnswered(): void
+    {
+        $this->givenARunningRound();
+        $page = $this->browser->request('GET', '/reviews/round-1');
+
+        $updated = $this->replaced($page, $this->substitutedRoundChange('substitute-model'));
+
+        self::assertSame([['correctness', 'substitute-model']], array_map(static fn (array $row): array => array_slice($row, 0, 2), $this->rowsOf($updated)));
+    }
+
+    public function testARoundUpdateGivesAReviewerTheCurrentStateBlockAlreadyListsTheModelOfTheSubstituteThatAnswered(): void
+    {
+        $this->givenARunningRound();
+        $page = $this->browser->request('GET', '/reviews/round-1');
+
+        $updated = $this->replaced($page, $this->substitutedRoundChange('substitute-model'));
+
+        self::assertSame(['correctness (substitute-model): Approved'], $updated->filter('.state-block .sb-list li')->each(static fn (Crawler $li): string => $li->text()));
+    }
+
+    public function testARoundUpdateKeepsTheStartingModelOfASubstitutedReviewerWhenTheCatchUpNamesNoModel(): void
+    {
+        $this->givenARunningRound();
+        $page = $this->browser->request('GET', '/reviews/round-1');
+
+        $updated = $this->replaced($page, $this->substitutedRoundChange(null));
+
+        self::assertSame([['correctness', 'original-model']], array_map(static fn (array $row): array => array_slice($row, 0, 2), $this->rowsOf($updated)));
+        self::assertSame(['correctness (original-model): Approved'], $updated->filter('.state-block .sb-list li')->each(static fn (Crawler $li): string => $li->text()));
+    }
+
+    public function testARoundUpdateWhoseReviewerCannotBeReadLeavesTheModelsThePageShows(): void
+    {
+        $this->givenARunningRound();
+        $page = $this->browser->request('GET', '/reviews/round-1');
+
+        $streams = $this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(1, 2, false, ['round-1-correctness' => FinishedState::Verdict])]);
+
+        self::assertStringNotContainsString('-model', $streams);
+        self::assertSame('standard tier, model not recorded', $this->rowsOf($this->replaced($page, $streams))[0][1]);
+    }
+
+    public function testTheModelsARoundUpdateReplacesAreTheMarkupThePageRendersOnLoad(): void
+    {
+        $this->givenARunningRound();
+        $page = $this->browser->request('GET', '/reviews/round-1');
+        $outcome = new ReviewerOutcome('round-1-correctness', 'correctness', 'standard', new DateTimeImmutable('2026-11-17T00:00:00Z'));
+
+        $streams = new Crawler($this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(1, 2, false, ['round-1-correctness' => FinishedState::Verdict]), 'outcomes' => [$outcome]]));
+
+        foreach (['#round-round-1-reviewer-round-1-correctness-model', '#round-round-1-now-reviewer-round-1-correctness-model'] as $model) {
+            self::assertSame($page->filter($model)->outerHtml(), $streams->filter('turbo-stream[action="replace"][targets="'.$model.'"] template')->html());
+        }
+    }
+
     public function testAReviewerThatStartsAfterThePageLoadedGetsARunningRowWithItsRoleAndModelInTheCurrentStateBlock(): void
     {
         [$round, $id, $page] = $this->givenAPageLoadedBeforeAnyReviewerStarted();
@@ -1358,6 +1414,15 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
         // Unread unless a test gives them, as MercureRoundUpdates sends them when the ledger cannot be read.
         return $twig->render(sprintf('dashboard/stream/%s.stream.html.twig', $name), $context + ['outcome' => null, 'outcomes' => []]);
+    }
+
+    private function substitutedRoundChange(?string $model): string
+    {
+        $outcome = new ReviewerOutcome('round-1-correctness', 'correctness', 'standard', new DateTimeImmutable('2026-11-17T00:00:00Z'), 'original-model')
+            ->answered(Decision::Approve, 0, ProjectMode::Live)
+            ->substitutedBy('substitute', $model);
+
+        return $this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(1, 2, false, ['round-1-correctness' => FinishedState::Verdict]), 'outcomes' => [$outcome]]);
     }
 
     /**
