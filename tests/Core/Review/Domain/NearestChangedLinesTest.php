@@ -118,7 +118,7 @@ final class NearestChangedLinesTest extends TestCase
     {
         $line = '$reason = \''.str_repeat('a', NearestChangedLines::MAX_LINE_LENGTH - 16).'held-secret-value\';';
 
-        $text = $this->nearestFor('`dropReason` is unused.', [['src/A.php', 1, $line]], self::redactingHeldSecret(...))[0]->lines[0]->text;
+        $text = $this->nearestFor('`dropReason` is unused.', [['src/A.php', 1, $line]], $this->redactingHeldSecret(...))[0]->lines[0]->text;
 
         self::assertStringNotContainsString('held', $text);
         self::assertStringEndsWith('[reda', $text);
@@ -126,7 +126,7 @@ final class NearestChangedLinesTest extends TestCase
 
     public function testAQuoteIsStoredRedacted(): void
     {
-        $nearest = $this->nearestFor('`dropReason(held-secret-value)` is unused.', [['src/A.php', 1, '$dropReason = $heldSecretValue;']], self::redactingHeldSecret(...));
+        $nearest = $this->nearestFor('`dropReason(held-secret-value)` is unused.', [['src/A.php', 1, '$dropReason = $heldSecretValue;']], $this->redactingHeldSecret(...));
 
         self::assertSame('dropReason([redacted])', $nearest[0]->quote);
     }
@@ -147,7 +147,7 @@ final class NearestChangedLinesTest extends TestCase
         return new NearestChangedLines($redact ?? static fn (string $text): string => $text)->forQuotesOf($findingText, $changedLines);
     }
 
-    private static function redactingHeldSecret(string $text): string
+    private function redactingHeldSecret(string $text): string
     {
         return str_replace('held-secret-value', '[redacted]', $text);
     }
