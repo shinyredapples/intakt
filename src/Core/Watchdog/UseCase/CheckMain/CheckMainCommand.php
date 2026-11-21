@@ -9,9 +9,8 @@ use Intakt\Core\Watchdog\Contract\CommitNameNotFull;
 use Intakt\Core\Watchdog\Contract\MainNotRead;
 use Intakt\Core\Watchdog\Contract\WatchedMain;
 use Intakt\Core\Watchdog\Infrastructure\OwnerKeyRefused;
-use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Attribute\AsCommand;
-use Symfony\Component\Console\Attribute\Option;
+use Symfony\Component\Console\Attribute\MapInput;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use Symfony\Component\Process\Exception\ProcessFailedException;
@@ -26,23 +25,10 @@ final readonly class CheckMainCommand
     ) {
     }
 
-    /**
-     * @param list<string> $recordedMerge
-     * @param list<string> $ownerKey
-     */
-    public function __invoke(
-        SymfonyStyle $io,
-        #[Argument(description: 'The repository whose main branch is checked: the top folder of a checkout, or a bare repository')]
-        string $repository,
-        #[Argument(description: 'The full commit name of the head of main the watchdog saw last')]
-        string $lastSeenHead,
-        #[Option(description: 'A merge Intakt recorded, as <base>..<head> with full commit names (repeatable)')]
-        array $recordedMerge = [],
-        #[Option(description: 'An SSH public key the owner registered, "<type> <base64>" (repeatable)')]
-        array $ownerKey = [],
-    ): int {
+    public function __invoke(SymfonyStyle $io, #[MapInput] CheckMainInput $input): int
+    {
         try {
-            $classification = $this->check->classified($repository, $this->watched($lastSeenHead, $recordedMerge), $ownerKey);
+            $classification = $this->check->classified($input->repository, $this->watched($input->lastSeenHead, $input->recordedMerge), $input->ownerKey);
         } catch (CommitNameNotFull|RecordedMergeNotARange|OwnerKeyRefused $refused) {
             $io->error($this->printable($refused->getMessage()));
 

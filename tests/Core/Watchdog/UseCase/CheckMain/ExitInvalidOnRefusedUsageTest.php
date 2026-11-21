@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Watchdog\UseCase\CheckMain;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Watchdog\UseCase\CheckMain\CheckMain;
 use Intakt\Core\Watchdog\UseCase\CheckMain\CheckMainCommand;
+use Intakt\Core\Watchdog\UseCase\CheckMain\CheckMainInput;
 use Intakt\Core\Watchdog\UseCase\CheckMain\ExitInvalidOnRefusedUsage;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -27,6 +28,7 @@ use Symfony\Component\Filesystem\Filesystem;
 #[CoversClass(ExitInvalidOnRefusedUsage::class)]
 #[UsesClass(CheckMainCommand::class)]
 #[UsesClass(CheckMain::class)]
+#[UsesClass(CheckMainInput::class)]
 #[UsesClass(HardenedGit::class)]
 final class ExitInvalidOnRefusedUsageTest extends TestCase
 {

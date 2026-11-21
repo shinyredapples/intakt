@@ -4,7 +4,7 @@
 
 ## The command
 
-`php bin/console intakt:watchdog:check <repository> <last-seen-head> [--recorded-merge=<base>..<head> ...] [--owner-key=<key> ...]` (`src/Core/Watchdog/UseCase/CheckMain/CheckMainCommand.php`) builds a `WatchedMain` from the last seen head and the recorded merges, and `CheckMain` builds a `MainHistory` for the repository and the owner keys on each call (no state is kept between calls) and returns `CommitClassifier::classify()`.
+`php bin/console intakt:watchdog:check <repository> <last-seen-head> [--recorded-merge=<base>..<head> ...] [--owner-key=<key> ...]` (`src/Core/Watchdog/UseCase/CheckMain/CheckMainCommand.php`, its arguments and options mapped onto `CheckMainInput` with `#[MapInput]`) builds a `WatchedMain` from the last seen head and the recorded merges, and `CheckMain` builds a `MainHistory` for the repository and the owner keys on each call (no state is kept between calls) and returns `CommitClassifier::classify()`.
 
 - `<repository>`: the repository whose `refs/heads/main` is read, the top folder of a checkout or a bare repository, as `MainHistory` requires.
 - `<last-seen-head>`: the full commit name of the head the watchdog saw last.

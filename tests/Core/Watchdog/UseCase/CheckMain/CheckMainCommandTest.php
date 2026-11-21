@@ -20,6 +20,7 @@ use Intakt\Core\Watchdog\Infrastructure\OwnerKey;
 use Intakt\Core\Watchdog\Infrastructure\OwnerKeyRefused;
 use Intakt\Core\Watchdog\UseCase\CheckMain\CheckMain;
 use Intakt\Core\Watchdog\UseCase\CheckMain\CheckMainCommand;
+use Intakt\Core\Watchdog\UseCase\CheckMain\CheckMainInput;
 use Intakt\Core\Watchdog\UseCase\CheckMain\RecordedMergeNotARange;
 use Intakt\Core\Watchdog\UseCase\CheckMain\RecordedMergeOption;
 use Intakt\Tests\Core\Git\TemporaryRepository;
@@ -36,6 +37,7 @@ use Symfony\Component\Process\Process;
 
 #[CoversClass(CheckMainCommand::class)]
 #[CoversClass(CheckMain::class)]
+#[CoversClass(CheckMainInput::class)]
 #[CoversClass(RecordedMergeOption::class)]
 #[CoversClass(RecordedMergeNotARange::class)]
 #[UsesClass(CommitClassifier::class)]
@@ -74,7 +76,7 @@ final class CheckMainCommandTest extends TestCase
 
     public function testARecordedMergeOnMainIsReportedCleanAndExitsWithZero(): void
     {
-        [$seen, $merge] = $this->mergeOfATaskBranch();
+        [$seen, $merge] = $this->seenCommitAndMergeOfATaskBranch();
 
         $tester = $this->whenTheCommandRuns($seen, ['--recorded-merge' => [$seen.'..'.$merge]]);
 
@@ -128,7 +130,7 @@ final class CheckMainCommandTest extends TestCase
 
     public function testEveryRecordedMergeAndEveryOwnerKeyGivenIsRead(): void
     {
-        [$seen, $first] = $this->mergeOfATaskBranch();
+        [$seen, $first] = $this->seenCommitAndMergeOfATaskBranch();
         $this->repository->commitSignedWith($this->privateKey('second-owner'), 'Second owner change');
         $base = $this->repository->commitSignedWith($this->privateKey('first-owner'), 'First owner change');
         $this->repository->checkoutNewBranch('other');
@@ -172,7 +174,7 @@ final class CheckMainCommandTest extends TestCase
     {
         $this->repository->remove();
         $this->repository = new TemporaryRepository('sha256');
-        [$seen, $merge] = $this->mergeOfATaskBranch();
+        [$seen, $merge] = $this->seenCommitAndMergeOfATaskBranch();
 
         $tester = $this->whenTheCommandRuns($seen, ['--recorded-merge' => [$seen.'..'.$merge]]);
 
@@ -200,7 +202,7 @@ final class CheckMainCommandTest extends TestCase
     #[DataProvider('recordedMergesThatAreNotARange')]
     public function testARecordedMergeThatIsNotTwoFullCommitNamesAroundTwoDotsExitsWithTwo(string $value): void
     {
-        [$seen, $merge] = $this->mergeOfATaskBranch();
+        [$seen, $merge] = $this->seenCommitAndMergeOfATaskBranch();
         $range = strtr($value, ['{base}' => $seen, '{head}' => $merge, '{short}' => substr($seen, 0, 12), '{upper}' => strtoupper($seen)]);
 
         $tester = $this->whenTheCommandRuns($seen, ['--recorded-merge' => [$range]]);
@@ -220,7 +222,7 @@ final class CheckMainCommandTest extends TestCase
 
     public function testARecordedMergeWithAnAbbreviatedHeadNamesTheHead(): void
     {
-        [$seen, $merge] = $this->mergeOfATaskBranch();
+        [$seen, $merge] = $this->seenCommitAndMergeOfATaskBranch();
 
         $tester = $this->whenTheCommandRuns($seen, ['--recorded-merge' => [$seen.'..'.substr($merge, 0, 7)]]);
 
@@ -282,11 +284,10 @@ final class CheckMainCommandTest extends TestCase
         self::assertStringContainsString('missing\nviolation', $tester->getDisplay());
     }
 
-    // The seen commit and the merge commit of a task branch, in that order.
     /**
      * @return array{string, string}
      */
-    private function mergeOfATaskBranch(): array
+    private function seenCommitAndMergeOfATaskBranch(): array
     {
         $seen = $this->repository->commitEmpty('Seen');
         $this->repository->checkoutNewBranch('task');
