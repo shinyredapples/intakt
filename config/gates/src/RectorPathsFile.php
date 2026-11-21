@@ -49,12 +49,11 @@ final readonly class RectorPathsFile
             throw new ScopeFailure('the rector paths file '.$file.' does not decode: '.$failure->getMessage(), 0, $failure);
         }
 
-        if (!is_array($paths) || [] === $paths || !array_is_list($paths) || array_any($paths, static fn (mixed $path): bool => !is_string($path) || '' === $path)) {
+        if (!is_array($paths) || [] === $paths || !array_is_list($paths)) {
             throw new ScopeFailure('the rector paths file '.$file.' holds no list of paths');
         }
 
-        /** @var list<string> $paths */
-        return $paths;
+        return array_map(static fn (mixed $path): string => is_string($path) && '' !== $path ? $path : throw new ScopeFailure('the rector paths file '.$file.' holds no list of paths'), $paths);
     }
 
     /**
