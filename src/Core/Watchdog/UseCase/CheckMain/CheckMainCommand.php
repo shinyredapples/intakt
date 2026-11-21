@@ -16,9 +16,11 @@ use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use Symfony\Component\Process\Exception\ProcessFailedException;
 
-#[AsCommand(name: 'intakt:watchdog:check', description: 'Check the new commits on main since the last seen head against the watchdog\'s rules')]
+#[AsCommand(name: self::NAME, description: 'Check the new commits on main since the last seen head against the watchdog\'s rules')]
 final readonly class CheckMainCommand
 {
+    public const string NAME = 'intakt:watchdog:check';
+
     public function __construct(
         private CheckMain $check,
     ) {
