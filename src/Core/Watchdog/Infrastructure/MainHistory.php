@@ -98,8 +98,7 @@ final readonly class MainHistory implements CommitHistory
             return [];
         }
 
-        // The oldest commit stands on the commit itself, or on an ancestor of it when main holds the commit only through a second parent (a fast-forward to a branch that merged main). A cut can hide ancestry but never invent it, so a yes here is true.
-        // The oldest commit must also not be reachable from the commit, asked with no shallow entries, because a cut during the walk hides the ancestry that leaves a commit main already held out of the walk; a pruned commit then fails the read instead of answering no.
+        // The foot must be an ancestor of the commit (a cut can hide ancestry but never invent it, so a yes is true), and the oldest commit must not be one, asked with no shallow entries, because a cut during the walk can hide that main already held it; a pruned commit then fails the read instead of answering no.
         if (!$this->holds(['merge-base', '--is-ancestor', $chain->foot, $since]) || $this->holds(['merge-base', '--is-ancestor', $chain->commits[0], $since], self::NO_SHALLOW_ENTRIES)) {
             throw MainNotRead::brokenWalk($since, $tip);
         }
