@@ -9,6 +9,8 @@ use Intakt\Core\Platform\Contract\FigureKind;
 
 final readonly class MilestoneTable
 {
+    private const string MARKDOWN_PUNCTUATION = '\\`*_{}[]()#+-.!:|"\'$>';
+
     /**
      * @param list<Milestone> $milestones
      * @param list<Issue>     $issues
@@ -42,9 +44,11 @@ final readonly class MilestoneTable
         return '| '.implode(' | ', [$this->cell($milestone->title), $this->cell($milestone->goal), $due, $lastText, count($done).' / '.$open]).' |';
     }
 
-    // An escaped `<` keeps forge text from opening a comment or writing a journey marker into the page.
+    // Forge text stays literal (no comment, journey marker or Markdown); kramdown cannot backslash-escape `~` or `&`, so they become entities, and each single pass never rewrites its own output.
     private function cell(string $text): string
     {
-        return str_replace(['|', '<', "\r", "\n"], ['\|', '&lt;', '', ' '], trim($text));
+        return strtr(trim($text), ["\r\n" => ' ', "\r" => ' ', "\n" => ' '])
+            |> (static fn (string $flat): string => addcslashes($flat, self::MARKDOWN_PUNCTUATION))
+            |> (static fn (string $escaped): string => strtr($escaped, ['&' => '&amp;', '<' => '&lt;', '~' => '&#126;']));
     }
 }

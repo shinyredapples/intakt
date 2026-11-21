@@ -45,7 +45,7 @@ final readonly class AccountPlatform implements PlatformInterface
         private SendFailures $failures,
         private PinnedProviderCooldowns $pinnedCooldowns,
         private ?PinnedProvider $pinned,
-        // Null for the account the failover tries first, because the read that found it free was just made; a fallback account is read again, since another worker can cool it or its pin while an earlier account is tried.
+        // Every account is read again right before it sends, the first one too, because the scan that found it free went on to read the accounts after it, and another worker can cool an account or its pin meanwhile; null only where no wait is read again.
         private ?ModelWaits $recheck = null,
     ) {
     }
@@ -201,25 +201,20 @@ final readonly class AccountPlatform implements PlatformInterface
         return strlen($significant) > strlen((string) AccountCooldowns::LONGEST_SECONDS) ? AccountCooldowns::LONGEST_SECONDS : (int) $significant;
     }
 
-    // The three HTTP-date forms of RFC 9110: IMF-fixdate, the obsolete RFC 850 form and asctime. A date counts only when it formats back to the header, so one PHP reads by normalizing it (minute 99, a wrong weekday) falls back to the default minute instead of a wait it never named.
+    // The three HTTP-date forms of RFC 9110: IMF-fixdate, the obsolete RFC 850 form and asctime. Runs of spaces are read as one, because asctime pads a one-digit day with a space (`Nov  9`), which no PHP format writes. A date counts only when it formats back to that value, so one PHP reads by normalizing it (minute 99, a wrong weekday) falls back to the default minute instead of a wait it never named.
     private function secondsUntilDate(string $value): ?int
     {
         $utc = new DateTimeZone('UTC');
+        $collapsed = (string) preg_replace('~ {2,}~', ' ', $value);
 
         foreach (['D, d M Y H:i:s \G\M\T', 'l, d-M-y H:i:s \G\M\T', 'D M j H:i:s Y'] as $format) {
-            $at = DateTimeImmutable::createFromFormat('!'.$format, $value, $utc);
-            if (false !== $at && $this->formatsBack($at, $format, $value)) {
+            $at = DateTimeImmutable::createFromFormat('!'.$format, $collapsed, $utc);
+            if (false !== $at && $at->format($format) === $collapsed) {
                 return $at->getTimestamp() - $this->clock->now()->getTimestamp();
             }
         }
 
         return null;
-    }
-
-    // asctime pads a one-digit day with a space (`Nov  9`), which no PHP format writes, so runs of spaces are compared as one.
-    private function formatsBack(DateTimeImmutable $at, string $format, string $value): bool
-    {
-        return $at->format($format) === preg_replace('~ {2,}~', ' ', $value);
     }
 
     // The pinned provider keeps its own window, which alone says how long the call waits for it (AccountFailoverPlatform); false when the model pins nothing or the window could not be saved, logged instead of thrown, because the provider's 429 must still reach the caller.

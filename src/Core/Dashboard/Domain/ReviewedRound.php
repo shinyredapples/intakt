@@ -32,6 +32,12 @@ final readonly class ReviewedRound
     public array $dropped;
 
     public bool $findingTextRecorded;
+
+    // False when the judge's row holds a finding entry that cannot be read, or marks an id its findings do not hold, so a count over the round never reads a lost finding as none.
+    public bool $everyFindingRecorded;
+
+    // True when the judge left a finding without its mark (the fallback for an answer that cannot be read), null for a row written before that was recorded, so a count of the judge's own calls can leave both out.
+    public ?bool $judgeFellBack;
     public ReviewState $state;
     public TokenFigures $tokens;
     public Cost $cost;
@@ -42,6 +48,10 @@ final readonly class ReviewedRound
     // Null for a round completed before the ledger recorded who reported what, because such a round must read as unknown, never as a round whose reviewers reported nothing.
     /** @var array<string, list<string>>|null */
     public ?array $findingsByReviewer;
+
+    // Keyed by reviewer id, then finding id, with the severity that reviewer gave, because two reviewers may repeat one tracked finding at different severities; null unless every reporter row recorded them.
+    /** @var array<string, array<string, string>>|null */
+    public ?array $severitiesByReviewer;
 
     // The mark is null until the round is read with its review, because the start row does not say whether the round is a replay. The speed factor is null for every round but a demo replay that stored one.
     public function __construct(
@@ -62,6 +72,8 @@ final readonly class ReviewedRound
         $this->findings = [];
         $this->dropped = [];
         $this->findingTextRecorded = true;
+        $this->everyFindingRecorded = true;
+        $this->judgeFellBack = null;
         $this->state = ReviewState::InProgress;
         $this->tokens = TokenFigures::none();
         $this->cost = Cost::none();
@@ -69,6 +81,7 @@ final readonly class ReviewedRound
         $this->judgedAt = null;
         $this->mark = null;
         $this->findingsByReviewer = null;
+        $this->severitiesByReviewer = null;
     }
 
     // A replay shows like a live round, so the pages mark it, because its verdicts were never given on the change.
@@ -100,6 +113,12 @@ final readonly class ReviewedRound
     public function actFindings(): array
     {
         return [...array_filter($this->findings, static fn (RoundFinding $finding): bool => JudgeCall::Act === $finding->call)];
+    }
+
+    // Null when the round holds no severity from this reviewer for the id, such as a reporter row written before severities were recorded, so a count never guesses one.
+    public function severityReportedBy(string $reviewer, string $id): ?string
+    {
+        return $this->severityIn($this, $reviewer, $id);
     }
 
     public function reviewOutcome(): ?ReviewOutcome
@@ -161,6 +180,21 @@ final readonly class ReviewedRound
         return clone ($this, ['dropped' => $dropped]);
     }
 
+    public function withFindingsMissing(): self
+    {
+        return clone ($this, ['everyFindingRecorded' => false]);
+    }
+
+    public function judgedByFallback(): self
+    {
+        return clone ($this, ['judgeFellBack' => true]);
+    }
+
+    public function judgedOnItsOwnMarks(): self
+    {
+        return clone ($this, ['judgeFellBack' => false]);
+    }
+
     public function withTokens(TokenFigures $tokens): self
     {
         return clone ($this, ['tokens' => $tokens]);
@@ -190,6 +224,14 @@ final readonly class ReviewedRound
         return clone ($this, ['findingsByReviewer' => $findings]);
     }
 
+    /**
+     * @param array<string, array<string, string>> $severities
+     */
+    public function withSeveritiesByReviewer(array $severities): self
+    {
+        return clone ($this, ['severitiesByReviewer' => $severities]);
+    }
+
     public function markedAs(ReplayMark $mark): self
     {
         return clone ($this, ['mark' => $mark]);
@@ -199,5 +241,11 @@ final readonly class ReviewedRound
     private function isReplayMarked(self $round): bool
     {
         return ReplayMark::Replay === $round->mark;
+    }
+
+    // Read through a round for the same reason as `isReplayMarked()`: PHPStan keeps the constructor's null for `$this->severitiesByReviewer`.
+    private function severityIn(self $round, string $reviewer, string $id): ?string
+    {
+        return $round->severitiesByReviewer[$reviewer][$id] ?? null;
     }
 }

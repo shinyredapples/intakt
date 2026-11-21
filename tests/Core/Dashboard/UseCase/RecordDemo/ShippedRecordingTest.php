@@ -40,6 +40,20 @@ final class ShippedRecordingTest extends TestCase
         self::assertContains(LedgerEventKind::JudgeDone, $kinds);
     }
 
+    // The keys the Trends charts read were added to a recording made before them, derived from what it already held (#3053), so taking them out and deriving them again gives the shipped text back.
+    public function testTheShippedTrendsKeysAreDerivedFromTheRecordedContent(): void
+    {
+        $format = new RecordingFormat(StoredSerializerFactory::create());
+        $shipped = $this->shipped();
+        $before = new Recording($shipped->reviewedAt, $shipped->intaktVersion, $shipped->models, $shipped->project, $shipped->change, array_values(array_map(
+            $this->withoutFallback(...),
+            array_filter($shipped->events, static fn (RecordedLedgerEvent $event): bool => LedgerEventKind::ReviewerFindingsRecorded !== $event->kind),
+        )), $shipped->updates);
+
+        self::assertCount(2, array_filter($shipped->events, static fn (RecordedLedgerEvent $event): bool => LedgerEventKind::ReviewerFindingsRecorded === $event->kind));
+        self::assertSame($this->text(), $format->write(new RecordingWithTrendsKeys(StoredSerializerFactory::create())->of($before)));
+    }
+
     public function testTheImagePointsTheDemoAtTheShippedRecording(): void
     {
         self::assertMatchesRegularExpression(
@@ -70,6 +84,19 @@ final class ShippedRecordingTest extends TestCase
         yield 'a provider or forge token' => ['~\b(sk-|ghp_|gho_|github_pat_|xox[bp]-)~'];
         yield 'a private key' => ['~PRIVATE KEY~'];
         yield 'a bearer header' => ['~Bearer\s+\S~i'];
+    }
+
+    private function withoutFallback(RecordedLedgerEvent $event): RecordedLedgerEvent
+    {
+        if (LedgerEventKind::JudgeDone !== $event->kind) {
+            return $event;
+        }
+
+        /** @var array<string, mixed> $payload */
+        $payload = json_decode($event->payload, true, flags: JSON_THROW_ON_ERROR);
+        unset($payload['fallback']);
+
+        return new RecordedLedgerEvent($event->id, $event->kind, json_encode($payload, JSON_PRESERVE_ZERO_FRACTION | JSON_THROW_ON_ERROR), $event->recordedAt);
     }
 
     private function shipped(): Recording

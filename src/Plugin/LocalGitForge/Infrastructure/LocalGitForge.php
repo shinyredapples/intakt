@@ -15,6 +15,7 @@ use Intakt\Plugin\Forge\Contract\ChangedFiles;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\ChangeNotFound;
 use Intakt\Plugin\Forge\Contract\CommitId;
+use Intakt\Plugin\Forge\Contract\CommitIdMalformed;
 use Intakt\Plugin\Forge\Contract\CommitRange;
 use Intakt\Plugin\Forge\Contract\Diff;
 use Intakt\Plugin\Forge\Contract\FileContent;
@@ -24,7 +25,6 @@ use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\HeadMove;
 use Intakt\Plugin\Forge\Contract\HeadMoveKind;
 use Intakt\Plugin\LocalGitForge\Contract\LocalRepository;
-use InvalidArgumentException;
 use NoDiscard;
 use Symfony\Component\Process\Exception\ExceptionInterface;
 use Symfony\Component\Process\Process;
@@ -288,7 +288,7 @@ final readonly class LocalGitForge implements Forge, AuthorTrust
     {
         try {
             return new CommitId(trim($output));
-        } catch (InvalidArgumentException $invalid) {
+        } catch (CommitIdMalformed $invalid) {
             throw new ForgeReadFailed('git printed something other than a commit hash.', $invalid->getCode(), previous: $invalid);
         }
     }
