@@ -53,22 +53,23 @@ use Symfony\Component\DomCrawler\Crawler;
 #[UsesClass(SampleChangeSource::class)]
 final class BoardColumnMapTest extends DashboardPageTestCase
 {
-    private const array COLUMNS = ['Waiting on you', 'Backlog', 'Ready', 'Planned', 'Building', 'Checking', 'In review', 'Merging', 'Done'];
+    // The columns an install without tasks shows: the six Coming next names hold no card, so neither the map nor the switcher names them (#3154).
+    private const array COLUMNS = ['Waiting on you', 'In review', 'Done'];
 
     // Hidden until assets/board-map.js measures a board wider than its space, so a board that fits, or a page without the script, shows no map.
-    public function testTheColumnMapStartsHiddenWithOneSegmentPerColumnInBoardOrder(): void
+    public function testTheColumnMapStartsHiddenWithOneSegmentPerShownColumnInBoardOrder(): void
     {
         $map = $this->browser->request('GET', '/')->filter('.stagemap');
 
         self::assertNotNull($map->attr('hidden'));
         self::assertSame(self::COLUMNS, $map->filter('button.sm-seg .sr-only')->each(static fn (Crawler $name): string => $name->text()));
         self::assertSame(
-            array_map(static fn (BoardColumn $column): string => 'col-'.$column->slug(), BoardColumn::cases()),
+            array_map(static fn (string $name): string => 'col-'.BoardColumn::from($name)->slug(), self::COLUMNS),
             $map->filter('button.sm-seg')->each(static fn (Crawler $segment): string => (string) $segment->attr('aria-controls')),
         );
     }
 
-    public function testThePhoneSwitcherListsEveryColumnWithItsTrueTotalAndPressesWaitingOnYouFirst(): void
+    public function testThePhoneSwitcherListsEveryShownColumnWithItsTrueTotalAndPressesWaitingOnYouFirst(): void
     {
         $this->ledger->startRoundOf('42', 'round-1', 1);
         $this->ledger->judgeRound('round-1');
@@ -78,9 +79,9 @@ final class BoardColumnMapTest extends DashboardPageTestCase
 
         $buttons = $switcher->filter('button');
         self::assertSame(self::COLUMNS, $buttons->each(static fn (Crawler $button): string => (string) $button->attr('data-column')));
-        self::assertSame(['0', '0', '0', '0', '0', '0', '1', '0', '1'], $buttons->filter('.count')->each(static fn (Crawler $count): string => $count->text()));
-        self::assertSame(['true', 'false', 'false', 'false', 'false', 'false', 'false', 'false', 'false'], $buttons->each(static fn (Crawler $button): string => (string) $button->attr('aria-pressed')));
-        self::assertSame('col-in-review', $buttons->eq(6)->attr('aria-controls'));
+        self::assertSame(['0', '1', '1'], $buttons->filter('.count')->each(static fn (Crawler $count): string => $count->text()));
+        self::assertSame(['true', 'false', 'false'], $buttons->each(static fn (Crawler $button): string => (string) $button->attr('aria-pressed')));
+        self::assertSame('col-in-review', $buttons->eq(1)->attr('aria-controls'));
     }
 
     // A speech user says the words they see, so the switcher's name is them, with the unit in hidden words after the count.
@@ -88,7 +89,7 @@ final class BoardColumnMapTest extends DashboardPageTestCase
     {
         $this->ledger->startRoundOf('42', 'round-1', 1);
 
-        $button = $this->browser->request('GET', '/')->filter('nav.colswitch button')->eq(6);
+        $button = $this->browser->request('GET', '/')->filter('nav.colswitch button')->eq(1);
 
         self::assertSame('In review 1 task', $button->text());
     }
@@ -98,7 +99,7 @@ final class BoardColumnMapTest extends DashboardPageTestCase
     {
         $page = $this->browser->request('GET', '/');
 
-        self::assertSame(array_fill(0, 9, '-1'), $page->filter('.board > section.col')->each(static fn (Crawler $column): string => (string) $column->attr('tabindex')));
+        self::assertSame(array_fill(0, count(self::COLUMNS), '-1'), $page->filter('.board > section.col')->each(static fn (Crawler $column): string => (string) $column->attr('tabindex')));
     }
 
     // Hide sits in the head above the cards, so after a jump to an open Done the next Tab reaches Hide and the one after it the first card, in the order the reader sees; the strip is left out because the stylesheet hides it on an open column.
