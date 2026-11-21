@@ -14,10 +14,11 @@ interface ForgeWrites
      */
     public function postReview(string $project, Change $change, ReviewComment $comment): void;
 
+    // False when the forge publishes nothing by its configuration (an install without a GitHub App), so a caller records nothing the pull request does not show.
     /**
      * @throws ReviewTextHoldsSecret
      * @throws ChangeNotFound
      * @throws ForgeWriteFailed
      */
-    public function publishVerdict(string $project, ChangeId $change, PublishedVerdict $verdict): void;
+    public function publishVerdict(string $project, ChangeId $change, PublishedVerdict $verdict): bool;
 }
