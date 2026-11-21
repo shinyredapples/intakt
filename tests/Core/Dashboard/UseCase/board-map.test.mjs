@@ -62,12 +62,17 @@ class FakeBoard {
     }
 }
 
-// The map or the switcher a jump sits in, whose bottom edge stays where it is in the viewport (the switcher is pinned on a phone).
+// The map or the switcher a jump sits in. The phone's switcher is sticky 76 px from the top and 44 px tall, so once pinned its bottom is at 120 px, where the map's bottom also sits on load.
 class FakeBar {
     bottom = 120;
+    height = 44;
+
+    constructor(position) {
+        this.style = { position, top: 'sticky' === position ? '76px' : 'auto' };
+    }
 
     getBoundingClientRect() {
-        return { bottom: this.bottom };
+        return { bottom: this.bottom, height: this.height };
     }
 }
 
@@ -91,8 +96,8 @@ class FakeJump extends FakeElement {
 
 class FakeMap extends FakeElement {
     text = new FakeElement();
-    bar = new FakeBar();
-    segments = NAMES.map((name) => new FakeJump('.sm-seg', name, this.bar));
+    bar = new FakeBar('static');
+    segments =NAMES.map((name) => new FakeJump('.sm-seg', name, this.bar));
 
     querySelector(selector) {
         assert.equal(selector, '.sm-text');
@@ -110,8 +115,8 @@ class FakeMap extends FakeElement {
 class FakeSwitcher extends FakeElement {
     scrollLeft = 0;
     offsetLeft = 0;
-    bar = new FakeBar();
-    buttons = NAMES.map((name, i) => Object.assign(new FakeJump('.colswitch button', name, this.bar), { offsetLeft: 16 + i * 150 }));
+    bar = new FakeBar('sticky');
+    buttons =NAMES.map((name, i) => Object.assign(new FakeJump('.colswitch button', name, this.bar), { offsetLeft: 16 + i * 150 }));
 
     querySelectorAll(selector) {
         assert.equal(selector, 'button');
@@ -164,6 +169,10 @@ class FakeView extends FakeTarget {
 
     scrollBy(options) {
         this.scrolledBy = options;
+    }
+
+    getComputedStyle(element) {
+        return element.style;
     }
 
     matchMedia(query) {
@@ -291,16 +300,16 @@ test('a jump to a column that already starts below the map leaves the page where
     assert.equal(view.scrolledBy, null);
 });
 
-test('a switcher button near the bottom of a phone scrolls the page down until a column behind the bottom bar starts just below the switcher', () => {
+test('a switcher button near the bottom of a phone scrolls the page down until a column behind the bottom bar starts just below the switcher, pinned by then', () => {
     const { page, view, board, switcher } = boardOnAPage({ inset: 16 });
-    // A 390 by 800 view with the phone's 64 px rail fixed along its bottom edge.
+    // A 390 by 800 view with the phone's 64 px rail fixed along its bottom edge; the switcher has not pinned yet, so it moves up with the page until its bottom reaches 120 px.
     page.rail = { getBoundingClientRect: () => ({ top: 736, bottom: 800 }) };
     switcher.bar.bottom = 700;
     board.columns.forEach((column) => { column.top = 760; });
 
     page.dispatch('click', { target: switcher.buttons[6] });
 
-    assert.deepEqual(view.scrolledBy, { top: 60, behavior: 'smooth' });
+    assert.deepEqual(view.scrolledBy, { top: 640, behavior: 'smooth' });
     assert.deepEqual(board.columns[6].focusedWith, { preventScroll: true });
 });
 

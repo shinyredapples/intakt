@@ -72,13 +72,21 @@ function jumpTo(page, view, jump) {
     // The phone's switcher stays pinned while the page scrolls down a long column, so a shorter column the reader jumps to would start, or even end, above the viewport, and a switcher scrolled near the bottom leaves the column behind the bottom bar; either way the page moves until the column starts just below the switcher.
     const bar = jump.closest(`${MAP}, ${SWITCHER}`);
     if (bar) {
-        const below = bar.getBoundingClientRect().bottom;
+        const below = pinnedBottom(view, bar);
         const top = column.getBoundingClientRect().top;
         if (top < below || top >= visibleBottom(page, view, below)) {
             view.scrollBy({ top: top - below, behavior });
         }
     }
     column.focus({ preventScroll: true });
+}
+
+// A sticky switcher still low on the page moves up with it until it pins, so the column is aimed at where the switcher's bottom will be once pinned; the map scrolls with the page.
+function pinnedBottom(view, bar) {
+    const rect = bar.getBoundingClientRect();
+    const style = view.getComputedStyle(bar);
+
+    return 'sticky' === style.position ? Number.parseFloat(style.top) + rect.height : rect.bottom;
 }
 
 // On a phone the rail is a fixed bar along the bottom of the viewport and covers what lies behind it; on a wider screen it runs down the side, starting above the map, and covers nothing below.
