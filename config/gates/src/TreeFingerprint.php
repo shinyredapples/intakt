@@ -31,6 +31,10 @@ final readonly class TreeFingerprint
     // Because a passed result may stand only for the very same inputs, any input that cannot be read gives no fingerprint, so the check runs.
     public function taken(): ?string
     {
+        if (!file_exists($this->root.'/.git')) {
+            return null;
+        }
+
         try {
             $parts = [
                 ...$this->commits(),
@@ -59,10 +63,6 @@ final readonly class TreeFingerprint
     // Because the commit subjects and the history secrets judge commits, not the tree, the same tree on another commit or base is another check.
     private function commits(): array
     {
-        if (!file_exists($this->root.'/.git')) {
-            return [false];
-        }
-
         $workspace = new Workspace($this->root, $this->home, $this->options->mode, $this->options->base, $this->runner);
         $head = $workspace->git(['rev-parse', '--verify', '--quiet', 'HEAD^{commit}']);
 
@@ -75,7 +75,9 @@ final readonly class TreeFingerprint
     // Because the tree as it is, uncommitted and untracked files included, is what the gates read, it is written from a copy of the index, so the real index never changes.
     private function treeHash(): string|false
     {
-        $index = tempnam(sys_get_temp_dir(), 'intakt-check-index-');
+        // Because tempnam() falls back to another folder with a notice when the temp directory is missing, and a notice on stdout would spoil the JSON lines.
+        $directory = sys_get_temp_dir();
+        $index = is_dir($directory) ? @tempnam($directory, 'intakt-check-index-') : false;
 
         if (false === $index) {
             return false;
