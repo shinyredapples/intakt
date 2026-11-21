@@ -90,7 +90,7 @@ final class ClearHaltCommandTest extends TestCase
         $clear = new ClearHalt($this->halts, new OwnerToken(self::OWNER_TOKEN, null), $this->locks);
         $clear->cleared($card, self::OWNER_TOKEN);
 
-        $this->expectExceptionMessage('no standing card has the id '.$card);
+        $this->expectException(OnlyAStandingCardIsCleared::class);
 
         $clear->cleared($card, self::OWNER_TOKEN);
     }

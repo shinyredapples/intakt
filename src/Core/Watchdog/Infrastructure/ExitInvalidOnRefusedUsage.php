@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Core\Watchdog\UseCase;
+namespace Intakt\Core\Watchdog\Infrastructure;
 
 use Intakt\Core\Watchdog\UseCase\CheckMain\CheckMainCommand;
 use Intakt\Core\Watchdog\UseCase\GuardMain\GuardMainCommand;

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Tests\Core\Watchdog\UseCase;
+namespace Intakt\Tests\Core\Watchdog\Infrastructure;
 
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Watchdog\Contract\CommitName;
@@ -14,7 +14,7 @@ use Intakt\Core\Watchdog\Infrastructure\OwnerKeyRefused;
 use Intakt\Core\Watchdog\UseCase\CheckMain\CheckMain;
 use Intakt\Core\Watchdog\UseCase\CheckMain\CheckMainCommand;
 use Intakt\Core\Watchdog\UseCase\CheckMain\CheckMainInput;
-use Intakt\Core\Watchdog\UseCase\ExitInvalidOnRefusedUsage;
+use Intakt\Core\Watchdog\Infrastructure\ExitInvalidOnRefusedUsage;
 use Intakt\Core\Watchdog\UseCase\GuardMain\GuardMainCommand;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
