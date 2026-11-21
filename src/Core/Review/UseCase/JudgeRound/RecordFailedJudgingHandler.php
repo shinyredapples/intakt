@@ -24,7 +24,7 @@ final readonly class RecordFailedJudgingHandler
         private RoundLedger $ledger,
         private FailedJudgings $failedJudgings,
         private StoredFindings $findings,
-        private RecurringP1s $recurringP1s,
+        private RecordRecurringP1s $recurringP1s,
         private MessageBusInterface $commands,
         private LoggerInterface $logger,
     ) {
@@ -42,7 +42,8 @@ final readonly class RecordFailedJudgingHandler
             }
 
             $this->ledger->judgingFailed($round);
-            $this->releaseRecurringP1s($round);
+            // Recorded with the failure, because the failed round no longer waits and the later rounds it held back have no other judging that would decide them.
+            $this->recurringP1s->of($round);
             $this->commands->dispatch(new PublishVerdict($round->id()->toRfc4122()));
             $recorded = true;
         });
@@ -50,14 +51,6 @@ final readonly class RecordFailedJudgingHandler
         // After the commit, so a log that cannot be written does not take the record and the queued publication back.
         if ($recorded) {
             $this->logger->error('The judging of round {round} failed for good; the round stays unjudged and is published as not reviewed.', ['round' => $command->roundId]);
-        }
-    }
-
-    // Recorded with the failure, because the failed round no longer waits and the later rounds it held back have no other judging that would decide them.
-    private function releaseRecurringP1s(ReviewRound $round): void
-    {
-        foreach ($this->recurringP1s->foundWith($round) as $found) {
-            $this->ledger->recurringP1Found($found);
         }
     }
 
