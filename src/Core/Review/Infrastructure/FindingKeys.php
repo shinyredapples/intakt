@@ -47,13 +47,22 @@ final readonly class FindingKeys
         return null === $files || [] === $files ? null : FindingKey::of($this->normalized($finding->text), $files);
     }
 
+    // The file field and every citation of the text that may name a file, as the key reads them before it looks at a checkout, so a reader without the checkout (the escalation's prompt) matches the names the key was built from.
+    /**
+     * @return list<string>
+     */
+    public function citedIn(Finding $finding): array
+    {
+        return array_values(array_unique([...(null === $finding->file ? [] : [$finding->file]), ...$this->citationsIn($finding->text)]));
+    }
+
     /**
      * @return list<array{string, string}>|null
      */
     private function namedFiles(Checkout $checkout, CheckoutFileNames $fileNames, Finding $finding): ?array
     {
         $words = $this->wordsOf($finding->text);
-        $citations = array_values(array_filter(array_unique([...$this->codeSpansOf($finding->text), ...$words]), $this->mayNameAFile(...)));
+        $citations = $this->citationsIn($finding->text);
 
         $withDirectory = $this->withDirectory($citations);
         $withoutDirectory = $this->withoutDirectory($citations);
@@ -90,6 +99,14 @@ final readonly class FindingKeys
     private function citationsOfHashedFiles(array $citations, array $files): array
     {
         return array_values(array_filter($citations, static fn (string $citation, int $index): bool => is_array($files[$index] ?? null) && [] !== $files[$index], ARRAY_FILTER_USE_BOTH));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function citationsIn(string $text): array
+    {
+        return array_values(array_filter(array_unique([...$this->codeSpansOf($text), ...$this->wordsOf($text)]), $this->mayNameAFile(...)));
     }
 
     // Each span read whole, so a cited path with a space or any other character stays one path.

@@ -8,6 +8,7 @@ use Intakt\Core\Platform\Contract\AsCommandHandler;
 use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Review\Contract\EscalationFailed;
 use Intakt\Core\Review\Contract\EscalationOutcome;
+use Intakt\Core\Review\Contract\EscalationRequest;
 use Intakt\Core\Review\Contract\EscalationReviewed;
 use Intakt\Core\Review\Contract\EscalationVerdict;
 use Intakt\Core\Review\Contract\EscalationVerdictReused;
@@ -18,7 +19,10 @@ use Intakt\Core\Review\Infrastructure\KeptVerdicts;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
 use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
 use Intakt\Plugin\Vendor\Contract\EscalationReviews;
+use Intakt\Plugin\Vendor\Contract\ProviderFailedTransiently;
+use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
 use Intakt\Plugin\Vendor\Contract\Vendor;
+use Intakt\Plugin\Vendor\Contract\VendorAccountBusy;
 use Symfony\Component\Lock\LockFactory;
 
 // Queued from the judging's transaction and run after it, so the strong tier's call holds none of the judging's locks; the kept verdict and its event commit together.
@@ -56,7 +60,7 @@ final readonly class EscalateRecurringP1Handler
     // Not waited for, because Messenger brings a busy message back and it then finds the verdict the holder of the key kept, so two deliveries never pay for two answers.
     private function settledWhileTheKeyIsHeld(EscalateRecurringP1 $command): ?EscalationOutcome
     {
-        $lock = $this->locks->createLock(self::LOCK_PREFIX.hash('sha256', $command->key));
+        $lock = $this->locks->createLock(self::lockNameOf($command->key));
 
         if (!$lock->acquire()) {
             throw EscalationBusy::of($command->key);
@@ -102,13 +106,30 @@ final readonly class EscalateRecurringP1Handler
             return $this->failed($command, $this->unmappedIn($round->project()));
         }
 
-        $verdict = $this->escalations->escalate($round->project(), $request);
+        $verdict = $this->answerOf($round->project(), $request);
 
         if (!$verdict instanceof EscalationVerdict) {
             return $this->failed($command, self::UNREADABLE);
         }
 
         return $this->keep($round, $command, $this->redacted($verdict));
+    }
+
+    // The same lock for the escalation and the record of its failure, so the two never write for one key at once.
+    public static function lockNameOf(string $key): string
+    {
+        return self::LOCK_PREFIX.hash('sha256', $key);
+    }
+
+    private function answerOf(string $project, EscalationRequest $request): ?EscalationVerdict
+    {
+        try {
+            return $this->escalations->escalate($project, $request);
+        } catch (ProviderRateLimited $limited) {
+            throw EscalationLimited::after($limited->retryAfterSeconds);
+        } catch (VendorAccountBusy|ProviderFailedTransiently) {
+            throw EscalationLimited::after(null);
+        }
     }
 
     private function failed(EscalateRecurringP1 $command, string $reason): null

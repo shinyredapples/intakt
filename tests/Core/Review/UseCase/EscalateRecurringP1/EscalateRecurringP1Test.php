@@ -10,6 +10,7 @@ use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\ChangeSource;
 use Intakt\Core\Review\Contract\ChangeUnderReview;
 use Intakt\Core\Review\Contract\Decision;
+use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\EscalationFailed;
 use Intakt\Core\Review\Contract\EscalationOutcome;
 use Intakt\Core\Review\Contract\EscalationRequest;
@@ -28,19 +29,26 @@ use Intakt\Core\Review\Contract\StartReview;
 use Intakt\Core\Review\Contract\StartReviewAtHead;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\KeptVerdict;
+use Intakt\Core\Review\Infrastructure\EscalationPrompt;
 use Intakt\Core\Review\Infrastructure\KeptVerdicts;
 use Intakt\Core\Review\UseCase\EscalateRecurringP1\EscalateRecurringP1;
 use Intakt\Core\Review\UseCase\EscalateRecurringP1\EscalateRecurringP1Handler;
 use Intakt\Core\Review\UseCase\EscalateRecurringP1\EscalationBusy;
+use Intakt\Core\Review\UseCase\EscalateRecurringP1\EscalationLimited;
 use Intakt\Core\Review\UseCase\EscalateRecurringP1\EscalationRequests;
 use Intakt\Core\Review\UseCase\EscalateRecurringP1\EscalationsOfChange;
 use Intakt\Core\Review\UseCase\EscalateRecurringP1\HolderReReviews;
+use Intakt\Core\Review\UseCase\EscalateRecurringP1\RecordFailedEscalation;
+use Intakt\Core\Review\UseCase\EscalateRecurringP1\RecordFailedEscalationHandler;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRound;
 use Intakt\Core\Review\UseCase\JudgeRound\RecordRecurringP1s;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
 use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
 use Intakt\Plugin\Forge\Contract\CommitId;
+use Intakt\Plugin\Vendor\Contract\ProviderFailedTransiently;
+use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
 use Intakt\Plugin\Vendor\Contract\Vendor;
+use Intakt\Plugin\Vendor\Contract\VendorAccountBusy;
 use Intakt\Tests\Core\Review\UseCase\JudgeRound\ScriptedJudgement;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\VerdictPerRole;
@@ -48,8 +56,19 @@ use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
+use RuntimeException;
+use Symfony\Component\ErrorHandler\BufferingLogger;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Component\Console\Tester\CommandTester;
+use Symfony\Component\Messenger\Envelope;
+use Symfony\Component\Messenger\Event\WorkerMessageFailedEvent;
+use Symfony\Component\Messenger\Exception\HandlerFailedException;
+use Symfony\Component\Messenger\Stamp\DispatchOnFailureStamp;
+use Symfony\Component\Messenger\Stamp\ReceivedStamp;
+use Symfony\Component\Messenger\Stamp\RedeliveryStamp;
+use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
 
 #[Group('persistence')]
 #[CoversClass(EscalateRecurringP1Handler::class)]
@@ -69,6 +88,10 @@ use Symfony\Component\Console\Tester\CommandTester;
 #[CoversClass(EscalationRequests::class)]
 #[CoversClass(HolderReReviews::class)]
 #[CoversClass(EscalationBusy::class)]
+#[CoversClass(EscalationLimited::class)]
+#[CoversClass(RecordFailedEscalation::class)]
+#[CoversClass(RecordFailedEscalationHandler::class)]
+#[UsesClass(EscalationPrompt::class)]
 #[UsesClass(EscalationStillPending::class)]
 #[UsesClass(StartReviewAtHead::class)]
 final class EscalateRecurringP1Test extends KernelTestCase
@@ -82,7 +105,154 @@ final class EscalateRecurringP1Test extends KernelTestCase
 
     protected function setUp(): void
     {
-        $this->fixture = new RoundFixture(self::getContainer());
+        $this->fixture = new RoundFixture(self::getContainer(), diff: RoundFixture::DIFF_OF_RECORDING_BUS);
+    }
+
+    public function testAQueuedEscalationCarriesTheRecordOfItsFailureAsItsFailureStamp(): void
+    {
+        $second = $this->recurredOnASecondHead();
+
+        $stamp = $this->fixture->escalations->envelopes[0]->last(DispatchOnFailureStamp::class);
+
+        self::assertEquals(new RecordFailedEscalation($second, 'F1', $this->keyOfFirstRound()), $stamp?->getMessage());
+    }
+
+    public function testAProviderThatKeepsFailingTransientlyEndsTheEscalationInOneFailureForTheRoundAndKey(): void
+    {
+        $second = $this->recurredOnASecondHead();
+        $failing = new ScriptedEscalations(null, static fn (): never => throw new ProviderFailedTransiently(new RuntimeException('Overloaded.')));
+
+        $log = new BufferingLogger();
+
+        $limited = $this->limitedBy($failing);
+        $this->recordFailure(new RecordFailedEscalation($second, 'F1', $this->keyOfFirstRound()), $log);
+
+        self::assertSame([false, null], [$limited->forceRetry(), $limited->getRetryDelay()]);
+        self::assertSame(['error'], array_column($log->cleanLogs(), 0));
+        self::assertSame([['round' => $second, 'key' => $this->keyOfFirstRound(), 'reason' => RecordFailedEscalationHandler::PARKED]], array_map(static fn (array $failed): array => ['round' => $failed['round'] ?? null, 'key' => $failed['key'] ?? null, 'reason' => $failed['reason'] ?? null], $this->payloadsOf(LedgerEventKind::EscalationFailed)));
+        self::assertNull($this->fixture->escalationsOfChange()->outcomeAtLatestHead('alpha', self::CHANGE));
+    }
+
+    public function testAnEscalationTheProviderKeepsFailingIsParkedAfterTheTransportsRetriesAndQueuesTheRecordOfItsFailure(): void
+    {
+        $this->recurredOnASecondHead();
+        $limited = $this->limitedBy(new ScriptedEscalations(null, static fn (): never => throw new ProviderFailedTransiently(new RuntimeException('Overloaded.'))));
+        $received = $this->fixture->escalations->envelopes[0]->with(new RedeliveryStamp(2), new ReceivedStamp('async'));
+        $failed = new WorkerMessageFailedEvent($received, 'async', new HandlerFailedException($received, [EscalateRecurringP1Handler::class => $limited]));
+
+        self::getContainer()->get('event_dispatcher')->dispatch($failed);
+
+        self::assertFalse($failed->willRetry());
+        self::assertLoggedError('critical', sprintf('Error thrown while handling message %s. Removing from transport after 2 retries. Error: "Handling "%s" failed: %s"', EscalateRecurringP1::class, EscalateRecurringP1::class, $limited->getMessage()));
+        $async = self::getContainer()->get('messenger.transport.async');
+        self::assertInstanceOf(InMemoryTransport::class, $async);
+        $records = array_filter(array_map(static fn (Envelope $sent): object => $sent->getMessage(), $async->getSent()), static fn (object $sent): bool => $sent instanceof RecordFailedEscalation);
+        self::assertEquals([$this->fixture->escalations->envelopes[0]->last(DispatchOnFailureStamp::class)?->getMessage()], array_values($records));
+    }
+
+    public function testAnEscalationTheProviderFailedOnceIsRetriedByTheTransport(): void
+    {
+        $this->recurredOnASecondHead();
+        $limited = $this->limitedBy(new ScriptedEscalations(null, static fn (): never => throw new ProviderFailedTransiently(new RuntimeException('Overloaded.'))));
+        $received = $this->fixture->escalations->envelopes[0]->with(new ReceivedStamp('async'));
+        $failed = new WorkerMessageFailedEvent($received, 'async', new HandlerFailedException($received, [EscalateRecurringP1Handler::class => $limited]));
+
+        self::getContainer()->get('event_dispatcher')->dispatch($failed);
+
+        self::assertTrue($failed->willRetry());
+    }
+
+    public function testARateLimitedEscalationCallComesBackAfterTheProvidersReset(): void
+    {
+        $this->recurredOnASecondHead();
+
+        $limited = $this->limitedBy(new ScriptedEscalations(null, static fn (): never => throw new ProviderRateLimited(30, new RuntimeException('Too many requests.'))));
+
+        self::assertSame(30000, $limited->getRetryDelay());
+    }
+
+    public function testAnEscalationOnABusyVendorAccountComesBackLater(): void
+    {
+        $this->recurredOnASecondHead();
+
+        $limited = $this->limitedBy(new ScriptedEscalations(null, static fn (): never => throw VendorAccountBusy::at('main')));
+
+        self::assertSame([false, null, []], [$limited->forceRetry(), $limited->getRetryDelay(), $this->payloadsOf(LedgerEventKind::EscalationFailed)]);
+    }
+
+    public function testARedeliveredRecordOfAFailedEscalationWritesNoSecondFailure(): void
+    {
+        $second = $this->recurredOnASecondHead();
+        $record = new RecordFailedEscalation($second, 'F1', $this->keyOfFirstRound());
+
+        $this->recordFailure($record);
+        $this->recordFailure($record);
+
+        self::assertCount(1, $this->payloadsOf(LedgerEventKind::EscalationFailed));
+    }
+
+    public function testARecordOfAFailureForAnEscalationThatKeptItsVerdictWritesNothing(): void
+    {
+        $second = $this->recurredOnASecondHead();
+        $this->escalateQueued(new ScriptedEscalations(new EscalationVerdict(EscalationOutcome::Confirmed, 'The bus drops it.')));
+
+        $this->recordFailure(new RecordFailedEscalation($second, 'F1', $this->keyOfFirstRound()));
+
+        self::assertSame([[], EscalationOutcome::Confirmed], [$this->payloadsOf(LedgerEventKind::EscalationFailed), $this->fixture->escalationsOfChange()->outcomeAtLatestHead('alpha', self::CHANGE)]);
+    }
+
+    public function testAnEscalationDeliveredAfterItsFailureWasRecordedAsksNoModel(): void
+    {
+        $second = $this->recurredOnASecondHead();
+        $this->recordFailure(new RecordFailedEscalation($second, 'F1', $this->keyOfFirstRound()));
+        $late = new ScriptedEscalations(new EscalationVerdict(EscalationOutcome::Confirmed, 'Too late.'));
+
+        $this->escalateQueued($late);
+
+        self::assertSame([[], null], [$late->requests, $this->keptOfFirstKey()]);
+    }
+
+    public function testARecordOfAFailureWhileAnEscalationOfTheKeyRunsComesBackLater(): void
+    {
+        $second = $this->recurredOnASecondHead();
+        $busy = [];
+        $running = new ScriptedEscalations(new EscalationVerdict(EscalationOutcome::Confirmed, 'The bus drops it.'), function () use ($second, &$busy): void {
+            try {
+                $this->recordFailure(new RecordFailedEscalation($second, 'F1', $this->keyOfFirstRound()));
+            } catch (EscalationBusy $refused) {
+                $busy[] = $refused;
+            }
+        });
+
+        $this->escalateQueued($running);
+
+        self::assertSame([1, []], [count($busy), $this->payloadsOf(LedgerEventKind::EscalationFailed)]);
+    }
+
+    public function testAFindingWithoutAFileFieldThatNamesAFileTheDiffDoesNotChangeRecordsAFailedEscalationWithoutAskingAModel(): void
+    {
+        $finding = new Finding('A', Severity::P1, null, null, null, 'The bus in RecordingBus.php loses a message.', FixableBy::Builder, false, 'Every message is delivered.', null);
+        $this->judged($this->completedWithDiffOf(self::HEAD_A, $finding, RoundFixture::DIFF));
+        $this->judged($this->completedWithDiffOf(self::HEAD_B, $this->repeated($finding), RoundFixture::DIFF));
+        $escalations = new ScriptedEscalations(new EscalationVerdict(EscalationOutcome::Confirmed, 'Never asked.'));
+
+        $this->escalateQueued($escalations);
+
+        self::assertSame([[], EscalationRequests::FINDING_CUT], [$escalations->requests, $this->payloadsOf(LedgerEventKind::EscalationFailed)[0]['reason'] ?? null]);
+    }
+
+    public function testAFindingWithoutAFileFieldThatNamesItsFileInItsTextShowsThatFilesHunkAfterALongEarlierHunk(): void
+    {
+        $finding = new Finding('A', Severity::P1, null, null, null, 'The bus in RecordingBus.php loses a message.', FixableBy::Builder, false, 'Every message is delivered.', null);
+        $diff = "diff --git a/src/A.php b/src/A.php\n".str_repeat("+other change\n", 10000)."diff --git a/RecordingBus.php b/RecordingBus.php\n@@ -3 +3 @@\n+the_relevant_change();\n";
+        $this->judged($this->completedWithDiffOf(self::HEAD_A, $finding, $diff));
+        $this->judged($this->completedWithDiffOf(self::HEAD_B, $this->repeated($finding), $diff));
+        $escalations = new ScriptedEscalations(new EscalationVerdict(EscalationOutcome::Confirmed, 'The bus drops it.'));
+
+        $this->escalateQueued($escalations);
+
+        self::assertCount(1, $escalations->requests);
+        self::assertStringContainsString('+the_relevant_change();', $this->diffShownFor($escalations->requests[0][1]));
     }
 
     public function testARecurringP1WithoutAKeptVerdictQueuesOneEscalationReviewForThatFindingAlone(): void
@@ -111,7 +281,7 @@ final class EscalateRecurringP1Test extends KernelTestCase
 
         [$project, $request] = $escalations->requests[0];
         self::assertSame(['alpha', 1, $second], [$project, count($escalations->requests), $request->round->toRfc4122()]);
-        self::assertEquals(new ChangeUnderReview('alpha', RoundFixture::TASK, RoundFixture::DIFF), $request->change);
+        self::assertEquals(new ChangeUnderReview('alpha', RoundFixture::TASK, RoundFixture::DIFF_OF_RECORDING_BUS), $request->change);
         self::assertSame(['F1', Severity::P1, 'The bus loses a message.'], [$request->finding->id, $request->finding->severity, $request->finding->text]);
     }
 
@@ -456,6 +626,39 @@ final class EscalateRecurringP1Test extends KernelTestCase
         $this->deliverAll($round, new Verdict(Decision::Changes, [$finding], [], []));
 
         return $round;
+    }
+
+    private function completedWithDiffOf(string $head, Finding $finding, string $diff): string
+    {
+        $round = $this->fixture->startWithDiffAtHead(self::CHANGE, $head, $diff);
+        $this->deliverAll($round, new Verdict(Decision::Changes, [$finding], [], []));
+
+        return $round;
+    }
+
+    // The prompt the strong tier gets for the request, because the scripted strong tier sees the request before the prompt orders its diff.
+    private function diffShownFor(EscalationRequest $request): string
+    {
+        $text = new EscalationPrompt(new PromptCut(new Fence()))->messagesFor($request)->getMessages()[2]->asText();
+        self::assertIsString($text);
+
+        return $text;
+    }
+
+    private function recordFailure(RecordFailedEscalation $record, LoggerInterface $logger = new NullLogger()): void
+    {
+        $this->fixture->failedEscalationRecorder($logger)($record);
+    }
+
+    private function limitedBy(ScriptedEscalations $escalations): EscalationLimited
+    {
+        try {
+            $this->escalateQueued($escalations);
+        } catch (EscalationLimited $limited) {
+            return $limited;
+        }
+
+        self::fail('The escalation call was not limited.');
     }
 
     private function recurredOnASecondHead(): string

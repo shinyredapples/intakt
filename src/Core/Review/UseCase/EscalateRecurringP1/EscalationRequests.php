@@ -15,7 +15,7 @@ use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
 final readonly class EscalationRequests
 {
     public const string FINDING_GONE = 'the finding is not among the findings the round reported';
-    public const string FINDING_CUT = 'the diff of the files the finding names is longer than the escalation prompt holds, so the review could not see it whole';
+    public const string FINDING_CUT = 'the diff holds no file the finding names, or their part of it is longer than the escalation prompt holds, so the review could not see the finding\'s code whole';
 
     public function __construct(
         private StoredFindings $findings,

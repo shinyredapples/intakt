@@ -72,7 +72,7 @@ final class EscalationRecordTest extends KernelTestCase
 
     protected function setUp(): void
     {
-        $this->fixture = new RoundFixture(self::getContainer());
+        $this->fixture = new RoundFixture(self::getContainer(), diff: RoundFixture::DIFF_OF_RECORDING_BUS);
     }
 
     public function testThreeRoundsOnThreeHeadsRecordAConfirmedAndARejectedEscalationThatTheThirdRoundReuses(): void

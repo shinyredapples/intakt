@@ -13,6 +13,7 @@ use Intakt\Core\Review\Contract\PromptCut;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Infrastructure\DiffPaths;
 use Intakt\Core\Review\Infrastructure\EscalationPrompt;
+use Intakt\Core\Review\Infrastructure\FindingKeys;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -21,6 +22,7 @@ use Symfony\Component\Uid\Uuid;
 
 #[CoversClass(EscalationPrompt::class)]
 #[UsesClass(DiffPaths::class)]
+#[UsesClass(FindingKeys::class)]
 #[UsesClass(PromptCut::class)]
 #[UsesClass(Fence::class)]
 final class EscalationPromptTest extends TestCase
@@ -65,6 +67,49 @@ final class EscalationPromptTest extends TestCase
         $request = $this->requestOn($header.str_repeat('+', PromptCut::CEILING_BYTES - strlen($header))."\n", 'src/Z.php');
 
         self::assertFalse($this->prompt()->showsTheFindingWhole($request));
+    }
+
+    public function testAFindingWithoutAFileFieldThatNamesItsFileInItsTextShowsThatFilesHunkAfterALongEarlierHunk(): void
+    {
+        $request = $this->requestNaming($this->longFile('src/A.php').self::FINDING_SECTION, null, 'The bus in src/Z.php drops the message.');
+
+        self::assertSame([true, true], [$this->prompt()->showsTheFindingWhole($request), str_contains($this->diffMessageOf($request), '+the_relevant_change();')]);
+    }
+
+    public function testAFindingThatNamesItsFileWithoutADirectoryShowsThatFilesHunkFirst(): void
+    {
+        $request = $this->requestNaming($this->longFile('src/A.php').self::FINDING_SECTION, null, 'The bus in `Z.php` drops the message.');
+
+        self::assertStringContainsString('+the_relevant_change();', $this->diffMessageOf($request));
+    }
+
+    public function testAFindingThatNamesBothItsFileFieldAndAnotherFileInItsTextShowsBothFirst(): void
+    {
+        $named = "diff --git a/src/B.php b/src/B.php\n+the_sender();\n";
+        $request = $this->requestNaming($this->longFile('src/A.php').$named.self::FINDING_SECTION, 'src/Z.php', 'src/B.php hands the message to the bus, which drops it.');
+
+        $message = $this->diffMessageOf($request);
+
+        self::assertSame([true, true], [str_contains($message, '+the_sender();'), str_contains($message, '+the_relevant_change();')]);
+    }
+
+    public function testAFindingWithoutAFileFieldThatNamesNoFileOfTheDiffIsNotShownWhole(): void
+    {
+        $request = $this->requestNaming(self::FINDING_SECTION, null, 'The bus drops the message.');
+
+        self::assertFalse($this->prompt()->showsTheFindingWhole($request));
+    }
+
+    public function testAFindingWhoseFileTheDiffDoesNotChangeIsNotShownWhole(): void
+    {
+        self::assertFalse($this->prompt()->showsTheFindingWhole($this->requestOn(self::FINDING_SECTION, 'src/Elsewhere.php')));
+    }
+
+    private function requestNaming(string $diff, ?string $file, string $text): EscalationRequest
+    {
+        $finding = new Finding('F1', Severity::P1, $file, null, null, $text, FixableBy::Builder, true, 'Messages must arrive.', null);
+
+        return new EscalationRequest(new ChangeUnderReview('alpha', 'Deliver the messages.', $diff), $finding, Uuid::v7());
     }
 
     private function longFile(string $path): string

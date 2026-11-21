@@ -53,6 +53,7 @@ use Intakt\Core\Review\UseCase\EscalateRecurringP1\EscalateRecurringP1Handler;
 use Intakt\Core\Review\UseCase\EscalateRecurringP1\EscalationRequests;
 use Intakt\Core\Review\UseCase\EscalateRecurringP1\EscalationsOfChange;
 use Intakt\Core\Review\UseCase\EscalateRecurringP1\HolderReReviews;
+use Intakt\Core\Review\UseCase\EscalateRecurringP1\RecordFailedEscalationHandler;
 use Intakt\Core\Review\UseCase\IndexResolvedFindings\IndexResolvedFindings;
 use Intakt\Core\Review\UseCase\IndexResolvedFindings\IndexResolvedFindingsHandler;
 use Intakt\Core\Review\UseCase\JudgeRound\FailedJudgings;
@@ -107,6 +108,8 @@ final readonly class RoundFixture
 {
     public const string TASK = 'Add the thing.';
     public const string DIFF = "diff --git a/src/Thing.php b/src/Thing.php\n@@ -1,9 +1,9 @@\n-old\n+new\n";
+    // Also changes RecordingBus.php, a file of the checkout, so an escalation of a finding that names it has the finding's hunk to show.
+    public const string DIFF_OF_RECORDING_BUS = self::DIFF."diff --git a/RecordingBus.php b/RecordingBus.php\n@@ -3 +3 @@\n-old\n+new\n";
     public const string CHANGE = 'feat/thing';
     public const string MODEL = 'standard-model';
     public const string SUBSTITUTE_MODEL = 'substitute-model';
@@ -126,6 +129,7 @@ final readonly class RoundFixture
     public function __construct(
         private TestContainer $container,
         private ProjectModes $modes = new ConfiguredProjectModes([]),
+        private string $diff = self::DIFF,
     ) {
         $entities = $container->get('doctrine.orm.entity_manager');
         $this->entities = $entities;
@@ -303,6 +307,11 @@ final readonly class RoundFixture
         return new EscalateRecurringP1Handler($rounds, $requests, $this->keptVerdicts(), $vendor, $reviews, $this->roundLedger($this->ledger), $this->escalationsOfChange(), $reReviews, $this->container->get(Redactor::class), $this->locks);
     }
 
+    public function failedEscalationRecorder(LoggerInterface $logger): RecordFailedEscalationHandler
+    {
+        return new RecordFailedEscalationHandler($this->escalationsOfChange(), $this->roundLedger($this->ledger), $this->locks, $logger);
+    }
+
     public function escalationsOfChange(): EscalationsOfChange
     {
         return new EscalationsOfChange($this->rounds($this->entities), $this->storedFindingsOn($this->entities), $this->keptVerdicts(), $this->ledger, $this->ledgerPayloads());
@@ -468,7 +477,7 @@ final readonly class RoundFixture
 
     private function subject(): ReviewSubject
     {
-        return new ReviewSubject('alpha', __DIR__, self::TASK, self::DIFF);
+        return new ReviewSubject('alpha', __DIR__, self::TASK, $this->diff);
     }
 
     private function rounds(EntityManagerInterface $entities, ?Ledger $ledger = null): ReviewRounds

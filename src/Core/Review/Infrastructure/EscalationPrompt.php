@@ -30,9 +30,10 @@ final readonly class EscalationPrompt
 
     public function __construct(
         private PromptCut $cut,
-        // Defaulted because the paths reader and the assembly have no state or settings to wire, so every place that builds the prompt gets the same ones.
+        // Defaulted because the paths reader, the key's reader and the assembly have no state or settings to wire, so every place that builds the prompt gets the same ones.
         private DiffPaths $paths = new DiffPaths(),
         private PromptAssembly $assembly = new PromptAssembly(),
+        private FindingKeys $keys = new FindingKeys(),
     ) {
     }
 
@@ -43,28 +44,30 @@ final readonly class EscalationPrompt
         return new MessageBag(
             $this->assembly->system(self::INSTRUCTIONS),
             $this->assembly->user('The task of the change:', $this->cut->fenced(UntrustedSource::Task, $request->change->task)),
-            $this->assembly->user('The diff of the change, the finding\'s file first:', $this->cut->fenced(UntrustedSource::Diff, implode('', $this->findingFirst($request)))),
+            $this->assembly->user('The diff of the change, the files the finding names first:', $this->cut->fenced(UntrustedSource::Diff, implode('', $this->findingFirst($request)))),
             $this->assembly->user('The finding to judge:', $this->cut->fenced(UntrustedSource::EscalatedFinding, $finding->listEntry())),
         );
     }
 
-    // False when the finding's own part of the diff is longer than the cut keeps, because a review without tools would then judge code it never saw.
+    // False when the diff holds no file the finding names, or their part of it is longer than the cut keeps, because a review without tools would then judge code it never saw.
     public function showsTheFindingWhole(EscalationRequest $request): bool
     {
-        return !$this->cut->cuts($this->findingFirst($request)[0]);
+        [$named] = $this->findingFirst($request);
+
+        return '' !== $named && !$this->cut->cuts($named);
     }
 
-    // The sections of the files the finding names, then the others in their order, because the cut keeps the start of the diff and the finding's hunk must survive it.
+    // The sections of the files the finding's key was built from (its file field and the files its text names), then the others in their order, because the cut keeps the start of the diff and the finding's hunks must survive it.
     /**
      * @return array{string, string}
      */
     private function findingFirst(EscalationRequest $request): array
     {
-        $file = $request->finding->file;
+        $cited = $this->keys->citedIn($request->finding);
         [$named, $others] = ['', ''];
 
         foreach ($this->sectionsOf($request->change->diff) as $section) {
-            if (null !== $file && in_array($file, $this->paths->in($section), true)) {
+            if ($this->namesAny($cited, $this->paths->in($section))) {
                 $named .= $section;
             } else {
                 $others .= $section;
@@ -72,6 +75,16 @@ final readonly class EscalationPrompt
         }
 
         return [$named, $others];
+    }
+
+    // A cited name without a directory stands for the file that carries it, as it does for the key.
+    /**
+     * @param list<string> $cited
+     * @param list<string> $paths
+     */
+    private function namesAny(array $cited, array $paths): bool
+    {
+        return array_any($paths, static fn (string $path): bool => in_array($path, $cited, true) || in_array(basename($path), $cited, true));
     }
 
     // Split before each file header, because a hunk line always starts with a space, "+", "-" or "\" and so never with the header.
