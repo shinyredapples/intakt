@@ -115,7 +115,7 @@ final class HighlightsWorkflowTest extends TestCase
         self::assertArrayNotHasKey('GH_TOKEN', $build['env'] ?? []);
         self::assertCount(1, $logins);
         self::assertSame(['DOCKERHUB_USERNAME' => '${{ secrets.DOCKERHUB_USERNAME }}', 'DOCKERHUB_TOKEN' => '${{ secrets.DOCKERHUB_TOKEN }}'], $logins[0]['env'] ?? null);
-        self::assertSame([], self::secretReferencesBesidesTheLogin($steps));
+        self::assertSame([], $this->secretReferencesBesidesTheLogin($steps));
     }
 
     public function testASecretInBracketNotationIsFoundAsWellAsOneInDotNotation(): void
@@ -123,7 +123,7 @@ final class HighlightsWorkflowTest extends TestCase
         $login = ['run' => self::LOGIN, 'env' => ['DOCKERHUB_USERNAME' => '${{ secrets.DOCKERHUB_USERNAME }}', 'DOCKERHUB_TOKEN' => '${{ secrets.DOCKERHUB_TOKEN }}', 'EXTRA' => '${{ secrets[\'OTHER\'] }}']];
         $other = ['run' => 'echo "${{ secrets.ANOTHER }}"'];
 
-        self::assertSame(["secrets['OTHER']", 'secrets.ANOTHER'], self::secretReferencesBesidesTheLogin([$login, $other]));
+        self::assertSame(["secrets['OTHER']", 'secrets.ANOTHER'], $this->secretReferencesBesidesTheLogin([$login, $other]));
     }
 
     public function testTheAssembledPageReadsTheRecordedAnswersAsTheContainerSeesThem(): void
@@ -142,7 +142,7 @@ final class HighlightsWorkflowTest extends TestCase
      *
      * @return list<string>
      */
-    private static function secretReferencesBesidesTheLogin(array $steps): array
+    private function secretReferencesBesidesTheLogin(array $steps): array
     {
         $withoutTheLoginValues = array_map(static function (array $step): array {
             if (self::LOGIN === ($step['run'] ?? null) && is_array($step['env'] ?? null)) {
