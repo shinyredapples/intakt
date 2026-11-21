@@ -52,6 +52,12 @@ final readonly class NoCooldowns implements AccountCooldowns
     }
 
     #[Override]
+    public function secondsUntilFree(Account $account): int
+    {
+        return 0;
+    }
+
+    #[Override]
     public function secondsUntilAnAccountIsFree(Provider $provider): int
     {
         return 0;
