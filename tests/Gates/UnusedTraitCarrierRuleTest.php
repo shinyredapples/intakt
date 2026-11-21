@@ -139,6 +139,38 @@ final class UnusedTraitCarrierRuleTest extends PhpStanRuleTestCase
         self::assertSame('', $this->ruleFindingsIn($sandbox));
     }
 
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function anonymousClassesBuildingThemselves(): iterable
+    {
+        yield 'self' => ['new self()'];
+        yield 'static' => ['new static()'];
+        yield 'parent' => ['new parent()'];
+    }
+
+    #[DataProvider('anonymousClassesBuildingThemselves')]
+    public function testAnAnonymousClassInATraitNoClassUsesMayBuildItself(string $expression): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/Sample/Builds.php', $this->traitWithAnonymousClassBuilding($expression));
+
+        self::assertSame('', $this->ruleFindingsIn($sandbox));
+    }
+
+    public function testAnAnonymousClassInATraitNoClassUsesMayNotBuildAClassNamedOnlyAtRunTime(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/Sample/Builds.php', $this->traitWithAnonymousClassBuilding('new $text(\'x\', $text)'));
+
+        self::assertStringStartsWith('src/Sample/Builds.php:17 intakt.reviewerRole A trait no class uses', $this->ruleFindingsIn($sandbox));
+    }
+
+    private function traitWithAnonymousClassBuilding(string $expression): string
+    {
+        return "<?php\n\ndeclare(strict_types=1);\n\nnamespace Intakt\\Sample;\n\ntrait Builds\n{\n    public function factory(): object\n    {\n        return new class () extends \\ArrayObject {\n            /** @return object */\n            public function fresh(string \$text): mixed\n            {\n                \$text = \$text;\n\n                return {$expression};\n            }\n        };\n    }\n}\n";
+    }
+
     private function traitBuilding(string $expression): string
     {
         return "<?php\n\ndeclare(strict_types=1);\n\nnamespace Intakt\\Sample;\n\nuse Intakt\\Core\\Review\\Domain\\RoundReviewer;\n\ntrait Builds\n{\n    /** @param class-string<\\Intakt\\Core\\Review\\Contract\\ReviewerRole> \$role */\n    public function build(string \$text, string \$role): mixed\n    {\n        return {$expression};\n    }\n}\n";

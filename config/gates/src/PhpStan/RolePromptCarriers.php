@@ -92,9 +92,30 @@ final readonly class RolePromptCarriers
      */
     public function runTimeConstructionLines(Trait_ $trait): array
     {
-        $runTime = array_filter($this->constructionsIn($trait), fn (New_ $construction): bool => null === $this->traitClassNamesOf($construction->class));
+        $buildsItsAnonymousClass = $this->anonymousClassSelfConstructions($trait);
+        $runTime = array_filter($this->constructionsIn($trait), fn (New_ $construction): bool => null === $this->traitClassNamesOf($construction->class) && !isset($buildsItsAnonymousClass[spl_object_id($construction)]));
 
         return array_values(array_map(static fn (New_ $construction): int => $construction->getStartLine(), $runTime));
+    }
+
+    // because inside an anonymous class `self`, `static` and `parent` name that class or the parent it names literally, never the class that uses the trait, and a carrier is final, so neither is one
+    /**
+     * @return array<int, true>
+     */
+    private function anonymousClassSelfConstructions(Trait_ $trait): array
+    {
+        $finder = new NodeFinder();
+        $ids = [];
+
+        foreach ($finder->findInstanceOf($trait->stmts, Class_::class) as $anonymous) {
+            foreach ($finder->findInstanceOf($anonymous->stmts, New_::class) as $construction) {
+                if ($construction->class instanceof Name && $construction->class->isSpecialClassName()) {
+                    $ids[spl_object_id($construction)] = true;
+                }
+            }
+        }
+
+        return $ids;
     }
 
     public function unusedTraitFinding(string $file, int $line): IdentifierRuleError
