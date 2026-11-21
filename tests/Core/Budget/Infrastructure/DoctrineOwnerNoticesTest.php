@@ -542,6 +542,38 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
         self::assertSame('11:59', $this->notices()->endedOnTheDayOf(new DateTimeImmutable('2026-11-02T20:00:00+00:00'))[0]->endedAt->format('H:i'));
     }
 
+    // The writer's own update moves no row here, so it must still look again, and stop, instead of trusting that nothing moved.
+    public function testANoticeWhoseSameEndWasSavedFirstByAnotherWriterKeepsThatEnd(): void
+    {
+        $this->record('main', '2026-11-02 12:00:00');
+        $connection = $this->entities->getConnection();
+        $first = function () use ($connection): void {
+            $connection->executeStatement("UPDATE budget_outage_notice SET ended_at = '2026-11-02 12:00:00'");
+        };
+        $hook = new class($first) extends AbstractLogger {
+            public function __construct(private ?Closure $first)
+            {
+            }
+
+            public function log(mixed $level, string|Stringable $message, array $context = []): void
+            {
+                if (!$this->first instanceof Closure || !str_starts_with(is_string($context['sql'] ?? null) ? $context['sql'] : '', 'UPDATE budget_outage_notice SET ended_at = :')) {
+                    return;
+                }
+
+                $run = $this->first;
+                $this->first = null;
+                $run();
+            }
+        };
+        $writer = DriverManager::getConnection($connection->getParams(), new Configuration()->setMiddlewares([new Middleware($hook)]));
+        $notices = new DoctrineOutageNotices(new EntityManager($writer, $this->entities->getConfiguration()), new LockFactory(new InMemoryStore()), self::createStub(LoggerInterface::class));
+
+        $notices->noticeOnce(new UsageReadingsStayedAway(new Account(Provider::ClaudeCode, 'main'), new DateTimeImmutable('2026-11-02T08:00:00+00:00'), new DateTimeImmutable('2026-11-02T11:00:00+00:00')));
+
+        self::assertSame('12:00', $this->notices()->endedOnTheDayOf(new DateTimeImmutable('2026-11-02T20:00:00+00:00'))[0]->endedAt->format('H:i'));
+    }
+
     // The caller's rollback would erase the end, so a reading recorded inside its transaction tells nobody.
     public function testAReadingRecordedInsideACallersTransactionTellsNoListener(): void
     {

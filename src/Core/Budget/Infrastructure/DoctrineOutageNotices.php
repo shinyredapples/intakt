@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Budget\Infrastructure;
 
+use DateTimeImmutable;
 use DateTimeInterface;
 use Doctrine\ORM\EntityManagerInterface;
 use Intakt\Core\Budget\Domain\OutageNoticeRecord;
@@ -56,15 +57,22 @@ final readonly class DoctrineOutageNotices
         $this->endIfReadSince($notice);
     }
 
-    // A reading can land any time before this row is stored, and its own end of outages found no row yet, so the notice is ended by it here; looked up only once the row is stored, because a reading stored later finds the row itself. It looks again after each end, because an earlier reading stored meanwhile skips a notice with no end yet (it cannot tell it from one that predates ends being kept), and the end only ever moves earlier, so the loop stops.
+    // A reading can land any time before this row is stored, and its own end of outages found no row yet, so the notice is ended by it here; looked up only once the row is stored, because a reading stored later finds the row itself. It looks again until the earliest reading stays the same across an update, because an earlier reading stored meanwhile skips a notice with no end yet (it cannot tell it from one that predates ends being kept), and a competing writer may have saved the same end first, which moves no row here; the earliest moment only ever goes down, so the loop stops.
     private function endIfReadSince(OutageNoticeRecord $notice): void
     {
+        $endedWith = null;
         do {
-            $moved = $this->endWithTheEarliestReadingSince($notice);
-        } while ($moved > 0);
+            $earliest = $this->earliestReadingSince($notice);
+            if (null === $earliest || $earliest == $endedWith) {
+                return;
+            }
+
+            $this->endWith($notice, $earliest);
+            $endedWith = $earliest;
+        } while (true);
     }
 
-    private function endWithTheEarliestReadingSince(OutageNoticeRecord $notice): int
+    private function earliestReadingSince(OutageNoticeRecord $notice): ?DateTimeImmutable
     {
         /** @var list<WindowReadingRecord> $later */
         $later = $this->entities->createQueryBuilder()
@@ -81,22 +89,21 @@ final readonly class DoctrineOutageNotices
             ->getQuery()
             ->getResult();
 
-        $moved = 0;
-        foreach ($later as $reading) {
-            // One statement past the entity, because a reading may end the same row at once, and the earlier reading wins.
-            $result = $this->entities->createQueryBuilder()
-                ->update(OutageNoticeRecord::class, 'notice')
-                ->set('notice.endedAt', ':takenAt')
-                ->where('notice.position = :position')
-                ->andWhere('notice.endedAt IS NULL OR notice.endedAt > :takenAt')
-                ->setParameter('takenAt', $reading->takenAt, 'utc_datetime_immutable')
-                ->setParameter('position', $notice->position)
-                ->getQuery()
-                ->execute();
-            $moved += is_int($result) ? $result : 0;
-        }
+        return [] === $later ? null : $later[0]->takenAt;
+    }
 
-        return $moved;
+    // One statement past the entity, because a reading may end the same row at once, and the earlier reading wins.
+    private function endWith(OutageNoticeRecord $notice, DateTimeImmutable $takenAt): void
+    {
+        $this->entities->createQueryBuilder()
+            ->update(OutageNoticeRecord::class, 'notice')
+            ->set('notice.endedAt', ':takenAt')
+            ->where('notice.position = :position')
+            ->andWhere('notice.endedAt IS NULL OR notice.endedAt > :takenAt')
+            ->setParameter('takenAt', $takenAt, 'utc_datetime_immutable')
+            ->setParameter('position', $notice->position)
+            ->getQuery()
+            ->execute();
     }
 
     private function wasNoticed(UsageReadingsStayedAway $outage): bool
