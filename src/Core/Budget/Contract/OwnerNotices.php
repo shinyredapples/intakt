@@ -6,7 +6,7 @@ namespace Intakt\Core\Budget\Contract;
 
 use DateTimeImmutable;
 
-// The notices only the owner can act on that Budget keeps; until the owner notice records of plan T67 (#349) exist, these are the outage notices. An outage leaves the list when a newer reading of its account arrives, because nothing marks one handled yet.
+// The notices only the owner can act on that Budget keeps; until the owner notice records of plan T67 (#349) exist, these are the outage notices. An outage leaves the list when a newer reading of its account arrives, because nothing marks one handled yet, and Budget keeps the moment of that reading as the notice's end.
 interface OwnerNotices
 {
     /**

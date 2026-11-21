@@ -41,8 +41,8 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 
 #[Group('persistence')]
 #[CoversClass(DoctrineOwnerNotices::class)]
-#[UsesClass(DoctrineMeasuredUse::class)]
-#[UsesClass(DoctrineOutageNotices::class)]
+#[CoversClass(DoctrineMeasuredUse::class)]
+#[CoversClass(DoctrineOutageNotices::class)]
 #[UsesClass(OutageWatch::class)]
 #[UsesClass(UsageReadingsStayedAway::class)]
 #[UsesClass(WindowUse::class)]
