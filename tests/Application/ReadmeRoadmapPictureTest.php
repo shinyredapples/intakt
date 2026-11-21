@@ -51,8 +51,9 @@ final class ReadmeRoadmapPictureTest extends TestCase
             $svg = (string) file_get_contents($file);
 
             self::assertSame(1, preg_match('/href="data:image\/webp;base64,([A-Za-z0-9+\/=]+)"/', $svg, $match));
-            $webp = base64_decode($match[1], true);
+            $webp = base64_decode($match[1] ?? '', true);
             self::assertIsString($webp);
+            self::assertNotSame('', $webp);
             // A WebP file is a RIFF container: "RIFF", the length of the rest as 32-bit little endian, then "WEBP", so a cut or empty payload fails.
             self::assertSame('RIFF', substr($webp, 0, 4));
             self::assertSame('WEBP', substr($webp, 8, 4));
