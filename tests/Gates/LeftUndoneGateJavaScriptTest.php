@@ -46,6 +46,10 @@ final class LeftUndoneGateJavaScriptTest extends SandboxTestCase
         yield 'a FIXME block comment' => ['/* FIXME the total is off by one */', 'FIXME'];
         yield 'an XXX doc comment' => ['/** XXX breaks on empty orders */', 'XXX'];
         yield 'a trailing comment after code' => ['const total = 0; // todo round it', 'todo'];
+        yield 'a line comment spaced by a no-break space' => ["//\u{00A0}TODO show the total", 'TODO'];
+        yield 'a block comment spaced by a no-break space' => ["/*\u{00A0}FIXME the total */", 'FIXME'];
+        yield 'a block comment spaced by an ideographic space' => ["/*\u{3000}XXX the total */", 'XXX'];
+        yield 'a line comment spaced by a byte order mark' => ["//\u{FEFF}TODO show the total", 'TODO'];
     }
 
     /**
@@ -82,6 +86,15 @@ final class LeftUndoneGateJavaScriptTest extends SandboxTestCase
     public function testAMarkerOnTheSecondLineOfAMultiLineBlockCommentIsNamedByItsOwnLine(): void
     {
         $sandbox = $this->changeWithFile('assets/order.js', $this->scriptWithLine("/*\n * FIXME the total\n */"));
+
+        $run = $sandbox->runGate(new LeftUndoneGate());
+
+        self::assertStringContainsString('assets/order.js:4: FIXME comment', $run->findingsOf('left-undone'));
+    }
+
+    public function testABlockCommentLineIndentedByANoBreakSpaceIsReported(): void
+    {
+        $sandbox = $this->changeWithFile('assets/order.js', $this->scriptWithLine("/*\n\u{00A0}* FIXME the total\n */"));
 
         $run = $sandbox->runGate(new LeftUndoneGate());
 
