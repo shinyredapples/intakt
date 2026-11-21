@@ -194,7 +194,7 @@ final readonly class MainHistory implements CommitHistory
     {
         // Asked of git, because a linked work tree or a submodule has a .git file that names its git directory, and only git reads that file the way git does (a path in it may hold a line break).
         $answer = $this->run(['rev-parse', '--resolve-git-dir', $directory.'/.git'], ['GIT_WORK_TREE' => false]);
-        $resolved = $answer->isSuccessful() ? realpath(self::withoutLineBreak($answer->getOutput())) : false;
+        $resolved = $answer->isSuccessful() ? realpath($this->withoutLineBreak($answer->getOutput())) : false;
 
         return false === $resolved ? '' : $resolved;
     }
@@ -213,11 +213,11 @@ final readonly class MainHistory implements CommitHistory
             throw MainNotRead::notTheRepository($this->directory(), '');
         }
 
-        return self::withoutLineBreak($answer->getOutput());
+        return $this->withoutLineBreak($answer->getOutput());
     }
 
     // Only git's one line break is removed, because a folder name may end in a space.
-    private static function withoutLineBreak(string $output): string
+    private function withoutLineBreak(string $output): string
     {
         return str_ends_with($output, "\n") ? substr($output, 0, -1) : $output;
     }
