@@ -88,6 +88,7 @@ final class ReplaysRecordingTest extends KernelTestCase
 
         self::assertNotSame([], $this->trends->events);
         $last = array_last($this->trends->events);
+        self::assertInstanceOf(LiveEvent::class, $last);
         self::assertSame(DashboardTopics::SHELL, $last->topic);
         $head = new Crawler($last->turboStream)->filter('turbo-stream[target="trends-head-with-demo"] template');
         self::assertStringContainsString('1 review round over every project', $head->html());
@@ -185,7 +186,7 @@ final class ReplaysRecordingTest extends KernelTestCase
         $again = new ClockedLiveUpdates($this->clock, $this->ledger);
 
         try {
-            new ReplaysRecording($this->ledger, $again, $this->clock, new LockFactory($this->locks), $this->marks(), TourCaptionsOn::captions($again, TourCaptionsOn::tour($this->ledger, $this->marks(), '')), TourCaptionsOn::trends($this->trends, $this->ledger, $this->marks(), self::getContainer()))->replay($this->recordedRun(), 1.0);
+            new ReplaysRecording($this->ledger, $again, $this->clock, new LockFactory($this->locks), $this->marks(), TourCaptionsOn::captions($again, TourCaptionsOn::tour($this->ledger, $this->marks(), '')), TourCaptionsOn::trends($this->trends, TourCaptionsOn::pages($this->ledger, $this->marks()), self::getContainer()))->replay($this->recordedRun(), 1.0);
         } catch (ReplayIsRefused) {
         }
 
@@ -413,7 +414,7 @@ final class ReplaysRecordingTest extends KernelTestCase
 
     private function replays(): ReplaysRecording
     {
-        return new ReplaysRecording($this->ledger, $this->updates, $this->clock, new LockFactory($this->locks), $this->marks(), TourCaptionsOn::captions($this->updates, TourCaptionsOn::tour($this->ledger, $this->marks(), '')), TourCaptionsOn::trends($this->trends, $this->ledger, $this->marks(), self::getContainer()));
+        return new ReplaysRecording($this->ledger, $this->updates, $this->clock, new LockFactory($this->locks), $this->marks(), TourCaptionsOn::captions($this->updates, TourCaptionsOn::tour($this->ledger, $this->marks(), '')), TourCaptionsOn::trends($this->trends, TourCaptionsOn::pages($this->ledger, $this->marks()), self::getContainer()));
     }
 
     private function marks(): ReplayMarks

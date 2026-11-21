@@ -27,7 +27,7 @@ use Psr\Log\AbstractLogger;
 use Psr\Log\LoggerInterface;
 use Stringable;
 use Symfony\Bridge\Twig\Extension\RoutingExtension;
-use Symfony\Component\DependencyInjection\ContainerInterface;
+use Symfony\Bundle\FrameworkBundle\Test\TestContainer;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Routing\Generator\UrlGenerator;
@@ -52,12 +52,12 @@ final class TourCaptionsOn
     }
 
     // On the kernel's Twig, because the Trends templates use the components' own functions.
-    public static function trends(LiveUpdates $updates, Ledger $ledger, ReplayMarks $marks, ContainerInterface $kernel): LiveTrends
+    public static function trends(LiveUpdates $updates, LedgerReviewPages $pages, TestContainer $kernel): LiveTrends
     {
         $twig = $kernel->get(Environment::class);
         Assert::assertInstanceOf(Environment::class, $twig);
 
-        return new LiveTrends(self::pages($ledger, $marks), $twig, $updates, new LockFactory(new InMemoryStore()), self::failingLogger());
+        return new LiveTrends($pages, $twig, $updates, new LockFactory(new InMemoryStore()), self::failingLogger());
     }
 
     // Thrown again, because LiveTrends logs and swallows a failed render and a test would then only see a missing push.
@@ -74,7 +74,7 @@ final class TourCaptionsOn
         };
     }
 
-    private static function pages(Ledger $ledger, ReplayMarks $marks): LedgerReviewPages
+    public static function pages(Ledger $ledger, ReplayMarks $marks): LedgerReviewPages
     {
         $payloads = new LedgerPayloads(StoredSerializerFactory::create());
 

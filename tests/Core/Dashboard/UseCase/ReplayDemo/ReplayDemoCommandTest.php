@@ -220,7 +220,7 @@ final class ReplayDemoCommandTest extends KernelTestCase
     private function tester(string $composeService, ReplayMark $demoProject = ReplayMark::Replay): CommandTester
     {
         $marks = new ReplayMarks(new MarkAnsweringQueries($demoProject));
-        $replays = new ReplaysRecording($this->ledger, $this->updates, $this->clock, new LockFactory(new InMemoryStore()), $marks, TourCaptionsOn::captions($this->updates, TourCaptionsOn::tour($this->ledger, $marks, '')), TourCaptionsOn::trends(new PublishedLiveEvents(), $this->ledger, $marks, self::getContainer()));
+        $replays = new ReplaysRecording($this->ledger, $this->updates, $this->clock, new LockFactory(new InMemoryStore()), $marks, TourCaptionsOn::captions($this->updates, TourCaptionsOn::tour($this->ledger, $marks, '')), TourCaptionsOn::trends(new PublishedLiveEvents(), TourCaptionsOn::pages($this->ledger, $marks), self::getContainer()));
         $application = new Application();
         $application->addCommand(new ReplayDemoCommand($replays, $this->format, new Filesystem(), $composeService));
 

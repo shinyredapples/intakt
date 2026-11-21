@@ -36,7 +36,7 @@ final readonly class LiveTrends
     ) {
     }
 
-    // Without a round when a replayed row names none, such as a call's settled usage.
+    // Nullable, because a replayed row such as a call's settled usage names no round and the round only labels the log line.
     public function publishLatest(?Uuid $round): void
     {
         try {

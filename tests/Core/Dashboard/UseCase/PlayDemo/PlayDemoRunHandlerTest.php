@@ -153,7 +153,7 @@ final class PlayDemoRunHandlerTest extends KernelTestCase
     private function handler(string $recording, string $composeService = 'intakt'): PlayDemoRunHandler
     {
         $marks = new ReplayMarks(new ReplayMarkBus([CreateDemoProjectCommand::NAME]));
-        $replays = new ReplaysRecording($this->ledger, $this->updates, $this->clock, new LockFactory(new InMemoryStore()), $marks, TourCaptionsOn::captions($this->updates, TourCaptionsOn::tour($this->ledger, $marks, $composeService)), TourCaptionsOn::trends(new PublishedLiveEvents(), $this->ledger, $marks, self::getContainer()));
+        $replays = new ReplaysRecording($this->ledger, $this->updates, $this->clock, new LockFactory(new InMemoryStore()), $marks, TourCaptionsOn::captions($this->updates, TourCaptionsOn::tour($this->ledger, $marks, $composeService)), TourCaptionsOn::trends(new PublishedLiveEvents(), TourCaptionsOn::pages($this->ledger, $marks), self::getContainer()));
 
         return new PlayDemoRunHandler($replays, $this->format(), new Filesystem(), new RecordingLogger(LogRecords::ofThisRun() ?? self::fail('No log records.')), $recording, $composeService);
     }
