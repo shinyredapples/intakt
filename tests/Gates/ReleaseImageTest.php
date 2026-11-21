@@ -208,7 +208,7 @@ final class ReleaseImageTest extends SandboxTestCase
         self::assertSame('image', $job['needs']);
         self::assertSame(['group' => 'release-image-latest', 'cancel-in-progress' => false], $job['concurrency']);
         self::assertSame(['contents' => 'read', 'packages' => 'write'], $job['permissions']);
-        self::assertSame('.github/ci/release-latest.sh', $job['steps'][1]['run']);
+        self::assertSame('.github/ci/release-latest.sh', $job['steps'][2]['run']);
     }
 
     /**

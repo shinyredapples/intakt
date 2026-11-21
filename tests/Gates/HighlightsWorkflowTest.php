@@ -99,17 +99,22 @@ final class HighlightsWorkflowTest extends TestCase
         self::assertLessThan($assemble[0], $record[0]);
     }
 
-    public function testOnlyTheRecordStepGetsTheJobTokenAndNoStepReadsASecret(): void
+    public function testOnlyTheRecordStepGetsTheJobTokenAndOnlyTheDockerHubLoginReadsASecret(): void
     {
         $workflow = $this->workflow();
         $build = $workflow['jobs']['build'];
-        $record = array_first(array_filter($build['steps'] ?? [], static fn (array $step): bool => self::RECORD === trim($step['run'] ?? '')));
+        $steps = $build['steps'] ?? [];
+        $record = array_first(array_filter($steps, static fn (array $step): bool => self::RECORD === trim($step['run'] ?? '')));
         self::assertNotNull($record);
+        $isLogin = static fn (array $step): bool => '.github/ci/docker-hub-login.sh' === ($step['run'] ?? null);
+        $logins = array_values(array_filter($steps, $isLogin));
 
         self::assertSame(['GH_TOKEN' => '${{ github.token }}'], $record['env'] ?? null);
         self::assertArrayNotHasKey('GH_TOKEN', $workflow['env'] ?? []);
         self::assertArrayNotHasKey('GH_TOKEN', $build['env'] ?? []);
-        self::assertStringNotContainsString('secrets.', Yaml::dump($build['steps'] ?? [], 8));
+        self::assertCount(1, $logins);
+        self::assertSame(['DOCKERHUB_USERNAME' => '${{ secrets.DOCKERHUB_USERNAME }}', 'DOCKERHUB_TOKEN' => '${{ secrets.DOCKERHUB_TOKEN }}'], $logins[0]['env'] ?? null);
+        self::assertStringNotContainsString('secrets.', Yaml::dump(array_values(array_filter($steps, static fn (array $step): bool => !$isLogin($step))), 8));
     }
 
     public function testTheAssembledPageReadsTheRecordedAnswersAsTheContainerSeesThem(): void

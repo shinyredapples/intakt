@@ -66,6 +66,6 @@ final class ReleaseLabelsTest extends SandboxTestCase
         $workflow = Yaml::parseFile(__DIR__.'/../../.github/workflows/release-labels.yml');
         $environment = ['TITLE' => $title, 'REPOSITORY' => 'example/repo', 'NUMBER' => '7', 'LABELS' => $sandbox->root.'/labels'];
 
-        return $sandbox->runScript('chmod +x bin/gh; PATH="$PWD/bin:$PATH"; '.$workflow['jobs']['label']['steps'][0]['run'], $environment);
+        return $sandbox->runScript('chmod +x bin/gh; PATH="$PWD/bin:$PATH"; '.$workflow['jobs']['label']['steps'][1]['run'], $environment);
     }
 }

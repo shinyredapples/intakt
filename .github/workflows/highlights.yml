@@ -20,8 +20,8 @@ permissions:
 jobs:
   build:
     if: github.repository == 'shinyredapples/intakt' && github.ref == 'refs/heads/main'
-    # GitHub's image pulls from Docker Hub unthrottled; a CI_RUNS_ON runner needs a Docker Hub login this job lacks.
-    runs-on: ubuntu-24.04
+    # On CI_RUNS_ON, logged in to Docker Hub as ci.yml's jobs are, with gh installed when the runner lacks it.
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-24.04"') }}
     timeout-minutes: 15
     # jekyll-build-pages reads the repository's Pages settings (jekyll-github-metadata): without pages: read its token
     # gets 403 and the build fails
@@ -36,8 +36,15 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Log in to Docker Hub
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: .github/ci/docker-hub-login.sh
       - name: Build or restore the CI image
         uses: $/.github/actions/ci-image
+      - name: Install gh when the runner lacks it
+        run: .github/ci/install-gh.sh
       # On the runner, because the CI image has no gh; the job's own token stays out of the container.
       - name: Record the journey's API answers
         env:

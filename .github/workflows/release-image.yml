@@ -53,8 +53,8 @@ jobs:
     concurrency:
       group: release-image-latest
       cancel-in-progress: false
-    # GitHub's image has gh and docker buildx; the job pulls nothing from Docker Hub.
-    runs-on: ubuntu-24.04
+    # On CI_RUNS_ON, with gh installed when the runner lacks it; the job pulls nothing from Docker Hub.
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-24.04"') }}
     timeout-minutes: 10
     permissions:
       contents: read
@@ -63,6 +63,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Install gh when the runner lacks it
+        run: .github/ci/install-gh.sh
       - name: Point latest at the highest release tag
         env:
           REPOSITORY: ${{ github.repository }}
