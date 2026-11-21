@@ -23,6 +23,8 @@ Plan task T49, the job itself (#1709; design: [overview](../design/05-architectu
    - `Asked` with the question when `question.json` (`RunBuildJob::QUESTION`) is there and passes the [question rule](#the-question), with no bundle and no text, whatever else the output holds; `QuestionRefused` when it breaks the rule, with no question and `question refused: <QuestionRefused message>` appended to the log;
    - otherwise `NoCommits` without `handback.bundle`, `NoPullRequestText` without `pull-request.md`, otherwise `Built`.
 
+A build job gets no mount of the [dependency snapshot store](check-job.md#the-dependency-snapshot-store) and cannot write it: its only inputs are its clone and its prompt, only the orchestrator's own process writes the store, and a check job reaches a snapshot only as a read-only bind of that snapshot's folder.
+
 Both the bundle and the text are untrusted: the [hand-back check](hand-back.md) reads the bundle before anything trusts it ([`intakt:build:task`](build-task.md) runs it right after the job), and the checks of the text are plan tasks T50 and T51.
 
 ## In the container
