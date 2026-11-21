@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\RunReviewRound;
 
+use Doctrine\DBAL\Platforms\AbstractMySQLPlatform;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
 use Intakt\Tests\Core\Review\SampleIdentity;
 use Intakt\Tests\Support\KernelTestCase;
@@ -90,6 +91,10 @@ final class LatestJudgedRoundTest extends KernelTestCase
     // Judged on another pull request and written under an old spelling of this one, because only a round an older install stored apart (migration Version20261122100000 left it so) forms a second sequence whose id can be newer than the rounds judged after the clock went back.
     private function roundLeftUnderAnOldSpelling(RoundFixture $fixture): void
     {
+        if ($fixture->entities->getConnection()->getDatabasePlatform() instanceof AbstractMySQLPlatform) {
+            self::markTestSkipped('MySQL and MariaDB compare the address without letter case, so an old spelling that differs only in letter case shares the row of the canonical one there.');
+        }
+
         $this->judgedRound($fixture, self::ANOTHER_PULL);
 
         foreach (['change_findings', 'review_round'] as $table) {

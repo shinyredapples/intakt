@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\RunReviewRound;
 
+use Doctrine\DBAL\Platforms\AbstractMySQLPlatform;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
 use Intakt\Tests\Core\Review\SampleIdentity;
 use Intakt\Tests\Support\KernelTestCase;
@@ -35,6 +36,7 @@ final class HandedOverRoundLookupTest extends KernelTestCase
     public function testACollidingLegacySpellingKeepsItsVerdictWhenItAloneReviewedTheListedHead(): void
     {
         $fixture = new RoundFixture(self::getContainer());
+        $this->skipWhereTheAddressIgnoresLetterCase($fixture);
         $otherPull = 'https://github.com/acme/widgets/pull/8';
         $legacy = $this->judgeRound($fixture, $otherPull, SampleIdentity::HEAD);
         foreach (['change_findings', 'review_round'] as $table) {
@@ -49,6 +51,7 @@ final class HandedOverRoundLookupTest extends KernelTestCase
     public function testACanonicalJudgmentSupersedesAQueuedLegacyVerdictForTheSameHead(): void
     {
         $fixture = new RoundFixture(self::getContainer());
+        $this->skipWhereTheAddressIgnoresLetterCase($fixture);
         $legacy = $this->judgeRound($fixture, 'https://github.com/acme/widgets/pull/8', SampleIdentity::HEAD);
         $this->renameChange($fixture, 'https://github.com/acme/widgets/pull/8', self::UPPER);
         $this->judgeRound($fixture, self::PULL, SampleIdentity::NEW_HEAD);
@@ -76,6 +79,7 @@ final class HandedOverRoundLookupTest extends KernelTestCase
     public function testASeparateLocalBranchDifferingOnlyInCaseDoesNotSupplyAVerdict(): void
     {
         $fixture = new RoundFixture(self::getContainer());
+        $this->skipWhereTheAddressIgnoresLetterCase($fixture);
         $this->judgeRound($fixture, 'Feature', SampleIdentity::HEAD);
         $fixture->entities->clear();
 
@@ -90,6 +94,13 @@ final class HandedOverRoundLookupTest extends KernelTestCase
         $fixture->entities->clear();
 
         self::assertNull($fixture->transactions()->latestJudgedAt('alpha', self::PULL, SampleIdentity::HEAD));
+    }
+
+    private function skipWhereTheAddressIgnoresLetterCase(RoundFixture $fixture): void
+    {
+        if ($fixture->entities->getConnection()->getDatabasePlatform() instanceof AbstractMySQLPlatform) {
+            self::markTestSkipped('MySQL and MariaDB compare the address without letter case, so two spellings that differ only in letter case share one row there.');
+        }
     }
 
     private function renameChange(RoundFixture $fixture, string $from, string $to): void
