@@ -29,7 +29,7 @@ final readonly class RectorGate extends PhpFilesToolGate
     #[Override]
     protected function environment(PhpFileSelection $selection): array
     {
-        return [RectorPathsFile::VARIABLE => RectorPathsFile::written(array_values($selection->files))];
+        return [RectorPathsFile::VARIABLE => RectorPathsFile::written($selection->files)];
     }
 
     protected function findings(ProcessResult $result): array

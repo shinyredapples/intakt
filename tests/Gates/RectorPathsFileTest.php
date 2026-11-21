@@ -64,10 +64,7 @@ final class RectorPathsFileTest extends TestCase
 
     public function testAMissingFileFailsTheRead(): void
     {
-        $this->expectException(ScopeFailure::class);
-        $this->expectExceptionMessage('is missing or unreadable');
-
-        RectorPathsFile::read($this->folder.'/absent.json');
+        self::assertReadFails($this->folder.'/absent.json', 'is missing or unreadable');
     }
 
     public function testAnUnreadableFileFailsTheRead(): void
@@ -79,10 +76,7 @@ final class RectorPathsFileTest extends TestCase
         file_put_contents($this->folder.'/locked.json', '["src/A.php"]');
         chmod($this->folder.'/locked.json', 0o000);
 
-        $this->expectException(ScopeFailure::class);
-        $this->expectExceptionMessage('is missing or unreadable');
-
-        RectorPathsFile::read($this->folder.'/locked.json');
+        self::assertReadFails($this->folder.'/locked.json', 'is missing or unreadable');
     }
 
     /**
@@ -104,9 +98,16 @@ final class RectorPathsFileTest extends TestCase
     {
         file_put_contents($this->folder.'/paths.json', $contents);
 
-        $this->expectException(ScopeFailure::class);
-        $this->expectExceptionMessage($reason);
+        self::assertReadFails($this->folder.'/paths.json', $reason);
+    }
 
-        RectorPathsFile::read($this->folder.'/paths.json');
+    private static function assertReadFails(string $file, string $reason): void
+    {
+        try {
+            RectorPathsFile::read($file);
+            self::fail('The read passed although the paths file is no complete list of paths.');
+        } catch (ScopeFailure $failure) {
+            self::assertStringContainsString($reason, $failure->getMessage());
+        }
     }
 }

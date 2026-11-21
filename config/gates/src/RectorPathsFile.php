@@ -43,17 +43,22 @@ final readonly class RectorPathsFile
             throw new ScopeFailure('the rector paths file '.$file.' is missing or unreadable');
         }
 
-        try {
-            $paths = json_decode($contents, true, 2, JSON_THROW_ON_ERROR);
-        } catch (JsonException $failure) {
-            throw new ScopeFailure('the rector paths file '.$file.' does not decode: '.$failure->getMessage(), 0, $failure);
-        }
+        $paths = self::decoded($file, $contents);
 
         if (!is_array($paths) || [] === $paths || !array_is_list($paths)) {
             throw new ScopeFailure('the rector paths file '.$file.' holds no list of paths');
         }
 
         return array_map(static fn (mixed $path): string => is_string($path) && '' !== $path ? $path : throw new ScopeFailure('the rector paths file '.$file.' holds no list of paths'), $paths);
+    }
+
+    private static function decoded(string $file, string $contents): mixed
+    {
+        try {
+            return json_decode($contents, true, 2, JSON_THROW_ON_ERROR);
+        } catch (JsonException $failure) {
+            throw new ScopeFailure('the rector paths file '.$file.' does not decode: '.$failure->getMessage(), 0, $failure);
+        }
     }
 
     /**
