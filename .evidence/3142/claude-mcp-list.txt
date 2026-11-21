@@ -7,4 +7,4 @@ intakt: http://localhost:7781/mcp/owner (HTTP) - ✔ Connected
 
 # Same, with INTAKT_MCP_TOKEN=wrong: the header comes from the variable, so the server refuses it.
 $ claude mcp list
-intakt: http://localhost:7781/mcp/owner (HTTP) - ✘ Failed to connect - Server rejected the configured Authorization header (HTTP 401). Check that the token is valid for this MCP endpoint — OAuth fallback is disabled when headers.Authorization is set. Error detail: Invalid credentials.
+intakt: http://localhost:7781/mcp/owner (HTTP) - ✘ Failed to connect - Server rejected the configured Authorization header (HTTP 401). Check that the token is valid for this MCP endpoint - OAuth fallback is disabled when headers.Authorization is set. Error detail: Invalid credentials.

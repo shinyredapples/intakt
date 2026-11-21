@@ -9,6 +9,7 @@ use Intakt\Core\Dashboard\Contract\DashboardRoutes;
 use Intakt\Core\Dashboard\Domain\Board;
 use Intakt\Core\Dashboard\Domain\BoardColumn;
 use Intakt\Core\Dashboard\Domain\FailingHead;
+use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Infrastructure\LedgerFailingHeads;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LivePageRendering;
@@ -80,7 +81,7 @@ final readonly class ShowBoardController
     private function quietRoundOf(Board $board): ?RedirectResponse
     {
         $newest = $board->newestReviewAtRest();
-        if (null === $newest || [] !== $this->notices->stillRunningOldestFirst()) {
+        if (!$newest instanceof Review || [] !== $this->notices->stillRunningOldestFirst()) {
             return null;
         }
 
