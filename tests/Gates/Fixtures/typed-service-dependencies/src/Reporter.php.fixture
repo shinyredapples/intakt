@@ -1,0 +1,33 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use Psr\Clock\ClockInterface;
+use Psr\Log\LoggerInterface;
+use Symfony\Component\DependencyInjection\Attribute\AutowireIterator;
+use Symfony\Component\DependencyInjection\Attribute\AsDecorator;
+use Symfony\Component\DependencyInjection\ContainerInterface;
+
+#[AsDecorator('app.reporter', onInvalid: ContainerInterface::IGNORE_ON_INVALID_REFERENCE)]
+final readonly class Reporter
+{
+    /**
+     * @param iterable<object> $sinks
+     */
+    public function __construct(
+        private ClockInterface $clock,
+        private LoggerInterface $logger,
+        #[AutowireIterator('app.sink')]
+        private iterable $sinks,
+    ) {
+    }
+
+    public function report(): void
+    {
+        foreach ($this->sinks as $sink) {
+            $this->logger->info($sink::class, ['at' => $this->clock->now()->format('c')]);
+        }
+    }
+}

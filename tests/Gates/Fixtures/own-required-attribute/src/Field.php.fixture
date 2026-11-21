@@ -1,0 +1,21 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use Attribute;
+
+#[Attribute(Attribute::TARGET_PROPERTY)]
+final readonly class Required
+{
+}
+
+final readonly class Field
+{
+    public function __construct(
+        #[Required]
+        public string $name,
+    ) {
+    }
+}

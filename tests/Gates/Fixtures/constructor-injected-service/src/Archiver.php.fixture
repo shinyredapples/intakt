@@ -1,0 +1,23 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use Psr\Log\LoggerInterface;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
+
+final readonly class Archiver
+{
+    public function __construct(
+        private LoggerInterface $logger,
+        #[Autowire(param: 'kernel.project_dir')]
+        private string $projectDir,
+    ) {
+    }
+
+    public function archive(string $name): void
+    {
+        $this->logger->info($this->projectDir.'/'.$name);
+    }
+}

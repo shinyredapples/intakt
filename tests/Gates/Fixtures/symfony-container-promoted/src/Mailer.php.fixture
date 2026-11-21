@@ -1,0 +1,20 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use Symfony\Component\DependencyInjection\ContainerInterface;
+
+final readonly class Mailer
+{
+    public function __construct(
+        private ContainerInterface $container,
+    ) {
+    }
+
+    public function knows(string $id): bool
+    {
+        return $this->container->initialized($id);
+    }
+}
