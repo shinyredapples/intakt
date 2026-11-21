@@ -111,7 +111,7 @@ final readonly class ReviewRounds
         };
     }
 
-    // A forge status belongs to a commit, so only a later round that reviewed the same head speaks for it; a round of another head of the change leaves this head's status to this round.
+    // A forge status belongs to a commit, so only a later round that reviewed the same head speaks for it; a round of another head of the change leaves this head's status to this round. Compared as stored, because a round stores its address canonically (StoredFindings::openRound()), and an old spelling that migration Version20261122100000 left apart keeps its own numbering, which another sequence's numbers would not order.
     public function judgedAfter(ReviewRound $round): bool
     {
         /** @var list<ReviewRound> $later */
@@ -142,6 +142,7 @@ final readonly class ReviewRounds
         return $this->newestAcrossSpellings($this->highestNumberedPerSpelling($atHead));
     }
 
+    // Compared as stored, as judgedAfter() compares them, so the rounds come as one numbered sequence.
     /**
      * @return list<ReviewRound>
      */

@@ -12,7 +12,7 @@ Code and conventions:
 - [Branch push](branch-push.md)
 - [Hand-back checks](hand-back.md): the bundle a build returns, refused when it touches main, is not a fast-forward, holds a merge or a secret, stripped of attribution and redacted of mounted credentials; the pull request text scanned too, and a failure sent back once, then handed over
 - [Check job](check-job.md): the pre-push check of an accepted bundle in a fresh clone through the gate plugin, the lost-content rule, the verdict read from the job's output directory only, and the pull request text rule (Evidence references, body cap)
-- [Watchdog over main](watchdog.md): the rules that classify main's new commits: a recorded merge head passes before any signature check, an owner-signed commit passes, an unsigned commit, an unknown key and a rewrite of main's history are violations
+- [Watchdog over main](watchdog.md): the rules that classify main's new commits: a recorded merge head and the commits its merge brought in above its base pass before any signature check, an owner-signed commit passes, an unsigned commit, an unknown key and a rewrite of main's history are violations
 - [Protected paths of a head](protected-paths.md): the owner's list per project, read from the whole change and each commit; unreadable counts as protected
 - [Work intake from GitHub issues](work-intake.md): the work source contract, the `eligibility_label` watch key and the stored state of the GitHub work source
 - [Upstream reproductions](upstream-reproductions.md)
@@ -36,7 +36,7 @@ Running Intakt:
 - [Persistence](persistence.md)
 - [Job containers](job-containers.md): a fresh container per job through the Docker Engine API, the egress allowlist through a per-job proxy, the start check and its reduced mode, the memory-kill cause, and the cleanup after a crash
 - [Job images](job-images.md): a project's job image from its devcontainer, its Dockerfile or one generated from `composer.json`, and the probe that checks its PHP and extensions
-- [Differences from the existing loop](differences-from-the-existing-loop.md): what Intakt deliberately does another way than the loop it replaces, and why
+- [Differences from the earlier loop](differences-from-the-earlier-loop.md): what Intakt deliberately does another way than the build loop that developed Intakt, and why
 - [MCP server for the owner](mcp-server.md)
 
 Forges and identity:
