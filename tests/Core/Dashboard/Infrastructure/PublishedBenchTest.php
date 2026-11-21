@@ -5,11 +5,15 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Dashboard\Infrastructure;
 
 use Intakt\Core\Dashboard\Domain\BenchHeadline;
+use Intakt\Core\Dashboard\Infrastructure\MarkdownSection;
+use Intakt\Core\Dashboard\Infrastructure\MarkdownTable;
 use Intakt\Core\Dashboard\Infrastructure\PublishedBench;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(PublishedBench::class)]
+#[CoversClass(MarkdownSection::class)]
+#[CoversClass(MarkdownTable::class)]
 #[CoversClass(BenchHeadline::class)]
 final class PublishedBenchTest extends TestCase
 {
