@@ -187,17 +187,18 @@ final readonly class MainHistory implements CommitHistory
      */
     private function signatureLines(array $headers, string $header): ?array
     {
-        $lines = [];
-        $others = array_diff(self::SIGNATURE_HEADERS, [$header]);
-        foreach ($headers as $index => $line) {
-            $starts = str_starts_with($line, $header.' ');
-            // The other format's header too, because a commit carrying both could pass on a signature that covers the other header.
-            if (($starts && [] !== $lines) || array_any($others, static fn (string $other): bool => str_starts_with($line, $other.' '))) {
-                return null;
-            }
-            if ($starts || ([] !== $lines && array_last($lines) === $index - 1 && str_starts_with($line, ' '))) {
-                $lines[] = $index;
-            }
+        $starts = array_keys(array_filter($headers, static fn (string $line): bool => array_any(self::SIGNATURE_HEADERS, static fn (string $name): bool => str_starts_with($line, $name.' '))));
+        // A second header, or the other format's header, refuses the commit, because a commit carrying both could pass on a signature that covers the other header.
+        if (count($starts) > 1 || ([] !== $starts && !str_starts_with($headers[$starts[0]], $header.' '))) {
+            return null;
+        }
+        if ([] === $starts) {
+            return [];
+        }
+
+        $lines = [$starts[0]];
+        for ($index = $starts[0] + 1; isset($headers[$index]) && str_starts_with($headers[$index], ' '); ++$index) {
+            $lines[] = $index;
         }
 
         return $lines;
