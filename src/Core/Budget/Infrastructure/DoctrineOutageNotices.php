@@ -61,7 +61,7 @@ final readonly class DoctrineOutageNotices
     private function endIfReadSince(OutageNoticeRecord $notice): void
     {
         $endedWith = null;
-        do {
+        while (true) {
             $earliest = $this->earliestReadingSince($notice);
             if (null === $earliest || $earliest == $endedWith) {
                 return;
@@ -69,7 +69,7 @@ final readonly class DoctrineOutageNotices
 
             $this->endWith($notice, $earliest);
             $endedWith = $earliest;
-        } while (true);
+        }
     }
 
     private function earliestReadingSince(OutageNoticeRecord $notice): ?DateTimeImmutable
