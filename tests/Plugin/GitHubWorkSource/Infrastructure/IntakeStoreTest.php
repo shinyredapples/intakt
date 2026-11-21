@@ -7,7 +7,7 @@ namespace Intakt\Tests\Plugin\GitHubWorkSource\Infrastructure;
 use DateTimeZone;
 use Doctrine\Common\EventManager;
 use Doctrine\DBAL\Connection;
-use Doctrine\DBAL\Driver\PDO\Exception as PdoDriverException;
+use Doctrine\DBAL\Driver\PDO\Exception;
 use Doctrine\DBAL\DriverManager;
 use Doctrine\DBAL\Exception\DeadlockException;
 use Doctrine\DBAL\Exception\RetryableException;
@@ -433,7 +433,7 @@ final class IntakeStoreTest extends KernelTestCase
             {
             }
 
-            // A server such as InnoDB rolls the victim's transaction back itself before it reports the deadlock.
+            // Rolled back here, because a server such as InnoDB aborts the victim's transaction itself before it reports the deadlock.
             public function onFlush(): never
             {
                 $native = $this->connection->getNativeConnection();
@@ -441,7 +441,7 @@ final class IntakeStoreTest extends KernelTestCase
                     $native->rollBack();
                 }
 
-                throw new DeadlockException(PdoDriverException::new(new PDOException('Deadlock found when trying to get lock')), null);
+                throw new DeadlockException(Exception::new(new PDOException('Deadlock found when trying to get lock')), null);
             }
         });
         $store = new IntakeStore($manager);

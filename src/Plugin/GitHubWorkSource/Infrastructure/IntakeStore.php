@@ -6,7 +6,7 @@ namespace Intakt\Plugin\GitHubWorkSource\Infrastructure;
 
 use Doctrine\Common\EventManager;
 use Doctrine\DBAL\Connection;
-use Doctrine\DBAL\Exception as DbalException;
+use Doctrine\DBAL\Exception;
 use Doctrine\DBAL\Exception\RetryableException;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\DBAL\LockMode;
@@ -128,7 +128,7 @@ final readonly class IntakeStore
 
         try {
             $connection->rollBack();
-        } catch (DbalException) {
+        } catch (Exception) {
         }
     }
 
