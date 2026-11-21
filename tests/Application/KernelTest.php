@@ -52,6 +52,7 @@ final class KernelTest extends KernelTestCase
     {
         $entities = self::getContainer()->get(EntityManagerInterface::class);
         self::assertInstanceOf(EntityManagerInterface::class, $entities);
+        // Left on for the rest of the process on purpose, because tracking only counts deprecations and no later test reads or resets the count.
         Deprecation::enableTrackingDeprecations();
         $before = Deprecation::getTriggeredDeprecations()[self::SCHEMA_EDITOR_DEPRECATION] ?? 0;
 

@@ -149,6 +149,21 @@ final class ReviewPageOctopusTest extends DashboardPageTestCase
         self::assertCount(0, $this->browser->request('GET', '/reviews/round-2')->filter('img[src*="/mascot/"]'));
     }
 
+    public function testAnOlderRoundJudgedLateWhileANewerRoundIsStillInReviewStreamsNoOctopus(): void
+    {
+        $this->ledger->startRoundOfQuorumAll('feat/thing', 'round-1', 1);
+        $this->ledger->answer('round-1', 'correctness', 0);
+        $this->ledger->answer('round-1', 'security', 0);
+        $this->ledger->startRoundOfQuorumAll('feat/thing', 'round-2', 2);
+        $this->ledger->judgeRound('round-1');
+        $review = self::getContainer()->get(LedgerReviewPages::class)->reviewOf('round-1');
+
+        $stream = new Crawler(self::getContainer()->get(Environment::class)->render('dashboard/stream/round_judged.stream.html.twig', ['round' => 'round-1', 'reviewed' => $review?->rounds[0], 'review' => $review, 'progress' => new RoundProgress(2, 2, true)]));
+
+        self::assertCount(1, $stream->filter('turbo-stream[target="round-round-1-verdict"] template'));
+        self::assertCount(0, $stream->filter('turbo-stream[target="round-round-1-verdict"] template img'));
+    }
+
     private function givenARoundJudged(int $number, int $findings): void
     {
         $round = 'round-'.$number;

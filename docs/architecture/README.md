@@ -70,7 +70,7 @@ Reviews:
 - [Finding ledger](finding-ledger.md)
 - [Reviewer repository tools](reviewer-repository-tools.md)
 - [Reviewer agent](reviewer-agent.md)
-- [Prompt assembly](prompt-assembly.md): `PromptAssembly` is the only class that builds a model message, with literals and `FencedText` only, the role prompt only through `systemWithRole()`, enforced by the `phpstan` gate
+- [Prompt assembly](prompt-assembly.md): `PromptAssembly` is the only class that builds a model message, with literals and `FencedText` only, the role prompt only through `systemWithRole()`, enforced by the `phpstan` gate on code under `src/`, `bin/` and `config/`
 - [Project memory](project-memory.md)
 - [Ledger](ledger.md)
 - [The weekly report: the loop's reviews and Intakt's](weekly-report.md)

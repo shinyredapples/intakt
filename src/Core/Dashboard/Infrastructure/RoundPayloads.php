@@ -79,7 +79,7 @@ final readonly class RoundPayloads
 
         $read = $this->judgedFindingsOf($recorded) ?? [];
         $ids = array_map(static fn (JudgeDoneFinding $finding): string => $finding->id, $read);
-        $marked = array_merge($judge->act, $judge->followUps, ...array_map(static fn (JudgeDoneFinding $finding): array => $finding->merged, $read));
+        $marked = array_merge([...$judge->act], [...$judge->followUps], ...array_map(static fn (JudgeDoneFinding $finding): array => [...$finding->merged], $read));
 
         return count($entries) === count($read) && [] === array_diff($marked, $ids);
     }
