@@ -145,15 +145,16 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
 
         $until = $this->clock->now()->modify(sprintf('+%d seconds', $seconds));
 
-        $saved = $this->windowsEndingAt($until)->create($account->key())->consume();
+        $pool = new PoolRememberingItsSave($this->pool);
+        $consumed = $this->windowsEndingAt($until, $pool)->create($account->key())->consume();
 
         // Refused while a cooldown already runs, which is kept as it is, because only a call already in flight can still be limited then.
-        if (!$saved->isAccepted()) {
+        if (!$consumed->isAccepted()) {
             return;
         }
 
-        // A cache that refuses the save still accepts the token, so the account would read free while its event said it cooled, and another worker may save its own window before the read-back: only a window that ends where the accepted one ends is recorded, anything else is logged as a refusal.
-        if (!$this->isSavedUntil($account, $saved->getRetryAfter())) {
+        // A cache that refuses the save still accepts the token, so the account would read free while its event said it cooled: the cache's own result decides, under the limiter's lock, so another worker's window is never taken for this one.
+        if (!$pool->isSaved()) {
             $this->logger->warning('The cooldown of account {account} could not be saved.', ['account' => $account->key()]);
 
             return;
@@ -162,26 +163,18 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
         $this->record($account, $until);
     }
 
-    // Both ends come from the limiter, which dates its windows by the system time and not by the clock, so the check holds under any clock and across a second's boundary.
-    private function isSavedUntil(Account $account, DateTimeImmutable $end): bool
-    {
-        $window = $this->window($account);
-
-        return 0 === $window->getRemainingTokens() && $window->getRetryAfter()->getTimestamp() === $end->getTimestamp();
-    }
-
     // No token, so reading the window never starts or saves one.
     private function window(Account $account): RateLimit
     {
-        return $this->windowsEndingAt($this->clock->now())->create($account->key())->consume(0);
+        return $this->windowsEndingAt($this->clock->now(), $this->pool)->create($account->key())->consume(0);
     }
 
     // Anchored at the end so the fixed window closes at the vendor's reset; one month because it is the shortest interval the RateLimiter anchors.
-    private function windowsEndingAt(DateTimeImmutable $end): RateLimiterFactory
+    private function windowsEndingAt(DateTimeImmutable $end, CacheItemPoolInterface $pool): RateLimiterFactory
     {
         $config = ['id' => self::LIMITER, 'policy' => 'fixed_window', 'limit' => 1, 'interval' => '1 month', 'anchor_at' => $end];
 
-        return new RateLimiterFactory($config, new CacheStorage($this->pool), $this->locks);
+        return new RateLimiterFactory($config, new CacheStorage($pool), $this->locks);
     }
 
     // Beside the window in the same pool, so every worker sees why the account cools down; the account key holds a provider name and an account name the owner configured, never outside input.

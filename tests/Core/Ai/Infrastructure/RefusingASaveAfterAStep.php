@@ -9,7 +9,7 @@ use Override;
 use Psr\Cache\CacheItemInterface;
 use Symfony\Component\Cache\Adapter\ArrayAdapter;
 
-// A cache pool that refuses one save without throwing and runs another worker's step first, because only the saving worker's own call reaches into the moment between its refused save and its read-back.
+// A cache pool that refuses one save without throwing and runs another worker's step first, because only the saving worker's own call reaches into the moment between its window's read and its refused save.
 final class RefusingASaveAfterAStep extends ArrayAdapter
 {
     public ?Closure $step = null;

@@ -10,6 +10,7 @@ use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Infrastructure\AccountCooldownWindows;
 use Intakt\Core\Ai\Infrastructure\AccountErrorReported;
+use Intakt\Core\Ai\Infrastructure\PoolRememberingItsSave;
 use Intakt\Core\Budget\Contract\ReadingOutcome;
 use Intakt\Core\Budget\Contract\Usage;
 use Intakt\Core\Budget\Contract\UsageWindow;
@@ -32,6 +33,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 
 // On the native clock, because the RateLimiter reads the system time itself (symfony/rate-limiter has no clock option), so a mocked moment would not match its windows.
 #[CoversClass(AccountCooldownWindows::class)]
+#[CoversClass(PoolRememberingItsSave::class)]
 #[UsesClass(Account::class)]
 #[UsesClass(Provider::class)]
 #[UsesClass(AccountErrorReported::class)]
@@ -344,7 +346,7 @@ final class AccountCooldownWindowsTest extends TestCase
         self::assertSame('error', $logs[0][0]);
     }
 
-    // Forced order (decision 67 of #2860): the first worker's save is refused and a second worker cools the account for 60 s before the first reads the window back, so the window read back is not the first worker's own.
+    // Forced order (decision 67 of #2860): the first worker's save is refused and a second worker cools the account for 60 s before the first learns its save was refused, so only the other worker's window is kept and recorded.
     public function testARefusedSaveFollowedByAnotherWorkersCooldownRecordsOnlyTheOtherCooldownAndIsLogged(): void
     {
         $pool = new RefusingASaveAfterAStep();
@@ -363,6 +365,22 @@ final class AccountCooldownWindowsTest extends TestCase
         self::assertEqualsWithDelta(60, $end->getTimestamp() - new NativeClock()->now()->getTimestamp(), 1);
         self::assertEqualsWithDelta(60, $other->secondsUntilFree($this->default()), 1);
         self::assertContains('The cooldown of account {account} could not be saved.', array_column($logger->cleanLogs(), 1));
+    }
+
+    // Forced order (decision 77 of #2860): the first worker's save is refused while a second worker saves a window with the same end, so only the cache's own result can tell the two apart.
+    public function testARefusedSaveBesideAnotherWorkersWindowWithTheSameEndRecordsOneCooldownAndIsLoggedOnce(): void
+    {
+        $pool = new RefusingASaveAfterAStep();
+        $logger = new BufferingLogger();
+        $other = new AccountCooldownWindows($this->readings, $pool, new LockFactory(new InMemoryStore()), new NativeClock(), $this->ledger, new NullLogger(), StoredSerializerFactory::create(), $this->accounts());
+        $first = new AccountCooldownWindows($this->readings, $pool, new LockFactory(new InMemoryStore()), new NativeClock(), $this->ledger, $logger, StoredSerializerFactory::create(), $this->accounts());
+        $pool->step = fn () => $other->coolDown($this->default(), 120);
+
+        $first->coolDown($this->default(), 120);
+
+        self::assertSame([LedgerEventKind::AccountCooledDown], $this->ledger->kinds());
+        self::assertEqualsWithDelta(120, $other->secondsUntilFree($this->default()), 1);
+        self::assertSame(['The cooldown of account {account} could not be saved.'], array_column($logger->cleanLogs(), 1));
     }
 
     public function testARejectionIsReportedToTheOwnerWithItsAccount(): void
