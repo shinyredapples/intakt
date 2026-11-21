@@ -114,9 +114,10 @@ final class CheckReuseTest extends SandboxTestCase
 
     public function testTheJourneysRefuseToReuseAPass(): void
     {
-        $this->expectExceptionMessage('--journeys runs alone, without --fast, --reuse,');
+        $run = $this->emptySandbox()->check('--journeys', '--reuse');
 
-        Options::fromArguments(['--journeys', '--reuse']);
+        self::assertSame(2, $run->exitCode(), $run->output());
+        self::assertStringContainsString('--journeys runs alone, without --fast, --reuse,', $run->output());
     }
 
     public function testReuseIsOnlyAskedForByItsOwnArgument(): void
