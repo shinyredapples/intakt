@@ -6,6 +6,7 @@ namespace Intakt\Core\Budget\Infrastructure;
 
 use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\ORM\QueryBuilder;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Budget\Contract\MeasuredUse;
 use Intakt\Core\Budget\Contract\OwnerNoticesChanged;
@@ -43,11 +44,21 @@ final readonly class DoctrineMeasuredUse implements MeasuredUse
 
         // Read before the older readings are dropped, because one of them may be the reading that already ended an outage.
         $previous = $this->latestReadingBefore($reading->account, $now);
-        $nested = $this->entities->getConnection()->isTransactionActive();
-        $ended = $this->storeEndingOutages(new WindowReadingRecord($reading, $now), $previous);
         // Inside a caller's transaction nothing is committed yet, and its rollback would erase an end a listener already heard of, so the caller that owns the commit announces.
-        if ($ended > 0 && !$nested) {
-            $this->events->dispatch(new OwnerNoticesChanged());
+        if ($this->entities->getConnection()->isTransactionActive()) {
+            $this->storeEndingOutages(new WindowReadingRecord($reading, $now), $previous);
+
+            return ReadingOutcome::Recorded;
+        }
+
+        $record = new WindowReadingRecord($reading, $now);
+        $ended = $this->storeEndingOutages($record, $previous);
+        try {
+            $ended += $this->moveLaterEndsTo($record, $previous);
+        } finally {
+            if ($ended > 0) {
+                $this->events->dispatch(new OwnerNoticesChanged());
+            }
         }
 
         return ReadingOutcome::Recorded;
@@ -140,6 +151,30 @@ final readonly class DoctrineMeasuredUse implements MeasuredUse
     // One statement, so two workers ending one outage at once need no lock; the earlier reading wins, because a slow writer can store its reading after a later one; a reading between the outage and this one already ended it, so a notice left with no end from before ends were kept is not ended now.
     private function endOutagesBefore(WindowReadingRecord $record, ?DateTimeImmutable $previous): int
     {
+        $query = $this->endingQuery($record, $previous);
+        // A fresher reading of the account ended every outage before it when it was stored, so a notice it left with no end is from before ends were kept, even with no earlier reading to guard by.
+        if ($this->wasReadAfter($record)) {
+            $query->andWhere('notice.endedAt IS NOT NULL');
+        }
+
+        $ended = $query->getQuery()->execute();
+
+        return is_int($ended) ? $ended : 0;
+    }
+
+    // Once more after the commit, because a notice writer may have stored its notice after this reading's update and given it a later reading's end before this reading was visible to its re-check; only a saved end moves, since a notice still without one is either being ended by its writer, which now sees this reading, or from before ends were kept.
+    private function moveLaterEndsTo(WindowReadingRecord $record, ?DateTimeImmutable $previous): int
+    {
+        $moved = $this->endingQuery($record, $previous)
+            ->andWhere('notice.endedAt IS NOT NULL')
+            ->getQuery()
+            ->execute();
+
+        return is_int($moved) ? $moved : 0;
+    }
+
+    private function endingQuery(WindowReadingRecord $record, ?DateTimeImmutable $previous): QueryBuilder
+    {
         $query = $this->entities->createQueryBuilder()
             ->update(OutageNoticeRecord::class, 'notice')
             ->set('notice.endedAt', ':takenAt')
@@ -154,14 +189,7 @@ final readonly class DoctrineMeasuredUse implements MeasuredUse
             $query->andWhere('notice.lastReadingAt >= :previous')->setParameter('previous', $previous, 'utc_datetime_immutable');
         }
 
-        // A fresher reading of the account ended every outage before it when it was stored, so a notice it left with no end is from before ends were kept, even with no earlier reading to guard by.
-        if ($this->wasReadAfter($record)) {
-            $query->andWhere('notice.endedAt IS NOT NULL');
-        }
-
-        $ended = $query->getQuery()->execute();
-
-        return is_int($ended) ? $ended : 0;
+        return $query;
     }
 
     private function wasReadAfter(WindowReadingRecord $record): bool

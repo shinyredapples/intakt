@@ -575,6 +575,19 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
         self::assertSame('11:59', $this->notices()->endedOnTheDayOf(new DateTimeImmutable('2026-11-02T20:00:00+00:00'))[0]->endedAt->format('H:i'));
     }
 
+    // The earlier reading's own end ran before the notice was stored, and the notice writer's re-check ran before that reading committed, so only the reading, once committed, can move the end to its moment.
+    public function testAnEarlierReadingCommittedAfterTheNoticeWritersReCheckStillMovesTheEndToItsMoment(): void
+    {
+        $this->record('main', '2026-11-02 12:00:00');
+        $this->outageNotices()->noticeOnce(new UsageReadingsStayedAway(new Account(Provider::ClaudeCode, 'main'), new DateTimeImmutable('2026-11-02T08:00:00+00:00'), new DateTimeImmutable('2026-11-02T11:00:00+00:00')));
+        $connection = DriverManager::getConnection($this->entities->getConnection()->getParams(), new Configuration()->setMiddlewares([new FirstOutageEndRunsBeforeTheNotice()]));
+        $late = new DoctrineMeasuredUse(new EntityManager($connection, $this->entities->getConfiguration()), new MockClock('2026-11-02 11:59:00 UTC'), new EventDispatcher());
+
+        $late->record($this->readingOf('main'));
+
+        self::assertSame('11:59', $this->notices()->endedOnTheDayOf(new DateTimeImmutable('2026-11-02T20:00:00+00:00'))[0]->endedAt->format('H:i'));
+    }
+
     // The caller's rollback would erase the end, so a reading recorded inside its transaction tells nobody.
     public function testAReadingRecordedInsideACallersTransactionTellsNoListener(): void
     {
