@@ -30,7 +30,10 @@ final readonly class PassedTree
             return false;
         }
 
-        return @file_get_contents($this->file()) === $this->contents($this->taken);
+        $expected = $this->contents($this->taken);
+
+        // Because a record of any size would otherwise be read whole into memory, one byte past the expected length is enough to tell a longer one apart.
+        return @file_get_contents($this->file(), length: strlen($expected) + 1) === $expected;
     }
 
     // Because only the latest pass is kept, one small file replaced whole never grows, and a temporary name renamed over it never leaves half a record.
@@ -57,7 +60,22 @@ final readonly class PassedTree
             return false;
         }
 
-        return true;
+        return $this->stillHoldsBesideItsRecord();
+    }
+
+    /**
+     * @phpstan-impure
+     */
+    // Because a tree that does not ignore var/check hands the record and the report to its gates as files to judge, the record changes the fingerprint it holds there: such a tree keeps no record and reuses nothing.
+    private function stillHoldsBesideItsRecord(): bool
+    {
+        if ($this->fingerprint->taken($this->startedAt) === $this->taken) {
+            return true;
+        }
+
+        @unlink($this->file());
+
+        return false;
     }
 
     private function contents(string $fingerprint): string

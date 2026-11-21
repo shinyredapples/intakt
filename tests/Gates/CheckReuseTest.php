@@ -11,6 +11,7 @@ use Intakt\Gates\Options;
 use Intakt\Gates\PassedTree;
 use Intakt\Gates\TreeFingerprint;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\Clock\NativeClock;
 
@@ -76,6 +77,76 @@ final class CheckReuseTest extends SandboxTestCase
         self::assertTrue($run->failed('dashes'), $run->output());
     }
 
+    #[DataProvider('gateInputsWhereTheCheckWrites')]
+    public function testAnEditedGateInputWhereTheCheckWritesFailsAsAFreshRunWould(string $ignored, string $path, bool $tracked): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->startRepository();
+        $sandbox->write('README.md', "clean\n");
+        $sandbox->write('.gitignore', $ignored);
+        mkdir($sandbox->root.'/var');
+        if ($tracked) {
+            $sandbox->write($path, "clean\n");
+            $sandbox->git('add', '--force', $path);
+        }
+        $sandbox->commitAll('feat: start');
+        $this->waitForTheNextSecond();
+        $first = $this->check($sandbox);
+        $recorded = is_file($sandbox->root.'/'.PassedTree::RECORD);
+        $sandbox->write($path, "a long dash \u{2014} here\n");
+
+        $reused = $this->check($sandbox, '--reuse');
+        $fresh = $this->check($sandbox);
+
+        self::assertTrue($first->passed('dashes'), $first->output());
+        self::assertSame($tracked, $recorded, 'Only a tree that ignores the folder of the check keeps a record.');
+        self::assertSame([1, 1], [$reused->exitCode(), $fresh->exitCode()], $reused->output());
+        self::assertTrue($reused->failed('dashes'), $reused->output());
+    }
+
+    /**
+     * @return iterable<string, array{string, string, bool}>
+     */
+    public static function gateInputsWhereTheCheckWrites(): iterable
+    {
+        yield 'a tracked file under an ignored var/' => ["/var/\n", 'var/tracked.md', true];
+        yield 'an untracked file under a var/ that is not ignored' => ['', 'var/notes.md', false];
+        yield 'a tracked file under an ignored .phpunit.cache/' => ["/var/\n/.phpunit.cache/\n", '.phpunit.cache/notes.md', true];
+        yield 'a tracked config/reference.php' => ["/var/\n/config/reference.php\n", 'config/reference.php', true];
+    }
+
+    public function testAnEditedFileUnderAnIgnoredVarStillReusesThePass(): void
+    {
+        $sandbox = $this->committedSandbox("clean\n");
+        $this->check($sandbox);
+        $sandbox->write('var/cache/notes.md', "a long dash \u{2014} here\n");
+
+        $reused = $this->check($sandbox, '--reuse');
+        $fresh = $this->check($sandbox);
+
+        self::assertSame([self::REUSED], $reused->lines(), $reused->output());
+        self::assertSame(0, $fresh->exitCode(), $fresh->output());
+    }
+
+    // Because the run that creates var/ changes the folder it checks, it notes nothing; the next run of the unchanged tree does.
+    public function testTheCheckThatCreatesTheVarFolderNotesNoPassAndTheNextOneDoes(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->startRepository();
+        $sandbox->write('README.md', "clean\n");
+        $sandbox->write('.gitignore', "/var/\n");
+        $sandbox->commitAll('feat: start');
+        $this->waitForTheNextSecond();
+
+        $this->check($sandbox);
+        $afterTheFirst = is_file($sandbox->root.'/'.PassedTree::RECORD);
+        $this->waitForTheNextSecond();
+        $this->check($sandbox);
+
+        self::assertFalse($afterTheFirst);
+        self::assertFileExists($sandbox->root.'/'.PassedTree::RECORD);
+    }
+
     public function testAFailedCheckIsNeverReused(): void
     {
         $sandbox = $this->committedSandbox("a long dash \u{2014} here\n");
@@ -96,6 +167,8 @@ final class CheckReuseTest extends SandboxTestCase
         $advisories->write('packages.json', (string) json_encode(['packages' => [], 'metadata-url' => $advisories->root.'/p2/%package%.json', 'available-packages' => ['symfony/http-kernel'], 'security-advisories' => ['metadata' => true]]));
         $advisory = (string) file_get_contents($sandbox->root.'/advisories/p2/symfony/http-kernel.json');
         $advisories->write('p2/symfony/http-kernel.json', '{"packages": {}, "security-advisories": []}');
+        $sandbox->write('.gitignore', "/var/\n");
+        mkdir($sandbox->root.'/var');
         $sandbox->startRepository();
         $sandbox->commitAll('feat: start');
         $this->waitForTheNextSecond();
@@ -135,6 +208,9 @@ final class CheckReuseTest extends SandboxTestCase
         $sandbox = $this->emptySandbox();
         $sandbox->startRepository();
         $sandbox->write('README.md', $readme);
+        // Because a pass is kept only by a tree that ignores var/, and only by a run that did not have to create it.
+        $sandbox->write('.gitignore', "/var/\n");
+        mkdir($sandbox->root.'/var');
         $sandbox->commitAll('feat: start');
         $this->waitForTheNextSecond();
 

@@ -15,8 +15,10 @@ use Intakt\Gates\Scope;
 use Intakt\Gates\TreeFingerprint;
 use Intakt\Gates\Workspace;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\Clock\MockClock;
+use Symfony\Component\Clock\NativeClock;
 
 #[CoversClass(PassedTree::class)]
 #[CoversClass(TreeFingerprint::class)]
@@ -82,7 +84,7 @@ final class PassedTreeTest extends SandboxTestCase
     {
         foreach (['vendor/autoload.php', '.env.test.local', 'phpunit.xml'] as $ignored) {
             [$root, $home] = $this->checkedTreeAndHome();
-            $root->write('.gitignore', "/.env.*.local\n/vendor/\n/phpunit.xml\n");
+            $root->write('.gitignore', "/var/\n/.env.*.local\n/vendor/\n/phpunit.xml\n");
             $root->write('vendor/autoload.php', "<?php\n");
             $root->commitAll('chore: ignore the installed files');
             $this->pass($root, $home);
@@ -144,14 +146,178 @@ final class PassedTreeTest extends SandboxTestCase
     public function testTheFilesTheCheckWritesKeepThePassedResult(): void
     {
         [$root, $home] = $this->checkedTreeAndHome();
+        $root->write('.phpunit.cache/test-results', "{}\n");
+        $root->write('config/reference.php', "<?php\n");
         $this->pass($root, $home);
 
         $root->write(FullReport::FOLDER.'/report-0123456789abcdef.json', "{}\n");
         $root->write('var/cache/test/container.php', "<?php\n");
-        $root->write('.phpunit.cache/test-results', "{}\n");
-        $root->write('config/reference.php', "<?php\n");
+        $root->write('.phpunit.cache/test-results', "{\"version\":2}\n");
+        $root->write('config/reference.php', "<?php // dumped again\n");
 
         self::assertTrue($this->tree($root, $home)->hasPassed());
+    }
+
+    #[DataProvider('pathsTheCheckWritesThatTheGatesList')]
+    public function testAnEditedFileTheCheckWouldWriteCountsOnceTheGatesListIt(string $path): void
+    {
+        [$root, $home] = $this->checkedTreeAndHome();
+        $root->write($path, "clean\n");
+        $root->git('add', '--force', $path);
+        $root->commitAll('feat: track a file where the check writes');
+        $this->pass($root, $home);
+
+        $root->write($path, "edited\n");
+
+        self::assertFalse($this->tree($root, $home)->hasPassed());
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function pathsTheCheckWritesThatTheGatesList(): iterable
+    {
+        yield 'a tracked file under the ignored var/' => ['var/tracked.md'];
+        yield 'a tracked file under the ignored .phpunit.cache/' => ['.phpunit.cache/notes.md'];
+        yield 'a tracked config/reference.php' => ['config/reference.php'];
+        yield 'a tracked config/schema.json' => ['config/schema.json'];
+    }
+
+    public function testAnUntrackedFileUnderAVarThatIsNotIgnoredCounts(): void
+    {
+        [$root, $home] = $this->checkedTreeAndHome();
+        $root->write('.gitignore', '/'.FullReport::FOLDER."/\n");
+        $root->commitAll('chore: ignore only the folder of the check');
+        $root->write('var/notes.md', "clean\n");
+        $this->pass($root, $home);
+
+        $root->write('var/notes.md', "edited\n");
+
+        self::assertFalse($this->tree($root, $home)->hasPassed());
+    }
+
+    public function testATreeThatDoesNotIgnoreTheFolderOfTheCheckKeepsNoRecord(): void
+    {
+        [$root, $home] = $this->checkedTreeAndHome();
+        $root->write('.gitignore', "/vendor/\n");
+        $root->commitAll('chore: stop ignoring var');
+
+        self::assertFalse($this->tree($root, $home)->recordPass());
+        self::assertFileDoesNotExist($root->root.'/'.PassedTree::RECORD);
+    }
+
+    public function testAnEditedFileBehindALinkedFolderRunsTheCheckAgain(): void
+    {
+        [$root, $home] = $this->checkedTreeAndHome();
+        $shared = $this->emptySandbox();
+        $shared->write('autoload.php', "<?php\n");
+        $root->symlink('vendor', $shared->root);
+        $this->pass($root, $home);
+
+        $shared->write('autoload.php', "<?php // patched\n");
+
+        self::assertFalse($this->tree($root, $home)->hasPassed());
+    }
+
+    public function testAnEditedTrackedFileWhoseFolderBecameALinkRunsTheCheckAgain(): void
+    {
+        [$root, $home] = $this->checkedTreeAndHome();
+        $root->write('docs/guide.md', "clean\n");
+        $root->commitAll('docs: add a guide');
+        $elsewhere = $this->emptySandbox();
+        $elsewhere->write('guide.md', "clean\n");
+        unlink($root->root.'/docs/guide.md');
+        rmdir($root->root.'/docs');
+        $root->symlink('docs', $elsewhere->root);
+        $this->pass($root, $home);
+
+        $elsewhere->write('guide.md', "edited\n");
+
+        self::assertFalse($this->tree($root, $home)->hasPassed());
+    }
+
+    public function testAnEditedFileBehindALinkedFileRunsTheCheckAgain(): void
+    {
+        [$root, $home] = $this->checkedTreeAndHome();
+        $elsewhere = $this->emptySandbox();
+        $elsewhere->write('notes.md', "clean\n");
+        $root->symlink('notes.md', $elsewhere->root.'/notes.md');
+        $this->pass($root, $home);
+
+        $elsewhere->write('notes.md', "edited\n");
+
+        self::assertFalse($this->tree($root, $home)->hasPassed());
+    }
+
+    public function testALinkThatLeadsBackIntoItsOwnFolderGivesNoFingerprint(): void
+    {
+        [$root, $home] = $this->checkedTreeAndHome();
+        $root->write('src/Kept.php', "<?php\n");
+        $root->symlink('src/back', $root->root);
+
+        self::assertNull($this->fingerprint($root, $home)->taken());
+    }
+
+    public function testTwoLinksToTheSameFolderStillGiveAFingerprint(): void
+    {
+        [$root, $home] = $this->checkedTreeAndHome();
+        $shared = $this->emptySandbox();
+        $shared->write('autoload.php', "<?php\n");
+        $root->symlink('first', $shared->root);
+        $root->symlink('second', $shared->root);
+
+        self::assertNotNull($this->fingerprint($root, $home)->taken());
+    }
+
+    public function testATreeLeftAloneWhileTheGatesRanRecordsAPass(): void
+    {
+        [$root, $home] = $this->checkedTreeAndHome();
+        $root->write('src/Kept.php', "<?php\n");
+        $tree = $this->treeStartedInTheNextSecond($root, $home);
+
+        self::assertTrue($tree->recordPass());
+    }
+
+    // Because moving a folder leaves the times of the files in it alone, only the folder itself tells that the gates may have read another one in its place.
+    public function testAFolderMovedAwayAndBackWhileTheGatesRanRecordsNoPass(): void
+    {
+        [$root, $home] = $this->checkedTreeAndHome();
+        $root->write('src/Kept.php', "<?php\n");
+        $tree = $this->treeStartedInTheNextSecond($root, $home);
+
+        rename($root->root.'/src', $root->root.'/aside');
+        rename($root->root.'/aside', $root->root.'/src');
+
+        self::assertFalse($tree->recordPass());
+        self::assertFileDoesNotExist($root->root.'/'.PassedTree::RECORD);
+    }
+
+    public function testAFileThatCameAndWentWhileTheGatesRanRecordsNoPass(): void
+    {
+        [$root, $home] = $this->checkedTreeAndHome();
+        $root->write('src/Kept.php', "<?php\n");
+        $tree = $this->treeStartedInTheNextSecond($root, $home);
+
+        $root->write('src/Extra.php', "<?php\n");
+        unlink($root->root.'/src/Extra.php');
+
+        self::assertFalse($tree->recordPass());
+        self::assertFileDoesNotExist($root->root.'/'.PassedTree::RECORD);
+    }
+
+    // Because reading a record of any size whole would exhaust the memory before a gate starts, a process with little memory still has to answer.
+    public function testARecordFarLargerThanAFingerprintIsNotReusedAndNotReadWhole(): void
+    {
+        [$root, $home] = $this->checkedTreeAndHome();
+        $record = fopen($root->root.'/'.PassedTree::RECORD, 'w');
+        self::assertIsResource($record);
+        ftruncate($record, 256 * 1024 * 1024);
+        fclose($record);
+        $home->write('answer.php', '<?php require '.var_export(dirname(__DIR__, 2).'/vendor/autoload.php', true).'; echo '.PassedTree::class.'::before(new '.TreeFingerprint::class.'($argv[1], $argv[2], '.Options::class.'::fromArguments([]), []))->hasPassed() ? "reused" : "not reused";');
+
+        $answer = $home->run('php', '-d', 'memory_limit=64M', $home->root.'/answer.php', $root->root, $home->root);
+
+        self::assertSame('not reused', $answer->output, $answer->errors);
     }
 
     public function testAChangedComposerLockRunsTheCheckAgain(): void
@@ -329,6 +495,15 @@ final class PassedTreeTest extends SandboxTestCase
         return new TreeFingerprint($root->root, $home->root, Options::fromArguments(array_values($arguments)), self::ENVIRONMENT);
     }
 
+    // Because a change made while the gates ran shows only against files that were settled before, the run starts on the real clock, in the second after the last write.
+    private function treeStartedInTheNextSecond(Sandbox $root, Sandbox $home): PassedTree
+    {
+        $clock = new NativeClock();
+        $clock->sleep(1.02 - (float) $clock->now()->format('0.u'));
+
+        return PassedTree::before($this->fingerprint($root, $home), $clock);
+    }
+
     // Because a file written in the second a run starts records no pass, the tests that want one start their run an hour after their files were written.
     private function settledClock(): MockClock
     {
@@ -343,6 +518,7 @@ final class PassedTreeTest extends SandboxTestCase
         $root = $this->emptySandbox();
         $root->startRepository();
         $root->write('README.md', "base\n");
+        $root->write('.gitignore', "/var/\n/.phpunit.cache/\n/config/reference.php\n/config/schema.json\n");
         $root->commitAll('feat: start');
         mkdir($root->root.'/'.FullReport::FOLDER, 0o777, true);
 

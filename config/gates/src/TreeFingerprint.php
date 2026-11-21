@@ -4,11 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Gates;
 
-use FilesystemIterator;
-use RecursiveCallbackFilterIterator;
-use RecursiveDirectoryIterator;
-use RecursiveIteratorIterator;
-use SplFileInfo;
 use UnexpectedValueException;
 
 final readonly class TreeFingerprint
@@ -16,8 +11,11 @@ final readonly class TreeFingerprint
     // Because a new shell sets these anew without changing what any gate sees.
     private const array VOLATILE_VARIABLES = ['_', 'OLDPWD', 'SHLVL'];
 
-    // Because the check itself writes these while its gates run (its report and record, the test result cache, the reference a debug kernel writes on every boot), and no gate judges the tree by them.
-    private const array WRITTEN_BY_THE_CHECK = ['.git', 'var', '.phpunit.cache', 'config/reference.php', 'config/schema.json'];
+    // Because the check itself writes these while its gates run (its report and record, the test result cache, the reference a debug kernel writes); they are left out only where the gates' own file listing does not name them.
+    private const array WRITTEN_BY_THE_CHECK = ['var', '.phpunit.cache', 'config/reference.php', 'config/schema.json'];
+
+    // Because git keeps its own state there, and what the gates judge of it (the commits and the index) is part of the fingerprint by itself.
+    private const string GIT_FOLDER = '.git';
 
     // Because the gates run their tools from the home of bin/check, which may be another tree than the one checked.
     private const array HOME_INPUTS = ['bin/check', 'config/gates', 'composer.lock', 'vendor'];
@@ -47,11 +45,11 @@ final readonly class TreeFingerprint
             return $this->joined([
                 ...$this->commits(),
                 $this->index(),
-                $this->files($this->root, self::WRITTEN_BY_THE_CHECK, $settledBefore),
+                $this->checkedTree($settledBefore),
                 ...$this->homeInputs($settledBefore),
                 ...$this->optionsAndRuntime(),
             ]);
-        } catch (RepositoryAttributesRefused|UnexpectedValueException) {
+        } catch (RepositoryAttributesRefused|ScopeFailure|UnexpectedValueException) {
             return null;
         }
     }
@@ -101,37 +99,87 @@ final readonly class TreeFingerprint
     }
 
     /**
+     * @throws ScopeFailure
+     * @throws UnexpectedValueException
+     */
+    // Because the gates read files that git ignores (vendor/, .env.*.local, phpunit.xml) and ignore rules differ between the gates and git, every file counts, ignored or not.
+    private function checkedTree(?int $settledBefore): string
+    {
+        $root = $this->real($this->root);
+        $found = [$this->entries($root, '', [self::GIT_FOLDER, ...self::WRITTEN_BY_THE_CHECK], $settledBefore, [$root])];
+
+        foreach ($this->gateInputsAmongWhatTheCheckWrites($root) as $path) {
+            $found[] = $this->entries($root.'/'.$path, $path, [], $settledBefore, [$root]);
+        }
+
+        return $this->sealed($found);
+    }
+
+    /**
+     * @return list<string>
+     *
+     * @throws ScopeFailure
+     */
+    // Because the gates take their files from this very listing, a path the check writes is left out only while the listing does not name it: a tracked file under var/, or an untracked one the committed .gitignore leaves in, counts like any other file.
+    private function gateInputsAmongWhatTheCheckWrites(string $root): array
+    {
+        $inputs = [];
+
+        foreach (new Scope($this->root, $this->runner)->repositoryFiles() as $listed) {
+            // Because git lists a repository nested in the tree as a folder, with a slash at its end.
+            $path = rtrim($listed, '/');
+            $written = array_any(self::WRITTEN_BY_THE_CHECK, static fn (string $name): bool => $path === $name || str_starts_with($path, $name.'/'));
+
+            // Because the index, which is part of the fingerprint, already tells a tracked file that is gone.
+            if ($written && (file_exists($root.'/'.$path) || is_link($root.'/'.$path))) {
+                $inputs[] = $path;
+            }
+        }
+
+        return $inputs;
+    }
+
+    /**
      * @return list<?string>
      *
      * @throws UnexpectedValueException
      */
     private function homeInputs(?int $settledBefore): array
     {
-        $home = realpath($this->home);
+        $home = $this->real($this->home);
 
-        if (false === $home) {
-            throw new UnexpectedValueException('no home of bin/check');
-        }
-
-        if (realpath($this->root) === $home) {
+        if ($this->real($this->root) === $home) {
             return [];
         }
 
-        return array_map(fn (string $input): ?string => file_exists($home.'/'.$input) || is_link($home.'/'.$input) ? $this->files($home.'/'.$input, [], $settledBefore) : null, self::HOME_INPUTS);
+        return array_map(fn (string $input): ?string => file_exists($home.'/'.$input) || is_link($home.'/'.$input) ? $this->sealed([$this->entries($home.'/'.$input, $input, [], $settledBefore, [$home])]) : null, self::HOME_INPUTS);
     }
 
     /**
-     * @param list<string> $skipped
-     *
      * @throws UnexpectedValueException
      */
-    // Because the gates read files that git ignores (vendor/, .env.*.local, phpunit.xml) and ignore rules differ between the gates and git, every file counts, ignored or not; its times and inode tell a file rewritten while the gates ran even when its bytes are back as they were.
-    private function files(string $path, array $skipped, ?int $settledBefore): string
+    private function real(string $path): string
+    {
+        $real = realpath($path);
+
+        if (false === $real) {
+            throw new UnexpectedValueException('cannot resolve '.$path);
+        }
+
+        return $real;
+    }
+
+    /**
+     * @param iterable<iterable<string, string>> $found
+     */
+    private function sealed(iterable $found): string
     {
         $entries = [];
 
-        foreach ($this->entriesUnder($path, $skipped) as $relative => $file) {
-            $entries[$relative] = $this->entry($file, $settledBefore);
+        foreach ($found as $group) {
+            foreach ($group as $key => $entry) {
+                $entries[$key] = $entry;
+            }
         }
 
         ksort($entries, SORT_STRING);
@@ -140,57 +188,97 @@ final readonly class TreeFingerprint
     }
 
     /**
-     * @param list<string> $skipped
+     * @param list<string> $skipped keys left out, relative to the folder the walk started in
+     * @param list<string> $entered the real folders this walk is inside of, through links
      *
      * @return iterable<string, string>
      *
      * @throws UnexpectedValueException
      */
-    private function entriesUnder(string $path, array $skipped): iterable
+    // Because a folder counts with its own times and inode, a file that came and went, or a folder moved away and back while the gates ran, shows even when every file is as it was.
+    private function entries(string $path, string $key, array $skipped, ?int $settledBefore, array $entered): iterable
     {
-        if (is_link($path) || !is_dir($path)) {
-            yield basename($path) => $path;
+        $status = @lstat($path);
+
+        if (false === $status) {
+            throw new UnexpectedValueException('cannot read '.$path);
+        }
+
+        if (null !== $settledBefore && $status['ctime'] >= $settledBefore) {
+            throw new UnexpectedValueException('changed in the second the check started: '.$path);
+        }
+
+        if (is_link($path)) {
+            yield $key => $this->described($status, $this->readOrFail($path, @readlink($path)));
+            yield from $this->entriesBehindLink($path, $key, $settledBefore, $entered);
 
             return;
         }
 
-        $prefix = strlen($path) + 1;
-        $directory = new RecursiveDirectoryIterator($path, FilesystemIterator::SKIP_DOTS);
-        $kept = new RecursiveCallbackFilterIterator($directory, static fn (SplFileInfo $entry): bool => !in_array(substr($entry->getPathname(), $prefix), $skipped, true));
+        if (!is_dir($path)) {
+            yield $key => $this->described($status, is_file($path) ? $this->readOrFail($path, @hash_file('sha256', $path)) : '');
 
-        foreach (new RecursiveIteratorIterator($kept) as $entry) {
-            if ($entry instanceof SplFileInfo) {
-                yield substr($entry->getPathname(), $prefix) => $entry->getPathname();
+            return;
+        }
+
+        yield $key => $this->described($status, '');
+        $names = @scandir($path);
+
+        if (false === $names) {
+            throw new UnexpectedValueException('cannot read '.$path);
+        }
+
+        foreach (array_diff($names, ['.', '..']) as $name) {
+            $child = '' === $key ? $name : $key.'/'.$name;
+
+            if (!in_array($child, $skipped, true)) {
+                yield from $this->entries($path.'/'.$name, $child, $skipped, $settledBefore, $entered);
             }
         }
     }
 
     /**
+     * @param list<string> $entered
+     *
+     * @return iterable<string, string>
+     *
      * @throws UnexpectedValueException
      */
-    private function entry(string $file, ?int $settledBefore): string
+    // Because the gates open a path through a link (a vendor/ that points at a shared install, a tracked path whose folder became a link), what is behind the link counts and not only where it points.
+    private function entriesBehindLink(string $link, string $key, ?int $settledBefore, array $entered): iterable
     {
-        $status = @lstat($file);
-
-        if (false === $status) {
-            throw new UnexpectedValueException('cannot read '.$file);
+        if (!file_exists($link)) {
+            return;
         }
 
-        if (null !== $settledBefore && $status['ctime'] >= $settledBefore) {
-            throw new UnexpectedValueException('changed in the second the check started: '.$file);
+        $target = $this->real($link);
+
+        if (in_array($target, $entered, true)) {
+            throw new UnexpectedValueException('a link leads back into its own folder: '.$link);
         }
 
-        $contents = match (true) {
-            is_link($file) => @readlink($file),
-            is_file($file) => @hash_file('sha256', $file),
-            default => '',
-        };
+        // Because no file name holds a zero byte, the key of what is behind a link never passes for a path beside it.
+        yield from $this->entries($target, $key."\0", [], $settledBefore, [...$entered, $target]);
+    }
 
-        if (false === $contents) {
-            throw new UnexpectedValueException('cannot read '.$file);
-        }
-
+    /**
+     * @param array<int|string, int> $status
+     */
+    private function described(array $status, string $contents): string
+    {
         return implode(' ', [$status['mode'], $status['size'], $status['mtime'], $status['ctime'], $status['ino'], $contents]);
+    }
+
+    /**
+     * @throws UnexpectedValueException
+     */
+    private function readOrFail(string $path, string|false $read): string
+    {
+        if (false === $read) {
+            throw new UnexpectedValueException('cannot read '.$path);
+        }
+
+        return $read;
     }
 
     /**
