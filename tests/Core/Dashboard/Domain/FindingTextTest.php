@@ -227,6 +227,11 @@ final class FindingTextTest extends TestCase
         self::assertSame([['text' => $written, 'code' => false]], new FindingText($written)->spans());
     }
 
+    public function testAGlobStarBeforeADashStillPairsWithALaterStarInTheSameParagraph(): void
+    {
+        self::assertSame([['text' => 'Match -test.php and build-old.', 'code' => false]], new FindingText('Match *-test.php and build*-old.')->spans());
+    }
+
     public function testStarsInSeparateParagraphsNeverPair(): void
     {
         $written = "Copy *test.php.\n\nKeep files named build*.";

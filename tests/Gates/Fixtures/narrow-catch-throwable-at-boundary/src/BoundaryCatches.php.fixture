@@ -1,0 +1,89 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use Psr\Log\LoggerInterface;
+use Throwable;
+
+final readonly class BoundaryCatches
+{
+    public function __construct(
+        private LoggerInterface $logger,
+    ) {
+    }
+
+    public function rethrows(callable $work): void
+    {
+        try {
+            $work();
+            // Boundary: releases the lease before the failure leaves the run
+        } catch (Throwable $failure) {
+            throw $failure;
+        }
+    }
+
+    public function records(callable $work): void
+    {
+        try {
+            $work();
+            // Boundary: one failed message must not stop the worker
+        } catch (\Throwable $failure) {
+            $this->logger->error('The message failed.', ['exception' => $failure]);
+        }
+    }
+
+    public function afterANarrowCatch(callable $work): void
+    {
+        try {
+            $work();
+        } catch (\DomainException) {
+            $this->logger->warning('The message was refused.');
+            // Boundary: one failed message must not stop the worker
+        } catch (Throwable $failure) {
+            $this->logger->error('The message failed.', ['exception' => $failure]);
+        }
+    }
+
+    public function inAUnion(callable $work): void
+    {
+        try {
+            $work();
+            // Boundary: one failed message must not stop the worker
+        } catch (\DomainException|Throwable $failure) {
+            $this->logger->error('The message failed.', ['exception' => $failure]);
+        }
+    }
+
+    public function onTheCatchItself(callable $work): void
+    {
+        try {
+            $work();
+        }
+        // Boundary: one failed message must not stop the worker
+        catch (Throwable $failure) {
+            $this->logger->error('The message failed.', ['exception' => $failure]);
+        }
+    }
+
+    public function underAHashComment(callable $work): void
+    {
+        try {
+            $work();
+            # Boundary: leaves failure handling to the caller
+        } catch (Throwable $failure) {
+            throw $failure;
+        }
+    }
+
+    public function translatesTheFailure(callable $work): void
+    {
+        try {
+            $work();
+            // Boundary: the caller sees only domain failures
+        } catch (Throwable) {
+            throw new \DomainException('The work failed.');
+        }
+    }
+}
