@@ -133,6 +133,47 @@ final class LiveBoardHeadlineTest extends KernelTestCase
         self::assertSame(BoardColumn::Done->emptyLine(), $done->filter('.col-empty')->text());
     }
 
+    // Pushed with the columns, because a reviewer that starts or finishes changes who is working as much as it moves a card (#1461).
+    public function testAPushWhileAReviewerRunsCarriesWhoIsWorkingWithItsLane(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startRoundOf('42', 'r1', 1);
+        $ledger->startReviewer('r1', 'correctness');
+        $live = new PublishedLiveEvents();
+
+        $this->headlineOn($ledger, $live)->publishLatest(Uuid::v7());
+
+        $working = new Crawler($live->events[0]->turboStream)->filter('turbo-stream[action="replace"][target="working"] details#working.working');
+        self::assertCount(1, $working->filter('.lane'));
+        self::assertStringContainsString('1 working', $working->filter('summary .w-sum')->text());
+    }
+
+    public function testAPushOnceNobodyWorksCarriesTheNobodyIsWorkingLine(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startRoundOf('42', 'r1', 1);
+        $ledger->judgeRound('r1');
+        $live = new PublishedLiveEvents();
+
+        $this->headlineOn($ledger, $live)->publishLatest(Uuid::v7());
+
+        self::assertCount(1, new Crawler($live->events[0]->turboStream)->filter('turbo-stream[target="working"] p#working.working-none'));
+    }
+
+    // The phone switcher shows true totals, so a card that moves columns moves its counts there too.
+    public function testAPushCarriesThePhoneSwitcherWithEveryColumnsTrueTotal(): void
+    {
+        $ledger = new DashboardLedger();
+        $this->judgeRoundsOf($ledger, 2);
+        $ledger->startRoundOf('43', 'r3', 1);
+        $live = new PublishedLiveEvents();
+
+        $this->headlineOn($ledger, $live)->publishLatest(Uuid::v7());
+
+        $switcher = new Crawler($live->events[0]->turboStream)->filter('turbo-stream[action="replace"][target="colswitch"] nav#colswitch');
+        self::assertSame(['0', '0', '0', '0', '0', '0', '1', '0', '2'], $switcher->filter('button .count')->each(static fn (Crawler $count): string => $count->text()));
+    }
+
     private function pushedDoneColumnOf(int $judged): Crawler
     {
         $ledger = new DashboardLedger();

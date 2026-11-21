@@ -1,0 +1,14 @@
+{#- The board's loading state (DESIGN.md, Awkward data and states): static blocks in the shape of the lead line, Who is working and the columns, with the column names and blank counts, never pulsing. assets/board-loading.js shows it, with aria-busy on the main region, while a visit to the board waits for its first data. -#}
+<div class="page-head"><div><h1>Board</h1><p class="lead"><span class="skel w-lead"></span></p></div></div>
+<p class="working working-none" aria-hidden="true"><span class="skel w-working"></span></p>
+<section aria-label="Tasks by state, loading">
+    <div class="board-wrap"><div class="board">
+    {% for column in enum_cases('Intakt\\Core\\Dashboard\\Domain\\BoardColumn') %}
+        <div class="col{{ column.startsCollapsed ? ' collapsed' }}{{ loop.first ? ' col-needs' }}" aria-hidden="true">
+            {% if column.startsCollapsed %}<span class="col-fold"><span>{{ column.value }}</span><span class="count">&nbsp;</span></span>{% endif %}
+            <div class="col-head"><h3>{{ column.value }}</h3><span class="count">&nbsp;</span></div>
+            <div class="col-cards">{% for card in 1..(loop.index is odd ? 2 : 1) %}{{ include('dashboard/components/skeleton.html.twig', with_context = false) }}{% endfor %}</div>
+        </div>
+    {% endfor %}
+    </div></div>
+</section>

@@ -240,6 +240,9 @@ a.card.needs:hover, .card.needs.is-hover { filter: brightness(.98); }
 .skel.w40 { width: 40%; }
 .skel.w60 { width: 60%; }
 .skel.w90 { width: 90%; }
+/* The board skeleton's lead line and Who is working, at the widths of the mock's loading example. */
+.skel.w-lead { width: 280px; max-width: 100%; }
+.skel.w-working { width: 220px; max-width: 100%; }
 .test-result { padding: var(--s12) var(--s16); border-radius: var(--r-card); background: var(--tint); }
 .test-result p { margin: 0; }
 .test-result strong { display: inline-flex; align-items: center; gap: var(--s8); }

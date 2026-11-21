@@ -1,0 +1,7 @@
+{# The phone's switcher (DESIGN.md, Phone patterns): every column with its true total, Waiting on you first. Shared by the page and by the push of LiveBoardHeadline, so a pushed count is the one a page loaded after it shows; assets/board-map.js presses the column a swipe settles on. Shown below 761 px only. #}
+<nav class="colswitch" id="colswitch" aria-label="Board columns">
+{% for column in enum_cases('Intakt\\Core\\Dashboard\\Domain\\BoardColumn') %}
+    {% set count = board.countOf(column) %}
+    <button type="button" data-column="{{ column.value }}" aria-controls="col-{{ column.slug }}" aria-pressed="{{ loop.first ? 'true' : 'false' }}">{{ column.value }} {{ include('dashboard/components/count.html.twig', {n: count, needs: loop.first and count > 0}, with_context = false) }}<span class="sr-only"> {{ count == 1 ? 'task' : 'tasks' }}</span></button>
+{% endfor %}
+</nav>

@@ -9,3 +9,6 @@
 {% for column in [constant('Intakt\\Core\\Dashboard\\Domain\\BoardColumn::InReview'), constant('Intakt\\Core\\Dashboard\\Domain\\BoardColumn::Done')] %}
 <turbo-stream action="replace" target="col-{{ column.slug }}"><template>{{ include('dashboard/_board_column.html.twig', {board: board, column: column, limit: limit, pushed: true}, with_context = false) }}</template></turbo-stream>
 {% endfor %}
+{#- Who is working and the phone switcher's counts move with the same rounds (#1461); the page keeps an opened summary open and the pressed column pressed (assets/column-fold.js, assets/board-map.js). -#}
+<turbo-stream action="replace" target="working"><template>{{ include('dashboard/_board_working.html.twig', {board: board, working: board.whoIsWorking}, with_context = false) }}</template></turbo-stream>
+<turbo-stream action="replace" target="colswitch"><template>{{ include('dashboard/_board_switcher.html.twig', {board: board}, with_context = false) }}</template></turbo-stream>

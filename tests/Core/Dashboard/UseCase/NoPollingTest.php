@@ -46,7 +46,9 @@ final class NoPollingTest extends DashboardPageTestCase
         self::assertResponseIsSuccessful();
         self::assertStringContainsString('data-project="alpha"', $page);
 
-        self::assertSame(3, substr_count($page, '<script'));
+        // Four, because the board skeleton (#1461) is a script tag of inert text that the browser never runs.
+        self::assertSame(4, substr_count($page, '<script'));
+        self::assertSame(1, substr_count($page, '<script type="text/html" id="board-skeleton"'));
         self::assertSame(2, substr_count($page, '<script>(() => {'));
         self::assertSame(1, substr_count($page, '<script type="module">import { holdbackdangerbuttons } from \'/assets/arm-'));
         self::assertStringContainsString('prefers-color-scheme', $page);

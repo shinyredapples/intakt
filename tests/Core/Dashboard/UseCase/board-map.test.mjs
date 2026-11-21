@@ -251,3 +251,18 @@ test('a page without a board, such as a review page, is left alone', () => {
     mapBoardColumns(page, new FakeView());
     page.dispatch('click', { target: null });
 });
+
+test('a pushed switcher keeps the column this tab shows pressed and its row where it was', () => {
+    const { page, switcher } = boardOnAPage({ inset: 16 });
+    switcher.buttons.forEach((button, i) => button.setAttribute('aria-pressed', String(i === 6)));
+    switcher.scrollLeft = 700;
+    const pushed = new FakeSwitcher();
+    pushed.buttons.forEach((button, i) => button.setAttribute('aria-pressed', String(i === 0)));
+    const event = { target: { getAttribute: () => 'colswitch' }, detail: { render: () => { page.switcher = pushed; } } };
+
+    page.dispatch('turbo:before-stream-render', event);
+    event.detail.render('stream');
+
+    assert.deepEqual(pushed.buttons.map((button) => button.getAttribute('aria-pressed')), ['false', 'false', 'false', 'false', 'false', 'false', 'true', 'false', 'false']);
+    assert.equal(pushed.scrollLeft, 700);
+});

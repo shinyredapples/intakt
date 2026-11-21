@@ -1,0 +1,18 @@
+{#- Who is working, shared by the page and by the push of LiveBoardHeadline, so a pushed summary is the one a page loaded after it shows. -#}
+{# A disclosure with no lane would open to nothing, so it is a plain line until a lane runs. #}
+{% if working.lanes is empty %}
+<p class="working working-none" id="working">{{ board.nobodyWorkingLine }}</p>
+{% else %}
+<details class="working" id="working">
+    <summary><span class="w-title">Who is working</span><span class="w-dots" aria-hidden="true">{% for lane in working.lanes %}<span class="dot ok"></span>{% endfor %}</span><span class="w-sum">{{ working.working }} working</span>{{ include('dashboard/components/icon.html.twig', {name: 'chevron', small: true, extra: 'chev'}, with_context = false) }}</summary>
+    <div class="lanes">
+    {% for lane in working.lanes %}
+        <div class="lane" data-project="{{ lane.project }}">
+            <div class="who"><span class="dot ok"></span>{{ include('dashboard/components/character.html.twig', {character: constant('Intakt\\Core\\Dashboard\\Domain\\Character::CodeReviewer'), size: 24}, with_context = false) }}{{ lane.role }}, {{ lane.tier }}<span class="elapsed">since <time datetime="{{ lane.since|date('c', 'UTC') }}">{{ lane.since|date('H:i', 'UTC') }} UTC</time></span></div>
+            <div class="what">{{ lane.change }}</div>
+            <p class="meta"><span>{{ lane.project }}</span>{% if lane.round is not null %}<span>Round {{ lane.round }}</span>{% endif %}</p>
+        </div>
+    {% endfor %}
+    </div>
+</details>
+{% endif %}

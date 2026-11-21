@@ -33,6 +33,7 @@ export function mapBoardColumns(page, view) {
         settling = view.setTimeout(() => pressSettledColumn(page, board), SETTLE_MS);
     }, { capture: true, passive: true });
     page.addEventListener('intakt:project-shown', measure);
+    page.addEventListener('turbo:before-stream-render', (event) => keepPressedColumn(page, event));
     view.addEventListener('resize', measure);
     measure();
 }
@@ -95,4 +96,26 @@ function pressSettledColumn(page, board) {
     if (buttons[settled]) {
         switcher.scrollLeft = Math.max(0, buttons[settled].offsetLeft - switcher.offsetLeft - SWITCHER_INSET);
     }
+}
+
+// A pushed switcher comes with its first column pressed and scrolled to its start, so the column this tab shows is pressed again and the row kept where it was.
+function keepPressedColumn(page, event) {
+    if (event.target?.getAttribute?.('target') !== 'colswitch') {
+        return;
+    }
+    const shown = page.querySelector(SWITCHER);
+    if (!shown) {
+        return;
+    }
+    const pressed = [...shown.querySelectorAll('button')].findIndex((button) => button.getAttribute('aria-pressed') === 'true');
+    const scrolled = shown.scrollLeft;
+    const render = event.detail.render;
+    event.detail.render = (stream) => {
+        render(stream);
+        const pushed = page.querySelector(SWITCHER);
+        pushed?.querySelectorAll('button').forEach((button, i) => button.setAttribute('aria-pressed', String(i === pressed)));
+        if (pushed) {
+            pushed.scrollLeft = scrolled;
+        }
+    };
 }

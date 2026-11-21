@@ -10,6 +10,22 @@ export function foldColumns(page) {
         }
     });
     page.addEventListener('keydown', foldOnEscape);
+    page.addEventListener('turbo:before-stream-render', (event) => keepWorkingOpen(page, event));
+}
+
+// A pushed Who is working comes closed, so one this tab opened stays open across the push (#1461).
+function keepWorkingOpen(page, event) {
+    if (event.target?.getAttribute?.('target') !== 'working' || !page.querySelector(WORKING)?.open) {
+        return;
+    }
+    const render = event.detail.render;
+    event.detail.render = (stream) => {
+        render(stream);
+        const pushed = page.querySelector(WORKING);
+        if (pushed) {
+            pushed.open = true;
+        }
+    };
 }
 
 // Escape folds back what the board's keyboard walk-through opened (#1460, D6): Who is working, or a column that opened from its strip. The focus goes to the control that opens it again, so the next Tab goes on from there.

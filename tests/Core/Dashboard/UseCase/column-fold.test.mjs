@@ -51,7 +51,7 @@ class FakeColumn extends FakeElement {
 
 class FakePage {
     addEventListener(type, listener) {
-        assert.ok(['click', 'keydown'].includes(type));
+        assert.ok(['click', 'keydown', 'turbo:before-stream-render'].includes(type));
         this[type] = listener;
     }
 }
@@ -165,4 +165,34 @@ test('Escape outside the board closes nothing', () => {
     page.keydown(new FakeKey(null));
 
     assert.equal(key.defaultPrevented, false);
+});
+
+function aPushOf(target, page, pushedPage) {
+    const event = { target: { getAttribute: () => target }, detail: { render: () => Object.assign(page, pushedPage) } };
+    page['turbo:before-stream-render'](event);
+    event.detail.render('stream');
+}
+
+test('a pushed Who is working stays open when this tab had opened it', () => {
+    const page = new FakePage();
+    foldColumns(page);
+    page.querySelector = () => ({ open: true });
+    const pushed = { open: false };
+
+    aPushOf('working', page, { querySelector: () => pushed });
+
+    assert.equal(pushed.open, true);
+});
+
+test('a pushed Who is working stays closed when this tab had it closed, and other pushes are left alone', () => {
+    const page = new FakePage();
+    foldColumns(page);
+    page.querySelector = () => ({ open: false });
+    const pushed = { open: false };
+
+    aPushOf('working', page, { querySelector: () => pushed });
+    page.querySelector = () => ({ open: true });
+    aPushOf('col-done', page, { querySelector: () => pushed });
+
+    assert.equal(pushed.open, false);
 });
