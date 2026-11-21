@@ -644,7 +644,7 @@ final class EntrypointSampleSeedTest extends TestCase
     }
 
     /**
-     * @param array<string, string> $environment
+     * @param array<string, false|string> $environment
      */
     private function startEntrypoint(array $environment): void
     {
@@ -702,7 +702,7 @@ final class EntrypointSampleSeedTest extends TestCase
     }
 
     /**
-     * @param array<string, string> $environment
+     * @param array<string, false|string> $environment
      */
     private function entrypointWith(array $environment): Process
     {
