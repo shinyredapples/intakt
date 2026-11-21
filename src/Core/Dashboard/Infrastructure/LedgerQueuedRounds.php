@@ -63,7 +63,7 @@ final readonly class LedgerQueuedRounds
 
     /**
      * @param array<array-key, array<array-key, array{order: int, round: QueuedRound}|null>> $latest
-     * @param array<string, true>                                                             $started
+     * @param array<string, true>                                                            $started
      *
      * @return list<QueuedRound>
      */
