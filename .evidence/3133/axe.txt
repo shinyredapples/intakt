@@ -1,0 +1,8 @@
+light 390 details as loaded: no axe violations
+light 390 details open: no axe violations
+light 1440 details as loaded: no axe violations
+light 1440 details open: no axe violations
+dark 390 details as loaded: no axe violations
+dark 390 details open: no axe violations
+dark 1440 details as loaded: no axe violations
+dark 1440 details open: no axe violations
