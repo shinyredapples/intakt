@@ -6,7 +6,6 @@ namespace Intakt\Core\Watchdog\UseCase\GuardMain;
 
 use Intakt\Core\Watchdog\Contract\Classification;
 use Intakt\Core\Watchdog\Contract\OwnerCard;
-use Intakt\Core\Watchdog\Contract\WatchedMain;
 use Intakt\Core\Watchdog\Infrastructure\HaltNotRecorded;
 use Intakt\Core\Watchdog\Infrastructure\LedgerHalts;
 use Intakt\Core\Watchdog\UseCase\CheckMain\CheckMain;
@@ -25,19 +24,17 @@ final readonly class GuardMain
     }
 
     /**
-     * @param list<string> $ownerKeys
-     *
      * @return list<OwnerCard>
      *
      * @throws HaltNotRecorded
      */
-    public function standingCardsAfterChecking(string $project, string $repository, WatchedMain $main, array $ownerKeys): array
+    public function standingCardsAfterChecking(GuardMainInput $input): array
     {
-        $this->mustNameAProject($project);
-        $classification = $this->check->classified($repository, $main, $ownerKeys);
-        $this->raiseCardsFor($project, $classification);
+        $this->mustNameAProject($input->project);
+        $classification = $this->check->classified($input->repository, $input->watchedMain(), $input->ownerKey);
+        $this->raiseCardsFor($input->project, $classification);
 
-        return $this->halts->standingOf($project);
+        return $this->halts->standingOf($input->project);
     }
 
     private function mustNameAProject(string $project): void

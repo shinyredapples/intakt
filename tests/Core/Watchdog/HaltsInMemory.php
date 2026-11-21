@@ -25,7 +25,7 @@ final class HaltsInMemory implements Halts
 
     public function halt(string $project): void
     {
-        $this->standing[] = OwnerCard::of(Uuid::v7(), $project, new MainViolation(str_repeat('a', 40), Violation::Unsigned), new DateTimeImmutable('2026-11-02 08:00:00 UTC'));
+        $this->standing[] = new OwnerCard(Uuid::v7(), $project, new MainViolation(str_repeat('a', 40), Violation::Unsigned), new DateTimeImmutable('2026-11-02T08:00:00Z'));
     }
 
     public function clearAll(): void

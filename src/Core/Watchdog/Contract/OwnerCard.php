@@ -10,17 +10,12 @@ use Symfony\Component\Uid\Uuid;
 // The card is the halt's ledger event, so its id is that event's id and only an owner-cleared event that names it lifts it.
 final readonly class OwnerCard
 {
-    private function __construct(
+    public function __construct(
         public Uuid $id,
         public string $project,
         public ?MainViolation $violation,
         public DateTimeImmutable $raisedAt,
     ) {
-    }
-
-    public static function of(Uuid $id, string $project, MainViolation $violation, DateTimeImmutable $raisedAt): self
-    {
-        return new self($id, $project, $violation, $raisedAt);
     }
 
     // A halt row that no longer reads still halts, because a watchdog that lost the reason of a halt must not call the project clear.

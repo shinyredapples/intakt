@@ -183,7 +183,7 @@ final class GuardMainCommandTest extends TestCase
 
     public function testAMainThatCannotBeReadRaisesNoCardAndIsNeverReportedClean(): void
     {
-        $tester = $this->whenTheGuardRunsIn($this->repository->path.'/missing', self::PROJECT, str_repeat('a', 40));
+        $tester = $this->whenTheGuardRunsWith(['project' => self::PROJECT, 'repository' => $this->repository->path.'/missing', 'last-seen-head' => str_repeat('a', 40)]);
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringContainsString('Main was not read', $tester->getDisplay());
@@ -209,7 +209,7 @@ final class GuardMainCommandTest extends TestCase
         $seen = $this->repository->commitEmpty('Seen');
         $this->repository->commitEmpty('Seeded unsigned commit');
 
-        $tester = $this->whenTheGuardRunsIn($this->repository->path, ' ', $seen);
+        $tester = $this->whenTheGuardRunsWith(['project' => ' ', 'repository' => $this->repository->path, 'last-seen-head' => $seen]);
 
         self::assertSame(Command::INVALID, $tester->getStatusCode());
         self::assertStringContainsString('A halt names its project', $tester->getDisplay());
@@ -220,7 +220,7 @@ final class GuardMainCommandTest extends TestCase
     {
         $seen = $this->repository->commitEmpty('Seen');
 
-        $tester = $this->whenTheGuardRunsIn($this->repository->path, "acme/shop\nforged", $seen);
+        $tester = $this->whenTheGuardRunsWith(['project' => "acme/shop\nforged", 'repository' => $this->repository->path, 'last-seen-head' => $seen]);
 
         self::assertSame("acme/shop\\nforged is not halted: no owner card stands\n", $tester->getDisplay());
     }
@@ -238,19 +238,19 @@ final class GuardMainCommandTest extends TestCase
      */
     private function whenTheGuardRuns(string $seen, array $options): CommandTester
     {
-        return $this->whenTheGuardRunsIn($this->repository->path, self::PROJECT, $seen, $options);
+        return $this->whenTheGuardRunsWith(['project' => self::PROJECT, 'repository' => $this->repository->path, 'last-seen-head' => $seen, ...$options]);
     }
 
     /**
-     * @param array<string, list<string>> $options
+     * @param array<string, string|list<string>> $input
      */
-    private function whenTheGuardRunsIn(string $path, string $project, string $seen, array $options = []): CommandTester
+    private function whenTheGuardRunsWith(array $input): CommandTester
     {
         $guard = new GuardMain(new CheckMain(new HardenedGit(), new Filesystem()), $this->halts, new LockFactory(new InMemoryStore()));
         $application = new Application();
         $application->addCommand(new GuardMainCommand($guard));
         $tester = new CommandTester($application->find(GuardMainCommand::NAME));
-        $tester->execute(['project' => $project, 'repository' => $path, 'last-seen-head' => $seen, ...$options]);
+        $tester->execute($input);
 
         return $tester;
     }

@@ -29,7 +29,7 @@ final class HaltLedger implements Ledger
         }
 
         $id = Uuid::v7();
-        $this->recorded[] = new RecordedEvent($id, $event, new DateTimeImmutable('2026-11-21 09:00:00 UTC'));
+        $this->recorded[] = new RecordedEvent($id, $event, new DateTimeImmutable('2026-11-21T09:00:00Z'));
 
         return AppendResult::appended($id);
     }

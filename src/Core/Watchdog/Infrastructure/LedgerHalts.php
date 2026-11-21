@@ -95,7 +95,7 @@ final readonly class LedgerHalts implements Halts
         }
 
         try {
-            return OwnerCard::of($recorded->id, $payload->project, new MainViolation($payload->commit, $payload->violation), $recorded->recordedAt);
+            return new OwnerCard($recorded->id, $payload->project, new MainViolation($payload->commit, $payload->violation), $recorded->recordedAt);
         } catch (CommitNameNotFull) {
             return OwnerCard::unreadable($recorded->id, $recorded->recordedAt);
         }

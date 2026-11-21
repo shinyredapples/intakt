@@ -7,12 +7,10 @@ namespace Intakt\Core\Watchdog\UseCase\GuardMain;
 use Intakt\Core\Watchdog\Contract\CommitNameNotFull;
 use Intakt\Core\Watchdog\Contract\MainNotRead;
 use Intakt\Core\Watchdog\Contract\OwnerCard;
-use Intakt\Core\Watchdog\Contract\WatchedMain;
 use Intakt\Core\Watchdog\Infrastructure\ConsoleReport;
 use Intakt\Core\Watchdog\Infrastructure\HaltNotRecorded;
 use Intakt\Core\Watchdog\Infrastructure\OwnerKeyRefused;
 use Intakt\Core\Watchdog\UseCase\CheckMain\RecordedMergeNotARange;
-use Intakt\Core\Watchdog\UseCase\CheckMain\RecordedMergeOption;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\MapInput;
 use Symfony\Component\Console\Command\Command;
@@ -32,7 +30,7 @@ final readonly class GuardMainCommand
     public function __invoke(SymfonyStyle $io, #[MapInput] GuardMainInput $input): int
     {
         try {
-            $cards = $this->guard->standingCardsAfterChecking($input->project, $input->repository, $this->watched($input->lastSeenHead, $input->recordedMerge), $input->ownerKey);
+            $cards = $this->guard->standingCardsAfterChecking($input);
         } catch (AHaltNamesItsProject|CommitNameNotFull|RecordedMergeNotARange|OwnerKeyRefused $refused) {
             $io->error(ConsoleReport::printable($refused->getMessage()));
 
@@ -48,14 +46,6 @@ final readonly class GuardMainCommand
         }
 
         return $this->reported($io, $input->project, $cards);
-    }
-
-    /**
-     * @param list<string> $recordedMerges
-     */
-    private function watched(string $lastSeenHead, array $recordedMerges): WatchedMain
-    {
-        return new WatchedMain($lastSeenHead, array_map(RecordedMergeOption::parsed(...), $recordedMerges));
     }
 
     /**
