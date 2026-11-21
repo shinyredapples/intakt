@@ -65,7 +65,7 @@ final class UpNextTest extends TestCase
 
         self::assertCount(1, $rounds);
         self::assertSame(UpNextState::Waiting, $rounds[0]->state);
-        self::assertSame("waiting to start", $rounds[0]->status());
+        self::assertSame('waiting to start',$rounds[0]->status());
     }
 
     public function testRunningRoundsComeBeforeWaitingOnes(): void
