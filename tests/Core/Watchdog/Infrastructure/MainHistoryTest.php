@@ -440,6 +440,7 @@ final class MainHistoryTest extends TestCase
         $seen = $this->repository->commitFile('child/file', 'content');
 
         $this->expectException(MainNotRead::class);
+        $this->expectExceptionMessageMatches('/\/child\/file is not an existing folder\.$/');
 
         new MainHistory(new HardenedGit(), $this->repository->path.'/child/file', [], new Filesystem())->contains($seen);
     }
@@ -509,6 +510,34 @@ final class MainHistoryTest extends TestCase
         $this->repository->resetTo($merge);
 
         self::assertSame([$side, $merge], $this->history([])->firstParentsSince($seen));
+    }
+
+    public function testACommitMainAlreadyHeldThroughASecondParentIsNotReadAsNewWhenTheRepositoryIsCutShallowDuringTheWalk(): void
+    {
+        $this->repository->commitEmpty('Fork');
+        $this->repository->checkoutNewBranch('side');
+        $this->repository->commitEmpty('Already reachable');
+        $this->repository->checkoutNewBranch('first-parent');
+        $this->repository->commitEmpty('New');
+        $this->repository->checkout('side');
+        $cut = $this->repository->commitEmpty('Side tip');
+        $this->repository->checkout('main');
+        $this->repository->commitEmpty('Main side');
+        $seen = $this->repository->merge('side');
+        $this->repository->checkout('first-parent');
+        $tip = $this->repository->merge('main');
+        $this->repository->checkout('main');
+        $this->repository->resetTo($tip);
+        $path = $this->cutShallowWhileGitRuns('rev-list', $cut);
+
+        try {
+            $this->expectException(MainNotRead::class);
+            $this->expectExceptionMessageMatches('/ is not an unbroken chain/');
+
+            $this->history([])->firstParentsSince($seen);
+        } finally {
+            putenv('PATH='.$path);
+        }
     }
 
     public function testALinkedWorkTreeIsReadWhenThePathOfItsGitDirectoryHoldsALineBreak(): void
@@ -677,6 +706,22 @@ final class MainHistoryTest extends TestCase
         $git = escapeshellarg((string) new ExecutableFinder()->find('git'));
         $shallow = escapeshellarg($this->repository->path.'/.git/shallow');
         $script = "#!/bin/sh\ncase \" \$* \" in\n    *\" ".$option." \"*)\n        ".$git." \"\$@\" || exit \$?\n        printf '%s\\n' ".escapeshellarg($entry).' > '.$shallow."\n        ;;\n    *) exec ".$git." \"\$@\" ;;\nesac\n";
+        file_put_contents($bin.'/git', $script);
+        chmod($bin.'/git', 0o700);
+        $path = (string) getenv('PATH');
+        putenv('PATH='.$bin.':'.$path);
+
+        return $path;
+    }
+
+    // A git in front of the real one holds the shallow entry only while the named command runs, because a cut that is gone again before and after it is one no check around the walk can see; the search path to restore is returned.
+    private function cutShallowWhileGitRuns(string $command, string $entry): string
+    {
+        $bin = $this->keys.'/shallow-bin';
+        mkdir($bin);
+        $git = escapeshellarg((string) new ExecutableFinder()->find('git'));
+        $shallow = escapeshellarg($this->repository->path.'/.git/shallow');
+        $script = "#!/bin/sh\ncase \" \$* \" in\n    *\" ".$command." \"*)\n        printf '%s\\n' ".escapeshellarg($entry).' > '.$shallow."\n        ".$git." \"\$@\"\n        status=\$?\n        rm -f ".$shallow."\n        exit \$status\n        ;;\n    *) exec ".$git." \"\$@\" ;;\nesac\n";
         file_put_contents($bin.'/git', $script);
         chmod($bin.'/git', 0o700);
         $path = (string) getenv('PATH');
