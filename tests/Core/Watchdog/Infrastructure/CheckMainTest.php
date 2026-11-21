@@ -23,6 +23,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Process\Exception\ProcessFailedException;
+use Symfony\Component\Process\ExecutableFinder;
 
 #[CoversClass(CommitClassifier::class)]
 #[CoversClass(MainHistory::class)]
@@ -39,6 +40,10 @@ final class CheckMainTest extends TestCase
 {
     private TemporaryRepository $repository;
 
+    private ?string $bin = null;
+
+    private ?string $path = null;
+
     #[Override]
     protected function setUp(): void
     {
@@ -48,6 +53,12 @@ final class CheckMainTest extends TestCase
     #[Override]
     protected function tearDown(): void
     {
+        if (null !== $this->path) {
+            putenv('PATH='.$this->path);
+        }
+        if (null !== $this->bin) {
+            new Filesystem()->remove($this->bin);
+        }
         $this->repository->remove();
     }
 
@@ -88,6 +99,48 @@ final class CheckMainTest extends TestCase
     }
 
     public function testAnUnsignedCommitOnMainBelowTheRecordedBaseOfAFastForwardIsUnsigned(): void
+    {
+        $seen = $this->repository->commitEmpty('Seen');
+        $unsigned = $this->repository->commitEmpty('Unsigned commit on main');
+        $base = $this->repository->commitEmpty('Recorded base above the unsigned commit');
+        $this->repository->checkoutNewBranch('task');
+        $head = $this->repository->commitEmpty('Task commit');
+        $this->fastForwardMainTo('task');
+
+        $classification = $this->classify(new WatchedMain($seen, [new RecordedMerge($head, $base)]));
+
+        self::assertEquals([new MainViolation($unsigned, Violation::Unsigned), new MainViolation($base, Violation::Unsigned)], $classification->violations);
+    }
+
+    public function testAFileNamedLikeTheRecordedBaseDoesNotChangeWhatTheMergeBroughtIn(): void
+    {
+        $base = $this->repository->commitEmpty('Main before the task');
+        $head = $this->repository->commitFile($base, 'A file named like the base commit');
+
+        self::assertSame([$head], $this->history()->broughtInBy(new RecordedMerge($head, $base)));
+    }
+
+    public function testAnUnsignedCommitMainAlreadyHeldStaysUnsignedWhenTheRepositoryIsCutShallowAtTheBaseWhileTheCoverageIsRead(): void
+    {
+        [$unsigned, $base, $main] = $this->taskBranchThatMergedMainAboveAnUnsignedCommit();
+        $this->gitThatCutsShallowAt($base, onlyWhileRunning: true);
+
+        $classification = $this->classify($main);
+
+        self::assertEquals([new MainViolation($unsigned, Violation::Unsigned)], $classification->violations);
+    }
+
+    public function testARepositoryLeftCutShallowAtTheBaseWhileTheCoverageIsReadIsRefused(): void
+    {
+        [, $base, $main] = $this->taskBranchThatMergedMainAboveAnUnsignedCommit();
+        $this->gitThatCutsShallowAt($base, onlyWhileRunning: false);
+
+        $this->expectException(MainNotRead::class);
+
+        $this->classify($main);
+    }
+
+    public function testAnUnsignedRecordedBaseOnMainIsItselfUnsigned(): void
     {
         $seen = $this->repository->commitEmpty('Seen');
         $unsigned = $this->repository->commitEmpty('Unsigned commit on main');
@@ -147,6 +200,42 @@ final class CheckMainTest extends TestCase
         $this->repository->merge('main');
 
         return $base;
+    }
+
+    // The unsigned commit sits on main below the base, and the task branch forked above it, so it is reachable from the recorded head and must stay outside the coverage only through the base; the unsigned commit, the base and the watched main are returned.
+    /**
+     * @return array{string, string, WatchedMain}
+     */
+    private function taskBranchThatMergedMainAboveAnUnsignedCommit(): array
+    {
+        $seen = $this->repository->commitEmpty('Seen');
+        $unsigned = $this->repository->commitEmpty('Unsigned commit already on main');
+        $this->repository->checkoutNewBranch('task');
+        $this->repository->commitEmpty('Task commit');
+        $this->repository->checkout('main');
+        $base = $this->repository->commitEmpty('Main moved on');
+        $this->repository->checkout('task');
+        $head = $this->repository->merge('main');
+        $this->fastForwardMainTo('task');
+
+        return [$unsigned, $base, new WatchedMain($seen, [new RecordedMerge($head, $base)])];
+    }
+
+    // A git in front of the real one writes the base as the shallow boundary right before the coverage is read, after the shallow check, and removes it again when the read ends or leaves it in place; the search path is restored in tearDown.
+    private function gitThatCutsShallowAt(string $entry, bool $onlyWhileRunning): void
+    {
+        $this->bin = sys_get_temp_dir().'/intakt-watchdog-git-'.bin2hex(random_bytes(6));
+        mkdir($this->bin);
+        $git = escapeshellarg((string) new ExecutableFinder()->find('git'));
+        $shallow = escapeshellarg($this->repository->path.'/.git/shallow');
+        $cut = sprintf("printf '%%s\\n' %s > %s", escapeshellarg($entry), $shallow);
+        $coverage = $onlyWhileRunning
+            ? $cut."\n        ".$git." \"\$@\"\n        status=\$?\n        rm -f ".$shallow."\n        exit \$status"
+            : $cut."\n        exec ".$git." \"\$@\"";
+        file_put_contents($this->bin.'/git', "#!/bin/sh\ncase \" \$* \" in\n    *\" --not \"*)\n        ".$coverage."\n        ;;\n    *) exec ".$git." \"\$@\" ;;\nesac\n");
+        chmod($this->bin.'/git', 0o700);
+        $this->path = (string) getenv('PATH');
+        putenv('PATH='.$this->bin.':'.$this->path);
     }
 
     private function fastForwardMainTo(string $branch): void

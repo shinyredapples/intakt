@@ -138,8 +138,8 @@ final readonly class MainHistory implements CommitHistory
     public function broughtInBy(RecordedMerge $merge): array
     {
         $this->mustBeReadable();
-        // Both names are full commit names, so neither can be read as an option.
-        $brought = trim($this->read(['rev-list', $merge->head, '--not', $merge->base]));
+        // Read with no shallow entries, because a cut during the read would hide what the base already held and pass it as brought in; a pruned commit then fails the read. The trailing -- keeps a file named like the base from making it ambiguous.
+        $brought = trim($this->read(['rev-list', $merge->head, '--not', $merge->base, '--'], self::NO_SHALLOW_ENTRIES));
 
         return '' === $brought ? [] : explode("\n", $brought);
     }
@@ -255,13 +255,14 @@ final readonly class MainHistory implements CommitHistory
 
     /**
      * @param list<string> $arguments
+     * @param list<string> $options
      *
      * @throws MainNotRead
      * @throws RuntimeException
      */
-    private function read(array $arguments): string
+    private function read(array $arguments, array $options = []): string
     {
-        $answer = $this->run($arguments);
+        $answer = $this->run($arguments, options: $options);
 
         return $answer->isSuccessful() ? $answer->getOutput() : throw new ProcessFailedException($answer);
     }
