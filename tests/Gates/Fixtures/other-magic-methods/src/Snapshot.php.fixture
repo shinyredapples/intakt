@@ -1,0 +1,58 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+final class Snapshot
+{
+    /**
+     * @var array<string, string>
+     */
+    private array $state = [];
+
+    public function __clone(): void
+    {
+        $this->state = [];
+    }
+
+    public function __destruct()
+    {
+        $this->state = [];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function __serialize(): array
+    {
+        return $this->state;
+    }
+
+    /**
+     * @param array<string, string> $data
+     */
+    public function __unserialize(array $data): void
+    {
+        $this->state = $data;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function __debugInfo(): array
+    {
+        return $this->state;
+    }
+
+    /**
+     * @param array<string, string> $properties
+     */
+    public static function __set_state(array $properties): self
+    {
+        $snapshot = new self();
+        $snapshot->state = $properties;
+
+        return $snapshot;
+    }
+}

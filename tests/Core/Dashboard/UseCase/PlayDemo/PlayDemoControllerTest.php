@@ -26,7 +26,6 @@ use Symfony\Component\HttpFoundation\Session\FlashBagAwareSessionInterface;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Messenger\Envelope;
-use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
 
 #[CoversClass(ShowDemoController::class)]
 #[CoversClass(PlayDemoController::class)]
@@ -312,9 +311,6 @@ final class PlayDemoControllerTest extends DashboardPageTestCase
      */
     private function queued(): array
     {
-        $transport = self::getContainer()->get('messenger.transport.async');
-        self::assertInstanceOf(InMemoryTransport::class, $transport);
-
-        return array_values([...$transport->getSent()]);
+        return array_values(self::getQueuedMessages('async'));
     }
 }
