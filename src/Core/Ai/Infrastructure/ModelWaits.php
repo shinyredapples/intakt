@@ -50,7 +50,7 @@ final readonly class ModelWaits
         return $waits;
     }
 
-    // One account's wait by the same read, so AccountPlatform can check a fallback account again right before it sends (issue #2860).
+    // One account's wait by the same read, so AccountPlatform can check every account again right before it sends, the first free one too, since the scan that found it free goes on reading the others (issue #2860).
     public function ofAccount(Account $account, ?string $routerProvider): int
     {
         $own = $this->cooldowns->secondsUntilFree($account);
