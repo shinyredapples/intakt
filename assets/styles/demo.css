@@ -9,7 +9,7 @@
 .rs-pair .character { height: 60px; }
 /* Each character is two images (light and dark), so the second reviewer is the third and fourth; it faces the first, so the pair reads as two reviewers rather than one drawn twice. */
 .rs-pair .character:nth-child(n+3) { margin-left: -14px; transform: scaleX(-1); }
-.rs-change, .rs-fix { flex-direction: column; gap: var(--s4); width: 64px; height: 64px; margin: 4px 0; border-radius: var(--r-btn); background: var(--raised); border: 1px solid var(--hairline); color: var(--primary); }
+.rs-change, .rs-fix { flex-direction: column; gap: var(--s4); width: 64px; height: 64px; margin: var(--s4) 0; border-radius: var(--r-btn); background: var(--raised); border: 1px solid var(--hairline); color: var(--primary); }
 .rs-lines { display: grid; gap: 3px; width: 36px; }
 .rs-lines span { height: 3px; border-radius: 2px; background: var(--hairline); }
 .rs-lines span:first-child { background: var(--primary); width: 70%; }

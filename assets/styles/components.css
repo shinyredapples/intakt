@@ -728,7 +728,7 @@ details.ev > summary time { margin-left: auto; color: var(--muted); font-size: v
   position: sticky; bottom: 0; z-index: 15; display: flex; align-items: center; gap: var(--s12); margin-top: auto;
   padding: var(--s12) var(--s32); border-top: 1px solid var(--hairline); background: var(--raised);
 }
-.tour-caption .tour-dots { flex: none; display: flex; gap: 6px; }
+.tour-caption .tour-dots { flex: none; display: flex; gap: var(--s4); }
 .tour-caption .tour-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--hairline); }
 .tour-caption .tour-dot.done { background: var(--muted); }
 .tour-caption .tour-dot.now { width: 20px; border-radius: 4px; background: var(--primary); }
