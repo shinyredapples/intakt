@@ -6,6 +6,9 @@ namespace Intakt\Tests\Core\Budget\Infrastructure;
 
 use Closure;
 use DateTimeImmutable;
+use Doctrine\DBAL\Configuration;
+use Doctrine\DBAL\DriverManager;
+use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Event\PrePersistEventArgs;
 use Doctrine\ORM\Events;
@@ -15,6 +18,7 @@ use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Budget\Contract\EndedOutageNotice;
 use Intakt\Core\Budget\Contract\MeasuredUse;
 use Intakt\Core\Budget\Contract\OutageNotice;
+use Intakt\Core\Budget\Contract\OwnerNoticesChanged;
 use Intakt\Core\Budget\Contract\ReadingOutcome;
 use Intakt\Core\Budget\Contract\Usage;
 use Intakt\Core\Budget\Contract\UsageWindow;
@@ -33,6 +37,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\LoggerInterface;
+use RuntimeException;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\EventDispatcher\EventDispatcher;
@@ -48,6 +53,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[UsesClass(WindowUse::class)]
 #[UsesClass(OutageNotice::class)]
 #[UsesClass(EndedOutageNotice::class)]
+#[UsesClass(OwnerNoticesChanged::class)]
 #[UsesClass(OutageNoticeRecord::class)]
 #[UsesClass(Account::class)]
 #[UsesClass(Usage::class)]
@@ -124,7 +130,7 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
     {
         $account = new Account(Provider::ClaudeCode, 'main');
         $clock = new MockClock('2026-11-02 08:00:00 UTC');
-        $use = new DoctrineMeasuredUse($this->entities, $clock);
+        $use = new DoctrineMeasuredUse($this->entities, $clock, new EventDispatcher());
         $reading = new WindowReading($account, UsageWindow::FiveHour, new Usage(12.0, null));
         $use->record($reading);
         $clock->modify('+4 hours');
@@ -157,7 +163,7 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
     {
         $account = new Account(Provider::ClaudeCode, 'main');
         $clock = new MockClock('2026-11-02 08:00:00 UTC');
-        $use = new DoctrineMeasuredUse($this->entities, $clock);
+        $use = new DoctrineMeasuredUse($this->entities, $clock, new EventDispatcher());
         $use->record(new WindowReading($account, UsageWindow::FiveHour, new Usage(12.0, null)));
         $clock->modify('+4 hours');
         $this->entities->persist(new OutageNoticeRecord($account, new DateTimeImmutable('2026-11-02T08:00:00+00:00'), $clock->now()));
@@ -172,7 +178,7 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
             return $stampedAt;
         });
 
-        new DoctrineMeasuredUse($this->entities, $slowClock)->record($reading);
+        new DoctrineMeasuredUse($this->entities, $slowClock, new EventDispatcher())->record($reading);
 
         self::assertSame([], $this->notices()->stillRunningOldestFirst());
     }
@@ -182,7 +188,7 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
     {
         $account = new Account(Provider::ClaudeCode, 'main');
         $clock = new MockClock('2026-11-02 08:00:00 UTC');
-        $use = new DoctrineMeasuredUse($this->entities, $clock);
+        $use = new DoctrineMeasuredUse($this->entities, $clock, new EventDispatcher());
         $use->record(new WindowReading($account, UsageWindow::FiveHour, new Usage(12.0, null)));
         $clock->sleep(1);
         $use->record(new WindowReading($account, UsageWindow::Weekly, new Usage(5.0, null)));
@@ -417,10 +423,122 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
         self::assertSame([], $this->notices()->stillRunningOldestFirst());
     }
 
+    // The end is saved in one transaction with the reading, so a failed end leaves the earlier reading as the latest and the notice waiting.
+    public function testAReadingWhoseOutageEndFailsToSaveIsRolledBackAndTheNoticeStaysWaiting(): void
+    {
+        $this->record('main', '2026-11-02 08:00:00');
+        $this->store('main', new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
+
+        $this->recordWhileTheEndFails($this->measuredUseWhoseFirstEndFails(new MockClock('2026-11-02 12:00:00 UTC'), new EventDispatcher()));
+
+        self::assertSame('08:00', $this->measuredUseAt('2026-11-02 12:00:00')->of(new Account(Provider::ClaudeCode, 'main'), UsageWindow::FiveHour)?->takenAt->format('H:i'));
+        self::assertCount(1, $this->notices()->stillRunningOldestFirst());
+        self::assertSame([], $this->notices()->endedOnTheDayOf(new DateTimeImmutable('2026-11-02T20:00:00+00:00')));
+    }
+
+    // The same worker goes on after the failure, so the reading it rolled back must not stand in for the one it stores next.
+    public function testTheNextReadingAfterAFailedEndEndsTheNotice(): void
+    {
+        $this->record('main', '2026-11-02 08:00:00');
+        $this->store('main', new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
+        $clock = new MockClock('2026-11-02 12:00:00 UTC');
+        $worker = $this->measuredUseWhoseFirstEndFails($clock, new EventDispatcher());
+        $this->recordWhileTheEndFails($worker);
+        $clock->modify('+30 minutes');
+
+        self::assertSame(ReadingOutcome::Recorded, $worker->record($this->readingOf('main')));
+
+        self::assertSame('12:30', $worker->of(new Account(Provider::ClaudeCode, 'main'), UsageWindow::FiveHour)?->takenAt->format('H:i'));
+        self::assertSame([], $this->notices()->stillRunningOldestFirst());
+        self::assertSame('12:30', $this->notices()->endedOnTheDayOf(new DateTimeImmutable('2026-11-02T20:00:00+00:00'))[0]->endedAt->format('H:i'));
+    }
+
+    public function testAReadingWhoseOutageEndFailsTellsNoListener(): void
+    {
+        $this->store('main', new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
+        $heard = 0;
+        $events = new EventDispatcher();
+        $events->addListener(OwnerNoticesChanged::class, static function () use (&$heard): void {
+            ++$heard;
+        });
+
+        $this->recordWhileTheEndFails($this->measuredUseWhoseFirstEndFails(new MockClock('2026-11-02 12:00:00 UTC'), $events));
+
+        self::assertSame(0, $heard);
+    }
+
+    // A listener reads the notices again, so it must hear only once the end is committed and visible to every reader.
+    public function testAReadingThatEndsAnOutageTellsListenersAfterItsCommit(): void
+    {
+        $this->store('main', new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
+        $heard = [];
+        $events = new EventDispatcher();
+        $events->addListener(OwnerNoticesChanged::class, function () use (&$heard): void {
+            $heard[] = [$this->entities->getConnection()->isTransactionActive(), count($this->notices()->endedOnTheDayOf(new DateTimeImmutable('2026-11-02T20:00:00+00:00')))];
+        });
+
+        $this->measuredUseAt('2026-11-02 12:00:00', $events)->record($this->readingOf('main'));
+
+        self::assertSame([[false, 1]], $heard);
+    }
+
+    public function testAReadingThatEndsNoOutageTellsNoListener(): void
+    {
+        $this->store('main', new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
+        $heard = 0;
+        $events = new EventDispatcher();
+        $events->addListener(OwnerNoticesChanged::class, static function () use (&$heard): void {
+            ++$heard;
+        });
+
+        $this->measuredUseAt('2026-11-02 12:00:00', $events)->record($this->readingOf('other'));
+
+        self::assertSame(0, $heard);
+    }
+
+    // No reading of the account is stored before the late one, so no earlier reading shows the outage ended; the fresher reading stored first did, before ends were kept.
+    public function testAnEarlierReadingStoredLateGivesNoEndToANoticeFromBeforeEndsWereKept(): void
+    {
+        $this->store('main', new DateTimeImmutable('2026-10-01T11:00:00+00:00'), new DateTimeImmutable('2026-10-01T08:00:00+00:00'));
+        $this->read('main', new DateTimeImmutable('2026-11-21T09:00:00+00:00'));
+
+        $this->record('main', '2026-11-21 08:59:00');
+
+        self::assertSame([], $this->notices()->endedOnTheDayOf(new DateTimeImmutable('2026-11-21T20:00:00+00:00')));
+        self::assertSame([], $this->notices()->stillRunningOldestFirst());
+    }
+
     private function record(string $account, string $at): void
     {
-        $use = new DoctrineMeasuredUse($this->entities, new MockClock($at.' UTC'));
-        self::assertSame(ReadingOutcome::Recorded, $use->record(new WindowReading(new Account(Provider::ClaudeCode, $account), UsageWindow::FiveHour, new Usage(12.0, null))));
+        self::assertSame(ReadingOutcome::Recorded, $this->measuredUseAt($at)->record($this->readingOf($account)));
+    }
+
+    private function recordWhileTheEndFails(DoctrineMeasuredUse $worker): void
+    {
+        try {
+            $worker->record($this->readingOf('main'));
+            self::fail('The end of the outage was saved.');
+        } catch (RuntimeException $failure) {
+            self::assertSame(FirstOutageEndFails::FAILURE, $failure->getMessage());
+        }
+    }
+
+    private function measuredUseAt(string $at, EventDispatcher $events = new EventDispatcher()): DoctrineMeasuredUse
+    {
+        return new DoctrineMeasuredUse($this->entities, new MockClock($at.' UTC'), $events);
+    }
+
+    // Its own connection, because the failure is wired into the driver it connects through.
+    private function measuredUseWhoseFirstEndFails(ClockInterface $clock, EventDispatcher $events): DoctrineMeasuredUse
+    {
+        $connection = DriverManager::getConnection($this->entities->getConnection()->getParams(), new Configuration()->setMiddlewares([new FirstOutageEndFails()]));
+
+        return new DoctrineMeasuredUse(new EntityManager($connection, $this->entities->getConfiguration()), $clock, $events);
+    }
+
+    private function readingOf(string $account): WindowReading
+    {
+        return new WindowReading(new Account(Provider::ClaudeCode, $account), UsageWindow::FiveHour, new Usage(12.0, null));
     }
 
     private function outageNotices(): DoctrineOutageNotices

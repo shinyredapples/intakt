@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Budget\Contract\MeasuredUse;
+use Intakt\Core\Budget\Contract\OwnerNoticesChanged;
 use Intakt\Core\Budget\Contract\ReadingOutcome;
 use Intakt\Core\Budget\Contract\UsageWindow;
 use Intakt\Core\Budget\Contract\WindowReading;
@@ -17,6 +18,8 @@ use Intakt\Core\Budget\Domain\WindowReadingRecord;
 use Override;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
+use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
+use Throwable;
 
 // Readings are appended, never updated in place, so two workers recording one window at once need no lock: the later takenAt is the latest, and the higher position breaks a tie within one second.
 #[AsAlias(MeasuredUse::class)]
@@ -25,6 +28,7 @@ final readonly class DoctrineMeasuredUse implements MeasuredUse
     public function __construct(
         private EntityManagerInterface $entities,
         private ClockInterface $clock,
+        private EventDispatcherInterface $events,
     ) {
     }
 
@@ -39,11 +43,10 @@ final readonly class DoctrineMeasuredUse implements MeasuredUse
 
         // Read before the older readings are dropped, because one of them may be the reading that already ended an outage.
         $previous = $this->latestReadingBefore($reading->account, $now);
-        $record = new WindowReadingRecord($reading, $now);
-        $this->entities->persist($record);
-        $this->entities->flush();
-        $this->forgetReadingsBefore($record);
-        $this->endOutagesBefore($record, $previous);
+        $ended = $this->storeEndingOutages(new WindowReadingRecord($reading, $now), $previous);
+        if ($ended > 0) {
+            $this->events->dispatch(new OwnerNoticesChanged());
+        }
 
         return ReadingOutcome::Recorded;
     }
@@ -73,6 +76,25 @@ final readonly class DoctrineMeasuredUse implements MeasuredUse
         }
 
         return $reading->window->refusalOfReset($resetsAt, $now);
+    }
+
+    // One transaction, so an end that fails to save rolls back the reading and the dropped readings too, and the next reading ends the outage instead; the connection's transaction rather than wrapInTransaction, because that closes the entity manager a worker goes on with.
+    private function storeEndingOutages(WindowReadingRecord $record, ?DateTimeImmutable $previous): int
+    {
+        try {
+            return $this->entities->getConnection()->transactional(function () use ($record, $previous): int {
+                $this->entities->persist($record);
+                $this->entities->flush();
+                $this->forgetReadingsBefore($record);
+
+                return $this->endOutagesBefore($record, $previous);
+            });
+        } catch (Throwable $failure) {
+            // Detached, because its row is rolled back and the database may give its position to the next reading, which the entity manager then refuses as a second object of one identity.
+            $this->entities->detach($record);
+
+            throw $failure;
+        }
     }
 
     // Only the latest reading of a window is read, so older ones are dropped; one stamped earlier but stored last spares the fresher one, the evidence of a recovery.
@@ -114,7 +136,7 @@ final readonly class DoctrineMeasuredUse implements MeasuredUse
     }
 
     // One statement, so two workers ending one outage at once need no lock; the earlier reading wins, because a slow writer can store its reading after a later one; a reading between the outage and this one already ended it, so a notice left with no end from before ends were kept is not ended now.
-    private function endOutagesBefore(WindowReadingRecord $record, ?DateTimeImmutable $previous): void
+    private function endOutagesBefore(WindowReadingRecord $record, ?DateTimeImmutable $previous): int
     {
         $query = $this->entities->createQueryBuilder()
             ->update(OutageNoticeRecord::class, 'notice')
@@ -130,6 +152,30 @@ final readonly class DoctrineMeasuredUse implements MeasuredUse
             $query->andWhere('notice.lastReadingAt >= :previous')->setParameter('previous', $previous, 'utc_datetime_immutable');
         }
 
-        $query->getQuery()->execute();
+        // A fresher reading of the account ended every outage before it when it was stored, so a notice it left with no end is from before ends were kept, even with no earlier reading to guard by.
+        if ($this->wasReadAfter($record)) {
+            $query->andWhere('notice.endedAt IS NOT NULL');
+        }
+
+        $ended = $query->getQuery()->execute();
+
+        return is_int($ended) ? $ended : 0;
+    }
+
+    private function wasReadAfter(WindowReadingRecord $record): bool
+    {
+        $fresher = $this->entities->createQueryBuilder()
+            ->select('COUNT(reading.position)')
+            ->from(WindowReadingRecord::class, 'reading')
+            ->where('reading.provider = :provider')
+            ->andWhere('reading.account = :account')
+            ->andWhere('reading.takenAt > :takenAt')
+            ->setParameter('provider', $record->provider)
+            ->setParameter('account', $record->account)
+            ->setParameter('takenAt', $record->takenAt, 'utc_datetime_immutable')
+            ->getQuery()
+            ->getSingleScalarResult();
+
+        return 0 < (int) $fresher;
     }
 }

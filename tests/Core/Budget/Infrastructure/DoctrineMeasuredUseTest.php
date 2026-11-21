@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Budget\Infrastructure;
 use DateTimeImmutable;
 use Doctrine\Common\EventManager;
 use Doctrine\DBAL\DriverManager;
+use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Events;
@@ -27,6 +28,7 @@ use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\Clock\MockClock;
+use Symfony\Component\EventDispatcher\EventDispatcher;
 
 #[Group('persistence')]
 #[CoversClass(DoctrineMeasuredUse::class)]
@@ -51,7 +53,7 @@ final class DoctrineMeasuredUseTest extends KernelTestCase
         EmptyDatabase::in(self::getContainer());
         new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
         $this->clock = new MockClock('2026-11-01 08:00:00 UTC');
-        $this->measured = new DoctrineMeasuredUse($entities, $this->clock);
+        $this->measured = new DoctrineMeasuredUse($entities, $this->clock, new EventDispatcher());
     }
 
     public function testAReadingIsKeptWithItsResetTimeAndItsAgeOnTheClock(): void
@@ -189,6 +191,10 @@ final class DoctrineMeasuredUseTest extends KernelTestCase
 
     public function testAReadingAnotherWorkerRecordsBetweenAnInsertAndItsCleanupIsTheOneThatStays(): void
     {
+        if (!$this->entities->getConnection()->getDatabasePlatform() instanceof PostgreSQLPlatform) {
+            self::markTestSkipped('The insert and its cleanup share one transaction, and only PostgreSQL lets another worker write the same readings before it commits; the others make it wait, which one thread cannot.');
+        }
+
         $other = $this->worker(new EventManager());
         $events = new EventManager();
         $events->addEventListener(Events::postFlush, new OnceFlushed(fn () => self::assertSame(ReadingOutcome::Recorded, $other->record($this->reading($this->claude('main'), UsageWindow::FiveHour, 43.0)))));
@@ -240,7 +246,7 @@ final class DoctrineMeasuredUseTest extends KernelTestCase
             return $stampedAt;
         });
 
-        return new DoctrineMeasuredUse($this->entities, $slowClock);
+        return new DoctrineMeasuredUse($this->entities, $slowClock, new EventDispatcher());
     }
 
     // Its own connection and entity manager, because another messenger:consume process shares neither with this one.
@@ -248,7 +254,7 @@ final class DoctrineMeasuredUseTest extends KernelTestCase
     {
         $connection = DriverManager::getConnection($this->entities->getConnection()->getParams());
 
-        return new DoctrineMeasuredUse(new EntityManager($connection, $this->entities->getConfiguration(), $events), $this->clock);
+        return new DoctrineMeasuredUse(new EntityManager($connection, $this->entities->getConfiguration(), $events), $this->clock, new EventDispatcher());
     }
 
     private function claude(string $name): Account
