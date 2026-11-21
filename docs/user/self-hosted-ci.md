@@ -1,6 +1,6 @@
 # Running Intakt's CI on your own runner
 
-Intakt's own CI (`.github/workflows/ci.yml` and `.github/workflows/journeys.yml`) runs on GitHub's `ubuntu-24.04` runners unless you say otherwise. This page is for whoever maintains a copy of the Intakt repository and wants that CI on a machine of their own.
+Intakt's own workflows (`ci.yml`, `journeys.yml`, `highlights.yml`, `release-image.yml`, `ci-image.yml` and `release-labels.yml` under `.github/workflows/`) run on GitHub's `ubuntu-24.04` runners unless you say otherwise. This page is for whoever maintains a copy of the Intakt repository and wants that CI on a machine of their own.
 
 ## Choosing the runner
 
