@@ -11,7 +11,6 @@ use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
 use Intakt\Core\Review\Contract\CountedQuotes;
 use Intakt\Core\Review\Contract\QuotesCounted;
-use Intakt\Core\Review\Domain\QuotesInChange;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -23,7 +22,6 @@ use Symfony\Component\DomCrawler\Crawler;
 #[UsesClass(LedgerPayload::class)]
 #[UsesClass(CountedQuotes::class)]
 #[UsesClass(QuotesCounted::class)]
-#[UsesClass(QuotesInChange::class)]
 final class JudgedRoundFindingsPageTest extends DashboardPageTestCase
 {
     public function testAJudgedFindingIsACardWithItsSeverityChipFileAndLineAndTheCallInWords(): void

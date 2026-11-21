@@ -52,7 +52,6 @@ use Intakt\Core\Review\Contract\RoundEnds;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictReceived;
-use Intakt\Core\Review\Domain\QuotesInChange;
 use Intakt\Core\ReviewerForLoop\Contract\ProjectMode;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenUsageRow;
@@ -88,7 +87,6 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(DroppedFinding::class)]
 #[UsesClass(CountedQuotes::class)]
 #[UsesClass(QuotesCounted::class)]
-#[UsesClass(QuotesInChange::class)]
 #[UsesClass(JudgeDoneFinding::class)]
 #[UsesClass(UsageStarted::class)]
 #[UsesClass(UsageSettled::class)]
