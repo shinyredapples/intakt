@@ -21,6 +21,11 @@ final class SymfonyReleaseTest extends TestCase
         self::assertTrue(SymfonyRelease::isAtLeast(Kernel::MAJOR_VERSION.'.0'));
     }
 
+    public function testTheInstalledReleaseIsNotAtLeastTheNextMinorOfItsMajor(): void
+    {
+        self::assertFalse(SymfonyRelease::isAtLeast(Kernel::MAJOR_VERSION.'.'.(Kernel::MINOR_VERSION + 1)));
+    }
+
     public function testTheInstalledReleaseIsNotAtLeastTheNextMajor(): void
     {
         self::assertFalse(SymfonyRelease::isAtLeast((Kernel::MAJOR_VERSION + 1).'.0'));

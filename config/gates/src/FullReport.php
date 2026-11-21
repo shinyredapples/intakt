@@ -37,11 +37,25 @@ final readonly class FullReport
             return null;
         }
 
-        // TODO(#2652): a short write still gets a report key, because it is not detected yet.
-        fwrite($handle, $contents."\n");
-        fclose($handle);
+        return $this->writtenAs($file, $handle, $contents."\n");
+    }
 
-        return $file;
+    // Because a report the summary names must hold everything, a failed or short write leaves no file, and its warning never reaches stdout between the JSON lines.
+    /**
+     * @param resource $handle
+     */
+    private function writtenAs(string $file, $handle, string $contents): ?string
+    {
+        $written = @fwrite($handle, $contents);
+        $closed = @fclose($handle);
+
+        if (strlen($contents) === $written && $closed) {
+            return $file;
+        }
+
+        @unlink($this->root.'/'.$file);
+
+        return null;
     }
 
     /**

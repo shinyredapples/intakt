@@ -13,6 +13,7 @@ final readonly class GateReport
     private function __construct(
         public string $gate,
         public string $line,
+        private GateLine $origin,
         public ?string $kept = null,
     ) {
     }
@@ -24,12 +25,12 @@ final readonly class GateReport
         $passing = null === $line ? null : self::verdictOf($gate, $line);
 
         if (null !== $passing && $child->exitCode === ($passing ? 0 : 1)) {
-            return new self($gate, $line);
+            return new self($gate, $line, GateLine::Printed);
         }
 
         $reason = 'gate process ended with exit code '.$child->exitCode.' and no valid result line: ';
 
-        return new self($gate, GateResult::failedBecause($gate, $reason.self::endOf($child, $reason))->toJson());
+        return new self($gate, GateResult::failedBecause($gate, $reason.self::endOf($child, $reason))->toJson(), GateLine::Built);
     }
 
     // Because a finding is cut at its end, and the end of what a child wrote names why it stopped (a timeout, a signal, a fatal error).
@@ -56,11 +57,16 @@ final readonly class GateReport
         return true === self::verdictOf($this->gate, $this->line);
     }
 
-    // Because only a kept result that, cut as the line cuts it, gives the line's own findings and omitted count can stand in for it; the verdict stays the line's.
+    // Because only a kept result that, cut as the line cuts it, gives the line's own findings and omitted count, omits nothing itself and states the line's verdict can stand in for a line the child printed, so the report never shows a gate with two verdicts.
     public function keeping(string $kept): self
     {
+        if (GateLine::Built === $this->origin) {
+            return $this;
+        }
+
         $whole = json_decode($kept, true);
-        $findings = is_array($whole) && $this->gate === ($whole['gate'] ?? null) ? ($whole['findings'] ?? null) : null;
+        $agrees = is_array($whole) && $this->gate === ($whole['gate'] ?? null) && $this->isPassing() === ($whole['ok'] ?? null) && 0 === ($whole['omitted'] ?? null);
+        $findings = $agrees ? ($whole['findings'] ?? null) : null;
 
         $strings = is_array($findings) && array_is_list($findings) ? array_values(array_filter($findings, is_string(...))) : null;
 
@@ -71,7 +77,7 @@ final readonly class GateReport
         $recut = $this->shownOf(GateResult::withFindings($this->gate, $strings)->toJson());
         $shown = $this->shownOf($this->line);
 
-        return [$recut['findings'], $recut['omitted']] === [$shown['findings'], $shown['omitted']] ? new self($this->gate, $this->line, $kept) : $this;
+        return [$recut['findings'], $recut['omitted']] === [$shown['findings'], $shown['omitted']] ? new self($this->gate, $this->line, $this->origin, $kept) : $this;
     }
 
     public function lineIsCut(): bool
