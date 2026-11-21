@@ -7,6 +7,7 @@ namespace Intakt\Core\Review\Infrastructure;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
+use Intakt\Core\Review\Contract\EscalationOutcome;
 use Intakt\Core\Review\Contract\EscalationVerdict;
 use Intakt\Core\Review\Domain\KeptVerdict;
 use Intakt\Core\Review\Domain\VerdictAlreadyKept;
@@ -37,6 +38,23 @@ final readonly class KeptVerdicts
 
     public function ofKey(string $key): ?KeptVerdict
     {
-        return $this->entities->find(KeptVerdict::class, $key);
+        // Read past the identity map, the way keep() writes, because a row the map cached inside a transaction that rolled back would still be returned.
+        $connection = $this->entities->getConnection();
+        $row = $connection->fetchAssociative(
+            'SELECT outcome, reasons, round, recorded_at FROM kept_verdict WHERE finding_key = ?',
+            [$key],
+        );
+
+        if (false === $row) {
+            return null;
+        }
+
+        return new KeptVerdict(
+            $key,
+            EscalationOutcome::from((string) $row['outcome']),
+            (string) $row['reasons'],
+            (string) $row['round'],
+            $connection->convertToPHPValue($row['recorded_at'], 'utc_datetime_immutable'),
+        );
     }
 }

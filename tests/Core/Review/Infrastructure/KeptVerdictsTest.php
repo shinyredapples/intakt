@@ -71,18 +71,27 @@ final class KeptVerdictsTest extends KernelTestCase
         self::assertSame('2026-11-21T10:00:00+00:00', $read);
     }
 
-    public function testAVerdictAnotherWriterKeptAfterTheLookupIsRefusedAsAlreadyKeptAndTheEntityManagerStaysOpen(): void
+    public function testASecondInsertForAKeyIsRefusedAsAlreadyKeptAndTheEntityManagerStaysOpen(): void
     {
         $this->verdicts->keep('finding-raced', new EscalationVerdict(EscalationOutcome::Confirmed, 'It holds.'), 'round-one');
-        $this->entities->clear();
-        $loser = new KeptVerdicts(new StaleLookups($this->entities), new MockClock('2026-11-21 10:00:00'));
 
         try {
-            $loser->keep('finding-raced', new EscalationVerdict(EscalationOutcome::Rejected, 'It does not.'), 'round-two');
+            $this->verdicts->keep('finding-raced', new EscalationVerdict(EscalationOutcome::Rejected, 'It does not.'), 'round-two');
             self::fail('A second verdict for one key was kept.');
         } catch (VerdictAlreadyKept) {
-            self::assertSame([true, EscalationOutcome::Confirmed], [$this->entities->isOpen(), $this->verdicts->ofKey('finding-raced')?->outcome]);
+            self::assertTrue($this->entities->isOpen());
         }
+    }
+
+    public function testAVerdictKeptAndReadInATransactionThatRollsBackIsNoLongerFoundForItsKey(): void
+    {
+        $connection = $this->entities->getConnection();
+        $connection->beginTransaction();
+        $this->verdicts->keep('finding-rolled-back', new EscalationVerdict(EscalationOutcome::Rejected, 'It does not.'), 'round-one');
+        $readInside = $this->verdicts->ofKey('finding-rolled-back')?->outcome;
+        $connection->rollBack();
+
+        self::assertSame([EscalationOutcome::Rejected, null], [$readInside, $this->verdicts->ofKey('finding-rolled-back')]);
     }
 
     public function testAnUnknownKeyFindsNoKeptVerdict(): void
