@@ -105,6 +105,10 @@ final readonly class OwnerKey
 
     private static function modulusBits(string $modulus): int
     {
+        // No bits for a negative mpint, because a set top bit makes the SSH number negative and no RSA modulus is.
+        if ('' !== $modulus && ord($modulus[0]) >= 0x80) {
+            return 0;
+        }
         $significant = ltrim($modulus, "\x00");
 
         return '' === $significant ? 0 : (strlen($significant) - 1) * 8 + strlen(decbin(ord($significant[0])));

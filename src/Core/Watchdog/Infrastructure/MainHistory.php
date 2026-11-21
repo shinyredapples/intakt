@@ -9,6 +9,7 @@ use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Core\Watchdog\Contract\CommitHistory;
 use Intakt\Core\Watchdog\Contract\MainHistoryRewritten;
 use Intakt\Core\Watchdog\Contract\SignatureStatus;
+use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Process\Exception\ProcessFailedException;
 use Symfony\Component\Process\Exception\RuntimeException;
@@ -187,9 +188,11 @@ final readonly class MainHistory implements CommitHistory
     private function signatureLines(array $headers, string $header): ?array
     {
         $lines = [];
+        $others = array_diff(self::SIGNATURE_HEADERS, [$header]);
         foreach ($headers as $index => $line) {
             $starts = str_starts_with($line, $header.' ');
-            if ($starts && [] !== $lines) {
+            // The other format's header too, because a commit carrying both could pass on a signature that covers the other header.
+            if (($starts && [] !== $lines) || array_any($others, static fn (string $other): bool => str_starts_with($line, $other.' '))) {
                 return null;
             }
             if ($starts || ([] !== $lines && array_last($lines) === $index - 1 && str_starts_with($line, ' '))) {
@@ -206,15 +209,19 @@ final readonly class MainHistory implements CommitHistory
             return false;
         }
 
-        $files = [$signers = $this->filesystem->tempnam(sys_get_temp_dir(), 'intakt-owner-signers-')];
+        $files = [];
 
         try {
-            // Allocated inside the try, because a failure here must still remove the signers file.
+            // Allocated inside the try, because a failure on the second file must still remove the first.
+            $files[] = $signers = $this->filesystem->tempnam(sys_get_temp_dir(), 'intakt-owner-signers-');
             $files[] = $signatureFile = $this->filesystem->tempnam(sys_get_temp_dir(), 'intakt-owner-signature-');
             $this->filesystem->dumpFile($signers, $this->allowedSigners());
             $this->filesystem->dumpFile($signatureFile, $signature);
 
             return $this->verifies($signers, $signatureFile, $payload);
+        } catch (IOException) {
+            // Fail closed: a check that could not be prepared proves no owner signed, so the commit is an unknown key.
+            return false;
         } finally {
             $this->filesystem->remove($files);
         }

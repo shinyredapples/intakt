@@ -136,6 +136,20 @@ final class MainHistoryTest extends TestCase
         self::assertSame(SignatureStatus::UnknownKey, $this->history([$this->publicKey('owner')])->signatureOf($commit));
     }
 
+    public function testACommitCarryingTheOtherFormatsSignatureHeaderIsAnUnknownKeyEvenWhenItsOwnSignatureVerifies(): void
+    {
+        $this->repository->commitEmpty('Seen');
+        [$headers, $message] = explode("\n\n", $this->repository->rawCommit($this->repository->commitEmpty('Owner change')), 2);
+        $headers .= "\ngpgsig-sha256 -----BEGIN SSH SIGNATURE-----";
+        $payload = $this->keys.'/payload';
+        file_put_contents($payload, $headers."\n\n".$message);
+        new Process(['ssh-keygen', '-q', '-Y', 'sign', '-n', 'git', '-f', $this->privateKey('owner'), $payload])->mustRun();
+        $signature = str_replace("\n", "\n ", rtrim((string) file_get_contents($payload.'.sig')));
+        $commit = $this->repository->commitObject($headers."\ngpgsig ".$signature."\n\n".$message);
+
+        self::assertSame(SignatureStatus::UnknownKey, $this->history([$this->publicKey('owner')])->signatureOf($commit));
+    }
+
     public function testASignatureHeaderInTheCommitMessageLeavesTheCommitUnsigned(): void
     {
         $this->repository->commitEmpty('Seen');
@@ -258,12 +272,25 @@ final class MainHistoryTest extends TestCase
             }
         };
 
-        try {
-            new MainHistory(new HardenedGit(), $this->repository->path, [$this->publicKey('owner')], $filesystem)->signatureOf($signed);
-        } catch (IOException) {
-        }
+        $status = new MainHistory(new HardenedGit(), $this->repository->path, [$this->publicKey('owner')], $filesystem)->signatureOf($signed);
 
+        self::assertSame(SignatureStatus::UnknownKey, $status);
         self::assertFileDoesNotExist($filesystem->allocated[0]);
+    }
+
+    public function testAnOwnerSignedCommitIsAnUnknownKeyWhenTheVerificationFilesCannotBeWritten(): void
+    {
+        $this->repository->commitEmpty('Seen');
+        $signed = $this->repository->commitSignedWith($this->privateKey('owner'), 'Owner change');
+        $filesystem = new class extends Filesystem {
+            #[Override]
+            public function dumpFile(string $filename, $content): void
+            {
+                throw new IOException('No space for the verification files.');
+            }
+        };
+
+        self::assertSame(SignatureStatus::UnknownKey, new MainHistory(new HardenedGit(), $this->repository->path, [$this->publicKey('owner')], $filesystem)->signatureOf($signed));
     }
 
     public function testASignedCommitInASha256RepositoryIsReadFromItsSha256HeaderAndVerifies(): void
@@ -418,6 +445,7 @@ final class MainHistoryTest extends TestCase
         $securityKeyType = sprintf('sk-%s@openssh.com', 'ecdsa-sha2-nistp256');
         yield 'a security key point off its curve' => [self::key($securityKeyType, [$securityKeyType, 'nistp256', "\x04".str_repeat("\x01", 64), 'ssh:'])];
         yield 'an rsa modulus of zero' => [self::key('ssh-rsa', ['ssh-rsa', "\x01\x00\x01", "\x00"])];
+        yield 'an rsa modulus encoded as a negative mpint' => [self::key('ssh-rsa', ['ssh-rsa', "\x01\x00\x01", "\x80".str_repeat("\x01", 127)])];
         yield 'an rsa modulus of 1023 bits' => [self::key('ssh-rsa', ['ssh-rsa', "\x01\x00\x01", "\x00\x7f".str_repeat("\xff", 127)])];
         yield 'an ecdsa point in hybrid form' => [self::key('ecdsa-sha2-nistp256', ['ecdsa-sha2-nistp256', 'nistp256', "\x07".substr(self::P256_GENERATOR, 1)])];
         yield 'a key type the check does not know' => [self::key('ssh-unknown', ['ssh-unknown', str_repeat("\x01", 32)])];
