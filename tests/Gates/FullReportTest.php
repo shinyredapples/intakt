@@ -176,6 +176,16 @@ final class FullReportTest extends SandboxTestCase
         self::assertSame(['1', 12], [$report->get('whole')->text(), count($this->findingsIn($report))]);
     }
 
+    public function testAFullReportOfAGateThatKeptAFailureAndThenCrashedHoldsTheCrash(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $crashed = GateReport::fromChild('dashes', new ProcessResult(139, '', 'Segmentation fault'));
+
+        $file = new FullReport($sandbox->root, [$crashed->keeping(GateResult::failedBecause('dashes', 'notes.md:1 U+2014')->toFullJson())])->write();
+
+        self::assertSame('{"whole":true,"gates":['.$crashed->line.']}'."\n", file_get_contents($sandbox->root.'/'.$file));
+    }
+
     public function testAReportWithACutLineAndNoKeptResultIsNotWhole(): void
     {
         $sandbox = $this->emptySandbox();
