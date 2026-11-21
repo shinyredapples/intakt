@@ -46,9 +46,11 @@ if ('page' === $mode) {
     $mode = 'end';
 }
 
-if ('end' === $mode) {
+// `end-main` ends the other waiting outage on its own, so a page already open shows the push of its notice event.
+$ending = ['end' => new Account(Provider::Codex, 'spare'), 'end-main' => new Account(Provider::Anthropic, 'main')][$mode] ?? null;
+if ($ending instanceof Account) {
     // Through the real reading path, so the reading that ends the outage keeps its moment on the notice.
-    $services->get(MeasuredUse::class)->record(new WindowReading(new Account(Provider::Codex, 'spare'), UsageWindow::FiveHour, new Usage(12.0, $now->modify('+3 hours'))));
+    $services->get(MeasuredUse::class)->record(new WindowReading($ending, UsageWindow::FiveHour, new Usage(12.0, $now->modify('+3 hours'))));
 }
 
 echo 'seeded '.$mode."\n";
