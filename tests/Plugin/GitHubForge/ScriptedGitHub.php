@@ -46,6 +46,9 @@ final class ScriptedGitHub
     // Answers the pull request look-up with a 429, because GitHub's pause must reach the opener's caller as a failed write.
     public bool $pullsRateLimited = false;
 
+    // A raw body for the pull request look-up, because an answer that is no list must fail the look-up.
+    public ?string $pullsAnswer = null;
+
     public int $createdNumber = 42;
 
     // Null refuses `/app`, because a retry must fail when it cannot check the author of an open pull request against the App.
@@ -125,11 +128,28 @@ final class ScriptedGitHub
             return new MockResponse('{"message":"Too many requests"}', ['http_code' => 429, 'response_headers' => ['retry-after' => '60']]);
         }
 
+        if (str_ends_with($path, '/pulls') && null !== $this->pullsAnswer) {
+            return new MockResponse($this->pullsAnswer, ['http_code' => 200]);
+        }
+
         if (str_ends_with($path, '/pulls')) {
-            return new MockResponse(json_encode($this->openPulls, JSON_THROW_ON_ERROR), ['http_code' => 200]);
+            return new MockResponse(json_encode($this->pageOfPulls($url), JSON_THROW_ON_ERROR), ['http_code' => 200]);
         }
 
         return new MockResponse(json_encode(str_contains($url, 'page=1') ? $this->comments : [], JSON_THROW_ON_ERROR), ['http_code' => 200]);
+    }
+
+    // Paged as GitHub pages, because a look-up that reads only the first page misses a pull request listed on a later one.
+    /**
+     * @return list<array<mixed>>
+     */
+    private function pageOfPulls(string $url): array
+    {
+        parse_str((string) parse_url($url, PHP_URL_QUERY), $query);
+        $size = max(1, (int) ($query['per_page'] ?? 30));
+        $page = max(1, (int) ($query['page'] ?? 1));
+
+        return array_slice($this->openPulls, ($page - 1) * $size, $size);
     }
 
     /**

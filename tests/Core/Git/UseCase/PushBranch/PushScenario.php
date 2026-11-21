@@ -12,6 +12,7 @@ use Intakt\Core\Git\UseCase\PushBranch\PushRecords;
 use Intakt\Core\Git\UseCase\PushBranch\SignedCommits;
 use Intakt\Core\Git\UseCase\PushBranch\SigningKey;
 use Intakt\Core\HandBack\Contract\AcceptedHandBack;
+use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Plugin\Forge\Contract\ChangeOpening;
 use Intakt\Plugin\Forge\Contract\ChangeText;
 use Intakt\Tests\Core\Git\TemporaryRepository;
@@ -101,11 +102,11 @@ final readonly class PushScenario
     }
 
     // Through another forge than the recording one, because a test of the real opener must see what it lets through.
-    public function pushThrough(ChangeOpening $changes): PushBranch
+    public function pushThrough(ChangeOpening $changes, ?Ledger $ledger = null): PushBranch
     {
         $git = new BranchGit(new HardenedGit());
 
-        return new PushBranch($git, new SignedCommits($git, $this->signingKey($this->key)), new PushRecords($this->ledger), $changes, new LockFactory(new InMemoryStore()));
+        return new PushBranch($git, new SignedCommits($git, $this->signingKey($this->key)), new PushRecords($ledger ?? $this->ledger), $changes, new LockFactory(new InMemoryStore()));
     }
 
     public function signingKey(string $file): SigningKey

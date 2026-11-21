@@ -24,6 +24,8 @@ final readonly class GitHubChangeOpener implements ChangeOpening
 {
     private const string JSON = 'application/vnd.github+json';
     private const int UNAUTHORIZED = 401;
+    private const int PAGE_SIZE = 100;
+    private const int MAX_PAGES = 10;
 
     public function __construct(
         private GitHubCalls $calls,
@@ -72,16 +74,9 @@ final readonly class GitHubChangeOpener implements ChangeOpening
     // Every listed match is checked, never only the first, because the branch can have open pull requests to several bases and a push moves the head of each.
     private function numberOfOpenPullRequest(RepositoryAddress $repository, string $branch): ?int
     {
-        $query = ['state' => 'open', 'head' => $repository->headOf($branch), 'per_page' => 100];
-        $listed = $this->decoded($this->request('GET', $repository->path().'/pulls', ['query' => $query]));
-
-        if (!array_is_list($listed)) {
-            throw new ForgeWriteFailed('GitHub answered the pull request look-up with something other than a list.');
-        }
-
         $own = [];
 
-        foreach ($listed as $entry) {
+        foreach ($this->openPullRequestsOf($repository, $branch) as $entry) {
             $pull = is_array($entry) ? $entry : [];
 
             if ($this->isOfBranch($pull, $branch)) {
@@ -90,6 +85,38 @@ final readonly class GitHubChangeOpener implements ChangeOpening
         }
 
         return array_first($own);
+    }
+
+    // Every page is read, because a foreign pull request on a later page moves with the push as much as one on the first; a listing past the last page read is refused instead of taken as complete.
+    /**
+     * @return list<mixed>
+     */
+    private function openPullRequestsOf(RepositoryAddress $repository, string $branch): array
+    {
+        $listed = [];
+
+        for ($page = 1; $page <= self::MAX_PAGES; ++$page) {
+            $query = ['state' => 'open', 'head' => $repository->headOf($branch), 'per_page' => self::PAGE_SIZE, 'page' => $page];
+            $more = $this->listOf($this->request('GET', $repository->path().'/pulls', ['query' => $query]));
+            $listed = [...$listed, ...$more];
+
+            if (count($more) < self::PAGE_SIZE) {
+                return $listed;
+            }
+        }
+
+        throw new ForgeWriteFailed('GitHub lists more open pull requests of the branch than this forge reads, so the branch is left alone.');
+    }
+
+    /**
+     * @return list<mixed>
+     */
+    private function listOf(string $body): array
+    {
+        $listed = $this->decoded($body);
+
+        // `{}` decodes to the same empty array as `[]`, so only the answer's first character tells an empty object from an empty list.
+        return array_is_list($listed) && str_starts_with(ltrim($body), '[') ? $listed : throw new ForgeWriteFailed('GitHub answered the pull request look-up with something other than a list.');
     }
 
     // A listed entry whose branch cannot be read is refused, because it may be another account's pull request of this branch.
