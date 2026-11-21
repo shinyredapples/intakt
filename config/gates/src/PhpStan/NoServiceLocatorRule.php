@@ -13,10 +13,13 @@ use PhpParser\Node\Param;
 use PhpParser\Node\Stmt\ClassLike;
 use PhpParser\Node\Stmt\ClassMethod;
 use PhpParser\Node\Stmt\TraitUse;
+use PhpParser\Node\Stmt\TraitUseAdaptation;
 use PhpParser\Node\Stmt\TraitUseAdaptation\Alias;
 use PhpParser\NodeFinder;
 use PHPStan\Analyser\Scope;
 use PHPStan\Node\FileNode;
+use PHPStan\Reflection\ExtendedMethodReflection;
+use PHPStan\Reflection\ExtendedParameterReflection;
 use PHPStan\Reflection\ReflectionProvider;
 use PHPStan\Rules\IdentifierRuleError;
 use PHPStan\Rules\Rule;
@@ -70,27 +73,66 @@ final readonly class NoServiceLocatorRule implements Rule
      */
     private function locatorParametersOf(ClassLike $class): array
     {
-        $findings = [];
+        $located = array_filter([...$this->declaredParametersOf($class), ...$this->aliasedParametersOf($class)], static fn (array $parameter): bool => null !== $parameter[1]);
+
+        return array_values(array_map(fn (array $parameter): IdentifierRuleError => $this->locatorParameter($this->nameOf($class), $parameter), $located));
+    }
+
+    /**
+     * @return list<array{string, ?string, int}> the name, the locator type and the line of each parameter
+     */
+    private function declaredParametersOf(ClassLike $class): array
+    {
         $constructor = $class->getMethod('__construct');
 
-        foreach ($constructor instanceof ClassMethod ? $constructor->params : [] as $parameter) {
-            $locator = $this->locatorTypeOf($parameter);
+        return array_map(fn (Param $parameter): array => [$this->variableOf($parameter), $this->locatorAmong($this->namesIn($parameter)), $parameter->getStartLine()], $constructor instanceof ClassMethod ? $constructor->params : []);
+    }
 
-            if (null !== $locator) {
-                $variable = $parameter->var instanceof Variable && is_string($parameter->var->name) ? $parameter->var->name : '';
-                $findings[] = $this->locatorParameter($this->nameOf($class), $variable, $locator, $parameter->getStartLine());
-            }
-        }
+    // a trait method aliased to __construct is the constructor, and it is usually declared in another file, so its parameters are read through reflection
+    /**
+     * @return list<array{string, ?string, int}>
+     */
+    private function aliasedParametersOf(ClassLike $class): array
+    {
+        $parameters = [];
 
         foreach ($class->getTraitUses() as $traitUse) {
-            foreach ($traitUse->adaptations as $adaptation) {
-                if ($adaptation instanceof Alias && 0 === strcasecmp((string) $adaptation->newName?->toString(), '__construct')) {
-                    array_push($findings, ...$this->aliasedLocatorParametersOf($class, $traitUse, $adaptation));
-                }
+            foreach (array_filter($traitUse->adaptations, $this->aliasesTheConstructor(...)) as $alias) {
+                array_push($parameters, ...$this->traitParametersOf($traitUse, $alias));
             }
         }
 
-        return $findings;
+        return $parameters;
+    }
+
+    private function aliasesTheConstructor(TraitUseAdaptation $adaptation): bool
+    {
+        return $adaptation instanceof Alias && 0 === strcasecmp((string) $adaptation->newName?->toString(), '__construct');
+    }
+
+    /**
+     * @return list<array{string, ?string, int}>
+     */
+    private function traitParametersOf(TraitUse $traitUse, TraitUseAdaptation $alias): array
+    {
+        $method = $this->traitMethodOf($alias->trait instanceof Name ? [$alias->trait] : $traitUse->traits, $alias->method->toString());
+        $parameters = $method instanceof ExtendedMethodReflection ? $method->getOnlyVariant()->getParameters() : [];
+
+        return array_map(fn (ExtendedParameterReflection $parameter): array => [$parameter->getName(), $this->locatorAmong($parameter->getNativeType()->getReferencedClasses()), $alias->getStartLine()], $parameters);
+    }
+
+    /**
+     * @param array<Name> $traits
+     */
+    private function traitMethodOf(array $traits, string $method): ?ExtendedMethodReflection
+    {
+        foreach ($traits as $trait) {
+            if ($this->reflections->hasClass($trait->toString()) && $this->reflections->getClass($trait->toString())->hasNativeMethod($method)) {
+                return $this->reflections->getClass($trait->toString())->getNativeMethod($method);
+            }
+        }
+
+        return null;
     }
 
     // the anonymous class has no name node, and PHP-Parser leaves its namespaced name uninitialized, so it is checked before it is read
@@ -99,35 +141,18 @@ final readonly class NoServiceLocatorRule implements Rule
         return $class->name instanceof Identifier ? ($class->namespacedName ?? $class->name)->toString() : 'class@anonymous';
     }
 
-    // a trait method aliased to __construct is the constructor, and it is usually declared in another file, so its parameters are read through reflection
-    /**
-     * @return list<IdentifierRuleError>
-     */
-    private function aliasedLocatorParametersOf(ClassLike $class, TraitUse $traitUse, Alias $alias): array
+    private function variableOf(Param $parameter): string
     {
-        $method = $alias->method->toString();
-        $traits = $alias->trait instanceof Name ? [$alias->trait] : $traitUse->traits;
-        $findings = [];
+        return $parameter->var instanceof Variable && is_string($parameter->var->name) ? $parameter->var->name : '';
+    }
 
-        foreach ($traits as $trait) {
-            if (!$this->reflections->hasClass($trait->toString()) || !$this->reflections->getClass($trait->toString())->hasNativeMethod($method)) {
-                continue;
-            }
-
-            foreach ($this->reflections->getClass($trait->toString())->getNativeMethod($method)->getVariants() as $variant) {
-                foreach ($variant->getParameters() as $parameter) {
-                    $locator = $this->locatorAmong($parameter->getNativeType()->getReferencedClasses());
-
-                    if (null !== $locator) {
-                        $findings[] = $this->locatorParameter($this->nameOf($class), $parameter->getName(), $locator, $alias->getStartLine());
-                    }
-                }
-            }
-
-            break;
-        }
-
-        return $findings;
+    // searched as nested names because a nullable, union or intersection type wraps them, and taken as written because PHPStan's parser has already resolved each against the imports, so an alias still counts
+    /**
+     * @return list<string>
+     */
+    private function namesIn(Param $parameter): array
+    {
+        return $parameter->type instanceof Node ? array_map(static fn (Name $name): string => $name->toString(), new NodeFinder()->findInstanceOf($parameter->type, Name::class)) : [];
     }
 
     /**
@@ -135,33 +160,7 @@ final readonly class NoServiceLocatorRule implements Rule
      */
     private function locatorAmong(array $classes): ?string
     {
-        foreach ($classes as $class) {
-            foreach (self::LOCATORS as $locator) {
-                if (0 === strcasecmp($class, $locator)) {
-                    return $locator;
-                }
-            }
-        }
-
-        return null;
-    }
-
-    private function locatorTypeOf(Param $parameter): ?string
-    {
-        if (!$parameter->type instanceof Node) {
-            return null;
-        }
-
-        // searched as nested names because a nullable, union or intersection type wraps them, and compared as written because PHPStan's parser has already resolved each against the imports, so an alias still counts
-        foreach (new NodeFinder()->findInstanceOf($parameter->type, Name::class) as $name) {
-            foreach (self::LOCATORS as $locator) {
-                if (self::isNamed($name, $locator)) {
-                    return $locator;
-                }
-            }
-        }
-
-        return null;
+        return array_find(self::LOCATORS, static fn (string $locator): bool => array_any($classes, static fn (string $class): bool => 0 === strcasecmp(ltrim($class, '\\'), $locator)));
     }
 
     // compared case-insensitively because PHP matches class names in any letter case
@@ -170,9 +169,13 @@ final readonly class NoServiceLocatorRule implements Rule
         return 0 === strcasecmp(ltrim($name->toString(), '\\'), $class);
     }
 
-    private function locatorParameter(string $class, string $variable, string $locator, int $line): IdentifierRuleError
+    /**
+     * @param array{string, ?string, int} $parameter
+     */
+    private function locatorParameter(string $class, array $parameter): IdentifierRuleError
     {
-        $message = sprintf('Constructor of %s takes $%s as a service locator (%s): %s', $class, $variable, $locator, self::COMPLY);
+        [$variable, $locator, $line] = $parameter;
+        $message = sprintf('Constructor of %s takes $%s as a service locator (%s): %s', $class, $variable, (string) $locator, self::COMPLY);
 
         return RuleErrorBuilder::message($message)->identifier('intakt.noServiceLocator')->line($line)->build();
     }
