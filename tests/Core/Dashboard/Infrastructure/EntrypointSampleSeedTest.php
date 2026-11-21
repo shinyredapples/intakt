@@ -381,6 +381,37 @@ final class EntrypointSampleSeedTest extends TestCase
         self::assertStringNotContainsString('cache:warmup', $this->calls());
     }
 
+    public function testACacheDirectoryWithANulByteFromEnvLocalPhpStopsTheStartBeforeAnythingIsRemoved(): void
+    {
+        new Filesystem()->dumpFile($this->directory.'/.env.local.php', '<?php return '.var_export(['APP_CACHE_DIR' => $this->directory."/cache\0/shifted"], true).";\n");
+        $markers = [$this->directory.'/cache/shifted/test/keep', $this->directory.'/var/cache/test/old', $this->directory.'/build/test/old'];
+        array_map(static fn (string $marker) => new Filesystem()->dumpFile($marker, 'kept'), $markers);
+        $this->startEntrypoint(['APP_BUILD_DIR' => $this->directory.'/build']);
+
+        $this->entrypoint?->wait();
+
+        self::assertNotSame(0, $this->entrypoint?->getExitCode());
+        self::assertStringContainsString('APP_CACHE_DIR holds a control character', (string) $this->entrypoint?->getErrorOutput());
+        self::assertSame([true, true, true], array_map(is_file(...), $markers), 'a folder was removed although the start was refused');
+        self::assertStringNotContainsString('cache:warmup', $this->calls());
+        self::assertStringNotContainsString('frankenphp run', $this->calls());
+    }
+
+    public function testABuildDirectoryWithATabStopsTheStartBeforeAnythingIsRemoved(): void
+    {
+        $build = $this->directory."/build\t";
+        $markers = [$this->directory.'/var/cache/test/old', $build.'/test/old'];
+        array_map(static fn (string $marker) => new Filesystem()->dumpFile($marker, 'kept'), $markers);
+        $this->startEntrypoint(['APP_BUILD_DIR' => $build]);
+
+        $this->entrypoint?->wait();
+
+        self::assertNotSame(0, $this->entrypoint?->getExitCode());
+        self::assertStringContainsString('APP_BUILD_DIR holds a control character', (string) $this->entrypoint?->getErrorOutput());
+        self::assertSame([true, true], array_map(is_file(...), $markers), 'a folder was removed although the start was refused');
+        self::assertStringNotContainsString('cache:warmup', $this->calls());
+    }
+
     public function testAnEnvironmentOfTwoLinesStopsTheStartBeforeAnythingIsRemoved(): void
     {
         new Filesystem()->dumpFile($this->directory.'/var/cache/test/old', 'kept');

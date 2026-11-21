@@ -92,7 +92,7 @@ rebuild_container() {
     php bin/console cache:warmup --no-interaction
 }
 
-# Prints APP_ENV, APP_CACHE_DIR and APP_BUILD_DIR as NAME=value, one per line, as bin/console sees them: Symfony Runtime loads the dotenv files with the runtime options bin/console gets (a dotenv_path, an APP_ENV a dotenv file sets), and a value in the environment wins. The environment is APP_ENV also when an env_var_name option names another variable, because bin/console passes APP_ENV to the kernel. A value with a line break would read as two values, so it ends the read before anything is printed. Built from the options here instead of through vendor/autoload_runtime.php, which takes the project folder from where vendor really lies; the project folder is the working folder, as for bin/console in the image.
+# Prints APP_ENV, APP_CACHE_DIR and APP_BUILD_DIR as NAME=value, one per line, as bin/console sees them: Symfony Runtime loads the dotenv files with the runtime options bin/console gets (a dotenv_path, an APP_ENV a dotenv file sets), and a value in the environment wins. The environment is APP_ENV also when an env_var_name option names another variable, because bin/console passes APP_ENV to the kernel. A value with a control character ends the read before anything is printed, because a line break would read as two values and bash drops a NUL byte, so either would name another folder. Built from the options here instead of through vendor/autoload_runtime.php, which takes the project folder from where vendor really lies; the project folder is the working folder, as for bin/console in the image.
 kernel_values() {
     php -r '
         require "vendor/autoload.php";
@@ -105,8 +105,8 @@ kernel_values() {
         $lines = "";
         foreach (["APP_ENV", "APP_CACHE_DIR", "APP_BUILD_DIR"] as $name) {
             $value = $_SERVER[$name] ?? "";
-            if (!is_string($value) || false !== strpbrk($value, "\r\n")) {
-                fwrite(STDERR, "intakt: $name holds a line break, so the folder it names cannot be read and nothing is removed\n");
+            if (!is_string($value) || 1 === preg_match("/[\\x00-\\x1f\\x7f]/", $value)) {
+                fwrite(STDERR, "intakt: $name holds a control character, so the folder it names cannot be read and nothing is removed\n");
                 exit(1);
             }
             $lines .= "$name=$value\n";
