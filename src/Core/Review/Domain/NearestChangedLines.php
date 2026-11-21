@@ -28,8 +28,9 @@ final readonly class NearestChangedLines
     {
     }
 
+    // Takes the changed lines redacted already, each within its whole file, because only the file shows where a credential of several lines starts.
     /**
-     * @param list<array{string, int, string}> $changedLines redacted already, each line within its whole file
+     * @param list<array{string, int, string}> $changedLines
      *
      * @return list<QuoteNearLines>
      */

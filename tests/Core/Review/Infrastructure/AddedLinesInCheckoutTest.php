@@ -28,7 +28,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(QuotesInChange::class)]
 final class AddedLinesInCheckoutTest extends TestCase
 {
-    // Holds a line break, as a held credential read from a file written on another system may.
+    // With a CRLF inside, because a held credential read from a file written on another system may hold one.
     private const string HELD = "held-secret\r\nsecond-half";
 
     private TemporaryRepository $repository;
@@ -135,7 +135,7 @@ final class AddedLinesInCheckoutTest extends TestCase
 
     private function redactor(): Redactor
     {
-        $redactor = $this->createStub(Redactor::class);
+        $redactor = self::createStub(Redactor::class);
         $redactor->method('redact')->willReturnCallback(static fn (string $text): string => new Redaction()->redact($text, self::HELD, 'other-secret', 'other-secret-value', "held\xFFbyte"));
 
         return $redactor;
