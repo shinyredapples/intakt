@@ -27,6 +27,7 @@ use SplFileInfo;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\FlockStore;
+use Symfony\Component\Process\Process;
 
 #[CoversClass(DependencySnapshots::class)]
 #[CoversClass(DependencySnapshotLease::class)]
@@ -44,6 +45,28 @@ use Symfony\Component\Lock\Store\FlockStore;
 final class DependencySnapshotsTest extends TestCase
 {
     private const string START_CHECK = __DIR__.'/../../../../docker/job/start-check.sh';
+
+    // Run in a process of its own, so the stand-in for Filesystem's iterator_to_array() is defined before Filesystem is first called, and the save it stops never runs its cleanup, as a killed orchestrator would not. It stops the first delete of a folder Filesystem::remove() moved aside.
+    private const string INTERRUPTED_EVICTION = <<<'PHP'
+        namespace Symfony\Component\Filesystem {
+            function iterator_to_array(\Traversable $iterator, bool $preserve_keys = true): array
+            {
+                if ($iterator instanceof \FilesystemIterator && str_ends_with($iterator->getPath(), '/d')) {
+                    fwrite(STDERR, 'eviction interrupted');
+                    exit(1);
+                }
+
+                return \iterator_to_array($iterator, $preserve_keys);
+            }
+        }
+
+        namespace {
+            require $argv[1].'/vendor/autoload.php';
+            $store = new Intakt\Core\HandBack\Infrastructure\DependencySnapshots($argv[2].'/store', 1, new Symfony\Component\Lock\LockFactory(new Symfony\Component\Lock\Store\FlockStore($argv[2].'/locks')));
+            $step = new Intakt\Plugin\Gate\Contract\DependencyStep(['composer.json', 'composer.lock'], 'probe', 'install', 'generate');
+            $store->save(Intakt\Core\HandBack\Domain\DependencySnapshotKey::of($step, ['composer.json' => '{}', 'composer.lock' => 'b'], '8.5.12'), $argv[3]);
+        }
+        PHP;
 
     private string $directory;
 
@@ -340,6 +363,18 @@ final class DependencySnapshotsTest extends TestCase
 
         self::assertDirectoryDoesNotExist($this->evictingOf('a'));
         self::assertSame([$this->key('b')->value], $this->snapshots());
+    }
+
+    public function testAnEvictionStoppedWhileDeletingLeavesNothingTheNextLeaseDoesNotRemove(): void
+    {
+        $this->store(1)->save($this->key('a'), $this->install('a'));
+
+        $interrupted = new Process([PHP_BINARY, '-r', self::INTERRUPTED_EVICTION, dirname(__DIR__, 4), $this->directory, $this->install('b')]);
+        $interrupted->run();
+        self::assertStringContainsString('eviction interrupted', $interrupted->getErrorOutput().$interrupted->getOutput());
+
+        self::assertNull($this->store(1)->leaseOf($this->key('a'), '/input/dependencies'));
+        self::assertSame(['.pins', '.uses', $this->key('b')->value], $this->entriesOfStore());
     }
 
     public function testAnEvictedSnapshotLeavesNoFolderBehindUnderAnyName(): void

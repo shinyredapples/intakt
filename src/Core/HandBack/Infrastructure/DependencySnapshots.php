@@ -13,6 +13,7 @@ use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use SplFileInfo;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
+use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\SharedLockInterface;
@@ -278,22 +279,26 @@ final readonly class DependencySnapshots
         new Filesystem()->dumpFile($this->root.'/'.self::USES, json_encode(array_values($uses), JSON_THROW_ON_ERROR));
     }
 
-    // Its folders are read-only, so they are opened for the owner first; their files need no write permission to be removed.
-    private function remove(string $snapshot): void
+    // Its folders are read-only, so they are opened for the owner first; their files need no write permission to be removed. The folder's entries are removed and the folder itself last, because Filesystem::remove() first moves a folder to a random name beside it, and a removal stopped there would leave a copy under a name no later trim looks for: inside the folder, any such move stays under the name this store reclaims.
+    private function remove(string $folder): void
     {
-        if (is_link($snapshot) || !is_dir($snapshot)) {
+        if (is_link($folder) || !is_dir($folder)) {
             return;
         }
 
-        chmod($snapshot, 0o755);
+        chmod($folder, 0o755);
 
-        foreach ($this->treeOf($snapshot) as $entry) {
+        foreach ($this->treeOf($folder) as $entry) {
             if ($entry->isDir() && !$entry->isLink()) {
                 chmod($entry->getPathname(), 0o755);
             }
         }
 
-        new Filesystem()->remove($snapshot);
+        new Filesystem()->remove(array_map(static fn (string $name): string => $folder.'/'.$name, $this->entriesOf($folder)));
+
+        if (!rmdir($folder)) {
+            throw new IOException(sprintf('Failed to remove the folder "%s".', $folder), path: $folder);
+        }
     }
 
     /**
