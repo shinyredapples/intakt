@@ -20,7 +20,7 @@ final class RectorGateTest extends SandboxTestCase
         $this->assertRejectedBy('rector', 'dead-code', 'RemoveUnusedVariableAssignRector');
     }
 
-    // Rector passes its command-line paths to every parallel worker in one shell string, which Linux caps at 128 KiB.
+    // Because Rector passes its command-line paths to every parallel worker in one shell string, which Linux caps at 128 KiB.
     public function testAFileListLongerThanOneShellArgumentStillReachesEveryWorker(): void
     {
         $sandbox = $this->emptySandbox();

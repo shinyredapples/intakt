@@ -43,7 +43,7 @@ final class MateInvocationTest extends TestCase
         $profile = new Profile('a1b2c3');
         $profile->setMethod('GET');
         $profile->setUrl('http://localhost/');
-        // A fixed timestamp turns two days old: FileProfilerStorage then purges it on one write in ten.
+        // Because FileProfilerStorage purges profiles older than two days on one write in ten, a fixed timestamp failed once it aged.
         $profile->setTime(new NativeClock()->now()->getTimestamp());
         $profile->setStatusCode(200);
 

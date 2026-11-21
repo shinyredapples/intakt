@@ -11,7 +11,7 @@ $pathsFile = getenv(RectorGate::PATHS_FILE_VARIABLE);
 $paths = is_string($pathsFile) && is_file($pathsFile) ? file($pathsFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) : false;
 
 return RectorConfig::configure()
-    // The rector gate names its files here, not on the command line: see RectorGate::environment()
+    // Because Rector copies command-line paths into every worker's shell string, capped at 128 KiB, the gate names its files here (RectorGate::environment())
     ->withPaths(false === $paths ? [] : array_map(static fn (string $path): string => getcwd().'/'.$path, $paths))
     ->withCache(GatesCache::directory().'/rector')
     // As many workers as the CI runner's 4 vCPUs and 300 s each, so concurrent checks stop timing each other out
