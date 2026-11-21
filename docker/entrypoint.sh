@@ -105,6 +105,9 @@ if [[ -n ${INTAKT_SAMPLE_REPOSITORY:-} ]]; then
     print_provider_notes_once
     # Set last, so the health check is green only once the sample is seeded; cleared above on every start, so a restart is not healthy before the seed has run again.
     touch "$READY_MARK"
+# The project file is read only while the container is compiled, and the image compiled its own without one, so a start that has a project file builds it again before any worker acts on the old projects. A set INTAKT_CONFIG counts without its file, because a restart after the file was removed still holds the projects it named.
+elif [[ -n ${INTAKT_CONFIG:-} || -e config/intakt.yaml ]]; then
+    rebuild_container
 fi
 
 # Validating first prints why FrankenPHP rejects the Caddyfile, which the web process alone would end on without a reason.
