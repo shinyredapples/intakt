@@ -62,7 +62,7 @@ final readonly class MarkdownSection
      */
     private static function withoutLastParagraph(array $section): array
     {
-        while ([] !== $section && '' !== trim((string) end($section))) {
+        while ([] !== $section && '' !== trim(end($section))) {
             array_pop($section);
         }
 
