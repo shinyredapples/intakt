@@ -20,7 +20,7 @@ Output and exit codes:
 | violations | one line per `MainViolation`, oldest first: `violation <commit> <violation>` (`unsigned`, `unknown_key`, `history_rewritten`) | 1 |
 | main not read (`MainNotRead`, or a git call that failed, such as a recorded head the repository does not hold) | an error naming the reason, with control characters spelled out (`\n`, and Unicode controls, line and paragraph separators and format characters such as a next line or a direction override as `\u{0085}`; in text that is not UTF-8 every byte above ASCII as an octal escape), never `main is clean` | 1 |
 | refused input: a last seen head or a recorded merge that is not as above (a name of the other format's length included), an owner key `OwnerKeyRefused` refuses (its message names the key's position, never the key) | an error naming the rule | 2 |
-| usage the Console refuses before the command runs (an option without its value, a missing argument, an unknown option) | the Console's error | 2 (`ExitInvalidOnRefusedUsage`, a `ConsoleEvents::ERROR` listener for this command only) |
+| usage the Console refuses before the command runs (an option without its value, a missing argument, an unknown option) | the Console's error | 2 (`ExitInvalidOnRefusedUsage`, a `ConsoleEvents::ERROR` listener for this command and `intakt:watchdog:guard` only) |
 
 A refused run logs none of its command line: `ExitInvalidOnRefusedUsage` stops the `ConsoleEvents::ERROR` event of a usage error and the `ConsoleEvents::TERMINATE` event of an exit with 2 before the Console's `ErrorListener` logs them, because refused input was never checked and an `--owner-key` value in it may be private key material. A run that exits with 0 or 1 is logged as before.
 
