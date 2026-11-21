@@ -13,7 +13,7 @@ final readonly class GateReport
     private function __construct(
         public string $gate,
         public string $line,
-        private bool $lineIsTheChilds,
+        private GateLine $origin,
         public ?string $kept = null,
     ) {
     }
@@ -25,12 +25,12 @@ final readonly class GateReport
         $passing = null === $line ? null : self::verdictOf($gate, $line);
 
         if (null !== $passing && $child->exitCode === ($passing ? 0 : 1)) {
-            return new self($gate, $line, true);
+            return new self($gate, $line, GateLine::Printed);
         }
 
         $reason = 'gate process ended with exit code '.$child->exitCode.' and no valid result line: ';
 
-        return new self($gate, GateResult::failedBecause($gate, $reason.self::endOf($child, $reason))->toJson(), false);
+        return new self($gate, GateResult::failedBecause($gate, $reason.self::endOf($child, $reason))->toJson(), GateLine::Built);
     }
 
     // Because a finding is cut at its end, and the end of what a child wrote names why it stopped (a timeout, a signal, a fatal error).
@@ -57,11 +57,10 @@ final readonly class GateReport
         return true === self::verdictOf($this->gate, $this->line);
     }
 
-    // Because only a kept result that, cut as the line cuts it, gives the line's own findings and omitted count can stand in for it; the verdict stays the line's.
-    // A line bin/check built for a crash, a timeout or a missing line names why the child stopped, which a result it saved before cannot.
+    // Because only a kept result that, cut as the line cuts it, gives the line's own findings and omitted count can stand in for a line the child printed; the verdict stays the line's.
     public function keeping(string $kept): self
     {
-        if (!$this->lineIsTheChilds) {
+        if (GateLine::Built === $this->origin) {
             return $this;
         }
 
@@ -77,7 +76,7 @@ final readonly class GateReport
         $recut = $this->shownOf(GateResult::withFindings($this->gate, $strings)->toJson());
         $shown = $this->shownOf($this->line);
 
-        return [$recut['findings'], $recut['omitted']] === [$shown['findings'], $shown['omitted']] ? new self($this->gate, $this->line, true, $kept) : $this;
+        return [$recut['findings'], $recut['omitted']] === [$shown['findings'], $shown['omitted']] ? new self($this->gate, $this->line, $this->origin, $kept) : $this;
     }
 
     public function lineIsCut(): bool

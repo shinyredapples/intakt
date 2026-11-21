@@ -136,8 +136,8 @@ final class GateReportKeptResultTest extends TestCase
     public function testAKeptResultIsRefusedForABuiltLineEvenWhenItsFindingsEqualTheLines(): void
     {
         $built = GateReport::fromChild('dashes', new ProcessResult(139, '', 'Segmentation fault'));
-        $finding = json_decode($built->line, true)['findings'][0] ?? '';
-        self::assertIsString($finding);
+        $finding = 'gate process ended with exit code 139 and no valid result line: Segmentation fault';
+        self::assertSame(GateResult::failedBecause('dashes', $finding)->toJson(), $built->line);
 
         self::assertNull($built->keeping(GateResult::failedBecause('dashes', $finding)->toFullJson())->kept);
     }
