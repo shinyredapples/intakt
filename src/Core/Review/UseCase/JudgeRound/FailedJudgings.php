@@ -9,6 +9,7 @@ use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Review\Contract\JudgingFailed;
+use ReflectionProperty;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Messenger\Transport\Receiver\ListableReceiverInterface;
 use Symfony\Component\Messenger\Transport\Receiver\ReceiverInterface;
@@ -87,7 +88,7 @@ final readonly class FailedJudgings
             $message = $envelope->getMessage();
 
             // A message that deserialized without its round id names no round, and one such message must not stop the judging of other changes.
-            if ($message instanceof JudgeRound && isset($message->roundId)) {
+            if ($message instanceof JudgeRound && new ReflectionProperty($message, 'roundId')->isInitialized($message)) {
                 $parked[$message->roundId] = true;
             }
         }
