@@ -19,7 +19,7 @@ final class NoServiceLocatorRuleTest extends PhpStanRuleTestCase
 {
     protected function ruleFor(string $root): NoServiceLocatorRule
     {
-        return new NoServiceLocatorRule($root);
+        return new NoServiceLocatorRule($root, self::createReflectionProvider());
     }
 
     /**
@@ -59,6 +59,31 @@ final class NoServiceLocatorRuleTest extends PhpStanRuleTestCase
     public function testAContainerInAUnionWrittenInLowerCaseFailsStaticAnalysis(): void
     {
         $this->assertRuleRejects('container-in-a-union', 'src/Loader.php:12 intakt.noServiceLocator Constructor of Intakt\Sample\Loader takes $source as a service locator (Psr\Container\ContainerInterface)');
+    }
+
+    public function testAServiceLocatorInAnIntersectionFailsStaticAnalysis(): void
+    {
+        $this->assertRuleRejects('container-in-an-intersection', 'src/Resolver.php:13 intakt.noServiceLocator Constructor of Intakt\Sample\Resolver takes $handlers as a service locator (Symfony\Component\DependencyInjection\ServiceLocator)');
+    }
+
+    public function testAContainerInTheConstructorOfAnAnonymousClassFailsStaticAnalysis(): void
+    {
+        $this->assertRuleRejects('container-in-an-anonymous-class', 'src/Probes.php:14 intakt.noServiceLocator Constructor of class@anonymous takes $container as a service locator (Psr\Container\ContainerInterface)');
+    }
+
+    public function testAContainerInTheConstructorOfATraitFailsStaticAnalysis(): void
+    {
+        $this->assertRuleRejects('container-in-a-trait-constructor', 'src/BootsServices.php:12 intakt.noServiceLocator Constructor of Intakt\Sample\BootsServices takes $container as a service locator (Symfony\Component\DependencyInjection\ContainerInterface)');
+    }
+
+    public function testATraitMethodTakingAContainerAliasedAsTheConstructorFailsStaticAnalysis(): void
+    {
+        $this->assertRuleRejects('container-in-an-aliased-trait-constructor', 'src/Gateway.php:9 intakt.noServiceLocator Constructor of Intakt\Sample\Gateway takes $container as a service locator (Psr\Container\ContainerInterface)');
+    }
+
+    public function testATraitMethodTakingAContainerAliasedAsAnotherMethodPassesStaticAnalysis(): void
+    {
+        $this->assertRuleAccepts('plainly-aliased-trait-method');
     }
 
     public function testAnAutowireLocatorAttributeFailsStaticAnalysis(): void

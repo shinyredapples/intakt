@@ -1,0 +1,15 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use Symfony\Component\DependencyInjection\ContainerInterface;
+
+trait BootsServices
+{
+    public function __construct(
+        private readonly ContainerInterface $container,
+    ) {
+    }
+}

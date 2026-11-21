@@ -7,13 +7,17 @@ namespace Intakt\Gates\PhpStan;
 use PhpParser\Node;
 use PhpParser\Node\Attribute;
 use PhpParser\Node\Expr\Variable;
+use PhpParser\Node\Identifier;
 use PhpParser\Node\Name;
 use PhpParser\Node\Param;
 use PhpParser\Node\Stmt\ClassLike;
 use PhpParser\Node\Stmt\ClassMethod;
+use PhpParser\Node\Stmt\TraitUse;
+use PhpParser\Node\Stmt\TraitUseAdaptation\Alias;
 use PhpParser\NodeFinder;
 use PHPStan\Analyser\Scope;
 use PHPStan\Node\FileNode;
+use PHPStan\Reflection\ReflectionProvider;
 use PHPStan\Rules\IdentifierRuleError;
 use PHPStan\Rules\Rule;
 use PHPStan\Rules\RuleErrorBuilder;
@@ -31,7 +35,7 @@ final readonly class NoServiceLocatorRule implements Rule
 
     private const string COMPLY = 'no service locator in src/, because services pulled from a container at runtime are hidden from the signature, from static analysis and from the container\'s own checks; inject each service the class needs through its constructor, or a tagged set as an iterable with #[AutowireIterator].';
 
-    public function __construct(private string $root)
+    public function __construct(private string $root, private ReflectionProvider $reflections)
     {
     }
 
@@ -66,23 +70,80 @@ final readonly class NoServiceLocatorRule implements Rule
      */
     private function locatorParametersOf(ClassLike $class): array
     {
+        $findings = [];
         $constructor = $class->getMethod('__construct');
 
-        if (!$constructor instanceof ClassMethod) {
-            return [];
-        }
-
-        $findings = [];
-
-        foreach ($constructor->params as $parameter) {
+        foreach ($constructor instanceof ClassMethod ? $constructor->params : [] as $parameter) {
             $locator = $this->locatorTypeOf($parameter);
 
             if (null !== $locator) {
-                $findings[] = $this->locatorParameter($class->namespacedName?->toString() ?? 'class@anonymous', $parameter, $locator);
+                $variable = $parameter->var instanceof Variable && is_string($parameter->var->name) ? $parameter->var->name : '';
+                $findings[] = $this->locatorParameter(self::nameOf($class), $variable, $locator, $parameter->getStartLine());
+            }
+        }
+
+        foreach ($class->getTraitUses() as $traitUse) {
+            foreach ($traitUse->adaptations as $adaptation) {
+                if ($adaptation instanceof Alias && 0 === strcasecmp((string) $adaptation->newName?->toString(), '__construct')) {
+                    array_push($findings, ...$this->aliasedLocatorParametersOf($class, $traitUse, $adaptation));
+                }
             }
         }
 
         return $findings;
+    }
+
+    // the anonymous class has no name node, and PHP-Parser leaves its namespaced name uninitialized, so it is checked before it is read
+    private static function nameOf(ClassLike $class): string
+    {
+        return $class->name instanceof Identifier ? ($class->namespacedName ?? $class->name)->toString() : 'class@anonymous';
+    }
+
+    // a trait method aliased to __construct is the constructor, and it is usually declared in another file, so its parameters are read through reflection
+    /**
+     * @return list<IdentifierRuleError>
+     */
+    private function aliasedLocatorParametersOf(ClassLike $class, TraitUse $traitUse, Alias $alias): array
+    {
+        $method = $alias->method->toString();
+        $traits = $alias->trait instanceof Name ? [$alias->trait] : $traitUse->traits;
+        $findings = [];
+
+        foreach ($traits as $trait) {
+            if (!$this->reflections->hasClass($trait->toString()) || !$this->reflections->getClass($trait->toString())->hasNativeMethod($method)) {
+                continue;
+            }
+
+            foreach ($this->reflections->getClass($trait->toString())->getNativeMethod($method)->getVariants() as $variant) {
+                foreach ($variant->getParameters() as $parameter) {
+                    $locator = $this->locatorAmong($parameter->getNativeType()->getReferencedClasses());
+
+                    if (null !== $locator) {
+                        $findings[] = $this->locatorParameter(self::nameOf($class), $parameter->getName(), $locator, $alias->getStartLine());
+                    }
+                }
+            }
+
+            break;
+        }
+
+        return $findings;
+    }
+
+    /**
+     * @param list<string> $classes
+     */
+    private function locatorAmong(array $classes): ?string
+    {
+        foreach ($classes as $class) {
+            foreach (self::LOCATORS as $locator) {
+                if (0 === strcasecmp($class, $locator)) {
+                    return $locator;
+                }
+            }
+        }
+
+        return null;
     }
 
     private function locatorTypeOf(Param $parameter): ?string
@@ -109,12 +170,11 @@ final readonly class NoServiceLocatorRule implements Rule
         return 0 === strcasecmp(ltrim($name->toString(), '\\'), $class);
     }
 
-    private function locatorParameter(string $class, Param $parameter, string $locator): IdentifierRuleError
+    private function locatorParameter(string $class, string $variable, string $locator, int $line): IdentifierRuleError
     {
-        $variable = $parameter->var instanceof Variable && is_string($parameter->var->name) ? $parameter->var->name : '';
         $message = sprintf('Constructor of %s takes $%s as a service locator (%s): %s', $class, $variable, $locator, self::COMPLY);
 
-        return RuleErrorBuilder::message($message)->identifier('intakt.noServiceLocator')->line($parameter->getStartLine())->build();
+        return RuleErrorBuilder::message($message)->identifier('intakt.noServiceLocator')->line($line)->build();
     }
 
     private function locatorAttribute(Attribute $attribute): IdentifierRuleError

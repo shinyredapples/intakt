@@ -50,7 +50,7 @@ final readonly class NoRequiredAttributeRule implements Rule
 
     private function requiredAttribute(Attribute $attribute): IdentifierRuleError
     {
-        $message = 'Attribute #[Required] wires a dependency after construction: constructor injection only, because a service built in two steps can be used half wired and cannot be readonly; take the dependency as a constructor parameter.';
+        $message = 'Attribute #[Required] wires a dependency after construction: constructor injection only, because a service built in two steps can be used half wired and hides the dependency from its constructor; take the dependency as a constructor parameter.';
 
         return RuleErrorBuilder::message($message)->identifier('intakt.constructorInjectionOnly')->line($attribute->getStartLine())->build();
     }
