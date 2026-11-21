@@ -143,7 +143,7 @@ final class EscalationRecordTest extends KernelTestCase
         }
     }
 
-    // The scripted vendor answers by the finding it is asked about, the way a model judges the one finding in its prompt.
+    // Answers by the finding in the prompt, because each escalation is asked about one finding alone and the record needs one of each outcome.
     private function strongTier(): SymfonyAiEscalationReviews
     {
         $answer = static fn ($model, array|string $payload): string => str_contains(json_encode($payload, JSON_THROW_ON_ERROR), self::CONFIRMED_TEXT)

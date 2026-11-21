@@ -263,7 +263,7 @@ final readonly class RoundFixture
         return new RecordRecurringP1s($this->recurringP1s($ledger), $this->keptVerdicts(), $this->roundLedger($ledger), $this->escalations);
     }
 
-    // A new handler on every delivery, as a restarted worker has; the escalations are those the judging queued, delivered in the test's order.
+    // A new handler on every delivery, because a restarted worker has one too and a redelivery must find the kept verdict in the database, not in the handler.
     public function escalate(EscalateRecurringP1 $message, EscalationReviews $reviews, Vendor $vendor = new ScriptedVendor()): void
     {
         $this->escalationHandler($reviews, $vendor)($message);
