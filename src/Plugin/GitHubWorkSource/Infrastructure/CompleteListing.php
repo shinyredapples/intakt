@@ -18,6 +18,7 @@ use Intakt\Plugin\GitHubWorkSource\Domain\IntakeRules;
 use Intakt\Plugin\GitHubWorkSource\Domain\IssueReferences;
 use Intakt\Plugin\GitHubWorkSource\Domain\ItemReading;
 use Intakt\Plugin\GitHubWorkSource\Domain\ListingRows;
+use Intakt\Plugin\GitHubWorkSource\Domain\ProjectHeldByAnotherWriter;
 use Intakt\Plugin\GitHubWorkSource\Domain\QueuedIssue;
 use Intakt\Plugin\GitHubWorkSource\Domain\StoredIssue;
 use Intakt\Plugin\GitHubWorkSource\Domain\Vouching;
@@ -42,25 +43,33 @@ final readonly class CompleteListing
     #[NoDiscard]
     public function planOf(string $project): ?IntakePlan
     {
-        $askedWith = $this->store->validatorOf($project);
         try {
-            $listing = $this->reads->listOpen($project, $askedWith);
+            return $this->syncOf($project);
+        } catch (ProjectHeldByAnotherWriter $held) {
+            // A refusal before a won write leaves nothing written, and one of the plan's read after a won write keeps the rows written, which are the newest committed listing: either way only this tick's plan is skipped and the next tick plans from what is stored.
+            return $this->shortListing($project, $held);
+        }
+    }
+
+    private function syncOf(string $project): ?IntakePlan
+    {
+        $readBefore = $this->store->syncStateOf($project);
+        try {
+            $listing = $this->reads->listOpen($project, $readBefore->validator);
             $rows = $this->rowsOf($project, $listing);
             $vouched = $this->vouchWhatSteers($project, $rows);
         } catch (ForgeReadFailed|ForgeRateLimited|TrustNotChecked $short) {
-            $this->logger->warning('The open-issue listing of project {project} came back short, so nothing is picked and no wait closes this tick: {reason}', ['project' => $project, 'reason' => $short->getMessage(), 'exception' => $short]);
-
-            return null;
+            return $this->shortListing($project, $short);
         }
 
         if ($listing->isUnchanged() && [] === $vouched) {
             return $this->planOver($project, $rows);
         }
 
-        $listed = new ListingRows($rows, $listing->isUnchanged() ? $askedWith : $listing->validator);
+        $listed = new ListingRows($rows, $listing->isUnchanged() ? $readBefore->validator : $listing->validator);
 
         // Another worker that stored a listing meanwhile holds the newer rows, so those are the ones to answer from.
-        return $this->planOver($project, $this->store->recordIfStill($project, $askedWith, $listed) ? $rows : $this->store->issuesOf($project));
+        return $this->planOver($project, $this->store->recordIfStill($project, $readBefore, $listed) ? $rows : $this->store->issuesOf($project));
     }
 
     // An unchanged listing is answered from the stored rows, and so is the history of an item whose update time stands; the rest is taken from the listing, because the milestone due date changes without moving it.
@@ -124,6 +133,13 @@ final readonly class CompleteListing
         }
 
         return $history;
+    }
+
+    private function shortListing(string $project, ForgeReadFailed|ForgeRateLimited|TrustNotChecked|ProjectHeldByAnotherWriter $short): null
+    {
+        $this->logger->warning('The open-issue listing of project {project} came back short, so nothing is picked and no wait closes this tick: {reason}', ['project' => $project, 'reason' => $short->getMessage(), 'exception' => $short]);
+
+        return null;
     }
 
     /**

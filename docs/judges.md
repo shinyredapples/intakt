@@ -16,7 +16,7 @@ The video's script and shot list: [docs/video.md](video.md)
 1. `git clone https://github.com/shinyredapples/intakt.git && cd intakt`
 2. `docker compose up -d --wait`: it returns once the container is healthy.
 3. Open http://localhost:7781. You see **Set up Intakt** with two choices: "Watch a recorded review" and "Run it live with your key".
-4. Open http://localhost:7781/demo and press **Play the demo run**. You see "The demo run is starting: the caption at the bottom of each page names the stage it is in." The caption counts "Stage 1 of 7" up to "Stage 5 of 7: The round is judged: the act list names the findings to fix now."
+4. Open http://localhost:7781/demo and press **Play the demo run**. You see "The demo run is starting: the caption at the bottom of each page names the stage it is in." The caption shows one progress dot per stage (five in all) and a short line; the last one reads "Done: To fix lists what still needs changing."
 5. Press **Open the review** in the caption. The review of `sample-change` in `demo-replay` carries the **Replay** mark; its reviewers ran on models from two AI labs, Claude (`opus`) and GPT (`gpt-6.2-sol`). Round 1 reads "Changes requested": `correctness` (`opus`) and `security` (`gpt-6.2-sol`) each asked for changes with 4 findings. Under "Findings and the judge's call", F1 (P1, `src/discount.js:3`, also reported as F6), F2 (P1, `src/report.js:4`, also reported as F5, F7), F3 (P2), F4 (P2) and F8 (P3) read **Fix now**.
 
 ## b. One Hugging Face token or provider key, about 5 minutes
