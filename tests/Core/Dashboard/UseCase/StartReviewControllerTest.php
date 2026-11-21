@@ -260,7 +260,7 @@ final class StartReviewControllerTest extends DashboardPageTestCase
         $this->browser->request('POST', '/reviews/round-1/start', ['_token' => $this->token(), 'number' => '2']);
 
         $this->browser->followRedirect();
-        self::assertSelectorTextSame('.flash-error', (new PanelWithoutReviewers())->getMessage());
+        self::assertSelectorTextSame('.flash-error', new PanelWithoutReviewers()->getMessage());
     }
 
     public function testAFailureThatIsNotAReportableOneIsAServerErrorAndNotAnErrorLine(): void
