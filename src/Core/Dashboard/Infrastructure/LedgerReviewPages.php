@@ -88,7 +88,7 @@ final readonly class LedgerReviewPages
             $row = $this->payloads->reviewerRowOf($recorded);
 
             if ($row instanceof ReviewerStarted && $row->round === $round && $row->reviewer === $reviewer) {
-                $started = new ReviewerOutcome($row->reviewer, $row->role, $row->tier->value, $recorded->recordedAt, $row->model);
+                $started = new ReviewerOutcome($row->reviewer, $row->role, $row->tier->value, $recorded->recordedAt)->restarted($recorded->recordedAt, $row->model);
             }
         }
 

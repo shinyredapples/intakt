@@ -30,7 +30,6 @@ use Intakt\Core\Review\Contract\RoundEnding;
 use Intakt\Core\Review\Contract\RoundEndings;
 use Intakt\Core\Review\Contract\RoundEnds;
 use Intakt\Core\Review\Contract\SampleChange;
-use Intakt\Core\Review\UseCase\ReviewChange\RoundEndReasons;
 use Intakt\Tests\Support\FixedRoundEndings;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -567,7 +566,7 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
 
     public function testUpNextLeavesOutARoundThatEndedWithoutTheJudgesCallWhileTheBoardKeepsItInReview(): void
     {
-        self::getContainer()->set(RoundEndings::class, new FixedRoundEndings(new RoundEnding(RoundEnds::JudgingFailed, RoundEndReasons::JUDGING_FAILED)));
+        self::getContainer()->set(RoundEndings::class, new FixedRoundEndings(new RoundEnding(RoundEnds::JudgingFailed, 'The judge failed.')));
         $this->ledger->startRoundOf('feat/a', 'r-1', 1);
         $this->ledger->startReviewer('r-1', 'correctness');
 

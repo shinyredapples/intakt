@@ -176,8 +176,8 @@
         href: path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_REVIEW'), {round: round.round}),
         project: round.project,
         title: round.change is same as('') ? constant('Intakt\\Core\\Dashboard\\Domain\\ReviewSummary::UNNAMED_CHANGE') : round.change,
-        facts: (round.number is null ? [] : ['Round ' ~ round.number])|merge([round.outcomes is empty ? 'No reviewer has started yet' : round.outcomes|map(outcome => outcome.role|capitalize)|join(', ')]),
-        waiting: round.outcomes is empty,
+        facts: (round.number is null ? [] : ['Round ' ~ round.number])|merge([round.startedOutcomes is empty ? 'No reviewer has started yet' : round.startedOutcomes|map(outcome => outcome.role|capitalize)|join(', ')]),
+        waiting: round.startedOutcomes is empty,
     }) -%}
     {#- A queued round has no link, because its review page answers 404 until the round starts (decision 2 of #3159). -#}
     {%- set queued = up_next.queued|map(round => {href: null, project: round.project, title: round.title, facts: ['Queued, not started yet'], waiting: true}) -%}

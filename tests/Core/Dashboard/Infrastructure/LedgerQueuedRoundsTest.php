@@ -5,11 +5,17 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Dashboard\Infrastructure;
 
 use Intakt\Core\Dashboard\Domain\QueuedRound;
+use Intakt\Core\Dashboard\Domain\ReviewedRound;
+use Intakt\Core\Dashboard\Domain\RoundPlace;
+use Intakt\Core\Dashboard\Domain\RoundStart;
 use Intakt\Core\Dashboard\Infrastructure\LedgerPayload;
 use Intakt\Core\Dashboard\Infrastructure\LedgerQueuedRounds;
+use Intakt\Core\Dashboard\Infrastructure\RoundPayloads;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Tests\Core\Dashboard\UseCase\DashboardLedger;
+use Intakt\Tests\Support\StoredSerializerFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -17,6 +23,11 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(LedgerQueuedRounds::class)]
 #[CoversClass(QueuedRound::class)]
 #[UsesClass(LedgerPayload::class)]
+#[UsesClass(LedgerPayloads::class)]
+#[UsesClass(RoundPayloads::class)]
+#[UsesClass(ReviewedRound::class)]
+#[UsesClass(RoundStart::class)]
+#[UsesClass(RoundPlace::class)]
 final class LedgerQueuedRoundsTest extends TestCase
 {
     private DashboardLedger $ledger;
@@ -40,6 +51,14 @@ final class LedgerQueuedRoundsTest extends TestCase
         $this->ledger->startRound($round, 'alpha');
 
         self::assertSame([], $this->queued());
+    }
+
+    public function testAnUnreadableStartLeavesTheRoundQueued(): void
+    {
+        $round = $this->ledger->queueRoundOf('alpha', '7', 'a');
+        $this->ledger->append(new LedgerEvent(LedgerEventKind::ReviewStarted, json_encode(['round' => $round, 'project' => []], JSON_THROW_ON_ERROR)));
+
+        self::assertSame([[$round, 'alpha', 'Pull request 7']], $this->queued());
     }
 
     public function testANewerWatcherLineOfThePullRequestEndsTheWait(): void
@@ -80,6 +99,6 @@ final class LedgerQueuedRoundsTest extends TestCase
      */
     private function queued(): array
     {
-        return array_map(static fn (QueuedRound $round): array => [$round->round, $round->project, $round->title()], new LedgerQueuedRounds()->in($this->ledger->readInOrder()));
+        return array_map(static fn (QueuedRound $round): array => [$round->round, $round->project, $round->title()], new LedgerQueuedRounds(new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())))->in($this->ledger->readInOrder()));
     }
 }

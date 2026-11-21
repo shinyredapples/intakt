@@ -17,6 +17,8 @@ final readonly class ReviewerOutcome
     public ?string $note;
     public ?string $substitute;
     public ProjectMode $mode;
+    // False until a start is recorded, because a reviewer whose message failed for good is blocked without ever starting.
+    public bool $started;
 
     public function __construct(
         public string $id,
@@ -31,12 +33,13 @@ final readonly class ReviewerOutcome
         $this->note = null;
         $this->substitute = null;
         $this->mode = ProjectMode::Live;
+        $this->started = false;
     }
 
     // The model comes from the latest start alone, because a reviewer started again may run on another model, and a start written before the model was recorded has none.
     public function restarted(DateTimeImmutable $at, ?string $model): self
     {
-        return new self($this->id, $this->role, $this->tier, $at, $model);
+        return clone (new self($this->id, $this->role, $this->tier, $at, $model), ['started' => true]);
     }
 
     // The tier stands in for a start written before Intakt recorded the model, so every place that names a reviewer says the same.

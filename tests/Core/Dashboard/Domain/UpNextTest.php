@@ -54,6 +54,28 @@ final class UpNextTest extends TestCase
         self::assertSame([[], ['r1']], [$this->ids($upNext->inProgress), $this->ids($upNext->waitingToStart)]);
     }
 
+    public function testAReviewerBlockedBeforeItStartedLeavesTheRoundWaitingToStart(): void
+    {
+        $blocked = new ReviewerOutcome('r1-a', 'correctness', 'standard', new DateTimeImmutable('2026-11-01T10:01:00+00:00'))->blocked('The review message failed for good.');
+        $round = $this->round('r1', '2026-11-01T10:00:00+00:00')->withOutcomes([$blocked]);
+
+        $upNext = new Board([new Review([$round])])->upNext([]);
+
+        self::assertSame([[], ['r1']], [$this->ids($upNext->inProgress), $this->ids($upNext->waitingToStart)]);
+        self::assertSame([], $upNext->waitingToStart[0]->startedOutcomes());
+    }
+
+    public function testARoundWithOneStartedReviewerIsInProgressAndNamesOnlyTheStartedRole(): void
+    {
+        $blocked = new ReviewerOutcome('r1-b', 'security', 'standard', new DateTimeImmutable('2026-11-01T10:01:00+00:00'))->blocked('The review message failed for good.');
+        $round = $this->round('r1', '2026-11-01T10:00:00+00:00')->withOutcomes([$this->reviewer('r1-a', 'correctness'), $blocked]);
+
+        $upNext = new Board([new Review([$round])])->upNext([]);
+
+        self::assertSame([['r1'], []], [$this->ids($upNext->inProgress), $this->ids($upNext->waitingToStart)]);
+        self::assertSame(['correctness'], array_map(static fn (ReviewerOutcome $outcome): string => $outcome->role, $upNext->inProgress[0]->startedOutcomes()));
+    }
+
     public function testAJudgedOrEndedRoundIsNotListed(): void
     {
         $judged = $this->round('r1', '2026-11-01T10:00:00+00:00')->judgedWith([], new DateTimeImmutable('2026-11-01T11:00:00+00:00'));
@@ -131,6 +153,8 @@ final class UpNextTest extends TestCase
 
     private function reviewer(string $id, string $role): ReviewerOutcome
     {
-        return new ReviewerOutcome($id, $role, 'standard', new DateTimeImmutable('2026-11-01T10:01:00+00:00'));
+        $at = new DateTimeImmutable('2026-11-01T10:01:00+00:00');
+
+        return new ReviewerOutcome($id, $role, 'standard', $at)->restarted($at, null);
     }
 }

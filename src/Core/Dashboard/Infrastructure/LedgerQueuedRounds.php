@@ -5,12 +5,17 @@ declare(strict_types=1);
 namespace Intakt\Core\Dashboard\Infrastructure;
 
 use Intakt\Core\Dashboard\Domain\QueuedRound;
+use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 
 // The latest watcher line of a pull request decides, as in LedgerWaitingHeads, so a newer head or a closed pull request ends the wait; a started round is left out because from its start it is a review the board shows.
 final readonly class LedgerQueuedRounds
 {
+    public function __construct(private RoundPayloads $payloads)
+    {
+    }
+
     // Newest queue line first, because Up next lists them after the board's cards, which come newest first.
     /**
      * @return list<QueuedRound>
@@ -22,15 +27,19 @@ final readonly class LedgerQueuedRounds
 
         foreach ($events as $order => $recorded) {
             $kind = $recorded->event->kind;
-            $payload = LedgerPayload::of($recorded);
 
-            if (LedgerEventKind::ReviewStarted === $kind && is_string($payload['round'] ?? null)) {
-                $started[$payload['round']] = true;
+            // Read as the review page reads a start, so an unreadable start, which has no page, leaves the round queued.
+            if (LedgerEventKind::ReviewStarted === $kind) {
+                $start = $this->payloads->startOf($recorded);
+
+                if ($start instanceof ReviewedRound) {
+                    $started[$start->round] = true;
+                }
 
                 continue;
             }
 
-            $line = $this->watcherLineOf($kind, $payload, $order);
+            $line = $this->watcherLineOf($kind, LedgerPayload::of($recorded), $order);
 
             if (null !== $line) {
                 // Keyed by project, then pull request, so no name either side sends can make two keys meet.
