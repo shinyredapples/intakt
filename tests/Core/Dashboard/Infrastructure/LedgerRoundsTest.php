@@ -32,6 +32,7 @@ use Intakt\Core\Review\Contract\ChangeDecision;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\DroppedFinding;
 use Intakt\Core\Review\Contract\FailureInWords;
+use Intakt\Core\Review\Contract\FindingIds;
 use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\JudgeDoneFinding;
 use Intakt\Core\Review\Contract\PanelVerdict;
@@ -80,6 +81,7 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(CatchUpOwed::class)]
 #[UsesClass(ReviewerFindingsRecorded::class)]
 #[UsesClass(JudgeDone::class)]
+#[UsesClass(FindingIds::class)]
 #[UsesClass(DroppedFinding::class)]
 #[UsesClass(JudgeDoneFinding::class)]
 #[UsesClass(UsageStarted::class)]
@@ -410,7 +412,7 @@ final class LedgerRoundsTest extends TestCase
         $review = $this->reviewOf(
             'r1',
             $this->event(LedgerEventKind::ReviewStarted, self::START),
-            $this->row(LedgerEventKind::JudgeDone, new JudgeDone('r1', ['F1'], ['F2'], [new JudgeDoneFinding('F1', Severity::P1, 'Broken.'), new JudgeDoneFinding('F2', Severity::P3, 'Later.')])),
+            $this->row(LedgerEventKind::JudgeDone, new JudgeDone('r1', new FindingIds('F1'), new FindingIds('F2'), [new JudgeDoneFinding('F1', Severity::P1, 'Broken.'), new JudgeDoneFinding('F2', Severity::P3, 'Later.')])),
         );
 
         self::assertEquals([new RoundFinding('F1', 'P1', 'Broken.')->calledBy(JudgeCall::Act), new RoundFinding('F2', 'P3', 'Later.')->calledBy(JudgeCall::FollowUp)], $review?->rounds[0]->findings);
@@ -421,7 +423,7 @@ final class LedgerRoundsTest extends TestCase
         $review = $this->reviewOf(
             'r1',
             $this->event(LedgerEventKind::ReviewStarted, self::START),
-            $this->row(LedgerEventKind::JudgeDone, new JudgeDone('r1', [], [], [], [new DroppedFinding('F1', Severity::P2, 'Call `ghost`.', 'src/A.php', 3, 'none of its 1 quoted code fragments is in the change')])),
+            $this->row(LedgerEventKind::JudgeDone, new JudgeDone('r1', new FindingIds(), new FindingIds(), [], [new DroppedFinding('F1', Severity::P2, 'Call `ghost`.', 'src/A.php', 3, 'none of its 1 quoted code fragments is in the change')])),
         );
 
         self::assertInstanceOf(Review::class, $review);
@@ -457,7 +459,7 @@ final class LedgerRoundsTest extends TestCase
         $review = $this->reviewOf(
             'r1',
             $this->event(LedgerEventKind::ReviewStarted, self::START),
-            $this->row(LedgerEventKind::JudgeDone, new JudgeDone('r1', ['F1'], [], [new JudgeDoneFinding('F1', Severity::P1, 'Broken.', [], 'src/A.php', 7)])),
+            $this->row(LedgerEventKind::JudgeDone, new JudgeDone('r1', new FindingIds('F1'), new FindingIds(), [new JudgeDoneFinding('F1', Severity::P1, 'Broken.', new FindingIds(), 'src/A.php', 7)])),
         );
 
         self::assertSame(['src/A.php', 7], [$review?->rounds[0]->findings[0]->file, $review?->rounds[0]->findings[0]->line]);
@@ -468,7 +470,7 @@ final class LedgerRoundsTest extends TestCase
         $review = $this->reviewOf(
             'r1',
             $this->event(LedgerEventKind::ReviewStarted, self::START),
-            $this->row(LedgerEventKind::JudgeDone, new JudgeDone('r1', ['F1'], ['F2'], [new JudgeDoneFinding('F1', Severity::P1, 'A.'), new JudgeDoneFinding('F2', Severity::P3, 'B.'), new JudgeDoneFinding('F3', Severity::P3, 'C.')])),
+            $this->row(LedgerEventKind::JudgeDone, new JudgeDone('r1', new FindingIds('F1'), new FindingIds('F2'), [new JudgeDoneFinding('F1', Severity::P1, 'A.'), new JudgeDoneFinding('F2', Severity::P3, 'B.'), new JudgeDoneFinding('F3', Severity::P3, 'C.')])),
         );
 
         self::assertSame(['Fix now', 'Dropped: deferred to a follow-up issue', 'Dropped: rejected or not marked by the judge'], array_map(static fn (RoundFinding $finding): string => $finding->callInWords(), $review?->rounds[0]->findings ?? []));
@@ -479,7 +481,7 @@ final class LedgerRoundsTest extends TestCase
         $review = $this->reviewOf(
             'r1',
             $this->event(LedgerEventKind::ReviewStarted, self::START),
-            $this->row(LedgerEventKind::JudgeDone, new JudgeDone('r1', ['F1'], [], [])),
+            $this->row(LedgerEventKind::JudgeDone, new JudgeDone('r1', new FindingIds('F1'), new FindingIds(), [])),
         );
 
         self::assertSame([null, null], [$review?->rounds[0]->findings[0]->file, $review?->rounds[0]->findings[0]->line]);
@@ -490,7 +492,7 @@ final class LedgerRoundsTest extends TestCase
         $review = $this->reviewOf(
             'r1',
             $this->event(LedgerEventKind::ReviewStarted, self::START),
-            $this->row(LedgerEventKind::JudgeDone, new JudgeDone('r1', ['F1', 'F2'], [], [new JudgeDoneFinding('F1', Severity::P1, 'Broken.', ['F2']), new JudgeDoneFinding('F2', Severity::P1, 'Also broken.')])),
+            $this->row(LedgerEventKind::JudgeDone, new JudgeDone('r1', new FindingIds('F1', 'F2'), new FindingIds(), [new JudgeDoneFinding('F1', Severity::P1, 'Broken.', new FindingIds('F2')), new JudgeDoneFinding('F2', Severity::P1, 'Also broken.')])),
         );
 
         self::assertEquals([new RoundFinding('F1', 'P1', 'Broken.', ['F2'])->calledBy(JudgeCall::Act)], $review?->rounds[0]->findings);
@@ -735,7 +737,7 @@ final class LedgerRoundsTest extends TestCase
     public function testAChangesVerdictTheJudgeStepCountedAsApprovalApprovesTheRoundAsTheConsoleDoes(): void
     {
         $changes = $this->row(LedgerEventKind::VerdictReceived, new VerdictReceived('r1', 'x', 'correctness', Tier::Standard, Decision::Changes, 1, ProjectMode::Live));
-        $judged = $this->row(LedgerEventKind::JudgeDone, new JudgeDone('r1', [], ['F1'], [new JudgeDoneFinding('F1', Severity::P3, 'Later.')], votes: ['x' => Decision::Approve]));
+        $judged = $this->row(LedgerEventKind::JudgeDone, new JudgeDone('r1', new FindingIds(), new FindingIds('F1'), [new JudgeDoneFinding('F1', Severity::P3, 'Later.')], votes: ['x' => Decision::Approve]));
 
         $review = $this->reviewOf('r1', $this->quorumStart(1, QuorumPolicy::All), $changes, $judged);
 
@@ -911,7 +913,7 @@ final class LedgerRoundsTest extends TestCase
 
     private function judged(): RecordedEvent
     {
-        return $this->row(LedgerEventKind::JudgeDone, new JudgeDone('r1', [], [], []));
+        return $this->row(LedgerEventKind::JudgeDone, new JudgeDone('r1', new FindingIds(), new FindingIds(), []));
     }
 
     private function event(LedgerEventKind $kind, string $payload, ?DateTimeImmutable $at = null): RecordedEvent

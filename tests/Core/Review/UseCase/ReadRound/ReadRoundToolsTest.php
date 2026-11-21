@@ -11,6 +11,7 @@ use Intakt\Core\Review\Contract\DroppedFinding;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\FencedText;
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\FindingIds;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\FlagProjectAsReplay;
 use Intakt\Core\Review\Contract\JudgedFinding;
@@ -72,6 +73,7 @@ use Symfony\Component\Serializer\SerializerInterface;
 #[UsesClass(ReplayProject::class)]
 #[UsesClass(ReplayMark::class)]
 #[UsesClass(ActEntryAnswer::class)]
+#[UsesClass(FindingIds::class)]
 #[UsesClass(Fence::class)]
 #[UsesClass(FencedText::class)]
 final class ReadRoundToolsTest extends KernelTestCase
@@ -239,22 +241,22 @@ final class ReadRoundToolsTest extends KernelTestCase
 
     public function testTwoFindingsAtOnePlaceGiveOneActEntryThatNamesTheSecondAsMerged(): void
     {
-        $round = $this->fixture->start(2);
-        $vendor = new VerdictPerRole([
-            'Look at part 1.' => new Verdict(Decision::Changes, [$this->findingAt('A')], [], []),
-            'Look at part 2.' => new Verdict(Decision::Changes, [$this->findingAt('B')], [], []),
-        ]);
-        foreach ($this->fixture->bus->messages as $message) {
-            $this->fixture->deliver($message, $vendor);
-        }
-        $judgement = new Judgement([new JudgedFinding('F1', Mark::Act), new JudgedFinding('F2', Mark::Act)]);
-        $this->fixture->judge(new ScriptedJudgement($judgement))(new JudgeRound($round->id()->toRfc4122()));
+        $round = $this->judgedWithTwoFindingsAtOnePlace();
 
         $act = $this->actList()($round->id()->toRfc4122());
 
         self::assertCount(1, $act->act);
         self::assertSame('F1', $act->act[0]->id);
-        self::assertSame(['F2'], $act->act[0]->merged);
+        self::assertSame(['F2'], [...$act->act[0]->merged]);
+    }
+
+    public function testTheActListAnswerKeepsTheMergedIdsAsAPlainJsonList(): void
+    {
+        $round = $this->judgedWithTwoFindingsAtOnePlace();
+
+        $entry = $this->firstActEntryAsJson($this->actList()($round->id()->toRfc4122()));
+
+        self::assertSame(['F2'], $entry['merged']);
     }
 
     public function testTheFindingsResourceListsEveryFindingTheRoundReported(): void
@@ -436,6 +438,22 @@ final class ReadRoundToolsTest extends KernelTestCase
     private function findingAt(string $id): Finding
     {
         return new Finding($id, Severity::P1, 'src/A.php', 7, null, 'Text of '.$id.'.', FixableBy::Builder, false, null, null);
+    }
+
+    private function judgedWithTwoFindingsAtOnePlace(): ReviewRound
+    {
+        $round = $this->fixture->start(2);
+        $vendor = new VerdictPerRole([
+            'Look at part 1.' => new Verdict(Decision::Changes, [$this->findingAt('A')], [], []),
+            'Look at part 2.' => new Verdict(Decision::Changes, [$this->findingAt('B')], [], []),
+        ]);
+        foreach ($this->fixture->bus->messages as $message) {
+            $this->fixture->deliver($message, $vendor);
+        }
+        $judgement = new Judgement([new JudgedFinding('F1', Mark::Act), new JudgedFinding('F2', Mark::Act)]);
+        $this->fixture->judge(new ScriptedJudgement($judgement))(new JudgeRound($round->id()->toRfc4122()));
+
+        return $round;
     }
 
     // Through json_encode, because that is how the MCP SDK writes a tool's answer.
