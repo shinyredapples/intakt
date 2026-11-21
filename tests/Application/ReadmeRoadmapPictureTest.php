@@ -50,7 +50,9 @@ final class ReadmeRoadmapPictureTest extends TestCase
             $svg = (string) file_get_contents($this->root().'/docs/assets/roadmap-'.$theme.'.svg');
 
             self::assertGreaterThan(0, preg_match_all('/font-size:\s*(\d+(?:\.\d+)?)px/', $svg, $sizes));
-            self::assertGreaterThanOrEqual(12.0, min(array_map(floatval(...), $sizes[1])) * 390 / 480);
+            foreach ($sizes[1] as $size) {
+                self::assertGreaterThanOrEqual(12.0, (float) $size * 390 / 480);
+            }
         }
     }
 
