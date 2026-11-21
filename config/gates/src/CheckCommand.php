@@ -124,19 +124,22 @@ final readonly class CheckCommand
         $runningTheChangesCode = array_map(static fn (Gate $gate): string => $gate->name(), array_values(array_filter($selected, static fn (Gate $gate): bool => $gate instanceof RunsTheChangesCode)));
 
         $root = $options->root ?? $this->home;
-        $reports = new GateChildren($this->home, $root, $slots, $runningTheChangesCode)->reportsOf($names, $arguments);
+        $children = new GateChildren($this->home, $root, $slots, $runningTheChangesCode);
+        $scratch = $children->scratchOutsideTheTree();
+        $reports = $children->reportsOf($names, $arguments, $scratch);
 
-        return $this->runGates($reports, new FullReport($root, $reports));
+        // Because without the scratch folder no gate could keep its whole result, a report then would hold only the lines, so none is written.
+        return $this->runGates($reports, $scratch instanceof ScratchDirectory ? new FullReport($root, $reports) : null);
     }
 
     /**
      * @param list<GateReport> $reports
      */
-    private function runGates(array $reports, FullReport $fullReport): int
+    private function runGates(array $reports, ?FullReport $fullReport): int
     {
         $failed = $this->reportOn($reports);
         $summary = ['result' => [] === $failed ? 'pass' : 'fail', 'failed' => $failed];
-        $file = $fullReport->write();
+        $file = $fullReport?->write();
 
         $this->print(null === $file ? $summary : [...$summary, 'report' => $file]);
 

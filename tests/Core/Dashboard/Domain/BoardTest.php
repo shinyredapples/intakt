@@ -45,6 +45,23 @@ final class BoardTest extends TestCase
         self::assertSame(['Waiting on you', 'Backlog', 'Ready', 'Planned', 'Building', 'Checking', 'In review', 'Merging', 'Done'], $names);
     }
 
+    public function testABoardWithoutCardsShowsWaitingOnYouInReviewAndDoneInTheirOrder(): void
+    {
+        self::assertSame([BoardColumn::WaitingOnYou, BoardColumn::InReview, BoardColumn::Done], new Board([])->shownColumns());
+    }
+
+    public function testABoardWithoutCardsFoldsTheColumnsOfFeaturesNotRunningYetIntoComingNextInTheirOrder(): void
+    {
+        self::assertSame([BoardColumn::Backlog, BoardColumn::Ready, BoardColumn::Planned, BoardColumn::Building, BoardColumn::Checking, BoardColumn::Merging], new Board([])->comingNext());
+    }
+
+    public function testABoardWithCardsInReviewAndDoneStillFoldsTheSameColumns(): void
+    {
+        $board = new Board([new Review([$this->round('r1', 'feat/a', 1)]), new Review([$this->round('r2', 'feat/b', 1)->judgedWith([], $this->morning())])]);
+
+        self::assertSame([[BoardColumn::WaitingOnYou, BoardColumn::InReview, BoardColumn::Done], 6], [$board->shownColumns(), count($board->comingNext())]);
+    }
+
     public function testAReviewWhoseLatestRoundRunsIsACardInInReview(): void
     {
         $board = new Board([new Review([$this->round('r1', 'feat/a', 1)])]);

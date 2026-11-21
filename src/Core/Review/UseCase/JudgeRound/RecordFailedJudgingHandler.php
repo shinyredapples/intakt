@@ -10,11 +10,12 @@ use Intakt\Core\Review\Domain\RoundState;
 use Intakt\Core\Review\UseCase\PublishVerdict\PublishVerdict;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
 use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
+use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Uid\Uuid;
 
-// Under the round's lock and in one transaction with the Doctrine queue, so the record and the queued publication commit together, and a judging that fails for good again after a worker restarted records and publishes nothing more.
+// Under the round's lock, then the change's as a judging takes them, and in one transaction with the Doctrine queue, so the record and the queued publication commit together, and a judging that fails for good again after a worker restarted records and publishes nothing more.
 #[AsCommandHandler]
 final readonly class RecordFailedJudgingHandler
 {
@@ -22,6 +23,8 @@ final readonly class RecordFailedJudgingHandler
         private ReviewRounds $rounds,
         private RoundLedger $ledger,
         private FailedJudgings $failedJudgings,
+        private StoredFindings $findings,
+        private RecordRecurringP1s $recurringP1s,
         private MessageBusInterface $commands,
         private LoggerInterface $logger,
     ) {
@@ -32,11 +35,15 @@ final readonly class RecordFailedJudgingHandler
         $recorded = false;
 
         $this->rounds->withLockedRound(Uuid::fromString($command->roundId), function (ReviewRound $round) use (&$recorded): void {
+            $this->findings->lockChangeOf($round);
+
             if (!$this->isStillUnjudged($round)) {
                 return;
             }
 
             $this->ledger->judgingFailed($round);
+            // Recorded with the failure, because the failed round no longer waits and the later rounds it held back have no other judging that would decide them.
+            $this->recurringP1s->of($round);
             $this->commands->dispatch(new PublishVerdict($round->id()->toRfc4122()));
             $recorded = true;
         });

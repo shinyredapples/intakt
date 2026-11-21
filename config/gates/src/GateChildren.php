@@ -32,22 +32,20 @@ final readonly class GateChildren
      *
      * @return list<GateReport>
      */
-    public function reportsOf(array $gates, array $arguments): array
+    // Because the folder holds every child's whole result, it goes whatever ends the run, also when starting a child throws.
+    public function reportsOf(array $gates, array $arguments, ?ScratchDirectory $scratch): array
     {
-        $scratch = $this->scratchOutsideTheTree();
-
-        // Because the folder holds every child's whole result, it goes whatever ends the run.
         try {
             $results = $this->resultsOf($this->slots->launchOrder($gates, $this->runningTheChangesCode), $this->childrenOf($gates, $arguments, $scratch), $scratch);
 
             return array_map(static fn (string $gate): GateReport => self::keptIn($scratch, GateReport::fromChild($gate, $results[$gate])), $gates);
         } finally {
-            $scratch?->remove();
+            $scratch?->discard();
         }
     }
 
     // Because gates scan every file under the checked tree, a scratch folder there would put one gate's whole result into the scan of the next.
-    private function scratchOutsideTheTree(): ?ScratchDirectory
+    public function scratchOutsideTheTree(): ?ScratchDirectory
     {
         $scratch = ScratchDirectory::create(self::SCRATCH_PREFIX);
         $tree = realpath($this->root);
@@ -56,7 +54,7 @@ final readonly class GateChildren
             return $scratch;
         }
 
-        $scratch->remove();
+        $scratch->discard();
 
         return null;
     }
@@ -111,7 +109,7 @@ final readonly class GateChildren
         // Because one Ctrl-C or kill meant for bin/check must reach every child running at that moment, and bin/check then dies of that signal before any finally runs.
         $forwarding = StopSignalForwarding::through(static function () use (&$running, $scratch): void {
             self::stopAll($running);
-            $scratch?->remove();
+            $scratch?->discard();
         });
 
         while ([] !== $waiting || [] !== $running) {

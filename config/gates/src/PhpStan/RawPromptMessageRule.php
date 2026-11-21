@@ -11,16 +11,20 @@ use Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewerHandler;
 use PhpParser\Node;
 use PhpParser\Node\Arg;
 use PhpParser\Node\Expr;
+use PhpParser\Node\Expr\Array_;
 use PhpParser\Node\Expr\MethodCall;
 use PhpParser\Node\Expr\New_;
 use PhpParser\Node\Expr\StaticCall;
 use PhpParser\Node\Identifier;
 use PhpParser\Node\Name;
+use PhpParser\Node\Scalar\String_;
 use PhpParser\Node\Stmt\Class_;
 use PHPStan\Analyser\Scope;
 use PHPStan\Rules\IdentifierRuleError;
 use PHPStan\Rules\Rule;
 use PHPStan\Rules\RuleErrorBuilder;
+use PHPStan\Type\Constant\ConstantArrayType;
+use PHPStan\Type\Constant\ConstantIntegerType;
 use PHPStan\Type\Constant\ConstantStringType;
 use PHPStan\Type\ObjectType;
 use PHPStan\Type\Type;
@@ -66,6 +70,8 @@ final readonly class RawPromptMessageRule implements Rule
         $finding = match (true) {
             $node instanceof StaticCall => $this->factoryFinding($node, $scope),
             $node instanceof New_ => $this->constructionFinding($node, $scope),
+            $node instanceof Array_ => $this->callableArrayFinding($node, $scope),
+            $node instanceof String_ => $this->callableStringFinding($node),
             default => null,
         };
 
@@ -74,7 +80,8 @@ final readonly class RawPromptMessageRule implements Rule
 
     private function isJudged(Scope $scope): bool
     {
-        $file = $scope->getFile();
+        // because a trait's own file decides, not the file of the class that uses it
+        $file = $scope->getTraitReflection()?->getFileName() ?? $scope->getFile();
 
         return array_any(self::JUDGED_FOLDERS, fn (string $folder): bool => str_starts_with($file, $this->root.$folder))
             && !$this->isInClass($scope, self::ASSEMBLY);
@@ -100,6 +107,55 @@ final readonly class RawPromptMessageRule implements Rule
         return $call->name instanceof Identifier
             ? [$call->name->toString()]
             : array_map(static fn (ConstantStringType $name): string => $name->getValue(), $scope->getType($call->name)->getConstantStrings());
+    }
+
+    // because `[Message::class, 'ofUser']` is a callable only with exactly the keys 0 and 1, in any written order
+    private function callableArrayFinding(Array_ $array, Scope $scope): ?IdentifierRuleError
+    {
+        $factories = array_filter(array_map($this->factoryOfCallableArray(...), $scope->getType($array)->getConstantArrays()), static fn (?string $factory): bool => null !== $factory);
+
+        return [] === $factories ? null : $this->rawMessage('A callable array of Message and '.array_first($factories));
+    }
+
+    private function factoryOfCallableArray(ConstantArrayType $array): ?string
+    {
+        $keys = array_map(static fn (Type $key): ?int => $key instanceof ConstantIntegerType ? $key->getValue() : null, $array->getKeyTypes());
+        $class = array_search(0, $keys, true);
+        $method = array_search(1, $keys, true);
+
+        if (2 !== count($keys) || false === $class || false === $method || !$this->namesMessage($this->classNamesOf($array->getValueTypes()[$class]))) {
+            return null;
+        }
+
+        return $this->factoryNamed($array->getValueTypes()[$method]);
+    }
+
+    // a method name known only at run time may be a factory, so any type that may be a string counts as one, `?string` too
+    private function factoryNamed(Type $method): ?string
+    {
+        $names = array_map(static fn (ConstantStringType $name): string => $name->getValue(), $method->getConstantStrings());
+
+        return array_find($names, static fn (string $name): bool => in_array(strtolower($name), self::MESSAGE_FACTORIES, true))
+            ?? ([] === $names && !$method->isString()->no() ? 'a factory name' : null);
+    }
+
+    private function callableStringFinding(String_ $string): ?IdentifierRuleError
+    {
+        $parts = explode('::', $this->withoutLeadingBackslash($string->value));
+
+        if (2 !== count($parts) || !$this->namesMessage([$parts[0]]) || !in_array(strtolower($parts[1]), self::MESSAGE_FACTORIES, true)) {
+            return null;
+        }
+
+        return $this->rawMessage('Message::'.$parts[1].'()');
+    }
+
+    /**
+     * @param list<string> $names
+     */
+    private function namesMessage(array $names): bool
+    {
+        return array_any($names, static fn (string $name): bool => 0 === strcasecmp($name, self::MESSAGE));
     }
 
     private function constructionFinding(New_ $construction, Scope $scope): ?IdentifierRuleError
@@ -128,7 +184,7 @@ final readonly class RawPromptMessageRule implements Rule
             default => [],
         };
 
-        return array_find($candidates, static fn (string $candidate): bool => array_any($names, static fn (string $name): bool => 0 === strcasecmp(ltrim($name, '\\'), $candidate)));
+        return array_find($candidates, static fn (string $candidate): bool => array_any($names, static fn (string $name): bool => 0 === strcasecmp($name, $candidate)));
     }
 
     // because `$message::ofUser()` names the class through an object and `new $class()` through a class-name string, constant or typed `class-string<...>`
@@ -139,8 +195,14 @@ final readonly class RawPromptMessageRule implements Rule
     {
         return [
             ...$type->getObjectTypeOrClassStringObjectType()->getObjectClassNames(),
-            ...array_map(static fn (ConstantStringType $name): string => $name->getValue(), $type->getConstantStrings()),
+            ...array_map(fn (ConstantStringType $name): string => $this->withoutLeadingBackslash($name->getValue()), $type->getConstantStrings()),
         ];
+    }
+
+    // because PHP accepts at most one leading backslash in a class string
+    private function withoutLeadingBackslash(string $name): string
+    {
+        return str_starts_with($name, '\\') ? substr($name, 1) : $name;
     }
 
     private function rolePromptIsProven(New_ $construction, Scope $scope): bool
