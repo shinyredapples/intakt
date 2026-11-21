@@ -832,3 +832,7 @@ a.fchip { display: inline-flex; align-items: center; text-decoration: none; }
 .up-next p { margin: 0; }
 .up-next ul { display: flex; flex-direction: column; gap: var(--s4); margin: 0; padding: 0; list-style: none; }
 .up-next li { overflow-wrap: anywhere; }
+/* Each entry's link stands alone on its line, so on a phone it is a control and takes the 44 px floor. */
+@media (max-width: 760px) {
+  .up-next li a { display: inline-flex; align-items: center; min-height: 44px; }
+}
