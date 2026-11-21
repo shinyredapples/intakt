@@ -119,6 +119,21 @@ final readonly class ReviewTrends
         return Cost::inUsd(($total->usd ?? 0.0) / count($priced), array_last($priced)->cost->priceDate);
     }
 
+    public function reviewerCatches(): ?ReviewerCatches
+    {
+        return ReviewerCatches::of($this->rounds);
+    }
+
+    public function judgeOutcomes(): ?JudgeOutcomes
+    {
+        return JudgeOutcomes::of($this->rounds);
+    }
+
+    public function reviewsPerDay(): ?ReviewsPerDay
+    {
+        return ReviewsPerDay::of($this->rounds);
+    }
+
     /**
      * @return list<ReviewedRound>
      */

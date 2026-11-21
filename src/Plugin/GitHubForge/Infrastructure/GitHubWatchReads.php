@@ -19,7 +19,6 @@ use Intakt\Plugin\Forge\Contract\OpenChanges;
 use Intakt\Plugin\GitHubForge\Contract\InstallationDoesNotMatchConfiguration;
 use Intakt\Plugin\GitHubForge\Contract\InstallationNotReadBack;
 use Intakt\Plugin\GitHubForge\Contract\InstallationTokenNotMinted;
-use InvalidArgumentException;
 use JsonException;
 use Symfony\Contracts\HttpClient\Exception\ExceptionInterface;
 
@@ -109,14 +108,13 @@ final readonly class GitHubWatchReads implements OpenChanges, HeadChecks
      */
     private function openChange(array $pull): OpenChange
     {
-        $id = new ChangeId($this->text($pull, 'html_url'));
-
         try {
+            $id = new ChangeId($this->text($pull, 'html_url'));
             // Only an address the forge's other reads accept, so a listed change can be read by them.
             PullRequestAddress::of($id);
 
             return new OpenChange($id, new CommitId($this->text($pull, 'head', 'sha')), $this->moments->parse($this->text($pull, 'updated_at')));
-        } catch (ChangeNotFound|InvalidArgumentException|Exception $invalid) {
+        } catch (ChangeNotFound|Exception $invalid) {
             throw new ForgeReadFailed('GitHub listed a pull request this forge cannot read.', $invalid->getCode(), previous: $invalid);
         }
     }

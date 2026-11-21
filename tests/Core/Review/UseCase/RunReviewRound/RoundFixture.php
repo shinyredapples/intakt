@@ -42,6 +42,7 @@ use Intakt\Core\Review\Domain\TrackedFinding;
 use Intakt\Core\Review\Infrastructure\ChangeText;
 use Intakt\Core\Review\Infrastructure\DiffHunks;
 use Intakt\Core\Review\Infrastructure\DiffPaths;
+use Intakt\Core\Review\Infrastructure\FindingKeys;
 use Intakt\Core\Review\Infrastructure\StopRequests;
 use Intakt\Core\Review\UseCase\IndexResolvedFindings\IndexResolvedFindings;
 use Intakt\Core\Review\UseCase\IndexResolvedFindings\IndexResolvedFindingsHandler;
@@ -51,6 +52,7 @@ use Intakt\Core\Review\UseCase\JudgeRound\JudgeRound;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRoundHandler;
 use Intakt\Core\Review\UseCase\JudgeRound\PublishJudgedRound;
 use Intakt\Core\Review\UseCase\JudgeRound\RecordFailedJudgingHandler;
+use Intakt\Core\Review\UseCase\JudgeRound\RecurringP1s;
 use Intakt\Core\Review\UseCase\ReadVerdicts\StoredVerdicts;
 use Intakt\Core\Review\UseCase\ReadVerdicts\VerdictsOfRoundHandler;
 use Intakt\Core\Review\UseCase\RunReviewRound\BlockReviewerOfFailedMessage;
@@ -234,7 +236,12 @@ final readonly class RoundFixture
 
     public function judge(Vendor $vendor): JudgeRoundHandler
     {
-        return new JudgeRoundHandler(new JudgedRounds($this->rounds($this->entities), $this->storedFindingsOn($this->entities), $this->roundLedger($this->ledger), new ChangeText(new DiffPaths()), new DiffHunks(new DiffPaths()), new DiffPaths(), new StoredVerdicts($this->serializer), $this->noFailedJudgings()), $vendor, $this->events);
+        return new JudgeRoundHandler(new JudgedRounds($this->rounds($this->entities), $this->storedFindingsOn($this->entities), $this->roundLedger($this->ledger), new ChangeText(new DiffPaths()), new DiffHunks(new DiffPaths()), new DiffPaths(), new StoredVerdicts($this->serializer), $this->noFailedJudgings(), $this->recurringP1s($this->ledger)), $vendor, $this->events);
+    }
+
+    public function recurringP1s(Ledger $ledger): RecurringP1s
+    {
+        return new RecurringP1s($this->rounds($this->entities), $ledger, $this->ledgerPayloads());
     }
 
     // The application's queue, because the round's workflow, taken from the container, queues the judging through the application's bus.
@@ -314,6 +321,11 @@ final readonly class RoundFixture
         return $this->rounds($this->entities);
     }
 
+    public function transactionsOn(EntityManagerInterface $entities): ReviewRounds
+    {
+        return $this->rounds($entities);
+    }
+
     public function round(string $id): ReviewRound
     {
         $this->entities->clear();
@@ -377,7 +389,7 @@ final readonly class RoundFixture
 
     private function roundLedger(Ledger $ledger): RoundLedger
     {
-        return new RoundLedger($ledger, $this->modes, $this->serializer, new ConfiguredTierResolver(['alpha' => ['tiers' => ['standard' => ['provider' => 'anthropic', 'model' => self::MODEL, 'substitutes' => [['provider' => 'openai', 'model' => self::SUBSTITUTE_MODEL]]]]]], []), $this->container->get(Redactor::class));
+        return new RoundLedger($ledger, $this->modes, $this->serializer, new ConfiguredTierResolver(['alpha' => ['tiers' => ['standard' => ['provider' => 'anthropic', 'model' => self::MODEL, 'substitutes' => [['provider' => 'openai', 'model' => self::SUBSTITUTE_MODEL]]]]]], []), $this->container->get(Redactor::class), new FindingKeys());
     }
 
     private function startWith(RunReviewRound $command, MessageBusInterface $queue): string

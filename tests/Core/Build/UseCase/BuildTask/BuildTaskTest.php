@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Build\UseCase\BuildTask;
 
+use Doctrine\DBAL\DriverManager;
+use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
@@ -15,9 +17,12 @@ use Intakt\Core\Build\Contract\BuildRoutingNotConfigured;
 use Intakt\Core\Build\Contract\BuildStep;
 use Intakt\Core\Build\Contract\TierChoice;
 use Intakt\Core\Build\Domain\BuilderPrompt;
+use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\Domain\GatesAtOnce;
 use Intakt\Core\Build\Domain\GatesByDefault;
 use Intakt\Core\Build\Domain\ModelRouting;
+use Intakt\Core\Build\Domain\ParkedTaskRecord;
+use Intakt\Core\Build\Domain\QuestionRefused;
 use Intakt\Core\Build\Domain\RoutingRules;
 use Intakt\Core\Build\Infrastructure\ConfiguredBuildRouting;
 use Intakt\Core\Build\UseCase\BuildTask\BuildStepNotRecorded;
@@ -26,8 +31,10 @@ use Intakt\Core\Build\UseCase\BuildTask\BuildTaskOutcome;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTaskRequest;
 use Intakt\Core\Build\UseCase\BuildTask\HandBackCheck;
 use Intakt\Core\Build\UseCase\BuildTask\HandBackFile;
+use Intakt\Core\Build\UseCase\BuildTask\ParkedTasks;
 use Intakt\Core\Build\UseCase\BuildTask\PrePushCheck;
 use Intakt\Core\Build\UseCase\BuildTask\PushStep;
+use Intakt\Core\Build\UseCase\BuildTask\TaskNotParked;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildVerdict;
@@ -95,6 +102,7 @@ use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\ChangeText;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\JobCredentials;
+use Intakt\Plugin\Forge\Contract\OpenedChange;
 use Intakt\Plugin\Forge\Contract\ProposedChange;
 use Intakt\Plugin\GitHubForge\Contract\IssueListing;
 use Intakt\Plugin\GitHubForge\Contract\IssueReads;
@@ -112,6 +120,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
+use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Lock\Exception\LockStorageException;
@@ -131,6 +140,11 @@ use Symfony\Component\Process\Process;
 #[CoversClass(HandBackFile::class)]
 #[CoversClass(PrePushCheck::class)]
 #[CoversClass(PushStep::class)]
+#[UsesClass(ParkedTasks::class)]
+#[UsesClass(ParkedTaskRecord::class)]
+#[UsesClass(TaskNotParked::class)]
+#[UsesClass(BuildQuestion::class)]
+#[UsesClass(QuestionRefused::class)]
 #[UsesClass(PushBranch::class)]
 #[UsesClass(PushRecords::class)]
 #[UsesClass(BranchGit::class)]
@@ -143,6 +157,7 @@ use Symfony\Component\Process\Process;
 #[UsesClass(RefusedPush::class)]
 #[UsesClass(ChangeText::class)]
 #[UsesClass(ChangeId::class)]
+#[UsesClass(OpenedChange::class)]
 #[UsesClass(ProposedChange::class)]
 #[UsesClass(RunCheckJob::class)]
 #[UsesClass(LostContentCheck::class)]
@@ -622,6 +637,39 @@ final class BuildTaskTest extends TestCase
         self::assertSame(BuildVerdict::NoCommits->reason(), $ledger->payloads()[3]['failure']);
     }
 
+    public function testAQuestionThatBreaksTheQuestionRuleEndsAtTheBuildJobStepWithItsVerdictAndParksNothing(): void
+    {
+        new Filesystem()->dumpFile($this->output.'/'.RunBuildJob::QUESTION, '{"question":"PLANT-question","choices":[],"recommendation":"x"}');
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::BuildJob, $outcome->last);
+        self::assertSame(BuildVerdict::QuestionRefused->reason(), $outcome->failure);
+        self::assertFalse($outcome->parked());
+        self::assertSame(['passed', 'passed', 'passed', 'failed'], array_column($ledger->payloads(), 'outcome'));
+        self::assertSame(BuildVerdict::QuestionRefused->reason(), $ledger->payloads()[3]['failure']);
+        self::assertStringNotContainsString('PLANT', (string) json_encode($ledger->payloads()));
+    }
+
+    public function testAQuestionTheDatabaseDoesNotStoreEndsAtTheBuildJobStepFailedWithFixedWordsAndRunsNoLaterStep(): void
+    {
+        new Filesystem()->dumpFile($this->output.'/'.RunBuildJob::QUESTION, '{"question":"PLANT-question?","choices":["a","b"],"recommendation":"a"}');
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::BuildJob, $outcome->last);
+        self::assertSame('Issue 7 of project "alpha" was not parked: the database did not store its question', $outcome->failure);
+        self::assertFalse($outcome->parked());
+        self::assertSame([BuildStep::Task, BuildStep::Mirror, BuildStep::Clone], $outcome->passedSteps());
+        self::assertSame(['task', 'mirror', 'clone', 'build_job'], array_column($ledger->payloads(), 'step'));
+        self::assertSame(['passed', 'passed', 'passed', 'failed'], array_column($ledger->payloads(), 'outcome'));
+        self::assertSame($outcome->failure, $ledger->payloads()[3]['failure']);
+        self::assertStringNotContainsString('PLANT', (string) json_encode($ledger->payloads()));
+        self::assertSame([], glob($this->mirrors.'-hand-backs/*'));
+    }
+
     public function testABuildJobWithoutPullRequestTextEndsAtTheBuildJobStep(): void
     {
         new Filesystem()->remove($this->output.'/'.RunBuildJob::PULL_REQUEST_TEXT);
@@ -943,13 +991,16 @@ final class BuildTaskTest extends TestCase
 
     private function buildTask(IssueReads $issues, GitBuildCheckout $checkout, InMemoryLedger $ledger): BuildTask
     {
-        $builds = new RunBuildJob($this->tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $this->runner, new PhpGate(), new GatesAtOnce(12, 1), new Filesystem(), self::SCRIPT, $this->mirrors.'-prompts');
+        $builds = new RunBuildJob($this->tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $this->runner, new PhpGate(), new GatesAtOnce(12, 1), 1500, new Filesystem(), self::SCRIPT, $this->mirrors.'-prompts');
         $git = new RepositoryGit(new HardenedGit());
         $checks = new CheckHandBack($git, new BundleFile(), new StrippedCommits(), new IncomingObjects(), new BundleSecretScan($this->scanner));
         $files = new HandBackFile($checkout, $this->handBackFiles, $this->mirrors.'-hand-backs');
         $checkJobs = new RunCheckJob($checks, new LostContentCheck($git), $this->checkRunner, new PhpGate(), new Filesystem(), self::CHECK_SCRIPT);
 
-        return new BuildTask($issues, $checkout, $this->routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files), new PushStep($this->branchPush($ledger), $checkout), $ledger);
+        // On a database that cannot be opened, because a parking that works is proven on the install's own database in BuildTaskParksOnSqliteTest.
+        $parked = new ParkedTasks(DriverManager::getConnection(['driver' => 'pdo_sqlite', 'path' => $this->mirrors.'-missing/data.db']), $ledger, self::createStub(ManagerRegistry::class), new MockClock());
+
+        return new BuildTask($issues, $checkout, $this->routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files), new PushStep($this->branchPush($ledger), $checkout), $parked, $ledger);
     }
 
     // Records in the run's own ledger, as the container wires it, so the push's events sit between the steps' events.

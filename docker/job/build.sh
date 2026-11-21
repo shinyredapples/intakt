@@ -1,7 +1,8 @@
 #!/bin/sh
 # The build job's command: the builder works in a clone of its own, and only a bundle and the pull request text leave the job.
-# Usage: build.sh <build clone> <prompt file> <branch> <model> <max turns> <allowance seconds> <gates at once>
+# Usage: build.sh <build clone> <prompt file> <branch> <model> <max turns> <allowance seconds> <gates at once> <tool time limit seconds>
 # Copies the build clone's branches into TMPDIR, runs Claude Code there with the prompt on its input, then bundles the branch's new commits.
+# Each of the session's tool calls may run up to <tool time limit seconds>, so the builder's own bin/check ends inside its call instead of going to the background.
 # The builder's bin/check runs <gates at once> gates at the same time, a count the orchestrator hands over only when it is below what bin/check picks from the job's limits; when it is empty, INTAKT_GATE_SLOTS is left as the job's environment has it (unset unless the image sets it), so bin/check uses the job's limits (its CPUs and memory) to size its gates at once itself.
 # The session ends at its turn limit or when the allowance is used up, and the script outlives it, so what it committed before is still bundled.
 # Writes build.log, handback.bundle (only when the branch has new commits), pull-request.md (only when PR.md is a regular file) and question.json (only when QUESTION.json is a regular file) into INTAKT_JOB_OUTPUT.
@@ -14,6 +15,7 @@ model="$4"
 turns="$5"
 allowance="$6"
 gates="$7"
+tool_time_limit="$8"
 
 output="${INTAKT_JOB_OUTPUT:-/output}"
 clone="${TMPDIR:-/work}/clone"
@@ -57,8 +59,15 @@ if [ -n "$gates" ]; then
     INTAKT_GATE_SLOTS="$gates"
     export INTAKT_GATE_SLOTS
 fi
+# The CLI's default and its most for one command, both at the orchestrator's limit, so the builder gets that limit by default (it may still ask for less, or run a command in the background).
+# Also passed as command-line settings, because the CLI applies the env of the clone's .claude/settings.json and .claude/settings.local.json after it starts,
+# and only command-line settings rank above those files, so the clone cannot raise the limit.
+BASH_DEFAULT_TIMEOUT_MS="$((tool_time_limit * 1000))"
+BASH_MAX_TIMEOUT_MS="$BASH_DEFAULT_TIMEOUT_MS"
+export BASH_DEFAULT_TIMEOUT_MS BASH_MAX_TIMEOUT_MS
+time_limit_settings="$(printf '{"env":{"BASH_DEFAULT_TIMEOUT_MS":"%s","BASH_MAX_TIMEOUT_MS":"%s"}}' "$BASH_DEFAULT_TIMEOUT_MS" "$BASH_MAX_TIMEOUT_MS")"
 # In a session of its own, so the processes it leaves running can be ended with it.
-setsid claude -p --model "$model" --max-turns "$turns" --output-format json --dangerously-skip-permissions < "$prompt" >> "$log" 2>&1 &
+setsid claude -p --model "$model" --max-turns "$turns" --output-format json --dangerously-skip-permissions --settings "$time_limit_settings" < "$prompt" >> "$log" 2>&1 &
 session=$!
 # The allowance ends the session only, never this script, so a cut session still reaches the bundle below; the watchdog is in a session of its own too, so its sleep goes with it.
 # It reports the cut by its exit status, not by a file, because the builder can write anywhere a file could be and so stop the kill or fake a cut.

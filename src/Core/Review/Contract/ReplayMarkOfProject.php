@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Contract;
 
-final readonly class ReplayMarkOfProject
+use Intakt\Core\Platform\Contract\QueryMessage;
+
+final readonly class ReplayMarkOfProject implements QueryMessage
 {
     public function __construct(public string $project)
     {
