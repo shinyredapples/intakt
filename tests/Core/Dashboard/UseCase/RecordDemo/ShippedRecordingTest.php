@@ -240,6 +240,24 @@ final class ShippedRecordingTest extends TestCase
         }
     }
 
+    public function testTheShippedRecordingNamesEveryReviewerModelCellWithItsAiLabAndKeepsTheIdInTheTitle(): void
+    {
+        $cells = [];
+
+        foreach ($this->shipped()->updates as $update) {
+            preg_match_all('~<td id="[^"]*-model"([^>]*)>([^<]*)</td>~', $update->data, $found, PREG_SET_ORDER);
+            $cells = [...$cells, ...$found];
+        }
+
+        self::assertNotEmpty($cells);
+
+        foreach ($cells as [, $attributes, $text]) {
+            preg_match('~^ title="([^"]+)"$~', $attributes, $title);
+            self::assertArrayHasKey(1, $title, 'model cell without a title');
+            self::assertSame(AiLab::modelName($title[1]).' ('.AiLab::of($title[1])?->value.')', $text);
+        }
+    }
+
     private function shippedWith(string $field, string $value): string
     {
         $shipped = $this->shipped();
