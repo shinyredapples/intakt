@@ -22,11 +22,28 @@ final readonly class AttributionLines
             return $message;
         }
 
-        $joined = implode("\n", $kept);
-        // So a message written with Windows line endings does not come back with mixed ones, judged from the kept lines because a removed trailer's ending is not the message's.
-        $ending = str_contains($joined, "\r\n") ? "\r\n" : "\n";
-        $text = rtrim((string) preg_replace(self::BLANK_LINES, $ending.$ending, $joined));
+        $ending = self::endingOf($message, $lines, $kept);
+        $text = rtrim((string) preg_replace(self::BLANK_LINES, $ending.$ending, implode("\n", $kept)));
 
         return '' === $text ? '' : $text.$ending;
+    }
+
+    /**
+     * So a message written with Windows line endings does not come back with mixed ones. Judged from the endings the kept lines had in the message, because a removed trailer's ending is not the message's; only when no kept line had one (a single line without a final newline is left) does the whole message decide.
+     *
+     * @param list<string>       $lines
+     * @param array<int, string> $kept
+     */
+    private static function endingOf(string $message, array $lines, array $kept): string
+    {
+        $terminated = $kept;
+        // Because the last piece of the split is the only one no line ending followed.
+        unset($terminated[array_key_last($lines)]);
+
+        return match (true) {
+            array_any($terminated, static fn (string $line): bool => str_ends_with($line, "\r")) => "\r\n",
+            [] !== $terminated => "\n",
+            default => str_contains($message, "\r\n") ? "\r\n" : "\n",
+        };
     }
 }
