@@ -86,7 +86,8 @@ final readonly class FailedJudgings
         foreach ($this->failed->all() as $envelope) {
             $message = $envelope->getMessage();
 
-            if ($message instanceof JudgeRound) {
+            // A message that deserialized without its round id names no round, and one such message must not stop the judging of other changes.
+            if ($message instanceof JudgeRound && isset($message->roundId)) {
                 $parked[$message->roundId] = true;
             }
         }

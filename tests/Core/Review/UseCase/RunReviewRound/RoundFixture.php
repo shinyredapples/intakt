@@ -239,7 +239,6 @@ final readonly class RoundFixture
         return new JudgeRoundHandler(new JudgedRounds($this->rounds($this->entities), $this->storedFindingsOn($this->entities), $this->roundLedger($this->ledger), new ChangeText(new DiffPaths()), new DiffHunks(new DiffPaths()), new DiffPaths(), new StoredVerdicts($this->serializer), $this->noFailedJudgings(), $this->recurringP1s($this->ledger)), $vendor, $this->events);
     }
 
-    // An empty failure transport unless the test parks a judging in one.
     public function recurringP1s(Ledger $ledger, InMemoryTransport $failed = new InMemoryTransport()): RecurringP1s
     {
         return new RecurringP1s($this->rounds($this->entities), $ledger, $this->ledgerPayloads(), new FailedJudgings($failed, $ledger, $this->ledgerPayloads()));

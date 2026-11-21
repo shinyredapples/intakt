@@ -19,6 +19,7 @@ use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
+use ReflectionClass;
 use Symfony\Component\Messenger\Bridge\Doctrine\Transport\DoctrineTransport;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\Transport\Receiver\ReceiverInterface;
@@ -142,6 +143,15 @@ final class FailedJudgingsTest extends KernelTestCase
         $unlisted->expects($this->never())->method('get');
 
         self::assertSame([], $this->judgings($unlisted)->failedRounds());
+    }
+
+    public function testAParkedJudgingWithoutARoundIdIsLeftOutOfTheFailedRoundsAndStaysParked(): void
+    {
+        $this->failed->send(new Envelope(new JudgeRound(self::ROUND)));
+        $this->failed->send(new Envelope(new ReflectionClass(JudgeRound::class)->newInstanceWithoutConstructor()));
+
+        self::assertSame([self::ROUND => true], $this->judgings($this->failed)->failedRounds());
+        self::assertSame(2, $this->failed->getMessageCount());
     }
 
     private function judgings(ReceiverInterface $failed): FailedJudgings
