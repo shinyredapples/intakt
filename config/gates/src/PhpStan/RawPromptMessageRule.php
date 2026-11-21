@@ -13,7 +13,6 @@ use PhpParser\Node\Identifier;
 use PhpParser\Node\Scalar\String_;
 use PhpParser\Node\Stmt\Trait_;
 use PHPStan\Analyser\Scope;
-use PHPStan\Node\CollectedDataNode;
 use PHPStan\Rules\IdentifierRuleError;
 use PHPStan\Rules\Rule;
 use PHPStan\Rules\RuleErrorBuilder;
@@ -58,10 +57,6 @@ final readonly class RawPromptMessageRule implements Rule
      */
     public function processNode(Node $node, Scope $scope): array
     {
-        if ($node instanceof CollectedDataNode) {
-            return $this->carriers->unusedTraitFindings($node, $this->isJudgedFile(...));
-        }
-
         if (!$this->isJudged($scope)) {
             return [];
         }
@@ -89,7 +84,7 @@ final readonly class RawPromptMessageRule implements Rule
         return $this->isJudgedFile($scope->getTraitReflection()?->getFileName() ?? $scope->getFile());
     }
 
-    private function isJudgedFile(string $file): bool
+    public function isJudgedFile(string $file): bool
     {
         return array_any(self::JUDGED_FOLDERS, fn (string $folder): bool => str_starts_with($file, $this->root.$folder));
     }

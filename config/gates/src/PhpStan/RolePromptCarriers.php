@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Gates\PhpStan;
 
-use Closure;
 use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewerRole;
 use Intakt\Core\Review\Domain\ReviewRound;
@@ -12,7 +11,6 @@ use Intakt\Core\Review\Domain\RoundReviewer;
 use Intakt\Core\Review\Infrastructure\ConfiguredPanels;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewerHandler;
 use Intakt\Core\Review\UseCase\SeedSampleProject\SampleProject;
-use Intakt\Gates\StaticAnalysisGate;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiVendor;
 use PhpParser\Node\Arg;
 use PhpParser\Node\Expr;
@@ -27,7 +25,6 @@ use PhpParser\Node\Stmt\Class_;
 use PhpParser\Node\Stmt\Trait_;
 use PhpParser\NodeFinder;
 use PHPStan\Analyser\Scope;
-use PHPStan\Node\CollectedDataNode;
 use PHPStan\Rules\IdentifierRuleError;
 use PHPStan\Rules\RuleErrorBuilder;
 use PHPStan\Type\ObjectType;
@@ -100,30 +97,9 @@ final readonly class RolePromptCarriers
         return array_values(array_map(static fn (New_ $construction): int => $construction->getStartLine(), $runTime));
     }
 
-    // because a trait no analyzed class uses has no method types, any class it names only at run time may be a carrier; a used trait's are judged in usedTraitFinding(). A subset run misses the classes that use a trait, so only the gate's explicit signal skips this, as for trait setters.
-    /**
-     * @param Closure(string): bool $isJudged
-     *
-     * @return list<IdentifierRuleError>
-     */
-    public function unusedTraitFindings(CollectedDataNode $collected, Closure $isJudged): array
+    public function unusedTraitFinding(string $file, int $line): IdentifierRuleError
     {
-        if ('1' === getenv(StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE)) {
-            return [];
-        }
-
-        $used = array_merge(...array_merge(...array_values($collected->get(UsedTraitCollector::class))));
-        $findings = [];
-
-        foreach ($collected->get(RunTimeTraitConstructionCollector::class) as $file => $traits) {
-            foreach ($isJudged($file) ? $traits : [] as [$trait, $lines]) {
-                $findings = array_any($used, static fn (string $name): bool => 0 === strcasecmp($name, $trait))
-                    ? $findings
-                    : [...$findings, ...array_map(static fn (int $line): IdentifierRuleError => RuleErrorBuilder::message(self::TRAIT_ADVICE)->identifier('intakt.reviewerRole')->file($file)->line($line)->build(), $lines)];
-            }
-        }
-
-        return $findings;
+        return RuleErrorBuilder::message(self::TRAIT_ADVICE)->identifier('intakt.reviewerRole')->file($file)->line($line)->build();
     }
 
     // because inside a using class the trait's method has its own types: a class expression PHPStan names fully is judged by those names, one it cannot name may be a carrier; a literal name is left to traitFindings(), which already names it
@@ -149,7 +125,7 @@ final readonly class RolePromptCarriers
      */
     private function constructionsIn(Trait_ $trait): array
     {
-        return new NodeFinder()->findInstanceOf($trait->stmts, New_::class);
+        return array_values(new NodeFinder()->findInstanceOf($trait->stmts, New_::class));
     }
 
     private function namedTraitConstructionFinding(New_ $construction): ?IdentifierRuleError

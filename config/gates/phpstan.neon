@@ -149,3 +149,9 @@ services:
         class: Intakt\Gates\PhpStan\UsedTraitCollector
         tags:
             - phpstan.collector
+    -
+        class: Intakt\Gates\PhpStan\UnusedTraitCarrierRule
+        arguments:
+            root: %currentWorkingDirectory%
+        tags:
+            - phpstan.rules.rule
