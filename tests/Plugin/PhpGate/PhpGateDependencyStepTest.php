@@ -474,6 +474,263 @@ final class PhpGateDependencyStepTest extends TestCase
         self::assertSame(1, preg_match_all('/\R/u', $install->getErrorOutput()));
     }
 
+    public function testTheSourceGuardAcceptsASourceCheckoutWhoseHeadIsTheLockedReference(): void
+    {
+        $this->sourceProject('fixture/pkg');
+
+        $guard = $this->runInProject(PhpGateSteps::SOURCE_GUARD);
+
+        self::assertSame(0, $guard->getExitCode(), $guard->getErrorOutput());
+    }
+
+    public function testTheSourceGuardRefusesASourceCheckoutWhoseHeadIsNotTheLockedReference(): void
+    {
+        $this->sourceProject('fixture/pkg');
+        $this->mustRun('git -C vendor/fixture/pkg commit --allow-empty -q -m moved');
+
+        $this->assertRefused(PhpGateSteps::SOURCE_GUARD, 'package "fixture/pkg"');
+    }
+
+    public function testTheSourceGuardRefusesASourceCheckoutWhoseGitIsAFileAndNotADirectory(): void
+    {
+        $this->sourceProject('fixture/pkg');
+        new Filesystem()->remove($this->directory.'/vendor/fixture/pkg/.git');
+        file_put_contents($this->directory.'/vendor/fixture/pkg/.git', 'gitdir: ../elsewhere');
+
+        $this->assertRefused(PhpGateSteps::SOURCE_GUARD, 'not a directory');
+    }
+
+    public function testTheSourceGuardRefusesASourceCheckoutWhoseGitIsALink(): void
+    {
+        $this->sourceProject('fixture/pkg');
+        $this->mustRun('mv vendor/fixture/pkg/.git elsewhere && ln -s ../../../elsewhere vendor/fixture/pkg/.git');
+
+        $this->assertRefused(PhpGateSteps::SOURCE_GUARD, 'is a link');
+    }
+
+    public function testTheSourceGuardRefusesACheckoutWithACommondirFileThatPointsAtARepositoryAtTheLockedCommit(): void
+    {
+        $this->sourceProject('fixture/pkg');
+        $this->mustRun('git clone -q vendor/fixture/pkg other');
+        $this->mustRun('git -C vendor/fixture/pkg commit --allow-empty -q -m moved');
+        $this->mustRun('git -C vendor/fixture/pkg checkout -q -b unrelated && git -C vendor/fixture/pkg branch -q -D main');
+        $this->mustRun('git -C vendor/fixture/pkg symbolic-ref HEAD refs/heads/main');
+        file_put_contents($this->directory.'/vendor/fixture/pkg/.git/commondir', $this->directory.'/other/.git');
+
+        $this->assertRefused(PhpGateSteps::SOURCE_GUARD, 'commondir');
+    }
+
+    public function testTheSourceGuardRefusesACheckoutGitCannotRead(): void
+    {
+        $this->sourceProject('fixture/pkg');
+        new Filesystem()->remove($this->directory.'/vendor/fixture/pkg/.git');
+        mkdir($this->directory.'/vendor/fixture/pkg/.git');
+
+        $this->assertRefused(PhpGateSteps::SOURCE_GUARD, 'git could not read');
+    }
+
+    #[DataProvider('unusableNames')]
+    public function testTheSourceGuardRefusesAPackageNameThatCouldLeaveTheVendorFolder(string $name): void
+    {
+        $this->lockedProject([['name' => $name, 'source' => ['type' => 'git', 'url' => 'https://git.invalid/x.git', 'reference' => str_repeat('a', 40)]]]);
+
+        $this->assertRefused(PhpGateSteps::SOURCE_GUARD, 'without a usable name');
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function unusableNames(): iterable
+    {
+        yield 'dot-dot name' => ['../..'];
+        yield 'dot-dot part' => ['fixture/../../x'];
+        yield 'no vendor part' => ['pkg'];
+    }
+
+    public function testTheSourceGuardIgnoresInheritedGitVariablesThatWouldPointGitAtAnotherRepository(): void
+    {
+        $this->sourceProject('fixture/pkg');
+        $this->mustRun('git clone -q vendor/fixture/pkg other');
+        $this->mustRun('git -C vendor/fixture/pkg commit --allow-empty -q -m moved');
+        $other = escapeshellarg($this->directory.'/other/.git');
+
+        $this->assertRefused('export GIT_COMMON_DIR='.$other.' GIT_DIR='.$other.'; '.PhpGateSteps::SOURCE_GUARD, 'not at the locked commit');
+    }
+
+    public function testTheSourceGuardFindsTheCheckoutOfAMixedCaseNameWhereComposerClonedIt(): void
+    {
+        $this->composerSourceInstall('Fixture/Pkg', []);
+        $this->mustRun('git -C vendor/Fixture/Pkg commit --allow-empty -q -m moved');
+
+        $this->assertRefused(PhpGateSteps::SOURCE_GUARD, 'not at the locked commit');
+    }
+
+    public function testTheSourceGuardFindsTheCheckoutOfAPackageWithATargetDirWhereComposerClonedIt(): void
+    {
+        $this->composerSourceInstall('fixture/pkg', ['target-dir' => 'Legacy/Subdir']);
+        self::assertDirectoryExists($this->directory.'/vendor/fixture/pkg/Legacy/Subdir/.git');
+        $this->mustRun('git -C vendor/fixture/pkg/Legacy/Subdir commit --allow-empty -q -m moved');
+
+        $this->assertRefused(PhpGateSteps::SOURCE_GUARD, 'not at the locked commit');
+    }
+
+    public function testTheSourceGuardAcceptsAPackageComposerInstalledFromAnArchive(): void
+    {
+        $this->sourceProject('fixture/pkg');
+        $this->installedJson(['packages' => [['name' => 'fixture/pkg', 'installation-source' => 'dist', 'install-path' => '../fixture/pkg']]]);
+        $this->mustRun('git -C vendor/fixture/pkg commit --allow-empty -q -m moved');
+
+        $guard = $this->runInProject(PhpGateSteps::SOURCE_GUARD);
+
+        self::assertSame(0, $guard->getExitCode(), $guard->getErrorOutput());
+    }
+
+    public function testTheSourceGuardRefusesWhenComposerCannotReportTheVendorFolder(): void
+    {
+        $this->sourceProject('fixture/pkg');
+
+        $this->assertRefused('export COMPOSER=absent.json; '.PhpGateSteps::SOURCE_GUARD, 'vendor folder');
+    }
+
+    /**
+     * @param array<string, mixed> $installed
+     */
+    #[DataProvider('unusableRecords')]
+    public function testTheSourceGuardRefusesALockOrAnInstallRecordItCannotUse(string $lock, ?array $installed, string $mention): void
+    {
+        $this->sourceProject('fixture/pkg');
+        new Filesystem()->dumpFile($this->directory.'/composer.lock', $lock);
+        if (null === $installed) {
+            new Filesystem()->dumpFile($this->directory.'/vendor/composer/installed.json', '{"packages": ');
+        } elseif ([] !== $installed) {
+            $this->installedJson($installed);
+        }
+
+        $this->composerShim(0);
+
+        // Through the stand-in, because Composer itself cannot report the vendor folder for such records, and the guard's own reading is what this shows.
+        $this->assertRefused('export PATH="$PWD/shim:$PATH"; '.PhpGateSteps::SOURCE_GUARD, $mention);
+    }
+
+    /**
+     * @return iterable<string, array{string, array<string, mixed>|null, string}>
+     */
+    public static function unusableRecords(): iterable
+    {
+        $source = '{"packages":[{"name":"fixture/pkg","source":{"type":"git","url":"https://git.invalid/x.git","reference":"'.str_repeat('a', 40).'"}}],"packages-dev":[]}';
+        $installed = ['name' => 'fixture/pkg', 'installation-source' => 'source', 'install-path' => '../fixture/pkg'];
+
+        yield 'a lock that is not valid JSON' => ['{"packages": ', [], '"composer.lock" is not valid JSON'];
+        yield 'a lock whose package list is not a list' => ['{"packages":"x"}', [], 'no valid "packages" list'];
+        yield 'a lock whose dev package list is not a list' => ['{"packages":[],"packages-dev":7}', [], 'no valid "packages-dev" list'];
+        yield 'an installed.json that is not valid JSON' => [$source, null, 'installed.json" is not valid JSON'];
+        yield 'an installed.json without a package list' => [$source, ['packages' => 'x'], 'no valid package list'];
+        yield 'a source install the lock does not name' => [$source, ['packages' => [[...$installed, 'name' => 'fixture/other']]], 'names no source reference'];
+        yield 'a source install of a package locked without a source' => ['{"packages":[{"name":"fixture/pkg"}]}', ['packages' => [$installed]], 'names no source reference'];
+        yield 'a source install that is not git' => [str_replace('"git"', '"hg"', $source), ['packages' => [$installed]], 'not git'];
+        yield 'an install path that leaves the vendor folder' => [$source, ['packages' => [[...$installed, 'install-path' => '../fixture/../../outside']]], 'outside the vendor folder'];
+        yield 'an absolute install path' => [$source, ['packages' => [[...$installed, 'install-path' => '/srv/pkg']]], 'outside the vendor folder'];
+        yield 'a source install without a .git' => [$source, ['packages' => [[...$installed, 'install-path' => '../fixture/absent']]], 'has no .git'];
+    }
+
+    public function testTheSourceGuardRefusesALockFileItCannotRead(): void
+    {
+        $this->sourceProject('fixture/pkg');
+        new Filesystem()->remove($this->directory.'/composer.lock');
+
+        $this->assertRefused(PhpGateSteps::SOURCE_GUARD, '"composer.lock" cannot be read');
+    }
+
+    public function testTheSourceGuardRefusesAVendorFolderWithoutAnInstalledJson(): void
+    {
+        $this->sourceProject('fixture/pkg');
+        new Filesystem()->remove($this->directory.'/vendor/composer/installed.json');
+
+        $this->assertRefused(PhpGateSteps::SOURCE_GUARD, 'installed.json" cannot be read');
+    }
+
+    public function testTheLockedInstallGoesOnToTheSourceGuardWhenComposerSucceedsAndRefusesAMovedCheckout(): void
+    {
+        $this->sourceProject('fixture/pkg', 'prepared');
+        $this->mustRun('git -C prepared commit --allow-empty -q -m moved');
+        $this->composerShim(0);
+
+        $this->assertRefused('export PATH="$PWD/shim:$PATH"; '.PhpGateSteps::LOCKED_INSTALL, 'package "fixture/pkg"');
+    }
+
+    public function testTheLockedInstallKeepsComposersOwnExitStatusAndSkipsTheSourceGuardWhenComposerFails(): void
+    {
+        $this->sourceProject('fixture/pkg', 'prepared');
+        $this->mustRun('git -C prepared commit --allow-empty -q -m moved');
+        $this->composerShim(3);
+
+        $install = $this->runInProject('export PATH="$PWD/shim:$PATH"; '.PhpGateSteps::LOCKED_INSTALL);
+
+        self::assertSame(3, $install->getExitCode());
+        self::assertStringNotContainsString('source checkout', $install->getErrorOutput());
+    }
+
+    public function testTheLockedInstallSucceedsWhenComposerSucceedsAndTheCheckoutIsAtTheLockedCommit(): void
+    {
+        $this->sourceProject('fixture/pkg', 'prepared');
+        $this->composerShim(0);
+
+        $install = $this->runInProject('export PATH="$PWD/shim:$PATH"; '.PhpGateSteps::LOCKED_INSTALL);
+
+        self::assertSame(0, $install->getExitCode(), $install->getErrorOutput());
+    }
+
+    // The lock for one source package, a git checkout of it at the locked commit and the installed.json that records it, because the guard compares the three.
+    private function sourceProject(string $name, string $checkout = 'vendor/fixture/pkg'): void
+    {
+        $this->mustRun('git init -q -b main '.escapeshellarg($checkout).' && git -C '.escapeshellarg($checkout).' commit --allow-empty -q -m locked');
+        $locked = trim($this->mustRun('git -C '.escapeshellarg($checkout).' rev-parse HEAD'));
+        $this->lockedProject([['name' => $name, 'source' => ['type' => 'git', 'url' => 'https://git.invalid/fixture/pkg.git', 'reference' => $locked]]]);
+        $this->installedJson(['packages' => [['name' => $name, 'installation-source' => 'source', 'install-path' => '../fixture/pkg']]], 'prepared' === $checkout ? 'prepared-installed.json' : 'vendor/composer/installed.json');
+    }
+
+    /**
+     * @param array<string, mixed> $record
+     */
+    private function installedJson(array $record, string $file = 'vendor/composer/installed.json'): void
+    {
+        new Filesystem()->dumpFile($this->directory.'/'.$file, json_encode($record, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES));
+    }
+
+    // A real locked install from a local repository, reached through an insteadOf rule for the remote address the lock guard accepts, because only Composer itself shows where it clones a package.
+    /**
+     * @param array<string, mixed> $extra
+     */
+    private function composerSourceInstall(string $name, array $extra): void
+    {
+        $url = 'https://git.invalid/fixture/pkg.git';
+        $this->mustRun('git init -q -b main remote && git -C remote commit --allow-empty -q -m locked');
+        $reference = trim($this->mustRun('git -C remote rev-parse HEAD'));
+        $package = ['name' => $name, 'version' => '1.0.0', 'source' => ['type' => 'git', 'url' => $url, 'reference' => $reference], ...$extra];
+        // The lock is written by hand, because Composer's resolver refuses a mixed-case name that a lock file, being data, can still hold.
+        $this->lockedProject([$package], ['require' => [strtolower($name) => '1.0.0']]);
+        $redirect = 'export GIT_CONFIG_GLOBAL="$PWD/redirect.gitconfig"; ';
+        $this->mustRun($redirect.'git config --global url.'.escapeshellarg($this->directory.'/remote').'.insteadOf '.escapeshellarg($url));
+        $this->mustRun($redirect.PhpGateSteps::LOCKED_INSTALL);
+    }
+
+    // A stand-in Composer, because the lock guard refuses every address an offline run could clone from.
+    private function composerShim(int $status): void
+    {
+        $script = "#!/bin/sh\nif [ \"\$1\" = config ]; then echo vendor; exit 0; fi\nif [ \"\$1\" = install ]; then mkdir -p vendor/fixture vendor/composer && cp -R prepared vendor/fixture/pkg && cp prepared-installed.json vendor/composer/installed.json; exit ".$status."; fi\nexit 2\n";
+        new Filesystem()->dumpFile($this->directory.'/shim/composer', $script);
+        chmod($this->directory.'/shim/composer', 0o755);
+    }
+
+    private function assertRefused(string $command, string $mention): void
+    {
+        $process = $this->runInProject($command);
+
+        self::assertSame(PhpGateSteps::REFUSED, $process->getExitCode(), $process->getErrorOutput());
+        self::assertStringContainsString($mention, $process->getErrorOutput());
+        self::assertSame(1, substr_count(rtrim($process->getErrorOutput(), "\n"), "\n") + 1);
+    }
+
     /**
      * @param list<array<string, mixed>> $packages
      * @param array<string, mixed>       $manifest
