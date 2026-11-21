@@ -6,6 +6,7 @@ namespace Intakt\Core\Dashboard\UseCase\RecordDemo;
 
 use Symfony\Component\DependencyInjection\Attribute\Target;
 use Symfony\Component\Serializer\Encoder\JsonEncode;
+use Symfony\Component\Serializer\Encoder\JsonEncoder;
 use Symfony\Component\Serializer\Exception\ExceptionInterface;
 use Symfony\Component\Serializer\Normalizer\DateTimeNormalizer;
 use Symfony\Component\Serializer\SerializerInterface;
@@ -26,7 +27,7 @@ final readonly class RecordingFormat
 
     public function write(Recording $recording): string
     {
-        return $this->serializer->serialize($recording, 'json', [...self::MOMENTS, JsonEncode::OPTIONS => self::JSON | JSON_PRETTY_PRINT])."\n";
+        return $this->serializer->serialize($recording, JsonEncoder::FORMAT, [...self::MOMENTS, JsonEncode::OPTIONS => self::JSON | JSON_PRETTY_PRINT])."\n";
     }
 
     /**
@@ -35,7 +36,7 @@ final readonly class RecordingFormat
     public function read(string $json): Recording
     {
         try {
-            return $this->serializer->deserialize($json, Recording::class, 'json', self::MOMENTS);
+            return $this->serializer->deserialize($json, Recording::class, JsonEncoder::FORMAT, self::MOMENTS);
         } catch (ExceptionInterface $failure) {
             throw RecordingIsMalformed::because($failure);
         }
@@ -43,14 +44,14 @@ final readonly class RecordingFormat
 
     public function lineOf(CapturedUpdate $update): string
     {
-        return $this->serializer->serialize($update, 'json', [...self::MOMENTS, JsonEncode::OPTIONS => self::JSON])."\n";
+        return $this->serializer->serialize($update, JsonEncoder::FORMAT, [...self::MOMENTS, JsonEncode::OPTIONS => self::JSON])."\n";
     }
 
     // Null for a line that is no update, so the reader names the line.
     public function updateOf(string $line): ?CapturedUpdate
     {
         try {
-            return $this->serializer->deserialize($line, CapturedUpdate::class, 'json', self::MOMENTS);
+            return $this->serializer->deserialize($line, CapturedUpdate::class, JsonEncoder::FORMAT, self::MOMENTS);
         } catch (ExceptionInterface) {
             return null;
         }

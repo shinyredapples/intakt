@@ -10,8 +10,11 @@ use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Build\Contract\BuildBrief;
 use Intakt\Core\Build\Domain\BuilderPrompt;
+use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\Domain\GatesAtOnce;
 use Intakt\Core\Build\Domain\GatesByDefault;
+use Intakt\Core\Build\Domain\QuestionRefused;
+use Intakt\Core\Build\UseCase\RunBuildJob\BuildCloneIsNoFolder;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuilderNotOnClaudeCode;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
@@ -44,9 +47,12 @@ use Symfony\Component\Filesystem\Filesystem;
 #[CoversClass(BuildJobOutcome::class)]
 #[CoversClass(BuildVerdict::class)]
 #[CoversClass(BuilderNotOnClaudeCode::class)]
+#[CoversClass(BuildCloneIsNoFolder::class)]
 #[UsesClass(BuildJob::class)]
 #[UsesClass(BuildBrief::class)]
 #[UsesClass(BuilderPrompt::class)]
+#[UsesClass(BuildQuestion::class)]
+#[UsesClass(QuestionRefused::class)]
 #[UsesClass(GatesAtOnce::class)]
 #[UsesClass(GatesByDefault::class)]
 #[UsesClass(Fence::class)]
@@ -72,6 +78,8 @@ final class RunBuildJobTest extends TestCase
     private string $promptSeen = '';
 
     private GatesAtOnce $gatesAtOnce;
+
+    private mixed $toolTimeLimit = 1500;
 
     protected function setUp(): void
     {
@@ -101,9 +109,56 @@ final class RunBuildJobTest extends TestCase
 
         self::assertNotNull($this->ran);
         self::assertSame(
-            ['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-build', RunBuildJob::CLONE, RunBuildJob::PROMPT, 'task', 'claude-opus-5-5', '100', '3000', ''],
+            ['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-build', RunBuildJob::CLONE, RunBuildJob::PROMPT, 'task', 'claude-opus-5-5', '100', '3000', '', '1500'],
             $this->ran->command,
         );
+    }
+
+    #[TestWith([1800])]
+    #[TestWith([1])]
+    #[TestWith([2999])]
+    public function testTheBuilderSessionIsStartedWithTheToolTimeLimitFromConfiguration(int $seconds): void
+    {
+        $this->toolTimeLimit = $seconds;
+
+        (void) $this->runBuilds(new JobOutput([]))->run($this->job());
+
+        self::assertNotNull($this->ran);
+        self::assertSame((string) $seconds, $this->ran->command[11]);
+    }
+
+    #[TestWith([3000])]
+    #[TestWith([3001])]
+    public function testAToolTimeLimitNotBelowTheSessionsAllowanceIsRefused(int $seconds): void
+    {
+        $this->toolTimeLimit = $seconds;
+
+        $this->expectExceptionObject(new InvalidArgumentException(sprintf('The builder\'s tool time limit must be at least 1 second and below the session\'s allowance of 3000 seconds, not %d.', $seconds)));
+
+        $this->runBuilds(new JobOutput([]));
+    }
+
+    #[TestWith([true])]
+    #[TestWith(['1500'])]
+    #[TestWith([1500.0])]
+    public function testAToolTimeLimitThatIsNotAWholeNumberIsRefusedAsGiven(mixed $given): void
+    {
+        $this->toolTimeLimit = $given;
+
+        $this->expectExceptionMessageMatches('/tool time limit must be a whole number of seconds, not /');
+
+        $this->runBuilds(new JobOutput([]));
+    }
+
+    #[TestWith([0])]
+    #[TestWith([-1])]
+    public function testAToolTimeLimitBelowOneSecondIsRefused(int $seconds): void
+    {
+        $this->toolTimeLimit = $seconds;
+
+        $this->expectExceptionMessageMatches('/must be at least 1 second .*, not '.$seconds.'\.$/');
+
+        $this->runBuilds(new JobOutput([]));
     }
 
     #[TestWith([12, 2])]
@@ -199,7 +254,7 @@ final class RunBuildJobTest extends TestCase
 
     public function testACloneThatIsNoFolderIsRefused(): void
     {
-        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionObject(BuildCloneIsNoFolder::at($this->folder.'/missing'));
 
         (void) $this->runBuilds(new JobOutput([]))->run(new BuildJob('demo', $this->folder.'/missing', 'task', new BuildBrief('x', [], null), Tier::Standard, 'img'));
     }
@@ -210,6 +265,29 @@ final class RunBuildJobTest extends TestCase
 
         self::assertSame(BuildVerdict::NoCommits, $outcome->verdict);
         self::assertNull($outcome->bundle);
+    }
+
+    public function testAJobThatLeavesAValidQuestionEndsAsAskedCarryingTheQuestion(): void
+    {
+        $question = '{"question":"Which store?","choices":["SQLite","Postgres"],"recommendation":"SQLite"}';
+
+        $outcome = $this->runBuilds(new JobOutput(['question.json' => $question, 'handback.bundle' => 'BUNDLE', 'pull-request.md' => "feat: x\n"]))->run($this->job());
+
+        self::assertSame(BuildVerdict::Asked, $outcome->verdict);
+        self::assertSame(['Which store?', ['SQLite', 'Postgres'], 'SQLite'], [$outcome->question?->question, $outcome->question?->choices, $outcome->question?->recommendation]);
+        self::assertNull($outcome->bundle);
+        self::assertFalse($outcome->built());
+    }
+
+    public function testAJobThatLeavesARefusedQuestionEndsAsRefusedWithTheReasonInItsLog(): void
+    {
+        $question = '{"question":"Which store?","choices":["SQLite"],"recommendation":"Postgres"}';
+
+        $outcome = $this->runBuilds(new JobOutput(['question.json' => $question, 'build.log' => "log\n"]))->run($this->job());
+
+        self::assertSame(BuildVerdict::QuestionRefused, $outcome->verdict);
+        self::assertNull($outcome->question);
+        self::assertSame("log\nquestion refused: the recommendation is not one of the choices\n", $outcome->log);
     }
 
     public function testAJobWithoutThePullRequestTextIsNotBuilt(): void
@@ -282,6 +360,6 @@ final class RunBuildJobTest extends TestCase
         $tiers = self::createStub(TierResolver::class);
         $tiers->method('resolve')->willReturn($model);
 
-        return new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $runner, new PhpGate(), $this->gatesAtOnce, new Filesystem(), self::SCRIPT, $this->folder.'/prompts');
+        return new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $runner, new PhpGate(), $this->gatesAtOnce, $this->toolTimeLimit, new Filesystem(), self::SCRIPT, $this->folder.'/prompts');
     }
 }

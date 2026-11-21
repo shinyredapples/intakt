@@ -32,12 +32,14 @@ use Intakt\Core\Review\Contract\ChangeDecision;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\DroppedFinding;
 use Intakt\Core\Review\Contract\FailureInWords;
+use Intakt\Core\Review\Contract\FindingIds;
 use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\JudgeDoneFinding;
 use Intakt\Core\Review\Contract\PanelVerdict;
 use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\ReviewerBlocked;
 use Intakt\Core\Review\Contract\ReviewerFailed;
+use Intakt\Core\Review\Contract\ReviewerFindingsRecorded;
 use Intakt\Core\Review\Contract\ReviewerStarted;
 use Intakt\Core\Review\Contract\ReviewerStopped;
 use Intakt\Core\Review\Contract\ReviewStarted;
@@ -62,6 +64,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\AI\Platform\Exception\MaxOutputTokensException;
+use Symfony\Component\Serializer\Encoder\JsonEncoder;
 use Symfony\Component\Uid\Uuid;
 
 #[CoversClass(LedgerRounds::class)]
@@ -76,7 +79,9 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(ReviewerBlocked::class)]
 #[UsesClass(ReviewerStopped::class)]
 #[UsesClass(CatchUpOwed::class)]
+#[UsesClass(ReviewerFindingsRecorded::class)]
 #[UsesClass(JudgeDone::class)]
+#[UsesClass(FindingIds::class)]
 #[UsesClass(DroppedFinding::class)]
 #[UsesClass(JudgeDoneFinding::class)]
 #[UsesClass(UsageStarted::class)]
@@ -407,7 +412,7 @@ final class LedgerRoundsTest extends TestCase
         $review = $this->reviewOf(
             'r1',
             $this->event(LedgerEventKind::ReviewStarted, self::START),
-            $this->row(LedgerEventKind::JudgeDone, new JudgeDone('r1', ['F1'], ['F2'], [new JudgeDoneFinding('F1', Severity::P1, 'Broken.'), new JudgeDoneFinding('F2', Severity::P3, 'Later.')])),
+            $this->row(LedgerEventKind::JudgeDone, new JudgeDone('r1', new FindingIds('F1'), new FindingIds('F2'), [new JudgeDoneFinding('F1', Severity::P1, 'Broken.'), new JudgeDoneFinding('F2', Severity::P3, 'Later.')])),
         );
 
         self::assertEquals([new RoundFinding('F1', 'P1', 'Broken.')->calledBy(JudgeCall::Act), new RoundFinding('F2', 'P3', 'Later.')->calledBy(JudgeCall::FollowUp)], $review?->rounds[0]->findings);
@@ -418,7 +423,7 @@ final class LedgerRoundsTest extends TestCase
         $review = $this->reviewOf(
             'r1',
             $this->event(LedgerEventKind::ReviewStarted, self::START),
-            $this->row(LedgerEventKind::JudgeDone, new JudgeDone('r1', [], [], [], [new DroppedFinding('F1', Severity::P2, 'Call `ghost`.', 'src/A.php', 3, 'none of its 1 quoted code fragments is in the change')])),
+            $this->row(LedgerEventKind::JudgeDone, new JudgeDone('r1', new FindingIds(), new FindingIds(), [], [new DroppedFinding('F1', Severity::P2, 'Call `ghost`.', 'src/A.php', 3, 'none of its 1 quoted code fragments is in the change')])),
         );
 
         self::assertInstanceOf(Review::class, $review);
@@ -454,7 +459,7 @@ final class LedgerRoundsTest extends TestCase
         $review = $this->reviewOf(
             'r1',
             $this->event(LedgerEventKind::ReviewStarted, self::START),
-            $this->row(LedgerEventKind::JudgeDone, new JudgeDone('r1', ['F1'], [], [new JudgeDoneFinding('F1', Severity::P1, 'Broken.', [], 'src/A.php', 7)])),
+            $this->row(LedgerEventKind::JudgeDone, new JudgeDone('r1', new FindingIds('F1'), new FindingIds(), [new JudgeDoneFinding('F1', Severity::P1, 'Broken.', new FindingIds(), 'src/A.php', 7)])),
         );
 
         self::assertSame(['src/A.php', 7], [$review?->rounds[0]->findings[0]->file, $review?->rounds[0]->findings[0]->line]);
@@ -465,7 +470,7 @@ final class LedgerRoundsTest extends TestCase
         $review = $this->reviewOf(
             'r1',
             $this->event(LedgerEventKind::ReviewStarted, self::START),
-            $this->row(LedgerEventKind::JudgeDone, new JudgeDone('r1', ['F1'], ['F2'], [new JudgeDoneFinding('F1', Severity::P1, 'A.'), new JudgeDoneFinding('F2', Severity::P3, 'B.'), new JudgeDoneFinding('F3', Severity::P3, 'C.')])),
+            $this->row(LedgerEventKind::JudgeDone, new JudgeDone('r1', new FindingIds('F1'), new FindingIds('F2'), [new JudgeDoneFinding('F1', Severity::P1, 'A.'), new JudgeDoneFinding('F2', Severity::P3, 'B.'), new JudgeDoneFinding('F3', Severity::P3, 'C.')])),
         );
 
         self::assertSame(['Fix now', 'Dropped: deferred to a follow-up issue', 'Dropped: rejected or not marked by the judge'], array_map(static fn (RoundFinding $finding): string => $finding->callInWords(), $review?->rounds[0]->findings ?? []));
@@ -476,7 +481,7 @@ final class LedgerRoundsTest extends TestCase
         $review = $this->reviewOf(
             'r1',
             $this->event(LedgerEventKind::ReviewStarted, self::START),
-            $this->row(LedgerEventKind::JudgeDone, new JudgeDone('r1', ['F1'], [], [])),
+            $this->row(LedgerEventKind::JudgeDone, new JudgeDone('r1', new FindingIds('F1'), new FindingIds(), [])),
         );
 
         self::assertSame([null, null], [$review?->rounds[0]->findings[0]->file, $review?->rounds[0]->findings[0]->line]);
@@ -487,7 +492,7 @@ final class LedgerRoundsTest extends TestCase
         $review = $this->reviewOf(
             'r1',
             $this->event(LedgerEventKind::ReviewStarted, self::START),
-            $this->row(LedgerEventKind::JudgeDone, new JudgeDone('r1', ['F1', 'F2'], [], [new JudgeDoneFinding('F1', Severity::P1, 'Broken.', ['F2']), new JudgeDoneFinding('F2', Severity::P1, 'Also broken.')])),
+            $this->row(LedgerEventKind::JudgeDone, new JudgeDone('r1', new FindingIds('F1', 'F2'), new FindingIds(), [new JudgeDoneFinding('F1', Severity::P1, 'Broken.', new FindingIds('F2')), new JudgeDoneFinding('F2', Severity::P1, 'Also broken.')])),
         );
 
         self::assertEquals([new RoundFinding('F1', 'P1', 'Broken.', ['F2'])->calledBy(JudgeCall::Act)], $review?->rounds[0]->findings);
@@ -732,7 +737,7 @@ final class LedgerRoundsTest extends TestCase
     public function testAChangesVerdictTheJudgeStepCountedAsApprovalApprovesTheRoundAsTheConsoleDoes(): void
     {
         $changes = $this->row(LedgerEventKind::VerdictReceived, new VerdictReceived('r1', 'x', 'correctness', Tier::Standard, Decision::Changes, 1, ProjectMode::Live));
-        $judged = $this->row(LedgerEventKind::JudgeDone, new JudgeDone('r1', [], ['F1'], [new JudgeDoneFinding('F1', Severity::P3, 'Later.')], votes: ['x' => Decision::Approve]));
+        $judged = $this->row(LedgerEventKind::JudgeDone, new JudgeDone('r1', new FindingIds(), new FindingIds('F1'), [new JudgeDoneFinding('F1', Severity::P3, 'Later.')], votes: ['x' => Decision::Approve]));
 
         $review = $this->reviewOf('r1', $this->quorumStart(1, QuorumPolicy::All), $changes, $judged);
 
@@ -829,6 +834,49 @@ final class LedgerRoundsTest extends TestCase
         self::assertNull($review?->rounds[0]->ending);
     }
 
+    public function testTheFindingsEachReviewerReportedAreReadOntoTheirRound(): void
+    {
+        $review = $this->reviewOf('r1', $this->event(LedgerEventKind::ReviewStarted, self::START), $this->reported('x', ['F1', 'F2']), $this->reported('y', []), $this->judged());
+
+        self::assertSame(['x' => ['F1', 'F2'], 'y' => []], $review?->rounds[0]->findingsByReviewer);
+    }
+
+    public function testARoundWhoseSecondReviewerHasNoReadableRecordReadsAsUnrecorded(): void
+    {
+        $review = $this->reviewOf('r1', $this->event(LedgerEventKind::ReviewStarted, self::START), $this->approved('x'), $this->approved('y'), $this->reported('x', ['F1']), $this->event(LedgerEventKind::ReviewerFindingsRecorded, '{"round":"r1","reviewer":"y","findings":[7]}'), $this->judged());
+
+        self::assertNull($review?->rounds[0]->findingsByReviewer);
+    }
+
+    public function testARoundWhereEveryReviewerWithAVerdictHasARecordIsReadAsRecorded(): void
+    {
+        $review = $this->reviewOf('r1', $this->event(LedgerEventKind::ReviewStarted, self::START), $this->approved('x'), $this->approved('y'), $this->reported('x', ['F1']), $this->reported('y', []), $this->judged());
+
+        self::assertSame(['x' => ['F1'], 'y' => []], $review?->rounds[0]->findingsByReviewer);
+    }
+
+    public function testARoundWithoutARecordOfWhoReportedWhatReadsAsUnrecordedNotAsEmpty(): void
+    {
+        $review = $this->reviewOf('r1', $this->event(LedgerEventKind::ReviewStarted, self::START), $this->approved('x'), $this->judged());
+
+        self::assertNull($review?->rounds[0]->findingsByReviewer);
+    }
+
+    public function testARecordOfWhoReportedWhatThatNamesANonTextIdIsSkipped(): void
+    {
+        $review = $this->reviewOf('r1', $this->event(LedgerEventKind::ReviewStarted, self::START), $this->event(LedgerEventKind::ReviewerFindingsRecorded, '{"round":"r1","reviewer":"x","findings":[7]}'));
+
+        self::assertNull($review?->rounds[0]->findingsByReviewer);
+    }
+
+    /**
+     * @param list<string> $findings
+     */
+    private function reported(string $reviewer, array $findings): RecordedEvent
+    {
+        return $this->row(LedgerEventKind::ReviewerFindingsRecorded, new ReviewerFindingsRecorded('r1', $reviewer, $findings));
+    }
+
     private function noCosts(): RoundCosts
     {
         $costs = self::createStub(RoundCosts::class);
@@ -865,7 +913,7 @@ final class LedgerRoundsTest extends TestCase
 
     private function judged(): RecordedEvent
     {
-        return $this->row(LedgerEventKind::JudgeDone, new JudgeDone('r1', [], [], []));
+        return $this->row(LedgerEventKind::JudgeDone, new JudgeDone('r1', new FindingIds(), new FindingIds(), []));
     }
 
     private function event(LedgerEventKind $kind, string $payload, ?DateTimeImmutable $at = null): RecordedEvent
@@ -876,7 +924,7 @@ final class LedgerRoundsTest extends TestCase
     // Serialized as the writers do, so the reader is shown the row it meets in production.
     private function row(LedgerEventKind $kind, object $payload): RecordedEvent
     {
-        return $this->event($kind, StoredSerializerFactory::create()->serialize($payload, 'json'));
+        return $this->event($kind, StoredSerializerFactory::create()->serialize($payload, JsonEncoder::FORMAT));
     }
 
     private function usage(int $prompt, int $completion): TokenUsageRow

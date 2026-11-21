@@ -78,10 +78,32 @@ final readonly class CheckCommand
             new LowPriority()->take();
         }
 
+        $wholeResultFile = $this->variable(GateChildren::FULL_RESULT_VARIABLE);
+        // Because a gate may start a nested bin/check or gate child of its own, none of them may write in place of this child's whole result.
+        putenv(GateChildren::FULL_RESULT_VARIABLE);
+        unset($_ENV[GateChildren::FULL_RESULT_VARIABLE], $_SERVER[GateChildren::FULL_RESULT_VARIABLE]);
+
         $result = $this->resultOf($gate, new Workspace($options->root ?? $this->home, $this->home, $options->mode, $options->base));
         fwrite(STDOUT, $result->toJson()."\n");
 
+        if (null !== $wholeResultFile) {
+            $this->keep($result, $wholeResultFile);
+        }
+
         return $result->isPassing() ? 0 : 1;
+    }
+
+    // Because the file is the parent's hand-off, the child only creates it and never writes through anything already in its place, a link included.
+    private function keep(GateResult $result, string $file): void
+    {
+        $handle = file_exists($file) || is_link($file) ? false : fopen($file, 'x');
+
+        if (false === $handle) {
+            return;
+        }
+
+        fwrite($handle, $result->toFullJson());
+        fclose($handle);
     }
 
     /**
@@ -101,18 +123,40 @@ final readonly class CheckCommand
 
         $runningTheChangesCode = array_map(static fn (Gate $gate): string => $gate->name(), array_values(array_filter($selected, static fn (Gate $gate): bool => $gate instanceof RunsTheChangesCode)));
 
-        return $this->runGates($names, $arguments, new GateChildren($this->home, $options->root ?? $this->home, $slots, $runningTheChangesCode));
+        $root = $options->root ?? $this->home;
+        $children = new GateChildren($this->home, $root, $slots, $runningTheChangesCode);
+        $scratch = $children->scratchOutsideTheTree();
+        $reports = $children->reportsOf($names, $arguments, $scratch);
+
+        // Because without the scratch folder no gate could keep its whole result, a report then would hold only the lines, so none is written.
+        return $this->runGates($reports, $scratch instanceof ScratchDirectory ? new FullReport($root, $reports) : null);
     }
 
     /**
-     * @param list<string> $names
-     * @param list<string> $arguments
+     * @param list<GateReport> $reports
      */
-    private function runGates(array $names, array $arguments, GateChildren $children): int
+    private function runGates(array $reports, ?FullReport $fullReport): int
+    {
+        $failed = $this->reportOn($reports);
+        $summary = ['result' => [] === $failed ? 'pass' : 'fail', 'failed' => $failed];
+        $file = $fullReport?->write();
+
+        $this->print(null === $file ? $summary : [...$summary, 'report' => $file]);
+
+        return [] === $failed ? 0 : 1;
+    }
+
+    /**
+     * @param list<GateReport> $reports
+     *
+     * @return list<string>
+     */
+    // Because the verdict, the failed list and the exit code come from the gate lines alone, before any report is written.
+    private function reportOn(array $reports): array
     {
         $failed = [];
 
-        foreach ($children->reportsOf($names, $arguments) as $report) {
+        foreach ($reports as $report) {
             fwrite(STDOUT, $report->line."\n");
 
             if (!$report->isPassing()) {
@@ -120,9 +164,7 @@ final readonly class CheckCommand
             }
         }
 
-        $this->print(['result' => [] === $failed ? 'pass' : 'fail', 'failed' => $failed]);
-
-        return [] === $failed ? 0 : 1;
+        return $failed;
     }
 
     // Because the test workers count against the same processors as the gates, the parent sizes them as the tests gate will; a refused count fails that gate, so it counts as one.

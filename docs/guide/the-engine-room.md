@@ -29,7 +29,7 @@ flowchart LR
 
 How many build slots run at the same time depends on the budget (below): when the week's allowance is tight, only one does.
 
-Developers on one machine share its processors. What keeps them apart today is each build job's own limit: 2 processors and 4 GiB of memory, from which the Developer's check sizes itself (one gate at a time, the tests gate included). Intakt also works out a ceiling for the checks a Developer runs at a time when more slots share the machine: the machine's processors divided by the number of slots, rounded down to a whole number (11 processors and 3 slots give 3), at least 2 and at most 8. A build job passes this number on to its Developer's check only when there is more than one slot and the number is lower than what the check would pick by itself from the job's limits; it never raises that pick, because the job's memory would not hold more. With today's job limits the ceiling (2 or more) is never lower than the check's own pick (1), so the number of slots does not change a build job's check yet. For now you set the number of slots yourself (`intakt.build.slots`, 1 by default; see the [user guide](../user/README.md#running-a-build)).
+Developers on one machine share its processors. What keeps them apart today is each build job's own limit: 2 processors and 4 GiB of memory, from which the Developer's check sizes itself (one gate at a time, the tests gate included). Intakt also works out a ceiling for the checks a Developer runs at a time when more slots share the machine: the machine's processors divided by the number of slots, rounded down to a whole number (11 processors and 3 slots give 3), at least 2 and at most 8. A build job passes this number on to its Developer's check only when there is more than one slot and the number is lower than what the check would pick by itself from the job's limits; it never raises that pick, because the job's memory would not hold more. With today's job limits the ceiling (2 or more) is never lower than the check's own pick (1), so the number of slots does not change a build job's check yet. For now you set the number of slots yourself (`intakt.build.slots`, 1 by default; see the [user guide](../user/README.md#running-a-build)). Each Developer also gets 25 minutes for one command (`intakt.build.tool_time_limit_seconds`, 1500 seconds by default), set by Intakt when it starts the Developer, so a check as slow as the slowest measured on a busy machine (7 to 9 minutes) still finishes inside the command that started it instead of going to the background while the Developer waits. A command that runs longer than the limit may keep running in the background after the call returns; the session's own time limit is separate.
 
 ## Queues: who is next
 
@@ -70,11 +70,11 @@ On main, the database tests, the image build with its smoke test and first-start
 
 *(Planned; this is the decided design:)* CI is the project's full check, tests included, run on the pushed version after every push: by default a fresh container that Intakt starts itself, or the forge's CI (GitHub's machines) where the project sets it, or both. That run is the Developer's check. It is a second, independent opinion, and the reviewers only start once it is green. While it runs, the build slot is already free for the next task. For Intakt's own repository it is GitHub's CI, and the checks before the push are only the quick ones that do not run the change's code. Another project runs before the push whatever pre-push command it configures, and its whole check when it configures none.
 
-Intakt's own checks run on GitHub's machines by default. Whoever maintains a copy of the Intakt repository can move them to a machine of their own by setting the repository variable `CI_RUNS_ON`, but only to a machine that is wiped back to a clean state before every job and cannot reach their home or office network: a change under review runs its own code there, and a machine that keeps anything between jobs would let it leave something behind for the next one. The machine also needs Docker and a few system settings; the [setup page](../user/self-hosted-ci.md) lists them. A paid runner service that hands out a fresh machine for every job works too; the same page says which two settings it needs. One job always stays on GitHub's machines: the one that files the urgent task when the nightly journeys fail, because it needs GitHub's own command-line tool.
+Intakt's own checks run on GitHub's machines by default. Whoever maintains a copy of the Intakt repository can move them to a machine of their own by setting the repository variable `CI_RUNS_ON`, but only to a machine that is wiped back to a clean state before every job and cannot reach their home or office network: a change under review runs its own code there, and a machine that keeps anything between jobs would let it leave something behind for the next one. The machine also needs Docker and a few system settings; the [setup page](../user/self-hosted-ci.md) lists them. A paid runner service that hands out a fresh machine for every job works too; the same page says which two settings it needs. A few jobs always stay on GitHub's machines: the one that files the urgent task when the nightly journeys fail, the one that labels a pull request by its title and the one that points `latest` at the newest release, because they need GitHub's own command-line tool, and the one that builds the highlights page, because it downloads from Docker Hub without logging in.
 
 `CI_RUNS_ON` also leaves alone the job that builds and starts the demo on an ARM machine after every merge: it stays on GitHub's ARM machine unless the separate variable `CI_ARM_RUNS_ON` names another one.
 
-If CI never starts (GitHub occasionally misses an update), Intakt notices after a few minutes, nudges GitHub once, and alerts the Maintainer if that didn't help. A wait for CI never blocks a bench: the work is parked and the bench takes the next job.
+If CI never starts (GitHub occasionally misses an update), Intakt notices after a few minutes, nudges GitHub once, and alerts the Maintainer if that didn't help. *(Planned:)* first it looks at the pull request once: if the change clashes with the newest main, it goes back to a Developer to join the two (or to the Maintainer when the task has no build tries left), except a clash only in the project's shared lists (such as the lock file), which Intakt tries to join itself and checks before it sends the result. If it cannot join them safely, or the joined result fails its checks, nothing is sent and the change takes the same way back to a Developer (or to the Maintainer). A dependency bot's change that clashes is never joined or sent to a Developer: it waits for the bot's next version. A wait for CI never blocks a bench: the work is parked and the bench takes the next job.
 
 ## Locks: one at a time
 
@@ -95,18 +95,23 @@ Locks are short-lived: a job that waits for something outside (CI, you) gives it
 
 ## Cycles and generations: second chances
 
-A **cycle** is one round of *build, check, review*. When reviewers ask for changes, the task goes around again.
+A **cycle** is one round of *build, check, review*. When the reviewers leave something that must be fixed, the task goes around again.
 
 ```mermaid
 flowchart LR
   c1[Cycle 1] -- changes --> c2[Cycle 2] -- changes --> c3[Cycle 3]
   c3 -- still not approved --> g2[Generation 2:<br/>a stronger model,<br/>fresh cycles]
   g2 -- still not approved --> m[The Maintainer decides]
+  sb([Third send-back,<br/>counted across cycles]) -. planned .-> s[Split into smaller tasks, once]
+  s -. "no way to split" .-> r[Rewrite the task, or one more try<br/>with a stronger model]
 ```
+
+Running builds on their own is planned ([what works today](../user/README.md)), so this whole flow is planned too. In it, the task moves on to generation 2 after its last cycle. The dotted arrows are a later addition to that plan: at the third send-back, whichever cycle that falls in, the task is split once instead, as the last bullet below says.
 
 - A task gets a **limited number of cycles**, so a change that keeps failing doesn't burn the budget forever.
 - A **generation** is a set of cycles with one kind of Developer. Generation 1 uses the normal model; if it runs out of cycles, **generation 2** starts with a stronger model.
 - If that doesn't work either, the **Maintainer** decides: split the task, rewrite it, or ask you.
+- *(Planned:)* the third time a task is sent back (by reviewers asking for changes, or by failing checks; within one cycle the first two failing-check returns in a row do not count, the third counts as one, and bringing in the newest project is never a send-back), it gets no further rebuild: the Maintainer splits it into smaller tasks, once. If its open problems give no way to split it, the Maintainer rewrites what the task must do or gives it one more try with a stronger model. A task that was already split this way is never split by this rule again.
 
 A cycle that changes nothing (the Developer couldn't fix the problem because it needs something outside the task) doesn't loop: the task goes **on hold** instead ([holds](how-intakt-works.md#when-something-gets-stuck)).
 

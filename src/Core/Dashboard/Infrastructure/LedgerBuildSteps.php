@@ -81,6 +81,11 @@ final readonly class LedgerBuildSteps
             return null;
         }
 
+        // The published status schema names no asked outcome yet, so a stored one is left out rather than reported outside the schema.
+        if (BuildStepOutcome::Asked === $outcome) {
+            return null;
+        }
+
         if (!is_string($failure) && null !== $failure) {
             return null;
         }

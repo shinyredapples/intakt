@@ -9,8 +9,11 @@ use Intakt\Plugin\Forge\Contract\ChangeText;
 use Intakt\Plugin\Forge\Contract\ChangeTextHoldsSecret;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
+use Intakt\Plugin\Forge\Contract\OpenedChange;
+use Intakt\Plugin\Forge\Contract\Opening;
 use Intakt\Plugin\Forge\Contract\ProposedChange;
 use Intakt\Plugin\GitHubForge\Contract\InstallationToken;
+use Intakt\Plugin\GitHubForge\Contract\TrustNotChecked;
 use Intakt\Plugin\GitHubForge\Domain\ExpectedInstallation;
 use Intakt\Plugin\GitHubForge\Domain\Installation;
 use Intakt\Plugin\GitHubForge\Infrastructure\AppJwt;
@@ -24,6 +27,8 @@ use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokens;
 use Intakt\Plugin\GitHubForge\Infrastructure\RateLimitReadings;
 use Intakt\Plugin\GitHubForge\Infrastructure\RepositoryAddress;
 use Intakt\Plugin\GitHubForge\Infrastructure\SecretScan;
+use Intakt\Plugin\GitHubForge\Infrastructure\SteeringIdentities;
+use Intakt\Plugin\GitHubForge\Infrastructure\TrustAnswers;
 use Intakt\Plugin\GitHubForge\Infrastructure\WatchedRepositories;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -34,6 +39,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(WatchedRepositories::class)]
 #[UsesClass(SecretScan::class)]
 #[UsesClass(ChangeId::class)]
+#[UsesClass(OpenedChange::class)]
 #[UsesClass(ChangeText::class)]
 #[UsesClass(ProposedChange::class)]
 #[UsesClass(ChangeTextHoldsSecret::class)]
@@ -50,6 +56,9 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(GitHubCalls::class)]
 #[UsesClass(ExpectedInstallation::class)]
 #[UsesClass(Installation::class)]
+#[UsesClass(SteeringIdentities::class)]
+#[UsesClass(TrustAnswers::class)]
+#[UsesClass(TrustNotChecked::class)]
 final class GitHubChangeOpenerTest extends TestCase
 {
     private const string API = 'https://api.github.com/repos/acme/widgets';
@@ -60,18 +69,118 @@ final class GitHubChangeOpenerTest extends TestCase
 
         $change = $github->opener()->openOrUpdate(new ProposedChange('widgets', 'task', 'main', new ChangeText('Add the files', 'Evidence: tests pass.')));
 
-        self::assertSame('https://github.com/acme/widgets/pull/42', $change->value);
+        self::assertSame('https://github.com/acme/widgets/pull/42', $change->id->value);
         self::assertSame([['POST '.self::API.'/pulls', ['title' => 'Add the files', 'body' => 'Evidence: tests pass.', 'base' => 'main', 'head' => 'task']]], $github->writes);
+    }
+
+    public function testAPullRequestTheOpenerPostedIsAnsweredAsCreated(): void
+    {
+        $github = new ScriptedGitHub();
+
+        $change = $github->opener()->openOrUpdate(new ProposedChange('widgets', 'task', 'main', new ChangeText('Add the files', 'Evidence: tests pass.')));
+
+        self::assertSame(Opening::Created, $change->opening);
+    }
+
+    public function testAnOpenPullRequestTheOpenerOnlyUpdatedIsAnsweredAsNotCreated(): void
+    {
+        $github = new ScriptedGitHub();
+        $github->openPulls = [['number' => 7, 'head' => ['ref' => 'task'], 'user' => ['login' => 'octocat']]];
+
+        $change = $github->opener()->openOrUpdate(new ProposedChange('widgets', 'task', 'main', new ChangeText('New title', 'New body')));
+
+        self::assertSame(Opening::Updated, $change->opening);
+    }
+
+    public function testAnOpenPullRequestThisAppCreatedBeforeAnInterruptedPushIsAnsweredAsCreatedOnTheRetry(): void
+    {
+        $github = new ScriptedGitHub();
+        $github->openPulls = [['number' => 7, 'head' => ['ref' => 'task'], 'user' => ['login' => 'intakt[bot]', 'type' => 'Bot']]];
+
+        $change = $github->opener()->openOrUpdate(new ProposedChange('widgets', 'task', 'main', new ChangeText('T', 'B')));
+
+        self::assertSame(Opening::Created, $change->opening);
+        self::assertSame('PATCH '.self::API.'/pulls/7', $github->writes[0][0]);
+    }
+
+    public function testThisAppsBotAccountIsRecognizedInAnyLetterCaseOfItsSlug(): void
+    {
+        $github = new ScriptedGitHub();
+        $github->openPulls = [['number' => 7, 'head' => ['ref' => 'task'], 'user' => ['login' => 'InTakt[bot]']]];
+
+        $change = $github->opener()->openOrUpdate(new ProposedChange('widgets', 'task', 'main', new ChangeText('T', 'B')));
+
+        self::assertSame(Opening::Created, $change->opening);
+    }
+
+    public function testAnOpenPullRequestAnotherAppCreatedIsAnsweredAsNotCreated(): void
+    {
+        $github = new ScriptedGitHub();
+        $github->openPulls = [['number' => 7, 'head' => ['ref' => 'task'], 'user' => ['login' => 'loop[bot]', 'type' => 'Bot']]];
+
+        $change = $github->opener()->openOrUpdate(new ProposedChange('widgets', 'task', 'main', new ChangeText('T', 'B')));
+
+        self::assertSame(Opening::Updated, $change->opening);
+    }
+
+    public function testAnOpenPullRequestOfAPersonNamedLikeTheAppIsAnsweredAsNotCreated(): void
+    {
+        $github = new ScriptedGitHub();
+        $github->openPulls = [['number' => 7, 'head' => ['ref' => 'task'], 'user' => ['login' => 'intakt', 'type' => 'User']]];
+
+        $change = $github->opener()->openOrUpdate(new ProposedChange('widgets', 'task', 'main', new ChangeText('T', 'B')));
+
+        self::assertSame(Opening::Updated, $change->opening);
+    }
+
+    public function testAnOpenPullRequestWhoseAuthorIsNoTextFailsBeforeAnyWrite(): void
+    {
+        $github = new ScriptedGitHub();
+        $github->openPulls = [['number' => 7, 'head' => ['ref' => 'task'], 'user' => ['login' => ['intakt[bot]']]]];
+
+        $this->assertWriteFailsWith('without its author\'s login', fn () => $github->opener()->openOrUpdate(new ProposedChange('widgets', 'task', 'main', new ChangeText('T', 'B'))));
+        self::assertSame([], $github->writes);
+    }
+
+    public function testARetryThatFindsItsPullRequestWithoutAnAuthorFailsBeforeAnyWrite(): void
+    {
+        $github = new ScriptedGitHub();
+        $proposal = new ProposedChange('widgets', 'task', 'main', new ChangeText('T', 'B'));
+        $opener = $github->opener();
+        $opener->openOrUpdate($proposal);
+        $github->openPulls = [['number' => 42, 'head' => ['ref' => 'task'], 'user' => null]];
+
+        $this->assertWriteFailsWith('without its author\'s login', fn () => $opener->openOrUpdate($proposal));
+        self::assertCount(1, $github->writes);
+    }
+
+    public function testARetryThatFindsItsPullRequestWithAnEmptyAuthorLoginFailsBeforeAnyWrite(): void
+    {
+        $github = new ScriptedGitHub();
+        $github->openPulls = [['number' => 11, 'head' => ['ref' => 'task'], 'user' => ['login' => '']]];
+
+        $this->assertWriteFailsWith('without its author\'s login', fn () => $github->opener()->openOrUpdate(new ProposedChange('widgets', 'task', 'main', new ChangeText('T', 'B'))));
+        self::assertSame([], $github->writes);
+    }
+
+    public function testABotAuthorThatCannotBeCheckedAgainstTheAppFailsBeforeAnyWrite(): void
+    {
+        $github = new ScriptedGitHub();
+        $github->appSlug = null;
+        $github->openPulls = [['number' => 7, 'head' => ['ref' => 'task'], 'user' => ['login' => 'intakt[bot]']]];
+
+        $this->assertWriteFailsWith('could not be checked against this App', fn () => $github->opener()->openOrUpdate(new ProposedChange('widgets', 'task', 'main', new ChangeText('T', 'B'))));
+        self::assertSame([], $github->writes);
     }
 
     public function testABranchWithAnOpenPullRequestHasItsTextUpdatedInstead(): void
     {
         $github = new ScriptedGitHub();
-        $github->openPulls = [['number' => 7, 'head' => ['ref' => 'task']]];
+        $github->openPulls = [['number' => 7, 'head' => ['ref' => 'task'], 'user' => ['login' => 'octocat']]];
 
         $change = $github->opener()->openOrUpdate(new ProposedChange('widgets', 'task', 'main', new ChangeText('New title', 'New body')));
 
-        self::assertSame('https://github.com/acme/widgets/pull/7', $change->value);
+        self::assertSame('https://github.com/acme/widgets/pull/7', $change->id->value);
         self::assertSame([['PATCH '.self::API.'/pulls/7', ['title' => 'New title', 'body' => 'New body', 'base' => 'main']]], $github->writes);
     }
 
@@ -109,7 +218,7 @@ final class GitHubChangeOpenerTest extends TestCase
     public function testAnOpenPullRequestWithoutANumberIsRefused(): void
     {
         $github = new ScriptedGitHub();
-        $github->openPulls = [['number' => 'seven', 'head' => ['ref' => 'task']]];
+        $github->openPulls = [['number' => 'seven', 'head' => ['ref' => 'task'], 'user' => ['login' => 'octocat']]];
 
         $this->expectException(ForgeWriteFailed::class);
 

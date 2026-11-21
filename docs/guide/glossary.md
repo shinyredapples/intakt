@@ -19,12 +19,13 @@ The words used across Intakt's guides and dashboard, in plain terms. Each entry 
 | **Checks / gates** | machinery: the project's automatic tests and rules (`bin/check` in Intakt itself) | [journey](the-journey-of-a-task.md#3-checking) |
 | **CI** | the project's full check run again on the pushed version, on a machine the Developer does not control: today GitHub's machines; planned: a fresh container Intakt starts by default, or GitHub's machines where the project sets it | [engine room](the-engine-room.md#ci-the-second-opinion) |
 | **Code reviewers** | the AI agents that review a change, each with its own focus: the core panel plus specialists, with a verdict step at the end (formerly the review panel) | [how it works](how-intakt-works.md#which-reviewers-look-at-a-change) |
+| **Cooldown (for a release)** | the 3 days Intakt waits before it takes a new release of a PHP or dashboard JavaScript package | [Symfony in Intakt](symfony-in-intakt.md#waiting-before-taking-a-new-release) |
 | **Core panel** | the Code reviewers every change gets | [how it works](how-intakt-works.md#which-reviewers-look-at-a-change) |
 | **Cycle** | one round of build, check and review | [engine room](the-engine-room.md#cycles-and-generations-second-chances) |
 | **Dashboard** | machinery: the page where you see what Intakt does and act on it | [dashboard](a-tour-of-the-dashboard.md) |
 | **Definition of Done** | what the Developer checks before it hands a change back | [writing a good task](writing-a-good-task.md#definition-of-done) |
 | **Definition of Ready** | what a task needs before it is built; the Tech lead checks it | [writing a good task](writing-a-good-task.md#definition-of-ready) |
-| **Designer** (planned, optional) | the AI agent that shapes and reviews work on a project's screens, only for tasks that touch them | [how it works](how-intakt-works.md) |
+| **Designer** (planned, optional) | the AI agent that plans and judges your project's screens, only for tasks that touch them: automatic checks, scores with a reason, and your taste learned by choosing between two versions | [how it works](how-intakt-works.md#the-idea-in-one-sentence) |
 | **Developer** | the AI agent that writes the change (formerly the builder) | [how it works](how-intakt-works.md) |
 | **Draining** | stopping new work so running jobs can finish before an update; planned: an update drains only the build slots it is moving to the new version (first one slot, then the remaining build slots together, so several can show draining while reviews go on), and all of them only when it changes stored data the old version could not read | [engine room](the-engine-room.md#draining-and-updates) |
 | **Evidence** | what a finished change must show, numbered E1, E2, ... | [writing a good task](writing-a-good-task.md) |
@@ -37,7 +38,9 @@ The words used across Intakt's guides and dashboard, in plain terms. Each entry 
 | **Hands-off** | a label meaning you work on this item yourself and Intakt stays off it until you remove it (planned) | [steering](steering-intakt.md#taking-an-item-over-by-hand-and-giving-it-back) |
 | **Head** | the latest commit of a pull request | |
 | **Hold** | a pause that lifts by itself when its reason is gone | [how it works](how-intakt-works.md#when-something-gets-stuck) |
+| **Import map** | the list that tells the browser where each JavaScript module of the dashboard lives (`importmap.php`) | [Symfony in Intakt](symfony-in-intakt.md#waiting-before-taking-a-new-release) |
 | **In-flight limit** | how much finished but not yet merged work may exist, whatever it waits for, before Developers pause; twice the review cap by default | [engine room](the-engine-room.md#queues-who-is-next) |
+| **Integrity hash** | a fingerprint (sha384) of a module's exact bytes in the import map; the browser refuses a module that does not match it | [Symfony in Intakt](symfony-in-intakt.md#waiting-before-taking-a-new-release) |
 | **Issue / task** | one piece of work; on GitHub it is an issue | [writing a good task](writing-a-good-task.md) |
 | **Job** | one build, one check or one review, in its own container | [containers](containers-and-services.md) |
 | **Journey check** | a run that starts a fresh copy of Intakt and walks one path a person takes, to prove the whole product still works | [checking the whole product](checking-the-whole-product.md) |
@@ -85,8 +88,8 @@ The words used across Intakt's guides and dashboard, in plain terms. Each entry 
 | **Tech lead** | the AI agent that checks a task against the Definition of Ready, and sizes, splits and plans it (formerly the sizer, triage and the planner) | [writing a good task](writing-a-good-task.md#definition-of-ready) |
 | **Test engineer** (planned, optional) | an AI agent that keeps the tests fast without losing what they prove | [how it works](how-intakt-works.md) |
 | **Tier** | `strong`, `standard` or `light`: a kind of AI model, mapped to each company's models | [costs](accounts-and-costs.md) |
-| **Verdict** | a reviewer's answer: approve, or changes with findings; blocked (held for a person) only when Intakt holds the review back, and a reviewer that answers blocked with findings counts as changes, unless it names a finding like one of Intakt's own failures, which counts as an answer that could not be read | [journey](the-journey-of-a-task.md#5-reviewing) |
+| **Verdict** | a reviewer's answer: approve, or changes with findings; blocked (held for a person) only when Intakt holds the review back. A reviewer that answers blocked with findings is recorded as changes. A changes answer votes for changes only when one of its findings is on the list to fix. When its only findings are small points the verdict step set aside, it counts as approving. Otherwise (for example when every finding quoted code the change does not hold, so all were dropped) it counts as blocked, so it can still hold the round back. If it names a finding like one of Intakt's own failures, it counts as an answer that could not be read | [journey](the-journey-of-a-task.md#5-reviewing) |
 | **Verdict step** | the Code reviewers' last step, a quick call that sorts the findings: a serious one (P1 or P2) is always fixed now, with the step's doubt written beside it, and a small one (P3) is fixed now, later, or not at all (formerly the judge step) | [journey](the-journey-of-a-task.md#5-reviewing) |
-| **Waiting on you** | the dashboard column with only what needs a person | [dashboard](a-tour-of-the-dashboard.md#waiting-on-you) |
+| **Waiting on you** | the dashboard page (`/waiting`) that lists the outages only you can act on; the board column of the same name already exists and is empty; its cards and phone notifications are planned | [dashboard](a-tour-of-the-dashboard.md#waiting-on-you) |
 | **Watchdog** | machinery: the part that watches main and raises the alarm if its history was rewritten (planned) | [safety](why-the-ai-cant-wreck-your-project.md) |
 | **Window** | an AI allowance that refills: five-hour and weekly | [costs](accounts-and-costs.md) |

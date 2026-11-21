@@ -8,6 +8,7 @@ use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Budget\Infrastructure\ConfiguredPrices;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
+use Intakt\Core\Dashboard\Infrastructure\RoundLock;
 use Intakt\Core\Dashboard\Infrastructure\RoundPayloads;
 use Intakt\Core\Dashboard\UseCase\StopReview\ReviewerStops;
 use Intakt\Core\Ledger\Contract\Ledger;
@@ -24,8 +25,14 @@ use Intakt\Tests\Support\StoredSerializerFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\RequestStack;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
+use Symfony\Component\Serializer\Encoder\JsonEncoder;
 
 #[CoversClass(ReviewerStops::class)]
+#[UsesClass(RoundLock::class)]
 #[UsesClass(LedgerReviewPages::class)]
 #[UsesClass(ReplayMarks::class)]
 #[UsesClass(RoundPayloads::class)]
@@ -49,7 +56,7 @@ final class ReviewerStopsTest extends TestCase
     {
         $ledger = new DashboardLedger();
         $ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
-        $ledger->append(new LedgerEvent(LedgerEventKind::ReviewerStarted, StoredSerializerFactory::create()->serialize(new ReviewerStarted('round-1', 'round-1-security', 'security', Tier::Strong), 'json')));
+        $ledger->append(new LedgerEvent(LedgerEventKind::ReviewerStarted, StoredSerializerFactory::create()->serialize(new ReviewerStarted('round-1', 'round-1-security', 'security', Tier::Strong), JsonEncoder::FORMAT)));
 
         self::assertSame(['success', 'Asked the reviewer to stop.'], $this->stopsOn($ledger)->requestStopOf('round-1', 'round-1-security'));
     }
@@ -91,8 +98,25 @@ final class ReviewerStopsTest extends TestCase
         self::assertNull($this->stopsOn($ledger)->requestStopOfRound('round-9'));
     }
 
-    private function stopsOn(Ledger $ledger): ReviewerStops
+    public function testTwoStopsFromTwoUnnumberedRoundPagesOfOneReviewShareTheLock(): void
     {
-        return new ReviewerStops(new LedgerReviewPages($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), new RoundLedgerReading($ledger, new LedgerPayloads(StoredSerializerFactory::create()), new ConfiguredPrices([])), new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), new ReplayMarks(new ReplayMarkBus())), $ledger);
+        $ledger = new DashboardLedger();
+
+        foreach (['first', 'second'] as $round) {
+            $ledger->append(new LedgerEvent(LedgerEventKind::ReviewStarted, json_encode(['round' => $round, 'project' => 'alpha', 'reviewers' => 2, 'change' => 'feat/thing'], JSON_THROW_ON_ERROR)));
+            $ledger->startReviewer($round, 'security');
+        }
+
+        $locks = new LockFactory(new InMemoryStore());
+        // Kept in a variable, because the lock lives on its request and would be freed with it.
+        $holding = $this->stopsOn($ledger, $locks);
+
+        self::assertSame('success', $holding->requestStopOf('first', 'first-security')[0] ?? null);
+        self::assertSame(['error', 'Another press for this review is still running, so nothing was stopped.'], $this->stopsOn($ledger, $locks)->requestStopOf('second', 'second-security'));
+    }
+
+    private function stopsOn(Ledger $ledger, LockFactory $locks = new LockFactory(new InMemoryStore())): ReviewerStops
+    {
+        return new ReviewerStops(new LedgerReviewPages($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), new RoundLedgerReading($ledger, new LedgerPayloads(StoredSerializerFactory::create()), new ConfiguredPrices([])), new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), new ReplayMarks(new ReplayMarkBus())), $ledger, new RoundLock($locks, new RequestStack([new Request()])));
     }
 }

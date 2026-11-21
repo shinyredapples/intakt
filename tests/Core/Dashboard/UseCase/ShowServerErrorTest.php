@@ -92,7 +92,7 @@ final class ShowServerErrorTest extends WebTestCase
         $crawler = $this->browser->request('GET', '/');
 
         self::assertResponseStatusCodeSame(500);
-        self::assertSame('/', $crawler->filter('a')->attr('href'));
+        self::assertSame('/?board=1', $crawler->filter('a')->attr('href'));
         $reference = $crawler->filter('code')->text();
         self::assertLoggedError(LogLevel::ERROR, sprintf('A dashboard page failed, reference %s.', $reference));
         self::assertLoggedError(LogLevel::WARNING, 'The error page was shown without the dashboard shell.');

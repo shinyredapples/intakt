@@ -10,6 +10,7 @@ use Intakt\Core\Git\Contract\BuildCheckoutFailed;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Core\HandBack\Contract\AcceptedHandBack;
 use Intakt\Core\HandBack\Contract\HandBack;
+use Intakt\Core\HandBack\Contract\HandBackBranchRefused;
 use Intakt\Core\HandBack\Contract\HandBackChecks;
 use Intakt\Core\HandBack\Contract\HandBackNotChecked;
 use Intakt\Core\HandBack\Contract\RefusedHandBack;
@@ -47,7 +48,7 @@ final readonly class HandBackCheck
         } catch (ExceptionInterface $stopped) {
             // Caught first, because a process failure may also be an InvalidArgumentException, and its message names the whole command line.
             return $this->stoppedBy($stopped);
-        } catch (BuildCheckoutFailed|InvalidArgumentException|HandBackNotChecked|RepositoryAttributesRefused $failure) {
+        } catch (BuildCheckoutFailed|InvalidArgumentException|HandBackBranchRefused|HandBackNotChecked|RepositoryAttributesRefused $failure) {
             return $failure->getMessage();
         }
 

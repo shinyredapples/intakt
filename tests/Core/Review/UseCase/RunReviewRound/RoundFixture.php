@@ -42,6 +42,8 @@ use Intakt\Core\Review\Domain\TrackedFinding;
 use Intakt\Core\Review\Infrastructure\ChangeText;
 use Intakt\Core\Review\Infrastructure\DiffHunks;
 use Intakt\Core\Review\Infrastructure\DiffPaths;
+use Intakt\Core\Review\Infrastructure\FindingKeys;
+use Intakt\Core\Review\Infrastructure\KeptVerdicts;
 use Intakt\Core\Review\Infrastructure\StopRequests;
 use Intakt\Core\Review\UseCase\IndexResolvedFindings\IndexResolvedFindings;
 use Intakt\Core\Review\UseCase\IndexResolvedFindings\IndexResolvedFindingsHandler;
@@ -50,6 +52,9 @@ use Intakt\Core\Review\UseCase\JudgeRound\JudgedRounds;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRound;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRoundHandler;
 use Intakt\Core\Review\UseCase\JudgeRound\PublishJudgedRound;
+use Intakt\Core\Review\UseCase\JudgeRound\RecordFailedJudgingHandler;
+use Intakt\Core\Review\UseCase\JudgeRound\RecordRecurringP1s;
+use Intakt\Core\Review\UseCase\JudgeRound\RecurringP1s;
 use Intakt\Core\Review\UseCase\ReadVerdicts\StoredVerdicts;
 use Intakt\Core\Review\UseCase\ReadVerdicts\VerdictsOfRoundHandler;
 use Intakt\Core\Review\UseCase\RunReviewRound\BlockReviewerOfFailedMessage;
@@ -71,6 +76,7 @@ use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Core\Review\RecordedRoundUpdates;
 use Intakt\Tests\Core\Review\SampleIdentity;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
+use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\TestContainer;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\ErrorHandler\BufferingLogger;
@@ -215,7 +221,7 @@ final readonly class RoundFixture
 
     public function worker(EntityManagerInterface $entities, Vendor $vendor, Ledger $ledger): ReviewWithReviewerHandler
     {
-        return new ReviewWithReviewerHandler($this->leases($entities, $ledger), $vendor, $this->rounds($entities), new GoalpostRule(), $this->liveProgress($entities));
+        return new ReviewWithReviewerHandler($this->leases($entities, $ledger), $vendor, $this->rounds($entities, $ledger), new GoalpostRule(), $this->liveProgress($entities));
     }
 
     // The fixture's one lock store, because the workers of one install share theirs and a worker on its own store would never find the publication taken.
@@ -232,7 +238,22 @@ final readonly class RoundFixture
 
     public function judge(Vendor $vendor): JudgeRoundHandler
     {
-        return new JudgeRoundHandler(new JudgedRounds($this->rounds($this->entities), $this->storedFindingsOn($this->entities), $this->roundLedger($this->ledger), new ChangeText(new DiffPaths()), new DiffHunks(new DiffPaths()), new DiffPaths(), new StoredVerdicts($this->serializer)), $vendor, $this->events);
+        return new JudgeRoundHandler(new JudgedRounds($this->rounds($this->entities), $this->storedFindingsOn($this->entities), $this->roundLedger($this->ledger), new ChangeText(new DiffPaths()), new DiffHunks(new DiffPaths()), new DiffPaths(), new StoredVerdicts($this->serializer), $this->noFailedJudgings(), $this->recordRecurringP1s($this->ledger)), $vendor, $this->events);
+    }
+
+    public function recurringP1s(Ledger $ledger, InMemoryTransport $failed = new InMemoryTransport()): RecurringP1s
+    {
+        return new RecurringP1s($this->rounds($this->entities), $ledger, $this->ledgerPayloads(), new FailedJudgings($failed, $ledger, $this->ledgerPayloads()));
+    }
+
+    public function keptVerdicts(): KeptVerdicts
+    {
+        return new KeptVerdicts($this->entities, new MockClock('2026-11-21 10:00:00'));
+    }
+
+    private function recordRecurringP1s(Ledger $ledger): RecordRecurringP1s
+    {
+        return new RecordRecurringP1s($this->recurringP1s($ledger), $this->keptVerdicts(), $this->roundLedger($ledger));
     }
 
     // The application's queue, because the round's workflow, taken from the container, queues the judging through the application's bus.
@@ -247,10 +268,15 @@ final readonly class RoundFixture
         return array_values(array_filter(array_map(static fn (Envelope $sent): object => $sent->getMessage(), $queue->getSent()), static fn (object $message): bool => $message instanceof JudgeRound));
     }
 
-    // An empty in-memory failure transport, so a test that waits on a round sees no failed judging.
+    // An empty in-memory failure transport and the round's ledger, so a test that waits on a round sees a failed judging only once its failure is recorded.
     public function noFailedJudgings(): FailedJudgings
     {
-        return new FailedJudgings(new InMemoryTransport());
+        return new FailedJudgings(new InMemoryTransport(), $this->ledger, $this->ledgerPayloads());
+    }
+
+    public function failedJudgingRecorder(MessageBusInterface $commands, LoggerInterface $logger): RecordFailedJudgingHandler
+    {
+        return new RecordFailedJudgingHandler($this->transactions(), $this->roundLedger($this->ledger), $this->noFailedJudgings(), $this->storedFindingsOn($this->entities), $this->recordRecurringP1s($this->ledger), $commands, $logger);
     }
 
     public function indexing(MemoryIndex $memory): IndexResolvedFindingsHandler
@@ -271,7 +297,7 @@ final readonly class RoundFixture
 
     public function failedMessages(?Ledger $ledger = null): BlockReviewerOfFailedMessage
     {
-        return new BlockReviewerOfFailedMessage($this->leases($this->entities, $ledger), $this->rounds($this->entities), $this->log);
+        return new BlockReviewerOfFailedMessage($this->leases($this->entities, $ledger), $this->rounds($this->entities, $ledger), $this->log);
     }
 
     // Another worker: its own connection and entity manager, as another messenger:consume process has; its ledger is in memory because the Doctrine ledger writes through the first connection.
@@ -305,6 +331,11 @@ final readonly class RoundFixture
     public function transactions(): ReviewRounds
     {
         return $this->rounds($this->entities);
+    }
+
+    public function transactionsOn(EntityManagerInterface $entities): ReviewRounds
+    {
+        return $this->rounds($entities);
     }
 
     public function round(string $id): ReviewRound
@@ -370,7 +401,7 @@ final readonly class RoundFixture
 
     private function roundLedger(Ledger $ledger): RoundLedger
     {
-        return new RoundLedger($ledger, $this->modes, $this->serializer, new ConfiguredTierResolver(['alpha' => ['tiers' => ['standard' => ['provider' => 'anthropic', 'model' => self::MODEL, 'substitutes' => [['provider' => 'openai', 'model' => self::SUBSTITUTE_MODEL]]]]]], []), $this->container->get(Redactor::class));
+        return new RoundLedger($ledger, $this->modes, $this->serializer, new ConfiguredTierResolver(['alpha' => ['tiers' => ['standard' => ['provider' => 'anthropic', 'model' => self::MODEL, 'substitutes' => [['provider' => 'openai', 'model' => self::SUBSTITUTE_MODEL]]]]]], []), $this->container->get(Redactor::class), new FindingKeys());
     }
 
     private function startWith(RunReviewRound $command, MessageBusInterface $queue): string
@@ -388,9 +419,9 @@ final readonly class RoundFixture
         return new ReviewSubject('alpha', __DIR__, self::TASK, self::DIFF);
     }
 
-    private function rounds(EntityManagerInterface $entities): ReviewRounds
+    private function rounds(EntityManagerInterface $entities, ?Ledger $ledger = null): ReviewRounds
     {
-        return new ReviewRounds($entities, $this->clock, $this->storedFindingsOn($entities));
+        return new ReviewRounds($entities, $this->clock, $this->storedFindingsOn($entities), $this->roundLedger($ledger ?? $this->ledger));
     }
 
     private function storedFindingsOn(EntityManagerInterface $entities): StoredFindings

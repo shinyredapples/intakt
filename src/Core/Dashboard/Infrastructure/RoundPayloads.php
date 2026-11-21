@@ -17,6 +17,7 @@ use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\JudgeDoneFinding;
 use Intakt\Core\Review\Contract\ReviewerBlocked;
 use Intakt\Core\Review\Contract\ReviewerFailed;
+use Intakt\Core\Review\Contract\ReviewerFindingsRecorded;
 use Intakt\Core\Review\Contract\ReviewerStarted;
 use Intakt\Core\Review\Contract\ReviewerStopped;
 use Intakt\Core\Review\Contract\ReviewStarted;
@@ -66,6 +67,23 @@ final readonly class RoundPayloads
         return $this->payloads->entriesOf($recorded, 'findings', JudgeDoneFinding::class);
     }
 
+    // False when an entry of the row's findings does not deserialize, or when an id the judge marked (on the act list, as a follow-up or in an entry's merges) is not among the findings read, because a count must not read part of the round as the whole; a row without findings is the marks-only kind the callers tell apart.
+    public function isEveryJudgedFindingRecorded(RecordedEvent $recorded, JudgeDone $judge): bool
+    {
+        $row = json_decode($recorded->event->payload, true);
+        $entries = is_array($row) ? ($row['findings'] ?? null) : null;
+
+        if (!is_array($entries)) {
+            return true;
+        }
+
+        $read = $this->judgedFindingsOf($recorded) ?? [];
+        $ids = array_map(static fn (JudgeDoneFinding $finding): string => $finding->id, $read);
+        $marked = array_merge([...$judge->act], [...$judge->followUps], ...array_map(static fn (JudgeDoneFinding $finding): array => [...$finding->merged], $read));
+
+        return count($entries) === count($read) && [] === array_diff($marked, $ids);
+    }
+
     // Empty for a row written before drop reasons were recorded, because it dropped nothing the page could show; an unreadable entry is left out, because one bad entry must not hide the others.
     /**
      * @return list<DroppedFinding>
@@ -86,6 +104,11 @@ final readonly class RoundPayloads
             LedgerEventKind::CatchUpOwed => $this->payloads->of($recorded, CatchUpOwed::class),
             default => null,
         };
+    }
+
+    public function reviewerFindingsOf(RecordedEvent $recorded): ?ReviewerFindingsRecorded
+    {
+        return $this->payloads->of($recorded, ReviewerFindingsRecorded::class);
     }
 
     // Told apart by the row's phase, because an unsettled row also reads into UsageSettled.

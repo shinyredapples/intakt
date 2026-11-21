@@ -48,9 +48,19 @@ final class DashboardLedger implements Ledger
         $this->add(LedgerEventKind::ReviewStarted, ['round' => $round, 'project' => $project, 'reviewers' => 2]);
     }
 
+    public function startRoundAt(string $round, DateTimeImmutable $at): void
+    {
+        $this->add(LedgerEventKind::ReviewStarted, ['round' => $round, 'project' => 'alpha', 'reviewers' => 2], $at);
+    }
+
     public function judgeRound(string $round): void
     {
         $this->add(LedgerEventKind::JudgeDone, ['round' => $round, 'act' => [], 'follow_ups' => []]);
+    }
+
+    public function judgeRoundAt(string $round, DateTimeImmutable $at): void
+    {
+        $this->add(LedgerEventKind::JudgeDone, ['round' => $round, 'act' => [], 'follow_ups' => []], $at);
     }
 
     public function startRoundOf(string $change, string $round, int $number): void
@@ -93,6 +103,23 @@ final class DashboardLedger implements Ledger
         $this->add(LedgerEventKind::VerdictReceived, $this->reviewer($round, $role) + ['decision' => 0 === $findings ? 'approve' : 'changes', 'findings' => $findings]);
     }
 
+    // Without severities, because rows written before reporters' severities were recorded hold none.
+    /**
+     * @param list<string> $findings
+     */
+    public function reportFindings(string $round, string $role, array $findings): void
+    {
+        $this->add(LedgerEventKind::ReviewerFindingsRecorded, ['round' => $round, 'reviewer' => $round.'-'.$role, 'findings' => $findings]);
+    }
+
+    /**
+     * @param array<string, string> $severities
+     */
+    public function reportRatedFindings(string $round, string $role, array $severities): void
+    {
+        $this->add(LedgerEventKind::ReviewerFindingsRecorded, ['round' => $round, 'reviewer' => $round.'-'.$role, 'findings' => array_keys($severities), 'severities' => $severities]);
+    }
+
     public function stopReviewer(string $round, string $role): void
     {
         $this->add(LedgerEventKind::ReviewerStopped, $this->reviewer($round, $role));
@@ -128,6 +155,7 @@ final class DashboardLedger implements Ledger
             'act' => array_keys(array_filter($marks, static fn (string $mark): bool => 'act' === $mark)),
             'follow_ups' => array_keys(array_filter($marks, static fn (string $mark): bool => 'defer' === $mark)),
             'findings' => array_map(static fn (string $id): array => ['id' => $id, 'severity' => 'P2', 'text' => 'Text of '.$id.'.'], array_keys($marks)),
+            'fallback' => false,
         ]);
     }
 
@@ -332,8 +360,8 @@ final class DashboardLedger implements Ledger
     /**
      * @param array<string, mixed> $payload
      */
-    private function add(LedgerEventKind $kind, array $payload): void
+    private function add(LedgerEventKind $kind, array $payload, ?DateTimeImmutable $at = null): void
     {
-        $this->recorded[] = new RecordedEvent(Uuid::v7(), new LedgerEvent($kind, json_encode($payload, JSON_THROW_ON_ERROR)), new DateTimeImmutable('2026-10-28T12:00:00+00:00'));
+        $this->recorded[] = new RecordedEvent(Uuid::v7(), new LedgerEvent($kind, json_encode($payload, JSON_THROW_ON_ERROR)), $at ?? new DateTimeImmutable('2026-10-28T12:00:00+00:00'));
     }
 }

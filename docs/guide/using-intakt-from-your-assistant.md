@@ -31,9 +31,9 @@ When a review ends, its answer says how it ended, in one of three ways:
 - **judging failed:** the reviewers reported, but the verdict step could not finish. The decision is blocked, with the reason that the judging failed.
 - **no outcome in time:** the round did not end within its time limit, for example because no review worker was running. The decision is blocked, with the reason "no outcome in time". Start the worker (`messenger:consume async`) and review again.
 
-The dashboard's review page shows the same ends in the same words: a round that was never judged says **Blocked** with the reason "the judging failed" or "no outcome in time".
+The dashboard's review page shows the same two ends with the same reasons: a round whose judging failed says **Failed** with the reason "the judging failed", and a round with no outcome in time says **Blocked** with the reason "no outcome in time".
 
-The terminal command below blocks for the same two reasons.
+The terminal command below blocks for both reasons (exit code 11).
 
 Your assistant can also read one thing that is not a tool: the **round findings** (`round_findings`, built), every finding the reviewers of a round reported. It only reads and changes nothing.
 

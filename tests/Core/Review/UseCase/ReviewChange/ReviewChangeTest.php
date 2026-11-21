@@ -290,7 +290,7 @@ final class ReviewChangeTest extends KernelTestCase
         $review = $this->reviewWith(new VerdictPerRole($this->bothReportLines(7, 7)));
 
         self::assertCount(1, $review->actList);
-        self::assertSame(['F2'], $review->actList[0]->merged);
+        self::assertSame(['F2'], [...$review->actList[0]->merged]);
     }
 
     public function testAP3TheJudgeRejectsAtThePlaceOfAP1StaysOutOfItsEntry(): void
@@ -298,7 +298,7 @@ final class ReviewChangeTest extends KernelTestCase
         $review = $this->reviewWith(new JudgeRejectingFindings(new VerdictPerRole($this->bothReportLines(7, 7, Severity::P3)), ['F2']));
 
         self::assertSame(['F1'], array_map(static fn (Finding $finding): string => $finding->id, $review->actList));
-        self::assertSame([], $review->actList[0]->merged);
+        self::assertSame([], [...$review->actList[0]->merged]);
     }
 
     public function testAP1TheJudgeRejectsAtThePlaceOfAnotherP1StillJoinsItsEntry(): void
@@ -306,7 +306,7 @@ final class ReviewChangeTest extends KernelTestCase
         $review = $this->reviewWith(new JudgeRejectingFindings(new VerdictPerRole($this->bothReportLines(7, 7)), ['F2']));
 
         self::assertSame(['F1'], array_map(static fn (Finding $finding): string => $finding->id, $review->actList));
-        self::assertSame(['F2'], $review->actList[0]->merged);
+        self::assertSame(['F2'], [...$review->actList[0]->merged]);
     }
 
     public function testFindingsAtDifferentLinesOfOneFileStaySeparate(): void
@@ -578,7 +578,7 @@ final class ReviewChangeTest extends KernelTestCase
             new WorkerOnSleep($this->fixture->clock, $work),
             new FailureInWords(),
             $this->tiers,
-            new FailedJudgings($this->failureTransport()),
+            new FailedJudgings($this->failureTransport(), $this->fixture->ledger(), $this->fixture->ledgerPayloads()),
             $upperWait,
         );
     }

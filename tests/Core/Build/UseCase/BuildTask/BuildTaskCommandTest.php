@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Build\UseCase\BuildTask;
 
+use Doctrine\DBAL\DriverManager;
+use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
@@ -24,6 +26,7 @@ use Intakt\Core\Build\UseCase\BuildTask\BuildTaskOutcome;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTaskRequest;
 use Intakt\Core\Build\UseCase\BuildTask\HandBackCheck;
 use Intakt\Core\Build\UseCase\BuildTask\HandBackFile;
+use Intakt\Core\Build\UseCase\BuildTask\ParkedTasks;
 use Intakt\Core\Build\UseCase\BuildTask\PrePushCheck;
 use Intakt\Core\Build\UseCase\BuildTask\PushStep;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
@@ -58,6 +61,7 @@ use Intakt\Core\Review\Contract\PromptCut;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\ChangeText;
 use Intakt\Plugin\Forge\Contract\JobCredentials;
+use Intakt\Plugin\Forge\Contract\OpenedChange;
 use Intakt\Plugin\GitHubForge\Contract\IssueListing;
 use Intakt\Plugin\GitHubForge\Contract\IssueReads;
 use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
@@ -69,6 +73,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
@@ -85,11 +90,13 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(HandBackFile::class)]
 #[UsesClass(PrePushCheck::class)]
 #[UsesClass(PushStep::class)]
+#[UsesClass(ParkedTasks::class)]
 #[UsesClass(BranchPushRequest::class)]
 #[UsesClass(PushedBranch::class)]
 #[UsesClass(RefusedPush::class)]
 #[UsesClass(ChangeText::class)]
 #[UsesClass(ChangeId::class)]
+#[UsesClass(OpenedChange::class)]
 #[UsesClass(CheckJob::class)]
 #[UsesClass(CheckJobOutcome::class)]
 #[UsesClass(CheckVerdict::class)]
@@ -323,7 +330,7 @@ final class BuildTaskCommandTest extends TestCase
         $routing->method('tierFor')->willReturn(new TierChoice(Tier::Standard, TierReason::Default));
         $tiers = self::createStub(TierResolver::class);
         $tiers->method('resolve')->willReturn(new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'));
-        $builds = new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), new ScriptedJobRunner($this->folder.'/output'), new PhpGate(), new GatesAtOnce(12, 1), new Filesystem(), self::SCRIPT, $this->folder.'/prompts');
+        $builds = new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), new ScriptedJobRunner($this->folder.'/output'), new PhpGate(), new GatesAtOnce(12, 1), 1500, new Filesystem(), self::SCRIPT, $this->folder.'/prompts');
         $checks = self::createStub(HandBackChecks::class);
         $checks->method('check')->willReturn($this->checked);
         $checkJobs = self::createStub(CheckJobs::class);
@@ -332,7 +339,10 @@ final class BuildTaskCommandTest extends TestCase
         $branches = self::createStub(BranchPush::class);
         $branches->method('push')->willReturn($this->pushed);
 
-        return new BuildTask($issues, $checkout, $routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files), new PushStep($branches, $checkout), $ledger);
+        // On a database that cannot be opened, because the parked run's output is proven on the install's own database in BuildTaskParksOnSqliteTest.
+        $parked = new ParkedTasks(DriverManager::getConnection(['driver' => 'pdo_sqlite', 'path' => $this->folder.'/missing/data.db']), $ledger, self::createStub(ManagerRegistry::class), new MockClock());
+
+        return new BuildTask($issues, $checkout, $routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files), new PushStep($branches, $checkout), $parked, $ledger);
     }
 
     private function listing(ListedIssue $task): IssueReads

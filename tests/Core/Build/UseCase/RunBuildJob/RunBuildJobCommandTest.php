@@ -11,8 +11,11 @@ use Intakt\Core\Ai\Contract\TierNotMapped;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Build\Contract\BuildBrief;
 use Intakt\Core\Build\Domain\BuilderPrompt;
+use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\Domain\GatesAtOnce;
 use Intakt\Core\Build\Domain\GatesByDefault;
+use Intakt\Core\Build\Domain\QuestionRefused;
+use Intakt\Core\Build\UseCase\RunBuildJob\BuildCloneIsNoFolder;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuilderNotOnClaudeCode;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
@@ -20,6 +23,7 @@ use Intakt\Core\Build\UseCase\RunBuildJob\BuildVerdict;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJobCommand;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJobInput;
+use Intakt\Core\Build\UseCase\RunBuildJob\TierNotKnown;
 use Intakt\Core\Job\Contract\JobCause;
 use Intakt\Core\Job\Contract\JobEgress;
 use Intakt\Core\Job\Contract\JobEnd;
@@ -27,6 +31,7 @@ use Intakt\Core\Job\Contract\JobId;
 use Intakt\Core\Job\Contract\JobInput;
 use Intakt\Core\Job\Contract\JobLimits;
 use Intakt\Core\Job\Contract\JobOutput;
+use Intakt\Core\Job\Contract\JobRefused;
 use Intakt\Core\Job\Contract\JobResult;
 use Intakt\Core\Job\Contract\JobRunner;
 use Intakt\Core\Job\Contract\JobSpec;
@@ -34,6 +39,8 @@ use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\PromptCut;
 use Intakt\Core\Review\Contract\UntrustedSource;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
+use IntlChar;
+use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -44,6 +51,9 @@ use Symfony\Component\Filesystem\Filesystem;
 
 #[CoversClass(RunBuildJobCommand::class)]
 #[CoversClass(RunBuildJobInput::class)]
+#[CoversClass(TierNotKnown::class)]
+#[UsesClass(BuildCloneIsNoFolder::class)]
+#[UsesClass(JobRefused::class)]
 #[UsesClass(RunBuildJob::class)]
 #[UsesClass(BuildJob::class)]
 #[UsesClass(BuildJobOutcome::class)]
@@ -51,6 +61,8 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(BuilderNotOnClaudeCode::class)]
 #[UsesClass(BuildBrief::class)]
 #[UsesClass(BuilderPrompt::class)]
+#[UsesClass(BuildQuestion::class)]
+#[UsesClass(QuestionRefused::class)]
 #[UsesClass(GatesAtOnce::class)]
 #[UsesClass(GatesByDefault::class)]
 #[UsesClass(Fence::class)]
@@ -75,6 +87,8 @@ final class RunBuildJobCommandTest extends TestCase
     private string $promptSeen = '';
 
     private ?JobSpec $ran = null;
+
+    private ?JobRunner $runner = null;
 
     protected function setUp(): void
     {
@@ -122,6 +136,77 @@ final class RunBuildJobCommandTest extends TestCase
         self::assertFileDoesNotExist($this->folder.'/out.bundle');
     }
 
+    public function testAnAskedJobPrintsTheQuestionItsChoicesAndItsRecommendationAndWritesNoBundle(): void
+    {
+        $tester = $this->executed(new JobOutput(['question.json' => '{"question":"Which <b>store</b>?","choices":["SQLite","Postgres"],"recommendation":"SQLite"}']), []);
+
+        self::assertSame(Command::SUCCESS, $tester->getStatusCode());
+        self::assertSame("question: Which <b>store</b>?\nchoice: SQLite\nchoice: Postgres\nrecommendation: SQLite\n", $tester->getDisplay());
+        self::assertFileDoesNotExist($this->folder.'/out.bundle');
+    }
+
+    public function testALineBreakOrATerminalControlInTheQuestionCannotForgeALineOfItsOwn(): void
+    {
+        $question = '{"question":"Which store?\nrecommendation: Postgres\u001b[2K ","choices":["SQLite\r","Postgres"],"recommendation":"Postgres"}';
+
+        $tester = $this->executed(new JobOutput(['question.json' => $question]), []);
+
+        self::assertSame("question: Which store?\\u{A}recommendation: Postgres\\u{1B}[2K\\u{2028}\nchoice: SQLite\nchoice: Postgres\nrecommendation: Postgres\n", $tester->getDisplay());
+    }
+
+    public function testChoicesThatDifferOnlyInACharacterThatIsNotPrintedAsItIsStayDifferentSoTheRecommendedOneCanBeTold(): void
+    {
+        $question = '{"question":"Which?","choices":["a\tb","a\u000bb","a?b","a\\\\u{9}b","a​b","a b","a b","ab\\\\"],"recommendation":"a\u000bb"}';
+
+        $tester = $this->executed(new JobOutput(['question.json' => $question]), []);
+
+        $lines = explode("\n", trim($tester->getDisplay()));
+        self::assertSame(
+            ['question: Which?', 'choice: a\u{9}b', 'choice: a\u{B}b', 'choice: a?b', 'choice: a\\\\u{9}b', 'choice: a\u{200B}b', 'choice: a\u{A0}b', 'choice: a b', 'choice: ab\\\\', 'recommendation: a\u{B}b'],
+            $lines,
+        );
+        self::assertCount(count($lines), array_unique($lines));
+    }
+
+    public function testADefaultIgnorableCharacterOutsideTheControlsIsPrintedAsItsCodePoint(): void
+    {
+        $question = json_encode(['question' => "Which\u{34F}?", 'choices' => ["a\u{FE0E}b", "a\u{115F}b", "a\u{3164}b", "a\u{FFA0}b", 'ab'], 'recommendation' => 'ab'], JSON_THROW_ON_ERROR);
+
+        $tester = $this->executed(new JobOutput(['question.json' => $question]), []);
+
+        self::assertSame(
+            "question: Which\\u{34F}?\nchoice: a\\u{FE0E}b\nchoice: a\\u{115F}b\nchoice: a\\u{3164}b\nchoice: a\\u{FFA0}b\nchoice: ab\nrecommendation: ab\n",
+            $tester->getDisplay(),
+        );
+    }
+
+    public function testVisibleLettersOutsideAsciiArePrintedAsTheyAre(): void
+    {
+        $tester = $this->executed(new JobOutput(['question.json' => '{"question":"Café or 한글?","choices":["é","한"],"recommendation":"é"}']), []);
+
+        self::assertSame("question: Café or 한글?\nchoice: é\nchoice: 한\nrecommendation: é\n", $tester->getDisplay());
+    }
+
+    public function testTheDefaultIgnorableRangesAreExactlyThoseOfUnicodesDataAsIntlKnowsThem(): void
+    {
+        $listed = [];
+        foreach (RunBuildJobCommand::DEFAULT_IGNORABLE as [$first, $last]) {
+            array_push($listed, ...range($first, $last));
+        }
+        $known = array_values(array_filter(range(0, 0x10FFFF), static fn (int $point): bool => true === IntlChar::hasBinaryProperty($point, IntlChar::PROPERTY_DEFAULT_IGNORABLE_CODE_POINT)));
+
+        self::assertSame($known, $listed);
+    }
+
+    public function testARefusedQuestionIsPrintedAsAFailedBuildWithItsReason(): void
+    {
+        $tester = $this->executed(new JobOutput(['question.json' => 'not json']), []);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringStartsWith("question refused: the question is not a JSON object\n", $tester->getDisplay());
+        self::assertStringContainsString('failed: '.BuildVerdict::QuestionRefused->reason(), $this->flat($tester));
+    }
+
     public function testAnUnknownTierIsPrintedAndFails(): void
     {
         $tester = $this->executed(new JobOutput([]), ['--tier' => 'huge']);
@@ -162,6 +247,37 @@ final class RunBuildJobCommandTest extends TestCase
         self::assertNull($this->ran);
     }
 
+    public function testACloneThatIsNoFolderIsPrintedAndFails(): void
+    {
+        $tester = $this->executed(new JobOutput([]), ['clone' => $this->folder.'/missing']);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString('missing" is no folder.', $this->flat($tester));
+        self::assertNull($this->ran);
+    }
+
+    public function testAJobTheRunnerRefusesIsPrintedAndFails(): void
+    {
+        $runner = self::createStub(JobRunner::class);
+        $runner->method('run')->willThrowException(JobRefused::alreadyRunning(new JobId('build-demo')));
+        $this->runner = $runner;
+
+        $tester = $this->executed(new JobOutput([]), []);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString('The job "build-demo" is already running.', $this->flat($tester));
+    }
+
+    public function testAnUnexpectedInvalidArgumentExceptionPassesThroughTheCommand(): void
+    {
+        $tiers = self::createStub(TierResolver::class);
+        $tiers->method('resolve')->willThrowException(new InvalidArgumentException('a bug in the tiers'));
+
+        $this->expectExceptionObject(new InvalidArgumentException('a bug in the tiers'));
+
+        $this->executed(new JobOutput([]), [], $tiers);
+    }
+
     /**
      * @param array<string, mixed> $arguments
      */
@@ -179,9 +295,10 @@ final class RunBuildJobCommandTest extends TestCase
         $application->addCommand(new RunBuildJobCommand(new RunBuildJob(
             $tiers ?? $this->tiers(),
             new BuilderPrompt(new Fence(), new PromptCut(new Fence())),
-            $runner,
+            $this->runner ?? $runner,
             new PhpGate(),
             new GatesAtOnce(12, 1),
+            1500,
             new Filesystem(),
             self::SCRIPT,
             $this->folder.'/prompts',

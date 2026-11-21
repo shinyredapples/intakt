@@ -20,7 +20,7 @@ flowchart TD
 
 ## Seeing all of them
 
-On the dashboard every card, lane and "Waiting on you" item carries its project, and a filter shows one project or all. Each project has a summary card:
+On the dashboard every card and lane carries its project, and a filter shows one project or all. The outages on the Waiting on you page belong to an AI account rather than a project: they show "All projects" and stay visible whichever project is picked. Each project has a summary card:
 - its share of the week against what it actually spent;
 - whether it is paused or halted, and why;
 - what it is working on right now.

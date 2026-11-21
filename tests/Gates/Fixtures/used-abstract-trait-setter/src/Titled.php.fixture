@@ -1,0 +1,10 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+trait Titled
+{
+    abstract public function setTitle(string $title): void;
+}

@@ -16,22 +16,29 @@ use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Review\Contract\CatchUpOwed;
 use Intakt\Core\Review\Contract\ChangeSource;
 use Intakt\Core\Review\Contract\Decision;
+use Intakt\Core\Review\Contract\EscalationVerdictReused;
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\FindingIds;
 use Intakt\Core\Review\Contract\FollowUp;
 use Intakt\Core\Review\Contract\JudgedFindings;
 use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\JudgeDoneFinding;
+use Intakt\Core\Review\Contract\JudgingFailed;
 use Intakt\Core\Review\Contract\QuorumPolicy;
+use Intakt\Core\Review\Contract\RecurringP1Found;
 use Intakt\Core\Review\Contract\ReviewerBlocked;
 use Intakt\Core\Review\Contract\ReviewerFailed;
+use Intakt\Core\Review\Contract\ReviewerFindingsRecorded;
 use Intakt\Core\Review\Contract\ReviewerStarted;
 use Intakt\Core\Review\Contract\ReviewerStopped;
 use Intakt\Core\Review\Contract\ReviewStarted;
+use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictReceived;
 use Intakt\Core\Review\Domain\OnePerPlace;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundReviewer;
+use Intakt\Core\Review\Infrastructure\FindingKeys;
 use Intakt\Core\ReviewerForLoop\Contract\ProjectModes;
 use Symfony\Component\DependencyInjection\Attribute\Target;
 use Symfony\Component\Serializer\Encoder\JsonEncoder;
@@ -47,6 +54,7 @@ final readonly class RoundLedger
         private SerializerInterface $serializer,
         private TierResolver $tiers,
         private Redactor $redactor,
+        private FindingKeys $keys,
     ) {
     }
 
@@ -84,6 +92,17 @@ final readonly class RoundLedger
         ));
     }
 
+    // Under the ids of the change's finding ledger, because those are the ids the act list and the judge's merges name, so the dashboard can tell which reviewers reported an act entry.
+    public function reviewerFindingsRecorded(ReportedFindings $reported): void
+    {
+        $this->append(LedgerEventKind::ReviewerFindingsRecorded, new ReviewerFindingsRecorded(
+            $reported->reviewer->round()->id()->toRfc4122(),
+            $reported->reviewer->id()->toRfc4122(),
+            $reported->findings,
+            $reported->severities,
+        ));
+    }
+
     // Written with the verdict in one transaction, so a substitute's verdict never counts without its owed catch-up; the substitute's model goes with it, because the dashboard then names the reviewer by the model that answered.
     public function catchUpOwed(RoundReviewer $reviewer, Provider $substitute): void
     {
@@ -110,6 +129,12 @@ final readonly class RoundLedger
         $this->append(LedgerEventKind::ReviewerStopped, new ReviewerStopped(...$this->identify($reviewer)));
     }
 
+    // The only trace of a judging that failed for good, because Messenger dispatches its failure message instead of parking it in the failure transport.
+    public function judgingFailed(ReviewRound $round): void
+    {
+        $this->append(LedgerEventKind::JudgingFailed, new JudgingFailed($round->id()->toRfc4122()));
+    }
+
     // The judged findings go with the call, because the dashboard renders from the ledger alone and needs what each act id stands for.
     /**
      * @param array<string, Decision> $votes
@@ -120,13 +145,42 @@ final readonly class RoundLedger
 
         $this->append(LedgerEventKind::JudgeDone, new JudgeDone(
             $round->id()->toRfc4122(),
-            $act,
-            array_map(static fn (FollowUp $followUp): string => $followUp->finding->id, $judged->followUps),
+            new FindingIds(...$act),
+            new FindingIds(...array_map(static fn (FollowUp $followUp): string => $followUp->finding->id, $judged->followUps)),
             $this->recordedFindings($judged, $act),
             $judged->dropped,
             $judged->sameCause,
             $votes,
+            $this->p1KeysOf($round, $judged),
+            $judged->fallback,
         ));
+    }
+
+    public function recurringP1Found(RecurringP1Found $found): void
+    {
+        $this->append(LedgerEventKind::RecurringP1Found, $found);
+    }
+
+    public function escalationVerdictReused(EscalationVerdictReused $reused): void
+    {
+        $this->append(LedgerEventKind::EscalationVerdictReused, $reused);
+    }
+
+    // Keyed at the head the round judged, because only the reviewed checkout holds the files a P1 named as the reviewers saw them.
+    /**
+     * @return array<string, ?string>
+     */
+    private function p1KeysOf(ReviewRound $round, JudgedFindings $judged): array
+    {
+        $keys = [];
+
+        foreach ($judged->findings as $finding) {
+            if (Severity::P1 === $finding->severity) {
+                $keys[$finding->id] = $this->keys->of($finding, $round->checkoutRoot())?->value;
+            }
+        }
+
+        return $keys;
     }
 
     // An act entry is recorded as the act list holds it (highest severity, merged ids), so the review page shows it the way the console does; the merged findings stay recorded for their ids.
@@ -139,7 +193,7 @@ final readonly class RoundLedger
     {
         $findings = $judged->findings;
         $entries = [];
-        foreach (new OnePerPlace()->actList($findings, $act, $judged->sameCause) as $entry) {
+        foreach (new OnePerPlace()->actList($findings, $act, iterator_to_array($judged->sameCause)) as $entry) {
             $entries[$entry->id] = $entry;
         }
 
@@ -190,7 +244,7 @@ final readonly class RoundLedger
         return ['round' => $reviewer->round()->id()->toRfc4122(), 'reviewer' => $reviewer->id()->toRfc4122(), 'role' => $reviewer->roleName(), 'tier' => $reviewer->tier()];
     }
 
-    private function append(LedgerEventKind $kind, ReviewStarted|ReviewerStarted|VerdictReceived|CatchUpOwed|ReviewerFailed|ReviewerBlocked|ReviewerStopped|JudgeDone $payload): void
+    private function append(LedgerEventKind $kind, ReviewStarted|ReviewerStarted|VerdictReceived|CatchUpOwed|ReviewerFailed|ReviewerBlocked|ReviewerStopped|JudgeDone|JudgingFailed|ReviewerFindingsRecorded|RecurringP1Found|EscalationVerdictReused $payload): void
     {
         $result = $this->ledger->append(new LedgerEvent($kind, $this->serializer->serialize($payload, JsonEncoder::FORMAT)));
 

@@ -17,6 +17,7 @@ use Intakt\Core\Review\Domain\ChangeRound;
 use Intakt\Core\Review\Domain\FindingLedger;
 use Intakt\Core\Review\Domain\OnePerPlace;
 use Intakt\Core\Review\Domain\ReviewRound;
+use Intakt\Core\Review\Domain\RoundReviewer;
 use Intakt\Core\Review\Domain\RoundTransition;
 use Intakt\Core\Review\Domain\TrackedFinding;
 use Symfony\Component\DependencyInjection\Attribute\Target;
@@ -53,15 +54,19 @@ final readonly class StoredFindings
         return $this->findingsIn($round->openFindingsJson());
     }
 
-    // Completing and recording are one step, so the verdicts of a round reach the ledger exactly once: a second completion finds the guard closed.
-    public function completeWhenEveryReviewerIsIn(ReviewRound $round): void
+    // Completing and recording are one step, so the verdicts of a round reach the ledger exactly once: a second completion finds the guard closed and reports nothing.
+    /**
+     * @return list<ReportedFindings>
+     */
+    public function completeWhenEveryReviewerIsIn(ReviewRound $round): array
     {
         if (!$this->machine->can($round, RoundTransition::Complete->value)) {
-            return;
+            return [];
         }
 
         $this->machine->apply($round, RoundTransition::Complete->value);
-        $this->recordVerdictsOf($round);
+
+        return $this->recordVerdictsOf($round);
     }
 
     /**
@@ -86,7 +91,7 @@ final readonly class StoredFindings
         $notes = array_filter(array_column(array_map(static fn (JudgeDoneFinding $finding): array => [$finding->id, $finding->judgeNote], $judged->findings), 1, 0), static fn (?string $note): bool => null !== $note);
         $reported = array_map(static fn (Finding $finding): Finding => isset($notes[$finding->id]) ? $finding->withJudgeNote($notes[$finding->id]) : $finding, $this->reportedIn($round));
 
-        return new OnePerPlace()->actList($reported, $judged->act, $judged->sameCause);
+        return new OnePerPlace()->actList($reported, [...$judged->act], iterator_to_array($judged->sameCause));
     }
 
     /**
@@ -128,15 +133,22 @@ final readonly class StoredFindings
         return true;
     }
 
+    // The lock a completing round takes after its own, so two judgings of one change read each other's judge_done in turn; without the plain existence read, because under MySQL's REPEATABLE READ that read would fix the snapshot before the wait and hide the other judging's judge_done (a judged round completed through this row, so it exists).
+    public function lockChangeOf(ReviewRound $round): void
+    {
+        $this->lockedRow($round->project(), $round->change()) ?? throw ChangeFindingsNotFound::for($round->project(), $round->change());
+    }
+
     // Every verdict of the round at once, when it completes, so a round reaches the ledger as one step that the recorded round number orders against the other rounds of the change.
-    private function recordVerdictsOf(ReviewRound $round): void
+    /**
+     * @return list<ReportedFindings>
+     */
+    private function recordVerdictsOf(ReviewRound $round): array
     {
         $stored = $this->locked($round->project(), $round->change());
         $ledger = $this->ledgerFor($round, $stored);
 
-        foreach ($this->verdictsOf($round) as $verdict) {
-            $ledger->recordVerdict($round->number(), $verdict);
-        }
+        $reported = array_map(fn (RoundReviewer $reviewer): ReportedFindings => $this->reportedBy($reviewer, $ledger, $round->number()), $this->answeredIn($round));
 
         $round->keepReportedFindings($this->written($ledger->openReportedIn($round->number())));
 
@@ -145,7 +157,7 @@ final readonly class StoredFindings
             $round->keepResolvedFindings($this->written([]));
             $round->keepResolvedFindingIds($this->serializer->serialize([], JsonEncoder::FORMAT));
 
-            return;
+            return $reported;
         }
 
         $resolved = $this->resolvedIn($round, $ledger);
@@ -153,6 +165,23 @@ final readonly class StoredFindings
         $round->keepResolvedFindings($this->written(array_map(static fn (TrackedFinding $tracked): Finding => $tracked->latest->withId($tracked->id), $resolved)));
         $round->keepResolvedFindingIds($this->serializer->serialize(array_map(static fn (TrackedFinding $tracked): string => $tracked->id, $resolved), JsonEncoder::FORMAT));
         $stored->recordFindings($round->number(), $this->written($ledger->all()));
+
+        return $reported;
+    }
+
+    // Each id keeps the severity this reviewer gave it, because another reviewer may repeat the same tracked finding at another one; the ledger returns one id per reported finding, in order, and the higher severity stands where a reviewer reports one id twice.
+    private function reportedBy(RoundReviewer $reviewer, FindingLedger $ledger, int $number): ReportedFindings
+    {
+        $verdict = $this->verdictOf($reviewer);
+        $ids = $ledger->recordVerdict($number, $verdict);
+        $severities = [];
+
+        foreach ($ids as $index => $id) {
+            $severity = $verdict->findings[$index]->severity->value;
+            $severities[$id] = min($severities[$id] ?? $severity, $severity);
+        }
+
+        return new ReportedFindings($reviewer, $ids, $severities);
     }
 
     /**
@@ -169,11 +198,16 @@ final readonly class StoredFindings
     private function locked(string $project, string $change): ChangeFindings
     {
         $this->createIfMissing($project, $change);
+
+        return $this->lockedRow($project, $change) ?? throw ChangeFindingsNotFound::for($project, $change);
+    }
+
+    private function lockedRow(string $project, string $change): ?ChangeFindings
+    {
         // Locked with a write, because on SQLite only a write takes the lock, and a snapshot gone stale then fails here, where the transaction starts over, rather than in the flush, which closes the entity manager.
         $this->entities->getConnection()->executeStatement('UPDATE change_findings SET rounds = rounds WHERE project = ? AND change_ref = ?', [$project, $change]);
-        $stored = $this->entities->find(ChangeFindings::class, ['project' => $project, 'change' => $change], LockMode::PESSIMISTIC_WRITE);
 
-        return $stored ?? throw ChangeFindingsNotFound::for($project, $change);
+        return $this->entities->find(ChangeFindings::class, ['project' => $project, 'change' => $change], LockMode::PESSIMISTIC_WRITE);
     }
 
     // A row that does not exist yet cannot be locked, so two first rounds of a change can both find none; the one whose insert loses takes the other's row instead of failing.
@@ -242,8 +276,19 @@ final readonly class StoredFindings
      */
     private function verdictsOf(ReviewRound $round): array
     {
-        $stored = array_filter(array_map(static fn ($reviewer): ?string => $reviewer->verdictJson(), $round->reviewers()), static fn (?string $json): bool => null !== $json);
+        return array_map($this->verdictOf(...), $this->answeredIn($round));
+    }
 
-        return array_values(array_map(fn (string $json): Verdict => $this->serializer->deserialize($json, Verdict::class, JsonEncoder::FORMAT), $stored));
+    /**
+     * @return list<RoundReviewer>
+     */
+    private function answeredIn(ReviewRound $round): array
+    {
+        return array_values(array_filter($round->reviewers(), static fn (RoundReviewer $reviewer): bool => null !== $reviewer->verdictJson()));
+    }
+
+    private function verdictOf(RoundReviewer $reviewer): Verdict
+    {
+        return $this->serializer->deserialize((string) $reviewer->verdictJson(), Verdict::class, JsonEncoder::FORMAT);
     }
 }
