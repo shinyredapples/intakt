@@ -24,7 +24,7 @@ final readonly class QuotesCounted implements IteratorAggregate
 
     public function count(): int
     {
-        return \count($this->quotes);
+        return count($this->quotes);
     }
 
     /**
