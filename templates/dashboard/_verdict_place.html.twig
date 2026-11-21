@@ -1,4 +1,2 @@
 {#- The line apart from the path, because a phone cuts the path short and the line is what the reader opens the file at. -#}
-{%- set parts = place|split(':') -%}
-{%- set line = parts|length > 1 and parts|last matches '/^\\d+(-\\d+)?$/' ? parts|last : null -%}
-<span class="mono vf-place"><span class="vf-path">{{ line is null ? place : parts|slice(0, -1)|join(':') }}</span>{% if line is not null %}<span class="vf-line">:{{ line }}</span>{% endif %}</span>
+<span class="mono vf-place"><span class="vf-path">{{ file }}</span>{% if line is not null %}<span class="vf-line">:{{ line }}</span>{% endif %}</span>

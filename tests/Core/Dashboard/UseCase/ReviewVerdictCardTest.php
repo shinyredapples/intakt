@@ -102,6 +102,27 @@ final class ReviewVerdictCardTest extends DashboardPageTestCase
         self::assertSame(['src/A.php', ':7'], [$crawler->filter('.vf-place .vf-path')->text(), $crawler->filter('.vf-place .vf-line')->text()]);
     }
 
+    public function testAFileWhoseNameEndsInAColonAndDigitsIsShownWholeWithoutAnInventedLine(): void
+    {
+        $this->givenAChangesRound();
+        $this->ledger->judgeToFixIn('round-1', 'src/report:2026', null);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame('src/report:2026', $crawler->filter('.vf-place .vf-path')->text());
+        self::assertCount(0, $crawler->filter('.vf-place .vf-line'));
+    }
+
+    public function testAPathHoldingAColonKeepsItsRecordedLineApart(): void
+    {
+        $this->givenAChangesRound();
+        $this->ledger->judgeToFixIn('round-1', 'src/long:folder/<draft>.php', 1234);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame(['src/long:folder/<draft>.php', ':1234'], [$crawler->filter('.vf-place .vf-path')->text(), $crawler->filter('.vf-place .vf-line')->text()]);
+    }
+
     public function testAnApprovedRoundWhoseJudgeRejectedAFindingListsNothingToFix(): void
     {
         $this->ledger->startRoundOfQuorum('feat/thing', 'round-1', 'all');
