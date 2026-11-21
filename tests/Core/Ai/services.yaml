@@ -1,5 +1,5 @@
 services:
-    # Public under a test name, because no service takes the pinned provider cooldowns yet (issue #2824 part 2 does) and a test proves the container builds them on its shared pool and clock.
+    # Public under a test name, because only an enabled provider's AccountFailoverPlatform takes the pinned provider cooldowns, and a test proves the container builds them on its shared pool and clock without one.
     test.intakt.pinned_provider_cooldowns:
         alias: Intakt\Core\Ai\Contract\PinnedProviderCooldowns
         public: true

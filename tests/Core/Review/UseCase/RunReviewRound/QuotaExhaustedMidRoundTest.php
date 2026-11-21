@@ -9,6 +9,7 @@ use Intakt\Core\Ai\Contract\EveryProviderOut;
 use Intakt\Core\Ai\Infrastructure\AccountCooldownWindows;
 use Intakt\Core\Ai\Infrastructure\AccountFailoverPlatform;
 use Intakt\Core\Ai\Infrastructure\AccountPlatform;
+use Intakt\Core\Ai\Infrastructure\ModelWaits;
 use Intakt\Core\Ai\Infrastructure\SendFailures;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
 use Intakt\Core\Ai\Infrastructure\TypedRejectionConverter;
@@ -57,6 +58,7 @@ use Symfony\AI\Platform\PlatformInterface;
 #[UsesClass(SendFailures::class)]
 #[UsesClass(TypedRejectionConverter::class)]
 #[UsesClass(AccountFailoverPlatform::class)]
+#[UsesClass(ModelWaits::class)]
 #[UsesClass(AccountPlatform::class)]
 #[UsesClass(Account::class)]
 #[UsesClass(ChangeDecision::class)]
