@@ -119,7 +119,7 @@ final class WaitingPageLiveUpdatesTest extends DashboardPageTestCase
         $page = $this->browser->request('GET', '/waiting');
         self::assertCount(1, $page->filter('.wait-item'));
 
-        $this->theOutageEndsAt('2026-10-28T11:30:00+00:00');
+        $this->theOutageEndsAt(new DateTimeImmutable('2026-10-28T11:30:00+00:00'));
 
         $updated = $this->applied($page, $this->lastWaitingUpdate());
         self::assertCount(0, $updated->filter('.wait-item'));
@@ -172,7 +172,7 @@ final class WaitingPageLiveUpdatesTest extends DashboardPageTestCase
     {
         $this->hubRefuses = true;
 
-        $this->theOutageEndsAt('2026-10-28T11:30:00+00:00');
+        $this->theOutageEndsAt(new DateTimeImmutable('2026-10-28T11:30:00+00:00'));
         $page = $this->browser->request('GET', '/waiting');
 
         self::assertResponseIsSuccessful();
@@ -218,10 +218,10 @@ final class WaitingPageLiveUpdatesTest extends DashboardPageTestCase
         self::getContainer()->set(LiveUpdates::class, new MercureLiveUpdates($hub, new NullLogger()));
     }
 
-    private function theOutageEndsAt(string $moment): void
+    private function theOutageEndsAt(DateTimeImmutable $moment): void
     {
         $this->notices->running = [];
-        $this->notices->ended = [new EndedOutageNotice(new Account(Provider::ClaudeCode, 'main'), new DateTimeImmutable($moment))];
+        $this->notices->ended = [new EndedOutageNotice(new Account(Provider::ClaudeCode, 'main'), $moment)];
         $events = self::getContainer()->get(EventDispatcherInterface::class);
         self::assertInstanceOf(EventDispatcherInterface::class, $events);
         $events->dispatch(new OwnerNoticesChanged());
@@ -264,28 +264,38 @@ final class WaitingPageLiveUpdatesTest extends DashboardPageTestCase
             $template = $stream->filter('template')->getNode(0);
             self::assertNotNull($target);
             self::assertNotNull($template);
-            $document = $target->ownerDocument;
-            $parent = $target->parentNode;
-            self::assertNotNull($document);
-            self::assertNotNull($parent);
-            $replace = 'replace' === $stream->attr('action');
 
-            if (!$replace) {
-                while ($target->firstChild instanceof DOMNode) {
-                    $target->removeChild($target->firstChild);
-                }
-            }
-
-            foreach (iterator_to_array($template->childNodes) as $child) {
-                $imported = $document->importNode($child, true);
-                $replace ? $parent->insertBefore($imported, $target) : $target->appendChild($imported);
-            }
-
-            if ($replace) {
-                $parent->removeChild($target);
-            }
+            'replace' === $stream->attr('action') ? $this->replaced($target, $template) : $this->updated($target, $template);
         }
 
         return $page;
+    }
+
+    private function replaced(DOMNode $target, DOMNode $template): void
+    {
+        $document = $target->ownerDocument;
+        $parent = $target->parentNode;
+        self::assertNotNull($document);
+        self::assertNotNull($parent);
+
+        foreach (iterator_to_array($template->childNodes) as $child) {
+            $parent->insertBefore($document->importNode($child, true), $target);
+        }
+
+        $parent->removeChild($target);
+    }
+
+    private function updated(DOMNode $target, DOMNode $template): void
+    {
+        $document = $target->ownerDocument;
+        self::assertNotNull($document);
+
+        while ($target->firstChild instanceof DOMNode) {
+            $target->removeChild($target->firstChild);
+        }
+
+        foreach (iterator_to_array($template->childNodes) as $child) {
+            $target->appendChild($document->importNode($child, true));
+        }
     }
 }

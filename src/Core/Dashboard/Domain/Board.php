@@ -36,7 +36,7 @@ final readonly class Board
         return array_values(array_filter($this->cards, static fn (Review $card): bool => $card->column() === $column));
     }
 
-    // The reviews whose latest round is neither judged nor ended, longest running first, as the Waiting on you page's "Meanwhile" lists them.
+    // Longest running first, because that is the order of "Meanwhile" in docs/design/mocks/waiting.html.
     /**
      * @return list<Review>
      */

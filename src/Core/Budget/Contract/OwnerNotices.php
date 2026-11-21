@@ -14,7 +14,7 @@ interface OwnerNotices
      */
     public function stillRunningOldestFirst(): array;
 
-    // The UTC day of the moment, newest first, from the same notices as the list above.
+    // The UTC day of the moment, because every moment Intakt stores is UTC; from the same notices as the list above, so a notice leaves one as it enters the other.
     /**
      * @return list<EndedOutageNotice>
      */

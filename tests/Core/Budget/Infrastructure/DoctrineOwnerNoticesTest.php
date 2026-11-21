@@ -285,10 +285,8 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
         $this->record('before', '2026-11-02 23:59:59');
         $this->record('at', '2026-11-03 00:00:00');
 
-        $names = static fn (array $ended): array => array_map(static fn (EndedOutageNotice $notice): string => $notice->account->name, $ended);
-
-        self::assertSame(['before'], $names($this->notices()->endedOnTheDayOf(new DateTimeImmutable('2026-11-02T12:00:00+00:00'))));
-        self::assertSame(['at'], $names($this->notices()->endedOnTheDayOf(new DateTimeImmutable('2026-11-03T12:00:00+00:00'))));
+        self::assertSame(['before'], $this->namesEndedOnTheDayOf(new DateTimeImmutable('2026-11-02T12:00:00+00:00')));
+        self::assertSame(['at'], $this->namesEndedOnTheDayOf(new DateTimeImmutable('2026-11-03T12:00:00+00:00')));
     }
 
     // A moment in another zone is still read as its UTC day, so the same outages are listed wherever the moment comes from.
@@ -348,6 +346,14 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
     {
         $use = new DoctrineMeasuredUse($this->entities, new MockClock($at.' UTC'), new EventDispatcher());
         self::assertSame(ReadingOutcome::Recorded, $use->record(new WindowReading(new Account(Provider::ClaudeCode, $account), UsageWindow::FiveHour, new Usage(12.0, null))));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function namesEndedOnTheDayOf(DateTimeImmutable $moment): array
+    {
+        return array_map(static fn (EndedOutageNotice $notice): string => $notice->account->name, $this->notices()->endedOnTheDayOf($moment));
     }
 
     private function notices(): DoctrineOwnerNotices

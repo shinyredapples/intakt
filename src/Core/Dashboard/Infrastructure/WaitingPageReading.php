@@ -53,7 +53,7 @@ final readonly class WaitingPageReading
         return array_map(MeanwhileLine::ofReview(...), $this->pages->board()->runningReviews());
     }
 
-    // Today is the UTC day, as every moment Intakt stores.
+    // Today is the UTC day, because every moment Intakt stores is UTC.
     /**
      * @return list<HandledLine>
      */

@@ -106,7 +106,7 @@ final class ShellLiveUpdatesTest extends DashboardPageTestCase
 
         $this->browser->request('GET', $path);
 
-        $expected = [['match' => DashboardTopics::SHELL], ['match' => 'review/rounds/:round', 'match_type' => 'urlpattern']];
+        $expected = [['match' => DashboardTopics::SHELL], ['match' => DashboardTopics::WAITING], ['match' => 'review/rounds/:round', 'match_type' => 'urlpattern']];
         self::assertSame($expected, $this->grantedTopics());
         self::assertContains(['match' => 'review/rounds/:round', 'match_type' => 'urlpattern'], $reviewGrants);
     }

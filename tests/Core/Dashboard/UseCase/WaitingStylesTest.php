@@ -76,7 +76,7 @@ final class WaitingStylesTest extends TestCase
         self::assertStringNotContainsString('--amber', $rules['.wait-item'] ?? '');
     }
 
-    // DESIGN.md, Breakpoints: the split page puts "Meanwhile" and "You handled today" beside the list only from 1500 px.
+    // Because DESIGN.md (Breakpoints) puts "Meanwhile" and "You handled today" beside the list only from 1500 px.
     public function testBelow1500WideThePanelsStackUnderTheList(): void
     {
         self::assertMatchesRegularExpression('/^\s*display:\s*grid;\s*grid-template-columns:\s*minmax\(0, 1fr\);/', $this->rulesOf($this->sheetOutside('min-width: 1500px', 'min-width: 2200px'))['.split'] ?? '');
@@ -88,7 +88,7 @@ final class WaitingStylesTest extends TestCase
         self::assertMatchesRegularExpression('/position:\s*sticky;/', $this->rulesOf($this->mediaBlocks('min-width: 1500px'))['.split > .side'] ?? '');
     }
 
-    // DESIGN.md, Phone: every touch target is at least 44 px tall.
+    // Because DESIGN.md (Phone) wants every touch target at least 44 px tall.
     public function testOnlyAt760WideAndBelowIsAPanelRow48PxAndItsLink44PxTall(): void
     {
         $phone = $this->rulesOf($this->mediaBlocks(self::PHONE));

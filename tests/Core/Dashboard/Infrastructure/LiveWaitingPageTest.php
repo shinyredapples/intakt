@@ -127,7 +127,7 @@ final class LiveWaitingPageTest extends KernelTestCase
         self::assertSame(['2026-11-02T12:00:00+00:00'], $days);
     }
 
-    // Read again after the lock is let go, and the same page is not sent twice in one call.
+    // The publisher reads the page again after it lets the lock go, so this proves that the read again does not send the same page twice.
     public function testAPageThatDidNotChangeWhileItWasPublishedIsPublishedOnce(): void
     {
         $this->notices->running = [$this->outage('main')];
@@ -147,7 +147,7 @@ final class LiveWaitingPageTest extends KernelTestCase
         $this->pageOn($live, $log)->publishLatest();
 
         self::assertSame([], $live->events);
-        self::assertSame([['warning', 'The waiting page was not published.']], array_map(static fn (array $record): array => [$record[0], $record[1]], $log->cleanLogs()));
+        self::assertSame([['warning', 'The waiting page was not published.']], array_map(static fn (mixed $record): array => array_slice((array) $record, 0, 2), $log->cleanLogs()));
     }
 
     // The holder publishes while the other worker finds its lock taken, so only the holder's read after letting go can carry the outage that ended meanwhile.

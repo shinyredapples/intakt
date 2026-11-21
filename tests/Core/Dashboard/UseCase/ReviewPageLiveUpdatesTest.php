@@ -1039,7 +1039,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
         self::assertCount(1, $crawler->filter('turbo-mercure-stream-source'));
-        self::assertSame(['dashboard/shell', 'review/rounds/round-1', 'review/rounds/round-2'], $this->subscribedTopics());
+        self::assertSame(['dashboard/shell', 'dashboard/waiting', 'review/rounds/round-1', 'review/rounds/round-2'], $this->subscribedTopics());
     }
 
     public function testAReviewerThatStartsAfterThePageLoadedGetsItsPlaceFromItsFirstUpdate(): void
