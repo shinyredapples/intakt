@@ -1,6 +1,29 @@
 # Watchdog over main
 
-`Core/Watchdog` (issues #2969 and #2970, parts 1 and 2 of #2914, hardened by #2915; the commits a recorded merge brought in by #2692) classifies main's new commits: the contract types in `src/Core/Watchdog/Contract/`, the classifier in `src/Core/Watchdog/Domain/` and `MainHistory`, which reads main with git, in `src/Core/Watchdog/Infrastructure/`. Nothing calls it yet: the console command, the project halt and the owner card come in later issues. The module has no container wiring, so `WatchdogServices` holds no ids yet.
+`Core/Watchdog` (issues #2969 and #2970, parts 1 and 2 of #2914, hardened by #2915; the commits a recorded merge brought in by #2692) classifies main's new commits: the contract types in `src/Core/Watchdog/Contract/`, the classifier in `src/Core/Watchdog/Domain/` and `MainHistory`, which reads main with git, in `src/Core/Watchdog/Infrastructure/`. The console command `intakt:watchdog:check` (#1790, part 2 of #1689) runs the classification by hand ([below](#the-command)); the project halt and the owner card come in later issues. The module's services are autowired and need no ids, so `WatchdogServices` holds none yet.
+
+## The command
+
+`php bin/console intakt:watchdog:check <repository> <last-seen-head> [--recorded-merge=<base>..<head> ...] [--owner-key=<key> ...]` (`src/Core/Watchdog/UseCase/CheckMain/CheckMainCommand.php`) builds a `WatchedMain` from the last seen head and the recorded merges, and `CheckMain` builds a `MainHistory` for the repository and the owner keys on each call (no state is kept between calls) and returns `CommitClassifier::classify()`.
+
+- `<repository>`: the repository whose `refs/heads/main` is read, the top folder of a checkout or a bare repository, as `MainHistory` requires.
+- `<last-seen-head>`: the full commit name of the head the watchdog saw last.
+- `--recorded-merge=<base>..<head>`: optional and repeatable, one merge Intakt recorded, base first. `RecordedMergeOption::parsed()` splits the value at `..` and needs exactly two parts (a full commit name holds no dot), otherwise it throws `RecordedMergeNotARange`; each part must be a full commit name (`RecordedMerge`, `CommitNameNotFull`), so an abbreviated name, a branch name, three dots or an empty side are refused.
+- `--owner-key=<key>`: optional and repeatable, one SSH public key the owner registered (`OwnerKey::fromLine()`). Without it every signed commit is `unknown_key`.
+
+Output and exit codes:
+
+| Outcome | Output | Exit |
+| --- | --- | --- |
+| clean | `main is clean` | 0 |
+| violations | one line per `MainViolation`, oldest first: `violation <commit> <violation>` (`unsigned`, `unknown_key`, `history_rewritten`) | 1 |
+| main not read (`MainNotRead`, or a git call that failed, such as a recorded head the repository does not hold) | an error naming the reason, with control characters spelled out (`\n`), never `main is clean` | 1 |
+| refused input: a last seen head or a recorded merge that is not as above, an owner key `OwnerKeyRefused` refuses (its message names the key's position, never the key) | an error naming the rule | 2 |
+| usage the Console refuses before the command runs (an option without its value, a missing argument, an unknown option) | the Console's error | 2 (`ExitInvalidOnRefusedUsage`, a `ConsoleEvents::ERROR` listener for this command only) |
+
+The command adds no git or `ssh-keygen` call of its own: it makes exactly the calls of `MainHistory` below.
+
+Tests: `tests/Core/Watchdog/UseCase/CheckMain/CheckMainCommandTest.php`, on temporary repositories with real `ssh-keygen` keys (a recorded merge is clean with exit 0, a seeded unsigned commit is `violation <commit> unsigned` with exit 1, a commit signed by a given owner key passes, a key not given and a signed commit without any `--owner-key` are `unknown_key`, several recorded merges and owner keys are all read, violations come oldest first, a force push is `history_rewritten` on the last seen head, full SHA-256 names are read, ten malformed `--recorded-merge` values and a last seen head that is not a full commit name exit 2, a malformed owner key exits 2 without echoing it, a shallow repository and a recorded head the repository does not hold exit 1 and never print clean, a line break in the reason is printed escaped), and `tests/Core/Watchdog/UseCase/CheckMain/ExitInvalidOnRefusedUsageTest.php` (an option without its value, a missing argument and an unknown option exit 2; another command's usage error and an error that is not refused usage keep their exit code). They need `ssh-keygen` and are never skipped without it.
 
 ## Rules
 
