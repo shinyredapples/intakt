@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Intakt\Gates\PhpStan;
 
+use Closure;
 use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewerRole;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundReviewer;
 use Intakt\Core\Review\Infrastructure\ConfiguredPanels;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewerHandler;
-use Closure;
 use Intakt\Core\Review\UseCase\SeedSampleProject\SampleProject;
 use Intakt\Gates\StaticAnalysisGate;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiVendor;
