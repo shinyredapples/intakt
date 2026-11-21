@@ -26,12 +26,12 @@ final readonly class MarkdownText
 
     public static function visible(string $markdown): string
     {
-        return self::read($markdown, static fn (string $fence): string => $fence, false);
+        return self::read($markdown, static fn (string $fence): string => $fence, static fn (string $text, int $start): string => self::commentAt($text, $start));
     }
 
     public static function visibleProse(string $markdown): string
     {
-        return self::read($markdown, self::lineBreaksOf(...), true);
+        return self::read($markdown, self::lineBreaksOf(...), self::taskCommentAt(...));
     }
 
     // A tab in the indent or after a list marker runs to the next tab stop, as Markdown reads it (https://spec.commonmark.org/0.31.2/#tabs).
@@ -85,9 +85,10 @@ final readonly class MarkdownText
     }
 
     /**
-     * @param callable(string): string $fenced
+     * @param callable(string): string                     $fenced
+     * @param callable(string, int, OpenListItems): string $comment
      */
-    private static function read(string $markdown, callable $fenced, bool $blocksHideTheirLine): string
+    private static function read(string $markdown, callable $fenced, callable $comment): string
     {
         $text = str_replace(["\r\n", "\r"], "\n", $markdown);
         $read = '';
@@ -103,7 +104,7 @@ final readonly class MarkdownText
                 MarkdownPart::Fence, MarkdownPart::FenceAfterAMarker => FencedBlock::at($text, $start, $items),
                 MarkdownPart::Code => ($codeSpans = $codeSpans->inTheParagraphAt($start))->spanOrLiteralAt($start, $offset),
                 MarkdownPart::Literal => $match['fence'][0],
-                default => self::commentAt($text, $start, $blocksHideTheirLine && $items->readUpTo(self::lineStartAt($text, $start) + 1)->opensAnHtmlBlock($start)),
+                default => $comment($text, $start, $items),
             };
             $read .= substr($text, $offset, $start - $offset).self::shown($kind, $part, $fenced);
             $offset = $start + strlen($part);
@@ -165,18 +166,22 @@ final readonly class MarkdownText
         };
     }
 
-    // In a task, a comment whose `<!--` opens its line is an HTML block up to the end of the line holding its `-->`, so the text after it on that line is no paragraph line and the next line continues no paragraph (https://spec.commonmark.org/0.31.2/#html-blocks, kind 2). In a body that text is shown, so a reference there still counts.
-    private static function commentAt(string $text, int $start, bool $opensABlock): string
+    private static function taskCommentAt(string $text, int $start, OpenListItems $items): string
+    {
+        return $items->readUpTo(self::lineStartAt($text, $start) + 1)->opensAnHtmlBlock($start) ? self::htmlBlockAt($text, $start) : self::commentAt($text, $start);
+    }
+
+    private static function commentAt(string $text, int $start): string
     {
         $end = strpos($text, self::COMMENT_END, $start + strlen('<!--'));
 
-        if (false === $end) {
-            return substr($text, $start);
-        }
+        return false === $end ? substr($text, $start) : substr($text, $start, $end + strlen(self::COMMENT_END) - $start);
+    }
 
-        $end += strlen(self::COMMENT_END);
-
-        return substr($text, $start, ($opensABlock ? self::lineEndAt($text, $end) : $end) - $start);
+    // In a task, a comment whose `<!--` opens its line is an HTML block up to the end of the line holding its `-->`, so the text after it on that line is no paragraph line and the next line continues no paragraph (https://spec.commonmark.org/0.31.2/#html-blocks, kind 2). In a body that text is shown, so a reference there still counts.
+    private static function htmlBlockAt(string $text, int $start): string
+    {
+        return substr($text, $start, self::lineEndAt($text, $start + strlen(self::commentAt($text, $start))) - $start);
     }
 
     private static function atTabStops(string $prefix): string
