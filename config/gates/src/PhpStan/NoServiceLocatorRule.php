@@ -57,7 +57,7 @@ final readonly class NoServiceLocatorRule implements Rule
 
         return [
             ...array_merge(...array_values(array_map($this->locatorParametersOf(...), $classes))),
-            ...array_values(array_map(self::locatorAttribute(...), $locatorAttributes)),
+            ...array_values(array_map($this->locatorAttribute(...), $locatorAttributes)),
         ];
     }
 
@@ -78,7 +78,7 @@ final readonly class NoServiceLocatorRule implements Rule
             $locator = $this->locatorTypeOf($parameter);
 
             if (null !== $locator) {
-                $findings[] = self::locatorParameter($class->namespacedName?->toString() ?? 'class@anonymous', $parameter, $locator);
+                $findings[] = $this->locatorParameter($class->namespacedName?->toString() ?? 'class@anonymous', $parameter, $locator);
             }
         }
 
@@ -87,7 +87,7 @@ final readonly class NoServiceLocatorRule implements Rule
 
     private function locatorTypeOf(Param $parameter): ?string
     {
-        if (null === $parameter->type) {
+        if (!$parameter->type instanceof Node) {
             return null;
         }
 
@@ -109,7 +109,7 @@ final readonly class NoServiceLocatorRule implements Rule
         return 0 === strcasecmp(ltrim($name->toString(), '\\'), $class);
     }
 
-    private static function locatorParameter(string $class, Param $parameter, string $locator): IdentifierRuleError
+    private function locatorParameter(string $class, Param $parameter, string $locator): IdentifierRuleError
     {
         $variable = $parameter->var instanceof Variable && is_string($parameter->var->name) ? $parameter->var->name : '';
         $message = sprintf('Constructor of %s takes $%s as a service locator (%s): %s', $class, $variable, $locator, self::COMPLY);
@@ -117,7 +117,7 @@ final readonly class NoServiceLocatorRule implements Rule
         return RuleErrorBuilder::message($message)->identifier('intakt.noServiceLocator')->line($parameter->getStartLine())->build();
     }
 
-    private static function locatorAttribute(Attribute $attribute): IdentifierRuleError
+    private function locatorAttribute(Attribute $attribute): IdentifierRuleError
     {
         $message = sprintf('Attribute #[AutowireLocator] injects a service locator: %s', self::COMPLY);
 

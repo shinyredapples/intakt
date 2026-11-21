@@ -45,10 +45,10 @@ final readonly class NoRequiredAttributeRule implements Rule
         // PHPStan's parser has already resolved each name against the imports, so an alias still counts, and PHP matches class names in any letter case
         $required = array_filter($attributes, static fn (Attribute $attribute): bool => 0 === strcasecmp(ltrim($attribute->name->toString(), '\\'), Required::class));
 
-        return array_values(array_map(self::requiredAttribute(...), $required));
+        return array_values(array_map($this->requiredAttribute(...), $required));
     }
 
-    private static function requiredAttribute(Attribute $attribute): IdentifierRuleError
+    private function requiredAttribute(Attribute $attribute): IdentifierRuleError
     {
         $message = 'Attribute #[Required] wires a dependency after construction: constructor injection only, because a service built in two steps can be used half wired and cannot be readonly; take the dependency as a constructor parameter.';
 
