@@ -26,6 +26,7 @@ use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Intakt\Core\Review\Contract\ChangeDecision;
 use Intakt\Core\Review\Contract\FailureInWords;
+use Intakt\Core\Review\Contract\FindingIds;
 use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\JudgeDoneFinding;
 use Intakt\Core\Review\Contract\ReviewStarted;
@@ -64,6 +65,7 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(RoundPlace::class)]
 #[UsesClass(ReviewStarted::class)]
 #[UsesClass(JudgeDone::class)]
+#[UsesClass(FindingIds::class)]
 #[UsesClass(JudgeDoneFinding::class)]
 #[UsesClass(RecordedEvent::class)]
 #[UsesClass(RecordedEvents::class)]
@@ -166,7 +168,7 @@ final class LedgerReviewsTest extends TestCase
     {
         $reviews = $this->reviewsOf(
             $this->row(LedgerEventKind::ReviewStarted, new ReviewStarted('r1', 'alpha', 3, 'feat/thing', 1, 'Add the thing.', '/repos/alpha', 'main')),
-            $this->row(LedgerEventKind::JudgeDone, new JudgeDone('r1', ['F1'], [], [new JudgeDoneFinding('F1', Severity::P1, 'Broken.')])),
+            $this->row(LedgerEventKind::JudgeDone, new JudgeDone('r1', new FindingIds('F1'), new FindingIds(), [new JudgeDoneFinding('F1', Severity::P1, 'Broken.')])),
         );
 
         self::assertSame([['r1', 'alpha', 3, ReviewState::Judged]], array_map(static fn (ReviewSummary $review): array => [$review->round, $review->project, $review->reviewers, $review->state], $reviews));
