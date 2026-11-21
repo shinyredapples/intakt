@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\UseCase\RunReviewRound;
 
-use Intakt\Core\Review\Contract\FindingIds;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
@@ -18,6 +17,7 @@ use Intakt\Core\Review\Contract\CatchUpOwed;
 use Intakt\Core\Review\Contract\ChangeSource;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\FindingIds;
 use Intakt\Core\Review\Contract\FollowUp;
 use Intakt\Core\Review\Contract\JudgedFindings;
 use Intakt\Core\Review\Contract\JudgeDone;

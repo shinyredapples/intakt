@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Domain;
 
-use Intakt\Core\Review\Contract\FindingIds;
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\FindingIds;
 use Intakt\Core\Review\Contract\Severity;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
