@@ -61,10 +61,6 @@ final class RoundReviewer implements HasPlace
     #[ORM\Column(options: ['default' => 0])]
     private int $interruptions = 0;
 
-    // Kept apart from the id, because a UUIDv7 id follows the wall clock, which can step back between two reviewers of one panel.
-    #[ORM\Column(name: 'panel_position', options: ['default' => 0])]
-    private readonly int $position;
-
     // The provider that reviewed in this reviewer's place; set means a catch-up review is owed, because another vendor reviewed; a move to another account of the same vendor never sets it.
     #[ORM\Column(length: 32, nullable: true, enumType: Provider::class)]
     private ?Provider $substitute = null;
@@ -77,9 +73,10 @@ final class RoundReviewer implements HasPlace
         #[ORM\JoinColumn(nullable: false)]
         private readonly ReviewRound $round,
         PanelReviewer $member,
-        int $position,
+        // Kept apart from the id, because a UUIDv7 id follows the wall clock, which can step back between two reviewers of one panel.
+        #[ORM\Column(name: 'panel_position', options: ['default' => 0])]
+        private readonly int $position,
     ) {
-        $this->position = $position;
         $this->roleName = $member->role->name;
         $this->rolePrompt = $member->role->prompt;
         $this->tier = $member->model->tier;
