@@ -386,7 +386,9 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
 
         $this->roundLedger($ledger)->judgeDone($round, JudgedFindings::of(new Judgement([]), $findings), []);
 
-        self::assertSame([true, false], array_column($ledger->payloads()[0]['findings'], 'gate_gap'));
+        $recorded = $ledger->payloads()[0]['findings'];
+        self::assertIsArray($recorded);
+        self::assertSame([true, false], array_column($recorded, 'gate_gap'));
     }
 
     public function testAJudgeRowWithTheGateGapMarkerReadsBackAndIsWrittenAgainWithIt(): void

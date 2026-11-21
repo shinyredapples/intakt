@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Contract;
 
+use Symfony\Component\DependencyInjection\Attribute\Exclude;
+
+// Excluded because the round ledger and the stored serializer build it, not the container.
+#[Exclude]
 final readonly class JudgeDoneFinding
 {
     public function __construct(
