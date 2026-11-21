@@ -17,7 +17,7 @@ final class Version20261122100000 extends AbstractMigration
         return 'Store the GitHub pull-request address of review rounds in its canonical form where no other spelling collides';
     }
 
-    // Only a change stored under one spelling moves, because merging two numberings would renumber published rounds (docs/architecture/review-flow.md#one-address-per-pull-request).
+    // Only a lone spelling moves, so no published round is renumbered (review-flow.md#one-address-per-pull-request).
     public function up(Schema $schema): void
     {
         foreach ($this->loneSpellings() as [$project, $spelling]) {
