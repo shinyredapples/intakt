@@ -34,7 +34,7 @@ With a key: paste one provider key or Hugging Face token on http://localhost:778
 
 ### Timed run
 
-Measured on 2026-11-17 on a 4-core Intel i7-4790K with 16 GB RAM, Ubuntu 26.10 and Docker 29: ten consecutive runs of the five-minute path, each from a fresh `git archive` of main, with a Hugging Face token in `.env.local` and the terminal path `docker compose exec intakt php bin/console intakt:demo`.
+Measured on 2026-11-17 on an older 4-core desktop with 16 GB RAM and Docker 29: ten consecutive runs of the five-minute path, each from a fresh `git archive` of main, with a Hugging Face token in `.env.local` and the terminal path `docker compose exec intakt php bin/console intakt:demo`.
 
 | Measure | Median | Range |
 |---|---|---|
