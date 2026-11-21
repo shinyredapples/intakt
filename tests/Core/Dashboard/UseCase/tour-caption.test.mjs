@@ -212,8 +212,8 @@ function stageCaption({ round = 'r1', stage = 'judge-weighs', last = false } = {
     return caption;
 }
 
-// A page that shows the given rounds' elements, holds a window with timers the test fires itself, and may be the page a started run's redirect reached (its start line).
-function pointingPage({ caption = stageCaption(), rounds = ['r1'], follow = false, played = false, storage = new FakeStorage() } = {}) {
+// A page that shows the given rounds' elements, holds a window with timers the test fires itself, and may be the page a started run's redirect reached (the only page the server gives the follow mark).
+function pointingPage({ caption = stageCaption(), rounds = ['r1'], follow = false, storage = new FakeStorage() } = {}) {
     const targets = new Map(rounds.map((round) => {
         const target = new FakeElement();
         target.scrolls = 0;
@@ -224,11 +224,10 @@ function pointingPage({ caption = stageCaption(), rounds = ['r1'], follow = fals
     page.body = {};
     const window = { visited: [], timers: [], location: { assign: (href) => window.visited.push(href) }, setTimeout: (run, ms) => window.timers.push({ run, ms }), matchMedia: () => ({ matches: true }) };
     page.defaultView = window;
-    page.started = played;
     page.follow = follow;
     // The follow mark is one attribute on one element, so removing it takes it off the page.
     const mark = { removeAttribute: (name) => { page.follow = page.follow && name !== 'data-tour-follow'; } };
-    page.querySelector = (selector) => targets.get(selector) ?? (selector === '[data-tour-follow]' && page.follow ? mark : selector === 'main .flash-success' && page.started ? {} : null);
+    page.querySelector = (selector) => targets.get(selector) ?? (selector === '[data-tour-follow]' && page.follow ? mark : null);
     page.querySelectorAll = (selector) => (selector === '[data-tour-focus]' ? [...targets.values()].filter((target) => target.getAttribute('data-tour-focus') !== null) : []);
     captionTour(page, storage);
 
@@ -256,15 +255,15 @@ test('the element the stage talks about is marked and scrolled into view once', 
 });
 
 test('the page Play reached takes the visitor to the review once the run has started', () => {
-    const { window, target, storage } = pointingPage({ follow: true, played: true });
+    const { window, target, storage } = pointingPage({ follow: true });
 
     assert.deepEqual(window.visited, ['/reviews/r1']);
     assert.equal(target.getAttribute('data-tour-focus'), null);
     assert.equal(storage.items.size, 0);
 });
 
-test('a refused Play does not follow a replay another tab started', async () => {
-    const { page, window } = pointingPage({ follow: true, caption: new FakeCaption() });
+test('a demo page without the follow mark does not follow a replay another tab started', async () => {
+    const { page, window } = pointingPage({ caption: new FakeCaption() });
 
     await replaceCaption(page, stageCaption({ stage: 'change-arrives' }));
 
@@ -275,23 +274,22 @@ test('a Play that failed leaves nothing for a later visit to follow on', () => {
     const storage = new FakeStorage();
     pointingPage({ caption: new FakeCaption(), storage });
 
-    const { window } = pointingPage({ follow: true, storage });
+    const { window } = pointingPage({ storage });
 
     assert.deepEqual(window.visited, []);
     assert.equal(storage.items.size, 0);
 });
 
-test('a plain later visit to the page that offers the tour does not follow it', () => {
-    const { window, target } = pointingPage({ follow: true });
+test('a plain later visit to the demo page does not follow the tour', () => {
+    const { window, target } = pointingPage();
 
     assert.deepEqual(window.visited, []);
     assert.equal(target.getAttribute('data-tour-focus'), 'judge-weighs');
 });
 
 test('a later Turbo visit after the page Play reached does not follow the tour', async () => {
-    const { page, window } = pointingPage({ follow: true, played: true, caption: new FakeCaption() });
+    const { page, window } = pointingPage({ follow: true, caption: new FakeCaption() });
     page.body = {};
-    page.started = false;
     page.listeners['turbo:load']();
 
     await replaceCaption(page, stageCaption());
@@ -299,32 +297,25 @@ test('a later Turbo visit after the page Play reached does not follow the tour',
     assert.deepEqual(window.visited, []);
 });
 
-// The forced order of Back: Turbo restores the copy it cached of the page Play reached (a new body), and that copy still shows the start line.
-test('the page Play reached, restored from the cache with its start line, does not follow the tour', async () => {
-    const { page, window } = pointingPage({ follow: true, played: true, caption: new FakeCaption() });
+// The forced order of Back: Turbo restores the copy it cached of the page Play reached (a new body), cached after takePlay() took the page.
+test('the page Play reached, restored from the cache, does not follow the tour', async () => {
+    const { page, window } = pointingPage({ follow: true, caption: new FakeCaption() });
     page.body = {};
     page.listeners['turbo:load']();
 
     await replaceCaption(page, stageCaption({ stage: 'change-arrives' }));
 
-    assert.equal(page.started, true);
     assert.deepEqual(window.visited, []);
 });
 
 test('the page Play reached is taken once, so its follow mark is gone from the page', () => {
-    const { page } = pointingPage({ follow: true, played: true, caption: new FakeCaption() });
+    const { page } = pointingPage({ follow: true, caption: new FakeCaption() });
 
     assert.equal(page.follow, false);
 });
 
-test('a page that only offers the tour keeps its follow mark', () => {
-    const { page } = pointingPage({ follow: true, caption: new FakeCaption() });
-
-    assert.equal(page.follow, true);
-});
-
 test('the page Play reached still follows on a later stage when no stage had arrived at its load', async () => {
-    const { page, window } = pointingPage({ follow: true, played: true, caption: new FakeCaption() });
+    const { page, window } = pointingPage({ follow: true, caption: new FakeCaption() });
     page.listeners['turbo:load']();
 
     await replaceCaption(page, stageCaption({ stage: 'change-arrives' }));
@@ -333,7 +324,7 @@ test('the page Play reached still follows on a later stage when no stage had arr
 });
 
 test('a closed tour does not follow from the page Play reached', async () => {
-    const { page, window } = pointingPage({ follow: true, played: true, caption: new FakeCaption() });
+    const { page, window } = pointingPage({ follow: true, caption: new FakeCaption() });
     page.click(page.caption.close);
 
     await replaceCaption(page, stageCaption());
@@ -343,7 +334,7 @@ test('a closed tour does not follow from the page Play reached', async () => {
 
 test('a paused tour does not follow from the page Play reached', async () => {
     const caption = stageCaption({ stage: 'change-arrives' });
-    const { page, window } = pointingPage({ follow: true, played: true, caption: new FakeCaption() });
+    const { page, window } = pointingPage({ follow: true, caption: new FakeCaption() });
     page.caption = caption;
     page.click(caption.pause);
 
@@ -374,7 +365,7 @@ test('a caption for one round marks nothing on a page that shows another round',
 });
 
 test('the last stage closes the caption after a moment', () => {
-    const { page, window, storage } = pointingPage({ caption: stageCaption({ last: true }), follow: true, played: true });
+    const { page, window, storage } = pointingPage({ caption: stageCaption({ last: true }), follow: true });
 
     assert.deepEqual(window.visited, []);
     assert.deepEqual(window.timers.map((timer) => timer.ms), [8000]);
@@ -420,6 +411,25 @@ test('the close of a last stage leaves a replacement caption of the same stage i
 
     await replaceCaption(page, stageCaption({ stage: 'round-ends', last: true }));
     window.timers[0].run();
+
+    assert.equal(page.documentElement.dataset.tour, undefined);
+    assert.deepEqual(window.timers.map((timer) => timer.ms), [8000, 8000]);
+    window.timers[1].run();
+    assert.equal(page.documentElement.dataset.tour, 'closed');
+});
+
+// The forced order of Back: the last stage is armed, the page is left, its timer fires on the page that replaced it, then Turbo restores the cached copy, which still carries the data-closing an earlier script wrote.
+test('a restored last-stage caption that still has data-closing closes after its own moment', () => {
+    const { page, window } = pointingPage({ caption: stageCaption({ stage: 'round-ends', last: true }) });
+    page.caption = null;
+    page.body = {};
+    window.timers[0].run();
+
+    const restored = stageCaption({ stage: 'round-ends', last: true });
+    restored.setAttribute('data-closing', '');
+    page.caption = restored;
+    page.body = {};
+    page.listeners['turbo:load']();
 
     assert.equal(page.documentElement.dataset.tour, undefined);
     assert.deepEqual(window.timers.map((timer) => timer.ms), [8000, 8000]);

@@ -17,6 +17,9 @@ final readonly class PlayDemoController
 {
     public const string TOKEN_ID = 'dashboard_play_demo';
 
+    // A flash type only this controller writes, because another form's success line that a demo request picks up first must not make that visit follow a replay another tab started; ShowDemoController takes it, so only the page this redirect reaches carries the tour's follow mark.
+    public const string STARTED = 'demo_started';
+
     public function __construct(
         private DemoRuns $runs,
         private FormPress $press,
@@ -28,7 +31,12 @@ final readonly class PlayDemoController
     public function __invoke(Request $request): Response
     {
         $this->press->refuseWithoutToken($request, self::TOKEN_ID, 'The form token is missing or wrong, so the demo run was not started.');
-        $this->press->flash($request, $this->runs->play());
+        $line = $this->runs->play();
+        $this->press->flash($request, $line);
+
+        if (DemoRuns::FLASH_SUCCESS === $line[0]) {
+            $this->press->flash($request, [self::STARTED, '1']);
+        }
 
         return new RedirectResponse($this->urls->generate(DashboardRoutes::SHOW_DEMO), Response::HTTP_SEE_OTHER);
     }

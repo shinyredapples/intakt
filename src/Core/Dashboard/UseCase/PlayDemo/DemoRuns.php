@@ -12,7 +12,7 @@ use Symfony\Component\Messenger\MessageBusInterface;
 
 final readonly class DemoRuns
 {
-    private const string FLASH_SUCCESS = 'success';
+    public const string FLASH_SUCCESS = 'success';
     private const string FLASH_ERROR = 'error';
 
     public function __construct(

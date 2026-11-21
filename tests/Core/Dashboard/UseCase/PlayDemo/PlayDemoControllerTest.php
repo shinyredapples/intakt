@@ -93,7 +93,6 @@ final class PlayDemoControllerTest extends DashboardPageTestCase
         self::assertSame(['The change', 'Two AI labs', 'Checks every finding', 'To fix'], $page->filter('ol.review-strip .rs-label')->each(static fn (Crawler $label): string => $label->text()));
         self::assertSame(['No key needed', 'Replay, not a verdict'], $page->filter('.demo-facts .chip')->each(static fn (Crawler $chip): string => $chip->text()));
         self::assertCount(0, $page->filter('ol.tour-stages'));
-        self::assertCount(1, $page->filter('[data-tour-follow]'));
     }
 
     public function testOutsideTheComposeDemoThePageSaysWhyAndOffersNoButton(): void
@@ -146,17 +145,51 @@ final class PlayDemoControllerTest extends DashboardPageTestCase
         self::assertSelectorTextContains('.flash-success', 'The demo run is starting');
     }
 
-    // The two marks assets/tour-caption.js follows the tour on, so only the page a started run's redirect reached sends the visitor to the review.
-    public function testOnlyThePageAStartedRunsRedirectReachedHoldsTheStartLineBesideTheFollowMark(): void
+    // The mark assets/tour-caption.js follows the tour on, so only the page a started run's redirect reached sends the visitor to the review.
+    public function testThePagePlaysRedirectReachesCarriesTheFollowMark(): void
     {
         $this->browser->request('POST', '/demo', ['_token' => $this->tokenFromThePage()]);
         $reached = $this->browser->followRedirect();
-        $later = $this->demoPage();
 
         self::assertCount(1, $reached->filter('[data-tour-follow]'));
-        self::assertCount(1, $reached->filter('main .flash-success'));
-        self::assertCount(1, $later->filter('[data-tour-follow]'));
-        self::assertCount(0, $later->filter('main .flash-success'));
+    }
+
+    public function testALaterVisitAfterThePagePlayReachedHasNoFollowMark(): void
+    {
+        $this->browser->request('POST', '/demo', ['_token' => $this->tokenFromThePage()]);
+        $this->browser->followRedirect();
+
+        self::assertCount(0, $this->demoPage()->filter('[data-tour-follow]'));
+    }
+
+    public function testAPlainDemoPageHasNoFollowMark(): void
+    {
+        self::assertCount(0, $this->demoPage()->filter('[data-tour-follow]'));
+    }
+
+    // Another form's success line, such as a kept provider key, that a demo request picks up first must not make that visit follow a replay another tab started.
+    public function testADemoPageThatPicksUpAnUnrelatedSuccessLineHasNoFollowMark(): void
+    {
+        $this->demoPage();
+        $session = $this->browser->getRequest()->getSession();
+        self::assertInstanceOf(FlashBagAwareSessionInterface::class, $session);
+        $session->getFlashBag()->add('success', 'The provider key is kept.');
+        $session->save();
+
+        $page = $this->demoPage();
+
+        self::assertSelectorTextContains('main .flash-success', 'The provider key is kept.');
+        self::assertCount(0, $page->filter('[data-tour-follow]'));
+    }
+
+    public function testARefusedPlayComesBackWithoutTheFollowMark(): void
+    {
+        $token = $this->tokenFromThePage();
+        $this->demoRunAt(1);
+
+        $this->browser->request('POST', '/demo', ['_token' => $token]);
+
+        self::assertCount(0, $this->browser->followRedirect()->filter('[data-tour-follow]'));
     }
 
     // Turbo leaves a temporary element out of the page it caches, so Back restores the page Play reached without its start line.

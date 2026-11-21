@@ -5,9 +5,8 @@ const CLOSED_KEY = 'intakt-tour';
 const ENDED_KEY = 'intakt-tour-ended';
 const FOCUS = 'data-tour-focus';
 const FOLLOW_MARK = 'data-tour-follow';
+// The server renders it only on the page Play's own redirect reaches (a flash type only PlayDemoController writes), so a later request, or one that picked up another form's success line, has no mark; takePlay() removes it when it takes the page, so the copy Turbo caches has none either.
 const FOLLOW = `[${FOLLOW_MARK}]`;
-// Only Play posts to the demo page, and a refused Play flashes an error, so a start line there is the page a started run's redirect reached. A later request finds the flash spent, and a page Turbo restores from its cache has neither mark: the flash lines are data-turbo-temporary, and takePlay() removes the follow mark when it takes the page.
-const STARTED = 'main .flash-success';
 // Long enough to read the last line once, short enough that an ended tour never stays on the pages after it.
 const LAST_STAGE_MS = 8000;
 
@@ -15,7 +14,8 @@ const LAST_STAGE_MS = 8000;
 export function captionTour(page, storage) {
     let held = null;
     // The body of the page Play's own redirect reached; Turbo gives each visit a new body, so a later visit to the same page is not it.
-    const tour = { followOn: null };
+    // The captions whose close is armed: kept out of the DOM, because the copy Turbo caches would keep an attribute, and a caption Back restores must arm its own moment.
+    const tour = { followOn: null, closing: new WeakSet() };
 
     page.addEventListener('click', (event) => {
         const pause = event.target?.closest?.(PAUSE);
@@ -56,7 +56,7 @@ export function captionTour(page, storage) {
 // Only the page a started run's redirect reached follows, so a stalled, refused or later visit to the demo page never sends the visitor on.
 function takePlay(page, tour) {
     const mark = page.querySelector?.(FOLLOW);
-    if (!mark || !page.querySelector?.(STARTED)) {
+    if (!mark) {
         return;
     }
     tour.followOn = page.body;
@@ -94,20 +94,20 @@ function pointAt(page, storage, tour) {
         const still = page.defaultView?.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
         target.scrollIntoView?.({ block: 'center', behavior: still ? 'auto' : 'smooth' });
     }
-    if (caption.hasAttribute('data-tour-last') && !caption.hasAttribute('data-closing') && !isPaused(page)) {
-        closeLater(page, storage, caption);
+    if (caption.hasAttribute('data-tour-last') && !tour.closing.has(caption) && !isPaused(page)) {
+        closeLater(page, storage, tour, caption);
     }
 }
 
-// Tied to the caption element it was armed for, so a caption a live update put in meanwhile, even for the same stage, keeps its own full moment; a paused caption is armed again on resume.
-function closeLater(page, storage, caption) {
-    caption.setAttribute('data-closing', '');
+// Tied to the caption element it was armed for, so a caption a live update or Back put in meanwhile, even for the same stage, keeps its own full moment; a paused caption is armed again on resume.
+function closeLater(page, storage, tour, caption) {
+    tour.closing.add(caption);
     page.defaultView?.setTimeout(() => {
         if (isClosed(page) || page.getElementById(CAPTION) !== caption) {
             return;
         }
         if (isPaused(page)) {
-            caption.removeAttribute('data-closing');
+            tour.closing.delete(caption);
             return;
         }
         close(page, storage, caption.getAttribute('data-round'));

@@ -3,8 +3,8 @@
 {% block title %}The demo run - Intakt{% endblock %}
 
 {% block body %}
-{#- data-tour-follow: on the page Play's own redirect reaches, assets/tour-caption.js takes the visitor from here to the review once the run starts, and removes the mark as it takes the page, so the copy Turbo caches cannot be taken again; a later visit stays here and shows its readiness line. -#}
-<div class="demo" data-tour-follow>
+{#- data-tour-follow: only on the page Play's own redirect reaches (PlayDemoController::STARTED), so assets/tour-caption.js takes the visitor from here to the review once the run starts; it removes the mark as it takes the page, so the copy Turbo caches cannot be taken again, and a later visit stays here and shows its readiness line. -#}
+<div class="demo"{% if follow %} data-tour-follow{% endif %}>
     <div class="page-head">
         {{ include('dashboard/components/character.html.twig', {character: constant('Intakt\\Core\\Dashboard\\Domain\\MascotPose::Conducting'), size: 144}, with_context = false) }}
         <div>
