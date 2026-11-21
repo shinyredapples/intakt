@@ -77,7 +77,7 @@ final readonly class DependencySnapshots
             $lease = $this->pinned($key);
             $this->trimAllBut($key);
 
-            if (null !== $lease) {
+            if ($lease instanceof DependencySnapshotLease) {
                 $this->markUsed($key);
             }
 
@@ -276,12 +276,16 @@ final readonly class DependencySnapshots
         }
 
         $order = json_decode($this->filesystem->readFile($file), flags: JSON_THROW_ON_ERROR);
+        $names = [];
 
-        if (!is_array($order) || !array_is_list($order) || [] !== array_filter($order, static fn (mixed $name): bool => !is_string($name))) {
-            throw new UnexpectedValueException(sprintf('the use order %s is not a list of snapshot names', self::USES));
+        foreach (is_array($order) && array_is_list($order) ? $order : [null] as $name) {
+            if (!is_string($name)) {
+                throw new UnexpectedValueException(sprintf('the use order %s is not a list of snapshot names', self::USES));
+            }
+
+            $names[] = $name;
         }
 
-        /** @var list<string> $order */
-        return $order;
+        return $names;
     }
 }
