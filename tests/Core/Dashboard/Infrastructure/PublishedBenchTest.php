@@ -241,6 +241,11 @@ final class PublishedBenchTest extends TestCase
         self::assertNull($this->headlineOf($this->bench($this->table('| Panel | '.PHP_INT_MAX.'0 of '.PHP_INT_MAX.'1 | 2 |'))));
     }
 
+    public function testAZeroPaddedCountGivesNoHeadline(): void
+    {
+        self::assertNull($this->headlineOf($this->bench($this->table('| Panel | 02 of 15 | 2 |'))));
+    }
+
     public function testAllDefectsFoundAtTheLargestCountStillGiveTheHeadline(): void
     {
         $headline = $this->headlineOf($this->bench($this->table('| Panel | 15 of 15 | '.PHP_INT_MAX.' |')));
