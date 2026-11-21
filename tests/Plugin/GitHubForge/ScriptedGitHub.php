@@ -140,7 +140,7 @@ final class ScriptedGitHub
         };
     }
 
-    // Paged as GitHub pages, because a look-up that reads only the first page misses a pull request listed on a later one.
+    // Paged as GitHub pages, because a look-up that takes a full first page as the whole listing misses a pull request listed on a later one.
     /**
      * @return list<array<mixed>>
      */

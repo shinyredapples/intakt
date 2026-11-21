@@ -116,7 +116,15 @@ final class GitHubChangeOpenerTest extends TestCase
         self::assertSame([], $github->writes);
     }
 
-    public function testAnotherAccountsPullRequestOnTheSecondPageIsRefusedByTheCheck(): void
+    public function testAFullPageOfThisAppsOwnPullRequestsIsRefusedByTheCheckAsPossiblyIncomplete(): void
+    {
+        $github = new ScriptedGitHub();
+        $github->openPulls = array_map(static fn (int $number): array => ['number' => $number, 'head' => ['ref' => 'task'], 'user' => ['login' => 'intakt[bot]']], range(1, 100));
+
+        $this->assertWriteFailsWith('may not be all of them', fn () => $github->opener()->refuseForeignChange(new ProposedChange('widgets', 'task', 'main', new ChangeText('T', 'B'))));
+    }
+
+    public function testAFullPageHidingAnotherAccountsPullRequestOnTheNextIsNotWrittenTo(): void
     {
         $github = new ScriptedGitHub();
         $github->openPulls = [
@@ -125,28 +133,21 @@ final class GitHubChangeOpenerTest extends TestCase
             ['number' => 101, 'head' => ['ref' => 'task'], 'user' => ['login' => 'loop[bot]']],
         ];
 
-        $this->assertWriteFailsWith('another account opened', fn () => $github->opener()->refuseForeignChange(new ProposedChange('widgets', 'task', 'main', new ChangeText('T', 'B'))));
+        $this->assertWriteFailsWith('may not be all of them', fn () => $github->opener()->openOrUpdate(new ProposedChange('widgets', 'task', 'main', new ChangeText('T', 'B'))));
+        self::assertSame([], $github->writes);
     }
 
-    public function testThisAppsPullRequestOnTheSecondPageIsUpdated(): void
+    public function testThisAppsPullRequestListedLastOnAPageOneShortOfFullIsUpdated(): void
     {
         $github = new ScriptedGitHub();
         $github->openPulls = [
-            ...array_map(static fn (int $number): array => ['number' => $number, 'head' => ['ref' => 'other'], 'user' => ['login' => 'octocat']], range(1, 100)),
-            ['number' => 101, 'head' => ['ref' => 'task'], 'user' => ['login' => 'intakt[bot]']],
+            ...array_map(static fn (int $number): array => ['number' => $number, 'head' => ['ref' => 'other'], 'user' => ['login' => 'octocat']], range(1, 98)),
+            ['number' => 99, 'head' => ['ref' => 'task'], 'user' => ['login' => 'intakt[bot]']],
         ];
 
         $github->opener()->openOrUpdate(new ProposedChange('widgets', 'task', 'main', new ChangeText('T', 'B')));
 
-        self::assertSame(['PATCH https://api.github.com/repos/acme/widgets/pulls/101'], array_column($github->writes, 0));
-    }
-
-    public function testALookUpWithMorePagesThanTheOpenerReadsIsRefusedByTheCheck(): void
-    {
-        $github = new ScriptedGitHub();
-        $github->openPulls = array_map(static fn (int $number): array => ['number' => $number, 'head' => ['ref' => 'other'], 'user' => ['login' => 'octocat']], range(1, 1000));
-
-        $this->assertWriteFailsWith('more open pull requests', fn () => $github->opener()->refuseForeignChange(new ProposedChange('widgets', 'task', 'main', new ChangeText('T', 'B'))));
+        self::assertSame(['PATCH https://api.github.com/repos/acme/widgets/pulls/99'], array_column($github->writes, 0));
     }
 
     public function testALookUpAnsweredWithAnEmptyObjectIsRefusedByTheCheck(): void

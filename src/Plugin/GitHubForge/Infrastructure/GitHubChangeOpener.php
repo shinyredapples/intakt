@@ -25,7 +25,6 @@ final readonly class GitHubChangeOpener implements ChangeOpening
     private const string JSON = 'application/vnd.github+json';
     private const int UNAUTHORIZED = 401;
     private const int PAGE_SIZE = 100;
-    private const int MAX_PAGES = 10;
 
     public function __construct(
         private GitHubCalls $calls,
@@ -87,25 +86,16 @@ final readonly class GitHubChangeOpener implements ChangeOpening
         return array_first($own);
     }
 
-    // Every page is read, because a foreign pull request on a later page moves with the push as much as one on the first; a listing past the last page read is refused instead of taken as complete.
+    // One page only, because offset pages read one after the other can shift and skip a pull request that stays open throughout; one answer is one listing, and only one that is not full shows it holds them all.
     /**
      * @return list<mixed>
      */
     private function openPullRequestsOf(RepositoryAddress $repository, string $branch): array
     {
-        $listed = [];
+        $query = ['state' => 'open', 'head' => $repository->headOf($branch), 'per_page' => self::PAGE_SIZE];
+        $listed = $this->listOf($this->request('GET', $repository->path().'/pulls', ['query' => $query]));
 
-        for ($page = 1; $page <= self::MAX_PAGES; ++$page) {
-            $query = ['state' => 'open', 'head' => $repository->headOf($branch), 'per_page' => self::PAGE_SIZE, 'page' => $page];
-            $more = $this->listOf($this->request('GET', $repository->path().'/pulls', ['query' => $query]));
-            $listed = [...$listed, ...$more];
-
-            if (count($more) < self::PAGE_SIZE) {
-                return $listed;
-            }
-        }
-
-        throw new ForgeWriteFailed('GitHub lists more open pull requests of the branch than this forge reads, so the branch is left alone.');
+        return count($listed) < self::PAGE_SIZE ? $listed : throw new ForgeWriteFailed(sprintf('GitHub listed %d open pull requests of the branch, a full page that may not be all of them, so the branch is left alone.', self::PAGE_SIZE));
     }
 
     /**
