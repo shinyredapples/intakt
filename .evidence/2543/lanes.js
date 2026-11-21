@@ -21,6 +21,7 @@ const OLD_RULE = '.lane { grid-template-columns: none; } .lane .meta span { whit
     try {
       const context = await browser.newContext({ viewport: { width, height: 900 }, colorScheme: theme, bypassCSP: true });
       await context.route(address + '/**', async (route) => route.fulfill({ response: await route.fetch({ headers: { ...route.request().headers(), host: 'localhost:7780' } }) }));
+      await context.route(/\.(png|webp|svg|avif)(\?.*)?$/, async (route) => { await new Promise((r) => setTimeout(r, 400)); await route.fallback(); });
       const page = await context.newPage();
       const response = await page.goto(address + '/', { waitUntil: 'load' });
       if (old) await page.addStyleTag({ content: OLD_RULE });
@@ -29,8 +30,16 @@ const OLD_RULE = '.lane { grid-template-columns: none; } .lane .meta span { whit
         const shifts = [];
         new PerformanceObserver((list) => shifts.push(...list.getEntries())).observe({ type: 'layout-shift' });
         const strip = document.querySelector('details.working');
+        const snapshot = () => [...strip.querySelectorAll('.lane')].map((lane) => {
+          const b = lane.getBoundingClientRect(); const w = lane.querySelector('.who').getBoundingClientRect();
+          return [b.left, b.top, b.width, b.height, w.left, w.top, w.width, w.height].map((n) => Math.round(n * 100) / 100).join(',');
+        }).join('|');
         const openedAt = performance.now();
         strip.open = true;
+        const first = snapshot();
+        let moved = 0;
+        const track = () => { if (snapshot() !== first) moved++; requestAnimationFrame(track); };
+        requestAnimationFrame(track);
         // Only the theme's own image is shown; the other one is never fetched, because it is lazy and hidden.
         const images = [...strip.querySelectorAll('.lane img')].filter((img) => img.getClientRects().length > 0);
         const loaded = () => images.every((img) => img.complete && img.naturalWidth > 0);
@@ -41,6 +50,7 @@ const OLD_RULE = '.lane { grid-template-columns: none; } .lane .meta span { whit
           resolve({
             openedAt: Math.round(openedAt), loadedAt: Math.round(loadedAt), images: `${images.filter((img) => img.complete && img.naturalWidth > 0).length} of ${images.length}`,
             lanes: after.filter(inLanes).reduce((sum, s) => sum + s.value, 0),
+            moved,
             page: after.reduce((sum, s) => sum + s.value, 0),
           });
         }, 200)));
@@ -72,7 +82,7 @@ const OLD_RULE = '.lane { grid-template-columns: none; } .lane .meta span { whit
       const over = fit.filter((l) => l.over > 0);
       failures += over.length;
       console.log(`board ${theme} ${width}${old ? ' (old rule)' : ''}: HTTP ${response.status()}, ${columns} lane columns, strip opened at ${opened.openedAt} ms, ${opened.images} lane images loaded by ${opened.loadedAt} ms, `
-        + `lane shift from opening through image load ${opened.lanes.toFixed(3)} (whole page ${opened.page.toFixed(3)}), `
+        + `lane shift from opening through image load ${opened.lanes.toFixed(3)} (whole page ${opened.page.toFixed(3)}), frames where a lane or its role line moved from the first open frame ${opened.moved}, `
         + `lanes ${fit.map((l) => `${l.lane} px wide, role line ${l.lines} px tall, ${l.over > 0 ? `text spills ${l.over} px` : 'text fits'}`).join('; ')}`);
       if (width === 780 && !old) await page.screenshot({ path: path.join(__dirname, `board-lanes-${theme}-780.png`), fullPage: false });
     } finally {
