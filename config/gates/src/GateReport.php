@@ -57,7 +57,7 @@ final readonly class GateReport
         return true === self::verdictOf($this->gate, $this->line);
     }
 
-    // Because only a kept result that, cut as the line cuts it, gives the line's own findings and omitted count can stand in for a line the child printed; the verdict stays the line's.
+    // Because only a kept result that, cut as the line cuts it, gives the line's own findings and omitted count, omits nothing itself and states the line's verdict can stand in for a line the child printed, so the report never shows a gate with two verdicts.
     public function keeping(string $kept): self
     {
         if (GateLine::Built === $this->origin) {
@@ -65,7 +65,8 @@ final readonly class GateReport
         }
 
         $whole = json_decode($kept, true);
-        $findings = is_array($whole) && $this->gate === ($whole['gate'] ?? null) ? ($whole['findings'] ?? null) : null;
+        $agrees = is_array($whole) && $this->gate === ($whole['gate'] ?? null) && $this->isPassing() === ($whole['ok'] ?? null) && 0 === ($whole['omitted'] ?? null);
+        $findings = $agrees ? ($whole['findings'] ?? null) : null;
 
         $strings = is_array($findings) && array_is_list($findings) ? array_values(array_filter($findings, is_string(...))) : null;
 
