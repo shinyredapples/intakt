@@ -16,6 +16,7 @@ use Intakt\Core\Review\Infrastructure\EscalationPrompt;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use Symfony\AI\Platform\Message\UserMessage;
 use Symfony\Component\Uid\Uuid;
 
 #[CoversClass(EscalationPrompt::class)]
@@ -80,7 +81,9 @@ final class EscalationPromptTest extends TestCase
 
     private function diffMessageOf(EscalationRequest $request): string
     {
-        $text = $this->prompt()->messagesFor($request)->getMessages()[2]->asText();
+        $message = $this->prompt()->messagesFor($request)->getMessages()[2];
+        self::assertInstanceOf(UserMessage::class, $message);
+        $text = $message->asText();
         self::assertIsString($text);
 
         return $text;

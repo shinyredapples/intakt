@@ -63,7 +63,7 @@ final readonly class HolderReReviews
         return array_any($this->rounds->ofChange($round), fn (ReviewRound $other): bool => $other->number() < $round->number() && $this->headOf($other)?->hash === $head->hash);
     }
 
-    // From the round's review_started, the same record the dashboard starts a next round from.
+    // Read from the round's review_started, because the stored round keeps no repository and the dashboard starts a next round from the same record.
     private function sourceOf(string $roundId): ?ChangeSource
     {
         foreach ($this->ledger->readMentioning([$roundId]) as $recorded) {

@@ -167,7 +167,7 @@ final readonly class RoundFixture
         return $this->startWith($this->commandAt($change, $head, 2), $this->bus);
     }
 
-    // As startAtHead(), with the repository and base a next round is started from, as a round the watcher or the dashboard starts has.
+    // With a repository and base, because a rejection starts the holder's re-review only from the source a round's start recorded.
     public function startAtHeadOfRepository(string $change, string $head): string
     {
         $command = $this->commandAt($change, $head, 2);

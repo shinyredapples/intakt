@@ -397,9 +397,9 @@ final class EscalateRecurringP1Test extends KernelTestCase
         $third = $this->judged($this->completedAt(self::HEAD_C, $this->repeated($this->keyedP1())));
         $never = new ScriptedEscalations(new EscalationVerdict(EscalationOutcome::Confirmed, 'Never asked.'));
 
-        $this->fixture->escalate(array_last($this->fixture->escalations->messages), $never);
+        $this->fixture->escalate($this->latestQueued(), $never);
 
-        self::assertSame([$third, []], [array_last($this->fixture->escalations->messages)->round, $never->requests]);
+        self::assertSame([$third, []], [$this->latestQueued()->round, $never->requests]);
         self::assertSame([3, 4], array_map(static fn (StartReviewAtHead $start): ?int => $start->start->round->number, $this->fixture->reviewStarts->starts));
     }
 
@@ -409,7 +409,7 @@ final class EscalateRecurringP1Test extends KernelTestCase
         $this->escalateQueued(new ScriptedEscalations(new EscalationVerdict(EscalationOutcome::Rejected, 'Fine as it is.')));
         $this->judged($this->completedAt(self::HEAD_B, $this->repeated($this->keyedP1())));
 
-        $this->fixture->escalate(array_last($this->fixture->escalations->messages), new ScriptedEscalations(null));
+        $this->fixture->escalate($this->latestQueued(), new ScriptedEscalations(null));
 
         self::assertCount(1, $this->fixture->reviewStarts->starts);
     }
@@ -423,6 +423,14 @@ final class EscalateRecurringP1Test extends KernelTestCase
         $this->escalateQueued($escalations);
 
         self::assertSame([[], EscalationRequests::FINDING_CUT], [$escalations->requests, $this->payloadsOf(LedgerEventKind::EscalationFailed)[0]['reason'] ?? null]);
+    }
+
+    private function latestQueued(): EscalateRecurringP1
+    {
+        $latest = array_last($this->fixture->escalations->messages);
+        self::assertNotNull($latest);
+
+        return $latest;
     }
 
     private function recurredOnAThirdHead(): string
