@@ -82,6 +82,16 @@ final class HandedOverRoundLookupTest extends KernelTestCase
         self::assertNull($fixture->transactions()->latestJudgedAt('alpha', 'feature', SampleIdentity::HEAD));
     }
 
+    public function testAnUnrelatedJudgedRoundWithAnEmptyVerdictIdentityDoesNotBreakTheLookupOfAnotherPullRequest(): void
+    {
+        $fixture = new RoundFixture(self::getContainer());
+        $this->judgeRound($fixture, 'https://github.com/acme/widgets/pull/8', SampleIdentity::HEAD);
+        $fixture->entities->getConnection()->executeStatement("UPDATE review_round SET verdict_identity = ''");
+        $fixture->entities->clear();
+
+        self::assertNull($fixture->transactions()->latestJudgedAt('alpha', self::PULL, SampleIdentity::HEAD));
+    }
+
     private function renameChange(RoundFixture $fixture, string $from, string $to): void
     {
         foreach (['change_findings', 'review_round'] as $table) {

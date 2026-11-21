@@ -174,9 +174,9 @@ final readonly class ReviewRounds
             ->setParameter('judged', RoundState::Judged->value)
             ->getResult();
 
-        // Matched by the canonical form of the stored address, as the migration grouped them, so an alias with a suffix is found and a local branch that differs only in case is not.
-        return array_find($rounds, static fn (ReviewRound $round): bool => $round->identity()->commits->head->hash === $head
-            && ChangeAddress::canonical($round->change()) === $canonical);
+        // Matched by the canonical form of the stored address, as the migration grouped them, so an alias with a suffix is found and a local branch that differs only in case is not; the address is compared first so an unrelated round with a malformed historical identity is never read.
+        return array_find($rounds, static fn (ReviewRound $round): bool => ChangeAddress::canonical($round->change()) === $canonical
+            && $round->identity()->commits->head->hash === $head);
     }
 
     // Compared as stored, as judgedAfter() compares them, so the rounds come as one numbered sequence.
