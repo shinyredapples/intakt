@@ -85,9 +85,8 @@ final readonly class FullReport
     private function generatedNamesIn(string $folder): array
     {
         $names = @scandir($folder);
-        $generated = false === $names ? false : preg_grep(self::GENERATED, $names);
 
-        return false === $generated ? [] : array_values($generated);
+        return false === $names ? [] : array_values(array_filter($names, static fn (string $name): bool => 1 === preg_match(self::GENERATED, $name)));
     }
 
     // Because a report the summary names must hold everything, a failed or short write leaves no file, and its warning never reaches stdout between the JSON lines.
