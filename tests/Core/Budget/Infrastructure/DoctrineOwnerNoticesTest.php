@@ -4,13 +4,18 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Budget\Infrastructure;
 
+use Closure;
 use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\ORM\Event\PrePersistEventArgs;
+use Doctrine\ORM\Events;
 use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Budget\Contract\EndedOutageNotice;
 use Intakt\Core\Budget\Contract\MeasuredUse;
 use Intakt\Core\Budget\Contract\OutageNotice;
+use Intakt\Core\Budget\Contract\ReadingOutcome;
 use Intakt\Core\Budget\Contract\Usage;
 use Intakt\Core\Budget\Contract\UsageWindow;
 use Intakt\Core\Budget\Contract\WindowReading;
@@ -42,6 +47,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[UsesClass(UsageReadingsStayedAway::class)]
 #[UsesClass(WindowUse::class)]
 #[UsesClass(OutageNotice::class)]
+#[UsesClass(EndedOutageNotice::class)]
 #[UsesClass(OutageNoticeRecord::class)]
 #[UsesClass(Account::class)]
 #[UsesClass(Usage::class)]
@@ -233,6 +239,201 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
         $this->read('main', new DateTimeImmutable('2026-11-02T12:00:00+00:00'), Provider::Codex);
 
         self::assertCount(1, $this->notices()->stillRunningOldestFirst());
+    }
+
+    public function testAnOutageEndedByAReadingTakenTodayIsListedAsEndedToday(): void
+    {
+        $this->store('main', new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
+        $this->record('main', '2026-11-02 12:30:00');
+
+        $ended = $this->notices()->endedOnTheDayOf(new DateTimeImmutable('2026-11-02T20:00:00+00:00'));
+
+        self::assertCount(1, $ended);
+        self::assertSame('claude_code.main', $ended[0]->account->key());
+        self::assertSame('2026-11-02 12:30:00', $ended[0]->endedAt->format('Y-m-d H:i:s'));
+    }
+
+    public function testAnOutageEndedYesterdayIsNotListedToday(): void
+    {
+        $this->store('main', new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
+        $this->record('main', '2026-11-02 12:30:00');
+
+        self::assertSame([], $this->notices()->endedOnTheDayOf(new DateTimeImmutable('2026-11-03T09:00:00+00:00')));
+    }
+
+    public function testANoticeStillRunningIsNotListedAsEnded(): void
+    {
+        $this->store('main', new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
+
+        self::assertSame([], $this->notices()->endedOnTheDayOf(new DateTimeImmutable('2026-11-02T20:00:00+00:00')));
+    }
+
+    // The reading the outage started from is no newer reading, so it ends nothing.
+    public function testAReadingTakenAtTheOutagesLastReadingDoesNotEndIt(): void
+    {
+        $this->store('main', new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
+        $this->record('main', '2026-11-02 08:00:00');
+
+        self::assertSame([], $this->notices()->endedOnTheDayOf(new DateTimeImmutable('2026-11-02T20:00:00+00:00')));
+        self::assertCount(1, $this->notices()->stillRunningOldestFirst());
+    }
+
+    // The day is the UTC day, so the last second before midnight and midnight itself fall on two days.
+    public function testAReadingAtMidnightUtcEndsTheOutageOnTheNewDay(): void
+    {
+        $this->store('before', new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
+        $this->store('at', new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
+        $this->record('before', '2026-11-02 23:59:59');
+        $this->record('at', '2026-11-03 00:00:00');
+
+        self::assertSame(['before'], $this->namesEndedOnTheDayOf(new DateTimeImmutable('2026-11-02T12:00:00+00:00')));
+        self::assertSame(['at'], $this->namesEndedOnTheDayOf(new DateTimeImmutable('2026-11-03T12:00:00+00:00')));
+    }
+
+    // A moment in another zone is still read as its UTC day, so the same outages are listed wherever the moment comes from.
+    public function testAMomentInAnotherZoneIsReadAsItsUtcDay(): void
+    {
+        $this->store('main', new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
+        $this->record('main', '2026-11-02 23:30:00');
+
+        self::assertCount(1, $this->notices()->endedOnTheDayOf(new DateTimeImmutable('2026-11-03T01:00:00+02:00')));
+    }
+
+    public function testOutagesEndedTodayAreListedNewestFirst(): void
+    {
+        $this->store('early', new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
+        $this->store('late', new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
+        $this->record('late', '2026-11-02 15:00:00');
+        $this->record('early', '2026-11-02 12:00:00');
+
+        self::assertSame(['late', 'early'], $this->namesEndedOnTheDayOf(new DateTimeImmutable('2026-11-02T20:00:00+00:00')));
+    }
+
+    // A slow writer stamps its reading before a later one but stores it after, so the outage ended at the earlier reading.
+    public function testAnEarlierReadingStoredLateMovesTheEndToItsMoment(): void
+    {
+        $this->store('main', new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
+        $this->record('main', '2026-11-02 13:00:00');
+        $this->record('main', '2026-11-02 12:30:00');
+
+        self::assertSame('12:30', $this->notices()->endedOnTheDayOf(new DateTimeImmutable('2026-11-02T20:00:00+00:00'))[0]->endedAt->format('H:i'));
+    }
+
+    // The reading landed before the notice's row existed, so only the row's own look at the readings can end it.
+    public function testAnOutageNoticedAfterAReadingAlreadyEndedItIsStoredAsEnded(): void
+    {
+        $this->read('main', new DateTimeImmutable('2026-11-02T12:00:00+00:00'));
+
+        $this->outageNotices()->noticeOnce(new UsageReadingsStayedAway(new Account(Provider::ClaudeCode, 'main'), new DateTimeImmutable('2026-11-02T08:00:00+00:00'), new DateTimeImmutable('2026-11-02T12:00:01+00:00')));
+
+        self::assertSame('12:00', $this->notices()->endedOnTheDayOf(new DateTimeImmutable('2026-11-02T20:00:00+00:00'))[0]->endedAt->format('H:i'));
+    }
+
+    public function testAnOutageNoticedWithNoNewerReadingIsNotStoredAsEnded(): void
+    {
+        $this->read('main', new DateTimeImmutable('2026-11-02T08:00:00+00:00'));
+        $this->read('other', new DateTimeImmutable('2026-11-02T12:00:00+00:00'));
+
+        $this->outageNotices()->noticeOnce(new UsageReadingsStayedAway(new Account(Provider::ClaudeCode, 'main'), new DateTimeImmutable('2026-11-02T08:00:00+00:00'), new DateTimeImmutable('2026-11-02T12:00:01+00:00')));
+
+        self::assertSame([], $this->notices()->endedOnTheDayOf(new DateTimeImmutable('2026-11-02T20:00:00+00:00')));
+    }
+
+    // A notice stored before ends were kept has none, though a reading after it already ended its outage, so the next reading must not end it now.
+    public function testAnOutageThatEndedBeforeEndsWereKeptIsNotListedAsEndedByALaterReading(): void
+    {
+        $this->store('main', new DateTimeImmutable('2026-10-01T11:00:00+00:00'), new DateTimeImmutable('2026-10-01T08:00:00+00:00'));
+        $this->record('main', '2026-10-01 12:00:00');
+        $this->entities->getConnection()->executeStatement('UPDATE budget_outage_notice SET ended_at = NULL');
+
+        $this->record('main', '2026-11-21 09:00:00');
+
+        self::assertSame([], $this->notices()->endedOnTheDayOf(new DateTimeImmutable('2026-11-21T20:00:00+00:00')));
+        self::assertSame([], $this->notices()->stillRunningOldestFirst());
+    }
+
+    public function testAReadingFromBeforeTheOutageStillLetsTheNextReadingEndIt(): void
+    {
+        $this->read('main', new DateTimeImmutable('2026-11-02T07:00:00+00:00'));
+        $this->store('main', new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
+
+        $this->record('main', '2026-11-02 12:30:00');
+
+        self::assertSame(['main'], $this->namesEndedOnTheDayOf(new DateTimeImmutable('2026-11-02T20:00:00+00:00')));
+    }
+
+    // The saved end alone keeps it off the list, because a late write or the cleanup of old readings can remove the reading that ended it.
+    public function testANoticeWithASavedEndIsNotListedAsRunningOnceItsEndingReadingIsGone(): void
+    {
+        $this->store('main', new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
+        $this->record('main', '2026-11-02 12:00:00');
+        $this->entities->getConnection()->executeStatement('DELETE FROM budget_window_reading');
+
+        self::assertSame([], $this->notices()->stillRunningOldestFirst());
+        self::assertSame(['main'], $this->namesEndedOnTheDayOf(new DateTimeImmutable('2026-11-02T20:00:00+00:00')));
+    }
+
+    // With no saved end, only the readings decide, so a notice whose ending reading is gone is listed again.
+    public function testANoticeWithNoSavedEndIsListedAgainOnceItsEndingReadingIsGone(): void
+    {
+        $this->store('main', new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
+        $this->read('main', new DateTimeImmutable('2026-11-02T12:00:00+00:00'));
+        $this->entities->getConnection()->executeStatement('DELETE FROM budget_window_reading');
+
+        self::assertCount(1, $this->notices()->stillRunningOldestFirst());
+    }
+
+    // The reading lands after the notice looked at the readings and before its row exists, so neither the reading nor that first look can end it.
+    public function testAReadingThatLandsWhileTheNoticeIsStoredEndsIt(): void
+    {
+        $this->read('main', new DateTimeImmutable('2026-11-02T08:00:00+00:00'));
+        $record = $this->record(...);
+        $landing = new class($record) {
+            private bool $landed = false;
+
+            /** @param Closure(string, string): void $record */
+            public function __construct(private readonly Closure $record)
+            {
+            }
+
+            public function prePersist(PrePersistEventArgs $args): void
+            {
+                if ($this->landed || !$args->getObject() instanceof OutageNoticeRecord) {
+                    return;
+                }
+                $this->landed = true;
+                ($this->record)('main', '2026-11-02 12:00:00');
+            }
+        };
+        $this->entities->getEventManager()->addEventListener(Events::prePersist, $landing);
+
+        try {
+            $this->outageNotices()->noticeOnce(new UsageReadingsStayedAway(new Account(Provider::ClaudeCode, 'main'), new DateTimeImmutable('2026-11-02T08:00:00+00:00'), new DateTimeImmutable('2026-11-02T12:00:01+00:00')));
+        } finally {
+            $this->entities->getEventManager()->removeEventListener(Events::prePersist, $landing);
+        }
+
+        self::assertSame(['main'], $this->namesEndedOnTheDayOf(new DateTimeImmutable('2026-11-02T20:00:00+00:00')));
+        self::assertSame([], $this->notices()->stillRunningOldestFirst());
+    }
+
+    private function record(string $account, string $at): void
+    {
+        $use = new DoctrineMeasuredUse($this->entities, new MockClock($at.' UTC'));
+        self::assertSame(ReadingOutcome::Recorded, $use->record(new WindowReading(new Account(Provider::ClaudeCode, $account), UsageWindow::FiveHour, new Usage(12.0, null))));
+    }
+
+    private function outageNotices(): DoctrineOutageNotices
+    {
+        return new DoctrineOutageNotices($this->entities, new LockFactory(new InMemoryStore()), self::createStub(LoggerInterface::class));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function namesEndedOnTheDayOf(DateTimeImmutable $moment): array
+    {
+        return array_map(static fn (EndedOutageNotice $notice): string => $notice->account->name, $this->notices()->endedOnTheDayOf($moment));
     }
 
     private function notices(): DoctrineOwnerNotices
