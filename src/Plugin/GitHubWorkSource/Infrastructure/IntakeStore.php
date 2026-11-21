@@ -43,7 +43,7 @@ final readonly class IntakeStore
         return $this->readOf($project, fn (): SyncState => $this->ownManager()->find(IntakeValidator::class, $project)?->state() ?? SyncState::neverSynced());
     }
 
-    // Another worker's commit under way holds a pending lock that refuses even a read, and nothing says yet whether it stores a newer listing.
+    // Named as held, because another worker's commit under way holds a pending lock that refuses even a read, and nothing says yet whether it stores a newer listing.
     /**
      * @template T
      *

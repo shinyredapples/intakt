@@ -67,7 +67,8 @@ final readonly class CompleteListing
         }
 
         $listed = new ListingRows($rows, $listing->isUnchanged() ? $readBefore->validator : $listing->validator);
-        return $this->store->recordIfStill($project, $readBefore, $listed) ?$this->planOver($project, $rows) : $this->planOverTheNewerRows($project);
+
+        return $this->store->recordIfStill($project, $readBefore, $listed) ? $this->planOver($project, $rows) : $this->planOverTheNewerRows($project);
     }
 
     // An unchanged listing is answered from the stored rows, and so is the history of an item whose update time stands; the rest is taken from the listing, because the milestone due date changes without moving it.

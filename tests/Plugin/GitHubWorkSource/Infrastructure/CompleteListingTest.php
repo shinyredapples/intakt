@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\GitHubWorkSource\Infrastructure;
 
+use Closure;
 use Doctrine\Common\EventManager;
 use Doctrine\DBAL\DriverManager;
 use Doctrine\DBAL\Exception\RetryableException;
@@ -429,7 +430,7 @@ final class CompleteListingTest extends KernelTestCase
 
     public function testARowReadRefusedByAnotherWorkersPendingCommitDuringTheListingLeavesTheListingShortWithoutAnException(): void
     {
-        $this->withAPendingCommit(function (callable $pend): void {
+        $this->withAPendingCommit(function (Closure $pend): void {
             $this->reads->lists([Issues::task(7)]);
             $this->reads->during = $pend;
 
@@ -439,7 +440,10 @@ final class CompleteListingTest extends KernelTestCase
     }
 
     // A reader keeps its shared lock open, so the writer's commit is refused and leaves its pending lock, which refuses every new read of the file until it commits.
-    private function withAPendingCommit(callable $test, bool $beforeTheListing): void
+    /**
+     * @param Closure(Closure(): void): void $test
+     */
+    private function withAPendingCommit(Closure $test, bool $beforeTheListing): void
     {
         $shared = self::getContainer()->get('doctrine.orm.entity_manager');
         self::assertInstanceOf(EntityManagerInterface::class, $shared);
