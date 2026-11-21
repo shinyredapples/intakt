@@ -17,7 +17,7 @@ use Intakt\Plugin\Forge\Contract\HeadStatus;
 use Intakt\Plugin\Forge\Contract\PublishedVerdict;
 use JsonException;
 
-// A protected head of a pull request handed to Intakt merges only with the owner's approval of that head: docs/design/05-architecture/08-merge.md
+// Asked on the forge and in the ledger, because a protected head of a pull request handed to Intakt merges only with the owner's approval of that head: docs/design/05-architecture/08-merge.md
 final readonly class OwnerAsks
 {
     private const string DESCRIPTION = 'Intakt approves this head; it touches protected paths and waits for the owner.';

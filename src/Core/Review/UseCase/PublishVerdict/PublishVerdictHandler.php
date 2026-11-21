@@ -43,7 +43,7 @@ final readonly class PublishVerdictHandler
         $this->publications->whileHeld($round->project(), $round->change(), fn () => $this->publishLatestStateOf($command->roundId));
     }
 
-    // A pull request handed to Intakt counts Intakt's review in any mode, while the loop's own heads of a live project stay with the weekly report.
+    // In any mode for a pull request handed to Intakt, because the loop leaves it and Intakt's review is the one that counts there, while the loop's own heads of a live project stay with the weekly report.
     private function isPublishedFor(ReviewRound $round): bool
     {
         return ProjectMode::ReviewerForLoop === $this->modes->of($round->project()) || $this->handed->isHandedToIntakt($round->project(), $round->change());
@@ -83,7 +83,7 @@ final readonly class PublishVerdictHandler
     {
         $verdict = $this->verdicts->of($round);
         $ask = $this->ownerAsks->askFor($round, $verdict);
-        $this->publish($round, $ask?->verdict ?? $verdict);
+        $this->publish($round, $ask->verdict ?? $verdict);
 
         if ($ask instanceof OwnerAsk) {
             $this->ownerAsks->record($round, $ask);

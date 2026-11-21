@@ -37,7 +37,7 @@ final readonly class ProtectedHeadsOfMirrors implements ProtectedHeads
         }
     }
 
-    // Refusals thrown, for the command, which tells a mistyped argument apart from a checked head.
+    // Refusals thrown, because the command tells a mistyped argument apart from a checked head.
     /**
      * @throws ProjectNameRefused
      * @throws CommitNameRefused
