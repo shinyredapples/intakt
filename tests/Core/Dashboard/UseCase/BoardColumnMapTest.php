@@ -103,6 +103,7 @@ final class BoardColumnMapTest extends DashboardPageTestCase
     }
 
     // Hide sits in the head above the cards, so after a jump to an open Done the next Tab reaches Hide and the one after it the first card, in the order the reader sees; the strip is left out because the stylesheet hides it on an open column.
+    // This reads the markup order only; the keyboard walk-through in the pull request's Evidence (E3) shows the real Tab order in a browser.
     public function testAfterAJumpToAnOpenDoneTheNextTabReachesHideAndThenItsFirstCard(): void
     {
         $this->ledger->startRoundOf('42', 'round-1', 1);

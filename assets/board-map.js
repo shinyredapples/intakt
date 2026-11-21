@@ -131,6 +131,6 @@ function pressSettledColumn(page, board) {
     const buttons = [...switcher.querySelectorAll('button')];
     buttons.forEach((button, i) => button.setAttribute('aria-pressed', String(i === settled)));
     if (buttons[settled]) {
-        switcher.scrollLeft = Math.max(0, buttons[settled].offsetLeft - switcher.offsetLeft - SWITCHER_INSET);
+        switcher.scrollLeft = Math.max(0, buttons[settled].offsetLeft - SWITCHER_INSET);
     }
 }
