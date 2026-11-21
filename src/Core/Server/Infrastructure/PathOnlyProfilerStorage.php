@@ -10,6 +10,7 @@ use Symfony\Component\DependencyInjection\Attribute\AutowireDecorated;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpKernel\Profiler\Profile;
 use Symfony\Component\HttpKernel\Profiler\ProfilerStorageInterface;
+use Uri\Rfc3986\Uri;
 
 // Because a query string can carry a credential and the profiler saves the full URL and client address outside the collector allow-list (docs/architecture/development-diagnostics.md).
 #[AsDecorator('profiler.storage', onInvalid: ContainerInterface::IGNORE_ON_INVALID_REFERENCE)]
@@ -23,10 +24,20 @@ final readonly class PathOnlyProfilerStorage implements ProfilerStorageInterface
 
     public function write(Profile $profile): bool
     {
-        $profile->setUrl(explode('?', $profile->getUrl() ?? '', 2)[0]);
+        $profile->setUrl($this->withoutQuery($profile->getUrl()));
         $profile->setIp(null);
 
         return $this->storage->write($profile);
+    }
+
+    // An unreadable URL is dropped, not kept raw, because its query could not be found and removed.
+    private function withoutQuery(?string $url): ?string
+    {
+        if (null === $url) {
+            return null;
+        }
+
+        return Uri::parse($url)?->withQuery(null)->withFragment(null)->toRawString();
     }
 
     /**
