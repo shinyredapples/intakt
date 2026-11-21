@@ -85,7 +85,7 @@ final readonly class RolePromptCarriers
             $carrier = null === $names ? null : $this->classNames->matching($names, array_keys(self::BUILDERS))[0] ?? null;
             $finding = null === $names ? RuleErrorBuilder::message(self::TRAIT_ADVICE)->identifier('intakt.reviewerRole') : (null === $carrier ? null : $this->misplaced($carrier));
 
-            if (null !== $finding) {
+            if ($finding instanceof RuleErrorBuilder) {
                 $findings[] = $finding->line($construction->getStartLine())->build();
             }
         }
