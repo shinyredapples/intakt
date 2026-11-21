@@ -737,8 +737,10 @@ details.ev > summary time { margin-left: auto; color: var(--muted); font-size: v
 .tour-caption .tour-line { flex: 1; margin: 0; min-width: 0; font-weight: 600; }
 .tour-caption .tour-review { flex: none; white-space: nowrap; }
 [data-tour="closed"] .tour-caption { display: none; }
-/* One row of 44 px on a phone: the dots become a bar along its top edge, the line links to the review and Close stays; Pause is for a desk. */
+/* One row of 44 px on a phone: the dots become a bar along its top edge, the line links to the review and Close stays; Pause is for a desk. While it shows, the tab bar is 56 px with 48 px tabs, so the two together stay at 100 px above the safe area. */
 @media (max-width: 760px) {
+  :root:has(.tour-caption):not([data-tour="closed"]) { --bar: 56px; }
+  :root:has(.tour-caption):not([data-tour="closed"]) .rail .nav { height: 48px; }
   .tour-caption { bottom: calc(var(--bar) + env(safe-area-inset-bottom)); gap: var(--s8); min-height: 44px; padding: 0 0 0 var(--s16); }
   .tour-caption .tour-dots { position: absolute; top: -1px; left: 0; right: 0; gap: 2px; }
   .tour-caption .tour-dot, .tour-caption .tour-dot.now { flex: 1; width: auto; height: 3px; border-radius: 0; }

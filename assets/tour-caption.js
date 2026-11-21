@@ -1,12 +1,12 @@
 const CAPTION = 'tour-caption';
 const PAUSE = '[data-tour-pause]';
 const CLOSE = '[data-tour-close]';
-const PLAY = 'form.play-demo';
 const CLOSED_KEY = 'intakt-tour';
 const ENDED_KEY = 'intakt-tour-ended';
-const PLAYED_KEY = 'intakt-tour-play';
 const FOCUS = 'data-tour-focus';
 const FOLLOW = '[data-tour-follow]';
+// Only Play posts to the demo page, and a refused Play flashes an error, so a start line there is the page a started run's redirect reached; the flash is gone on any later visit.
+const STARTED = 'main .flash-success';
 // Long enough to read the last line once, short enough that an ended tour never stays on the pages after it.
 const LAST_STAGE_MS = 8000;
 
@@ -32,11 +32,6 @@ export function captionTour(page, storage) {
             close(page, storage, null);
         }
     });
-    page.addEventListener('submit', (event) => {
-        if (event.target?.closest?.(PLAY)) {
-            write(storage, PLAYED_KEY, 'play');
-        }
-    });
     // Turbo appends a stream to the document element, so only the document sees it.
     page.addEventListener('turbo:before-stream-render', (event) => {
         if (event.target.getAttribute('target') !== CAPTION || !isPaused(page)) {
@@ -50,21 +45,16 @@ export function captionTour(page, storage) {
     });
     // A visit Turbo makes runs no module again, so the new page's element is marked on its load.
     page.addEventListener('turbo:load', () => {
-        takePlay(page, storage, tour);
+        takePlay(page, tour);
         pointAt(page, storage, tour);
     });
-    takePlay(page, storage, tour);
+    takePlay(page, tour);
     pointAt(page, storage, tour);
 }
 
-// Play leaves a mark only the next page takes, so a stalled, refused or later visit to the demo page never sends the visitor on.
-function takePlay(page, storage, tour) {
-    let played = null;
-    try {
-        played = storage.getItem(PLAYED_KEY);
-        storage.removeItem(PLAYED_KEY);
-    } catch {}
-    if (played && page.querySelector?.(FOLLOW)) {
+// Only the page a started run's redirect reached follows, so a stalled, refused or later visit to the demo page never sends the visitor on.
+function takePlay(page, tour) {
+    if (page.querySelector?.(FOLLOW) && page.querySelector?.(STARTED)) {
         tour.followOn = page.body;
     }
 }
@@ -104,32 +94,29 @@ function pointAt(page, storage, tour) {
     }
 }
 
-// Tied to the round and stage it was armed for, so a caption a later round put in meanwhile stays; a paused caption is armed again on resume.
+// Tied to the caption element it was armed for, so a caption a live update put in meanwhile, even for the same stage, keeps its own full moment; a paused caption is armed again on resume.
 function closeLater(page, storage, caption) {
-    const round = caption.getAttribute('data-round');
-    const stage = caption.getAttribute('data-stage');
     caption.setAttribute('data-closing', '');
     page.defaultView?.setTimeout(() => {
-        const shown = page.getElementById(CAPTION);
-        if (isClosed(page) || shown?.getAttribute?.('data-round') !== round || shown.getAttribute('data-stage') !== stage) {
+        if (isClosed(page) || page.getElementById(CAPTION) !== caption) {
             return;
         }
         if (isPaused(page)) {
-            shown.removeAttribute('data-closing');
+            caption.removeAttribute('data-closing');
             return;
         }
-        close(page, storage, round);
+        close(page, storage, caption.getAttribute('data-round'));
     }, LAST_STAGE_MS);
 }
 
-// Only the tour's own end gives way to a new round; a tour the visitor closed stays closed for the tab.
+// Only the tour's own end gives way to another round, at whichever stage a page first shows it; a tour the visitor closed stays closed for the tab.
 function startsAfterTheEnd(caption, storage) {
     let ended = null;
     try {
         ended = storage.getItem(ENDED_KEY);
     } catch {}
 
-    return caption.hasAttribute('data-tour-first') && ended !== null && ended !== caption.getAttribute('data-round');
+    return ended !== null && ended !== caption.getAttribute('data-round');
 }
 
 function unmark(page, kept) {

@@ -197,14 +197,11 @@ test('a page without a caption lets every update through', () => {
 });
 
 // A caption for one round and stage, naming the element its stage talks about by that round's id, as the template builds it.
-function stageCaption({ round = 'r1', stage = 'judge-weighs', first = false, last = false } = {}) {
+function stageCaption({ round = 'r1', stage = 'judge-weighs', last = false } = {}) {
     const caption = new FakeCaption();
     caption.setAttribute('data-stage', stage);
     caption.setAttribute('data-round', round);
     caption.setAttribute('data-tour-at', `[id="round-${round}-now-judge"]`);
-    if (first) {
-        caption.setAttribute('data-tour-first', '');
-    }
     if (last) {
         caption.setAttribute('data-tour-last', '');
     }
@@ -215,7 +212,7 @@ function stageCaption({ round = 'r1', stage = 'judge-weighs', first = false, las
     return caption;
 }
 
-// A page that shows the given rounds' elements, holds a window with timers the test fires itself, and may be the page Play's redirect reached.
+// A page that shows the given rounds' elements, holds a window with timers the test fires itself, and may be the page a started run's redirect reached (its start line).
 function pointingPage({ caption = stageCaption(), rounds = ['r1'], follow = false, played = false, storage = new FakeStorage() } = {}) {
     const targets = new Map(rounds.map((round) => {
         const target = new FakeElement();
@@ -227,11 +224,9 @@ function pointingPage({ caption = stageCaption(), rounds = ['r1'], follow = fals
     page.body = {};
     const window = { visited: [], timers: [], location: { assign: (href) => window.visited.push(href) }, setTimeout: (run, ms) => window.timers.push({ run, ms }), matchMedia: () => ({ matches: true }) };
     page.defaultView = window;
-    page.querySelector = (selector) => targets.get(selector) ?? (selector === '[data-tour-follow]' && follow ? {} : null);
+    page.started = played;
+    page.querySelector = (selector) => targets.get(selector) ?? ((selector === '[data-tour-follow]' && follow) || (selector === 'main .flash-success' && page.started) ? {} : null);
     page.querySelectorAll = (selector) => (selector === '[data-tour-focus]' ? [...targets.values()].filter((target) => target.getAttribute('data-tour-focus') !== null) : []);
-    if (played) {
-        storage.setItem('intakt-tour-play', 'play');
-    }
     captionTour(page, storage);
 
     return { caption, page, target: targets.get('[id="round-r1-now-judge"]'), window, storage };
@@ -262,15 +257,25 @@ test('the page Play reached takes the visitor to the review once the run has sta
 
     assert.deepEqual(window.visited, ['/reviews/r1']);
     assert.equal(target.getAttribute('data-tour-focus'), null);
-    assert.equal(storage.getItem('intakt-tour-play'), null);
+    assert.equal(storage.items.size, 0);
 });
 
-test('submitting Play marks the next page as the one that follows the tour', () => {
-    const { page, storage } = pointingPage();
+test('a refused Play does not follow a replay another tab started', async () => {
+    const { page, window } = pointingPage({ follow: true, caption: new FakeCaption() });
 
-    page.listeners.submit({ target: { closest: (selector) => (selector === 'form.play-demo' ? {} : null) } });
+    await replaceCaption(page, stageCaption({ stage: 'change-arrives' }));
 
-    assert.equal(storage.getItem('intakt-tour-play'), 'play');
+    assert.deepEqual(window.visited, []);
+});
+
+test('a Play that failed leaves nothing for a later visit to follow on', () => {
+    const storage = new FakeStorage();
+    pointingPage({ caption: new FakeCaption(), storage });
+
+    const { window } = pointingPage({ follow: true, storage });
+
+    assert.deepEqual(window.visited, []);
+    assert.equal(storage.items.size, 0);
 });
 
 test('a plain later visit to the page that offers the tour does not follow it', () => {
@@ -283,6 +288,7 @@ test('a plain later visit to the page that offers the tour does not follow it', 
 test('a later Turbo visit after the page Play reached does not follow the tour', async () => {
     const { page, window } = pointingPage({ follow: true, played: true, caption: new FakeCaption() });
     page.body = {};
+    page.started = false;
     page.listeners['turbo:load']();
 
     await replaceCaption(page, stageCaption());
@@ -300,7 +306,7 @@ test('a closed tour does not follow from the page Play reached', async () => {
 });
 
 test('a paused tour does not follow from the page Play reached', async () => {
-    const caption = stageCaption({ stage: 'change-arrives', first: true });
+    const caption = stageCaption({ stage: 'change-arrives' });
     const { page, window } = pointingPage({ follow: true, played: true, caption: new FakeCaption() });
     page.caption = caption;
     page.click(caption.pause);
@@ -367,28 +373,65 @@ test('resume after the moment passed waits a fresh moment and then closes', asyn
 test('the close of a last stage leaves the caption a new round started within the moment', async () => {
     const { page, window } = pointingPage({ caption: stageCaption({ round: 'r1', stage: 'round-ends', last: true }), rounds: ['r1', 'r2'] });
 
-    await replaceCaption(page, stageCaption({ round: 'r2', stage: 'change-arrives', first: true }));
+    await replaceCaption(page, stageCaption({ round: 'r2', stage: 'change-arrives' }));
     window.timers[0].run();
 
     assert.equal(page.documentElement.dataset.tour, undefined);
+});
+
+test('the close of a last stage leaves a replacement caption of the same stage its own full moment', async () => {
+    const { page, window } = pointingPage({ caption: stageCaption({ stage: 'round-ends', last: true }) });
+
+    await replaceCaption(page, stageCaption({ stage: 'round-ends', last: true }));
+    window.timers[0].run();
+
+    assert.equal(page.documentElement.dataset.tour, undefined);
+    assert.deepEqual(window.timers.map((timer) => timer.ms), [8000, 8000]);
+    window.timers[1].run();
+    assert.equal(page.documentElement.dataset.tour, 'closed');
 });
 
 test('a round that starts after the close shows its caption again', async () => {
     const { page, window, storage } = pointingPage({ caption: stageCaption({ round: 'r1', stage: 'round-ends', last: true }), rounds: ['r1', 'r2'] });
     window.timers[0].run();
 
-    await replaceCaption(page, stageCaption({ round: 'r2', stage: 'change-arrives', first: true }));
+    await replaceCaption(page, stageCaption({ round: 'r2', stage: 'change-arrives' }));
 
     assert.equal(page.documentElement.dataset.tour, undefined);
     assert.equal(storage.getItem('intakt-tour'), null);
     assert.equal(page.querySelector('[id="round-r2-now-judge"]').getAttribute('data-tour-focus'), 'change-arrives');
 });
 
+test('a page first showing a later round past its first stage after the close shows that caption again', async () => {
+    const storage = new FakeStorage();
+    const ended = pointingPage({ caption: stageCaption({ round: 'r1', stage: 'round-ends', last: true }), storage });
+    ended.window.timers[0].run();
+
+    const { page } = pointingPage({ caption: stageCaption({ round: 'r2', stage: 'reviewers-read' }), rounds: ['r2'], storage });
+    page.documentElement.dataset.tour = 'closed';
+    page.listeners['turbo:load']();
+
+    assert.equal(page.documentElement.dataset.tour, undefined);
+    assert.equal(page.querySelector('[id="round-r2-now-judge"]').getAttribute('data-tour-focus'), 'reviewers-read');
+});
+
+test('a page of the ended round stays closed after the close', () => {
+    const storage = new FakeStorage();
+    const ended = pointingPage({ caption: stageCaption({ round: 'r1', stage: 'round-ends', last: true }), storage });
+    ended.window.timers[0].run();
+
+    const { page } = pointingPage({ caption: stageCaption({ round: 'r1', stage: 'judge-weighs' }), storage });
+    page.documentElement.dataset.tour = 'closed';
+    page.listeners['turbo:load']();
+
+    assert.equal(page.documentElement.dataset.tour, 'closed');
+});
+
 test('a round that starts after the visitor closed the tour stays closed', async () => {
     const { caption, page } = pointingPage({ rounds: ['r1', 'r2'] });
     page.click(caption.close);
 
-    await replaceCaption(page, stageCaption({ round: 'r2', stage: 'change-arrives', first: true }));
+    await replaceCaption(page, stageCaption({ round: 'r2', stage: 'change-arrives' }));
 
     assert.equal(page.documentElement.dataset.tour, 'closed');
 });

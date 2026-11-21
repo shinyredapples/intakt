@@ -146,6 +146,31 @@ final class PlayDemoControllerTest extends DashboardPageTestCase
         self::assertSelectorTextContains('.flash-success', 'The demo run is starting');
     }
 
+    // The two marks assets/tour-caption.js follows the tour on, so only the page a started run's redirect reached sends the visitor to the review.
+    public function testOnlyThePageAStartedRunsRedirectReachedHoldsTheStartLineBesideTheFollowMark(): void
+    {
+        $this->browser->request('POST', '/demo', ['_token' => $this->tokenFromThePage()]);
+        $reached = $this->browser->followRedirect();
+        $later = $this->demoPage();
+
+        self::assertCount(1, $reached->filter('[data-tour-follow]'));
+        self::assertCount(1, $reached->filter('main .flash-success'));
+        self::assertCount(1, $later->filter('[data-tour-follow]'));
+        self::assertCount(0, $later->filter('main .flash-success'));
+    }
+
+    public function testARefusedPlayComesBackWithoutTheStartLine(): void
+    {
+        $token = $this->tokenFromThePage();
+        $this->demoRunAt(1);
+
+        $this->browser->request('POST', '/demo', ['_token' => $token]);
+        $refused = $this->browser->followRedirect();
+
+        self::assertCount(1, $refused->filter('main .flash-error'));
+        self::assertCount(0, $refused->filter('main .flash-success'));
+    }
+
     public function testPressingPlayWithoutAValidTokenStartsNothing(): void
     {
         $this->demoPage();
@@ -249,7 +274,6 @@ final class PlayDemoControllerTest extends DashboardPageTestCase
         self::assertCount(1, $caption->filter('.tour-dot.now'));
         self::assertSame('#state-block-title:has([id="round-demo-round-1-now-phase"])', $caption->attr('data-tour-at'));
         self::assertSame('demo-round-1', $caption->attr('data-round'));
-        self::assertSame('', $caption->attr('data-tour-first'));
         self::assertNull($caption->attr('data-tour-last'));
     }
 
