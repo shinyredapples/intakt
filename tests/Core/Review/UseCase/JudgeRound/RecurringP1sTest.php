@@ -9,6 +9,7 @@ use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\EscalationOutcome;
+use Intakt\Core\Review\Contract\EscalationVerdict;
 use Intakt\Core\Review\Contract\EscalationVerdictReused;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
@@ -55,6 +56,7 @@ use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
 #[UsesClass(EscalationVerdictReused::class)]
 #[UsesClass(KeptVerdicts::class)]
 #[UsesClass(KeptVerdict::class)]
+#[UsesClass(EscalationVerdict::class)]
 final class RecurringP1sTest extends KernelTestCase
 {
     private const string CHANGE = 'recurring-change';
@@ -388,7 +390,7 @@ final class RecurringP1sTest extends KernelTestCase
 
     public function testAP1NamingNoRegularFileGetsNoKeyAndReusesNoKeptVerdict(): void
     {
-        $this->fixture->keptVerdicts()->keep('', EscalationOutcome::Confirmed, 'Seeded.', 'r1');
+        $this->fixture->keptVerdicts()->keep('', new EscalationVerdict(EscalationOutcome::Confirmed, 'Seeded.'), 'r1');
         $this->judged($this->completedAt(self::CHANGE, self::HEAD_A, $this->unkeyedP1()));
         $this->judged($this->completedAt(self::CHANGE, self::HEAD_B, $this->repeatedP1($this->unkeyedP1())));
 
@@ -412,7 +414,7 @@ final class RecurringP1sTest extends KernelTestCase
 
     private function keepVerdictOfFirstRound(EscalationOutcome $outcome, string $round): void
     {
-        $this->fixture->keptVerdicts()->keep($this->keyOfFirstRound(), $outcome, 'Seeded.', $round);
+        $this->fixture->keptVerdicts()->keep($this->keyOfFirstRound(), new EscalationVerdict($outcome, 'Seeded.'), $round);
     }
 
     private function keyOfFirstRound(): string

@@ -6,7 +6,7 @@ namespace Intakt\Core\Review\Infrastructure;
 
 use DateTimeZone;
 use Doctrine\ORM\EntityManagerInterface;
-use Intakt\Core\Review\Contract\EscalationOutcome;
+use Intakt\Core\Review\Contract\EscalationVerdict;
 use Intakt\Core\Review\Domain\KeptVerdict;
 use Intakt\Core\Review\Domain\VerdictAlreadyKept;
 use Symfony\Component\Clock\ClockInterface;
@@ -20,13 +20,13 @@ final readonly class KeptVerdicts
     ) {
     }
 
-    public function keep(string $key, EscalationOutcome $outcome, string $reasons, string $round): void
+    public function keep(string $key, EscalationVerdict $verdict, string $round): void
     {
         if ($this->ofKey($key) instanceof KeptVerdict) {
             throw VerdictAlreadyKept::forKey($key);
         }
 
-        $this->entities->persist(new KeptVerdict($key, $outcome, $reasons, $round, $this->clock->now()->setTimezone(new DateTimeZone('UTC'))));
+        $this->entities->persist(new KeptVerdict($key, $verdict->outcome, $verdict->reasons, $round, $this->clock->now()->setTimezone(new DateTimeZone('UTC'))));
         $this->entities->flush();
     }
 

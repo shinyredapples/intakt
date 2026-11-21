@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Review\Infrastructure;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Core\Review\Contract\EscalationOutcome;
+use Intakt\Core\Review\Contract\EscalationVerdict;
 use Intakt\Core\Review\Domain\KeptVerdict;
 use Intakt\Core\Review\Domain\VerdictAlreadyKept;
 use Intakt\Core\Review\Infrastructure\KeptVerdicts;
@@ -20,6 +21,7 @@ use Symfony\Component\Clock\MockClock;
 #[Group('persistence')]
 #[CoversClass(KeptVerdicts::class)]
 #[UsesClass(KeptVerdict::class)]
+#[UsesClass(EscalationVerdict::class)]
 #[UsesClass(VerdictAlreadyKept::class)]
 final class KeptVerdictsTest extends KernelTestCase
 {
@@ -36,7 +38,7 @@ final class KeptVerdictsTest extends KernelTestCase
 
     public function testAKeptVerdictIsFoundByItsKeyWithItsOutcomeAndReasons(): void
     {
-        $this->verdicts->keep('finding-one', EscalationOutcome::Rejected, 'The code never runs.', 'round-one');
+        $this->verdicts->keep('finding-one', new EscalationVerdict(EscalationOutcome::Rejected, 'The code never runs.'), 'round-one');
 
         $kept = $this->verdicts->ofKey('finding-one');
 
@@ -45,24 +47,24 @@ final class KeptVerdictsTest extends KernelTestCase
 
     public function testAKeptVerdictRecordsWhenItWasKeptInUtc(): void
     {
-        $this->verdicts->keep('finding-utc', EscalationOutcome::Confirmed, 'It holds.', 'round-one');
+        $this->verdicts->keep('finding-utc', new EscalationVerdict(EscalationOutcome::Confirmed, 'It holds.'), 'round-one');
 
         self::assertSame('2026-11-21T10:00:00+00:00', $this->verdicts->ofKey('finding-utc')?->recordedAt->format('c'));
     }
 
     public function testAnUnknownKeyFindsNoKeptVerdict(): void
     {
-        $this->verdicts->keep('finding-known', EscalationOutcome::Confirmed, 'It holds.', 'round-one');
+        $this->verdicts->keep('finding-known', new EscalationVerdict(EscalationOutcome::Confirmed, 'It holds.'), 'round-one');
 
         self::assertNull($this->verdicts->ofKey('finding-unknown'));
     }
 
     public function testASecondVerdictForTheSameKeyIsRefusedAndTheFirstStays(): void
     {
-        $this->verdicts->keep('finding-twice', EscalationOutcome::Confirmed, 'It holds.', 'round-one');
+        $this->verdicts->keep('finding-twice', new EscalationVerdict(EscalationOutcome::Confirmed, 'It holds.'), 'round-one');
 
         try {
-            $this->verdicts->keep('finding-twice', EscalationOutcome::Rejected, 'It does not.', 'round-two');
+            $this->verdicts->keep('finding-twice', new EscalationVerdict(EscalationOutcome::Rejected, 'It does not.'), 'round-two');
             self::fail('A second verdict for one key was kept.');
         } catch (VerdictAlreadyKept) {
             self::assertSame(EscalationOutcome::Confirmed, $this->verdicts->ofKey('finding-twice')?->outcome);
