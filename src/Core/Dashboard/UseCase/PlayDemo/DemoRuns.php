@@ -12,7 +12,8 @@ use Symfony\Component\Messenger\MessageBusInterface;
 
 final readonly class DemoRuns
 {
-    private const string FLASH_SUCCESS = 'success';
+    // Its own type, not the generic success line, because the demo page follows the run to the review only on the page Play's redirect reaches.
+    public const string FLASH_STARTED = 'demo-started';
     private const string FLASH_ERROR = 'error';
 
     public function __construct(
@@ -50,6 +51,6 @@ final readonly class DemoRuns
         // Sent to a queue worker, because a replay sleeps at the recorded pace for minutes and must never hold a web worker.
         $this->commands->dispatch(new PlayDemoRun());
 
-        return [self::FLASH_SUCCESS, 'The demo run is starting: the caption at the bottom of each page names the stage it is in.'];
+        return [self::FLASH_STARTED,'The demo run is starting: the caption at the bottom of each page names the stage it is in.'];
     }
 }

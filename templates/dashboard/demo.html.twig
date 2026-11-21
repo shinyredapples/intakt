@@ -4,6 +4,10 @@
 
 {% block body %}
 <div class="demo">
+    {#- Only Play sets this flash type, so only the page its redirect reaches tells assets/tour-caption.js to follow the run to the review. -#}
+    {%- for line in app.flashes(constant('Intakt\\Core\\Dashboard\\UseCase\\PlayDemo\\DemoRuns::FLASH_STARTED')) %}
+    <p class="flash flash-success" data-tour-follow>{{ line }}</p>
+    {%- endfor %}
     <div class="page-head">
         {{ include('dashboard/components/character.html.twig', {character: constant('Intakt\\Core\\Dashboard\\Domain\\MascotPose::Conducting'), size: 144}, with_context = false) }}
         <div>
