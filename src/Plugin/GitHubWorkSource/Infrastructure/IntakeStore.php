@@ -5,17 +5,24 @@ declare(strict_types=1);
 namespace Intakt\Plugin\GitHubWorkSource\Infrastructure;
 
 use Doctrine\Common\EventManager;
+use Doctrine\DBAL\Exception\RetryableException;
+use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Intakt\Plugin\GitHubWorkSource\Domain\IntakeValidator;
 use Intakt\Plugin\GitHubWorkSource\Domain\ListingRows;
+use Intakt\Plugin\GitHubWorkSource\Domain\ProjectHeldByAnotherWriter;
 use Intakt\Plugin\GitHubWorkSource\Domain\StoredIssue;
+use Intakt\Plugin\GitHubWorkSource\Domain\SyncState;
 use Intakt\Plugin\GitHubWorkSource\Domain\TaskFailure;
 use Intakt\Plugin\WorkSource\Contract\TaskNotQueued;
 use InvalidArgumentException;
 use LogicException;
 use NoDiscard;
+use PDO;
+use SQLite3;
+use SQLite3Exception;
 
 // Every call works in an entity manager of its own on the shared connection: a worker keeps the shared one between ticks, what another worker stored since is the truth, a write must flush only its own rows and never another caller's pending work, and a write that fails leaves nothing behind for a later flush.
 final readonly class IntakeStore
@@ -30,30 +37,104 @@ final readonly class IntakeStore
      */
     public function issuesOf(string $project): array
     {
-        return array_values($this->storedIssuesOf($this->ownManager(), $project));
+        return $this->readOf($project, fn (): array => array_values($this->storedIssuesOf($this->ownManager(), $project)));
     }
 
-    public function validatorOf(string $project): ?string
+    public function syncStateOf(string $project): SyncState
     {
-        return $this->ownManager()->find(IntakeValidator::class, $project)?->value();
+        return $this->readOf($project, fn (): SyncState => $this->ownManager()->find(IntakeValidator::class, $project)?->state() ?? SyncState::neverSynced());
     }
 
-    // Written only while the stored validator is still the one the listing was asked with, because otherwise another worker stored a newer listing meanwhile and these rows would replace it with an older one.
+    // Named as held, because another worker's commit under way holds a pending lock that refuses even a read, and nothing says yet whether it stores a newer listing.
+    /**
+     * @template T
+     *
+     * @param callable(): T $read
+     *
+     * @return T
+     */
+    private function readOf(string $project, callable $read): mixed
+    {
+        try {
+            return $read();
+        } catch (RetryableException $refusal) {
+            throw ProjectHeldByAnotherWriter::of($project, $refusal);
+        }
+    }
+
+    // Written only while the stored generation is still the one read before the listing, because otherwise another worker stored a newer listing meanwhile and these rows would replace it with an older one.
     #[NoDiscard]
-    public function recordIfStill(string $project, ?string $askedWith, ListingRows $rows): bool
+    public function recordIfStill(string $project, SyncState $readBefore, ListingRows $rows): bool
     {
         $listed = $this->listed($project, $rows->issues);
 
-        return $this->ownManager()->wrapInTransaction(function (EntityManagerInterface $manager) use ($project, $askedWith, $listed, $rows): bool {
-            if ($manager->find(IntakeValidator::class, $project, LockMode::PESSIMISTIC_WRITE)?->value() !== $askedWith) {
-                return false;
+        try {
+            return $this->ownManager()->wrapInTransaction(function (EntityManagerInterface $manager) use ($project, $readBefore, $listed, $rows): bool {
+                $sync = $manager->find(IntakeValidator::class, $project, LockMode::PESSIMISTIC_WRITE);
+                if (($sync?->state() ?? SyncState::neverSynced())->generation !== $readBefore->generation) {
+                    return false;
+                }
+
+                $this->replaceRows($manager, $project, $listed);
+                // Kept also when the forge sent no validator, so the next listing is a full one and still has a generation to compare.
+                if ($sync instanceof IntakeValidator) {
+                    $sync->advance($rows->validator);
+
+                    return true;
+                }
+
+                $manager->persist(new IntakeValidator($project, $rows->validator));
+
+                return true;
+            });
+        } catch (UniqueConstraintViolationException|RetryableException $failure) {
+            $this->rollBackARefusedCommit();
+
+            return $this->lostAfter($failure, $project, $readBefore);
+        }
+    }
+
+    // SQLite keeps a transaction open when it refuses its COMMIT as busy, on DBAL's PDO and native SQLite3 drivers alike, while DBAL already counts it as ended and never rolls it back: left open, its uncommitted generation would be read back as another worker's and hold the write lock for every later call on the connection.
+    private function rollBackARefusedCommit(): void
+    {
+        $connection = $this->entities->getConnection();
+        if ($connection->isTransactionActive()) {
+            return;
+        }
+
+        $native = $connection->getNativeConnection();
+        if ($native instanceof PDO && $native->inTransaction()) {
+            $native->rollBack();
+        }
+
+        if ($native instanceof SQLite3) {
+            $this->rollBackNative($native);
+        }
+    }
+
+    // SQLite3 cannot say whether a transaction is open, so the rollback is tried and only its "no transaction is active" refusal is expected.
+    private function rollBackNative(SQLite3 $native): void
+    {
+        try {
+            $native->exec('ROLLBACK');
+        } catch (SQLite3Exception $refusal) {
+            if (!str_contains($refusal->getMessage(), 'no transaction is active')) {
+                throw $refusal;
             }
+        }
+    }
 
-            $this->replaceRows($manager, $project, $listed);
-            $this->recordValidator($manager, $project, $rows->validator);
+    private function lostAfter(UniqueConstraintViolationException|RetryableException $failure, string $project, SyncState $readBefore): false
+    {
+        $stored = $this->syncStateOf($project);
 
-            return true;
-        });
+        // The first sync of a project finds no row to lock, so a worker that commits the row after it was read makes the insert collide (or, on SQLite in WAL mode, the stale read snapshot refuses the write). It loses only when the newer listing is really stored.
+        if ($stored->generation !== $readBefore->generation) {
+            return false;
+        }
+
+        // A lock wait or a deadlock with the generation unmoved means another writer holds the project and has not committed: it may still roll back, so this is not a lost write and gets a name of its own. Any other failure stays one.
+        throw $failure instanceof RetryableException ? ProjectHeldByAnotherWriter::of($project, $failure) : $failure;
     }
 
     // Apart from the issue rows, so a task that is closed after it failed for good still holds the tasks that wait on it.
@@ -80,12 +161,14 @@ final readonly class IntakeStore
      */
     public function failuresOf(string $project): array
     {
-        $failures = [];
-        foreach ($this->rowsOf($this->ownManager(), TaskFailure::class, $project) as $failure) {
-            $failures[$failure->number()] = $failure->reason();
-        }
+        return $this->readOf($project, function () use ($project): array {
+            $failures = [];
+            foreach ($this->rowsOf($this->ownManager(), TaskFailure::class, $project) as $failure) {
+                $failures[$failure->number()] = $failure->reason();
+            }
 
-        return $failures;
+            return $failures;
+        });
     }
 
     /**
@@ -178,25 +261,5 @@ final readonly class IntakeStore
         }
 
         $manager->persist($issue);
-    }
-
-    private function recordValidator(EntityManagerInterface $manager, string $project, ?string $validator): void
-    {
-        $stored = $manager->find(IntakeValidator::class, $project);
-        if (null === $validator) {
-            if (null !== $stored) {
-                $manager->remove($stored);
-            }
-
-            return;
-        }
-
-        if (null === $stored) {
-            $manager->persist(new IntakeValidator($project, $validator));
-
-            return;
-        }
-
-        $stored->replace($validator);
     }
 }
