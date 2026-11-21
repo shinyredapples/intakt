@@ -123,7 +123,7 @@ final class CheckMainTest extends TestCase
     public function testAnUnsignedCommitMainAlreadyHeldStaysUnsignedWhenTheRepositoryIsCutShallowAtTheBaseWhileTheCoverageIsRead(): void
     {
         [$unsigned, $base, $main] = $this->taskBranchThatMergedMainAboveAnUnsignedCommit();
-        $this->gitThatCutsShallowAt($base, onlyWhileRunning: true);
+        $this->gitThatCutsShallowAtOnlyWhileTheCoverageIsRead($base);
 
         $classification = $this->classify($main);
 
@@ -133,7 +133,7 @@ final class CheckMainTest extends TestCase
     public function testARepositoryLeftCutShallowAtTheBaseWhileTheCoverageIsReadIsRefused(): void
     {
         [, $base, $main] = $this->taskBranchThatMergedMainAboveAnUnsignedCommit();
-        $this->gitThatCutsShallowAt($base, onlyWhileRunning: false);
+        $this->gitThatLeavesTheRepositoryCutShallowAt($base);
 
         $this->expectException(MainNotRead::class);
 
@@ -221,17 +221,38 @@ final class CheckMainTest extends TestCase
         return [$unsigned, $base, new WatchedMain($seen, [new RecordedMerge($head, $base)])];
     }
 
-    // A git in front of the real one, because only that forces the cut between the shallow check and the coverage read; a cut removed when the read ends is one no later check can see.
-    private function gitThatCutsShallowAt(string $entry, bool $onlyWhileRunning): void
+    // A cut removed when the read ends is one no later check can see.
+    private function gitThatCutsShallowAtOnlyWhileTheCoverageIsRead(string $entry): void
     {
+        $this->gitThatRunsOnTheCoverageRead($this->cutShallowAt($entry)."\n        ".$this->realGit()." \"\$@\"\n        status=\$?\n        rm -f ".$this->shallowFile()."\n        exit \$status");
+    }
+
+    private function gitThatLeavesTheRepositoryCutShallowAt(string $entry): void
+    {
+        $this->gitThatRunsOnTheCoverageRead($this->cutShallowAt($entry)."\n        exec ".$this->realGit().' "$@"');
+    }
+
+    private function cutShallowAt(string $entry): string
+    {
+        return sprintf("printf '%%s\\n' %s > %s", escapeshellarg($entry), $this->shallowFile());
+    }
+
+    private function shallowFile(): string
+    {
+        return escapeshellarg($this->repository->path.'/.git/shallow');
+    }
+
+    private function realGit(): string
+    {
+        return escapeshellarg((string) new ExecutableFinder()->find('git'));
+    }
+
+    // A git in front of the real one, because only that forces the cut between the shallow check and the coverage read.
+    private function gitThatRunsOnTheCoverageRead(string $coverage): void
+    {
+        $git = $this->realGit();
         $this->bin = sys_get_temp_dir().'/intakt-watchdog-git-'.bin2hex(random_bytes(6));
         mkdir($this->bin);
-        $git = escapeshellarg((string) new ExecutableFinder()->find('git'));
-        $shallow = escapeshellarg($this->repository->path.'/.git/shallow');
-        $cut = sprintf("printf '%%s\\n' %s > %s", escapeshellarg($entry), $shallow);
-        $coverage = $onlyWhileRunning
-            ? $cut."\n        ".$git." \"\$@\"\n        status=\$?\n        rm -f ".$shallow."\n        exit \$status"
-            : $cut."\n        exec ".$git.' "$@"';
         file_put_contents($this->bin.'/git', "#!/bin/sh\ncase \" \$* \" in\n    *\" --not \"*)\n        ".$coverage."\n        ;;\n    *) exec ".$git." \"\$@\" ;;\nesac\n");
         chmod($this->bin.'/git', 0o700);
         $this->path = (string) getenv('PATH');
