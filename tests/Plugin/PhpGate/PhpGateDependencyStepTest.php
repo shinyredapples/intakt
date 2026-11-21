@@ -697,9 +697,8 @@ final class PhpGateDependencyStepTest extends TestCase
         new Filesystem()->dumpFile($this->directory.'/'.$file, json_encode($record, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES));
     }
 
+    // A real locked install from a local repository, reached through an insteadOf rule for the remote address the lock guard accepts, because only Composer itself shows where it clones a package.
     /**
-     * A real locked install from a local repository, reached through an insteadOf rule for the remote address the lock guard accepts, because only Composer itself shows where it clones a package.
-     *
      * @param array<string, mixed> $extra
      */
     private function composerSourceInstall(string $name, array $extra): void
