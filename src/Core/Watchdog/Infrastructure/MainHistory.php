@@ -28,6 +28,9 @@ final readonly class MainHistory implements CommitHistory
     // One header per object format, because git names the signature header after the hash the repository uses.
     private const array SIGNATURE_HEADERS = ['sha1' => 'gpgsig', 'sha256' => 'gpgsig-sha256'];
 
+    // An empty shallow file is git's own way to read no shallow entries, so git follows the real parents and fails on one that is missing.
+    private const array NO_SHALLOW_ENTRIES = ['--shallow-file', ''];
+
     private const string SSH_ARMOR = '-----BEGIN SSH SIGNATURE-----';
     private const string NAMESPACE = 'git';
     private const string PRINCIPAL = 'owner';
@@ -91,13 +94,13 @@ final readonly class MainHistory implements CommitHistory
         $walk = trim($this->read(['rev-list', '--first-parent', '--reverse', '--parents', $since.'..'.$tip]));
 
         $chain = FirstParentChain::fromWalk('' === $walk ? [] : explode("\n", $walk), $since, $tip);
-        // The oldest commit stands on the commit itself, or on an ancestor of it when main holds the commit only through a second parent (a fast-forward to a branch that merged main). A cut can hide ancestry but never invent it, so a yes here is true.
-        $foot = $chain->foot ?? $since;
-        if ($foot !== $since && !$this->holds(['merge-base', '--is-ancestor', $foot, $since])) {
-            throw MainNotRead::brokenWalk($since, $tip);
+        if (null === $chain->foot) {
+            return [];
         }
-        // The oldest listed commit must not be reachable from the commit, asked with the shallow entries ignored, because a cut during the walk hides the ancestry that leaves a commit main already held out of the walk; a pruned commit then fails the read instead of answering no.
-        if ([] !== $chain->commits && $this->holds(['merge-base', '--is-ancestor', $chain->commits[0], $since], ignoringShallow: true)) {
+
+        // The oldest commit stands on the commit itself, or on an ancestor of it when main holds the commit only through a second parent (a fast-forward to a branch that merged main). A cut can hide ancestry but never invent it, so a yes here is true.
+        // The oldest commit must also not be reachable from the commit, asked with no shallow entries, because a cut during the walk hides the ancestry that leaves a commit main already held out of the walk; a pruned commit then fails the read instead of answering no.
+        if (!$this->holds(['merge-base', '--is-ancestor', $chain->foot, $since]) || $this->holds(['merge-base', '--is-ancestor', $chain->commits[0], $since], self::NO_SHALLOW_ENTRIES)) {
             throw MainNotRead::brokenWalk($since, $tip);
         }
 
@@ -218,13 +221,14 @@ final readonly class MainHistory implements CommitHistory
 
     /**
      * @param list<string> $arguments
+     * @param list<string> $options
      *
      * @throws MainNotRead
      * @throws RuntimeException
      */
-    private function holds(array $arguments, bool $ignoringShallow = false): bool
+    private function holds(array $arguments, array $options = []): bool
     {
-        $answer = $this->run($arguments, ignoringShallow: $ignoringShallow);
+        $answer = $this->run($arguments, options: $options);
 
         return match ($answer->getExitCode()) {
             0 => true,
@@ -250,11 +254,12 @@ final readonly class MainHistory implements CommitHistory
     /**
      * @param list<string>                $arguments
      * @param array<string, string|false> $overrides
+     * @param list<string>                $options
      *
      * @throws MainNotRead
      * @throws RuntimeException
      */
-    private function run(array $arguments, array $overrides = [], bool $ignoringShallow = false): Process
+    private function run(array $arguments, array $overrides = [], array $options = []): Process
     {
         $directory = $this->directory();
 
@@ -267,9 +272,8 @@ final readonly class MainHistory implements CommitHistory
             throw MainNotRead::because(sprintf('git %s could not be prepared: %s', $arguments[0], $failed->getMessage()));
         }
 
-        // An empty shallow file is git's own way to read no shallow entries, so git walks the real parents and fails on one that is missing.
-        $command = $ignoringShallow ? [$call->command[0], '--shallow-file', '', ...array_slice($call->command, 1)] : $call->command;
-        $process = new Process($command, $call->directory, [...$call->environment, ...$overrides], null, self::TIMEOUT_SECONDS);
+        // Options go right after the program, because git reads its global options only before the command.
+        $process = new Process([$call->command[0], ...$options, ...array_slice($call->command, 1)], $call->directory, [...$call->environment, ...$overrides], null, self::TIMEOUT_SECONDS);
         $process->run();
 
         return $process;
