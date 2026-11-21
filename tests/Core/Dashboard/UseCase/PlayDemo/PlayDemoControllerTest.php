@@ -166,10 +166,75 @@ final class PlayDemoControllerTest extends DashboardPageTestCase
         $this->browser->request('POST', '/demo', ['_token' => $token]);
 
         self::assertResponseStatusCodeSame(303);
-        self::assertResponseRedirects('/demo');
+        self::assertMatchesRegularExpression('~^/demo\?play=[0-9a-f]{32}$~', (string) $this->browser->getResponse()->headers->get('Location'));
         self::assertEquals([new PlayDemoRun()], array_map(static fn (Envelope $sent): object => $sent->getMessage(), $this->queued()));
         $this->browser->followRedirect();
         self::assertSelectorTextContains('.flash-success', 'The demo run is starting');
+    }
+
+    public function testThePagePlaysRedirectReachesTellsTheTourToFollowTheRun(): void
+    {
+        $token = $this->tokenFromThePage();
+        $this->browser->request('POST', '/demo', ['_token' => $token]);
+
+        $page = $this->browser->followRedirect();
+
+        self::assertSame(['The demo run is starting: the caption at the bottom of each page names the stage it is in.'], $page->filter('[data-tour-follow]')->each(static fn (Crawler $line): string => $line->text()));
+    }
+
+    public function testALaterVisitToTheDemoPageDoesNotTellTheTourToFollow(): void
+    {
+        $token = $this->tokenFromThePage();
+        $this->browser->request('POST', '/demo', ['_token' => $token]);
+        $this->browser->followRedirect();
+
+        self::assertCount(0, $this->demoPage()->filter('[data-tour-follow]'));
+    }
+
+    public function testAVisitFromAnotherTabBeforePlaysRedirectArrivesLeavesTheFollowToTheRedirect(): void
+    {
+        $token = $this->tokenFromThePage();
+        $this->browser->request('POST', '/demo', ['_token' => $token]);
+        $redirect = (string) $this->browser->getResponse()->headers->get('Location');
+
+        $otherTab = $this->demoPage();
+        $page = $this->browser->request('GET', $redirect);
+
+        self::assertCount(0, $otherTab->filter('[data-tour-follow]'));
+        self::assertCount(1, $page->filter('[data-tour-follow]'));
+    }
+
+    public function testAPlaySignThatNoPlayGaveDoesNotTellTheTourToFollow(): void
+    {
+        $token = $this->tokenFromThePage();
+        $this->browser->request('POST', '/demo', ['_token' => $token]);
+
+        $page = $this->browser->request('GET', '/demo?play='.str_repeat('0', 32));
+
+        self::assertResponseIsSuccessful();
+        self::assertCount(0, $page->filter('[data-tour-follow]'));
+    }
+
+    public function testAPlaySignInAnotherShapeIsIgnored(): void
+    {
+        $page = $this->browser->request('GET', '/demo?play=started');
+
+        self::assertResponseIsSuccessful();
+        self::assertCount(0, $page->filter('[data-tour-follow]'));
+    }
+
+    public function testASuccessLineFromAnotherFormDoesNotTellTheTourToFollow(): void
+    {
+        $this->demoPage();
+        $session = $this->browser->getRequest()->getSession();
+        self::assertInstanceOf(FlashBagAwareSessionInterface::class, $session);
+        $session->getFlashBag()->add('success', 'The provider key is kept.');
+        $session->save();
+
+        $page = $this->demoPage();
+
+        self::assertSame('The provider key is kept.', $page->filter('.flash-success')->text());
+        self::assertCount(0, $page->filter('[data-tour-follow]'));
     }
 
     public function testPressingPlayWithoutAValidTokenStartsNothing(): void
@@ -252,6 +317,16 @@ final class PlayDemoControllerTest extends DashboardPageTestCase
         $this->demoRunAt(2);
 
         self::assertSame(TourStage::ChangeArrives->value, $this->demoPage()->filter('aside#tour-caption')->attr('data-stage'));
+    }
+
+    public function testOnlyTheCaptionOfTheLastStageSaysItIsTheLast(): void
+    {
+        $this->demoRunAt(1);
+        self::assertCount(0, $this->demoPage()->filter('aside#tour-caption[data-tour-last]'));
+
+        $this->ledger->append(new LedgerEvent(LedgerEventKind::JudgeDone, '{"round":"demo-round-1","act":[],"follow_ups":[]}'));
+
+        self::assertSame(TourStage::RoundEnds->value, $this->demoPage()->filter('aside#tour-caption[data-tour-last]')->attr('data-stage'));
     }
 
     public function testTheCaptionShowsOneDotPerStageWithTheCurrentOneMarkedAndNoStageCount(): void

@@ -219,6 +219,12 @@ final class MainHistoryTest extends TestCase
             {
                 return $this->history->signatureOf($commit);
             }
+
+            #[Override]
+            public function broughtInBy(RecordedMerge $merge): array
+            {
+                return $this->history->broughtInBy($merge);
+            }
         };
 
         $classification = new CommitClassifier($forcePushAfterTheAncestryCheck)->classify(new WatchedMain($seen, []));
@@ -310,6 +316,29 @@ final class MainHistoryTest extends TestCase
         $signed = $this->repository->commitSignedWith($this->privateKey('owner'), 'Owner change');
 
         self::assertSame(SignatureStatus::OwnerSigned, $this->history([$this->publicKey('owner')])->signatureOf($signed));
+    }
+
+    public function testASha1RepositoryNamesCommitsWithFortyCharacters(): void
+    {
+        $this->repository->commitEmpty('Seen');
+
+        self::assertSame(40, $this->history([])->commitNameLength());
+    }
+
+    public function testASha256RepositoryNamesCommitsWithSixtyFourCharacters(): void
+    {
+        $this->repository->remove();
+        $this->repository = new TemporaryRepository('sha256');
+        $this->repository->commitEmpty('Seen');
+
+        self::assertSame(64, $this->history([])->commitNameLength());
+    }
+
+    public function testTheNameLengthIsNotReadFromAFolderThatIsNotTheRepository(): void
+    {
+        $this->expectException(MainNotRead::class);
+
+        new MainHistory(new HardenedGit(), $this->repository->path.'/missing', [], new Filesystem())->commitNameLength();
     }
 
     public function testFirstParentsSinceACommitComeOldestFirstWithoutTheCommitsAMergeBroughtFromItsSideBranch(): void

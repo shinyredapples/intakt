@@ -11,6 +11,7 @@ use Intakt\Core\Dashboard\Domain\ReviewTrends;
 use Intakt\Core\Dashboard\Infrastructure\LedgerQueuedRounds;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LivePageRendering;
+use Intakt\Core\Dashboard\Infrastructure\PublishedBench;
 use Intakt\Core\Dashboard\Infrastructure\SampleChangeSource;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Review\Contract\ChangeSource;
@@ -29,6 +30,7 @@ final readonly class ShowTrendsController
         private LedgerQueuedRounds $queued,
         private SampleChangeSource $sample,
         private LivePageRendering $pages,
+        private PublishedBench $bench,
     ) {
     }
 
@@ -44,6 +46,7 @@ final readonly class ShowTrendsController
         return new Response($this->pages->render($request, 'dashboard/trends.html.twig', [
             'trends' => $trends,
             'up_next' => new Board($reviews)->upNext($this->queued->in($events)),
+            'bench' => $this->bench->headline(),
             'sample_can_start' => $this->sample->source() instanceof ChangeSource,
         ]));
     }
