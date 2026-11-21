@@ -68,10 +68,10 @@ final class ParityRecordTest extends TestCase
         ], array_keys(self::notBuiltItemsOfTheRecord()));
     }
 
-    #[DataProvider('behaviorsNotBuiltYet')]
     /**
      * @param list<string> $tasks
      */
+    #[DataProvider('behaviorsNotBuiltYet')]
     public function testEachBehaviorNotBuiltYetIsReportedByNameWithThePlanTaskThatBuildsIt(array $tasks): void
     {
         $plan = (string) file_get_contents(dirname(__DIR__, 3).'/docs/plan.md');
