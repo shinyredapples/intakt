@@ -9,6 +9,10 @@ final readonly class FullReport
     // Because Intakt's own .gitignore leaves out var/, and the ASCII-only report keeps a tree whose gates do scan var/ passing.
     public const string FOLDER = 'var/check';
 
+    private const string GENERATED = '~^report-[0-9a-f]{16}\.json$~';
+
+    private const int KEPT = 20;
+
     /**
      * @param list<GateReport> $reports
      */
@@ -30,14 +34,50 @@ final readonly class FullReport
             return null;
         }
 
-        $file = self::FOLDER.'/report-'.bin2hex(random_bytes(8)).'.json';
-        $handle = @fopen($this->root.'/'.$file, 'x');
+        $name = 'report-'.bin2hex(random_bytes(8)).'.json';
+        $handle = @fopen($folder.'/'.$name, 'x');
 
         if (false === $handle) {
             return null;
         }
 
-        return $this->writtenAs($file, $handle, $contents."\n");
+        $file = $this->writtenAs(self::FOLDER.'/'.$name, $handle, $contents."\n");
+
+        if (null !== $file) {
+            $this->pruneOlderReportsIn($folder, $name);
+        }
+
+        return $file;
+    }
+
+    // Because a glob() pattern built from the checked path would read a tree named like tree[a] as a pattern, the literal folder is listed, and only generated names count, so a hand-made report and this run's own report always stay.
+    private function pruneOlderReportsIn(string $folder, string $written): void
+    {
+        $older = $this->otherGeneratedReportsIn($folder, $written);
+        arsort($older);
+
+        foreach (array_slice(array_keys($older), self::KEPT - 1) as $path) {
+            @unlink($path);
+        }
+    }
+
+    /**
+     * @return array<string, int> each path with its modification time
+     */
+    private function otherGeneratedReportsIn(string $folder, string $written): array
+    {
+        $times = [];
+
+        foreach (preg_grep(self::GENERATED, @scandir($folder) ?: []) ?: [] as $name) {
+            $path = $folder.'/'.$name;
+            $time = $name === $written || is_link($path) || !is_file($path) ? false : @filemtime($path);
+
+            if (false !== $time) {
+                $times[$path] = $time;
+            }
+        }
+
+        return $times;
     }
 
     // Because a report the summary names must hold everything, a failed or short write leaves no file, and its warning never reaches stdout between the JSON lines.
