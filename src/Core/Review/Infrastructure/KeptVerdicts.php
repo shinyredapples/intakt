@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Infrastructure;
 
+use DateTimeImmutable;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
@@ -12,6 +13,7 @@ use Intakt\Core\Review\Contract\EscalationVerdict;
 use Intakt\Core\Review\Domain\KeptVerdict;
 use Intakt\Core\Review\Domain\VerdictAlreadyKept;
 use Symfony\Component\Clock\ClockInterface;
+use UnexpectedValueException;
 
 // The kept verdict of each finding key, written inside the caller's transaction; the key is the table's primary key, so the database decides which of two racing writers keeps its verdict.
 final readonly class KeptVerdicts
@@ -49,12 +51,12 @@ final readonly class KeptVerdicts
             return null;
         }
 
-        return new KeptVerdict(
-            $key,
-            EscalationOutcome::from((string) $row['outcome']),
-            (string) $row['reasons'],
-            (string) $row['round'],
-            $connection->convertToPHPValue($row['recorded_at'], 'utc_datetime_immutable'),
-        );
+        $recordedAt = $connection->convertToPHPValue($row['recorded_at'], 'utc_datetime_immutable');
+
+        if (!is_string($row['outcome']) || !is_string($row['reasons']) || !is_string($row['round']) || !$recordedAt instanceof DateTimeImmutable) {
+            throw new UnexpectedValueException(sprintf('The kept verdict of key "%s" is not a readable row.', $key));
+        }
+
+        return new KeptVerdict($key, EscalationOutcome::from($row['outcome']), $row['reasons'], $row['round'], $recordedAt);
     }
 }
