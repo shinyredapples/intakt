@@ -319,12 +319,7 @@ final class IntakeStoreTest extends KernelTestCase
             $readBefore = $loser->syncStateOf('alpha');
             $events->addEventListener([Events::onFlush], new WriterBetweenWriteAndCommit($second));
 
-            $held = null;
-            try {
-                (void) $loser->recordIfStill('alpha', $readBefore, new ListingRows([$this->stored(Issues::task(7))], null));
-            } catch (ProjectHeldByAnotherWriter $held) {
-            }
-
+            $held = $this->heldWhileRecording($loser, $readBefore);
             $second->commit();
 
             self::assertInstanceOf(ProjectHeldByAnotherWriter::class, $held);
@@ -481,6 +476,17 @@ final class IntakeStoreTest extends KernelTestCase
         $this->expectException(LogicException::class);
 
         new IntakeStore(self::createStub(EntityManagerInterface::class))->issuesOf('alpha');
+    }
+
+    private function heldWhileRecording(IntakeStore $loser, SyncState $readBefore): ?ProjectHeldByAnotherWriter
+    {
+        try {
+            (void) $loser->recordIfStill('alpha', $readBefore, new ListingRows([$this->stored(Issues::task(7))], null));
+        } catch (ProjectHeldByAnotherWriter $held) {
+            return $held;
+        }
+
+        return null;
     }
 
     /**

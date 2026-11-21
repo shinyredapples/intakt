@@ -68,14 +68,19 @@ final readonly class IntakeStore
                 return true;
             });
         } catch (UniqueConstraintViolationException|RetryableException $failure) {
-            // The first sync of a project finds no row to lock, so a worker that commits the row after it was read makes the insert collide (or, on SQLite in WAL mode, the stale read snapshot refuses the write). It loses only when the newer listing is really stored.
-            if ($this->syncStateOf($project)->generation !== $readBefore->generation) {
-                return false;
-            }
-
-            // A lock wait or a deadlock with the generation unmoved means another writer holds the project and has not committed: it may still roll back, so this is not a lost write and gets a name of its own. Any other failure stays one.
-            throw $failure instanceof RetryableException ? ProjectHeldByAnotherWriter::of($project, $failure) : $failure;
+            return $this->lostAfter($failure, $project, $readBefore);
         }
+    }
+
+    private function lostAfter(UniqueConstraintViolationException|RetryableException $failure, string $project, SyncState $readBefore): false
+    {
+        // The first sync of a project finds no row to lock, so a worker that commits the row after it was read makes the insert collide (or, on SQLite in WAL mode, the stale read snapshot refuses the write). It loses only when the newer listing is really stored.
+        if ($this->syncStateOf($project)->generation !== $readBefore->generation) {
+            return false;
+        }
+
+        // A lock wait or a deadlock with the generation unmoved means another writer holds the project and has not committed: it may still roll back, so this is not a lost write and gets a name of its own. Any other failure stays one.
+        throw $failure instanceof RetryableException ? ProjectHeldByAnotherWriter::of($project, $failure) : $failure;
     }
 
     // Apart from the issue rows, so a task that is closed after it failed for good still holds the tasks that wait on it.
