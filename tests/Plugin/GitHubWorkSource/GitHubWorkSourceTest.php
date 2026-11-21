@@ -261,7 +261,9 @@ final class GitHubWorkSourceTest extends KernelTestCase
     {
         $logs = $this->logger->cleanLogs();
         self::assertCount(1, $logs);
-        [$level, $message, $context] = $logs[0];
+        $record = $logs[0];
+        self::assertIsArray($record);
+        [$level, $message, $context] = $record;
         self::assertIsString($level);
         self::assertIsString($message);
         self::assertIsArray($context);
