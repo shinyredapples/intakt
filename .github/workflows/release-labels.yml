@@ -10,7 +10,8 @@ permissions:
 jobs:
   label:
     if: github.event.pull_request.head.repo.full_name == github.repository && (github.event.action != 'edited' || github.event.changes.title)
-    # On CI_RUNS_ON; with no checkout, a runner without gh gets Ubuntu's own package (any gh version does here).
+    # On CI_RUNS_ON; with no checkout, a runner without gh gets Ubuntu's own package (any gh version does here). The
+    # version is printed because the log is then the record of which gh the runner had.
     runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-24.04"') }}
     # On the job, not the workflow: a skipped edit (no title change) must not cancel a running label job.
     concurrency:
@@ -22,7 +23,9 @@ jobs:
       pull-requests: write
     steps:
       - name: Install gh when the runner lacks it
-        run: command -v gh > /dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq gh; }
+        run: |
+          command -v gh > /dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq gh; }
+          gh --version
       - name: Label the pull request with the type of its title
         env:
           GH_TOKEN: ${{ github.token }}

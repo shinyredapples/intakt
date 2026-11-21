@@ -23,6 +23,10 @@ final class ReleaseLabelsTest extends SandboxTestCase
         esac
         BASH;
 
+    // Stands in for the apt install, so the step's version line has a gh to run.
+    private const string INSTALL_FAKE_GH = 'if [ "$1 $2" = "apt-get install" ]; then '
+        .'printf "#!/bin/sh\\necho gh version 2.45.0\\n" > "${0%/*}/gh"; /bin/chmod +x "${0%/*}/gh"; fi'."\n";
+
     public function testTheTypeOfTheTitleBecomesTheOnlyTypeLabel(): void
     {
         $sandbox = $this->sandboxLabeled("docs\nwip\n");
@@ -55,15 +59,19 @@ final class ReleaseLabelsTest extends SandboxTestCase
     {
         $sandbox = $this->emptySandbox();
         $sandbox->write('calls', '');
-        $sandbox->write('bin/sudo', "#!/bin/sh\necho \"sudo \$*\" >> \"\$CALLS\"\n");
+        $sandbox->write('bin/sudo', "#!/bin/sh\necho \"sudo \$*\" >> \"\$CALLS\"\n".self::INSTALL_FAKE_GH);
 
-        self::assertTrue($this->runInstallStep($sandbox)->succeeded());
+        $installed = $this->runInstallStep($sandbox);
+        self::assertTrue($installed->succeeded(), $installed->errors);
         self::assertSame("sudo apt-get update -qq\nsudo apt-get install -y -qq gh\n", file_get_contents($sandbox->root.'/calls'));
+        self::assertStringContainsString('gh version 2.45.0', $installed->output);
 
         $sandbox->write('calls', '');
-        $sandbox->write('bin/gh', "#!/bin/sh\n");
-        self::assertTrue($this->runInstallStep($sandbox)->succeeded());
+        $sandbox->write('bin/gh', "#!/bin/sh\necho 'gh version 2.83.0'\n");
+        $kept = $this->runInstallStep($sandbox);
+        self::assertTrue($kept->succeeded(), $kept->errors);
         self::assertSame('', file_get_contents($sandbox->root.'/calls'));
+        self::assertStringContainsString('gh version 2.83.0', $kept->output);
     }
 
     // Only the fakes are on PATH, so a gh installed on this machine stays out.
