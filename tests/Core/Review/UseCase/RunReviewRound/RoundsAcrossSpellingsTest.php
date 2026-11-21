@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\RunReviewRound;
 
+use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\Platforms\AbstractMySQLPlatform;
 use Intakt\Core\Review\Contract\ChangeAddress;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
@@ -62,9 +64,25 @@ final class RoundsAcrossSpellingsTest extends KernelTestCase
         self::assertSame([$first, $second], array_map(static fn (ReviewRound $round): string => $round->id()->toRfc4122(), $rounds));
     }
 
+    public function testTwoSpellingsOfOnePullRequestWithAFragmentNumberTheirRoundsOneAndTwo(): void
+    {
+        $fixture = new RoundFixture(self::getContainer());
+
+        $first = $fixture->round($fixture->startAtHead(self::OTHER_SPELLING.'#discussion', SampleIdentity::HEAD));
+        $second = $fixture->round($fixture->startAtHead(self::PULL.'#discussion', SampleIdentity::HEAD));
+
+        self::assertSame([1, 2, self::PULL], [$first->number(), $second->number(), $second->change()]);
+    }
+
     public function testTwoLocalBranchesWhoseNamesDifferOnlyInLetterCaseNumberTheirRoundsApart(): void
     {
         $fixture = new RoundFixture(self::getContainer());
+        $connection = self::getContainer()->get('doctrine.dbal.default_connection');
+        self::assertInstanceOf(Connection::class, $connection);
+
+        if ($connection->getDatabasePlatform() instanceof AbstractMySQLPlatform) {
+            self::markTestSkipped('MySQL and MariaDB compare the address without letter case, so two branch names that differ only in letter case share one row there.');
+        }
 
         $upper = $fixture->round($fixture->startAtHead('feat/Widget', SampleIdentity::HEAD));
         $lower = $fixture->round($fixture->startAtHead('feat/widget', SampleIdentity::HEAD));

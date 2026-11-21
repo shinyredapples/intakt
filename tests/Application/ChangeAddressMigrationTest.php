@@ -57,13 +57,31 @@ final class ChangeAddressMigrationTest extends KernelTestCase
         $fixture = new RoundFixture(self::getContainer());
         $old = $fixture->startAtHead(self::PULL, SampleIdentity::HEAD);
         $this->respell(self::PULL, self::OLD_SPELLING);
-        $this->respellStartRow(self::OLD_SPELLING);
+        $this->respellStartRows(self::PULL, self::OLD_SPELLING);
 
         $this->migrate();
         $next = $fixture->startAtHead(self::OLD_SPELLING, SampleIdentity::HEAD);
 
         $review = self::getContainer()->get(LedgerReviewPages::class)->reviewOf($next);
         self::assertSame([$old, $next], array_map(static fn (ReviewedRound $round): string => $round->round, $review->rounds ?? []));
+    }
+
+    public function testTheNewRoundOfACanonicalSequenceStaysTheLatestOfItsReviewBesideALongerCollidingOldSpelling(): void
+    {
+        $fixture = new RoundFixture(self::getContainer());
+        $this->refuseOnMySql();
+        $first = $fixture->startAtHead(self::PULL, SampleIdentity::HEAD);
+        for ($round = 0; $round < 3; ++$round) {
+            $fixture->startAtHead(self::OTHER_PULL, SampleIdentity::HEAD);
+        }
+        $this->respell(self::OTHER_PULL, self::OLD_SPELLING);
+        $this->respellStartRows(self::OTHER_PULL, self::OLD_SPELLING);
+
+        $this->migrate();
+        $next = $fixture->startAtHead(self::PULL, SampleIdentity::HEAD);
+
+        $review = self::getContainer()->get(LedgerReviewPages::class)->reviewOf($next);
+        self::assertSame([[$first, $next], 3], [array_map(static fn (ReviewedRound $round): string => $round->round, $review->rounds ?? []), $review?->nextNumber()]);
     }
 
     public function testALocalBranchWithCapitalLettersKeepsItsSpellingThroughTheMigration(): void
@@ -98,15 +116,20 @@ final class ChangeAddressMigrationTest extends KernelTestCase
     }
 
     // The ledger is append-only, so a start row written before the migration keeps the spelling it named.
-    private function respellStartRow(string $to): void
+    private function respellStartRows(string $from, string $to): void
     {
         $connection = $this->connection();
-        $stored = $connection->fetchOne("SELECT payload FROM ledger_event WHERE kind = 'review_started'");
-        self::assertIsString($stored);
-        $payload = json_decode($stored, true, flags: JSON_THROW_ON_ERROR);
-        self::assertIsArray($payload);
-        $payload['change'] = $to;
-        $connection->update('ledger_event', ['payload' => json_encode($payload, JSON_THROW_ON_ERROR)], ['kind' => 'review_started']);
+
+        foreach ($connection->fetchFirstColumn("SELECT payload FROM ledger_event WHERE kind = 'review_started'") as $stored) {
+            self::assertIsString($stored);
+            $payload = json_decode($stored, true, flags: JSON_THROW_ON_ERROR);
+            self::assertIsArray($payload);
+
+            if ($from === $payload['change']) {
+                $payload['change'] = $to;
+                $connection->update('ledger_event', ['payload' => json_encode($payload, JSON_THROW_ON_ERROR)], ['payload' => $stored]);
+            }
+        }
     }
 
     private function migrate(): void

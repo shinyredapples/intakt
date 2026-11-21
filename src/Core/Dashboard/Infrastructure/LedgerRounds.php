@@ -175,10 +175,27 @@ final class LedgerRounds
         }
 
         $others = array_filter($this->started, static fn (ReviewedRound $other): bool => $other !== $chosen && $chosen->isOfTheSameReviewAs($other));
-        $rounds = [$chosen, ...array_values($others)];
+        $rounds = self::oneSequenceOf($chosen, [$chosen, ...array_values($others)]);
         usort($rounds, static fn (ReviewedRound $one, ReviewedRound $other): int => ($one->number ?? 0) <=> ($other->number ?? 0));
 
         return $rounds;
+    }
+
+    // A round number twice among the spellings of one pull request means two spellings were stored apart before the migration to the canonical address (Version20261122100000), each with a numbering of its own; only the chosen round's spelling is then its review, because mixing two numberings would make a legacy round the latest and offer a round number storage does not expect.
+    /**
+     * @param list<ReviewedRound> $rounds
+     *
+     * @return list<ReviewedRound>
+     */
+    private static function oneSequenceOf(ReviewedRound $chosen, array $rounds): array
+    {
+        $numbers = array_filter(array_map(static fn (ReviewedRound $round): ?int => $round->number, $rounds), static fn (?int $number): bool => null !== $number);
+
+        if (count($numbers) === count(array_unique($numbers))) {
+            return $rounds;
+        }
+
+        return array_values(array_filter($rounds, static fn (ReviewedRound $round): bool => $round->change === $chosen->change));
     }
 
     // Each round keeps its own mark, never one of its review, because a replay round opened after a live round of the same change is still a replay; kept per round for one read, because the board and a review page may ask for the same round more than once.
