@@ -74,9 +74,9 @@ final readonly class LedgerReviewPages
     /**
      * @return list<ReviewedRound>
      */
-    public function everyRound(): array
+    public function everyRoundOf(RecordedEvents $events): array
     {
-        return array_merge([], ...array_map(static fn (Review $review): array => $review->rounds, $this->rounds($this->ledger->readInOrder())->reviews()));
+        return array_merge([], ...array_map(static fn (Review $review): array => $review->rounds, $this->rounds($events)->reviews()));
     }
 
     // Read from the rows that name the round alone, because a live update goes out for each streamed text and must not read every start the ledger holds; the latest start wins, as on the page, and null means the reviewer has not started in that round.

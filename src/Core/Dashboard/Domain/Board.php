@@ -42,6 +42,12 @@ final readonly class Board
         return new WhoIsWorking($this->cards);
     }
 
+    // From the cards in their order, so the Trends page lists the same rounds the board shows in review.
+    public function upNext(): UpNext
+    {
+        return new UpNext($this->cards);
+    }
+
     // From the same lanes and Waiting on you cards the page shows, so the line never tells a different story than the board below it.
     public function headline(): Headline
     {

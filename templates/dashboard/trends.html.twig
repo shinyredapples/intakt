@@ -166,4 +166,31 @@
     </section>
 </div>
 {% endif %}
+{#- Shown also before the first review and with the demo left out, because it lists what the board shows in review now, not what the figures count (D6 of #2864). -#}
+<section class="section up-next" id="up-next" aria-labelledby="up-next-title">
+    <h2 id="up-next-title">Up next</h2>
+    {% if up_next.emptyLine is not null %}
+    <p class="muted">{{ up_next.emptyLine }}</p>
+    {% else %}
+    {% for group in [{title: 'In progress', rounds: up_next.inProgress}, {title: 'Waiting to start', rounds: up_next.waitingToStart}] %}
+    {% if group.rounds is not empty %}
+    <h3 id="up-next-{{ loop.index }}">{{ group.title }}</h3>
+    <ul class="review-rows" aria-labelledby="up-next-{{ loop.index }}">
+        {% for round in group.rounds %}
+        <li class="review-row" data-project="{{ round.project }}">
+            <a class="review-link" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_REVIEW'), {round: round.round}) }}">
+                <span class="review-title">{{ round.change }}</span>
+                <span class="review-facts">
+                    <span class="pname">{{ round.project }}</span>
+                    {% if round.number is not null %}<span>Round {{ round.number }}</span>{% endif %}
+                    <span>{{ round.outcomes is empty ? 'No reviewer has started yet' : round.outcomes|map(outcome => outcome.role|capitalize)|join(', ') }}</span>
+                </span>
+            </a>
+        </li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+    {% endfor %}
+    {% endif %}
+</section>
 {% endblock %}
