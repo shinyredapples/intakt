@@ -14,7 +14,7 @@ final class InstallGhTest extends SandboxTestCase
 
     private const string FINGERPRINT = '7F38BBB59D064DBCB3D84D725612B36462313325';
 
-    // Each fake logs its call. gpg exports the pinned key only when HAS_KEY is set; apt-get install puts a 2.83 gh in place.
+    // Fakes, because the real install needs root and the network; the log lets a test compare the exact calls in order.
     private const array FAKES = [
         'curl' => '#!/bin/sh'."\n".'echo "curl $*" >> "$CALLS"',
         'gpg' => '#!/bin/sh'."\n".'echo "gpg $*" >> "$CALLS"'."\n".'if [ "$1" = --export ] && [ -n "$HAS_KEY" ]; then echo key; fi',
