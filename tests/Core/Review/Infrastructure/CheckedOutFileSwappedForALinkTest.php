@@ -3,12 +3,12 @@
 declare(strict_types=1);
 
 namespace Intakt\Core\Review\Contract {
-    use function realpath as resolvedForReal;
+    use Intakt\Tests\Core\Review\Infrastructure\CheckedOutFileSwappedForALinkTest;
 
     // Swaps the file for a link right after it was resolved, a moment no test can time; it stays defined for every later test in the process, which is harmless because any other path passes through to a real resolve.
     function realpath(string $path): string|false
     {
-        $resolved = resolvedForReal($path);
+        $resolved = CheckedOutFileSwappedForALinkTest::resolvedForReal($path);
 
         if ('resolved-then-swapped.txt' === basename($path) && is_file($path.'.swap')) {
             rename($path.'.swap', $path);
@@ -20,7 +20,7 @@ namespace Intakt\Core\Review\Contract {
 }
 
 namespace Intakt\Core\Review\Infrastructure {
-    use function fopen as openedForReal;
+    use Intakt\Tests\Core\Review\Infrastructure\CheckedOutFileSwappedForALinkTest;
 
     // Swaps the file for a link between its check and its open, a moment no test can time; it stays defined for every later test in the process, which is harmless because any other file name passes through to a real open.
     /**
@@ -33,7 +33,7 @@ namespace Intakt\Core\Review\Infrastructure {
             clearstatcache(true);
         }
 
-        return openedForReal($filename, $mode);
+        return CheckedOutFileSwappedForALinkTest::openedForReal($filename, $mode);
     }
 }
 
@@ -97,6 +97,20 @@ namespace Intakt\Tests\Core\Review\Infrastructure {
             file_put_contents($this->repository->path.'/kept.txt', "first\r\nsecond\n");
 
             self::assertSame("first\r\nsecond\n", CheckedOutFile::contentBehindNoLinkOf($this->checkout(), 'kept.txt'));
+        }
+
+        // Called from the overrides, because only a call outside their namespace reaches the real function.
+        public static function resolvedForReal(string $path): string|false
+        {
+            return realpath($path);
+        }
+
+        /**
+         * @return resource|false
+         */
+        public static function openedForReal(string $filename, string $mode)
+        {
+            return fopen($filename, $mode);
         }
 
         private function prepareSwap(string $name): void
