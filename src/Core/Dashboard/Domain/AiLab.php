@@ -18,7 +18,7 @@ enum AiLab: string
     case Meta = 'Meta';
     case XAi = 'xAI';
 
-    // The first lab whose marker starts the id or its model name; an id of an unknown lab has none, and the page then shows the model name alone.
+    // Null for an unknown lab, because a guessed lab would mislabel a reviewer; the page then shows the model name alone.
     public static function of(string $model): ?self
     {
         $id = strtolower(self::withoutHost($model));
@@ -30,7 +30,7 @@ enum AiLab: string
         ));
     }
 
-    // The part after the namespace and before the hosting provider, with spaces for dashes, so "moonshotai/Kimi-K3.1-Pro:deepinfra" reads "Kimi K3.1 Pro".
+    // Without the namespace and the hosting provider, because a reader new to AI reviews knows "Kimi K3.1 Pro", not "moonshotai/Kimi-K3.1-Pro:deepinfra".
     public static function modelName(string $model): string
     {
         $words = explode(' ', str_replace(['-', '_'], ' ', self::lastPart(self::withoutHost($model))));
@@ -40,7 +40,7 @@ enum AiLab: string
             default => ucfirst($word),
         }, $words));
 
-        // A version written with dashes (claude-opus-4-5) reads as one number.
+        // Joined again, because a version written with dashes (4-5) would otherwise read as two numbers.
         return (string) preg_replace('/(?<= )(\d) (\d)(?= |$)/', '$1.$2', $name);
     }
 
@@ -51,7 +51,7 @@ enum AiLab: string
     {
         return match ($this) {
             self::Anthropic => ['anthropic/', 'claude'],
-            self::OpenAi => ['openai/', 'gpt', 'o3', 'o4', 'codex'],
+            self::OpenAi => ['openai/', 'gpt'],
             self::Google => ['google/', 'gemini', 'gemma'],
             self::MoonshotAi => ['moonshotai/', 'kimi'],
             self::DeepSeek => ['deepseek'],

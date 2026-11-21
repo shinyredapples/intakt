@@ -45,7 +45,7 @@ final readonly class ReviewerOutcome
         return null === $this->model || '' === $this->model ? $this->tier.' tier, model not recorded' : $this->model;
     }
 
-    // The model's name and its AI lab for a reader new to the ids; the raw id stays in modelInWords() for the details.
+    // Apart from modelInWords(), because a reader new to the ids needs the name and lab while the details keep the raw id (#3133).
     public function modelName(): string
     {
         return null === $this->model || '' === $this->model ? $this->modelInWords() : AiLab::modelName($this->model);

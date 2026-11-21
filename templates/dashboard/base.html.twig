@@ -69,6 +69,10 @@
 {% for line in app.flashes('error') %}
 <p class="flash flash-error">{{ line }}</p>
 {% endfor %}
+{# A start that Intakt could not run because it is not set up yet: plain words and the way to Setup, never a red error (#3133). #}
+{% for line in app.flashes(constant('Intakt\\Core\\Dashboard\\UseCase\\StartReview\\ReviewStarts::FLASH_SETUP')) %}
+<p class="flash flash-setup">{{ line }} <a href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::FIRST_RUN')) }}">Open Setup</a></p>
+{% endfor %}
 {# A toast floats over the page instead of a line above it, so a started round does not push the page down. #}
 {% for line in app.flashes('toast') %}
 {{ include('dashboard/components/toast.html.twig', {message: line}, with_context = false) }}

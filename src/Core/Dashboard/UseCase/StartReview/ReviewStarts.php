@@ -11,6 +11,7 @@ use Intakt\Core\Dashboard\Infrastructure\RoundLock;
 use Intakt\Core\Dashboard\Infrastructure\SampleChangeSource;
 use Intakt\Core\Platform\Contract\ReportableFailure;
 use Intakt\Core\Review\Contract\ChangeSource;
+use Intakt\Core\Review\Contract\PanelNotConfigured;
 use Intakt\Core\Review\Contract\RequestedRound;
 use Intakt\Core\Review\Contract\SampleChange;
 use Intakt\Core\Review\Contract\StartReview;
@@ -21,6 +22,10 @@ final readonly class ReviewStarts
 {
     private const string FLASH_TOAST = 'toast';
     private const string FLASH_ERROR = 'error';
+    // Its own kind, because base.html.twig shows it as a calm line with a link to Setup rather than as a red error (#3133).
+    public const string FLASH_SETUP = 'setup';
+    public const string REPLAY_NOT_STARTED = 'This is a recorded review. To review your own change, add a provider key on Setup.';
+    public const string NO_PANEL = 'This project has no reviewers yet. To review a change, add a provider key on Setup.';
 
     public function __construct(
         private LedgerReviewPages $reviews,
@@ -52,6 +57,11 @@ final readonly class ReviewStarts
             return null;
         }
 
+        // A recording has no panel to run, so a press from an old page or a direct post is answered before anything is dispatched (#3133).
+        if ($review->everyRoundIsAReplay()) {
+            return new StartAnswer([self::FLASH_SETUP, self::REPLAY_NOT_STARTED]);
+        }
+
         // Taken only now, for a round the ledger knows, and released by RoundLock once the answer is built; keyed by the review's first round, so two presses that arrive together from two round pages of one review are kept apart too, and RoundNotNext still refuses a second press that comes later.
         if (!$this->locks->tryHolding($review->firstRound())) {
             return new StartAnswer([self::FLASH_ERROR, 'Another press for this review is still running, so nothing was started.']);
@@ -72,6 +82,9 @@ final readonly class ReviewStarts
     {
         try {
             $handled = $this->commands->dispatch($command)->last(HandledStamp::class);
+        } catch (PanelNotConfigured) {
+            // Calm words and a way on instead of the exception text, because a missing panel means Intakt is not set up yet, not that something broke (#3133).
+            return new StartAnswer([self::FLASH_SETUP, self::NO_PANEL]);
         } catch (ReportableFailure $refusal) {
             return new StartAnswer([self::FLASH_ERROR, $refusal->getMessage()]);
         }

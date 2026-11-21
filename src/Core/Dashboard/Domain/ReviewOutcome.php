@@ -49,7 +49,7 @@ enum ReviewOutcome: string
         };
     }
 
-    // The verdict card's plain words; the value stays the technical term the CLI, MCP and docs use.
+    // Apart from the value, because the CLI, MCP and docs keep the technical term while the verdict card speaks plainly (#3133).
     public function plainWords(): string
     {
         return match ($this) {

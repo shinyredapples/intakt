@@ -17,3 +17,4 @@ code { font-family: var(--f-mono); font-size: var(--t13); }
 
 .flash-success { color: var(--link); }
 .flash-error { color: var(--red); }
+.flash-setup { padding: var(--s12) var(--s16); border-radius: var(--r-card); background: var(--tint); }

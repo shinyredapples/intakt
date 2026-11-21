@@ -20,7 +20,7 @@ final class AiLabTest extends TestCase
         yield 'hosted Kimi' => ['moonshotai/Kimi-K3.1-Pro:deepinfra', 'Kimi K3.1 Pro', AiLab::MoonshotAi];
         yield 'hosted DeepSeek' => ['deepseek-ai/DeepSeek-V4-Pro-0813:deepinfra', 'DeepSeek V4 Pro 0813', AiLab::DeepSeek];
         yield 'Claude with a dashed version' => ['claude-opus-4-5', 'Claude Opus 4.5', AiLab::Anthropic];
-        yield 'GPT' => ['gpt-6.2-sol', 'GPT 6.2 Sol', AiLab::OpenAi];
+        yield 'GPT under a namespace' => ['openai/gpt-6.2-sol', 'GPT 6.2 Sol', AiLab::OpenAi];
         yield 'Qwen under a namespace' => ['Qwen/Qwen3-Coder-480B', 'Qwen3 Coder 480B', AiLab::Qwen];
         yield 'an unknown lab' => ['acme/robot-7', 'Robot 7', null];
     }

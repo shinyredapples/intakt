@@ -22,7 +22,6 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\DomCrawler\Crawler;
 
-// The verdict card answers first (#3133): the outcome in plain words, the findings to fix and the panel, above everything else.
 #[CoversClass(ShowReviewController::class)]
 #[UsesClass(LedgerReviewPages::class)]
 #[UsesClass(Review::class)]
