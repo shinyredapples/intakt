@@ -199,6 +199,64 @@ final class NarrowCatchRuleTest extends PhpStanRuleTestCase
         self::assertStringContainsString('src/Lossy.php:10 intakt.narrowCatch A catch of Throwable at a failure boundary that neither rethrows nor records the failure', $this->ruleFindingsIn($sandbox));
     }
 
+    public function testAMarkedThrowableCatchThatLogsWithoutBindingTheFailureFailsStaticAnalysis(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/Worker.php', <<<'PHP'
+            <?php
+            use Psr\Log\LoggerInterface;
+
+            final readonly class Worker
+            {
+                public function __construct(private LoggerInterface $logger)
+                {
+                }
+
+                public function run(callable $work): void
+                {
+                    try {
+                        $work();
+                    }
+                    // Boundary: keeps one failed job from stopping the worker
+                    catch (Throwable) {
+                        $this->logger->error('The job failed.');
+                    }
+                }
+            }
+            PHP);
+
+        self::assertStringContainsString('src/Worker.php:16 intakt.narrowCatch A catch of Throwable at a failure boundary that neither rethrows nor records the failure', $this->ruleFindingsIn($sandbox));
+    }
+
+    public function testAMarkedThrowableCatchThatLogsTheBoundFailurePassesStaticAnalysis(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/Worker.php', <<<'PHP'
+            <?php
+            use Psr\Log\LoggerInterface;
+
+            final readonly class Worker
+            {
+                public function __construct(private LoggerInterface $logger)
+                {
+                }
+
+                public function run(callable $work): void
+                {
+                    try {
+                        $work();
+                    }
+                    // Boundary: keeps one failed job from stopping the worker
+                    catch (Throwable $failure) {
+                        $this->logger->error('The job failed.', ['exception' => $failure]);
+                    }
+                }
+            }
+            PHP);
+
+        self::assertSame('', $this->ruleFindingsIn($sandbox));
+    }
+
     public function testLibraryExceptionsSharingARootsShortNamePassStaticAnalysis(): void
     {
         $this->assertRuleAccepts('narrow-catch-library-exceptions');
