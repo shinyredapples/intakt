@@ -21,7 +21,7 @@ final class BoardStylesTest extends TestCase
     // Asserted, because an absolute .sr-only label of a folded strip escaped the static scroller and widened the page at 1440 (#2659).
     public function testTheBoardScrollerHoldsItsScreenReaderLabelsSoTheyNeverWidenThePage(): void
     {
-        $rules = $this->rulesOf($this->sheet());
+        $rules = $this->rulesOf($this->sheetOutside('max-width: 760px'));
 
         self::assertMatchesRegularExpression('/overflow-x:\s*auto;.*position:\s*relative/s', $rules['.board'] ?? '');
     }
@@ -65,6 +65,39 @@ final class BoardStylesTest extends TestCase
 
         self::assertMatchesRegularExpression('/^\s*display:\s*none;\s*$/', $rules['.col-hide'] ?? '');
         self::assertArrayNotHasKey('.board .col.collapsed', $this->rulesOf($this->sheetOutside('min-width: 761px')));
+    }
+
+    // Asserted, because DESIGN.md (Phone patterns) asks for one column at a time that a swipe snaps column by column.
+    public function testOnAPhoneTheBoardShowsOneColumnAtATimeAndSnapsByColumn(): void
+    {
+        $rules = $this->rulesOf($this->mediaBlock('max-width: 760px'));
+
+        self::assertMatchesRegularExpression('/scroll-snap-type:\s*x mandatory/', $rules['.board'] ?? '');
+        self::assertMatchesRegularExpression('/^\s*flex:\s*0 0 100%;\s*min-width:\s*0;\s*scroll-snap-align:\s*start;\s*$/', $rules['.board .col, .board .col.col-needs'] ?? '');
+    }
+
+    // Sticky, because the switcher must stay in reach while a long column scrolls; 44 px, because that is the phone floor of DESIGN.md.
+    public function testOnAPhoneTheColumnSwitcherIsStickyWith44PxButtonsAndOnlyThere(): void
+    {
+        $phone = $this->rulesOf($this->mediaBlock('max-width: 760px'));
+
+        self::assertMatchesRegularExpression('/display:\s*flex;.*position:\s*sticky;\s*top:\s*var\(--top\)/s', $phone['.colswitch'] ?? '');
+        self::assertMatchesRegularExpression('/height:\s*44px/', $phone['.colswitch button'] ?? '');
+        self::assertMatchesRegularExpression('/background:\s*var\(--selected\)/', $phone['.colswitch button[aria-pressed="true"]'] ?? '');
+        self::assertMatchesRegularExpression('/^\s*display:\s*none;\s*$/', $this->rulesOf($this->sheetOutside('max-width: 760px'))['.colswitch'] ?? '');
+        self::assertMatchesRegularExpression('/^\s*display:\s*none;\s*$/', $phone['.stagemap'] ?? '');
+    }
+
+    // No amber, because DESIGN.md keeps amber for what waits on the owner; the map marks the columns in view in green.
+    public function testTheColumnMapMarksColumnsInViewInGreenWithoutAmber(): void
+    {
+        $rules = $this->rulesOf($this->sheetOutside('max-width: 760px'));
+
+        self::assertMatchesRegularExpression('/background:\s*var\(--primary\)/', $rules['.sm-seg.in::before'] ?? '');
+        self::assertMatchesRegularExpression('/width:\s*18px;\s*height:\s*8px/', $rules['.sm-seg::before'] ?? '');
+        foreach (['.stagemap', '.sm-seg', '.sm-seg::before', '.sm-seg.in::before'] as $selector) {
+            self::assertStringNotContainsString('amber', $rules[$selector] ?? '');
+        }
     }
 
     public function testTheFirstDayPanelStacksItsOctopusAboveItsTextAtMost144PxHigh(): void

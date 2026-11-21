@@ -50,6 +50,19 @@
     <h2 id="board-h" class="sr-only">Tasks by state</h2>
     {# The counts are totals over every project, so the project filter hides cards and never changes a count. A crowded column renders every card and marks those past the limit, which assets/column-more.js counts again over the cards the filter shows. The wrapper carries the edge classes assets/board-edge.js sets, because the fade they turn on masks the board inside it; the same script scrolls a board marked data-scroll-to-end to Done once. #}
     {% set limit = constant('Intakt\\Core\\Dashboard\\Domain\\Board::PAGE_LIMIT') %}
+    {# The phone's switcher (DESIGN.md, Phone patterns): every column with its true total, Waiting on you first; assets/board-map.js presses the column a swipe settles on. Shown below 761 px only. #}
+    <nav class="colswitch" aria-label="Board columns">
+    {% for column in columns %}
+        {% set count = board.countOf(column) %}
+        <button type="button" data-column="{{ column.value }}" aria-controls="col-{{ column.slug }}" aria-pressed="{{ loop.first ? 'true' : 'false' }}">{{ column.value }} {{ include('dashboard/components/count.html.twig', {n: count, needs: loop.first and count > 0}, with_context = false) }}<span class="sr-only"> {{ count == 1 ? 'task' : 'tasks' }}</span></button>
+    {% endfor %}
+    </nav>
+    {# The column map (DESIGN.md, Board edge and stage map): hidden until assets/board-map.js measures a board wider than its space, which marks the columns in view and names them; never on a phone. #}
+    <div class="stagemap" hidden><span class="sm-text"></span><span class="sm-bar">
+    {%- for column in columns -%}
+        <button type="button" class="sm-seg" aria-controls="col-{{ column.slug }}" title="{{ column.value }}"><span class="sr-only">{{ column.value }}</span></button>
+    {%- endfor -%}
+    </span></div>
     <div class="board-wrap"{% if board.startsScrolledToDone %} data-scroll-to-end{% endif %}>
     {# Focusable, because a board with no card (a fresh install, or a phone that hides the column buttons) scrolls sideways with nothing in it the keyboard could reach. #}
     <div class="board" tabindex="0">
