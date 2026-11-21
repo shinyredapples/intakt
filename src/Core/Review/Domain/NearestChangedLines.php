@@ -18,7 +18,7 @@ final readonly class NearestChangedLines
     public const int MAX_LINE_LENGTH = 160;
     // Split at an underscore, a digit and a change of case, because a quote may spell a name in another case style (fooBar, foo_bar, FOO_BAR).
     private const string WORD_PART = '/[A-Z]+(?![a-z])|[A-Z]?[a-z]+/';
-    // Shorter parts (id, of, to) are in too many names to say anything.
+    // Shorter parts are left out, because a part such as id, of or to is in too many names to say anything.
     private const int MIN_PART_LENGTH = 3;
 
     /**
