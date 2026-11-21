@@ -788,6 +788,20 @@ final class FirstRunControllerTest extends WebTestCase
         self::assertSame('Start the first review', $page->filter('form.start-first-review .btn.secondary')->text());
     }
 
+    public function testWithAReviewAndTheDemoReadyOpenTheReviewIsSecondaryAndPlayIsTheOnlyPrimaryButton(): void
+    {
+        $_SERVER['INTAKT_SAMPLE_REPOSITORY'] = self::SAMPLE_REPOSITORY;
+        $_SERVER['INTAKT_COMPOSE_SERVICE'] = 'intakt';
+        $_SERVER['INTAKT_DEMO_RECORDING'] = $this->file;
+
+        $this->ledger->startRoundOf(SampleChange::CHANGE, 'round-1', 1);
+
+        $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+
+        self::assertSame('Open the review', $page->filter('a.btn.secondary')->text());
+        self::assertSame(['Play the demo run'], $page->filter('main .btn.primary')->each(static fn (Crawler $button): string => $button->text()));
+    }
+
     public function testTheSetupHeadingHasNoLeadParagraph(): void
     {
         $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);

@@ -71,7 +71,7 @@
         {%- if step.keyless is not empty or step.firstProject is not null %}
         {#- Closed, because which providers lack a key and which model each tier uses matter only to someone setting up a key. -#}
         <details class="step-details">
-            <summary>Providers and tiers</summary>
+            <summary>Providers and tiers {{ include('dashboard/components/icon.html.twig', {name: 'chevron', small: true, extra: 'chev'}, with_context = false) }}</summary>
         {%- if step.keyless is not empty %}
         <ul class="keyless">
             {%- for message in step.keyless %}

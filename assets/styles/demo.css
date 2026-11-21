@@ -30,7 +30,7 @@
 
 /* Providers without a key and the tier table, behind one disclosure, because they matter only to someone setting up a key. */
 .step-details { margin: 0 0 var(--s16); }
-.step-details > summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; color: var(--link); font-weight: 600; }
+.step-details > summary { min-height: 44px; display: flex; align-items: center; gap: var(--s8); cursor: pointer; color: var(--link); font-weight: 600; }
 
 @media (max-width: 760px) {
   .review-strip { padding: var(--s12) var(--s4); gap: var(--s4); }
