@@ -174,6 +174,7 @@ final class ParityRecordTest extends TestCase
         yield 'a parenthesis marker with a stray closing parenthesis' => ['not built yet (the rest, T1))'];
         yield 'a marker after an earlier remark that is never closed' => ['`ParityRecordTest::testAnIndentedDoneItemIsJudged` (built (most; not built yet: the rest, T1)'];
         yield 'a marker after a semicolon outside any remark' => ['built; not built yet: the rest, T1'];
+        yield 'a marker after a link whose target is never closed' => ['(see [the record](parity(test.md; not built yet: the rest, T1)'];
     }
 
     #[DataProvider('statusesThatAreNotBuiltMarkers')]
@@ -193,6 +194,8 @@ final class ParityRecordTest extends TestCase
         yield 'the parenthesis form right after a parenthesis it closes' => ['`ParityRecordTest::testAnIndentedDoneItemIsJudged` (not built yet (the rest, T1))'];
         yield 'the colon form after a semicolon in a remark it closes' => ['`ParityRecordTest::testAnIndentedDoneItemIsJudged` (built; not built yet: the rest, T1)'];
         yield 'a remark that holds a link before the marker' => ['`ParityRecordTest::testAnIndentedDoneItemIsJudged` (see [the record](parity.md); not built yet: the rest, T1)'];
+        yield 'a remark that holds a link with parentheses in its target before the marker' => ['(see [the record](parity(test).md); not built yet: the rest, T1)'];
+        yield 'a link with parentheses in its target before the remark' => ['[the record](parity(test).md) (not built yet: the rest, T1)'];
     }
 
     public function testAMarkerJustBeforeTheLineEndWithTrailingSpacesIsAccepted(): void

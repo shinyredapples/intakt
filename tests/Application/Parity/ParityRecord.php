@@ -24,10 +24,14 @@ final readonly class ParityRecord
     // Because the words alone can stand in a sentence that denies them, only the record's own form counts: it names the tasks that build the rest, and it is closed and ends the line, so no later remark can take it back.
     private const string NOT_BUILT_MARKER = 'not built yet(?| \((?:[^()]*, )?(T\d+(?: and T\d+)*)\)|: (?:[^()]*, )?(T\d+(?: and T\d+)*))';
 
-    private const string BALANCED_TEXT = '(?:[^()]|\([^()]*\))*';
+    // A Markdown link target may hold parentheses of its own, so text before the marker may nest them to any depth as long as each one closes.
+    private const string BALANCED_TEXT = '(?:[^()]|(?&parenthesized))*';
+
+    // The group is defined after the branch reset so the tasks stay group 1 in both forms.
+    private const string PARENTHESIZED = '(?(DEFINE)(?<parenthesized>\((?:[^()]|(?&parenthesized))*\)))';
 
     // A closing parenthesis is accepted exactly when it closes the remark the marker stands in, so neither a stray one nor an unclosed remark can pass.
-    private const string NOT_BUILT = '/^(?|\s*'.self::NOT_BUILT_MARKER.'|'.self::BALANCED_TEXT.'\((?:'.self::BALANCED_TEXT.'; )?'.self::NOT_BUILT_MARKER.'\))\s*$/';
+    private const string NOT_BUILT = '/^(?|\s*'.self::NOT_BUILT_MARKER.'|'.self::BALANCED_TEXT.'\((?:'.self::BALANCED_TEXT.'; )?'.self::NOT_BUILT_MARKER.'\))\s*$'.self::PARENTHESIZED.'/';
 
     private const string NOT_BUILT_FORM = 'an open item must say after `Intakt:` what is not built yet, as `not built yet (<what>, T<n>)` or `not built yet: <what>, T<n>`';
 
