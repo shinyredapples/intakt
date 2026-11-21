@@ -121,25 +121,39 @@ final readonly class CheckCommand
             return 2;
         }
 
+        $root = $options->root ?? $this->home;
+        $passed = PassedTree::before(new TreeFingerprint($root, $this->home, $options, getenv()));
+
+        // Because a tree whose every input is unchanged since it passed would pass again, its check is not run twice.
+        if ($passed->hasPassed()) {
+            $this->print(['result' => 'pass', 'failed' => [], 'reused' => PassedTree::RECORD]);
+
+            return 0;
+        }
+
         $runningTheChangesCode = array_map(static fn (Gate $gate): string => $gate->name(), array_values(array_filter($selected, static fn (Gate $gate): bool => $gate instanceof RunsTheChangesCode)));
 
-        $root = $options->root ?? $this->home;
         $children = new GateChildren($this->home, $root, $slots, $runningTheChangesCode);
         $scratch = $children->scratchOutsideTheTree();
         $reports = $children->reportsOf($names, $arguments, $scratch);
 
         // Because without the scratch folder no gate could keep its whole result, a report then would hold only the lines, so none is written.
-        return $this->runGates($reports, $scratch instanceof ScratchDirectory ? new FullReport($root, $reports) : null);
+        return $this->runGates($reports, $scratch instanceof ScratchDirectory ? new FullReport($root, $reports) : null, $passed);
     }
 
     /**
      * @param list<GateReport> $reports
      */
-    private function runGates(array $reports, ?FullReport $fullReport): int
+    private function runGates(array $reports, ?FullReport $fullReport, PassedTree $passed): int
     {
         $failed = $this->reportOn($reports);
         $summary = ['result' => [] === $failed ? 'pass' : 'fail', 'failed' => $failed];
         $file = $fullReport?->write();
+
+        // Because a pass is recorded only beside the report that holds it, a run that could not keep its report leaves nothing to reuse.
+        if ([] === $failed && null !== $file) {
+            $passed->recordPass();
+        }
 
         $this->print(null === $file ? $summary : [...$summary, 'report' => $file]);
 
