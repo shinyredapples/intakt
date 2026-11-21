@@ -252,9 +252,9 @@ final class ShippedRecordingTest extends TestCase
         self::assertNotEmpty($cells);
 
         foreach ($cells as [, $attributes, $text]) {
-            preg_match('~^ title="([^"]+)"$~', $attributes, $title);
-            self::assertArrayHasKey(1, $title, 'model cell without a title');
-            self::assertSame(AiLab::modelName($title[1]).' ('.AiLab::of($title[1])?->value.')', $text);
+            $id = preg_replace('~^ title="([^"]+)"$~', '$1', $attributes);
+            self::assertNotSame($attributes, $id, 'model cell without a title');
+            self::assertSame(AiLab::modelName((string) $id).' ('.AiLab::of((string) $id)?->value.')', $text);
         }
     }
 
