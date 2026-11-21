@@ -8,6 +8,7 @@ use DateTimeInterface;
 use Doctrine\ORM\EntityManagerInterface;
 use Intakt\Core\Budget\Domain\OutageNoticeRecord;
 use Intakt\Core\Budget\Domain\UsageReadingsStayedAway;
+use Intakt\Core\Budget\Domain\WindowReadingRecord;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\Lock\LockFactory;
@@ -49,8 +50,42 @@ final readonly class DoctrineOutageNotices
             'account' => $outage->account->key(),
             'since' => $outage->lastReadingAt->format(DateTimeInterface::ATOM),
         ]);
-        $this->entities->persist(new OutageNoticeRecord($outage->account, $outage->lastReadingAt, $outage->seenAt));
+        $notice = new OutageNoticeRecord($outage->account, $outage->lastReadingAt, $outage->seenAt);
+        $this->entities->persist($notice);
         $this->entities->flush();
+        $this->endIfReadSince($notice);
+    }
+
+    // A reading can land any time before this row is stored, and its own end of outages found no row yet, so the notice is ended by it here; looked up only once the row is stored, because a reading stored later finds the row itself.
+    private function endIfReadSince(OutageNoticeRecord $notice): void
+    {
+        /** @var list<WindowReadingRecord> $later */
+        $later = $this->entities->createQueryBuilder()
+            ->select('reading')
+            ->from(WindowReadingRecord::class, 'reading')
+            ->where('reading.provider = :provider')
+            ->andWhere('reading.account = :account')
+            ->andWhere('reading.takenAt > :lastReadingAt')
+            ->orderBy('reading.takenAt', 'ASC')
+            ->setParameter('provider', $notice->provider)
+            ->setParameter('account', $notice->account)
+            ->setParameter('lastReadingAt', $notice->lastReadingAt, 'utc_datetime_immutable')
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getResult();
+
+        foreach ($later as $reading) {
+            // One statement past the entity, because a reading may end the same row at once, and the earlier reading wins.
+            $this->entities->createQueryBuilder()
+                ->update(OutageNoticeRecord::class, 'notice')
+                ->set('notice.endedAt', ':takenAt')
+                ->where('notice.position = :position')
+                ->andWhere('notice.endedAt IS NULL OR notice.endedAt > :takenAt')
+                ->setParameter('takenAt', $reading->takenAt, 'utc_datetime_immutable')
+                ->setParameter('position', $notice->position)
+                ->getQuery()
+                ->execute();
+        }
     }
 
     private function wasNoticed(UsageReadingsStayedAway $outage): bool
