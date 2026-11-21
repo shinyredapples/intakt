@@ -51,7 +51,7 @@ final class IntakeGenerationMigrationTest extends KernelTestCase
         $connection->executeStatement("INSERT INTO work_source_validator (project, validator) VALUES ('new', NULL)");
         $this->apply(new Version20261120120000($connection, new NullLogger()), $connection, up: false);
 
-        self::assertSame(1, (int) $generation);
+        self::assertEquals(1, $generation);
         self::assertSame(['old' => 'W/"a"'], $connection->fetchAllKeyValue('SELECT project, validator FROM work_source_validator'));
     }
 
