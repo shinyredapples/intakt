@@ -690,6 +690,21 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         self::assertStringStartsWith('correctness', $lanes->filter('.who')->text());
     }
 
+    public function testEachLaneLinksToTheReviewPageOfTheRoundItIsWorkingOn(): void
+    {
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+        $this->ledger->startReviewer('round-1', 'correctness');
+        $this->ledger->startRoundOf('43', 'round-2', 3);
+        $this->ledger->startReviewer('round-2', 'security');
+
+        $lanes = $this->browser->request('GET', '/')->filter('.working a.lane');
+
+        self::assertSame(
+            [['/reviews/round-1', 'Round 1'], ['/reviews/round-2', 'Round 3']],
+            $lanes->each(static fn (Crawler $lane): array => [$lane->attr('href'), $lane->filter('.meta span')->last()->text()]),
+        );
+    }
+
     public function testEachLaneShowsADecorative24PixelMeerkatInBothThemes(): void
     {
         $this->ledger->startRoundOf('42', 'round-1', 1);

@@ -71,8 +71,9 @@ final class GitHubForgeWithoutAppTest extends TestCase
 
     public function testAVerdictIsNotPublishedAndNoRequestReachesGitHubWithoutAnApp(): void
     {
-        $this->forge('')->publishVerdict('alpha', new ChangeId(self::PULL), $this->verdict());
+        $published = $this->forge('')->publishVerdict('alpha', new ChangeId(self::PULL), $this->verdict());
 
+        self::assertFalse($published);
         self::assertSame([], $this->requests);
     }
 
