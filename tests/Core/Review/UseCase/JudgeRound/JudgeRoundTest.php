@@ -542,8 +542,8 @@ final class JudgeRoundTest extends KernelTestCase
         }
 
         self::assertSame(
-            [['quote' => '[redacted]Thing', 'lines' => [['file' => 'src/Thing.php', 'line' => 1, 'text' => '[redacted]']]]],
-            $this->judgeDonePayloads()[0]['dropped'][0]['nearest'],
+            [['id' => 'F1', 'severity' => 'P1', 'text' => '`newThing` is not defined.', 'file' => 'src/Thing.php', 'line' => 1, 'reason' => 'none of its 1 quoted code fragments is in the change', 'nearest' => [['quote' => '[redacted]Thing', 'lines' => [['file' => 'src/Thing.php', 'line' => 1, 'text' => '[redacted]']]]]]],
+            $this->judgeDonePayloads()[0]['dropped'],
         );
     }
 
