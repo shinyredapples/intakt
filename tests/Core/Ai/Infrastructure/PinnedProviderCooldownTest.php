@@ -17,6 +17,7 @@ use Intakt\Core\Ai\Infrastructure\ModelWaits;
 use Intakt\Core\Ai\Infrastructure\PinnedProviderCooldownWindows;
 use Intakt\Core\Ai\Infrastructure\SendFailures;
 use Intakt\Core\Ai\Infrastructure\TypedRejectionConverter;
+use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Tests\Core\Budget\ReadingsInMemory;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use Intakt\Tests\Support\StoredSerializerFactory;
@@ -298,6 +299,34 @@ final class PinnedProviderCooldownTest extends TestCase
 
         self::assertSame($limited, $out);
         self::assertSame(120, $this->pins->secondsUntilFree($this->deepinfra(Account::DEFAULT)));
+        self::assertContains('The cooldown of account {account} could not be saved.', array_column($logger->cleanLogs(), 1));
+    }
+
+    // Forced order: the account store's cache refuses the window's save without throwing, so the account stays free; the refusal is logged instead of recorded as a cooldown, the pin still cools and the caller gets the provider's own 429.
+    public function testAnAccountWindowTheCacheRefusesIsLoggedAndRecordsNoCooldownWhileThePinCools(): void
+    {
+        $pool = new class extends ArrayAdapter {
+            #[Override]
+            public function save(CacheItemInterface $item): bool
+            {
+                return false;
+            }
+        };
+        $clock = new NativeClock();
+        $provider = Provider::OpenAiCompatible;
+        $ledger = new InMemoryLedger();
+        $logger = new BufferingLogger();
+        $accounts = new AccountCooldownWindows(new ReadingsInMemory($clock), $pool, new LockFactory(new InMemoryStore()), $clock, $ledger, $logger, StoredSerializerFactory::create(), [$provider->value => [Account::DEFAULT]]);
+        $limited = new RateLimitExceededException(120);
+        $platform = new AccountFailoverPlatform($provider, [Account::DEFAULT => new FailingWhenRead($limited)], $accounts, $this->clock, $logger, $this->pins);
+        $answer = $platform->invoke(self::PINNED, 'Review.');
+
+        $out = $this->failureOf(static fn (): string => $answer->asText());
+
+        self::assertSame($limited, $out);
+        self::assertSame(120, $this->pins->secondsUntilFree($this->deepinfra(Account::DEFAULT)));
+        self::assertSame(0, $accounts->secondsUntilFree(new Account($provider, Account::DEFAULT)));
+        self::assertNotContains(LedgerEventKind::AccountCooledDown, $ledger->kinds());
         self::assertContains('The cooldown of account {account} could not be saved.', array_column($logger->cleanLogs(), 1));
     }
 
