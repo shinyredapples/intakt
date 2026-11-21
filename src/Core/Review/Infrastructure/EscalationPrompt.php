@@ -77,7 +77,7 @@ final readonly class EscalationPrompt
         return [$named, $others];
     }
 
-    // A cited name without a directory stands for the file that carries it, as it does for the key.
+    // Also by the file's name alone, because the key takes a cited name without a directory for the one file that carries it.
     /**
      * @param list<string> $cited
      * @param list<string> $paths

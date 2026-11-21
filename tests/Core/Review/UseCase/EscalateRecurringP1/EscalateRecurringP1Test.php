@@ -59,6 +59,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use RuntimeException;
+use Symfony\AI\Platform\Message\UserMessage;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Component\Console\Tester\CommandTester;
 use Symfony\Component\ErrorHandler\BufferingLogger;
@@ -639,7 +640,9 @@ final class EscalateRecurringP1Test extends KernelTestCase
     // The prompt the strong tier gets for the request, because the scripted strong tier sees the request before the prompt orders its diff.
     private function diffShownFor(EscalationRequest $request): string
     {
-        $text = new EscalationPrompt(new PromptCut(new Fence()))->messagesFor($request)->getMessages()[2]->asText();
+        $message = new EscalationPrompt(new PromptCut(new Fence()))->messagesFor($request)->getMessages()[2];
+        self::assertInstanceOf(UserMessage::class, $message);
+        $text = $message->asText();
         self::assertIsString($text);
 
         return $text;
