@@ -66,7 +66,7 @@ final class FirstRunWithoutAKeyJourneyTest extends JourneyTestCase
         $page = $this->visit('/setup');
 
         self::assertSame(
-            ['Watch a recorded real review now', 'Paste one provider key or Hugging Face token and run the demo review'],
+            ['Watch a recorded review', 'Run it live with your key'],
             $page->filter('#demo-choices h3')->each(static fn (Crawler $title): string => $title->text()),
         );
         self::assertSame('The demo run plays only on the compose demo, and INTAKT_COMPOSE_SERVICE is empty on this install.', $page->filter('#choice-recorded .recorded-when')->text());

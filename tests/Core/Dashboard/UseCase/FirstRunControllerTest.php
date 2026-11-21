@@ -729,7 +729,7 @@ final class FirstRunControllerTest extends WebTestCase
         $page = $this->firstRunPage(self::PROJECTS, []);
 
         self::assertSame(
-            ['Watch a recorded real review now', 'Paste one provider key or Hugging Face token and run the demo review'],
+            ['Watch a recorded review', 'Run it live with your key'],
             $page->filter('#demo-choices h3')->each(static fn (Crawler $title): string => $title->text()),
         );
     }
@@ -757,7 +757,7 @@ final class FirstRunControllerTest extends WebTestCase
 
         $page = $this->firstRunPage(self::PROJECTS, []);
 
-        self::assertSame('Watch a recorded real review now', $page->filter('#choice-recorded h3')->text());
+        self::assertSame('Watch a recorded review', $page->filter('#choice-recorded h3')->text());
         self::assertSame(DemoReadiness::NoRecording->sentence(), $page->filter('#choice-recorded .recorded-when')->text());
         self::assertCount(0, $page->filter('form.play-demo'));
         self::assertCount(0, $page->filter('#choice-recorded pre, #choice-recorded code'));
@@ -771,9 +771,59 @@ final class FirstRunControllerTest extends WebTestCase
 
         $page = $this->firstRunPage(self::PROJECTS, []);
 
-        self::assertSame(DemoReadiness::Ready->sentence(), $page->filter('#choice-recorded .recorded-when')->text());
-        self::assertSame('Play the demo run', $page->filter('#choice-recorded form.play-demo .btn.secondary')->text());
+        self::assertCount(0, $page->filter('#choice-recorded .recorded-when'));
+        self::assertSame('No key needed', $page->filter('#choice-recorded .chip')->text());
+        self::assertSame(['Play the demo run'], $page->filter('main .btn.primary')->each(static fn (Crawler $button): string => $button->text()));
         self::assertCount(1, $page->filter('form.play-demo'));
+    }
+
+    public function testWithARecordingTheFirstReviewStartIsASecondaryButton(): void
+    {
+        $_SERVER['INTAKT_SAMPLE_REPOSITORY'] = self::SAMPLE_REPOSITORY;
+        $_SERVER['INTAKT_COMPOSE_SERVICE'] = 'intakt';
+        $_SERVER['INTAKT_DEMO_RECORDING'] = $this->file;
+
+        $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+
+        self::assertSame('Start the first review', $page->filter('form.start-first-review .btn.secondary')->text());
+    }
+
+    public function testTheSetupHeadingHasNoLeadParagraph(): void
+    {
+        $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+
+        self::assertSame('Set up Intakt', $page->filter('.setup .page-head h1')->text());
+        self::assertCount(0, $page->filter('.setup .page-head p'));
+    }
+
+    public function testThePageDrawsTheFourStepsOfAReviewWithOneShortLabelEach(): void
+    {
+        $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+
+        $labels = $page->filter('.setup ol.review-strip li .rs-label')->each(static fn (Crawler $label): string => $label->text());
+
+        self::assertSame(['The change', 'Two AI labs', 'Checks every finding', 'To fix'], $labels);
+        self::assertSame([], array_filter($labels, static fn (string $label): bool => str_word_count($label) > 3));
+        self::assertCount(0, $page->filter('.review-strip p'));
+    }
+
+    public function testTheStripDrawsTwoReviewersAndTheJudgeWithTheTeamCharacters(): void
+    {
+        $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+
+        self::assertSame(
+            [0, 4, 2, 0],
+            $page->filter('.review-strip li')->each(static fn (Crawler $step): int => $step->filter('img.character')->count()),
+        );
+    }
+
+    public function testTheProvidersAndTiersSitBehindAClosedDisclosure(): void
+    {
+        $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+
+        self::assertSame('Providers and tiers', $page->filter('#step-providers details.step-details > summary')->text());
+        self::assertNull($page->filter('#step-providers details.step-details')->attr('open'));
+        self::assertCount(1, $page->filter('#step-providers details.step-details .tiers'));
     }
 
     public function testWithoutAKeyTheDemoReviewChoiceSaysToPasteOneAndRestart(): void
