@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Infrastructure;
 
-use InvalidArgumentException;
 use Intakt\Core\Review\Contract\FindingIds;
 use Intakt\Core\Review\Contract\SameCause;
+use InvalidArgumentException;
 use Symfony\Component\DependencyInjection\Attribute\AutoconfigureTag;
 use Symfony\Component\Serializer\Exception\LogicException;
 use Symfony\Component\Serializer\Exception\UnexpectedValueException;
