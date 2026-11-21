@@ -139,16 +139,16 @@ final class NearestChangedLinesTest extends TestCase
 
     public function testAPrivateKeyBodyLineOfADiffIsNotRecorded(): void
     {
-        $body = 'MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC7signing9Key+x';
+        $body = 'MIIEvQIBADANBgkqhkiG9w0BAQEFAASC7signing9Key+x';
         $dashes = str_repeat('-', 5);
-        $diff = "diff --git a/config/jwt.pem b/config/jwt.pem\n--- /dev/null\n+++ b/config/jwt.pem\n@@ -0,0 +1,3 @@\n+".$dashes.'BEGIN PRIVATE KEY'.$dashes."\n+".$body."\n+".$dashes.'END PRIVATE KEY'.$dashes."\n";
+        $diff = "diff --git a/jwt.pem b/jwt.pem\n--- /dev/null\n+++ b/jwt.pem\n@@ -0,0 +1,3 @@\n+".$dashes.'BEGIN PRIVATE KEY'.$dashes."\n+".$body."\n+".$dashes.'END PRIVATE KEY'.$dashes."\n";
 
         $nearest = $this->nearestFor('`signingKey` is never rotated.', new DiffAddedLines(new DiffPaths())->in($diff), new Redaction()->redact(...));
 
         self::assertSame([], $nearest);
     }
 
-    public function testALineIsTakenFromItsRedactedHunkWhenNoRedactionSpansALineBreak(): void
+    public function testALineIsStoredAsItStandsInItsRedactedHunk(): void
     {
         $hunk = "context\n\$reason = 'held-secret-value';\ncontext";
 
