@@ -12,9 +12,14 @@ use PHPUnit\Framework\TestCase;
 use Symfony\Component\Filesystem\Filesystem;
 
 #[CoversClass(ParityRecord::class)]
+#[CoversClass(IntaktTestNames::class)]
 #[CoversClass(TestClassIndex::class)]
 final class ParityRecordTest extends TestCase
 {
+    private const string NOT_BUILT_FORM = 'an open item must say after `Intakt:` what is not built yet, as `not built yet (<what>, T<n>)` or `not built yet: <what>, T<n>`';
+
+    private const string NOT_BUILT_FORM_AT_LINE_2 = 'line 2: '.self::NOT_BUILT_FORM;
+
     /** @var list<string> */
     private array $scratches = [];
 
@@ -30,6 +35,295 @@ final class ParityRecordTest extends TestCase
         $record = (string) file_get_contents($root.'/docs/architecture/parity.md');
 
         self::assertSame([], $this->repositoryTests()->unprovenItems($record));
+    }
+
+    public function testEveryJudgedSectionIsAHeadingOfTheRecord(): void
+    {
+        $record = (string) file_get_contents(dirname(__DIR__, 3).'/docs/architecture/parity.md');
+
+        foreach (ParityRecord::JUDGED_SECTIONS as $section) {
+            self::assertStringContainsString("\n## ".$section."\n", $record);
+        }
+    }
+
+    public function testTheOpenItemsOfTheJudgedSectionsAreTheBehaviorsNotBuiltYet(): void
+    {
+        self::assertSame([
+            'Intake and shaping, line 10: A task waits until every `Waits for #n` issue is closed; a line naming the task\'s own pull request is no wait, and a pull request target counts as the task it closes for that task\'s failure and stall, but releases only on that pull request\'s confirmed merge into main.',
+            'Intake and shaping, line 11: Open pull request work goes before new tasks; only urgent goes before it.',
+            'Intake and shaping, line 12: Projects get free slots in share order; urgent work first; a project at share 0 is paused for builds and reviews.',
+            'Intake and shaping, line 13: A task split creates its parts in order with `Waits for` lines, and the original becomes an umbrella.',
+            'Intake and shaping, line 14: A task is never split twice; an interrupted split ends on the first part once.',
+            'Intake and shaping, line 15: An umbrella closes only on trusted notes when its parts close.',
+            'Build and hand-back, line 20: Builder and reviewer egress is limited to an allowlist; the vendor login is unreadable to the model\'s commands.',
+            'Build and hand-back, line 22: Builds run the project\'s own PHP, never a fallback.',
+            'Build and hand-back, line 28: Only a green check pushes; the pre-check in the session catches refusals first.',
+            'Build and hand-back, line 29: Every Evidence item is referenced; a miss goes back once, a second miss goes to the reviewers.',
+            'Build and hand-back, line 30: A body over the cap goes back once with its commits kept.',
+            'Build and hand-back, line 31: Composer changes beyond routine go to the owner, naming the packages.',
+            'CI, line 38: A head with pending CI holds nothing; heads with finished CI go first.',
+            'CI, line 39: Red CI goes back before any reviewer and uses no cycle; the third bounce in a row counts.',
+            'CI, line 40: The CI excerpt is redacted, fenced and capped.',
+            'CI, line 41: A missed CI start is nudged once; a pull request the forge reports in conflict with main is not nudged but goes to Intakt\'s checked registry-file merge, or to a builder as a merge-main rework; an unreadable workflow fails closed.',
+        ], array_keys(self::notBuiltItemsOfTheRecord()));
+    }
+
+    /**
+     * @param list<string> $tasks
+     */
+    #[DataProvider('behaviorsNotBuiltYet')]
+    public function testEachBehaviorNotBuiltYetIsReportedByNameWithThePlanTaskThatBuildsIt(array $tasks): void
+    {
+        $plan = (string) file_get_contents(dirname(__DIR__, 3).'/docs/plan.md');
+
+        foreach ($tasks as $task) {
+            self::assertStringContainsString("\n### ".$task.' ', $plan);
+        }
+    }
+
+    /**
+     * @return iterable<string, array{list<string>}>
+     */
+    public static function behaviorsNotBuiltYet(): iterable
+    {
+        foreach (self::notBuiltItemsOfTheRecord() as $behavior => $tasks) {
+            yield $behavior => [$tasks];
+        }
+    }
+
+    public function testTwoOpenItemsWithTheSameFirstSentenceAreBothListed(): void
+    {
+        $record = "## CI\n- [ ] A behavior. One. [T1]; Intakt: not built yet (T1)\n- [ ] A behavior. Two. [T2]; Intakt: not built yet (T2)";
+
+        self::assertSame(
+            ['CI, line 2: A behavior.' => ['T1'], 'CI, line 3: A behavior.' => ['T2']],
+            $this->repositoryTests()->notBuiltItems($record),
+        );
+    }
+
+    public function testAMarkerNamingTwoTasksListsBoth(): void
+    {
+        $record = "## CI\n- [ ] A behavior. [T1]; Intakt: not built yet (the lanes, T56 and T57)";
+
+        self::assertSame(['CI, line 2: A behavior.' => ['T56', 'T57']], $this->repositoryTests()->notBuiltItems($record));
+    }
+
+    public function testAStarBulletOpenItemInAJudgedSectionIsReported(): void
+    {
+        $record = "## CI\n* [ ] A behavior. [T1]; Intakt: not built yet (T1)";
+
+        self::assertSame(
+            ['line 2: a list item of a judged section must start with `- [ ]` or `- [x]`'],
+            $this->repositoryTests()->unprovenItems($record),
+        );
+    }
+
+    #[DataProvider('listItemsWithoutTheExactCheckbox')]
+    public function testAListItemWithoutTheExactCheckboxInAJudgedSectionIsReported(string $item): void
+    {
+        self::assertSame(
+            ['line 2: a list item of a judged section must start with `- [ ]` or `- [x]`'],
+            $this->repositoryTests()->unprovenItems("## CI\n".$item),
+        );
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function listItemsWithoutTheExactCheckbox(): iterable
+    {
+        yield 'a plain bullet' => ['- A behavior. `test_old.py` [T1]'];
+        yield 'a plus bullet with a checkbox' => ['+ [x] A behavior. [T1]; Intakt: `ParityRecordTest::testAnIndentedDoneItemIsJudged`'];
+        yield 'a numbered item' => ['1. [ ] A behavior. [T1]; Intakt: not built yet (T1)'];
+        yield 'a bullet without text' => ['-'];
+    }
+
+    public function testAStarBulletOutsideTheJudgedSectionsIsNotReported(): void
+    {
+        $record = "## Reviews\n* [ ] A behavior. `test_old.py` [T1]\n- A note.";
+
+        self::assertSame([], $this->repositoryTests()->unprovenItems($record));
+    }
+
+    #[DataProvider('statusesThatAreNoNotBuiltMarker')]
+    public function testAnOpenItemWhoseStatusOnlyContainsTheWordsNotBuiltYetIsReported(string $status): void
+    {
+        self::assertSame(
+            [self::NOT_BUILT_FORM_AT_LINE_2],
+            $this->repositoryTests()->unprovenItems("## CI\n- [ ] A behavior. [T1]; Intakt: ".$status),
+        );
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function statusesThatAreNoNotBuiltMarker(): iterable
+    {
+        yield 'a sentence denying it' => ['It is no longer true that this is not built yet.'];
+        yield 'a question' => ['(it is not built yet? no, it is)'];
+        yield 'a marker without its task' => ['not built yet (the rest)'];
+        yield 'a task only after the remark closed' => ['not built yet (the rest) T1'];
+        yield 'the words inside another word' => ['`ParityRecordTest::testAnIndentedDoneItemIsJudged` (cannot built yet: T1)'];
+        yield 'a marker that is never closed' => ['not built yet (the rest, T1'];
+        yield 'a remark after the marker that says it is built' => ['not built yet (the rest, T1) was the old status; it is now built.'];
+        yield 'a remark after the colon form' => ['`ParityRecordTest::testAnIndentedDoneItemIsJudged` (not built yet: the rest, T1) but now it is'];
+        yield 'a parenthesis inside what is not built' => ['not built yet (the rest (most of it), T1)'];
+        yield 'a colon marker in a remark that is never closed' => ['`ParityRecordTest::testAnIndentedDoneItemIsJudged` (built; not built yet: the rest, T57'];
+        yield 'a colon marker right after a parenthesis that is never closed' => ['`ParityRecordTest::testAnIndentedDoneItemIsJudged` (not built yet: the rest, T1'];
+        yield 'a colon marker with a stray closing parenthesis' => ['not built yet: the rest, T1)'];
+        yield 'a parenthesis marker with a stray closing parenthesis' => ['not built yet (the rest, T1))'];
+        yield 'a marker after an earlier remark that is never closed' => ['`ParityRecordTest::testAnIndentedDoneItemIsJudged` (built (most; not built yet: the rest, T1)'];
+        yield 'a marker after a semicolon outside any remark' => ['built; not built yet: the rest, T1'];
+        yield 'a marker after a link whose target is never closed' => ['(see [the record](parity(test.md; not built yet: the rest, T1)'];
+    }
+
+    #[DataProvider('statusesThatAreNotBuiltMarkers')]
+    public function testAnOpenItemWithAClosedNotBuiltMarkerIsAccepted(string $status): void
+    {
+        self::assertSame([], $this->repositoryTests()->unprovenItems("## CI\n- [ ] A behavior. [T1]; Intakt: ".$status));
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function statusesThatAreNotBuiltMarkers(): iterable
+    {
+        yield 'the parenthesis form at the start' => ['not built yet (the rest, T1)'];
+        yield 'the colon form at the start' => ['not built yet: the rest, T1'];
+        yield 'the colon form right after a parenthesis it closes' => ['`ParityRecordTest::testAnIndentedDoneItemIsJudged` (not built yet: the rest, T1)'];
+        yield 'the parenthesis form right after a parenthesis it closes' => ['`ParityRecordTest::testAnIndentedDoneItemIsJudged` (not built yet (the rest, T1))'];
+        yield 'the colon form after a semicolon in a remark it closes' => ['`ParityRecordTest::testAnIndentedDoneItemIsJudged` (built; not built yet: the rest, T1)'];
+        yield 'a remark that holds a link before the marker' => ['`ParityRecordTest::testAnIndentedDoneItemIsJudged` (see [the record](parity.md); not built yet: the rest, T1)'];
+        yield 'a remark that holds a link with parentheses in its target before the marker' => ['(see [the record](parity(test).md); not built yet: the rest, T1)'];
+        yield 'a link with parentheses in its target before the remark' => ['[the record](parity(test).md) (not built yet: the rest, T1)'];
+    }
+
+    public function testAMarkerJustBeforeTheLineEndWithTrailingSpacesIsAccepted(): void
+    {
+        $record = "## CI\n- [ ] A behavior. [T1]; Intakt: not built yet: the rest, T1  ";
+
+        self::assertSame([], $this->repositoryTests()->unprovenItems($record));
+    }
+
+    public function testAnOpenItemWhoseMarkerNamesItsTaskIsListedWithThatTask(): void
+    {
+        $record = "## CI\n- [ ] A behavior. [T1]; Intakt: `ParityRecordTest::testAnIndentedDoneItemIsJudged` (built; not built yet: the rest, T57)";
+
+        self::assertSame(['CI, line 2: A behavior.' => ['T57']], $this->repositoryTests()->notBuiltItems($record));
+    }
+
+    public function testAMarkerFollowedByAMissingTestReportsBothTheTestAndTheMarker(): void
+    {
+        $record = "## CI\n- [ ] A behavior. [T1]; Intakt: not built yet (T1); `NoSuchParityTest::testAnything`";
+
+        self::assertSame(
+            ['line 2: NoSuchParityTest is no test class under tests/', self::NOT_BUILT_FORM_AT_LINE_2],
+            $this->repositoryTests()->unprovenItems($record),
+        );
+    }
+
+    public function testAnOpenItemOfAJudgedSectionThatSaysNothingAfterIntaktIsReportedWithItsLine(): void
+    {
+        $record = "## CI\n- [ ] A behavior. `test_old.py` [T1]";
+
+        self::assertSame(
+            [self::NOT_BUILT_FORM_AT_LINE_2],
+            $this->repositoryTests()->unprovenItems($record),
+        );
+    }
+
+    public function testAnOpenItemOfAJudgedSectionNamingOnlyExistingTestsWithoutSayingWhatIsNotBuiltIsReported(): void
+    {
+        $record = "## Build and hand-back\n- [ ] A behavior. [T1]; Intakt: `ParityRecordTest::testAnIndentedDoneItemIsJudged`";
+
+        self::assertSame(
+            [self::NOT_BUILT_FORM_AT_LINE_2],
+            $this->repositoryTests()->unprovenItems($record),
+        );
+    }
+
+    public function testAnOpenItemOfAJudgedSectionThatSaysNotBuiltYetOnlyBeforeIntaktIsReported(): void
+    {
+        $record = "## CI\n- [ ] A behavior, not built yet. [T1]; Intakt: `ParityRecordTest::testAnIndentedDoneItemIsJudged`";
+
+        self::assertSame(
+            [self::NOT_BUILT_FORM_AT_LINE_2],
+            $this->repositoryTests()->unprovenItems($record),
+        );
+    }
+
+    public function testAnOpenItemOfAJudgedSectionNamingAMissingTestIsReported(): void
+    {
+        $record = "## Intake and shaping\n- [ ] A behavior. [T1]; Intakt: `NoSuchParityTest::testAnything` (not built yet: the rest, T1)";
+
+        self::assertSame(
+            ['line 2: NoSuchParityTest is no test class under tests/'],
+            $this->repositoryTests()->unprovenItems($record),
+        );
+    }
+
+    public function testAnOpenItemOfAJudgedSectionThatSaysWhatIsNotBuiltYetPasses(): void
+    {
+        $record = "## CI\n- [ ] A behavior. [T1]; Intakt: `ParityRecordTest::testAnIndentedDoneItemIsJudged` (not built yet: the rest, T1)\n- [ ] Another. [T2]; Intakt: not built yet (T2)";
+
+        self::assertSame([], $this->repositoryTests()->unprovenItems($record));
+    }
+
+    public function testAnOpenItemOfAJudgedSectionThatSaysWhatIsNotBuiltYetIsListedByItsSectionAndFirstSentence(): void
+    {
+        $record = "## CI\n- [ ] A behavior. Done later. [T1]; Intakt: not built yet (T1)";
+
+        self::assertSame(['CI, line 2: A behavior.' => ['T1']], $this->repositoryTests()->notBuiltItems($record));
+    }
+
+    public function testADoneItemOfAJudgedSectionIsNotListedAsNotBuiltThoughItsRemarkNamesAMissingPart(): void
+    {
+        $record = '## CI'."\n".'- [x] A behavior. [T1]; Intakt: `ParityRecordTest::testAnIndentedDoneItemIsJudged` (not built yet: the lane, T2)';
+
+        self::assertSame([], $this->repositoryTests()->notBuiltItems($record));
+    }
+
+    public function testAnOpenItemOutsideTheJudgedSectionsIsNeitherJudgedNorListed(): void
+    {
+        $record = "## CI\n- [ ] A behavior. [T1]; Intakt: not built yet (T1)\n## Reviews\n- [ ] Another. `test_old.py` [T2]; Intakt: `NoSuchParityTest::testAnything`\n  and more words";
+        $parity = $this->repositoryTests();
+
+        self::assertSame([], $parity->unprovenItems($record));
+        self::assertSame(['CI, line 2: A behavior.' => ['T1']], $parity->notBuiltItems($record));
+    }
+
+    public function testAHeadingThatOnlyStartsLikeAJudgedSectionNameDoesNotTurnOnJudging(): void
+    {
+        $record = "## CI later\n- [ ] A behavior. `test_old.py` [T1]";
+
+        self::assertSame([], $this->repositoryTests()->unprovenItems($record));
+    }
+
+    public function testADeeperHeadingInsideAJudgedSectionKeepsItJudged(): void
+    {
+        $record = "## CI\n### Details\n- [ ] A behavior. `test_old.py` [T1]";
+
+        self::assertSame(
+            ['line 3: '.self::NOT_BUILT_FORM],
+            $this->repositoryTests()->unprovenItems($record),
+        );
+    }
+
+    public function testATopLevelHeadingEndsAJudgedSection(): void
+    {
+        $record = "## CI\n# Appendix\n- [ ] A behavior. `test_old.py` [T1]";
+
+        self::assertSame([], $this->repositoryTests()->unprovenItems($record));
+    }
+
+    public function testANonBlankLineDirectlyAfterAnOpenItemOfAJudgedSectionIsReported(): void
+    {
+        $record = "## CI\n- [ ] A behavior. [T1]; Intakt: not built yet (T1)\n  and `NoSuchParityTest::testAnything`";
+
+        self::assertSame(
+            ['line 3: an open item of a judged section must stay on one line'],
+            $this->repositoryTests()->unprovenItems($record),
+        );
     }
 
     public function testADoneItemNamingAnExistingTestMethodPasses(): void
@@ -347,6 +641,16 @@ final class ParityRecordTest extends TestCase
     private function repositoryTests(): ParityRecord
     {
         return new ParityRecord(dirname(__DIR__, 2), 'Intakt\Tests');
+    }
+
+    /**
+     * @return array<string, list<string>>
+     */
+    private static function notBuiltItemsOfTheRecord(): array
+    {
+        $record = (string) file_get_contents(dirname(__DIR__, 3).'/docs/architecture/parity.md');
+
+        return new ParityRecord(dirname(__DIR__, 2), 'Intakt\Tests')->notBuiltItems($record);
     }
 
     /**
