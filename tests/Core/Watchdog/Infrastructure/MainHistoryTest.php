@@ -6,10 +6,12 @@ namespace Intakt\Tests\Core\Watchdog\Infrastructure;
 
 use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
+use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Core\Watchdog\Contract\Classification;
 use Intakt\Core\Watchdog\Contract\CommitHistory;
 use Intakt\Core\Watchdog\Contract\CommitName;
 use Intakt\Core\Watchdog\Contract\MainHistoryRewritten;
+use Intakt\Core\Watchdog\Contract\MainNotRead;
 use Intakt\Core\Watchdog\Contract\MainViolation;
 use Intakt\Core\Watchdog\Contract\RecordedMerge;
 use Intakt\Core\Watchdog\Contract\SignatureStatus;
@@ -34,7 +36,9 @@ use Symfony\Component\Process\Process;
 #[CoversClass(OwnerKey::class)]
 #[CoversClass(OwnerKeyRefused::class)]
 #[CoversClass(MainHistoryRewritten::class)]
+#[CoversClass(MainNotRead::class)]
 #[UsesClass(HardenedGit::class)]
+#[UsesClass(RepositoryAttributesRefused::class)]
 #[UsesClass(GitCall::class)]
 #[UsesClass(CommitClassifier::class)]
 #[UsesClass(Classification::class)]
@@ -350,6 +354,70 @@ final class MainHistoryTest extends TestCase
         $history = new MainHistory(new HardenedGit(), $relative, [], new Filesystem());
 
         self::assertTrue($history->contains($seen));
+    }
+
+    public function testAShallowRepositoryIsRefusedBeforeAnyCommitIsWalked(): void
+    {
+        $base = $this->repository->commitEmpty('Base');
+        $seen = $this->repository->commitEmpty('Seen');
+        $this->repository->commitEmpty('New');
+        $this->repository->cutHistoryBelow($seen);
+
+        $this->expectException(MainNotRead::class);
+        $this->expectExceptionMessage('is a shallow repository');
+
+        $this->history([])->firstParentsSince($base);
+    }
+
+    public function testASubdirectoryOfATemporaryRepositoryRaisesMainNotRead(): void
+    {
+        $seen = $this->repository->commitFile('sub/file', 'content');
+
+        $this->expectException(MainNotRead::class);
+        $this->expectExceptionMessage('is not the repository itself');
+
+        new MainHistory(new HardenedGit(), $this->repository->path.'/sub', [], new Filesystem())->contains($seen);
+    }
+
+    public function testTheGitDirectoryOfARepositoryWithAWorkTreeRaisesMainNotRead(): void
+    {
+        $seen = $this->repository->commitEmpty('Seen');
+
+        $this->expectException(MainNotRead::class);
+        $this->expectExceptionMessage('is not the repository itself');
+
+        new MainHistory(new HardenedGit(), $this->repository->path.'/.git', [], new Filesystem())->contains($seen);
+    }
+
+    public function testABareRepositoryIsReadThroughItsGitDirectory(): void
+    {
+        $seen = $this->repository->commitEmpty('Seen');
+        $bare = $this->keys.'/bare.git';
+        new Process(['git', 'clone', '--quiet', '--bare', $this->repository->path, $bare])->mustRun();
+
+        self::assertTrue(new MainHistory(new HardenedGit(), $bare, [], new Filesystem())->contains($seen));
+    }
+
+    public function testAMissingRepositoryPathRaisesMainNotRead(): void
+    {
+        $seen = $this->repository->commitEmpty('Seen');
+
+        $this->expectException(MainNotRead::class);
+        $this->expectExceptionMessage('does not exist');
+
+        new MainHistory(new HardenedGit(), $this->repository->path.'/missing', [], new Filesystem())->contains($seen);
+    }
+
+    public function testAnExistingInfoAttributesFileRaisesMainNotRead(): void
+    {
+        $this->repository->commitEmpty('Seen');
+        $signed = $this->repository->commitSignedWith($this->privateKey('owner'), 'Owner change');
+        file_put_contents($this->repository->path.'/.git/info/attributes', "* filter=anything\n");
+
+        $this->expectException(MainNotRead::class);
+        $this->expectExceptionMessage('info/attributes exists');
+
+        $this->history([$this->publicKey('owner')])->signatureOf($signed);
     }
 
     public function testAnOwnerKeyWithItsCommentIsAccepted(): void

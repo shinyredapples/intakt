@@ -8,6 +8,7 @@ use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Core\Watchdog\Contract\CommitHistory;
 use Intakt\Core\Watchdog\Contract\MainHistoryRewritten;
+use Intakt\Core\Watchdog\Contract\MainNotRead;
 use Intakt\Core\Watchdog\Contract\SignatureStatus;
 use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
@@ -50,23 +51,26 @@ final readonly class MainHistory implements CommitHistory
     }
 
     /**
-     * @throws RepositoryAttributesRefused
+     * @throws MainNotRead
      * @throws RuntimeException
      */
     public function contains(string $commit): bool
     {
+        $this->mustBeReadable();
+
         return $this->holds(['merge-base', '--is-ancestor', $commit, $this->tip()]);
     }
 
     /**
      * @return list<string>
      *
-     * @throws RepositoryAttributesRefused
+     * @throws MainNotRead
      * @throws RuntimeException
      * @throws MainHistoryRewritten
      */
     public function firstParentsSince(string $commit): array
     {
+        $this->mustBeReadable();
         // One pinned tip for the ancestry check and the walk, because a force push between two reads of the ref would walk a history that dropped the commit.
         $tip = $this->tip();
         if (!$this->holds(['merge-base', '--is-ancestor', $commit, $tip])) {
@@ -79,12 +83,13 @@ final readonly class MainHistory implements CommitHistory
     }
 
     /**
-     * @throws RepositoryAttributesRefused
+     * @throws MainNotRead
      * @throws RuntimeException
      * @throws IOException
      */
     public function signatureOf(string $commit): SignatureStatus
     {
+        $this->mustBeReadable();
         $header = self::SIGNATURE_HEADERS[trim($this->read(['rev-parse', '--show-object-format']))] ?? null;
         // A format git adds later has a header this class does not know, so its commits fail closed instead of reading as unsigned.
         if (null === $header) {
@@ -100,7 +105,58 @@ final readonly class MainHistory implements CommitHistory
     }
 
     /**
-     * @throws RepositoryAttributesRefused
+     * @throws MainNotRead
+     * @throws RuntimeException
+     */
+    private function mustBeReadable(): void
+    {
+        $this->mustBeTheRepository();
+        $this->mustBeComplete();
+    }
+
+    /**
+     * @throws MainNotRead
+     * @throws RuntimeException
+     */
+    private function mustBeTheRepository(): void
+    {
+        $directory = $this->directory();
+        $answer = explode("\n", trim($this->discovered(['rev-parse', '--is-bare-repository', '--absolute-git-dir'])), 2);
+        // A bare repository is named by its git directory; anything else must be the top of its work tree, so a folder inside a work tree, or its .git, is refused.
+        $found = 'true' === $answer[0] ? $answer[1] ?? '' : trim($this->discovered(['rev-parse', '--show-toplevel']));
+
+        if ($found !== $directory) {
+            throw MainNotRead::notTheRepository($directory, $found);
+        }
+    }
+
+    /**
+     * @param list<string> $arguments
+     *
+     * @throws MainNotRead
+     * @throws RuntimeException
+     */
+    private function discovered(array $arguments): string
+    {
+        // Without the pinned work tree, because HardenedGit names the folder itself as the work tree, and git would then call any folder inside a repository its top.
+        $answer = $this->run($arguments, ['GIT_WORK_TREE' => false]);
+
+        return $answer->isSuccessful() ? $answer->getOutput() : throw MainNotRead::notTheRepository($this->directory(), '');
+    }
+
+    /**
+     * @throws MainNotRead
+     * @throws RuntimeException
+     */
+    private function mustBeComplete(): void
+    {
+        if ('false' !== trim($this->read(['rev-parse', '--is-shallow-repository']))) {
+            throw MainNotRead::shallow($this->directory());
+        }
+    }
+
+    /**
+     * @throws MainNotRead
      * @throws RuntimeException
      */
     private function tip(): string
@@ -112,7 +168,7 @@ final readonly class MainHistory implements CommitHistory
     /**
      * @param list<string> $arguments
      *
-     * @throws RepositoryAttributesRefused
+     * @throws MainNotRead
      * @throws RuntimeException
      */
     private function holds(array $arguments): bool
@@ -130,7 +186,7 @@ final readonly class MainHistory implements CommitHistory
     /**
      * @param list<string> $arguments
      *
-     * @throws RepositoryAttributesRefused
+     * @throws MainNotRead
      * @throws RuntimeException
      */
     private function read(array $arguments): string
@@ -141,20 +197,38 @@ final readonly class MainHistory implements CommitHistory
     }
 
     /**
-     * @param list<string> $arguments
+     * @param list<string>              $arguments
+     * @param array<string, string|false> $overrides
      *
-     * @throws RepositoryAttributesRefused
+     * @throws MainNotRead
      * @throws RuntimeException
      */
-    private function run(array $arguments): Process
+    private function run(array $arguments, array $overrides = []): Process
     {
-        // Resolved here, because a relative path would otherwise be read against wherever the process happens to run.
-        $directory = realpath($this->repository);
-        $call = $this->git->call($arguments, false === $directory ? $this->repository : $directory);
-        $process = new Process($call->command, $call->directory, $call->environment, null, self::TIMEOUT_SECONDS);
+        try {
+            $call = $this->git->call($arguments, $this->directory());
+        } catch (RepositoryAttributesRefused $refused) {
+            throw MainNotRead::because($refused->getMessage());
+        } catch (RuntimeException) {
+            // Because HardenedGit first asks git for the repository's object format, and that call can be stopped or fail to start; its exception is not chained, as in BranchGit.
+            throw MainNotRead::because(sprintf('git %s could not be prepared, because the look at its repository was stopped', $arguments[0]));
+        }
+
+        $process = new Process($call->command, $call->directory, [...$call->environment, ...$overrides], null, self::TIMEOUT_SECONDS);
         $process->run();
 
         return $process;
+    }
+
+    /**
+     * @throws MainNotRead
+     */
+    private function directory(): string
+    {
+        // Resolved here, because a relative path would otherwise be read against wherever the process happens to run.
+        $directory = realpath($this->repository);
+
+        return false === $directory ? throw MainNotRead::missing($this->repository) : $directory;
     }
 
     // Only the lines up to the first empty line, because a signature header in the message is not a header.
