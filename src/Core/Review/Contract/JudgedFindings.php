@@ -15,7 +15,6 @@ final readonly class JudgedFindings
      * @param list<Finding>         $actList
      * @param list<FollowUp>        $followUps
      * @param list<DroppedFinding>  $dropped
-     * @param array<string, string> $sameCause
      * @param list<Finding>         $rejected
      * @param array<string, string> $notes
      */
@@ -24,7 +23,7 @@ final readonly class JudgedFindings
         public array $actList,
         public array $followUps,
         public array $dropped,
-        public array $sameCause,
+        public SameCause $sameCause,
         // The P3 findings the judge marked reject, apart from the ones it gave no mark, because only a judge's own mark lets a changes verdict count as approval.
         public array $rejected,
         public array $notes,
@@ -40,13 +39,13 @@ final readonly class JudgedFindings
     public static function of(Judgement $judgement, array $findings, array $dropped = []): self
     {
         $marks = [];
-        $sameCause = [];
+        $sameCause = new SameCause();
         $given = array_map(static fn (Finding $finding): string => $finding->id, $findings);
 
         foreach ($judgement->marks as $judged) {
             $marks[$judged->id] = $judged->mark;
-            if (null !== $judged->same_cause_as && in_array($judged->id, $given, true) && in_array($judged->same_cause_as, $given, true)) {
-                $sameCause[$judged->id] = $judged->same_cause_as;
+            if (null !== $judged->same_cause_as && $judged->same_cause_as !== $judged->id && in_array($judged->id, $given, true) && in_array($judged->same_cause_as, $given, true)) {
+                $sameCause = $sameCause->with($judged->id, $judged->same_cause_as);
             }
         }
 

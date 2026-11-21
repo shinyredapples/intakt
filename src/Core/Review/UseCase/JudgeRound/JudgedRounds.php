@@ -30,7 +30,7 @@ final readonly class JudgedRounds
         private DiffPaths $paths,
         private StoredVerdicts $verdicts,
         private FailedJudgings $failedJudgings,
-        private RecurringP1s $recurringP1s,
+        private RecordRecurringP1s $recurringP1s,
     ) {
     }
 
@@ -80,20 +80,12 @@ final readonly class JudgedRounds
 
             if (!$this->failedJudgings->isRecorded($locked->id()->toRfc4122()) && $this->findings->markJudged($locked)) {
                 $this->ledger->judgeDone($locked, $judged, $this->votesOf($locked, $judged));
-                $this->recordRecurringP1s($locked);
+                $this->recurringP1s->of($locked);
                 $recorded = true;
             }
         });
 
         return $recorded;
-    }
-
-    // In the judging's transaction, so a recurrence is recorded exactly when the judge_done that shows it commits.
-    private function recordRecurringP1s(ReviewRound $round): void
-    {
-        foreach ($this->recurringP1s->foundWith($round) as $found) {
-            $this->ledger->recurringP1Found($found);
-        }
     }
 
     // Counted once, with the judgement, and recorded with it, so every reader of the round counts the same votes.
