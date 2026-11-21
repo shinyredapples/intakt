@@ -14,6 +14,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\DomCrawler\Crawler;
 
 // The image points INTAKT_DEMO_RECORDING at this file, so /demo works without a key only while it still reads.
 #[CoversClass(RecordingFormat::class)]
@@ -66,6 +67,22 @@ final class ShippedRecordingTest extends TestCase
     {
         // A compose `environment:` entry would win over `env_file: .env.local`, so the owner could not override it.
         self::assertStringNotContainsString('INTAKT_DEMO_RECORDING', $this->file('/compose.yaml'));
+    }
+
+    // The replay publishes the recorded update to a review page that is already open, so a card the page renders differently would change once the juror reloads.
+    public function testTheShippedJudgedUpdateShowsTheDroppedFindingWithTheQuotesTheCheckCounted(): void
+    {
+        $judged = array_values(array_filter(array_map(
+            static fn (CapturedUpdate $update): ?string => 1 === preg_match('~<turbo-stream action="replace" target="round-[^"]+-judged"><template>(.*?)</template></turbo-stream>~s', $update->data, $part) ? $part[1] : null,
+            $this->shipped()->updates,
+        )));
+        self::assertCount(1, $judged);
+        $card = new Crawler($judged[0])->filter('[data-dropped="F3"]');
+
+        self::assertSame('Quote not found in the code', $card->filter('.fc-call')->text());
+        self::assertNull($card->filter('details.fc-quotes')->attr('open'));
+        self::assertSame(['ann', 'joanne'], $card->filter('details.fc-quotes .fc-quote-list code')->each(static fn (Crawler $code): string => $code->text()));
+        self::assertSame('Dropped before the judge: none of its 2 quoted code fragments is in the change', $card->filter('details.fc-quotes .fc-reason')->text());
     }
 
     #[DataProvider('privateText')]

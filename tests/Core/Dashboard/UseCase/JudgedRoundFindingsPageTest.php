@@ -228,6 +228,26 @@ final class JudgedRoundFindingsPageTest extends DashboardPageTestCase
         self::assertSame('File names, numbers and suggested-fix blocks are not checked.', $disclosure->filter('.fc-unchecked')->text());
     }
 
+    public function testARepeatedQuoteIsListedEachTimeTheRecordedReasonCountsIt(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeWithOnlyADroppedFinding('round-1', 'Call `ghostName` once, not `ghostName` twice.', 'none of its 2 quoted code fragments is in the change');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame(['ghostName', 'ghostName'], $this->quotesIn($crawler->filter('#round-round-1 [data-dropped] details.fc-quotes')));
+    }
+
+    public function testAQuoteThatWrapsOntoTheNextLineKeepsItsLineBreak(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeWithOnlyADroppedFinding('round-1', "Call `ghostName(\n    other)` here.", 'none of its 1 quoted code fragments is in the change');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame("ghostName(\n    other)", $crawler->filter('#round-round-1 [data-dropped] details.fc-quotes .fc-quote-list code')->text(normalizeWhitespace: false));
+    }
+
     /**
      * @return list<string>
      */
