@@ -139,7 +139,7 @@ final class ChooseBuildModelCommandTest extends TestCase
         $tester = $this->execute($ledger, ['project' => 'alpha', 'task' => 'T61', 'attempt' => '3', '--change' => 'feat/pending']);
 
         self::assertSame([Command::FAILURE, 0], [$tester->getStatusCode(), $ledger->count()]);
-        self::assertStringContainsString('not answered yet', $tester->getDisplay());
+        self::assertStringContainsString('is still pending', $tester->getDisplay());
     }
 
     public function testItReportsATierOnAProviderABuildCannotRunOnWithoutRecording(): void
