@@ -6,6 +6,7 @@ namespace Intakt\Tests\Application;
 
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Platforms\AbstractMySQLPlatform;
+use DoctrineMigrations\Version20261122100000;
 use Intakt\Tests\Core\Review\SampleIdentity;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use Intakt\Tests\Support\KernelTestCase;
@@ -75,7 +76,7 @@ final class ChangeAddressMigrationTest extends KernelTestCase
         $application = new Application(self::$kernel ?? self::bootKernel());
         $application->setAutoExit(false);
         $console = new ApplicationTester($application);
-        $console->run(['command' => 'doctrine:migrations:execute', 'versions' => ['DoctrineMigrations\Version20261122100000'], '--up' => true, '--no-interaction' => true]);
+        $console->run(['command' => 'doctrine:migrations:execute', 'versions' => [Version20261122100000::class], '--up' => true, '--no-interaction' => true]);
         $console->assertCommandIsSuccessful($console->getDisplay());
         self::getContainer()->get('doctrine.orm.entity_manager')->clear();
     }
