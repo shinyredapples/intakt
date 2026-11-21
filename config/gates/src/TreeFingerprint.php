@@ -44,37 +44,32 @@ final readonly class TreeFingerprint
         clearstatcache();
 
         try {
-            $parts = [
+            return $this->joined([
                 ...$this->commits(),
                 $this->index(),
                 $this->files($this->root, self::WRITTEN_BY_THE_CHECK, $settledBefore),
                 ...$this->homeInputs($settledBefore),
                 ...$this->optionsAndRuntime(),
-            ];
+            ]);
         } catch (RepositoryAttributesRefused|UnexpectedValueException) {
             return null;
         }
-
-        if (in_array(false, $parts, true)) {
-            return null;
-        }
-
-        return $this->joined($parts);
     }
 
     /**
-     * @param list<string|false|null> $parts
+     * @param list<?string> $parts
      */
     private function joined(array $parts): string
     {
         // Because each part is prefixed by its length, no value can pass for the boundary between two parts.
-        return hash('sha256', implode('', array_map(static fn (string|false|null $part): string => null === $part ? 'n' : strlen((string) $part).':'.$part, $parts)));
+        return hash('sha256', implode('', array_map(static fn (?string $part): string => null === $part ? 'n' : strlen($part).':'.$part, $parts)));
     }
 
     /**
-     * @return list<string|false|null>
+     * @return list<?string>
      *
      * @throws RepositoryAttributesRefused
+     * @throws UnexpectedValueException
      */
     // Because the commit subjects and the history secrets judge commits, not the tree, the same tree on another commit or base is another check.
     private function commits(): array
@@ -82,36 +77,47 @@ final readonly class TreeFingerprint
         $workspace = new Workspace($this->root, $this->home, $this->options->mode, $this->options->base, $this->runner);
         $head = $workspace->git(['rev-parse', '--verify', '--quiet', 'HEAD^{commit}']);
 
-        return [$head->succeeded() ? trim($head->output) : false, $workspace->baseTip(), $workspace->mergeBase()];
+        if (!$head->succeeded()) {
+            throw new UnexpectedValueException('no HEAD commit');
+        }
+
+        return [trim($head->output), $workspace->baseTip(), $workspace->mergeBase()];
     }
 
     /**
      * @throws RepositoryAttributesRefused
+     * @throws UnexpectedValueException
      */
     // Because the fast check takes its files from the index too, a staged edit is another check even when the working file is back as it was; the listing reads the index and never writes it or any object.
-    private function index(): string|false
+    private function index(): string
     {
         $staged = $this->runner->git(['ls-files', '--stage', '-z'], $this->root);
 
-        return $staged->succeeded() ? $staged->output : false;
+        if (!$staged->succeeded()) {
+            throw new UnexpectedValueException('cannot list the index');
+        }
+
+        return $staged->output;
     }
 
     /**
-     * @return list<string|false|null>
+     * @return list<?string>
+     *
+     * @throws UnexpectedValueException
      */
     private function homeInputs(?int $settledBefore): array
     {
         $home = realpath($this->home);
 
         if (false === $home) {
-            return [false];
+            throw new UnexpectedValueException('no home of bin/check');
         }
 
         if (realpath($this->root) === $home) {
             return [];
         }
 
-        return array_map(fn (string $input): string|false|null => file_exists($home.'/'.$input) || is_link($home.'/'.$input) ? $this->files($home.'/'.$input, [], $settledBefore) : null, self::HOME_INPUTS);
+        return array_map(fn (string $input): ?string => file_exists($home.'/'.$input) || is_link($home.'/'.$input) ? $this->files($home.'/'.$input, [], $settledBefore) : null, self::HOME_INPUTS);
     }
 
     /**
@@ -120,23 +126,17 @@ final readonly class TreeFingerprint
      * @throws UnexpectedValueException
      */
     // Because the gates read files that git ignores (vendor/, .env.*.local, phpunit.xml) and ignore rules differ between the gates and git, every file counts, ignored or not; its times and inode tell a file rewritten while the gates ran even when its bytes are back as they were.
-    private function files(string $path, array $skipped, ?int $settledBefore): string|false
+    private function files(string $path, array $skipped, ?int $settledBefore): string
     {
         $entries = [];
 
         foreach ($this->entriesUnder($path, $skipped) as $relative => $file) {
-            $entry = $this->entry($file, $settledBefore);
-
-            if (false === $entry) {
-                return false;
-            }
-
-            $entries[$relative] = $entry;
+            $entries[$relative] = $this->entry($file, $settledBefore);
         }
 
         ksort($entries, SORT_STRING);
 
-        return $this->joined([...array_keys($entries), ...array_values($entries)]);
+        return $this->joined([...array_map(strval(...), array_keys($entries)), ...array_values($entries)]);
     }
 
     /**
@@ -165,12 +165,19 @@ final readonly class TreeFingerprint
         }
     }
 
-    private function entry(string $file, ?int $settledBefore): string|false
+    /**
+     * @throws UnexpectedValueException
+     */
+    private function entry(string $file, ?int $settledBefore): string
     {
         $status = @lstat($file);
 
-        if (false === $status || (null !== $settledBefore && $status['ctime'] >= $settledBefore)) {
-            return false;
+        if (false === $status) {
+            throw new UnexpectedValueException('cannot read '.$file);
+        }
+
+        if (null !== $settledBefore && $status['ctime'] >= $settledBefore) {
+            throw new UnexpectedValueException('changed in the second the check started: '.$file);
         }
 
         $contents = match (true) {
@@ -179,7 +186,11 @@ final readonly class TreeFingerprint
             default => '',
         };
 
-        return false === $contents ? false : implode(' ', [$status['mode'], $status['size'], $status['mtime'], $status['ctime'], $status['ino'], $contents]);
+        if (false === $contents) {
+            throw new UnexpectedValueException('cannot read '.$file);
+        }
+
+        return implode(' ', [$status['mode'], $status['size'], $status['mtime'], $status['ctime'], $status['ino'], $contents]);
     }
 
     /**

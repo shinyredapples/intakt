@@ -112,6 +112,18 @@ final class CheckReuseTest extends SandboxTestCase
         self::assertStringContainsString('"reused":"'.PassedTree::RECORD.'"', $second->output());
     }
 
+    public function testTheJourneysRefuseToReuseAPass(): void
+    {
+        $this->expectExceptionMessage('--journeys runs alone, without --fast, --reuse,');
+
+        Options::fromArguments(['--journeys', '--reuse']);
+    }
+
+    public function testReuseIsOnlyAskedForByItsOwnArgument(): void
+    {
+        self::assertSame([false, true], [Options::fromArguments(['--fast'])->reuse, Options::fromArguments(['--fast', '--reuse'])->reuse]);
+    }
+
     private function check(Sandbox $sandbox, string ...$arguments): CheckRun
     {
         return $sandbox->checkWith([GateSlots::VARIABLE => '1'], '--only=dashes', ...array_values($arguments));
