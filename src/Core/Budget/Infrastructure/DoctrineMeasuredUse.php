@@ -110,8 +110,9 @@ final readonly class DoctrineMeasuredUse implements MeasuredUse
             ->getQuery()
             ->getSingleScalarResult();
 
-        /** @var DateTimeImmutable|null */
-        return $this->entities->getConnection()->convertToPHPValue($latest, 'utc_datetime_immutable');
+        $converted = $this->entities->getConnection()->convertToPHPValue($latest, 'utc_datetime_immutable');
+
+        return $converted instanceof DateTimeImmutable ? $converted : null;
     }
 
     // One statement, so two workers ending one outage at once need no lock; the earlier reading wins, because a slow writer can store its reading after a later one; a reading between the outage and this one already ended it, so a notice left with no end from before ends were kept is not ended now.
