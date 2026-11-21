@@ -64,11 +64,12 @@
 {# A page whose content runs side by side, as the board's columns do, takes the full width with ` wide`. #}
 <main class="content{% block content_width %}{% endblock %}">
 {{ include('dashboard/components/connection.html.twig', {live: true}, with_context = false) }}
+{# data-turbo-temporary: a flash belongs to one response, so Turbo leaves it out of the copy it caches and a page restored with Back shows no stale line (and assets/tour-caption.js finds no start line there). #}
 {% for line in app.flashes('success') %}
-<p class="flash flash-success">{{ line }}</p>
+<p class="flash flash-success" data-turbo-temporary>{{ line }}</p>
 {% endfor %}
 {% for line in app.flashes('error') %}
-<p class="flash flash-error">{{ line }}</p>
+<p class="flash flash-error" data-turbo-temporary>{{ line }}</p>
 {% endfor %}
 {# A toast floats over the page instead of a line above it, so a started round does not push the page down. #}
 {% for line in app.flashes('toast') %}

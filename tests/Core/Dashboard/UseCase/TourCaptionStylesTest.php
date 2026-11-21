@@ -31,6 +31,7 @@ final class TourCaptionStylesTest extends TestCase
     {
         $tab = $this->pixels('/height:\s*(\d+)px;/', $this->rule(self::SHOWN.' .rail .nav'));
 
+        // 2 * 4: the tab bar's padding (--s4, 4 px) above and below its tabs; change it here when that padding changes.
         self::assertLessThanOrEqual($this->pixels('/--bar:\s*(\d+)px;/', $this->rule(self::SHOWN)) - 2 * 4, $tab);
     }
 

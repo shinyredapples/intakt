@@ -4,8 +4,9 @@ const CLOSE = '[data-tour-close]';
 const CLOSED_KEY = 'intakt-tour';
 const ENDED_KEY = 'intakt-tour-ended';
 const FOCUS = 'data-tour-focus';
-const FOLLOW = '[data-tour-follow]';
-// Only Play posts to the demo page, and a refused Play flashes an error, so a start line there is the page a started run's redirect reached; the flash is gone on any later visit.
+const FOLLOW_MARK = 'data-tour-follow';
+const FOLLOW = `[${FOLLOW_MARK}]`;
+// Only Play posts to the demo page, and a refused Play flashes an error, so a start line there is the page a started run's redirect reached. A later request finds the flash spent, and a page Turbo restores from its cache has neither mark: the flash lines are data-turbo-temporary, and takePlay() removes the follow mark when it takes the page.
 const STARTED = 'main .flash-success';
 // Long enough to read the last line once, short enough that an ended tour never stays on the pages after it.
 const LAST_STAGE_MS = 8000;
@@ -54,9 +55,13 @@ export function captionTour(page, storage) {
 
 // Only the page a started run's redirect reached follows, so a stalled, refused or later visit to the demo page never sends the visitor on.
 function takePlay(page, tour) {
-    if (page.querySelector?.(FOLLOW) && page.querySelector?.(STARTED)) {
-        tour.followOn = page.body;
+    const mark = page.querySelector?.(FOLLOW);
+    if (!mark || !page.querySelector?.(STARTED)) {
+        return;
     }
+    tour.followOn = page.body;
+    // Taken once: the copy of this page Turbo caches on the way out must not be taken again when Back restores it.
+    mark.removeAttribute?.(FOLLOW_MARK);
 }
 
 // Marks the element the stage talks about (the caption names it in data-tour-at), scrolls it into view when it is new, follows the tour from the page Play reached to the review, and closes the tour a moment after its last stage.
@@ -74,7 +79,7 @@ function pointAt(page, storage, tour) {
         open(page, storage);
     }
     const review = caption.querySelector('a.tour-review')?.getAttribute('href');
-    if (review && tour.followOn === page.body && page.querySelector?.(FOLLOW) && !caption.hasAttribute('data-tour-last') && !isPaused(page)) {
+    if (review && tour.followOn === page.body && !caption.hasAttribute('data-tour-last') && !isPaused(page)) {
         tour.followOn = null;
         page.defaultView?.location.assign(review);
         return;

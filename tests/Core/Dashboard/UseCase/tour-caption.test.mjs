@@ -225,7 +225,10 @@ function pointingPage({ caption = stageCaption(), rounds = ['r1'], follow = fals
     const window = { visited: [], timers: [], location: { assign: (href) => window.visited.push(href) }, setTimeout: (run, ms) => window.timers.push({ run, ms }), matchMedia: () => ({ matches: true }) };
     page.defaultView = window;
     page.started = played;
-    page.querySelector = (selector) => targets.get(selector) ?? ((selector === '[data-tour-follow]' && follow) || (selector === 'main .flash-success' && page.started) ? {} : null);
+    page.follow = follow;
+    // The follow mark is one attribute on one element, so removing it takes it off the page.
+    const mark = { removeAttribute: (name) => { page.follow = page.follow && name !== 'data-tour-follow'; } };
+    page.querySelector = (selector) => targets.get(selector) ?? (selector === '[data-tour-follow]' && page.follow ? mark : selector === 'main .flash-success' && page.started ? {} : null);
     page.querySelectorAll = (selector) => (selector === '[data-tour-focus]' ? [...targets.values()].filter((target) => target.getAttribute('data-tour-focus') !== null) : []);
     captionTour(page, storage);
 
@@ -294,6 +297,39 @@ test('a later Turbo visit after the page Play reached does not follow the tour',
     await replaceCaption(page, stageCaption());
 
     assert.deepEqual(window.visited, []);
+});
+
+// The forced order of Back: Turbo restores the copy it cached of the page Play reached (a new body), and that copy still shows the start line.
+test('the page Play reached, restored from the cache with its start line, does not follow the tour', async () => {
+    const { page, window } = pointingPage({ follow: true, played: true, caption: new FakeCaption() });
+    page.body = {};
+    page.listeners['turbo:load']();
+
+    await replaceCaption(page, stageCaption({ stage: 'change-arrives' }));
+
+    assert.equal(page.started, true);
+    assert.deepEqual(window.visited, []);
+});
+
+test('the page Play reached is taken once, so its follow mark is gone from the page', () => {
+    const { page } = pointingPage({ follow: true, played: true, caption: new FakeCaption() });
+
+    assert.equal(page.follow, false);
+});
+
+test('a page that only offers the tour keeps its follow mark', () => {
+    const { page } = pointingPage({ follow: true, caption: new FakeCaption() });
+
+    assert.equal(page.follow, true);
+});
+
+test('the page Play reached still follows on a later stage when no stage had arrived at its load', async () => {
+    const { page, window } = pointingPage({ follow: true, played: true, caption: new FakeCaption() });
+    page.listeners['turbo:load']();
+
+    await replaceCaption(page, stageCaption({ stage: 'change-arrives' }));
+
+    assert.deepEqual(window.visited, ['/reviews/r1']);
 });
 
 test('a closed tour does not follow from the page Play reached', async () => {

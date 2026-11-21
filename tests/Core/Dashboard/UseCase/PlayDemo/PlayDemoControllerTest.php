@@ -159,6 +159,26 @@ final class PlayDemoControllerTest extends DashboardPageTestCase
         self::assertCount(0, $later->filter('main .flash-success'));
     }
 
+    // Turbo leaves a temporary element out of the page it caches, so Back restores the page Play reached without its start line.
+    public function testTheStartLineIsLeftOutOfThePageTurboCaches(): void
+    {
+        $this->browser->request('POST', '/demo', ['_token' => $this->tokenFromThePage()]);
+        $reached = $this->browser->followRedirect();
+
+        self::assertCount(1, $reached->filter('main .flash-success[data-turbo-temporary]'));
+    }
+
+    public function testARefusedPlaysErrorLineIsLeftOutOfThePageTurboCaches(): void
+    {
+        $token = $this->tokenFromThePage();
+        $this->demoRunAt(1);
+
+        $this->browser->request('POST', '/demo', ['_token' => $token]);
+        $refused = $this->browser->followRedirect();
+
+        self::assertCount(1, $refused->filter('main .flash-error[data-turbo-temporary]'));
+    }
+
     public function testARefusedPlayComesBackWithoutTheStartLine(): void
     {
         $token = $this->tokenFromThePage();
