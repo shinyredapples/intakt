@@ -56,6 +56,9 @@ final class ComposeExecOwnerTokenTest extends TestCase
             'MERCURE_JWT_ISSUER' => 'http://localhost',
             'MCP_OWNER_TOKEN' => false,
             'MCP_OWNER_ACCESS' => false,
+            // Cleared, because the start removes the folders they name, which a caller's setting would point outside this test.
+            'APP_CACHE_DIR' => false,
+            'APP_BUILD_DIR' => false,
             'INTAKT_SAMPLE_REPOSITORY' => $this->directory.'/sample-repository',
             'INTAKT_CONFIG' => $this->directory.'/intakt.yaml',
             'MCP_OWNER_KEPT_FILE' => $this->keptFile(),
