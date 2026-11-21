@@ -33,7 +33,7 @@ final class EntrypointProcessesTest extends TestCase
 
     private string $directory;
 
-    /** @var array<string, string> */
+    /** @var array<string, false|string> */
     private array $environment;
 
     protected function setUp(): void
