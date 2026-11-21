@@ -63,7 +63,7 @@ final readonly class DoctrineOutageNotices
         $endedWith = null;
         while (true) {
             $earliest = $this->earliestReadingSince($notice);
-            if (null === $earliest || $earliest == $endedWith) {
+            if (null === $earliest || $earliest->getTimestamp() === $endedWith?->getTimestamp()) {
                 return;
             }
 
