@@ -307,6 +307,19 @@ final class AccountCooldownWindowsTest extends TestCase
         self::assertIsString($payload['until']);
     }
 
+    // Decision 73 of #2860: the limiter dates its windows by the system time, so a clock set to a past date must not make a saved window read as refused.
+    public function testACooldownUnderAClockAtAPastDateIsRecordedAndLogsNoWarning(): void
+    {
+        $logger = new BufferingLogger();
+        $cooldowns = new AccountCooldownWindows($this->readings, $this->pool, new LockFactory(new InMemoryStore()), new MockClock('2026-11-02 12:00:00.000 UTC'), $this->ledger, $logger, StoredSerializerFactory::create(), $this->accounts());
+
+        $cooldowns->coolDown($this->default(), 300);
+
+        self::assertSame([LedgerEventKind::AccountCooledDown], $this->ledger->kinds());
+        self::assertSame('2026-11-02T12:05:00+00:00', $this->ledger->payloads()[0]['until']);
+        self::assertSame([], $logger->cleanLogs());
+    }
+
     public function testASecondLimitWhileTheAccountCoolsDownKeepsTheFirstCooldownAndRecordsNothing(): void
     {
         $cooldowns = $this->cooldowns();

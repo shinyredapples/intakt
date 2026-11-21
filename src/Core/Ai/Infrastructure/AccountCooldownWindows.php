@@ -145,13 +145,15 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
 
         $until = $this->clock->now()->modify(sprintf('+%d seconds', $seconds));
 
+        $saved = $this->windowsEndingAt($until)->create($account->key())->consume();
+
         // Refused while a cooldown already runs, which is kept as it is, because only a call already in flight can still be limited then.
-        if (!$this->windowsEndingAt($until)->create($account->key())->consume()->isAccepted()) {
+        if (!$saved->isAccepted()) {
             return;
         }
 
-        // A cache that refuses the save still accepts the token, so the account would read free while its event said it cooled, and another worker may save its own window before the read-back: only a window that ends at this call's end is recorded, anything else is logged as a refusal.
-        if (!$this->isSavedUntil($account, $until)) {
+        // A cache that refuses the save still accepts the token, so the account would read free while its event said it cooled, and another worker may save its own window before the read-back: only a window that ends where the accepted one ends is recorded, anything else is logged as a refusal.
+        if (!$this->isSavedUntil($account, $saved->getRetryAfter())) {
             $this->logger->warning('The cooldown of account {account} could not be saved.', ['account' => $account->key()]);
 
             return;
@@ -160,12 +162,12 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
         $this->record($account, $until);
     }
 
-    // Compared to the second, because every wait is read and reported in whole seconds, so a window that ends in this call's second is its own.
-    private function isSavedUntil(Account $account, DateTimeImmutable $until): bool
+    // Both ends come from the limiter, which dates its windows by the system time and not by the clock, so the check holds under any clock and across a second's boundary.
+    private function isSavedUntil(Account $account, DateTimeImmutable $end): bool
     {
         $window = $this->window($account);
 
-        return 0 === $window->getRemainingTokens() && $window->getRetryAfter()->getTimestamp() === $until->getTimestamp();
+        return 0 === $window->getRemainingTokens() && $window->getRetryAfter()->getTimestamp() === $end->getTimestamp();
     }
 
     // No token, so reading the window never starts or saves one.
