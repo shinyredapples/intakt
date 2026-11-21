@@ -81,7 +81,9 @@ final readonly class GitHubChangeOpener implements ChangeOpening
 
         $own = [];
 
-        foreach ($listed as $pull) {
+        foreach ($listed as $entry) {
+            $pull = is_array($entry) ? $entry : [];
+
             if ($this->isOfBranch($pull, $branch)) {
                 $own[] = $this->ownNumberOf($pull);
             }
@@ -91,9 +93,12 @@ final readonly class GitHubChangeOpener implements ChangeOpening
     }
 
     // A listed entry whose branch cannot be read is refused, because it may be another account's pull request of this branch.
-    private function isOfBranch(mixed $pull, string $branch): bool
+    /**
+     * @param array<mixed> $pull
+     */
+    private function isOfBranch(array $pull, string $branch): bool
     {
-        $ref = is_array($pull) && is_array($pull['head'] ?? null) ? ($pull['head']['ref'] ?? null) : null;
+        $ref = is_array($pull['head'] ?? null) ? ($pull['head']['ref'] ?? null) : null;
 
         return is_string($ref) ? $ref === $branch : throw new ForgeWriteFailed('GitHub listed an open pull request without its branch, so the branch is left alone.');
     }
