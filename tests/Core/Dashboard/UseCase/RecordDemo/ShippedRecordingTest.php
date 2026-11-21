@@ -49,7 +49,10 @@ final class ShippedRecordingTest extends TestCase
 
         self::assertCount(2, $reported);
         self::assertCount(1, $judged);
-        self::assertFalse(json_decode($judged[0]->payload, true, flags: JSON_THROW_ON_ERROR)['fallback']);
+        $answer = json_decode($judged[0]->payload, true, flags: JSON_THROW_ON_ERROR);
+        self::assertIsArray($answer);
+        self::assertArrayHasKey('fallback', $answer);
+        self::assertFalse($answer['fallback']);
     }
 
     public function testTheImagePointsTheDemoAtTheShippedRecording(): void
