@@ -169,16 +169,28 @@ final class EscalateRecurringP1Test extends KernelTestCase
 
         $limited = $this->limitedBy(new ScriptedEscalations(null, static fn (): never => throw new ProviderRateLimited(30, new RuntimeException('Too many requests.'))));
 
-        self::assertSame(30000, $limited->getRetryDelay());
+        self::assertSame([true, 30000, []], [$limited->forceRetry(), $limited->getRetryDelay(), $this->payloadsOf(LedgerEventKind::EscalationFailed)]);
     }
 
-    public function testAnEscalationOnABusyVendorAccountComesBackLater(): void
+    public function testAnEscalationOnABusyVendorAccountIsRetriedByForceAndRecordsNoFailure(): void
     {
         $this->recurredOnASecondHead();
 
         $limited = $this->limitedBy(new ScriptedEscalations(null, static fn (): never => throw VendorAccountBusy::at('main')));
 
-        self::assertSame([false, null, []], [$limited->forceRetry(), $limited->getRetryDelay(), $this->payloadsOf(LedgerEventKind::EscalationFailed)]);
+        self::assertSame([true, null, []], [$limited->forceRetry(), $limited->getRetryDelay(), $this->payloadsOf(LedgerEventKind::EscalationFailed)]);
+    }
+
+    public function testAnEscalationOnABusyVendorAccountIsStillRetriedAfterTheTransportsRetries(): void
+    {
+        $this->recurredOnASecondHead();
+        $limited = $this->limitedBy(new ScriptedEscalations(null, static fn (): never => throw VendorAccountBusy::at('main')));
+        $received = $this->fixture->escalations->envelopes[0]->with(new RedeliveryStamp(2), new ReceivedStamp('async'));
+        $failed = new WorkerMessageFailedEvent($received, 'async', new HandlerFailedException($received, [EscalateRecurringP1Handler::class => $limited]));
+
+        self::getContainer()->get('event_dispatcher')->dispatch($failed);
+
+        self::assertTrue($failed->willRetry());
     }
 
     public function testARedeliveredRecordOfAFailedEscalationWritesNoSecondFailure(): void

@@ -126,9 +126,11 @@ final readonly class EscalateRecurringP1Handler
         try {
             return $this->escalations->escalate($project, $request);
         } catch (ProviderRateLimited $limited) {
-            throw EscalationLimited::after($limited->retryAfterSeconds);
-        } catch (VendorAccountBusy|ProviderFailedTransiently) {
-            throw EscalationLimited::after(null);
+            throw EscalationLimited::untilFree($limited->retryAfterSeconds);
+        } catch (VendorAccountBusy) {
+            throw EscalationLimited::untilFree(null);
+        } catch (ProviderFailedTransiently) {
+            throw EscalationLimited::bounded();
         }
     }
 
