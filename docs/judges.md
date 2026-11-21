@@ -23,7 +23,7 @@ The video's script and shot list: [docs/video.md](video.md)
 
 First clone and start Intakt as in steps 1 and 2 of path a.
 
-1. Open http://localhost:7781/setup, the first-run page (once path a has played, http://localhost:7781 opens the board instead in a desktop browser, and a phone opens Waiting on you; `/?board=1` is the board on any device). Paste the key or token in step 1 ("A key or token for Anthropic, OpenAI or Hugging Face") and press **Keep the key**. Calls are billed to the key's owner.
+1. Open http://localhost:7781/setup, the first-run page (once path a has played, http://localhost:7781 opens the board instead in a desktop browser, and a phone opens the newest review, since the board is then at rest; `/?board=1` is the board on any device). Paste the key or token in step 1 ("A key or token for Anthropic, OpenAI or Hugging Face") and press **Keep the key**. Calls are billed to the key's owner.
 2. `docker compose restart intakt`, so the sample project gets its reviewers. Wait until `docker compose ps` shows the container as healthy.
 3. Reload http://localhost:7781/setup: step 2 now reads "1 project is configured." and lists the `sample` project. Then start the live review:
    - **If you skipped path a:** press **Start the first review** in step 3. Its live review page opens: each reviewer's row fills in as it answers, then the round shows its outcome (`approve`, `changes` or `blocked`) and "Findings and the judge's call" lists the act list, each entry marked **Fix now**.
@@ -34,7 +34,7 @@ First clone and start Intakt as in steps 1 and 2 of path a.
 This path runs a live review, so first do steps 1 and 2 of path b (keep a key, restart, wait until healthy): without them the `sample` project has no reviewers.
 
 1. Get the token: `docker compose exec intakt php bin/console intakt:sample:show /app/var/data/sample-repository` prints `Connect an MCP client: claude mcp add ... --header "Authorization: Bearer <token>"`. Step 4 of the first-run page at http://localhost:7781/setup ("Your own agent") shows the address, `http://localhost:7781/mcp/owner`.
-2. Run the printed `claude mcp add` line in the clone, then start `claude` there.
+2. The clone carries a `.mcp.json` for that address, so there is nothing to add: run `export INTAKT_MCP_TOKEN=<the token from step 1>`, then start `claude` in the clone and approve the `intakt` server it offers. `claude mcp list` shows `intakt` as connected. (Or run the printed `claude mcp add` line instead.)
 3. Install the skill: copy `skills/intakt-review` to `~/.claude/skills/intakt-review` ([details](../skills/intakt-review/README.md)).
 4. Say "intakt review the demo". The agent starts the review with `start_review`, fixes only what the act list names inside the container, and reports the verdict, the rounds used and why it stopped.
 

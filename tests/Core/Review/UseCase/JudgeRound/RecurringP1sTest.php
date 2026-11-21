@@ -15,8 +15,11 @@ use Intakt\Core\Review\Contract\RecurringP1Found;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\RoundState;
+use Intakt\Core\Review\UseCase\JudgeRound\FailedJudgings;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgedRounds;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRound;
+use Intakt\Core\Review\UseCase\JudgeRound\RecordFailedJudging;
+use Intakt\Core\Review\UseCase\JudgeRound\RecordFailedJudgingHandler;
 use Intakt\Core\Review\UseCase\JudgeRound\RecurringP1s;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
 use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
@@ -27,11 +30,17 @@ use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Component\Console\Tester\CommandTester;
+use Symfony\Component\Messenger\Envelope;
+use Symfony\Component\Messenger\MessageBusInterface;
+use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
 
 #[Group('persistence')]
 #[CoversClass(RecurringP1s::class)]
+#[CoversClass(FailedJudgings::class)]
+#[CoversClass(RecordFailedJudgingHandler::class)]
 #[CoversClass(JudgedRounds::class)]
 #[CoversClass(RoundLedger::class)]
 #[CoversClass(ReviewRounds::class)]
@@ -130,7 +139,7 @@ final class RecurringP1sTest extends KernelTestCase
 
     public function testARoundJudgedBeforeAnEarlierRoundOfTheChangeFindsNothingYet(): void
     {
-        $this->fixture->startAtHead(self::CHANGE, self::HEAD_A);
+        $this->completedAs($this->fixture->startAtHead(self::CHANGE, self::HEAD_A), '[]');
         $second = $this->fixture->startAtHead(self::CHANGE, self::HEAD_B);
         $this->appendJudgeDone($second, '["F1"]', '{"F1":"k"}');
 
@@ -152,6 +161,7 @@ final class RecurringP1sTest extends KernelTestCase
         $a = $this->fixture->startAtHead(self::CHANGE, self::HEAD_A);
         $b = $this->fixture->startAtHead(self::CHANGE, self::HEAD_B);
         $again = $this->fixture->startAtHead(self::CHANGE, self::HEAD_A);
+        array_map(fn (string $round) => $this->completedAs($round, '[]'), [$a, $b, $again]);
         $recurring = $this->fixture->recurringP1s($this->fixture->ledger());
         $events = [];
 
@@ -202,6 +212,67 @@ final class RecurringP1sTest extends KernelTestCase
         $this->appendJudgeDone($second, '["F1"]', '{"F1":"k"}');
 
         self::assertSame([], $this->fixture->recurringP1s($this->fixture->ledger())->foundWith($this->fixture->round($second)));
+    }
+
+    public function testAnEarlierRoundWhoseJudgingIsParkedInTheFailureTransportHoldsUpNoLaterRecurrence(): void
+    {
+        $parked = $this->fixture->startAtHead(self::CHANGE, self::HEAD_A);
+        $this->completedAs($parked, '[]');
+        $failed = new InMemoryTransport();
+        $failed->send(new Envelope(new JudgeRound($parked)));
+        $first = $this->fixture->startAtHead(self::CHANGE, self::HEAD_A);
+        $second = $this->fixture->startAtHead(self::CHANGE, self::HEAD_B);
+        $this->appendJudgeDone($first, '["F1"]', '{"F1":"k"}');
+        $this->appendJudgeDone($second, '["F1"]', '{"F1":"k"}');
+
+        self::assertEquals([new RecurringP1Found($second, 'F1', 'k', $first)], $this->fixture->recurringP1s($this->fixture->ledger(), $failed)->foundWith($this->fixture->round($second)));
+    }
+
+    public function testAnEarlierRoundWhoseJudgingFailureIsRecordedHoldsUpNoLaterRecurrence(): void
+    {
+        $failed = $this->fixture->startAtHead(self::CHANGE, self::HEAD_A);
+        $this->completedAs($failed, '[]');
+        self::assertTrue($this->fixture->ledger()->append(new LedgerEvent(LedgerEventKind::JudgingFailed, '{"round":"'.$failed.'"}'))->succeeded());
+        $first = $this->fixture->startAtHead(self::CHANGE, self::HEAD_A);
+        $second = $this->fixture->startAtHead(self::CHANGE, self::HEAD_B);
+        $this->appendJudgeDone($first, '["F1"]', '{"F1":"k"}');
+        $this->appendJudgeDone($second, '["F1"]', '{"F1":"k"}');
+
+        self::assertEquals([new RecurringP1Found($second, 'F1', 'k', $first)], $this->fixture->recurringP1s($this->fixture->ledger())->foundWith($this->fixture->round($second)));
+    }
+
+    public function testRecordingTheFailedJudgingOfAWaitingRoundRecordsTheRecurrenceItHeldBack(): void
+    {
+        $waiting = $this->completedAt(self::CHANGE, self::HEAD_A, $this->keyedP1());
+        $first = $this->judged($this->completedAt(self::CHANGE, self::HEAD_A, $this->requiredP1()));
+        $second = $this->judged($this->completedAt(self::CHANGE, self::HEAD_B, $this->requiredP1()));
+        self::assertSame([], $this->recurrences());
+
+        $commands = self::createStub(MessageBusInterface::class);
+        $commands->method('dispatch')->willReturnCallback(static fn (object $command): Envelope => new Envelope($command));
+
+        $this->fixture->failedJudgingRecorder($commands, self::createStub(LoggerInterface::class))(new RecordFailedJudging($waiting));
+
+        self::assertEquals([$second => $first], $this->recurrences());
+    }
+
+    // Round 1 has no end state that would release what it held back, so it holds nothing back and its later judging adds its own event to the one recorded before.
+    public function testACollectingRoundOneOnAWithRoundsTwoOnBAndThreeOnAJudgedRecordsRoundThreeAndThenRoundTwoOnceRoundOneIsJudged(): void
+    {
+        $sent = count($this->fixture->bus->messages);
+        $one = $this->fixture->startAtHead(self::CHANGE, self::HEAD_A);
+        $reviewersOfOne = array_slice($this->fixture->bus->messages, $sent);
+        $two = $this->judged($this->completedAt(self::CHANGE, self::HEAD_B, $this->requiredP1()));
+        $three = $this->judged($this->completedAt(self::CHANGE, self::HEAD_A, $this->requiredP1()));
+        $beforeOne = $this->recurrences();
+
+        foreach ($reviewersOfOne as $message) {
+            $this->fixture->deliver($message, new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, [$this->keyedP1()], [], [])]));
+        }
+
+        $this->judged($one);
+
+        self::assertSame([[$three => $two], [$three => $two, $two => $one]], [$beforeOne, $this->recurrences()]);
     }
 
     public function testAP1TheJudgeDidNotPutOnTheActListOnTheEarlierHeadDoesNotMakeALaterOneRecurring(): void
@@ -290,6 +361,12 @@ final class RecurringP1sTest extends KernelTestCase
     private function keyedP1(): Finding
     {
         return new Finding('A', Severity::P1, 'RecordingBus.php', 3, null, 'The bus loses a message.', FixableBy::Builder, false, null, null);
+    }
+
+    // Tied to a requirement, so the goalpost rule lets a new P1 of a later round block.
+    private function requiredP1(): Finding
+    {
+        return new Finding('A', Severity::P1, 'RecordingBus.php', 3, null, 'The bus loses a message.', FixableBy::Builder, false, 'Every message is delivered.', null);
     }
 
     private function unkeyedP1(): Finding
