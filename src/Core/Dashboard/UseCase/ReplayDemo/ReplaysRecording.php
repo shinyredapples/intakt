@@ -7,6 +7,7 @@ namespace Intakt\Core\Dashboard\UseCase\ReplayDemo;
 use DateTimeImmutable;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Contract\LiveUpdates;
+use Intakt\Core\Dashboard\Infrastructure\LiveTrends;
 use Intakt\Core\Dashboard\Infrastructure\ReplayedStart;
 use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Dashboard\Infrastructure\TourCaptionUpdates;
@@ -22,6 +23,7 @@ use Intakt\Core\Review\Contract\ReplayMark;
 use stdClass;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Uid\Uuid;
 
 final readonly class ReplaysRecording
 {
@@ -35,6 +37,7 @@ final readonly class ReplaysRecording
         private LockFactory $locks,
         private ReplayMarks $marks,
         private TourCaptionUpdates $captions,
+        private LiveTrends $trends,
     ) {
     }
 
@@ -154,8 +157,16 @@ final readonly class ReplaysRecording
             throw ReplayStopped::at($recording, $number, (string) $result->failure);
         }
 
-        // After each row, because the stage is read from the rows and no recorded update reaches a page that is not the review's.
+        // After each row, because the stage and the Trends figures are read from the rows and no recorded update reaches a page that is not the review's.
         $this->captions->publishTheStage();
+        $this->trends->publishLatest(self::roundIdOf($event->payload));
+    }
+
+    private static function roundIdOf(string $payload): ?Uuid
+    {
+        $round = self::roundOf($payload);
+
+        return null !== $round && Uuid::isValid($round) ? Uuid::fromString($round) : null;
     }
 
     // A step recorded before the first one follows at once, because the ledger and the capture keep the recorded order.

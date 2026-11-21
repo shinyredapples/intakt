@@ -36,13 +36,14 @@ final readonly class LiveTrends
     ) {
     }
 
-    public function publishLatest(Uuid $round): void
+    // Without a round when a replayed row names none, such as a call's settled usage.
+    public function publishLatest(?Uuid $round): void
     {
         try {
             $this->publishedInTurn();
-            // Boundary: logs a failed publish and swallows it, because the page is a view and a round update must never change a verdict or a round.
+            // Boundary: logs a failed publish and swallows it, because the page is a view and a round update or a replayed row must never change a verdict or a round.
         } catch (Throwable $failure) {
-            $this->logger->warning('The trends were not published.', ['round' => $round->toRfc4122(), 'exception' => $failure]);
+            $this->logger->warning('The trends were not published.', ['round' => $round?->toRfc4122(), 'exception' => $failure]);
         }
     }
 

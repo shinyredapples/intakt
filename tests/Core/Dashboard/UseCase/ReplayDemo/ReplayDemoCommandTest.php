@@ -19,11 +19,12 @@ use Intakt\Core\Dashboard\UseCase\ReplayDemo\ReplaysRecording;
 use Intakt\Core\Dashboard\UseCase\ReplayDemo\ReplayStopped;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Review\Contract\ReplayMark;
+use Intakt\Tests\Core\Dashboard\Infrastructure\PublishedLiveEvents;
+use Intakt\Tests\Support\KernelTestCase;
 use Intakt\Tests\Support\StoredSerializerFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
-use PHPUnit\Framework\TestCase;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command;
@@ -46,7 +47,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[UsesClass(LiveEvent::class)]
 #[UsesClass(ReplayMarks::class)]
 #[UsesClass(ReplayMark::class)]
-final class ReplayDemoCommandTest extends TestCase
+final class ReplayDemoCommandTest extends KernelTestCase
 {
     private const string STREAM = '<turbo-stream action="replace" target="round-state"><template>r-1 started</template></turbo-stream>';
 
@@ -219,7 +220,7 @@ final class ReplayDemoCommandTest extends TestCase
     private function tester(string $composeService, ReplayMark $demoProject = ReplayMark::Replay): CommandTester
     {
         $marks = new ReplayMarks(new MarkAnsweringQueries($demoProject));
-        $replays = new ReplaysRecording($this->ledger, $this->updates, $this->clock, new LockFactory(new InMemoryStore()), $marks, TourCaptionsOn::captions($this->updates, TourCaptionsOn::tour($this->ledger, $marks, '')));
+        $replays = new ReplaysRecording($this->ledger, $this->updates, $this->clock, new LockFactory(new InMemoryStore()), $marks, TourCaptionsOn::captions($this->updates, TourCaptionsOn::tour($this->ledger, $marks, '')), TourCaptionsOn::trends(new PublishedLiveEvents(), $this->ledger, $marks, self::getContainer()));
         $application = new Application();
         $application->addCommand(new ReplayDemoCommand($replays, $this->format, new Filesystem(), $composeService));
 

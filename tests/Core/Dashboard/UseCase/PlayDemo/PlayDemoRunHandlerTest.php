@@ -24,14 +24,13 @@ use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Tests\Core\Dashboard\Infrastructure\PublishedLiveEvents;
 use Intakt\Tests\Core\Dashboard\UseCase\DashboardLedger;
 use Intakt\Tests\Core\Dashboard\UseCase\ReplayDemo\TourCaptionsOn;
-use Intakt\Tests\Support\Log\AssertsLoggedErrors;
+use Intakt\Tests\Support\KernelTestCase;
 use Intakt\Tests\Support\Log\LogRecords;
 use Intakt\Tests\Support\Log\RecordingLogger;
 use Intakt\Tests\Support\ReplayMarkBus;
 use Intakt\Tests\Support\StoredSerializerFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
-use PHPUnit\Framework\TestCase;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Lock\LockFactory;
@@ -49,9 +48,8 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[UsesClass(TourStage::class)]
 #[UsesClass(ReplayMarks::class)]
 #[UsesClass(LiveEvent::class)]
-final class PlayDemoRunHandlerTest extends TestCase
+final class PlayDemoRunHandlerTest extends KernelTestCase
 {
-    use AssertsLoggedErrors;
 
     private const string START = '2026-11-16T08:00:00+00:00';
 
@@ -156,7 +154,7 @@ final class PlayDemoRunHandlerTest extends TestCase
     private function handler(string $recording, string $composeService = 'intakt'): PlayDemoRunHandler
     {
         $marks = new ReplayMarks(new ReplayMarkBus([CreateDemoProjectCommand::NAME]));
-        $replays = new ReplaysRecording($this->ledger, $this->updates, $this->clock, new LockFactory(new InMemoryStore()), $marks, TourCaptionsOn::captions($this->updates, TourCaptionsOn::tour($this->ledger, $marks, $composeService)));
+        $replays = new ReplaysRecording($this->ledger, $this->updates, $this->clock, new LockFactory(new InMemoryStore()), $marks, TourCaptionsOn::captions($this->updates, TourCaptionsOn::tour($this->ledger, $marks, $composeService)), TourCaptionsOn::trends(new PublishedLiveEvents(), $this->ledger, $marks, self::getContainer()));
 
         return new PlayDemoRunHandler($replays, $this->format(), new Filesystem(), new RecordingLogger(LogRecords::ofThisRun() ?? self::fail('No log records.')), $recording, $composeService);
     }

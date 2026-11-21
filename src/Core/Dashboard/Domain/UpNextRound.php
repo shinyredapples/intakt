@@ -15,7 +15,7 @@ final readonly class UpNextRound
         public string $project,
         public string $change,
         public UpNextState $state,
-        public array $reviewers = [],
+        public array $reviewers,
     ) {
     }
 

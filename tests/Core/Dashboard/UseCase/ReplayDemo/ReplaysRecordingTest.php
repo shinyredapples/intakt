@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Dashboard\UseCase\ReplayDemo;
 
 use DateTimeImmutable;
+use Intakt\Core\Dashboard\Contract\DashboardTopics;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
+use Intakt\Core\Dashboard\Infrastructure\LiveTrends;
 use Intakt\Core\Dashboard\Infrastructure\ReplayedStart;
 use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Dashboard\UseCase\CreateDemoProject\CreateDemoProjectCommand;
@@ -20,11 +22,13 @@ use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\ReplayMark;
+use Intakt\Tests\Core\Dashboard\Infrastructure\PublishedLiveEvents;
+use Intakt\Tests\Support\KernelTestCase;
 use Intakt\Tests\Support\StoredSerializerFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
-use PHPUnit\Framework\TestCase;
 use Symfony\Component\Clock\MockClock;
+use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
 
@@ -38,7 +42,8 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[UsesClass(LiveEvent::class)]
 #[UsesClass(ReplayMarks::class)]
 #[UsesClass(ReplayMark::class)]
-final class ReplaysRecordingTest extends TestCase
+#[UsesClass(LiveTrends::class)]
+final class ReplaysRecordingTest extends KernelTestCase
 {
     private const string ROUND = '0196a000-0000-7000-8000-000000000001';
 
@@ -59,6 +64,9 @@ final class ReplaysRecordingTest extends TestCase
 
     private ClockedLiveUpdates $updates;
 
+    // Apart from the captured updates, so a test of their order and pace sees only what the recording holds.
+    private PublishedLiveEvents $trends;
+
     private ReplayMark $demoProject = ReplayMark::Replay;
 
     protected function setUp(): void
@@ -67,6 +75,23 @@ final class ReplaysRecordingTest extends TestCase
         $this->ledger = new ClockedLedger($this->clock);
         $this->locks = new InMemoryStore();
         $this->updates = new ClockedLiveUpdates($this->clock, $this->ledger);
+        $this->trends = new PublishedLiveEvents();
+    }
+
+    // A tab opened before the demo played gets no round update from a replay, so the replayed verdict must reach its figures and its demo link by itself.
+    public function testPlayingTheShippedRecordingPushesTheTrendsHeadWithTheLinkThatLeavesTheDemoOut(): void
+    {
+        $text = file_get_contents(dirname(__DIR__, 5).'/fixtures/demo/sample-change-review.json');
+        self::assertIsString($text);
+
+        $this->replays()->replay(new RecordingFormat(StoredSerializerFactory::create())->read($text), 1000.0);
+
+        self::assertNotSame([], $this->trends->events);
+        $last = $this->trends->events[array_key_last($this->trends->events)];
+        self::assertSame(DashboardTopics::SHELL, $last->topic);
+        $head = new Crawler($last->turboStream)->filter('turbo-stream[target="trends-head-with-demo"] template');
+        self::assertStringContainsString('1 review round over every project', $head->html());
+        self::assertStringContainsString('Leave out the demo review', $head->html());
     }
 
     public function testReplayingARecordingPublishesEveryCapturedUpdateWithItsRecordedTopicAndStreamInCaptureOrder(): void
@@ -160,7 +185,7 @@ final class ReplaysRecordingTest extends TestCase
         $again = new ClockedLiveUpdates($this->clock, $this->ledger);
 
         try {
-            new ReplaysRecording($this->ledger, $again, $this->clock, new LockFactory($this->locks), $this->marks(), TourCaptionsOn::captions($again, TourCaptionsOn::tour($this->ledger, $this->marks(), '')))->replay($this->recordedRun(), 1.0);
+            new ReplaysRecording($this->ledger, $again, $this->clock, new LockFactory($this->locks), $this->marks(), TourCaptionsOn::captions($again, TourCaptionsOn::tour($this->ledger, $this->marks(), '')), TourCaptionsOn::trends($this->trends, $this->ledger, $this->marks(), self::getContainer()))->replay($this->recordedRun(), 1.0);
         } catch (ReplayIsRefused) {
         }
 
@@ -388,7 +413,7 @@ final class ReplaysRecordingTest extends TestCase
 
     private function replays(): ReplaysRecording
     {
-        return new ReplaysRecording($this->ledger, $this->updates, $this->clock, new LockFactory($this->locks), $this->marks(), TourCaptionsOn::captions($this->updates, TourCaptionsOn::tour($this->ledger, $this->marks(), '')));
+        return new ReplaysRecording($this->ledger, $this->updates, $this->clock, new LockFactory($this->locks), $this->marks(), TourCaptionsOn::captions($this->updates, TourCaptionsOn::tour($this->ledger, $this->marks(), '')), TourCaptionsOn::trends($this->trends, $this->ledger, $this->marks(), self::getContainer()));
     }
 
     private function marks(): ReplayMarks
