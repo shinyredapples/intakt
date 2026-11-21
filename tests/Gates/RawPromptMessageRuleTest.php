@@ -9,7 +9,9 @@ use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Infrastructure\ConfiguredPanels;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewerHandler;
 use Intakt\Core\Review\UseCase\SeedSampleProject\SampleProject;
+use Intakt\Gates\PhpStan\ClassNames;
 use Intakt\Gates\PhpStan\RawPromptMessageRule;
+use Intakt\Gates\PhpStan\RolePromptCarriers;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiVendor;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -18,6 +20,8 @@ use PHPUnit\Framework\Attributes\DataProvider;
  * @extends PhpStanRuleTestCase<RawPromptMessageRule>
  */
 #[CoversClass(RawPromptMessageRule::class)]
+#[CoversClass(RolePromptCarriers::class)]
+#[CoversClass(ClassNames::class)]
 final class RawPromptMessageRuleTest extends PhpStanRuleTestCase
 {
     private const string MESSAGE_IMPORTS = "use Symfony\\AI\\Platform\\Message\\Content\\Text;\nuse Symfony\\AI\\Platform\\Message\\Message;\nuse Symfony\\AI\\Platform\\Message\\SystemMessage;\nuse Symfony\\AI\\Platform\\Message\\UserMessage;\n";
@@ -542,14 +546,15 @@ final class RawPromptMessageRuleTest extends PhpStanRuleTestCase
      */
     public static function carrierUnions(): iterable
     {
-        yield 'a conversation behind a role in the panel configuration' => ['src/Core/Review/Infrastructure/ConfiguredPanels.php', ConfiguredPanels::class, 'new (\'\' === $text ? ReviewerRole::class : ReviewerConversation::class)(\'x\', $text)', 'intakt.reviewerConversation'];
-        yield 'a role behind a conversation in the handler' => [self::HANDLER, ReviewWithReviewerHandler::class, 'new (\'\' === $text ? ReviewerConversation::class : ReviewerRole::class)($reviewer->rolePrompt(), $id)', 'intakt.reviewerRole'];
-        yield 'a round reviewer behind a role in the sample project' => ['src/Core/Review/UseCase/SeedSampleProject/SampleProject.php', SampleProject::class, 'new (\'\' === $text ? ReviewerRole::class : RoundReviewer::class)($id, $round, $member)', 'intakt.reviewerRole'];
+        yield 'a conversation behind a role in the panel configuration' => [ConfiguredPanels::class, 'new (\'\' === $text ? ReviewerRole::class : ReviewerConversation::class)(\'x\', $text)', 'intakt.reviewerConversation'];
+        yield 'a role behind a conversation in the handler' => [ReviewWithReviewerHandler::class, 'new (\'\' === $text ? ReviewerConversation::class : ReviewerRole::class)($reviewer->rolePrompt(), $id)', 'intakt.reviewerRole'];
+        yield 'a round reviewer behind a role in the sample project' => [SampleProject::class, 'new (\'\' === $text ? ReviewerRole::class : RoundReviewer::class)($id, $round, $member)', 'intakt.reviewerRole'];
     }
 
     #[DataProvider('carrierUnions')]
-    public function testEveryClassAClassStringUnionNamesIsJudged(string $path, string $class, string $expression, string $identifier): void
+    public function testEveryClassAClassStringUnionNamesIsJudged(string $class, string $expression, string $identifier): void
     {
+        $path = 'src/'.str_replace('\\', '/', substr($class, strlen('Intakt\\'))).'.php';
         $sandbox = $this->emptySandbox();
         $sandbox->write($path, $this->classWithCases($class, self::BUILDER_PARAMETERS, [$expression]));
 
