@@ -40,7 +40,7 @@ flowchart LR
 2. **One change per branch and pull request**, small enough to review in one go.
 3. **Tests with every change:** a test that would fail without it, named as a sentence (`testAnEmptyFindingsListIsRefused`), with the coverage attributes `AGENTS.md` asks for.
 4. **Docs in the same change:** a user-visible change updates `docs/user/` and `docs/architecture/`; a change to something a guide describes updates the guide in `docs/guide/`; a change that starts using a Symfony or Symfony AI feature updates its row of `docs/highlights.md` through a new fragment in [`docs/highlights.d/`](docs/highlights.d/), never by editing or committing the page itself (`bin/highlights` builds it, and git ignores it).
-5. **Run `bin/check`** before every commit. It runs every gate CI runs: tests, static analysis, code style and Intakt's own rules.
+5. **Run `bin/check`** before every commit. It runs every gate CI runs: tests, static analysis, code style and Intakt's own rules. Run again with the same options on a tree that passed and has not changed since, it reuses that pass instead of running the gates again ([details](docs/user/README.md#running-bincheck-again-on-an-unchanged-tree)).
 6. **Commits:** [Conventional Commits](https://www.conventionalcommits.org/) (`feat(review): ...`, `fix(probe): ...`), at most 100 characters, in US English.
 
 ## Protected files
