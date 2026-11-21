@@ -84,12 +84,13 @@ final readonly class CompleteListing
             return $this->shortListing($project, $short);
         }
 
+        $failures = $this->store->failuresOf($project);
         $this->stillNewestSince($project, $readBefore);
 
-        return $this->planOver($project, $newer);
+        return $this->planOverWith($newer, $failures);
     }
 
-    // Checked once and never retried, because a winning write is never answered from rows older than the newest committed listing, and the history reads leave time for a third worker to commit one.
+    // Checked once, after the last read the plan is answered from, and never retried, because a winning write is never answered from rows older than the newest committed listing, and the history and failure reads leave time for a third worker to commit one.
     private function stillNewestSince(string $project, SyncState $readBefore): void
     {
         if ($this->store->syncStateOf($project)->generation !== $readBefore->generation) {
@@ -172,6 +173,15 @@ final readonly class CompleteListing
      */
     private function planOver(string $project, array $rows): IntakePlan
     {
-        return $this->rules->planOf(array_map(static fn (StoredIssue $row): QueuedIssue => $row->queued(), $rows), $this->store->failuresOf($project));
+        return $this->planOverWith($rows, $this->store->failuresOf($project));
+    }
+
+    /**
+     * @param list<StoredIssue>  $rows
+     * @param array<int, string> $failures
+     */
+    private function planOverWith(array $rows, array $failures): IntakePlan
+    {
+        return $this->rules->planOf(array_map(static fn (StoredIssue $row): QueuedIssue => $row->queued(), $rows), $failures);
     }
 }

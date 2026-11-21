@@ -38,6 +38,7 @@ use Intakt\Plugin\GitHubWorkSource\Infrastructure\CompleteListing;
 use Intakt\Plugin\GitHubWorkSource\Infrastructure\IntakeStore;
 use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Plugin\GitHubForge\RecordedIssueApi;
+use Intakt\Tests\Plugin\GitHubWorkSource\CommitOnFirstFailureLoad;
 use Intakt\Tests\Plugin\GitHubWorkSource\Issues;
 use Intakt\Tests\Plugin\GitHubWorkSource\RecordedIssueReads;
 use Intakt\Tests\Plugin\GitHubWorkSource\ScriptedHistories;
@@ -371,8 +372,10 @@ final class CompleteListingTest extends KernelTestCase
     public function testAfterALostWriteARowThatIsACandidateUnderThisSyncsEligibilityLabelIsVouchedBeforeThePlanIsAnswered(): void
     {
         $this->reads->lists([Issues::task(7, ['ready']), Issues::task(8, ['intakt'])]);
-        $this->reads->during = function (): void {
+        $otherWorkers = null;
+        $this->reads->during = function () use (&$otherWorkers): void {
             self::assertInstanceOf(IntakePlan::class, $this->listingOver($this->reads, $this->histories)->planOf('alpha'));
+            $otherWorkers = $this->store->syncStateOf('alpha')->generation;
         };
 
         $plan = $this->listingOver($this->reads, $this->histories, 'ready')->planOf('alpha');
@@ -381,6 +384,8 @@ final class CompleteListingTest extends KernelTestCase
         self::assertSame([7], $this->numbersOf($plan->ready));
         self::assertSame([8, 7, 7], $this->histories->read);
         self::assertSame([], $this->shortListingReasons());
+        self::assertFalse($this->rowOf(7)->isVouched());
+        self::assertSame($otherWorkers, $this->store->syncStateOf('alpha')->generation);
     }
 
     public function testAHistoryThatCannotBeReadAfterALostWriteLeavesTheListingShort(): void
@@ -416,6 +421,31 @@ final class CompleteListingTest extends KernelTestCase
         self::assertSame([3, 10, 11], $this->numbersOf($this->store->issuesOf('alpha')));
         self::assertSame('W/"issues-3"', $this->store->syncStateOf('alpha')->validator);
         self::assertFalse($this->rowOf(11)->isVouched());
+    }
+
+    public function testASyncThatCommitsWhileTheFailuresAreReadAfterALostWriteLeavesTheListingShortSoNoTaskBecomesReadyFromTheOlderRows(): void
+    {
+        $waiting = Issues::task(10, ['ready'], ['body' => 'Waits for #3']);
+        $this->reads->lists([$waiting]);
+        $this->reads->during = function () use ($waiting): void {
+            $closedThree = [$this->vouchedRowOf($waiting), $this->vouchedRowOf(Issues::task(20))];
+            self::assertTrue($this->store->recordIfStill('alpha', $this->store->syncStateOf('alpha'), new ListingRows($closedThree, 'W/"issues-2"')));
+            $this->store->failForGood('alpha', 20, 'recorded failure');
+        };
+        $reopenedThree = new CommitOnFirstFailureLoad(function () use ($waiting): void {
+            $rows = [$this->vouchedRowOf(Issues::task(3)), $this->vouchedRowOf($waiting), $this->vouchedRowOf(Issues::task(20))];
+            self::assertTrue($this->store->recordIfStill('alpha', $this->store->syncStateOf('alpha'), new ListingRows($rows, 'W/"issues-3"')));
+        });
+        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
+        self::assertInstanceOf(EntityManagerInterface::class, $entities);
+        $entities->getEventManager()->addEventListener([Events::postLoad], $reopenedThree);
+
+        $plan = $this->listingOver($this->reads, $this->histories, 'ready')->planOf('alpha');
+
+        self::assertTrue($reopenedThree->committed());
+        self::assertNull($plan);
+        self::assertSame(['Another worker stored a newer listing of project "alpha" while the stored rows were checked.'], $this->shortListingReasons());
+        self::assertSame('W/"issues-3"', $this->store->syncStateOf('alpha')->validator);
     }
 
     public function testAWriteRefusedWhileAnotherWorkerHasNotCommittedItsListingLeavesTheListingShortWithoutAnException(): void
