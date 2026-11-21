@@ -29,8 +29,6 @@ final readonly class AttributionLines
     }
 
     /**
-     * So a message written with Windows line endings does not come back with mixed ones. Judged from the endings the kept lines had in the message, because a removed trailer's ending is not the message's; only when no kept line had one (a single line without a final newline is left) does the whole message decide.
-     *
      * @param list<string>       $lines
      * @param array<int, string> $kept
      */
@@ -38,8 +36,9 @@ final readonly class AttributionLines
     {
         $terminated = $kept;
         // Because the last piece of the split is the only one no line ending followed.
-        unset($terminated[array_key_last($lines)]);
+        unset($terminated[count($lines) - 1]);
 
+        // So a message written with Windows line endings does not come back with mixed ones. Judged from the endings the kept lines had in the message, because a removed trailer's ending is not the message's; only when no kept line had one (a single line without a final newline is left) does the whole message decide.
         return match (true) {
             array_any($terminated, static fn (string $line): bool => str_ends_with($line, "\r")) => "\r\n",
             [] !== $terminated => "\n",
