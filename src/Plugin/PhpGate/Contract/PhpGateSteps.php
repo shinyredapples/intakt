@@ -133,7 +133,7 @@ final readonly class PhpGateSteps
         $head = is_resource($process) ? trim((string) stream_get_contents($pipes[1])) : "";
         $status = is_resource($process) ? proc_close($process) : 1;
         if (0 !== $status) { $refuse("git could not read the HEAD of the source checkout of ".$label."."); }
-    if ($head !== $reference) { $refuse("The source checkout of ".$label." is at ".$show($head).", not at the locked commit."); }
+        if ($head !== $reference) { $refuse("The source checkout of ".$label." is at ".$show($head).", not at the locked commit."); }
     }'
     SH_WRAP;
 
