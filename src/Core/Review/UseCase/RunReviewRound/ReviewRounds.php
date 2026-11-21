@@ -258,10 +258,9 @@ final readonly class ReviewRounds
         }
     }
 
+    // Within one spelling by round number as judgedAfter() orders them, because an id follows a clock that can go back and would pick a round the publication then drops as superseded; the rounds come highest number first.
     /**
-     * Within one spelling by round number as judgedAfter() orders them, because an id follows a clock that can go back and would pick a round the publication then drops as superseded.
-     *
-     * @param array<ReviewRound> $rounds ordered by round number, highest first
+     * @param array<ReviewRound> $rounds
      *
      * @return array<string, ReviewRound>
      */
@@ -276,9 +275,8 @@ final readonly class ReviewRounds
         return $highest;
     }
 
+    // Across spellings by id, because each spelling numbers its rounds from one, so a number says nothing about which spelling reviewed last.
     /**
-     * Across spellings by id, because each spelling numbers its rounds from one, so a number says nothing about which spelling reviewed last.
-     *
      * @param array<string, ReviewRound> $rounds
      */
     private function newestAcrossSpellings(array $rounds): ?ReviewRound
