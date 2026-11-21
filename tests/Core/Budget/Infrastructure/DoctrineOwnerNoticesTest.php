@@ -716,7 +716,7 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
         self::assertSame([[], []], $this->namesOf($this->notices()->waitingAndEndedOnTheDayOf(new DateTimeImmutable('2026-11-03T00:00:00+00:00'))));
     }
 
-    // The day is the UTC day of the moment, as in the read of the ended notices alone.
+    // The day is the UTC day of the moment, because every moment Intakt stores is UTC.
     public function testTheCombinedReadTakesAMomentInAnotherZoneAsItsUtcDay(): void
     {
         $this->store('main', new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
