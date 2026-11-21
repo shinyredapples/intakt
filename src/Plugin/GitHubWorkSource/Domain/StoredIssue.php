@@ -91,6 +91,13 @@ final class StoredIssue
         $this->vouchedLabels = $vouching->labels;
     }
 
+    // Back to unread, so the next listing reads its history again instead of keeping a vouching the pick found out of date.
+    public function forgetVouching(): void
+    {
+        $this->trusted = null;
+        $this->vouchedLabels = [];
+    }
+
     // Kept only while the update time and what steers both stand, because an edit in the second of the earlier listing keeps the update time and the history vouched for the earlier labels and references.
     public function keepVouchingOf(self $stored): void
     {

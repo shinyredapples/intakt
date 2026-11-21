@@ -110,11 +110,15 @@ final readonly class QueuedIssue
         return $this->hasLabels($other->reading->listed->labels) && $this->namesNumbers($other->reading);
     }
 
-    // Only the labels the item carries, in the order they were applied, because those are what the eligibility and priority rules read; a label applied again by an account without write access leaves the label set as it was and is seen only here.
+    // Only the labels the item carries, because those are what the eligibility and priority rules read; a label applied again by an account without write access leaves the label set as it was and is seen only here. Priority labels in the order they were applied, because the one applied last counts, and every other label as a set, because its order steers nothing.
     public function isVouchedAs(Vouching $other): bool
     {
+        $own = array_values(array_filter($this->vouchedLabels(), $this->hasLabel(...)));
+        $fresh = array_values(array_filter($other->labels, $this->hasLabel(...)));
+
         return $this->isTrusted() === $other->trusted
-            && array_values(array_filter($this->vouchedLabels(), $this->hasLabel(...))) === array_values(array_filter($other->labels, $this->hasLabel(...)));
+            && Priority::labelsIn($own) === Priority::labelsIn($fresh)
+            && self::sorted($own) === self::sorted($fresh);
     }
 
     private function namesNumbers(ItemReading $other): bool
@@ -128,11 +132,19 @@ final readonly class QueuedIssue
      */
     private function hasLabels(array $labels): bool
     {
-        $own = $this->reading->listed->labels;
-        sort($own, SORT_STRING);
+        return self::sorted($this->reading->listed->labels) === self::sorted($labels);
+    }
+
+    /**
+     * @param list<string> $labels
+     *
+     * @return list<string>
+     */
+    private static function sorted(array $labels): array
+    {
         sort($labels, SORT_STRING);
 
-        return $own === $labels;
+        return $labels;
     }
 
     /**

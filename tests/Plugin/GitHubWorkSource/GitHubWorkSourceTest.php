@@ -81,9 +81,12 @@ final class GitHubWorkSourceTest extends KernelTestCase
     /** @var list<string> */
     private array $writers = ['ana', 'bea'];
     private string $labelApplier = 'ana';
-    /** @var array<string, string> */
+    /** @var array<int, array<string, string>> */
     private array $appliersOf = [];
-    private ?string $editedBody = null;
+    /** @var ?list<string> */
+    private ?array $appliedInOrder = null;
+    /** @var array<int, string> */
+    private array $editedBodies = [];
     /** @var list<string> */
     private array $asked = [];
     /** @var list<int> */
@@ -201,7 +204,7 @@ final class GitHubWorkSourceTest extends KernelTestCase
         $source = $this->source();
         self::assertSame(5, $source->queue('alpha')->ready()[0]->number);
         $this->reads->listsUnchanged();
-        $this->editedBody = 'Waits for #6';
+        $this->editedBodies = [5 => 'Waits for #6'];
 
         $pick = $source->nextWork('alpha', WorkerState::Free);
 
@@ -215,7 +218,7 @@ final class GitHubWorkSourceTest extends KernelTestCase
         $source = $this->source();
         self::assertSame(5, $source->queue('alpha')->ready()[0]->number);
         $this->reads->listsUnchanged();
-        $this->appliersOf = ['intakt' => 'triager'];
+        $this->appliersOf = [5 => ['intakt' => 'triager']];
 
         $pick = $source->nextWork('alpha', WorkerState::Free);
 
@@ -224,13 +227,104 @@ final class GitHubWorkSourceTest extends KernelTestCase
         self::assertSame('The labels of #5 are no longer applied by the accounts with write access the plan counted, so it is not the planned item.', $this->onlyLog()['context']['reason'] ?? null);
     }
 
+    public function testTheOnlyTaskWhoseEligibilityLabelWasAppliedAgainWithoutWriteAccessIsNotPicked(): void
+    {
+        $this->reads->lists([Issues::task(5)]);
+        $source = $this->source();
+        self::assertSame(5, $source->queue('alpha')->ready()[0]->number);
+        $this->reads->listsUnchanged();
+        $this->labelApplier = 'triager';
+
+        self::assertNull($source->nextWork('alpha', WorkerState::Free)->task);
+    }
+
+    public function testALabelPutBackByANonWriterEndsTheTickUncheckedAndTheNextUnchangedListingPicksTheTaskBehindIt(): void
+    {
+        $this->reads->lists([Issues::task(5), Issues::task(6)]);
+        $source = $this->source();
+        self::assertSame(5, $source->queue('alpha')->ready()[0]->number);
+        $this->reads->listsUnchanged();
+        $this->appliersOf = [5 => ['intakt' => 'triager']];
+        self::assertSame(NothingPicked::TrustNotChecked, $source->nextWork('alpha', WorkerState::Free)->nothing);
+        $this->reads->listsUnchanged();
+
+        $pick = $source->nextWork('alpha', WorkerState::Free);
+
+        self::assertSame(6, $pick->task?->number);
+        self::assertNull(array_last($this->reads->validators));
+    }
+
+    public function testAWaitAddedInTheSecondOfTheListingEndsTheTickUncheckedAndTheNextListingIsReadInFull(): void
+    {
+        $this->reads->lists([Issues::task(5), Issues::task(6)]);
+        $source = $this->source();
+        $source->queue('alpha');
+        $this->reads->listsUnchanged();
+        $this->editedBodies = [5 => 'Waits for #6'];
+        self::assertSame(NothingPicked::TrustNotChecked, $source->nextWork('alpha', WorkerState::Free)->nothing);
+        $this->reads->lists([Issues::task(5, ['intakt'], ['body' => 'Waits for #6']), Issues::task(6)]);
+
+        $pick = $source->nextWork('alpha', WorkerState::Free);
+
+        self::assertSame(6, $pick->task?->number);
+        self::assertNull(array_last($this->reads->validators));
+    }
+
+    public function testARefusedWriteThatForgetsTheItemIsLoggedAndTheTickStillEndsUnchecked(): void
+    {
+        $file = (string) tempnam(sys_get_temp_dir(), 'intake');
+        $writer = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'path' => $file]);
+        try {
+            $this->store = $this->storeOnAFileThatRefusesBusyReads($file);
+            $this->reads->lists([Issues::task(5), Issues::task(6)]);
+            $source = $this->source();
+            $source->queue('alpha');
+            $this->reads->listsUnchanged();
+            $this->appliersOf = [5 => ['intakt' => 'triager']];
+            $this->duringHistory = static fn () => $writer->executeStatement('BEGIN EXCLUSIVE');
+
+            $pick = $source->nextWork('alpha', WorkerState::Free);
+
+            self::assertSame(NothingPicked::TrustNotChecked, $pick->nothing);
+            $logs = $this->logger->cleanLogs();
+            self::assertCount(2, $logs);
+            self::assertIsArray($logs[0]);
+            self::assertSame('Task #{number} of project {project} could not be marked to be read again by the next listing: {reason}', $logs[0][1] ?? null);
+        } finally {
+            $writer->close();
+            unlink($file);
+        }
+    }
+
+    public function testTwoNonPriorityLabelsAppliedAgainInTheOtherOrderByAWriterStillPickTheTask(): void
+    {
+        $this->reads->lists([Issues::task(5, ['intakt', 'docs'])]);
+        $source = $this->source();
+        $source->queue('alpha');
+        $this->reads->listsUnchanged();
+        $this->appliedInOrder = ['docs', 'intakt'];
+
+        self::assertSame(5, $source->nextWork('alpha', WorkerState::Free)->task?->number);
+    }
+
+    public function testPriorityLabelsAppliedAgainInTheOtherOrderStopThePick(): void
+    {
+        $this->reads->lists([Issues::task(5, ['intakt', 'priority:low', 'priority:high']), Issues::task(6)]);
+        $source = $this->source();
+        self::assertSame(5, $source->queue('alpha')->ready()[0]->number);
+        $this->reads->listsUnchanged();
+        $this->appliedInOrder = ['intakt', 'priority:high', 'priority:low'];
+
+        self::assertSame(NothingPicked::TrustNotChecked, $source->nextWork('alpha', WorkerState::Free)->nothing);
+    }
+
     public function testAPriorityLabelAppliedAgainWithoutWriteAccessInTheSecondOfTheListingPicksNothing(): void
     {
         $this->reads->lists([Issues::task(5, ['intakt', 'priority:urgent']), Issues::task(6)]);
         $source = $this->source();
         self::assertSame(5, $source->queue('alpha')->ready()[0]->number);
         $this->reads->listsUnchanged();
-        $this->appliersOf = ['priority:urgent' => 'triager'];
+        $this->appliersOf = [5 => ['priority:urgent' => 'triager']];
 
         $pick = $source->nextWork('alpha', WorkerState::Free);
 
@@ -240,7 +334,7 @@ final class GitHubWorkSourceTest extends KernelTestCase
 
     public function testALabelAppliedWithoutWriteAccessSinceBeforeTheListingDoesNotKeepTheTaskFromBeingPicked(): void
     {
-        $this->appliersOf = ['docs' => 'triager'];
+        $this->appliersOf = [5 => ['docs' => 'triager']];
         $this->reads->lists([Issues::task(5, ['intakt', 'docs'])]);
         $source = $this->source();
         $source->queue('alpha');
@@ -399,7 +493,7 @@ final class GitHubWorkSourceTest extends KernelTestCase
 
             $listed = $this->reads->lastListed[$number];
 
-            return new IssueHistory($this->editor, array_map(fn (string $label): LabelApplication => new LabelApplication($label, $this->appliersOf[$label] ?? $this->labelApplier), $listed->labels), $this->editedBody ?? $listed->body, $listed->labels);
+            return new IssueHistory($this->editor, array_map(fn (string $label): LabelApplication => new LabelApplication($label, $this->appliersOf[$number][$label] ?? $this->labelApplier), $this->appliedInOrder ?? $listed->labels), $this->editedBodies[$number] ?? $listed->body, $listed->labels);
         });
 
         return $this->sourceOver($this->reads, $histories);

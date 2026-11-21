@@ -22,6 +22,7 @@ final class RecordedIssueReads implements IssueReads
     /** @var array<int, ListedIssue> */
     public array $lastListed = [];
     private ?IssueListing $next = null;
+    private ?IssueListing $lastFull = null;
 
     /**
      * @param list<ListedIssue> $issues
@@ -29,6 +30,7 @@ final class RecordedIssueReads implements IssueReads
     public function lists(array $issues, ?string $validator = 'W/"issues-1"'): void
     {
         $this->next = IssueListing::listed($issues, $validator);
+        $this->lastFull = $this->next;
         foreach ($issues as $issue) {
             $this->lastListed[$issue->number] = $issue;
         }
@@ -47,6 +49,11 @@ final class RecordedIssueReads implements IssueReads
         $this->during = null;
         if ($during instanceof Closure) {
             $during();
+        }
+
+        // Asked without a validator, GitHub has nothing to confirm and sends the whole listing again.
+        if (null === $validator && $this->next instanceof IssueListing && $this->next->isUnchanged()) {
+            return $this->lastFull ?? throw new ForgeReadFailed('GitHub answered 502 to a read.');
         }
 
         return $this->next ?? throw new ForgeReadFailed('GitHub answered 502 to a read.');

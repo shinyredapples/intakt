@@ -37,4 +37,10 @@ final class IntakeValidator
         $this->validator = $validator;
         ++$this->generation;
     }
+
+    // The generation stays, because an overlapping write is still compared against it; without a validator the next listing is a full one.
+    public function forget(): void
+    {
+        $this->validator = null;
+    }
 }

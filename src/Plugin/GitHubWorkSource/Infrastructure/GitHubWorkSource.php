@@ -119,7 +119,7 @@ final readonly class GitHubWorkSource implements WorkSource
 
         $history = $this->histories->of($project, $issue->number(), $issue->updatedAt());
         if (!$issue->isListedAs($history, $this->references)) {
-            throw new ForgeReadFailed(sprintf('GitHub holds #%d with other text or labels than it was planned with, so its history is not of the planned item.', $issue->number()));
+            throw $this->readAgainLater($project, $issue, sprintf('GitHub holds #%d with other text or labels than it was planned with, so its history is not of the planned item.', $issue->number()));
         }
 
         $vouching = Vouching::of($issue->author(), $history, $steers);
@@ -128,10 +128,22 @@ final readonly class GitHubWorkSource implements WorkSource
         }
 
         if (!$issue->isVouchedAs($vouching)) {
-            throw new ForgeReadFailed(sprintf('The labels of #%d are no longer applied by the accounts with write access the plan counted, so it is not the planned item.', $issue->number()));
+            throw $this->readAgainLater($project, $issue, sprintf('The labels of #%d are no longer applied by the accounts with write access the plan counted, so it is not the planned item.', $issue->number()));
         }
 
         return true;
+    }
+
+    // The stored state forgets the item, because a listing that keeps the plan's view of it would plan it first again and stop every later tick at the same check. A refused write is only logged: the tick fails closed either way.
+    private function readAgainLater(string $project, QueuedIssue $issue, string $mismatch): ForgeReadFailed
+    {
+        try {
+            $this->store->forgetVouchingOf($project, $issue->number());
+        } catch (ProjectHeldByAnotherWriter $held) {
+            $this->logger->warning('Task #{number} of project {project} could not be marked to be read again by the next listing: {reason}', ['number' => $issue->number(), 'project' => $project, 'reason' => $held->getMessage(), 'exception' => $held]);
+        }
+
+        return new ForgeReadFailed($mismatch);
     }
 
     // Remembered for one pick only, because the author is often the last editor and the one who applied the labels, and each ask is a forge call.

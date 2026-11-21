@@ -220,6 +220,23 @@ final readonly class IntakeStore
         });
     }
 
+    // Under the lock the listing's write takes, so it never interleaves with a listing being stored. The item's vouching and the validator both go: a listing GitHub confirms unchanged would bring back the stored waits, and a kept vouching would bring back the plan the pick refused.
+    public function forgetVouchingOf(string $project, int $number): void
+    {
+        try {
+            $this->inTransaction($this->ownManager(), static function (EntityManagerInterface $manager) use ($project, $number): bool {
+                $manager->find(IntakeValidator::class, $project, LockMode::PESSIMISTIC_WRITE)?->forget();
+                $manager->find(StoredIssue::class, ['project' => $project, 'number' => $number])?->forgetVouching();
+
+                return true;
+            });
+        } catch (RetryableException $refusal) {
+            $this->rollBackARefusedCommit();
+
+            throw ProjectHeldByAnotherWriter::of($project, $refusal);
+        }
+    }
+
     /**
      * @return array<int, string>
      */

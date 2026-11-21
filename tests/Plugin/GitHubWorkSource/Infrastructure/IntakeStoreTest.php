@@ -152,6 +152,19 @@ final class IntakeStoreTest extends KernelTestCase
         self::assertTrue(array_first($this->store->issuesOf('alpha'))?->queued()->isTrusted());
     }
 
+    public function testForgettingAnItemClearsItsVouchingAndTheValidatorAndKeepsTheGeneration(): void
+    {
+        $this->record('alpha', [$this->vouched(Issues::task(7)), $this->vouched(Issues::task(8))], 'W/"one"');
+        $before = $this->store->syncStateOf('alpha');
+
+        $this->store->forgetVouchingOf('alpha', 7);
+
+        $issues = $this->store->issuesOf('alpha');
+        self::assertSame([false, true], array_map(static fn (StoredIssue $issue): bool => $issue->isVouched(), $issues));
+        self::assertNull($this->store->syncStateOf('alpha')->validator);
+        self::assertSame($before->generation, $this->store->syncStateOf('alpha')->generation);
+    }
+
     public function testAnIssueTheListingNoLongerShowsLosesItsRow(): void
     {
         $this->record('alpha', [$this->stored(Issues::task(7)), $this->stored(Issues::task(8))], null);
