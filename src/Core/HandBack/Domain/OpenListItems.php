@@ -73,8 +73,8 @@ final readonly class OpenListItems
     {
         $read = $this->readUpTo(MarkdownText::lineStartAt($this->text, $start) + 1);
 
-        // A part over several lines, or one that fills its line, is a block of its own (an HTML comment alone on its line is an HTML block), so the line after it continues no paragraph.
-        $isABlock = str_contains(substr($this->text, $start, $end - $start), "\n") || $this->fillsItsLine($start, $end);
+        // A fence over several lines is a block of its own, and so is an HTML comment whose `<!--` opens its line, up to three columns in, together with the text after its `-->` (https://spec.commonmark.org/0.31.2/#html-blocks, kind 2). So the line after a block continues no paragraph, while a comment indented further continues the paragraph above it.
+        $isABlock = str_starts_with(substr($this->text, $start, 4), '<!--') ? $read->opensAnHtmlBlock($start) : str_contains(substr($this->text, $start, $end - $start), "\n");
 
         return new self($this->text, $read->columns, max($read->nextLine, MarkdownText::lineEndAt($this->text, $end) + 1), $isABlock ? '' : $read->lineAbove);
     }
@@ -124,11 +124,11 @@ final readonly class OpenListItems
         return [] === $columns && MarkdownText::continuesAParagraph($lineAbove, $line);
     }
 
-    private function fillsItsLine(int $start, int $end): bool
+    private function opensAnHtmlBlock(int $start): bool
     {
         $lineStart = MarkdownText::lineStartAt($this->text, $start);
-        $lineEnd = MarkdownText::lineEndAt($this->text, $end);
+        $indent = MarkdownText::withSpacesForTabs(substr($this->text, $lineStart, $start - $lineStart));
 
-        return '' === trim(substr($this->text, $lineStart, $start - $lineStart)) && '' === trim(substr($this->text, $end, $lineEnd - $end));
+        return '' === trim($indent) && strlen($indent) <= ($this->columnFor(strlen($indent)) ?? 0) + self::MOST_INDENT;
     }
 }

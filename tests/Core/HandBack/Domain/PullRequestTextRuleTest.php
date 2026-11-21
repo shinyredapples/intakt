@@ -342,4 +342,14 @@ final class PullRequestTextRuleTest extends TestCase
     {
         self::assertSame([], PullRequestTextRule::judge("## Evidence\n- Show the output.", "<!-- note -->\n10. Example\n\n\t~~~\n\t<!-- E1 -->\n\t~~~")->missingItems);
     }
+
+    public function testACommentIndentedFourSpacesUnderAParagraphContinuesItSoTheNextOrderedMarkerOpensNoFence(): void
+    {
+        self::assertSame([1], PullRequestTextRule::judge("## Evidence\n- Show the result.", "A paragraph\n    <!-- note -->\n10. Example\n    ~~~\n    <!-- E1 -->")->missingItems);
+    }
+
+    public function testACommentOpeningItsLineIsABlockWithTheTextAfterItSoTheNextOrderedItemOpensItsFence(): void
+    {
+        self::assertSame([], PullRequestTextRule::judge("## Evidence\n- Show the result.", "<!-- note --> lead-in\n10. ~~~\n    <!-- E1 -->\n    ~~~")->missingItems);
+    }
 }
