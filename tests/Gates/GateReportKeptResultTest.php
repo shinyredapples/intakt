@@ -108,6 +108,41 @@ final class GateReportKeptResultTest extends TestCase
         self::assertNull($this->reportOf(GateResult::withFindings('dashes', $this->elevenFindings()))->keeping($kept)->kept);
     }
 
+    public function testAKeptResultWithTheLinesFindingsButAPassingOkFallsBackToTheLine(): void
+    {
+        $kept = '{"gate":"dashes","ok":true,"findings":["notes.md:1 U+2014"],"omitted":0}';
+
+        self::assertNull($this->reportOf(GateResult::withFindings('dashes', ['notes.md:1 U+2014']))->keeping($kept)->kept);
+    }
+
+    public function testAKeptResultWithNoFindingsButAFailingOkFallsBackToAPassingLine(): void
+    {
+        $kept = '{"gate":"dashes","ok":false,"findings":[],"omitted":0}';
+
+        self::assertNull($this->reportOf(GateResult::passed('dashes'))->keeping($kept)->kept);
+    }
+
+    public function testAKeptResultWithoutAnOkFallsBackToTheLine(): void
+    {
+        $kept = '{"gate":"dashes","findings":["notes.md:1 U+2014"],"omitted":0}';
+
+        self::assertNull($this->reportOf(GateResult::withFindings('dashes', ['notes.md:1 U+2014']))->keeping($kept)->kept);
+    }
+
+    public function testAKeptResultThatClaimsOmittedFindingsFallsBackToTheLine(): void
+    {
+        $kept = '{"gate":"dashes","ok":false,"findings":["notes.md:1 U+2014"],"omitted":3}';
+
+        self::assertNull($this->reportOf(GateResult::withFindings('dashes', ['notes.md:1 U+2014']))->keeping($kept)->kept);
+    }
+
+    public function testAKeptPassingResultIsAcceptedForAPassingLine(): void
+    {
+        $result = GateResult::passed('dashes');
+
+        self::assertSame($result->toFullJson(), $this->reportOf($result)->keeping($result->toFullJson())->kept);
+    }
+
     public function testAKeptResultThatIsNoJsonFallsBackToTheLine(): void
     {
         self::assertNull($this->reportOf(GateResult::passed('dashes'))->keeping('{"gate":')->kept);
@@ -121,6 +156,35 @@ final class GateReportKeptResultTest extends TestCase
         $keeping = $report->keeping($result->toFullJson());
 
         self::assertSame([$report->line, false], [$keeping->line, $keeping->isPassing()]);
+    }
+
+    public function testAChildThatKeptAFailureAndThenCrashedWithoutALineIsReportedWithTheCrash(): void
+    {
+        $saved = GateResult::withFindings('dashes', ['notes.md:1 U+2014']);
+
+        $report = GateReport::fromChild('dashes', new ProcessResult(139, '', 'Segmentation fault'))->keeping($saved->toFullJson());
+
+        self::assertNull($report->kept);
+        self::assertStringContainsString('exit code 139', $report->line);
+    }
+
+    public function testAKeptResultIsRefusedForABuiltLineEvenWhenItsFindingsEqualTheLines(): void
+    {
+        $built = GateReport::fromChild('dashes', new ProcessResult(139, '', 'Segmentation fault'));
+        $finding = 'gate process ended with exit code 139 and no valid result line: Segmentation fault';
+        self::assertSame(GateResult::failedBecause('dashes', $finding)->toJson(), $built->line);
+
+        self::assertNull($built->keeping(GateResult::failedBecause('dashes', $finding)->toFullJson())->kept);
+    }
+
+    public function testAGateWhoseValidLineCameWithTheWrongExitCodeKeepsNoSavedResult(): void
+    {
+        $saved = GateResult::withFindings('dashes', ['notes.md:1 U+2014']);
+
+        $report = GateReport::fromChild('dashes', new ProcessResult(139, $saved->toJson()."\n", ''))->keeping($saved->toFullJson());
+
+        self::assertNull($report->kept);
+        self::assertStringContainsString('exit code 139', $report->line);
     }
 
     /**
