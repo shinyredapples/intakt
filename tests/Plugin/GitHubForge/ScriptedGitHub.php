@@ -36,7 +36,7 @@ final class ScriptedGitHub
     public const string OWN_LOGIN = 'acme-intakt[bot]';
     private const string APP_ID = '12345';
     private const string APP_SLUG = 'acme-intakt';
-    // 2026-11-25 10:10:00 UTC, ten minutes after the clock of the stack.
+    // A literal moment (2026-11-25 10:10:00 UTC), because the reset must be ten minutes after the clock of the stack whatever time the test runs.
     private const string RATE_LIMIT_RESET = '1795601400';
 
     /** @var list<array{string, array<mixed>}> */
