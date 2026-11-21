@@ -8,6 +8,7 @@ use Closure;
 use DateTimeImmutable;
 use Doctrine\DBAL\Configuration;
 use Doctrine\DBAL\DriverManager;
+use Doctrine\DBAL\Logging\Middleware as LoggingMiddleware;
 use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Event\PrePersistEventArgs;
@@ -36,8 +37,10 @@ use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Psr\Log\AbstractLogger;
 use Psr\Log\LoggerInterface;
 use RuntimeException;
+use Stringable;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\EventDispatcher\EventDispatcher;
@@ -506,6 +509,59 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
 
         self::assertSame([], $this->notices()->endedOnTheDayOf(new DateTimeImmutable('2026-11-21T20:00:00+00:00')));
         self::assertSame([], $this->notices()->stillRunningOldestFirst());
+    }
+
+    // A notice whose writer is still saving its end looks, to an earlier reading stored meanwhile, like one from before ends were kept, so the writer must look again.
+    public function testAnEarlierReadingStoredWhileTheNoticeSavesItsEndStillMovesTheEndToItsMoment(): void
+    {
+        $this->record('main', '2026-11-02 12:00:00');
+        $late = function (): void {
+            $this->record('main', '2026-11-02 11:59:00');
+        };
+        $hook = new class($late) extends AbstractLogger {
+            public function __construct(private ?Closure $late)
+            {
+            }
+
+            public function log(mixed $level, string|Stringable $message, array $context = []): void
+            {
+                if (null === $this->late || !str_starts_with((string) ($context['sql'] ?? ''), 'UPDATE budget_outage_notice ')) {
+                    return;
+                }
+
+                $record = $this->late;
+                $this->late = null;
+                $record();
+            }
+        };
+        $connection = DriverManager::getConnection($this->entities->getConnection()->getParams(), new Configuration()->setMiddlewares([new LoggingMiddleware($hook)]));
+        $notices = new DoctrineOutageNotices(new EntityManager($connection, $this->entities->getConfiguration()), new LockFactory(new InMemoryStore()), self::createStub(LoggerInterface::class));
+
+        $notices->noticeOnce(new UsageReadingsStayedAway(new Account(Provider::ClaudeCode, 'main'), new DateTimeImmutable('2026-11-02T08:00:00+00:00'), new DateTimeImmutable('2026-11-02T11:00:00+00:00')));
+
+        self::assertSame('11:59', $this->notices()->endedOnTheDayOf(new DateTimeImmutable('2026-11-02T20:00:00+00:00'))[0]->endedAt->format('H:i'));
+    }
+
+    // The caller's rollback would erase the end, so a reading recorded inside its transaction tells nobody.
+    public function testAReadingRecordedInsideACallersTransactionTellsNoListener(): void
+    {
+        $this->store('main', new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
+        $heard = 0;
+        $events = new EventDispatcher();
+        $events->addListener(OwnerNoticesChanged::class, static function () use (&$heard): void {
+            ++$heard;
+        });
+        $connection = $this->entities->getConnection();
+
+        $connection->beginTransaction();
+        try {
+            $this->measuredUseAt('2026-11-02 12:00:00', $events)->record($this->readingOf('main'));
+        } finally {
+            $connection->rollBack();
+        }
+
+        self::assertSame(0, $heard);
+        self::assertCount(1, $this->notices()->stillRunningOldestFirst());
     }
 
     private function record(string $account, string $at): void

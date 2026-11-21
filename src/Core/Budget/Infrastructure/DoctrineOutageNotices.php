@@ -56,8 +56,15 @@ final readonly class DoctrineOutageNotices
         $this->endIfReadSince($notice);
     }
 
-    // A reading can land any time before this row is stored, and its own end of outages found no row yet, so the notice is ended by it here; looked up only once the row is stored, because a reading stored later finds the row itself.
+    // A reading can land any time before this row is stored, and its own end of outages found no row yet, so the notice is ended by it here; looked up only once the row is stored, because a reading stored later finds the row itself. It looks again after each end, because an earlier reading stored meanwhile skips a notice with no end yet (it cannot tell it from one that predates ends being kept), and the end only ever moves earlier, so the loop stops.
     private function endIfReadSince(OutageNoticeRecord $notice): void
+    {
+        do {
+            $moved = $this->endWithTheEarliestReadingSince($notice);
+        } while ($moved > 0);
+    }
+
+    private function endWithTheEarliestReadingSince(OutageNoticeRecord $notice): int
     {
         /** @var list<WindowReadingRecord> $later */
         $later = $this->entities->createQueryBuilder()
@@ -74,9 +81,10 @@ final readonly class DoctrineOutageNotices
             ->getQuery()
             ->getResult();
 
+        $moved = 0;
         foreach ($later as $reading) {
             // One statement past the entity, because a reading may end the same row at once, and the earlier reading wins.
-            $this->entities->createQueryBuilder()
+            $result = $this->entities->createQueryBuilder()
                 ->update(OutageNoticeRecord::class, 'notice')
                 ->set('notice.endedAt', ':takenAt')
                 ->where('notice.position = :position')
@@ -85,7 +93,10 @@ final readonly class DoctrineOutageNotices
                 ->setParameter('position', $notice->position)
                 ->getQuery()
                 ->execute();
+            $moved += is_int($result) ? $result : 0;
         }
+
+        return $moved;
     }
 
     private function wasNoticed(UsageReadingsStayedAway $outage): bool

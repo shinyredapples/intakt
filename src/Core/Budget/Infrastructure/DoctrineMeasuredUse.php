@@ -43,8 +43,10 @@ final readonly class DoctrineMeasuredUse implements MeasuredUse
 
         // Read before the older readings are dropped, because one of them may be the reading that already ended an outage.
         $previous = $this->latestReadingBefore($reading->account, $now);
+        $nested = $this->entities->getConnection()->isTransactionActive();
         $ended = $this->storeEndingOutages(new WindowReadingRecord($reading, $now), $previous);
-        if ($ended > 0) {
+        // Inside a caller's transaction nothing is committed yet, and its rollback would erase an end a listener already heard of, so the caller that owns the commit announces.
+        if ($ended > 0 && !$nested) {
             $this->events->dispatch(new OwnerNoticesChanged());
         }
 

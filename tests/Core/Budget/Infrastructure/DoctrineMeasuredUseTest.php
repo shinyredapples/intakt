@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Budget\Infrastructure;
 
 use DateTimeImmutable;
 use Doctrine\Common\EventManager;
+use Doctrine\DBAL\Configuration;
 use Doctrine\DBAL\DriverManager;
 use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
@@ -202,6 +203,19 @@ final class DoctrineMeasuredUseTest extends KernelTestCase
 
         self::assertSame(42.0, $this->measured->of($this->claude('main'), UsageWindow::FiveHour)?->usage->usedPercent);
         self::assertSame(1, $this->entities->getRepository(WindowReadingRecord::class)->count());
+    }
+
+    // The other worker commits its reading after this worker's insert and before its cleanup, as a read-committed engine allows; the cleanup then still must not drop it.
+    public function testAReadingAnotherWorkerCommitsBetweenTheInsertAndTheCleanupIsNotDeleted(): void
+    {
+        $write = "INSERT INTO budget_window_reading (provider, account, usage_window, used_percent, resets_at, taken_at) VALUES ('claude_code', 'main', 'five-hour', 43.0, NULL, '2026-11-01 08:00:00')";
+        $connection = DriverManager::getConnection($this->entities->getConnection()->getParams(), new Configuration()->setMiddlewares([new AnotherWorkerWritesBeforeTheCleanup($write)]));
+        $worker = new DoctrineMeasuredUse(new EntityManager($connection, $this->entities->getConfiguration()), $this->clock, new EventDispatcher());
+
+        self::assertSame(ReadingOutcome::Recorded, $worker->record($this->reading($this->claude('main'), UsageWindow::FiveHour, 42.0)));
+
+        self::assertSame(43.0, $this->measured->of($this->claude('main'), UsageWindow::FiveHour)?->usage->usedPercent);
+        self::assertSame(2, $this->entities->getRepository(WindowReadingRecord::class)->count());
     }
 
     public function testAReadingStampedEarlierButStoredAfterAFresherOneLeavesTheFresherOneAsTheMeasuredUse(): void
