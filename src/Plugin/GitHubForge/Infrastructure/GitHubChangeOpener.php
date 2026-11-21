@@ -76,13 +76,23 @@ final readonly class GitHubChangeOpener implements ChangeOpening
             throw new ForgeWriteFailed('GitHub answered the pull request look-up with something other than a list.');
         }
 
-        foreach ($listed as $pull) {
-            if (is_array($pull) && is_array($pull['head'] ?? null) && ($pull['head']['ref'] ?? null) === $branch) {
-                return $this->isOpenedByThisApp($pull) ? $this->numberOf($pull) : throw new ForgeWriteFailed(sprintf('The open pull request of branch %s was not opened by this App, so Intakt leaves it alone.', $branch));
+        $matches = array_values(array_filter($listed, static fn (mixed $pull): bool => is_array($pull) && is_array($pull['head'] ?? null) && ($pull['head']['ref'] ?? null) === $branch));
+        $this->refuseUnlessAllOwn($matches, $branch);
+
+        return [] === $matches ? null : $this->numberOf($matches[0]);
+    }
+
+    /**
+     * @param list<array<mixed>> $matches
+     */
+    private function refuseUnlessAllOwn(array $matches, string $branch): void
+    {
+        // Every match, because GitHub allows several open pull requests from one head to different bases, and a push moves the head of each.
+        foreach ($matches as $pull) {
+            if (!$this->isOpenedByThisApp($pull)) {
+                throw new ForgeWriteFailed(sprintf('An open pull request of branch %s was not opened by this App, so Intakt leaves it alone.', $branch));
             }
         }
-
-        return null;
     }
 
     /**

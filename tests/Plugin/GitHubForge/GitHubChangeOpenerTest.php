@@ -137,6 +137,54 @@ final class GitHubChangeOpenerTest extends TestCase
         self::assertSame([], $github->writes);
     }
 
+    public function testABranchWithAForeignOpenPullRequestToAnotherBaseListedAfterThisAppsOwnIsRefusedBeforeThePush(): void
+    {
+        $github = new ScriptedGitHub();
+        $github->openPulls = [
+            ['number' => 7, 'head' => ['ref' => 'task'], 'base' => ['ref' => 'main'], 'user' => ['login' => ScriptedGitHub::OWN_LOGIN]],
+            ['number' => 8, 'head' => ['ref' => 'task'], 'base' => ['ref' => 'release'], 'user' => ['login' => 'acme-loop[bot]']],
+        ];
+
+        $this->assertWriteFailsWith('not opened by this App', fn () => $github->opener()->refuseForeignChange('widgets', 'task'));
+        self::assertSame([], $github->writes);
+    }
+
+    public function testAForeignOpenPullRequestListedAfterThisAppsOwnLeavesBothAlone(): void
+    {
+        $github = new ScriptedGitHub();
+        $github->openPulls = [
+            ['number' => 7, 'head' => ['ref' => 'task'], 'base' => ['ref' => 'main'], 'user' => ['login' => ScriptedGitHub::OWN_LOGIN]],
+            ['number' => 8, 'head' => ['ref' => 'task'], 'base' => ['ref' => 'release'], 'user' => ['login' => 'acme-loop[bot]']],
+        ];
+
+        $this->assertWriteFailsWith('not opened by this App', fn () => $github->opener()->openOrUpdate(new ProposedChange('widgets', 'task', 'main', new ChangeText('T', 'B'))));
+        self::assertSame([], $github->writes);
+    }
+
+    public function testAnOpenPullRequestWithoutAnAuthorListedAfterThisAppsOwnIsRefusedBeforeThePush(): void
+    {
+        $github = new ScriptedGitHub();
+        $github->openPulls = [
+            ['number' => 7, 'head' => ['ref' => 'task'], 'user' => ['login' => ScriptedGitHub::OWN_LOGIN]],
+            ['number' => 8, 'head' => ['ref' => 'task'], 'base' => ['ref' => 'release']],
+        ];
+
+        $this->assertWriteFailsWith('not opened by this App', fn () => $github->opener()->refuseForeignChange('widgets', 'task'));
+    }
+
+    public function testABranchWhoseOpenPullRequestsAreAllThisAppsOwnHasTheFirstUpdated(): void
+    {
+        $github = new ScriptedGitHub();
+        $github->openPulls = [
+            ['number' => 7, 'head' => ['ref' => 'task'], 'base' => ['ref' => 'main'], 'user' => ['login' => ScriptedGitHub::OWN_LOGIN]],
+            ['number' => 8, 'head' => ['ref' => 'task'], 'base' => ['ref' => 'release'], 'user' => ['login' => ScriptedGitHub::OWN_LOGIN]],
+        ];
+
+        $change = $github->opener()->openOrUpdate(new ProposedChange('widgets', 'task', 'main', new ChangeText('T', 'B')));
+
+        self::assertSame('https://github.com/acme/widgets/pull/7', $change->value);
+    }
+
     public function testABranchWithoutAnOpenPullRequestMayBePushed(): void
     {
         $github = new ScriptedGitHub();
