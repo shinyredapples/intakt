@@ -97,7 +97,7 @@ final readonly class RolePromptCarriers
         return null === $carrier ? null : $this->misplaced($carrier)->line($construction->getStartLine())->build();
     }
 
-    // null when the class is known only at run time: `self`, `static` and `parent` name the using class, and a variable's type is known only inside it
+    // null because `self`, `static` and `parent` name the using class and a variable's type is known only inside it, so such a class may be a carrier
     /**
      * @return list<string>|null
      */
