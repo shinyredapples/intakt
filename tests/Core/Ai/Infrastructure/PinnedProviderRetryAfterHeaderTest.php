@@ -65,8 +65,12 @@ final class PinnedProviderRetryAfterHeaderTest extends TestCase
     }
 
     #[DataProvider('retryAfterHeaders')]
-    public function testARouter429CoolsThePinAndTheAccountForTheRetryAfterHeaderAndTheNextCallIsSkippedWithoutARequest(string $header, int $seconds): void
+    public function testARouter429CoolsThePinAndTheAccountForTheRetryAfterHeaderAndTheNextCallIsSkippedWithoutARequest(string $header, int $seconds, ?string $now = null): void
     {
+        if (null !== $now) {
+            $this->clock->modify($now);
+        }
+
         $http = $this->limited(['retry-after: '.$header]);
         $platform = $this->platform($http);
 
@@ -78,7 +82,7 @@ final class PinnedProviderRetryAfterHeaderTest extends TestCase
     }
 
     /**
-     * @return iterable<string, array{string, int}>
+     * @return iterable<string, array{0: string, 1: int, 2?: string}>
      */
     public static function retryAfterHeaders(): iterable
     {
@@ -90,6 +94,7 @@ final class PinnedProviderRetryAfterHeaderTest extends TestCase
         yield 'an IMF-fixdate' => ['Thu, 19 Nov 2026 12:02:00 GMT', 120];
         yield 'an RFC 850 date' => ['Thursday, 19-Nov-26 12:02:00 GMT', 120];
         yield 'an asctime date' => ['Thu Nov 19 12:02:00 2026', 120];
+        yield 'an asctime date with a padded one-digit day' => ['Mon Nov  9 12:02:00 2026', 120, '2026-11-09T12:00:00.400000+00:00'];
         yield 'a date beyond a day, capped' => ['Sat, 21 Nov 2026 12:00:00 GMT', 86400];
         yield 'a past date' => ['Thu, 19 Nov 2026 11:00:00 GMT', 1];
     }

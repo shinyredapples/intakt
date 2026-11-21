@@ -130,6 +130,46 @@ final class PinnedProviderCooldownTest extends TestCase
         self::assertSame([120, 0], [$out->secondsUntilAnAccountIsFree, $requests]);
     }
 
+    // Forced order: the default account's pin cools right after the scan read the team account, so after the read that found the default account free. The default account is read again before it sends too, so it gets no request and the team account answers.
+    public function testTheFirstFreeAccountWhosePinCoolsDuringTheScanGetsNoRequest(): void
+    {
+        $requests = 0;
+        $default = $this->answering(static function () use (&$requests): string {
+            ++$requests;
+
+            return 'default';
+        });
+        $coolingDuringTheScan = new PinCoolingAfterARead($this->pins, $this->deepinfra('team'), $this->deepinfra(Account::DEFAULT), 120);
+        $platform = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $default, 'team' => $this->answering('team')], new NoCooldowns(), $this->clock, new NullLogger(), $coolingDuringTheScan);
+
+        $answer = $platform->invoke(self::PINNED, 'Review.')->asText();
+
+        self::assertSame(['team', 0], [$answer, $requests]);
+    }
+
+    // Forced order: the default account's 429 cools the team account's pin for a second, so the team account is skipped before it sends, and that pin ends while the last account is tried. The team account is free once the call failed but was never sent to, so the call waits a second instead of failing, and the next call goes to the team account.
+    public function testAnAccountThatFreesUpDuringTheCallGivesAWaitOfASecondAndTheNextCallReachesIt(): void
+    {
+        $accounts = new AccountWindowsOnAClock($this->clock, [Provider::OpenAiCompatible->value => [Account::DEFAULT, 'team', 'last']]);
+        $default = $this->answering(function (): never {
+            $this->pins->coolDown($this->deepinfra('team'), 1);
+
+            throw new RateLimitExceededException(120);
+        });
+        $last = $this->answering(function (): never {
+            $this->clock->sleep(2);
+
+            throw new RateLimitExceededException(120);
+        });
+        $platform = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $default, 'team' => $this->answering('team'), 'last' => $last], $accounts, $this->clock, new NullLogger(), $this->pins);
+
+        $out = $this->failureOf(static fn (): string => $platform->invoke(self::PINNED, 'Review.')->asText());
+
+        self::assertInstanceOf(EveryAccountCoolingDown::class, $out);
+        self::assertSame(1, $out->secondsUntilAnAccountIsFree);
+        self::assertSame('team', $platform->invoke(self::PINNED, 'Review.')->asText());
+    }
+
     public function testThePinStoreAloneLeavesAnotherRouterProviderOnTheSameAccountFree(): void
     {
         $this->pins->coolDown($this->deepinfra(Account::DEFAULT), 300);

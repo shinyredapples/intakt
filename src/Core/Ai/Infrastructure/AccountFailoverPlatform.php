@@ -105,9 +105,8 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         foreach ($this->platforms as $name => $platform) {
             if (0 === $waits[$name]) {
                 $account = new Account($this->provider, $name);
-                // Every account but the first free one is read again right before it sends, because the read that found it free was made before an earlier account was tried.
-                $recheck = [] === $free ? null : $this->modelWaits;
-                $free[$name] = new AccountPlatform($account, $platform, $this->cooldowns, $this->clock, $this->logger, $failures, $this->pinnedCooldowns, $this->pinnedOf($account, $routerProvider), $recheck);
+                // Every free account is read again right before it sends, the first one too, because the read that found it free was made before the scan read the accounts after it and before an earlier account was tried.
+                $free[$name] = new AccountPlatform($account, $platform, $this->cooldowns, $this->clock, $this->logger, $failures, $this->pinnedCooldowns, $this->pinnedOf($account, $routerProvider), $this->modelWaits);
             }
         }
 
@@ -141,11 +140,20 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         }
 
         $waits = $this->waits($routerProvider);
-        if (in_array(0, $waits, true)) {
-            return $everyAccountFailed;
+        if (!in_array(0, $waits, true)) {
+            return $this->outOfAccounts($waits, $failures);
         }
 
-        return $this->outOfAccounts($waits, $failures);
+        // An account that freed up during the call and was never sent to (skipped before it sent, or not free when the call began) gets the next call after a second, when every account this call did send to was limited (issue #2860).
+        return $this->freedUntried($waits, $failures) && $failures->isEveryTriedLimited() ? new EveryAccountCoolingDown($this->provider, 1) : $everyAccountFailed;
+    }
+
+    /**
+     * @param array<string, int> $waits
+     */
+    private function freedUntried(array $waits, SendFailures $failures): bool
+    {
+        return array_any($waits, fn ($wait, $name) => 0 === $wait && !$failures->wasTried(new Account($this->provider, $name)));
     }
 
     // When every account of the provider rejected its key, in this call or in an earlier one it still cools down from, there is nothing to wait for, so a rejection is thrown; never the provider's own, because its message can echo a key and the judging's failure listener logs what it gets. The wait is the shortest of the waits that just found no account free, never a second read, so it is at least a second (see waits()); the longest window is listed too, so min() always has a value.
