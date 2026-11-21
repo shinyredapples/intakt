@@ -39,7 +39,7 @@ final class EntrypointSampleSeedTest extends TestCase
     {
         $this->directory = sys_get_temp_dir().'/intakt-entrypoint-seed-'.bin2hex(random_bytes(6));
         new Filesystem()->copy(dirname(__DIR__, 4).'/config/sample-project.yaml', $this->dataFile());
-        // What the start's real PHP reads from the image's working directory when it asks Symfony's Dotenv for the kernel's folders.
+        // Linked and written here because the start asks Symfony's Dotenv for the kernel's folders with the real PHP, which reads both from its working directory.
         new Filesystem()->symlink(dirname(__DIR__, 4).'/vendor', $this->directory.'/vendor');
         new Filesystem()->dumpFile($this->directory.'/.env', '');
     }
@@ -734,7 +734,7 @@ final class EntrypointSampleSeedTest extends TestCase
         ];
     }
 
-    // The file Symfony's Dotenv reads last for the test environment these starts run in.
+    // This file because Symfony's Dotenv reads it last for the test environment these starts run in, so nothing overrides its line.
     private function givenTheDotenvFileOfTheEnvironment(string $line): void
     {
         new Filesystem()->dumpFile($this->directory.'/.env.test.local', $line."\n");
