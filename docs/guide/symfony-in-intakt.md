@@ -134,7 +134,7 @@ As a second safety net, a worker (one loaded copy of Intakt) does not live forev
 
 - **Clock:** all time comes from one clock, so tests can freeze or fast-forward it; a check refuses code that reads the system time directly. *(in use)*
 - **Validator and Serializer:** a reviewer's verdict is checked field by field; an unknown field or a missing one is refused rather than guessed. *(in progress)*
-- **Quality gates:** `bin/check` runs every check (static analysis, code style, tests and Intakt's own rules) the same way on your machine and in CI. The walks through a freshly started install (the journeys, see [Checking the whole product](checking-the-whole-product.md)) run separately, with `bin/check --journeys`. *(in use)*
+- **Quality gates:** `bin/check` runs every check (static analysis, code style, tests and Intakt's own rules) the same way on your machine and in CI. On your machine, `bin/check --reuse` can skip a second run of a folder that passed and has not changed since, all but the dependency audit; CI never skips. The walks through a freshly started install (the journeys, see [Checking the whole product](checking-the-whole-product.md)) run separately, with `bin/check --journeys`. *(in use)*
 
 ## Waiting before taking a new release
 

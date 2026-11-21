@@ -46,6 +46,7 @@ What works without Docker or a provider key:
 ```
 composer install
 bin/check            # the quality gates every change passes (not the journeys), one JSON line per gate
+bin/check --reuse    # the same, but an unchanged tree that passed reuses that pass and runs only the audit again
 bin/check --journeys # the user journeys, each on a fresh install, run separately
 bin/console about    # the app boots on SQLite
 ```

@@ -260,13 +260,15 @@ The file lies in the checked folder (`--root`, else the repository), under `var/
 
 ## Running `bin/check` again on an unchanged tree
 
-When every gate passed and the report was written, `bin/check` also notes that pass in `var/check/passed.json`. Run it again with the same options on a tree where nothing has changed, and it runs no gate: it prints only
+When every gate passed and the report was written, `bin/check` also notes that pass in `var/check/passed.json`. Run it again with the same options plus `--reuse` on a tree where nothing has changed, and it runs no gate except `audit`, which always runs again because a new advisory can hit an unchanged `composer.lock`. Without `audit` (for example with `--fast` or `--only=...`), it prints only
 
 ```
 {"result":"pass","failed":[],"reused":"var/check/passed.json"}
 ```
 
-and exits with 0. Anything that could change the result runs the gates again: an edited, staged, new or deleted file (files your `.gitignore` leaves out do not count, nor does `var/check/` itself), another commit or base branch, a changed `composer.lock`, a change under `config/gates/` or to `bin/check`, other options (`--fast`, `--only`, `--skip`, `--base`, `--test-merge`), another PHP version, extension or setting, or another environment variable (only `_`, `OLDPWD` and `SHLVL` are left out). A failed run is never reused, and only the latest pass is kept. The check needs git for this: a folder that is not a git repository always runs the gates. A `var/` or `var/check` that is a link is not followed, so then nothing is noted or reused. To force a fresh run, delete `var/check/passed.json`. CI checks out a clean tree (the checkout removes untracked and ignored files), which has no `var/check/`, so it always runs every gate.
+and exits with 0. With `audit`, it prints the `audit` line first, and the result line also names the report of that run. Without `--reuse`, `bin/check` never reads the note and runs every gate: CI and every step that gates a change run it that way, because the note is a file anyone working in the tree can write and proves nothing.
+
+Anything that could change the result runs the gates again: a file in the folder that is added, deleted, edited or only rewritten, ignored files included (`vendor/`, `.env.*.local`, `phpunit.xml`, files `.git/info/exclude` leaves out), an edit staged with `git add`, another commit or base branch, a change under `config/gates/` or to `bin/check`, other options (`--fast`, `--only`, `--skip`, `--base`, `--test-merge`), another PHP version, extension or setting, or another environment variable (only `_`, `OLDPWD` and `SHLVL` are left out). Only what the check itself writes does not count: `.git/`, `var/`, `.phpunit.cache/`, `config/reference.php` and `config/schema.json`. A failed run is never reused, and only the latest pass is kept. A run in which a file changed, or was changed and changed back, notes nothing, and so does a run that starts in the same second as a file's last change: run it again and that run notes its pass. The check needs git for this: a folder that is not a git repository always runs the gates, and so does a folder with a file the check cannot read. A `var/` or `var/check` that is a link is not followed, so then nothing is noted or reused. To force a fresh run, leave out `--reuse`.
 
 ## Listing the static gates and the gate order
 
