@@ -628,7 +628,7 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
 
         foreach ($page->filter('.tiles .tile:not([data-tile="bench"])') as $tile) {
             $crawler = new Crawler($tile);
-            $label = $crawler->filter('dt .term')->getNode(0)?->firstChild?->textContent ?? '';
+            $label = $crawler->filter('dt .term')->getNode(0)?->firstChild->textContent ?? '';
             $tiles[trim($label)] = $crawler->filter('dd')->text();
         }
 
@@ -645,9 +645,6 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
 
     private function projectDir(): string
     {
-        $dir = self::getContainer()->getParameter('kernel.project_dir');
-        self::assertIsString($dir);
-
-        return $dir;
+        return self::getContainer()->getParameter('kernel.project_dir');
     }
 }
