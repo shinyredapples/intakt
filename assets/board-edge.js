@@ -3,7 +3,7 @@ const WRAP = '.board-wrap';
 const SLACK = 4;
 const SCROLL_TO_END = 'data-scroll-to-end';
 
-// Not a Stimulus controller, for the reason assets/column-fold.js gives. A fold, a pushed column (the layout's filter runs after it) and a resize change how far the board reaches, so each marks the edges again.
+// Not a Stimulus controller, for the reason assets/column-fold.js gives. A fold (by a click, or by Escape in assets/column-fold.js, which the layout starts first), a pushed column (the layout's filter runs after it) and a resize change how far the board reaches, so each marks the edges again.
 export function markBoardEdges(page, view) {
     const markEveryBoard = () => page.querySelectorAll(WRAP).forEach(mark);
 
@@ -15,6 +15,7 @@ export function markBoardEdges(page, view) {
         }
     }, { capture: true, passive: true });
     page.addEventListener('click', markEveryBoard);
+    page.addEventListener('keydown', markEveryBoard);
     page.addEventListener('intakt:project-shown', markEveryBoard);
     view.addEventListener('resize', markEveryBoard);
     markEveryBoard();

@@ -22,7 +22,7 @@ export function mapBoardColumns(page, view) {
     page.addEventListener('click', (event) => {
         const jump = event.target?.closest?.(JUMP);
         if (jump) {
-            jumpTo(page, view, jump.getAttribute('aria-controls'));
+            jumpTo(page, view, jump);
         }
         measure();
     });
@@ -58,15 +58,22 @@ function startOf(column, columns) {
     return column.offsetLeft - columns[0].offsetLeft;
 }
 
-// The focus follows the jump, so the next Tab reaches the column's first card or strip rather than the first column's; preventScroll leaves the motion to the scroll.
-function jumpTo(page, view, id) {
+// The focus follows the jump, so the next Tab reaches the column's first card or strip rather than the first column's; preventScroll leaves the motion to the scrolls.
+function jumpTo(page, view, jump) {
+    const id = jump.getAttribute('aria-controls');
     const column = id ? page.getElementById(id) : null;
     const board = column?.closest(BOARD);
     if (!board) {
         return;
     }
-    const still = view.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    board.scrollTo({ left: startOf(column, columnsOf(board)), behavior: still ? 'auto' : 'smooth' });
+    const behavior = view.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+    board.scrollTo({ left: startOf(column, columnsOf(board)), behavior });
+    // The phone's switcher stays pinned while the page scrolls down a long column, so a shorter column the reader jumps to would start, or even end, above the viewport; the page comes back up until the column starts just below the switcher.
+    const bar = jump.closest(`${MAP}, ${SWITCHER}`);
+    const hidden = bar ? bar.getBoundingClientRect().bottom - column.getBoundingClientRect().top : 0;
+    if (hidden > 0) {
+        view.scrollBy({ top: -hidden, behavior });
+    }
     column.focus({ preventScroll: true });
 }
 

@@ -580,6 +580,16 @@ test('a term focused inside a card keeps focus when the column is pushed', () =>
     assert.equal(page.focused(), page.column('col-in-review').terms[1]);
 });
 
+// assets/board-map.js focuses the column a jump lands on, so a push before the next Tab must not drop the keyboard back at the page start.
+test('a column focused by a jump keeps focus when it is pushed', () => {
+    const page = new Browser('light').open();
+    page.column('col-in-review').focus();
+
+    page.pushColumn('col-in-review');
+
+    assert.equal(page.focused(), page.column('col-in-review'));
+});
+
 test('a pushed column leaves focus alone when it was outside the column', () => {
     const page = new Browser('light').open();
     page.railToggle.focus();

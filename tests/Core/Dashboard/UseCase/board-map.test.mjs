@@ -8,6 +8,12 @@ const NAMES = ['waiting-on-you', 'backlog', 'ready', 'planned', 'building', 'che
 
 class FakeColumn extends FakeElement {
     focusedWith = null;
+    // Where the column starts in the viewport: below the map and the switcher until the page scrolls down.
+    top = 200;
+
+    getBoundingClientRect() {
+        return { top: this.top };
+    }
 
     constructor(name, offsetLeft, offsetWidth, board) {
         super();
@@ -56,14 +62,27 @@ class FakeBoard {
     }
 }
 
+// The map or the switcher a jump sits in, whose bottom edge stays where it is in the viewport (the switcher is pinned on a phone).
+class FakeBar {
+    bottom = 120;
+
+    getBoundingClientRect() {
+        return { bottom: this.bottom };
+    }
+}
+
 class FakeJump extends FakeElement {
-    constructor(selector, column) {
+    constructor(selector, column, bar) {
         super();
         this.selector = selector;
+        this.bar = bar;
         this.setAttribute('aria-controls', `col-${column}`);
     }
 
     closest(selector) {
+        if (selector === '.stagemap, .colswitch') {
+            return this.bar;
+        }
         assert.equal(selector, '.sm-seg, .colswitch button');
 
         return this;
@@ -72,7 +91,8 @@ class FakeJump extends FakeElement {
 
 class FakeMap extends FakeElement {
     text = new FakeElement();
-    segments = NAMES.map((name) => new FakeJump('.sm-seg', name));
+    bar = new FakeBar();
+    segments = NAMES.map((name) => new FakeJump('.sm-seg', name, this.bar));
 
     querySelector(selector) {
         assert.equal(selector, '.sm-text');
@@ -90,7 +110,8 @@ class FakeMap extends FakeElement {
 class FakeSwitcher extends FakeElement {
     scrollLeft = 0;
     offsetLeft = 0;
-    buttons = NAMES.map((name, i) => Object.assign(new FakeJump('.colswitch button', name), { offsetLeft: 16 + i * 150 }));
+    bar = new FakeBar();
+    buttons = NAMES.map((name, i) => Object.assign(new FakeJump('.colswitch button', name, this.bar), { offsetLeft: 16 + i * 150 }));
 
     querySelectorAll(selector) {
         assert.equal(selector, 'button');
@@ -130,9 +151,15 @@ class FakePage extends FakeTarget {
 }
 
 class FakeView extends FakeTarget {
+    scrolledBy = null;
+
     constructor(reducedMotion = false) {
         super();
         this.reducedMotion = reducedMotion;
+    }
+
+    scrollBy(options) {
+        this.scrolledBy = options;
     }
 
     matchMedia(query) {
@@ -239,6 +266,34 @@ test('a phone switcher button snaps its column into view past the board inset', 
     page.dispatch('click', { target: switcher.buttons[3] });
 
     assert.equal(board.scrolledTo.left, 600);
+});
+
+test('a switcher button pinned over a long column brings the page back up until its column starts just below the switcher', () => {
+    const { page, view, board, switcher } = boardOnAPage({ inset: 16 });
+    // The reader scrolled 900 px down a long column, so the board's columns start far above the pinned switcher.
+    board.columns.forEach((column) => { column.top = -780; });
+
+    page.dispatch('click', { target: switcher.buttons[6] });
+
+    assert.deepEqual(view.scrolledBy, { top: -900, behavior: 'smooth' });
+    assert.deepEqual(board.columns[6].focusedWith, { preventScroll: true });
+});
+
+test('a jump to a column that already starts below the map leaves the page where it is', () => {
+    const { page, view, map } = boardOnAPage();
+
+    page.dispatch('click', { target: map.segments[6] });
+
+    assert.equal(view.scrolledBy, null);
+});
+
+test('under reduced motion the page comes back up at once too', () => {
+    const { page, view, board, switcher } = boardOnAPage({ inset: 16, reducedMotion: true });
+    board.columns.forEach((column) => { column.top = 0; });
+
+    page.dispatch('click', { target: switcher.buttons[2] });
+
+    assert.deepEqual(view.scrolledBy, { top: -120, behavior: 'auto' });
 });
 
 test('swiping the phone board presses the column it settled on and scrolls the switcher to it', () => {

@@ -8,4 +8,6 @@
 {% set limit = constant('Intakt\\Core\\Dashboard\\Domain\\Board::PAGE_LIMIT') %}
 {% for column in [constant('Intakt\\Core\\Dashboard\\Domain\\BoardColumn::InReview'), constant('Intakt\\Core\\Dashboard\\Domain\\BoardColumn::Done')] %}
 <turbo-stream action="replace" target="col-{{ column.slug }}"><template>{{ include('dashboard/_board_column.html.twig', {board: board, column: column, limit: limit, pushed: true}, with_context = false) }}</template></turbo-stream>
+{#- The phone switcher's button for the same column, updated inside so it keeps the column a swipe pressed and the keyboard focus. -#}
+<turbo-stream action="update" target="switch-{{ column.slug }}"><template>{{ include('dashboard/_board_switch.html.twig', {board: board, column: column}, with_context = false) }}</template></turbo-stream>
 {% endfor %}
