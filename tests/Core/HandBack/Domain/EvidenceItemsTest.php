@@ -264,4 +264,24 @@ final class EvidenceItemsTest extends TestCase
         self::assertSame(2, EvidenceItems::countIn("<!-->\n## Evidence\n- E1. a\n- E2. b\n"));
         self::assertSame(1, EvidenceItems::countIn("<!--->\n## Evidence\n- E1. a\n"));
     }
+
+    public function testAnOutdentedCommentBlockEndsTheListWithoutABlankLine(): void
+    {
+        self::assertSame(1, EvidenceItems::countIn("- Example\n<!-- note -->\n  ## Evidence\n- Show the result."));
+    }
+
+    public function testAnOutdentedCommentBlockEndsTheListAfterABlankLine(): void
+    {
+        self::assertSame(1, EvidenceItems::countIn("- Example\n\n<!-- note -->\n  ## Evidence\n- Show the result."));
+    }
+
+    public function testAnOutdentedFenceEndsTheListWithoutABlankLine(): void
+    {
+        self::assertSame(1, EvidenceItems::countIn("- Example\n~~~\nexample\n~~~\n  ## Evidence\n- Show the result."));
+    }
+
+    public function testACommentIndentedIntoTheItemKeepsTheListOpen(): void
+    {
+        self::assertSame(0, EvidenceItems::countIn("- Example\n  <!-- note -->\n  ## Evidence\n  - Show the result."));
+    }
 }

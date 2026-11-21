@@ -377,4 +377,9 @@ final class PullRequestTextRuleTest extends TestCase
     {
         self::assertSame([1], PullRequestTextRule::judge("## Evidence\n- Show the result.", "- ~~~ E1\n  unrelated\n  ~~~")->missingItems);
     }
+
+    public function testABodyWithoutReferencesIsRefusedAfterAnOutdentedComment(): void
+    {
+        self::assertFalse(PullRequestTextRule::judge("- Example\n<!-- note -->\n  ## Evidence\n- Show the result.", 'Done')->passed());
+    }
 }

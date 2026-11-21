@@ -21,7 +21,7 @@ final readonly class EvidenceItems
 
     public static function countIn(string $task): int
     {
-        $lines = array_map(MarkdownText::withSpacesForTabs(...), explode("\n", MarkdownText::visibleProse($task)));
+        $lines = HiddenBlockOpeners::proseLinesOf($task);
         $column = null;
 
         foreach (array_keys($lines) as $index) {
