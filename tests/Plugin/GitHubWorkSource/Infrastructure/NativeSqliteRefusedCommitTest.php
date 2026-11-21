@@ -58,7 +58,7 @@ final class NativeSqliteRefusedCommitTest extends KernelTestCase
                 {
                 }
 
-                // The read transaction of another worker makes SQLite refuse the store's COMMIT as busy.
+                // Held open, because SQLite refuses the store's COMMIT as busy while another worker's read transaction lasts.
                 public function onFlush(): void
                 {
                     $this->other->beginTransaction();
