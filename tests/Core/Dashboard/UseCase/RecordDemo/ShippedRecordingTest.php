@@ -72,10 +72,12 @@ final class ShippedRecordingTest extends TestCase
     // The replay publishes the recorded update to a review page that is already open, so a card the page renders differently would change once the juror reloads.
     public function testTheShippedJudgedUpdateShowsTheDroppedFindingWithTheQuotesTheCheckCounted(): void
     {
-        $judged = array_values(array_filter(array_map(
-            static fn (CapturedUpdate $update): ?string => 1 === preg_match('~<turbo-stream action="replace" target="round-[^"]+-judged"><template>(.*?)</template></turbo-stream>~s', $update->data, $part) ? $part[1] : null,
-            $this->shipped()->updates,
-        )));
+        $judged = [];
+        foreach ($this->shipped()->updates as $update) {
+            if (1 === preg_match('~<turbo-stream action="replace" target="round-[^"]+-judged"><template>(.*?)</template></turbo-stream>~s', $update->data, $part)) {
+                $judged[] = $part[1];
+            }
+        }
         self::assertCount(1, $judged);
         $card = new Crawler($judged[0])->filter('[data-dropped="F3"]');
 

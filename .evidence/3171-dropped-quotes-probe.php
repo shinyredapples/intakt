@@ -29,11 +29,8 @@ if (!is_string($environment) || !is_string($port)) {
 $kernel = new Kernel($environment, false);
 $kernel->boot();
 $ledger = $kernel->getContainer()->get('test.service_container')->get(Ledger::class);
-if (!$ledger instanceof Ledger) {
-    exit('no ledger'.PHP_EOL);
-}
 
-$f3 = droppedOfTheRecording((string) file_get_contents(__DIR__.'/../fixtures/demo/sample-change-review.json'));
+$f3 = firstDroppedOf(judgePayloadOf((string) file_get_contents(__DIR__.'/../fixtures/demo/sample-change-review.json')));
 
 $rounds = [
     'demo F3' => $f3,
@@ -45,7 +42,7 @@ foreach ($rounds as $name => $dropped) {
     (void) $ledger->append(new LedgerEvent(LedgerEventKind::ReviewStarted, json_encode(['round' => $round, 'project' => 'probe', 'reviewers' => 1, 'change' => 'probe-'.$round, 'number' => 1], JSON_THROW_ON_ERROR)));
     (void) $ledger->append(new LedgerEvent(LedgerEventKind::JudgeDone, json_encode(['round' => $round, 'act' => [], 'follow_ups' => [], 'findings' => [], 'dropped' => [$dropped]], JSON_THROW_ON_ERROR)));
 
-    // The dashboard answers only a loopback name with its configured port (RefuseForeignHost), and the instance listens on a port of its own.
+    // Sent with the configured port as Host, because the dashboard answers only a loopback name with that port (RefuseForeignHost) while the instance listens on a port of its own.
     $url = getenv('INTAKT_INSTANCE_URL').'/reviews/'.$round;
     $context = stream_context_create(['http' => ['header' => 'Host: localhost:'.$port]]);
     $card = new Crawler((string) file_get_contents($url, false, $context))->filter('[data-dropped]');
@@ -63,16 +60,21 @@ foreach ($rounds as $name => $dropped) {
 /**
  * @return array<mixed>
  */
-function droppedOfTheRecording(string $recording): array
+function judgePayloadOf(string $recording): mixed
 {
-    $events = json_decode($recording, true, flags: JSON_THROW_ON_ERROR);
-    $dropped = null;
-    foreach (is_array($events) && is_array($events['events'] ?? null) ? $events['events'] : [] as $event) {
-        if (is_array($event) && 'judge_done' === ($event['kind'] ?? null) && is_string($event['payload'] ?? null)) {
-            $payload = json_decode($event['payload'], true, flags: JSON_THROW_ON_ERROR);
-            $dropped = is_array($payload) && is_array($payload['dropped'] ?? null) ? ($payload['dropped'][0] ?? null) : null;
-        }
-    }
+    $file = json_decode($recording, true, flags: JSON_THROW_ON_ERROR);
+    $events = is_array($file) && is_array($file['events'] ?? null) ? $file['events'] : [];
+    $judged = array_find($events, static fn (mixed $event): bool => is_array($event) && 'judge_done' === ($event['kind'] ?? null));
+
+    return is_array($judged) && is_string($judged['payload'] ?? null) ? json_decode($judged['payload'], true, flags: JSON_THROW_ON_ERROR) : null;
+}
+
+/**
+ * @return array<mixed>
+ */
+function firstDroppedOf(mixed $payload): array
+{
+    $dropped = is_array($payload) && is_array($payload['dropped'] ?? null) ? ($payload['dropped'][0] ?? null) : null;
 
     return is_array($dropped) ? $dropped : exit('the recording holds no dropped finding'.PHP_EOL);
 }
