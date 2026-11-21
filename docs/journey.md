@@ -280,8 +280,8 @@ team, history, settings, setup) follow after the hackathon.
 - **Run the judged path the way a juror will.** The first clean-machine run happened on 11-13 and found four defects
   no test had ([#1801](https://github.com/shinyredapples/intakt/issues/1801) to [#1804](https://github.com/shinyredapples/intakt/issues/1804)).
 - **More builders do not by themselves mean more merges.** 11-12: 73 counted merges for 89M measured tokens with three
-  builders. Builders 4 and 5 started on 11-13, the last day on this page and recorded only in part: 11-13: 18 counted
-  merges to 07:30, and 43M measured tokens in the usage file. The page cannot show yet what the two extra builders added;
+  builders. Builders 4 and 5 started on 11-13, the last day on this page, whose merges are counted only to 07:30: 11-13: 18
+  counted merges to 07:30, and 140M measured tokens over the whole day in the usage file. The page cannot show yet what the two extra builders added;
   the tickets got harder and builders waited for the two check slots, so the limit is tokens per week, not builders.
 - **Cut the backlog on purpose.** More issues were opened than closed on almost every day; the cut of 11-13 (70
   closed as not planned, 84 parked) made the deadline's work visible again.
