@@ -9,6 +9,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Budget\Contract\OwnerNoticesChanged;
 use Intakt\Core\Budget\Domain\OutageNoticeRecord;
 use Intakt\Core\Budget\Domain\UsageReadingsStayedAway;
 use Intakt\Core\Budget\Infrastructure\DoctrineOutageNotices;
@@ -20,6 +21,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\LoggerInterface;
 use RuntimeException;
 use Symfony\Component\Clock\MockClock;
+use Symfony\Component\EventDispatcher\EventDispatcher;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
 
@@ -27,6 +29,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[CoversClass(DoctrineOutageNotices::class)]
 #[CoversClass(OutageNoticeRecord::class)]
 #[UsesClass(UsageReadingsStayedAway::class)]
+#[UsesClass(OwnerNoticesChanged::class)]
 #[UsesClass(Account::class)]
 final class DoctrineOutageNoticesTest extends KernelTestCase
 {
@@ -58,7 +61,7 @@ final class DoctrineOutageNoticesTest extends KernelTestCase
         $logger = $this->createMock(LoggerInterface::class);
         $logger->expects($this->once())->method('warning')->with(self::anything(), ['account' => 'claude_code.main', 'since' => '2026-11-02T08:00:00+00:00']);
 
-        new DoctrineOutageNotices($this->entities, $this->locks, $logger)->noticeOnce($this->outageOf($this->claude('main'), $this->lastReading));
+        new DoctrineOutageNotices($this->entities, $this->locks, $logger, new EventDispatcher())->noticeOnce($this->outageOf($this->claude('main'), $this->lastReading));
     }
 
     public function testAWarningThatFailedIsTriedAgain(): void
@@ -70,7 +73,7 @@ final class DoctrineOutageNoticesTest extends KernelTestCase
                 throw new RuntimeException('The warning could not be written.');
             }
         });
-        $notices = new DoctrineOutageNotices($this->entities, $this->locks, $logger);
+        $notices = new DoctrineOutageNotices($this->entities, $this->locks, $logger, new EventDispatcher());
 
         try {
             $notices->noticeOnce($this->outageOf($this->claude('main'), $this->lastReading));
@@ -79,6 +82,34 @@ final class DoctrineOutageNoticesTest extends KernelTestCase
         $notices->noticeOnce($this->outageOf($this->claude('main'), $this->lastReading));
 
         self::assertSame(2, $attempts);
+    }
+
+    public function testAStoredNoticeTellsThatTheOwnerNoticesChanged(): void
+    {
+        $events = new EventDispatcher();
+        $told = 0;
+        $events->addListener(OwnerNoticesChanged::class, static function () use (&$told): void {
+            ++$told;
+        });
+
+        new DoctrineOutageNotices($this->entities, $this->locks, self::createStub(LoggerInterface::class), $events)->noticeOnce($this->outageOf($this->claude('main'), $this->lastReading));
+
+        self::assertSame(1, $told);
+    }
+
+    public function testAnOutageAlreadyNoticedTellsNothing(): void
+    {
+        $events = new EventDispatcher();
+        $notices = new DoctrineOutageNotices($this->entities, $this->locks, self::createStub(LoggerInterface::class), $events);
+        $notices->noticeOnce($this->outageOf($this->claude('main'), $this->lastReading));
+        $told = 0;
+        $events->addListener(OwnerNoticesChanged::class, static function () use (&$told): void {
+            ++$told;
+        });
+
+        $notices->noticeOnce($this->outageOf($this->claude('main'), $this->lastReading));
+
+        self::assertSame(0, $told);
     }
 
     public function testAnotherWorkerDoesNotNoticeAnOutageAlreadyNoticed(): void
@@ -120,7 +151,7 @@ final class DoctrineOutageNoticesTest extends KernelTestCase
         $logger = $this->createMock(LoggerInterface::class);
         $logger->expects($this->exactly($times))->method('warning');
 
-        return new DoctrineOutageNotices($this->entities, $this->locks, $logger);
+        return new DoctrineOutageNotices($this->entities, $this->locks, $logger, new EventDispatcher());
     }
 
     private function outageOf(Account $account, DateTimeImmutable $lastReadingAt): UsageReadingsStayedAway

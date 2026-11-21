@@ -10,14 +10,17 @@ use Doctrine\DBAL\DriverManager;
 use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Events;
+use Symfony\Component\EventDispatcher\EventDispatcher;
 use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Budget\Contract\OwnerNoticesChanged;
 use Intakt\Core\Budget\Contract\ReadingOutcome;
 use Intakt\Core\Budget\Contract\Usage;
 use Intakt\Core\Budget\Contract\UsageWindow;
 use Intakt\Core\Budget\Contract\WindowReading;
 use Intakt\Core\Budget\Contract\WindowUse;
+use Intakt\Core\Budget\Domain\OutageNoticeRecord;
 use Intakt\Core\Budget\Domain\WindowReadingRecord;
 use Intakt\Core\Budget\Infrastructure\DoctrineMeasuredUse;
 use Intakt\Tests\Application\EmptyDatabase;
@@ -36,6 +39,8 @@ use Symfony\Component\Clock\MockClock;
 #[UsesClass(WindowReading::class)]
 #[UsesClass(Usage::class)]
 #[UsesClass(Account::class)]
+#[UsesClass(OutageNoticeRecord::class)]
+#[UsesClass(OwnerNoticesChanged::class)]
 final class DoctrineMeasuredUseTest extends KernelTestCase
 {
     private EntityManagerInterface $entities;
@@ -50,7 +55,7 @@ final class DoctrineMeasuredUseTest extends KernelTestCase
         EmptyDatabase::in(self::getContainer());
         new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
         $this->clock = new MockClock('2026-11-01 08:00:00 UTC');
-        $this->measured = new DoctrineMeasuredUse($entities, $this->clock);
+        $this->measured = new DoctrineMeasuredUse($entities, $this->clock, new EventDispatcher());
     }
 
     public function testAReadingIsKeptWithItsResetTimeAndItsAgeOnTheClock(): void
@@ -70,6 +75,45 @@ final class DoctrineMeasuredUseTest extends KernelTestCase
     public function testAWindowWithoutAReadingHasNoMeasuredUse(): void
     {
         self::assertNull($this->measured->of($this->claude('main'), UsageWindow::Weekly));
+    }
+
+    public function testAReadingThatEndsAnOutageTellsThatTheOwnerNoticesChanged(): void
+    {
+        $this->entities->persist(new OutageNoticeRecord($this->claude('main'), new DateTimeImmutable('2026-11-01T04:00:00Z'), new DateTimeImmutable('2026-11-01T07:00:00Z')));
+        $this->entities->flush();
+
+        self::assertSame(1, $this->changesToldBy($this->reading($this->claude('main'), UsageWindow::FiveHour, 42.0)));
+    }
+
+    // Readings arrive with every call, so only one that ends an outage may make a view read the notices again.
+    public function testAReadingThatEndsNoOutageTellsNothing(): void
+    {
+        $this->entities->persist(new OutageNoticeRecord($this->claude('other'), new DateTimeImmutable('2026-11-01T04:00:00Z'), new DateTimeImmutable('2026-11-01T07:00:00Z')));
+        $this->entities->flush();
+
+        self::assertSame(0, $this->changesToldBy($this->reading($this->claude('main'), UsageWindow::FiveHour, 42.0)));
+    }
+
+    public function testAReadingAfterTheOutageAlreadyEndedTellsNothing(): void
+    {
+        $this->entities->persist(new OutageNoticeRecord($this->claude('main'), new DateTimeImmutable('2026-11-01T04:00:00Z'), new DateTimeImmutable('2026-11-01T07:00:00Z')));
+        $this->entities->flush();
+        $this->record($this->reading($this->claude('main'), UsageWindow::FiveHour, 42.0));
+        $this->clock->sleep(60);
+
+        self::assertSame(0, $this->changesToldBy($this->reading($this->claude('main'), UsageWindow::FiveHour, 43.0)));
+    }
+
+    private function changesToldBy(WindowReading $reading): int
+    {
+        $events = new EventDispatcher();
+        $told = 0;
+        $events->addListener(OwnerNoticesChanged::class, static function () use (&$told): void {
+            ++$told;
+        });
+        self::assertSame(ReadingOutcome::Recorded, new DoctrineMeasuredUse($this->entities, $this->clock, $events)->record($reading));
+
+        return $told;
     }
 
     public function testANewerReadingOfAWindowReplacesTheOlderOne(): void
@@ -209,7 +253,7 @@ final class DoctrineMeasuredUseTest extends KernelTestCase
     {
         $connection = DriverManager::getConnection($this->entities->getConnection()->getParams());
 
-        return new DoctrineMeasuredUse(new EntityManager($connection, $this->entities->getConfiguration(), $events), $this->clock);
+        return new DoctrineMeasuredUse(new EntityManager($connection, $this->entities->getConfiguration(), $events), $this->clock, new EventDispatcher());
     }
 
     private function claude(string $name): Account

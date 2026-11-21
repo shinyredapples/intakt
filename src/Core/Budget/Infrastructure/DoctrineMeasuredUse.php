@@ -8,14 +8,17 @@ use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Budget\Contract\MeasuredUse;
+use Intakt\Core\Budget\Contract\OwnerNoticesChanged;
 use Intakt\Core\Budget\Contract\ReadingOutcome;
 use Intakt\Core\Budget\Contract\UsageWindow;
 use Intakt\Core\Budget\Contract\WindowReading;
 use Intakt\Core\Budget\Contract\WindowUse;
+use Intakt\Core\Budget\Domain\OutageNoticeRecord;
 use Intakt\Core\Budget\Domain\WindowReadingRecord;
 use Override;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
+use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
 // Readings are appended, never updated in place, so two workers recording one window at once need no lock: the higher position is the latest.
 #[AsAlias(MeasuredUse::class)]
@@ -24,6 +27,7 @@ final readonly class DoctrineMeasuredUse implements MeasuredUse
     public function __construct(
         private EntityManagerInterface $entities,
         private ClockInterface $clock,
+        private EventDispatcherInterface $events,
     ) {
     }
 
@@ -40,6 +44,7 @@ final readonly class DoctrineMeasuredUse implements MeasuredUse
         $this->entities->persist($record);
         $this->entities->flush();
         $this->forgetReadingsBefore($record);
+        $this->endOutagesBefore($record);
 
         return ReadingOutcome::Recorded;
     }
@@ -86,5 +91,26 @@ final readonly class DoctrineMeasuredUse implements MeasuredUse
             ->setParameter('position', $record->position)
             ->getQuery()
             ->execute();
+    }
+
+    // One statement, so two workers ending one outage at once need no lock; the earlier reading wins, because a slow writer can store its reading after a later one.
+    private function endOutagesBefore(WindowReadingRecord $record): void
+    {
+        $ended = $this->entities->createQueryBuilder()
+            ->update(OutageNoticeRecord::class, 'notice')
+            ->set('notice.endedAt', ':takenAt')
+            ->where('notice.provider = :provider')
+            ->andWhere('notice.account = :account')
+            ->andWhere('notice.lastReadingAt < :takenAt')
+            ->andWhere('notice.endedAt IS NULL OR notice.endedAt > :takenAt')
+            ->setParameter('takenAt', $record->takenAt, 'utc_datetime_immutable')
+            ->setParameter('provider', $record->provider)
+            ->setParameter('account', $record->account)
+            ->getQuery()
+            ->execute();
+
+        if (0 < $ended) {
+            $this->events->dispatch(new OwnerNoticesChanged());
+        }
     }
 }

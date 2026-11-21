@@ -25,6 +25,10 @@ final class OutageNoticeRecord
     #[ORM\Column(length: 255)]
     public readonly string $account;
 
+    // Kept on the notice, because only the latest reading of a window is stored, so the reading that ended the outage is gone once the next one arrives.
+    #[ORM\Column(type: 'utc_datetime_immutable', nullable: true)]
+    public private(set) ?DateTimeImmutable $endedAt = null;
+
     public function __construct(
         Account $account,
         #[ORM\Column(type: 'utc_datetime_immutable')]
@@ -34,5 +38,13 @@ final class OutageNoticeRecord
     ) {
         $this->provider = $account->provider;
         $this->account = $account->name;
+    }
+
+    // The earliest reading wins, because a slow writer can store a reading after a later one.
+    public function endWith(DateTimeImmutable $reading): void
+    {
+        if (null === $this->endedAt || $reading < $this->endedAt) {
+            $this->endedAt = $reading;
+        }
     }
 }

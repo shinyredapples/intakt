@@ -9,8 +9,11 @@ use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Budget\Contract\EndedOutageNotice;
 use Intakt\Core\Budget\Contract\MeasuredUse;
 use Intakt\Core\Budget\Contract\OutageNotice;
+use Intakt\Core\Budget\Contract\OwnerNoticesChanged;
+use Intakt\Core\Budget\Contract\ReadingOutcome;
 use Intakt\Core\Budget\Contract\Usage;
 use Intakt\Core\Budget\Contract\UsageWindow;
 use Intakt\Core\Budget\Contract\WindowReading;
@@ -42,6 +45,8 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[UsesClass(UsageReadingsStayedAway::class)]
 #[UsesClass(WindowUse::class)]
 #[UsesClass(OutageNotice::class)]
+#[UsesClass(EndedOutageNotice::class)]
+#[UsesClass(OwnerNoticesChanged::class)]
 #[UsesClass(OutageNoticeRecord::class)]
 #[UsesClass(Account::class)]
 #[UsesClass(Usage::class)]
@@ -118,7 +123,7 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
     {
         $account = new Account(Provider::ClaudeCode, 'main');
         $clock = new MockClock('2026-11-02 08:00:00 UTC');
-        $use = new DoctrineMeasuredUse($this->entities, $clock);
+        $use = new DoctrineMeasuredUse($this->entities, $clock, new EventDispatcher());
         $reading = new WindowReading($account, UsageWindow::FiveHour, new Usage(12.0, null));
         $use->record($reading);
         $clock->modify('+4 hours');
@@ -151,7 +156,7 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
     {
         $account = new Account(Provider::ClaudeCode, 'main');
         $clock = new MockClock('2026-11-02 08:00:00 UTC');
-        $use = new DoctrineMeasuredUse($this->entities, $clock);
+        $use = new DoctrineMeasuredUse($this->entities, $clock, new EventDispatcher());
         $use->record(new WindowReading($account, UsageWindow::FiveHour, new Usage(12.0, null)));
         $clock->modify('+4 hours');
         $this->entities->persist(new OutageNoticeRecord($account, new DateTimeImmutable('2026-11-02T08:00:00+00:00'), $clock->now()));
@@ -166,7 +171,7 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
             return $stampedAt;
         });
 
-        new DoctrineMeasuredUse($this->entities, $slowClock)->record($reading);
+        new DoctrineMeasuredUse($this->entities, $slowClock, new EventDispatcher())->record($reading);
 
         self::assertSame([], $this->notices()->stillRunningOldestFirst());
     }
@@ -176,7 +181,7 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
     {
         $account = new Account(Provider::ClaudeCode, 'main');
         $clock = new MockClock('2026-11-02 08:00:00 UTC');
-        $use = new DoctrineMeasuredUse($this->entities, $clock);
+        $use = new DoctrineMeasuredUse($this->entities, $clock, new EventDispatcher());
         $use->record(new WindowReading($account, UsageWindow::FiveHour, new Usage(12.0, null)));
         $clock->sleep(1);
         $use->record(new WindowReading($account, UsageWindow::Weekly, new Usage(5.0, null)));
@@ -191,7 +196,7 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
         $logger = $this->createMock(LoggerInterface::class);
         $logger->expects($this->once())->method('warning')->with(self::anything(), ['account' => 'claude_code.main', 'since' => '2026-11-02T08:00:01+00:00']);
         $dispatcher = new EventDispatcher();
-        $dispatcher->addListener(UsageReadingsStayedAway::class, new DoctrineOutageNotices($this->entities, new LockFactory(new InMemoryStore()), $logger)->noticeOnce(...));
+        $dispatcher->addListener(UsageReadingsStayedAway::class, new DoctrineOutageNotices($this->entities, new LockFactory(new InMemoryStore()), $logger, new EventDispatcher())->noticeOnce(...));
 
         new OutageWatch($slowLookups, $clock, $dispatcher)->watch($account);
 
@@ -233,6 +238,116 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
         $this->read('main', new DateTimeImmutable('2026-11-02T12:00:00+00:00'), Provider::Codex);
 
         self::assertCount(1, $this->notices()->stillRunningOldestFirst());
+    }
+
+    public function testAnOutageEndedByAReadingTakenTodayIsListedAsEndedToday(): void
+    {
+        $this->store('main', new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
+        $this->record('main', '2026-11-02 12:30:00');
+
+        $ended = $this->notices()->endedOnTheDayOf(new DateTimeImmutable('2026-11-02T20:00:00+00:00'));
+
+        self::assertCount(1, $ended);
+        self::assertSame('claude_code.main', $ended[0]->account->key());
+        self::assertSame('2026-11-02 12:30:00', $ended[0]->endedAt->format('Y-m-d H:i:s'));
+    }
+
+    public function testAnOutageEndedYesterdayIsNotListedToday(): void
+    {
+        $this->store('main', new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
+        $this->record('main', '2026-11-02 12:30:00');
+
+        self::assertSame([], $this->notices()->endedOnTheDayOf(new DateTimeImmutable('2026-11-03T09:00:00+00:00')));
+    }
+
+    public function testANoticeStillRunningIsNotListedAsEnded(): void
+    {
+        $this->store('main', new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
+
+        self::assertSame([], $this->notices()->endedOnTheDayOf(new DateTimeImmutable('2026-11-02T20:00:00+00:00')));
+    }
+
+    // The reading the outage started from is no newer reading, so it ends nothing.
+    public function testAReadingTakenAtTheOutagesLastReadingDoesNotEndIt(): void
+    {
+        $this->store('main', new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
+        $this->record('main', '2026-11-02 08:00:00');
+
+        self::assertSame([], $this->notices()->endedOnTheDayOf(new DateTimeImmutable('2026-11-02T20:00:00+00:00')));
+        self::assertCount(1, $this->notices()->stillRunningOldestFirst());
+    }
+
+    // The day is the UTC day, so the last second before midnight and midnight itself fall on two days.
+    public function testAReadingAtMidnightUtcEndsTheOutageOnTheNewDay(): void
+    {
+        $this->store('before', new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
+        $this->store('at', new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
+        $this->record('before', '2026-11-02 23:59:59');
+        $this->record('at', '2026-11-03 00:00:00');
+
+        $names = static fn (array $ended): array => array_map(static fn (EndedOutageNotice $notice): string => $notice->account->name, $ended);
+
+        self::assertSame(['before'], $names($this->notices()->endedOnTheDayOf(new DateTimeImmutable('2026-11-02T12:00:00+00:00'))));
+        self::assertSame(['at'], $names($this->notices()->endedOnTheDayOf(new DateTimeImmutable('2026-11-03T12:00:00+00:00'))));
+    }
+
+    // A moment in another zone is still read as its UTC day, so the same outages are listed wherever the moment comes from.
+    public function testAMomentInAnotherZoneIsReadAsItsUtcDay(): void
+    {
+        $this->store('main', new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
+        $this->record('main', '2026-11-02 23:30:00');
+
+        self::assertCount(1, $this->notices()->endedOnTheDayOf(new DateTimeImmutable('2026-11-03T01:00:00+02:00')));
+    }
+
+    public function testOutagesEndedTodayAreListedNewestFirst(): void
+    {
+        $this->store('early', new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
+        $this->store('late', new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
+        $this->record('late', '2026-11-02 15:00:00');
+        $this->record('early', '2026-11-02 12:00:00');
+
+        $names = array_map(static fn (EndedOutageNotice $notice): string => $notice->account->name, $this->notices()->endedOnTheDayOf(new DateTimeImmutable('2026-11-02T20:00:00+00:00')));
+
+        self::assertSame(['late', 'early'], $names);
+    }
+
+    // A slow writer stamps its reading before a later one but stores it after, so the outage ended at the earlier reading.
+    public function testAnEarlierReadingStoredLateMovesTheEndToItsMoment(): void
+    {
+        $this->store('main', new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
+        $this->record('main', '2026-11-02 13:00:00');
+        $this->record('main', '2026-11-02 12:30:00');
+
+        self::assertSame('12:30', $this->notices()->endedOnTheDayOf(new DateTimeImmutable('2026-11-02T20:00:00+00:00'))[0]->endedAt->format('H:i'));
+    }
+
+    // The reading landed before the notice's row existed, so only the row's own look at the readings can end it.
+    public function testAnOutageNoticedAfterAReadingAlreadyEndedItIsStoredAsEnded(): void
+    {
+        $this->read('main', new DateTimeImmutable('2026-11-02T12:00:00+00:00'));
+        $notices = new DoctrineOutageNotices($this->entities, new LockFactory(new InMemoryStore()), self::createStub(LoggerInterface::class), new EventDispatcher());
+
+        $notices->noticeOnce(new UsageReadingsStayedAway(new Account(Provider::ClaudeCode, 'main'), new DateTimeImmutable('2026-11-02T08:00:00+00:00'), new DateTimeImmutable('2026-11-02T12:00:01+00:00')));
+
+        self::assertSame('12:00', $this->notices()->endedOnTheDayOf(new DateTimeImmutable('2026-11-02T20:00:00+00:00'))[0]->endedAt->format('H:i'));
+    }
+
+    public function testAnOutageNoticedWithNoNewerReadingIsNotStoredAsEnded(): void
+    {
+        $this->read('main', new DateTimeImmutable('2026-11-02T08:00:00+00:00'));
+        $this->read('other', new DateTimeImmutable('2026-11-02T12:00:00+00:00'));
+        $notices = new DoctrineOutageNotices($this->entities, new LockFactory(new InMemoryStore()), self::createStub(LoggerInterface::class), new EventDispatcher());
+
+        $notices->noticeOnce(new UsageReadingsStayedAway(new Account(Provider::ClaudeCode, 'main'), new DateTimeImmutable('2026-11-02T08:00:00+00:00'), new DateTimeImmutable('2026-11-02T12:00:01+00:00')));
+
+        self::assertSame([], $this->notices()->endedOnTheDayOf(new DateTimeImmutable('2026-11-02T20:00:00+00:00')));
+    }
+
+    private function record(string $account, string $at): void
+    {
+        $use = new DoctrineMeasuredUse($this->entities, new MockClock($at.' UTC'), new EventDispatcher());
+        self::assertSame(ReadingOutcome::Recorded, $use->record(new WindowReading(new Account(Provider::ClaudeCode, $account), UsageWindow::FiveHour, new Usage(12.0, null))));
     }
 
     private function notices(): DoctrineOwnerNotices
