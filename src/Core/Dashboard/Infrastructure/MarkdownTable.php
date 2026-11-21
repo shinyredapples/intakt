@@ -7,47 +7,71 @@ namespace Intakt\Core\Dashboard\Infrastructure;
 // The cells of the one pipe table in a section, so a second table or a row of another shape never stands in for it.
 final readonly class MarkdownTable
 {
-    private const string LINE = '/^ {0,3}\|/';
-    private const string ROW = '/^\|(.*)(?<!\\\)\|$/';
+    // Four spaces of indentation make a code block, never a table.
+    private const string TABLE_LINE = '/^ {0,3}\S/';
     private const string CELL_BOUNDARY = '/(?<!\\\)\|/';
     private const string DELIMITER_CELL = '/^:?-+:?$/';
 
-    // The header row first, then the delimiter row, then the body rows; null unless the lines hold exactly one such table.
+    // Every header and delimiter pair counts, outer pipes or not, so a second table in either syntax refuses the section instead of hiding behind the first.
     /**
      * @param list<string> $lines
      *
-     * @return list<list<string>>|null
+     * @return list<list<string>>|null header row, delimiter row, then body rows
      */
     public static function only(array $lines): ?array
     {
-        $tables = self::tables($lines);
-        if (1 !== count($tables)) {
+        $starts = array_keys(array_filter(array_keys($lines), static fn (int $index): bool => self::startsTable($lines, $index)));
+        if (1 !== count($starts)) {
             return null;
         }
 
-        $rows = array_map(self::cells(...), $tables[0]);
-        if (count($rows) < 3 || in_array([], $rows, true) || 1 !== count(array_unique(array_map(count(...), $rows)))) {
+        $rows = self::rowsFrom($lines, $starts[0]);
+        if (count($rows) < 3 || 1 !== count(array_unique(array_map(count(...), $rows)))) {
             return null;
         }
 
-        return self::isDelimiter($rows[1]) ? $rows : null;
+        return $rows;
     }
 
     /**
      * @param list<string> $lines
-     *
-     * @return list<non-empty-list<string>>
      */
-    private static function tables(array $lines): array
+    private static function startsTable(array $lines, int $index): bool
     {
-        $tables = [];
-        $last = null;
-        foreach (array_filter($lines, static fn (string $line): bool => 1 === preg_match(self::LINE, $line)) as $index => $line) {
-            $tables[$index - 1 === $last ? count($tables) - 1 : count($tables)][] = $line;
-            $last = $index;
+        $delimiter = $lines[$index + 1] ?? '';
+        if (!self::hasCells($lines[$index]) || !self::hasCells($delimiter)) {
+            return false;
         }
 
-        return array_values($tables);
+        $cells = self::cells($delimiter);
+
+        return count($cells) === count(self::cells($lines[$index]))
+            && [] === array_filter($cells, static fn (string $cell): bool => 1 !== preg_match(self::DELIMITER_CELL, $cell));
+    }
+
+    private static function hasCells(string $line): bool
+    {
+        return 1 === preg_match(self::TABLE_LINE, $line) && 1 === preg_match(self::CELL_BOUNDARY, $line);
+    }
+
+    // A table runs until the first blank line, so a following line without pipes is a row of another width and refuses the table.
+    /**
+     * @param list<string> $lines
+     *
+     * @return list<list<string>>
+     */
+    private static function rowsFrom(array $lines, int $start): array
+    {
+        $rows = [];
+        foreach (array_slice($lines, $start) as $line) {
+            if ('' === trim($line)) {
+                break;
+            }
+
+            $rows[] = self::cells($line);
+        }
+
+        return $rows;
     }
 
     /**
@@ -55,16 +79,9 @@ final readonly class MarkdownTable
      */
     private static function cells(string $line): array
     {
-        $cells = 1 === preg_match(self::ROW, trim($line), $row) ? preg_split(self::CELL_BOUNDARY, $row[1]) : false;
+        $row = preg_replace(['/^\|/', '/(?<!\\\)\|$/'], '', trim($line));
+        $cells = null === $row ? false : preg_split(self::CELL_BOUNDARY, $row);
 
         return false === $cells ? [] : array_map(trim(...), $cells);
-    }
-
-    /**
-     * @param list<string> $row
-     */
-    private static function isDelimiter(array $row): bool
-    {
-        return [] === array_filter($row, static fn (string $cell): bool => 1 !== preg_match(self::DELIMITER_CELL, $cell));
     }
 }

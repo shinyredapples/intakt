@@ -185,7 +185,54 @@ final class PublishedBenchTest extends TestCase
     public function testMoreDefectsFoundThanPlantedGiveNoHeadline(): void
     {
         self::assertNull($this->headlineOf($this->bench($this->table('| Panel | 16 of 15 | 2 |'))));
+    }
+
+    public function testNothingPlantedGivesNoHeadline(): void
+    {
         self::assertNull($this->headlineOf($this->bench($this->table('| Panel | 0 of 0 | 2 |'))));
+    }
+
+    public function testACommentedOutSectionGivesNoHeadline(): void
+    {
+        self::assertNull($this->headlineOf("<!--\n".$this->bench($this->table(self::SMALL_PANEL))."-->\n"));
+    }
+
+    public function testACommentedOutRunDateGivesNoHeadline(): void
+    {
+        $readme = "### Review bench\n\n".$this->table(self::SMALL_PANEL)."\n\n<!--\nDate of the run: 2026-11-16.\n-->\n";
+
+        self::assertNull($this->headlineOf($readme));
+    }
+
+    public function testACommentOnTheRunDateLineKeepsTheDate(): void
+    {
+        $readme = "### Review bench\n\n".$this->table(self::SMALL_PANEL)."\n\nDate of the run: 2026-11-16. <!-- a note -->\n";
+
+        self::assertSame('2026-11-16', $this->headlineOf($readme)?->ranOn);
+    }
+
+    public function testARunDateThatIsTheTitleOfTheNextSetextHeadingGivesNoHeadline(): void
+    {
+        self::assertNull($this->headlineOf($this->bench($this->table(self::SMALL_PANEL))."===\n"));
+    }
+
+    public function testAThematicBreakAfterANestedHeadingKeepsTheSection(): void
+    {
+        self::assertNotNull($this->headlineOf($this->bench("#### Figures\n---\n\n".$this->table(self::SMALL_PANEL))));
+    }
+
+    public function testATableWithoutOuterPipesGivesTheHeadline(): void
+    {
+        $table = "Reviewer | Defects found | False alarms\n--- | --- | ---\nPanel | 11 of 15 | 2";
+
+        self::assertSame('11 of 15', $this->headlineOf($this->bench($table))?->reading());
+    }
+
+    public function testASecondTableWithoutOuterPipesGivesNoHeadline(): void
+    {
+        $tables = $this->table(self::SMALL_PANEL)."\n\nReviewer | Defects found | False alarms\n--- | --- | ---\nPanel | 3 of 4 | 5";
+
+        self::assertNull($this->headlineOf($this->bench($tables)));
     }
 
     public function testACountBeyondTheIntegerRangeGivesNoHeadline(): void

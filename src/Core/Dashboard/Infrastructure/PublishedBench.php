@@ -71,8 +71,7 @@ final readonly class PublishedBench
             return null;
         }
 
-        $counts = [$this->countOf($found[1]), $this->countOf($found[2]), $this->countOf($panels[0][2])];
-        [$defects, $planted, $falseAlarms] = $counts;
+        [$defects, $planted, $falseAlarms] = [$this->countOf($found[1]), $this->countOf($found[2]), $this->countOf($panels[0][2])];
         if (in_array(null, [$defects, $planted, $falseAlarms], true) || 0 === $planted || $defects > $planted) {
             return null;
         }
