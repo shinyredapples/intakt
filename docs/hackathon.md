@@ -17,7 +17,7 @@ one and merges what passes review.
 
 The repository's first commit with content is from 2026-10-26, the first day of the hackathon; the commit of
 2026-10-24 is GitHub's empty initial commit. Everything else was built inside the window. The milestones reached, with
-the dates from [the journey](journey.md#milestones):
+the dates from [the journey's milestones](journey.md#milestones) and, for 2026-10-27, its [timeline](journey.md#timeline):
 
 - **2026-10-26:** the design is written and the first pull requests are merged.
 - **2026-10-27:** 31 plan tasks with acceptance criteria, in the milestones M1 to M5.
