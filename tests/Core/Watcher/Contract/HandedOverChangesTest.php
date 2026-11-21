@@ -60,7 +60,7 @@ final class HandedOverChangesTest extends TestCase
 
     public function testAnUnreadableLineIsSkippedForTheReadableOnes(): void
     {
-        $_ = $this->ledger->append(new LedgerEvent(LedgerEventKind::ChangeHandedToIntakt, '{not json'));
+        $this->ledger->append(new LedgerEvent(LedgerEventKind::ChangeHandedToIntakt, '{not json'));
         $this->record(LedgerEventKind::ChangeHandedToIntakt, 'alpha', self::PULL);
 
         self::assertTrue($this->handed()->isHandedToIntakt('alpha', self::PULL));
@@ -68,7 +68,7 @@ final class HandedOverChangesTest extends TestCase
 
     private function record(LedgerEventKind $kind, string $project, string $change): void
     {
-        $_ = $this->ledger->append(new LedgerEvent($kind, json_encode(['project' => $project, 'change' => $change, 'head' => str_repeat('a', 40)], JSON_THROW_ON_ERROR)));
+        $this->ledger->append(new LedgerEvent($kind, json_encode(['project' => $project, 'change' => $change, 'head' => str_repeat('a', 40)], JSON_THROW_ON_ERROR)));
     }
 
     private function handed(): HandedOverChanges
