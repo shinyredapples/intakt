@@ -164,8 +164,7 @@ final class HighlightsWorkflowTest extends TestCase
 
     public function testAJobConditionAndAStepConditionReadingSecretsAreFound(): void
     {
-        $workflow = $this->withBuildSteps([['if' => "secrets.STEP != ''", 'run' => 'true']]);
-        $workflow['jobs']['build']['if'] = "secrets.JOB != ''";
+        $workflow = ['jobs' => ['build' => ['steps' => [['if' => "secrets.STEP != ''", 'run' => 'true']], 'if' => "secrets.JOB != ''"]]];
 
         self::assertSame(["secrets.STEP != ''", "secrets.JOB != ''"], $this->secretReferencesBesidesTheLogin($workflow));
     }
