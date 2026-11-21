@@ -97,7 +97,7 @@ final class TrendsFromTheShippedRecordingTest extends DashboardPageTestCase
             ['Correctness', 'P1', '1', '1'], ['Correctness', 'P2', '3', '3'], ['Correctness', 'P3', '0', '0'],
             ['Security', 'P1', '0', '0'], ['Security', 'P2', '0', '0'], ['Security', 'P3', '0', '0'],
         ], $this->rowsOf($page, '#chart-catches'));
-        self::assertSame([['Kept on the act list', '3'], ['Merged as duplicate', '0'], ['Deferred to a follow-up issue', '0'], ['Rejected', '0']], $this->rowsOf($page, '#chart-judge'));
+        self::assertSame([['Kept to fix', '3'], ['Merged as duplicate', '0'], ['Deferred to a follow-up issue', '0'], ['Rejected', '0']], $this->rowsOf($page, '#chart-judge'));
     }
 
     // The recorded verdicts run again through the Review module with the stand-in vendor, because the derived rows must be what a live round would have written: the approving reviewer reports nothing, the other the findings judge_done holds, in id order, at their recorded severities.
