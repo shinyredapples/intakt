@@ -13,6 +13,7 @@ use Intakt\Gates\ProcessResult;
 use Intakt\Gates\ProcessRunner;
 use Intakt\Gates\Scope;
 use Intakt\Gates\TreeFingerprint;
+use Intakt\Gates\TreeWalk;
 use Intakt\Gates\Workspace;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -22,6 +23,7 @@ use Symfony\Component\Clock\NativeClock;
 
 #[CoversClass(PassedTree::class)]
 #[CoversClass(TreeFingerprint::class)]
+#[CoversClass(TreeWalk::class)]
 #[UsesClass(GitCall::class)]
 #[UsesClass(HardenedGitCall::class)]
 #[UsesClass(Options::class)]

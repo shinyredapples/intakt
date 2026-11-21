@@ -10,6 +10,7 @@ use Intakt\Gates\JsonNode;
 use Intakt\Gates\Options;
 use Intakt\Gates\PassedTree;
 use Intakt\Gates\TreeFingerprint;
+use Intakt\Gates\TreeWalk;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -19,6 +20,7 @@ use Symfony\Component\Clock\NativeClock;
 #[CoversClass(Options::class)]
 #[UsesClass(PassedTree::class)]
 #[UsesClass(TreeFingerprint::class)]
+#[UsesClass(TreeWalk::class)]
 #[UsesClass(JsonNode::class)]
 final class CheckReuseTest extends SandboxTestCase
 {

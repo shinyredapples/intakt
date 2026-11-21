@@ -106,10 +106,10 @@ final readonly class TreeFingerprint
     private function checkedTree(?int $settledBefore): string
     {
         $root = $this->real($this->root);
-        $found = [$this->entries($root, '', [self::GIT_FOLDER, ...self::WRITTEN_BY_THE_CHECK], $settledBefore, [$root])];
+        $found = [new TreeWalk([self::GIT_FOLDER, ...self::WRITTEN_BY_THE_CHECK], $settledBefore)->entries($root, '', [$root])];
 
         foreach ($this->gateInputsAmongWhatTheCheckWrites($root) as $path) {
-            $found[] = $this->entries($root.'/'.$path, $path, [], $settledBefore, [$root]);
+            $found[] = new TreeWalk([], $settledBefore)->entries($root.'/'.$path, $path, [$root]);
         }
 
         return $this->sealed($found);
@@ -152,7 +152,7 @@ final readonly class TreeFingerprint
             return [];
         }
 
-        return array_map(fn (string $input): ?string => file_exists($home.'/'.$input) || is_link($home.'/'.$input) ? $this->sealed([$this->entries($home.'/'.$input, $input, [], $settledBefore, [$home])]) : null, self::HOME_INPUTS);
+        return array_map(fn (string $input): ?string => file_exists($home.'/'.$input) || is_link($home.'/'.$input) ? $this->sealed([new TreeWalk([], $settledBefore)->entries($home.'/'.$input, $input, [$home])]) : null, self::HOME_INPUTS);
     }
 
     /**
@@ -185,100 +185,6 @@ final readonly class TreeFingerprint
         ksort($entries, SORT_STRING);
 
         return $this->joined([...array_map(strval(...), array_keys($entries)), ...array_values($entries)]);
-    }
-
-    /**
-     * @param list<string> $skipped keys left out, relative to the folder the walk started in
-     * @param list<string> $entered the real folders this walk is inside of, through links
-     *
-     * @return iterable<string, string>
-     *
-     * @throws UnexpectedValueException
-     */
-    // Because a folder counts with its own times and inode, a file that came and went, or a folder moved away and back while the gates ran, shows even when every file is as it was.
-    private function entries(string $path, string $key, array $skipped, ?int $settledBefore, array $entered): iterable
-    {
-        $status = @lstat($path);
-
-        if (false === $status) {
-            throw new UnexpectedValueException('cannot read '.$path);
-        }
-
-        if (null !== $settledBefore && $status['ctime'] >= $settledBefore) {
-            throw new UnexpectedValueException('changed in the second the check started: '.$path);
-        }
-
-        if (is_link($path)) {
-            yield $key => $this->described($status, $this->readOrFail($path, @readlink($path)));
-            yield from $this->entriesBehindLink($path, $key, $settledBefore, $entered);
-
-            return;
-        }
-
-        if (!is_dir($path)) {
-            yield $key => $this->described($status, is_file($path) ? $this->readOrFail($path, @hash_file('sha256', $path)) : '');
-
-            return;
-        }
-
-        yield $key => $this->described($status, '');
-        $names = @scandir($path);
-
-        if (false === $names) {
-            throw new UnexpectedValueException('cannot read '.$path);
-        }
-
-        foreach (array_diff($names, ['.', '..']) as $name) {
-            $child = '' === $key ? $name : $key.'/'.$name;
-
-            if (!in_array($child, $skipped, true)) {
-                yield from $this->entries($path.'/'.$name, $child, $skipped, $settledBefore, $entered);
-            }
-        }
-    }
-
-    /**
-     * @param list<string> $entered
-     *
-     * @return iterable<string, string>
-     *
-     * @throws UnexpectedValueException
-     */
-    // Because the gates open a path through a link (a vendor/ that points at a shared install, a tracked path whose folder became a link), what is behind the link counts and not only where it points.
-    private function entriesBehindLink(string $link, string $key, ?int $settledBefore, array $entered): iterable
-    {
-        if (!file_exists($link)) {
-            return;
-        }
-
-        $target = $this->real($link);
-
-        if (in_array($target, $entered, true)) {
-            throw new UnexpectedValueException('a link leads back into its own folder: '.$link);
-        }
-
-        // Because no file name holds a zero byte, the key of what is behind a link never passes for a path beside it.
-        yield from $this->entries($target, $key."\0", [], $settledBefore, [...$entered, $target]);
-    }
-
-    /**
-     * @param array<int|string, int> $status
-     */
-    private function described(array $status, string $contents): string
-    {
-        return implode(' ', [$status['mode'], $status['size'], $status['mtime'], $status['ctime'], $status['ino'], $contents]);
-    }
-
-    /**
-     * @throws UnexpectedValueException
-     */
-    private function readOrFail(string $path, string|false $read): string
-    {
-        if (false === $read) {
-            throw new UnexpectedValueException('cannot read '.$path);
-        }
-
-        return $read;
     }
 
     /**
