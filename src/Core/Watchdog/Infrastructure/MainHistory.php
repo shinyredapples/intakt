@@ -9,6 +9,7 @@ use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Core\Watchdog\Contract\CommitHistory;
 use Intakt\Core\Watchdog\Contract\MainHistoryRewritten;
 use Intakt\Core\Watchdog\Contract\MainNotRead;
+use Intakt\Core\Watchdog\Contract\RecordedMerge;
 use Intakt\Core\Watchdog\Contract\SignatureStatus;
 use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
@@ -126,6 +127,21 @@ final readonly class MainHistory implements CommitHistory
         }
 
         return $this->ownerSigned(...$signed) ? SignatureStatus::OwnerSigned : SignatureStatus::UnknownKey;
+    }
+
+    /**
+     * @return list<string>
+     *
+     * @throws MainNotRead
+     * @throws RuntimeException
+     */
+    public function broughtInBy(RecordedMerge $merge): array
+    {
+        $this->mustBeReadable();
+        // Both names are full commit names, so neither can be read as an option.
+        $brought = trim($this->read(['rev-list', $merge->head, '--not', $merge->base]));
+
+        return '' === $brought ? [] : explode("\n", $brought);
     }
 
     /**

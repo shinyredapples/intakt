@@ -26,4 +26,12 @@ interface CommitHistory
      * @throws MainNotRead
      */
     public function signatureOf(string $commit): SignatureStatus;
+
+    // Only what the head holds and its base does not, because a fast-forward puts these commits on main's first-parent line and everything below the base was main's already.
+    /**
+     * @return list<string>
+     *
+     * @throws MainNotRead
+     */
+    public function broughtInBy(RecordedMerge $merge): array;
 }
