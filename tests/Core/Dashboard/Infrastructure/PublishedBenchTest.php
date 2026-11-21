@@ -16,6 +16,9 @@ final class PublishedBenchTest extends TestCase
     private const string HEADER = '| Reviewer | Defects found (measured) | False alarms (measured) | Tokens per change (measured) |';
     private const string PANEL = '| Panel (`correctness` and `security`) | 11 of 15 | 2 | about 6,800 |';
     private const string DATE = 'Date of the run: 2026-11-16. Models: a, b.';
+    private const string SMALL_HEADER = '| Reviewer | Defects found | False alarms |';
+    private const string DELIMITER = '| --- | --- | --- |';
+    private const string SMALL_PANEL = '| Panel | 11 of 15 | 2 |';
 
     /** @var list<string> */
     private array $files = [];
@@ -61,7 +64,7 @@ final class PublishedBenchTest extends TestCase
 
     public function testColumnsNamedWithoutTheirQualifierStillGiveTheHeadline(): void
     {
-        self::assertNotNull($this->headlineOf($this->section(header: '| Reviewer | Defects found | False alarms |')));
+        self::assertNotNull($this->headlineOf($this->section(header: '| Reviewer | Defects found | False alarms | Tokens |')));
     }
 
     public function testAPanelRowOutsideTheSectionGivesNoHeadline(): void
@@ -96,6 +99,110 @@ final class PublishedBenchTest extends TestCase
         self::assertNull($this->headlineOf($this->section(panel: self::PANEL."\n".self::PANEL)));
     }
 
+    public function testATableWithoutADelimiterRowGivesNoHeadline(): void
+    {
+        self::assertNull($this->headlineOf($this->bench(self::SMALL_HEADER."\n".self::SMALL_PANEL)));
+    }
+
+    public function testAPanelRowInASecondTableOfTheSectionGivesNoHeadline(): void
+    {
+        $tables = $this->table('| Solo | 8 of 15 | 0 |')."\n\n| Reviewer | Defects found | Runs |\n".self::DELIMITER."\n".self::SMALL_PANEL;
+
+        self::assertNull($this->headlineOf($this->bench($tables)));
+    }
+
+    public function testASecondTableAfterTheBenchTableGivesNoHeadline(): void
+    {
+        $tables = $this->table(self::SMALL_PANEL)."\n\n| Reviewer | Runs | Days |\n".self::DELIMITER."\n| Panel | 3 of 4 | 5 |";
+
+        self::assertNull($this->headlineOf($this->bench($tables)));
+    }
+
+    public function testAnEmptyColumnBeforeTheReviewerGivesNoHeadline(): void
+    {
+        $table = '| '.self::SMALL_HEADER."\n| --- | --- | --- | --- |\n| ".self::SMALL_PANEL;
+
+        self::assertNull($this->headlineOf($this->bench($table)));
+    }
+
+    public function testAFalseAlarmColumnInAnotherUnitGivesNoHeadline(): void
+    {
+        $table = "| Reviewer | Defects found | False alarms (per change) |\n".self::DELIMITER."\n".self::SMALL_PANEL;
+
+        self::assertNull($this->headlineOf($this->bench($table)));
+    }
+
+    public function testARowOfAnotherWidthGivesNoHeadline(): void
+    {
+        self::assertNull($this->headlineOf($this->bench($this->table('| Panel | 11 of 15 | 2 | 6,800 |'))));
+    }
+
+    public function testAnEscapedPipeIsNoColumnBoundary(): void
+    {
+        self::assertNull($this->headlineOf($this->bench($this->table('| Panel \| 11 of 15 | 2 |'))));
+    }
+
+    public function testAPanelAfterATabDelimitedHeadingGivesNoHeadline(): void
+    {
+        self::assertNull($this->headlineOf($this->bench("##\tLater\n\n".$this->table(self::SMALL_PANEL))));
+    }
+
+    public function testAPanelAfterASetextHeadingGivesNoHeadline(): void
+    {
+        self::assertNull($this->headlineOf($this->bench("Later\n-----\n\n".$this->table(self::SMALL_PANEL))));
+        self::assertNull($this->headlineOf($this->bench("Later\n=====\n\n".$this->table(self::SMALL_PANEL))));
+    }
+
+    public function testAFourthLevelHeadingKeepsTheSection(): void
+    {
+        self::assertNotNull($this->headlineOf($this->bench("#### Figures\n\n".$this->table(self::SMALL_PANEL))));
+    }
+
+    public function testASectionInsideFencedCodeGivesNoHeadline(): void
+    {
+        self::assertNull($this->headlineOf("```markdown\n".$this->bench($this->table(self::SMALL_PANEL))."```\n"));
+        self::assertNull($this->headlineOf("~~~~\n".$this->bench($this->table(self::SMALL_PANEL))."~~~\n"));
+    }
+
+    public function testARunDateInsideFencedCodeGivesNoHeadline(): void
+    {
+        $readme = "### Review bench\n\n".$this->table(self::SMALL_PANEL)."\n\n```text\nDate of the run: 2026-11-16.\n```\n";
+
+        self::assertNull($this->headlineOf($readme));
+    }
+
+    public function testTwoReviewBenchSectionsGiveNoHeadline(): void
+    {
+        $bench = $this->bench($this->table(self::SMALL_PANEL));
+
+        self::assertNull($this->headlineOf($bench."\n".$bench));
+    }
+
+    public function testMoreDefectsFoundThanPlantedGiveNoHeadline(): void
+    {
+        self::assertNull($this->headlineOf($this->bench($this->table('| Panel | 16 of 15 | 2 |'))));
+        self::assertNull($this->headlineOf($this->bench($this->table('| Panel | 0 of 0 | 2 |'))));
+    }
+
+    public function testACountBeyondTheIntegerRangeGivesNoHeadline(): void
+    {
+        self::assertNull($this->headlineOf($this->bench($this->table('| Panel | 11 of 15 | '.PHP_INT_MAX.'0 |'))));
+        self::assertNull($this->headlineOf($this->bench($this->table('| Panel | '.PHP_INT_MAX.'0 of '.PHP_INT_MAX.'1 | 2 |'))));
+    }
+
+    public function testAllDefectsFoundAtTheLargestCountStillGiveTheHeadline(): void
+    {
+        $headline = $this->headlineOf($this->bench($this->table('| Panel | 15 of 15 | '.PHP_INT_MAX.' |')));
+
+        self::assertNotNull($headline);
+        self::assertSame(['15 of 15', PHP_INT_MAX], [$headline->reading(), $headline->falseAlarms]);
+    }
+
+    public function testAReadmePathThatIsAFolderGivesNoHeadline(): void
+    {
+        self::assertNull(new PublishedBench(__DIR__)->headline());
+    }
+
     public function testTheShippedReadmeStillParses(): void
     {
         $headline = new PublishedBench(__DIR__.'/../../../../README.md')->headline();
@@ -109,6 +216,16 @@ final class PublishedBenchTest extends TestCase
     {
         return "# Intakt\n\n### Review bench\n\nThe bench, below:\n\n```\nphp bin/console intakt:bench\n```\n\n"
             ."{$header}\n| --- | --- | --- | --- |\n{$panel}\n| `security` alone | 8 of 15 | 0 | about 4,350 |\n\n{$date}\n";
+    }
+
+    private function bench(string $body): string
+    {
+        return "### Review bench\n\n{$body}\n\nDate of the run: 2026-11-16.\n";
+    }
+
+    private function table(string $rows): string
+    {
+        return self::SMALL_HEADER."\n".self::DELIMITER."\n".$rows;
     }
 
     private function headlineOf(string $text): ?BenchHeadline
