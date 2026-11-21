@@ -187,7 +187,7 @@ final readonly class RoundLedger
     {
         $findings = $judged->findings;
         $entries = [];
-        foreach (new OnePerPlace()->actList($findings, $act, $judged->sameCause) as $entry) {
+        foreach (new OnePerPlace()->actList($findings, $act, iterator_to_array($judged->sameCause)) as $entry) {
             $entries[$entry->id] = $entry;
         }
 

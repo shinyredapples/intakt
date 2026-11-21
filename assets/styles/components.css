@@ -250,7 +250,9 @@ a.card.needs:hover, .card.needs.is-hover { filter: brightness(.98); }
 .empty > .character { margin-bottom: var(--s16); }
 .col-empty { margin: 0; padding: var(--s8) 2px; color: var(--muted); font-size: var(--t13); }
 
-/* Board: the nine columns side by side, scrolled sideways where they do not fit (docs/design/mocks/index.html). */
+/* Board: its columns side by side, scrolled sideways where they do not fit (docs/design/mocks/index.html). */
+/* Wraps, because the names of six columns are wider than a phone. */
+.coming-next { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s8); margin: 0 0 var(--s16); color: var(--muted); font-size: var(--t15); }
 .content.wide { max-width: none; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 /* Positioned, because an absolute .sr-only label in a folded strip past the edge otherwise escapes the scroller and widens the page. */
