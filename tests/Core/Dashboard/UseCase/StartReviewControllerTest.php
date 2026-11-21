@@ -19,6 +19,8 @@ use Intakt\Core\Dashboard\UseCase\StartReview\ReviewStarts;
 use Intakt\Core\Dashboard\UseCase\StartReview\StartReviewController;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Review\Contract\ChangeSource;
+use Intakt\Core\Review\Contract\PanelNotConfigured;
+use Intakt\Core\Review\Contract\PanelWithoutReviewers;
 use Intakt\Core\Review\Contract\RequestedRound;
 use Intakt\Core\Review\Contract\RoundNotNext;
 use Intakt\Core\Review\Contract\StartReview;
@@ -235,6 +237,30 @@ final class StartReviewControllerTest extends DashboardPageTestCase
         $this->browser->followRedirect();
         self::assertSelectorTextContains('.flash-error', 'Round 2 was asked for');
         self::assertStringNotContainsString('Stack trace', (string) $this->browser->getResponse()->getContent());
+    }
+
+    public function testAProjectWithoutAReviewPanelIsAnsweredInPlainWords(): void
+    {
+        $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+        $this->commandBus()->expects(self::once())->method('dispatch')->willThrowException(new PanelNotConfigured('alpha'));
+
+        $this->browser->request('POST', '/reviews/round-1/start', ['_token' => $this->token(), 'number' => '2']);
+
+        self::assertResponseStatusCodeSame(303);
+        $this->browser->followRedirect();
+        self::assertSelectorTextSame('.flash-error', 'This project has no reviewers set up yet, so nothing was started.');
+        self::assertSelectorNotExists('.toast');
+    }
+
+    public function testAnotherPanelFailureKeepsItsOwnMessage(): void
+    {
+        $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+        $this->commandBus()->expects(self::once())->method('dispatch')->willThrowException(new PanelWithoutReviewers());
+
+        $this->browser->request('POST', '/reviews/round-1/start', ['_token' => $this->token(), 'number' => '2']);
+
+        $this->browser->followRedirect();
+        self::assertSelectorTextSame('.flash-error', (new PanelWithoutReviewers())->getMessage());
     }
 
     public function testAFailureThatIsNotAReportableOneIsAServerErrorAndNotAnErrorLine(): void
