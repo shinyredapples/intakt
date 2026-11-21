@@ -57,7 +57,7 @@ final readonly class RolePromptCarriers
     {
         // because traitFindings() judges every construction in a trait where the trait is declared, also in a trait no analyzed class uses
         if ($scope->isInTrait()) {
-            return null;
+            return $this->usedTraitFinding($construction, $scope);
         }
 
         // because a class-string union may name an allowed carrier beside a refused one, every carrier it names is judged
@@ -84,6 +84,18 @@ final readonly class RolePromptCarriers
         $findings = array_map($this->traitConstructionFinding(...), new NodeFinder()->findInstanceOf($trait->stmts, New_::class));
 
         return array_values(array_filter($findings, static fn (?IdentifierRuleError $finding): bool => $finding instanceof IdentifierRuleError));
+    }
+
+    // because inside a using class the trait's method has its own types, so a class expression typed as a carrier is named here by that carrier; a literal name is left to traitFindings(), which already names it
+    private function usedTraitFinding(New_ $construction, Scope $scope): ?IdentifierRuleError
+    {
+        if (null !== $this->traitClassNamesOf($construction->class)) {
+            return null;
+        }
+
+        $carrier = $this->classNames->namedAmong($construction->class, array_keys(self::BUILDERS), $scope)[0] ?? null;
+
+        return null === $carrier ? null : $this->misplaced($carrier)->build();
     }
 
     private function traitConstructionFinding(New_ $construction): ?IdentifierRuleError
