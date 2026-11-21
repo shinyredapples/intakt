@@ -39,26 +39,35 @@ final readonly class LedgerQueuedRounds
                 continue;
             }
 
-            $project = $payload['project'] ?? null;
-            $change = $payload['change'] ?? null;
+            $line = $this->watcherLineOf($kind, $payload, $order);
 
-            if (!in_array($kind, self::WATCHER_LINES, true) || !is_string($project) || !is_string($change)) {
-                continue;
+            if (null !== $line) {
+                // Keyed by project, then pull request, so no name either side sends can make two keys meet.
+                $latest[$line['project']][$line['change']] = $line['queued'];
             }
-
-            // Keyed by project, then pull request, so no name either side sends can make two keys meet.
-            $latest[$project][$change] = $this->queuedOf($kind, $project, $change, $payload['round'] ?? null, $order);
         }
 
         return $this->waiting($latest, $started);
     }
 
     /**
-     * @return array{order: int, round: QueuedRound}|null
+     * @param array<string, mixed> $payload
+     *
+     * @return array{project: string, change: string, queued: array{order: int, round: QueuedRound}|null}|null
      */
-    private function queuedOf(LedgerEventKind $kind, string $project, string $change, mixed $round, int $order): ?array
+    private function watcherLineOf(LedgerEventKind $kind, array $payload, int $order): ?array
     {
-        return LedgerEventKind::RoundQueued === $kind && is_string($round) && '' !== $round ? ['order' => $order, 'round' => new QueuedRound($round, $project, $change)] : null;
+        $project = $payload['project'] ?? null;
+        $change = $payload['change'] ?? null;
+
+        if (!in_array($kind, self::WATCHER_LINES, true) || !is_string($project) || !is_string($change)) {
+            return null;
+        }
+
+        $round = $payload['round'] ?? null;
+        $queued = LedgerEventKind::RoundQueued === $kind && is_string($round) && '' !== $round ? ['order' => $order, 'round' => new QueuedRound($round, $project, $change)] : null;
+
+        return ['project' => $project, 'change' => $change, 'queued' => $queued];
     }
 
     /**
