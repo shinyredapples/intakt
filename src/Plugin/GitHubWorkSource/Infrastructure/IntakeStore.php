@@ -200,10 +200,11 @@ final readonly class IntakeStore
         throw $failure instanceof RetryableException ? ProjectHeldByAnotherWriter::of($project, $failure) : $failure;
     }
 
-    // Apart from the issue rows, so a task that is closed after it failed for good still holds the tasks that wait on it.
+    // Apart from the issue rows, so a task that is closed after it failed for good still holds the tasks that wait on it. Under the lock the listing's write takes, so a failure and a listing write never interleave and a pick that reads the failures under that lock sees every failure recorded before it.
     public function failForGood(string $project, int $number, string $reason): void
     {
         $this->ownManager()->wrapInTransaction(static function (EntityManagerInterface $manager) use ($project, $number, $reason): void {
+            $manager->find(IntakeValidator::class, $project, LockMode::PESSIMISTIC_WRITE);
             if (!$manager->find(StoredIssue::class, ['project' => $project, 'number' => $number]) instanceof StoredIssue) {
                 throw TaskNotQueued::named($project, $number);
             }
@@ -224,14 +225,33 @@ final readonly class IntakeStore
      */
     public function failuresOf(string $project): array
     {
-        return $this->readOf($project, function () use ($project): array {
-            $failures = [];
-            foreach ($this->rowsOf($this->ownManager(), TaskFailure::class, $project) as $failure) {
-                $failures[$failure->number()] = $failure->reason();
-            }
+        return $this->readOf($project, fn (): array => $this->reasonsOf($this->ownManager(), $project));
+    }
 
-            return $failures;
-        });
+    // Read once the lock is held, because a failure recorded since the plan was made must keep its task from being picked: the pick is ordered before any failure that commits after this read.
+    /**
+     * @return array<int, string>
+     */
+    public function failuresUnderTheListingLock(string $project): array
+    {
+        return $this->readOf($project, fn (): array => $this->ownManager()->wrapInTransaction(function (EntityManagerInterface $manager) use ($project): array {
+            $manager->find(IntakeValidator::class, $project, LockMode::PESSIMISTIC_WRITE);
+
+            return $this->reasonsOf($manager, $project);
+        }));
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function reasonsOf(EntityManagerInterface $manager, string $project): array
+    {
+        $failures = [];
+        foreach ($this->rowsOf($manager, TaskFailure::class, $project) as $failure) {
+            $failures[$failure->number()] = $failure->reason();
+        }
+
+        return $failures;
     }
 
     /**
