@@ -50,7 +50,6 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[UsesClass(LiveEvent::class)]
 final class PlayDemoRunHandlerTest extends KernelTestCase
 {
-
     private const string START = '2026-11-16T08:00:00+00:00';
 
     private string $directory;

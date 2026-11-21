@@ -87,7 +87,7 @@ final class ReplaysRecordingTest extends KernelTestCase
         $this->replays()->replay(new RecordingFormat(StoredSerializerFactory::create())->read($text), 1000.0);
 
         self::assertNotSame([], $this->trends->events);
-        $last = $this->trends->events[array_key_last($this->trends->events)];
+        $last = array_last($this->trends->events);
         self::assertSame(DashboardTopics::SHELL, $last->topic);
         $head = new Crawler($last->turboStream)->filter('turbo-stream[target="trends-head-with-demo"] template');
         self::assertStringContainsString('1 review round over every project', $head->html());

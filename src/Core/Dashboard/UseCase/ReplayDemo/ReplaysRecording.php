@@ -159,10 +159,10 @@ final readonly class ReplaysRecording
 
         // After each row, because the stage and the Trends figures are read from the rows and no recorded update reaches a page that is not the review's.
         $this->captions->publishTheStage();
-        $this->trends->publishLatest(self::roundIdOf($event->payload));
+        $this->trends->publishLatest($this->roundIdOf($event->payload));
     }
 
-    private static function roundIdOf(string $payload): ?Uuid
+    private function roundIdOf(string $payload): ?Uuid
     {
         $round = self::roundOf($payload);
 
