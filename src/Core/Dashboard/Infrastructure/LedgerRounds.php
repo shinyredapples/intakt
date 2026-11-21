@@ -112,7 +112,13 @@ final class LedgerRounds
     {
         $rounds = $this->membersOf($round);
 
-        return [] === $rounds ? null : new Review(array_map($this->completed(...), $rounds), $this->isALegacyTimeline($rounds));
+        if ([] === $rounds) {
+            return null;
+        }
+
+        $review = new Review(array_map($this->completed(...), $rounds));
+
+        return $this->isALegacyTimeline($rounds) ? $review->asHistoryOnly() : $review;
     }
 
     // Empty for a round never started readably; known from the starts alone, so a read of one review can learn which rounds to read before it reads them.

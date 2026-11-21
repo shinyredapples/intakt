@@ -145,7 +145,7 @@ final class ReviewTest extends TestCase
 
     public function testAHistoryOnlyReviewOffersNoNextRound(): void
     {
-        self::assertNull(new Review([$this->round('round-a', 1), $this->round('round-b', 2)], true)->nextNumber());
+        self::assertNull(new Review([$this->round('round-a', 1), $this->round('round-b', 2)])->asHistoryOnly()->nextNumber());
     }
 
     private function judged(string $id, int $number): ReviewedRound
