@@ -6,14 +6,20 @@ namespace Intakt\Gates\PhpStan;
 
 use Intakt\Core\Review\Contract\PromptAssembly;
 use Intakt\Core\Review\Contract\ReviewerConversation;
+use Intakt\Core\Review\Contract\ReviewerRole;
+use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundReviewer;
+use Intakt\Core\Review\Infrastructure\ConfiguredPanels;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewerHandler;
+use Intakt\Core\Review\UseCase\SeedSampleProject\SampleProject;
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiVendor;
 use PhpParser\Node;
 use PhpParser\Node\Arg;
 use PhpParser\Node\Expr;
 use PhpParser\Node\Expr\Array_;
 use PhpParser\Node\Expr\MethodCall;
 use PhpParser\Node\Expr\New_;
+use PhpParser\Node\Expr\PropertyFetch;
 use PhpParser\Node\Expr\StaticCall;
 use PhpParser\Node\Identifier;
 use PhpParser\Node\Name;
@@ -48,6 +54,19 @@ final readonly class RawPromptMessageRule implements Rule
     private const string ROUND_REVIEWER = RoundReviewer::class;
     private const string ADVICE = ' builds a model message outside PromptAssembly: build it through '.self::ASSEMBLY.', with Intakt\'s own text as a literal and untrusted text as a FencedText from Fence.';
     private const string ROLE_ADVICE = 'new ReviewerConversation() in ReviewWithReviewerHandler takes a role prompt that is not $reviewer->rolePrompt() of a RoundReviewer: pass the round reviewer\'s rolePrompt() as the role prompt, so only the panel\'s configured prompt reaches PromptAssembly::systemWithRole().';
+    private const string RETRY = SymfonyAiVendor::class;
+    private const string RETRY_ADVICE = 'new ReviewerConversation() in SymfonyAiVendor takes a role prompt that is not the rolePrompt of an existing ReviewerConversation: copy the stopped conversation\'s rolePrompt, so only the panel\'s configured prompt reaches PromptAssembly::systemWithRole().';
+    // because the role prompt enters a system message verbatim, the objects that carry it are built only where it comes from the owner's panel configuration or a fixed literal, a trait body counting as outside: decision 2 of #2812
+    private const array BUILDERS = [
+        ReviewerRole::class => [ConfiguredPanels::class, SampleProject::class],
+        RoundReviewer::class => [ReviewRound::class],
+        ReviewerConversation::class => [ReviewWithReviewerHandler::class, SymfonyAiVendor::class],
+    ];
+    private const array BUILDER_FINDINGS = [
+        ReviewerRole::class => ['intakt.reviewerRole', 'new ReviewerRole() outside ConfiguredPanels and SampleProject: a role prompt enters the system message verbatim, so build a ReviewerRole only from the owner\'s panel configuration (ConfiguredPanels) or as a fixed sample role (SampleProject).'],
+        RoundReviewer::class => ['intakt.reviewerRole', 'new RoundReviewer() outside ReviewRound: a round reviewer carries its panel member\'s role prompt, so let ReviewRound build it from a PanelReviewer of the round\'s panel.'],
+        ReviewerConversation::class => ['intakt.reviewerConversation', 'new ReviewerConversation() outside ReviewWithReviewerHandler and SymfonyAiVendor: a conversation carries the role prompt PromptAssembly::systemWithRole() puts into the system message, so start it in ReviewWithReviewerHandler from $reviewer->rolePrompt(), or copy an existing conversation\'s rolePrompt in SymfonyAiVendor\'s retry.'],
+    ];
 
     public function __construct(private string $root)
     {
@@ -68,8 +87,10 @@ final readonly class RawPromptMessageRule implements Rule
         }
 
         $finding = match (true) {
-            $node instanceof StaticCall => $this->factoryFinding($node, $scope),
             $node instanceof New_ => $this->constructionFinding($node, $scope),
+            // because the assembly may build messages, but not the objects that carry a role prompt
+            $this->isInClass($scope, self::ASSEMBLY) => null,
+            $node instanceof StaticCall => $this->factoryFinding($node, $scope),
             $node instanceof Array_ => $this->callableArrayFinding($node, $scope),
             $node instanceof String_ => $this->callableStringFinding($node),
             default => null,
@@ -83,8 +104,7 @@ final readonly class RawPromptMessageRule implements Rule
         // because a trait's own file decides, not the file of the class that uses it
         $file = $scope->getTraitReflection()?->getFileName() ?? $scope->getFile();
 
-        return array_any(self::JUDGED_FOLDERS, fn (string $folder): bool => str_starts_with($file, $this->root.$folder))
-            && !$this->isInClass($scope, self::ASSEMBLY);
+        return array_any(self::JUDGED_FOLDERS, fn (string $folder): bool => str_starts_with($file, $this->root.$folder));
     }
 
     private function factoryFinding(StaticCall $call, Scope $scope): ?IdentifierRuleError
@@ -162,15 +182,33 @@ final readonly class RawPromptMessageRule implements Rule
     {
         $messageClass = $this->namedClass($construction->class, self::MESSAGE_CLASSES, $scope);
 
-        if (null !== $messageClass) {
+        if (null !== $messageClass && !$this->isInClass($scope, self::ASSEMBLY)) {
             return $this->rawMessage('new '.substr($messageClass, (int) strrpos($messageClass, '\\') + 1).'()');
         }
 
-        if ($this->isInClass($scope, self::ROLE_HANDLER) && null !== $this->namedClass($construction->class, [self::CONVERSATION], $scope) && !$this->rolePromptIsProven($construction, $scope)) {
-            return RuleErrorBuilder::message(self::ROLE_ADVICE)->identifier('intakt.unprovenRolePrompt')->build();
+        $carrier = $this->namedClass($construction->class, array_keys(self::BUILDERS), $scope);
+
+        if (null === $carrier) {
+            return null;
+        }
+
+        if (!$this->isBuiltByItsBuilder($carrier, $scope)) {
+            [$identifier, $advice] = self::BUILDER_FINDINGS[$carrier];
+
+            return RuleErrorBuilder::message($advice)->identifier($identifier)->build();
+        }
+
+        if (self::CONVERSATION === $carrier && !$this->rolePromptIsProven($construction, $scope)) {
+            return RuleErrorBuilder::message($this->isInClass($scope, self::RETRY) ? self::RETRY_ADVICE : self::ROLE_ADVICE)->identifier('intakt.unprovenRolePrompt')->build();
         }
 
         return null;
+    }
+
+    private function isBuiltByItsBuilder(string $carrier, Scope $scope): bool
+    {
+        return null === $scope->getTraitReflection()
+            && array_any(self::BUILDERS[$carrier], fn (string $builder): bool => $this->isInClass($scope, $builder));
     }
 
     /**
@@ -209,7 +247,13 @@ final readonly class RawPromptMessageRule implements Rule
     {
         $rolePrompt = $this->rolePromptArgument($construction);
 
-        return $rolePrompt instanceof Arg && $this->readsTheRoundReviewersRolePrompt($rolePrompt->value, $scope);
+        if (!$rolePrompt instanceof Arg) {
+            return false;
+        }
+
+        return $this->isInClass($scope, self::RETRY)
+            ? $this->copiesAConversationsRolePrompt($rolePrompt->value, $scope)
+            : $this->readsTheRoundReviewersRolePrompt($rolePrompt->value, $scope);
     }
 
     // an unpacked argument names no role prompt, so any unpack in the call, also after the role prompt, proves none
@@ -235,6 +279,15 @@ final readonly class RawPromptMessageRule implements Rule
             && $value->name instanceof Identifier
             && 'roleprompt' === $value->name->toLowerString()
             && new ObjectType(self::ROUND_REVIEWER)->isSuperTypeOf($scope->getType($value->var))->yes();
+    }
+
+    // because a retry starts a new conversation with the stopped one's role prompt, which the handler proved
+    private function copiesAConversationsRolePrompt(Expr $value, Scope $scope): bool
+    {
+        return $value instanceof PropertyFetch
+            && $value->name instanceof Identifier
+            && 'rolePrompt' === $value->name->toString()
+            && new ObjectType(self::CONVERSATION)->isSuperTypeOf($scope->getType($value->var))->yes();
     }
 
     private function isInClass(Scope $scope, string $class): bool
