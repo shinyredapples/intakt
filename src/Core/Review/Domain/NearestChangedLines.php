@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\Domain;
 
 use Closure;
+use Intakt\Core\Platform\Contract\Redaction;
 use Intakt\Core\Review\Contract\NearLine;
 use Intakt\Core\Review\Contract\QuoteNearLines;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
@@ -37,7 +38,8 @@ final readonly class NearestChangedLines
     public function forQuotesOf(string $findingText, array $changedLines): array
     {
         $changedLines = $this->withStorablePath($changedLines);
-        $partsOfLines = array_map(fn (array $changed): array => $this->partsOf($changed[2]), $changedLines);
+        // Without the redaction marker, because its word is put there by the redaction and names nothing in the change.
+        $partsOfLines = array_map(fn (array $changed): array => $this->partsOf(str_replace(Redaction::MARKER, ' ', $changed[2])), $changedLines);
         $looked = [];
         $recorded = [];
 

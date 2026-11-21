@@ -91,6 +91,22 @@ final class AddedLinesInCheckoutTest extends TestCase
         }
     }
 
+    public function testAnAddedSymlinkGivesNoLineOfTheUnchangedFileItPointsTo(): void
+    {
+        $this->repository->commitFile('notes.txt', "\$reason = 1;\n");
+        symlink('notes.txt', $this->repository->path.'/current.txt');
+
+        self::assertSame([], $this->linesOf($this->diffAdding('current.txt', 1, 1)));
+    }
+
+    public function testAFileUnderASymlinkedFolderGivesNoLine(): void
+    {
+        $this->repository->commitFile('real/A.php', "\$reason = 1;\n");
+        symlink('real', $this->repository->path.'/linked');
+
+        self::assertSame([], $this->linesOf($this->diffAdding('linked/A.php', 1, 1)));
+    }
+
     public function testACheckoutThatIsGoneGivesNoLine(): void
     {
         self::assertSame([], new AddedLinesInCheckout(new DiffAddedLines(new DiffPaths()), $this->redactor())->of($this->diffAdding('src/A.php', 1, 1), $this->repository->path.'/gone'));

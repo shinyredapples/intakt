@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Review\Domain;
 
 use Closure;
+use Intakt\Core\Platform\Contract\Redaction;
 use Intakt\Core\Review\Contract\NearLine;
 use Intakt\Core\Review\Contract\QuoteNearLines;
 use Intakt\Core\Review\Domain\NearestChangedLines;
@@ -140,6 +141,30 @@ final class NearestChangedLinesTest extends TestCase
         $nearest = $this->nearestFor('`dropReason` is unused.', [['src/held-secret-value.php', 1, '$reason = 1;'], ['src/B.php', 2, '$reason = 2;']], $this->redactingHeldSecret(...));
 
         self::assertSame([['src/B.php', 2]], $this->placesOf($nearest[0]));
+    }
+
+    public function testARedactionMarkerDoesNotCountAsANameInTheChange(): void
+    {
+        self::assertSame([], $this->nearestFor('`redactedResult` is missing.', [['src/A.php', 1, '$thing = "'.Redaction::MARKER.'";']]));
+    }
+
+    public function testALineHoldingOnlyARedactionMarkerDoesNotComeCloseToAQuoteNamingRedacted(): void
+    {
+        self::assertSame([], $this->nearestFor('`redacted` is missing.', [['config/a.env', 1, Redaction::MARKER]]));
+    }
+
+    public function testALineWithARedactionMarkerStillComesCloseThroughASharedNameAndKeepsTheMarker(): void
+    {
+        $line = '$redactedResult = "'.Redaction::MARKER.'";';
+
+        $nearest = $this->nearestFor('`redactedResult` is missing.', [['src/A.php', 1, $line]]);
+
+        self::assertEquals([new QuoteNearLines('redactedResult', [new NearLine('src/A.php', 1, $line)])], $nearest);
+    }
+
+    public function testNamesOnBothSidesOfARedactionMarkerStayApart(): void
+    {
+        self::assertSame([], $this->nearestFor('`dropreason` is missing.', [['src/A.php', 1, 'drop'.Redaction::MARKER.'reason']]));
     }
 
     public function testAQuoteInAFencedBlockIsNotLookedFor(): void

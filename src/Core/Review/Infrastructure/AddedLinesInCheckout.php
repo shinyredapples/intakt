@@ -6,6 +6,7 @@ namespace Intakt\Core\Review\Infrastructure;
 
 use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Review\Contract\Checkout;
+use Intakt\Core\Review\Contract\CheckoutNotADirectory;
 
 // Gives each line the diff adds with its file, its number and its redacted text as it stands in the checked-out file, because a credential of several lines (a private key's body under a BEGIN line outside the hunk) is recognized only in its whole file.
 final readonly class AddedLinesInCheckout
@@ -19,12 +20,13 @@ final readonly class AddedLinesInCheckout
      */
     public function of(string $diff, string $checkoutRoot): array
     {
-        // No line when the checkout is gone, because the diff alone cannot be redacted with its files.
-        if (!is_dir($checkoutRoot)) {
+        try {
+            $checkout = new Checkout($checkoutRoot);
+        } catch (CheckoutNotADirectory) {
+            // No line when the checkout is gone, because the diff alone cannot be redacted with its files. Caught, not checked first, because the checkout may go between a check and the read.
             return [];
         }
 
-        $checkout = new Checkout($checkoutRoot);
         $linesOfFiles = [];
         $found = [];
 
@@ -45,7 +47,7 @@ final readonly class AddedLinesInCheckout
      */
     private function redactedLinesOf(Checkout $checkout, string $path): array
     {
-        $content = CheckedOutFile::contentOf($checkout, $path);
+        $content = CheckedOutFile::contentBehindNoLinkOf($checkout, $path);
         if (null === $content) {
             return [];
         }
