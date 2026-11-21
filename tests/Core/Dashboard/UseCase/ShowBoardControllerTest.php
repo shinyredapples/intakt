@@ -8,6 +8,7 @@ use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Dashboard\Domain\Board;
 use Intakt\Core\Dashboard\Domain\BoardColumn;
+use Intakt\Core\Dashboard\Domain\Character;
 use Intakt\Core\Dashboard\Domain\FailingHead;
 use Intakt\Core\Dashboard\Domain\HeadFault;
 use Intakt\Core\Dashboard\Domain\Headline;
@@ -39,6 +40,7 @@ use Symfony\Component\HttpFoundation\Response;
 #[UsesClass(LedgerRounds::class)]
 #[UsesClass(Board::class)]
 #[UsesClass(BoardColumn::class)]
+#[UsesClass(Character::class)]
 #[UsesClass(Review::class)]
 #[UsesClass(ReviewedRound::class)]
 #[UsesClass(ReviewOutcome::class)]
