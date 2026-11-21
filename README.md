@@ -9,7 +9,7 @@
 
 Your coding agent says it is done. Intakt tells you whether to believe it.
 
-Reviewers on models from different AI labs review the change, and a judge marks every finding against the task. Start a review from the dashboard, or let your own agent run the loop over MCP until the verdict is clean. On the [review bench](#review-bench), a panel on Claude and GPT caught all 15 planted defects (measured, 2026-11-21); on low-cost open models it caught 11.
+Reviewers on models from different AI labs review the change, and a judge marks every finding against the task. Start a review from the dashboard, or let your own agent run the loop over MCP until the verdict is clean. On the [review bench](#review-bench), a panel on Claude and GPT caught all 5 planted defects in each of 3 runs (15 of 15, measured 2026-11-21); on low-cost open models it caught 11 of 15.
 
 Along the way, building Intakt led to [12 fixes (11 pull requests) merged upstream](#found-and-fixed-upstream) in Symfony, Symfony AI and Doctrine.
 
