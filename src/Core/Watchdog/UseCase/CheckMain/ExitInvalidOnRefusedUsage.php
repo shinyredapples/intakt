@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Watchdog\UseCase\CheckMain;
 
+use Intakt\Core\Watchdog\UseCase\GuardMain\GuardMainCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Event\ConsoleErrorEvent;
 use Symfony\Component\Console\Event\ConsoleEvent;
@@ -34,6 +35,6 @@ final readonly class ExitInvalidOnRefusedUsage
 
     private function isTheCheck(ConsoleEvent $event): bool
     {
-        return CheckMainCommand::NAME === $event->getCommand()?->getName();
+        return in_array($event->getCommand()?->getName(), [CheckMainCommand::NAME, GuardMainCommand::NAME], true);
     }
 }
