@@ -19,10 +19,9 @@
 {#- A short label whose meaning shows on hover and focus, in the glossary's dotted-underline style; page-local, because these readings belong to Trends alone. -#}
 {% macro hint(words, tip, at) %}<span class="term" tabindex="0" aria-describedby="hint-{{ at }}">{{ words }}<span class="term-tip" role="tooltip" id="hint-{{ at }}">{{ tip }}</span></span>{% endmacro %}
 
-{#- Missing data reads "No data", never a chart of zeros, so nothing unmeasured looks measured (DESIGN.md, Charts). -#}
-{% macro no_chart(reason) %}
-<p class="takeaway" data-no-data>No data</p>
-<p class="chart-key muted">{{ reason }}</p>
+{#- A chart title of a few words with the kind of its figures, so the reader sees what is counted before the bars. -#}
+{% macro title(id, words, kind) %}
+<h2 id="{{ id }}-title">{{ words }} {{ include('dashboard/components/figure_kind.html.twig', {kind: kind, at: id}, with_context = false) }}</h2>
 {% endmacro %}
 
 {#- Hidden from assistive technology, because each mark's own label already reads the same value first. -#}
@@ -77,18 +76,19 @@
 </div>
 {% else %}
 {% set catches = trends.reviewerCatches %}
+{% set drawnReviewers = catches is null ? [] : catches.reviewers|filter(reviewer => reviewer.bars|filter(bar => (bar.value ?? 0) > 0) is not empty) %}
 {% set outcomes = trends.judgeOutcomes %}
 {% set perDay = trends.reviewsPerDay %}
+{% set costDrawn = perDay is not null and perDay.costBars|filter(bar => (bar.value ?? 0) > 0) is not empty %}
+{#- A chart without data, or of zeros only, is left out, so every chart on the page shows something (juror walk-through of issue 3141); its takeaway stays for a screen reader. -#}
 <div class="charts">
-    <section class="chart wide" id="chart-catches" aria-labelledby="chart-catches-title" data-controller="chart" data-action="keydown.esc@window->chart#dismiss">
-        <h2 id="chart-catches-title">Which reviewer caught what</h2>
-        {% if catches is null %}
-        {{ _self.no_chart('Fills in once a judged review records which reviewer reported each finding.') }}
-        {% else %}
-        <p class="takeaway">{{ catches.takeaway }}</p>
-        <p class="chart-key muted">Each bar counts the findings one reviewer reported, by severity; the solid part is what no other reviewer of its round reported.</p>
+    {% if drawnReviewers is not empty %}
+    <section class="chart{{ drawnReviewers|length > 1 ? ' wide' }}" id="chart-catches" aria-labelledby="chart-catches-title" data-controller="chart" data-action="keydown.esc@window->chart#dismiss">
+        {{ _self.title('chart-catches', 'Catches by reviewer', kinds.Counted) }}
+        <p class="takeaway sr-only">{{ catches.takeaway }}</p>
+        <p class="legend chart-legend"><span><i class="c-swatch"></i>{{ _self.hint('One reviewer only', 'Findings no other reviewer of the same pass reported; the label after each count says how many.', 'legend-alone') }}</span><span><i class="c-swatch c-whole"></i>Also found by others</span></p>
         <div class="multiples">
-            {% for reviewer in catches.reviewers %}
+            {% for reviewer in drawnReviewers %}
             <figure class="multiple">
                 <figcaption class="sub-h">{{ reviewer.role|capitalize }}</figcaption>
                 {{ include('dashboard/components/bar_chart.html.twig', {name: 'Findings of the ' ~ reviewer.role ~ ' reviewer by severity', bars: reviewer.bars, top: catches.scaleTop}, with_context = false) }}
@@ -98,9 +98,9 @@
         <details class="c-table">
             <summary>Show as table</summary>
             <table>
-                <thead><tr><th scope="col">Reviewer</th><th scope="col">Severity</th><th scope="col">Findings</th><th scope="col">Found by it alone</th></tr></thead>
+                <thead><tr><th scope="col">Reviewer</th><th scope="col">Severity</th><th scope="col">Findings</th><th scope="col">One reviewer only</th></tr></thead>
                 <tbody>
-                {% for reviewer in catches.reviewers %}
+                {% for reviewer in drawnReviewers %}
                 {% for bar in reviewer.bars %}
                 <tr><td>{{ reviewer.role|capitalize }}</td><td>{{ bar.label }}</td><td>{{ bar.value }}</td><td>{{ bar.part }}</td></tr>
                 {% endfor %}
@@ -108,16 +108,14 @@
                 </tbody>
             </table>
         </details>
-        {% endif %}
         {{ _self.tip() }}
     </section>
+    {% endif %}
+    {% if outcomes is not null and outcomes.bars|filter(bar => (bar.value ?? 0) > 0) is not empty %}
     <section class="chart" id="chart-judge" aria-labelledby="chart-judge-title" data-controller="chart" data-action="keydown.esc@window->chart#dismiss">
-        <h2 id="chart-judge-title">What the judge did</h2>
-        {% if outcomes is null %}
-        {{ _self.no_chart('Fills in once the judge has marked the findings of a review.') }}
-        {% else %}
-        <p class="takeaway">{{ outcomes.takeaway }}</p>
-        {{ include('dashboard/components/bar_chart.html.twig', {name: 'Findings by what the judge did with them, over every judged round', bars: outcomes.bars, top: outcomes.scaleTop}, with_context = false) }}
+        {{ _self.title('chart-judge', 'Checked findings', kinds.Counted) }}
+        <p class="takeaway sr-only">{{ outcomes.takeaway }}</p>
+        {{ include('dashboard/components/bar_chart.html.twig', {name: 'Findings by what the judge did with them, over every checked pass', bars: outcomes.bars, top: outcomes.scaleTop}, with_context = false) }}
         <details class="c-table">
             <summary>Show as table</summary>
             <table>
@@ -129,43 +127,41 @@
                 </tbody>
             </table>
         </details>
-        {% endif %}
         {{ _self.tip() }}
     </section>
+    {% endif %}
+    {% if perDay is not null %}
     <section class="chart wide" id="chart-per-day" aria-labelledby="chart-per-day-title" data-controller="chart" data-action="keydown.esc@window->chart#dismiss">
-        <h2 id="chart-per-day-title">Reviews and cost per day</h2>
-        {% if perDay is null %}
-        {#- A quiet line, never an empty grid, until there is a trend to draw (D5 of #2863). -#}
-        <p class="takeaway" data-no-data>Shows once there are reviews on {{ constant('Intakt\\Core\\Dashboard\\Domain\\ReviewsPerDay::MINIMUM_DAYS') }} days</p>
-        {% else %}
-        <p class="chart-key muted">Both charts share the same days, counted by the day each round started (UTC). Cost is an estimate {{ include('dashboard/components/figure_kind.html.twig', {kind: enum('Intakt\\Core\\Platform\\Contract\\FigureKind').Estimated, at: 'trends-per-day'}, with_context = false) }}; a day without a priced round reads No data.</p>
+        <h2 id="chart-per-day-title">{{ costDrawn ? 'Passes and cost per day' : 'Passes per day' }}</h2>
         <div class="multiples two">
             <figure class="multiple">
-                <figcaption class="sub-h">Rounds per day</figcaption>
-                <p class="takeaway">{{ perDay.roundsTakeaway }}</p>
-                {{ include('dashboard/components/bar_chart.html.twig', {name: 'Review rounds per day', bars: perDay.roundBars, top: perDay.roundsTop}, with_context = false) }}
+                <figcaption class="sub-h">{{ _self.hint('Passes', 'Counted by the day each pass started (UTC).', 'per-day') }} {{ include('dashboard/components/figure_kind.html.twig', {kind: kinds.Counted, at: 'per-day-passes'}, with_context = false) }}</figcaption>
+                <p class="takeaway sr-only">{{ perDay.roundsTakeaway }}</p>
+                {{ include('dashboard/components/bar_chart.html.twig', {name: 'Review passes per day', bars: perDay.roundBars, top: perDay.roundsTop}, with_context = false) }}
             </figure>
+            {% if costDrawn %}
             <figure class="multiple">
-                <figcaption class="sub-h">Estimated cost per day (USD)</figcaption>
-                <p class="takeaway">{{ perDay.costTakeaway }}</p>
+                <figcaption class="sub-h">Cost (USD) {{ include('dashboard/components/figure_kind.html.twig', {kind: kinds.Estimated, at: 'trends-per-day'}, with_context = false) }}</figcaption>
+                <p class="takeaway sr-only">{{ perDay.costTakeaway }}</p>
                 {{ include('dashboard/components/bar_chart.html.twig', {name: 'Estimated cost per day in US dollars', bars: perDay.costBars, top: perDay.costTop, divisor: perDay.costDivisor}, with_context = false) }}
             </figure>
+            {% endif %}
         </div>
         <details class="c-table">
             <summary>Show as table</summary>
             <table>
-                <thead><tr><th scope="col">Day</th><th scope="col">Rounds</th><th scope="col">Estimated cost (USD)</th></tr></thead>
+                <thead><tr><th scope="col">Day</th><th scope="col">Passes</th>{% if costDrawn %}<th scope="col">Estimated cost (USD)</th>{% endif %}</tr></thead>
                 <tbody>
                 {% set costBars = perDay.costBars %}
                 {% for bar in perDay.roundBars %}
-                <tr><td>{{ bar.label }}</td><td>{{ bar.directLabel }}</td><td>{{ costBars[loop.index0].directLabel }}</td></tr>
+                <tr><td>{{ bar.label }}</td><td>{{ bar.directLabel }}</td>{% if costDrawn %}<td>{{ costBars[loop.index0].directLabel }}</td>{% endif %}</tr>
                 {% endfor %}
                 </tbody>
             </table>
         </details>
-        {% endif %}
         {{ _self.tip() }}
     </section>
+    {% endif %}
 </div>
 {% endif %}
 {% endblock %}
