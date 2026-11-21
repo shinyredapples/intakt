@@ -1,5 +1,5 @@
 <div class="live" id="reviewer-{{ reviewer }}">
-    <div class="character-row">{{ include('dashboard/components/character.html.twig', {character: constant('Intakt\\Core\\Dashboard\\Domain\\Character::CodeReviewer'), size: 24}, with_context = false) }}<h3>{{ heading }} live</h3></div>
+    <div class="character-row">{{ include('dashboard/components/character.html.twig', {character: constant('Intakt\\Core\\Dashboard\\Domain\\Character::CodeReviewer'), size: 24}, with_context = false) }}<h3{% if model ?? null %} title="{{ model }}"{% endif %}>{{ heading }} live</h3></div>
     <ul class="live-calls" id="reviewer-{{ reviewer }}-activity"></ul>
     <div class="live-text" id="reviewer-{{ reviewer }}-text"></div>
 </div>

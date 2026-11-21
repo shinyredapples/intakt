@@ -197,7 +197,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame([['correctness', 'kimi-k3', 'Changes requested', '2'], ['security', 'model-b', 'Approved', '0']], $this->rowsOf($crawler->filter('table.reviewers tbody tr')));
+        self::assertSame([['correctness', 'Kimi K3 (Moonshot AI)','Changes requested', '2'], ['security', 'model-b', 'Approved', '0']], $this->rowsOf($crawler->filter('table.reviewers tbody tr')));
     }
 
     public function testAJudgedRoundsReviewersTableHasNoEmptyColumn(): void
@@ -292,7 +292,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
         self::assertSame(['Role', 'Model', 'Outcome', 'Findings counted', 'Stop'], $crawler->filter('table.reviewers thead th')->each(static fn (Crawler $header): string => self::wordsOf($header)));
-        self::assertSame([['correctness', 'kimi-k3', 'running', 'no answer yet', 'Stop this reviewer']], $this->rowsOf($crawler->filter('table.reviewers tbody tr')));
+        self::assertSame([['correctness', 'Kimi K3 (Moonshot AI)','running', 'no answer yet', 'Stop this reviewer']], $this->rowsOf($crawler->filter('table.reviewers tbody tr')));
     }
 
     public function testTheReviewPageShowsAVerdictRecordedInTheRemovedShadowModeLikeAnOrdinaryOne(): void
@@ -848,8 +848,8 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame(['correctness (Kimi K3): running'], $crawler->filter('.state-block .sb-list li')->each(static fn (Crawler $item): string => $item->text()));
-        self::assertSame(['correctness (Kimi K3) live'], $crawler->filter('.log-pane .live h3')->each(static fn (Crawler $heading): string => $heading->text()));
+        self::assertSame(['correctness (Kimi K3 (Moonshot AI)): running'], $crawler->filter('.state-block .sb-list li')->each(static fn (Crawler $item): string => $item->text()));
+        self::assertSame(['correctness (Kimi K3 (Moonshot AI)) live'], $crawler->filter('.log-pane .live h3')->each(static fn (Crawler $heading): string => $heading->text()));
     }
 
     public function testAnOpenFindingLinksToItsRowInTheTimeline(): void

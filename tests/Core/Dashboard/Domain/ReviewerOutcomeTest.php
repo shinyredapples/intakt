@@ -45,6 +45,27 @@ final class ReviewerOutcomeTest extends TestCase
         self::assertSame('standard tier, model not recorded', $reviewer->modelInWords());
     }
 
+    public function testAReviewerOnAModelOfAKnownAiLabIsNamedAsModelAndAiLab(): void
+    {
+        $reviewer = new ReviewerOutcome('r1', 'correctness', 'standard', new DateTimeImmutable('2026-11-13 10:00:00'), 'moonshotai/Kimi-K3.1-Pro:deepinfra');
+
+        self::assertSame('Kimi K3.1 Pro (Moonshot AI)', $reviewer->modelAndLab());
+    }
+
+    public function testAReviewerOnAModelOfAnUnknownAiLabIsNamedByTheModelIdAlone(): void
+    {
+        $reviewer = new ReviewerOutcome('r1', 'correctness', 'standard', new DateTimeImmutable('2026-11-13 10:00:00'), 'acme/robot-7');
+
+        self::assertSame('acme/robot-7', $reviewer->modelAndLab());
+    }
+
+    public function testAReviewerWithoutARecordedModelIsNamedByItsTier(): void
+    {
+        $reviewer = new ReviewerOutcome('r1', 'correctness', 'standard', new DateTimeImmutable('2026-11-13 10:00:00'));
+
+        self::assertSame('standard tier, model not recorded', $reviewer->modelAndLab());
+    }
+
     public function testAFailedReviewerGivesFailed(): void
     {
         self::assertSame(ReviewOutcome::Failed, $this->reviewer()->failed('timeout')->outcome());
