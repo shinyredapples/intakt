@@ -5,11 +5,16 @@ declare(strict_types=1);
 namespace Intakt\Core\Watchdog\UseCase\GuardMain;
 
 use Intakt\Core\Watchdog\Contract\Classification;
+use Intakt\Core\Watchdog\Contract\CommitNameNotFull;
+use Intakt\Core\Watchdog\Contract\MainNotRead;
 use Intakt\Core\Watchdog\Contract\OwnerCard;
 use Intakt\Core\Watchdog\Infrastructure\HaltNotRecorded;
 use Intakt\Core\Watchdog\Infrastructure\LedgerHalts;
+use Intakt\Core\Watchdog\Infrastructure\OwnerKeyRefused;
 use Intakt\Core\Watchdog\UseCase\CheckMain\CheckMain;
+use Intakt\Core\Watchdog\UseCase\CheckMain\RecordedMergeNotARange;
 use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Process\Exception\ProcessFailedException;
 
 final readonly class GuardMain
 {
@@ -26,6 +31,12 @@ final readonly class GuardMain
     /**
      * @return list<OwnerCard>
      *
+     * @throws AHaltNamesItsProject
+     * @throws CommitNameNotFull
+     * @throws RecordedMergeNotARange
+     * @throws OwnerKeyRefused
+     * @throws MainNotRead
+     * @throws ProcessFailedException
      * @throws HaltNotRecorded
      */
     public function standingCardsAfterChecking(GuardMainInput $input): array
