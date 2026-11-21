@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\Infrastructure;
 
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\FindingIds;
 use Symfony\Component\DependencyInjection\Attribute\AutoconfigureTag;
 use Symfony\Component\Serializer\Exception\LogicException;
 use Symfony\Component\Serializer\Exception\UnexpectedValueException;
@@ -44,7 +45,7 @@ final class StoredFindingNormalizer implements NormalizerInterface, Denormalizer
         }
 
         if ($this->writes(self::MERGED, $context)) {
-            $normalized[self::MERGED] = $data->merged;
+            $normalized[self::MERGED] = [...$data->merged];
         }
 
         // Left out when there is none, so a finding without a note is written as before the note existed.
@@ -74,7 +75,7 @@ final class StoredFindingNormalizer implements NormalizerInterface, Denormalizer
         }
 
         // Read as none when the key is missing, because every row stored before merged ids existed lacks it.
-        $merged = array_key_exists(self::MERGED, $data) ? $this->idsIn($data[self::MERGED]) : [];
+        $merged = array_key_exists(self::MERGED, $data) ? $this->idsIn($data[self::MERGED]) : new FindingIds();
         $note = $this->noteIn($data[self::JUDGE_NOTE] ?? null);
         unset($data[self::MERGED], $data[self::JUDGE_NOTE]);
 
@@ -111,10 +112,7 @@ final class StoredFindingNormalizer implements NormalizerInterface, Denormalizer
     }
 
     // A stored row is read back as data, so merged ids that are not a list of strings fail instead of reading as none.
-    /**
-     * @return list<string>
-     */
-    private function idsIn(mixed $merged): array
+    private function idsIn(mixed $merged): FindingIds
     {
         if (!is_array($merged) || !array_is_list($merged)) {
             throw $this->notIds();
@@ -129,7 +127,7 @@ final class StoredFindingNormalizer implements NormalizerInterface, Denormalizer
             $ids[] = $id;
         }
 
-        return $ids;
+        return new FindingIds(...$ids);
     }
 
     private function notIds(): UnexpectedValueException
