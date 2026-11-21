@@ -63,7 +63,7 @@ final readonly class JudgeOutcomes
     public function bars(): array
     {
         return [
-            $this->bar('Kept', $this->kept, 'kept on the act list'),
+            $this->bar('To fix', $this->kept, 'kept to fix'),
             $this->bar('Merged', $this->merged, 'merged as duplicate'),
             $this->bar('Deferred', $this->deferred, 'deferred to a follow-up issue'),
             $this->bar('Rejected', $this->rejected, 'rejected'),

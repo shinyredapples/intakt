@@ -3,5 +3,5 @@
 {#- `at` names the label's place on the page (round and position), so the id is the same on every render and unique. -#}
 {%- set tip_id = 'kind-' ~ at -%}
 {#- The tooltip is anchored to its own label by name, because it is placed against the viewport so a scrolling table cannot clip it. -#}
-<span class="figure-kind" data-kind="{{ kind.value }}" aria-describedby="{{ tip_id }}" style="anchor-name: --{{ tip_id }}">{{ kind.value }}<span class="figure-kind-tip" role="tooltip" id="{{ tip_id }}" style="position-anchor: --{{ tip_id }}">{{ kind.source }}</span></span>
+<span class="figure-kind" data-kind="{{ kind.value }}" aria-describedby="{{ tip_id }}" style="anchor-name: --{{ tip_id }}">{{ kind.value }}<span class="figure-kind-tip" role="tooltip" id="{{ tip_id }}" style="position-anchor: --{{ tip_id }}">{{ source|default(kind.source) }}</span></span>
 {#- Trimmed, because the label sits inside a sentence and a trailing newline would show as a space before its comma. -#}
