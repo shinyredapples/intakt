@@ -9,7 +9,7 @@
 
 Your coding agent says it is done. Intakt tells you whether to believe it.
 
-Reviewers on models from different AI labs review the change, and a judge marks every finding against the task. Start a review from the dashboard, or let your own agent run the loop over MCP until the verdict is clean. On the [review bench](#review-bench) the panel caught more planted defects than either of its reviewers alone: 11 of 15, against 10 and 8 (measured, 2026-11-16).
+Reviewers on models from different AI labs review the change, and a judge marks every finding against the task. Start a review from the dashboard, or let your own agent run the loop over MCP until the verdict is clean. On the [review bench](#review-bench), a panel on Claude and GPT caught all 15 planted defects (measured, 2026-11-21); on low-cost open models it caught 11.
 
 Along the way, building Intakt led to [12 fixes (11 pull requests) merged upstream](#found-and-fixed-upstream) in Symfony, Symfony AI and Doctrine.
 
@@ -56,7 +56,7 @@ What the journeys cover and how to run one: [Checking the whole product](docs/gu
 
 ### Review bench
 
-The review bench reviews eight small changes of the sample shop, five with one planted defect each and three without any, and counts what each reviewer caught, missed and raised in error. **It calls your paid models**, so it runs only when you ask, never in `bin/check` or CI. With the demo running, this gave the result below:
+The review bench reviews eight small changes of the sample shop, five with one planted defect each and three without any, and counts what each reviewer caught, missed and raised in error. **It calls your paid models**, so it runs only when you ask, never in `bin/check` or CI. With a running install, this gave the results below:
 
 ```
 docker compose exec intakt php bin/console intakt:bench --project=sample --repeat=3
@@ -64,13 +64,16 @@ docker compose exec intakt php bin/console intakt:bench --project=sample --repea
 
 | Reviewer | Defects found (measured) | False alarms (measured) | Tokens per change (measured) |
 | --- | --- | --- | --- |
-| Panel (`correctness` and `security`) | 11 of 15 | 2 | about 6,800 |
-| `correctness` alone | 10 of 15 (1 harness failure left out, on a change without a defect) | 2 | about 2,460 |
-| `security` alone | 8 of 15 | 0 | about 4,350 |
+| Panel on Claude and GPT (`correctness` on Claude `opus`, `security` on GPT `gpt-6.2-sol`), 2026-11-21 | 15 of 15 | 3 | about 75,600 |
+| Claude `opus` alone | 12 of 15 | 0 | about 13,250 |
+| GPT `gpt-6.2-sol` alone | 15 of 15 | 3 | about 62,400 |
+| Panel on open models (`correctness` and `security`, Hugging Face), 2026-11-16 | 11 of 15 | 2 | about 6,800 |
+| `correctness` alone (open model) | 10 of 15 (1 harness failure left out, on a change without a defect) | 2 | about 2,460 |
+| `security` alone (open model) | 8 of 15 | 0 | about 4,350 |
 
-Seven of the eight changes varied between the three runs: a single run's result for one change is partly luck, so your own run will not match these figures exactly.
+In the open-model run seven of the eight changes varied between the three runs (in the Claude and GPT run none did): a single run's result for one change is partly luck, so your own run will not match these figures exactly.
 
-Date of the run: 2026-11-16. Models (the demo's Hugging Face mapping): `correctness` (tier strong) `moonshotai/Kimi-K3:deepinfra`, `security` (tier standard) `openai/gpt-oss-120b:novita`. What a run costs and how to read these figures: [the review bench](docs/user/README.md#the-review-bench) in the user guide.
+Claude and GPT run: 2026-11-21, subscription CLIs (`claude_code` model `opus`, `codex` model `gpt-6.2-sol` with effort high, judge on Claude `haiku`), 24 rounds, all three runs agreeing on every change; the panel's figures are the union of its two reviewers' findings, and all three false alarms came from the GPT reviewer. Open-model run: 2026-11-16. Models (the demo's Hugging Face mapping): `correctness` (tier strong) `moonshotai/Kimi-K3:deepinfra`, `security` (tier standard) `openai/gpt-oss-120b:novita`. What a run costs and how to read these figures: [the review bench](docs/user/README.md#the-review-bench) in the user guide.
 
 ## Found and fixed upstream
 
