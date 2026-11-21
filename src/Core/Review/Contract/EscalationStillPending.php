@@ -12,6 +12,6 @@ final class EscalationStillPending extends RuntimeException implements Reportabl
 {
     public static function of(string $change): self
     {
-        return new self(sprintf('The escalation review of a recurring P1 of change "%s" has not answered yet: choose the build\'s tier once it has.', $change));
+        return new self(sprintf('The escalation review of the change "%s" is still pending: choose the build\'s tier once it has answered.', $change));
     }
 }

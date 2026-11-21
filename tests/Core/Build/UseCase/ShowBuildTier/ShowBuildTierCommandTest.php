@@ -91,7 +91,7 @@ final class ShowBuildTierCommandTest extends TestCase
         $tester = $this->execute(['project' => 'alpha', '--change' => 'feat/pending']);
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
-        self::assertStringContainsString('not answered yet', $tester->getDisplay());
+        self::assertStringContainsString('is still pending', $tester->getDisplay());
         self::assertStringNotContainsString('tier standard', $tester->getDisplay());
     }
 
