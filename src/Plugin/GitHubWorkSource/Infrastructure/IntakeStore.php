@@ -5,13 +5,14 @@ declare(strict_types=1);
 namespace Intakt\Plugin\GitHubWorkSource\Infrastructure;
 
 use Doctrine\Common\EventManager;
-use Doctrine\DBAL\Exception\LockWaitTimeoutException;
+use Doctrine\DBAL\Exception\RetryableException;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Intakt\Plugin\GitHubWorkSource\Domain\IntakeValidator;
 use Intakt\Plugin\GitHubWorkSource\Domain\ListingRows;
+use Intakt\Plugin\GitHubWorkSource\Domain\ProjectHeldByAnotherWriter;
 use Intakt\Plugin\GitHubWorkSource\Domain\StoredIssue;
 use Intakt\Plugin\GitHubWorkSource\Domain\SyncState;
 use Intakt\Plugin\GitHubWorkSource\Domain\TaskFailure;
@@ -66,13 +67,14 @@ final readonly class IntakeStore
 
                 return true;
             });
-        } catch (UniqueConstraintViolationException|LockWaitTimeoutException $failure) {
-            // The first sync of a project finds no row to lock, so a worker that commits the row after it was read makes the insert collide (or, on SQLite in WAL mode, the stale read snapshot refuses the write). It loses only when the newer listing is really stored; any other failure stays one.
+        } catch (UniqueConstraintViolationException|RetryableException $failure) {
+            // The first sync of a project finds no row to lock, so a worker that commits the row after it was read makes the insert collide (or, on SQLite in WAL mode, the stale read snapshot refuses the write). It loses only when the newer listing is really stored.
             if ($this->syncStateOf($project)->generation !== $readBefore->generation) {
                 return false;
             }
 
-            throw $failure;
+            // A lock wait or a deadlock with the generation unmoved means another writer holds the project and has not committed: it may still roll back, so this is not a lost write and gets a name of its own. Any other failure stays one.
+            throw $failure instanceof RetryableException ? ProjectHeldByAnotherWriter::of($project, $failure) : $failure;
         }
     }
 

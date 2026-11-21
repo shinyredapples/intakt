@@ -18,6 +18,7 @@ use Intakt\Plugin\GitHubWorkSource\Domain\IntakeRules;
 use Intakt\Plugin\GitHubWorkSource\Domain\IssueReferences;
 use Intakt\Plugin\GitHubWorkSource\Domain\ItemReading;
 use Intakt\Plugin\GitHubWorkSource\Domain\ListingRows;
+use Intakt\Plugin\GitHubWorkSource\Domain\ProjectHeldByAnotherWriter;
 use Intakt\Plugin\GitHubWorkSource\Domain\QueuedIssue;
 use Intakt\Plugin\GitHubWorkSource\Domain\StoredIssue;
 use Intakt\Plugin\GitHubWorkSource\Domain\Vouching;
@@ -56,11 +57,14 @@ final readonly class CompleteListing
         }
 
         $listed = new ListingRows($rows, $listing->isUnchanged() ? $readBefore->validator : $listing->validator);
-        if ($this->store->recordIfStill($project, $readBefore, $listed)) {
-            return $this->planOver($project, $rows);
+        try {
+            $written = $this->store->recordIfStill($project, $readBefore, $listed);
+        } catch (ProjectHeldByAnotherWriter $held) {
+            // The other writer has not committed, so neither listing is the stored one yet: nothing is written and the next tick reads what it committed.
+            return $this->shortListing($project, $held);
         }
 
-        return $this->planOverTheNewerRows($project);
+        return $written ? $this->planOver($project, $rows) : $this->planOverTheNewerRows($project);
     }
 
     // An unchanged listing is answered from the stored rows, and so is the history of an item whose update time stands; the rest is taken from the listing, because the milestone due date changes without moving it.
@@ -126,7 +130,7 @@ final readonly class CompleteListing
         return $history;
     }
 
-    private function shortListing(string $project, ForgeReadFailed|ForgeRateLimited|TrustNotChecked $short): null
+    private function shortListing(string $project, ForgeReadFailed|ForgeRateLimited|TrustNotChecked|ProjectHeldByAnotherWriter $short): null
     {
         $this->logger->warning('The open-issue listing of project {project} came back short, so nothing is picked and no wait closes this tick: {reason}', ['project' => $project, 'reason' => $short->getMessage(), 'exception' => $short]);
 

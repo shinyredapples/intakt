@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\GitHubWorkSource\Infrastructure;
 
+use Doctrine\Common\EventManager;
+use Doctrine\DBAL\DriverManager;
+use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\ORM\Events;
 use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Plugin\GitHubForge\Contract\IssueHistories;
 use Intakt\Plugin\GitHubForge\Contract\IssueListing;
@@ -18,7 +22,9 @@ use Intakt\Plugin\GitHubWorkSource\Domain\IntakePlan;
 use Intakt\Plugin\GitHubWorkSource\Domain\IntakeRules;
 use Intakt\Plugin\GitHubWorkSource\Domain\IssueReferences;
 use Intakt\Plugin\GitHubWorkSource\Domain\ItemReading;
+use Intakt\Plugin\GitHubWorkSource\Domain\IntakeValidator;
 use Intakt\Plugin\GitHubWorkSource\Domain\ListingRows;
+use Intakt\Plugin\GitHubWorkSource\Domain\ProjectHeldByAnotherWriter;
 use Intakt\Plugin\GitHubWorkSource\Domain\QueuedIssue;
 use Intakt\Plugin\GitHubWorkSource\Domain\StoredIssue;
 use Intakt\Plugin\GitHubWorkSource\Domain\SyncState;
@@ -30,6 +36,7 @@ use Intakt\Tests\Plugin\GitHubForge\RecordedIssueApi;
 use Intakt\Tests\Plugin\GitHubWorkSource\Issues;
 use Intakt\Tests\Plugin\GitHubWorkSource\RecordedIssueReads;
 use Intakt\Tests\Plugin\GitHubWorkSource\ScriptedHistories;
+use Intakt\Tests\Plugin\GitHubWorkSource\WriterBetweenWriteAndCommit;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
@@ -49,7 +56,9 @@ use Symfony\Component\ErrorHandler\BufferingLogger;
 #[UsesClass(HeldIssue::class)]
 #[UsesClass(IssueReferences::class)]
 #[UsesClass(ItemReading::class)]
+#[UsesClass(IntakeValidator::class)]
 #[UsesClass(ListingRows::class)]
+#[UsesClass(ProjectHeldByAnotherWriter::class)]
 #[UsesClass(QueuedIssue::class)]
 #[UsesClass(SyncState::class)]
 #[UsesClass(Vouching::class)]
@@ -376,6 +385,35 @@ final class CompleteListingTest extends KernelTestCase
 
         self::assertNull($plan);
         self::assertSame(['GitHub holds #7 with other text or labels than it was listed with, so its history is not of the listed item.'], $this->shortListingReasons());
+    }
+
+    public function testAWriteRefusedWhileAnotherWorkerHasNotCommittedItsListingLeavesTheListingShortWithoutAnException(): void
+    {
+        $shared = self::getContainer()->get('doctrine.orm.entity_manager');
+        self::assertInstanceOf(EntityManagerInterface::class, $shared);
+        $file = (string) tempnam(sys_get_temp_dir(), 'intake');
+        $first = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'path' => $file]);
+        $second = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'path' => $file]);
+        try {
+            $events = new EventManager();
+            $manager = new EntityManager($first, $shared->getConfiguration(), $events);
+            new SchemaTool($manager)->createSchema([$manager->getClassMetadata(IntakeValidator::class), $manager->getClassMetadata(StoredIssue::class)]);
+            $events->addEventListener([Events::onFlush], new WriterBetweenWriteAndCommit($second));
+            $this->store = new IntakeStore($manager);
+            $this->reads->lists([Issues::task(7)]);
+
+            $plan = $this->listingOver($this->reads, $this->histories)->planOf('alpha');
+            $second->commit();
+
+            self::assertNull($plan);
+            self::assertSame(['Another writer holds the intake rows of project "alpha", so this listing was not written.'], $this->shortListingReasons());
+            self::assertSame([], $this->store->issuesOf('alpha'));
+            self::assertSame('winner', $this->store->syncStateOf('alpha')->validator);
+        } finally {
+            $second->close();
+            $first->close();
+            unlink($file);
+        }
     }
 
     /**

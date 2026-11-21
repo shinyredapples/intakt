@@ -7,6 +7,7 @@ namespace Intakt\Tests\Plugin\GitHubWorkSource\Infrastructure;
 use DateTimeZone;
 use Doctrine\Common\EventManager;
 use Doctrine\DBAL\DriverManager;
+use Doctrine\DBAL\Exception\RetryableException;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
@@ -22,6 +23,7 @@ use Intakt\Plugin\GitHubWorkSource\Domain\IntakeValidator;
 use Intakt\Plugin\GitHubWorkSource\Domain\IssueReferences;
 use Intakt\Plugin\GitHubWorkSource\Domain\ItemReading;
 use Intakt\Plugin\GitHubWorkSource\Domain\ListingRows;
+use Intakt\Plugin\GitHubWorkSource\Domain\ProjectHeldByAnotherWriter;
 use Intakt\Plugin\GitHubWorkSource\Domain\QueuedIssue;
 use Intakt\Plugin\GitHubWorkSource\Domain\StoredIssue;
 use Intakt\Plugin\GitHubWorkSource\Domain\SyncState;
@@ -31,11 +33,13 @@ use Intakt\Plugin\GitHubWorkSource\Infrastructure\IntakeStore;
 use Intakt\Plugin\WorkSource\Contract\TaskNotQueued;
 use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Plugin\GitHubWorkSource\Issues;
+use Intakt\Tests\Plugin\GitHubWorkSource\WriterBetweenWriteAndCommit;
 use Intakt\Tests\Support\KernelTestCase;
 use InvalidArgumentException;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
+use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\Attributes\UsesClass;
 use RuntimeException;
 use WeakReference;
@@ -48,6 +52,7 @@ use WeakReference;
 #[CoversClass(Vouching::class)]
 #[CoversClass(ListingRows::class)]
 #[CoversClass(SyncState::class)]
+#[CoversClass(ProjectHeldByAnotherWriter::class)]
 #[UsesClass(ItemReading::class)]
 #[UsesClass(QueuedIssue::class)]
 #[UsesClass(IssueReferences::class)]
@@ -282,6 +287,51 @@ final class IntakeStoreTest extends KernelTestCase
             self::assertFalse($written);
             self::assertSame([8], array_map(static fn (StoredIssue $issue): int => $issue->number(), $loser->issuesOf('alpha')));
             self::assertSame('W/"newer"', $loser->syncStateOf('alpha')->validator);
+        } finally {
+            $second->close();
+            $first->close();
+            unlink($file);
+        }
+    }
+
+    #[TestWith([false, false], 'first sync, default journal')]
+    #[TestWith([true, false], 'synced project, default journal')]
+    #[TestWith([false, true], 'first sync, WAL')]
+    #[TestWith([true, true], 'synced project, WAL')]
+    public function testAWriteRefusedWhileAnotherWorkerIsBetweenItsWriteAndItsCommitIsNamedAsHeldAndWritesNothing(bool $synced, bool $wal): void
+    {
+        $file = (string) tempnam(sys_get_temp_dir(), 'intake');
+        $first = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'path' => $file]);
+        $second = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'path' => $file]);
+        try {
+            if ($wal) {
+                $first->fetchOne('PRAGMA journal_mode=WAL');
+            }
+
+            $events = new EventManager();
+            $manager = new EntityManager($first, $this->entities->getConfiguration(), $events);
+            new SchemaTool($manager)->createSchema([$manager->getClassMetadata(IntakeValidator::class), $manager->getClassMetadata(StoredIssue::class)]);
+            $loser = new IntakeStore($manager);
+            if ($synced) {
+                self::assertTrue($loser->recordIfStill('alpha', $loser->syncStateOf('alpha'), new ListingRows([], 'old')));
+            }
+
+            $readBefore = $loser->syncStateOf('alpha');
+            $events->addEventListener([Events::onFlush], new WriterBetweenWriteAndCommit($second));
+
+            $held = null;
+            try {
+                (void) $loser->recordIfStill('alpha', $readBefore, new ListingRows([$this->stored(Issues::task(7))], null));
+            } catch (ProjectHeldByAnotherWriter $held) {
+            }
+
+            $second->commit();
+
+            self::assertInstanceOf(ProjectHeldByAnotherWriter::class, $held);
+            self::assertSame('Another writer holds the intake rows of project "alpha", so this listing was not written.', $held->getMessage());
+            self::assertInstanceOf(RetryableException::class, $held->getPrevious());
+            self::assertSame('winner', $loser->syncStateOf('alpha')->validator);
+            self::assertSame([], $loser->issuesOf('alpha'));
         } finally {
             $second->close();
             $first->close();
