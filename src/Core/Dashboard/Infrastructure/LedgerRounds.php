@@ -15,6 +15,7 @@ use Intakt\Core\Dashboard\Domain\RoundFinding;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\CatchUpOwed;
+use Intakt\Core\Review\Contract\ChangeAddress;
 use Intakt\Core\Review\Contract\ChangeDecision;
 use Intakt\Core\Review\Contract\CountedQuotes;
 use Intakt\Core\Review\Contract\Decision;
@@ -111,7 +112,7 @@ final class LedgerRounds
     {
         $rounds = $this->membersOf($round);
 
-        return [] === $rounds ? null : new Review(array_map($this->completed(...), $rounds));
+        return [] === $rounds ? null : new Review(array_map($this->completed(...), $rounds), $this->isALegacyTimeline($rounds));
     }
 
     // Empty for a round never started readably; known from the starts alone, so a read of one review can learn which rounds to read before it reads them.
@@ -174,11 +175,31 @@ final class LedgerRounds
             return [];
         }
 
-        $others = array_filter($this->started, static fn (ReviewedRound $other): bool => $other !== $chosen && $chosen->isOfTheSameReviewAs($other));
-        $rounds = $this->oneSequenceOf($chosen, [$chosen, ...array_values($others)]);
+        $rounds = $this->oneSequenceOf($chosen, $this->sameReviewAs($chosen));
         usort($rounds, static fn (ReviewedRound $one, ReviewedRound $other): int => ($one->number ?? 0) <=> ($other->number ?? 0));
 
         return $rounds;
+    }
+
+    /**
+     * @return non-empty-list<ReviewedRound>
+     */
+    private function sameReviewAs(ReviewedRound $chosen): array
+    {
+        $others = array_filter($this->started, static fn (ReviewedRound $other): bool => $other !== $chosen && $chosen->isOfTheSameReviewAs($other));
+
+        return [$chosen, ...array_values($others)];
+    }
+
+    // A spelling other than its canonical form, kept apart from rounds of its pull request, is history only, because storage numbers every new round of that pull request on the canonical row.
+    /**
+     * @param non-empty-list<ReviewedRound> $members
+     */
+    private function isALegacyTimeline(array $members): bool
+    {
+        $member = $members[0];
+
+        return $member->change !== ChangeAddress::canonical($member->change) && count($members) < count($this->sameReviewAs($member));
     }
 
     // A round number twice among the spellings of one pull request means two spellings were stored apart before the migration to the canonical address (Version20261122100000), each with a numbering of its own; only the chosen round's spelling is then its review, because mixing two numberings would make a legacy round the latest and offer a round number storage does not expect.

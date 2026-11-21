@@ -138,6 +138,16 @@ final class ReviewTest extends TestCase
         self::assertSame('round-z', new Review([$this->round('round-a', 2), $this->round('round-z', 1)])->firstRound());
     }
 
+    public function testAReviewOffersTheRoundAfterItsLatest(): void
+    {
+        self::assertSame(3, new Review([$this->round('round-a', 1), $this->round('round-b', 2)])->nextNumber());
+    }
+
+    public function testAHistoryOnlyReviewOffersNoNextRound(): void
+    {
+        self::assertNull(new Review([$this->round('round-a', 1), $this->round('round-b', 2)], true)->nextNumber());
+    }
+
     private function judged(string $id, int $number): ReviewedRound
     {
         return $this->round($id, $number)->judgedWith([], new DateTimeImmutable('2026-10-28T12:00:00+00:00'));

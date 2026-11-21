@@ -15,7 +15,7 @@ final readonly class Review
     /**
      * @param non-empty-list<ReviewedRound> $rounds
      */
-    public function __construct(public array $rounds)
+    public function __construct(public array $rounds, private bool $historyOnly = false)
     {
         $this->project = $rounds[0]->project;
         $this->change = $rounds[0]->change;
@@ -55,8 +55,13 @@ final readonly class Review
     }
 
     // Sent with the button as the page shows it, so a double submit or a page gone stale after another round started is refused instead of opening one more round.
+    // Null for a legacy timeline kept apart, because storage numbers new rounds of its pull request in the canonical review and would refuse or misplace a number counted here.
     public function nextNumber(): ?int
     {
+        if ($this->historyOnly) {
+            return null;
+        }
+
         $latest = $this->latest()->number;
 
         return null === $latest ? null : $latest + 1;
