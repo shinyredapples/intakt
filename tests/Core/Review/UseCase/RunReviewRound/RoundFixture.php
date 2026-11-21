@@ -45,6 +45,9 @@ use Intakt\Core\Review\Infrastructure\DiffPaths;
 use Intakt\Core\Review\Infrastructure\FindingKeys;
 use Intakt\Core\Review\Infrastructure\KeptVerdicts;
 use Intakt\Core\Review\Infrastructure\StopRequests;
+use Intakt\Core\Review\UseCase\EscalateRecurringP1\EscalateRecurringP1;
+use Intakt\Core\Review\UseCase\EscalateRecurringP1\EscalateRecurringP1Handler;
+use Intakt\Core\Review\UseCase\EscalateRecurringP1\EscalationsOfChange;
 use Intakt\Core\Review\UseCase\IndexResolvedFindings\IndexResolvedFindings;
 use Intakt\Core\Review\UseCase\IndexResolvedFindings\IndexResolvedFindingsHandler;
 use Intakt\Core\Review\UseCase\JudgeRound\FailedJudgings;
@@ -71,8 +74,10 @@ use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRoundHandler;
 use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
 use Intakt\Core\ReviewerForLoop\Contract\ProjectModes;
 use Intakt\Core\ReviewerForLoop\Infrastructure\ConfiguredProjectModes;
+use Intakt\Plugin\Vendor\Contract\EscalationReviews;
 use Intakt\Plugin\Vendor\Contract\Vendor;
 use Intakt\Tests\Application\EmptyDatabase;
+use Intakt\Tests\Core\Review\UseCase\EscalateRecurringP1\QueuedEscalations;
 use Intakt\Tests\Core\Review\RecordedRoundUpdates;
 use Intakt\Tests\Core\Review\SampleIdentity;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
@@ -102,6 +107,7 @@ final readonly class RoundFixture
 
     public EntityManagerInterface $entities;
     public RecordingBus $bus;
+    public QueuedEscalations $escalations;
     public MockClock $clock;
     public BufferingLogger $log;
     public EventDispatcher $events;
@@ -118,6 +124,7 @@ final readonly class RoundFixture
         $this->entities = $entities;
         $this->serializer = $container->get('serializer.stored');
         $this->bus = new RecordingBus();
+        $this->escalations = new QueuedEscalations();
         $this->clock = new MockClock('2026-10-30 12:00:00', 'UTC');
         $this->log = new BufferingLogger();
         $this->events = new EventDispatcher();
@@ -221,7 +228,7 @@ final readonly class RoundFixture
 
     public function worker(EntityManagerInterface $entities, Vendor $vendor, Ledger $ledger): ReviewWithReviewerHandler
     {
-        return new ReviewWithReviewerHandler($this->leases($entities, $ledger), $vendor, $this->rounds($entities, $ledger), new GoalpostRule(), $this->liveProgress($entities));
+        return new ReviewWithReviewerHandler($this->leases($entities, $ledger), $vendor, $this->rounds($entities, $ledger), new GoalpostRule(), $this->liveProgress($entities), new EscalationsOfChange($this->rounds($entities, $ledger), $this->storedFindingsOn($entities), new KeptVerdicts($entities, $this->clock), $ledger, $this->ledgerPayloads()));
     }
 
     // The fixture's one lock store, because the workers of one install share theirs and a worker on its own store would never find the publication taken.
@@ -253,7 +260,23 @@ final readonly class RoundFixture
 
     private function recordRecurringP1s(Ledger $ledger): RecordRecurringP1s
     {
-        return new RecordRecurringP1s($this->recurringP1s($ledger), $this->keptVerdicts(), $this->roundLedger($ledger));
+        return new RecordRecurringP1s($this->recurringP1s($ledger), $this->keptVerdicts(), $this->roundLedger($ledger), $this->escalations);
+    }
+
+    // A new handler on every delivery, as a restarted worker has; the escalations are those the judging queued, delivered in the test's order.
+    public function escalate(EscalateRecurringP1 $message, EscalationReviews $reviews, Vendor $vendor = new ScriptedVendor()): void
+    {
+        $this->escalationHandler($reviews, $vendor)($message);
+    }
+
+    public function escalationHandler(EscalationReviews $reviews, Vendor $vendor): EscalateRecurringP1Handler
+    {
+        return new EscalateRecurringP1Handler($this->rounds($this->entities), $this->storedFindingsOn($this->entities), $this->keptVerdicts(), $vendor, $reviews, $this->roundLedger($this->ledger), $this->container->get(Redactor::class));
+    }
+
+    public function escalationsOfChange(): EscalationsOfChange
+    {
+        return new EscalationsOfChange($this->rounds($this->entities), $this->storedFindingsOn($this->entities), $this->keptVerdicts(), $this->ledger, $this->ledgerPayloads());
     }
 
     // The application's queue, because the round's workflow, taken from the container, queues the judging through the application's bus.

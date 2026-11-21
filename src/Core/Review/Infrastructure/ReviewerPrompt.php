@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Infrastructure;
 
+use Intakt\Core\Review\Contract\EscalationVerdict;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\PromptAssembly;
@@ -54,6 +55,8 @@ final readonly class ReviewerPrompt
 
     public const string NAME_FINDINGS_OR_APPROVE = 'An earlier answer to this review gave no approval but its "findings" list was empty. A changes verdict must put every problem that must change into "findings", one object per problem with its file, line and rule, for example: '.self::EXAMPLE_FINDING.'. If nothing must change, answer approve.';
 
+    public const string ESCALATIONS_INTRO = 'An escalation review on the strong tier judged these open findings after they came back on another head: each entry names the finding id, the outcome (confirmed or rejected) and its reasons. Weigh the reasons before you hold or resolve the finding; hold a rejected finding again only when the reasons are wrong for the code you read.';
+
     public function __construct(
         private Fence $fence,
         private PromptCut $cut,
@@ -85,6 +88,11 @@ final readonly class ReviewerPrompt
             $messages[] = $this->assembly->user('The open findings of earlier rounds:', $this->fence->wrap(UntrustedSource::EarlierFindings, $this->listOf($brief->open)));
         }
 
+        // Fenced, because the reasons are the escalation model's text; a rejected finding is held again only against them.
+        if ([] !== $brief->escalations) {
+            $messages[] = $this->assembly->user(self::ESCALATIONS_INTRO, $this->fence->wrap(UntrustedSource::EscalationVerdicts, $this->escalationsOf($brief->escalations)));
+        }
+
         // Last and unfenced, because it is Intakt's own text about the answer it refused, never input from the change.
         if ($conversation->askedToNameFindings) {
             $messages[] = $this->assembly->notice(self::NAME_FINDINGS_OR_APPROVE);
@@ -99,6 +107,18 @@ final readonly class ReviewerPrompt
     private function listOf(array $open): string
     {
         return implode("\n\n", array_map(static fn (Finding $finding): string => $finding->listEntry(), $open));
+    }
+
+    /**
+     * @param array<string, EscalationVerdict> $escalations
+     */
+    private function escalationsOf(array $escalations): string
+    {
+        return implode("\n\n", array_map(
+            static fn (string $id, EscalationVerdict $verdict): string => sprintf("%s %s\n%s", $id, $verdict->outcome->value, $verdict->reasons),
+            array_keys($escalations),
+            $escalations,
+        ));
     }
 
     public function cutsInputOf(ReviewBrief $brief): bool

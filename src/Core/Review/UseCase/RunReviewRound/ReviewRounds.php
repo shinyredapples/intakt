@@ -141,6 +141,17 @@ final readonly class ReviewRounds
         return $rounds;
     }
 
+    public function latestOfChange(string $project, string $change): ?ReviewRound
+    {
+        $latest = $this->entities->createQuery(sprintf('SELECT r FROM %s r WHERE r.subject.project = :project AND r.change.change = :change ORDER BY r.change.number DESC', ReviewRound::class))
+            ->setParameter('project', $project)
+            ->setParameter('change', $change)
+            ->setMaxResults(1)
+            ->getOneOrNullResult();
+
+        return $latest instanceof ReviewRound ? $latest : null;
+    }
+
     /**
      * @param Closure(ReviewRound): mixed $work
      */
