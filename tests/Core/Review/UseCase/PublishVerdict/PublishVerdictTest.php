@@ -1122,7 +1122,7 @@ final class PublishVerdictTest extends KernelTestCase
         return str_repeat('p', 60000 - strlen($this->ask('Protected paths:')) - 1 - strlen('- <code>bin/a</code>') - 1 - strlen('- <code></code>') + $over);
     }
 
-    // Recognized as the tick does, then looked up as the worker does once the tick has committed.
+    // The lookup handled apart from the recognition, because the queue hands it to a worker only once the tick has committed.
     private function recognize(string $change, string $head): void
     {
         self::assertTrue($this->fixture->ledger()->append(new LedgerEvent(LedgerEventKind::ChangeOpened, json_encode(['project' => 'alpha', 'change' => self::PULL, 'opening' => 'created'], JSON_THROW_ON_ERROR)))->succeeded());
