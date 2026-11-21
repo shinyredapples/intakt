@@ -166,12 +166,11 @@ final class GitHubWorkSourceTest extends KernelTestCase
         $pick = $source->nextWork('alpha', WorkerState::Free);
 
         self::assertSame(NothingPicked::TrustNotChecked, $pick->nothing);
-        $logs = $this->logger->cleanLogs();
-        self::assertCount(1, $logs);
-        self::assertSame('warning', $logs[0][0]);
-        self::assertStringContainsString('write-access check of task #{number}', $logs[0][1]);
-        self::assertSame(5, $logs[0][2]['number']);
-        self::assertSame('GitHub refused the trust check with status 502.', $logs[0][2]['reason']);
+        $log = $this->onlyLog();
+        self::assertSame('warning', $log['level']);
+        self::assertStringContainsString('write-access check of task #{number}', $log['message']);
+        self::assertSame(5, $log['context']['number'] ?? null);
+        self::assertSame('GitHub refused the trust check with status 502.', $log['context']['reason'] ?? null);
     }
 
     public function testATaskThatWaitsForAnOpenIssueIsHeldAndTheIssueItWaitsForIsPicked(): void
@@ -240,9 +239,7 @@ final class GitHubWorkSourceTest extends KernelTestCase
         $pick = $this->sourceOver($api->reads(), $api->histories())->nextWork('alpha', WorkerState::Free);
 
         self::assertSame(NothingPicked::ListingIncomplete, $pick->nothing);
-        $logs = $this->logger->cleanLogs();
-        self::assertCount(1, $logs);
-        self::assertSame('GitHub answered 502 to a read.', $logs[0][2]['reason']);
+        self::assertSame('GitHub answered 502 to a read.', $this->onlyLog()['context']['reason'] ?? null);
     }
 
     public function testAQueueOverAListingThatCameBackShortIsIncomplete(): void
@@ -255,6 +252,21 @@ final class GitHubWorkSourceTest extends KernelTestCase
         $this->expectException(TaskNotQueued::class);
 
         $this->source()->failedForGood('alpha', 99, 'no such task');
+    }
+
+    /**
+     * @return array{level: string, message: string, context: array<mixed>}
+     */
+    private function onlyLog(): array
+    {
+        $logs = $this->logger->cleanLogs();
+        self::assertCount(1, $logs);
+        [$level, $message, $context] = $logs[0];
+        self::assertIsString($level);
+        self::assertIsString($message);
+        self::assertIsArray($context);
+
+        return ['level' => $level, 'message' => $message, 'context' => $context];
     }
 
     private function source(): GitHubWorkSource
