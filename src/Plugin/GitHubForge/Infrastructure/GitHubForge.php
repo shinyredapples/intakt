@@ -154,11 +154,9 @@ final readonly class GitHubForge implements Forge, ForgeWrites
     private function postVerdict(PullRequestAddress $address, PublishedVerdict $verdict, array $comments): void
     {
         // The comment before the status, so a head never shows Intakt's status without the comment that explains it; a retry finds the comment by its marker and posts it once.
-        $this->postOnce($address, sprintf(self::VERDICT_MARKER, $verdict->token->value), $comments);
-
-        // Each part of the ask by a marker of its own, so a retry posts the part an earlier try did not reach, and an ask the review comment did not carry.
-        foreach ($verdict->ownerAsks as $part => $ask) {
-            $this->postOnce($address, sprintf(self::OWNER_ASK_MARKER, $verdict->token->value, $part + 1), [$ask]);
+        $marked = [sprintf(self::VERDICT_MARKER, $verdict->token->value) => $comments, ...$this->askPartsOf($verdict)];
+        foreach ($this->comments->bodiesNotYetPosted($address, $marked) as $body) {
+            $this->post($address->issuePath().'/comments', ['body' => $body]);
         }
 
         $this->post($address->repositoryPath().'/statuses/'.$verdict->head->hash, [
@@ -168,14 +166,15 @@ final readonly class GitHubForge implements Forge, ForgeWrites
         ]);
     }
 
+    // Each part of the ask by a marker of its own, so a retry posts the part an earlier try did not reach, and an ask the review comment did not carry.
     /**
-     * @param list<string> $comments
+     * @return array<string, list<string>>
      */
-    private function postOnce(PullRequestAddress $address, string $marker, array $comments): void
+    private function askPartsOf(PublishedVerdict $verdict): array
     {
-        foreach ($this->comments->notYetPosted($address, $marker, $comments) as $comment) {
-            $this->post($address->issuePath().'/comments', ['body' => $comment."\n\n".$marker]);
-        }
+        $markers = array_map(static fn (int $part): string => sprintf(self::OWNER_ASK_MARKER, $verdict->token->value, $part + 1), array_keys($verdict->ownerAsks));
+
+        return array_combine($markers, array_map(static fn (string $ask): array => [$ask], $verdict->ownerAsks));
     }
 
     private function isStale(Change $change): bool

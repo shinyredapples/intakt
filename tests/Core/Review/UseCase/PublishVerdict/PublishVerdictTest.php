@@ -231,7 +231,7 @@ final class PublishVerdictTest extends KernelTestCase
         $parts = $this->askBodies();
         self::assertCount(4, $parts);
         self::assertSame($paths, $this->listedPaths());
-        self::assertLessThanOrEqual(65536, max(array_map(mb_strlen(...), $parts)));
+        self::assertSame([], array_filter($parts, static fn (string $part): bool => mb_strlen($part) > 65536));
         self::assertStringStartsWith('**Waiting for the owner** (head '.SampleIdentity::HEAD."), continued\n\n- <code>", $parts[3]);
         self::assertStringEndsWith($this->askMarker($roundId, 4), $parts[3]);
     }
@@ -357,7 +357,7 @@ final class PublishVerdictTest extends KernelTestCase
 
         $publications = $this->publicationsOf($roundId);
         self::assertCount(2, $publications);
-        $this->handler(new ConfiguredProjectModes([]))(array_last($publications));
+        $this->handler(new ConfiguredProjectModes([]))($publications[1]);
         self::assertSame(['success'], array_column(array_column($this->github->writes, 1), 'state'));
     }
 
@@ -377,7 +377,7 @@ final class PublishVerdictTest extends KernelTestCase
         $second = $this->judgedApprovalAt(SampleIdentity::NEW_HEAD);
         self::assertTrue($this->fixture->ledger()->append(new LedgerEvent(LedgerEventKind::ChangeOpened, json_encode(['project' => 'alpha', 'change' => self::PULL, 'opening' => 'created'], JSON_THROW_ON_ERROR)))->succeeded());
 
-        // Listed in another letter case, as the forge may spell the repository other than it was configured.
+        // Listed in another letter case, because the forge may spell the repository other than it was configured.
         $this->recognizer()->recognizeAmong('alpha', [new OpenChange(new ChangeId('https://github.com/Acme/Widgets/pull/7'), new CommitId(SampleIdentity::NEW_HEAD), $this->fixture->clock->now())]);
 
         self::assertSame([1, 2], [count($this->publicationsOf($first)), count($this->publicationsOf($second))]);
@@ -1018,6 +1018,9 @@ final class PublishVerdictTest extends KernelTestCase
         return implode("\n", ['**Waiting for the owner** (head '.SampleIdentity::HEAD.')', '', 'This head touches protected paths, so it merges only once the owner has approved this head.', '', ...$lines]);
     }
 
+    /**
+     * @return non-empty-string
+     */
     private function askMarker(string $roundId, int $part): string
     {
         return '<!-- intakt-owner-ask: '.$roundId.' part '.$part.' -->';
@@ -1051,7 +1054,7 @@ final class PublishVerdictTest extends KernelTestCase
         return $paths[1];
     }
 
-    // A path whose line, after "bin/a", ends the first part $over bytes past its limit.
+    // Sized from the ask's own lines, because the boundary tests need a first part that ends exactly $over bytes past its limit.
     private function pathFillingThePartWith(int $over): string
     {
         return str_repeat('p', 60000 - strlen($this->ask('Protected paths:')) - 1 - strlen('- <code>bin/a</code>') - 1 - strlen('- <code></code>') + $over);
