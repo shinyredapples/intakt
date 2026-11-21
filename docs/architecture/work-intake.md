@@ -10,7 +10,7 @@ Plan task T47. `Plugin/WorkSource` is the contract. No implementation of it exis
 
 ## The `eligibility_label` key
 
-The `watch` section of a project takes the optional `eligibility_label`: the issue label that makes a task eligible; when the key is left out it is unset, and no code reads it yet (the implementation arrives in part 2 of #1602). `WatchConfiguration` refuses a blank value, including one of only Unicode whitespace such as a no-break space, with the same check as the `repository`, `base` and `task` keys. Test: `tests/Core/Watcher/Infrastructure/WatchConfigurationTest.php`.
+The `watch` section of a project takes the optional `eligibility_label`: the issue label that makes a task eligible. When the key is left out it is `intakt` (issue #3291, part 1 of #2987), so a project beside the earlier loop builds only what carries its own label: `IntakeRules` counts a task as a candidate only when it carries the label it was built with, so a task carrying only the loop's label is not eligible and its history is not read (test: `tests/Plugin/GitHubWorkSource/Domain/IntakeRulesTest.php`). No running code passes the configured label to `IntakeRules` yet: that is the `WorkSource` implementation of #2666. `WatchConfiguration` refuses a blank value, including one of only Unicode whitespace such as a no-break space, with the same check as the `repository`, `base` and `task` keys. Test: `tests/Core/Watcher/Infrastructure/WatchConfigurationTest.php`.
 
 ## Stored state (`work_source_issue`, `work_source_validator`, `work_source_failure`)
 

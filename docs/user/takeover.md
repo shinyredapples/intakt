@@ -18,7 +18,7 @@ Write down, before the first step:
 
 - the output of `php bin/console intakt:status` (the status of every project as one JSON line);
 - the open pull requests on each project, and who opened each one (the loop's App or a co-existence App);
-- the label the loop builds from, and the label in Intakt's `eligibility_label` for each project (the example configuration uses `intakt`);
+- the label the loop builds from, and the label in Intakt's `eligibility_label` for each project (`intakt` when the key is left out, as in the example configuration);
 - which projects run in `mode: reviewer-for-loop`, and for each one how the loop waits for Intakt's review (for example a required `intakt/review` status check on the branch, or a setting of the loop that hands its review to Intakt).
 
 ## Takeover
