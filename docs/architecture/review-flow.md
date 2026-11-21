@@ -17,7 +17,7 @@ flowchart TD
     verdicts --> complete{"Every reviewer in?"}
     complete -->|no| wait["The round stays collecting"]
     complete -->|yes| collected["Round complete: findings join the change's finding list"]
-    collected --> judge["JudgeRound: the quote check drops findings quoting code not in the change, the judge marks the rest act, defer or reject (a P3 that is a local edit in a touched file is act); every P1 and P2 it was given reaches the act list whatever its mark; a P1 or P2 marked defer or reject keeps the judge's note, if it gave one"]
+    collected --> judge["JudgeRound: the quote check drops findings quoting code not in the change, the judge marks the rest act, defer or reject (a P3 that is a local edit in a touched file is act); every P1 and P2 it was given reaches the act list whatever its mark; a P1 or P2 marked defer or reject keeps the judge's note, if it gave one; an act list entry that merged findings keeps its own note, or else the first note of a finding it merged"]
     judge --> act["Act list (every kept P1 and P2, and the P3s marked act), follow-ups (the P3s marked defer), the quote check's dropped findings, of any severity, with their reasons, each reviewer's counted vote and a key for each P1 in judge_done"]
     act --> recurring["recurring_p1_found for each round on another head than the first that flagged the same P1 key"]
     recurring --> ledger
@@ -37,7 +37,7 @@ flowchart TD
     judge -->|failed for good| failed[("DispatchOnFailureStamp: RecordFailedJudging, round stays complete")]
     failed --> outFailed["intakt:review ends blocked: the judging failed"]
     wait -->|upper wait passed| outLate["intakt:review ends blocked: no outcome in time"]
-    judge --> publish["PublishVerdict: a reviewer-for-loop round publishes its status and comment on the head (nothing without a GitHub App)"]
+    judge --> publish["PublishVerdict: a reviewer-for-loop round, or one of a pull request handed to Intakt, publishes its status and comment on the head (nothing without a GitHub App); an approved protected head handed to Intakt is pending and asks the owner"]
 ```
 
 A built head reaches this flow only after its hand-back round ([Hand-back checks](hand-back.md#the-round)): `intakt:hand-back:check` checks the bundle and the pull request text, and a refusal goes back to the builder once with its fixed reason (`hand_back_sent_back`) and hands the task over the second time in a row (`hand_back_handed_over`), so no review is spent on it. Today nothing connects the two: the build lane (T56) will run the round, push an accepted head and send the reason to the builder or the hand-over to the maintainer agent. Before a push, `intakt:build:task` updates the project's mirror again, then runs the pre-push [check job](check-job.md) on the head merged into current main whenever main moved since the branch last merged it, with main as the first parent as in CI's merge. Current main is the mirror's `HEAD` when the job clones the mirror: the commit that update fetched, or a newer one when another update of the same mirror ran between that update and the clone. So while main stays at the commit the job cloned, the pre-push check and CI check the same merged tree; main that moves after the clone (while the check runs, or before CI starts) is not in the check, and CI checks the merge with the newer main. A conflict with current main ends the build at that check, and so does a merge that fails without git reporting a conflict, with a reason of its own.
