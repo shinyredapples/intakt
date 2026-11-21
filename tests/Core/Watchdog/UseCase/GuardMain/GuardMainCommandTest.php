@@ -141,7 +141,7 @@ final class GuardMainCommandTest extends TestCase
         $tester = $this->whenTheGuardRuns($seen, ['--owner-key' => [$this->publicKey('owner')]]);
 
         self::assertSame(Command::SUCCESS, $tester->getStatusCode());
-        self::assertSame("acme/shop is not halted: main is clean\n", $tester->getDisplay());
+        self::assertSame("acme/shop is not halted: no owner card stands\n", $tester->getDisplay());
         self::assertSame([], $this->ledger->kinds());
     }
 
@@ -222,7 +222,7 @@ final class GuardMainCommandTest extends TestCase
 
         $tester = $this->whenTheGuardRunsIn($this->repository->path, "acme/shop\nforged", $seen);
 
-        self::assertSame("acme/shop\\nforged is not halted: main is clean\n", $tester->getDisplay());
+        self::assertSame("acme/shop\\nforged is not halted: no owner card stands\n", $tester->getDisplay());
     }
 
     private function onlyStandingCard(): OwnerCard

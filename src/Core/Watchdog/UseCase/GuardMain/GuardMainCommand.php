@@ -64,7 +64,7 @@ final readonly class GuardMainCommand
     private function reported(SymfonyStyle $io, string $project, array $cards): int
     {
         if ([] === $cards) {
-            $io->writeln(ConsoleReport::printable($project).' is not halted: main is clean');
+            $io->writeln(ConsoleReport::printable($project).' is not halted: no owner card stands');
 
             return Command::SUCCESS;
         }

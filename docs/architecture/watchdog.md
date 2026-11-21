@@ -41,7 +41,7 @@ A violation halts the project with an owner card. The halt lives only in the led
 
 | Outcome | Output | Exit |
 | --- | --- | --- |
-| no standing card of the project | `<project> is not halted: main is clean` | 0 |
+| no standing card of the project (main clean, or its only violations cleared already) | `<project> is not halted: no owner card stands` | 0 |
 | standing cards, new or older | one line per card, oldest first: `card <id> halts <project>: commit <commit> <violation>, raised <moment>`, or `card <id> halts every project: its halt record is unreadable, raised <moment>` | 1 |
 | main not read, or a card the ledger refused (`HaltNotRecorded`) | an error naming the reason, escaped as for the check | 1 |
 | refused input: an empty project, and everything the check refuses with 2 | an error naming the rule | 2 (`ExitInvalidOnRefusedUsage` covers this command too) |
