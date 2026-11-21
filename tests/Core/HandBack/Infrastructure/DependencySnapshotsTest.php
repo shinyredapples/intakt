@@ -275,6 +275,83 @@ final class DependencySnapshotsTest extends TestCase
         self::assertSame([$this->key('a')->value], $this->snapshots());
     }
 
+    public function testPinFoldersAnInterruptedEvictionLeftBehindAreGoneAfterTheNextSave(): void
+    {
+        $this->plantOrphanPins('x', 'y', 'z');
+
+        $this->store(1)->save($this->key('a'), $this->install('a'));
+
+        self::assertSame([], array_intersect($this->pinFolders(), [$this->key('x')->value, $this->key('y')->value, $this->key('z')->value]));
+        self::assertLessThanOrEqual(2, count($this->pinFolders()));
+    }
+
+    public function testPinFoldersAnInterruptedEvictionLeftBehindAreGoneAfterTheNextLease(): void
+    {
+        $store = $this->store(1);
+        $store->save($this->key('a'), $this->install('a'));
+        $this->plantOrphanPins('x', 'y', 'z');
+
+        $store->leaseOf($this->key('a'), '/input/dependencies')?->release();
+
+        self::assertSame([$this->key('a')->value], $this->pinFolders());
+    }
+
+    public function testAnOrphanPinThatIsBusyIsSkippedAndRemovedOnceItIsFree(): void
+    {
+        $this->plantOrphanPins('x');
+        $holder = new LockFactory(new FlockStore($this->directory.'/store/.pins/'.$this->key('x')->value))->createLock('pin', null);
+        self::assertTrue($holder->acquireRead(false));
+
+        $this->store(1)->save($this->key('a'), $this->install('a'));
+        self::assertContains($this->key('x')->value, $this->pinFolders());
+
+        $holder->release();
+        $this->store(1)->save($this->key('b'), $this->install('b'));
+        self::assertNotContains($this->key('x')->value, $this->pinFolders());
+    }
+
+    public function testAPinWhoseSnapshotIsStoredIsNotSwept(): void
+    {
+        $store = $this->store(2);
+        $store->save($this->key('a'), $this->install('a'));
+        $store->leaseOf($this->key('a'), '/input/dependencies')?->release();
+
+        $store->save($this->key('b'), $this->install('b'));
+
+        self::assertContains($this->key('a')->value, $this->pinFolders());
+    }
+
+    public function testAHalfRemovedSnapshotIsNeverLeasedAndTheLeaseRemovesIt(): void
+    {
+        $this->store()->save($this->key('a'), $this->install('a'));
+        $this->halfRemove('a');
+
+        self::assertNull($this->store()->leaseOf($this->key('a'), '/input/dependencies'));
+        self::assertDirectoryDoesNotExist($this->evictingOf('a'));
+        self::assertSame([], $this->snapshots());
+    }
+
+    public function testAHalfRemovedSnapshotIsRemovedByTheNextSave(): void
+    {
+        $this->store()->save($this->key('a'), $this->install('a'));
+        $this->halfRemove('a');
+
+        $this->store()->save($this->key('b'), $this->install('b'));
+
+        self::assertDirectoryDoesNotExist($this->evictingOf('a'));
+        self::assertSame([$this->key('b')->value], $this->snapshots());
+    }
+
+    public function testAnEvictedSnapshotLeavesNoFolderBehindUnderAnyName(): void
+    {
+        $store = $this->store(1);
+        $store->save($this->key('a'), $this->install('a'));
+
+        $store->save($this->key('b'), $this->install('b'));
+
+        self::assertSame(['.pins', '.uses', $this->key('b')->value], $this->entriesOfStore());
+    }
+
     // File locks, as the application's default lock store uses, and a factory of its own per store, as two orchestrator processes would have.
     private function store(int $count = 10): DependencySnapshots
     {
@@ -302,6 +379,48 @@ final class DependencySnapshotsTest extends TestCase
     private function snapshotOf(string $lock): string
     {
         return $this->directory.'/store/'.$this->key($lock)->value;
+    }
+
+    private function evictingOf(string $lock): string
+    {
+        return $this->directory.'/store/.evicting-'.$this->key($lock)->value;
+    }
+
+    // The state an eviction stopped half-way through deleting leaves: renamed away from its key, with some files already gone.
+    private function halfRemove(string $lock): void
+    {
+        rename($this->snapshotOf($lock), $this->evictingOf($lock));
+        chmod($this->evictingOf($lock).'/vendor/fixture/pkg', 0o755);
+        unlink($this->evictingOf($lock).'/vendor/fixture/pkg/code.php');
+    }
+
+    private function plantOrphanPins(string ...$locks): void
+    {
+        foreach ($locks as $lock) {
+            new Filesystem()->dumpFile($this->directory.'/store/.pins/'.$this->key($lock)->value.'/pin.lock', '');
+        }
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function pinFolders(): array
+    {
+        $names = array_values(array_diff((array) scandir($this->directory.'/store/.pins'), ['.', '..']));
+        sort($names);
+
+        return array_map(strval(...), $names);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function entriesOfStore(): array
+    {
+        $names = array_values(array_diff((array) scandir($this->directory.'/store'), ['.', '..']));
+        sort($names);
+
+        return array_map(strval(...), $names);
     }
 
     private function install(string $name): string

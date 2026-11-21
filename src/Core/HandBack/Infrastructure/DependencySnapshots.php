@@ -23,6 +23,9 @@ final readonly class DependencySnapshots
 {
     private const string INCOMING = '.incoming';
 
+    // Not a valid key, so a snapshot an eviction stopped half-way through deleting is never leased: under its key a snapshot is either complete or absent.
+    private const string EVICTING = '.evicting-';
+
     // The order of use, least recent first, kept as a list rather than in timestamps so two uses within one clock tick still have an order.
     private const string USES = '.uses';
 
@@ -59,7 +62,7 @@ final readonly class DependencySnapshots
             }
 
             $this->markUsed($key);
-            $this->evictPastCount($key);
+            $this->trim($key);
         } finally {
             $lock->release();
         }
@@ -78,7 +81,7 @@ final readonly class DependencySnapshots
             }
 
             $lease = $this->pinned($key, $containerPath);
-            $this->evictPastCount($key);
+            $this->trim($key);
 
             return $lease;
         } finally {
@@ -153,6 +156,58 @@ final readonly class DependencySnapshots
         $this->writeUses([...array_diff($this->uses(), [$key->value]), $key->value]);
     }
 
+    // Runs under the store lock, so no other eviction is still deleting a leftover it removes, and no lease can take a pin it sweeps.
+    private function trim(DependencySnapshotKey $kept): void
+    {
+        $this->removeEvictionLeftovers();
+        $this->evictPastCount($kept);
+        $this->sweepOrphanPins();
+    }
+
+    private function removeEvictionLeftovers(): void
+    {
+        foreach ($this->entriesOf($this->root) as $name) {
+            if (str_starts_with($name, self::EVICTING)) {
+                $this->remove($this->root.'/'.$name);
+            }
+        }
+    }
+
+    // A pin outlives its snapshot only when an eviction stopped between the two removals; a lease never holds such a pin, because it pins only a snapshot that is present, so a busy one is left for a later trim.
+    private function sweepOrphanPins(): void
+    {
+        foreach ($this->entriesOf($this->root.'/'.self::PINS) as $name) {
+            if (is_dir($this->root.'/'.self::PINS.'/'.$name) && !is_dir($this->root.'/'.$name)) {
+                $this->removePinOf($name);
+            }
+        }
+    }
+
+    private function removePinOf(string $name): void
+    {
+        $pin = $this->pinOf($name);
+
+        if (!$pin->acquire(false)) {
+            return;
+        }
+
+        try {
+            new Filesystem()->remove($this->root.'/'.self::PINS.'/'.$name);
+        } finally {
+            $pin->release();
+        }
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function entriesOf(string $directory): array
+    {
+        $entries = is_dir($directory) ? scandir($directory) : false;
+
+        return false === $entries ? [] : array_values(array_diff($entries, ['.', '..']));
+    }
+
     // A pinned snapshot is skipped and a less recently used one goes instead, so the store stays bounded while a job still mounts the old one; the snapshot just saved or leased always stays.
     private function evictPastCount(DependencySnapshotKey $saved): void
     {
@@ -178,7 +233,9 @@ final readonly class DependencySnapshots
         }
 
         try {
-            $this->remove($this->root.'/'.$name);
+            $evicting = $this->root.'/'.self::EVICTING.$name;
+            new Filesystem()->rename($this->root.'/'.$name, $evicting);
+            $this->remove($evicting);
             new Filesystem()->remove($this->root.'/'.self::PINS.'/'.$name);
 
             return true;
