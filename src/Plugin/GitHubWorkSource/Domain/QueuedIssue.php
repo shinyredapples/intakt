@@ -110,6 +110,13 @@ final readonly class QueuedIssue
         return $this->hasLabels($other->reading->listed->labels) && $this->namesNumbers($other->reading);
     }
 
+    // Only the labels the item carries, in the order they were applied, because those are what the eligibility and priority rules read; a label applied again by an account without write access leaves the label set as it was and is seen only here.
+    public function isVouchedAs(Vouching $other): bool
+    {
+        return $this->isTrusted() === $other->trusted
+            && array_values(array_filter($this->vouchedLabels(), $this->hasLabel(...))) === array_values(array_filter($other->labels, $this->hasLabel(...)));
+    }
+
     private function namesNumbers(ItemReading $other): bool
     {
         return $this->reading->waitsFor === $other->waitsFor && $this->reading->unreadableWaits === $other->unreadableWaits && $this->reading->closedBy === $other->closedBy;

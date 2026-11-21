@@ -81,6 +81,8 @@ final class GitHubWorkSourceTest extends KernelTestCase
     /** @var list<string> */
     private array $writers = ['ana', 'bea'];
     private string $labelApplier = 'ana';
+    /** @var array<string, string> */
+    private array $appliersOf = [];
     private ?string $editedBody = null;
     /** @var list<string> */
     private array $asked = [];
@@ -205,6 +207,46 @@ final class GitHubWorkSourceTest extends KernelTestCase
 
         self::assertSame(NothingPicked::TrustNotChecked, $pick->nothing);
         self::assertSame('GitHub holds #5 with other text or labels than it was planned with, so its history is not of the planned item.', $this->onlyLog()['context']['reason'] ?? null);
+    }
+
+    public function testAnEligibilityLabelAppliedAgainWithoutWriteAccessInTheSecondOfTheListingIsNotPicked(): void
+    {
+        $this->reads->lists([Issues::task(5), Issues::task(6)]);
+        $source = $this->source();
+        self::assertSame(5, $source->queue('alpha')->ready()[0]->number);
+        $this->reads->listsUnchanged();
+        $this->appliersOf = ['intakt' => 'triager'];
+
+        $pick = $source->nextWork('alpha', WorkerState::Free);
+
+        self::assertNull($pick->task);
+        self::assertSame(NothingPicked::TrustNotChecked, $pick->nothing);
+        self::assertSame('The labels of #5 are no longer applied by the accounts with write access the plan counted, so it is not the planned item.', $this->onlyLog()['context']['reason'] ?? null);
+    }
+
+    public function testAPriorityLabelAppliedAgainWithoutWriteAccessInTheSecondOfTheListingPicksNothing(): void
+    {
+        $this->reads->lists([Issues::task(5, ['intakt', 'priority:urgent']), Issues::task(6)]);
+        $source = $this->source();
+        self::assertSame(5, $source->queue('alpha')->ready()[0]->number);
+        $this->reads->listsUnchanged();
+        $this->appliersOf = ['priority:urgent' => 'triager'];
+
+        $pick = $source->nextWork('alpha', WorkerState::Free);
+
+        self::assertSame(NothingPicked::TrustNotChecked, $pick->nothing);
+        self::assertSame('The labels of #5 are no longer applied by the accounts with write access the plan counted, so it is not the planned item.', $this->onlyLog()['context']['reason'] ?? null);
+    }
+
+    public function testALabelAppliedWithoutWriteAccessSinceBeforeTheListingDoesNotKeepTheTaskFromBeingPicked(): void
+    {
+        $this->appliersOf = ['docs' => 'triager'];
+        $this->reads->lists([Issues::task(5, ['intakt', 'docs'])]);
+        $source = $this->source();
+        $source->queue('alpha');
+        $this->reads->listsUnchanged();
+
+        self::assertSame(5, $source->nextWork('alpha', WorkerState::Free)->task?->number);
     }
 
     public function testAWriterHoldingTheDatabaseWhenThePickReadsTheFailuresPicksNothingAndLogsTheReason(): void
@@ -357,7 +399,7 @@ final class GitHubWorkSourceTest extends KernelTestCase
 
             $listed = $this->reads->lastListed[$number];
 
-            return new IssueHistory($this->editor, array_map(fn (string $label): LabelApplication => new LabelApplication($label, $this->labelApplier), $listed->labels), $this->editedBody ?? $listed->body, $listed->labels);
+            return new IssueHistory($this->editor, array_map(fn (string $label): LabelApplication => new LabelApplication($label, $this->appliersOf[$label] ?? $this->labelApplier), $listed->labels), $this->editedBody ?? $listed->body, $listed->labels);
         });
 
         return $this->sourceOver($this->reads, $histories);

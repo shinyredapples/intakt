@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\GitHubWorkSource\Infrastructure;
 
+use Closure;
 use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\GitHubForge\Contract\IssueHistories;
@@ -14,6 +15,7 @@ use Intakt\Plugin\GitHubWorkSource\Domain\IntakePlan;
 use Intakt\Plugin\GitHubWorkSource\Domain\IssueReferences;
 use Intakt\Plugin\GitHubWorkSource\Domain\ProjectHeldByAnotherWriter;
 use Intakt\Plugin\GitHubWorkSource\Domain\QueuedIssue;
+use Intakt\Plugin\GitHubWorkSource\Domain\Vouching;
 use Intakt\Plugin\WorkSource\Contract\HeldTask;
 use Intakt\Plugin\WorkSource\Contract\NothingPicked;
 use Intakt\Plugin\WorkSource\Contract\Task;
@@ -107,10 +109,11 @@ final readonly class GitHubWorkSource implements WorkSource
         }
     }
 
-    // Asked again before each pick, because access may have been withdrawn since the item was vouched. The history must still be of the planned item, because an edit in the second of the listing keeps the update time and may add a wait or change a label the plan does not hold.
+    // Asked again before each pick, because access may have been withdrawn since the item was vouched. The history must still be of the planned item, because an edit in the second of the listing keeps the update time and may add a wait or change a label the plan does not hold. Its labels are vouched again too, because a label removed and applied again in that second by an account without write access leaves the label set as planned.
     private function isStillSteered(string $project, QueuedIssue $issue): bool
     {
-        if (!$this->accounts->steers($project, $issue->author())) {
+        $steers = $this->accessAskedOncePerAccount($project);
+        if (!$steers($issue->author())) {
             return false;
         }
 
@@ -119,7 +122,29 @@ final readonly class GitHubWorkSource implements WorkSource
             throw new ForgeReadFailed(sprintf('GitHub holds #%d with other text or labels than it was planned with, so its history is not of the planned item.', $issue->number()));
         }
 
-        return $this->accounts->steers($project, $history->lastEditor);
+        $vouching = Vouching::of($issue->author(), $history, $steers);
+        if (!$vouching->trusted) {
+            return false;
+        }
+
+        if (!$issue->isVouchedAs($vouching)) {
+            throw new ForgeReadFailed(sprintf('The labels of #%d are no longer applied by the accounts with write access the plan counted, so it is not the planned item.', $issue->number()));
+        }
+
+        return true;
+    }
+
+    // Remembered for one pick only, because the author is often the last editor and the one who applied the labels, and each ask is a forge call.
+    /**
+     * @return Closure(string): bool
+     */
+    private function accessAskedOncePerAccount(string $project): Closure
+    {
+        $answers = [];
+
+        return function (string $account) use ($project, &$answers): bool {
+            return $answers[$account] ??= $this->accounts->steers($project, $account);
+        };
     }
 
     // Read under the lock a failure is recorded with, so a task marked failed after the plan was made is never picked.
