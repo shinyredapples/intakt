@@ -91,7 +91,7 @@ final readonly class Verdict
         return Decision::Blocked === $this->verdict && array_any($this->findings, static fn (Finding $finding): bool => self::REVIEWER_STOPPED === $finding->id);
     }
 
-    // An approval, or a changes verdict of P3 findings only, which the quorum counts as approval when the judge defers or rejects them all; the guards that refuse an approval refuse both, because the judge's marks come only after them. It reads the verdict as recorded, because a reviewer's blocked with findings is recorded as changes after the guards ran.
+    // An approval, or a changes verdict of P3 findings only, which the quorum counts as approval when the judge defers or rejects them all; the guards that refuse an approval refuse both, because the judge's marks come only after them. It reads the verdict as recorded, because a reviewer's blocked with findings is recorded as changes after the guards ran; like asRecorded(), only on a fresh verdict, because the guards check a reviewer's answer before it is stored.
     #[Ignore]
     public function mayCountAsApproval(): bool
     {
