@@ -63,7 +63,7 @@ final class ChangeAddressMigrationTest extends KernelTestCase
         $next = $fixture->startAtHead(self::OLD_SPELLING, SampleIdentity::HEAD);
 
         $review = self::getContainer()->get(LedgerReviewPages::class)->reviewOf($next);
-        self::assertSame([$old, $next], array_map(static fn (ReviewedRound $round): string => $round->round, $review?->rounds ?? []));
+        self::assertSame([$old, $next], array_map(static fn (ReviewedRound $round): string => $round->round, $review->rounds ?? []));
     }
 
     public function testALocalBranchWithCapitalLettersKeepsItsSpellingThroughTheMigration(): void
@@ -101,7 +101,9 @@ final class ChangeAddressMigrationTest extends KernelTestCase
     private function respellStartRow(string $to): void
     {
         $connection = $this->connection();
-        $payload = json_decode((string) $connection->fetchOne("SELECT payload FROM ledger_event WHERE kind = 'review_started'"), true, flags: JSON_THROW_ON_ERROR);
+        $stored = $connection->fetchOne("SELECT payload FROM ledger_event WHERE kind = 'review_started'");
+        self::assertIsString($stored);
+        $payload = json_decode($stored, true, flags: JSON_THROW_ON_ERROR);
         self::assertIsArray($payload);
         $payload['change'] = $to;
         $connection->update('ledger_event', ['payload' => json_encode($payload, JSON_THROW_ON_ERROR)], ['kind' => 'review_started']);
