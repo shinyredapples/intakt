@@ -139,7 +139,7 @@ final readonly class ReviewedRound
      */
     public function startedOutcomes(): array
     {
-        return array_values(array_filter($this->outcomes, static fn (ReviewerOutcome $outcome): bool => $outcome->started));
+        return [...array_filter($this->outcomes, static fn (ReviewerOutcome $outcome): bool => true === $outcome->started)];
     }
 
     public function failedReviewers(): int
