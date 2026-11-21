@@ -629,6 +629,16 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
   .ttabs ~ .task-grid .finding-card { scroll-margin-top: calc(var(--top) + 66px + var(--s16)); }
   .fc-body { flex-basis: 100%; }
 }
+/* The verdict card holds one line per finding, cut with an ellipsis, so the first finding stays on a phone's first screen however long its text is. */
+.verdict-card { margin: var(--s12) 0 var(--s8); padding: var(--s12) var(--s16); border-radius: var(--r-btn); background: var(--tint); }
+.vc-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s8); }
+.verdict-card .vc-outcome { margin: var(--s8) 0 0; font-size: var(--t17); overflow-wrap: anywhere; }
+.vc-findings { list-style: none; margin: var(--s8) 0 0; padding: 0; display: grid; gap: var(--s4); }
+.vc-findings a { display: flex; align-items: baseline; gap: var(--s8); min-height: 44px; padding: var(--s8) var(--s12); border-radius: var(--r-btn); background: var(--raised); color: var(--ink); text-decoration: none; }
+.vc-findings a:hover { background: var(--page); }
+.vc-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vc-place { flex: none; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: var(--t13); }
+.vc-findings code { padding: 0 var(--s4); border-radius: var(--r-chip); background: var(--tint); }
 .timeline-title { margin: var(--s32) 0 var(--s8); }
 details.ev > summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s8) var(--s12); cursor: pointer; }
 details.ev > summary .chev { align-self: center; }

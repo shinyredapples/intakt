@@ -28,6 +28,9 @@
         {% if review.everyRoundIsAReplay %}
         <p class="replay-mark">{{ include(chip, {label: 'Replay', on_page: true}, with_context = false) }} A recording played back: its verdicts were never given on this change and never count as one.</p>
         {% endif %}
+        {# The newest round with an outcome, also one that ended without the judge, because a newer round still in review has no answer to show yet. #}
+        {% set decided = review.rounds|filter(r => r.reviewOutcome is not null)|last %}
+        {% if decided %}{{ include('dashboard/_verdict_card.html.twig', {reviewed: decided, replay_chip: replay_chip}, with_context = false) }}{% endif %}
         {% if review.source is not null %}
         <p class="task-sentence">{{ review.source.task }}</p>
         {% else %}

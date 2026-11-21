@@ -1,0 +1,30 @@
+{#- The newest decided round's outcome in plain words and its findings to fix, one line each, so a phone shows the answer on the first screen; the words live here alone, because no other page words a headline this way. -#}
+{%- set outcomes = enum('Intakt\\Core\\Dashboard\\Domain\\ReviewOutcome') -%}
+{%- set outcome = reviewed.reviewOutcome -%}
+{%- set to_fix = reviewed.actFindings -%}
+{%- if outcome is same as(outcomes.ChangesRequested) -%}
+    {%- set headline = to_fix is empty ? 'Changes needed' : 'Changes needed: ' ~ to_fix|length ~ (to_fix|length == 1 ? ' thing' : ' things') ~ ' to fix' -%}
+{%- elseif outcome is same as(outcomes.Approved) -%}
+    {%- set headline = 'Approved' -%}
+{%- elseif reviewed.ending is not null -%}
+    {%- set headline = outcome.value ~ ': ' ~ reviewed.ending.reason -%}
+{%- elseif outcome is same as(outcomes.Failed) -%}
+    {%- set headline = 'Failed: every reviewer failed, see each reviewer below' -%}
+{%- else -%}
+    {%- set headline = 'Blocked: the reviewers gave no outcome the quorum policy counts, see each reviewer below' -%}
+{%- endif -%}
+<section class="verdict-card" aria-labelledby="verdict-card-title">
+    <div class="vc-head">
+        {{ include('dashboard/components/outcome_chip.html.twig', {outcome: outcome, on_page: true}, with_context = false) }}
+        {% if reviewed.isReplay %}{{ include('dashboard/components/chip.html.twig', replay_chip, with_context = false) }}{% endif %}
+        <span class="muted small vc-round">Round {{ reviewed.number ?? '(number not recorded)' }}</span>
+    </div>
+    <h2 class="vc-outcome" id="verdict-card-title">{{ headline }}</h2>
+    {% if to_fix is not empty %}
+    <ul class="vc-findings" aria-label="Findings to fix">
+        {% for finding in to_fix %}
+        <li><a href="#round-{{ reviewed.round }}-finding-{{ finding.id }}"><span class="sev">{{ finding.severity ?? '?' }}</span><span class="vc-text">{{ include('dashboard/_finding_text.html.twig', {finding: finding, missing: 'Text not recorded.'}, with_context = false) }}</span>{% if finding.place is not null %}<span class="mono vc-place">{{ finding.place }}</span>{% endif %}</a></li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+</section>
