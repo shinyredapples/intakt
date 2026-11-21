@@ -120,7 +120,7 @@ final readonly class IntakeStore
         }
     }
 
-    // The flush runs its statements in a nested transaction of its own and rolls it back in a finally block: when the server already aborted the whole transaction, that rollback is refused and thrown instead, with the statement's refusal at the end of its chain of previous exceptions.
+    // Looked for in the previous exceptions too, because the flush runs its statements in a nested transaction of its own and rolls it back in a finally block: when the server already aborted the whole transaction, that rollback is refused and thrown instead, with the statement's refusal at the end of its chain.
     private function refusalBehind(Throwable $failure): Throwable
     {
         for ($cause = $failure; $cause instanceof Throwable; $cause = $cause->getPrevious()) {
