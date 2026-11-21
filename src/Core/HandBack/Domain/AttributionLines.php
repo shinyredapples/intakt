@@ -10,7 +10,7 @@ final readonly class AttributionLines
     private const string ATTRIBUTION = '/^(?:[ \t]*co-authored-by[ \t]*:|[^A-Za-z0-9]*generated[ -](?:with|by)\b)/i';
 
     // Because a removed paragraph leaves its blank lines behind, spaces and a Windows line ending included.
-    private const string BLANK_LINES = '/\n(?:[ \t\r]*\n){2,}/';
+    private const string BLANK_LINES = '/\r?\n(?:[ \t\r]*\n){2,}/';
 
     public static function strippedFrom(string $message): string
     {
@@ -22,8 +22,27 @@ final readonly class AttributionLines
             return $message;
         }
 
-        $text = rtrim((string) preg_replace(self::BLANK_LINES, "\n\n", implode("\n", $kept)));
+        $ending = self::endingOf($message, $lines, $kept);
+        $text = rtrim((string) preg_replace(self::BLANK_LINES, $ending.$ending, implode("\n", $kept)));
 
-        return '' === $text ? '' : $text."\n";
+        return '' === $text ? '' : $text.$ending;
+    }
+
+    /**
+     * @param list<string>       $lines
+     * @param array<int, string> $kept
+     */
+    private static function endingOf(string $message, array $lines, array $kept): string
+    {
+        $terminated = $kept;
+        // Because the last piece of the split is the only one no line ending followed.
+        unset($terminated[count($lines) - 1]);
+
+        // So a message written with Windows line endings does not come back with mixed ones. Judged from the endings the kept lines had in the message, because a removed trailer's ending is not the message's; only when no kept line had one (a single line without a final newline is left) does the whole message decide.
+        return match (true) {
+            array_any($terminated, static fn (string $line): bool => str_ends_with($line, "\r")) => "\r\n",
+            [] !== $terminated => "\n",
+            default => str_contains($message, "\r\n") ? "\r\n" : "\n",
+        };
     }
 }
