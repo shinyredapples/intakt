@@ -7,11 +7,11 @@
 {# A column that can fold always carries its strip and Hide, even when it starts open, because the layout puts this tab's own fold back on a pushed column and a folded column needs its strip to open again. #}
 {% set folds = column.startsCollapsed %}
 {% set folded = board.startsCollapsed(column) %}
-{% set slug = column.value|lower|replace({' ': '-'}) %}
+{% set slug = column.slug %}
 {% set count = board.countOf(column) %}
 {% set crowded = cards|length > limit %}
-{# Backlog and Done stay open on phones because DESIGN.md asks for it. #}
-<section class="col{{ needs ? ' col-needs' }}{{ folded ? ' collapsed' }}" id="col-{{ slug }}" aria-label="{{ column.value }}"{% if crowded %} data-page-limit="{{ limit }}"{% endif %}>
+{# Backlog and Done stay open on phones because DESIGN.md asks for it. A jump from the column map or the phone switcher focuses the column (assets/board-map.js), so it takes the focus without being a Tab stop. #}
+<section class="col{{ needs ? ' col-needs' }}{{ folded ? ' collapsed' }}" id="col-{{ slug }}" aria-label="{{ column.value }}" tabindex="-1"{% if crowded %} data-page-limit="{{ limit }}"{% endif %}>
     {# The name is built from hidden words around the visible ones rather than an aria-label, so it contains what a speech user sees and says (WCAG 2.5.3). #}
     {% if folds %}<button type="button" class="col-fold" aria-expanded="{{ folded ? 'false' : 'true' }}" aria-controls="cards-{{ slug }}"><span><span class="sr-only">Show </span>{{ column.value }}</span>{{ include('dashboard/components/count.html.twig', {n: count}, with_context = false) }}<span class="sr-only"> {{ count == 1 ? 'task' : 'tasks' }}</span></button>{% endif %}
     <div class="col-head"><h3>{{ column.value }}</h3>{{ include('dashboard/components/count.html.twig', {n: count, needs: needs and cards is not empty}, with_context = false) }}{% if folds %}<button type="button" class="btn quiet sm col-hide" aria-label="Hide {{ column.value }}">Hide</button>{% endif %}</div>

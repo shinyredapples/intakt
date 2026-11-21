@@ -17,6 +17,12 @@ enum BoardColumn: string
     case Merging = 'Merging';
     case Done = 'Done';
 
+    // The column's id on the page is col- and this, and the column map and the phone switcher name it the same way, so a jump finds it.
+    public function slug(): string
+    {
+        return str_replace(' ', '-', strtolower($this->value));
+    }
+
     // Work not started and work finished ask nothing of the reader now, so they give their width to the flow (docs/design/mocks/DESIGN.md, Rules).
     public function startsCollapsed(): bool
     {
