@@ -126,6 +126,35 @@ final class HighlightsWorkflowTest extends TestCase
         self::assertSame(["secrets['OTHER']", 'secrets.ANOTHER'], $this->secretReferencesBesidesTheLogin([$login, $other]));
     }
 
+    public function testASecretReferenceInAnyLetterCaseIsFound(): void
+    {
+        $steps = [['env' => ['EXTRA' => '${{ SECRETS[\'EXTRA\'] }}', 'MORE' => '${{ Secrets.MORE }}']]];
+
+        self::assertSame(["SECRETS['EXTRA']", 'Secrets.MORE'], $this->secretReferencesBesidesTheLogin($steps));
+    }
+
+    public function testTheWholeSecretsContextIsFoundAsAnArgumentAsAnObjectAndInACondition(): void
+    {
+        $steps = [
+            ['env' => ['ALL' => '${{ toJSON(secrets) }}', 'BARE' => '${{ secrets }}']],
+            ['if' => "contains(toJSON(SECRETS), 'x')", 'run' => 'true'],
+        ];
+
+        self::assertSame(['toJSON(secrets)', 'secrets', "contains(toJSON(SECRETS), 'x')"], $this->secretReferencesBesidesTheLogin($steps));
+    }
+
+    public function testTheWordSecretsOutsideAnExpressionOrAsPartOfAnotherNameIsNoReference(): void
+    {
+        $steps = [[
+            'name' => 'Keep the secrets out of the log',
+            'if' => "github.event.inputs.secrets_note != 'secrets'",
+            'env' => ['HAS_SECRETS' => '${{ github.event.inputs.secrets }}', 'NOTE' => "\${{ format('no {0}', 'secrets') }}"],
+            'run' => 'echo "no secrets here"',
+        ]];
+
+        self::assertSame([], $this->secretReferencesBesidesTheLogin($steps));
+    }
+
     public function testTheAssembledPageReadsTheRecordedAnswersAsTheContainerSeesThem(): void
     {
         self::assertStringContainsString(' --recorded=/workspace/_journey-api ', $this->pageCommand());
@@ -136,7 +165,7 @@ final class HighlightsWorkflowTest extends TestCase
         self::assertNotSame(0, $this->runPageWrite("# Highlights\n", 'sed() { return 1; }; ')['status']);
     }
 
-    // Only the login's two values are dropped, so any further secret, in dot or bracket notation, still counts.
+    // Only the login's two values are dropped, so any other use of the secrets context, in any form, still counts.
     /**
      * @param list<array<string, mixed>> $steps
      *
@@ -152,13 +181,36 @@ final class HighlightsWorkflowTest extends TestCase
             return $step;
         }, $steps);
         $references = [];
-        array_walk_recursive($withoutTheLoginValues, static function (mixed $value) use (&$references): void {
-            if (is_string($value) && preg_match_all('/\bsecrets\s*(?:\.\s*\w+|\[[^\]]*\])/', $value, $matches) > 0) {
-                array_push($references, ...$matches[0]);
+        array_walk_recursive($withoutTheLoginValues, static function (mixed $value, int|string $key) use (&$references): void {
+            if (is_string($value)) {
+                array_push($references, ...array_filter(self::expressions($value, 'if' === $key), self::readsSecrets(...)));
             }
         });
 
         return $references;
+    }
+
+    // GitHub reads an if: value as an expression even without ${{ }}, so it is scanned whole; other values only inside it.
+    /**
+     * @return list<string>
+     */
+    private static function expressions(string $value, bool $isCondition): array
+    {
+        if ($isCondition && !str_contains($value, '${{')) {
+            return [trim($value)];
+        }
+
+        preg_match_all('/\$\{\{(.*?)\}\}/s', $value, $matches);
+
+        return array_map(trim(...), $matches[1]);
+    }
+
+    // Contexts are case-insensitive and string literals are dropped first, so only the context itself counts, not a word.
+    private static function readsSecrets(string $expression): bool
+    {
+        $withoutLiterals = (string) preg_replace("/'(?:[^']|'')*'/", "''", $expression);
+
+        return 1 === preg_match('/(?<![\w.-])secrets(?![\w-])/i', $withoutLiterals);
     }
 
     /**
