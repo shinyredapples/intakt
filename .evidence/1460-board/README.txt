@@ -1,27 +1,20 @@
-Evidence for #1460, rebuilt on commit 7a315b037 (the last product-code commit of the branch).
-The later merge of main (ea14ef18b) changes no board file: only the review page's reviewer
-model cells (_reviewer_cells, _reviewer_model_cell, _now_reviewer, round_changed) and FindingText.
-ui-check.txt was rerun on head a77e046d7, after the merge of main 5f5f57848 (the review page's
-verdict card, the card top line that wraps, #3155), on a fresh install of the same kind: change 41
-judged, change 42 with two reviewers working, both with a model on their reviewers, added through
-the Ledger contract. It covers the review page of both rounds.
+Evidence for #1460, built on commit 05ec2d844 (the product code of this pull request; later commits
+only add these files).
 
-Install: APP_ENV=test, APP_DEBUG=0, a fresh SQLite database migrated with doctrine:migrations:migrate,
-served by PHP's built-in server on localhost:7780 (DASHBOARD_PORT). The ledger holds two rounds:
-change 41 started and judged (Done holds one card, starts folded), change 42 started with two
-reviewers working (In review holds one card). Nothing on the page was seeded or edited in the
-browser, except the spacer in phone.txt that only moves the switcher near the bottom of the view.
-
-The import map's vendor files (@hotwired/stimulus 3.2.2, @hotwired/turbo 8.0.23) come from the
-npm registry, because the CDN importmap:install uses is not reachable from the build sandbox;
-asset-map:compile wrote public/assets. Both folders are git-ignored.
+Install: a fresh checkout of 05ec2d844, composer install, importmap:install, asset-map:compile,
+doctrine:migrations:migrate on a new SQLite database (APP_ENV=test, APP_DEBUG=0), the sample
+repository built with intakt:sample:seed, the demo project made with intakt:demo:create and the
+recorded review fixtures/demo/sample-change-review.json replayed with intakt:demo:replay. Served by
+PHP's built-in server on localhost:7780 (DASHBOARD_PORT). Nothing was seeded or edited in the
+browser. The replayed round is judged, so the board holds one card in Done, which starts open
+because every other column is empty, and nobody is working.
 
 Files:
-- board-built-<theme>-<width>.png beside board-mock-<theme>-<width>.png (mock: docs/design/mocks/tools/screenshots.js, index-*.png)
-- board.txt: map, board widths, sideways scroll and switcher at 1440, 1920 and 390, light and dark (E1)
-- ui-check.txt: axe and the 390 floors over every page of bin/ui-check, with bin/ui-check's own
-  jobsFor, measureFloors and report; viewport only, because a full-page shot of /components ran
-  out of the build's memory (E2, E4)
-- walkthrough.txt: keyboard walk-through at 1440, 839 and 907 (E3, E5, E6)
-- walk-<width>-after-escape.png: the board after the Escape fold
-- phone.txt, phone-tap-done-near-bottom.png: phone tap with the switcher near the bottom (E3)
+- board-built-<theme>-<width>.png beside board-mock-<theme>-<width>.png (mock:
+  docs/design/mocks/tools/screenshots.js). 1440 and 1920 are full pages; 390 is the first phone
+  screen, since a full-page shot resizes the view and moves the board's sideways scroll.
+- review-built-<theme>-<width>.png: the review detail page of the replayed round, 390 and 1440.
+- walkthrough.txt: map, switcher and segment sizes, the keyboard walk-through at 839 wide, and the
+  phone tap and swipe (E1, E3, E5, E6).
+- walk-839-after-escape.png: the board after Escape folds Done.
+- ui-check.txt: bin/ui-check over every page, 3 widths, both themes (E2, E4).

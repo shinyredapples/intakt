@@ -1,67 +1,33 @@
-widest desktop width with the map shown on load (Done folded): 839
-at 761: map "Columns 1 to 2 of 3" [GG.]; board client 457 scroll 540 at 0
-widest desktop width with the map shown once Done is open: 907
-
-Keyboard walk-through at 1440 x 900, light:
-1. 3 x Tab -> a.nav "Board" focus-visible=true outline=solid 2px
-   Enter -> /?board=1; map hidden; board client 1136 scroll 1136 at 0
-2. 12 x Tab -> summary "Who is working2 working" focus-visible=true outline=solid 2px
-   Enter -> summary "Who is working2 working" focus-visible=true outline=solid 2px open=true
-   Escape -> summary "Who is working2 working" focus-visible=true outline=solid 2px open=false
-   Space -> summary "Who is working2 working" focus-visible=true outline=solid 2px open=true
-3. 4 x Tab -> button.col-fold "Show Done1 task" focus-visible=true outline=solid 2px; collapsed=true; map hidden; board client 1136 scroll 1136 at 0
-   Enter -> button.btn.quiet.sm.col-hide "Hide Done" focus-visible=true outline=solid 2px collapsed=false; map hidden; board client 1136 scroll 1136 at 0
-   Escape -> button.col-fold "Show Done1 task" focus-visible=true outline=solid 2px collapsed=true; map hidden; board client 1136 scroll 1136 at 0
-   Space -> button.btn.quiet.sm.col-hide "Hide Done" focus-visible=true outline=solid 2px collapsed=false; map hidden; board client 1136 scroll 1136 at 0
-4. the map is hidden at this width (the board fits), so there is no segment to Tab to; Tab from here:
-   Tab -> a.card "#41alpha Review of 41 Round 1One build, " focus-visible=true outline=solid 2px
-   Escape -> button.col-fold "Show Done1 task" focus-visible=true outline=solid 2px collapsed=true
-5. 2 x Shift+Tab -> a.card "#42alpha Review of 42 Round 1One build, " focus-visible=true outline=solid 2px
-   Enter -> /reviews/<round>: Review 42 - Intakt
-
-Keyboard walk-through at 839 x 900, light:
-1. 3 x Tab -> a.nav "Board" focus-visible=true outline=solid 2px
-   Enter -> /?board=1; map "Columns 1 to 2 of 3" [GG.]; board client 535 scroll 540 at 0
-2. 12 x Tab -> summary "Who is working2 working" focus-visible=true outline=solid 2px
-   Enter -> summary "Who is working2 working" focus-visible=true outline=solid 2px open=true
-   Escape -> summary "Who is working2 working" focus-visible=true outline=solid 2px open=false
-   Space -> summary "Who is working2 working" focus-visible=true outline=solid 2px open=true
-3. 7 x Tab -> button.col-fold "Show Done1 task" focus-visible=true outline=solid 2px; collapsed=true; map "Columns 1 to 2 of 3" [GG.]; board client 535 scroll 540 at 0
-   Enter -> button.btn.quiet.sm.col-hide "Hide Done" focus-visible=true outline=solid 2px collapsed=false; map "Columns 2 to 3 of 3" [.GG]; board client 535 scroll 608 at 73
-   Escape -> button.col-fold "Show Done1 task" focus-visible=true outline=solid 2px collapsed=true; map "Columns 2 to 3 of 3" [.GG]; board client 535 scroll 540 at 5
-   Space -> button.btn.quiet.sm.col-hide "Hide Done" focus-visible=true outline=solid 2px collapsed=false; map "Columns 2 to 3 of 3" [.GG]; board client 535 scroll 608 at 73
-4. 4 x Shift+Tab -> button.sm-seg.in "Done" focus-visible=true outline=solid 2px
-   E5 segment 24 x 24 px, bar 18px x 8px, 3 segments, next segment starts 0 px after the previous
-   Enter -> section#col-done.col "Done" focus-visible=true outline=solid 2px; map "Columns 2 to 3 of 3" [.GG]; board client 535 scroll 608 at 73
-   after the scroll settles: map "Columns 2 to 3 of 3" [.GG]; board client 535 scroll 608 at 73
-   Tab -> button.btn.quiet.sm.col-hide "Hide Done" focus-visible=true outline=solid 2px
-   Tab -> a.card "#41alpha Review of 41 Round 1One build, " focus-visible=true outline=solid 2px
-   E6 before Escape: collapsed=false; map "Columns 2 to 3 of 3" [.GG]; board client 535 scroll 608 at 73
-   Escape -> button.col-fold "Show Done1 task" focus-visible=true outline=solid 2px collapsed=true; map "Columns 2 to 3 of 3" [.GG]; board client 535 scroll 540 at 5
-5. 5 x Shift+Tab -> button.sm-seg.in "In review" focus-visible=true outline=solid 2px
-   Enter -> section#col-in-review.col "In review" focus-visible=true outline=solid 2px; map "Columns 2 to 3 of 3" [.GG]; board client 535 scroll 540 at 5
-   Tab -> a.card "#42alpha Review of 42 Round 1One build, " focus-visible=true outline=solid 2px
-   Enter -> /reviews/<round>: Review 42 - Intakt
-
-Keyboard walk-through at 907 x 900, light:
-1. 3 x Tab -> a.nav "Board" focus-visible=true outline=solid 2px
-   Enter -> /?board=1; map hidden; board client 603 scroll 603 at 0
-2. 12 x Tab -> summary "Who is working2 working" focus-visible=true outline=solid 2px
-   Enter -> summary "Who is working2 working" focus-visible=true outline=solid 2px open=true
-   Escape -> summary "Who is working2 working" focus-visible=true outline=solid 2px open=false
-   Space -> summary "Who is working2 working" focus-visible=true outline=solid 2px open=true
-3. 4 x Tab -> button.col-fold "Show Done1 task" focus-visible=true outline=solid 2px; collapsed=true; map hidden; board client 603 scroll 603 at 0
-   Enter -> button.btn.quiet.sm.col-hide "Hide Done" focus-visible=true outline=solid 2px collapsed=false; map "Columns 1 to 2 of 3" [GG.]; board client 603 scroll 608 at 0
-   Escape -> button.col-fold "Show Done1 task" focus-visible=true outline=solid 2px collapsed=true; map hidden; board client 603 scroll 603 at 0
-   Space -> button.btn.quiet.sm.col-hide "Hide Done" focus-visible=true outline=solid 2px collapsed=false; map "Columns 1 to 2 of 3" [GG.]; board client 603 scroll 608 at 0
-4. 4 x Shift+Tab -> button.sm-seg "Done" focus-visible=true outline=solid 2px
-   E5 segment 24 x 24 px, bar 18px x 8px, 3 segments, next segment starts 0 px after the previous
-   Enter -> section#col-done.col "Done" focus-visible=true outline=solid 2px; map "Columns 1 to 2 of 3" [GG.]; board client 603 scroll 608 at 0
-   after the scroll settles: map "Columns 2 to 3 of 3" [.GG]; board client 603 scroll 608 at 5
-   Tab -> button.btn.quiet.sm.col-hide "Hide Done" focus-visible=true outline=solid 2px
-   Tab -> a.card "#41alpha Review of 41 Round 1One build, " focus-visible=true outline=solid 2px
-   E6 before Escape: collapsed=false; map "Columns 2 to 3 of 3" [.GG]; board client 603 scroll 608 at 5
-   Escape -> button.col-fold "Show Done1 task" focus-visible=true outline=solid 2px collapsed=true; map hidden; board client 603 scroll 603 at 0
-5. the fold left a board that fits, so the map is hidden and Shift+Tab goes to the In review card:
-   2 x Shift+Tab -> a.card "#42alpha Review of 42 Round 1One build, " focus-visible=true outline=solid 2px
-   Enter -> /reviews/<round>: Review 42 - Intakt
+Evidence for #1460 on head 05ec2d844, from http://localhost:7780 (fresh SQLite install, the recorded demo review replayed with intakt:demo:replay).
+board light 390: board 1138 px, map shown=false Columns 3 to 3 of 3 segment 0 x 0 px; switcher: Waiting on you 0 tasks 44px | In review 0 tasks 44px | Done 1 task 44px pressed
+review light 390: /reviews/01a1f261-3829-7222-812d-3260f5198464 HTTP ok, h1 "Review of sample-change in demo-replay"
+board light 1440: board 1136 px, map shown=false  segment 0 x 0 px; switcher: hidden
+review light 1440: /reviews/01a1f261-3829-7222-812d-3260f5198464 HTTP ok, h1 "Review of sample-change in demo-replay"
+board light 1920: board 1584 px, map shown=false  segment 0 x 0 px; switcher: hidden
+board dark 390: board 1138 px, map shown=false Columns 3 to 3 of 3 segment 0 x 0 px; switcher: Waiting on you 0 tasks 44px | In review 0 tasks 44px | Done 1 task 44px pressed
+review dark 390: /reviews/01a1f261-3829-7222-812d-3260f5198464 HTTP ok, h1 "Review of sample-change in demo-replay"
+board dark 1440: board 1136 px, map shown=false  segment 0 x 0 px; switcher: hidden
+review dark 1440: /reviews/01a1f261-3829-7222-812d-3260f5198464 HTTP ok, h1 "Review of sample-change in demo-replay"
+board dark 1920: board 1584 px, map shown=false  segment 0 x 0 px; switcher: hidden
+map at 839: {"shown":true,"label":"Columns 2 to 3 of 3","seg":"24 x 24 px","on":"011","board":608}
+map at 907: {"shown":true,"label":"Columns 2 to 3 of 3","seg":"24 x 24 px","on":"011","board":608}
+Keyboard walk-through, 839 wide, light:
+  3 x Tab to rail "Board": a.nav "Board" focus-visible=true outline=solid 2px
+  Enter opens /?board=1
+  Who is working: not on this board (the replayed round is judged, nobody is working), so its step is skipped
+  Done starts open (every other column is empty); map "Columns 2 to 3 of 3" segments in view 011, board 608 px
+  15 x Tab to Hide on Done: button.btn "Hide Done" focus-visible=true outline=solid 2px
+  Enter (Hide): Done folded, focus button.col-fold "Show Done1 task" focus-visible=true outline=solid 2px; map "Columns 2 to 3 of 3" segments in view 011, board 540 px
+  Enter on the strip: Done open, focus button.btn "Hide Done" focus-visible=true outline=solid 2px; map "Columns 2 to 3 of 3" segments in view 011, board 608 px
+  Escape: Done folded, focus button.col-fold "Show Done1 task" focus-visible=true outline=solid 2px; map "Columns 2 to 3 of 3" segments in view 011, board 540 px
+  Space on the strip: Done open, focus button.btn "Hide Done" focus-visible=true outline=solid 2px; map "Columns 2 to 3 of 3" segments in view 011, board 608 px
+  3 x Shift+Tab to the In review map segment: button.sm-seg "In review" focus-visible=true outline=solid 2px
+  Enter jumps: focus section#col-in-review.col "In review" focus-visible=true outline=solid 2px; map "Columns 2 to 3 of 3" segments in view 011, board 608 px
+  Tab (In review is empty) reaches button.btn "Hide Done" focus-visible=true outline=solid 2px
+  2 x Shift+Tab to the Done map segment: button.sm-seg "Done" focus-visible=true outline=solid 2px
+  Space jumps: focus section#col-done.col "Done" focus-visible=true outline=solid 2px; map "Columns 2 to 3 of 3" segments in view 011, board 608 px
+  Tab reaches button.btn "Hide Done" focus-visible=true outline=solid 2px
+  Tab reaches a.card "#sample-changedemo-replayReplay Changes requested " focus-visible=true outline=solid 2px
+  Enter opens /reviews/01a1f261-3829-7222-812d-3260f5198464
+phone tap 2nd switcher button: In review 0 tasks pressed, board scrollLeft 374
+phone swipe to the end: Done 1 task pressed

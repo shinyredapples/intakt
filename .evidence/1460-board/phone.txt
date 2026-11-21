@@ -1,3 +1,0 @@
-on load -> scrollY 0, switcher bottom 477, bottom bar top 732, Done column starts at 489, pressed Waiting on you 0 tasks
-a spacer above the switcher -> scrollY 0, switcher bottom 728, bottom bar top 732, Done column starts at 740, pressed Waiting on you 0 tasks
-tap Done -> scrollY 177, switcher bottom 551, bottom bar top 732, Done column starts at 563, pressed Done 1 task

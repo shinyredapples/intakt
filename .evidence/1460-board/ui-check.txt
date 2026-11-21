@@ -1,45 +1,35 @@
-bin/ui-check rerun on head a77e046d7 (after the merge of main 5f5f57848, which brings the review
-page's verdict card and the wrapping card top line), with bin/ui-check itself:
-NODE_PATH=<playwright>:<axe-core 4.14.1> CHROME_PATH=<chromium headless shell> bin/ui-check http://localhost:7780
-Fresh install as in README.txt: round-41 (change 41) judged with one act finding, so Done holds a
-card; round-42 (change 42) with two reviewers working. /reviews/round-42 is the review page
-bin/ui-check picks (the newest). The last six runs are the same check (a copy of bin/ui-check whose
-only page is /reviews/round-41), because only a judged round renders main's section.verdict-card.
-
-GET /: HTTP 200
-GET /components: HTTP 200
-GET /projects: HTTP 200
-GET /reviews: HTTP 200
-GET /setup: HTTP 200
-GET /trends: HTTP 200
-GET /waiting: HTTP 200
-GET /reviews/round-42: HTTP 200
-GET /reviews/round-41: HTTP 200 (renders class="card verdict-card")
-
 board light 1440: axe critical 0, serious 0, moderate 0, minor 0
 board light 1920: axe critical 0, serious 0, moderate 0, minor 0
-board light 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
+board light 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 1
+  target 21.75 px: a.tour-review "Open the review"
 board dark 1440: axe critical 0, serious 0, moderate 0, minor 0
 board dark 1920: axe critical 0, serious 0, moderate 0, minor 0
-board dark 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
+board dark 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 1
+  target 21.75 px: a.tour-review "Open the review"
 components light 1440: axe critical 0, serious 0, moderate 0, minor 0
 components light 1920: axe critical 0, serious 0, moderate 0, minor 0
-components light 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
+components light 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 1
+  target 21.75 px: a.tour-review "Open the review"
 components dark 1440: axe critical 0, serious 0, moderate 0, minor 0
 components dark 1920: axe critical 0, serious 0, moderate 0, minor 0
-components dark 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
+components dark 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 1
+  target 21.75 px: a.tour-review "Open the review"
 projects light 1440: axe critical 0, serious 0, moderate 0, minor 0
 projects light 1920: axe critical 0, serious 0, moderate 0, minor 0
-projects light 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
+projects light 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 1
+  target 21.75 px: a.tour-review "Open the review"
 projects dark 1440: axe critical 0, serious 0, moderate 0, minor 0
 projects dark 1920: axe critical 0, serious 0, moderate 0, minor 0
-projects dark 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
+projects dark 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 1
+  target 21.75 px: a.tour-review "Open the review"
 reviews light 1440: axe critical 0, serious 0, moderate 0, minor 0
 reviews light 1920: axe critical 0, serious 0, moderate 0, minor 0
-reviews light 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
+reviews light 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 1
+  target 21.75 px: a.tour-review "Open the review"
 reviews dark 1440: axe critical 0, serious 0, moderate 0, minor 0
 reviews dark 1920: axe critical 0, serious 0, moderate 0, minor 0
-reviews dark 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
+reviews dark 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 1
+  target 21.75 px: a.tour-review "Open the review"
 search light 1440: axe critical 0, serious 0, moderate 0, minor 0
 search light 1920: axe critical 0, serious 0, moderate 0, minor 0
 search light 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
@@ -48,33 +38,35 @@ search dark 1920: axe critical 0, serious 0, moderate 0, minor 0
 search dark 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
 setup light 1440: axe critical 0, serious 0, moderate 0, minor 0
 setup light 1920: axe critical 0, serious 0, moderate 0, minor 0
-setup light 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
+setup light 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 1
+  target 21.75 px: a.tour-review "Open the review"
 setup dark 1440: axe critical 0, serious 0, moderate 0, minor 0
 setup dark 1920: axe critical 0, serious 0, moderate 0, minor 0
-setup dark 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
+setup dark 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 1
+  target 21.75 px: a.tour-review "Open the review"
 trends light 1440: axe critical 0, serious 0, moderate 0, minor 0
 trends light 1920: axe critical 0, serious 0, moderate 0, minor 0
-trends light 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
+trends light 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 1
+  target 21.75 px: a.tour-review "Open the review"
 trends dark 1440: axe critical 0, serious 0, moderate 0, minor 0
 trends dark 1920: axe critical 0, serious 0, moderate 0, minor 0
-trends dark 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
+trends dark 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 1
+  target 21.75 px: a.tour-review "Open the review"
 waiting light 1440: axe critical 0, serious 0, moderate 0, minor 0
 waiting light 1920: axe critical 0, serious 0, moderate 0, minor 0
-waiting light 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
+waiting light 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 1
+  target 21.75 px: a.tour-review "Open the review"
 waiting dark 1440: axe critical 0, serious 0, moderate 0, minor 0
 waiting dark 1920: axe critical 0, serious 0, moderate 0, minor 0
-waiting dark 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
+waiting dark 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 1
+  target 21.75 px: a.tour-review "Open the review"
 review light 1440: axe critical 0, serious 0, moderate 0, minor 0
 review light 1920: axe critical 0, serious 0, moderate 0, minor 0
-review light 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
+review light 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 1
+  target 21.75 px: a.tour-review "Open the review"
 review dark 1440: axe critical 0, serious 0, moderate 0, minor 0
 review dark 1920: axe critical 0, serious 0, moderate 0, minor 0
-review dark 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
-UI check: 54 runs, 0 serious or critical axe violations, 0 phone floor findings, 0 page errors.
-review-judged light 1440: axe critical 0, serious 0, moderate 0, minor 0
-review-judged light 1920: axe critical 0, serious 0, moderate 0, minor 0
-review-judged light 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
-review-judged dark 1440: axe critical 0, serious 0, moderate 0, minor 0
-review-judged dark 1920: axe critical 0, serious 0, moderate 0, minor 0
-review-judged dark 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
-UI check: 6 runs, 0 serious or critical axe violations, 0 phone floor findings, 0 page errors.
+review dark 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 1
+  target 21.75 px: a.tour-review "Open the review"
+UI check: 54 runs, 0 serious or critical axe violations, 16 phone floor findings, 0 page errors.
+Screenshots in var/ui-check/
