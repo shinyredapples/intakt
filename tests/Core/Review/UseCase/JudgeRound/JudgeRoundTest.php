@@ -21,17 +21,21 @@ use Intakt\Core\Review\Contract\JudgedFindings;
 use Intakt\Core\Review\Contract\Judgement;
 use Intakt\Core\Review\Contract\JudgeRequest;
 use Intakt\Core\Review\Contract\Mark;
+use Intakt\Core\Review\Contract\NearLine;
+use Intakt\Core\Review\Contract\QuoteNearLines;
 use Intakt\Core\Review\Contract\RoundJudged;
 use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\CausesInOneHunk;
 use Intakt\Core\Review\Domain\FindingLedger;
+use Intakt\Core\Review\Domain\NearestChangedLines;
 use Intakt\Core\Review\Domain\QuotesInChange;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundState;
 use Intakt\Core\Review\Domain\RoundTransition;
 use Intakt\Core\Review\Infrastructure\ChangeText;
+use Intakt\Core\Review\Infrastructure\DiffAddedLines;
 use Intakt\Core\Review\Infrastructure\DiffHunks;
 use Intakt\Core\Review\Infrastructure\DiffPaths;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgedRounds;
@@ -79,6 +83,10 @@ use Throwable;
 #[CoversClass(DiffHunks::class)]
 #[UsesClass(JudgedFindings::class)]
 #[UsesClass(DroppedFinding::class)]
+#[UsesClass(NearestChangedLines::class)]
+#[UsesClass(DiffAddedLines::class)]
+#[UsesClass(QuoteNearLines::class)]
+#[UsesClass(NearLine::class)]
 #[UsesClass(RoundJudged::class)]
 #[UsesClass(FollowUp::class)]
 #[UsesClass(Judgement::class)]
@@ -512,8 +520,20 @@ final class JudgeRoundTest extends KernelTestCase
         $this->fixture->judge(new ScriptedJudgement(new Judgement([])))($this->judgingOf($round));
 
         self::assertSame(
-            [['id' => 'F1', 'severity' => 'P1', 'text' => '`grepName` is not defined.', 'file' => 'src/Thing.php', 'line' => 1, 'reason' => 'none of its 1 quoted code fragments is in the change']],
+            [['id' => 'F1', 'severity' => 'P1', 'text' => '`grepName` is not defined.', 'file' => 'src/Thing.php', 'line' => 1, 'reason' => 'none of its 1 quoted code fragments is in the change', 'nearest' => []]],
             $this->judgeDonePayloads()[0]['dropped'],
+        );
+    }
+
+    public function testAFindingDroppedForItsQuotesIsRecordedWithTheNearestChangedLines(): void
+    {
+        $round = $this->roundReporting([$this->quoting('A', Severity::P1, '`newThing` is not defined.')]);
+
+        $this->fixture->judge(new ScriptedJudgement(new Judgement([])))($this->judgingOf($round));
+
+        self::assertSame(
+            [['quote' => 'newThing', 'lines' => [['file' => 'src/Thing.php', 'line' => 1, 'text' => 'new']]]],
+            $this->judgeDonePayloads()[0]['dropped'][0]['nearest'],
         );
     }
 
