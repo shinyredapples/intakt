@@ -107,7 +107,7 @@ final readonly class AccountPlatform implements PlatformInterface
         $cause = $failure instanceof IncompleteStreamException ? $failure->getPrevious() ?? $failure : $failure;
         $coolDown = $this->coolDownAfter($cause);
 
-        // A wrapper that is retryable itself counts as an account error, as it did when the thrown exception was classified.
+        // A retryable wrapper counts as an account error, because the send path classified the thrown exception itself before it looked through to the cause.
         $thrownIsAccountError = $cause === $failure || $failure instanceof RetryableExceptionInterface;
 
         if (!$coolDown instanceof Closure) {
