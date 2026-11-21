@@ -1,5 +1,5 @@
 {# Shared by the reviewers table and the row a live update places, so a reviewer that started after the page loaded reads like one a reload lists. #}
 <td>{{ outcome.role }}</td>
-<td>{{ outcome.modelInWords }}</td>
+{{ include('dashboard/_reviewer_model_cell.html.twig', {round: round, outcome: outcome}, with_context = false) }}
 {{ include('dashboard/_reviewer_state_cell.html.twig', {round: round, outcome: outcome}, with_context = false) }}
 <td class="num">{% if outcome.findings is not null %}{{ outcome.findings }}{% elseif outcome.progress.name == 'Running' %}no answer yet{% else %}no answer{% endif %}</td>

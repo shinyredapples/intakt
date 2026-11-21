@@ -163,7 +163,7 @@ final class BlockedWithFindingsPageTest extends WebTestCase
             foreach ($fixture->judgings() as $judging) {
                 // Read before the judge's call, because the Now box shows a round only until it is judged.
                 $this->roundId = $judging->roundId;
-                $this->nowStates = $this->browser->request('GET', '/reviews/'.$judging->roundId)->filter('[id$="-now-reviewers"] [id*="-now-reviewer-"]')->each(static fn (Crawler $state): string => $state->text());
+                $this->nowStates = $this->browser->request('GET', '/reviews/'.$judging->roundId)->filter('[id$="-now-reviewers"] [id*="-now-reviewer-"][id$="-state"]')->each(static fn (Crawler $state): string => $state->text());
                 $fixture->judge($vendor)($judging);
             }
         };
