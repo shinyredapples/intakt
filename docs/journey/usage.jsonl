@@ -1,121 +1,121 @@
-{"day": "2026-10-27", "vendor": "claude", "account": "claude-1", "lane": "build", "tokens": 9743937}
-{"day": "2026-10-27", "vendor": "claude", "account": "claude-1", "lane": "review", "tokens": 1414394}
-{"day": "2026-10-27", "vendor": "gpt", "account": "gpt-1", "lane": "review", "tokens": 1475652}
-{"day": "2026-10-28", "vendor": "claude", "account": "claude-1", "lane": "build", "tokens": 15080151}
-{"day": "2026-10-28", "vendor": "claude", "account": "claude-1", "lane": "review", "tokens": 3670947}
-{"day": "2026-10-28", "vendor": "gpt", "account": "gpt-1", "lane": "review", "tokens": 5320086}
-{"day": "2026-10-29", "vendor": "claude", "account": "claude-1", "lane": "build", "tokens": 17634626}
-{"day": "2026-10-29", "vendor": "claude", "account": "claude-1", "lane": "review", "tokens": 6574144}
-{"day": "2026-10-29", "vendor": "gpt", "account": "gpt-1", "lane": "review", "tokens": 9313894}
-{"day": "2026-10-30", "vendor": "claude", "account": "claude-1", "lane": "build", "tokens": 10410087}
-{"day": "2026-10-30", "vendor": "claude", "account": "claude-1", "lane": "review", "tokens": 2367409}
-{"day": "2026-10-30", "vendor": "gpt", "account": "gpt-1", "lane": "review", "tokens": 3389857}
-{"day": "2026-10-31", "vendor": "claude", "account": "claude-1", "lane": "build", "tokens": 7932737}
-{"day": "2026-10-31", "vendor": "claude", "account": "claude-1", "lane": "review", "tokens": 2853520}
-{"day": "2026-10-31", "vendor": "claude", "account": "claude-2", "lane": "build", "tokens": 18183868}
-{"day": "2026-10-31", "vendor": "claude", "account": "claude-2", "lane": "review", "tokens": 2685722}
-{"day": "2026-10-31", "vendor": "gpt", "account": "gpt-1", "lane": "review", "tokens": 7602051}
-{"day": "2026-11-01", "vendor": "claude", "account": "claude-1", "lane": "build", "tokens": 44450135}
-{"day": "2026-11-01", "vendor": "claude", "account": "claude-1", "lane": "review", "tokens": 6629491}
-{"day": "2026-11-01", "vendor": "claude", "account": "claude-2", "lane": "build", "tokens": 7148870}
-{"day": "2026-11-01", "vendor": "claude", "account": "claude-2", "lane": "review", "tokens": 895089}
-{"day": "2026-11-01", "vendor": "gpt", "account": "gpt-1", "lane": "review", "tokens": 10302741}
-{"day": "2026-11-02", "vendor": "claude", "account": "claude-1", "lane": "build", "tokens": 41154441}
-{"day": "2026-11-02", "vendor": "claude", "account": "claude-1", "lane": "review", "tokens": 6110315}
-{"day": "2026-11-02", "vendor": "gpt", "account": "gpt-1", "lane": "review", "tokens": 9295766}
-{"day": "2026-11-03", "vendor": "claude", "account": "claude-1", "lane": "build", "tokens": 28209262}
-{"day": "2026-11-03", "vendor": "claude", "account": "claude-1", "lane": "review", "tokens": 4083062}
-{"day": "2026-11-03", "vendor": "claude", "account": "claude-2", "lane": "build", "tokens": 11578992}
-{"day": "2026-11-03", "vendor": "claude", "account": "claude-2", "lane": "review", "tokens": 1707646}
-{"day": "2026-11-03", "vendor": "gpt", "account": "gpt-1", "lane": "review", "tokens": 8540343}
-{"day": "2026-11-04", "vendor": "claude", "account": "claude-1", "lane": "build", "tokens": 16245985}
-{"day": "2026-11-04", "vendor": "claude", "account": "claude-1", "lane": "review", "tokens": 1882564}
-{"day": "2026-11-04", "vendor": "claude", "account": "claude-2", "lane": "build", "tokens": 13485643}
-{"day": "2026-11-04", "vendor": "claude", "account": "claude-2", "lane": "review", "tokens": 4986021}
-{"day": "2026-11-04", "vendor": "gpt", "account": "gpt-1", "lane": "review", "tokens": 6306327}
-{"day": "2026-11-05", "vendor": "claude", "account": "claude-1", "lane": "build", "tokens": 7080025}
-{"day": "2026-11-05", "vendor": "claude", "account": "claude-1", "lane": "review", "tokens": 4656827}
-{"day": "2026-11-05", "vendor": "claude", "account": "claude-2", "lane": "build", "tokens": 16192215}
-{"day": "2026-11-05", "vendor": "claude", "account": "claude-2", "lane": "review", "tokens": 2358682}
-{"day": "2026-11-05", "vendor": "gpt", "account": "gpt-1", "lane": "review", "tokens": 3739786}
-{"day": "2026-11-06", "vendor": "claude", "account": "claude-1", "lane": "build", "tokens": 16883767}
-{"day": "2026-11-06", "vendor": "claude", "account": "claude-1", "lane": "review", "tokens": 8851669}
-{"day": "2026-11-06", "vendor": "claude", "account": "claude-2", "lane": "build", "tokens": 4505330}
-{"day": "2026-11-06", "vendor": "claude", "account": "claude-2", "lane": "review", "tokens": 2892885}
-{"day": "2026-11-06", "vendor": "claude", "account": "claude-api", "lane": "build", "tokens": 11923645}
-{"day": "2026-11-06", "vendor": "claude", "account": "claude-api", "lane": "review", "tokens": 3418088}
-{"day": "2026-11-06", "vendor": "gpt", "account": "gpt-1", "lane": "review", "tokens": 7309720}
-{"day": "2026-11-07", "vendor": "claude", "account": "claude-2", "lane": "build", "tokens": 37905225}
-{"day": "2026-11-07", "vendor": "claude", "account": "claude-2", "lane": "review", "tokens": 12770764}
-{"day": "2026-11-07", "vendor": "claude", "account": "claude-api", "lane": "build", "tokens": 12024508}
-{"day": "2026-11-07", "vendor": "claude", "account": "claude-api", "lane": "review", "tokens": 1852813}
-{"day": "2026-11-07", "vendor": "gpt", "account": "gpt-1", "lane": "review", "tokens": 7827106}
-{"day": "2026-11-08", "vendor": "claude", "account": "claude-1", "lane": "build", "tokens": 37849890}
-{"day": "2026-11-08", "vendor": "claude", "account": "claude-1", "lane": "review", "tokens": 9293907}
-{"day": "2026-11-08", "vendor": "claude", "account": "claude-2", "lane": "build", "tokens": 4424942}
-{"day": "2026-11-08", "vendor": "claude", "account": "claude-2", "lane": "review", "tokens": 1768851}
-{"day": "2026-11-08", "vendor": "claude", "account": "claude-api", "lane": "build", "tokens": 1177517}
-{"day": "2026-11-08", "vendor": "gpt", "account": "gpt-1", "lane": "review", "tokens": 6456744}
-{"day": "2026-11-09", "vendor": "claude", "account": "claude-1", "lane": "build", "tokens": 47680259}
-{"day": "2026-11-09", "vendor": "claude", "account": "claude-1", "lane": "review", "tokens": 6995410}
-{"day": "2026-11-09", "vendor": "gpt", "account": "gpt-1", "lane": "review", "tokens": 3873823}
-{"day": "2026-11-10", "vendor": "claude", "account": "claude-1", "lane": "build", "tokens": 41968547}
-{"day": "2026-11-10", "vendor": "claude", "account": "claude-1", "lane": "review", "tokens": 13950428}
-{"day": "2026-11-10", "vendor": "gpt", "account": "gpt-1", "lane": "review", "tokens": 7782678}
-{"day": "2026-11-11", "vendor": "claude", "account": "claude-1", "lane": "build", "tokens": 48812342}
-{"day": "2026-11-11", "vendor": "claude", "account": "claude-1", "lane": "review", "tokens": 15459209}
-{"day": "2026-11-11", "vendor": "claude", "account": "claude-2", "lane": "build", "tokens": 7614827}
-{"day": "2026-11-11", "vendor": "claude", "account": "claude-2", "lane": "review", "tokens": 1392889}
-{"day": "2026-11-11", "vendor": "gpt", "account": "gpt-1", "lane": "review", "tokens": 9348347}
-{"day": "2026-11-12", "vendor": "claude", "account": "claude-1", "lane": "build", "tokens": 48965527}
-{"day": "2026-11-12", "vendor": "claude", "account": "claude-1", "lane": "review", "tokens": 15697001}
-{"day": "2026-11-12", "vendor": "claude", "account": "claude-2", "lane": "build", "tokens": 9323206}
-{"day": "2026-11-12", "vendor": "claude", "account": "claude-2", "lane": "review", "tokens": 3657172}
-{"day": "2026-11-12", "vendor": "gpt", "account": "gpt-1", "lane": "review", "tokens": 10917017}
-{"day": "2026-11-13", "vendor": "claude", "account": "claude-1", "lane": "build", "tokens": 51660468}
-{"day": "2026-11-13", "vendor": "claude", "account": "claude-1", "lane": "review", "tokens": 13573621}
-{"day": "2026-11-13", "vendor": "claude", "account": "claude-2", "lane": "build", "tokens": 28062381}
-{"day": "2026-11-13", "vendor": "claude", "account": "claude-2", "lane": "review", "tokens": 10649531}
-{"day": "2026-11-13", "vendor": "claude", "account": "claude-api", "lane": "build", "tokens": 21476082}
-{"day": "2026-11-13", "vendor": "gpt", "account": "gpt-1", "lane": "review", "tokens": 14192612}
-{"day": "2026-11-14", "vendor": "claude", "account": "claude-1", "lane": "build", "tokens": 44546129}
-{"day": "2026-11-14", "vendor": "claude", "account": "claude-1", "lane": "review", "tokens": 11479327}
-{"day": "2026-11-14", "vendor": "claude", "account": "claude-2", "lane": "build", "tokens": 23856442}
-{"day": "2026-11-14", "vendor": "claude", "account": "claude-2", "lane": "review", "tokens": 7013915}
-{"day": "2026-11-14", "vendor": "claude", "account": "claude-api", "lane": "build", "tokens": 2929575}
-{"day": "2026-11-14", "vendor": "gpt", "account": "gpt-1", "lane": "review", "tokens": 10300181}
-{"day": "2026-11-15", "vendor": "claude", "account": "claude-1", "lane": "build", "tokens": 57419823}
-{"day": "2026-11-15", "vendor": "claude", "account": "claude-1", "lane": "review", "tokens": 13580644}
-{"day": "2026-11-15", "vendor": "claude", "account": "claude-2", "lane": "build", "tokens": 7049036}
-{"day": "2026-11-15", "vendor": "claude", "account": "claude-2", "lane": "review", "tokens": 1532519}
-{"day": "2026-11-15", "vendor": "gpt", "account": "gpt-1", "lane": "review", "tokens": 8565064}
-{"day": "2026-11-16", "vendor": "claude", "account": "claude-1", "lane": "build", "tokens": 84850947}
-{"day": "2026-11-16", "vendor": "claude", "account": "claude-1", "lane": "review", "tokens": 19316606}
-{"day": "2026-11-16", "vendor": "claude", "account": "claude-2", "lane": "build", "tokens": 20667113}
-{"day": "2026-11-16", "vendor": "claude", "account": "claude-2", "lane": "review", "tokens": 4766800}
-{"day": "2026-11-16", "vendor": "gpt", "account": "gpt-1", "lane": "review", "tokens": 14752328}
-{"day": "2026-11-17", "vendor": "claude", "account": "claude-1", "lane": "build", "tokens": 99671098}
-{"day": "2026-11-17", "vendor": "claude", "account": "claude-1", "lane": "review", "tokens": 19216893}
-{"day": "2026-11-17", "vendor": "claude", "account": "claude-2", "lane": "build", "tokens": 9485404}
-{"day": "2026-11-17", "vendor": "claude", "account": "claude-2", "lane": "review", "tokens": 2452698}
-{"day": "2026-11-17", "vendor": "gpt", "account": "gpt-1", "lane": "review", "tokens": 13735417}
-{"day": "2026-11-18", "vendor": "claude", "account": "claude-1", "lane": "build", "tokens": 81077644}
-{"day": "2026-11-18", "vendor": "claude", "account": "claude-1", "lane": "review", "tokens": 39472911}
-{"day": "2026-11-18", "vendor": "claude", "account": "claude-2", "lane": "build", "tokens": 47412271}
-{"day": "2026-11-18", "vendor": "claude", "account": "claude-2", "lane": "review", "tokens": 27272650}
-{"day": "2026-11-18", "vendor": "claude", "account": "claude-api", "lane": "build", "tokens": 52935556}
-{"day": "2026-11-18", "vendor": "gpt", "account": "gpt-1", "lane": "review", "tokens": 43561360}
-{"day": "2026-11-19", "vendor": "claude", "account": "claude-1", "lane": "build", "tokens": 6935520}
-{"day": "2026-11-19", "vendor": "claude", "account": "claude-1", "lane": "review", "tokens": 4898001}
-{"day": "2026-11-19", "vendor": "claude", "account": "claude-2", "lane": "build", "tokens": 108558372}
-{"day": "2026-11-19", "vendor": "claude", "account": "claude-2", "lane": "review", "tokens": 49940904}
-{"day": "2026-11-19", "vendor": "claude", "account": "claude-api", "lane": "build", "tokens": 12258567}
-{"day": "2026-11-19", "vendor": "gpt", "account": "gpt-1", "lane": "review", "tokens": 36857642}
-{"day": "2026-11-20", "vendor": "claude", "account": "claude-1", "lane": "build", "tokens": 40421153}
-{"day": "2026-11-20", "vendor": "claude", "account": "claude-1", "lane": "review", "tokens": 17513486}
-{"day": "2026-11-20", "vendor": "claude", "account": "claude-2", "lane": "build", "tokens": 79964466}
-{"day": "2026-11-20", "vendor": "claude", "account": "claude-2", "lane": "review", "tokens": 40434327}
-{"day": "2026-11-20", "vendor": "gpt", "account": "gpt-1", "lane": "review", "tokens": 44719942}
-{"day": "2026-11-21", "vendor": "claude", "account": "claude-1", "lane": "build", "tokens": 123354276}
-{"day": "2026-11-21", "vendor": "claude", "account": "claude-1", "lane": "review", "tokens": 39939930}
-{"day": "2026-11-21", "vendor": "gpt", "account": "gpt-1", "lane": "review", "tokens": 34978268}
+{"day": "2026-10-27", "vendor": "claude", "account": "claude-1", "lane": "build", "tokens": 9743937, "reserved": 0}
+{"day": "2026-10-27", "vendor": "claude", "account": "claude-1", "lane": "review", "tokens": 1414394, "reserved": 0}
+{"day": "2026-10-27", "vendor": "gpt", "account": "gpt-1", "lane": "review", "tokens": 1475652, "reserved": 0}
+{"day": "2026-10-28", "vendor": "claude", "account": "claude-1", "lane": "build", "tokens": 15080151, "reserved": 0}
+{"day": "2026-10-28", "vendor": "claude", "account": "claude-1", "lane": "review", "tokens": 3670947, "reserved": 0}
+{"day": "2026-10-28", "vendor": "gpt", "account": "gpt-1", "lane": "review", "tokens": 5320086, "reserved": 0}
+{"day": "2026-10-29", "vendor": "claude", "account": "claude-1", "lane": "build", "tokens": 17634626, "reserved": 0}
+{"day": "2026-10-29", "vendor": "claude", "account": "claude-1", "lane": "review", "tokens": 6574144, "reserved": 0}
+{"day": "2026-10-29", "vendor": "gpt", "account": "gpt-1", "lane": "review", "tokens": 9313894, "reserved": 0}
+{"day": "2026-10-30", "vendor": "claude", "account": "claude-1", "lane": "build", "tokens": 10410087, "reserved": 0}
+{"day": "2026-10-30", "vendor": "claude", "account": "claude-1", "lane": "review", "tokens": 2367409, "reserved": 0}
+{"day": "2026-10-30", "vendor": "gpt", "account": "gpt-1", "lane": "review", "tokens": 3389857, "reserved": 0}
+{"day": "2026-10-31", "vendor": "claude", "account": "claude-1", "lane": "build", "tokens": 7932737, "reserved": 0}
+{"day": "2026-10-31", "vendor": "claude", "account": "claude-1", "lane": "review", "tokens": 2553520, "reserved": 300000}
+{"day": "2026-10-31", "vendor": "claude", "account": "claude-2", "lane": "build", "tokens": 18183868, "reserved": 0}
+{"day": "2026-10-31", "vendor": "claude", "account": "claude-2", "lane": "review", "tokens": 2685722, "reserved": 0}
+{"day": "2026-10-31", "vendor": "gpt", "account": "gpt-1", "lane": "review", "tokens": 7602051, "reserved": 0}
+{"day": "2026-11-01", "vendor": "claude", "account": "claude-1", "lane": "build", "tokens": 39650135, "reserved": 4800000}
+{"day": "2026-11-01", "vendor": "claude", "account": "claude-1", "lane": "review", "tokens": 6029491, "reserved": 600000}
+{"day": "2026-11-01", "vendor": "claude", "account": "claude-2", "lane": "build", "tokens": 7148870, "reserved": 0}
+{"day": "2026-11-01", "vendor": "claude", "account": "claude-2", "lane": "review", "tokens": 895089, "reserved": 0}
+{"day": "2026-11-01", "vendor": "gpt", "account": "gpt-1", "lane": "review", "tokens": 10302741, "reserved": 0}
+{"day": "2026-11-02", "vendor": "claude", "account": "claude-1", "lane": "build", "tokens": 41154441, "reserved": 0}
+{"day": "2026-11-02", "vendor": "claude", "account": "claude-1", "lane": "review", "tokens": 6110315, "reserved": 0}
+{"day": "2026-11-02", "vendor": "gpt", "account": "gpt-1", "lane": "review", "tokens": 9295766, "reserved": 0}
+{"day": "2026-11-03", "vendor": "claude", "account": "claude-1", "lane": "build", "tokens": 28209262, "reserved": 0}
+{"day": "2026-11-03", "vendor": "claude", "account": "claude-1", "lane": "review", "tokens": 4083062, "reserved": 0}
+{"day": "2026-11-03", "vendor": "claude", "account": "claude-2", "lane": "build", "tokens": 11578992, "reserved": 0}
+{"day": "2026-11-03", "vendor": "claude", "account": "claude-2", "lane": "review", "tokens": 1707646, "reserved": 0}
+{"day": "2026-11-03", "vendor": "gpt", "account": "gpt-1", "lane": "review", "tokens": 8540343, "reserved": 0}
+{"day": "2026-11-04", "vendor": "claude", "account": "claude-1", "lane": "build", "tokens": 16105028, "reserved": 140957}
+{"day": "2026-11-04", "vendor": "claude", "account": "claude-1", "lane": "review", "tokens": 1882564, "reserved": 0}
+{"day": "2026-11-04", "vendor": "claude", "account": "claude-2", "lane": "build", "tokens": 13485643, "reserved": 0}
+{"day": "2026-11-04", "vendor": "claude", "account": "claude-2", "lane": "review", "tokens": 4986021, "reserved": 0}
+{"day": "2026-11-04", "vendor": "gpt", "account": "gpt-1", "lane": "review", "tokens": 6306327, "reserved": 0}
+{"day": "2026-11-05", "vendor": "claude", "account": "claude-1", "lane": "build", "tokens": 4909225, "reserved": 2170800}
+{"day": "2026-11-05", "vendor": "claude", "account": "claude-1", "lane": "review", "tokens": 4656827, "reserved": 0}
+{"day": "2026-11-05", "vendor": "claude", "account": "claude-2", "lane": "build", "tokens": 16192215, "reserved": 0}
+{"day": "2026-11-05", "vendor": "claude", "account": "claude-2", "lane": "review", "tokens": 2358682, "reserved": 0}
+{"day": "2026-11-05", "vendor": "gpt", "account": "gpt-1", "lane": "review", "tokens": 3739786, "reserved": 0}
+{"day": "2026-11-06", "vendor": "claude", "account": "claude-1", "lane": "build", "tokens": 16883767, "reserved": 0}
+{"day": "2026-11-06", "vendor": "claude", "account": "claude-1", "lane": "review", "tokens": 8851669, "reserved": 0}
+{"day": "2026-11-06", "vendor": "claude", "account": "claude-2", "lane": "build", "tokens": 4505330, "reserved": 0}
+{"day": "2026-11-06", "vendor": "claude", "account": "claude-2", "lane": "review", "tokens": 2892885, "reserved": 0}
+{"day": "2026-11-06", "vendor": "claude", "account": "claude-api", "lane": "build", "tokens": 11923645, "reserved": 0}
+{"day": "2026-11-06", "vendor": "claude", "account": "claude-api", "lane": "review", "tokens": 3418088, "reserved": 0}
+{"day": "2026-11-06", "vendor": "gpt", "account": "gpt-1", "lane": "review", "tokens": 7309720, "reserved": 0}
+{"day": "2026-11-07", "vendor": "claude", "account": "claude-2", "lane": "build", "tokens": 37905225, "reserved": 0}
+{"day": "2026-11-07", "vendor": "claude", "account": "claude-2", "lane": "review", "tokens": 12770764, "reserved": 0}
+{"day": "2026-11-07", "vendor": "claude", "account": "claude-api", "lane": "build", "tokens": 12024508, "reserved": 0}
+{"day": "2026-11-07", "vendor": "claude", "account": "claude-api", "lane": "review", "tokens": 1852813, "reserved": 0}
+{"day": "2026-11-07", "vendor": "gpt", "account": "gpt-1", "lane": "review", "tokens": 7827106, "reserved": 0}
+{"day": "2026-11-08", "vendor": "claude", "account": "claude-1", "lane": "build", "tokens": 37849890, "reserved": 0}
+{"day": "2026-11-08", "vendor": "claude", "account": "claude-1", "lane": "review", "tokens": 9293907, "reserved": 0}
+{"day": "2026-11-08", "vendor": "claude", "account": "claude-2", "lane": "build", "tokens": 4424942, "reserved": 0}
+{"day": "2026-11-08", "vendor": "claude", "account": "claude-2", "lane": "review", "tokens": 1768851, "reserved": 0}
+{"day": "2026-11-08", "vendor": "claude", "account": "claude-api", "lane": "build", "tokens": 1177517, "reserved": 0}
+{"day": "2026-11-08", "vendor": "gpt", "account": "gpt-1", "lane": "review", "tokens": 6456744, "reserved": 0}
+{"day": "2026-11-09", "vendor": "claude", "account": "claude-1", "lane": "build", "tokens": 42880259, "reserved": 4800000}
+{"day": "2026-11-09", "vendor": "claude", "account": "claude-1", "lane": "review", "tokens": 6395410, "reserved": 600000}
+{"day": "2026-11-09", "vendor": "gpt", "account": "gpt-1", "lane": "review", "tokens": 3873823, "reserved": 0}
+{"day": "2026-11-10", "vendor": "claude", "account": "claude-1", "lane": "build", "tokens": 39897375, "reserved": 2071172}
+{"day": "2026-11-10", "vendor": "claude", "account": "claude-1", "lane": "review", "tokens": 13950428, "reserved": 0}
+{"day": "2026-11-10", "vendor": "gpt", "account": "gpt-1", "lane": "review", "tokens": 7782678, "reserved": 0}
+{"day": "2026-11-11", "vendor": "claude", "account": "claude-1", "lane": "build", "tokens": 44012342, "reserved": 4800000}
+{"day": "2026-11-11", "vendor": "claude", "account": "claude-1", "lane": "review", "tokens": 14859209, "reserved": 600000}
+{"day": "2026-11-11", "vendor": "claude", "account": "claude-2", "lane": "build", "tokens": 7614827, "reserved": 0}
+{"day": "2026-11-11", "vendor": "claude", "account": "claude-2", "lane": "review", "tokens": 1392889, "reserved": 0}
+{"day": "2026-11-11", "vendor": "gpt", "account": "gpt-1", "lane": "review", "tokens": 9348347, "reserved": 0}
+{"day": "2026-11-12", "vendor": "claude", "account": "claude-1", "lane": "build", "tokens": 48965527, "reserved": 0}
+{"day": "2026-11-12", "vendor": "claude", "account": "claude-1", "lane": "review", "tokens": 15697001, "reserved": 0}
+{"day": "2026-11-12", "vendor": "claude", "account": "claude-2", "lane": "build", "tokens": 9323206, "reserved": 0}
+{"day": "2026-11-12", "vendor": "claude", "account": "claude-2", "lane": "review", "tokens": 3657172, "reserved": 0}
+{"day": "2026-11-12", "vendor": "gpt", "account": "gpt-1", "lane": "review", "tokens": 10917017, "reserved": 0}
+{"day": "2026-11-13", "vendor": "claude", "account": "claude-1", "lane": "build", "tokens": 51660468, "reserved": 0}
+{"day": "2026-11-13", "vendor": "claude", "account": "claude-1", "lane": "review", "tokens": 13573621, "reserved": 0}
+{"day": "2026-11-13", "vendor": "claude", "account": "claude-2", "lane": "build", "tokens": 28062381, "reserved": 0}
+{"day": "2026-11-13", "vendor": "claude", "account": "claude-2", "lane": "review", "tokens": 10649531, "reserved": 0}
+{"day": "2026-11-13", "vendor": "claude", "account": "claude-api", "lane": "build", "tokens": 21476082, "reserved": 0}
+{"day": "2026-11-13", "vendor": "gpt", "account": "gpt-1", "lane": "review", "tokens": 14192612, "reserved": 0}
+{"day": "2026-11-14", "vendor": "claude", "account": "claude-1", "lane": "build", "tokens": 44546129, "reserved": 0}
+{"day": "2026-11-14", "vendor": "claude", "account": "claude-1", "lane": "review", "tokens": 11479327, "reserved": 0}
+{"day": "2026-11-14", "vendor": "claude", "account": "claude-2", "lane": "build", "tokens": 23856442, "reserved": 0}
+{"day": "2026-11-14", "vendor": "claude", "account": "claude-2", "lane": "review", "tokens": 7013915, "reserved": 0}
+{"day": "2026-11-14", "vendor": "claude", "account": "claude-api", "lane": "build", "tokens": 2929575, "reserved": 0}
+{"day": "2026-11-14", "vendor": "gpt", "account": "gpt-1", "lane": "review", "tokens": 10300181, "reserved": 0}
+{"day": "2026-11-15", "vendor": "claude", "account": "claude-1", "lane": "build", "tokens": 57419823, "reserved": 0}
+{"day": "2026-11-15", "vendor": "claude", "account": "claude-1", "lane": "review", "tokens": 13580644, "reserved": 0}
+{"day": "2026-11-15", "vendor": "claude", "account": "claude-2", "lane": "build", "tokens": 7049036, "reserved": 0}
+{"day": "2026-11-15", "vendor": "claude", "account": "claude-2", "lane": "review", "tokens": 1532519, "reserved": 0}
+{"day": "2026-11-15", "vendor": "gpt", "account": "gpt-1", "lane": "review", "tokens": 8565064, "reserved": 0}
+{"day": "2026-11-16", "vendor": "claude", "account": "claude-1", "lane": "build", "tokens": 84850947, "reserved": 0}
+{"day": "2026-11-16", "vendor": "claude", "account": "claude-1", "lane": "review", "tokens": 19316606, "reserved": 0}
+{"day": "2026-11-16", "vendor": "claude", "account": "claude-2", "lane": "build", "tokens": 20667113, "reserved": 0}
+{"day": "2026-11-16", "vendor": "claude", "account": "claude-2", "lane": "review", "tokens": 4766800, "reserved": 0}
+{"day": "2026-11-16", "vendor": "gpt", "account": "gpt-1", "lane": "review", "tokens": 14752328, "reserved": 0}
+{"day": "2026-11-17", "vendor": "claude", "account": "claude-1", "lane": "build", "tokens": 99671098, "reserved": 0}
+{"day": "2026-11-17", "vendor": "claude", "account": "claude-1", "lane": "review", "tokens": 19216893, "reserved": 0}
+{"day": "2026-11-17", "vendor": "claude", "account": "claude-2", "lane": "build", "tokens": 9485404, "reserved": 0}
+{"day": "2026-11-17", "vendor": "claude", "account": "claude-2", "lane": "review", "tokens": 2452698, "reserved": 0}
+{"day": "2026-11-17", "vendor": "gpt", "account": "gpt-1", "lane": "review", "tokens": 13735417, "reserved": 0}
+{"day": "2026-11-18", "vendor": "claude", "account": "claude-1", "lane": "build", "tokens": 81077644, "reserved": 0}
+{"day": "2026-11-18", "vendor": "claude", "account": "claude-1", "lane": "review", "tokens": 39472911, "reserved": 0}
+{"day": "2026-11-18", "vendor": "claude", "account": "claude-2", "lane": "build", "tokens": 47412271, "reserved": 0}
+{"day": "2026-11-18", "vendor": "claude", "account": "claude-2", "lane": "review", "tokens": 27272650, "reserved": 0}
+{"day": "2026-11-18", "vendor": "claude", "account": "claude-api", "lane": "build", "tokens": 52935556, "reserved": 0}
+{"day": "2026-11-18", "vendor": "gpt", "account": "gpt-1", "lane": "review", "tokens": 43561360, "reserved": 0}
+{"day": "2026-11-19", "vendor": "claude", "account": "claude-1", "lane": "build", "tokens": 6935520, "reserved": 0}
+{"day": "2026-11-19", "vendor": "claude", "account": "claude-1", "lane": "review", "tokens": 4898001, "reserved": 0}
+{"day": "2026-11-19", "vendor": "claude", "account": "claude-2", "lane": "build", "tokens": 106692305, "reserved": 1866067}
+{"day": "2026-11-19", "vendor": "claude", "account": "claude-2", "lane": "review", "tokens": 48281318, "reserved": 1659586}
+{"day": "2026-11-19", "vendor": "claude", "account": "claude-api", "lane": "build", "tokens": 12258567, "reserved": 0}
+{"day": "2026-11-19", "vendor": "gpt", "account": "gpt-1", "lane": "review", "tokens": 36857642, "reserved": 0}
+{"day": "2026-11-20", "vendor": "claude", "account": "claude-1", "lane": "build", "tokens": 40421153, "reserved": 0}
+{"day": "2026-11-20", "vendor": "claude", "account": "claude-1", "lane": "review", "tokens": 16313486, "reserved": 1200000}
+{"day": "2026-11-20", "vendor": "claude", "account": "claude-2", "lane": "build", "tokens": 79964466, "reserved": 0}
+{"day": "2026-11-20", "vendor": "claude", "account": "claude-2", "lane": "review", "tokens": 40434327, "reserved": 0}
+{"day": "2026-11-20", "vendor": "gpt", "account": "gpt-1", "lane": "review", "tokens": 44719942, "reserved": 0}
+{"day": "2026-11-21", "vendor": "claude", "account": "claude-1", "lane": "build", "tokens": 137390140, "reserved": 0}
+{"day": "2026-11-21", "vendor": "claude", "account": "claude-1", "lane": "review", "tokens": 45077106, "reserved": 0}
+{"day": "2026-11-21", "vendor": "gpt", "account": "gpt-1", "lane": "review", "tokens": 39147860, "reserved": 0}
