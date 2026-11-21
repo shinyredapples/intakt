@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Review\Stored;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\FindingIds;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
@@ -97,7 +98,7 @@ final class StoredJsonTest extends KernelTestCase
 
     public function testAFindingWithMergedIdsReadsBackWithThem(): void
     {
-        $finding = $this->finding()->withMerged(['F2', 'F3']);
+        $finding = $this->finding()->withMerged(new FindingIds('F2', 'F3'));
 
         $read = $this->serializer()->deserialize($this->serializer()->serialize([$finding], JsonEncoder::FORMAT), Finding::class.'[]', JsonEncoder::FORMAT);
 
@@ -106,7 +107,7 @@ final class StoredJsonTest extends KernelTestCase
 
     public function testATrackedFindingWithMergedIdsReadsBackWithThem(): void
     {
-        $tracked = [new TrackedFinding('a', $this->finding()->withMerged(['F2']), [1], FindingStatus::Open)];
+        $tracked = [new TrackedFinding('a', $this->finding()->withMerged(new FindingIds('F2')), [1], FindingStatus::Open)];
 
         $read = $this->serializer()->deserialize($this->serializer()->serialize($tracked, JsonEncoder::FORMAT), TrackedFinding::class.'[]', JsonEncoder::FORMAT);
 
@@ -115,9 +116,18 @@ final class StoredJsonTest extends KernelTestCase
 
     public function testAFindingIsWrittenWithItsMergedIdsUnderTheKeyMerged(): void
     {
-        $json = $this->serializer()->serialize($this->finding()->withMerged(['F2']), JsonEncoder::FORMAT);
+        $json = $this->serializer()->serialize($this->finding()->withMerged(new FindingIds('F2')), JsonEncoder::FORMAT);
 
         self::assertStringEndsWith(',"regression":true,"merged":["F2"]}', $json);
+    }
+
+    public function testAFindingRowWithMergedIdsWrittenBeforeTheIdsWereOneValueReadsBackAndIsWrittenAgainUnchanged(): void
+    {
+        $row = '[{"id":"a","severity":"P2","file":"src\/A.php","line":7,"symbol":null,"text":"Broken.","fixable_by":"builder","repeat":false,"requirement":null,"evidence":{"probe":"php -l","output":"ok"},"regression":true,"merged":["F2","F3"]}]';
+
+        $read = $this->serializer()->deserialize($row, Finding::class.'[]', JsonEncoder::FORMAT);
+
+        self::assertSame($row, $this->serializer()->serialize($read, JsonEncoder::FORMAT));
     }
 
     public function testAFindingRowWithoutMergedIdsReadsWithNone(): void
@@ -125,7 +135,7 @@ final class StoredJsonTest extends KernelTestCase
         $read = $this->serializer()->deserialize('['.self::TODAYS_FINDING.']', Finding::class.'[]', JsonEncoder::FORMAT);
 
         self::assertInstanceOf(Finding::class, $read[0]);
-        self::assertSame([], $read[0]->merged);
+        self::assertSame([], [...$read[0]->merged]);
     }
 
     /**

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\Domain;
 
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\FindingIds;
 use Intakt\Core\Review\Contract\Severity;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
@@ -134,7 +135,7 @@ final readonly class OnePerPlace
     {
         $merged = $entry
             ->withSeverity($this->higher($entry->severity, $finding->severity))
-            ->withMerged([...$entry->merged, $finding->id, ...$finding->merged]);
+            ->withMerged(new FindingIds(...[...$entry->merged, $finding->id, ...$finding->merged]));
         $note = $finding->judgeNote();
 
         return null === $entry->judgeNote() && null !== $note ? $merged->withJudgeNote($note) : $merged;

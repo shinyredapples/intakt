@@ -130,7 +130,7 @@ final class MergedActEntryPageTest extends WebTestCase
 
         self::assertResponseIsSuccessful();
         self::assertCount(1, $act);
-        self::assertSame(array_map(static fn (Finding $entry): array => [$entry->severity->value, $entry->id, $entry->text, 'Also reported as '.implode(', ', $entry->merged), 'Fix now'], $act), $this->pageRows($page->filter('.finding-card')));
+        self::assertSame(array_map(static fn (Finding $entry): array => [$entry->severity->value, $entry->id, $entry->text, 'Also reported as '.implode(', ', [...$entry->merged]), 'Fix now'], $act), $this->pageRows($page->filter('.finding-card')));
     }
 
     // The symbol is place, because only a quote is checked against the change, so a finding with an absent symbol and no quote must reach the judge.
