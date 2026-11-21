@@ -63,8 +63,7 @@ final class WatchedMainTest extends TestCase
     public function testASha1LengthRecordedHeadInASha256RepositoryIsRefused(): void
     {
         $main = new WatchedMain(str_repeat('a', 64), [new RecordedMerge(self::HEAD, str_repeat('b', 64))]);
-        $this->expectException(CommitNameNotFull::class);
-        $this->expectExceptionMessage('recorded merge head');
+        $this->expectExceptionObject(new CommitNameNotFull('The recorded merge head "'.self::HEAD.'" is not a full commit name of this repository (64 characters).'));
 
         $main->mustNameFullCommitsOfLength(64);
     }
@@ -72,8 +71,7 @@ final class WatchedMainTest extends TestCase
     public function testASha256LengthSeenHeadInASha1RepositoryIsRefused(): void
     {
         $main = new WatchedMain(str_repeat('a', 64), []);
-        $this->expectException(CommitNameNotFull::class);
-        $this->expectExceptionMessage('last seen head');
+        $this->expectExceptionObject(new CommitNameNotFull('The last seen head "'.str_repeat('a', 64).'" is not a full commit name of this repository (40 characters).'));
 
         $main->mustNameFullCommitsOfLength(40);
     }
