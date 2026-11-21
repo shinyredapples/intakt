@@ -11,7 +11,7 @@ final class MainNotRead extends RuntimeException
 {
     public static function missing(string $repository): self
     {
-        return new self(sprintf('Main was not read, because %s does not exist.', $repository));
+        return new self(sprintf('Main was not read, because %s is not an existing folder.', $repository));
     }
 
     // Because git would otherwise read the repository that encloses a plain folder and report its main as this one's.

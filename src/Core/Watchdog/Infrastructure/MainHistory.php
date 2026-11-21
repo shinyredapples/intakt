@@ -58,7 +58,13 @@ final readonly class MainHistory implements CommitHistory
     {
         $this->mustBeReadable();
 
-        return $this->holds(['merge-base', '--is-ancestor', $commit, $this->tip()]);
+        $contained = $this->holds(['merge-base', '--is-ancestor', $commit, $this->tip()]);
+        // Checked again for a "no", because a repository cut shallow after the first check lacks the commits that would answer yes.
+        if (!$contained) {
+            $this->mustBeComplete();
+        }
+
+        return $contained;
     }
 
     /**
@@ -74,6 +80,9 @@ final readonly class MainHistory implements CommitHistory
         // One pinned tip for the ancestry check and the walk, because a force push between two reads of the ref would walk a history that dropped the commit.
         $tip = $this->tip();
         if (!$this->holds(['merge-base', '--is-ancestor', $commit, $tip])) {
+            // Checked again, because a repository cut shallow after the first check would read as a force push.
+            $this->mustBeComplete();
+
             throw MainHistoryRewritten::dropped($commit, $tip);
         }
 
@@ -121,13 +130,37 @@ final readonly class MainHistory implements CommitHistory
     private function mustBeTheRepository(): void
     {
         $directory = $this->directory();
-        $answer = explode("\n", trim($this->discovered(['rev-parse', '--is-bare-repository', '--absolute-git-dir'])), 2);
+        $bare = 'true' === $this->discovered(['rev-parse', '--is-bare-repository']);
+        $gitDirectory = $this->discovered(['rev-parse', '--absolute-git-dir']);
         // A bare repository is named by its git directory; anything else must be the top of its work tree, so a folder inside a work tree, or its .git, is refused.
-        $found = 'true' === $answer[0] ? $answer[1] ?? '' : trim($this->discovered(['rev-parse', '--show-toplevel']));
-
+        $found = $bare ? $gitDirectory : $this->discovered(['rev-parse', '--show-toplevel']);
         if ($found !== $directory) {
             throw MainNotRead::notTheRepository($directory, $found);
         }
+
+        // The enclosing repository's core.worktree can name any folder as its top, so the folder must also hold the git directory git found.
+        if (!$bare && $gitDirectory !== $this->ownGitDirectory($directory)) {
+            throw MainNotRead::notTheRepository($directory, $gitDirectory);
+        }
+    }
+
+    private function ownGitDirectory(string $directory): string
+    {
+        $dotGit = $directory.'/.git';
+        $target = is_file($dotGit) ? $this->gitFileTarget($dotGit, $directory) : $dotGit;
+
+        return realpath($target) ?: '';
+    }
+
+    // A linked work tree or a submodule has a .git file that names its git directory.
+    private function gitFileTarget(string $dotGit, string $directory): string
+    {
+        $content = @file_get_contents($dotGit);
+        if (false === $content || 1 !== preg_match('/^gitdir: (.+?)\r?\n?$/', $content, $match)) {
+            return '';
+        }
+
+        return str_starts_with($match[1], '/') ? $match[1] : $directory.'/'.$match[1];
     }
 
     /**
@@ -140,8 +173,12 @@ final readonly class MainHistory implements CommitHistory
     {
         // Without the pinned work tree, because HardenedGit names the folder itself as the work tree, and git would then call any folder inside a repository its top.
         $answer = $this->run($arguments, ['GIT_WORK_TREE' => false]);
+        if (!$answer->isSuccessful()) {
+            throw MainNotRead::notTheRepository($this->directory(), '');
+        }
 
-        return $answer->isSuccessful() ? $answer->getOutput() : throw MainNotRead::notTheRepository($this->directory(), '');
+        // Only git's one line break is removed, because a folder name may end in a space.
+        return str_ends_with($answer->getOutput(), "\n") ? substr($answer->getOutput(), 0, -1) : $answer->getOutput();
     }
 
     /**
@@ -150,7 +187,9 @@ final readonly class MainHistory implements CommitHistory
      */
     private function mustBeComplete(): void
     {
-        if ('false' !== trim($this->read(['rev-parse', '--is-shallow-repository']))) {
+        $answer = $this->run(['rev-parse', '--is-shallow-repository']);
+        // A failed answer is refused too, because damaged shallow metadata makes git exit before it prints.
+        if (!$answer->isSuccessful() || 'false' !== trim($answer->getOutput())) {
             throw MainNotRead::shallow($this->directory());
         }
     }
@@ -205,13 +244,15 @@ final readonly class MainHistory implements CommitHistory
      */
     private function run(array $arguments, array $overrides = []): Process
     {
+        $directory = $this->directory();
+
         try {
-            $call = $this->git->call($arguments, $this->directory());
+            $call = $this->git->call($arguments, $directory);
         } catch (RepositoryAttributesRefused $refused) {
             throw MainNotRead::because($refused->getMessage());
-        } catch (RuntimeException) {
-            // Because HardenedGit first asks git for the repository's object format, and that call can be stopped or fail to start; its exception is not chained, as in BranchGit.
-            throw MainNotRead::because(sprintf('git %s could not be prepared, because the look at its repository was stopped', $arguments[0]));
+        } catch (RuntimeException $failed) {
+            // Because HardenedGit first asks git for the repository's object format, and that call can be stopped or fail to start.
+            throw MainNotRead::because(sprintf('git %s could not be prepared: %s', $arguments[0], $failed->getMessage()));
         }
 
         $process = new Process($call->command, $call->directory, [...$call->environment, ...$overrides], null, self::TIMEOUT_SECONDS);
@@ -228,7 +269,8 @@ final readonly class MainHistory implements CommitHistory
         // Resolved here, because a relative path would otherwise be read against wherever the process happens to run.
         $directory = realpath($this->repository);
 
-        return false === $directory ? throw MainNotRead::missing($this->repository) : $directory;
+        // A file is no repository, because git cannot run inside it.
+        return false === $directory || !is_dir($directory) ? throw MainNotRead::missing($this->repository) : $directory;
     }
 
     // Only the lines up to the first empty line, because a signature header in the message is not a header.

@@ -30,6 +30,7 @@ use PHPUnit\Framework\TestCase;
 use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Process\Exception\ProcessFailedException;
+use Symfony\Component\Process\ExecutableFinder;
 use Symfony\Component\Process\Process;
 
 #[CoversClass(MainHistory::class)]
@@ -403,9 +404,76 @@ final class MainHistoryTest extends TestCase
         $seen = $this->repository->commitEmpty('Seen');
 
         $this->expectException(MainNotRead::class);
-        $this->expectExceptionMessageMatches('/\/missing does not exist\.$/');
+        $this->expectExceptionMessageMatches('/\/missing is not an existing folder\.$/');
 
         new MainHistory(new HardenedGit(), $this->repository->path.'/missing', [], new Filesystem())->contains($seen);
+    }
+
+    public function testASubdirectoryNamedByTheCoreWorktreeSettingRaisesMainNotRead(): void
+    {
+        $seen = $this->repository->commitFile('sub/file', 'content');
+        new Process(['git', '-C', $this->repository->path, 'config', 'core.worktree', $this->repository->path.'/sub'])->mustRun();
+
+        $this->expectException(MainNotRead::class);
+        $this->expectExceptionMessageMatches('/ is not the repository itself /');
+
+        new MainHistory(new HardenedGit(), $this->repository->path.'/sub', [], new Filesystem())->contains($seen);
+    }
+
+    public function testARepositoryFolderNameEndingInASpaceIsReadAsTheRepositoryItself(): void
+    {
+        $seen = $this->repository->commitEmpty('Seen');
+        $spaced = $this->repository->path.' ';
+        rename($this->repository->path, $spaced);
+
+        try {
+            self::assertTrue(new MainHistory(new HardenedGit(), $spaced, [], new Filesystem())->contains($seen));
+        } finally {
+            rename($spaced, $this->repository->path);
+        }
+    }
+
+    public function testAFileAsTheRepositoryPathRaisesMainNotRead(): void
+    {
+        $seen = $this->repository->commitFile('child/file', 'content');
+
+        $this->expectException(MainNotRead::class);
+
+        new MainHistory(new HardenedGit(), $this->repository->path.'/child/file', [], new Filesystem())->contains($seen);
+    }
+
+    public function testDamagedShallowMetadataRaisesMainNotRead(): void
+    {
+        $seen = $this->repository->commitEmpty('Seen');
+        file_put_contents($this->repository->path.'/.git/shallow', "invalid-shallow-entry\n");
+
+        $this->expectException(MainNotRead::class);
+
+        $this->history([])->contains($seen);
+    }
+
+    public function testARepositoryCutShallowAfterTheFirstCheckIsRefusedNotReadAsARewrite(): void
+    {
+        $base = $this->repository->commitEmpty('Base');
+        $cut = $this->repository->commitEmpty('Cut');
+        $this->repository->commitEmpty('Tip');
+        $bin = $this->keys.'/shallow-bin';
+        mkdir($bin);
+        $git = escapeshellarg(new ExecutableFinder()->find('git'));
+        $shallow = escapeshellarg($this->repository->path.'/.git/shallow');
+        $script = "#!/bin/sh\ncase \" \$* \" in\n    *\" --is-shallow-repository \"*)\n        ".$git." \"\$@\" || exit \$?\n        printf '%s\\n' ".escapeshellarg($cut).' > '.$shallow."\n        ;;\n    *) exec ".$git." \"\$@\" ;;\nesac\n";
+        file_put_contents($bin.'/git', $script);
+        chmod($bin.'/git', 0o700);
+        $path = getenv('PATH');
+        putenv('PATH='.$bin.':'.$path);
+
+        try {
+            $this->expectException(MainNotRead::class);
+
+            $this->history([])->firstParentsSince($base);
+        } finally {
+            putenv('PATH='.$path);
+        }
     }
 
     public function testAnExistingInfoAttributesFileRaisesMainNotRead(): void
