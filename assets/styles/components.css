@@ -780,17 +780,27 @@ a.lane:hover { background: var(--tint-2); }
   .tour-caption [data-tour-close] { position: relative; z-index: 1; flex: none; min-width: 44px; }
 }
 
-/* Trends: stat tiles, the figure big above its label; two per row on a phone (decisions D2 and D7 of issue 2858). */
-.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(208px, 1fr)); gap: var(--s12); margin: 0; }
-.tile { display: flex; flex-direction: column-reverse; justify-content: flex-end; gap: var(--s4); padding: var(--s12) var(--s16); border-radius: var(--r-card); background: var(--tint); }
+/* Trends: stat tiles first, the figure big above its short label; three per row on a phone so the headline figures fill the first screen (issue 3141). */
+.trends-head { align-items: center; }
+.demo-toggle { display: inline-flex; align-items: center; gap: var(--s4); }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: var(--s12); margin: 0; }
+/* A tile's tip hangs from its own tile, not from its label or the grid: from the label it ran past a phone's right edge, from the grid it opened below the last row, off screen (review of issue 3198). */
+.tile .term { position: static; }
+.tile { position: relative; display: flex; flex-direction: column-reverse; justify-content: flex-end; gap: var(--s4); padding: var(--s12) var(--s16); border-radius: var(--r-card); background: var(--tint); }
 .tile dt { color: var(--muted); font-size: var(--t13); }
 .tile dd { margin: 0; color: var(--ink); font: 700 var(--t28)/1.2 var(--f-body); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-.tile[data-no-data] dd { color: var(--muted); font-size: var(--t17); font-weight: 500; }
-.tiles-note { margin: var(--s12) 0 0; font-size: var(--t13); }
-a.fchip { display: inline-flex; align-items: center; text-decoration: none; }
+.tile .tile-date { display: block; color: var(--muted); font: 400 var(--t13)/1.4 var(--f-body); }
+.tile .term-tip { left: 0; right: 0; width: auto; max-width: none; }
 @media (max-width: 760px) {
-  .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s8); }
+  .tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s8); }
+  .tile { padding: var(--s8) var(--s12); }
   .tile dd { font-size: var(--t21); }
+  .tile .term { display: inline-flex; align-items: center; min-height: 44px; }
+  /* A third of a phone is too narrow to read a tip, so it spans two columns, opening away from the grid's nearer edge. */
+  .tile .term-tip { right: auto; width: calc(200% + var(--s8)); }
+  .tile:nth-child(3n+2) .term-tip { left: calc(-50% - var(--s8) / 2); }
+  .tile:nth-child(3n) .term-tip { left: auto; right: 0; }
+  .demo-toggle { height: 44px; }
 }
 
 /* Trends charts (issue 2935 adds the per-day pair) as DESIGN.md's Charts (trends) and the mocks' trends page: one hue, hairline grid, small multiples in rows of three; they stack on a phone (issue 2934). */
