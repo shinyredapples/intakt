@@ -12,7 +12,7 @@ final readonly class DependencySnapshotKey
     }
 
     /**
-     * @param array<string, string> $lockFiles the bytes of each lock input file, by its path
+     * @param array<array-key, string> $lockFiles
      */
     public static function ofLockInputs(array $lockFiles, string $platform): self
     {

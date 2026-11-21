@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\HandBack\Infrastructure {
     use Intakt\Tests\Core\HandBack\Infrastructure\DependencySnapshotsTest;
 
-    // Fails the publication only in a store that holds the marker file, a failure no real folder gives on demand; any other rename passes through.
+    // Fails the publication only in a store that holds the marker file, because no real folder fails a rename on demand; any other rename passes through.
     function rename(string $from, string $to): bool
     {
         if (DependencySnapshots::INCOMING === basename($from) && is_file(dirname($to).'/'.DependencySnapshotsTest::REFUSE_PUBLICATION)) {
@@ -15,7 +15,7 @@ namespace Intakt\Core\HandBack\Infrastructure {
         return DependencySnapshotsTest::renamedForReal($from, $to);
     }
 
-    // Fails only for an entry named after the marker, a failure no file owner gets on demand; any other path passes through.
+    // Fails only for an entry named after the marker, because a file's owner can always change its mode; any other path passes through.
     function chmod(string $path, int $mode): bool
     {
         if (DependencySnapshotsTest::REFUSES_CHMOD === basename($path)) {
@@ -31,6 +31,7 @@ namespace Intakt\Tests\Core\HandBack\Infrastructure {
     use Intakt\Core\HandBack\Infrastructure\DependencySnapshotCountRefused;
     use Intakt\Core\HandBack\Infrastructure\DependencySnapshotLease;
     use Intakt\Core\HandBack\Infrastructure\DependencySnapshots;
+    use Intakt\Core\HandBack\Infrastructure\DependencySnapshotUses;
     use PHPUnit\Framework\Attributes\CoversClass;
     use PHPUnit\Framework\Attributes\UsesClass;
     use PHPUnit\Framework\TestCase;
@@ -41,10 +42,12 @@ namespace Intakt\Tests\Core\HandBack\Infrastructure {
     use Symfony\Component\Filesystem\Filesystem;
     use Symfony\Component\Lock\LockFactory;
     use Symfony\Component\Lock\Store\FlockStore;
+    use UnexpectedValueException;
 
     #[CoversClass(DependencySnapshots::class)]
     #[CoversClass(DependencySnapshotLease::class)]
     #[CoversClass(DependencySnapshotCountRefused::class)]
+    #[CoversClass(DependencySnapshotUses::class)]
     #[UsesClass(DependencySnapshotKey::class)]
     final class DependencySnapshotsTest extends TestCase
     {
@@ -254,6 +257,17 @@ namespace Intakt\Tests\Core\HandBack\Infrastructure {
             self::assertSame([], $this->snapshots());
         }
 
+        public function testAUseOrderThatIsNoListOfNamesIsRefused(): void
+        {
+            $store = $this->storeKeeping(10);
+            $store->save($this->key('a'), $this->install('a'));
+            file_put_contents($this->store.'/'.DependencySnapshotUses::FILE, '{"a":1}');
+
+            $this->expectException(UnexpectedValueException::class);
+
+            $store->save($this->key('b'), $this->install('b'));
+        }
+
         // Called from the overrides, because only a call outside their namespace reaches the real function.
         public static function renamedForReal(string $from, string $to): bool
         {
@@ -267,7 +281,7 @@ namespace Intakt\Tests\Core\HandBack\Infrastructure {
 
         private function storeKeeping(int $count): DependencySnapshots
         {
-            return new DependencySnapshots($this->store, $count, new LockFactory(new FlockStore($this->folder.'/locks')), new Filesystem());
+            return new DependencySnapshots($this->store, $count, new LockFactory(new FlockStore($this->folder.'/locks')), new Filesystem(), new DependencySnapshotUses(new Filesystem()));
         }
 
         private function key(string $lock): DependencySnapshotKey

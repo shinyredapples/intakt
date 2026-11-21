@@ -17,16 +17,13 @@ use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\SharedLockInterface;
 use Symfony\Component\Lock\Store\FlockStore;
-use UnexpectedValueException;
 
-// Only the orchestrator's own process writes here: build jobs get no mount of it, and a check gets one snapshot's folder as a read-only bind.
+// Only the orchestrator's own process writes here, because a later check trusts what it holds: build jobs get no mount of it, and a check gets one snapshot's folder as a read-only bind.
 final readonly class DependencySnapshots
 {
     public const string INCOMING = '.incoming';
 
     public const string PINS = '.pins';
-
-    public const string USES = '.uses';
 
     private const string STORE_LOCK = 'intakt-dependency-snapshots';
 
@@ -39,6 +36,7 @@ final readonly class DependencySnapshots
         private int $count,
         private LockFactory $locks,
         private Filesystem $filesystem,
+        private DependencySnapshotUses $uses,
     ) {
         if ($count < 1) {
             throw DependencySnapshotCountRefused::belowOne($count);
@@ -205,7 +203,7 @@ final readonly class DependencySnapshots
         }
 
         sort($present, SORT_STRING);
-        $used = array_values(array_intersect($this->uses(), $present));
+        $used = array_values(array_intersect($this->uses->leastRecentFirstIn($this->directory), $present));
 
         return [...array_values(array_diff($present, $used)), ...$used];
     }
@@ -255,37 +253,6 @@ final readonly class DependencySnapshots
     private function markUsed(DependencySnapshotKey $key): void
     {
         $present = $this->snapshotsLeastRecentFirst();
-        $order = [...array_values(array_diff($present, [$key->value])), $key->value];
-        $written = $this->directory.'/'.self::USES.bin2hex(random_bytes(8));
-        $this->filesystem->dumpFile($written, json_encode($order, JSON_THROW_ON_ERROR));
-
-        if (!@rename($written, $this->directory.'/'.self::USES)) {
-            throw new IOException(sprintf('the use order %s could not be replaced', self::USES), path: $written);
-        }
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function uses(): array
-    {
-        $file = $this->directory.'/'.self::USES;
-
-        if (!is_file($file)) {
-            return [];
-        }
-
-        $order = json_decode($this->filesystem->readFile($file), flags: JSON_THROW_ON_ERROR);
-        $names = [];
-
-        foreach (is_array($order) && array_is_list($order) ? $order : [null] as $name) {
-            if (!is_string($name)) {
-                throw new UnexpectedValueException(sprintf('the use order %s is not a list of snapshot names', self::USES));
-            }
-
-            $names[] = $name;
-        }
-
-        return $names;
+        $this->uses->record($this->directory, [...array_values(array_diff($present, [$key->value])), $key->value]);
     }
 }

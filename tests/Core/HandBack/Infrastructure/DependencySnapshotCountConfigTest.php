@@ -17,6 +17,6 @@ final class DependencySnapshotCountConfigTest extends KernelTestCase
         self::bootKernel();
 
         self::assertSame(10, self::getContainer()->getParameter(HandBackServices::DEPENDENCY_SNAPSHOT_COUNT));
-        self::assertStringEndsWith('/var/dependency-snapshots', (string) self::getContainer()->getParameter(HandBackServices::DEPENDENCY_SNAPSHOTS_DIRECTORY));
+        self::assertStringEndsWith('/var/dependency-snapshots', self::getContainer()->getParameter(HandBackServices::DEPENDENCY_SNAPSHOTS_DIRECTORY));
     }
 }
