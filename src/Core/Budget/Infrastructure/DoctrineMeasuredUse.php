@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Budget\Infrastructure;
 
 use DateTimeImmutable;
+use DateTimeZone;
 use Doctrine\ORM\EntityManagerInterface;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Budget\Contract\MeasuredUse;
@@ -40,11 +41,13 @@ final readonly class DoctrineMeasuredUse implements MeasuredUse
             return $refusal;
         }
 
+        // Read before the older readings are dropped, because one of them may be the reading that already ended an outage.
+        $previous = $this->latestReadingBefore($reading->account, $now);
         $record = new WindowReadingRecord($reading, $now);
         $this->entities->persist($record);
         $this->entities->flush();
         $this->forgetReadingsBefore($record);
-        $this->endOutagesBefore($record);
+        $this->endOutagesBefore($record, $previous);
 
         return ReadingOutcome::Recorded;
     }
@@ -93,10 +96,29 @@ final readonly class DoctrineMeasuredUse implements MeasuredUse
             ->execute();
     }
 
-    // One statement, so two workers ending one outage at once need no lock; the earlier reading wins, because a slow writer can store its reading after a later one.
-    private function endOutagesBefore(WindowReadingRecord $record): void
+    private function latestReadingBefore(Account $account, DateTimeImmutable $moment): ?DateTimeImmutable
     {
-        $ended = $this->entities->createQueryBuilder()
+        /** @var string|null $latest */
+        $latest = $this->entities->createQueryBuilder()
+            ->select('MAX(reading.takenAt)')
+            ->from(WindowReadingRecord::class, 'reading')
+            ->where('reading.provider = :provider')
+            ->andWhere('reading.account = :account')
+            ->andWhere('reading.takenAt < :moment')
+            ->setParameter('provider', $account->provider)
+            ->setParameter('account', $account->name)
+            ->setParameter('moment', $moment, 'utc_datetime_immutable')
+            ->getQuery()
+            ->getSingleScalarResult();
+
+        return null === $latest ? null : new DateTimeImmutable($latest, new DateTimeZone('UTC'));
+    }
+
+    // One statement, so two workers ending one outage at once need no lock; the earlier reading wins, because a slow writer can store its reading after a later one.
+    // A reading of the account between the outage and this one already ended it, so a notice with no end from before ends were kept stays without one instead of ending now.
+    private function endOutagesBefore(WindowReadingRecord $record, ?DateTimeImmutable $previous): void
+    {
+        $query = $this->entities->createQueryBuilder()
             ->update(OutageNoticeRecord::class, 'notice')
             ->set('notice.endedAt', ':takenAt')
             ->where('notice.provider = :provider')
@@ -105,9 +127,12 @@ final readonly class DoctrineMeasuredUse implements MeasuredUse
             ->andWhere('notice.endedAt IS NULL OR notice.endedAt > :takenAt')
             ->setParameter('takenAt', $record->takenAt, 'utc_datetime_immutable')
             ->setParameter('provider', $record->provider)
-            ->setParameter('account', $record->account)
-            ->getQuery()
-            ->execute();
+            ->setParameter('account', $record->account);
+        if ($previous instanceof DateTimeImmutable) {
+            $query->andWhere('notice.lastReadingAt >= :previous')->setParameter('previous', $previous, 'utc_datetime_immutable');
+        }
+
+        $ended = $query->getQuery()->execute();
 
         if (0 < $ended) {
             $this->events->dispatch(new OwnerNoticesChanged());

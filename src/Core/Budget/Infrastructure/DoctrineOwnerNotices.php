@@ -25,7 +25,7 @@ final readonly class DoctrineOwnerNotices implements OwnerNotices
     ) {
     }
 
-    // A reading of the account taken after the notice's last one ends that outage, so the notice no longer waits for the owner; the position breaks a tie of one moment.
+    // A reading of the account taken after the notice's last one ends that outage, so the notice no longer waits for the owner; the saved end counts too, because a late write can drop the reading that ended it. The position breaks a tie of one moment.
     #[Override]
     public function stillRunningOldestFirst(): array
     {
@@ -39,7 +39,8 @@ final readonly class DoctrineOwnerNotices implements OwnerNotices
         $records = $this->entities->createQueryBuilder()
             ->select('notice')
             ->from(OutageNoticeRecord::class, 'notice')
-            ->where('NOT EXISTS ('.$later->getDQL().')')
+            ->where('notice.endedAt IS NULL')
+            ->andWhere('NOT EXISTS ('.$later->getDQL().')')
             ->orderBy('notice.noticedAt', 'ASC')
             ->addOrderBy('notice.position', 'ASC')
             ->getQuery()

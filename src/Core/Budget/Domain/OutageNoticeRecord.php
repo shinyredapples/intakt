@@ -39,12 +39,4 @@ final class OutageNoticeRecord
         $this->provider = $account->provider;
         $this->account = $account->name;
     }
-
-    // The earliest reading wins, because a slow writer can store a reading after a later one.
-    public function endWith(DateTimeImmutable $reading): void
-    {
-        if (!$this->endedAt instanceof DateTimeImmutable || $reading < $this->endedAt) {
-            $this->endedAt = $reading;
-        }
-    }
 }

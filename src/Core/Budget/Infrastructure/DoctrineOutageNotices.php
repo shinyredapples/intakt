@@ -53,13 +53,15 @@ final readonly class DoctrineOutageNotices
             'account' => $outage->account->key(),
             'since' => $outage->lastReadingAt->format(DateTimeInterface::ATOM),
         ]);
-        $this->entities->persist($this->endedIfReadSince(new OutageNoticeRecord($outage->account, $outage->lastReadingAt, $outage->seenAt)));
+        $notice = new OutageNoticeRecord($outage->account, $outage->lastReadingAt, $outage->seenAt);
+        $this->entities->persist($notice);
         $this->entities->flush();
+        $this->endIfReadSince($notice);
         $this->events->dispatch(new OwnerNoticesChanged());
     }
 
-    // A reading can land between the watch's look at the readings and this row, and its own end of outages found no row yet, so the notice is ended by it here.
-    private function endedIfReadSince(OutageNoticeRecord $notice): OutageNoticeRecord
+    // A reading can land any time before this row is stored, and its own end of outages found no row yet, so the notice is ended by it here; looked up only once the row is stored, because a reading stored later finds the row itself.
+    private function endIfReadSince(OutageNoticeRecord $notice): void
     {
         /** @var list<WindowReadingRecord> $later */
         $later = $this->entities->createQueryBuilder()
@@ -77,10 +79,17 @@ final readonly class DoctrineOutageNotices
             ->getResult();
 
         foreach ($later as $reading) {
-            $notice->endWith($reading->takenAt);
+            // One statement past the entity, because a reading may end the same row at once, and the earlier reading wins.
+            $this->entities->createQueryBuilder()
+                ->update(OutageNoticeRecord::class, 'notice')
+                ->set('notice.endedAt', ':takenAt')
+                ->where('notice.position = :position')
+                ->andWhere('notice.endedAt IS NULL OR notice.endedAt > :takenAt')
+                ->setParameter('takenAt', $reading->takenAt, 'utc_datetime_immutable')
+                ->setParameter('position', $notice->position)
+                ->getQuery()
+                ->execute();
         }
-
-        return $notice;
     }
 
     private function wasNoticed(UsageReadingsStayedAway $outage): bool
