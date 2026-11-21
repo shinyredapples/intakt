@@ -231,7 +231,7 @@ final class CheckMainTest extends TestCase
         $cut = sprintf("printf '%%s\\n' %s > %s", escapeshellarg($entry), $shallow);
         $coverage = $onlyWhileRunning
             ? $cut."\n        ".$git." \"\$@\"\n        status=\$?\n        rm -f ".$shallow."\n        exit \$status"
-            : $cut."\n        exec ".$git." \"\$@\"";
+            : $cut."\n        exec ".$git.' "$@"';
         file_put_contents($this->bin.'/git', "#!/bin/sh\ncase \" \$* \" in\n    *\" --not \"*)\n        ".$coverage."\n        ;;\n    *) exec ".$git." \"\$@\" ;;\nesac\n");
         chmod($this->bin.'/git', 0o700);
         $this->path = (string) getenv('PATH');
