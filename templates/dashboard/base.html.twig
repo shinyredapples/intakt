@@ -186,6 +186,8 @@
                     const focusedTerm = focusedCard !== null && focused !== focusedCard ? [...focusedCard.querySelectorAll('[tabindex]')].indexOf(focused) : -1;
                     // A jump from the column map or the phone switcher (assets/board-map.js) leaves the focus on the column itself until the next Tab.
                     const columnFocused = document.activeElement === replaced;
+                    // Hide on an open column or the strip of a folded one is found again by its class, so Escape still folds a column opened from its strip after a push.
+                    const focusedControl = ['.col-hide', '.col-fold'].find((control) => focused?.matches(control)) ?? null;
                     render(stream);
                     const pushed = document.getElementById(replaced.id);
                     pushed?.classList.toggle('collapsed', collapsed);
@@ -195,6 +197,9 @@
                     showProject();
                     if (columnFocused) {
                         pushed?.focus({ preventScroll: true });
+                    }
+                    if (focusedControl !== null) {
+                        pushed?.querySelector(focusedControl)?.focus({ preventScroll: true });
                     }
                     if (focusedLink !== null) {
                         const card = [...(pushed?.querySelectorAll('a[href]') ?? [])].find((link) => link.getAttribute('href') === focusedLink);

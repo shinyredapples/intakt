@@ -373,7 +373,7 @@ test('a second scroll before the pause replaces the first one\'s timer, so only 
     assert.deepEqual(pressed(switcher), ['false', 'false', 'false', 'true', 'false', 'false', 'false', 'false', 'false']);
 });
 
-test('a board replaced before the swipe settles presses nothing on the new board', () => {
+test('a board replaced before the swipe settles leaves the new board\'s switcher as it started', () => {
     const { page, view, board, switcher } = phoneBoardOnAPage();
     board.scrollLeft = 2 * 374;
     page.dispatch('scroll', { target: board });
@@ -382,7 +382,8 @@ test('a board replaced before the swipe settles presses nothing on the new board
     page.board = new FakeBoard(16, 358, 16);
     view.runTimers();
 
-    assert.deepEqual(pressed(switcher), NAMES.map(() => null));
+    // Still the first column, which the start pressed, rather than the old board's third.
+    assert.deepEqual(pressed(switcher), NAMES.map((name, i) => String(i === 0)));
 });
 
 test('a page visit about to render clears the swipe timer', () => {
@@ -393,6 +394,26 @@ test('a page visit about to render clears the swipe timer', () => {
     page.dispatch('turbo:before-render');
 
     assert.equal(view.timers.size, 0);
+});
+
+test('a page restored from the cache with Done pressed and its board at the first column presses Waiting on you', () => {
+    const { page, board, switcher } = phoneBoardOnAPage();
+    switcher.buttons.forEach((button, i) => button.setAttribute('aria-pressed', String(i === NAMES.length - 1)));
+    board.scrollLeft = 0;
+
+    page.dispatch('turbo:render');
+
+    assert.deepEqual(pressed(switcher), NAMES.map((name) => String(name === 'waiting-on-you')));
+    assert.equal(switcher.scrollLeft, 0);
+});
+
+test('a page load presses the column the board shows', () => {
+    const { page, board, switcher } = phoneBoardOnAPage();
+    board.scrollLeft = 3 * 374;
+
+    page.dispatch('turbo:load');
+
+    assert.deepEqual(pressed(switcher), NAMES.map((name, i) => String(i === 3)));
 });
 
 test('a key such as Escape that folds a column measures the map again', () => {

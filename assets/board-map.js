@@ -47,7 +47,17 @@ export function mapBoardColumns(page, view) {
     page.addEventListener('turbo:before-render', stopSettling);
     page.addEventListener('intakt:project-shown', measure);
     view.addEventListener('resize', measure);
-    measure();
+    // A page Turbo restores from its cache keeps the pressed button it was left with, while its board starts at its first column again, so every render presses the column the board shows.
+    const settle = () => {
+        measure();
+        const board = page.querySelector(BOARD);
+        if (board) {
+            pressSettledColumn(page, board);
+        }
+    };
+    page.addEventListener('turbo:render', settle);
+    page.addEventListener('turbo:load', settle);
+    settle();
 }
 
 function columnsOf(board) {

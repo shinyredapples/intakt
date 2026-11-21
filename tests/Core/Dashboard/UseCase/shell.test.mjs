@@ -590,6 +590,29 @@ test('a column focused by a jump keeps focus when it is pushed', () => {
     assert.equal(page.focused(), page.column('col-in-review'));
 });
 
+// Escape folds a column opened from its strip only while its Hide has focus (assets/column-fold.js), so a push must hand the focus to the pushed column's Hide.
+test('Hide focused on an opened Done keeps focus on the pushed Done\'s Hide, which keeps the opened mark', () => {
+    const page = new Browser('light').open();
+    page.column('col-done').classList.toggle('collapsed', false);
+    page.column('col-done').setAttribute('data-opened', '');
+    page.column('col-done').querySelector('.col-hide').focus();
+
+    page.pushColumn('col-done');
+
+    assert.equal(page.focused(), page.column('col-done').querySelector('.col-hide'));
+    assert.equal(page.column('col-done').hasAttribute('data-opened'), true);
+    assert.equal(page.column('col-done').classList.contains('collapsed'), false);
+});
+
+test('the strip focused on a folded column keeps focus on the pushed column\'s strip', () => {
+    const page = new Browser('light').open();
+    page.column('col-done').querySelector('.col-fold').focus();
+
+    page.pushColumn('col-done');
+
+    assert.equal(page.focused(), page.column('col-done').querySelector('.col-fold'));
+});
+
 test('a pushed column leaves focus alone when it was outside the column', () => {
     const page = new Browser('light').open();
     page.railToggle.focus();
