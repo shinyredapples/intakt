@@ -9,11 +9,8 @@ use Intakt\Core\Review\Domain\QuotesInChange;
 // Another module shows the quotes the quote check counted through this door, so the quotes it lists are read by the check's own rule and never by a second parser.
 final readonly class CountedQuotes
 {
-    /**
-     * @return list<string>
-     */
-    public function of(string $findingText): array
+    public function of(string $findingText): QuotesCounted
     {
-        return new QuotesInChange()->countedQuotes($findingText);
+        return new QuotesCounted(...new QuotesInChange()->countedQuotes($findingText));
     }
 }
