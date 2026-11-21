@@ -167,7 +167,7 @@ final readonly class NarrowCatchRule implements Rule
     {
         $lines = preg_split('/\R/', substr($source, 0, $comment->getStartFilePos())) ?: [''];
 
-        return '' === trim((string) array_last($lines));
+        return '' === trim(array_last($lines));
     }
 
     private function rethrowsOrRecords(Catch_ $catch): bool
