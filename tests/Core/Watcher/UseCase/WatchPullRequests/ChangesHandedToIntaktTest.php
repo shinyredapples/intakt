@@ -89,6 +89,45 @@ final class ChangesHandedToIntaktTest extends KernelTestCase
         self::assertEquals([new PublishHandedOverChange('alpha', self::PULL, str_repeat('a', 40))], $this->commands->handedOver);
     }
 
+    public function testAPullRequestHandedOverBeforePublicationsWereQueuedIsSentForPublicationAtItsListedHead(): void
+    {
+        $this->record(LedgerEventKind::ChangeHandedToIntakt, ['project' => 'alpha', 'change' => self::PULL, 'head' => str_repeat('a', 40)]);
+
+        $this->recognize('alpha', $this->change(self::PULL));
+
+        self::assertEquals([new PublishHandedOverChange('alpha', self::PULL, str_repeat('a', 40))], $this->commands->handedOver);
+    }
+
+    public function testAPullRequestHandedOverBeforePublicationsWereQueuedIsSentForPublicationOnce(): void
+    {
+        $this->record(LedgerEventKind::ChangeHandedToIntakt, ['project' => 'alpha', 'change' => self::PULL, 'head' => str_repeat('a', 40)]);
+
+        $this->recognize('alpha', $this->change(self::PULL));
+        $this->recognize('alpha', $this->change(self::PULL));
+
+        self::assertCount(1, $this->commands->handedOver);
+    }
+
+    public function testAPullRequestWhosePublicationWasQueuedInAnotherCaseIsNotSentAgain(): void
+    {
+        $this->record(LedgerEventKind::ChangeHandedToIntakt, ['project' => 'alpha', 'change' => self::PULL, 'head' => str_repeat('a', 40)]);
+        $this->record(LedgerEventKind::HandOverPublicationQueued, ['project' => 'alpha', 'change' => 'https://github.com/Acme/Widgets/pull/7', 'head' => str_repeat('a', 40)]);
+
+        $this->recognize('alpha', $this->change(self::PULL));
+
+        self::assertSame([], $this->commands->handedOver);
+    }
+
+    public function testAHandOverOfAnotherProjectSendsNoPullRequestOfTheSameAddressForPublication(): void
+    {
+        $this->record(LedgerEventKind::ChangeHandedToIntakt, ['project' => 'beta', 'change' => self::PULL, 'head' => str_repeat('a', 40)]);
+        $this->record(LedgerEventKind::ChangeNotHandedToIntakt, ['project' => 'alpha', 'change' => self::PULL, 'head' => str_repeat('a', 40)]);
+
+        $this->recognize('alpha', $this->change(self::PULL));
+
+        self::assertSame([], $this->commands->handedOver);
+    }
+
     public function testAPullRequestNotHandedToIntaktIsNotSentForPublication(): void
     {
         $this->record(LedgerEventKind::ChangeOpened, ['project' => 'alpha', 'branch' => 'feat/8', 'head' => str_repeat('a', 40), 'change' => self::LOOP_PULL, 'opening' => 'updated']);

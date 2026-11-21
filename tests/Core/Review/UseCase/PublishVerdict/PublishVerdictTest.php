@@ -394,6 +394,19 @@ final class PublishVerdictTest extends KernelTestCase
         self::assertSame(['success'], array_column(array_column($this->github->writes, 1), 'state'));
     }
 
+    public function testAnUnchangedHeadJudgedWhileItsPullRequestWasHandedOverBeforePublicationsWereQueuedIsPublishedOnTheNextTick(): void
+    {
+        $roundId = $this->publishRoundJudgedOn([], new ConfiguredProjectModes([]));
+        self::assertTrue($this->fixture->ledger()->append(new LedgerEvent(LedgerEventKind::ChangeHandedToIntakt, json_encode(['project' => 'alpha', 'change' => self::PULL, 'head' => SampleIdentity::HEAD], JSON_THROW_ON_ERROR)))->succeeded());
+
+        $this->recognize(self::PULL, SampleIdentity::HEAD);
+
+        $publications = $this->publicationsOf($roundId);
+        self::assertCount(2, $publications);
+        $this->handler(new ConfiguredProjectModes([]))($publications[1]);
+        self::assertSame(['success'], array_column(array_column($this->github->writes, 1), 'state'));
+    }
+
     public function testRecognizingAPullRequestLeavesTheLookupOfItsJudgedRoundToAWorkerAfterTheTickCommits(): void
     {
         $roundId = $this->judgedRound(self::PULL, []);

@@ -51,4 +51,5 @@ enum LedgerEventKind: string
     case ChangeHandedToIntakt = 'change_handed_to_intakt';
     case ChangeNotHandedToIntakt = 'change_not_handed_to_intakt';
     case OwnerAsked = 'owner_asked';
+    case HandOverPublicationQueued = 'hand_over_publication_queued';
 }

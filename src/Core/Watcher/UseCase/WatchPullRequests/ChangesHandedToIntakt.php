@@ -41,17 +41,51 @@ final readonly class ChangesHandedToIntakt
 
         // Every author is read before the first line is appended, because a failure behind an append rolls the tick's transaction back under a line the entity manager still holds, and the ledger's next append then collides with it.
         [$created, $notCreated] = $this->authorsAmong($project, $open);
+        $unqueued = $this->unqueuedAmong($project, $open);
 
-        // Published once it is handed over, because a round judged before this tick found it the loop's and published nothing; queued in the tick's transaction, so a worker looks for the round only after the line it reads has committed.
         foreach ($created as $change) {
             $this->records->changeHandedToIntakt($project, $change);
-            $this->commands->dispatch(new PublishHandedOverChange($project, $change->id->value, $change->head->hash));
+            $this->queuePublicationOf($project, $change);
+        }
+
+        // Also a pull request handed over before publications were queued, because a round of its head judged then published nothing, and its unchanged head starts no judging that would.
+        foreach ($unqueued as $change) {
+            $this->queuePublicationOf($project, $change);
         }
 
         // Recorded, because the author the forge sets never changes, so the forge is asked once per pull request and not on every tick.
         foreach ($notCreated as $change) {
             $this->records->changeNotHandedToIntakt($project, $change);
         }
+    }
+
+    // Published once it is handed over, because a round judged before this tick found it the loop's and published nothing; queued in the tick's transaction, so a worker looks for the round only after the line it reads has committed, and recorded, so a later tick queues it no second time.
+    private function queuePublicationOf(string $project, OpenChange $change): void
+    {
+        $this->records->handOverPublicationQueued($project, $change);
+        $this->commands->dispatch(new PublishHandedOverChange($project, $change->id->value, $change->head->hash));
+    }
+
+    /**
+     * @param list<OpenChange> $open
+     *
+     * @return list<OpenChange>
+     */
+    private function unqueuedAmong(string $project, array $open): array
+    {
+        $handed = $this->addressesOf($project, LedgerEventKind::ChangeHandedToIntakt);
+        $queued = $this->addressesOf($project, LedgerEventKind::HandOverPublicationQueued);
+        $unqueued = [];
+
+        foreach ($open as $change) {
+            $address = $this->addressOf($change->id->value);
+
+            if (isset($handed[$address]) && !isset($queued[$address])) {
+                $unqueued[$address] ??= $change;
+            }
+        }
+
+        return array_values($unqueued);
     }
 
     /**

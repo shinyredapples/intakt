@@ -221,8 +221,8 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
 
         $this->tick();
 
-        self::assertSame([LedgerEventKind::ChangeHandedToIntakt, LedgerEventKind::ChangeNotHandedToIntakt, LedgerEventKind::HeadPending, LedgerEventKind::HeadPending], $this->ledger->kinds());
-        self::assertSame(['1', '2'], array_column(array_slice($this->ledger->payloads(), 0, 2), 'change'));
+        self::assertSame([LedgerEventKind::ChangeHandedToIntakt, LedgerEventKind::HandOverPublicationQueued, LedgerEventKind::ChangeNotHandedToIntakt, LedgerEventKind::HeadPending, LedgerEventKind::HeadPending], $this->ledger->kinds());
+        self::assertSame(['1', '1', '2'], array_column(array_slice($this->ledger->payloads(), 0, 3), 'change'));
     }
 
     public function testAPullRequestListedBeforeItsOpeningRecordIsRecordedAsHandedToIntaktOnAnUnchangedListing(): void
@@ -239,7 +239,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         $this->tick();
 
         self::assertSame(1, $this->listing->conditionalAnswers);
-        self::assertSame([LedgerEventKind::ChangeNotHandedToIntakt, LedgerEventKind::HeadPending, LedgerEventKind::ChangeHandedToIntakt], $this->ledger->kinds());
+        self::assertSame([LedgerEventKind::ChangeNotHandedToIntakt, LedgerEventKind::HeadPending, LedgerEventKind::ChangeHandedToIntakt, LedgerEventKind::HandOverPublicationQueued], $this->ledger->kinds());
     }
 
     public function testOneUnreadableAuthorDoesNotKeepAnUnrelatedHeadFromBeingQueued(): void
@@ -282,7 +282,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
 
         $this->tick();
 
-        self::assertSame([LedgerEventKind::ChangeHandedToIntakt, LedgerEventKind::HeadPending], $this->ledger->kinds());
+        self::assertSame([LedgerEventKind::ChangeHandedToIntakt, LedgerEventKind::HandOverPublicationQueued, LedgerEventKind::HeadPending], $this->ledger->kinds());
     }
 
     public function testAPendingHeadIsReadAgainOnceItsReadAgainTimeHasPassedEvenWhenTheListingIsUnchanged(): void
