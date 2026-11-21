@@ -85,7 +85,7 @@ final readonly class NoServiceLocatorRule implements Rule
     {
         $constructor = $class->getMethod('__construct');
 
-        return array_map(fn (Param $parameter): array => [$this->variableOf($parameter), $this->locatorAmong($this->namesIn($parameter)), $parameter->getStartLine()], $constructor instanceof ClassMethod ? $constructor->params : []);
+        return array_values(array_map(fn (Param $parameter): array => [$this->variableOf($parameter), $this->locatorAmong($this->namesIn($parameter)), $parameter->getStartLine()], $constructor instanceof ClassMethod ? $constructor->params : []));
     }
 
     // a trait method aliased to __construct is the constructor, and it is usually declared in another file, so its parameters are read through reflection
@@ -152,7 +152,7 @@ final readonly class NoServiceLocatorRule implements Rule
      */
     private function namesIn(Param $parameter): array
     {
-        return $parameter->type instanceof Node ? array_map(static fn (Name $name): string => $name->toString(), new NodeFinder()->findInstanceOf($parameter->type, Name::class)) : [];
+        return $parameter->type instanceof Node ? array_values(array_map(static fn (Name $name): string => $name->toString(), new NodeFinder()->findInstanceOf($parameter->type, Name::class))) : [];
     }
 
     /**
