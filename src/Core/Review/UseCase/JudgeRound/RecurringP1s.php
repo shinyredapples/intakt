@@ -14,13 +14,14 @@ use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundState;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
 
-// A round's events are decided only once every earlier round of the change is judged, because an event is never taken back and an earlier round judged later could be the first to flag the place; so rounds judged out of order record the same events as rounds judged in order; only an earlier round that can still produce a judge_done delays settlement, because a round that can never be judged would otherwise hold the change forever.
+// A round's events are decided only once no earlier round of the change waits for its judging, because an event is never taken back and an earlier round judged later could be the first to flag the place; only a waiting round delays settlement, because a round with no end state that releases it (collecting, failed, parked) would otherwise hold the change forever.
 final readonly class RecurringP1s
 {
     public function __construct(
         private ReviewRounds $rounds,
         private Ledger $ledger,
         private LedgerPayloads $payloads,
+        private FailedJudgings $failedJudgings,
     ) {
     }
 
@@ -33,7 +34,7 @@ final readonly class RecurringP1s
         $ofChange = $this->rounds->ofChange($round);
         $rounds = $this->headsOf($ofChange);
         $flagged = $this->flagged($rounds);
-        $settled = $this->settled($rounds, $flagged, $this->neverJudged($ofChange));
+        $settled = $this->settled($rounds, $flagged, $this->waiting($ofChange));
         $recorded = $this->recorded($rounds);
         $keys = [];
         $found = [];
@@ -49,22 +50,22 @@ final readonly class RecurringP1s
         return array_values(array_filter($found, static fn (RecurringP1Found $recurrence): bool => !isset($recorded[$recurrence->round][$recurrence->key])));
     }
 
-    // Only the rounds up to the first one not judged yet, because only for these the first round that flagged a place is final; a round that will never be judged flags nothing and holds up no later round.
+    // Only the rounds up to the first one still waiting for its judging, because only for these the first round that flagged a place is final; any other round without a judge_done flags nothing and holds up no later round.
     /**
      * @param array<string, string>                $rounds
      * @param array<string, array<string, string>> $flagged
-     * @param array<string, true>                  $neverJudged
+     * @param array<string, true>                  $waiting
      *
      * @return array<string, string>
      */
-    private function settled(array $rounds, array $flagged, array $neverJudged): array
+    private function settled(array $rounds, array $flagged, array $waiting): array
     {
         $settled = [];
 
         foreach ($rounds as $id => $head) {
             if (isset($flagged[$id])) {
                 $settled[$id] = $head;
-            } elseif (!isset($neverJudged[$id])) {
+            } elseif (isset($waiting[$id])) {
                 break;
             }
         }
@@ -72,25 +73,26 @@ final readonly class RecurringP1s
         return $settled;
     }
 
-    // Left out of the wait because neither can ever write a judge_done: a round completed before migration Version20261101120000 kept no reported findings and was never queued for judging, and a judged round without one gets none later.
+    // Only a complete round with reported findings whose judging has not failed, because its judging or its recorded failure ends the wait; a round completed before migration Version20261101120000 kept no reported findings and was never queued, and a collecting round may never complete.
     /**
      * @param list<ReviewRound> $rounds
      *
      * @return array<string, true>
      */
-    private function neverJudged(array $rounds): array
+    private function waiting(array $rounds): array
     {
-        $never = [];
+        $failed = $this->failedJudgings->failedRounds();
+        $waiting = [];
 
         foreach ($rounds as $round) {
-            $state = $round->state();
+            $id = $round->id()->toRfc4122();
 
-            if (RoundState::Judged === $state || (RoundState::Complete === $state && null === $round->reportedFindingsJson())) {
-                $never[$round->id()->toRfc4122()] = true;
+            if (RoundState::Complete === $round->state() && null !== $round->reportedFindingsJson() && !isset($failed[$id])) {
+                $waiting[$id] = true;
             }
         }
 
-        return $never;
+        return $waiting;
     }
 
     // Each round's head by its id, in round-number order; a round stored before identities were recorded names no head, so it cannot tell another head from its own and is left out.
