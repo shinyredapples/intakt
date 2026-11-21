@@ -91,7 +91,7 @@ final readonly class NoServiceLocatorRule implements Rule
             return null;
         }
 
-        // a nullable, union or intersection type holds its class names as nested names, and PHPStan's parser has already resolved each against the imports
+        // searched as nested names because a nullable, union or intersection type wraps them, and compared as written because PHPStan's parser has already resolved each against the imports, so an alias still counts
         foreach (new NodeFinder()->findInstanceOf($parameter->type, Name::class) as $name) {
             foreach (self::LOCATORS as $locator) {
                 if (self::isNamed($name, $locator)) {
@@ -103,7 +103,7 @@ final readonly class NoServiceLocatorRule implements Rule
         return null;
     }
 
-    // PHP matches class names in any letter case
+    // compared case-insensitively because PHP matches class names in any letter case
     private static function isNamed(Name $name, string $class): bool
     {
         return 0 === strcasecmp(ltrim($name->toString(), '\\'), $class);
