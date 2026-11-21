@@ -7,19 +7,6 @@ const { chromium } = require('playwright');
 const { measureFloors } = require(path.join(root, 'bin', 'ui-check'));
 const address = process.env.INTAKT_INSTANCE_URL.replace(/\/+$/, '').replace('127.0.0.1', 'localhost');
 const state = process.argv[2] ?? 'board';
-// With the second argument "fixture", a display fixture stands in for a column that holds a card: no install can put one in the six folded
-// columns yet, so the page's own In review column is copied as Building and Building leaves the Coming next line, as the template renders it.
-const fixture = process.argv[3] === 'fixture';
-const showBuildingAgain = () => {
-  const source = document.querySelector('section.col#col-in-review');
-  const copy = source.cloneNode(true);
-  copy.id = 'col-building';
-  copy.setAttribute('aria-label', 'Building');
-  copy.querySelectorAll('h3, .col-fold > span:first-child').forEach((node) => { node.textContent = node.matches('h3') ? 'Building' : node.textContent.replace('In review', 'Building'); });
-  source.before(copy);
-  const line = document.querySelector('p.coming-next span:last-child');
-  line.textContent = line.textContent.replace('Building, ', '');
-};
 const SIZES = [{ width: 1440, height: 900 }, { width: 390, height: 844 }];
 
 (async () => {
@@ -35,7 +22,6 @@ const SIZES = [{ width: 1440, height: 900 }, { width: 390, height: 844 }];
       const response = await page.goto(address + '/?board=1', { waitUntil: 'load' });
       if (!response.ok()) errors.push(`HTTP ${response.status()}`);
       await page.evaluate(() => document.fonts.ready);
-      if (fixture) await page.evaluate(showBuildingAgain);
       const seen = await page.evaluate(() => {
         const columns = [...document.querySelectorAll('.board > section.col')].map((c) => c.getAttribute('aria-label'));
         const line = document.querySelector('p.coming-next');
@@ -52,7 +38,7 @@ const SIZES = [{ width: 1440, height: 900 }, { width: 390, height: 844 }];
       const floors = size.width === 390 ? await page.evaluate(measureFloors, { text: 15, target: 44 }) : [];
       console.log(`board ${state} ${theme} ${size.width}: ${seen}`);
       await page.evaluate(() => window.scrollTo(0, 0));
-      await page.screenshot({ path: path.join(__dirname, `board-${state}${fixture ? '-fixture' : ''}-${theme}-${size.width}.png`), fullPage: true });
+      await page.screenshot({ path: path.join(__dirname, `board-${state}-${theme}-${size.width}.png`), fullPage: true });
       runs.push({ page: state, theme, width: size.width, errors, violations, floors });
       await context.close();
     }

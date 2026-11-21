@@ -88,7 +88,7 @@ final readonly class Board
      */
     public function shownColumns(): array
     {
-        return array_values(array_filter(BoardColumn::cases(), fn (BoardColumn $column): bool => !$column->foldsIntoComingNext($this->countOf($column))));
+        return $this->splitColumns()['shown'];
     }
 
     /**
@@ -96,7 +96,7 @@ final readonly class Board
      */
     public function comingNext(): array
     {
-        return array_values(array_filter(BoardColumn::cases(), fn (BoardColumn $column): bool => $column->foldsIntoComingNext($this->countOf($column))));
+        return $this->splitColumns()['folded'];
     }
 
     // The newest card while the board is at rest (every card Done, no task in flight), so a quiet phone home can open it instead of an empty Waiting on you (#3142).
@@ -145,6 +145,20 @@ final readonly class Board
     private function tasksInFlight(): array
     {
         return array_values(array_filter($this->tasks, static fn (BuildTask $task): bool => $task->inFlight));
+    }
+
+    // One pass for both lists, because a column the board shows must never also be named in the Coming next line.
+    /**
+     * @return array{shown: list<BoardColumn>, folded: list<BoardColumn>}
+     */
+    private function splitColumns(): array
+    {
+        $split = ['shown' => [], 'folded' => []];
+        foreach (BoardColumn::cases() as $column) {
+            $split[$column->foldsIntoComingNext($this->countOf($column)) ? 'folded' : 'shown'][] = $column;
+        }
+
+        return $split;
     }
 
     private function everyColumnButDoneIsEmpty(): bool
