@@ -30,9 +30,9 @@ final class WatchConfigurationTest extends TestCase
 
     public function testAProjectThatNamesNoEligibilityLabelGetsIntakt(): void
     {
-        $projects = $this->processed(['repository' => '/r', 'base' => 'main', 'task' => 'Review.']);
+        $projects = $this->processed(['repository' => '/r', 'base' => 'main', 'task' => 'Review.', 'github' => 'acme/widgets']);
 
-        self::assertSame('intakt', $projects['alpha']['eligibility_label'] ?? null);
+        self::assertSame(['alpha' => ['repository' => '/r', 'base' => 'main', 'task' => 'Review.', 'github' => 'acme/widgets', 'eligibility_label' => 'intakt']], $projects);
     }
 
     public function testANamedEligibilityLabelReplacesTheDefault(): void
