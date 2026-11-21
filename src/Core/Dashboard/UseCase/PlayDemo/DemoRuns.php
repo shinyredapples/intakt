@@ -51,6 +51,6 @@ final readonly class DemoRuns
         // Sent to a queue worker, because a replay sleeps at the recorded pace for minutes and must never hold a web worker.
         $this->commands->dispatch(new PlayDemoRun());
 
-        return [self::FLASH_STARTED,'The demo run is starting: the caption at the bottom of each page names the stage it is in.'];
+        return [self::FLASH_STARTED, 'The demo run is starting: the caption at the bottom of each page names the stage it is in.'];
     }
 }
