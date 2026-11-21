@@ -36,6 +36,15 @@ final readonly class Board
         return array_values(array_filter($this->cards, static fn (Review $card): bool => $card->column() === $column));
     }
 
+    // The reviews whose latest round is neither judged nor ended, longest running first, as the Waiting on you page's "Meanwhile" lists them.
+    /**
+     * @return list<Review>
+     */
+    public function runningReviews(): array
+    {
+        return array_reverse(array_values(array_filter($this->cards, static fn (Review $card): bool => null !== $card->activeRound())));
+    }
+
     // From the cards in their order, so the newest review's reviewers come first.
     public function whoIsWorking(): WhoIsWorking
     {

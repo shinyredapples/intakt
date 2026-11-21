@@ -48,7 +48,7 @@ final readonly class LivePageRendering
     // The same grants on every page, because the subscriber cookie is shared by every tab: a list page that granted less would cut off a review tab that reconnects with it.
     public static function listenerGrants(): array
     {
-        return ['exact' => [DashboardTopics::SHELL], 'urlpattern' => [MercureRoundUpdates::topicOf(':round')]];
+        return ['exact' => [DashboardTopics::SHELL, DashboardTopics::WAITING], 'urlpattern' => [MercureRoundUpdates::topicOf(':round')]];
     }
 
     private function flashBagOf(Request $request): FlashBagInterface

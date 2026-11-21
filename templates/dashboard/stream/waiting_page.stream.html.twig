@@ -1,0 +1,4 @@
+{#- The Waiting on you page's lead, list and panels, from the partials the page renders, so a pushed page never differs from one loaded after it. Morphed, as the board's head is, so an unchanged item keeps its node and the keyboard focus it holds. -#}
+<turbo-stream action="update" method="morph" target="waiting-lead"><template>{{ include('dashboard/_waiting_lead.html.twig', {items: page.items}, with_context = false) }}</template></turbo-stream>
+<turbo-stream action="replace" method="morph" target="waiting-list"><template>{{ include('dashboard/_waiting_list.html.twig', {items: page.items, now: now}, with_context = false) }}</template></turbo-stream>
+<turbo-stream action="replace" method="morph" target="waiting-side"><template>{{ include('dashboard/_waiting_side.html.twig', {page: page, now: now}, with_context = false) }}</template></turbo-stream>
