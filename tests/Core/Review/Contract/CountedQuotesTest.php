@@ -29,5 +29,6 @@ final class CountedQuotesTest extends TestCase
 
         self::assertSame(['b', 'a', 'b'], iterator_to_array($quotes));
         self::assertCount(3, $quotes);
+        self::assertSame(3, count($quotes));
     }
 }
