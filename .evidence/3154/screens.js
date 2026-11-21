@@ -4,9 +4,22 @@
 const path = require('path');
 const root = path.resolve(__dirname, '..', '..');
 const { chromium } = require('playwright');
-const { measureFloors, report, failed } = require(path.join(root, 'bin', 'ui-check'));
+const { measureFloors } = require(path.join(root, 'bin', 'ui-check'));
 const address = process.env.INTAKT_INSTANCE_URL.replace(/\/+$/, '').replace('127.0.0.1', 'localhost');
 const state = process.argv[2] ?? 'board';
+// With the second argument "fixture", a display fixture stands in for a column that holds a card: no install can put one in the six folded
+// columns yet, so the page's own In review column is copied as Building and Building leaves the Coming next line, as the template renders it.
+const fixture = process.argv[3] === 'fixture';
+const showBuildingAgain = () => {
+  const source = document.querySelector('section.col#col-in-review');
+  const copy = source.cloneNode(true);
+  copy.id = 'col-building';
+  copy.setAttribute('aria-label', 'Building');
+  copy.querySelectorAll('h3, .col-fold > span:first-child').forEach((node) => { node.textContent = node.matches('h3') ? 'Building' : node.textContent.replace('In review', 'Building'); });
+  source.before(copy);
+  const line = document.querySelector('p.coming-next span:last-child');
+  line.textContent = line.textContent.replace('Building, ', '');
+};
 const SIZES = [{ width: 1440, height: 900 }, { width: 390, height: 844 }];
 
 (async () => {
@@ -22,6 +35,7 @@ const SIZES = [{ width: 1440, height: 900 }, { width: 390, height: 844 }];
       const response = await page.goto(address + '/?board=1', { waitUntil: 'load' });
       if (!response.ok()) errors.push(`HTTP ${response.status()}`);
       await page.evaluate(() => document.fonts.ready);
+      if (fixture) await page.evaluate(showBuildingAgain);
       const seen = await page.evaluate(() => {
         const columns = [...document.querySelectorAll('.board > section.col')].map((c) => c.getAttribute('aria-label'));
         const line = document.querySelector('p.coming-next');
@@ -29,18 +43,23 @@ const SIZES = [{ width: 1440, height: 900 }, { width: 390, height: 844 }];
         return `columns [${columns.join(', ')}]; coming next: ${line ? `"${line.textContent.replace(/\s+/g, ' ').trim()}", ${Math.round(line.getBoundingClientRect().height)} px tall` : 'none'}; `
           + `board scrolls sideways ${board.scrollWidth > board.clientWidth}; page overflows ${document.documentElement.scrollWidth > window.innerWidth}`;
       });
-      // axe-core is not installed in this sandbox, so only the phone floors are measured.
-      const violations = [];
+      // Null when axe-core is not installed in this sandbox, so the report says the scan was skipped instead of printing zero violations.
+      let violations = null;
+      try {
+        await page.addScriptTag({ path: require.resolve('axe-core/axe.min.js') });
+        violations = (await page.evaluate(async () => (await axe.run(document, { resultTypes: ['violations'] })).violations.map((v) => ({ id: v.id, impact: v.impact })))).filter((v) => ['serious', 'critical'].includes(v.impact));
+      } catch (e) { /* axe-core is missing: left as skipped */ }
       const floors = size.width === 390 ? await page.evaluate(measureFloors, { text: 15, target: 44 }) : [];
       console.log(`board ${state} ${theme} ${size.width}: ${seen}`);
       await page.evaluate(() => window.scrollTo(0, 0));
-      await page.screenshot({ path: path.join(__dirname, `board-${state}-${theme}-${size.width}.png`), fullPage: true });
-      runs.push({ page: `board ${state}`, theme, width: size.width, errors, violations, floors });
+      await page.screenshot({ path: path.join(__dirname, `board-${state}${fixture ? '-fixture' : ''}-${theme}-${size.width}.png`), fullPage: true });
+      runs.push({ page: state, theme, width: size.width, errors, violations, floors });
       await context.close();
     }
   } finally {
     await browser.close();
   }
-  console.log(report(runs));
-  process.exitCode = failed(runs) ? 1 : 0;
+  for (const run of runs) console.log(`board ${run.page} ${run.theme} ${run.width}: axe ${null === run.violations ? 'SKIPPED (axe-core not installed)' : `${run.violations.length} serious or critical`}`
+    + (run.width === 390 ? `, phone floor findings ${run.floors.length}` : '') + `, page errors ${run.errors.length}`);
+  process.exitCode = runs.some((run) => run.errors.length > 0 || run.floors.length > 0 || (run.violations ?? []).length > 0) ? 1 : 0;
 })().catch((e) => { console.error(e); process.exit(2); });
