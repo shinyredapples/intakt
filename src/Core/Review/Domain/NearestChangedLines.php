@@ -29,7 +29,7 @@ final readonly class NearestChangedLines
     }
 
     /**
-     * @param list<array{0: string, 1: int, 2: string, 3?: string, 4?: int}> $changedLines
+     * @param list<array{string, int, string}> $changedLines redacted already, each line within its whole file
      *
      * @return list<QuoteNearLines>
      */
@@ -37,12 +37,18 @@ final readonly class NearestChangedLines
     {
         $changedLines = $this->withStorablePath($changedLines);
         $partsOfLines = array_map(fn (array $changed): array => $this->partsOf($changed[2]), $changedLines);
-        $redactedHunks = [];
+        $looked = [];
         $recorded = [];
 
         foreach (new QuotesInChange()->countedQuotesWithNames($findingText) as [$quote, $names]) {
+            // Once per quote, because a quote the finding repeats would repeat its lines.
+            if (isset($looked[$quote])) {
+                continue;
+            }
+
+            $looked[$quote] = true;
             $closest = $this->closestTo($this->partsOf(implode(' ', $names)), $partsOfLines);
-            $lines = $this->storedOf(array_map(static fn (int $index): array => $changedLines[$index], $closest), $redactedHunks);
+            $lines = array_map(fn (int $index): NearLine => new NearLine($changedLines[$index][0], $changedLines[$index][1], $this->cut($changedLines[$index][2])), array_slice($closest, 0, self::MAX_LINES_PER_QUOTE));
 
             if ([] !== $lines) {
                 $recorded[] = new QuoteNearLines($this->cut(($this->redact)($quote)), $lines);
@@ -53,9 +59,9 @@ final readonly class NearestChangedLines
     }
 
     /**
-     * @param list<array{0: string, 1: int, 2: string, 3?: string, 4?: int}> $changedLines
+     * @param list<array{string, int, string}> $changedLines
      *
-     * @return list<array{0: string, 1: int, 2: string, 3?: string, 4?: int}>
+     * @return list<array{string, int, string}>
      */
     private function withStorablePath(array $changedLines): array
     {
@@ -92,46 +98,6 @@ final readonly class NearestChangedLines
         usort($scored, static fn (array $a, array $b): int => $b[0] <=> $a[0]);
 
         return array_column($scored, 1);
-    }
-
-    /**
-     * @param list<array{0: string, 1: int, 2: string, 3?: string, 4?: int}> $closest
-     * @param array<list<string>>                                            $redactedHunks
-     *
-     * @return list<NearLine>
-     */
-    private function storedOf(array $closest, array &$redactedHunks): array
-    {
-        $stored = [];
-
-        foreach ($closest as $changed) {
-            // The line alone when it comes without its hunk, because there is then no other line to redact it with.
-            $hunk = $changed[3] ?? $changed[2];
-            $redactedHunks[$hunk] ??= $this->redactedLinesOf($hunk);
-            $text = $redactedHunks[$hunk][$changed[4] ?? 0] ?? null;
-
-            // Not counted, because a line left out with its hunk would take the place of one that can be shown.
-            if (null !== $text) {
-                $stored[] = new NearLine($changed[0], $changed[1], $this->cut($text));
-            }
-
-            if (self::MAX_LINES_PER_QUOTE === count($stored)) {
-                break;
-            }
-        }
-
-        return $stored;
-    }
-
-    // Redacted as one text, because a private key is known only by its first line. No line when the redaction took a line break away, because the result's lines are then no longer the hunk's.
-    /**
-     * @return list<string>
-     */
-    private function redactedLinesOf(string $hunk): array
-    {
-        $redacted = explode("\n", ($this->redact)($hunk));
-
-        return count($redacted) === substr_count($hunk, "\n") + 1 ? $redacted : [];
     }
 
     /**

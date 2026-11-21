@@ -34,7 +34,12 @@ use Intakt\Core\Review\Domain\QuotesInChange;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundState;
 use Intakt\Core\Review\Domain\RoundTransition;
+use Intakt\Core\Review\Infrastructure\AddedLinesInCheckout;
 use Intakt\Core\Review\Infrastructure\ChangeText;
+use Intakt\Core\Review\Infrastructure\CheckedOutFile;
+use Intakt\Core\ReviewerForLoop\Infrastructure\ConfiguredProjectModes;
+use Intakt\Core\Review\Contract\Checkout;
+use Intakt\Tests\Core\Git\TemporaryRepository;
 use Intakt\Core\Review\Infrastructure\DiffAddedLines;
 use Intakt\Core\Review\Infrastructure\DiffHunks;
 use Intakt\Core\Review\Infrastructure\DiffPaths;
@@ -85,6 +90,9 @@ use Throwable;
 #[UsesClass(DroppedFinding::class)]
 #[UsesClass(NearestChangedLines::class)]
 #[UsesClass(DiffAddedLines::class)]
+#[UsesClass(AddedLinesInCheckout::class)]
+#[UsesClass(CheckedOutFile::class)]
+#[UsesClass(Checkout::class)]
 #[UsesClass(QuoteNearLines::class)]
 #[UsesClass(NearLine::class)]
 #[UsesClass(RoundJudged::class)]
@@ -100,10 +108,17 @@ use Throwable;
 final class JudgeRoundTest extends KernelTestCase
 {
     private RoundFixture $fixture;
+    private ?TemporaryRepository $checkout = null;
 
     protected function setUp(): void
     {
         $this->fixture = new RoundFixture(self::getContainer());
+    }
+
+    protected function tearDown(): void
+    {
+        $this->checkout?->remove();
+        parent::tearDown();
     }
 
     public function testACompletedRoundIsQueuedForJudgingOnce(): void
@@ -527,6 +542,7 @@ final class JudgeRoundTest extends KernelTestCase
 
     public function testAHeldCredentialOnANearestChangedLineIsRecordedRedacted(): void
     {
+        $this->checkOutThingHolding("\$thing = new Thing();\n");
         $round = $this->roundReporting([$this->quoting('A', Severity::P1, '`newThing` is not defined.')]);
         $previous = $_SERVER['APP_SECRET'] ?? null;
         $_SERVER['APP_SECRET'] = 'new';
@@ -542,13 +558,14 @@ final class JudgeRoundTest extends KernelTestCase
         }
 
         self::assertSame(
-            [['id' => 'F1', 'severity' => 'P1', 'text' => '`newThing` is not defined.', 'file' => 'src/Thing.php', 'line' => 1, 'reason' => 'none of its 1 quoted code fragments is in the change', 'nearest' => [['quote' => '[redacted]Thing', 'lines' => [['file' => 'src/Thing.php', 'line' => 1, 'text' => '[redacted]']]]]]],
+            [['id' => 'F1', 'severity' => 'P1', 'text' => '`newThing` is not defined.', 'file' => 'src/Thing.php', 'line' => 1, 'reason' => 'none of its 1 quoted code fragments is in the change', 'nearest' => [['quote' => '[redacted]Thing', 'lines' => [['file' => 'src/Thing.php', 'line' => 1, 'text' => '$thing = [redacted] Thing();']]]]]],
             $this->judgeDonePayloads()[0]['dropped'],
         );
     }
 
     public function testAFindingDroppedForItsQuotesIsRecordedWithTheNearestChangedLines(): void
     {
+        $this->checkOutThingHolding("new\n");
         $round = $this->roundReporting([$this->quoting('A', Severity::P1, '`newThing` is not defined.')]);
 
         $this->fixture->judge(new ScriptedJudgement(new Judgement([])))($this->judgingOf($round));
@@ -719,6 +736,14 @@ final class JudgeRoundTest extends KernelTestCase
         $this->fixture->deliver($this->fixture->bus->messages[0], new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, $findings, [], [])]));
 
         return $this->fixture->round($round->id()->toRfc4122());
+    }
+
+    // A checkout holding the file the round's diff changes, because the nearest lines are read from the checked-out file.
+    private function checkOutThingHolding(string $content): void
+    {
+        $this->checkout = new TemporaryRepository();
+        $this->checkout->commitFile('src/Thing.php', $content);
+        $this->fixture = new RoundFixture(self::getContainer(), new ConfiguredProjectModes([]), $this->checkout->path);
     }
 
     // At one place, so a finding that is dropped would otherwise be merged with the other.

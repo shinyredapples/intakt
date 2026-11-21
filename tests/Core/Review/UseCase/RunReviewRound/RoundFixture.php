@@ -40,6 +40,7 @@ use Intakt\Core\Review\Domain\ReviewTarget;
 use Intakt\Core\Review\Domain\RoundReviewer;
 use Intakt\Core\Review\Domain\TrackedFinding;
 use Intakt\Core\Review\Infrastructure\ChangeText;
+use Intakt\Core\Review\Infrastructure\AddedLinesInCheckout;
 use Intakt\Core\Review\Infrastructure\DiffAddedLines;
 use Intakt\Core\Review\Infrastructure\DiffHunks;
 use Intakt\Core\Review\Infrastructure\DiffPaths;
@@ -114,6 +115,7 @@ final readonly class RoundFixture
     public function __construct(
         private TestContainer $container,
         private ProjectModes $modes = new ConfiguredProjectModes([]),
+        private string $checkoutRoot = __DIR__,
     ) {
         $entities = $container->get('doctrine.orm.entity_manager');
         $this->entities = $entities;
@@ -239,7 +241,7 @@ final readonly class RoundFixture
 
     public function judge(Vendor $vendor): JudgeRoundHandler
     {
-        return new JudgeRoundHandler(new JudgedRounds($this->rounds($this->entities), $this->storedFindingsOn($this->entities), $this->roundLedger($this->ledger), new ChangeText(new DiffPaths()), new DiffHunks(new DiffPaths()), new DiffAddedLines(new DiffPaths()), new DiffPaths(), new StoredVerdicts($this->serializer), $this->noFailedJudgings(), $this->recordRecurringP1s($this->ledger)), $vendor, $this->events, $this->container->get(Redactor::class));
+        return new JudgeRoundHandler(new JudgedRounds($this->rounds($this->entities), $this->storedFindingsOn($this->entities), $this->roundLedger($this->ledger), new ChangeText(new DiffPaths()), new DiffHunks(new DiffPaths()), new AddedLinesInCheckout(new DiffAddedLines(new DiffPaths()), $this->container->get(Redactor::class)), new DiffPaths(), new StoredVerdicts($this->serializer), $this->noFailedJudgings(), $this->recordRecurringP1s($this->ledger)), $vendor, $this->events, $this->container->get(Redactor::class));
     }
 
     public function recurringP1s(Ledger $ledger, InMemoryTransport $failed = new InMemoryTransport()): RecurringP1s
@@ -417,7 +419,7 @@ final readonly class RoundFixture
 
     private function subject(): ReviewSubject
     {
-        return new ReviewSubject('alpha', __DIR__, self::TASK, self::DIFF);
+        return new ReviewSubject('alpha', $this->checkoutRoot, self::TASK, self::DIFF);
     }
 
     private function rounds(EntityManagerInterface $entities, ?Ledger $ledger = null): ReviewRounds

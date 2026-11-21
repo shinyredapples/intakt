@@ -5,13 +5,10 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Review\Domain;
 
 use Closure;
-use Intakt\Core\Platform\Contract\Redaction;
 use Intakt\Core\Review\Contract\NearLine;
 use Intakt\Core\Review\Contract\QuoteNearLines;
 use Intakt\Core\Review\Domain\NearestChangedLines;
 use Intakt\Core\Review\Domain\QuotesInChange;
-use Intakt\Core\Review\Infrastructure\DiffAddedLines;
-use Intakt\Core\Review\Infrastructure\DiffPaths;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -20,9 +17,6 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(QuoteNearLines::class)]
 #[CoversClass(NearLine::class)]
 #[UsesClass(QuotesInChange::class)]
-#[UsesClass(DiffAddedLines::class)]
-#[UsesClass(DiffPaths::class)]
-#[UsesClass(Redaction::class)]
 final class NearestChangedLinesTest extends TestCase
 {
     public function testAQuoteSharingNamePartsWithAChangedLineRecordsThatLineWithItsFileAndNumber(): void
@@ -120,16 +114,6 @@ final class NearestChangedLinesTest extends TestCase
         self::assertSame([['src/B.php', 2]], $this->placesOf($nearest[0]));
     }
 
-    public function testAChangedLineIsRedactedBeforeItIsCutSoACredentialAcrossTheCutLeavesNoPart(): void
-    {
-        $line = '$reason = \''.str_repeat('a', NearestChangedLines::MAX_LINE_LENGTH - 16).'held-secret-value\';';
-
-        $text = $this->nearestFor('`dropReason` is unused.', [['src/A.php', 1, $line]], $this->redactingHeldSecret(...))[0]->lines[0]->text;
-
-        self::assertStringNotContainsString('held', $text);
-        self::assertStringEndsWith('[reda', $text);
-    }
-
     public function testAQuoteIsStoredRedacted(): void
     {
         $nearest = $this->nearestFor('`dropReason(held-secret-value)` is unused.', [['src/A.php', 1, '$dropReason = $heldSecretValue;']], $this->redactingHeldSecret(...));
@@ -137,43 +121,18 @@ final class NearestChangedLinesTest extends TestCase
         self::assertSame('dropReason([redacted])', $nearest[0]->quote);
     }
 
-    public function testAPrivateKeyBodyLineOfADiffIsNotRecorded(): void
+    public function testAQuoteTheFindingRepeatsIsRecordedOnce(): void
     {
-        $body = 'MIIEvQIBADANBgkqhkiG9w0BAQEFAASC7signing9Key+x';
-        $dashes = str_repeat('-', 5);
-        $diff = "diff --git a/jwt.pem b/jwt.pem\n--- /dev/null\n+++ b/jwt.pem\n@@ -0,0 +1,3 @@\n+".$dashes.'BEGIN PRIVATE KEY'.$dashes."\n+".$body."\n+".$dashes.'END PRIVATE KEY'.$dashes."\n";
+        $nearest = $this->nearestFor('`dropReason` is unused, and `dropReason` is never read.', [['src/A.php', 1, '$reason = 1;']]);
 
-        $nearest = $this->nearestFor('`signingKey` is never rotated.', new DiffAddedLines(new DiffPaths())->in($diff), new Redaction()->redact(...));
-
-        self::assertSame([], $nearest);
+        self::assertEquals([new QuoteNearLines('dropReason', [new NearLine('src/A.php', 1, '$reason = 1;')])], $nearest);
     }
 
-    public function testALineIsStoredAsItStandsInItsRedactedHunk(): void
+    public function testALineWithBytesThatAreNotUtf8IsStoredScrubbed(): void
     {
-        $hunk = "context\n\$reason = 'held-secret-value';\ncontext";
+        $nearest = $this->nearestFor('`customerName` is missing.', [['src/A.php', 1, "\$customer = \"a\xFFb\";"]]);
 
-        $nearest = $this->nearestFor('`dropReason` is unused.', [['src/A.php', 2, "\$reason = 'held-secret-value';", $hunk, 1]], $this->redactingHeldSecret(...));
-
-        self::assertEquals([new NearLine('src/A.php', 2, "\$reason = '[redacted]';")], $nearest[0]->lines);
-    }
-
-    public function testALineLeftOutWithItsHunkTakesNoPlaceAmongTheKeptLines(): void
-    {
-        $leftOut = ['src/A.php', 1, '$dropReason = 0;', "\$dropReason = 0;\nheld-secret\n-value", 0];
-        $kept = array_map(static fn (int $line): array => ['src/B.php', $line, '$reason = '.$line.';'], range(1, 3));
-
-        $nearest = $this->nearestFor('`dropReason` is unused.', [$leftOut, ...$kept], static fn (string $text): string => str_replace("held-secret\n-value", '[redacted]', $text));
-
-        self::assertSame([['src/B.php', 1], ['src/B.php', 2], ['src/B.php', 3]], $this->placesOf($nearest[0]));
-    }
-
-    public function testAHeldCredentialWithBytesThatAreNotUtf8IsRedacted(): void
-    {
-        $secret = "credential\xFFsecretFixture";
-
-        $nearest = $this->nearestFor('`customerName` is missing.', [['src/A.php', 1, '$customer = "'.$secret.'";']], static fn (string $text): string => str_replace($secret, '[redacted]', $text));
-
-        self::assertSame('$customer = "[redacted]";', $nearest[0]->lines[0]->text);
+        self::assertSame('$customer = "a?b";', $nearest[0]->lines[0]->text);
     }
 
     public function testALineInAFileWhosePathHoldsACredentialIsLeftOut(): void
@@ -189,8 +148,8 @@ final class NearestChangedLinesTest extends TestCase
     }
 
     /**
-     * @param list<array{0: string, 1: int, 2: string, 3?: string, 4?: int}> $changedLines
-     * @param ?Closure(string): string                                       $redact
+     * @param list<array{string, int, string}> $changedLines
+     * @param ?Closure(string): string         $redact
      *
      * @return list<QuoteNearLines>
      */

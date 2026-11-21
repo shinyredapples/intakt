@@ -11,8 +11,8 @@ use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\CountedVote;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundState;
+use Intakt\Core\Review\Infrastructure\AddedLinesInCheckout;
 use Intakt\Core\Review\Infrastructure\ChangeText;
-use Intakt\Core\Review\Infrastructure\DiffAddedLines;
 use Intakt\Core\Review\Infrastructure\DiffHunks;
 use Intakt\Core\Review\Infrastructure\DiffPaths;
 use Intakt\Core\Review\UseCase\ReadVerdicts\StoredVerdicts;
@@ -28,7 +28,7 @@ final readonly class JudgedRounds
         private RoundLedger $ledger,
         private ChangeText $change,
         private DiffHunks $hunks,
-        private DiffAddedLines $addedLines,
+        private AddedLinesInCheckout $addedLines,
         private DiffPaths $paths,
         private StoredVerdicts $verdicts,
         private FailedJudgings $failedJudgings,
@@ -53,11 +53,11 @@ final readonly class JudgedRounds
     }
 
     /**
-     * @return list<array{string, int, string, string, int}>
+     * @return list<array{string, int, string}>
      */
     public function addedLinesOf(ReviewRound $round): array
     {
-        return $this->addedLines->in($round->diff());
+        return $this->addedLines->of($round->diff(), $round->checkoutRoot());
     }
 
     // Null for a round judged already or whose failed judging is recorded, so a redelivered message asks the model nothing.
