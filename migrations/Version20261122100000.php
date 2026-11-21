@@ -36,30 +36,38 @@ final class Version20261122100000 extends AbstractMigration
      */
     private function loneSpellings(): array
     {
-        $spellings = [];
+        $lone = [];
+
+        foreach ($this->spellingsPerChange() as [$project, $spellings]) {
+            $spelling = $spellings[0];
+
+            if (1 === count($spellings) && $spelling !== strtolower($spelling)) {
+                $lone[] = [$project, $spelling];
+            }
+        }
+
+        return $lone;
+    }
+
+    /**
+     * @return list<array{string, non-empty-list<string>}>
+     */
+    private function spellingsPerChange(): array
+    {
+        $changes = [];
 
         foreach (self::TABLES as $table) {
             /** @var list<array{project: string, change_ref: string}> $rows */
             $rows = $this->connection->fetchAllAssociative(sprintf('SELECT DISTINCT project, change_ref FROM %s', $table));
 
             foreach ($rows as $row) {
-                // Nested by project, so no project name can run into an address.
-                $spellings[$row['project']][strtolower($row['change_ref'])][$row['change_ref']] = true;
+                // Keyed by a JSON list, so no project name can run into an address.
+                $key = json_encode([$row['project'], strtolower($row['change_ref'])], JSON_THROW_ON_ERROR);
+                $changes[$key] ??= [$row['project'], []];
+                $changes[$key][1][] = $row['change_ref'];
             }
         }
 
-        $lone = [];
-
-        foreach ($spellings as $project => $changes) {
-            foreach ($changes as $canonical => $written) {
-                $spelling = array_key_first($written);
-
-                if (1 === count($written) && $spelling !== $canonical) {
-                    $lone[] = [(string) $project, (string) $spelling];
-                }
-            }
-        }
-
-        return $lone;
+        return array_values(array_map(static fn (array $change): array => [$change[0], array_values(array_unique($change[1]))], $changes));
     }
 }
