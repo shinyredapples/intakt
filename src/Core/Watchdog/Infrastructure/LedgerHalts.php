@@ -47,7 +47,7 @@ final readonly class LedgerHalts implements Halts
     // Cleared cards count too, because the owner already checked that commit and a new card for it would halt the project again for nothing.
     public function wasRaised(string $project, MainViolation $violation): bool
     {
-        return array_any($this->raised(), static fn (OwnerCard $card): bool => null !== $card->violation && $card->project === $project && $card->violation->commit === $violation->commit && $card->violation->violation === $violation->violation);
+        return array_any($this->raised(), static fn (OwnerCard $card): bool => $card->violation instanceof MainViolation && $card->project === $project && $card->violation->commit === $violation->commit && $card->violation->violation === $violation->violation);
     }
 
     /**

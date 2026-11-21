@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Watchdog\Infrastructure;
 
 use DateTimeInterface;
+use Intakt\Core\Watchdog\Contract\MainViolation;
 use Intakt\Core\Watchdog\Contract\OwnerCard;
 
 // One home for the watchdog's console lines, because every door prints text that git, a path or a caller supplied.
@@ -24,7 +25,7 @@ final readonly class ConsoleReport
     public static function cardLine(OwnerCard $card): string
     {
         $raised = $card->raisedAt->format(DateTimeInterface::ATOM);
-        if (null === $card->violation) {
+        if (!$card->violation instanceof MainViolation) {
             return sprintf('card %s halts every project: its halt record is unreadable, raised %s', $card->id->toRfc4122(), $raised);
         }
 
