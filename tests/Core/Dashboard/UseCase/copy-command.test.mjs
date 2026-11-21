@@ -410,6 +410,28 @@ test('a Turbo visit on a phone leaves every Why of the new page closed', () => {
     assert.equal(why.open, false);
 });
 
+test('a list pushed into a wide page opens every Why it brings once it rendered', async () => {
+    const { page } = pageWithACommand();
+    const pushed = new FakeWhy(false);
+    const event = { detail: { render: async () => page.whys.push(pushed) } };
+
+    page.dispatch('turbo:before-stream-render', event);
+    await event.detail.render({});
+
+    assert.equal(pushed.open, true);
+});
+
+test('a list pushed into a phone page keeps every Why it brings closed', async () => {
+    const { page } = pageWithACommand({ phone: true });
+    const pushed = new FakeWhy(false);
+    const event = { detail: { render: async () => page.whys.push(pushed) } };
+
+    page.dispatch('turbo:before-stream-render', event);
+    await event.detail.render({});
+
+    assert.equal(pushed.open, false);
+});
+
 test('narrowing a wide window to phone width closes every Why', () => {
     const whys = [new FakeWhy(false), new FakeWhy(false)];
     const { media } = pageWithACommand({ whys });

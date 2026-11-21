@@ -17,6 +17,14 @@ export function copyCommands(page, view) {
     showWhys(page, view);
     // A Turbo visit brings new items, and a page back from the cache has every Why closed.
     page.addEventListener('turbo:load', () => showWhys(page, view));
+    // A pushed list is morphed in as the server rendered it, every Why closed, so it gets the state a fresh load shows at this width.
+    page.addEventListener('turbo:before-stream-render', (event) => {
+        const render = event.detail.render;
+        event.detail.render = async (stream) => {
+            await render(stream);
+            showWhys(page, view);
+        };
+    });
     // A window resized or turned across 760 px gets the state its new width shows on first render.
     view.matchMedia(PHONE).addEventListener('change', () => showWhys(page, view));
     page.addEventListener('click', (event) => {

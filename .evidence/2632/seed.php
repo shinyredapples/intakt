@@ -16,14 +16,16 @@ use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Kernel;
+use Symfony\Component\Clock\ClockInterface;
+use Symfony\Component\Dotenv\Dotenv;
 
 require dirname(__DIR__, 2).'/vendor/autoload.php';
-new Symfony\Component\Dotenv\Dotenv()->bootEnv(dirname(__DIR__, 2).'/.env');
+new Dotenv()->bootEnv(dirname(__DIR__, 2).'/.env');
 
 $kernel = new Kernel((string) getenv('APP_ENV'), false);
 $kernel->boot();
 $services = $kernel->getContainer()->get('test.service_container');
-$now = new DateTimeImmutable();
+$now = $services->get(ClockInterface::class)->now();
 
 $mode = $argv[1] ?? '';
 
