@@ -86,7 +86,7 @@ final class ChangesHandedToIntaktTest extends KernelTestCase
         $this->recognize('alpha', $this->change(self::PULL));
         $this->recognize('alpha', $this->change(self::PULL, 'b'));
 
-        self::assertEquals([new PublishHandedOverChange('alpha', self::PULL)], $this->commands->handedOver);
+        self::assertEquals([new PublishHandedOverChange('alpha', self::PULL, str_repeat('a', 40))], $this->commands->handedOver);
     }
 
     public function testAPullRequestNotHandedToIntaktIsNotSentForPublication(): void

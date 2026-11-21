@@ -127,18 +127,17 @@ final readonly class ReviewRounds
         return array_any($later, static fn (ReviewRound $other): bool => $other->identity()->commits->head->hash === $head->hash);
     }
 
-    // Without letter case, because the watcher names the pull request as the forge lists it and the round as the push or the request named it.
-    public function latestJudgedOf(string $project, string $change): ?ReviewRound
+    // Without letter case, because the watcher names the pull request as the forge lists it and the round as the push or the request named it; by head and then by id, which is time-ordered, because round numbers count per spelling of the address.
+    public function latestJudgedAt(string $project, string $change, string $head): ?ReviewRound
     {
         /** @var list<ReviewRound> $rounds */
-        $rounds = $this->entities->createQuery(sprintf('SELECT r FROM %s r WHERE r.subject.project = :project AND LOWER(r.change.change) = :change AND r.state = :judged ORDER BY r.change.number DESC', ReviewRound::class))
+        $rounds = $this->entities->createQuery(sprintf('SELECT r FROM %s r WHERE r.subject.project = :project AND LOWER(r.change.change) = :change AND r.state = :judged ORDER BY r.id DESC', ReviewRound::class))
             ->setParameter('project', $project)
             ->setParameter('change', strtolower($change))
             ->setParameter('judged', RoundState::Judged->value)
-            ->setMaxResults(1)
             ->getResult();
 
-        return $rounds[0] ?? null;
+        return array_find($rounds, static fn (ReviewRound $round): bool => $round->identity()->commits->head->hash === $head);
     }
 
     /**

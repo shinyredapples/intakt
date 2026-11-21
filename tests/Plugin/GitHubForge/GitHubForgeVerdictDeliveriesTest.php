@@ -130,23 +130,54 @@ final class GitHubForgeVerdictDeliveriesTest extends TestCase
         self::assertSame([self::POST_COMMENT, self::POST_COMMENT, self::POST_COMMENT, self::POST_STATUS], $this->posts);
         self::assertSame([
             "The verdict.\n\n<!-- intakt-verdict: ".self::TOKEN.' -->',
-            "Ask, part 1.\n\n<!-- intakt-owner-ask: ".self::TOKEN.' part 1 -->',
-            "Ask, part 2.\n\n<!-- intakt-owner-ask: ".self::TOKEN.' part 2 -->',
+            "Ask, part 1.\n\n".$this->askMarker(1),
+            "Ask, part 2.\n\n".$this->askMarker(2),
         ], array_slice($this->bodies, 0, 3));
     }
 
     public function testARetryWhoseReviewCommentIsPostedPostsOnlyTheAskPartsNotYetPosted(): void
     {
-        $posted = json_encode([
-            ['body' => "The verdict.\n\n<!-- intakt-verdict: ".self::TOKEN.' -->', 'performed_via_github_app' => ['id' => 12345]],
-            ['body' => "Ask, part 1.\n\n<!-- intakt-owner-ask: ".self::TOKEN.' part 1 -->', 'performed_via_github_app' => ['id' => 12345]],
-        ], JSON_THROW_ON_ERROR);
-        $forge = $this->forge(static fn (string $url): ResponseInterface => str_contains($url, self::LISTING) ? new MockResponse($posted) : new MockResponse('{}', ['http_code' => 201]));
+        $forge = $this->forgeThatListsAlreadyPosted(["The verdict.\n\n<!-- intakt-verdict: ".self::TOKEN.' -->', "Ask, part 1.\n\n".$this->askMarker(1)]);
 
         self::assertTrue($forge->publishVerdict('widgets', new ChangeId(self::PULL), $this->askingVerdict()));
 
         self::assertSame([self::POST_COMMENT, self::POST_STATUS], $this->posts);
-        self::assertSame("Ask, part 2.\n\n<!-- intakt-owner-ask: ".self::TOKEN.' part 2 -->', $this->bodies[0]);
+        self::assertSame("Ask, part 2.\n\n".$this->askMarker(2), $this->bodies[0]);
+    }
+
+    public function testARetryWhoseProtectedPathsChangedSinceTheEarlierTryPostsTheAskItWillRecord(): void
+    {
+        $forge = $this->forgeThatListsAlreadyPosted(["The verdict.\n\n<!-- intakt-verdict: ".self::TOKEN.' -->', "Ask, part 1.\n\n".$this->askMarker(1, ['Ask, part 1.'])]);
+
+        self::assertTrue($forge->publishVerdict('widgets', new ChangeId(self::PULL), $this->askingVerdict()));
+
+        self::assertSame([self::POST_COMMENT, self::POST_COMMENT, self::POST_STATUS], $this->posts);
+        self::assertSame(["Ask, part 1.\n\n".$this->askMarker(1), "Ask, part 2.\n\n".$this->askMarker(2)], array_slice($this->bodies, 0, 2));
+    }
+
+    public function testAnOwnerAskWhoseSecretIsWrittenWithEntitiesPostsNothing(): void
+    {
+        $forge = $this->forge(static fn (string $url): ResponseInterface => str_contains($url, self::LISTING) ? new MockResponse('[]') : new MockResponse('{}', ['http_code' => 201]));
+        $escaped = '- <code>bin/sk&#95;live&#95;'.str_repeat('4eC39HqLyjWDarjtT1zdp7dc', 2).'</code>';
+        $verdict = new PublishedVerdict(new CommitId(self::HEAD), HeadStatus::Pending, 'The description.', 'The verdict.', new ReviewToken(self::TOKEN), [$escaped]);
+
+        try {
+            $forge->publishVerdict('widgets', new ChangeId(self::PULL), $verdict);
+            self::fail('An ask that renders a secret must not be posted.');
+        } catch (ReviewTextHoldsSecret) {
+        }
+
+        self::assertSame([], $this->posts);
+    }
+
+    public function testAnOwnerAskWithEntitiesButNoSecretIsPosted(): void
+    {
+        $forge = $this->forge(static fn (string $url): ResponseInterface => str_contains($url, self::LISTING) ? new MockResponse('[]') : new MockResponse('{}', ['http_code' => 201]));
+        $verdict = new PublishedVerdict(new CommitId(self::HEAD), HeadStatus::Pending, 'The description.', 'The verdict.', new ReviewToken(self::TOKEN), ['- <code>bin/a&#95;b&#60;c&#62;</code>']);
+
+        self::assertTrue($forge->publishVerdict('widgets', new ChangeId(self::PULL), $verdict));
+
+        self::assertSame([self::POST_COMMENT, self::POST_COMMENT, self::POST_STATUS], $this->posts);
     }
 
     public function testAnOwnerAskThatHoldsASecretPostsNothing(): void
@@ -166,6 +197,24 @@ final class GitHubForgeVerdictDeliveriesTest extends TestCase
     private function askingVerdict(): PublishedVerdict
     {
         return new PublishedVerdict(new CommitId(self::HEAD), HeadStatus::Pending, 'The description.', 'The verdict.', new ReviewToken(self::TOKEN), ['Ask, part 1.', 'Ask, part 2.']);
+    }
+
+    /**
+     * @param list<string> $asks
+     */
+    private function askMarker(int $part, array $asks = ['Ask, part 1.', 'Ask, part 2.']): string
+    {
+        return '<!-- intakt-owner-ask: '.self::TOKEN.' '.hash('sha256', json_encode($asks, JSON_THROW_ON_ERROR)).' part '.$part.' -->';
+    }
+
+    /**
+     * @param list<string> $bodies
+     */
+    private function forgeThatListsAlreadyPosted(array $bodies): GitHubForge
+    {
+        $posted = json_encode(array_map(static fn (string $body): array => ['body' => $body, 'performed_via_github_app' => ['id' => 12345]], $bodies), JSON_THROW_ON_ERROR);
+
+        return $this->forge(static fn (string $url): ResponseInterface => str_contains($url, self::LISTING) ? new MockResponse($posted) : new MockResponse('{}', ['http_code' => 201]));
     }
 
     private function publish(GitHubForge $forge, ?string $comment): void

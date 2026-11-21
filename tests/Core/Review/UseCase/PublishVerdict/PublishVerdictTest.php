@@ -167,9 +167,10 @@ final class PublishVerdictTest extends KernelTestCase
 
         $roundId = $this->publishRoundJudgedOn([], new ConfiguredProjectModes([]));
 
+        $ask = $this->ask('Protected paths:', '- <code>.github/workflows/ci.yaml</code>', '- <code>bin/check</code>');
         self::assertSame([
             [self::COMMENT, ['body' => $this->approvedComment($roundId)]],
-            [self::COMMENT, ['body' => $this->ask('Protected paths:', '- <code>.github/workflows/ci.yaml</code>', '- <code>bin/check</code>')."\n\n".$this->askMarker($roundId, 1)]],
+            [self::COMMENT, ['body' => $ask."\n\n".$this->askMarker($roundId, 1, $ask)]],
             [self::STATUS, ['state' => 'pending', 'context' => 'intakt/review', 'description' => 'Intakt approves this head; it touches protected paths and waits for the owner.']],
         ], $this->github->writes);
         self::assertSame([['project' => 'alpha', 'change' => self::PULL, 'head' => SampleIdentity::HEAD, 'round' => $roundId, 'paths' => ['.github/workflows/ci.yaml', 'bin/check'], 'unreadable' => null]], $this->ownerAsks());
@@ -182,7 +183,8 @@ final class PublishVerdictTest extends KernelTestCase
 
         $roundId = $this->publishRoundJudgedOn([], new ConfiguredProjectModes([]));
 
-        self::assertSame([$this->ask('Intakt could not read which paths this head changes, so it counts as protected.')."\n\n".$this->askMarker($roundId, 1)], $this->askBodies());
+        $ask = $this->ask('Intakt could not read which paths this head changes, so it counts as protected.');
+        self::assertSame([$ask."\n\n".$this->askMarker($roundId, 1, $ask)], $this->askBodies());
         self::assertSame(['pending'], array_column(array_column($this->github->writes, 1), 'state'));
         self::assertSame(['/var/lib/intakt/mirrors/alpha.git is no folder'], array_column($this->ownerAsks(), 'unreadable'));
     }
@@ -233,7 +235,38 @@ final class PublishVerdictTest extends KernelTestCase
         self::assertSame($paths, $this->listedPaths());
         self::assertSame([], array_filter($parts, static fn (string $part): bool => mb_strlen($part) > 65536));
         self::assertStringStartsWith('**Waiting for the owner** (head '.SampleIdentity::HEAD."), continued\n\n- <code>", $parts[3]);
-        self::assertStringEndsWith($this->askMarker($roundId, 4), $parts[3]);
+        self::assertStringEndsWith($this->askMarker($roundId, 4, ...array_map(static fn (string $part): string => substr($part, 0, (int) strrpos($part, "\n\n")), $parts)), $parts[3]);
+    }
+
+    public function testAProtectedFileNameThatHoldsASecretPublishesOnlyAnErrorStatus(): void
+    {
+        $this->handOver('alpha', self::PULL);
+        $this->protectedChanges = ProtectedChanges::touching(['bin/sk_live_'.str_repeat('4eC39HqLyjWDarjtT1zdp7dc', 2)]);
+
+        $this->publishRoundJudgedOn([], new ConfiguredProjectModes([]));
+
+        self::assertSame([[self::STATUS, ['state' => 'error', 'context' => 'intakt/review', 'description' => 'Intakt could not publish its review of this head.']]], $this->github->writes);
+        self::assertSame([], $this->ownerAsks());
+    }
+
+    public function testARetryWhoseProtectedPathsChangedPostsTheAskItRecords(): void
+    {
+        $this->handOver('alpha', self::PULL);
+        $this->protectedChanges = ProtectedChanges::touching(['bin/old']);
+        $roundId = $this->judgedRound(self::PULL, []);
+        $this->github->refuseOnce('/statuses/'.SampleIdentity::HEAD, 502);
+        $handler = $this->handler(new ConfiguredProjectModes([]));
+        try {
+            $handler(new PublishVerdict($roundId));
+            self::fail('A refused status must fail the publication.');
+        } catch (ForgeWriteFailed) {
+        }
+        $this->protectedChanges = ProtectedChanges::touching(['bin/new']);
+
+        $handler(new PublishVerdict($roundId));
+
+        self::assertSame(['bin/new'], $this->listedPathsIn($this->askBodies()[1]));
+        self::assertSame([['bin/new']], array_column($this->ownerAsks(), 'paths'));
     }
 
     public function testAnAskWhosePathsFillAPartToItsLastByteNeedsNoSecondPart(): void
@@ -294,7 +327,8 @@ final class PublishVerdictTest extends KernelTestCase
         $handler(new PublishVerdict($roundId));
 
         self::assertSame([$this->approvedComment($roundId)], array_slice(array_column(array_column($this->github->writes, 1), 'body'), 0, 1));
-        self::assertSame([$this->ask('Protected paths:', '- <code>bin/check</code>')."\n\n".$this->askMarker($roundId, 1)], $this->askBodies());
+        $ask = $this->ask('Protected paths:', '- <code>bin/check</code>');
+        self::assertSame([$ask."\n\n".$this->askMarker($roundId, 1, $ask)], $this->askBodies());
         self::assertSame(['pending'], array_slice(array_column(array_column($this->github->writes, 1), 'state'), -1));
         self::assertCount(1, $this->ownerAsks());
     }
@@ -351,9 +385,8 @@ final class PublishVerdictTest extends KernelTestCase
     {
         $roundId = $this->publishRoundJudgedOn([], new ConfiguredProjectModes([]));
         self::assertSame([], $this->github->writes);
-        self::assertTrue($this->fixture->ledger()->append(new LedgerEvent(LedgerEventKind::ChangeOpened, json_encode(['project' => 'alpha', 'change' => self::PULL, 'opening' => 'created'], JSON_THROW_ON_ERROR)))->succeeded());
 
-        $this->recognizer()->recognizeAmong('alpha', [new OpenChange(new ChangeId(self::PULL), new CommitId(SampleIdentity::HEAD), $this->fixture->clock->now())]);
+        $this->recognize(self::PULL, SampleIdentity::HEAD);
 
         $publications = $this->publicationsOf($roundId);
         self::assertCount(2, $publications);
@@ -361,26 +394,55 @@ final class PublishVerdictTest extends KernelTestCase
         self::assertSame(['success'], array_column(array_column($this->github->writes, 1), 'state'));
     }
 
-    public function testRecognizingAPullRequestWithoutAJudgedRoundQueuesNoPublication(): void
+    public function testRecognizingAPullRequestLeavesTheLookupOfItsJudgedRoundToAWorkerAfterTheTickCommits(): void
     {
-        $roundId = $this->reviewedRound(self::PULL, []);
+        $roundId = $this->judgedRound(self::PULL, []);
         self::assertTrue($this->fixture->ledger()->append(new LedgerEvent(LedgerEventKind::ChangeOpened, json_encode(['project' => 'alpha', 'change' => self::PULL, 'opening' => 'created'], JSON_THROW_ON_ERROR)))->succeeded());
 
         $this->recognizer()->recognizeAmong('alpha', [new OpenChange(new ChangeId(self::PULL), new CommitId(SampleIdentity::HEAD), $this->fixture->clock->now())]);
 
+        self::assertCount(1, $this->publicationsOf($roundId));
+        self::assertEquals([new PublishHandedOverChange('alpha', self::PULL, SampleIdentity::HEAD)], $this->queuedHandOvers());
+    }
+
+    public function testRecognizingAPullRequestWithoutAJudgedRoundQueuesNoPublication(): void
+    {
+        $roundId = $this->reviewedRound(self::PULL, []);
+
+        $this->recognize(self::PULL, SampleIdentity::HEAD);
+
         self::assertSame([], $this->publicationsOf($roundId));
     }
 
-    public function testRecognizingAPullRequestQueuesOnlyItsLatestJudgedRound(): void
+    public function testRecognizingAPullRequestQueuesOnlyTheRoundOfTheHeadItIsListedAt(): void
     {
         $first = $this->judgedApprovalAt(SampleIdentity::HEAD);
         $second = $this->judgedApprovalAt(SampleIdentity::NEW_HEAD);
-        self::assertTrue($this->fixture->ledger()->append(new LedgerEvent(LedgerEventKind::ChangeOpened, json_encode(['project' => 'alpha', 'change' => self::PULL, 'opening' => 'created'], JSON_THROW_ON_ERROR)))->succeeded());
 
         // Listed in another letter case, because the forge may spell the repository other than it was configured.
-        $this->recognizer()->recognizeAmong('alpha', [new OpenChange(new ChangeId('https://github.com/Acme/Widgets/pull/7'), new CommitId(SampleIdentity::NEW_HEAD), $this->fixture->clock->now())]);
+        $this->recognize('https://github.com/Acme/Widgets/pull/7', SampleIdentity::NEW_HEAD);
 
         self::assertSame([1, 2], [count($this->publicationsOf($first)), count($this->publicationsOf($second))]);
+    }
+
+    public function testRecognizingAPullRequestQueuesTheRoundOfItsListedHeadThoughAnotherSpellingNumbersItsRoundsHigher(): void
+    {
+        $this->judgedApprovalAt(SampleIdentity::HEAD);
+        $older = $this->judgedApprovalAt(str_repeat('b', 40));
+        $current = $this->judgedApprovalAt(SampleIdentity::NEW_HEAD, 'https://github.com/Acme/Widgets/pull/7');
+
+        $this->recognize(self::PULL, SampleIdentity::NEW_HEAD);
+
+        self::assertSame([1, 2], [count($this->publicationsOf($older)), count($this->publicationsOf($current))]);
+    }
+
+    public function testRecognizingAPullRequestAtAHeadNotYetJudgedQueuesNoPublication(): void
+    {
+        $roundId = $this->judgedApprovalAt(SampleIdentity::HEAD);
+
+        $this->recognize(self::PULL, SampleIdentity::NEW_HEAD);
+
+        self::assertCount(1, $this->publicationsOf($roundId));
     }
 
     public function testAHandedOverProtectedHeadWithChangesAsksNoOwner(): void
@@ -1021,9 +1083,9 @@ final class PublishVerdictTest extends KernelTestCase
     /**
      * @return non-empty-string
      */
-    private function askMarker(string $roundId, int $part): string
+    private function askMarker(string $roundId, int $part, string ...$asks): string
     {
-        return '<!-- intakt-owner-ask: '.$roundId.' part '.$part.' -->';
+        return '<!-- intakt-owner-ask: '.$roundId.' '.hash('sha256', json_encode($asks, JSON_THROW_ON_ERROR)).' part '.$part.' -->';
     }
 
     /**
@@ -1058,6 +1120,32 @@ final class PublishVerdictTest extends KernelTestCase
     private function pathFillingThePartWith(int $over): string
     {
         return str_repeat('p', 60000 - strlen($this->ask('Protected paths:')) - 1 - strlen('- <code>bin/a</code>') - 1 - strlen('- <code></code>') + $over);
+    }
+
+    // Recognized as the tick does, then looked up as the worker does once the tick has committed.
+    private function recognize(string $change, string $head): void
+    {
+        self::assertTrue($this->fixture->ledger()->append(new LedgerEvent(LedgerEventKind::ChangeOpened, json_encode(['project' => 'alpha', 'change' => self::PULL, 'opening' => 'created'], JSON_THROW_ON_ERROR)))->succeeded());
+        $this->recognizer()->recognizeAmong('alpha', [new OpenChange(new ChangeId($change), new CommitId($head), $this->fixture->clock->now())]);
+
+        $commands = self::getContainer()->get('command.bus');
+        self::assertInstanceOf(MessageBusInterface::class, $commands);
+        $lookup = new PublishHandedOverChangeHandler($this->fixture->transactions(), $commands);
+        foreach ($this->queuedHandOvers() as $handOver) {
+            $lookup($handOver);
+        }
+    }
+
+    /**
+     * @return list<PublishHandedOverChange>
+     */
+    private function queuedHandOvers(): array
+    {
+        $queue = self::getContainer()->get('messenger.transport.async');
+        assert($queue instanceof InMemoryTransport);
+        $sent = array_map(static fn (Envelope $envelope): object => $envelope->getMessage(), $queue->getSent());
+
+        return array_values(array_filter($sent, static fn (object $message): bool => $message instanceof PublishHandedOverChange));
     }
 
     private function recognizer(): ChangesHandedToIntakt

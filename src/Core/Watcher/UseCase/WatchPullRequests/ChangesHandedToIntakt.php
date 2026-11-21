@@ -42,10 +42,10 @@ final readonly class ChangesHandedToIntakt
         // Every author is read before the first line is appended, because a failure behind an append rolls the tick's transaction back under a line the entity manager still holds, and the ledger's next append then collides with it.
         [$created, $notCreated] = $this->authorsAmong($project, $open);
 
-        // Published once it is handed over, because a round judged before this tick found it the loop's and published nothing; in the tick's transaction, so the queued publication commits with the line it reads.
+        // Published once it is handed over, because a round judged before this tick found it the loop's and published nothing; queued in the tick's transaction, so a worker looks for the round only after the line it reads has committed.
         foreach ($created as $change) {
             $this->records->changeHandedToIntakt($project, $change);
-            $this->commands->dispatch(new PublishHandedOverChange($project, $change->id->value));
+            $this->commands->dispatch(new PublishHandedOverChange($project, $change->id->value, $change->head->hash));
         }
 
         // Recorded, because the author the forge sets never changes, so the forge is asked once per pull request and not on every tick.

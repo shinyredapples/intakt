@@ -39,7 +39,7 @@ final readonly class GitHubForge implements Forge, ForgeWrites
     // An HTML comment, so the token is invisible on the pull request while the orchestrator can still match it.
     private const string TOKEN_MARKER = '<!-- intakt-review-token: %s -->';
     private const string VERDICT_MARKER = '<!-- intakt-verdict: %s -->';
-    private const string OWNER_ASK_MARKER = '<!-- intakt-owner-ask: %s part %d -->';
+    private const string OWNER_ASK_MARKER = '<!-- intakt-owner-ask: %s %s part %d -->';
     private const string STATUS_CONTEXT = 'intakt/review';
     private const string JSON = 'application/vnd.github+json';
     private const string DIFF = 'application/vnd.github.diff';
@@ -140,7 +140,9 @@ final readonly class GitHubForge implements Forge, ForgeWrites
     {
         $address = PullRequestAddress::of($change);
         $comments = $verdict->comments();
-        if (array_any([...$comments, ...$verdict->ownerAsks], $this->secrets->findsSecretIn(...))) {
+        // The asks scanned as GitHub shows them, without tags and entities, because a file name in an ask is written with entities inside <code>, and an entity in the middle of a key or a tag right after it hides the key from the scan's rules.
+        $rendered = array_map(static fn (string $ask): string => html_entity_decode(strip_tags($ask), ENT_QUOTES | ENT_HTML5, 'UTF-8'), $verdict->ownerAsks);
+        if (array_any([...$comments, ...$rendered], $this->secrets->findsSecretIn(...))) {
             throw ReviewTextHoldsSecret::afterRedaction();
         }
 
@@ -166,13 +168,14 @@ final readonly class GitHubForge implements Forge, ForgeWrites
         ]);
     }
 
-    // Each part of the ask by a marker of its own, so a retry posts the part an earlier try did not reach, and an ask the review comment did not carry.
+    // Each part of the ask by a marker of its own, so a retry posts the part an earlier try did not reach, and an ask the review comment did not carry; the marker names a digest of the whole ask, so a retry whose protected paths changed posts the ask it records instead of finding the old one.
     /**
      * @return array<string, list<string>>
      */
     private function askPartsOf(PublishedVerdict $verdict): array
     {
-        $markers = array_map(static fn (int $part): string => sprintf(self::OWNER_ASK_MARKER, $verdict->token->value, $part + 1), array_keys($verdict->ownerAsks));
+        $digest = hash('sha256', json_encode($verdict->ownerAsks, JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE));
+        $markers = array_map(static fn (int $part): string => sprintf(self::OWNER_ASK_MARKER, $verdict->token->value, $digest, $part + 1), array_keys($verdict->ownerAsks));
 
         return array_combine($markers, array_map(static fn (string $ask): array => [$ask], $verdict->ownerAsks));
     }
