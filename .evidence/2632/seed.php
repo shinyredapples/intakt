@@ -37,6 +37,7 @@ if ('page' === $mode) {
     $entities->flush();
 
     $ledger = $services->get(Ledger::class);
+    $appended = [];
     foreach ([
         [LedgerEventKind::ReviewStarted, ['round' => '0195f3a0-0000-7000-8000-000000000001', 'project' => 'alpha', 'reviewers' => 2, 'change' => '42', 'number' => 2]],
         [LedgerEventKind::ReviewStarted, ['round' => '0195f3a0-0000-7000-8000-000000000002', 'project' => 'beta', 'reviewers' => 2, 'change' => '7', 'number' => 1]],
