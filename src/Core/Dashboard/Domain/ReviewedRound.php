@@ -132,6 +132,15 @@ final readonly class ReviewedRound
         return ReviewOutcome::ofQuorum($this);
     }
 
+    // Only the reviewers with a recorded start, because one blocked before it started never ran in this round.
+    /**
+     * @return list<ReviewerOutcome>
+     */
+    public function startedOutcomes(): array
+    {
+        return array_values(array_filter($this->outcomes, static fn (ReviewerOutcome $outcome): bool => $outcome->started));
+    }
+
     public function failedReviewers(): int
     {
         return count(array_filter($this->outcomes, static fn (ReviewerOutcome $outcome): bool => ReviewerProgress::Failed === $outcome->progress));
