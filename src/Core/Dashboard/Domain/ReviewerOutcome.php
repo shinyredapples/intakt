@@ -45,6 +45,18 @@ final readonly class ReviewerOutcome
         return null === $this->model || '' === $this->model ? $this->tier.' tier, model not recorded' : $this->model;
     }
 
+    // Apart from modelInWords(), because the review page names the model and its AI lab for a reader new to the ids while the CLI, MCP and docs keep the raw id (#3183).
+    public function modelAndLab(): string
+    {
+        if (null === $this->model || '' === $this->model) {
+            return $this->modelInWords();
+        }
+
+        $lab = AiLab::of($this->model);
+
+        return null === $lab ? $this->model : AiLab::modelName($this->model).' ('.$lab->value.')';
+    }
+
     public function outcome(): ?ReviewOutcome
     {
         return ReviewOutcome::ofReviewer($this);
