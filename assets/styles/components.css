@@ -70,7 +70,7 @@ a.card.needs:hover, .card.needs.is-hover { filter: brightness(.98); }
 .card.needs.is-hover { background: var(--amber-tint); }
 /* The Replay chip wraps to its own line in a narrow column, because beside the change and project it squeezed the change to nothing. */
 .card .top { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s4) var(--s8); margin-bottom: var(--s4); color: var(--muted); font-size: var(--t13); }
-/* A change named like a branch is as long as a title; it gives way to the project name, which keeps up to 60%. */
+/* A change named like a branch is as long as a title; it is cut with an ellipsis, and the project name wraps below it when both do not fit one line. */
 .card .top .num { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .card .top .pname { flex: none; margin-left: auto; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .card .title {
