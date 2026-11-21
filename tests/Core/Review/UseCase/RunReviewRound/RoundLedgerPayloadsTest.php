@@ -14,6 +14,8 @@ use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Review\Contract\CatchUpOwed;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\DroppedFinding;
+use Intakt\Core\Review\Contract\EscalationOutcome;
+use Intakt\Core\Review\Contract\EscalationVerdictReused;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FindingIds;
 use Intakt\Core\Review\Contract\FixableBy;
@@ -60,6 +62,7 @@ use Symfony\Component\Serializer\SerializerInterface;
 #[CoversClass(DroppedFinding::class)]
 #[CoversClass(RoundLedger::class)]
 #[CoversClass(RecurringP1Found::class)]
+#[CoversClass(EscalationVerdictReused::class)]
 #[UsesClass(OnePerPlace::class)]
 #[UsesClass(FindingKeys::class)]
 #[UsesClass(FindingKey::class)]
@@ -311,6 +314,21 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
         ], $payload['findings']);
     }
 
+    public function testAP2MergedIntoAnActEntryAtOnePlaceKeepsItsJudgesNoteOnItsOwnRecord(): void
+    {
+        $round = new RoundFixture(self::getContainer())->start(1);
+        $ledger = new InMemoryLedger();
+        $findings = [$this->findingAt('F1', Severity::P1, 7), $this->findingAt('F2', Severity::P2, 7)];
+        $judgement = new Judgement([new JudgedFinding('F1', Mark::Act), new JudgedFinding('F2', Mark::Defer, note: 'Not reachable.')]);
+
+        $this->roundLedger($ledger)->judgeDone($round, JudgedFindings::of($judgement, $findings), []);
+
+        self::assertSame([
+            ['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of F1.', 'merged' => ['F2'], 'file' => 'src/A.php', 'line' => 7, 'judge_note' => null],
+            ['id' => 'F2', 'severity' => 'P2', 'text' => 'Text of F2.', 'merged' => [], 'file' => 'src/A.php', 'line' => 7, 'judge_note' => 'Not reachable.'],
+        ], $ledger->payloads()[0]['findings']);
+    }
+
     public function testAJudgeRowWrittenWithoutFileAndLineStillReadsWithBothNull(): void
     {
         $finding = self::getContainer()->get('serializer.stored')->deserialize('{"id":"f1","severity":"P1","text":"A bug."}', JudgeDoneFinding::class, JsonEncoder::FORMAT);
@@ -335,6 +353,11 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
     public function testARecurringP1FoundIsWrittenWithItsRoundFindingKeyAndFirstRound(): void
     {
         self::assertSame('{"round":"'.self::ROUND.'","finding":"F1","key":"abc","first_round":"r1"}', $this->written(new RecurringP1Found(self::ROUND, 'F1', 'abc', 'r1')));
+    }
+
+    public function testAnEscalationVerdictReusedIsWrittenWithItsRoundFindingKeyOutcomeAndVerdictRound(): void
+    {
+        self::assertSame('{"round":"'.self::ROUND.'","finding":"F1","key":"abc","outcome":"confirmed","verdict_round":"r1"}', $this->written(new EscalationVerdictReused(self::ROUND, 'F1', 'abc', EscalationOutcome::Confirmed, 'r1')));
     }
 
     public function testADoneJudgeWithoutFollowUpsStillWritesTheKey(): void
