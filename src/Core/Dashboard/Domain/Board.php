@@ -46,7 +46,7 @@ final readonly class Board
     /**
      * @param list<QueuedRound> $queued
      */
-    public function upNext(array $queued = []): UpNext
+    public function upNext(array $queued): UpNext
     {
         return new UpNext($this->cards, $queued);
     }

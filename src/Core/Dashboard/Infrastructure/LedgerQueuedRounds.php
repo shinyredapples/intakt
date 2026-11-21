@@ -11,15 +11,6 @@ use Intakt\Core\Ledger\Contract\RecordedEvents;
 // The latest watcher line of a pull request decides, as in LedgerWaitingHeads, so a newer head or a closed pull request ends the wait; a started round is left out because from its start it is a review the board shows.
 final readonly class LedgerQueuedRounds
 {
-    private const array WATCHER_LINES = [
-        LedgerEventKind::HeadPending,
-        LedgerEventKind::HeadRed,
-        LedgerEventKind::HeadFailed,
-        LedgerEventKind::HeadHandedOver,
-        LedgerEventKind::RoundQueued,
-        LedgerEventKind::HeadForgotten,
-    ];
-
     // Newest queue line first, because Up next lists them after the board's cards, which come newest first.
     /**
      * @return list<QueuedRound>
@@ -60,7 +51,7 @@ final readonly class LedgerQueuedRounds
         $project = $payload['project'] ?? null;
         $change = $payload['change'] ?? null;
 
-        if (!in_array($kind, self::WATCHER_LINES, true) || !is_string($project) || !is_string($change)) {
+        if (!in_array($kind, WatcherLines::ALL, true) || !is_string($project) || !is_string($change)) {
             return null;
         }
 

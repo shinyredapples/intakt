@@ -40,7 +40,7 @@ final class UpNextTest extends TestCase
     {
         $round = $this->round('r1', '2026-11-01T10:00:00+00:00')->withOutcomes([$this->reviewer('r1-a', 'correctness'), $this->reviewer('r1-b', 'security')->failed('The reviewer timed out.')]);
 
-        $upNext = new Board([new Review([$round])])->upNext();
+        $upNext = new Board([new Review([$round])])->upNext([]);
 
         self::assertSame(['r1'], $this->ids($upNext->inProgress));
         self::assertSame(['correctness', 'security'], array_map(static fn (ReviewerOutcome $outcome): string => $outcome->role, $upNext->inProgress[0]->outcomes));
@@ -49,7 +49,7 @@ final class UpNextTest extends TestCase
 
     public function testARoundNoReviewerHasStartedIsWaitingToStart(): void
     {
-        $upNext = new Board([new Review([$this->round('r1', '2026-11-01T10:00:00+00:00')])])->upNext();
+        $upNext = new Board([new Review([$this->round('r1', '2026-11-01T10:00:00+00:00')])])->upNext([]);
 
         self::assertSame([[], ['r1']], [$this->ids($upNext->inProgress), $this->ids($upNext->waitingToStart)]);
     }
@@ -59,7 +59,7 @@ final class UpNextTest extends TestCase
         $judged = $this->round('r1', '2026-11-01T10:00:00+00:00')->judgedWith([], new DateTimeImmutable('2026-11-01T11:00:00+00:00'));
         $ended = $this->round('r2', '2026-11-01T10:00:00+00:00')->endedAs(new RoundEnding(RoundEnds::JudgingFailed, 'The judge gave no call.'));
 
-        $upNext = new Board([new Review([$judged]), new Review([$ended])])->upNext();
+        $upNext = new Board([new Review([$judged]), new Review([$ended])])->upNext([]);
 
         self::assertSame([[], []], [$upNext->inProgress, $upNext->waitingToStart]);
     }
@@ -68,7 +68,7 @@ final class UpNextTest extends TestCase
     {
         $earlier = $this->round('r1', '2026-11-01T10:00:00+00:00')->judgedWith([], new DateTimeImmutable('2026-11-01T11:00:00+00:00'));
 
-        $upNext = new Board([new Review([$earlier, $this->round('r2', '2026-11-01T12:00:00+00:00')])])->upNext();
+        $upNext = new Board([new Review([$earlier, $this->round('r2', '2026-11-01T12:00:00+00:00')])])->upNext([]);
 
         self::assertSame(['r2'], $this->ids($upNext->waitingToStart));
     }
@@ -79,7 +79,7 @@ final class UpNextTest extends TestCase
             new Review([$this->round('r1', '2026-11-01T10:00:00+00:00', 'feat/a')]),
             new Review([$this->round('r2', '2026-11-03T10:00:00+00:00', 'feat/b')]),
             new Review([$this->round('r3', '2026-11-02T10:00:00+00:00', 'feat/c')]),
-        ])->upNext();
+        ])->upNext([]);
 
         self::assertSame(['r2', 'r3', 'r1'], $this->ids($upNext->waitingToStart));
     }
@@ -95,17 +95,17 @@ final class UpNextTest extends TestCase
     {
         $round = $this->round('r1', '2026-11-01T10:00:00+00:00')->withOutcomes([$this->reviewer('r1-a', 'correctness')]);
 
-        self::assertFalse(new Board([new Review([$round])])->upNext()->isWaiting());
+        self::assertFalse(new Board([new Review([$round])])->upNext([])->isWaiting());
     }
 
     public function testWithNothingRunningOrQueuedTheListSaysSo(): void
     {
-        self::assertSame('Nothing running or queued.', new Board([])->upNext()->emptyLine());
+        self::assertSame('Nothing running or queued.', new Board([])->upNext([])->emptyLine());
     }
 
     public function testWithARoundListedThereIsNoEmptyLine(): void
     {
-        self::assertNull(new Board([new Review([$this->round('r1', '2026-11-01T10:00:00+00:00')])])->upNext()->emptyLine());
+        self::assertNull(new Board([new Review([$this->round('r1', '2026-11-01T10:00:00+00:00')])])->upNext([])->emptyLine());
     }
 
     /**
