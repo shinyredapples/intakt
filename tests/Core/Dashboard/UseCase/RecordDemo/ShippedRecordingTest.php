@@ -14,7 +14,6 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
-use Symfony\Component\DomCrawler\Crawler;
 
 // The image points INTAKT_DEMO_RECORDING at this file, so /demo works without a key only while it still reads.
 #[CoversClass(RecordingFormat::class)]
