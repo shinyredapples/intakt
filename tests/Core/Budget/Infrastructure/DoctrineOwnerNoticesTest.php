@@ -588,6 +588,30 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
         self::assertSame('11:59', $this->notices()->endedOnTheDayOf(new DateTimeImmutable('2026-11-02T20:00:00+00:00'))[0]->endedAt->format('H:i'));
     }
 
+    // The end saved in the transaction is committed before the second update runs, so its failure keeps that end, still announces it, and reaches the caller.
+    public function testAFailedUpdateAfterTheCommitKeepsTheEndAnnouncesItOnceAndReachesTheCaller(): void
+    {
+        $this->store('main', new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
+        $heard = 0;
+        $events = new EventDispatcher();
+        $events->addListener(OwnerNoticesChanged::class, static function () use (&$heard): void {
+            ++$heard;
+        });
+        $connection = DriverManager::getConnection($this->entities->getConnection()->getParams(), new Configuration()->setMiddlewares([new SecondOutageEndFails()]));
+        $worker = new DoctrineMeasuredUse(new EntityManager($connection, $this->entities->getConfiguration()), new MockClock('2026-11-02 12:00:00 UTC'), $events);
+
+        try {
+            $worker->record($this->readingOf('main'));
+            self::fail('The update after the commit did not fail.');
+        } catch (RuntimeException $failure) {
+            self::assertSame(SecondOutageEndFails::FAILURE, $failure->getMessage());
+        }
+
+        self::assertSame(1, $heard);
+        self::assertSame('12:00', $this->notices()->endedOnTheDayOf(new DateTimeImmutable('2026-11-02T20:00:00+00:00'))[0]->endedAt->format('H:i'));
+        self::assertSame('12:00', $this->measuredUseAt('2026-11-02 12:00:00')->of(new Account(Provider::ClaudeCode, 'main'), UsageWindow::FiveHour)?->takenAt->format('H:i'));
+    }
+
     // The caller's rollback would erase the end, so a reading recorded inside its transaction tells nobody.
     public function testAReadingRecordedInsideACallersTransactionTellsNoListener(): void
     {
