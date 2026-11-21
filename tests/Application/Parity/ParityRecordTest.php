@@ -12,6 +12,7 @@ use PHPUnit\Framework\TestCase;
 use Symfony\Component\Filesystem\Filesystem;
 
 #[CoversClass(ParityRecord::class)]
+#[CoversClass(IntaktTestNames::class)]
 #[CoversClass(TestClassIndex::class)]
 final class ParityRecordTest extends TestCase
 {
