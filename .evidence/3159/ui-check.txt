@@ -1,0 +1,22 @@
+bin/ui-check http://localhost:7782 (a local SQLite install with round r-run of project sample, two reviewers started, and round r-wait of project alpha, no reviewer started):
+
+trends light 1440: axe critical 0, serious 0, moderate 0, minor 0
+trends light 1920: axe critical 0, serious 0, moderate 0, minor 0
+trends light 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
+trends dark 1440: axe critical 0, serious 0, moderate 0, minor 0
+trends dark 1920: axe critical 0, serious 0, moderate 0, minor 0
+trends dark 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
+review light 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 1
+  target 40 px: div.table-scroll "Reviewers of round r-wait"
+review dark 1440: axe critical 0, serious 0, moderate 0, minor 0
+review dark 1920: axe critical 0, serious 0, moderate 0, minor 0
+review dark 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 1
+  target 40 px: div.table-scroll "Reviewers of round r-wait"
+UI check: 54 runs, 0 serious or critical axe violations, 2 phone floor findings, 0 page errors.
+Screenshots in var/ui-check/
+
+The review page's 390 floor finding is the reviewers table scroller of the review page (main), not the Trends markup.
+
+Keyboard walk of /trends (Tab x200, Playwright, 1440 px):
+links on /trends main: 2, reached by Tab: 2, missed: []
+Up next links: ["/reviews/r-run","/reviews/r-wait"], all reached: true
