@@ -27,6 +27,7 @@ use Intakt\Plugin\GitHubWorkSource\Domain\IntakeRules;
 use Intakt\Plugin\GitHubWorkSource\Domain\IntakeValidator;
 use Intakt\Plugin\GitHubWorkSource\Domain\IssueReferences;
 use Intakt\Plugin\GitHubWorkSource\Domain\ItemReading;
+use Intakt\Plugin\GitHubWorkSource\Domain\ListingReplacedMeanwhile;
 use Intakt\Plugin\GitHubWorkSource\Domain\ListingRows;
 use Intakt\Plugin\GitHubWorkSource\Domain\ProjectHeldByAnotherWriter;
 use Intakt\Plugin\GitHubWorkSource\Domain\QueuedIssue;
@@ -61,6 +62,7 @@ use Symfony\Component\ErrorHandler\BufferingLogger;
 #[UsesClass(IssueReferences::class)]
 #[UsesClass(ItemReading::class)]
 #[UsesClass(IntakeValidator::class)]
+#[UsesClass(ListingReplacedMeanwhile::class)]
 #[UsesClass(ListingRows::class)]
 #[UsesClass(ProjectHeldByAnotherWriter::class)]
 #[UsesClass(QueuedIssue::class)]
@@ -366,6 +368,56 @@ final class CompleteListingTest extends KernelTestCase
         self::assertSame([], $this->shortListingReasons());
     }
 
+    public function testAfterALostWriteARowThatIsACandidateUnderThisSyncsEligibilityLabelIsVouchedBeforeThePlanIsAnswered(): void
+    {
+        $this->reads->lists([Issues::task(7, ['ready']), Issues::task(8, ['intakt'])]);
+        $this->reads->during = function (): void {
+            self::assertInstanceOf(IntakePlan::class, $this->listingOver($this->reads, $this->histories)->planOf('alpha'));
+        };
+
+        $plan = $this->listingOver($this->reads, $this->histories, 'ready')->planOf('alpha');
+
+        self::assertInstanceOf(IntakePlan::class, $plan);
+        self::assertSame([7], $this->numbersOf($plan->ready));
+        self::assertSame([8, 7, 7], $this->histories->read);
+        self::assertSame([], $this->shortListingReasons());
+    }
+
+    public function testAHistoryThatCannotBeReadAfterALostWriteLeavesTheListingShort(): void
+    {
+        $this->reads->lists([Issues::task(7, ['ready'])]);
+        $this->storedMeanwhile([$this->rowOfListed(Issues::task(7, ['ready', 'urgent']))], 'W/"issues-2"');
+
+        $plan = $this->listingOver($this->reads, $this->histories, 'ready')->planOf('alpha');
+
+        self::assertNull($plan);
+        self::assertSame(['GitHub holds #7 with other text or labels than it was listed with, so its history is not of the listed item.'], $this->shortListingReasons());
+    }
+
+    public function testASyncThatCommitsDuringTheHistoryReadAfterALostWriteLeavesTheListingShortSoNoTaskBecomesReadyFromTheOlderRows(): void
+    {
+        $waiting = Issues::task(10, ['ready'], ['body' => 'Waits for #3']);
+        $this->reads->lists([Issues::task(11, ['ready'])]);
+        $this->reads->lists([Issues::task(3), $waiting]);
+        $this->reads->during = function () use ($waiting): void {
+            // The second worker saw #3 closed and #11 opened, and stored #11 without its history under its own eligibility label.
+            self::assertTrue($this->store->recordIfStill('alpha', $this->store->syncStateOf('alpha'), new ListingRows([$this->vouchedRowOf($waiting), $this->rowOfListed(Issues::task(11, ['ready']))], 'W/"issues-2"')));
+            $this->histories->during = function () use ($waiting): void {
+                // The third worker saw #3 reopened.
+                self::assertTrue($this->store->recordIfStill('alpha', $this->store->syncStateOf('alpha'), new ListingRows([$this->vouchedRowOf(Issues::task(3)), $this->vouchedRowOf($waiting), $this->rowOfListed(Issues::task(11, ['ready']))], 'W/"issues-3"')));
+            };
+        };
+
+        $plan = $this->listingOver($this->reads, $this->histories, 'ready')->planOf('alpha');
+
+        self::assertNull($plan);
+        self::assertSame([11], $this->histories->read);
+        self::assertSame(['Another worker stored a newer listing of project "alpha" while the stored rows were checked.'], $this->shortListingReasons());
+        self::assertSame([3, 10, 11], $this->numbersOf($this->store->issuesOf('alpha')));
+        self::assertSame('W/"issues-3"', $this->store->syncStateOf('alpha')->validator);
+        self::assertFalse($this->rowOf(11)->isVouched());
+    }
+
     public function testAWriteRefusedWhileAnotherWorkerHasNotCommittedItsListingLeavesTheListingShortWithoutAnException(): void
     {
         $shared = self::getContainer()->get('doctrine.orm.entity_manager');
@@ -475,6 +527,13 @@ final class CompleteListingTest extends KernelTestCase
         $row->vouch(Vouching::of($listed->author, $history, static fn (string $account): bool => 'ana' === $account));
 
         return $row;
+    }
+
+    private function rowOfListed(ListedIssue $listed): StoredIssue
+    {
+        $references = new IssueReferences();
+
+        return StoredIssue::of('alpha', new ItemReading($listed, $references->waitsFor($listed->body), $references->unreadableWaits($listed->body), $references->closedBy($listed->body)));
     }
 
     private function planOf(): IntakePlan
