@@ -1,0 +1,17 @@
+Install: bin/instance (SQLite), migrations, intakt:demo:create, intakt:demo:replay fixtures/demo/sample-change-review.json --factor=1000, assets compiled, dashboard on http://localhost:7780.
+Browser: headless Chromium 153 through Playwright; axe-core through bin/ui-check.
+
+Verdict card measured on the review page (pixels from the top of the viewport):
+light 390x844: "Changes needed: 3 things to fix" ends at 286, first "To fix" line ends at 360, place "src/discount.js:3", line number visible: true
+light 1440x900: ends at 248, first line ends at 319, line number visible: true
+dark 390x844: ends at 286, first line ends at 360, line number visible: true
+dark 1440x900: ends at 248, first line ends at 319, line number visible: true
+
+bin/ui-check http://localhost:7780:
+review light 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
+review dark 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
+review light 1440: axe critical 0, serious 0, moderate 0, minor 0
+review dark 1440: axe critical 0, serious 0, moderate 0, minor 0
+UI check: 54 runs, 0 serious or critical axe violations, 0 phone floor findings, 0 page errors.
+
+Screenshots: verdict-card-light-390.png, verdict-card-dark-390.png, verdict-card-light-1440.png, verdict-card-dark-1440.png
