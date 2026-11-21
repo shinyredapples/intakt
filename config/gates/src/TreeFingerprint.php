@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Gates;
 
 use FilesystemIterator;
+use RecursiveCallbackFilterIterator;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use SplFileInfo;
@@ -15,6 +16,12 @@ final readonly class TreeFingerprint
     // Because a new shell sets these anew without changing what any gate sees.
     private const array VOLATILE_VARIABLES = ['_', 'OLDPWD', 'SHLVL'];
 
+    // Because the check itself writes these while its gates run (its report and record, the test result cache, the reference a debug kernel writes on every boot), and no gate judges the tree by them.
+    private const array WRITTEN_BY_THE_CHECK = ['.git', 'var', '.phpunit.cache', 'config/reference.php', 'config/schema.json'];
+
+    // Because the gates run their tools from the home of bin/check, which may be another tree than the one checked.
+    private const array HOME_INPUTS = ['bin/check', 'config/gates', 'composer.lock', 'vendor'];
+
     /**
      * @param array<string, string> $environment
      */
@@ -24,23 +31,24 @@ final readonly class TreeFingerprint
         private Options $options,
         private array $environment,
         private ProcessRunner $runner = new ProcessRunner(),
-        private HardenedGitCall $hardened = new HardenedGitCall(),
     ) {
     }
 
-    // Because a passed result may stand only for the very same inputs, any input that cannot be read gives no fingerprint, so the check runs.
-    public function taken(): ?string
+    // Because a passed result may stand only for the very same inputs, any input that cannot be read gives no fingerprint, so the check runs; a file changed at or after $settledBefore gives none either, since a change within that second leaves no trace in its times.
+    public function taken(?int $settledBefore = null): ?string
     {
         if (!file_exists($this->root.'/.git')) {
             return null;
         }
 
+        clearstatcache();
+
         try {
             $parts = [
                 ...$this->commits(),
-                $this->treeHash(),
-                ...$this->lockFiles(),
-                ...$this->gateConfiguration(),
+                $this->index(),
+                $this->files($this->root, self::WRITTEN_BY_THE_CHECK, $settledBefore),
+                ...$this->homeInputs($settledBefore),
                 ...$this->optionsAndRuntime(),
             ];
         } catch (RepositoryAttributesRefused|UnexpectedValueException) {
@@ -51,8 +59,16 @@ final readonly class TreeFingerprint
             return null;
         }
 
+        return $this->joined($parts);
+    }
+
+    /**
+     * @param list<string|false|null> $parts
+     */
+    private function joined(array $parts): string
+    {
         // Because each part is prefixed by its length, no value can pass for the boundary between two parts.
-        return hash('sha256', implode('', array_map(static fn (?string $part): string => null === $part ? 'n' : strlen($part).':'.$part, $parts)));
+        return hash('sha256', implode('', array_map(static fn (string|false|null $part): string => null === $part ? 'n' : strlen((string) $part).':'.$part, $parts)));
     }
 
     /**
@@ -72,130 +88,104 @@ final readonly class TreeFingerprint
     /**
      * @throws RepositoryAttributesRefused
      */
-    // Because the tree as it is, uncommitted and untracked files included, is what the gates read, it is written from a copy of the index, so the real index never changes.
-    private function treeHash(): string|false
+    // Because the fast check takes its files from the index too, a staged edit is another check even when the working file is back as it was; the listing reads the index and never writes it or any object.
+    private function index(): string|false
     {
-        // Because tempnam() falls back to another folder with a notice when the temp directory is missing, and a notice on stdout would spoil the JSON lines.
-        $directory = sys_get_temp_dir();
-        $index = is_dir($directory) ? @tempnam($directory, 'intakt-check-index-') : false;
+        $staged = $this->runner->git(['ls-files', '--stage', '-z'], $this->root);
 
-        if (false === $index) {
-            return false;
-        }
-
-        try {
-            return $this->treeHashWith($index);
-        } finally {
-            @unlink($index);
-            @unlink($index.'.lock');
-        }
-    }
-
-    /**
-     * @throws RepositoryAttributesRefused
-     */
-    private function treeHashWith(string $index): string|false
-    {
-        $real = $this->realIndex();
-
-        if (null === $real || !$this->copied($real, $index)) {
-            return false;
-        }
-
-        // Because the check writes its report and its record under var/check, a tree that does not ignore var/ would otherwise change with every run.
-        $tree = $this->git(['add', '--all', '--', '.', ':(exclude,literal)'.FullReport::FOLDER], $index)->succeeded() ? $this->git(['write-tree'], $index) : null;
-
-        return true === $tree?->succeeded() ? trim($tree->output) : false;
-    }
-
-    /**
-     * @throws RepositoryAttributesRefused
-     */
-    private function realIndex(): ?string
-    {
-        $path = $this->runner->git(['rev-parse', '--git-path', 'index'], $this->root);
-
-        if (!$path->succeeded()) {
-            return null;
-        }
-
-        $real = trim($path->output);
-
-        return str_starts_with($real, '/') ? $real : $this->root.'/'.$real;
-    }
-
-    // Because a repository without commits has no index yet, git then starts from an empty one.
-    private function copied(string $real, string $index): bool
-    {
-        if (!file_exists($real)) {
-            return @unlink($index);
-        }
-
-        return @copy($real, $index);
-    }
-
-    /**
-     * @param list<string> $arguments
-     *
-     * @throws RepositoryAttributesRefused
-     */
-    private function git(array $arguments, string $index): ProcessResult
-    {
-        // Because the only pathspecs here are the two written above, never a path from the repository.
-        $call = $this->hardened->callWithPathspecMagic($arguments, $this->root);
-
-        return $this->runner->run($call->command, $call->directory, [...$call->environment, 'GIT_INDEX_FILE' => $index]);
+        return $staged->succeeded() ? $staged->output : false;
     }
 
     /**
      * @return list<string|false|null>
      */
-    private function lockFiles(): array
+    private function homeInputs(?int $settledBefore): array
     {
-        return [$this->contentsOf($this->root.'/composer.lock'), $this->contentsOf($this->home.'/composer.lock')];
+        $home = realpath($this->home);
+
+        if (false === $home) {
+            return [false];
+        }
+
+        if (realpath($this->root) === $home) {
+            return [];
+        }
+
+        return array_map(fn (string $input): string|false|null => file_exists($home.'/'.$input) || is_link($home.'/'.$input) ? $this->files($home.'/'.$input, [], $settledBefore) : null, self::HOME_INPUTS);
     }
 
     /**
-     * @return list<string|false>
+     * @param list<string> $skipped
+     *
+     * @throws UnexpectedValueException
      */
-    // Because the gates and their configuration come from the home of bin/check, which may be another tree than the one checked.
-    private function gateConfiguration(): array
+    // Because the gates read files that git ignores (vendor/, .env.*.local, phpunit.xml) and ignore rules differ between the gates and git, every file counts, ignored or not; its times and inode tell a file rewritten while the gates ran even when its bytes are back as they were.
+    private function files(string $path, array $skipped, ?int $settledBefore): string|false
     {
-        $files = [$this->home.'/bin/check'];
-        $entries = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($this->home.'/config/gates', FilesystemIterator::SKIP_DOTS));
+        $entries = [];
 
-        foreach ($entries as $entry) {
-            if ($entry instanceof SplFileInfo) {
-                $files[] = $entry->getPathname();
+        foreach ($this->entriesUnder($path, $skipped) as $relative => $file) {
+            $entry = $this->entry($file, $settledBefore);
+
+            if (false === $entry) {
+                return false;
             }
+
+            $entries[$relative] = $entry;
         }
 
-        sort($files);
-        $parts = [];
+        ksort($entries, SORT_STRING);
 
-        foreach ($files as $file) {
-            $parts[] = $file;
-            $parts[] = $this->contentsOf($file) ?? false;
-        }
-
-        return $parts;
+        return $this->joined([...array_keys($entries), ...array_values($entries)]);
     }
 
-    private function contentsOf(string $file): string|false|null
+    /**
+     * @param list<string> $skipped
+     *
+     * @return iterable<string, string>
+     *
+     * @throws UnexpectedValueException
+     */
+    private function entriesUnder(string $path, array $skipped): iterable
     {
-        if (!file_exists($file) && !is_link($file)) {
-            return null;
+        if (is_link($path) || !is_dir($path)) {
+            yield basename($path) => $path;
+
+            return;
         }
 
-        $contents = @file_get_contents($file);
+        $prefix = strlen($path) + 1;
+        $directory = new RecursiveDirectoryIterator($path, FilesystemIterator::SKIP_DOTS);
+        $kept = new RecursiveCallbackFilterIterator($directory, static fn (SplFileInfo $entry): bool => !in_array(substr($entry->getPathname(), $prefix), $skipped, true));
 
-        return false === $contents ? false : hash('sha256', $contents);
+        foreach (new RecursiveIteratorIterator($kept) as $entry) {
+            if ($entry instanceof SplFileInfo) {
+                yield substr($entry->getPathname(), $prefix) => $entry->getPathname();
+            }
+        }
+    }
+
+    private function entry(string $file, ?int $settledBefore): string|false
+    {
+        $status = @lstat($file);
+
+        if (false === $status || (null !== $settledBefore && $status['ctime'] >= $settledBefore)) {
+            return false;
+        }
+
+        $contents = match (true) {
+            is_link($file) => @readlink($file),
+            is_file($file) => @hash_file('sha256', $file),
+            default => '',
+        };
+
+        return false === $contents ? false : implode(' ', [$status['mode'], $status['size'], $status['mtime'], $status['ctime'], $status['ino'], $contents]);
     }
 
     /**
      * @return list<string>
      */
-    // Because the environment gate judges the running PHP, and a variable can change what a gate or a test does.
+    // Because the environment gate judges the running PHP, and a variable can change what a gate or a test does; asking for reuse changes no gate, so a run without it may be reused.
     private function optionsAndRuntime(): array
     {
         $extensions = get_loaded_extensions();

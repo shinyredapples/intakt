@@ -16,6 +16,7 @@ use Intakt\Gates\TreeFingerprint;
 use Intakt\Gates\Workspace;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Symfony\Component\Clock\MockClock;
 
 #[CoversClass(PassedTree::class)]
 #[CoversClass(TreeFingerprint::class)]
@@ -46,6 +47,17 @@ final class PassedTreeTest extends SandboxTestCase
         self::assertFalse($this->tree($root, $home)->hasPassed());
     }
 
+    public function testATreeThatIgnoresVarStillRecordsAndReusesAPass(): void
+    {
+        [$root, $home] = $this->checkedTreeAndHome();
+        $root->write('.gitignore', "/var/\n");
+        $root->commitAll('chore: ignore var');
+
+        $this->pass($root, $home);
+
+        self::assertTrue($this->tree($root, $home)->hasPassed());
+    }
+
     public function testAnEditedTrackedFileRunsTheCheckAgain(): void
     {
         [$root, $home] = $this->checkedTreeAndHome();
@@ -66,16 +78,30 @@ final class PassedTreeTest extends SandboxTestCase
         self::assertFalse($this->tree($root, $home)->hasPassed());
     }
 
-    public function testAnIgnoredFileKeepsThePassedResult(): void
+    public function testAnEditedFileGitIgnoresRunsTheCheckAgain(): void
+    {
+        foreach (['vendor/autoload.php', '.env.test.local', 'phpunit.xml'] as $ignored) {
+            [$root, $home] = $this->checkedTreeAndHome();
+            $root->write('.gitignore', "/.env.*.local\n/vendor/\n/phpunit.xml\n");
+            $root->write('vendor/autoload.php', "<?php\n");
+            $root->commitAll('chore: ignore the installed files');
+            $this->pass($root, $home);
+
+            $root->write($ignored, "<?php // edited\n");
+
+            self::assertFalse($this->tree($root, $home)->hasPassed(), $ignored);
+        }
+    }
+
+    public function testAFileLeftOutOnlyByGitInfoExcludeRunsTheCheckAgain(): void
     {
         [$root, $home] = $this->checkedTreeAndHome();
-        $root->write('.gitignore', "/cache/\n");
-        $root->commitAll('chore: ignore the cache');
+        $root->write('.git/info/exclude', "notes.md\n");
         $this->pass($root, $home);
 
-        $root->write('cache/entry', "kept out of the tree\n");
+        $root->write('notes.md', "new\n");
 
-        self::assertTrue($this->tree($root, $home)->hasPassed());
+        self::assertFalse($this->tree($root, $home)->hasPassed());
     }
 
     public function testAnEditStagedInTheIndexRunsTheCheckAgainAndLeavesTheIndexAlone(): void
@@ -91,12 +117,39 @@ final class PassedTreeTest extends SandboxTestCase
         self::assertSame($before, $root->git('diff', '--cached', '--name-only')->output);
     }
 
-    public function testTheChecksOwnReportAndRecordKeepThePassedResult(): void
+    public function testAStagedEditWhoseWorkingFileIsBackAsBeforeChangesTheFingerprint(): void
+    {
+        [$root, $home] = $this->checkedTreeAndHome();
+        $fingerprint = $this->fingerprint($root, $home, '--fast');
+        $before = $fingerprint->taken();
+
+        $root->write('README.md', "staged\n");
+        $root->git('add', 'README.md');
+        $root->write('README.md', "base\n");
+
+        self::assertNotNull($before);
+        self::assertNotSame($before, $fingerprint->taken());
+    }
+
+    public function testTakingTheFingerprintStoresNoObjectInGit(): void
+    {
+        [$root, $home] = $this->checkedTreeAndHome();
+        $root->write('draft.txt', "discarded draft\n");
+        $object = trim($root->git('hash-object', 'draft.txt')->output);
+
+        self::assertNotNull($this->fingerprint($root, $home)->taken());
+        self::assertFalse($root->git('cat-file', '-e', $object)->succeeded());
+    }
+
+    public function testTheFilesTheCheckWritesKeepThePassedResult(): void
     {
         [$root, $home] = $this->checkedTreeAndHome();
         $this->pass($root, $home);
 
         $root->write(FullReport::FOLDER.'/report-0123456789abcdef.json', "{}\n");
+        $root->write('var/cache/test/container.php', "<?php\n");
+        $root->write('.phpunit.cache/test-results', "{}\n");
+        $root->write('config/reference.php', "<?php\n");
 
         self::assertTrue($this->tree($root, $home)->hasPassed());
     }
@@ -107,6 +160,17 @@ final class PassedTreeTest extends SandboxTestCase
         $this->pass($root, $home);
 
         $home->write('composer.lock', "{\"packages\":[1]}\n");
+
+        self::assertFalse($this->tree($root, $home)->hasPassed());
+    }
+
+    public function testAnEditedVendorFileInTheHomeOfBinCheckRunsTheCheckAgain(): void
+    {
+        [$root, $home] = $this->checkedTreeAndHome();
+        $home->write('vendor/bin/phpunit', "<?php\n");
+        $this->pass($root, $home);
+
+        $home->write('vendor/bin/phpunit', "<?php // patched\n");
 
         self::assertFalse($this->tree($root, $home)->hasPassed());
     }
@@ -141,12 +205,20 @@ final class PassedTreeTest extends SandboxTestCase
         self::assertTrue($this->tree($root, $home, '--only=dashes')->hasPassed());
     }
 
+    public function testAskingForReuseKeepsThePassOfARunThatDidNotAsk(): void
+    {
+        [$root, $home] = $this->checkedTreeAndHome();
+        $this->pass($root, $home, '--only=dashes');
+
+        self::assertTrue($this->tree($root, $home, '--only=dashes', '--reuse')->hasPassed());
+    }
+
     public function testAChangedEnvironmentVariableRunsTheCheckAgain(): void
     {
         [$root, $home] = $this->checkedTreeAndHome();
         $this->pass($root, $home);
 
-        $tree = PassedTree::before(new TreeFingerprint($root->root, $home->root, Options::fromArguments([]), [...self::ENVIRONMENT, 'INTAKT_TEST_WORKERS' => '0']));
+        $tree = PassedTree::before(new TreeFingerprint($root->root, $home->root, Options::fromArguments([]), [...self::ENVIRONMENT, 'INTAKT_TEST_WORKERS' => '0']), $this->settledClock());
 
         self::assertFalse($tree->hasPassed());
     }
@@ -170,6 +242,21 @@ final class PassedTreeTest extends SandboxTestCase
 
         self::assertFalse($this->tree($root, $home)->recordPass());
         self::assertFalse($this->tree($root, $home)->hasPassed());
+    }
+
+    public function testAnUnreadableFileGivesNoFingerprint(): void
+    {
+        $this->skipWhenPermissionsAreIgnored();
+        [$root, $home] = $this->checkedTreeAndHome();
+        $root->write('secret.txt', "unreadable\n");
+        chmod($root->root.'/secret.txt', 0o000);
+
+        try {
+            self::assertNull($this->fingerprint($root, $home)->taken());
+            self::assertFalse($this->tree($root, $home)->recordPass());
+        } finally {
+            chmod($root->root.'/secret.txt', 0o644);
+        }
     }
 
     public function testALinkedVarCheckIsRefusedForRecords(): void
@@ -206,6 +293,19 @@ final class PassedTreeTest extends SandboxTestCase
         self::assertFileDoesNotExist($root->root.'/'.PassedTree::RECORD);
     }
 
+    // Because the gates may have read the edited bytes, a file back as it was by the end of the run still records nothing.
+    public function testAFileEditedAndRestoredWhileTheGatesRanRecordsNoPass(): void
+    {
+        [$root, $home] = $this->checkedTreeAndHome();
+        $tree = PassedTree::before($this->fingerprint($root, $home), new MockClock());
+
+        $root->write('README.md', "edited while the gates ran\n");
+        $root->write('README.md', "base\n");
+
+        self::assertFalse($tree->recordPass());
+        self::assertFileDoesNotExist($root->root.'/'.PassedTree::RECORD);
+    }
+
     public function testARecordOfAnotherFingerprintIsNotReused(): void
     {
         [$root, $home] = $this->checkedTreeAndHome();
@@ -221,7 +321,18 @@ final class PassedTreeTest extends SandboxTestCase
 
     private function tree(Sandbox $root, Sandbox $home, string ...$arguments): PassedTree
     {
-        return PassedTree::before(new TreeFingerprint($root->root, $home->root, Options::fromArguments(array_values($arguments)), self::ENVIRONMENT));
+        return PassedTree::before($this->fingerprint($root, $home, ...$arguments), $this->settledClock());
+    }
+
+    private function fingerprint(Sandbox $root, Sandbox $home, string ...$arguments): TreeFingerprint
+    {
+        return new TreeFingerprint($root->root, $home->root, Options::fromArguments(array_values($arguments)), self::ENVIRONMENT);
+    }
+
+    // Because a file written in the second a run starts records no pass, the tests that want one start their run an hour after their files were written.
+    private function settledClock(): MockClock
+    {
+        return new MockClock('+1 hour');
     }
 
     /**

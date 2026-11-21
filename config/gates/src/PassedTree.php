@@ -4,20 +4,26 @@ declare(strict_types=1);
 
 namespace Intakt\Gates;
 
+use Symfony\Component\Clock\ClockInterface;
+use Symfony\Component\Clock\NativeClock;
+
 final readonly class PassedTree
 {
     public const string RECORD = FullReport::FOLDER.'/passed.json';
 
-    private function __construct(private TreeFingerprint $fingerprint, private ?string $taken)
+    private function __construct(private TreeFingerprint $fingerprint, private ?string $taken, private int $startedAt)
     {
     }
 
     // Because the fingerprint is taken before any gate starts, a tree edited while the gates run never records a pass for what they did not see.
-    public static function before(TreeFingerprint $fingerprint): self
+    public static function before(TreeFingerprint $fingerprint, ClockInterface $clock = new NativeClock()): self
     {
-        return new self($fingerprint, $fingerprint->taken());
+        $startedAt = $clock->now()->getTimestamp();
+
+        return new self($fingerprint, $fingerprint->taken(), $startedAt);
     }
 
+    // Because the record is a file the checked code can write too, it only spares a run its caller asked to spare, never one that gates a change.
     public function hasPassed(): bool
     {
         if (null === $this->taken || $this->isLinked() || is_link($this->file()) || !is_file($this->file())) {
@@ -30,7 +36,8 @@ final readonly class PassedTree
     // Because only the latest pass is kept, one small file replaced whole never grows, and a temporary name renamed over it never leaves half a record.
     public function recordPass(): bool
     {
-        if (null === $this->taken || $this->fingerprint->taken() !== $this->taken || $this->isLinked() || !$this->folderStaysInside()) {
+        // Because a file changed and changed back while the gates ran shows in its times, unless both changes fell in the second the fingerprint was taken, which the settled test refuses.
+        if (null === $this->taken || $this->fingerprint->taken($this->startedAt) !== $this->taken || $this->isLinked() || !$this->folderStaysInside()) {
             return false;
         }
 
