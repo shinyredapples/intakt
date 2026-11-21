@@ -28,6 +28,7 @@
     <link rel="stylesheet" href="{{ asset('styles/tokens.css') }}">
     <link rel="stylesheet" href="{{ asset('styles/base.css') }}">
     <link rel="stylesheet" href="{{ asset('styles/components.css') }}">
+    <link rel="stylesheet" href="{{ asset('styles/demo.css') }}">
     {# Only a page the hub can reach is told to listen; the plain page shows the ledger's state either way. #}
     {% block importmap %}{% if live|default(false) %}{{ importmap('app') }}{% endif %}{% endblock %}
     {# Imported by their own address, not through the import map, so a danger button asks first, the search opens, the review page switches panes, a finding id highlights its entry, a collapsed board column, a crowded one and a phone banner open, the asleep octopus of a project the filter shows wakes into view, and the board's hidden side fades, the demo caption pauses and closes, and a command copies, also on a page without one. After the import map, which a browser ignores once a module has started to load. The edges are marked after the fold, so a click that opens a column is measured open. #}
@@ -76,7 +77,7 @@
 {% block body %}{% endblock %}
 </main>
 {# After the content and sticky at the bottom, so the caption takes its own room below the page and never covers its end; the error page leaves it out, because a failing ledger must not take that page down too. #}
-{% block tour %}{{ include('dashboard/_tour_caption.html.twig', {caption: demo_tour()}, with_context = false) }}{% endblock %}
+{% block tour %}{{ include('dashboard/_tour_caption.html.twig', {caption: demo_tour(), on_load: true}, with_context = false) }}{% endblock %}
 </div>
 </div>
 {# Outside the shell, because any child of it takes a cell of its grid, and because the search script makes the shell inert while this is open. assets/search.js opens it and fills the list box with the results fragment of the search route. #}

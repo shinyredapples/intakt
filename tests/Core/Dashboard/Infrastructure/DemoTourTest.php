@@ -142,14 +142,14 @@ final class DemoTourTest extends TestCase
         self::assertSame(TourStage::RoundEnds, $this->caption()->stage);
     }
 
-    public function testASecondRoundInProgressIsTheNextRoundStage(): void
+    public function testASecondRoundInProgressPassesTheReviewersStagesAgain(): void
     {
         $this->startRound('r1', 1);
         $this->judge('r1', ['f1']);
         $this->startRound('r2', 2);
         $this->startReviewer('r2', 'correctness');
 
-        self::assertSame(TourStage::NextRound, $this->caption()->stage);
+        self::assertSame(TourStage::ReviewersRead, $this->caption()->stage);
     }
 
     public function testAJudgedSecondRoundWithNothingToFixIsTheLastStage(): void
@@ -159,8 +159,8 @@ final class DemoTourTest extends TestCase
         $this->startRound('r2', 2);
         $this->judge('r2', []);
 
-        self::assertSame(TourStage::FindingsClosed, $this->caption()->stage);
-        self::assertSame(7, TourStage::FindingsClosed->number());
+        self::assertSame(TourStage::RoundEnds, $this->caption()->stage);
+        self::assertTrue(TourStage::RoundEnds->isLast());
     }
 
     public function testAJudgedSecondRoundThatStillHasFindingsToFixIsTheActListStageAgain(): void
@@ -175,8 +175,9 @@ final class DemoTourTest extends TestCase
 
     public function testTheStagesAreCountedInTheOrderARunPassesThem(): void
     {
-        self::assertSame([1, 2, 3, 4, 5, 6, 7], array_map(static fn (TourStage $stage): int => $stage->number(), TourStage::cases()));
-        self::assertSame(7, TourStage::count());
+        self::assertSame([1, 2, 3, 4, 5], array_map(static fn (TourStage $stage): int => $stage->number(), TourStage::cases()));
+        self::assertSame(5, TourStage::count());
+        self::assertSame([TourStage::RoundEnds], array_values(array_filter(TourStage::cases(), static fn (TourStage $stage): bool => $stage->isLast())));
     }
 
     public function testEveryStageHasOneShortSentence(): void
