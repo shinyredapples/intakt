@@ -144,7 +144,7 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
             return $this->outOfAccounts($waits, $failures);
         }
 
-        // An account that freed up during the call and was never sent to (skipped before it sent, or not free when the call began) gets the next call after a second, when every account this call did send to was limited (issue #2860).
+        // A wait of a second instead of the failover's error, because the vendor counts that error as a failure while an account that freed up during the call and was never sent to can take the retry (issue #2860).
         return $this->freedUntried($waits, $failures) && $failures->isEveryTriedLimited() ? new EveryAccountCoolingDown($this->provider, 1) : $everyAccountFailed;
     }
 
