@@ -83,6 +83,22 @@ final class FindChangedPullRequestsTest extends KernelTestCase
         self::assertSame([['status' => 304, 'changed' => 0]], [array_intersect_key($this->log->logged[1][1], ['status' => 1, 'changed' => 1])]);
     }
 
+    public function testTheOpenPullRequestsOfAProjectAreStillNamedAfterAnUnchangedListing(): void
+    {
+        $fractional = $this->at('8', '2026-11-01 11:00:00.123456');
+        $this->forge->opens('alpha', RecordedForge::change('7', 'a', '2026-11-01T10:00:00Z'), $fractional);
+        $this->forge->opens('beta', RecordedForge::change('9', 'c', '2026-11-01T10:00:00Z'));
+        $this->find('alpha');
+        $this->find('beta');
+        $this->find('alpha');
+        $this->entities->clear();
+
+        $open = $this->use($this->forge)->openOf('alpha');
+
+        self::assertSame(1, $this->forge->conditionalAnswers);
+        self::assertEquals([RecordedForge::change('7', 'a', '2026-11-01T10:00:00Z'), $fractional], $open);
+    }
+
     public function testAPullRequestWhoseHeadAndUpdateTimeAreUnchangedIsNotReturnedAgain(): void
     {
         $this->forge->opens('alpha', RecordedForge::change('7', 'a', '2026-11-01T10:00:00Z'));

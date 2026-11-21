@@ -76,6 +76,7 @@
 <p class="tiles-note muted">{% if cost is not null %}Cost per round is the mean of the rounds with a known estimate, {{ cost.priceDateReading }}. {% endif %}"Caught by one reviewer only" counts only the rounds with a full record of which reviewer reported each finding.</p>
 {% set catches = trends.reviewerCatches %}
 {% set outcomes = trends.judgeOutcomes %}
+{% set perDay = trends.reviewsPerDay %}
 <div class="charts">
     <section class="chart wide" id="chart-catches" aria-labelledby="chart-catches-title" data-controller="chart" data-action="keydown.esc@window->chart#dismiss">
         <h2 id="chart-catches-title">Which reviewer caught what</h2>
@@ -122,6 +123,40 @@
                 <tbody>
                 {% for bar in outcomes.bars %}
                 <tr><td>{{ bar.detail }}</td><td>{{ bar.value }}</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </details>
+        {% endif %}
+        {{ _self.tip() }}
+    </section>
+    <section class="chart wide" id="chart-per-day" aria-labelledby="chart-per-day-title" data-controller="chart" data-action="keydown.esc@window->chart#dismiss">
+        <h2 id="chart-per-day-title">Reviews and cost per day</h2>
+        {% if perDay is null %}
+        {#- A quiet line, never an empty grid, until there is a trend to draw (D5 of #2863). -#}
+        <p class="takeaway" data-no-data>Shows once there are reviews on {{ constant('Intakt\\Core\\Dashboard\\Domain\\ReviewsPerDay::MINIMUM_DAYS') }} days</p>
+        {% else %}
+        <p class="chart-key muted">Both charts share the same days, counted by the day each round started (UTC). Cost is an estimate {{ include('dashboard/components/figure_kind.html.twig', {kind: enum('Intakt\\Core\\Platform\\Contract\\FigureKind').Estimated, at: 'trends-per-day'}, with_context = false) }}; a day without a priced round reads No data.</p>
+        <div class="multiples two">
+            <figure class="multiple">
+                <figcaption class="sub-h">Rounds per day</figcaption>
+                <p class="takeaway">{{ perDay.roundsTakeaway }}</p>
+                {{ include('dashboard/components/bar_chart.html.twig', {name: 'Review rounds per day', bars: perDay.roundBars, top: perDay.roundsTop}, with_context = false) }}
+            </figure>
+            <figure class="multiple">
+                <figcaption class="sub-h">Estimated cost per day (USD)</figcaption>
+                <p class="takeaway">{{ perDay.costTakeaway }}</p>
+                {{ include('dashboard/components/bar_chart.html.twig', {name: 'Estimated cost per day in US dollars', bars: perDay.costBars, top: perDay.costTop, divisor: perDay.costDivisor}, with_context = false) }}
+            </figure>
+        </div>
+        <details class="c-table">
+            <summary>Show as table</summary>
+            <table>
+                <thead><tr><th scope="col">Day</th><th scope="col">Rounds</th><th scope="col">Estimated cost (USD)</th></tr></thead>
+                <tbody>
+                {% set costBars = perDay.costBars %}
+                {% for bar in perDay.roundBars %}
+                <tr><td>{{ bar.label }}</td><td>{{ bar.directLabel }}</td><td>{{ costBars[loop.index0].directLabel }}</td></tr>
                 {% endfor %}
                 </tbody>
             </table>
