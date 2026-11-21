@@ -75,6 +75,14 @@ class FakeStorage {
     setItem(key, value) {
         this.items.set(key, value);
     }
+
+    getItem(key) {
+        return this.items.get(key) ?? null;
+    }
+
+    removeItem(key) {
+        this.items.delete(key);
+    }
 }
 
 function captionOnAPage() {
@@ -188,29 +196,56 @@ test('a page without a caption lets every update through', () => {
     assert.deepEqual(rendered, [stream]);
 });
 
-// A caption that names the element its stage talks about, on a page that can find that element and holds a window.
-function pointingPage({ stage = 'judge-weighs', last = false, follow = false } = {}) {
+// A caption for one round and stage, naming the element its stage talks about by that round's id, as the template builds it.
+function stageCaption({ round = 'r1', stage = 'judge-weighs', first = false, last = false } = {}) {
     const caption = new FakeCaption();
     caption.setAttribute('data-stage', stage);
-    caption.setAttribute('data-tour-at', '#judge');
+    caption.setAttribute('data-round', round);
+    caption.setAttribute('data-tour-at', `[id="round-${round}-now-judge"]`);
+    if (first) {
+        caption.setAttribute('data-tour-first', '');
+    }
     if (last) {
         caption.setAttribute('data-tour-last', '');
     }
     const link = new FakeElement();
-    link.setAttribute('href', '/reviews/r1');
+    link.setAttribute('href', `/reviews/${round}`);
     caption.querySelector = (selector) => (selector === '[data-tour-pause]' ? caption.pause : selector === 'a.tour-review' ? link : null);
-    const target = new FakeElement();
-    target.scrolls = 0;
-    target.scrollIntoView = () => target.scrolls++;
+
+    return caption;
+}
+
+// A page that shows the given rounds' elements, holds a window with timers the test fires itself, and may be the page Play's redirect reached.
+function pointingPage({ caption = stageCaption(), rounds = ['r1'], follow = false, played = false, storage = new FakeStorage() } = {}) {
+    const targets = new Map(rounds.map((round) => {
+        const target = new FakeElement();
+        target.scrolls = 0;
+        target.scrollIntoView = () => target.scrolls++;
+        return [`[id="round-${round}-now-judge"]`, target];
+    }));
     const page = new FakePage(caption);
-    const window = { visited: [], timers: [], location: { assign: (href) => window.visited.push(href) }, setTimeout: (run) => window.timers.push(run), matchMedia: () => ({ matches: true }) };
+    page.body = {};
+    const window = { visited: [], timers: [], location: { assign: (href) => window.visited.push(href) }, setTimeout: (run, ms) => window.timers.push({ run, ms }), matchMedia: () => ({ matches: true }) };
     page.defaultView = window;
-    page.querySelector = (selector) => (selector === '#judge' ? target : selector === '[data-tour-follow]' && follow ? {} : null);
-    page.querySelectorAll = () => [];
-    const storage = new FakeStorage();
+    page.querySelector = (selector) => targets.get(selector) ?? (selector === '[data-tour-follow]' && follow ? {} : null);
+    page.querySelectorAll = (selector) => (selector === '[data-tour-focus]' ? [...targets.values()].filter((target) => target.getAttribute('data-tour-focus') !== null) : []);
+    if (played) {
+        storage.setItem('intakt-tour-play', 'play');
+    }
     captionTour(page, storage);
 
-    return { caption, page, target, window, storage };
+    return { caption, page, target: targets.get('[id="round-r1-now-judge"]'), window, storage };
+}
+
+// Shaped as a live update that replaces the caption: the new caption is in place once render runs, and the mark is drawn after it.
+async function replaceCaption(page, caption) {
+    const event = {
+        target: { getAttribute: (name) => (name === 'target' ? 'tour-caption' : null) },
+        detail: { render: () => { page.caption = caption; } },
+        preventDefault() {},
+    };
+    page.listeners['turbo:before-stream-render'](event);
+    await event.detail.render(event.target);
 }
 
 test('the element the stage talks about is marked and scrolled into view once', () => {
@@ -222,29 +257,138 @@ test('the element the stage talks about is marked and scrolled into view once', 
     assert.equal(target.scrolls, 1);
 });
 
-test('a page that follows the tour takes the visitor to the review once the run has started', () => {
-    const { window, target } = pointingPage({ follow: true });
+test('the page Play reached takes the visitor to the review once the run has started', () => {
+    const { window, target, storage } = pointingPage({ follow: true, played: true });
 
     assert.deepEqual(window.visited, ['/reviews/r1']);
     assert.equal(target.getAttribute('data-tour-focus'), null);
+    assert.equal(storage.getItem('intakt-tour-play'), null);
+});
+
+test('submitting Play marks the next page as the one that follows the tour', () => {
+    const { page, storage } = pointingPage();
+
+    page.listeners.submit({ target: { closest: (selector) => (selector === 'form.play-demo' ? {} : null) } });
+
+    assert.equal(storage.getItem('intakt-tour-play'), 'play');
+});
+
+test('a plain later visit to the page that offers the tour does not follow it', () => {
+    const { window, target } = pointingPage({ follow: true });
+
+    assert.deepEqual(window.visited, []);
+    assert.equal(target.getAttribute('data-tour-focus'), 'judge-weighs');
+});
+
+test('a later Turbo visit after the page Play reached does not follow the tour', async () => {
+    const { page, window } = pointingPage({ follow: true, played: true, caption: new FakeCaption() });
+    page.body = {};
+    page.listeners['turbo:load']();
+
+    await replaceCaption(page, stageCaption());
+
+    assert.deepEqual(window.visited, []);
+});
+
+test('a closed tour does not follow from the page Play reached', async () => {
+    const { page, window } = pointingPage({ follow: true, played: true, caption: new FakeCaption() });
+    page.click(page.caption.close);
+
+    await replaceCaption(page, stageCaption());
+
+    assert.deepEqual(window.visited, []);
+});
+
+test('a paused tour does not follow from the page Play reached', async () => {
+    const caption = stageCaption({ stage: 'change-arrives', first: true });
+    const { page, window } = pointingPage({ follow: true, played: true, caption: new FakeCaption() });
+    page.caption = caption;
+    page.click(caption.pause);
+
+    page.stream('projfilter');
+    await Promise.resolve();
+
+    assert.deepEqual(window.visited, []);
+});
+
+test('a closed tour draws no ring, does not scroll and removes the mark it drew', () => {
+    const { caption, page, target } = pointingPage();
+
+    page.click(caption.close);
+    page.listeners['turbo:load']();
+
+    assert.equal(target.getAttribute('data-tour-focus'), null);
+    assert.equal(target.scrolls, 1);
+});
+
+test('a caption for one round marks nothing on a page that shows another round', () => {
+    const { page } = pointingPage({ caption: stageCaption({ round: 'a' }), rounds: ['b'] });
+    const other = page.querySelector('[id="round-b-now-judge"]');
+
+    page.listeners['turbo:load']();
+
+    assert.equal(other.getAttribute('data-tour-focus'), null);
+    assert.equal(other.scrolls, 0);
 });
 
 test('the last stage closes the caption after a moment', () => {
-    const { page, window, storage } = pointingPage({ last: true, follow: true });
+    const { page, window, storage } = pointingPage({ caption: stageCaption({ last: true }), follow: true, played: true });
 
     assert.deepEqual(window.visited, []);
-    assert.equal(window.timers.length, 1);
-    window.timers[0]();
+    assert.deepEqual(window.timers.map((timer) => timer.ms), [8000]);
+    window.timers[0].run();
 
     assert.equal(page.documentElement.dataset.tour, 'closed');
     assert.equal(storage.items.get('intakt-tour'), 'closed');
 });
 
-test('a paused last stage stays open', () => {
-    const { caption, page, window } = pointingPage({ last: true });
+test('a paused last stage stays open when its moment passes', () => {
+    const { caption, page, window } = pointingPage({ caption: stageCaption({ last: true }) });
 
     page.click(caption.pause);
-    window.timers[0]();
+    window.timers[0].run();
 
     assert.equal(page.documentElement.dataset.tour, undefined);
+});
+
+test('resume after the moment passed waits a fresh moment and then closes', async () => {
+    const { caption, page, window } = pointingPage({ caption: stageCaption({ last: true }) });
+    page.click(caption.pause);
+    window.timers[0].run();
+
+    page.click(caption.pause);
+    await Promise.resolve();
+
+    assert.deepEqual(window.timers.map((timer) => timer.ms), [8000, 8000]);
+    window.timers[1].run();
+    assert.equal(page.documentElement.dataset.tour, 'closed');
+});
+
+test('the close of a last stage leaves the caption a new round started within the moment', async () => {
+    const { page, window } = pointingPage({ caption: stageCaption({ round: 'r1', stage: 'round-ends', last: true }), rounds: ['r1', 'r2'] });
+
+    await replaceCaption(page, stageCaption({ round: 'r2', stage: 'change-arrives', first: true }));
+    window.timers[0].run();
+
+    assert.equal(page.documentElement.dataset.tour, undefined);
+});
+
+test('a round that starts after the close shows its caption again', async () => {
+    const { page, window, storage } = pointingPage({ caption: stageCaption({ round: 'r1', stage: 'round-ends', last: true }), rounds: ['r1', 'r2'] });
+    window.timers[0].run();
+
+    await replaceCaption(page, stageCaption({ round: 'r2', stage: 'change-arrives', first: true }));
+
+    assert.equal(page.documentElement.dataset.tour, undefined);
+    assert.equal(storage.getItem('intakt-tour'), null);
+    assert.equal(page.querySelector('[id="round-r2-now-judge"]').getAttribute('data-tour-focus'), 'change-arrives');
+});
+
+test('a round that starts after the visitor closed the tour stays closed', async () => {
+    const { caption, page } = pointingPage({ rounds: ['r1', 'r2'] });
+    page.click(caption.close);
+
+    await replaceCaption(page, stageCaption({ round: 'r2', stage: 'change-arrives', first: true }));
+
+    assert.equal(page.documentElement.dataset.tour, 'closed');
 });

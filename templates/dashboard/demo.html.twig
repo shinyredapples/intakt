@@ -3,7 +3,7 @@
 {% block title %}The demo run - Intakt{% endblock %}
 
 {% block body %}
-{#- data-tour-follow: once the run starts, assets/tour-caption.js takes the visitor from here to the review as it fills. -#}
+{#- data-tour-follow: on the page Play's own redirect reaches, assets/tour-caption.js takes the visitor from here to the review once the run starts; a later visit stays here and shows its readiness line. -#}
 <div class="demo" data-tour-follow>
     <div class="page-head">
         {{ include('dashboard/components/character.html.twig', {character: constant('Intakt\\Core\\Dashboard\\Domain\\MascotPose::Conducting'), size: 144}, with_context = false) }}

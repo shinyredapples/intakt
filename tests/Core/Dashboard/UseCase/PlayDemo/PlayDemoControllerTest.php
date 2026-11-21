@@ -247,8 +247,25 @@ final class PlayDemoControllerTest extends DashboardPageTestCase
 
         self::assertCount(TourStage::count(), $caption->filter('.tour-dots .tour-dot'));
         self::assertCount(1, $caption->filter('.tour-dot.now'));
-        self::assertSame('#state-block-title', $caption->attr('data-tour-at'));
+        self::assertSame('#state-block-title:has([id="round-demo-round-1-now-phase"])', $caption->attr('data-tour-at'));
+        self::assertSame('demo-round-1', $caption->attr('data-round'));
+        self::assertSame('', $caption->attr('data-tour-first'));
         self::assertNull($caption->attr('data-tour-last'));
+    }
+
+    public function testTheElementTheCaptionNamesIsOnTheReviewOfItsRoundOnly(): void
+    {
+        $this->ledger->append(new LedgerEvent(LedgerEventKind::ReviewStarted, '{"round":"other-round-1","project":"acme","reviewers":2,"change":"other-change","number":1}'));
+        $this->demoRunAt(1);
+
+        $own = $this->browser->request('GET', '/reviews/demo-round-1');
+        $at = $own->filter('aside#tour-caption')->attr('data-tour-at') ?? '';
+        $other = $this->browser->request('GET', '/reviews/other-round-1');
+
+        self::assertResponseIsSuccessful();
+        self::assertCount(1, $own->filter($at));
+        self::assertCount(1, $other->filter('#state-block-title'));
+        self::assertCount(0, $other->filter($at));
     }
 
     public function testBeforeADemoRunTheComposeDemoPagesHoldOnlyTheEmptyCaption(): void

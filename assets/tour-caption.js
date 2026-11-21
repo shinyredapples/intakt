@@ -1,7 +1,10 @@
 const CAPTION = 'tour-caption';
 const PAUSE = '[data-tour-pause]';
 const CLOSE = '[data-tour-close]';
+const PLAY = 'form.play-demo';
 const CLOSED_KEY = 'intakt-tour';
+const ENDED_KEY = 'intakt-tour-ended';
+const PLAYED_KEY = 'intakt-tour-play';
 const FOCUS = 'data-tour-focus';
 const FOLLOW = '[data-tour-follow]';
 // Long enough to read the last line once, short enough that an ended tour never stays on the pages after it.
@@ -10,17 +13,28 @@ const LAST_STAGE_MS = 8000;
 // Not a Stimulus controller, because a page the hub cannot reach loads no import map and its caption must still close. Listens on the page once, so a caption a live update or a visit puts in later is covered too.
 export function captionTour(page, storage) {
     let held = null;
+    // The body of the page Play's own redirect reached; Turbo gives each visit a new body, so a later visit to the same page is not it.
+    const tour = { followOn: null };
 
     page.addEventListener('click', (event) => {
         const pause = event.target?.closest?.(PAUSE);
         if (pause) {
-            togglePause(pause, held);
+            const resumed = togglePause(pause);
+            const shown = held;
             // A pause starts empty, because a stage held on an earlier page would bring back an older stage on resume.
             held = null;
+            if (resumed) {
+                Promise.resolve(shown?.render(shown.stream)).then(() => pointAt(page, storage, tour));
+            }
             return;
         }
         if (event.target?.closest?.(CLOSE)) {
-            close(page, storage);
+            close(page, storage, null);
+        }
+    });
+    page.addEventListener('submit', (event) => {
+        if (event.target?.closest?.(PLAY)) {
+            write(storage, PLAYED_KEY, 'play');
         }
     });
     // Turbo appends a stream to the document element, so only the document sees it.
@@ -28,68 +42,147 @@ export function captionTour(page, storage) {
         if (event.target.getAttribute('target') !== CAPTION || !isPaused(page)) {
             // Any update can replace the element a stage points at, so the mark is drawn again after each one.
             const render = event.detail.render;
-            event.detail.render = (stream) => Promise.resolve(render(stream)).then(() => pointAt(page, storage));
+            event.detail.render = (stream) => Promise.resolve(render(stream)).then(() => pointAt(page, storage, tour));
             return;
         }
         event.preventDefault();
         held = { render: event.detail.render, stream: event.target };
     });
     // A visit Turbo makes runs no module again, so the new page's element is marked on its load.
-    page.addEventListener('turbo:load', () => pointAt(page, storage));
-    pointAt(page, storage);
+    page.addEventListener('turbo:load', () => {
+        takePlay(page, storage, tour);
+        pointAt(page, storage, tour);
+    });
+    takePlay(page, storage, tour);
+    pointAt(page, storage, tour);
 }
 
-// Marks the element the stage talks about (the caption names it in data-tour-at), scrolls it into view when it is new, follows the tour from a page that offers it to the review, and closes the tour a moment after its last stage.
-function pointAt(page, storage) {
+// Play leaves a mark only the next page takes, so a stalled, refused or later visit to the demo page never sends the visitor on.
+function takePlay(page, storage, tour) {
+    let played = null;
+    try {
+        played = storage.getItem(PLAYED_KEY);
+        storage.removeItem(PLAYED_KEY);
+    } catch {}
+    if (played && page.querySelector?.(FOLLOW)) {
+        tour.followOn = page.body;
+    }
+}
+
+// Marks the element the stage talks about (the caption names it in data-tour-at), scrolls it into view when it is new, follows the tour from the page Play reached to the review, and closes the tour a moment after its last stage.
+function pointAt(page, storage, tour) {
     const caption = page.getElementById?.(CAPTION);
     const at = caption?.getAttribute?.('data-tour-at');
     if (!at) {
         return;
     }
+    if (isClosed(page)) {
+        if (!startsAfterTheEnd(caption, storage)) {
+            unmark(page, null);
+            return;
+        }
+        open(page, storage);
+    }
     const review = caption.querySelector('a.tour-review')?.getAttribute('href');
-    if (review && page.querySelector?.(FOLLOW) && !caption.hasAttribute('data-tour-last')) {
+    if (review && tour.followOn === page.body && page.querySelector?.(FOLLOW) && !caption.hasAttribute('data-tour-last') && !isPaused(page)) {
+        tour.followOn = null;
         page.defaultView?.location.assign(review);
         return;
     }
-    const target = page.querySelector?.(at);
-    for (const marked of page.querySelectorAll?.(`[${FOCUS}]`) ?? []) {
-        if (marked !== target) {
-            marked.removeAttribute(FOCUS);
-        }
-    }
+    let target = null;
+    try {
+        target = page.querySelector?.(at) ?? null;
+    } catch {}
+    unmark(page, target);
     if (target && target.getAttribute(FOCUS) !== caption.getAttribute('data-stage')) {
         target.setAttribute(FOCUS, caption.getAttribute('data-stage'));
         const still = page.defaultView?.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
         target.scrollIntoView?.({ block: 'center', behavior: still ? 'auto' : 'smooth' });
     }
-    if (caption.hasAttribute('data-tour-last') && !caption.hasAttribute('data-closing')) {
-        caption.setAttribute('data-closing', '');
-        page.defaultView?.setTimeout(() => {
-            if (!isPaused(page)) {
-                close(page, storage);
-            }
-        }, LAST_STAGE_MS);
+    if (caption.hasAttribute('data-tour-last') && !caption.hasAttribute('data-closing') && !isPaused(page)) {
+        closeLater(page, storage, caption);
+    }
+}
+
+// Tied to the round and stage it was armed for, so a caption a later round put in meanwhile stays; a paused caption is armed again on resume.
+function closeLater(page, storage, caption) {
+    const round = caption.getAttribute('data-round');
+    const stage = caption.getAttribute('data-stage');
+    caption.setAttribute('data-closing', '');
+    page.defaultView?.setTimeout(() => {
+        const shown = page.getElementById(CAPTION);
+        if (isClosed(page) || shown?.getAttribute?.('data-round') !== round || shown.getAttribute('data-stage') !== stage) {
+            return;
+        }
+        if (isPaused(page)) {
+            shown.removeAttribute('data-closing');
+            return;
+        }
+        close(page, storage, round);
+    }, LAST_STAGE_MS);
+}
+
+// Only the tour's own end gives way to a new round; a tour the visitor closed stays closed for the tab.
+function startsAfterTheEnd(caption, storage) {
+    let ended = null;
+    try {
+        ended = storage.getItem(ENDED_KEY);
+    } catch {}
+
+    return caption.hasAttribute('data-tour-first') && ended !== null && ended !== caption.getAttribute('data-round');
+}
+
+function unmark(page, kept) {
+    for (const marked of page.querySelectorAll?.(`[${FOCUS}]`) ?? []) {
+        if (marked !== kept) {
+            marked.removeAttribute(FOCUS);
+        }
     }
 }
 
 // Only the newest stage is kept while paused, because it already holds everything the ones before it said.
-function togglePause(pause, held) {
+function togglePause(pause) {
     const paused = pause.getAttribute('aria-pressed') !== 'true';
     pause.setAttribute('aria-pressed', String(paused));
     pause.textContent = paused ? 'Resume' : 'Pause';
-    if (!paused && held) {
-        held.render(held.stream);
-    }
+
+    return !paused;
 }
 
 function isPaused(page) {
     return page.getElementById(CAPTION)?.querySelector(PAUSE)?.getAttribute('aria-pressed') === 'true';
 }
 
+function isClosed(page) {
+    return page.documentElement.dataset.tour === 'closed';
+}
+
 // Kept for the tab only, so a new visit to the demo shows the caption again.
-function close(page, storage) {
+function close(page, storage, endedRound) {
     page.documentElement.dataset.tour = 'closed';
+    unmark(page, null);
+    write(storage, CLOSED_KEY, 'closed');
+    if (endedRound === null) {
+        forget(storage, ENDED_KEY);
+    } else {
+        write(storage, ENDED_KEY, endedRound);
+    }
+}
+
+function open(page, storage) {
+    delete page.documentElement.dataset.tour;
+    forget(storage, CLOSED_KEY);
+    forget(storage, ENDED_KEY);
+}
+
+function write(storage, key, value) {
     try {
-        storage.setItem(CLOSED_KEY, 'closed');
+        storage.setItem(key, value);
+    } catch {}
+}
+
+function forget(storage, key) {
+    try {
+        storage.removeItem(key);
     } catch {}
 }

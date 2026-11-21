@@ -1,11 +1,11 @@
-{#- Nothing outside the compose demo; an empty element before a demo run, so the live update that starts the tour has a target. A page loaded after the last stage holds the empty element too, so a tour that ended never stays on every page; only the live update shows the last stage, and assets/tour-caption.js closes it after a moment. assets/tour-caption.js pauses and closes it. -#}
-{#- The element on the review page each stage talks about; assets/tour-caption.js marks it, and a page without it marks nothing. -#}
-{%- set focus = {'change-arrives': '#state-block-title', 'reviewers-read': '[id$="-now-reviewers"]', 'findings-arrive': '[id$="-now-reviewers"]', 'judge-weighs': '[id$="-now-judge"]', 'round-ends': '[id$="-judged"]'} %}
+{#- Nothing outside the compose demo; an empty element before a demo run, so the live update that starts the tour has a target. A page loaded after the last stage holds the empty element too, so a tour that ended never stays on every page; only the live update shows the last stage, and assets/tour-caption.js closes it after a moment. -#}
+{#- The element on the review page each stage talks about, by the ids the round's live updates target, so a page that does not show the caption's round marks nothing; assets/tour-caption.js marks it. -#}
 {%- if caption is not null %}
+{%- set focus = {'change-arrives': '#state-block-title:has([id="round-' ~ caption.round ~ '-now-phase"])', 'reviewers-read': '[id="round-' ~ caption.round ~ '-now-reviewers"]', 'findings-arrive': '[id="round-' ~ caption.round ~ '-now-reviewers"]', 'judge-weighs': '[id="round-' ~ caption.round ~ '-now-judge"]', 'round-ends': '[id="round-' ~ caption.round ~ '-judged"]'} %}
 {%- if caption.stage is null or (on_load|default(false) and caption.stage.isLast) %}
 <div id="tour-caption" hidden></div>
 {%- else %}
-<aside id="tour-caption" class="tour-caption" aria-label="Demo tour" data-stage="{{ caption.stage.value }}" data-tour-at="{{ focus[caption.stage.value] }}"{% if caption.stage.isLast %} data-tour-last{% endif %}>
+<aside id="tour-caption" class="tour-caption" aria-label="Demo tour" data-stage="{{ caption.stage.value }}" data-round="{{ caption.round }}" data-tour-at="{{ focus[caption.stage.value] }}"{% if caption.stage.number == 1 %} data-tour-first{% endif %}{% if caption.stage.isLast %} data-tour-last{% endif %}>
     <span class="tour-dots" aria-hidden="true">
         {%- for stage in enum_cases('Intakt\\Core\\Dashboard\\Domain\\TourStage') %}<span class="tour-dot{% if stage.number < caption.stage.number %} done{% elseif stage is same as(caption.stage) %} now{% endif %}"></span>{% endfor -%}
     </span>
