@@ -135,6 +135,17 @@ final readonly class MainHistory implements CommitHistory
      * @throws MainNotRead
      * @throws RuntimeException
      */
+    public function head(): string
+    {
+        $this->mustBeReadable();
+
+        return $this->tip();
+    }
+
+    /**
+     * @throws MainNotRead
+     * @throws RuntimeException
+     */
     public function commitNameLength(): int
     {
         $this->mustBeReadable();

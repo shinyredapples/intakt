@@ -11,6 +11,7 @@ use Intakt\Core\Watchdog\Infrastructure\LedgerHalts;
 use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Exception\RuntimeException;
 use Symfony\Component\Console\Question\Question;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
@@ -44,10 +45,22 @@ final readonly class ClearHaltCommand
         return Command::SUCCESS;
     }
 
-    // Asked, never an argument or an option, because a command line shows in the process list and the shell's history.
+    // Asked, never an argument or an option, because a command line shows in the process list and the shell's history; never visibly, because a terminal that cannot hide the answer would echo the token.
+    public static function ownerTokenQuestion(): Question
+    {
+        return new Question('The owner token')->setHidden(true)->setHiddenFallback(false);
+    }
+
+    /**
+     * @throws OnlyTheOwnerClearsAHalt
+     */
     private function ownerToken(SymfonyStyle $io): string
     {
-        $answer = $io->askQuestion(new Question('The owner token')->setHidden(true));
+        try {
+            $answer = $io->askQuestion(self::ownerTokenQuestion());
+        } catch (RuntimeException) {
+            throw new OnlyTheOwnerClearsAHalt('Only the owner clears a halt, and this terminal cannot hide the owner token, so it was not asked.');
+        }
 
         return is_string($answer) ? $answer : '';
     }

@@ -12,6 +12,8 @@ final readonly class HaltPayload
         public string $project,
         public string $commit,
         public Violation $violation,
+        // Main's head when the halt was raised, because two rewrites that dropped the same head differ only in what replaced it.
+        public string $head,
     ) {
     }
 }

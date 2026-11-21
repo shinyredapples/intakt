@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Watchdog\UseCase\GuardMain;
 
-use Intakt\Core\Watchdog\Contract\Classification;
 use Intakt\Core\Watchdog\Contract\CommitNameNotFull;
 use Intakt\Core\Watchdog\Contract\MainNotRead;
 use Intakt\Core\Watchdog\Contract\OwnerCard;
+use Intakt\Core\Watchdog\Domain\CheckedMain;
 use Intakt\Core\Watchdog\Infrastructure\HaltNotRecorded;
 use Intakt\Core\Watchdog\Infrastructure\LedgerHalts;
 use Intakt\Core\Watchdog\Infrastructure\OwnerKeyRefused;
@@ -42,8 +42,7 @@ final readonly class GuardMain
     public function standingCardsAfterChecking(GuardMainInput $input): array
     {
         $this->mustNameAProject($input->project);
-        $classification = $this->check->classified($input->repository, $input->watchedMain(), $input->ownerKey);
-        $this->raiseCardsFor($input->project, $classification);
+        $this->raiseCardsFor($input->project, $this->check->checked($input->repository, $input->watchedMain(), $input->ownerKey));
 
         return $this->halts->standingOf($input->project);
     }
@@ -55,18 +54,18 @@ final readonly class GuardMain
         }
     }
 
-    private function raiseCardsFor(string $project, Classification $classification): void
+    private function raiseCardsFor(string $project, CheckedMain $checked): void
     {
-        if ($classification->isClean()) {
+        if ($checked->classification->isClean()) {
             return;
         }
 
         $lock = $this->locks->createLock(self::LOCK);
         $lock->acquire(true);
         try {
-            foreach ($classification->violations as $violation) {
-                if (!$this->halts->wasRaised($project, $violation)) {
-                    $this->halts->raise($project, $violation);
+            foreach ($checked->classification->violations as $violation) {
+                if (!$this->halts->wasRaised($project, $violation, $checked->head)) {
+                    $this->halts->raise($project, $violation, $checked->head);
                 }
             }
         } finally {

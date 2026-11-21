@@ -33,6 +33,8 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(AppendResult::class)]
 final class LedgerHaltsTest extends TestCase
 {
+    private const string HEAD = 'cccccccccccccccccccccccccccccccccccccccc';
+
     private HaltLedger $ledger;
     private LedgerHalts $halts;
 
@@ -44,7 +46,7 @@ final class LedgerHaltsTest extends TestCase
 
     public function testARaisedHaltStandsAsACardNamingItsProjectCommitAndReason(): void
     {
-        $this->halts->raise('acme/shop', $this->unsigned('a'));
+        $this->halts->raise('acme/shop', $this->unsigned('a'), self::HEAD);
 
         $card = $this->onlyCard($this->halts->standing());
         self::assertSame('acme/shop', $card->project);
@@ -55,7 +57,7 @@ final class LedgerHaltsTest extends TestCase
 
     public function testAClearThatNamesTheCardLiftsIt(): void
     {
-        $this->halts->raise('acme/shop', $this->unsigned('a'));
+        $this->halts->raise('acme/shop', $this->unsigned('a'), self::HEAD);
 
         $this->halts->clear($this->onlyCard($this->halts->standing()));
 
@@ -65,17 +67,17 @@ final class LedgerHaltsTest extends TestCase
 
     public function testAHaltRaisedAfterAClearStands(): void
     {
-        $this->halts->raise('acme/shop', $this->unsigned('a'));
+        $this->halts->raise('acme/shop', $this->unsigned('a'), self::HEAD);
         $this->halts->clear($this->onlyCard($this->halts->standing()));
 
-        $this->halts->raise('acme/shop', $this->unsigned('b'));
+        $this->halts->raise('acme/shop', $this->unsigned('b'), self::HEAD);
 
         self::assertSame(str_repeat('b', 40), $this->onlyCard($this->halts->standing())->violation?->commit);
     }
 
     public function testACardOfAnotherProjectDoesNotHaltThisOne(): void
     {
-        $this->halts->raise('acme/blog', $this->unsigned('a'));
+        $this->halts->raise('acme/blog', $this->unsigned('a'), self::HEAD);
 
         self::assertSame([], $this->halts->standingOf('acme/shop'));
         self::assertCount(1, $this->halts->standingOf('acme/blog'));
@@ -98,7 +100,7 @@ final class LedgerHaltsTest extends TestCase
 
     public function testAClearRowThatDoesNotReadLiftsNothing(): void
     {
-        $this->halts->raise('acme/shop', $this->unsigned('a'));
+        $this->halts->raise('acme/shop', $this->unsigned('a'), self::HEAD);
         $this->appended(new LedgerEvent(LedgerEventKind::HaltCleared, '{"cards":[]}'));
 
         self::assertCount(1, $this->halts->standing());
@@ -106,18 +108,39 @@ final class LedgerHaltsTest extends TestCase
 
     public function testAClearedCardStillCountsAsRaised(): void
     {
-        $this->halts->raise('acme/shop', $this->unsigned('a'));
+        $this->halts->raise('acme/shop', $this->unsigned('a'), self::HEAD);
         $this->halts->clear($this->onlyCard($this->halts->standing()));
 
-        self::assertTrue($this->halts->wasRaised('acme/shop', $this->unsigned('a')));
+        self::assertTrue($this->halts->wasRaised('acme/shop', $this->unsigned('a'), self::HEAD));
     }
 
     public function testTheSameCommitWithAnotherReasonOrProjectWasNotRaised(): void
     {
-        $this->halts->raise('acme/shop', $this->unsigned('a'));
+        $this->halts->raise('acme/shop', $this->unsigned('a'), self::HEAD);
 
-        self::assertFalse($this->halts->wasRaised('acme/shop', new MainViolation(str_repeat('a', 40), Violation::HistoryRewritten)));
-        self::assertFalse($this->halts->wasRaised('acme/blog', $this->unsigned('a')));
+        self::assertFalse($this->halts->wasRaised('acme/shop', $this->rewritten('a'), self::HEAD));
+        self::assertFalse($this->halts->wasRaised('acme/blog', $this->unsigned('a'), self::HEAD));
+    }
+
+    public function testTheSameRewriteSeenTwiceWasRaised(): void
+    {
+        $this->halts->raise('acme/shop', $this->rewritten('a'), self::HEAD);
+
+        self::assertTrue($this->halts->wasRaised('acme/shop', $this->rewritten('a'), self::HEAD));
+    }
+
+    public function testARewriteOfTheSameHeadToAnotherCommitWasNotRaised(): void
+    {
+        $this->halts->raise('acme/shop', $this->rewritten('a'), self::HEAD);
+
+        self::assertFalse($this->halts->wasRaised('acme/shop', $this->rewritten('a'), str_repeat('d', 40)));
+    }
+
+    public function testAnUnsignedCommitSeenUnderAnotherHeadWasStillRaised(): void
+    {
+        $this->halts->raise('acme/shop', $this->unsigned('a'), self::HEAD);
+
+        self::assertTrue($this->halts->wasRaised('acme/shop', $this->unsigned('a'), str_repeat('d', 40)));
     }
 
     public function testAHaltTheLedgerRefusesIsReportedNotRecorded(): void
@@ -126,12 +149,12 @@ final class LedgerHaltsTest extends TestCase
 
         $this->expectException(HaltNotRecorded::class);
 
-        $this->halts->raise('acme/shop', $this->unsigned('a'));
+        $this->halts->raise('acme/shop', $this->unsigned('a'), self::HEAD);
     }
 
     public function testAClearTheLedgerRefusesIsReportedAndTheCardStands(): void
     {
-        $this->halts->raise('acme/shop', $this->unsigned('a'));
+        $this->halts->raise('acme/shop', $this->unsigned('a'), self::HEAD);
         $this->ledger->refuseAppends();
 
         try {
@@ -145,6 +168,11 @@ final class LedgerHaltsTest extends TestCase
     private function unsigned(string $digit): MainViolation
     {
         return new MainViolation(str_repeat($digit, 40), Violation::Unsigned);
+    }
+
+    private function rewritten(string $digit): MainViolation
+    {
+        return new MainViolation(str_repeat($digit, 40), Violation::HistoryRewritten);
     }
 
     private function appended(LedgerEvent $event): void

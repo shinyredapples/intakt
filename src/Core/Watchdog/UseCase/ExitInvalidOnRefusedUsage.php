@@ -2,8 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Core\Watchdog\UseCase\CheckMain;
+namespace Intakt\Core\Watchdog\UseCase;
 
+use Intakt\Core\Watchdog\UseCase\CheckMain\CheckMainCommand;
 use Intakt\Core\Watchdog\UseCase\GuardMain\GuardMainCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Event\ConsoleErrorEvent;

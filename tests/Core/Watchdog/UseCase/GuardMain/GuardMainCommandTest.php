@@ -15,6 +15,7 @@ use Intakt\Core\Watchdog\Contract\MainNotRead;
 use Intakt\Core\Watchdog\Contract\MainViolation;
 use Intakt\Core\Watchdog\Contract\OwnerCard;
 use Intakt\Core\Watchdog\Contract\WatchedMain;
+use Intakt\Core\Watchdog\Domain\CheckedMain;
 use Intakt\Core\Watchdog\Domain\CommitClassifier;
 use Intakt\Core\Watchdog\Domain\HaltClearedPayload;
 use Intakt\Core\Watchdog\Domain\HaltPayload;
@@ -50,6 +51,7 @@ use Symfony\Component\Process\Process;
 #[CoversClass(AHaltNamesItsProject::class)]
 #[CoversClass(ConsoleReport::class)]
 #[UsesClass(CheckMain::class)]
+#[UsesClass(CheckedMain::class)]
 #[UsesClass(CommitClassifier::class)]
 #[UsesClass(MainHistory::class)]
 #[UsesClass(FirstParentChain::class)]
@@ -131,6 +133,39 @@ final class GuardMainCommandTest extends TestCase
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringContainsString('commit '.$seen.' history_rewritten', $tester->getDisplay());
         self::assertCount(1, $this->halts->standingOf(self::PROJECT));
+    }
+
+    public function testAnotherRewriteOfTheSameHeadAfterTheOwnerClearedTheFirstRaisesANewCard(): void
+    {
+        $base = $this->repository->commitEmpty('Base');
+        $seen = $this->repository->commitEmpty('Seen, then dropped');
+        $this->repository->resetTo($base);
+        $this->repository->commitEmpty('First replacement');
+        $this->whenTheGuardRuns($seen, []);
+        $this->halts->clear($this->onlyStandingCard());
+        $this->repository->resetTo($base);
+        $this->repository->commitEmpty('Second replacement');
+
+        $tester = $this->whenTheGuardRuns($seen, []);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString('commit '.$seen.' history_rewritten', $tester->getDisplay());
+        self::assertSame([LedgerEventKind::MainHalted, LedgerEventKind::HaltCleared, LedgerEventKind::MainHalted], $this->ledger->kinds());
+    }
+
+    public function testTheSameRewriteSeenAgainAfterTheOwnerClearedItRaisesNoNewCard(): void
+    {
+        $base = $this->repository->commitEmpty('Base');
+        $seen = $this->repository->commitEmpty('Seen, then dropped');
+        $this->repository->resetTo($base);
+        $this->repository->commitEmpty('Replacement');
+        $this->whenTheGuardRuns($seen, []);
+        $this->halts->clear($this->onlyStandingCard());
+
+        $tester = $this->whenTheGuardRuns($seen, []);
+
+        self::assertSame(Command::SUCCESS, $tester->getStatusCode());
+        self::assertSame([LedgerEventKind::MainHalted, LedgerEventKind::HaltCleared], $this->ledger->kinds());
     }
 
     public function testAnOwnerSignedCommitRaisesNoCardAndExitsWithZero(): void

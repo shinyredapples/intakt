@@ -21,6 +21,7 @@ use Intakt\Core\Watchdog\UseCase\ClearHalt\ClearHalt;
 use Intakt\Core\Watchdog\UseCase\ClearHalt\ClearHaltCommand;
 use Intakt\Core\Watchdog\UseCase\ClearHalt\OnlyAStandingCardIsCleared;
 use Intakt\Core\Watchdog\UseCase\ClearHalt\OnlyTheOwnerClearsAHalt;
+use Intakt\Tests\Core\Watchdog\BeforeTheClear;
 use Intakt\Tests\Core\Watchdog\HaltLedger;
 use Intakt\Tests\Support\StoredSerializerFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -29,6 +30,8 @@ use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
 
 #[CoversClass(ClearHaltCommand::class)]
 #[CoversClass(ClearHalt::class)]
@@ -50,12 +53,54 @@ final class ClearHaltCommandTest extends TestCase
     private const string OWNER_TOKEN = 'owner-token-of-this-test';
 
     private HaltLedger $ledger;
+    private BeforeTheClear $clears;
     private LedgerHalts $halts;
+    private LockFactory $locks;
 
     protected function setUp(): void
     {
         $this->ledger = new HaltLedger();
-        $this->halts = new LedgerHalts($this->ledger, new LedgerPayloads(StoredSerializerFactory::create()));
+        $this->clears = new BeforeTheClear($this->ledger);
+        $this->halts = new LedgerHalts($this->clears, new LedgerPayloads(StoredSerializerFactory::create()));
+        $this->locks = new LockFactory(new InMemoryStore());
+    }
+
+    public function testOfTwoClearsOfOneCardOnlyOneIsAppendedAndTheOtherIsRefused(): void
+    {
+        $card = $this->haltedOn('acme/shop', 'a');
+        $clear = new ClearHalt($this->halts, new OwnerToken(self::OWNER_TOKEN, null), $this->locks);
+        $refusals = [];
+        $this->clears->runFirst(static function () use ($clear, $card, &$refusals): void {
+            try {
+                $clear->cleared($card, self::OWNER_TOKEN);
+            } catch (OnlyAStandingCardIsCleared $refused) {
+                $refusals[] = $refused->getMessage();
+            }
+        });
+
+        $clear->cleared($card, self::OWNER_TOKEN);
+
+        self::assertSame(['Only a standing card is cleared, and card '.$card.' is being cleared by another run.'], $refusals);
+        self::assertSame([LedgerEventKind::MainHalted, LedgerEventKind::HaltCleared], $this->ledger->kinds());
+    }
+
+    public function testAClearAfterAnotherClearOfTheSameCardFinishedIsRefusedAsNotStanding(): void
+    {
+        $card = $this->haltedOn('acme/shop', 'a');
+        $clear = new ClearHalt($this->halts, new OwnerToken(self::OWNER_TOKEN, null), $this->locks);
+        $clear->cleared($card, self::OWNER_TOKEN);
+
+        $this->expectExceptionMessage('no standing card has the id '.$card);
+
+        $clear->cleared($card, self::OWNER_TOKEN);
+    }
+
+    public function testTheOwnerTokenQuestionIsHiddenWithNoVisibleFallback(): void
+    {
+        $question = ClearHaltCommand::ownerTokenQuestion();
+
+        self::assertTrue($question->isHidden());
+        self::assertFalse($question->isHiddenFallback());
     }
 
     public function testTheOwnerClearsACardAndTheProjectIsNoLongerHalted(): void
@@ -169,7 +214,7 @@ final class ClearHaltCommandTest extends TestCase
 
     private function haltedOn(string $project, string $digit): string
     {
-        $this->halts->raise($project, new MainViolation(str_repeat($digit, 40), Violation::Unsigned));
+        $this->halts->raise($project, new MainViolation(str_repeat($digit, 40), Violation::Unsigned), str_repeat('c', 40));
 
         return array_last($this->halts->standing())?->id->toRfc4122() ?? '';
     }
@@ -197,7 +242,7 @@ final class ClearHaltCommandTest extends TestCase
     private function application(OwnerToken $owner): Application
     {
         $application = new Application();
-        $application->addCommand(new ClearHaltCommand(new ClearHalt($this->halts, $owner), $this->halts));
+        $application->addCommand(new ClearHaltCommand(new ClearHalt($this->halts, $owner, $this->locks), $this->halts));
 
         return $application;
     }
