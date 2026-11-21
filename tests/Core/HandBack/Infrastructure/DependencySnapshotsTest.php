@@ -61,10 +61,16 @@ final class DependencySnapshotsTest extends TestCase
         }
 
         namespace {
+            use Intakt\Core\HandBack\Domain\DependencySnapshotKey;
+            use Intakt\Core\HandBack\Infrastructure\DependencySnapshots;
+            use Intakt\Plugin\Gate\Contract\DependencyStep;
+            use Symfony\Component\Lock\LockFactory;
+            use Symfony\Component\Lock\Store\FlockStore;
+
             require $argv[1].'/vendor/autoload.php';
-            $store = new Intakt\Core\HandBack\Infrastructure\DependencySnapshots($argv[2].'/store', 1, new Symfony\Component\Lock\LockFactory(new Symfony\Component\Lock\Store\FlockStore($argv[2].'/locks')));
-            $step = new Intakt\Plugin\Gate\Contract\DependencyStep(['composer.json', 'composer.lock'], 'probe', 'install', 'generate');
-            $store->save(Intakt\Core\HandBack\Domain\DependencySnapshotKey::of($step, ['composer.json' => '{}', 'composer.lock' => 'b'], '8.5.12'), $argv[3]);
+            $store = new DependencySnapshots($argv[2].'/store', 1, new LockFactory(new FlockStore($argv[2].'/locks')));
+            $step = new DependencyStep(['composer.json', 'composer.lock'], 'probe', 'install', 'generate');
+            $store->save(DependencySnapshotKey::of($step, ['composer.json' => '{}', 'composer.lock' => 'b'], '8.5.12'), $argv[3]);
         }
         PHP;
 
