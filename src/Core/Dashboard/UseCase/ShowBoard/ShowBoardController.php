@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\UseCase\ShowBoard;
 
+use Intakt\Core\Budget\Contract\OwnerNotices;
 use Intakt\Core\Dashboard\Contract\DashboardRoutes;
+use Intakt\Core\Dashboard\Domain\Board;
 use Intakt\Core\Dashboard\Domain\FailingHead;
+use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Infrastructure\LedgerFailingHeads;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LivePageRendering;
@@ -33,6 +36,7 @@ final readonly class ShowBoardController
         private LivePageRendering $pages,
         private SampleChangeSource $sample,
         private UrlGeneratorInterface $urls,
+        private OwnerNotices $notices,
     ) {
     }
 
@@ -49,7 +53,7 @@ final readonly class ShowBoardController
         }
 
         if ($this->landsOnWaiting($request)) {
-            return $this->variesByDevice($this->redirectTo(DashboardRoutes::LIST_WAITING));
+            return $this->variesByDevice($this->quietRoundOf($board) ?? $this->redirectTo(DashboardRoutes::LIST_WAITING));
         }
 
         return $this->variesByDevice(new Response($this->pages->render($request, 'dashboard/board.html.twig', [
@@ -62,7 +66,7 @@ final readonly class ShowBoardController
         ])));
     }
 
-    // A phone opens on what only the owner can act on; the Board flag of the dashboard's own Board links skips it, so a tap on Board still shows the board.
+    // A phone opens on what only the owner can act on, or on its newest review while the install is quiet; the Board flag of the dashboard's own Board links skips it, so a tap on Board still shows the board.
     private function landsOnWaiting(Request $request): bool
     {
         if ($request->query->has(self::BOARD_FLAG)) {
@@ -73,9 +77,23 @@ final readonly class ShowBoardController
             || str_contains($request->headers->get('User-Agent') ?? '', 'Mobi');
     }
 
-    private function redirectTo(string $route): RedirectResponse
+    // A quiet install (nothing waits on the owner, nothing runs) opens its newest review on a phone, because an empty Waiting on you shows nothing of the product (#3142); the notices are read last, so a busy board never asks the database.
+    private function quietRoundOf(Board $board): ?RedirectResponse
     {
-        return new RedirectResponse($this->urls->generate($route), Response::HTTP_SEE_OTHER);
+        $newest = $board->newestReviewAtRest();
+        if (!$newest instanceof Review || [] !== $this->notices->stillRunningOldestFirst()) {
+            return null;
+        }
+
+        return $this->redirectTo(DashboardRoutes::SHOW_REVIEW, ['round' => $newest->latest()->round]);
+    }
+
+    /**
+     * @param array<string, string> $parameters
+     */
+    private function redirectTo(string $route, array $parameters = []): RedirectResponse
+    {
+        return new RedirectResponse($this->urls->generate($route, $parameters), Response::HTTP_SEE_OTHER);
     }
 
     // Every answer of the root address varies by device, so a shared cache never hands a desktop's board to a phone or a phone's redirect to a desktop.

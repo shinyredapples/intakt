@@ -99,6 +99,12 @@ final readonly class Board
         return array_values(array_filter(BoardColumn::cases(), fn (BoardColumn $column): bool => $column->foldsIntoComingNext($this->countOf($column))));
     }
 
+    // The newest card while the board is at rest (every card Done, no task in flight), so a quiet phone home can open it instead of an empty Waiting on you (#3142).
+    public function newestReviewAtRest(): ?Review
+    {
+        return [] !== $this->cards && MascotPose::Asleep === $this->mascot() ? $this->cards[0] : null;
+    }
+
     // Null while the column holds a card, because only an empty column says what lands there and when (#2731).
     public function emptyLineOf(BoardColumn $column): ?string
     {
