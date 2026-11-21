@@ -6,6 +6,8 @@ namespace Intakt\Tests\Application;
 
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
+use ReflectionMethod;
+use Symfony\Component\Clock\NativeClock;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\HttpKernel\Profiler\FileProfilerStorage;
 use Symfony\Component\HttpKernel\Profiler\Profile;
@@ -41,11 +43,15 @@ final class MateInvocationTest extends TestCase
         $profile = new Profile('a1b2c3');
         $profile->setMethod('GET');
         $profile->setUrl('http://localhost/');
-        $profile->setTime(1_795_000_000);
+        // A fixed timestamp turns two days old: FileProfilerStorage then purges it on one write in ten.
+        $profile->setTime(new NativeClock()->now()->getTimestamp());
         $profile->setStatusCode(200);
 
         try {
-            new FileProfilerStorage('file:'.$cache.'/dev/profiler')->write($profile);
+            $storage = new FileProfilerStorage('file:'.$cache.'/dev/profiler');
+            $storage->write($profile);
+            // The purge of expired profiles runs on a random write; run it here so every run takes that path.
+            new ReflectionMethod($storage, 'removeExpiredProfiles')->invoke($storage);
 
             $profiles = $this->mateWith(['APP_CACHE_DIR' => $cache], 'tools:call', 'symfony-profiler-list');
         } finally {
