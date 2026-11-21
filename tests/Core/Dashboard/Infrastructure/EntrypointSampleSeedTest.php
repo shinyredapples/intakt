@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Dashboard\Infrastructure;
 
 use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Process\ExecutableFinder;
@@ -330,6 +331,96 @@ final class EntrypointSampleSeedTest extends TestCase
         $this->waitForTheServer();
 
         self::assertDirectoryDoesNotExist($this->directory.'/build/staging', 'the container of the APP_ENV in .env.local survived');
+    }
+
+    public function testAStartRemovesTheContainerOfTheEnvironmentTheConsolePassesToTheKernel(): void
+    {
+        new Filesystem()->dumpFile($this->directory.'/build/test/old-container', 'old');
+        new Filesystem()->dumpFile($this->directory.'/build/staging/keep', 'kept');
+        $this->startEntrypoint([
+            'INTAKT_CONFIG' => $this->directory.'/intakt.yaml',
+            'OTHER_ENV' => 'staging',
+            'APP_RUNTIME_OPTIONS' => '{"env_var_name":"OTHER_ENV"}',
+            'APP_BUILD_DIR' => $this->directory.'/build',
+        ]);
+
+        $this->waitForTheServer();
+
+        self::assertDirectoryDoesNotExist($this->directory.'/build/test', 'the container of the APP_ENV bin/console passes to the kernel survived');
+        self::assertFileExists($this->directory.'/build/staging/keep', 'the folder of an environment the kernel does not run in was removed');
+    }
+
+    public function testACacheDirectoryOfTwoLinesStopsTheStartBeforeAnythingIsRemoved(): void
+    {
+        $cache = $this->directory."/cache\n".$this->directory.'/unrelated';
+        $markers = [$cache.'/test/old', $this->directory.'/build/test/old', $this->directory.'/unrelated/test/keep'];
+        array_map(static fn (string $marker) => new Filesystem()->dumpFile($marker, 'kept'), $markers);
+        $this->startEntrypoint(['APP_CACHE_DIR' => $cache, 'APP_BUILD_DIR' => $this->directory.'/build']);
+
+        $this->entrypoint?->wait();
+
+        self::assertNotSame(0, $this->entrypoint?->getExitCode());
+        self::assertStringContainsString('APP_CACHE_DIR', (string) $this->entrypoint?->getErrorOutput());
+        self::assertSame([true, true, true], array_map(is_file(...), $markers), 'a folder was removed although the start was refused');
+        self::assertStringNotContainsString('cache:warmup', $this->calls());
+        self::assertStringNotContainsString('frankenphp run', $this->calls());
+    }
+
+    public function testABuildDirectoryWithACarriageReturnStopsTheStartBeforeAnythingIsRemoved(): void
+    {
+        $build = $this->directory."/build\r";
+        $markers = [$this->directory.'/var/cache/test/old', $build.'/test/old'];
+        array_map(static fn (string $marker) => new Filesystem()->dumpFile($marker, 'kept'), $markers);
+        $this->startEntrypoint(['APP_BUILD_DIR' => $build]);
+
+        $this->entrypoint?->wait();
+
+        self::assertNotSame(0, $this->entrypoint?->getExitCode());
+        self::assertStringContainsString('APP_BUILD_DIR', (string) $this->entrypoint?->getErrorOutput());
+        self::assertSame([true, true], array_map(is_file(...), $markers), 'a folder was removed although the start was refused');
+        self::assertStringNotContainsString('cache:warmup', $this->calls());
+    }
+
+    public function testAnEnvironmentOfTwoLinesStopsTheStartBeforeAnythingIsRemoved(): void
+    {
+        new Filesystem()->dumpFile($this->directory.'/var/cache/test/old', 'kept');
+        $this->startEntrypoint(['APP_ENV' => "test\nstaging"]);
+
+        $this->entrypoint?->wait();
+
+        self::assertNotSame(0, $this->entrypoint?->getExitCode());
+        self::assertStringContainsString('APP_ENV', (string) $this->entrypoint?->getErrorOutput());
+        self::assertFileExists($this->directory.'/var/cache/test/old');
+        self::assertStringNotContainsString('cache:warmup', $this->calls());
+    }
+
+    #[DataProvider('readsThatAreNotTheThreeValues')]
+    public function testAReadThatDoesNotPrintExactlyTheThreeValuesStopsTheStartBeforeAnythingIsRemoved(string $printed): void
+    {
+        $markers = [$this->directory.'/var/cache/test/old', $this->directory.'/shifted/test/keep'];
+        array_map(static fn (string $marker) => new Filesystem()->dumpFile($marker, 'kept'), $markers);
+        $reading = $this->directory.'/reading';
+        new Filesystem()->dumpFile($reading.'/php', "#!/bin/bash\n[[ \$1 == -r ]] && { printf '%s' \"\$PRINTED\"; exit 0; }\nexec ".escapeshellarg($this->stubPrograms().'/php')." \"\$@\"\n");
+        new Filesystem()->chmod($reading.'/php', 0755);
+        $this->startEntrypoint(['PATH' => $reading.':'.$this->stubPrograms().':'.getenv('PATH'), 'PRINTED' => $printed]);
+
+        $this->entrypoint?->wait();
+
+        self::assertNotSame(0, $this->entrypoint?->getExitCode());
+        self::assertSame([true, true], array_map(is_file(...), $markers), 'a folder was removed although the start was refused');
+        self::assertStringNotContainsString('cache:warmup', $this->calls());
+        self::assertStringNotContainsString('frankenphp run', $this->calls());
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function readsThatAreNotTheThreeValues(): iterable
+    {
+        yield 'a fourth line' => ["APP_ENV=test\nAPP_CACHE_DIR=cache\nshifted\nAPP_BUILD_DIR=\n"];
+        yield 'two lines' => ["APP_ENV=test\nAPP_CACHE_DIR=shifted\n"];
+        yield 'three lines without their names' => ["test\n\nshifted\n"];
+        yield 'the values in another order' => ["APP_ENV=test\nAPP_BUILD_DIR=shifted\nAPP_CACHE_DIR=\n"];
     }
 
     public function testADotenvFileThatCannotBeReadStopsTheStartBeforeTheServer(): void

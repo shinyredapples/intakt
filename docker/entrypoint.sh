@@ -70,21 +70,29 @@ kernel_dir() {
 
 # The cache and build folders are removed by hand, because cache:clear kept the image's container after the seed; the warmup runs in a new process so it reads the current keys and project file.
 rebuild_container() {
-    local out env
-    local -a dirs
+    local out env cache build
+    local -a values
+    # A plain assignment, so a read that fails ends the start here, before anything is removed.
     out=$(kernel_values)
-    mapfile -t dirs <<< "$out"
-    env=${dirs[0]:-}
+    mapfile -t values <<< "$out"
+    # The read prints each value behind its name; anything else (a line more or less, another order) would shift a value into another one's place, so nothing is removed then.
+    if [[ ${#values[@]} -ne 3 || ${values[0]} != APP_ENV=* || ${values[1]} != APP_CACHE_DIR=* || ${values[2]} != APP_BUILD_DIR=* ]]; then
+        echo "intakt: the read of the kernel's environment and folders did not print exactly APP_ENV, APP_CACHE_DIR and APP_BUILD_DIR, so its old container cannot be removed" >&2
+        exit 1
+    fi
+    env=${values[0]#APP_ENV=}
+    cache=${values[1]#APP_CACHE_DIR=}
+    build=${values[2]#APP_BUILD_DIR=}
     if [[ -z $env || $env == */* ]]; then
         echo "intakt: could not read the kernel's environment, so its old container cannot be removed" >&2
         exit 1
     fi
-    if [[ -n ${dirs[1]:-} ]]; then rm -rf "$(kernel_dir "${dirs[1]}" "$env")"; else rm -rf "var/cache/$env"; fi
-    [[ -z ${dirs[2]:-} ]] || rm -rf "$(kernel_dir "${dirs[2]}" "$env")"
+    if [[ -n $cache ]]; then rm -rf "$(kernel_dir "$cache" "$env")"; else rm -rf "var/cache/$env"; fi
+    [[ -z $build ]] || rm -rf "$(kernel_dir "$build" "$env")"
     php bin/console cache:warmup --no-interaction
 }
 
-# Prints the kernel's environment, APP_CACHE_DIR and APP_BUILD_DIR, one per line, as bin/console sees them: Symfony Runtime loads the dotenv files with the runtime options bin/console gets (a dotenv_path, an APP_ENV a dotenv file sets), and a value in the environment wins. Built from the options here instead of through vendor/autoload_runtime.php, which takes the project folder from where vendor really lies; the project folder is the working folder, as for bin/console in the image.
+# Prints APP_ENV, APP_CACHE_DIR and APP_BUILD_DIR as NAME=value, one per line, as bin/console sees them: Symfony Runtime loads the dotenv files with the runtime options bin/console gets (a dotenv_path, an APP_ENV a dotenv file sets), and a value in the environment wins. The environment is APP_ENV also when an env_var_name option names another variable, because bin/console passes APP_ENV to the kernel. A value with a line break would read as two values, so it ends the read before anything is printed. Built from the options here instead of through vendor/autoload_runtime.php, which takes the project folder from where vendor really lies; the project folder is the working folder, as for bin/console in the image.
 kernel_values() {
     php -r '
         require "vendor/autoload.php";
@@ -94,7 +102,16 @@ kernel_values() {
         }
         $options += ["project_dir" => getcwd()];
         new Symfony\Component\Runtime\SymfonyRuntime($options);
-        echo $_SERVER[$options["env_var_name"] ?? "APP_ENV"], "\n", $_SERVER["APP_CACHE_DIR"] ?? "", "\n", $_SERVER["APP_BUILD_DIR"] ?? "", "\n";
+        $lines = "";
+        foreach (["APP_ENV", "APP_CACHE_DIR", "APP_BUILD_DIR"] as $name) {
+            $value = $_SERVER[$name] ?? "";
+            if (!is_string($value) || false !== strpbrk($value, "\r\n")) {
+                fwrite(STDERR, "intakt: $name holds a line break, so the folder it names cannot be read and nothing is removed\n");
+                exit(1);
+            }
+            $lines .= "$name=$value\n";
+        }
+        echo $lines;
     '
 }
 
