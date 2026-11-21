@@ -11,7 +11,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversNothing]
 final class TrendsTileStylesTest extends TestCase
 {
-    // A tip anchored at its label's left edge runs past a phone's right edge from the third tile of a row (review of #3198).
+    // Because a tip anchored at its label's left edge runs past a phone's right edge from the third tile of a row (review of #3198).
     public function testATilesTooltipIsAnchoredToTheTileGridNotToItsLabel(): void
     {
         $rules = $this->rulesOf($this->sheetOutsideThePhoneRules());
