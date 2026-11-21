@@ -115,7 +115,7 @@ final class HighlightsWorkflowTest extends TestCase
         self::assertArrayNotHasKey('GH_TOKEN', $build['env'] ?? []);
         self::assertCount(1, $logins);
         self::assertSame(['DOCKERHUB_USERNAME' => '${{ secrets.DOCKERHUB_USERNAME }}', 'DOCKERHUB_TOKEN' => '${{ secrets.DOCKERHUB_TOKEN }}'], $logins[0]['env'] ?? null);
-        self::assertSame([], $this->secretReferencesBesidesTheLogin($steps));
+        self::assertSame([], $this->secretReferencesBesidesTheLogin($workflow));
     }
 
     public function testASecretInBracketNotationIsFoundAsWellAsOneInDotNotation(): void
@@ -123,14 +123,14 @@ final class HighlightsWorkflowTest extends TestCase
         $login = ['run' => self::LOGIN, 'env' => ['DOCKERHUB_USERNAME' => '${{ secrets.DOCKERHUB_USERNAME }}', 'DOCKERHUB_TOKEN' => '${{ secrets.DOCKERHUB_TOKEN }}', 'EXTRA' => '${{ secrets[\'OTHER\'] }}']];
         $other = ['run' => 'echo "${{ secrets.ANOTHER }}"'];
 
-        self::assertSame(["secrets['OTHER']", 'secrets.ANOTHER'], $this->secretReferencesBesidesTheLogin([$login, $other]));
+        self::assertSame(["secrets['OTHER']", 'secrets.ANOTHER'], $this->secretReferencesBesidesTheLogin($this->withBuildSteps([$login, $other])));
     }
 
     public function testASecretReferenceInAnyLetterCaseIsFound(): void
     {
         $steps = [['env' => ['EXTRA' => '${{ SECRETS[\'EXTRA\'] }}', 'MORE' => '${{ Secrets.MORE }}']]];
 
-        self::assertSame(["SECRETS['EXTRA']", 'Secrets.MORE'], $this->secretReferencesBesidesTheLogin($steps));
+        self::assertSame(["SECRETS['EXTRA']", 'Secrets.MORE'], $this->secretReferencesBesidesTheLogin($this->withBuildSteps($steps)));
     }
 
     public function testTheWholeSecretsContextIsFoundAsAnArgumentAsAnObjectAndInACondition(): void
@@ -140,7 +140,7 @@ final class HighlightsWorkflowTest extends TestCase
             ['if' => "contains(toJSON(SECRETS), 'x')", 'run' => 'true'],
         ];
 
-        self::assertSame(['toJSON(secrets)', 'secrets', "contains(toJSON(SECRETS), 'x')"], $this->secretReferencesBesidesTheLogin($steps));
+        self::assertSame(['toJSON(secrets)', 'secrets', "contains(toJSON(SECRETS), 'x')"], $this->secretReferencesBesidesTheLogin($this->withBuildSteps($steps)));
     }
 
     public function testTheWordSecretsOutsideAnExpressionOrAsPartOfAnotherNameIsNoReference(): void
@@ -152,7 +152,38 @@ final class HighlightsWorkflowTest extends TestCase
             'run' => 'echo "no secrets here"',
         ]];
 
-        self::assertSame([], $this->secretReferencesBesidesTheLogin($steps));
+        self::assertSame([], $this->secretReferencesBesidesTheLogin($this->withBuildSteps($steps)));
+    }
+
+    public function testASecretAnywhereOutsideTheStepsIsFound(): void
+    {
+        $workflow = ['env' => ['TOP' => '${{ secrets.TOP }}'], 'jobs' => ['build' => [
+            'steps' => [['uses' => 'x', 'with' => ['token' => '${{ secrets.WITH }}']]],
+            'if' => "secrets.CONDITION != ''",
+            'env' => ['JOB' => '${{ secrets.JOB }}'],
+            'container' => ['image' => 'x', 'credentials' => ['password' => '${{ secrets.CONTAINER }}']],
+            'services' => ['db' => ['env' => ['PASSWORD' => '${{ secrets.SERVICE }}']]],
+        ]]];
+
+        self::assertSame(
+            ['secrets.TOP', 'secrets.WITH', "secrets.CONDITION != ''", 'secrets.JOB', 'secrets.CONTAINER', 'secrets.SERVICE'],
+            $this->secretReferencesBesidesTheLogin($workflow),
+        );
+    }
+
+    public function testASecretAfterAQuotedClosingDelimiterIsFound(): void
+    {
+        $steps = [['run' => "echo \${{ format('}}{0}', secrets.EXTRA) }} and \${{ 'it''s }}' }}"]];
+
+        self::assertSame(["format('}}{0}', secrets.EXTRA)"], $this->secretReferencesBesidesTheLogin($this->withBuildSteps($steps)));
+    }
+
+    public function testTheLoginValuesAreAllowedOnlyInTheBuildJob(): void
+    {
+        $login = ['run' => self::LOGIN, 'env' => ['DOCKERHUB_USERNAME' => '${{ secrets.DOCKERHUB_USERNAME }}', 'DOCKERHUB_TOKEN' => '${{ secrets.DOCKERHUB_TOKEN }}']];
+        $workflow = ['jobs' => ['build' => ['steps' => [$login]], 'publish' => ['steps' => [$login]]]];
+
+        self::assertSame(['secrets.DOCKERHUB_USERNAME', 'secrets.DOCKERHUB_TOKEN'], $this->secretReferencesBesidesTheLogin($workflow));
     }
 
     public function testTheAssembledPageReadsTheRecordedAnswersAsTheContainerSeesThem(): void
@@ -165,48 +196,85 @@ final class HighlightsWorkflowTest extends TestCase
         self::assertNotSame(0, $this->runPageWrite("# Highlights\n", 'sed() { return 1; }; ')['status']);
     }
 
-    // Only the login's two values are dropped, so any other use of the secrets context, in any form, still counts.
+    // Only the build job's login loses its two values, so any other use of the secrets context, anywhere in the workflow, counts.
+    /**
+     * @return list<string>
+     */
+    private function secretReferencesBesidesTheLogin(mixed $node, string $path = ''): array
+    {
+        if (is_string($node)) {
+            return array_values(array_filter($this->expressions($node, str_ends_with($path, '/if')), $this->readsSecrets(...)));
+        }
+
+        if (!is_array($node)) {
+            return [];
+        }
+
+        if (1 === preg_match('#^/jobs/build/steps/\d+$#', $path) && self::LOGIN === ($node['run'] ?? null) && is_array($node['env'] ?? null)) {
+            unset($node['env']['DOCKERHUB_USERNAME'], $node['env']['DOCKERHUB_TOKEN']);
+        }
+
+        $references = [];
+        foreach ($node as $key => $child) {
+            array_push($references, ...$this->secretReferencesBesidesTheLogin($child, $path.'/'.$key));
+        }
+
+        return $references;
+    }
+
     /**
      * @param list<array<string, mixed>> $steps
      *
-     * @return list<string>
+     * @return array<string, mixed>
      */
-    private function secretReferencesBesidesTheLogin(array $steps): array
+    private function withBuildSteps(array $steps): array
     {
-        $withoutTheLoginValues = array_map(static function (array $step): array {
-            if (self::LOGIN === ($step['run'] ?? null) && is_array($step['env'] ?? null)) {
-                unset($step['env']['DOCKERHUB_USERNAME'], $step['env']['DOCKERHUB_TOKEN']);
-            }
-
-            return $step;
-        }, $steps);
-        $references = [];
-        array_walk_recursive($withoutTheLoginValues, static function (mixed $value, int|string $key) use (&$references): void {
-            if (is_string($value)) {
-                array_push($references, ...array_filter(self::expressions($value, 'if' === $key), self::readsSecrets(...)));
-            }
-        });
-
-        return $references;
+        return ['jobs' => ['build' => ['steps' => $steps]]];
     }
 
     // GitHub reads an if: value as an expression even without ${{ }}, so it is scanned whole; other values only inside it.
     /**
      * @return list<string>
      */
-    private static function expressions(string $value, bool $isCondition): array
+    private function expressions(string $value, bool $isCondition): array
     {
         if ($isCondition && !str_contains($value, '${{')) {
             return [trim($value)];
         }
 
-        preg_match_all('/\$\{\{(.*?)\}\}/s', $value, $matches);
+        $expressions = [];
+        $offset = 0;
+        while (false !== ($start = strpos($value, '${{', $offset))) {
+            $end = $this->closingDelimiter($value, $start + 3);
+            $expressions[] = trim(substr($value, $start + 3, $end - $start - 3));
+            $offset = min($end + 2, strlen($value));
+        }
 
-        return array_map(trim(...), $matches[1]);
+        return $expressions;
+    }
+
+    // GitHub ends an expression at the first }} outside a '...' literal ('' in one is a quote), so a quoted }} cannot end it.
+    private function closingDelimiter(string $value, int $from): int
+    {
+        $quoted = false;
+        $length = strlen($value);
+        for ($at = $from; $at < $length; ++$at) {
+            if ("'" === $value[$at]) {
+                $quoted = !$quoted;
+
+                continue;
+            }
+
+            if (!$quoted && '}}' === substr($value, $at, 2)) {
+                return $at;
+            }
+        }
+
+        return $length;
     }
 
     // Contexts are case-insensitive and string literals are dropped first, so only the context itself counts, not a word.
-    private static function readsSecrets(string $expression): bool
+    private function readsSecrets(string $expression): bool
     {
         $withoutLiterals = (string) preg_replace("/'(?:[^']|'')*'/", "''", $expression);
 
