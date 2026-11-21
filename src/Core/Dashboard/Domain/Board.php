@@ -91,6 +91,29 @@ final readonly class Board
         return array_values(array_diff(array_unique($projects), $busy));
     }
 
+    // From the counts over every project, so the project filter never hides or shows a column.
+    /**
+     * @return list<BoardColumn>
+     */
+    public function shownColumns(): array
+    {
+        return $this->splitColumns()['shown'];
+    }
+
+    /**
+     * @return list<BoardColumn>
+     */
+    public function comingNext(): array
+    {
+        return $this->splitColumns()['folded'];
+    }
+
+    // The newest card while the board is at rest (every card Done, no task in flight), so a quiet phone home can open it instead of an empty Waiting on you (#3142).
+    public function newestReviewAtRest(): ?Review
+    {
+        return [] !== $this->cards && MascotPose::Asleep === $this->mascot() ? $this->cards[0] : null;
+    }
+
     // Null while the column holds a card, because only an empty column says what lands there and when (#2731).
     public function emptyLineOf(BoardColumn $column): ?string
     {
@@ -113,7 +136,7 @@ final readonly class Board
         return $column->startsCollapsed();
     }
 
-    // Done is the last of nine columns and lies past the edge of a laptop's board, so opening it alone is not enough to show the finished review on arrival.
+    // Done is the last column and can lie past the edge of a narrow board, so opening it alone is not enough to show the finished review on arrival.
     public function startsScrolledToDone(): bool
     {
         return $this->everyColumnButDoneIsEmpty() && 0 < $this->countOf(BoardColumn::Done);
@@ -131,6 +154,20 @@ final readonly class Board
     private function tasksInFlight(): array
     {
         return array_values(array_filter($this->tasks, static fn (BuildTask $task): bool => $task->inFlight));
+    }
+
+    // One pass for both lists, because a column the board shows must never also be named in the Coming next line.
+    /**
+     * @return array{shown: list<BoardColumn>, folded: list<BoardColumn>}
+     */
+    private function splitColumns(): array
+    {
+        $split = ['shown' => [], 'folded' => []];
+        foreach (BoardColumn::cases() as $column) {
+            $split[$column->foldsIntoComingNext($this->countOf($column)) ? 'folded' : 'shown'][] = $column;
+        }
+
+        return $split;
     }
 
     private function everyColumnButDoneIsEmpty(): bool
