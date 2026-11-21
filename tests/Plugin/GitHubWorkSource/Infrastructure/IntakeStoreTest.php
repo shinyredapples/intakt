@@ -324,7 +324,7 @@ final class IntakeStoreTest extends KernelTestCase
             $second->commit();
 
             self::assertInstanceOf(ProjectHeldByAnotherWriter::class, $held);
-            self::assertSame('Another writer holds the intake rows of project "alpha", so this listing was not written.', $held->getMessage());
+            self::assertSame('Another writer holds the intake rows of project "alpha" and has not committed them.', $held->getMessage());
             self::assertInstanceOf(RetryableException::class, $held->getPrevious());
             self::assertSame('winner', $loser->syncStateOf('alpha')->validator);
             self::assertSame([], $loser->issuesOf('alpha'));

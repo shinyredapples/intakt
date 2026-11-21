@@ -6,6 +6,7 @@ namespace Intakt\Tests\Plugin\GitHubWorkSource\Infrastructure;
 
 use Doctrine\Common\EventManager;
 use Doctrine\DBAL\DriverManager;
+use Doctrine\DBAL\Exception\RetryableException;
 use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Events;
@@ -406,12 +407,73 @@ final class CompleteListingTest extends KernelTestCase
             $second->commit();
 
             self::assertNull($plan);
-            self::assertSame(['Another writer holds the intake rows of project "alpha", so this listing was not written.'], $this->shortListingReasons());
+            self::assertSame(['Another writer holds the intake rows of project "alpha" and has not committed them.'], $this->shortListingReasons());
             self::assertSame([], $this->store->issuesOf('alpha'));
             self::assertSame('winner', $this->store->syncStateOf('alpha')->validator);
         } finally {
             $second->close();
             $first->close();
+            unlink($file);
+        }
+    }
+
+    public function testASyncStateReadRefusedByAnotherWorkersPendingCommitLeavesTheListingShortWithoutAnException(): void
+    {
+        $this->withAPendingCommit(function (): void {
+            $this->reads->lists([Issues::task(7)]);
+
+            self::assertNull($this->listingOver($this->reads, $this->histories)->planOf('alpha'));
+            self::assertSame(['Another writer holds the intake rows of project "alpha" and has not committed them.'], $this->shortListingReasons());
+        }, beforeTheListing: true);
+    }
+
+    public function testARowReadRefusedByAnotherWorkersPendingCommitDuringTheListingLeavesTheListingShortWithoutAnException(): void
+    {
+        $this->withAPendingCommit(function (callable $pend): void {
+            $this->reads->lists([Issues::task(7)]);
+            $this->reads->during = $pend;
+
+            self::assertNull($this->listingOver($this->reads, $this->histories)->planOf('alpha'));
+            self::assertSame(['Another writer holds the intake rows of project "alpha" and has not committed them.'], $this->shortListingReasons());
+        }, beforeTheListing: false);
+    }
+
+    // A reader keeps its shared lock open, so the writer's commit is refused and leaves its pending lock, which refuses every new read of the file until it commits.
+    private function withAPendingCommit(callable $test, bool $beforeTheListing): void
+    {
+        $shared = self::getContainer()->get('doctrine.orm.entity_manager');
+        self::assertInstanceOf(EntityManagerInterface::class, $shared);
+        $file = (string) tempnam(sys_get_temp_dir(), 'intake');
+        $options = ['driver' => 'pdo_sqlite', 'path' => $file];
+        $intake = DriverManager::getConnection($options);
+        $reader = DriverManager::getConnection($options);
+        $writer = DriverManager::getConnection($options);
+        try {
+            $manager = new EntityManager($intake, $shared->getConfiguration(), new EventManager());
+            new SchemaTool($manager)->createSchema($manager->getMetadataFactory()->getAllMetadata());
+            $intake->executeStatement('PRAGMA busy_timeout=0');
+            $writer->executeStatement('PRAGMA busy_timeout=0');
+            $this->store = new IntakeStore($manager);
+            $pend = static function () use ($reader, $writer): void {
+                $reader->beginTransaction();
+                $reader->fetchOne('SELECT COUNT(*) FROM work_source_validator');
+                $writer->executeStatement('BEGIN IMMEDIATE');
+                $writer->executeStatement("INSERT INTO work_source_validator (project, validator, generation) VALUES ('alpha', 'winner', 1)");
+                try {
+                    $writer->executeStatement('COMMIT');
+                    self::fail('The commit was expected to wait for the reader.');
+                } catch (RetryableException) {
+                }
+            };
+            if ($beforeTheListing) {
+                $pend();
+            }
+
+            $test($pend);
+        } finally {
+            $intake->close();
+            $writer->close();
+            $reader->close();
             unlink($file);
         }
     }

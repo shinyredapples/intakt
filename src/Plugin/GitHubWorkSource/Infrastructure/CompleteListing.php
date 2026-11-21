@@ -43,6 +43,16 @@ final readonly class CompleteListing
     #[NoDiscard]
     public function planOf(string $project): ?IntakePlan
     {
+        try {
+            return $this->syncOf($project);
+        } catch (ProjectHeldByAnotherWriter $held) {
+            // The other writer has not committed, so neither listing is the stored one yet: nothing is written and the next tick reads what it committed.
+            return $this->shortListing($project, $held);
+        }
+    }
+
+    private function syncOf(string $project): ?IntakePlan
+    {
         $readBefore = $this->store->syncStateOf($project);
         try {
             $listing = $this->reads->listOpen($project, $readBefore->validator);
@@ -57,14 +67,7 @@ final readonly class CompleteListing
         }
 
         $listed = new ListingRows($rows, $listing->isUnchanged() ? $readBefore->validator : $listing->validator);
-        try {
-            $written = $this->store->recordIfStill($project, $readBefore, $listed);
-        } catch (ProjectHeldByAnotherWriter $held) {
-            // The other writer has not committed, so neither listing is the stored one yet: nothing is written and the next tick reads what it committed.
-            return $this->shortListing($project, $held);
-        }
-
-        return $written ? $this->planOver($project, $rows) : $this->planOverTheNewerRows($project);
+        return $this->store->recordIfStill($project, $readBefore, $listed) ?$this->planOver($project, $rows) : $this->planOverTheNewerRows($project);
     }
 
     // An unchanged listing is answered from the stored rows, and so is the history of an item whose update time stands; the rest is taken from the listing, because the milestone due date changes without moving it.

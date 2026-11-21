@@ -12,6 +12,6 @@ final class ProjectHeldByAnotherWriter extends RuntimeException
 {
     public static function of(string $project, Throwable $refusal): self
     {
-        return new self(sprintf('Another writer holds the intake rows of project "%s", so this listing was not written.', $project), 0, $refusal);
+        return new self(sprintf('Another writer holds the intake rows of project "%s" and has not committed them.', $project), 0, $refusal);
     }
 }

@@ -35,12 +35,29 @@ final readonly class IntakeStore
      */
     public function issuesOf(string $project): array
     {
-        return array_values($this->storedIssuesOf($this->ownManager(), $project));
+        return $this->readOf($project, fn (): array => array_values($this->storedIssuesOf($this->ownManager(), $project)));
     }
 
     public function syncStateOf(string $project): SyncState
     {
-        return $this->ownManager()->find(IntakeValidator::class, $project)?->state() ?? SyncState::neverSynced();
+        return $this->readOf($project, fn (): SyncState => $this->ownManager()->find(IntakeValidator::class, $project)?->state() ?? SyncState::neverSynced());
+    }
+
+    // Another worker's commit under way holds a pending lock that refuses even a read, and nothing says yet whether it stores a newer listing.
+    /**
+     * @template T
+     *
+     * @param callable(): T $read
+     *
+     * @return T
+     */
+    private function readOf(string $project, callable $read): mixed
+    {
+        try {
+            return $read();
+        } catch (RetryableException $refusal) {
+            throw ProjectHeldByAnotherWriter::of($project, $refusal);
+        }
     }
 
     // Written only while the stored generation is still the one read before the listing, because otherwise another worker stored a newer listing meanwhile and these rows would replace it with an older one.
@@ -87,12 +104,7 @@ final readonly class IntakeStore
 
     private function lostAfter(UniqueConstraintViolationException|RetryableException $failure, string $project, SyncState $readBefore): false
     {
-        try {
-            $stored = $this->syncStateOf($project);
-        } catch (RetryableException $refusal) {
-            // Another worker's commit is under way and its pending lock refuses even the read, so nothing says yet whether it stores a newer listing.
-            throw ProjectHeldByAnotherWriter::of($project, $refusal);
-        }
+        $stored = $this->syncStateOf($project);
 
         // The first sync of a project finds no row to lock, so a worker that commits the row after it was read makes the insert collide (or, on SQLite in WAL mode, the stale read snapshot refuses the write). It loses only when the newer listing is really stored.
         if ($stored->generation !== $readBefore->generation) {
@@ -127,12 +139,14 @@ final readonly class IntakeStore
      */
     public function failuresOf(string $project): array
     {
-        $failures = [];
-        foreach ($this->rowsOf($this->ownManager(), TaskFailure::class, $project) as $failure) {
-            $failures[$failure->number()] = $failure->reason();
-        }
+        return $this->readOf($project, function () use ($project): array {
+            $failures = [];
+            foreach ($this->rowsOf($this->ownManager(), TaskFailure::class, $project) as $failure) {
+                $failures[$failure->number()] = $failure->reason();
+            }
 
-        return $failures;
+            return $failures;
+        });
     }
 
     /**
