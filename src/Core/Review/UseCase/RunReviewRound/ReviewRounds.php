@@ -125,7 +125,27 @@ final readonly class ReviewRounds
 
         $head = $round->identity()->commits->head;
 
-        return array_any($later, static fn (ReviewRound $other): bool => $other->identity()->commits->head->hash === $head->hash);
+        return array_any($later, static fn (ReviewRound $other): bool => $other->identity()->commits->head->hash === $head->hash)
+            || $this->canonicalRoundJudgedAt($round, $head->hash);
+    }
+
+    // A round left under an old spelling predates every round of the canonical sequence, whose numbers do not compare with its own, so any judged canonical round of the same head supersedes it.
+    private function canonicalRoundJudgedAt(ReviewRound $round, string $head): bool
+    {
+        $canonical = ChangeAddress::canonical($round->change());
+
+        if ($canonical === $round->change()) {
+            return false;
+        }
+
+        /** @var list<ReviewRound> $rounds */
+        $rounds = $this->entities->createQuery(sprintf('SELECT r FROM %s r WHERE r.subject.project = :project AND r.change.change = :change AND r.state = :judged', ReviewRound::class))
+            ->setParameter('project', $round->project())
+            ->setParameter('change', $canonical)
+            ->setParameter('judged', RoundState::Judged->value)
+            ->getResult();
+
+        return array_any($rounds, static fn (ReviewRound $other): bool => $other->identity()->commits->head->hash === $head);
     }
 
     // In canonical form, because the watcher names the pull request as the forge lists it and a round stores it canonically (StoredFindings::openRound()). By round number as judgedAfter() orders them, not by id, because an id follows a clock that can go back and would pick a round the publication then drops as superseded.
@@ -145,14 +165,18 @@ final readonly class ReviewRounds
     // Only when the canonical sequence never judged this head, because a round that migration Version20261122100000 left under another spelling is the only verdict the head has; numbers of those sequences do not compare with each other, so the highest number decides among them and an id never does.
     private function judgedUnderAnOldSpelling(string $project, string $change, string $head): ?ReviewRound
     {
+        $canonical = ChangeAddress::canonical($change);
+
         /** @var list<ReviewRound> $rounds */
-        $rounds = $this->entities->createQuery(sprintf('SELECT r FROM %s r WHERE r.subject.project = :project AND LOWER(r.change.change) = :change AND r.state = :judged ORDER BY r.change.number DESC', ReviewRound::class))
+        $rounds = $this->entities->createQuery(sprintf('SELECT r FROM %s r WHERE r.subject.project = :project AND r.change.change != :change AND r.state = :judged ORDER BY r.change.number DESC', ReviewRound::class))
             ->setParameter('project', $project)
-            ->setParameter('change', strtolower(ChangeAddress::canonical($change)))
+            ->setParameter('change', $canonical)
             ->setParameter('judged', RoundState::Judged->value)
             ->getResult();
 
-        return array_find($rounds, static fn (ReviewRound $round): bool => $round->identity()->commits->head->hash === $head);
+        // Matched by the canonical form of the stored address, as the migration grouped them, so an alias with a suffix is found and a local branch that differs only in case is not.
+        return array_find($rounds, static fn (ReviewRound $round): bool => $round->identity()->commits->head->hash === $head
+            && ChangeAddress::canonical($round->change()) === $canonical);
     }
 
     // Compared as stored, as judgedAfter() compares them, so the rounds come as one numbered sequence.

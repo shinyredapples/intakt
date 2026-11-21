@@ -46,6 +46,49 @@ final class HandedOverRoundLookupTest extends KernelTestCase
         self::assertSame($legacy, $fixture->transactions()->latestJudgedAt('alpha', self::PULL, SampleIdentity::HEAD)?->id()->toRfc4122());
     }
 
+    public function testACanonicalJudgmentSupersedesAQueuedLegacyVerdictForTheSameHead(): void
+    {
+        $fixture = new RoundFixture(self::getContainer());
+        $legacy = $this->judgeRound($fixture, 'https://github.com/acme/widgets/pull/8', SampleIdentity::HEAD);
+        $this->renameChange($fixture, 'https://github.com/acme/widgets/pull/8', self::UPPER);
+        $this->judgeRound($fixture, self::PULL, SampleIdentity::NEW_HEAD);
+        $fixture->entities->clear();
+        $rounds = $fixture->transactions();
+        self::assertSame($legacy, $rounds->latestJudgedAt('alpha', self::PULL, SampleIdentity::HEAD)?->id()->toRfc4122());
+
+        $canonical = $this->judgeRound($fixture, self::PULL, SampleIdentity::HEAD);
+
+        self::assertSame($canonical, $rounds->latestJudgedAt('alpha', self::PULL, SampleIdentity::HEAD)?->id()->toRfc4122());
+        self::assertTrue($rounds->judgedAfter($fixture->round($legacy)));
+    }
+
+    public function testAStoredAliasWithASuffixStillSuppliesTheOnlyVerdictForTheListedHead(): void
+    {
+        $fixture = new RoundFixture(self::getContainer());
+        $legacy = $this->judgeRound($fixture, 'https://github.com/acme/widgets/pull/8', SampleIdentity::HEAD);
+        $this->renameChange($fixture, 'https://github.com/acme/widgets/pull/8', self::UPPER.'/?q=1#review');
+        $this->judgeRound($fixture, self::PULL, SampleIdentity::NEW_HEAD);
+        $fixture->entities->clear();
+
+        self::assertSame($legacy, $fixture->transactions()->latestJudgedAt('alpha', self::PULL, SampleIdentity::HEAD)?->id()->toRfc4122());
+    }
+
+    public function testASeparateLocalBranchDifferingOnlyInCaseDoesNotSupplyAVerdict(): void
+    {
+        $fixture = new RoundFixture(self::getContainer());
+        $this->judgeRound($fixture, 'Feature', SampleIdentity::HEAD);
+        $fixture->entities->clear();
+
+        self::assertNull($fixture->transactions()->latestJudgedAt('alpha', 'feature', SampleIdentity::HEAD));
+    }
+
+    private function renameChange(RoundFixture $fixture, string $from, string $to): void
+    {
+        foreach (['change_findings', 'review_round'] as $table) {
+            $fixture->entities->getConnection()->executeStatement("UPDATE $table SET change_ref = ? WHERE change_ref = ?", [$to, $from]);
+        }
+    }
+
     private function judgeRound(RoundFixture $fixture, string $change, string $head): string
     {
         $sent = count($fixture->bus->messages);
