@@ -73,6 +73,8 @@ final class RoundReviewer implements HasPlace
         #[ORM\JoinColumn(nullable: false)]
         private readonly ReviewRound $round,
         PanelReviewer $member,
+        #[ORM\Column(name: 'panel_position', options: ['default' => 0])]
+        private readonly int $position,
     ) {
         $this->roleName = $member->role->name;
         $this->rolePrompt = $member->role->prompt;

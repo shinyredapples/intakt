@@ -46,6 +46,22 @@ final class InterruptedReviewerRollbackTest extends TestCase
         );
     }
 
+    public function testMigratingPutsAStoredReviewerAtTheFirstPanelPosition(): void
+    {
+        $db = $this->migratedTable();
+
+        self::assertSame('0', $db->fetchOne('SELECT CAST(panel_position AS TEXT) FROM round_reviewer WHERE id = 1'));
+    }
+
+    public function testRollingBackDropsThePanelPosition(): void
+    {
+        $db = $this->migratedTable();
+
+        $this->rollBack($db);
+
+        self::assertSame(['id', 'state'], $db->fetchFirstColumn("SELECT name FROM pragma_table_info('round_reviewer') ORDER BY cid"));
+    }
+
     private function migratedTable(): Connection
     {
         $db = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'memory' => true]);

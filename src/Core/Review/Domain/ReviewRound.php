@@ -25,8 +25,8 @@ final class ReviewRound implements HasPlace
     // The properties are not readonly because the lazy proxy a reviewer holds for its round sets them again when it loads.
     /** @var Collection<int, RoundReviewer> */
     #[ORM\OneToMany(targetEntity: RoundReviewer::class, mappedBy: 'round', cascade: ['persist'])]
-    // Ordered by id (time-ordered UUIDv7, the order the panel added them), because PostgreSQL returns unordered rows in storage order, which an update changes.
-    #[ORM\OrderBy(['id' => 'ASC'])]
+    // Ordered by panel position, because PostgreSQL returns unordered rows in storage order and a clock step can put a later UUIDv7 first; the id breaks ties of rows stored before the position.
+    #[ORM\OrderBy(['position' => 'ASC', 'id' => 'ASC'])]
     private Collection $reviewers;
 
     #[ORM\Column(length: 16, enumType: RoundState::class)]
@@ -113,7 +113,7 @@ final class ReviewRound implements HasPlace
 
     public function addReviewer(UuidV7 $id, PanelReviewer $member): void
     {
-        $this->reviewers->add(new RoundReviewer($id, $this, $member));
+        $this->reviewers->add(new RoundReviewer($id, $this, $member, $this->reviewers->count()));
     }
 
     public function id(): Uuid
