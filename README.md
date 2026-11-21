@@ -9,11 +9,14 @@
 
 Your coding agent says it is done. Intakt tells you whether to believe it.
 
-A panel of reviewers on models from two AI labs reviews the change, and a judge marks every finding against the task. Your own agent runs this loop over MCP until the verdict is clean. On the [review bench](#review-bench) the panel found 11 of 15 planted defects (measured, 2026-11-16). Building it got [12 fixes merged upstream](#found-and-fixed-upstream) in Symfony, Symfony AI and Doctrine.
+A panel of reviewers on models from two AI labs reviews the change, and a judge marks every finding against the task. Your own agent runs this loop over MCP until the verdict is clean. On the [review bench](#review-bench) the panel found 11 of 15 planted defects (measured, 2026-11-16). Building it got [12 fixes (11 pull requests) merged upstream](#found-and-fixed-upstream) in Symfony, Symfony AI and Doctrine.
 
 <!-- VIDEO THUMBNAIL: put the linked thumbnail of the demo video here once it is uploaded (#3142). -->
 
-![The dashboard's review page for the sample change: the reviewers' verdicts, the findings with the judge's call on each, and the tokens per round, measured](docs/assets/dashboard-review.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/dashboard-review-dark.png">
+  <img src="docs/assets/dashboard-review.png" alt="The dashboard's review page for the sample change: the verdict card first, Changes requested with three things to fix, each with its priority and file and line, then what the change does and the tokens it took" width="760" height="475">
+</picture>
 
 PHP 8.5, Symfony AI · [Status](#status): what works today and what is planned · [Guides](docs/guide/README.md) · [Showcase](docs/showcase/README.md) · [For judges](docs/judges.md) · [Hackathon](docs/hackathon.md) · [Releases](https://github.com/shinyredapples/intakt/releases)
 
@@ -26,7 +29,7 @@ docker compose up -d --wait
 
 No key? Open http://localhost:7781/demo and press **Play the demo run**: the recording of a real review of the sample change plays onto the dashboard without calling any model ([details](docs/user/README.md#playing-the-demo-run-in-the-dashboard)).
 
-With your agent: the clone's `.mcp.json` connects Claude Code. Run `export INTAKT_MCP_TOKEN=<token from the first-run page>`, start `claude` in the clone, install the [skill](skills/intakt-review/README.md) and say *intakt review the demo* ([details](docs/user/mcp.md)).
+With your agent: the clone's `.mcp.json` connects Claude Code. The review is live, so it needs a key first (see *With a key* below). Run `export INTAKT_MCP_TOKEN=<token from the first-run page>`, start `claude` in the clone, approve the `intakt` MCP server when Claude Code asks, install the [skill](skills/intakt-review/README.md) and say *intakt review the demo* ([details](docs/user/mcp.md)).
 
 With a key: paste one provider key or Hugging Face token on http://localhost:7781/setup, run `docker compose restart intakt`, then press **Start the first review** ([Hugging Face details](docs/user/README.md#running-the-demo-on-a-hugging-face-token)). Or from the terminal: `docker compose exec intakt php bin/console intakt:demo` prints the verdict ([read it](docs/user/README.md#reading-a-verdict)). Calls are billed to the key's owner. The [demo walkthrough](docs/guide/demo-walkthrough.md) retells the run in plain words; [the review flow](docs/architecture/review-flow.md) draws it inside.
 
