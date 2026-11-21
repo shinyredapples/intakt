@@ -102,8 +102,7 @@ final class BoardColumnMapTest extends DashboardPageTestCase
         self::assertSame(array_fill(0, count(self::COLUMNS), '-1'), $page->filter('.board > section.col')->each(static fn (Crawler $column): string => (string) $column->attr('tabindex')));
     }
 
-    // Hide sits in the head above the cards, so after a jump to an open Done the next Tab reaches Hide and the one after it the first card, in the order the reader sees; the strip is left out because the stylesheet hides it on an open column.
-    // This reads the markup order only; the keyboard walk-through in the pull request's Evidence (E3) shows the real Tab order in a browser.
+    // Hide sits in the head above the cards, so after a jump to an open Done the next Tab reaches Hide and the one after it the first card, in the order the reader sees; the strip is left out because the stylesheet hides it on an open column. It reads the markup order only, because a test without a browser cannot press Tab; the keyboard walk-through of #1460 (E3) shows the real Tab order.
     public function testAfterAJumpToAnOpenDoneTheNextTabReachesHideAndThenItsFirstCard(): void
     {
         $this->ledger->startRoundOf('42', 'round-1', 1);
