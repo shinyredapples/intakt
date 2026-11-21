@@ -8,6 +8,7 @@ use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Budget\Contract\Prices;
 use Intakt\Core\Budget\Infrastructure\ConfiguredPrices;
 use Intakt\Core\Dashboard\Domain\JudgeCall;
+use Intakt\Core\Dashboard\Domain\QueuedRound;
 use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\ReviewerOutcome;
@@ -17,6 +18,7 @@ use Intakt\Core\Dashboard\Domain\RoundFinding;
 use Intakt\Core\Dashboard\Domain\RoundPlace;
 use Intakt\Core\Dashboard\Domain\RoundStart;
 use Intakt\Core\Dashboard\Infrastructure\LedgerPayload;
+use Intakt\Core\Dashboard\Infrastructure\LedgerQueuedRounds;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviews;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
@@ -69,6 +71,8 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 #[UsesClass(ReplayMarks::class)]
 #[UsesClass(ReplayedStart::class)]
 #[UsesClass(ReviewOutcome::class)]
+#[UsesClass(QueuedRound::class)]
+#[UsesClass(LedgerQueuedRounds::class)]
 final class ShowReviewControllerTest extends DashboardPageTestCase
 {
     public function testTheReviewPageShowsEveryRoundOfTheChangeInOrder(): void
@@ -665,6 +669,28 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
         self::assertCount(1, $crawler->filter('section.round'));
+    }
+
+    public function testARoundTheWatcherQueuedButNoWorkerStartedShowsAsWaitingToStart(): void
+    {
+        $round = $this->ledger->queueRoundOf('alpha', '7', 'abc123');
+
+        $page = $this->browser->request('GET', '/reviews/'.$round);
+
+        self::assertResponseIsSuccessful();
+        self::assertSame('Review of pull request 7 in alpha', $page->filter('main h1')->text());
+        self::assertSame('Waiting to start: the watcher queued this round and no worker has started it yet.', $page->filter('main .queued')->text());
+    }
+
+    public function testARoundQueuedAndThenMarkedStaleIsNotFound(): void
+    {
+        $round = $this->ledger->queueRoundOf('alpha', '7', 'abc123');
+        $this->ledger->markVerdictsStale('alpha', '7', $round);
+
+        $this->browser->request('GET', '/reviews/'.$round);
+
+        self::assertResponseStatusCodeSame(404);
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The ledger holds no review with this round."', NotFoundHttpException::class));
     }
 
     public function testARoundTheLedgerNeverStartedIsNotFound(): void

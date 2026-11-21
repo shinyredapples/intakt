@@ -12,11 +12,14 @@ use Intakt\Core\Dashboard\Domain\Board;
 use Intakt\Core\Dashboard\Domain\ChartBar;
 use Intakt\Core\Dashboard\Domain\ChartScale;
 use Intakt\Core\Dashboard\Domain\JudgeOutcomes;
+use Intakt\Core\Dashboard\Domain\QueuedRound;
 use Intakt\Core\Dashboard\Domain\ReviewerCatch;
 use Intakt\Core\Dashboard\Domain\ReviewerCatches;
 use Intakt\Core\Dashboard\Domain\ReviewsPerDay;
+use Intakt\Core\Dashboard\Domain\ReviewSummary;
 use Intakt\Core\Dashboard\Domain\ReviewTrends;
 use Intakt\Core\Dashboard\Domain\UpNext;
+use Intakt\Core\Dashboard\Infrastructure\LedgerQueuedRounds;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\SampleChangeSource;
 use Intakt\Core\Dashboard\UseCase\ShowTrends\ShowTrendsController;
@@ -34,6 +37,9 @@ use Symfony\Component\DomCrawler\Crawler;
 #[UsesClass(ReviewTrends::class)]
 #[UsesClass(Board::class)]
 #[UsesClass(UpNext::class)]
+#[UsesClass(QueuedRound::class)]
+#[UsesClass(LedgerQueuedRounds::class)]
+#[UsesClass(ReviewSummary::class)]
 #[UsesClass(ReviewerCatches::class)]
 #[UsesClass(ReviewerCatch::class)]
 #[UsesClass(JudgeOutcomes::class)]
@@ -539,17 +545,63 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
         self::assertCount(2, $this->browser->request('GET', '/trends?demo=0')->filter('#up-next a.review-link'));
     }
 
-    public function testUpNextListsTheRoundsTheBoardShowsInReview(): void
+    public function testUpNextListsTheBoardsInReviewRoundsAndLeavesOutTheJudgedOne(): void
     {
         $this->ledger->startRoundOf('feat/a', 'r-1', 1);
         $this->ledger->startReviewer('r-1', 'correctness');
         $this->ledger->startRoundOf('feat/b', 'r-2', 1);
+        $this->ledger->startRoundOf('feat/c', 'r-3', 1);
+        $this->ledger->judgeRound('r-3');
 
         $board = $this->browser->request('GET', '/?board')->filter('#col-in-review a[href^="/reviews/"]')->each(static fn (Crawler $link): string => (string) $link->attr('href'));
         $upNext = $this->browser->request('GET', '/trends')->filter('#up-next a.review-link')->each(static fn (Crawler $link): string => (string) $link->attr('href'));
 
         self::assertSame(['/reviews/r-1', '/reviews/r-2'], $upNext);
         self::assertEqualsCanonicalizing(array_unique($board), $upNext);
+    }
+
+    public function testUpNextListsARoundTheWatcherQueuedAsWaitingToStartWithItsReviewLink(): void
+    {
+        $round = $this->ledger->queueRoundOf('alpha', '7', 'abc123');
+
+        $upNext = $this->browser->request('GET', '/trends')->filter('#up-next');
+
+        self::assertSame(['Waiting to start'], $upNext->filter('h3')->each(static fn (Crawler $title): string => $title->text()));
+        self::assertSame('/reviews/'.$round, $upNext->filter('a.review-link')->attr('href'));
+        self::assertSame(['Pull request 7', 'alpha', 'Queued, no worker has started it yet'], $upNext->filter('.review-title, .review-facts > span')->each(static fn (Crawler $part): string => $part->text()));
+    }
+
+    public function testUpNextLeavesOutAQueuedRoundOnceItsReviewStarted(): void
+    {
+        $round = $this->ledger->queueRoundOf('alpha', '7', 'abc123');
+        $this->ledger->startRound($round, 'alpha');
+
+        self::assertSame(['/reviews/'.$round], $this->browser->request('GET', '/trends')->filter('#up-next a.review-link')->each(static fn (Crawler $link): string => (string) $link->attr('href')));
+    }
+
+    public function testUpNextLeavesOutAQueuedRoundMarkedStale(): void
+    {
+        $round = $this->ledger->queueRoundOf('alpha', '7', 'abc123');
+        $this->ledger->markVerdictsStale('alpha', '7', $round);
+
+        self::assertSame('Nothing running or queued.', $this->browser->request('GET', '/trends')->filter('#up-next p')->text());
+    }
+
+    public function testUpNextNamesARoundWithoutARecordedChangeAsUnnamed(): void
+    {
+        $this->ledger->startRound('r-1', 'alpha');
+
+        self::assertSame('Unnamed change', $this->browser->request('GET', '/trends')->filter('#up-next .review-title')->text());
+    }
+
+    public function testUpNextKeepsARoundWhoseReviewersAllAnsweredInProgressUntilItIsJudged(): void
+    {
+        $this->givenTwoAnsweringReviewers();
+
+        $upNext = $this->browser->request('GET', '/trends')->filter('#up-next');
+
+        self::assertSame(['In progress'], $upNext->filter('h3')->each(static fn (Crawler $title): string => $title->text()));
+        self::assertCount(1, $upNext->filter('a.review-link'));
     }
 
     private function givenReviewsOnThreeDaysWithOnePricedRound(): void

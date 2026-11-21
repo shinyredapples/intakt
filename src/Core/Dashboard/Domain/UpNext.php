@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\Domain;
 
-// Only rounds the ledger has started, because each entry links to its review page and a round the watcher queued has none yet.
 final readonly class UpNext
 {
     public const string NOTHING_PLANNED = 'Nothing running or queued.';
@@ -15,19 +14,25 @@ final readonly class UpNext
     /** @var list<ReviewedRound> */
     public array $waitingToStart;
 
-    // A round counts as in progress from its first reviewer's start, so a round whose reviewers all answered stays listed until the judge decides it; the reviews come in the board's order.
+    // A round counts as in progress from its first reviewer's start, so a round whose reviewers all answered stays listed until the judge decides it; the reviews come in the board's order, and a round the watcher queued waits after the started ones, because no worker has taken it yet.
     /**
-     * @param list<Review> $reviews
+     * @param list<Review>      $reviews
+     * @param list<QueuedRound> $queued
      */
-    public function __construct(array $reviews)
+    public function __construct(array $reviews, public array $queued)
     {
         $active = array_values(array_filter(array_map(static fn (Review $review): ?ReviewedRound => $review->activeRound(), $reviews), static fn (?ReviewedRound $round): bool => $round instanceof ReviewedRound));
         $this->inProgress = array_values(array_filter($active, static fn (ReviewedRound $round): bool => [] !== $round->outcomes));
         $this->waitingToStart = array_values(array_filter($active, static fn (ReviewedRound $round): bool => [] === $round->outcomes));
     }
 
+    public function isWaiting(): bool
+    {
+        return [] !== $this->waitingToStart || [] !== $this->queued;
+    }
+
     public function emptyLine(): ?string
     {
-        return [] === $this->inProgress && [] === $this->waitingToStart ? self::NOTHING_PLANNED : null;
+        return [] === $this->inProgress && !$this->isWaiting() ? self::NOTHING_PLANNED : null;
     }
 }

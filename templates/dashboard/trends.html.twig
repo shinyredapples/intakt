@@ -172,18 +172,26 @@
     {% if up_next.emptyLine is not null %}
     <p class="muted">{{ up_next.emptyLine }}</p>
     {% else %}
-    {% for group in [{title: 'In progress', rounds: up_next.inProgress}, {title: 'Waiting to start', rounds: up_next.waitingToStart}] %}
-    {% if group.rounds is not empty %}
+    {%- set started = (up_next.inProgress|merge(up_next.waitingToStart))|map(round => {
+        round: round.round,
+        project: round.project,
+        title: round.change is same as('') ? constant('Intakt\\Core\\Dashboard\\Domain\\ReviewSummary::UNNAMED_CHANGE') : round.change,
+        facts: (round.number is null ? [] : ['Round ' ~ round.number])|merge([round.outcomes is empty ? 'No reviewer has started yet' : round.outcomes|map(outcome => outcome.role|capitalize)|join(', ')]),
+        waiting: round.outcomes is empty,
+    }) -%}
+    {#- A queued round waits after the started ones, because no worker has taken it yet. -#}
+    {%- set queued = up_next.queued|map(round => {round: round.round, project: round.project, title: round.title, facts: ['Queued, no worker has started it yet'], waiting: true}) -%}
+    {% for group in [{title: 'In progress', rows: started|filter(row => not row.waiting)}, {title: 'Waiting to start', rows: (started|filter(row => row.waiting))|merge(queued)}] %}
+    {% if group.rows is not empty %}
     <h3 id="up-next-{{ loop.index }}">{{ group.title }}</h3>
     <ul class="review-rows" aria-labelledby="up-next-{{ loop.index }}">
-        {% for round in group.rounds %}
-        <li class="review-row" data-project="{{ round.project }}">
-            <a class="review-link" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_REVIEW'), {round: round.round}) }}">
-                <span class="review-title">{{ round.change }}</span>
+        {% for row in group.rows %}
+        <li class="review-row" data-project="{{ row.project }}">
+            <a class="review-link" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_REVIEW'), {round: row.round}) }}">
+                <span class="review-title">{{ row.title }}</span>
                 <span class="review-facts">
-                    <span class="pname">{{ round.project }}</span>
-                    {% if round.number is not null %}<span>Round {{ round.number }}</span>{% endif %}
-                    <span>{{ round.outcomes is empty ? 'No reviewer has started yet' : round.outcomes|map(outcome => outcome.role|capitalize)|join(', ') }}</span>
+                    <span class="pname">{{ row.project }}</span>
+                    {% for fact in row.facts %}<span>{{ fact }}</span>{% endfor %}
                 </span>
             </a>
         </li>

@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use DateTimeZone;
 use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Dashboard\Domain\Board;
+use Intakt\Core\Dashboard\Domain\QueuedRound;
 use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\ReviewerOutcome;
@@ -24,6 +25,7 @@ use PHPUnit\Framework\TestCase;
 
 #[CoversClass(UpNext::class)]
 #[CoversClass(Board::class)]
+#[UsesClass(QueuedRound::class)]
 #[UsesClass(Review::class)]
 #[UsesClass(ReviewedRound::class)]
 #[UsesClass(ReviewerOutcome::class)]
@@ -80,6 +82,20 @@ final class UpNextTest extends TestCase
         ])->upNext();
 
         self::assertSame(['r2', 'r3', 'r1'], $this->ids($upNext->waitingToStart));
+    }
+
+    public function testARoundTheWatcherQueuedIsWaitingAndEndsTheEmptyLine(): void
+    {
+        $upNext = new Board([])->upNext([new QueuedRound('r1', 'alpha', '7')]);
+
+        self::assertSame([true, null, ['r1']], [$upNext->isWaiting(), $upNext->emptyLine(), array_map(static fn (QueuedRound $round): string => $round->round, $upNext->queued)]);
+    }
+
+    public function testWithNoRoundWaitingOrQueuedNothingIsWaiting(): void
+    {
+        $round = $this->round('r1', '2026-11-01T10:00:00+00:00')->withOutcomes([$this->reviewer('r1-a', 'correctness')]);
+
+        self::assertFalse(new Board([new Review([$round])])->upNext()->isWaiting());
     }
 
     public function testWithNothingRunningOrQueuedTheListSaysSo(): void

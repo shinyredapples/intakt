@@ -8,6 +8,7 @@ use Intakt\Core\Build\Contract\BuildStep;
 use Intakt\Core\Build\Contract\BuildStepOutcome;
 use Intakt\Core\Dashboard\Domain\Board;
 use Intakt\Core\Dashboard\Domain\BuildTask;
+use Intakt\Core\Dashboard\Domain\QueuedRound;
 use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\ReviewerOutcome;
@@ -31,6 +32,7 @@ final readonly class LedgerReviewPages
         private RoundEndings $endings,
         private ReplayMarks $marks,
         private LedgerBuildSteps $buildSteps = new LedgerBuildSteps(),
+        private LedgerQueuedRounds $queued = new LedgerQueuedRounds(),
     ) {
     }
 
@@ -70,13 +72,19 @@ final readonly class LedgerReviewPages
         return $this->rounds($this->ledger->readInOrder())->listedInStartOrder();
     }
 
-    // Read through the reviews rather than the list, because the trends count each round's cost and replay mark, which the list leaves out.
+    // Complete with each round's cost and replay mark, which the list leaves out, because the trends count them; one read serves the figures and the board's cards alike.
     /**
-     * @return list<ReviewedRound>
+     * @return list<Review>
      */
-    public function everyRoundOf(RecordedEvents $events): array
+    public function reviewsOf(RecordedEvents $events): array
     {
-        return array_merge([], ...array_map(static fn (Review $review): array => $review->rounds, $this->rounds($events)->reviews()));
+        return $this->rounds($events)->reviews();
+    }
+
+    // Read from the rows that name the round alone, because only a round the ledger never started asks, and its queue line, start and stale mark all name it.
+    public function queuedRoundOf(string $round): ?QueuedRound
+    {
+        return $this->queued->roundIn($this->ledger->readMentioning([$round]), $round);
     }
 
     // Read from the rows that name the round alone, because a live update goes out for each streamed text and must not read every start the ledger holds; the latest start wins, as on the page, and null means the reviewer has not started in that round.
@@ -110,7 +118,7 @@ final readonly class LedgerReviewPages
 
     public function boardOf(RecordedEvents $events): Board
     {
-        return new Board($this->rounds($events)->reviews(), $this->tasks($events));
+        return new Board($this->reviewsOf($events), $this->tasks($events));
     }
 
     // A task is in flight while its latest step passed short of the push, because a build run stops at its first failed step and ends with its push, so either leaves the task at rest (#2732).
