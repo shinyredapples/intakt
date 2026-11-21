@@ -279,7 +279,7 @@ final class GitHubChangeOpenerTest extends TestCase
             ['number' => 8, 'head' => ['ref' => 'task'], 'base' => ['ref' => 'release']],
         ];
 
-        $this->assertWriteFailsWith('without its author\'s login',fn () => $github->opener()->refuseForeignChange('widgets', 'task'));
+        $this->assertWriteFailsWith('without its author\'s login', fn () => $github->opener()->refuseForeignChange('widgets', 'task'));
     }
 
     public function testABranchWhoseOpenPullRequestsAreAllThisAppsOwnHasTheFirstUpdated(): void
