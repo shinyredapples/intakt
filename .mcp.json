@@ -1,0 +1,11 @@
+{
+    "mcpServers": {
+        "intakt": {
+            "type": "http",
+            "url": "http://localhost:7781/mcp/owner",
+            "headers": {
+                "Authorization": "Bearer ${INTAKT_MCP_TOKEN}"
+            }
+        }
+    }
+}

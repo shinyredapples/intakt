@@ -4,7 +4,12 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
+use DateTimeImmutable;
+use Intakt\Core\Ai\Contract\Account;
+use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\TierResolver;
+use Intakt\Core\Budget\Contract\OutageNotice;
+use Intakt\Core\Budget\Contract\OwnerNotices;
 use Intakt\Core\Dashboard\Infrastructure\SampleChangeSource;
 use Intakt\Core\Dashboard\UseCase\ShowBoard\ShowBoardController;
 use Intakt\Tests\Support\Log\AssertsLoggedErrors;
@@ -118,5 +123,59 @@ final class BoardPhoneLandingTest extends DashboardPageTestCase
 
         self::assertSame('/?board=1', $page->filter('.rail a.nav[data-k="board"]')->attr('href'));
         self::assertSame(['/', '/'], $page->filter('a[aria-label="Intakt home"]')->each(static fn (Crawler $link): ?string => $link->attr('href')));
+    }
+
+    public function testAQuietInstallOpensItsNewestReviewOnAPhone(): void
+    {
+        $this->ledger->startRoundAt('round-old', new DateTimeImmutable('2026-10-28T10:00:00+00:00'));
+        $this->ledger->judgeRound('round-old');
+        $this->ledger->startRoundAt('round-new', new DateTimeImmutable('2026-10-28T11:00:00+00:00'));
+        $this->ledger->judgeRound('round-new');
+        $this->noticesAre();
+
+        $this->browser->request('GET', '/', server: ['HTTP_USER_AGENT' => self::IPHONE_SAFARI]);
+
+        self::assertResponseRedirects('/reviews/round-new', Response::HTTP_SEE_OTHER);
+        self::assertResponseHeaderSame('Vary', self::VARY);
+    }
+
+    public function testAQuietInstallWithANoticeStillOpensWaitingOnYouOnAPhone(): void
+    {
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+        $this->ledger->judgeRound('round-1');
+        $this->noticesAre(new OutageNotice(new Account(Provider::ClaudeCode, 'main'), new DateTimeImmutable('2026-10-28T11:00:00+00:00'), new DateTimeImmutable('2026-10-28T11:05:00+00:00')));
+
+        $this->browser->request('GET', '/', server: ['HTTP_USER_AGENT' => self::IPHONE_SAFARI]);
+
+        self::assertResponseRedirects('/waiting', Response::HTTP_SEE_OTHER);
+    }
+
+    public function testARunningReviewKeepsThePhoneOnWaitingOnYou(): void
+    {
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+        $this->noticesAre();
+
+        $this->browser->request('GET', '/', server: ['HTTP_USER_AGENT' => self::IPHONE_SAFARI]);
+
+        self::assertResponseRedirects('/waiting', Response::HTTP_SEE_OTHER);
+    }
+
+    public function testAQuietInstallStillShowsTheBoardOnADesktop(): void
+    {
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+        $this->ledger->judgeRound('round-1');
+        $this->noticesAre();
+
+        $page = $this->browser->request('GET', '/', server: ['HTTP_USER_AGENT' => self::DESKTOP_CHROME]);
+
+        self::assertResponseIsSuccessful();
+        self::assertSame('Board', $page->filter('.page-head h1')->text());
+    }
+
+    private function noticesAre(OutageNotice ...$notices): void
+    {
+        $stub = self::createStub(OwnerNotices::class);
+        $stub->method('stillRunningOldestFirst')->willReturn(array_values($notices));
+        self::getContainer()->set(OwnerNotices::class, $stub);
     }
 }
