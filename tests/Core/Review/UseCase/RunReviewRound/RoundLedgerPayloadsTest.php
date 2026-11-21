@@ -294,7 +294,7 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
         $payload = $ledger->payloads()[0];
         $done = $this->serializer()->deserialize((string) json_encode($payload), JudgeDone::class, JsonEncoder::FORMAT);
 
-        self::assertSame([['quote' => 'dropReason', 'lines' => [['file' => 'src/A.php', 'line' => 3, 'text' => '$reason = 1;']]]], $payload['dropped'][0]['nearest']);
+        self::assertSame([['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of F1.', 'file' => 'src/A.php', 'line' => 7, 'reason' => 'none of its 1 quoted code fragments is in the change', 'nearest' => [['quote' => 'dropReason', 'lines' => [['file' => 'src/A.php', 'line' => 3, 'text' => '$reason = 1;']]]]]], $payload['dropped']);
         self::assertInstanceOf(JudgeDone::class, $done);
         self::assertEquals([$dropped], $done->dropped);
     }

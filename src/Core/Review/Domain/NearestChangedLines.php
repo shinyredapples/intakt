@@ -16,13 +16,13 @@ final readonly class NearestChangedLines
     public const int MAX_QUOTES = 5;
     public const int MAX_LINES_PER_QUOTE = 3;
     public const int MAX_LINE_LENGTH = 160;
-    // Split at an underscore, a digit and a change of case, so fooBar, foo_bar and FOO_BAR give the same parts.
+    // Split at an underscore, a digit and a change of case, because a quote may spell a name in another case style (fooBar, foo_bar, FOO_BAR).
     private const string WORD_PART = '/[A-Z]+(?![a-z])|[A-Z]?[a-z]+/';
     // Shorter parts (id, of, to) are in too many names to say anything.
     private const int MIN_PART_LENGTH = 3;
 
     /**
-     * @param list<array{string, int, string}> $changedLines file, line number in the changed file, text
+     * @param list<array{string, int, string}> $changedLines
      *
      * @return list<QuoteNearLines>
      */

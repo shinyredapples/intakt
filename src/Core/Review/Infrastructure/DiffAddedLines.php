@@ -34,34 +34,39 @@ final readonly class DiffAddedLines
     private function addedIn(string $file): array
     {
         $paths = $this->paths->in($file);
-        if ([] === $paths) {
+        $hunks = preg_split('~^(?=@@)~m', $file);
+        if ([] === $paths || false === $hunks) {
             return [];
         }
 
-        // The last path is the changed file's own, because a rename or a copy names its source first.
-        $path = array_last($paths);
         $added = [];
-        $next = null;
+        // The first part is the file header, because its "+++" line is no added line; the last path is the changed file's own, because a rename or a copy names its source first.
+        foreach (array_slice($hunks, 1) as $hunk) {
+            $added = [...$added, ...$this->addedInHunk(array_last($paths), $hunk)];
+        }
 
-        foreach (explode("\n", $file) as $line) {
-            $line = rtrim($line, "\r");
+        return $added;
+    }
 
-            if (1 === preg_match(self::HUNK, $line, $hunk)) {
-                $next = (int) $hunk[1];
+    /**
+     * @return list<array{string, int, string}>
+     */
+    private function addedInHunk(string $path, string $hunk): array
+    {
+        $lines = array_map(static fn (string $line): string => rtrim($line, "\r"), explode("\n", $hunk));
+        if (1 !== preg_match(self::HUNK, array_shift($lines), $header)) {
+            return [];
+        }
 
-                continue;
-            }
+        $next = (int) $header[1];
+        $added = [];
 
-            // Before the first hunk, because the file header's "+++" line is no added line.
-            if (null === $next) {
-                continue;
-            }
-
+        foreach ($lines as $line) {
             if (str_starts_with($line, '+')) {
                 $added[] = [$path, $next, substr($line, 1)];
             }
 
-            // A removed line and a "\ No newline" note hold no line of the changed file; an empty line is a blank context line whose space a tool trimmed.
+            // Not counted for a removed line or a "\ No newline" note, because neither holds a line of the changed file; an empty line counts, because it is a blank context line whose space a tool trimmed.
             if ('' === $line || str_starts_with($line, '+') || str_starts_with($line, ' ')) {
                 ++$next;
             }
