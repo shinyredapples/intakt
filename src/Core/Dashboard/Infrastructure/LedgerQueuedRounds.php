@@ -8,10 +8,10 @@ use Intakt\Core\Dashboard\Domain\QueuedRound;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 
-// A queued round waits until the ledger records its start, from then on it is a review; one the watcher marked stale (a newer head replaced it) waits no more.
+// A started round is left out because from its start it is a review the board shows, and a stale one because a newer head of its pull request replaced it.
 final readonly class LedgerQueuedRounds
 {
-    // Newest first, as the board orders its cards.
+    // Newest first, because Up next lists them after the board's cards, which come newest first.
     /**
      * @return list<QueuedRound>
      */
