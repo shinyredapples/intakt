@@ -21,6 +21,7 @@ final class HighlightsWorkflowTest extends TestCase
     private const string WORKFLOW = __DIR__.'/../../.github/workflows/highlights.yml';
     private const string PAGES = 'bin/pages /page --recorded=/workspace/_journey-api';
     private const string RECORD = 'bin/journey-record _journey-api';
+    private const string LOGIN = '.github/ci/docker-hub-login.sh';
     private const string ASSEMBLE = 'Assemble the page';
     private const string MAIN_ONLY = "github.repository == 'shinyredapples/intakt' && github.ref == 'refs/heads/main'";
 
@@ -106,7 +107,7 @@ final class HighlightsWorkflowTest extends TestCase
         $steps = $build['steps'] ?? [];
         $record = array_first(array_filter($steps, static fn (array $step): bool => self::RECORD === trim($step['run'] ?? '')));
         self::assertNotNull($record);
-        $isLogin = static fn (array $step): bool => '.github/ci/docker-hub-login.sh' === ($step['run'] ?? null);
+        $isLogin = static fn (array $step): bool => self::LOGIN === ($step['run'] ?? null);
         $logins = array_values(array_filter($steps, $isLogin));
 
         self::assertSame(['GH_TOKEN' => '${{ github.token }}'], $record['env'] ?? null);
@@ -114,15 +115,15 @@ final class HighlightsWorkflowTest extends TestCase
         self::assertArrayNotHasKey('GH_TOKEN', $build['env'] ?? []);
         self::assertCount(1, $logins);
         self::assertSame(['DOCKERHUB_USERNAME' => '${{ secrets.DOCKERHUB_USERNAME }}', 'DOCKERHUB_TOKEN' => '${{ secrets.DOCKERHUB_TOKEN }}'], $logins[0]['env'] ?? null);
-        // Only the login's two expected values are taken out, so a further secret anywhere else, the login step included, still fails.
-        $withoutTheLoginValues = array_map(static function (array $step) use ($isLogin): array {
-            if ($isLogin($step)) {
-                unset($step['env']['DOCKERHUB_USERNAME'], $step['env']['DOCKERHUB_TOKEN']);
-            }
+        self::assertSame([], self::secretReferencesBesidesTheLogin($steps));
+    }
 
-            return $step;
-        }, $steps);
-        self::assertStringNotContainsString('secrets.', Yaml::dump($withoutTheLoginValues, 8));
+    public function testASecretInBracketNotationIsFoundAsWellAsOneInDotNotation(): void
+    {
+        $login = ['run' => self::LOGIN, 'env' => ['DOCKERHUB_USERNAME' => '${{ secrets.DOCKERHUB_USERNAME }}', 'DOCKERHUB_TOKEN' => '${{ secrets.DOCKERHUB_TOKEN }}', 'EXTRA' => '${{ secrets[\'OTHER\'] }}']];
+        $other = ['run' => 'echo "${{ secrets.ANOTHER }}"'];
+
+        self::assertSame(["secrets['OTHER']", 'secrets.ANOTHER'], self::secretReferencesBesidesTheLogin([$login, $other]));
     }
 
     public function testTheAssembledPageReadsTheRecordedAnswersAsTheContainerSeesThem(): void
@@ -133,6 +134,31 @@ final class HighlightsWorkflowTest extends TestCase
     public function testThePageStepFailsWhenTheEscapeFails(): void
     {
         self::assertNotSame(0, $this->runPageWrite("# Highlights\n", 'sed() { return 1; }; ')['status']);
+    }
+
+    // Only the login's two values are dropped, so any further secret, in dot or bracket notation, still counts.
+    /**
+     * @param list<array<string, mixed>> $steps
+     *
+     * @return list<string>
+     */
+    private static function secretReferencesBesidesTheLogin(array $steps): array
+    {
+        $withoutTheLoginValues = array_map(static function (array $step): array {
+            if (self::LOGIN === ($step['run'] ?? null) && is_array($step['env'] ?? null)) {
+                unset($step['env']['DOCKERHUB_USERNAME'], $step['env']['DOCKERHUB_TOKEN']);
+            }
+
+            return $step;
+        }, $steps);
+        $references = [];
+        array_walk_recursive($withoutTheLoginValues, static function (mixed $value) use (&$references): void {
+            if (is_string($value) && preg_match_all('/\bsecrets\s*(?:\.\s*\w+|\[[^\]]*\])/', $value, $matches) > 0) {
+                array_push($references, ...$matches[0]);
+            }
+        });
+
+        return $references;
     }
 
     /**
