@@ -61,7 +61,7 @@ final readonly class ParityRecord
     }
 
     /**
-     * @return array<string, string> the task that builds each behavior, by its section and first sentence
+     * @return array<string, string>
      */
     public function notBuiltItems(string $record): array
     {
