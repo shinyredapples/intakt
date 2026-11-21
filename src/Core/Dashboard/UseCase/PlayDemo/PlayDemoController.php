@@ -28,8 +28,11 @@ final readonly class PlayDemoController
     public function __invoke(Request $request): Response
     {
         $this->press->refuseWithoutToken($request, self::TOKEN_ID, 'The form token is missing or wrong, so the demo run was not started.');
-        $this->press->flash($request, $this->runs->play());
+        $play = bin2hex(random_bytes(16));
+        $line = $this->runs->play($play);
+        $this->press->flash($request, $line);
+        $query = DemoRuns::startedFlash($play) === $line[0] ? [DemoRuns::PLAY => $play] : [];
 
-        return new RedirectResponse($this->urls->generate(DashboardRoutes::SHOW_DEMO), Response::HTTP_SEE_OTHER);
+        return new RedirectResponse($this->urls->generate(DashboardRoutes::SHOW_DEMO, $query), Response::HTTP_SEE_OTHER);
     }
 }

@@ -748,6 +748,18 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertSame('2', $rows[0][3] ?? '');
     }
 
+    public function testARowALiveUpdatePlacesKeepsTheRawModelIdWithoutItsAiLab(): void
+    {
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeAnyReviewerStarted();
+        $this->ledger->startReviewerOn($id, 'correctness', 'moonshotai/Kimi-K3.1:deepinfra');
+        $this->ledger->answer($id, 'correctness', 2);
+
+        $this->publishedUpdates()->roundChanged($round, new RoundProgress(1, 2, false, [$id.'-correctness' => FinishedState::Verdict]));
+
+        $cell = $this->replaced($page, $this->publishedStreams())->filter('#round-'.$round.'-reviewer-'.$id.'-correctness-model');
+        self::assertSame(['moonshotai/Kimi-K3.1:deepinfra', null], [$cell->text(), $cell->attr('title')]);
+    }
+
     public function testAReviewerStoppedAfterThePageLoadedGetsARowWithItsRoleAndTheStoppedState(): void
     {
         [$round, $id, $page] = $this->givenAPageLoadedBeforeAnyReviewerStarted();
