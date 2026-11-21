@@ -100,12 +100,12 @@ final class ShippedRecordingTest extends TestCase
     {
         $text = $this->shippedWith('task', "Authorization: Bearer\tsynthetic-credential");
 
-        self::assertSame(['the payload of ledger event 0'], $this->placesMatching(self::privateTextPattern('a bearer header'), $text));
+        self::assertSame(['the payload of ledger event 0'], $this->placesMatching($this->privateTextPattern('a bearer header'), $text));
     }
 
     public function testAFolderWhoseNameOnlyStartsWithTmpIsNotTheSystemTempFolder(): void
     {
-        $pattern = self::privateTextPattern('the system temp folder');
+        $pattern = $this->privateTextPattern('the system temp folder');
 
         self::assertDoesNotMatchRegularExpression($pattern, '/tmp-backup/work');
         self::assertDoesNotMatchRegularExpression($pattern, '/tmp.d/work');
@@ -129,7 +129,7 @@ final class ShippedRecordingTest extends TestCase
         yield 'an email address' => ['~[\w.+-]+@[\w-]+(\.[\w-]+)+~'];
     }
 
-    private static function privateTextPattern(string $name): string
+    private function privateTextPattern(string $name): string
     {
         foreach (self::privateText() as $label => [$pattern]) {
             if ($name === $label) {
