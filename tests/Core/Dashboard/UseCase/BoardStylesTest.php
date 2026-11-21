@@ -212,6 +212,14 @@ final class BoardStylesTest extends TestCase
         self::assertMatchesRegularExpression('/flex:\s*none;/', $rules['.card .top .pname'] ?? '');
     }
 
+    // Because a Replay chip beside the change and project squeezed the change to zero width in a 176 px phone column.
+    public function testACardWrapsItsReplayChipBelowTheChangeInsteadOfSqueezingTheChange(): void
+    {
+        $rules = $this->rulesOf($this->sheet());
+
+        self::assertMatchesRegularExpression('/display:\s*flex;\s*flex-wrap:\s*wrap;/', $rules['.card .top'] ?? '');
+    }
+
     public function testACardPastAColumnsPageLimitIsNotShown(): void
     {
         $rules = $this->rulesOf($this->sheet());
