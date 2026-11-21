@@ -522,6 +522,23 @@ final class RawPromptMessageRuleTest extends PhpStanRuleTestCase
         self::assertStringContainsString('src/Sample/Builds.php:'.self::TRAIT_CASE_LINE.' '.$identifier, $this->ruleFindingsIn($sandbox));
     }
 
+    public function testATraitMethodDoesNotTakeTheTypeOfAClassStringAssignedInItsFile(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/Core/Review/UseCase/RunReviewRound/Builds.php', "<?php\n\nnamespace Intakt\\Core\\Review\\UseCase\\RunReviewRound;\n\nuse ArrayObject;\nuse Intakt\\Core\\Review\\Contract\\ReviewerConversation;\nuse Symfony\\Component\\Uid\\UuidV7;\n\n\$class = ArrayObject::class;\n\ntrait Builds\n{\n    /** @param class-string<ReviewerConversation> \$class */\n    public function build(string \$class, string \$prompt, UuidV7 \$id): ReviewerConversation\n    {\n        return new \$class(\$prompt, \$id);\n    }\n}\n");
+        $sandbox->write(self::HANDLER, "<?php\n\nnamespace Intakt\\Core\\Review\\UseCase\\RunReviewRound;\n\nfinal class ReviewWithReviewerHandler\n{\n    use Builds;\n}\n");
+
+        self::assertStringContainsString('src/Core/Review/UseCase/RunReviewRound/Builds.php:16 intakt.reviewerRole', $this->ruleFindingsIn($sandbox));
+    }
+
+    public function testATraitThatBuildsAClassStringItAssignsItselfIsRefused(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/Sample/Builds.php', $this->traitBuilding('Intakt\Sample', 'new ($text = \ArrayObject::class)()'));
+
+        self::assertStringContainsString('src/Sample/Builds.php:'.self::TRAIT_CASE_LINE.' intakt.reviewerRole', $this->ruleFindingsIn($sandbox));
+    }
+
     /**
      * @return iterable<string, array{string}>
      */

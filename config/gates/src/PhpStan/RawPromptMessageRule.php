@@ -62,7 +62,7 @@ final readonly class RawPromptMessageRule implements Rule
         }
 
         if ($node instanceof Trait_) {
-            return $this->carriers->traitFindings($node, $scope);
+            return $this->carriers->traitFindings($node);
         }
 
         $finding = match (true) {

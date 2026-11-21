@@ -14,11 +14,13 @@ use Intakt\Core\Review\UseCase\SeedSampleProject\SampleProject;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiVendor;
 use PhpParser\Node\Arg;
 use PhpParser\Node\Expr;
+use PhpParser\Node\Expr\ClassConstFetch;
 use PhpParser\Node\Expr\MethodCall;
 use PhpParser\Node\Expr\New_;
 use PhpParser\Node\Expr\PropertyFetch;
 use PhpParser\Node\Identifier;
 use PhpParser\Node\Name;
+use PhpParser\Node\Scalar\String_;
 use PhpParser\Node\Stmt\Class_;
 use PhpParser\Node\Stmt\Trait_;
 use PhpParser\NodeFinder;
@@ -77,16 +79,16 @@ final readonly class RolePromptCarriers
     /**
      * @return list<IdentifierRuleError>
      */
-    public function traitFindings(Trait_ $trait, Scope $scope): array
+    public function traitFindings(Trait_ $trait): array
     {
-        $findings = array_map(fn (New_ $construction): ?IdentifierRuleError => $this->traitConstructionFinding($construction, $scope), new NodeFinder()->findInstanceOf($trait->stmts, New_::class));
+        $findings = array_map($this->traitConstructionFinding(...), new NodeFinder()->findInstanceOf($trait->stmts, New_::class));
 
         return array_values(array_filter($findings, static fn (?IdentifierRuleError $finding): bool => $finding instanceof IdentifierRuleError));
     }
 
-    private function traitConstructionFinding(New_ $construction, Scope $scope): ?IdentifierRuleError
+    private function traitConstructionFinding(New_ $construction): ?IdentifierRuleError
     {
-        $names = $this->traitClassNamesOf($construction->class, $scope);
+        $names = $this->traitClassNamesOf($construction->class);
 
         if (null === $names) {
             return RuleErrorBuilder::message(self::TRAIT_ADVICE)->identifier('intakt.reviewerRole')->line($construction->getStartLine())->build();
@@ -97,19 +99,19 @@ final readonly class RolePromptCarriers
         return null === $carrier ? null : $this->misplaced($carrier)->line($construction->getStartLine())->build();
     }
 
-    // null because `self`, `static` and `parent` name the using class and a variable's type is known only inside it, so such a class may be a carrier
+    // null because `self`, `static` and `parent` name the using class, and the trait's scope is its file's, not its method's, so only a literal class name is known there and any other class may be a carrier
     /**
      * @return list<string>|null
      */
-    private function traitClassNamesOf(Name|Expr|Class_ $class, Scope $scope): ?array
+    private function traitClassNamesOf(Name|Expr|Class_ $class): ?array
     {
-        $names = match (true) {
+        return match (true) {
             $class instanceof Class_ => [],
             $class instanceof Name => $class->isSpecialClassName() ? null : [$class->toString()],
-            default => $this->classNames->ofType($scope->getType($class)),
+            $class instanceof String_ => [$this->classNames->withoutLeadingBackslash($class->value)],
+            $class instanceof ClassConstFetch && $class->class instanceof Name && !$class->class->isSpecialClassName() && $class->name instanceof Identifier && 'class' === $class->name->toLowerString() => [$class->class->toString()],
+            default => null,
         };
-
-        return [] === $names && $class instanceof Expr ? null : $names;
     }
 
     /**
