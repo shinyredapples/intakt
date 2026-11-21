@@ -43,10 +43,10 @@ final readonly class FinalClassRule implements Rule
         // a class can also be declared inside a function body or a condition, so the whole file is searched once instead of relying on where PHPStan visits class nodes
         $classes = new NodeFinder()->findInstanceOf($node->getNodes(), Class_::class);
 
-        return array_values(array_map($this->notFinal(...), array_filter($classes, $this->isConcreteNamedClass(...))));
+        return array_values(array_map($this->notFinal(...), array_filter($classes, $this->requiresFinalModifier(...))));
     }
 
-    private function isConcreteNamedClass(Class_ $class): bool
+    private function requiresFinalModifier(Class_ $class): bool
     {
         // PHPStan names an anonymous class, so only isAnonymous(), which it overrides for that node, tells one apart from a named class
         return $class->name instanceof Identifier && !$class->isAnonymous() && !$class->isFinal() && !$class->isAbstract();
