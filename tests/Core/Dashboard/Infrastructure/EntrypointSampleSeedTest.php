@@ -39,7 +39,7 @@ final class EntrypointSampleSeedTest extends TestCase
     {
         $this->directory = sys_get_temp_dir().'/intakt-entrypoint-seed-'.bin2hex(random_bytes(6));
         new Filesystem()->copy(dirname(__DIR__, 4).'/config/sample-project.yaml', $this->dataFile());
-        // Linked and written here because the start asks Symfony's Dotenv for the kernel's folders with the real PHP, which reads both from its working directory.
+        // Linked and written here because the start asks Symfony Runtime for the kernel's environment and folders with the real PHP, which reads both from its working directory.
         new Filesystem()->symlink(dirname(__DIR__, 4).'/vendor', $this->directory.'/vendor');
         new Filesystem()->dumpFile($this->directory.'/.env', '');
     }
@@ -308,6 +308,28 @@ final class EntrypointSampleSeedTest extends TestCase
 
         self::assertDirectoryDoesNotExist($this->directory.'/build/test', 'the container in the environment\'s APP_BUILD_DIR survived');
         self::assertFileExists($this->directory.'/dotenv-build/test/not-the-kernels', 'a folder the kernel does not compile into was removed');
+    }
+
+    public function testAStartRemovesTheContainerInTheBuildDirectoryOfTheDotenvPathTheRuntimeOptionsName(): void
+    {
+        new Filesystem()->dumpFile($this->directory.'/config/moved.env', 'APP_BUILD_DIR='.$this->directory."/moved-build\n");
+        new Filesystem()->dumpFile($this->directory.'/moved-build/test/old-container', 'old');
+        $this->startEntrypoint(['INTAKT_CONFIG' => $this->directory.'/intakt.yaml', 'APP_RUNTIME_OPTIONS' => '{"dotenv_path":"config/moved.env"}']);
+
+        $this->waitForTheServer();
+
+        self::assertDirectoryDoesNotExist($this->directory.'/moved-build/test', 'the container in the APP_BUILD_DIR of the runtime\'s dotenv_path survived');
+    }
+
+    public function testAStartRemovesTheContainerOfTheEnvironmentADotenvFileNames(): void
+    {
+        new Filesystem()->dumpFile($this->directory.'/.env.local', "APP_ENV=staging\nAPP_BUILD_DIR=".$this->directory."/build\n");
+        new Filesystem()->dumpFile($this->directory.'/build/staging/old-container', 'old');
+        $this->startEntrypoint(['INTAKT_CONFIG' => $this->directory.'/intakt.yaml', 'APP_ENV' => false]);
+
+        $this->waitForTheServer();
+
+        self::assertDirectoryDoesNotExist($this->directory.'/build/staging', 'the container of the APP_ENV in .env.local survived');
     }
 
     public function testADotenvFileThatCannotBeReadStopsTheStartBeforeTheServer(): void
@@ -740,7 +762,7 @@ final class EntrypointSampleSeedTest extends TestCase
         new Filesystem()->dumpFile($this->directory.'/.env.test.local', $line."\n");
     }
 
-    // Stand-ins that note each call (the inline script that asks Dotenv for the kernel's folders goes to the real PHP unnoted, because its answer is what the start acts on); the console steps end at once (the seed with SEED_STATUS), the server and the consumers wait to be stopped, without the test's pipes, so a sleep the entrypoint leaves behind cannot hold the test.
+    // Stand-ins that note each call (the inline script that asks Symfony Runtime for the kernel's environment and folders goes to the real PHP unnoted, because its answer is what the start acts on); the console steps end at once (the seed with SEED_STATUS), the server and the consumers wait to be stopped, without the test's pipes, so a sleep the entrypoint leaves behind cannot hold the test.
     private function stubPrograms(): string
     {
         $programs = $this->directory.'/stubs';

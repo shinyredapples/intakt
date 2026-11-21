@@ -65,27 +65,37 @@ php bin/console doctrine:migrations:migrate --no-interaction --allow-no-migratio
 kernel_dir() {
     local dir=$1
     [[ $dir == /* ]] || dir="$PWD/$dir"
-    echo "$dir/${APP_ENV:-prod}"
+    echo "$dir/$2"
 }
 
 # The cache and build folders are removed by hand, because cache:clear kept the image's container after the seed; the warmup runs in a new process so it reads the current keys and project file.
 rebuild_container() {
-    local cache_dir build_dir cache="var/cache/${APP_ENV:-prod}"
-    cache_dir=$(kernel_value APP_CACHE_DIR)
-    build_dir=$(kernel_value APP_BUILD_DIR)
-    [[ -z $cache_dir ]] || cache=$(kernel_dir "$cache_dir")
-    rm -rf "$cache"
-    [[ -z $build_dir ]] || rm -rf "$(kernel_dir "$build_dir")"
+    local out env
+    local -a dirs
+    out=$(kernel_values)
+    mapfile -t dirs <<< "$out"
+    env=${dirs[0]:-}
+    if [[ -z $env || $env == */* ]]; then
+        echo "intakt: could not read the kernel's environment, so its old container cannot be removed" >&2
+        exit 1
+    fi
+    if [[ -n ${dirs[1]:-} ]]; then rm -rf "$(kernel_dir "${dirs[1]}" "$env")"; else rm -rf "var/cache/$env"; fi
+    [[ -z ${dirs[2]:-} ]] || rm -rf "$(kernel_dir "${dirs[2]}" "$env")"
     php bin/console cache:warmup --no-interaction
 }
 
-# A value in the environment wins, as it does for Symfony's Dotenv; one the environment leaves out is asked of Dotenv, booted as bin/console boots it, because a dotenv file (.env.prod.local) moves the kernel's folders just as the environment does.
-kernel_value() {
-    if [[ -n ${!1:-} ]]; then
-        echo "${!1}"
-        return 0
-    fi
-    php -r 'require "vendor/autoload.php"; (new Symfony\Component\Dotenv\Dotenv())->bootEnv(".env"); echo $_SERVER[$argv[1]] ?? "";' "$1"
+# Prints the kernel's environment, APP_CACHE_DIR and APP_BUILD_DIR, one per line, as bin/console sees them: Symfony Runtime loads the dotenv files with the runtime options bin/console gets (a dotenv_path, an APP_ENV a dotenv file sets), and a value in the environment wins. Built from the options here instead of through vendor/autoload_runtime.php, which takes the project folder from where vendor really lies; the project folder is the working folder, as for bin/console in the image.
+kernel_values() {
+    php -r '
+        require "vendor/autoload.php";
+        $options = $_SERVER["APP_RUNTIME_OPTIONS"] ?? $_ENV["APP_RUNTIME_OPTIONS"] ?? [];
+        if (is_string($options)) {
+            $options = json_decode($options, true, 512, JSON_THROW_ON_ERROR);
+        }
+        $options += ["project_dir" => getcwd()];
+        new Symfony\Component\Runtime\SymfonyRuntime($options);
+        echo $_SERVER[$options["env_var_name"] ?? "APP_ENV"], "\n", $_SERVER["APP_CACHE_DIR"] ?? "", "\n", $_SERVER["APP_BUILD_DIR"] ?? "", "\n";
+    '
 }
 
 # Assigned apart from the export, because export would hide a failed write, and a start without the token would leave the printed MCP setup unusable.
