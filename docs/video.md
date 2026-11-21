@@ -4,12 +4,12 @@ The script and shot list of Intakt's hackathon video. Every shot is the real pro
 
 | Time | Shot | Voice-over |
 |---|---|---|
-| 0:00 to 0:05.5 | Cold open on the keyless demo's review page: the security reviewer approved with no findings; the verdict card says "Changes needed: 3 to fix", with the P1 shell injection. | One reviewer approved this change. The panel found a shell injection. |
+| 0:00 to 0:05.5 | Cold open on the keyless demo's review page: both reviewers asked for changes; the verdict card says "Changes needed: 5 things to fix", with the P1 shell injection in `src/report.js` that both reviewers reported. | Two reviewers read this change. Both found a shell injection. |
 | 0:05.5 to 0:07.6 | The octopus conductor lifts its baton; the logo. | This is Intakt. |
 | 0:07.6 to 0:13.56 | A terminal, sped up: `git clone`, `docker compose up -d --wait`; then the first-run page and **Play the demo run** on `/demo`. | Two commands, no key: clone, compose up, and watch a real recorded review. |
-| 0:13.56 to 0:23.55 | The demo's live review page: two reviewers on models from two AI labs, findings F1 to F4 arriving on the beat. | Reviewers on models from two AI labs read the change, live. Every finding carries an id, a priority and a quote from the code. |
-| 0:23.55 to 0:31.55 | The quote check: F3 is dropped because its quotes are not in the change; F2's quotes check out against the diff in a terminal. | Before the judge, each quote is checked against the code. A quote that is not there drops the finding. |
-| 0:31.55 to 0:37.55 | The judge's note on F4, which stays under To fix; the verdict card "Changes needed: 3 to fix". | A serious finding that checks out stays, whatever the judge says. |
+| 0:13.56 to 0:23.55 | The demo's live review page: two reviewers on models from two AI labs, findings F1 to F8 arriving on the beat. | Reviewers on models from two AI labs read the change, live. Every finding carries an id, a priority and a quote from the code. |
+| 0:23.55 to 0:31.55 | The quote check: F2's quotes (`customerName`, `execSync`) check out against the diff in a terminal; in this recording every finding passes the check. | Before the judge, each quote is checked against the code. A quote that is not there drops the finding. |
+| 0:31.55 to 0:37.55 | The judge merges the duplicates (F5 and F7 into F2, F6 into F1); the verdict card "Changes needed: 5 things to fix". | The judge merges what both reviewers found into one list to fix. |
 | 0:37.55 to 0:51.5 | A real Claude Code session drives the loop over MCP: the dashboard full frame, a small card with the agent's current step (start a review, read what to fix, fix, start the next pass). | Or hand it to your agent, over MCP. Claude Code starts a review, reads what to fix, fixes it, and runs the next pass until it is clean. |
 | 0:51.5 to 0:53.6 | The stop: that session's second pass running, the baton held high. | |
 | 0:53.6 to 1:01.55 | That session's second pass lands: the same finding ids as the first pass, shown closed or still open as they really are. | Pass two keeps the same ids. No moving goalposts. |
@@ -17,7 +17,7 @@ The script and shot list of Intakt's hackathon video. Every shot is the real pro
 | 1:09.55 to 1:19.55 | The Symfony AI packages and the MCP Bundle in `composer.json`; the upstream reports. | Built on Symfony AI and the MCP Bundle. Every bug we hit is reported upstream, with a fix where we could. |
 | 1:19.55 to 1:30 | Logo and repository URL; the octopus bows. | Clone it. Watch a real review without a key. Intakt. |
 
-The keyless demo ends after its first round ([For judges](judges.md)); the second pass is not part of it and comes only from the real Claude Code session, which needs a model key.
+The keyless demo ends after its first round ([the demo walkthrough](guide/demo-walkthrough.md): the shipped review has one round); the second pass is not part of it and comes only from the real Claude Code session, which needs a model key.
 
 The figure in the voice-over comes from the README's [review bench](../README.md#review-bench) (the panel on Claude and GPT, measured, 2026-11-21).
 
@@ -25,4 +25,4 @@ Notes on the precise behavior behind some lines of the voice-over:
 
 - **0:13.56 to 0:37.55:** a finding's code quote is optional. A finding has no quote field; the quotes are the inline backtick quotes of its text. Before the judge, the quote check drops a finding only when it quotes code and none of its quotes is in the change; a finding without a quote goes to the judge. The judge then checks the findings that survive the quote check, not every finding, and a round whose every finding is dropped ends without a judge call (see [Quote check](architecture/review-flow.md#quote-check)).
 - **0:37.55 to 0:51.5:** "runs the next pass until it is clean" is the goal, not a guarantee. The [review skill](user/mcp.md#the-review-skill) also stops when only P3 findings remain, when every open P1 or P2 finding is one it no longer fixes (a finding still open after two rounds of fixes is reported instead), or after 3 rounds (5 when an open finding is about security or data loss). It can therefore stop with findings still open, and running out of rounds is not an approval.
-- **1:09.55 to 1:19.55:** not every report is filed. Of the 27 reports under [`upstream/`](../upstream/README.md), the status sections record 17 as filed (as pull requests, issues or a comment). One records `fixed upstream` (by others), two `already reported` and four pass with nothing to file; three are `not filed` by the owner's decision. None needs a recheck, and none is `ready to file` today. The [report index](../upstream/README.md) and each report's status section name the individual references.
+- **1:09.55 to 1:19.55:** not every report is filed. Of the 28 reports under [`upstream/`](../upstream/README.md), the status sections record 17 as filed (as pull requests, issues or a comment). One records `fixed upstream` (by others), two `already reported` and four pass with nothing to file; three are `not filed` by the owner's decision. One, the Rector argument list report, is `ready to file` and waits for the owner's approval. None needs a recheck before filing. The [report index](../upstream/README.md) and each report's status section name the individual references.
