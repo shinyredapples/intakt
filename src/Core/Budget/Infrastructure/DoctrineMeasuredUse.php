@@ -71,8 +71,7 @@ final readonly class DoctrineMeasuredUse implements MeasuredUse
         return $reading->window->refusalOfReset($resetsAt, $now);
     }
 
-    // Only the latest reading of a window is ever read, so the older ones are dropped to keep the table at about one row per window.
-    // A reading stamped earlier but stored last deletes only what is older still, so the fresher one stays as evidence the account was read.
+    // Only the latest reading of a window is read, so older ones are dropped; one stamped earlier but stored last spares the fresher one, the evidence of a recovery.
     private function forgetReadingsBefore(WindowReadingRecord $record): void
     {
         $this->entities->createQueryBuilder()
