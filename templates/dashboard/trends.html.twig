@@ -5,13 +5,19 @@
 {#- Always loaded, not only with live updates, because the charts' tooltip controller starts from it. -#}
 {% block importmap %}{{ importmap('app') }}{% endblock %}
 
-{#- An estimated figure carries the same label as the review page's cost, so a guess never reads as a reading (decision D5 of #2206). -#}
-{% macro tile(label, figure, estimated) %}
-<div class="tile"{% if figure is null %} data-no-data{% endif %}>
-    <dt>{{ label }}{% if estimated and figure is not null %} {{ include('dashboard/components/figure_kind.html.twig', {kind: enum('Intakt\\Core\\Platform\\Contract\\FigureKind').Estimated, at: 'trends-cost'}, with_context = false) }}{% endif %}</dt>
-    <dd>{{ figure ?? 'No data' }}</dd>
+{#- A tile only for a figure there is, because a "No data" tile reads as a failure at a glance (juror walk-through of issue 3141). The label carries its explanation as a tooltip, never as a sentence under the tiles; a measured or estimated figure carries the same kind label as the review page's cost, so a guess never reads as a reading (decision D5 of #2206). -#}
+{% macro tile(label, figure, tip, at, kind = null, ran_on = null) %}
+{% if figure is not null %}
+<div class="tile" data-tile="{{ at }}">
+    <dt>{{ _self.hint(label, tip, at) }}{% if kind is not null %} {{ include('dashboard/components/figure_kind.html.twig', {kind: kind, at: at}, with_context = false) }}{% endif %}</dt>
+    {#- The run date is visible text, because the kind label is not a tab stop (D5 of #2206) and a keyboard user would never see it in a tooltip. -#}
+    <dd>{{ figure }}{% if ran_on is not null %}<time class="tile-date" datetime="{{ ran_on }}">Run of {{ ran_on }}</time>{% endif %}</dd>
 </div>
+{% endif %}
 {% endmacro %}
+
+{#- A short label whose meaning shows on hover and focus, in the glossary's dotted-underline style; page-local, because these readings belong to Trends alone. -#}
+{% macro hint(words, tip, at) %}<span class="term" tabindex="0" aria-describedby="hint-{{ at }}">{{ words }}<span class="term-tip" role="tooltip" id="hint-{{ at }}">{{ tip }}</span></span>{% endmacro %}
 
 {#- Missing data reads "No data", never a chart of zeros, so nothing unmeasured looks measured (DESIGN.md, Charts). -#}
 {% macro no_chart(reason) %}
@@ -26,28 +32,34 @@
 
 {% block body %}
 {% set route = constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_TRENDS') %}
-<div class="page-head">
-    <div>
-        <h1>Trends</h1>
-        <p class="lead">How the reviews went, over every project. The figures fill in as reviews add up.</p>
-        {% if trends.anyReview %}
-        {{ include('dashboard/components/meta.html.twig', {facts: [
-            {icon: 'rounds', text: trends.roundsRun ~ (trends.roundsRun == 1 ? ' review round' : ' review rounds') ~ ' over every project'},
-        ]|merge(trends.includesTheDemo ? [{text: 'Includes the recorded demo review'}] : [])
-         |merge(trends.demoLeftOut and trends.canLeaveOutTheDemo ? [{text: 'Leaves out the recorded demo review'}] : [])}, with_context = false) }}
-        {% endif %}
-    </div>
-    {# A link, not a stored choice, so the address says what the figures count (D1 of #2858). #}
+{% set kinds = enum('Intakt\\Core\\Platform\\Contract\\FigureKind') %}
+<div class="page-head trends-head">
+    <h1>Trends</h1>
+    {#- A toggle in the address, not a stored choice, so the address says what the figures count (D1 of #2858); pressed means the demo review is counted. -#}
     {% if trends.canLeaveOutTheDemo %}
-    <div class="actions">
-        {% if trends.demoLeftOut %}
-        <a class="fchip" href="{{ path(route) }}">Count the demo review</a>
-        {% else %}
-        <a class="fchip" href="{{ path(route, {(constant('Intakt\\Core\\Dashboard\\UseCase\\ShowTrends\\ShowTrendsController::LEAVE_OUT_DEMO')): '0'}) }}">Leave out the demo review</a>
-        {% endif %}
-    </div>
+    <form class="actions" method="get" action="{{ path(route) }}">
+        {% if not trends.demoLeftOut %}<input type="hidden" name="{{ constant('Intakt\\Core\\Dashboard\\UseCase\\ShowTrends\\ShowTrendsController::LEAVE_OUT_DEMO') }}" value="0">{% endif %}
+        <button type="submit" class="fchip demo-toggle" aria-pressed="{{ trends.includesTheDemo ? 'true' : 'false' }}">{% if trends.includesTheDemo %}{{ include('dashboard/components/icon.html.twig', {name: 'check', small: true}, with_context = false) }}{% endif %}Demo review</button>
+    </form>
     {% endif %}
 </div>
+{% set cost = trends.costPerRound %}
+{% set oneReviewerOnly = trends.caughtByOneReviewerOnlyPercent %}
+{% if bench is not null or trends.anyReview %}
+<dl class="tiles" aria-label="Review figures">
+    {% if bench is not null %}
+    {{ _self.tile('Defects found', bench.reading, 'Planted defects the review panel found on the review bench; ' ~ bench.falseAlarms ~ (bench.falseAlarms == 1 ? ' false alarm.' : ' false alarms.'), 'bench', kinds.Measured, bench.ranOn) }}
+    {% endif %}
+    {% if trends.anyReview %}
+    {#- Not the glossary's round, which is a whole build, because this counts every review pass started, a review of its own included. -#}
+    {{ _self.tile('Passes', trends.roundsRun, 'Review passes started, whether run on their own or for a build.', 'passes') }}
+    {{ _self.tile('To fix', trends.seriousActFindings, 'P1 and P2 findings the judge kept for the builder to fix (the act list).', 'to-fix') }}
+    {{ _self.tile('One reviewer only', oneReviewerOnly is null ? null : oneReviewerOnly ~ '%', 'Share of the findings kept to fix that only one reviewer of the pass reported, over passes with a full record of who reported what.', 'alone') }}
+    {{ _self.tile('Time to verdict', trends.medianTimeToVerdict, 'Median time from the start of a pass to its verdict.', 'verdict-time') }}
+    {{ _self.tile('Cost per pass', cost is null ? null : cost.reading, 'Mean of the passes with a cost estimate, ' ~ (cost is null ? '' : cost.priceDateReading) ~ '.', 'trends-cost', kinds.Estimated) }}
+    {% endif %}
+</dl>
+{% endif %}
 {% if not trends.anyReview %}
 {# The same start as step 3 of the setup page; an install without the sample change has nothing to start here, so the action opens that step, which says what is missing (D8 of #2858). #}
 <div class="empty">
@@ -64,16 +76,6 @@
     {% endif %}
 </div>
 {% else %}
-{% set cost = trends.costPerRound %}
-{% set oneReviewerOnly = trends.caughtByOneReviewerOnlyPercent %}
-<dl class="tiles" aria-label="Review figures">
-    {{ _self.tile('Review rounds run', trends.roundsRun, false) }}
-    {{ _self.tile('P1 and P2 findings on act lists', trends.seriousActFindings, false) }}
-    {{ _self.tile('Caught by one reviewer only', oneReviewerOnly is null ? null : oneReviewerOnly ~ '%', false) }}
-    {{ _self.tile('Median time from round start to verdict', trends.medianTimeToVerdict, false) }}
-    {{ _self.tile('Cost per round', cost is null ? null : cost.reading, true) }}
-</dl>
-<p class="tiles-note muted">{% if cost is not null %}Cost per round is the mean of the rounds with a known estimate, {{ cost.priceDateReading }}. {% endif %}"Caught by one reviewer only" counts only the rounds with a full record of which reviewer reported each finding.</p>
 {% set catches = trends.reviewerCatches %}
 {% set outcomes = trends.judgeOutcomes %}
 {% set perDay = trends.reviewsPerDay %}
