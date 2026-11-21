@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Watcher\UseCase\WatchPullRequests;
 use Closure;
 use Intakt\Core\Review\Contract\DiscardQueuedRound;
 use Intakt\Core\Review\Contract\MarkVerdictsStale;
+use Intakt\Core\Review\Contract\PublishHandedOverChange;
 use Intakt\Core\Review\Contract\QueuedRound;
 use Intakt\Core\Review\Contract\StartReviewAtHead;
 use Override;
@@ -28,9 +29,18 @@ final class RecordingCommandBus implements MessageBusInterface
     public array $markedStale = [];
     public ?Throwable $markFailure = null;
 
+    /** @var list<PublishHandedOverChange> */
+    public array $handedOver = [];
+
     #[Override]
     public function dispatch(object $message, array $stamps = []): Envelope
     {
+        if ($message instanceof PublishHandedOverChange) {
+            $this->handedOver[] = $message;
+
+            return new Envelope($message);
+        }
+
         if ($message instanceof MarkVerdictsStale) {
             $this->markedStale[] = $message->roundId;
 
