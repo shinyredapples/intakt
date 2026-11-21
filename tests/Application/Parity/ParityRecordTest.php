@@ -168,6 +168,31 @@ final class ParityRecordTest extends TestCase
         yield 'a remark after the marker that says it is built' => ['not built yet (the rest, T1) was the old status; it is now built.'];
         yield 'a remark after the colon form' => ['`ParityRecordTest::testAnIndentedDoneItemIsJudged` (not built yet: the rest, T1) but now it is'];
         yield 'a parenthesis inside what is not built' => ['not built yet (the rest (most of it), T1)'];
+        yield 'a colon marker in a remark that is never closed' => ['`ParityRecordTest::testAnIndentedDoneItemIsJudged` (built; not built yet: the rest, T57'];
+        yield 'a colon marker right after a parenthesis that is never closed' => ['`ParityRecordTest::testAnIndentedDoneItemIsJudged` (not built yet: the rest, T1'];
+        yield 'a colon marker with a stray closing parenthesis' => ['not built yet: the rest, T1)'];
+        yield 'a parenthesis marker with a stray closing parenthesis' => ['not built yet (the rest, T1))'];
+        yield 'a marker after an earlier remark that is never closed' => ['`ParityRecordTest::testAnIndentedDoneItemIsJudged` (built (most; not built yet: the rest, T1)'];
+        yield 'a marker after a semicolon outside any remark' => ['built; not built yet: the rest, T1'];
+    }
+
+    #[DataProvider('statusesThatAreNotBuiltMarkers')]
+    public function testAnOpenItemWithAClosedNotBuiltMarkerIsAccepted(string $status): void
+    {
+        self::assertSame([], $this->repositoryTests()->unprovenItems("## CI\n- [ ] A behavior. [T1]; Intakt: ".$status));
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function statusesThatAreNotBuiltMarkers(): iterable
+    {
+        yield 'the parenthesis form at the start' => ['not built yet (the rest, T1)'];
+        yield 'the colon form at the start' => ['not built yet: the rest, T1'];
+        yield 'the colon form right after a parenthesis it closes' => ['`ParityRecordTest::testAnIndentedDoneItemIsJudged` (not built yet: the rest, T1)'];
+        yield 'the parenthesis form right after a parenthesis it closes' => ['`ParityRecordTest::testAnIndentedDoneItemIsJudged` (not built yet (the rest, T1))'];
+        yield 'the colon form after a semicolon in a remark it closes' => ['`ParityRecordTest::testAnIndentedDoneItemIsJudged` (built; not built yet: the rest, T1)'];
+        yield 'a remark that holds a link before the marker' => ['`ParityRecordTest::testAnIndentedDoneItemIsJudged` (see [the record](parity.md); not built yet: the rest, T1)'];
     }
 
     public function testAMarkerJustBeforeTheLineEndWithTrailingSpacesIsAccepted(): void
