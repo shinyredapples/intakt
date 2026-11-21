@@ -51,7 +51,7 @@ final class RecordedIssueReads implements IssueReads
             $during();
         }
 
-        // Asked without a validator, GitHub has nothing to confirm and sends the whole listing again.
+        // A full listing because GitHub, asked without a validator, has nothing to confirm unchanged.
         if (null === $validator && $this->next instanceof IssueListing && $this->next->isUnchanged()) {
             return $this->lastFull ?? throw new ForgeReadFailed('GitHub answered 502 to a read.');
         }
