@@ -21,6 +21,9 @@ use Intakt\Core\Ledger\Infrastructure\DoctrineLedger;
 use Intakt\Core\Memory\Contract\MemoryIndex;
 use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Review\Contract\ChangeSource;
+use Intakt\Core\Review\Contract\Fence;
+use Intakt\Core\Review\Contract\PromptCut;
+use Intakt\Core\Review\Infrastructure\EscalationPrompt;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelReviewer;
@@ -47,7 +50,9 @@ use Intakt\Core\Review\Infrastructure\KeptVerdicts;
 use Intakt\Core\Review\Infrastructure\StopRequests;
 use Intakt\Core\Review\UseCase\EscalateRecurringP1\EscalateRecurringP1;
 use Intakt\Core\Review\UseCase\EscalateRecurringP1\EscalateRecurringP1Handler;
+use Intakt\Core\Review\UseCase\EscalateRecurringP1\EscalationRequests;
 use Intakt\Core\Review\UseCase\EscalateRecurringP1\EscalationsOfChange;
+use Intakt\Core\Review\UseCase\EscalateRecurringP1\HolderReReviews;
 use Intakt\Core\Review\UseCase\IndexResolvedFindings\IndexResolvedFindings;
 use Intakt\Core\Review\UseCase\IndexResolvedFindings\IndexResolvedFindingsHandler;
 use Intakt\Core\Review\UseCase\JudgeRound\FailedJudgings;
@@ -80,6 +85,7 @@ use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Core\Review\RecordedRoundUpdates;
 use Intakt\Tests\Core\Review\SampleIdentity;
 use Intakt\Tests\Core\Review\UseCase\EscalateRecurringP1\QueuedEscalations;
+use Intakt\Tests\Core\Review\UseCase\EscalateRecurringP1\StartedReviews;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\TestContainer;
@@ -108,6 +114,7 @@ final readonly class RoundFixture
     public EntityManagerInterface $entities;
     public RecordingBus $bus;
     public QueuedEscalations $escalations;
+    public StartedReviews $reviewStarts;
     public MockClock $clock;
     public BufferingLogger $log;
     public EventDispatcher $events;
@@ -125,6 +132,7 @@ final readonly class RoundFixture
         $this->serializer = $container->get('serializer.stored');
         $this->bus = new RecordingBus();
         $this->escalations = new QueuedEscalations();
+        $this->reviewStarts = new StartedReviews();
         $this->clock = new MockClock('2026-10-30 12:00:00', 'UTC');
         $this->log = new BufferingLogger();
         $this->events = new EventDispatcher();
@@ -157,6 +165,23 @@ final readonly class RoundFixture
     public function startAtHead(string $change, string $head): string
     {
         return $this->startWith($this->commandAt($change, $head, 2), $this->bus);
+    }
+
+    // As startAtHead(), with the repository and base a next round is started from, as a round the watcher or the dashboard starts has.
+    public function startAtHeadOfRepository(string $change, string $head): string
+    {
+        $command = $this->commandAt($change, $head, 2);
+
+        return $this->startWith(new RunReviewRound($command->target, $command->panel, new RequestedRound($change, null, new ChangeSource('/repos/alpha', 'main'))), $this->bus);
+    }
+
+    // As startAtHead(), on a diff the test writes, so a test can make the change longer than a prompt holds.
+    public function startWithDiffAtHead(string $change, string $head, string $diff): string
+    {
+        $command = $this->commandAt($change, $head, 2);
+        $target = new ReviewTarget(new ReviewSubject('alpha', __DIR__, self::TASK, $diff), $command->target->identity);
+
+        return $this->startWith(new RunReviewRound($target, $command->panel, $command->round), $this->bus);
     }
 
     public function commandFor(string $change, int $reviewers): RunReviewRound
@@ -271,7 +296,11 @@ final readonly class RoundFixture
 
     public function escalationHandler(EscalationReviews $reviews, Vendor $vendor): EscalateRecurringP1Handler
     {
-        return new EscalateRecurringP1Handler($this->rounds($this->entities), $this->storedFindingsOn($this->entities), $this->keptVerdicts(), $vendor, $reviews, $this->roundLedger($this->ledger), $this->container->get(Redactor::class));
+        $rounds = $this->rounds($this->entities);
+        $requests = new EscalationRequests($this->storedFindingsOn($this->entities), new EscalationPrompt(new PromptCut(new Fence())));
+        $reReviews = new HolderReReviews($rounds, $this->ledger, $this->ledgerPayloads(), $this->reviewStarts);
+
+        return new EscalateRecurringP1Handler($rounds, $requests, $this->keptVerdicts(), $vendor, $reviews, $this->roundLedger($this->ledger), $this->escalationsOfChange(), $reReviews, $this->container->get(Redactor::class), $this->locks);
     }
 
     public function escalationsOfChange(): EscalationsOfChange

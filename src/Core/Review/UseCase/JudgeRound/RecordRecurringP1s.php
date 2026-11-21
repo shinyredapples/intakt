@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\UseCase\JudgeRound;
 
+use Intakt\Core\Review\Contract\EscalationOutcome;
 use Intakt\Core\Review\Contract\EscalationVerdictReused;
 use Intakt\Core\Review\Contract\RecurringP1Found;
 use Intakt\Core\Review\Domain\KeptVerdict;
@@ -39,6 +40,11 @@ final readonly class RecordRecurringP1s
 
         if ($kept instanceof KeptVerdict) {
             $this->ledger->escalationVerdictReused(new EscalationVerdictReused($found->round, $found->finding, $found->key, $kept->outcome, $kept->round));
+
+            // Queued for a reused rejection too, because its handler finds the reuse recorded, asks no model, and starts the holder's re-review once the judging has committed.
+            if (EscalationOutcome::Rejected === $kept->outcome) {
+                $this->commands->dispatch(new EscalateRecurringP1($found->round, $found->finding, $found->key));
+            }
 
             return;
         }

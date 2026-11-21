@@ -10,6 +10,7 @@ use Intakt\Core\Build\Contract\BuildRoutingNotConfigured;
 use Intakt\Core\Build\Contract\Setback;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuilderNotOnClaudeCode;
 use Intakt\Core\Review\Contract\ChangeEscalations;
+use Intakt\Core\Review\Contract\EscalationStillPending;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\MapInput;
 use Symfony\Component\Console\Command\Command;
@@ -45,9 +46,9 @@ final readonly class ChooseBuildModelCommand
         try {
             $chosen = $this->chooseBuildModel->chooseFor(
                 new BuildAttempt($input->project, $input->task, $input->attempt),
-                BuildFacts::fromLabels($input->label, $input->path, $setback)->afterEscalation(null === $input->change ? null : $this->escalations->outcomeOfLatestRound($input->project, $input->change)),
+                BuildFacts::fromLabels($input->label, $input->path, $setback)->afterEscalation(null === $input->change ? null : $this->escalations->outcomeAtLatestHead($input->project, $input->change)),
             );
-        } catch (BuildRoutingNotConfigured|TierResolutionFailure|BuilderNotOnClaudeCode|ModelChoiceNotRecorded $failure) {
+        } catch (BuildRoutingNotConfigured|TierResolutionFailure|BuilderNotOnClaudeCode|ModelChoiceNotRecorded|EscalationStillPending $failure) {
             $io->error($failure->getMessage());
 
             return Command::FAILURE;

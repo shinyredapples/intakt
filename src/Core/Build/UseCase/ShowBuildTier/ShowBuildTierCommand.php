@@ -34,7 +34,7 @@ final readonly class ShowBuildTierCommand
         }
 
         try {
-            $choice = $this->routing->tierFor($input->project, BuildFacts::fromLabels($input->label, $input->path, $setback)->afterEscalation(null === $input->change ? null : $this->escalations->outcomeOfLatestRound($input->project, $input->change)));
+            $choice = $this->routing->tierFor($input->project, BuildFacts::fromLabels($input->label, $input->path, $setback)->afterEscalation(null === $input->change ? null : $this->escalations->outcomeAtLatestHead($input->project, $input->change)));
         } catch (ReportableFailure $failure) {
             $io->error($failure->getMessage());
 

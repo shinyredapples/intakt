@@ -23,6 +23,7 @@ use Intakt\Core\Build\UseCase\ChooseBuildModel\ModelChoiceNotRecorded;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuilderNotOnClaudeCode;
 use Intakt\Core\Review\Contract\ChangeEscalations;
 use Intakt\Core\Review\Contract\EscalationOutcome;
+use Intakt\Core\Review\Contract\EscalationStillPending;
 use Intakt\Core\Review\Contract\PathGlob;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -41,6 +42,7 @@ use Symfony\Component\Console\Tester\CommandTester;
 #[UsesClass(ModelChoiceNotRecorded::class)]
 #[UsesClass(BuilderNotOnClaudeCode::class)]
 #[UsesClass(ConfiguredBuildRouting::class)]
+#[UsesClass(EscalationStillPending::class)]
 #[UsesClass(BuildRoutingNotConfigured::class)]
 #[UsesClass(ModelRouting::class)]
 #[UsesClass(RoutingRules::class)]
@@ -130,6 +132,16 @@ final class ChooseBuildModelCommandTest extends TestCase
         self::assertSame('confirmed-escalation', $ledger->payloads()[0]['reason'] ?? null);
     }
 
+    public function testItChoosesAndRecordsNoModelForAChangeWhoseEscalationReviewHasNotAnsweredYet(): void
+    {
+        $ledger = new InMemoryLedger();
+
+        $tester = $this->execute($ledger, ['project' => 'alpha', 'task' => 'T61', 'attempt' => '3', '--change' => 'feat/pending']);
+
+        self::assertSame([Command::FAILURE, 0], [$tester->getStatusCode(), $ledger->count()]);
+        self::assertStringContainsString('not answered yet', $tester->getDisplay());
+    }
+
     public function testItReportsATierOnAProviderABuildCannotRunOnWithoutRecording(): void
     {
         $ledger = new InMemoryLedger();
@@ -151,7 +163,7 @@ final class ChooseBuildModelCommandTest extends TestCase
         $tiers->method('resolve')->willReturnCallback(static fn (string $project, Tier $tier): ResolvedModel => new ResolvedModel($provider, $tier->value.'-model'));
         $application = new Application();
         $escalations = self::createStub(ChangeEscalations::class);
-        $escalations->method('outcomeOfLatestRound')->willReturnCallback(static fn (string $project, string $change): ?EscalationOutcome => EscalationOutcome::tryFrom(substr($change, strlen('feat/'))));
+        $escalations->method('outcomeAtLatestHead')->willReturnCallback(static fn (string $project, string $change): ?EscalationOutcome => 'feat/pending' === $change ? throw EscalationStillPending::of($change) : EscalationOutcome::tryFrom(substr($change, strlen('feat/'))));
         $application->addCommand(new ChooseBuildModelCommand(new ChooseBuildModel($routing, $tiers, $ledger), $escalations));
         $tester = new CommandTester($application->find('intakt:build:model'));
         $tester->execute($input);

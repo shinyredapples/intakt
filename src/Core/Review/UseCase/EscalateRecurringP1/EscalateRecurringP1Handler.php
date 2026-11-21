@@ -6,85 +6,120 @@ namespace Intakt\Core\Review\UseCase\EscalateRecurringP1;
 
 use Intakt\Core\Platform\Contract\AsCommandHandler;
 use Intakt\Core\Platform\Contract\Redactor;
-use Intakt\Core\Review\Contract\ChangeUnderReview;
 use Intakt\Core\Review\Contract\EscalationFailed;
-use Intakt\Core\Review\Contract\EscalationRequest;
+use Intakt\Core\Review\Contract\EscalationOutcome;
 use Intakt\Core\Review\Contract\EscalationReviewed;
 use Intakt\Core\Review\Contract\EscalationVerdict;
 use Intakt\Core\Review\Contract\EscalationVerdictReused;
-use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Domain\KeptVerdict;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\VerdictAlreadyKept;
 use Intakt\Core\Review\Infrastructure\KeptVerdicts;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
 use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
-use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
 use Intakt\Plugin\Vendor\Contract\EscalationReviews;
 use Intakt\Plugin\Vendor\Contract\Vendor;
+use Symfony\Component\Lock\LockFactory;
 
 // Queued from the judging's transaction and run after it, so the strong tier's call holds none of the judging's locks; the kept verdict and its event commit together.
 #[AsCommandHandler]
 final readonly class EscalateRecurringP1Handler
 {
     public const string UNREADABLE = 'the answer could not be read as an escalation verdict';
-    public const string FINDING_GONE = 'the finding is not among the findings the round reported';
+
+    private const string LOCK_PREFIX = 'review-escalation-';
 
     public function __construct(
         private ReviewRounds $rounds,
-        private StoredFindings $findings,
+        private EscalationRequests $requests,
         private KeptVerdicts $verdicts,
         private Vendor $vendor,
         private EscalationReviews $escalations,
         private RoundLedger $ledger,
+        private EscalationsOfChange $recorded,
+        private HolderReReviews $reReviews,
         private Redactor $redactor,
+        private LockFactory $locks,
     ) {
     }
 
     public function __invoke(EscalateRecurringP1 $command): void
     {
+        $outcome = $this->settledWhileTheKeyIsHeld($command);
+
+        // Also on a redelivery and on a verdict reused at the judging, because the re-review is started only once per head and a round already started refuses a second start.
+        if (EscalationOutcome::Rejected === $outcome) {
+            $this->reReviews->startAfterRejectionIn($command->round);
+        }
+    }
+
+    // Not waited for, because Messenger brings a busy message back and it then finds the verdict the holder of the key kept, so two deliveries never pay for two answers.
+    private function settledWhileTheKeyIsHeld(EscalateRecurringP1 $command): ?EscalationOutcome
+    {
+        $lock = $this->locks->createLock(self::LOCK_PREFIX.hash('sha256', $command->key));
+
+        if (!$lock->acquire()) {
+            throw EscalationBusy::of($command->key);
+        }
+
+        try {
+            return $this->settled($command);
+        } finally {
+            $lock->release();
+        }
+    }
+
+    // Once per round and key: what the ledger holds for them stands, so a redelivery asks no model and records nothing twice; null for a failed escalation.
+    private function settled(EscalateRecurringP1 $command): ?EscalationOutcome
+    {
+        $recorded = $this->recorded->recordedFor($command->round, $command->key);
+
+        if (null !== $recorded) {
+            return $recorded instanceof EscalationFailed ? null : $recorded->outcome;
+        }
+
         $kept = $this->verdicts->ofKey($command->key);
 
-        // Asked already, by another round of the key or by this message before a redelivery, so the model is never asked for a second verdict.
         if ($kept instanceof KeptVerdict) {
             $this->reuse($command, $kept);
 
-            return;
+            return $kept->outcome;
         }
 
+        return $this->reviewed($command);
+    }
+
+    private function reviewed(EscalateRecurringP1 $command): ?EscalationOutcome
+    {
         $round = $this->rounds->stored($command->round);
-        $finding = $this->findingOf($round, $command->finding);
+        $request = $this->requests->of($round, $command->finding);
 
-        if (!$finding instanceof Finding) {
-            $this->ledger->escalationFailed(new EscalationFailed($command->round, $command->finding, $command->key, self::FINDING_GONE));
-
-            return;
+        if (is_string($request)) {
+            return $this->failed($command, $request);
         }
 
         if (!$this->vendor->mapsAModelTo($round->project(), EscalationReviews::TIER)) {
-            $this->ledger->escalationFailed(new EscalationFailed($command->round, $command->finding, $command->key, $this->unmappedIn($round->project())));
-
-            return;
+            return $this->failed($command, $this->unmappedIn($round->project()));
         }
 
-        $verdict = $this->escalations->escalate($round->project(), new EscalationRequest(new ChangeUnderReview($round->project(), $round->task(), $round->diff()), $finding, $round->id()));
+        $verdict = $this->escalations->escalate($round->project(), $request);
 
         if (!$verdict instanceof EscalationVerdict) {
-            $this->ledger->escalationFailed(new EscalationFailed($command->round, $command->finding, $command->key, self::UNREADABLE));
-
-            return;
+            return $this->failed($command, self::UNREADABLE);
         }
 
-        $this->keep($round, $command, $this->redacted($verdict));
+        return $this->keep($round, $command, $this->redacted($verdict));
     }
 
-    private function findingOf(ReviewRound $round, string $id): ?Finding
+    private function failed(EscalateRecurringP1 $command, string $reason): null
     {
-        return array_find($this->findings->reportedIn($round), static fn (Finding $finding): bool => $finding->id === $id);
+        $this->ledger->escalationFailed(new EscalationFailed($command->round, $command->finding, $command->key, $reason));
+
+        return null;
     }
 
     // Under the round's lock and in one transaction, so a refused event takes the kept verdict back; another writer that kept the key first wins, and this round reuses its verdict.
-    private function keep(ReviewRound $round, EscalateRecurringP1 $command, EscalationVerdict $verdict): void
+    private function keep(ReviewRound $round, EscalateRecurringP1 $command, EscalationVerdict $verdict): EscalationOutcome
     {
         $this->rounds->withLockedRound($round->id(), function () use ($command, $verdict): void {
             try {
@@ -99,15 +134,12 @@ final readonly class EscalateRecurringP1Handler
 
             $this->ledger->escalationReviewed(new EscalationReviewed($command->round, $command->finding, $command->key, $verdict->outcome, $verdict->reasons));
         });
+
+        return $this->verdicts->ofKey($command->key)->outcome ?? $verdict->outcome;
     }
 
-    // Nothing for this round's own verdict, because that is a redelivery whose escalation_reviewed is in the ledger already.
     private function reuse(EscalateRecurringP1 $command, KeptVerdict $kept): void
     {
-        if ($kept->round === $command->round) {
-            return;
-        }
-
         $this->ledger->escalationVerdictReused(new EscalationVerdictReused($command->round, $command->finding, $command->key, $kept->outcome, $kept->round));
     }
 

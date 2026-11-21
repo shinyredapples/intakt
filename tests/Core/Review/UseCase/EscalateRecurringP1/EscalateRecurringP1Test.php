@@ -7,29 +7,39 @@ namespace Intakt\Tests\Core\Review\UseCase\EscalateRecurringP1;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
+use Intakt\Core\Review\Contract\ChangeSource;
 use Intakt\Core\Review\Contract\ChangeUnderReview;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\EscalationFailed;
 use Intakt\Core\Review\Contract\EscalationOutcome;
 use Intakt\Core\Review\Contract\EscalationRequest;
 use Intakt\Core\Review\Contract\EscalationReviewed;
+use Intakt\Core\Review\Contract\EscalationStillPending;
 use Intakt\Core\Review\Contract\EscalationVerdict;
 use Intakt\Core\Review\Contract\EscalationVerdictReused;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\Judgement;
+use Intakt\Core\Review\Contract\PromptCut;
 use Intakt\Core\Review\Contract\RecurringP1Found;
+use Intakt\Core\Review\Contract\RequestedRound;
 use Intakt\Core\Review\Contract\Severity;
+use Intakt\Core\Review\Contract\StartReview;
+use Intakt\Core\Review\Contract\StartReviewAtHead;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\KeptVerdict;
 use Intakt\Core\Review\Infrastructure\KeptVerdicts;
 use Intakt\Core\Review\UseCase\EscalateRecurringP1\EscalateRecurringP1;
 use Intakt\Core\Review\UseCase\EscalateRecurringP1\EscalateRecurringP1Handler;
+use Intakt\Core\Review\UseCase\EscalateRecurringP1\EscalationBusy;
+use Intakt\Core\Review\UseCase\EscalateRecurringP1\EscalationRequests;
 use Intakt\Core\Review\UseCase\EscalateRecurringP1\EscalationsOfChange;
+use Intakt\Core\Review\UseCase\EscalateRecurringP1\HolderReReviews;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRound;
 use Intakt\Core\Review\UseCase\JudgeRound\RecordRecurringP1s;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
 use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
+use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Vendor\Contract\Vendor;
 use Intakt\Tests\Core\Review\UseCase\JudgeRound\ScriptedJudgement;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
@@ -56,11 +66,17 @@ use Symfony\Component\Console\Tester\CommandTester;
 #[UsesClass(RecurringP1Found::class)]
 #[UsesClass(KeptVerdicts::class)]
 #[UsesClass(KeptVerdict::class)]
+#[CoversClass(EscalationRequests::class)]
+#[CoversClass(HolderReReviews::class)]
+#[CoversClass(EscalationBusy::class)]
+#[UsesClass(EscalationStillPending::class)]
+#[UsesClass(StartReviewAtHead::class)]
 final class EscalateRecurringP1Test extends KernelTestCase
 {
     private const string CHANGE = 'escalated-change';
     private const string HEAD_A = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
     private const string HEAD_B = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+    private const string HEAD_C = 'cccccccccccccccccccccccccccccccccccccccc';
 
     private RoundFixture $fixture;
 
@@ -150,7 +166,7 @@ final class EscalateRecurringP1Test extends KernelTestCase
 
         $this->fixture->escalate(new EscalateRecurringP1($second, 'F9', $this->keyOfFirstRound()), $escalations);
 
-        self::assertSame([[], EscalateRecurringP1Handler::FINDING_GONE], [$escalations->requests, $this->payloadsOf(LedgerEventKind::EscalationFailed)[0]['reason'] ?? null]);
+        self::assertSame([[], EscalationRequests::FINDING_GONE],[$escalations->requests, $this->payloadsOf(LedgerEventKind::EscalationFailed)[0]['reason'] ?? null]);
     }
 
     public function testAVerdictKeptByAnotherWriterDuringTheCallIsReusedInsteadOfKeptTwice(): void
@@ -195,7 +211,7 @@ final class EscalateRecurringP1Test extends KernelTestCase
 
         $this->escalateQueued(new ScriptedEscalations(new EscalationVerdict(EscalationOutcome::Confirmed, 'The bus drops it.')));
 
-        self::assertSame(EscalationOutcome::Confirmed, $this->fixture->escalationsOfChange()->outcomeOfLatestRound('alpha', self::CHANGE));
+        self::assertSame(EscalationOutcome::Confirmed, $this->fixture->escalationsOfChange()->outcomeAtLatestHead('alpha', self::CHANGE));
     }
 
     public function testANewerRoundOfTheChangeHasNoEscalationOutcomeUntilItIsEscalated(): void
@@ -205,14 +221,14 @@ final class EscalateRecurringP1Test extends KernelTestCase
 
         $this->fixture->startAtHead(self::CHANGE, self::HEAD_A);
 
-        self::assertNull($this->fixture->escalationsOfChange()->outcomeOfLatestRound('alpha', self::CHANGE));
+        self::assertNull($this->fixture->escalationsOfChange()->outcomeAtLatestHead('alpha', self::CHANGE));
     }
 
     public function testAChangeWithoutRoundsOrEscalationsHasNoEscalationOutcome(): void
     {
         $this->judged($this->completedAt(self::HEAD_A, $this->keyedP1()));
 
-        self::assertSame([null, null], [$this->fixture->escalationsOfChange()->outcomeOfLatestRound('alpha', self::CHANGE), $this->fixture->escalationsOfChange()->outcomeOfLatestRound('alpha', 'another-change')]);
+        self::assertSame([null, null], [$this->fixture->escalationsOfChange()->outcomeAtLatestHead('alpha', self::CHANGE), $this->fixture->escalationsOfChange()->outcomeAtLatestHead('alpha', 'another-change')]);
     }
 
     public function testAfterARejectedEscalationTheHolderReReviewsTheFindingWithTheEscalationsReasons(): void
@@ -262,6 +278,178 @@ final class EscalateRecurringP1Test extends KernelTestCase
         self::assertGreaterThan(strpos($printed, ' recurring_p1_found '), strpos($printed, ' escalation_reviewed '));
     }
 
+    public function testWhileTheEscalationIsQueuedTheChangeHasNoOutcomeYetSoNoBuildTierIsChosen(): void
+    {
+        $this->recurredOnASecondHead();
+
+        $this->expectException(EscalationStillPending::class);
+
+        $this->fixture->escalationsOfChange()->outcomeAtLatestHead('alpha', self::CHANGE);
+    }
+
+    public function testAFailedEscalationLeavesTheChangeWithoutAnOutcomeAndNoLongerPending(): void
+    {
+        $this->recurredOnASecondHead();
+
+        $this->escalateQueued(new ScriptedEscalations(null));
+
+        self::assertNull($this->fixture->escalationsOfChange()->outcomeAtLatestHead('alpha', self::CHANGE));
+    }
+
+    public function testAnotherRoundOnTheConfirmedHeadKeepsTheConfirmationForTheNextBuild(): void
+    {
+        $this->recurredOnASecondHead();
+        $this->escalateQueued(new ScriptedEscalations(new EscalationVerdict(EscalationOutcome::Confirmed, 'The bus drops it.')));
+
+        $this->fixture->startAtHead(self::CHANGE, self::HEAD_B);
+
+        self::assertSame(EscalationOutcome::Confirmed, $this->fixture->escalationsOfChange()->outcomeAtLatestHead('alpha', self::CHANGE));
+    }
+
+    public function testAnUnreadableAnswerIsRecordedAsOneFailureAcrossRedeliveries(): void
+    {
+        $this->recurredOnASecondHead();
+        $this->escalateQueued(new ScriptedEscalations(null));
+        $again = new ScriptedEscalations(null);
+
+        $this->escalateQueued($again);
+
+        self::assertSame([[], null, 1], [$again->requests, $this->keptOfFirstKey(), count($this->payloadsOf(LedgerEventKind::EscalationFailed))]);
+    }
+
+    public function testARedeliveryOfAnEscalationThatReusedAVerdictRecordsTheReuseOnce(): void
+    {
+        $this->recurredOnAThirdHead();
+        [$second, $third] = $this->fixture->escalations->messages;
+        $answer = new ScriptedEscalations(new EscalationVerdict(EscalationOutcome::Confirmed, 'Already handled.'));
+        $this->fixture->escalate($second, $answer);
+
+        $this->fixture->escalate($third, $answer);
+        $this->fixture->escalate($third, $answer);
+
+        self::assertSame([1, 1], [count($answer->requests), count($this->payloadsOf(LedgerEventKind::EscalationVerdictReused))]);
+    }
+
+    public function testAnEscalationDeliveredWhileAnotherOfTheSameKeyRunsIsRetriedLaterAndThenReusesItsVerdict(): void
+    {
+        $this->recurredOnAThirdHead();
+        [$second, $third] = $this->fixture->escalations->messages;
+        $overlapping = new ScriptedEscalations(new EscalationVerdict(EscalationOutcome::Rejected, 'Second answer.'));
+        $busy = [];
+        $first = new ScriptedEscalations(new EscalationVerdict(EscalationOutcome::Confirmed, 'First answer.'), function () use ($third, $overlapping, &$busy): void {
+            try {
+                $this->fixture->escalate($third, $overlapping);
+            } catch (EscalationBusy $refused) {
+                $busy[] = $refused;
+            }
+        });
+
+        $this->fixture->escalate($second, $first);
+        $this->fixture->escalate($third, $overlapping);
+
+        self::assertSame([1, 0, 1], [count($first->requests), count($overlapping->requests), count($busy)]);
+        self::assertSame(['confirmed'], array_column($this->payloadsOf(LedgerEventKind::EscalationVerdictReused), 'outcome'));
+    }
+
+    public function testARejectionStartsTheNextRoundOfTheChangeOnTheRejectedHeadFromItsRepository(): void
+    {
+        $second = $this->recurredOnASecondHead();
+
+        $this->escalateQueued(new ScriptedEscalations(new EscalationVerdict(EscalationOutcome::Rejected, 'The retry in send() delivers it.')));
+
+        self::assertEquals([new StartReviewAtHead(new StartReview('alpha', RoundFixture::TASK, new RequestedRound(self::CHANGE, 3, new ChangeSource('/repos/alpha', 'main'))), new CommitId(self::HEAD_B))], $this->fixture->reviewStarts->starts);
+        self::assertSame(2, $this->fixture->round($second)->number());
+    }
+
+    public function testAConfirmationStartsNoRoundOfItsOwn(): void
+    {
+        $this->recurredOnASecondHead();
+
+        $this->escalateQueued(new ScriptedEscalations(new EscalationVerdict(EscalationOutcome::Confirmed, 'The bus drops it.')));
+
+        self::assertSame([], $this->fixture->reviewStarts->starts);
+    }
+
+    public function testARedeliveredRejectionStartsTheHoldersReReviewOnce(): void
+    {
+        $this->recurredOnASecondHead();
+        $this->escalateQueued(new ScriptedEscalations(new EscalationVerdict(EscalationOutcome::Rejected, 'The retry in send() delivers it.')));
+
+        $this->escalateQueued(new ScriptedEscalations(new EscalationVerdict(EscalationOutcome::Rejected, 'Asked twice.')));
+
+        self::assertCount(1, $this->fixture->reviewStarts->starts);
+    }
+
+    public function testARejectionInARoundWithoutARepositoryStartsNoRound(): void
+    {
+        $this->judged($this->completedWithoutRepositoryAt(self::HEAD_A, $this->keyedP1()));
+        $this->judged($this->completedWithoutRepositoryAt(self::HEAD_B, $this->repeated($this->keyedP1())));
+
+        $this->escalateQueued(new ScriptedEscalations(new EscalationVerdict(EscalationOutcome::Rejected, 'Fine as it is.')));
+
+        self::assertSame([], $this->fixture->reviewStarts->starts);
+    }
+
+    public function testAReusedRejectionAtTheJudgingQueuesItsMessageSoTheHolderReReviewsTheNewHead(): void
+    {
+        $this->recurredOnASecondHead();
+        $this->escalateQueued(new ScriptedEscalations(new EscalationVerdict(EscalationOutcome::Rejected, 'Fine as it is.')));
+        $third = $this->judged($this->completedAt(self::HEAD_C, $this->repeated($this->keyedP1())));
+        $never = new ScriptedEscalations(new EscalationVerdict(EscalationOutcome::Confirmed, 'Never asked.'));
+
+        $this->fixture->escalate(array_last($this->fixture->escalations->messages), $never);
+
+        self::assertSame([$third, []], [array_last($this->fixture->escalations->messages)->round, $never->requests]);
+        self::assertSame([3, 4], array_map(static fn (StartReviewAtHead $start): ?int => $start->start->round->number, $this->fixture->reviewStarts->starts));
+    }
+
+    public function testAHolderThatHoldsARejectedFindingAgainOnItsReReviewGetsNoFurtherRoundOnThatHead(): void
+    {
+        $this->recurredOnASecondHead();
+        $this->escalateQueued(new ScriptedEscalations(new EscalationVerdict(EscalationOutcome::Rejected, 'Fine as it is.')));
+        $this->judged($this->completedAt(self::HEAD_B, $this->repeated($this->keyedP1())));
+
+        $this->fixture->escalate(array_last($this->fixture->escalations->messages), new ScriptedEscalations(null));
+
+        self::assertCount(1, $this->fixture->reviewStarts->starts);
+    }
+
+    public function testAFindingWhoseFileTheDiffCannotHoldWholeRecordsAFailedEscalationWithoutAskingAModel(): void
+    {
+        $this->judged($this->completedWithDiffAt(self::HEAD_A, $this->keyedP1()));
+        $this->judged($this->completedWithDiffAt(self::HEAD_B, $this->repeated($this->keyedP1())));
+        $escalations = new ScriptedEscalations(new EscalationVerdict(EscalationOutcome::Confirmed, 'Never asked.'));
+
+        $this->escalateQueued($escalations);
+
+        self::assertSame([[], EscalationRequests::FINDING_CUT], [$escalations->requests, $this->payloadsOf(LedgerEventKind::EscalationFailed)[0]['reason'] ?? null]);
+    }
+
+    private function recurredOnAThirdHead(): string
+    {
+        $this->recurredOnASecondHead();
+
+        return $this->judged($this->completedAt(self::HEAD_C, $this->repeated($this->keyedP1())));
+    }
+
+    private function completedWithoutRepositoryAt(string $head, Finding $finding): string
+    {
+        $round = $this->fixture->startAtHead(self::CHANGE, $head);
+        $this->deliverAll($round, new Verdict(Decision::Changes, [$finding], [], []));
+
+        return $round;
+    }
+
+    // The finding's own file is longer than the prompt holds, so the cut would reach into it.
+    private function completedWithDiffAt(string $head, Finding $finding): string
+    {
+        $diff = "diff --git a/RecordingBus.php b/RecordingBus.php\n@@ -1 +1 @@\n".str_repeat("+line\n", intdiv(PromptCut::CEILING_BYTES, 6) + 1);
+        $round = $this->fixture->startWithDiffAtHead(self::CHANGE, $head, $diff);
+        $this->deliverAll($round, new Verdict(Decision::Changes, [$finding], [], []));
+
+        return $round;
+    }
+
     private function recurredOnASecondHead(): string
     {
         $this->judged($this->completedAt(self::HEAD_A, $this->keyedP1()));
@@ -276,7 +464,7 @@ final class EscalateRecurringP1Test extends KernelTestCase
 
     private function completedAt(string $head, Finding $finding): string
     {
-        $round = $this->fixture->startAtHead(self::CHANGE, $head);
+        $round = $this->fixture->startAtHeadOfRepository(self::CHANGE, $head);
         $this->deliverAll($round, new Verdict(Decision::Changes, [$finding], [], []));
 
         return $round;
