@@ -100,6 +100,17 @@ final class GateChildFullResultTest extends SandboxTestCase
         self::assertSame([1, '2'], [$child->exitCode, new CheckRun($child)->omittedOf('dashes')]);
     }
 
+    public function testAGrandchildStartedThroughSymfonyProcessUnderVariablesOrderEgpcsDoesNotSeeTheHandOff(): void
+    {
+        $sandbox = $this->sandboxWithTwelveDashes();
+        $sandbox->write('gate.php', $this->gateStartingAGrandchild());
+
+        $child = new ProcessRunner()->run([PHP_BINARY, '-d', 'variables_order=EGPCS', $sandbox->root.'/gate.php', 'dashes', '--root='.$sandbox->root], $sandbox->root, [GateChildren::FULL_RESULT_VARIABLE => $sandbox->root.'/whole.json']);
+
+        self::assertSame('unset', file_get_contents($sandbox->root.'/grandchild.txt'), $child->output.$child->errors);
+        self::assertCount(12, $this->findingsIn((string) file_get_contents($sandbox->root.'/whole.json')));
+    }
+
     public function testAChildStartedWithoutTheHandOffWritesNoWholeResult(): void
     {
         $sandbox = $this->sandboxWithTwelveDashes();
@@ -182,6 +193,22 @@ final class GateChildFullResultTest extends SandboxTestCase
             echo \$result->toJson(), "\\n";
             file_put_contents((string) getenv('INTAKT_GATE_FULL_RESULT'), \$result->toFullJson());
             exit(1);
+            PHP;
+    }
+
+    // Because the grandchild must start after the gate child cleared its hand-off, it starts once the real entry has run its gate.
+    private function gateStartingAGrandchild(): string
+    {
+        $real = var_export(dirname(__DIR__, 2), true);
+
+        return <<<PHP
+            <?php
+            register_shutdown_function(static function (): void {
+                \$grandchild = new Symfony\\Component\\Process\\Process([PHP_BINARY, '-r', 'echo false === getenv("INTAKT_GATE_FULL_RESULT") ? "unset" : "set";']);
+                \$grandchild->run();
+                file_put_contents(__DIR__.'/grandchild.txt', \$grandchild->getOutput());
+            });
+            require {$real}.'/config/gates/run-gate.php';
             PHP;
     }
 
