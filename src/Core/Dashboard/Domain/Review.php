@@ -15,7 +15,7 @@ final readonly class Review
     /**
      * @param non-empty-list<ReviewedRound> $rounds
      */
-    public function __construct(public array $rounds)
+    public function __construct(public array $rounds, private Timeline $timeline = Timeline::Current)
     {
         $this->project = $rounds[0]->project;
         $this->change = $rounds[0]->change;
@@ -57,6 +57,10 @@ final readonly class Review
     // Sent with the button as the page shows it, so a double submit or a page gone stale after another round started is refused instead of opening one more round.
     public function nextNumber(): ?int
     {
+        if (Timeline::HistoryOnly === $this->timeline) {
+            return null;
+        }
+
         $latest = $this->latest()->number;
 
         return null === $latest ? null : $latest + 1;

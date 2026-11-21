@@ -11,6 +11,7 @@ use Intakt\Core\Dashboard\Domain\ReviewOutcome;
 use Intakt\Core\Dashboard\Domain\RoundFinding;
 use Intakt\Core\Dashboard\Domain\RoundPlace;
 use Intakt\Core\Dashboard\Domain\RoundStart;
+use Intakt\Core\Review\Contract\ChangeAddress;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Core\Review\Contract\RoundEnding;
@@ -24,6 +25,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(ReviewOutcome::class)]
 #[UsesClass(ReviewerOutcome::class)]
 #[UsesClass(RoundFinding::class)]
+#[UsesClass(ChangeAddress::class)]
 final class ReviewedRoundTest extends TestCase
 {
     public function testAReportedSeverityIsReadPerReviewerSoTwoReviewersKeepTheirOwnForOneId(): void
@@ -99,9 +101,26 @@ final class ReviewedRoundTest extends TestCase
         self::assertSame(ReplayMark::Replay, $marked->replayMark());
     }
 
+    public function testRoundsOfOnePullRequestStartedUnderTwoSpellingsAreOfTheSameReview(): void
+    {
+        $old = $this->roundOf('r-1', 'https://github.com/Acme/Widgets/pull/7');
+
+        self::assertTrue($old->isOfTheSameReviewAs($this->roundOf('r-2', 'https://github.com/acme/widgets/pull/7')));
+    }
+
+    public function testRoundsOfTwoBranchesWhoseNamesDifferOnlyInLetterCaseAreOfTwoReviews(): void
+    {
+        self::assertFalse($this->roundOf('r-1', 'feat/Widget')->isOfTheSameReviewAs($this->roundOf('r-2', 'feat/widget')));
+    }
+
     private function round(): ReviewedRound
     {
-        return new ReviewedRound(new RoundStart('r-1', 'alpha', 2), new RoundPlace('feat/thing', 7), new DateTimeImmutable('2026-10-28T11:00:00+00:00'), null);
+        return $this->roundOf('r-1', 'feat/thing');
+    }
+
+    private function roundOf(string $id, string $change): ReviewedRound
+    {
+        return new ReviewedRound(new RoundStart($id, 'alpha', 2), new RoundPlace($change, 7), new DateTimeImmutable('2026-10-28T11:00:00+00:00'), null);
     }
 
     private function judged(): ReviewedRound
