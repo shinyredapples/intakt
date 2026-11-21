@@ -364,7 +364,7 @@ final class MainHistoryTest extends TestCase
         $this->repository->cutHistoryBelow($seen);
 
         $this->expectException(MainNotRead::class);
-        $this->expectExceptionMessage('is a shallow repository');
+        $this->expectExceptionMessageMatches('/ is a shallow repository\.$/');
 
         $this->history([])->firstParentsSince($base);
     }
@@ -374,7 +374,7 @@ final class MainHistoryTest extends TestCase
         $seen = $this->repository->commitFile('sub/file', 'content');
 
         $this->expectException(MainNotRead::class);
-        $this->expectExceptionMessage('is not the repository itself');
+        $this->expectExceptionMessageMatches('/ is not the repository itself /');
 
         new MainHistory(new HardenedGit(), $this->repository->path.'/sub', [], new Filesystem())->contains($seen);
     }
@@ -384,7 +384,7 @@ final class MainHistoryTest extends TestCase
         $seen = $this->repository->commitEmpty('Seen');
 
         $this->expectException(MainNotRead::class);
-        $this->expectExceptionMessage('is not the repository itself');
+        $this->expectExceptionMessageMatches('/ is not the repository itself /');
 
         new MainHistory(new HardenedGit(), $this->repository->path.'/.git', [], new Filesystem())->contains($seen);
     }
@@ -403,7 +403,7 @@ final class MainHistoryTest extends TestCase
         $seen = $this->repository->commitEmpty('Seen');
 
         $this->expectException(MainNotRead::class);
-        $this->expectExceptionMessage('does not exist');
+        $this->expectExceptionMessageMatches('/\/missing does not exist\.$/');
 
         new MainHistory(new HardenedGit(), $this->repository->path.'/missing', [], new Filesystem())->contains($seen);
     }
@@ -415,7 +415,7 @@ final class MainHistoryTest extends TestCase
         file_put_contents($this->repository->path.'/.git/info/attributes', "* filter=anything\n");
 
         $this->expectException(MainNotRead::class);
-        $this->expectExceptionMessage('info/attributes exists');
+        $this->expectExceptionMessageMatches('/^Main was not read, because .*\/\.git\/info\/attributes exists: /');
 
         $this->history([$this->publicKey('owner')])->signatureOf($signed);
     }
