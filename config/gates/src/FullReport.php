@@ -91,7 +91,9 @@ final readonly class FullReport
             return [];
         }
 
-        return array_values(preg_grep(self::GENERATED, $names));
+        $generated = array_filter($names, static fn (string $name): bool => 1 === preg_match(self::GENERATED, $name));
+
+        return array_values($generated);
     }
 
     // Because a report the summary names must hold everything, a failed or short write leaves no file, and its warning never reaches stdout between the JSON lines.

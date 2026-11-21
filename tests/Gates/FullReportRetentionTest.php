@@ -176,7 +176,7 @@ final class FullReportRetentionTest extends SandboxTestCase
     {
         $listed = scandir($root.'/'.FullReport::FOLDER);
         self::assertIsArray($listed);
-        $names = array_values(preg_grep(FullReport::GENERATED, $listed));
+        $names = array_values(array_filter($listed, static fn (string $name): bool => 1 === preg_match(FullReport::GENERATED, $name)));
         sort($names);
 
         return $names;
