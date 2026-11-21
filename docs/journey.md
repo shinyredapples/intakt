@@ -1,7 +1,7 @@
 # Journey: from an empty repository to a review panel that builds itself
 
-Intakt was started on 2026-10-24 for the Symfony AI & MCP Hackathon (deadline 2026-11-22). Most of it was built by an AI
-build loop, the runner Intakt is designed to replace: sessions wrote the design and the plan, the loop built the
+Intakt was started on 2026-10-24 for the Symfony AI & MCP Hackathon (deadline 2026-11-22). Most of it was built by the
+build loop that developed Intakt, an AI runner Intakt is designed to replace: sessions wrote the design and the plan, the loop built the
 issues, and a panel of AI reviewers approved or sent back every pull request. This page follows that path milestone by
 milestone: what was planned, what happened, what changed, and what we learned. The Symfony and Symfony AI features
 behind it are on [Highlights](https://shinyredapples.github.io/intakt/).
@@ -173,7 +173,7 @@ not. Since then every stall gets a cause and a route, and owner decisions are as
 ### The plan changes (10-31 to 11-09)
 
 - **10-31, switch plan.** The hackathon release covers reviews. Three milestones were added after it: M6 Shadow,
-  M7 Builder half, M8 Switch, built from Intakt's design with the old loop as reference only ([#318](https://github.com/shinyredapples/intakt/issues/318)).
+  M7 Builder half, M8 Switch, built from Intakt's design with the earlier loop as reference only ([#318](https://github.com/shinyredapples/intakt/issues/318)).
 - **11-03, take over as soon as possible.** The loop starts M7 before the deadline, protected by a strict pick order:
   urgent first, then milestone by milestone ([#742](https://github.com/shinyredapples/intakt/issues/742)).
 - **11-09, no observe-only stage.** Intakt's review replaces one of the loop's reviewers on real pull requests at once

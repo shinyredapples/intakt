@@ -1,6 +1,6 @@
 # The engine room: the words behind the loop
 
-The dashboard and the logs use a handful of words for the loop's machinery: lanes, slots, ticks, queues, locks, cycles, generations, budgets, draining. This page explains each one in plain words, with a picture where it helps. For the step-by-step story see [the journey of a task](the-journey-of-a-task.md); for the full rules, the [design](../design/README.md). Intakt is still being built, so this describes the decided design.
+The dashboard and the logs use a handful of words for the loop's machinery: lanes, slots, time limits, ticks, queues, locks, cycles, generations, budgets, draining. This page explains each one in plain words, with a picture where it helps. For the step-by-step story see [the journey of a task](the-journey-of-a-task.md); for the full rules, the [design](../design/README.md). Intakt is still being built, so this describes the decided design.
 
 ## Lanes and slots: the workbenches
 
@@ -29,7 +29,26 @@ flowchart LR
 
 How many build slots run at the same time depends on the budget (below): when the week's allowance is tight, only one does.
 
-Builders on one machine share its processors. What keeps them apart today is each build job's own limit: 2 processors and 4 GiB of memory, from which the builder's check sizes itself (one gate at a time, the tests gate included). Intakt also works out a ceiling for the checks a builder runs at a time when more slots share the machine: the machine's processors divided by the number of slots, rounded down to a whole number (11 processors and 3 slots give 3), at least 2 and at most 8. A build job passes this number on to its builder's check only when there is more than one slot and the number is lower than what the check would pick by itself from the job's limits; it never raises that pick, because the job's memory would not hold more. With today's job limits the ceiling (2 or more) is never lower than the check's own pick (1), so the number of slots does not change a build job's check yet. For now you set the number of slots yourself (`intakt.build.slots`, 1 by default; see the [user guide](../user/README.md#running-a-build)). Each builder also gets 25 minutes for one command (`intakt.build.tool_time_limit_seconds`, 1500 seconds by default), set by Intakt when it starts the builder, so a check as slow as the slowest measured on a busy machine (7 to 9 minutes) still finishes inside the command that started it instead of going to the background while the builder waits. A command that runs longer than the limit may keep running in the background after the call returns; the session's own time limit is separate.
+Builders on one machine share its processors. What keeps them apart today is each build job's own limit: 2 processors and 4 GiB of memory, from which the builder's check sizes itself (one gate at a time, the tests gate included). Intakt also works out a ceiling for the checks a builder runs at a time when more slots share the machine: the machine's processors divided by the number of slots, rounded down to a whole number (11 processors and 3 slots give 3), at least 2 and at most 8. A build job passes this number on to its builder's check only when there is more than one slot and the number is lower than what the check would pick by itself from the job's limits; it never raises that pick, because the job's memory would not hold more. With today's job limits the ceiling (2 or more) is never lower than the check's own pick (1), so the number of slots does not change a build job's check yet. For now you set the number of slots yourself (`intakt.build.slots`, 1 by default; see the [user guide](../user/README.md#running-a-build)). Each builder also has a time limit for one command, next to the time limit of its whole session ([below](#time-limits-one-command-and-the-whole-session)).
+
+## Time limits: one command and the whole session
+
+A builder works under two clocks:
+
+- **One command** (a check, for example) gets up to 25 minutes (`intakt.build.tool_time_limit_seconds`, 1500 seconds by default), set by Intakt when it starts the builder. That way a check as slow as the slowest measured on a busy machine (7 to 9 minutes) still finishes inside the command that started it, instead of going to the background while the builder waits. A command that runs longer than the limit may keep running in the background after the call returns, but the session goes on. Every command gets its own 25 minutes.
+- **The whole session** gets 50 minutes. Then a watchdog stops the builder, whatever command is running; what it committed until then is kept. The limit for one command is always shorter than this, because a command can never outlive its session.
+
+```mermaid
+gantt
+  title One build session
+  dateFormat HH:mm
+  axisFormat %M min
+  section The session
+  The whole session, 50 minutes, then the watchdog stops it : 00:00, 50m
+  section Its commands
+  One command, at most 25 minutes : 00:05, 25m
+  The next command, its own 25 minutes, cut at the session's end : 00:32, 18m
+```
 
 ## Queues: who is next
 

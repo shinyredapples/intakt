@@ -77,6 +77,36 @@ final class FirstRunStylesTest extends TestCase
         self::assertMatchesRegularExpression('/min-width:\s*0;/', $this->rule('.setup .page-head > div', $this->desktopRules()));
     }
 
+    public function testTheDashboardLoadsTheDemoSheetAsItsFifthStylesheet(): void
+    {
+        preg_match_all('~<link rel="stylesheet" href="\{\{ asset\(\'styles/([a-z]+)\.css\'\) \}\}">~', $this->file('templates/dashboard/base.html.twig'), $sheets);
+
+        self::assertSame(['fonts', 'tokens', 'base', 'components', 'demo'], $sheets[1]);
+    }
+
+    public function testTheReviewStripKeepsItsFourStepsInOneRowOnAPhone(): void
+    {
+        self::assertMatchesRegularExpression('/grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\);/', $this->rule('.review-strip', $this->demoSheet()));
+        self::assertDoesNotMatchRegularExpression('/grid-template-columns/', $this->rule('.review-strip', $this->phoneBlockOf($this->demoSheet())));
+    }
+
+    public function testTheDemoSheetUsesOnlyTokensForColors(): void
+    {
+        self::assertDoesNotMatchRegularExpression('/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/i', $this->demoSheet());
+    }
+
+    private function demoSheet(): string
+    {
+        return (string) preg_replace('~/\*.*?\*/~s', '', $this->file('assets/styles/demo.css'));
+    }
+
+    private function phoneBlockOf(string $css): string
+    {
+        preg_match_all('/@media \(max-width: 760px\) \{(.*?)\n\}/s', $css, $blocks);
+
+        return implode("\n", $blocks[1]);
+    }
+
     private function zIndex(string $selector): int
     {
         return 1 === preg_match('/z-index:\s*(\d+);/', $this->rule($selector, $this->phoneBlock()), $found) ? (int) $found[1] : self::fail($selector);
