@@ -7,10 +7,8 @@ namespace Intakt\Tests\Core\Budget\Infrastructure;
 use DateTimeImmutable;
 use Doctrine\Common\EventManager;
 use Doctrine\DBAL\DriverManager;
-use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\Events;
 use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\Provider;
@@ -189,20 +187,20 @@ final class DoctrineMeasuredUseTest extends KernelTestCase
         self::assertSame(61.0, $this->measured->of($this->claude('main'), UsageWindow::FiveHour)?->usage->usedPercent);
     }
 
-    public function testAReadingAnotherWorkerRecordsBetweenAnInsertAndItsCleanupIsTheOneThatStays(): void
+    // The insert and its cleanup share one transaction, so another worker's reading of the same second lands before it, and the higher position is the latest.
+    public function testOfTwoWorkersRecordingOneWindowInOneSecondTheReadingStoredLastStays(): void
     {
-        if (!$this->entities->getConnection()->getDatabasePlatform() instanceof PostgreSQLPlatform) {
-            self::markTestSkipped('The insert and its cleanup share one transaction, and only PostgreSQL lets another worker write the same readings before it commits; the others make it wait, which one thread cannot.');
-        }
-
         $other = $this->worker(new EventManager());
-        $events = new EventManager();
-        $events->addEventListener(Events::postFlush, new OnceFlushed(fn () => self::assertSame(ReadingOutcome::Recorded, $other->record($this->reading($this->claude('main'), UsageWindow::FiveHour, 43.0)))));
-        $first = $this->worker($events);
+        $stampedFirst = self::createStub(ClockInterface::class);
+        $stampedFirst->method('now')->willReturnCallback(function () use ($other): DateTimeImmutable {
+            self::assertSame(ReadingOutcome::Recorded, $other->record($this->reading($this->claude('main'), UsageWindow::FiveHour, 43.0)));
 
-        self::assertSame(ReadingOutcome::Recorded, $first->record($this->reading($this->claude('main'), UsageWindow::FiveHour, 42.0)));
+            return $this->clock->now();
+        });
 
-        self::assertSame(43.0, $this->measured->of($this->claude('main'), UsageWindow::FiveHour)?->usage->usedPercent);
+        self::assertSame(ReadingOutcome::Recorded, new DoctrineMeasuredUse($this->entities, $stampedFirst, new EventDispatcher())->record($this->reading($this->claude('main'), UsageWindow::FiveHour, 42.0)));
+
+        self::assertSame(42.0, $this->measured->of($this->claude('main'), UsageWindow::FiveHour)?->usage->usedPercent);
         self::assertSame(1, $this->entities->getRepository(WindowReadingRecord::class)->count());
     }
 
