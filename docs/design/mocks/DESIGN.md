@@ -116,7 +116,7 @@ The Code reviewers and their verdict step each have one character, drawn in a li
 
 The octopus has four poses (`MascotPose`): `waiting`, `conducting`, `bowing`, `asleep`, for empty, idle and approved states. The enum value is the file stem: `assets/images/roles/<value>-{light,dark}-{48,96,192}.webp` for a role and `assets/images/mascot/octopus-<value>-{light,dark}-{96,144,192,288}.webp` for a pose, plus `-72` for `bowing`, which sits at 72 px beside an approved newest round (scaled from `octopus-<value>-{light,dark}.webp`). Every place uses the one partial `templates/dashboard/components/character.html.twig` (`character`, `size`); the components page shows each character and pose in both themes.
 
-Places: a reviewer's row and the verdict step's row on the review page, the live log and the round heading (24 or 48 px), and an octopus pose on an empty, idle or approved state.
+Places: a reviewer's row and the verdict step's row on the review page, the live log and the round heading (24 or 48 px), the Code reviewer beside the role of each lane of the board's Who is working strip (24 px, one per lane), and an octopus pose on an empty, idle or approved state.
 
 - **Decoration only.** Every image has `alt=""`, no `role`, a fixed `width` and `height` (no layout shift), a 1x/2x `srcset` (24 px: the 48 and 96 files; 48 px: 96 and 192; an octopus at 96 px: 96 and 192; at 144 px: 144 and 288) and `loading="lazy"`. The text beside it names the actor; no text is removed or shortened for a character.
 - **Theme.** The light and the dark image switch by the nearest `[data-theme]`, like the logo.
