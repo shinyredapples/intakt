@@ -39,8 +39,8 @@ $rounds = [
 
 foreach ($rounds as $name => $dropped) {
     $round = (string) Uuid::v7();
-    (void) $ledger->append(new LedgerEvent(LedgerEventKind::ReviewStarted, json_encode(['round' => $round, 'project' => 'probe', 'reviewers' => 1, 'change' => 'probe-'.$round, 'number' => 1], JSON_THROW_ON_ERROR)));
-    (void) $ledger->append(new LedgerEvent(LedgerEventKind::JudgeDone, json_encode(['round' => $round, 'act' => [], 'follow_ups' => [], 'findings' => [], 'dropped' => [$dropped]], JSON_THROW_ON_ERROR)));
+    appendTo($ledger, new LedgerEvent(LedgerEventKind::ReviewStarted, json_encode(['round' => $round, 'project' => 'probe', 'reviewers' => 1, 'change' => 'probe-'.$round, 'number' => 1], JSON_THROW_ON_ERROR)));
+    appendTo($ledger, new LedgerEvent(LedgerEventKind::JudgeDone, json_encode(['round' => $round, 'act' => [], 'follow_ups' => [], 'findings' => [], 'dropped' => [$dropped]], JSON_THROW_ON_ERROR)));
 
     // Sent with the configured port as Host, because the dashboard answers only a loopback name with that port (RefuseForeignHost) while the instance listens on a port of its own.
     $url = getenv('INTAKT_INSTANCE_URL').'/reviews/'.$round;
@@ -57,9 +57,11 @@ foreach ($rounds as $name => $dropped) {
     printf("  reason:   %s\n", $disclosure->filter('.fc-reason')->text());
 }
 
-/**
- * @return array<mixed>
- */
+function appendTo(Ledger $ledger, LedgerEvent $event): void
+{
+    (void) $ledger->append($event);
+}
+
 function judgePayloadOf(string $recording): mixed
 {
     $file = json_decode($recording, true, flags: JSON_THROW_ON_ERROR);
