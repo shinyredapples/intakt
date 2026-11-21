@@ -13,16 +13,26 @@ export function captionTour(page, storage) {
     let held = null;
     // Kept out of the DOM, because Turbo caches a page with its attributes and a copy that Back restores must arm its own close.
     const armed = new WeakSet();
+    // Only a round this tab has not shown yet reopens a closed tour, because a copy Back restores can hold an older round than the one closed.
+    const seen = new Set();
     let closedRound = read(storage, CLOSED_ROUND_KEY);
     let due = null;
     let sign = takeFollow(page);
 
     const show = () => {
         const caption = page.getElementById?.(CAPTION);
-        const round = caption?.getAttribute?.('data-round') ?? null;
-        if (isClosed(page) && round !== null && closedRound !== null && round !== closedRound) {
+        const round = caption?.getAttribute?.('data-round') || null;
+        if (isClosed(page) && round !== null && closedRound === null && seen.size === 0) {
+            // A tab closed before the round was kept counts as closed for the round it shows, so a later round still opens it.
+            closedRound = round;
+            close(page, storage, round);
+        }
+        if (isClosed(page) && round !== null && round !== closedRound && !seen.has(round)) {
             reopen(page, storage);
             closedRound = null;
+        }
+        if (round !== null) {
+            seen.add(round);
         }
         pointAt(page);
         if (!round || isClosed(page)) {
@@ -39,16 +49,16 @@ export function captionTour(page, storage) {
             return;
         }
         armed.add(caption);
-        setTimeout(() => closeIfStillShown(round), CLOSE_AFTER_MS);
+        setTimeout(() => closeIfStillShown(caption, round), CLOSE_AFTER_MS);
     };
-    // Tied to the round it was armed for, so a round that started in the meantime keeps its caption.
-    const closeIfStillShown = (round) => {
+    // Tied to the caption element and the round it was armed for, so a round that started in the meantime keeps its caption, and a copy Back restored waits for its own timer.
+    const closeIfStillShown = (armedCaption, round) => {
         const caption = page.getElementById?.(CAPTION);
-        if (isClosed(page) || caption?.getAttribute?.('data-round') !== round || !caption.hasAttribute(LAST)) {
+        if (isClosed(page) || caption !== armedCaption || caption.getAttribute?.('data-round') !== round || !caption.hasAttribute(LAST)) {
             return;
         }
         if (isPaused(page)) {
-            due = round;
+            due = { caption, round };
             return;
         }
         closedRound = round;
@@ -71,9 +81,9 @@ export function captionTour(page, storage) {
             // A pause starts empty, because a stage held on an earlier page would bring back an older stage on resume.
             held = null;
             if (!isPaused(page) && due !== null) {
-                const round = due;
+                const { caption, round } = due;
                 due = null;
-                setTimeout(() => closeIfStillShown(round), CLOSE_AFTER_MS);
+                setTimeout(() => closeIfStillShown(caption, round), CLOSE_AFTER_MS);
             }
             return;
         }

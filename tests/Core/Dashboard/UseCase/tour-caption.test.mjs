@@ -533,3 +533,68 @@ test('a copy Back restores after the timer fired elsewhere closes after its own 
 
     assert.equal(page.documentElement.dataset.tour, 'closed');
 });
+
+test('a timer armed before the page was left leaves a copy Back restored open for its own 8 s', (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const page = new FakePage(lastStageOf('demo-round-1'));
+    captionTour(page, new FakeStorage());
+    t.mock.timers.tick(3000);
+    visit(page, null);
+    t.mock.timers.tick(2000);
+
+    visit(page, lastStageOf('demo-round-1'));
+    t.mock.timers.tick(3000);
+    assert.equal(page.documentElement.dataset.tour, undefined);
+    t.mock.timers.tick(4999);
+    assert.equal(page.documentElement.dataset.tour, undefined);
+    t.mock.timers.tick(1);
+
+    assert.equal(page.documentElement.dataset.tour, 'closed');
+});
+
+test('a resume armed before the page was left leaves a copy Back restored open for its own 8 s', (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const page = new FakePage(lastStageOf('demo-round-1'));
+    captionTour(page, new FakeStorage());
+    page.click(page.caption.pause);
+    t.mock.timers.tick(8000);
+    page.click(page.caption.pause);
+    t.mock.timers.tick(1000);
+    visit(page, null);
+    t.mock.timers.tick(1000);
+
+    visit(page, lastStageOf('demo-round-1'));
+    t.mock.timers.tick(6000);
+    assert.equal(page.documentElement.dataset.tour, undefined);
+    t.mock.timers.tick(2000);
+
+    assert.equal(page.documentElement.dataset.tour, 'closed');
+});
+
+test('a copy of an older round Back restores keeps the newer round closed', async () => {
+    const storage = new FakeStorage();
+    const page = new FakePage(stageOf('demo-round-1'));
+    captionTour(page, storage);
+    await aStageArrives(page, stageOf('demo-round-2'));
+    page.click(page.caption.close);
+
+    visit(page, stageOf('demo-round-1'));
+    assert.equal(page.documentElement.dataset.tour, 'closed');
+    visit(page, stageOf('demo-round-2'));
+
+    assert.equal(page.documentElement.dataset.tour, 'closed');
+    assert.equal(storage.items.get('intakt-tour-round'), 'demo-round-2');
+});
+
+test('a tab closed before the round was kept stays closed for the round it shows and opens for a later one', async () => {
+    const storage = new FakeStorage({ 'intakt-tour': 'closed' });
+    const page = new FakePage(stageOf('demo-round-1'));
+    page.documentElement.dataset.tour = 'closed';
+    captionTour(page, storage);
+    assert.equal(page.documentElement.dataset.tour, 'closed');
+    assert.equal(storage.items.get('intakt-tour-round'), 'demo-round-1');
+
+    await aStageArrives(page, stageOf('demo-round-2'));
+
+    assert.equal(page.documentElement.dataset.tour, undefined);
+});
