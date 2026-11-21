@@ -6,6 +6,7 @@ namespace DoctrineMigrations;
 
 use Doctrine\DBAL\Schema\Schema;
 use Doctrine\Migrations\AbstractMigration;
+use Intakt\Core\Review\Contract\ChangeAddress;
 
 final class Version20261122100000 extends AbstractMigration
 {
@@ -13,15 +14,15 @@ final class Version20261122100000 extends AbstractMigration
 
     public function getDescription(): string
     {
-        return 'Store the change address of review rounds in its lowercase canonical form where no other spelling collides';
+        return 'Store the GitHub pull-request address of review rounds in its canonical form where no other spelling collides';
     }
 
-    // Only a change stored under one spelling moves, because two spellings of one change each hold a finding ledger and a numbering of their own, which cannot be merged without renumbering rounds already published; such a change keeps its old spellings apart, and its new rounds continue the canonical one.
+    // Only a change stored under one spelling moves, because merging two numberings would renumber published rounds (docs/architecture/review-flow.md#one-address-per-pull-request).
     public function up(Schema $schema): void
     {
         foreach ($this->loneSpellings() as [$project, $spelling]) {
             foreach (self::TABLES as $table) {
-                $this->addSql(sprintf('UPDATE %s SET change_ref = ? WHERE project = ? AND change_ref = ?', $table), [strtolower($spelling), $project, $spelling]);
+                $this->addSql(sprintf('UPDATE %s SET change_ref = ? WHERE project = ? AND change_ref = ?', $table), [ChangeAddress::canonical($spelling), $project, $spelling]);
             }
         }
     }
@@ -41,7 +42,7 @@ final class Version20261122100000 extends AbstractMigration
         foreach ($this->spellingsPerChange() as [$project, $spellings]) {
             $spelling = $spellings[0];
 
-            if (1 === count($spellings) && $spelling !== strtolower($spelling)) {
+            if (1 === count($spellings) && $spelling !== ChangeAddress::canonical($spelling)) {
                 $lone[] = [$project, $spelling];
             }
         }
@@ -62,7 +63,7 @@ final class Version20261122100000 extends AbstractMigration
 
             foreach ($rows as $row) {
                 // Keyed by a JSON list, so no project name can run into an address.
-                $key = json_encode([$row['project'], strtolower($row['change_ref'])], JSON_THROW_ON_ERROR);
+                $key = json_encode([$row['project'], ChangeAddress::canonical($row['change_ref'])], JSON_THROW_ON_ERROR);
                 $changes[$key] ??= [$row['project'], []];
                 $changes[$key][1][] = $row['change_ref'];
             }

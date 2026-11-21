@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\UseCase\PublishVerdict;
 
 use Closure;
-use Intakt\Core\Review\Domain\ChangeAddress;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\LockInterface;
 
@@ -32,9 +31,9 @@ final readonly class ChangePublications
         }
     }
 
-    // Encoded as a list, so no project or change name can end where another begins; the change in its canonical form, because the hand-over handler may name the pull request in another spelling than its rounds, and an old round may still hold one.
+    // Encoded as a list, so no project or change name can end where another begins; the change without letter case, because two rounds may name one pull request in two spellings, and the hand-over and the ask read it so too.
     private function lockOf(string $project, string $change): LockInterface
     {
-        return $this->locks->createLock('review-publication-'.hash('sha256', json_encode([$project, ChangeAddress::canonical($change)], JSON_THROW_ON_ERROR)));
+        return $this->locks->createLock('review-publication-'.hash('sha256', json_encode([$project, strtolower($change)], JSON_THROW_ON_ERROR)));
     }
 }

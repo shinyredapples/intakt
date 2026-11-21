@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\RunReviewRound;
 
-use Intakt\Core\Review\Domain\ChangeAddress;
+use Intakt\Core\Review\Contract\ChangeAddress;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
 use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
@@ -60,6 +60,16 @@ final class RoundsAcrossSpellingsTest extends KernelTestCase
         $rounds = $fixture->transactions()->ofChange($fixture->round($first));
 
         self::assertSame([$first, $second], array_map(static fn (ReviewRound $round): string => $round->id()->toRfc4122(), $rounds));
+    }
+
+    public function testTwoLocalBranchesWhoseNamesDifferOnlyInLetterCaseNumberTheirRoundsApart(): void
+    {
+        $fixture = new RoundFixture(self::getContainer());
+
+        $upper = $fixture->round($fixture->startAtHead('feat/Widget', SampleIdentity::HEAD));
+        $lower = $fixture->round($fixture->startAtHead('feat/widget', SampleIdentity::HEAD));
+
+        self::assertSame(['feat/Widget', 1, 1], [$upper->change(), $upper->number(), $lower->number()]);
     }
 
     private function judgedRound(RoundFixture $fixture, string $address): string

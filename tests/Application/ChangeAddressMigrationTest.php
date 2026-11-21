@@ -7,6 +7,8 @@ namespace Intakt\Tests\Application;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Platforms\AbstractMySQLPlatform;
 use DoctrineMigrations\Version20261122100000;
+use Intakt\Core\Dashboard\Domain\ReviewedRound;
+use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Tests\Core\Review\SampleIdentity;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use Intakt\Tests\Support\KernelTestCase;
@@ -50,7 +52,31 @@ final class ChangeAddressMigrationTest extends KernelTestCase
         self::assertSame([self::OLD_SPELLING, 2], [$fixture->round($apart)->change(), $next->number()]);
     }
 
-    public function testAnOldRoundWhoseSpellingCollidedStillFindsItsOwnLedgerRow(): void
+    public function testAMigratedPullRequestShowsItsRoundsFromBeforeAndAfterTheMigrationAsOneReview(): void
+    {
+        $fixture = new RoundFixture(self::getContainer());
+        $old = $fixture->startAtHead(self::PULL, SampleIdentity::HEAD);
+        $this->respell(self::PULL, self::OLD_SPELLING);
+        $this->respellStartRow(self::OLD_SPELLING);
+
+        $this->migrate();
+        $next = $fixture->startAtHead(self::OLD_SPELLING, SampleIdentity::HEAD);
+
+        $review = self::getContainer()->get(LedgerReviewPages::class)->reviewOf($next);
+        self::assertSame([$old, $next], array_map(static fn (ReviewedRound $round): string => $round->round, $review?->rounds ?? []));
+    }
+
+    public function testALocalBranchWithCapitalLettersKeepsItsSpellingThroughTheMigration(): void
+    {
+        $fixture = new RoundFixture(self::getContainer());
+        $round = $fixture->startAtHead('feat/Widget', SampleIdentity::HEAD);
+
+        $this->migrate();
+
+        self::assertSame('feat/Widget', $fixture->round($round)->change());
+    }
+
+    public function testAnOldRoundWhoseSpellingCollidedStillReadsItsOwnRoundSequence(): void
     {
         $fixture = new RoundFixture(self::getContainer());
         $this->refuseOnMySql();
@@ -69,6 +95,16 @@ final class ChangeAddressMigrationTest extends KernelTestCase
         foreach (['change_findings', 'review_round'] as $table) {
             $this->connection()->executeStatement(sprintf('UPDATE %s SET change_ref = ? WHERE change_ref = ?', $table), [$to, $from]);
         }
+    }
+
+    // The ledger is append-only, so a start row written before the migration keeps the spelling it named.
+    private function respellStartRow(string $to): void
+    {
+        $connection = $this->connection();
+        $payload = json_decode((string) $connection->fetchOne("SELECT payload FROM ledger_event WHERE kind = 'review_started'"), true, flags: JSON_THROW_ON_ERROR);
+        self::assertIsArray($payload);
+        $payload['change'] = $to;
+        $connection->update('ledger_event', ['payload' => json_encode($payload, JSON_THROW_ON_ERROR)], ['kind' => 'review_started']);
     }
 
     private function migrate(): void

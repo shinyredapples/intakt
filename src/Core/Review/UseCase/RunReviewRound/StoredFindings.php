@@ -12,7 +12,7 @@ use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\JudgeDoneFinding;
 use Intakt\Core\Review\Contract\Verdict;
-use Intakt\Core\Review\Domain\ChangeAddress;
+use Intakt\Core\Review\Contract\ChangeAddress;
 use Intakt\Core\Review\Domain\ChangeFindings;
 use Intakt\Core\Review\Domain\ChangeRound;
 use Intakt\Core\Review\Domain\FindingLedger;
