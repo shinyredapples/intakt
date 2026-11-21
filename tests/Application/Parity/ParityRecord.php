@@ -86,11 +86,9 @@ final readonly class ParityRecord
         return $items;
     }
 
+    // Because the first heading is the page title and no section, it is left out.
     /**
-     * @return list<array{int, string, ?string}>
-     */
-    /**
-     * @return list<string> every section heading by the reader's own rule, the page title (the first heading) left out
+     * @return list<string>
      */
     public function sectionHeadings(string $record): array
     {
@@ -104,6 +102,9 @@ final readonly class ParityRecord
         return array_slice($headings, 1);
     }
 
+    /**
+     * @return list<array{int, string, ?string}>
+     */
     private function linesWithSections(string $record): array
     {
         $section = null;
