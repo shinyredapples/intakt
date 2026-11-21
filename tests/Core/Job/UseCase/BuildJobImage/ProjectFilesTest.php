@@ -37,11 +37,16 @@ final class ProjectFilesTest extends TestCase
         // In a child process with a temporary folder of its own, because PHP reads sys_temp_dir only when it starts and the added file's folder has a random name.
         $child = <<<'PHP'
             require $argv[1];
-            $plan = Intakt\Core\Job\UseCase\BuildJobImage\JobImagePlan::fromTree(Intakt\Core\Job\UseCase\BuildJobImage\JobImageSource::Dockerfile, 'missing', 'Dockerfile')->withReviewTools("FROM scratch\n");
+            use Intakt\Core\Job\UseCase\BuildJobImage\JobImageNotBuilt;
+            use Intakt\Core\Job\UseCase\BuildJobImage\JobImagePlan;
+            use Intakt\Core\Job\UseCase\BuildJobImage\JobImageSource;
+            use Intakt\Core\Job\UseCase\BuildJobImage\ProjectFiles;
+
+            $plan = JobImagePlan::fromTree(JobImageSource::Dockerfile, 'missing', 'Dockerfile')->withReviewTools("FROM scratch\n");
             try {
-                new Intakt\Core\Job\UseCase\BuildJobImage\ProjectFiles()->archiveAdding($argv[2], $plan, $argv[3]);
+                new ProjectFiles()->archiveAdding($argv[2], $plan, $argv[3]);
                 echo 'archived';
-            } catch (Intakt\Core\Job\UseCase\BuildJobImage\JobImageNotBuilt $failure) {
+            } catch (JobImageNotBuilt $failure) {
                 echo $failure->getMessage();
             }
             PHP;
@@ -51,6 +56,7 @@ final class ProjectFilesTest extends TestCase
 
         self::assertSame(0, $process->getExitCode(), $process->getErrorOutput().$process->getOutput());
         self::assertStringStartsWith($repository->path.' is not a git checkout with a commit that git can read: ', $process->getOutput());
+        self::assertStringContainsString('missing', $process->getOutput());
         self::assertSame([], array_diff((array) scandir($this->temporary), ['.', '..']));
     }
 }
