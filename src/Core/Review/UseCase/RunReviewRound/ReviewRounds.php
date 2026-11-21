@@ -138,6 +138,20 @@ final readonly class ReviewRounds
             ->setParameter('judged', RoundState::Judged->value)
             ->getResult();
 
+        return array_find($rounds, static fn (ReviewRound $round): bool => $round->identity()->commits->head->hash === $head)
+            ?? $this->judgedUnderAnOldSpelling($project, $change, $head);
+    }
+
+    // Only when the canonical sequence never judged this head, because a round that migration Version20261122100000 left under another spelling is the only verdict the head has; numbers of those sequences do not compare with each other, so the highest number decides among them and an id never does.
+    private function judgedUnderAnOldSpelling(string $project, string $change, string $head): ?ReviewRound
+    {
+        /** @var list<ReviewRound> $rounds */
+        $rounds = $this->entities->createQuery(sprintf('SELECT r FROM %s r WHERE r.subject.project = :project AND LOWER(r.change.change) = :change AND r.state = :judged ORDER BY r.change.number DESC', ReviewRound::class))
+            ->setParameter('project', $project)
+            ->setParameter('change', strtolower(ChangeAddress::canonical($change)))
+            ->setParameter('judged', RoundState::Judged->value)
+            ->getResult();
+
         return array_find($rounds, static fn (ReviewRound $round): bool => $round->identity()->commits->head->hash === $head);
     }
 
