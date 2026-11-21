@@ -24,6 +24,11 @@ final readonly class TwigComments implements CommentLanguage
         return self::LINE_SYNTAX;
     }
 
+    public function holdsPhpCode(): bool
+    {
+        return false;
+    }
+
     public function commentsIn(string $source): array
     {
         return iterator_to_array($this->commentsFrom($source), false);

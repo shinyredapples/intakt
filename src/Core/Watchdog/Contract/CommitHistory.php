@@ -10,9 +10,11 @@ interface CommitHistory
     // Asked for the last seen head, because a force push that rewrote main's history leaves it out.
     public function contains(string $commit): bool;
 
-    // Oldest first, because the violations are reported in the order the commits reached main.
+    // Oldest first, because the violations are reported in the order the commits reached main. It throws when main no longer holds the commit, because a force push can land after contains() answered.
     /**
      * @return list<string>
+     *
+     * @throws MainHistoryRewritten
      */
     public function firstParentsSince(string $commit): array;
 

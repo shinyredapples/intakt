@@ -16,7 +16,7 @@ final readonly class LeftUndoneComments
      *
      * @return array<int, string>
      */
-    public function markersOn(string $source, array $addedLines, CommentLanguage $language = new PhpComments()): array
+    public function markersOn(string $source, array $addedLines, CommentLanguage $language): array
     {
         $added = array_flip($addedLines);
         $markers = [];
