@@ -78,7 +78,7 @@ final readonly class NoServiceLocatorRule implements Rule
 
             if (null !== $locator) {
                 $variable = $parameter->var instanceof Variable && is_string($parameter->var->name) ? $parameter->var->name : '';
-                $findings[] = $this->locatorParameter(self::nameOf($class), $variable, $locator, $parameter->getStartLine());
+                $findings[] = $this->locatorParameter($this->nameOf($class), $variable, $locator, $parameter->getStartLine());
             }
         }
 
@@ -94,7 +94,7 @@ final readonly class NoServiceLocatorRule implements Rule
     }
 
     // the anonymous class has no name node, and PHP-Parser leaves its namespaced name uninitialized, so it is checked before it is read
-    private static function nameOf(ClassLike $class): string
+    private function nameOf(ClassLike $class): string
     {
         return $class->name instanceof Identifier ? ($class->namespacedName ?? $class->name)->toString() : 'class@anonymous';
     }
@@ -119,7 +119,7 @@ final readonly class NoServiceLocatorRule implements Rule
                     $locator = $this->locatorAmong($parameter->getNativeType()->getReferencedClasses());
 
                     if (null !== $locator) {
-                        $findings[] = $this->locatorParameter(self::nameOf($class), $parameter->getName(), $locator, $alias->getStartLine());
+                        $findings[] = $this->locatorParameter($this->nameOf($class), $parameter->getName(), $locator, $alias->getStartLine());
                     }
                 }
             }
