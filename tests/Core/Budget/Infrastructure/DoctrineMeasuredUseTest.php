@@ -25,6 +25,7 @@ use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\Clock\MockClock;
 
 #[Group('persistence')]
@@ -199,9 +200,47 @@ final class DoctrineMeasuredUseTest extends KernelTestCase
         self::assertSame(1, $this->entities->getRepository(WindowReadingRecord::class)->count());
     }
 
+    public function testAReadingStampedEarlierButStoredAfterAFresherOneLeavesTheFresherOneAsTheMeasuredUse(): void
+    {
+        $delayed = $this->delayedWorker($this->reading($this->claude('main'), UsageWindow::FiveHour, 43.0));
+
+        self::assertSame(ReadingOutcome::Recorded, $delayed->record($this->reading($this->claude('main'), UsageWindow::FiveHour, 42.0)));
+
+        $use = $this->measured->of($this->claude('main'), UsageWindow::FiveHour);
+        self::assertSame(43.0, $use?->usage->usedPercent);
+        self::assertEquals(new DateTimeImmutable('2026-11-01T08:01:00Z'), $use->takenAt);
+    }
+
+    public function testTheNextReadingAfterOneStoredLateLeavesOneRowForTheWindow(): void
+    {
+        $delayed = $this->delayedWorker($this->reading($this->claude('main'), UsageWindow::FiveHour, 43.0));
+        self::assertSame(ReadingOutcome::Recorded, $delayed->record($this->reading($this->claude('main'), UsageWindow::FiveHour, 42.0)));
+        $this->clock->sleep(60);
+
+        $this->record($this->reading($this->claude('main'), UsageWindow::FiveHour, 44.0));
+
+        self::assertSame(1, $this->entities->getRepository(WindowReadingRecord::class)->count());
+        self::assertSame(44.0, $this->measured->of($this->claude('main'), UsageWindow::FiveHour)?->usage->usedPercent);
+    }
+
     private function record(WindowReading $reading): void
     {
         self::assertSame(ReadingOutcome::Recorded, $this->measured->record($reading));
+    }
+
+    // Its clock is read before another worker stores a fresher reading, so its own, older reading is the one stored last.
+    private function delayedWorker(WindowReading $fresher): DoctrineMeasuredUse
+    {
+        $slowClock = self::createStub(ClockInterface::class);
+        $slowClock->method('now')->willReturnCallback(function () use ($fresher): DateTimeImmutable {
+            $stampedAt = $this->clock->now();
+            $this->clock->sleep(60);
+            $this->record($fresher);
+
+            return $stampedAt;
+        });
+
+        return new DoctrineMeasuredUse($this->entities, $slowClock);
     }
 
     // Its own connection and entity manager, because another messenger:consume process shares neither with this one.

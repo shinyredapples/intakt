@@ -2,6 +2,12 @@
 
 Intakt is to replace the existing loop for the owner's own use ([plan](../plan.md#replacing-the-existing-loop)). The loop is a reference, not a source: where Intakt deliberately does a thing another way, the difference is listed here, with the reason and where it is built. Each task that adds a deliberate difference adds it to this page; the parity list of behaviors that must stay the same is in [Parity](parity.md).
 
+## Waits for notes only in the task text
+
+- **The loop:** a `Waits for` note counts in the task text of a trusted author and also in a trusted author's comment (its `test_unblock.py`).
+- **Intakt:** `Waits for` lines are read from the task text only, and only when the task was written and last edited by an account with write access; comments are never read for them. Built in `Plugin/GitHubWorkSource` (`IssueReferences`, `IntakeRules`).
+- **Why:** the task text is the one place a wait is written and kept, so what a task waits for is read from one place and changes only when the task is edited.
+
 ## Job containers instead of system users and sandboxes
 
 - **The loop:** builders share a Unix user and a long-lived worktree, so every piece of state they leave (dotfiles, git config, caches and the like) has to be reset by hand, and each reset found by review became one more denylist item ([principles](../design/02-principles.md)).

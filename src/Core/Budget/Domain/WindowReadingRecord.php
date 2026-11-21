@@ -16,7 +16,7 @@ use Intakt\Core\Budget\Contract\WindowReading;
 #[ORM\Index(name: 'budget_window_reading_window', columns: ['provider', 'account', 'usage_window'])]
 final class WindowReadingRecord
 {
-    // The database counts readings, so the latest one of a window is the highest position even when two arrive in one second.
+    // The database counts readings, so of two readings of a window taken in one second the higher position is the latest.
     #[ORM\Id]
     #[ORM\GeneratedValue(strategy: 'IDENTITY')]
     #[ORM\Column]
