@@ -2,6 +2,7 @@ const CAPTION = 'tour-caption';
 const PAUSE = '[data-tour-pause]';
 const CLOSE = '[data-tour-close]';
 const CLOSED_KEY = 'intakt-tour';
+const FOCUS = 'data-tour-focus';
 
 // Not a Stimulus controller, because a page the hub cannot reach loads no import map and its caption must still close. Listens on the page once, so a caption a live update or a visit puts in later is covered too.
 export function captionTour(page, storage) {
@@ -22,11 +23,38 @@ export function captionTour(page, storage) {
     // Turbo appends a stream to the document element, so only the document sees it.
     page.addEventListener('turbo:before-stream-render', (event) => {
         if (event.target.getAttribute('target') !== CAPTION || !isPaused(page)) {
+            // Any update can replace the element a stage points at, so the mark is drawn again after each one.
+            const render = event.detail.render;
+            event.detail.render = (stream) => Promise.resolve(render(stream)).then(() => pointAt(page));
             return;
         }
         event.preventDefault();
         held = { render: event.detail.render, stream: event.target };
     });
+    // A visit Turbo makes runs no module again, so the new page's element is marked on its load.
+    page.addEventListener('turbo:load', () => pointAt(page));
+    pointAt(page);
+}
+
+// Marks the element the caption names in data-tour-at, which is scoped to the caption's round: a page without that element marks nothing.
+function pointAt(page) {
+    const caption = page.getElementById?.(CAPTION);
+    const at = caption?.getAttribute?.('data-tour-at');
+    let target = null;
+    try {
+        target = at ? (page.querySelector?.(at) ?? null) : null;
+    } catch {}
+    for (const marked of page.querySelectorAll?.(`[${FOCUS}]`) ?? []) {
+        if (marked !== target) {
+            marked.removeAttribute(FOCUS);
+        }
+    }
+    const stage = caption?.getAttribute?.('data-stage');
+    if (target && target.getAttribute(FOCUS) !== stage) {
+        target.setAttribute(FOCUS, stage);
+        const still = page.defaultView?.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+        target.scrollIntoView?.({ block: 'center', behavior: still ? 'auto' : 'smooth' });
+    }
 }
 
 // Only the newest stage is kept while paused, because it already holds everything the ones before it said.

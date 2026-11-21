@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Journeys;
 
 use DateTimeImmutable;
+use Intakt\Core\Dashboard\Domain\TourStage;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\RecordedLedgerEvent;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\Recording;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\RecordingFormat;
@@ -91,8 +92,9 @@ final class DemoTourJourneyTest extends JourneyTestCase
         $page = $dashboard->request('GET', '/reviews/'.self::SECOND);
 
         self::assertSame('The reviewers reported no findings, so the judge had nothing to mark.', $page->filter('#round-'.self::SECOND.'-judged')->text());
-        self::assertSame('Stage 7 of 7', $page->filter('#tour-caption .tour-count')->text());
-        self::assertSame('The new round is judged with nothing left to fix, so the findings are closed.', $page->filter('#tour-caption .tour-line')->text());
+        self::assertSame('Step 5 of 5', $page->filter('#tour-caption .tour-dots')->attr('aria-label'));
+        self::assertSame('[id="round-'.self::SECOND.'-judged"]', $page->filter('#tour-caption')->attr('data-tour-at'));
+        self::assertSame(TourStage::RoundEnds->sentence(), $page->filter('#tour-caption .tour-line')->text());
     }
 
     /**

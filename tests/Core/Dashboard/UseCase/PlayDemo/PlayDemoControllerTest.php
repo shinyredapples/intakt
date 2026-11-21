@@ -219,7 +219,7 @@ final class PlayDemoControllerTest extends DashboardPageTestCase
         foreach (['/', '/projects', '/reviews', '/demo', '/reviews/demo-round-1'] as $path) {
             $page = $this->browser->request('GET', $path);
             self::assertResponseIsSuccessful();
-            self::assertSame('Stage 1 of 7', $page->filter('aside#tour-caption .tour-count')->text(), $path);
+            self::assertSame('Step 1 of 5', $page->filter('aside#tour-caption .tour-dots')->attr('aria-label'), $path);
         }
     }
 
@@ -251,7 +251,30 @@ final class PlayDemoControllerTest extends DashboardPageTestCase
         $this->ledger->append(new LedgerEvent(LedgerEventKind::JudgeDone, '{"round":"demo-round-1","act":[],"follow_ups":[]}'));
         $this->demoRunAt(2);
 
-        self::assertSame(TourStage::NextRound->value, $this->demoPage()->filter('aside#tour-caption')->attr('data-stage'));
+        self::assertSame(TourStage::ChangeArrives->value, $this->demoPage()->filter('aside#tour-caption')->attr('data-stage'));
+    }
+
+    public function testTheCaptionShowsOneDotPerStageWithTheCurrentOneMarkedAndNoStageCount(): void
+    {
+        $this->demoRunAt(1);
+
+        $caption = $this->demoPage()->filter('aside#tour-caption');
+
+        self::assertCount(TourStage::count(), $caption->filter('.tour-dot'));
+        self::assertCount(1, $caption->filter('.tour-dot.now'));
+        self::assertDoesNotMatchRegularExpression('/Stage \d+ of/', $caption->text());
+    }
+
+    public function testTheCaptionPointsAtTheElementsOfItsOwnRoundOnly(): void
+    {
+        $this->demoRunAt(1);
+        $this->ledger->append(new LedgerEvent(LedgerEventKind::JudgeDone, '{"round":"demo-round-1","act":[],"follow_ups":[]}'));
+        $this->demoRunAt(2);
+
+        $at = $this->demoPage()->filter('aside#tour-caption')->attr('data-tour-at');
+
+        self::assertSame('[id="round-demo-round-2-now-phase"]', $at);
+        self::assertStringNotContainsString('demo-round-1', (string) $at);
     }
 
     public function testBeforeADemoRunTheComposeDemoPagesHoldOnlyTheEmptyCaption(): void
