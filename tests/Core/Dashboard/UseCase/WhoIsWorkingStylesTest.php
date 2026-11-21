@@ -28,6 +28,17 @@ final class WhoIsWorkingStylesTest extends TestCase
         self::assertMatchesRegularExpression('/grid-template-columns:\s*minmax\(0, 1fr\);/', $this->rule('.lanes', $this->phoneBlock()));
     }
 
+    public function testALaneKeepsItsRoleLineInsideItsColumnAboveThePhoneBreakpoint(): void
+    {
+        $who = $this->rule('.lane .who', $this->sheet());
+
+        self::assertMatchesRegularExpression('/flex-wrap:\s*wrap/', $who);
+        self::assertMatchesRegularExpression('/min-width:\s*0/', $who);
+        self::assertMatchesRegularExpression('/overflow-wrap:\s*anywhere/', $who);
+        self::assertMatchesRegularExpression('/grid-template-columns:\s*minmax\(0, 1fr\)/', $this->rule('.lane', $this->sheet()));
+        self::assertMatchesRegularExpression('/overflow-wrap:\s*anywhere/', $this->rule('.lane .meta span', $this->sheet()));
+    }
+
     public function testTheChevronTurnsWhenTheSummaryIsOpen(): void
     {
         self::assertMatchesRegularExpression('/rotate\(180deg\)/', $this->rule('details[open] > summary .chev', $this->sheet()));

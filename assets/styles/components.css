@@ -662,8 +662,17 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
 .fc-body p { margin: 0; }
 .fc-place, .fc-call, .fc-merged { color: var(--muted); font-size: var(--t13); }
 .fc-call { font-weight: 600; }
+/* A dropped card's quotes stay behind a closed disclosure, because most readers only need the one line that says why the judge never saw it. */
+.fc-quotes { font-size: var(--t13); }
+.fc-quotes > summary { display: inline-flex; align-items: center; gap: var(--s4); cursor: pointer; color: var(--link); font: 500 var(--t13)/1 var(--f-head); padding: var(--s4) 0; }
+.fc-quote-list { list-style: none; margin: var(--s4) 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--s4) var(--s8); }
+/* A counted quote may wrap onto the next line, so its line breaks and indentation stay as the check read them, while a long one still wraps on a phone. */
+.fc-quote-list code { white-space: pre-wrap; overflow-wrap: anywhere; }
+.fc-unchecked, .fc-reason { color: var(--muted); }
+.fc-quotes > p + p { margin-top: var(--s4); }
 @media (max-width: 760px) {
   .sb-finding { min-height: 44px; }
+  .fc-quotes > summary { min-height: 44px; }
   /* On a phone the place takes its own line under the text, because beside it the place left the text about 15 characters, too few to say what to fix; the text gets the row and at most two lines. */
   .verdict-findings a { flex-wrap: wrap; row-gap: 0; }
   .verdict-findings .vf-title { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; white-space: normal; overflow-wrap: anywhere; }
@@ -752,8 +761,12 @@ details.ev > summary time { margin-left: auto; color: var(--muted); font-size: v
 /* No tint and no hover, so a line with nothing to open does not look like a strip that opens. */
 .working-none { display: flex; align-items: center; min-height: 44px; padding: 0 var(--s16); color: var(--muted); }
 .lanes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s8); }
-.lane { padding: var(--s12) var(--s16); border-radius: var(--r-card); background: var(--tint); display: grid; gap: var(--s4); min-width: 0; align-content: start; }
-.lane .who { display: flex; align-items: center; gap: var(--s8); font: 500 var(--t13)/1.3 var(--f-head); color: var(--muted); }
+/* A lane links to its round's review page, so it reads and answers the pointer like a card, not like link text; one column no wider than the lane, because an auto column grows to its longest unbreakable word and pushes the lane's text into the next lane. */
+.lane { padding: var(--s12) var(--s16); border-radius: var(--r-card); background: var(--tint); display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s4); min-width: 0; align-content: start; color: var(--ink); text-decoration: none; }
+a.lane:hover { background: var(--tint-2); }
+.lane .meta span { white-space: normal; overflow-wrap: anywhere; }
+/* Wraps, because in a narrow lane the fixed-size character leaves too little room for the role and the start time on one line. */
+.lane .who { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s4) var(--s8); min-width: 0; overflow-wrap: anywhere; font: 500 var(--t13)/1.3 var(--f-head); color: var(--muted); }
 .lane .who .elapsed { margin-left: auto; font-family: var(--f-body); }
 .lane .what { font-size: var(--t15); overflow-wrap: anywhere; }
 @media (min-width: 1700px) {

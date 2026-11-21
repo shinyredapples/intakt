@@ -39,6 +39,7 @@ final readonly class GitHubForge implements Forge, ForgeWrites
     // An HTML comment, so the token is invisible on the pull request while the orchestrator can still match it.
     private const string TOKEN_MARKER = '<!-- intakt-review-token: %s -->';
     private const string VERDICT_MARKER = '<!-- intakt-verdict: %s -->';
+    private const string OWNER_ASK_MARKER = '<!-- intakt-owner-ask: %s %s part %d -->';
     private const string STATUS_CONTEXT = 'intakt/review';
     private const string JSON = 'application/vnd.github+json';
     private const string DIFF = 'application/vnd.github.diff';
@@ -130,16 +131,18 @@ final readonly class GitHubForge implements Forge, ForgeWrites
     }
 
     // No stale check, because the status and the comment name the head they judge, so a head that moved on keeps its own verdict.
-    public function publishVerdict(string $project, ChangeId $change, PublishedVerdict $verdict): void
+    public function publishVerdict(string $project, ChangeId $change, PublishedVerdict $verdict): bool
     {
-        $this->app->whenConfigured(fn () => $this->publishAsTheApp($change, $verdict));
+        return $this->app->whenConfigured(fn () => $this->publishAsTheApp($change, $verdict));
     }
 
     private function publishAsTheApp(ChangeId $change, PublishedVerdict $verdict): void
     {
         $address = PullRequestAddress::of($change);
         $comments = $verdict->comments();
-        if (array_any($comments, $this->secrets->findsSecretIn(...))) {
+        // The asks scanned as GitHub shows them, without tags and entities, because a file name in an ask is written with entities inside <code>, and an entity in the middle of a key or a tag right after it hides the key from the scan's rules.
+        $rendered = array_map(static fn (string $ask): string => html_entity_decode(strip_tags($ask), ENT_QUOTES | ENT_HTML5, 'UTF-8'), $verdict->ownerAsks);
+        if (array_any([...$comments, ...$rendered], $this->secrets->findsSecretIn(...))) {
             throw ReviewTextHoldsSecret::afterRedaction();
         }
 
@@ -153,9 +156,9 @@ final readonly class GitHubForge implements Forge, ForgeWrites
     private function postVerdict(PullRequestAddress $address, PublishedVerdict $verdict, array $comments): void
     {
         // The comment before the status, so a head never shows Intakt's status without the comment that explains it; a retry finds the comment by its marker and posts it once.
-        $marker = sprintf(self::VERDICT_MARKER, $verdict->token->value);
-        foreach ($this->comments->notYetPosted($address, $marker, $comments) as $comment) {
-            $this->post($address->issuePath().'/comments', ['body' => $comment."\n\n".$marker]);
+        $marked = [sprintf(self::VERDICT_MARKER, $verdict->token->value) => $comments, ...$this->askPartsOf($verdict)];
+        foreach ($this->comments->bodiesNotYetPosted($address, $marked) as $body) {
+            $this->post($address->issuePath().'/comments', ['body' => $body]);
         }
 
         $this->post($address->repositoryPath().'/statuses/'.$verdict->head->hash, [
@@ -163,6 +166,18 @@ final readonly class GitHubForge implements Forge, ForgeWrites
             'context' => self::STATUS_CONTEXT,
             'description' => $verdict->description,
         ]);
+    }
+
+    // Each part of the ask by a marker of its own, so a retry posts the part an earlier try did not reach, and an ask the review comment did not carry; the marker names a digest of the whole ask, so a retry whose protected paths changed posts the ask it records instead of finding the old one.
+    /**
+     * @return array<string, list<string>>
+     */
+    private function askPartsOf(PublishedVerdict $verdict): array
+    {
+        $digest = hash('sha256', json_encode($verdict->ownerAsks, JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE));
+        $markers = array_map(static fn (int $part): string => sprintf(self::OWNER_ASK_MARKER, $verdict->token->value, $digest, $part + 1), array_keys($verdict->ownerAsks));
+
+        return array_combine($markers, array_map(static fn (string $ask): array => [$ask], $verdict->ownerAsks));
     }
 
     private function isStale(Change $change): bool
