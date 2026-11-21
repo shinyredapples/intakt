@@ -137,19 +137,34 @@ final readonly class DependencySnapshots
         $incoming = $this->root.'/'.self::INCOMING;
         new Filesystem()->mirror($install, $incoming);
         $this->makeReadOnly($incoming);
-        new Filesystem()->rename($incoming, $snapshot);
+        $this->moveWhole($incoming, $snapshot);
     }
 
-    // Links are left alone, because chmod follows a link and would change whatever it points at.
+    // PHP's own rename, because Filesystem::rename() falls back to a copy and a delete when it fails, and a fallback stopped part way would leave a partial snapshot under a valid key.
+    private function moveWhole(string $from, string $to): void
+    {
+        if (!rename($from, $to)) {
+            throw new IOException(sprintf('Failed to rename "%s" to "%s".', $from, $to), path: $from);
+        }
+    }
+
+    // Links are left alone, because chmod follows a link and would change whatever it points at. The first failure stops the save, so a snapshot that is not read-only everywhere never gets its key.
     private function makeReadOnly(string $snapshot): void
     {
         foreach ($this->treeOf($snapshot) as $entry) {
             if (!$entry->isLink()) {
-                chmod($entry->getPathname(), $entry->isDir() || 0 !== ($entry->getPerms() & 0o100) ? 0o555 : 0o444);
+                $this->changeMode($entry->getPathname(), $entry->isDir() || 0 !== ($entry->getPerms() & 0o100) ? 0o555 : 0o444);
             }
         }
 
-        chmod($snapshot, 0o555);
+        $this->changeMode($snapshot, 0o555);
+    }
+
+    private function changeMode(string $path, int $mode): void
+    {
+        if (!chmod($path, $mode)) {
+            throw new IOException(sprintf('Failed to change the mode of "%s".', $path), path: $path);
+        }
     }
 
     private function markUsed(DependencySnapshotKey $key): void
@@ -161,8 +176,21 @@ final readonly class DependencySnapshots
     private function trim(DependencySnapshotKey $kept): void
     {
         $this->removeEvictionLeftovers();
+        $this->removeInterruptedUseWrites();
         $this->evictPastCount($kept);
         $this->sweepOrphanPins();
+    }
+
+    // Filesystem::dumpFile() writes the order to a temporary `.uses<random>` file beside it and renames it, so a crash before that rename leaves the temporary file behind.
+    private function removeInterruptedUseWrites(): void
+    {
+        foreach ($this->entriesOf($this->root) as $name) {
+            $path = $this->root.'/'.$name;
+
+            if (self::USES !== $name && str_starts_with($name, self::USES) && is_file($path) && !is_link($path)) {
+                new Filesystem()->remove($path);
+            }
+        }
     }
 
     private function removeEvictionLeftovers(): void
@@ -224,7 +252,7 @@ final readonly class DependencySnapshots
         $this->writeUses(array_filter($this->uses(), fn (string $name): bool => is_dir($this->root.'/'.$name)));
     }
 
-    // The pin file goes while its exclusive pin is held, so no lease holds it, and none can take it later: a lease checks the snapshot's folder first, under the same store lock.
+    // The pin file goes while its exclusive pin is held, so no lease holds it, and none can take it later: a lease checks the snapshot's folder first, under the same store lock. A rename that fails throws before anything else moves, so the snapshot stays whole under its key with its pin folder.
     private function evicted(string $name): bool
     {
         $pin = $this->pinOf($name);
@@ -235,7 +263,7 @@ final readonly class DependencySnapshots
 
         try {
             $evicting = $this->root.'/'.self::EVICTING.$name;
-            new Filesystem()->rename($this->root.'/'.$name, $evicting);
+            $this->moveWhole($this->root.'/'.$name, $evicting);
             $this->remove($evicting);
             new Filesystem()->remove($this->root.'/'.self::PINS.'/'.$name);
 

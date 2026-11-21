@@ -74,6 +74,55 @@ final class DependencySnapshotsTest extends TestCase
         }
         PHP;
 
+    // Run in a process of its own, so the stand-ins for the store's rename() and chmod() are defined before the store first calls them. The failing call is named by its first argument: a publication or an eviction rename, or the chmod of the install's tool.
+    private const string FAILING_CALL = <<<'PHP'
+        namespace Intakt\Core\HandBack\Infrastructure {
+            function rename(string $from, string $to): bool
+            {
+                $eviction = str_starts_with(basename($to), '.evicting-');
+
+                if (('publication' === $GLOBALS['argv'][4] && !$eviction) || ('eviction' === $GLOBALS['argv'][4] && $eviction)) {
+                    fwrite(STDERR, 'rename refused;');
+
+                    return false;
+                }
+
+                return \rename($from, $to);
+            }
+
+            function chmod(string $path, int $mode): bool
+            {
+                if ('chmod' === $GLOBALS['argv'][4] && str_ends_with($path, '/vendor/bin/tool')) {
+                    fwrite(STDERR, 'chmod refused;');
+
+                    return false;
+                }
+
+                return \chmod($path, $mode);
+            }
+        }
+
+        namespace {
+            use Intakt\Core\HandBack\Domain\DependencySnapshotKey;
+            use Intakt\Core\HandBack\Infrastructure\DependencySnapshots;
+            use Intakt\Plugin\Gate\Contract\DependencyStep;
+            use Symfony\Component\Filesystem\Exception\IOException;
+            use Symfony\Component\Lock\LockFactory;
+            use Symfony\Component\Lock\Store\FlockStore;
+
+            require $argv[1].'/vendor/autoload.php';
+            $store = new DependencySnapshots($argv[2].'/store', 1, new LockFactory(new FlockStore($argv[2].'/locks')));
+            $step = new DependencyStep(['composer.json', 'composer.lock'], 'probe', 'install', 'generate');
+
+            try {
+                $store->save(DependencySnapshotKey::of($step, ['composer.json' => '{}', 'composer.lock' => 'b'], '8.5.12'), $argv[3]);
+            } catch (IOException) {
+                fwrite(STDERR, 'save failed;');
+                exit(3);
+            }
+        }
+        PHP;
+
     private string $directory;
 
     protected function setUp(): void
@@ -378,9 +427,62 @@ final class DependencySnapshotsTest extends TestCase
         $interrupted = new Process([PHP_BINARY, '-r', self::INTERRUPTED_EVICTION, dirname(__DIR__, 4), $this->directory, $this->install('b')]);
         $interrupted->run();
         self::assertStringContainsString('eviction interrupted', $interrupted->getErrorOutput().$interrupted->getOutput());
+        self::assertSame(1, $interrupted->getExitCode());
 
         self::assertNull($this->store(1)->leaseOf($this->key('a'), '/input/dependencies'));
         self::assertSame(['.pins', '.uses', $this->key('b')->value], $this->entriesOfStore());
+    }
+
+    public function testAPublicationWhoseRenameFailsLeavesOnlyTheIncomingCopyWhichTheNextSaveRemoves(): void
+    {
+        self::assertSame('rename refused;save failed;', $this->saveOfBWhereThisFails('publication'));
+        self::assertSame([], $this->snapshots());
+        self::assertDirectoryExists($this->directory.'/store/.incoming');
+
+        $this->store(1)->save($this->key('c'), $this->install('c'));
+
+        self::assertSame(['.uses', $this->key('c')->value], $this->entriesOfStore());
+    }
+
+    public function testAnEvictionWhoseRenameFailsKeepsTheSnapshotWholeUnderItsKeyWithItsPinFolder(): void
+    {
+        $this->store(1)->save($this->key('a'), $this->install('a'));
+
+        self::assertSame('rename refused;save failed;', $this->saveOfBWhereThisFails('eviction'));
+
+        self::assertEqualsCanonicalizing([$this->key('a')->value, $this->key('b')->value], $this->snapshots());
+        self::assertStringEqualsFile($this->snapshotOf('a').'/vendor/fixture/pkg/code.php', '<?php // a');
+        self::assertFileExists($this->snapshotOf('a').'/vendor/bin/tool');
+        self::assertContains($this->key('a')->value, $this->pinFolders());
+        self::assertSame([], preg_grep('/^\.evicting-/', $this->entriesOfStore()));
+    }
+
+    public function testASaveWhoseChmodFailsOnOneEntryThrowsAndLeavesNoFolderUnderTheKey(): void
+    {
+        self::assertSame('chmod refused;save failed;', $this->saveOfBWhereThisFails('chmod'));
+
+        self::assertDirectoryDoesNotExist($this->snapshotOf('b'));
+        self::assertSame([], $this->snapshots());
+    }
+
+    public function testAnInterruptedWriteOfTheOrderOfUseIsGoneAfterTheNextSave(): void
+    {
+        $this->store()->save($this->key('a'), $this->install('a'));
+        new Filesystem()->dumpFile($this->directory.'/store/.usesAb12Cd', '["half');
+
+        $this->store()->save($this->key('b'), $this->install('b'));
+
+        self::assertSame(['.uses', ...$this->snapshots()], $this->entriesOfStore());
+    }
+
+    public function testAnInterruptedWriteOfTheOrderOfUseIsGoneAfterTheNextLease(): void
+    {
+        $this->store()->save($this->key('a'), $this->install('a'));
+        new Filesystem()->dumpFile($this->directory.'/store/.usesAb12Cd', '["half');
+
+        $this->store()->leaseOf($this->key('a'), '/input/dependencies')?->release();
+
+        self::assertSame(['.pins', '.uses', $this->key('a')->value], $this->entriesOfStore());
     }
 
     public function testAnEvictedSnapshotLeavesNoFolderBehindUnderAnyName(): void
@@ -397,6 +499,16 @@ final class DependencySnapshotsTest extends TestCase
     private function store(int $count = 10): DependencySnapshots
     {
         return new DependencySnapshots($this->directory.'/store', $count, new LockFactory(new FlockStore($this->directory.'/locks')));
+    }
+
+    // Saves the key of lock "b" at a count of 1 in a process of its own and returns what the stand-ins and the failed save wrote to its error output.
+    private function saveOfBWhereThisFails(string $call): string
+    {
+        $process = new Process([PHP_BINARY, '-r', self::FAILING_CALL, dirname(__DIR__, 4), $this->directory, $this->install('b'), $call]);
+        $process->run();
+        self::assertSame(3, $process->getExitCode(), $process->getErrorOutput().$process->getOutput());
+
+        return $process->getErrorOutput();
     }
 
     private function key(string $lock): DependencySnapshotKey
