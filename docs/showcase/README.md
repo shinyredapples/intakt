@@ -4,7 +4,7 @@
 
 This repository is built by an AI loop. A builder takes an issue, writes the change and opens a pull request. A panel of reviewers from two AI companies, Claude and GPT, reviews every change. Probes give the reviewers evidence: small tests they write and run against the change. Plain code merges a change once CI is green and the reviewers approve. The owner steps in only where a person must: a change to the checks that judge the code, or a decision the loop cannot make.
 
-One fact matters here: this repository is built by the loop Intakt grew out of, a Python loop Intakt was distilled from, not by Intakt itself. Intakt takes over its own building as its parts land (see [the plan](../plan.md)).
+One fact matters here: this repository is built by the build loop that developed Intakt, a Python loop Intakt was distilled from, not by Intakt itself. Intakt takes over its own building as its parts land (see [the plan](../plan.md)).
 
 Everything below is public on this repository: the pull requests, the review comments, the labels and the owner's approvals.
 
@@ -78,7 +78,7 @@ The owner approved. Later rounds changed the branch, and "a new push needs a new
 
 ## What changes when Intakt takes over its own loop
 
-Today the predecessor runs the whole loop, and Intakt is the code it builds. Intakt takes the loop over part by part, in the order of [the plan](../plan.md):
+Today that loop runs every step, and Intakt is the code it builds. Intakt takes the loop over part by part, in the order of [the plan](../plan.md):
 
 - **First the review.** The first release is the review loop: the two-company panel, probes, verdicts and a judge, shown live on a dashboard. Once it lands, Intakt reviews its own pull requests.
 - **Then building and merging.** They come after the first release, as the [design](../design/README.md) describes. From then on, the figures on this page describe Intakt building itself.

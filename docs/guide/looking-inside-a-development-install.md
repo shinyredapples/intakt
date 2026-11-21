@@ -4,7 +4,7 @@ When you work on Intakt itself, you can ask a running development install what a
 
 ## What a profile is
 
-A development install (`APP_ENV=dev`) writes down a short **profile** of every request it answers: the database queries it ran, the messages it sent, how long it took and how much memory it used. To tell requests apart, it also keeps the request's method (such as `GET`), its address without the part after any `?`, and the status code of the answer. Nothing else goes into it: no headers, cookies, session, request body or environment variables, so no secret ends up in a profile.
+A development install (`APP_ENV=dev`) writes down a short **profile** of every request it answers: the database queries it ran, the messages it sent, how long it took and how much memory it used. To tell requests apart, it also keeps the request's method (such as `GET`), its address without any query (the part after a `?`) or fragment (the part after a `#`), left out entirely when the address cannot be read, and the status code of the answer. Nothing else goes into it: no headers, cookies, session, request body or environment variables, so no secret ends up in a profile.
 
 The answer to each request names its profile in the `X-Debug-Token` header.
 

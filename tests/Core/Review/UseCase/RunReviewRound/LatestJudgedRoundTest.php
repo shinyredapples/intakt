@@ -45,7 +45,7 @@ final class LatestJudgedRoundTest extends KernelTestCase
         $fixture->clock->modify('+1 second');
         $newer = $this->judgedRound($fixture, 'https://github.com/Acme/widgets/pull/7');
 
-        // No assertion on the round numbers, because MySQL and MariaDB compare the address without letter case by default and number both spellings as one sequence; SQLite and PostgreSQL number the new spelling from one.
+        // No assertion on the round numbers, because rounds opened now number both spellings as one sequence (StoredFindings::openRound()); the lookup across spellings is kept for old rounds stored apart.
         self::assertSame($newer, $fixture->transactions()->latestJudgedAt('alpha', self::PULL, SampleIdentity::HEAD)?->id()->toRfc4122());
     }
 

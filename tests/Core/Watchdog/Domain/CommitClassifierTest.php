@@ -54,6 +54,32 @@ final class CommitClassifierTest extends TestCase
         self::assertTrue($classification->isClean());
     }
 
+    public function testACommitTheRecordedMergeBroughtInPassesBeforeAnySignatureCheck(): void
+    {
+        $history = self::createStub(CommitHistory::class);
+        $history->method('contains')->willReturn(true);
+        $history->method('firstParentsSince')->willReturn([self::OTHER, self::MERGE]);
+        $history->method('broughtInBy')->willReturn([self::MERGE, self::OTHER]);
+        $history->method('signatureOf')->willThrowException(new LogicException('A brought-in commit is never read for its signature.'));
+
+        $classification = $this->classify($history, $this->mainWithRecordedMerge());
+
+        self::assertTrue($classification->isClean());
+    }
+
+    public function testACommitNoRecordedMergeBroughtInIsStillJudgedByItsSignature(): void
+    {
+        $history = self::createStub(CommitHistory::class);
+        $history->method('contains')->willReturn(true);
+        $history->method('firstParentsSince')->willReturn([self::OTHER, self::MERGE]);
+        $history->method('broughtInBy')->willReturn([self::MERGE]);
+        $history->method('signatureOf')->willReturn(SignatureStatus::Unsigned);
+
+        $classification = $this->classify($history, $this->mainWithRecordedMerge());
+
+        self::assertEquals([new MainViolation(self::OTHER, Violation::Unsigned)], $classification->violations);
+    }
+
     public function testAnOwnerSignedCommitPasses(): void
     {
         $history = $this->history([self::OTHER => SignatureStatus::OwnerSigned]);
