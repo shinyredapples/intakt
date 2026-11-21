@@ -22,9 +22,10 @@ final readonly class AttributionLines
             return $message;
         }
 
-        // So a message written with Windows line endings does not come back with mixed ones.
-        $ending = str_contains($message, "\r\n") ? "\r\n" : "\n";
-        $text = rtrim((string) preg_replace(self::BLANK_LINES, $ending.$ending, implode("\n", $kept)));
+        $joined = implode("\n", $kept);
+        // So a message written with Windows line endings does not come back with mixed ones, judged from the kept lines because a removed trailer's ending is not the message's.
+        $ending = str_contains($joined, "\r\n") ? "\r\n" : "\n";
+        $text = rtrim((string) preg_replace(self::BLANK_LINES, $ending.$ending, $joined));
 
         return '' === $text ? '' : $text.$ending;
     }

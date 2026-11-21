@@ -62,6 +62,16 @@ final class AttributionLinesTest extends TestCase
         self::assertSame("Subject\r\n\r\nMore text.\r\n", AttributionLines::strippedFrom($message));
     }
 
+    public function testATrailerWithAWindowsEndingDoesNotMakeAUnixMessageMixed(): void
+    {
+        self::assertSame("Subject\n\nBody\n", AttributionLines::strippedFrom("Subject\n\nBody\nCo-authored-by: x\r\n"));
+    }
+
+    public function testTrailingWhiteSpaceBeforeAWindowsEndingIsDropped(): void
+    {
+        self::assertSame("Body\r\n", AttributionLines::strippedFrom("Body  \r\nCo-authored-by: x\r\n\r\n\r\n"));
+    }
+
     public function testAMessageOfOnlyAttributionBecomesEmpty(): void
     {
         self::assertSame('', AttributionLines::strippedFrom("Co-authored-by: Bot <bot@example.invalid>\n"));
