@@ -41,7 +41,16 @@
                     {% if finding.quotes|length > 0 %}
                     <ul class="fc-quote-list">
                         {% for quote in finding.quotes %}
-                        <li><code>{{ quote }}</code></li>
+                        <li><code>{{ quote }}</code>
+                            {%- set near = finding.nearLinesOf(quote) %}
+                            {%- if near is not empty %}
+                            <ul class="fc-near-lines" aria-label="Changed lines closest to this quote">
+                                {% for changed in near %}
+                                <li><span class="mono fc-near-place">{{ changed.file }}:{{ changed.line }}</span> <code>{{ changed.text }}</code></li>
+                                {% endfor %}
+                            </ul>
+                            {%- endif %}
+                        </li>
                         {% endfor %}
                     </ul>
                     <p class="fc-unchecked">File names, numbers and suggested-fix blocks are not checked.</p>

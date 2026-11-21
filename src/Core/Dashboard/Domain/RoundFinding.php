@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\Domain;
 
+use Intakt\Core\Review\Contract\NearLine;
+use Intakt\Core\Review\Contract\QuoteNearLines;
 use Intakt\Core\Review\Contract\QuotesCounted;
 
 final readonly class RoundFinding
@@ -11,7 +13,8 @@ final readonly class RoundFinding
     public JudgeCall $call;
 
     /**
-     * @param list<string> $merged
+     * @param list<string>         $merged
+     * @param list<QuoteNearLines> $nearest
      */
     public function __construct(
         public string $id,
@@ -22,8 +25,18 @@ final readonly class RoundFinding
         public ?int $line = null,
         public ?string $droppedBecause = null,
         public QuotesCounted $quotes = new QuotesCounted(),
+        private array $nearest = [],
     ) {
         $this->call = JudgeCall::NotActedOn;
+    }
+
+    // Looked up by the quote the ledger row recorded, because the page never gets the change text and must not search it again.
+    /**
+     * @return list<NearLine>
+     */
+    public function nearLinesOf(string $quote): array
+    {
+        return array_find($this->nearest, static fn (QuoteNearLines $near): bool => $near->quote === $quote)->lines ?? [];
     }
 
     /**

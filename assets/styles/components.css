@@ -643,6 +643,10 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
 .fc-quote-list { list-style: none; margin: var(--s4) 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--s4) var(--s8); }
 /* A counted quote may wrap onto the next line, so its line breaks and indentation stay as the check read them, while a long one still wraps on a phone. */
 .fc-quote-list code { white-space: pre-wrap; overflow-wrap: anywhere; }
+/* A quote with nearest lines takes the whole row, because its lines sit under it and beside another quote they would be too narrow to read. */
+.fc-quote-list > li:has(.fc-near-lines) { flex-basis: 100%; }
+.fc-near-lines { list-style: none; margin: var(--s4) 0 0; padding: 0 0 0 var(--s8); border-left: 2px solid var(--hairline); display: grid; gap: var(--s4); }
+.fc-near-place { color: var(--muted); margin-right: var(--s4); }
 .fc-unchecked, .fc-reason { color: var(--muted); }
 .fc-quotes > p + p { margin-top: var(--s4); }
 @media (max-width: 760px) {
