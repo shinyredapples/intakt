@@ -253,4 +253,15 @@ final class EvidenceItemsTest extends TestCase
     {
         self::assertSame(1, EvidenceItems::countIn("- Example\n## Notes\n  ## Evidence\n- Show the result."));
     }
+
+    public function testAThematicBreakOutdentedFromAnItemEndsTheListWithoutABlankLine(): void
+    {
+        self::assertSame(1, EvidenceItems::countIn("- Intro\n***\n  ## Evidence\n  - Show the result."));
+    }
+
+    public function testAnEmptyHtmlCommentEndsOnItsOwnLine(): void
+    {
+        self::assertSame(2, EvidenceItems::countIn("<!-->\n## Evidence\n- E1. a\n- E2. b\n"));
+        self::assertSame(1, EvidenceItems::countIn("<!--->\n## Evidence\n- E1. a\n"));
+    }
 }

@@ -27,6 +27,11 @@ final class MarkdownTextTest extends TestCase
         self::assertSame("a  b\nc", MarkdownText::visible("a <!-- hidden --> b\r\nc"));
     }
 
+    public function testTheEmptyHtmlCommentsAreWholeComments(): void
+    {
+        self::assertSame('a  E1 b  E2', MarkdownText::visible('a <!--> E1 b <!---> E2'));
+    }
+
     public function testAnHtmlCommentOverSeveralLinesIsHiddenKeepingItsLineBreaks(): void
     {
         self::assertSame("a \n\n b", MarkdownText::visible("a <!-- one\ntwo\nthree --> b"));

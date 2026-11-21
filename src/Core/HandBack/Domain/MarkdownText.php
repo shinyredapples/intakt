@@ -171,9 +171,10 @@ final readonly class MarkdownText
         return $items->readUpTo(self::lineStartAt($text, $start) + 1)->opensAnHtmlBlock($start) ? self::htmlBlockAt($text, $start) : self::commentAt($text, $start);
     }
 
+    // `<!-->` and `<!--->` are whole comments, so the end is searched from the second character of `<!--` (https://spec.commonmark.org/0.31.2/#html-comment).
     private static function commentAt(string $text, int $start): string
     {
-        $end = strpos($text, self::COMMENT_END, $start + strlen('<!--'));
+        $end = strpos($text, self::COMMENT_END, $start + strlen('<!'));
 
         return false === $end ? substr($text, $start) : substr($text, $start, $end + strlen(self::COMMENT_END) - $start);
     }
