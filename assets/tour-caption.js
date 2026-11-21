@@ -11,7 +11,7 @@ export function captionTour(page, storage) {
     page.addEventListener('click', (event) => {
         const pause = event.target?.closest?.(PAUSE);
         if (pause) {
-            togglePause(pause, held);
+            togglePause(pause, held, page);
             // A pause starts empty, because a stage held on an earlier page would bring back an older stage on resume.
             held = null;
             return;
@@ -41,8 +41,9 @@ function pointAt(page) {
     const caption = page.getElementById?.(CAPTION);
     const at = caption?.getAttribute?.('data-tour-at');
     let target = null;
+    const closed = page.documentElement?.dataset?.tour === 'closed';
     try {
-        target = at ? (page.querySelector?.(at) ?? null) : null;
+        target = at && !closed ? (page.querySelector?.(at) ?? null) : null;
     } catch {}
     for (const marked of page.querySelectorAll?.(`[${FOCUS}]`) ?? []) {
         if (marked !== target) {
@@ -58,12 +59,12 @@ function pointAt(page) {
 }
 
 // Only the newest stage is kept while paused, because it already holds everything the ones before it said.
-function togglePause(pause, held) {
+function togglePause(pause, held, page) {
     const paused = pause.getAttribute('aria-pressed') !== 'true';
     pause.setAttribute('aria-pressed', String(paused));
     pause.textContent = paused ? 'Resume' : 'Pause';
     if (!paused && held) {
-        held.render(held.stream);
+        Promise.resolve(held.render(held.stream)).then(() => pointAt(page));
     }
 }
 
@@ -77,4 +78,5 @@ function close(page, storage) {
     try {
         storage.setItem(CLOSED_KEY, 'closed');
     } catch {}
+    pointAt(page);
 }

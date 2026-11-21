@@ -262,3 +262,30 @@ test('a selector the page cannot parse marks nothing and breaks nothing', () => 
 
     assert.equal(page.querySelectorAll().length, 0);
 });
+
+test('a resume moves the mark to the stage that arrived while paused', async () => {
+    const page = new FakeReviewPage(captionAt('[id="round-a-now-reviewers"]'), ['round-a-now-reviewers', 'round-a-judged']);
+    const first = page.caption;
+    captionTour(page, new FakeStorage());
+    page.click(first.pause);
+    page.stream('tour-caption');
+    page.caption = captionAt('[id="round-a-judged"]', 'round-ends');
+    page.caption.pause = first.pause;
+
+    page.click(first.pause);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    assert.equal(page.marks.get('round-a-judged').getAttribute('data-tour-focus'), 'round-ends');
+});
+
+test('close takes the mark off, and a later update marks nothing', async () => {
+    const page = new FakeReviewPage(captionAt('[id="round-a-now-reviewers"]'), ['round-a-now-reviewers']);
+    page.documentElement = { dataset: {} };
+    captionTour(page, new FakeStorage());
+
+    page.click({ closest: (selector) => (selector === '[data-tour-close]' ? {} : null) });
+    page.listeners['turbo:load']();
+
+    assert.equal(page.marks.get('round-a-now-reviewers').hasAttribute('data-tour-focus'), false);
+});

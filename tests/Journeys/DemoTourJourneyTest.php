@@ -68,6 +68,9 @@ final class DemoTourJourneyTest extends JourneyTestCase
     {
         $dashboard = $this->dashboardWith($this->environment());
         $page = $dashboard->request('GET', '/demo');
+
+        self::assertSame('', trim($page->filter('#tour-caption')->text()));
+        self::assertNotNull($page->filter('#tour-caption')->attr('hidden'));
         $page = $dashboard->submit($page->selectButton('Play the demo run')->form());
 
         self::assertSame('The demo run is starting: the caption at the bottom of each page names the stage it is in.', $page->filter('.flash-success')->text());
