@@ -8,7 +8,7 @@ use DateTimeImmutable;
 use Intakt\Core\Review\Contract\Severity;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
-// Read from the recorded reporters alone, as the "Caught by one reviewer only" tile is, each under the severity its own reporter gave, so a round without a full record, or with a reported finding whose severity or reporter's role is unknown, is left out instead of guessed (D1 of #2858).
+// Read from the recorded reporters alone, as the "One reviewer only" tile is, each under the severity its own reporter gave, so a round without a full record, or with a reported finding whose severity or reporter's role is unknown, is left out instead of guessed (D1 of #2858).
 #[Exclude]
 final readonly class ReviewerCatches
 {

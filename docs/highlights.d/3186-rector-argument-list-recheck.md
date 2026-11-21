@@ -1,0 +1,2 @@
+## Found in the beta
+| Rector: parallel workers get every command-line path in one shell string and fail with "Argument list too long" once the paths pass 128 KiB | in progress | #3129, #3186, `upstream/rector-parallel-argument-list/` | still fails at 2.8.3, 2.8.5 and `main` e9fc2fd5db52 (checked 2026-11-21); the `rector` gate passes its files in a JSON file named by `INTAKT_RECTOR_PATHS_FILE` instead; no fix upstream, rectorphp/rector#9591 shows the same error and was closed with a batching workaround; ready to file as a new issue (`ISSUE.md`), nothing filed |

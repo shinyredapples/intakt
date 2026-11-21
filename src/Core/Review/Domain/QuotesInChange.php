@@ -34,8 +34,8 @@ final readonly class QuotesInChange
     public function reasonToDrop(Finding $finding, string $change): ?string
     {
         $text = $this->withoutFencedBlocks($finding->text);
-        $rest = (string) preg_replace(self::INLINE_QUOTE, self::BLANK_LINE, $text);
-        $quotes = [...$this->sureQuotesIn($text), ...$this->paddedQuotesIn($rest)];
+        $rest = $this->withoutSureQuotes($text);
+        $quotes = array_column($this->countedIn($text, $rest), 1);
 
         // Kept when any quote is found, because a quote may rightly name the fix the change still lacks.
         if ([] === $quotes || $this->anyIsInChange($quotes, $change) || $this->anyIsInChange($this->unsureQuotesIn($text, $rest), $change)) {
@@ -45,30 +45,44 @@ final readonly class QuotesInChange
         return sprintf('none of its %d quoted code fragments is in the change', count($quotes));
     }
 
+    /**
+     * @return list<string>
+     */
+    public function countedQuotes(string $findingText): array
+    {
+        return array_column($this->countedQuotesWithNames($findingText), 0);
+    }
+
+    /**
+     * @return list<array{string, non-empty-list<string>}>
+     */
+    public function countedQuotesWithNames(string $findingText): array
+    {
+        $text = $this->withoutFencedBlocks($findingText);
+
+        return $this->countedIn($text, $this->withoutSureQuotes($text));
+    }
+
     private function withoutFencedBlocks(string $text): string
     {
         // One line end for every pattern, because a closing fence before a CRLF or a CR would not be seen and the block would hide every quote after it.
         return (string) preg_replace(self::FENCED_BLOCK, '', str_replace(self::LINE_ENDS, "\n", $text));
     }
 
-    /**
-     * @return list<non-empty-list<string>>
-     */
-    private function sureQuotesIn(string $text): array
+    private function withoutSureQuotes(string $text): string
     {
-        preg_match_all(self::INLINE_QUOTE, $text, $found);
-
-        return $this->checked($found['code']);
+        return (string) preg_replace(self::INLINE_QUOTE, self::BLANK_LINE, $text);
     }
 
     /**
-     * @return list<non-empty-list<string>>
+     * @return list<array{string, non-empty-list<string>}>
      */
-    private function paddedQuotesIn(string $rest): array
+    private function countedIn(string $text, string $rest): array
     {
-        preg_match_all(self::PADDED_QUOTE, $rest, $found);
+        preg_match_all(self::INLINE_QUOTE, $text, $sure);
+        preg_match_all(self::PADDED_QUOTE, $rest, $padded);
 
-        return $this->checked($found['code']);
+        return $this->checked([...$sure['code'], ...$padded['code']]);
     }
 
     /**
@@ -87,23 +101,24 @@ final readonly class QuotesInChange
         preg_match_all(self::UNSURE_QUOTE, $rest, $found);
         preg_match_all(self::QUOTE_HOLDING_BACKTICKS, $text, $holding);
 
-        return $this->checked([...$found['code'], ...$holding['code']]);
+        return array_column($this->checked([...$found['code'], ...$holding['code']]), 1);
     }
 
     /**
      * @param list<string> $quotes
      *
-     * @return list<non-empty-list<string>>
+     * @return list<array{string, non-empty-list<string>}>
      */
     private function checked(array $quotes): array
     {
         $checked = [];
 
         foreach ($quotes as $quote) {
-            $names = $this->namesIn(trim($quote));
+            $quote = trim($quote);
+            $names = $this->namesIn($quote);
 
             if ([] !== $names) {
-                $checked[] = $names;
+                $checked[] = [$quote, $names];
             }
         }
 

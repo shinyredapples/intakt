@@ -6,10 +6,10 @@ namespace Intakt\Tests\Core\Budget\Infrastructure;
 
 use DateTimeImmutable;
 use Doctrine\Common\EventManager;
+use Doctrine\DBAL\Configuration;
 use Doctrine\DBAL\DriverManager;
 use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\Events;
 use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\Provider;
@@ -25,7 +25,9 @@ use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\Clock\MockClock;
+use Symfony\Component\EventDispatcher\EventDispatcher;
 
 #[Group('persistence')]
 #[CoversClass(DoctrineMeasuredUse::class)]
@@ -50,7 +52,7 @@ final class DoctrineMeasuredUseTest extends KernelTestCase
         EmptyDatabase::in(self::getContainer());
         new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
         $this->clock = new MockClock('2026-11-01 08:00:00 UTC');
-        $this->measured = new DoctrineMeasuredUse($entities, $this->clock);
+        $this->measured = new DoctrineMeasuredUse($entities, $this->clock, new EventDispatcher());
     }
 
     public function testAReadingIsKeptWithItsResetTimeAndItsAgeOnTheClock(): void
@@ -186,17 +188,57 @@ final class DoctrineMeasuredUseTest extends KernelTestCase
         self::assertSame(61.0, $this->measured->of($this->claude('main'), UsageWindow::FiveHour)?->usage->usedPercent);
     }
 
-    public function testAReadingAnotherWorkerRecordsBetweenAnInsertAndItsCleanupIsTheOneThatStays(): void
+    // The insert and its cleanup share one transaction, so another worker's reading of the same second lands before it, and the higher position is the latest.
+    public function testOfTwoWorkersRecordingOneWindowInOneSecondTheReadingStoredLastStays(): void
     {
         $other = $this->worker(new EventManager());
-        $events = new EventManager();
-        $events->addEventListener(Events::postFlush, new OnceFlushed(fn () => self::assertSame(ReadingOutcome::Recorded, $other->record($this->reading($this->claude('main'), UsageWindow::FiveHour, 43.0)))));
-        $first = $this->worker($events);
+        $stampedFirst = self::createStub(ClockInterface::class);
+        $stampedFirst->method('now')->willReturnCallback(function () use ($other): DateTimeImmutable {
+            self::assertSame(ReadingOutcome::Recorded, $other->record($this->reading($this->claude('main'), UsageWindow::FiveHour, 43.0)));
 
-        self::assertSame(ReadingOutcome::Recorded, $first->record($this->reading($this->claude('main'), UsageWindow::FiveHour, 42.0)));
+            return $this->clock->now();
+        });
+
+        self::assertSame(ReadingOutcome::Recorded, new DoctrineMeasuredUse($this->entities, $stampedFirst, new EventDispatcher())->record($this->reading($this->claude('main'), UsageWindow::FiveHour, 42.0)));
+
+        self::assertSame(42.0, $this->measured->of($this->claude('main'), UsageWindow::FiveHour)?->usage->usedPercent);
+        self::assertSame(1, $this->entities->getRepository(WindowReadingRecord::class)->count());
+    }
+
+    // The other worker commits its reading after this worker's insert and before its cleanup, as a read-committed engine allows; the cleanup then still must not drop it.
+    public function testAReadingAnotherWorkerCommitsBetweenTheInsertAndTheCleanupIsNotDeleted(): void
+    {
+        $write = "INSERT INTO budget_window_reading (provider, account, usage_window, used_percent, resets_at, taken_at) VALUES ('claude_code', 'main', 'five-hour', 43.0, NULL, '2026-11-01 08:00:00')";
+        $connection = DriverManager::getConnection($this->entities->getConnection()->getParams(), new Configuration()->setMiddlewares([new AnotherWorkerWritesBeforeTheCleanup($write)]));
+        $worker = new DoctrineMeasuredUse(new EntityManager($connection, $this->entities->getConfiguration()), $this->clock, new EventDispatcher());
+
+        self::assertSame(ReadingOutcome::Recorded, $worker->record($this->reading($this->claude('main'), UsageWindow::FiveHour, 42.0)));
 
         self::assertSame(43.0, $this->measured->of($this->claude('main'), UsageWindow::FiveHour)?->usage->usedPercent);
+        self::assertSame(2, $this->entities->getRepository(WindowReadingRecord::class)->count());
+    }
+
+    public function testAReadingStampedEarlierButStoredAfterAFresherOneLeavesTheFresherOneAsTheMeasuredUse(): void
+    {
+        $delayed = $this->delayedWorker($this->reading($this->claude('main'), UsageWindow::FiveHour, 43.0));
+
+        self::assertSame(ReadingOutcome::Recorded, $delayed->record($this->reading($this->claude('main'), UsageWindow::FiveHour, 42.0)));
+
+        $use = $this->measured->of($this->claude('main'), UsageWindow::FiveHour);
+        self::assertSame(43.0, $use?->usage->usedPercent);
+        self::assertEquals(new DateTimeImmutable('2026-11-01T08:01:00Z'), $use->takenAt);
+    }
+
+    public function testTheNextReadingAfterOneStoredLateLeavesOneRowForTheWindow(): void
+    {
+        $delayed = $this->delayedWorker($this->reading($this->claude('main'), UsageWindow::FiveHour, 43.0));
+        self::assertSame(ReadingOutcome::Recorded, $delayed->record($this->reading($this->claude('main'), UsageWindow::FiveHour, 42.0)));
+        $this->clock->sleep(60);
+
+        $this->record($this->reading($this->claude('main'), UsageWindow::FiveHour, 44.0));
+
         self::assertSame(1, $this->entities->getRepository(WindowReadingRecord::class)->count());
+        self::assertSame(44.0, $this->measured->of($this->claude('main'), UsageWindow::FiveHour)?->usage->usedPercent);
     }
 
     private function record(WindowReading $reading): void
@@ -204,12 +246,27 @@ final class DoctrineMeasuredUseTest extends KernelTestCase
         self::assertSame(ReadingOutcome::Recorded, $this->measured->record($reading));
     }
 
+    // Its clock is read before another worker stores a fresher reading, so its own, older reading is the one stored last.
+    private function delayedWorker(WindowReading $fresher): DoctrineMeasuredUse
+    {
+        $slowClock = self::createStub(ClockInterface::class);
+        $slowClock->method('now')->willReturnCallback(function () use ($fresher): DateTimeImmutable {
+            $stampedAt = $this->clock->now();
+            $this->clock->sleep(60);
+            $this->record($fresher);
+
+            return $stampedAt;
+        });
+
+        return new DoctrineMeasuredUse($this->entities, $slowClock, new EventDispatcher());
+    }
+
     // Its own connection and entity manager, because another messenger:consume process shares neither with this one.
     private function worker(EventManager $events): DoctrineMeasuredUse
     {
         $connection = DriverManager::getConnection($this->entities->getConnection()->getParams());
 
-        return new DoctrineMeasuredUse(new EntityManager($connection, $this->entities->getConfiguration(), $events), $this->clock);
+        return new DoctrineMeasuredUse(new EntityManager($connection, $this->entities->getConfiguration(), $events), $this->clock, new EventDispatcher());
     }
 
     private function claude(string $name): Account

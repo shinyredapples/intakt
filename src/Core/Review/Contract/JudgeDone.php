@@ -13,7 +13,6 @@ final readonly class JudgeDone
     /**
      * @param list<JudgeDoneFinding>  $findings
      * @param list<DroppedFinding>    $dropped
-     * @param array<string, string>   $sameCause
      * @param array<string, Decision> $votes
      * @param array<string, ?string>  $p1Keys
      */
@@ -25,7 +24,7 @@ final readonly class JudgeDone
         // Empty by default, because a judge_done row written before drop reasons were recorded holds no dropped findings.
         public array $dropped = [],
         // Empty by default, because a judge_done row written before the judge named causes links no findings.
-        public array $sameCause = [],
+        public SameCause $sameCause = new SameCause(),
         // Each reviewer's vote as the quorum counts it, by reviewer id, so the console, the loop and the review page decide one outcome; empty by default, because a judge_done row written before votes were counted holds none.
         public array $votes = [],
         // Each P1 finding's key by finding id, null for one that gets none, so a later round can tell the same finding on unchanged files; empty by default, because a judge_done row written before keys were recorded holds none.

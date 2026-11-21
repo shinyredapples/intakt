@@ -11,6 +11,7 @@ use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\CountedVote;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundState;
+use Intakt\Core\Review\Infrastructure\AddedLinesInCheckout;
 use Intakt\Core\Review\Infrastructure\ChangeText;
 use Intakt\Core\Review\Infrastructure\DiffHunks;
 use Intakt\Core\Review\Infrastructure\DiffPaths;
@@ -27,10 +28,11 @@ final readonly class JudgedRounds
         private RoundLedger $ledger,
         private ChangeText $change,
         private DiffHunks $hunks,
+        private AddedLinesInCheckout $addedLines,
         private DiffPaths $paths,
         private StoredVerdicts $verdicts,
         private FailedJudgings $failedJudgings,
-        private RecurringP1s $recurringP1s,
+        private RecordRecurringP1s $recurringP1s,
     ) {
     }
 
@@ -48,6 +50,14 @@ final readonly class JudgedRounds
     public function hunksOf(ReviewRound $round): array
     {
         return $this->hunks->in($round->diff());
+    }
+
+    /**
+     * @return list<array{string, int, string}>
+     */
+    public function addedLinesOf(ReviewRound $round): array
+    {
+        return $this->addedLines->of($round->diff(), $round->checkoutRoot());
     }
 
     // Null for a round judged already or whose failed judging is recorded, so a redelivered message asks the model nothing.
@@ -80,20 +90,12 @@ final readonly class JudgedRounds
 
             if (!$this->failedJudgings->isRecorded($locked->id()->toRfc4122()) && $this->findings->markJudged($locked)) {
                 $this->ledger->judgeDone($locked, $judged, $this->votesOf($locked, $judged));
-                $this->recordRecurringP1s($locked);
+                $this->recurringP1s->of($locked);
                 $recorded = true;
             }
         });
 
         return $recorded;
-    }
-
-    // In the judging's transaction, so a recurrence is recorded exactly when the judge_done that shows it commits.
-    private function recordRecurringP1s(ReviewRound $round): void
-    {
-        foreach ($this->recurringP1s->foundWith($round) as $found) {
-            $this->ledger->recurringP1Found($found);
-        }
     }
 
     // Counted once, with the judgement, and recorded with it, so every reader of the round counts the same votes.

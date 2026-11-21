@@ -12,16 +12,39 @@
         {{ include('dashboard/components/character.html.twig', {character: first_run.firstReview.mascot, size: 144}, with_context = false) }}
         <div>
             <h1>Set up Intakt</h1>
-            <p class="lead">What this install has set up and what is still missing, read from the running install.</p>
         </div>
     </div>
+    {{ include('dashboard/_review_strip.html.twig', with_context = false) }}
     {%- set demo_ready = demo is same as(constant('Intakt\\Core\\Dashboard\\UseCase\\PlayDemo\\DemoReadiness::Ready')) %}
+    {#- With a recording ready, watching it is the one primary action: a juror without a key needs only that button. -#}
+    {%- set step_button = demo_ready ? 'secondary' : 'primary' %}
     {%- if demo_ready and first_run.choices is null %}
     <div class="play-demo-offer step-nav">
-        <p>No provider key yet? Watch a recorded review run instead, with a caption that names each stage.</p>
         {{ _self.play_demo() }}
+        {{ _self.no_key() }}
     </div>
     {%- endif %}
+
+    {%- set choices = first_run.choices %}
+    {%- if choices is not null %}
+    <section class="step choices" id="demo-choices" aria-labelledby="demo-choices-h">
+        <h2 id="demo-choices-h">See a review</h2>
+        <div class="choice" id="choice-recorded">
+            <h3>Watch a recorded review</h3>
+            {%- if demo_ready %}
+            <div class="demo-play">{{ _self.play_demo() }}{{ _self.no_key() }}</div>
+            {%- else %}
+            <p class="recorded-when">{{ demo.sentence }}</p>
+            {%- endif %}
+        </div>
+        <div class="choice" id="choice-live">
+            <h3>Run it live with your key</h3>
+            <p class="next">{{ choices.liveReviewNext }}</p>
+        </div>
+    </section>
+    {%- endif %}
+
+    {#- After the ways to see a review, so a visitor without a key meets Play before the setup steps. -#}
     <ol class="steps" aria-label="Setup progress">
         {%- for title in titles %}
         {%- if loop.index0 === first_run.current %}
@@ -33,24 +56,6 @@
     </ol>
     <p class="step-count">{{ first_run.done }} of {{ first_run.needed }} steps done</p>
 
-    {%- set choices = first_run.choices %}
-    {%- if choices is not null %}
-    <section class="step choices" id="demo-choices" aria-labelledby="demo-choices-h">
-        <h2 id="demo-choices-h">Two ways to see a review</h2>
-        <div class="choice" id="choice-recorded">
-            <h3>Watch a recorded real review now</h3>
-            <p class="recorded-when">{{ demo.sentence }}</p>
-            {%- if demo_ready %}
-            {{ _self.play_demo() }}
-            {%- endif %}
-        </div>
-        <div class="choice" id="choice-live">
-            <h3>Paste one provider key or Hugging Face token and run the demo review</h3>
-            <p class="next">{{ choices.liveReviewNext }}</p>
-        </div>
-    </section>
-    {%- endif %}
-
     {%- set step = first_run.providers %}
     <section class="step" id="step-providers" data-state="{{ step.state.value }}" aria-labelledby="step-providers-h">
         <h2 id="step-providers-h">1 {{ titles[0] }} {{ _self.state(step.state) }}</h2>
@@ -60,9 +65,13 @@
             <input type="hidden" name="_token" value="{{ csrf_token(constant('Intakt\\Core\\Dashboard\\UseCase\\KeepProviderKey\\KeepProviderKeyController::TOKEN_ID')) }}">
             <label for="provider-key">A key or token for {{ step.keyLabels|join(', ', ' or ') }}</label>
             <input type="password" id="provider-key" name="{{ constant('Intakt\\Core\\Dashboard\\UseCase\\KeepProviderKey\\KeepProviderKeyController::FIELD') }}" autocomplete="off" required>
-            {{ include('dashboard/components/button.html.twig', {kind: 'primary', type: 'submit', label: 'Keep the key'}, with_context = false) }}
+            {{ include('dashboard/components/button.html.twig', {kind: step_button, type: 'submit', label: 'Keep the key'}, with_context = false) }}
         </form>
         {%- endif %}
+        {%- if step.keyless is not empty or step.firstProject is not null %}
+        {#- Closed, because which providers lack a key and which model each tier uses matter only to someone setting up a key. -#}
+        <details class="step-details">
+            <summary>Providers and tiers {{ include('dashboard/components/icon.html.twig', {name: 'chevron', small: true, extra: 'chev'}, with_context = false) }}</summary>
         {%- if step.keyless is not empty %}
         <ul class="keyless">
             {%- for message in step.keyless %}
@@ -80,6 +89,8 @@
                 {%- endfor %}
             </tbody>
         </table>
+        {%- endif %}
+        </details>
         {%- endif %}
     </section>
 
@@ -102,12 +113,12 @@
         <p class="lead">{{ step.sentence }}</p>
         {%- if step.round is not null %}
         <div class="step-nav">
-            <a class="btn primary" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_REVIEW'), {round: step.round}) }}">Open the review</a>
+            <a class="btn {{ step_button }}" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_REVIEW'), {round: step.round}) }}">Open the review</a>
         </div>
         {%- elseif step.sampleCanStart %}
         <form method="post" action="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::START_FIRST_REVIEW')) }}" class="start-first-review step-nav">
             <input type="hidden" name="_token" value="{{ csrf_token(constant('Intakt\\Core\\Dashboard\\UseCase\\StartReview\\StartFirstReviewController::TOKEN_ID')) }}">
-            {{ include('dashboard/components/button.html.twig', {kind: 'primary', type: 'submit', label: 'Start the first review'}, with_context = false) }}
+            {{ include('dashboard/components/button.html.twig', {kind: step_button, type: 'submit', label: 'Start the first review'}, with_context = false) }}
         </form>
         {%- endif %}
     </section>
@@ -135,10 +146,14 @@
 {{ include('dashboard/components/chip.html.twig', {label: state.words, dot: state.dot, on_page: true}, with_context = false) }}
 {%- endmacro %}
 
-{#- A secondary button, because the page's one primary action stays the next setup step. -#}
+{#- The page's one primary button whenever it is offered, because a juror without a key needs only this. -#}
 {% macro play_demo() -%}
 <form method="post" action="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::PLAY_DEMO')) }}" class="play-demo">
     <input type="hidden" name="_token" value="{{ csrf_token(constant('Intakt\\Core\\Dashboard\\UseCase\\PlayDemo\\PlayDemoController::TOKEN_ID')) }}">
-    {{ include('dashboard/components/button.html.twig', {kind: 'secondary', type: 'submit', label: 'Play the demo run'}, with_context = false) }}
+    {{ include('dashboard/components/button.html.twig', {kind: 'primary', type: 'submit', label: 'Play the demo run'}, with_context = false) }}
 </form>
+{%- endmacro %}
+
+{% macro no_key() -%}
+{{ include('dashboard/components/chip.html.twig', {label: 'No key needed', icon: 'check', on_page: true}, with_context = false) }}
 {%- endmacro %}

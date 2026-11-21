@@ -16,6 +16,7 @@ use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Review\Contract\CatchUpOwed;
 use Intakt\Core\Review\Contract\ChangeSource;
 use Intakt\Core\Review\Contract\Decision;
+use Intakt\Core\Review\Contract\EscalationVerdictReused;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FindingIds;
 use Intakt\Core\Review\Contract\FollowUp;
@@ -160,6 +161,11 @@ final readonly class RoundLedger
         $this->append(LedgerEventKind::RecurringP1Found, $found);
     }
 
+    public function escalationVerdictReused(EscalationVerdictReused $reused): void
+    {
+        $this->append(LedgerEventKind::EscalationVerdictReused, $reused);
+    }
+
     // Keyed at the head the round judged, because only the reviewed checkout holds the files a P1 named as the reviewers saw them.
     /**
      * @return array<string, ?string>
@@ -177,7 +183,7 @@ final readonly class RoundLedger
         return $keys;
     }
 
-    // An act entry is recorded as the act list holds it (highest severity, merged ids), so the review page shows it the way the console does; the merged findings stay recorded for their ids.
+    // An act entry is recorded as the act list holds it (highest severity, merged ids), so the review page shows it the way the console does; the merged findings stay recorded for their ids, each with its own judge's note, because the act list read back (StoredFindings::actListOf()) gives an entry its own note or else the first of a finding it merged.
     /**
      * @param list<string> $act
      *
@@ -187,7 +193,7 @@ final readonly class RoundLedger
     {
         $findings = $judged->findings;
         $entries = [];
-        foreach (new OnePerPlace()->actList($findings, $act, $judged->sameCause) as $entry) {
+        foreach (new OnePerPlace()->actList($findings, $act, iterator_to_array($judged->sameCause)) as $entry) {
             $entries[$entry->id] = $entry;
         }
 
@@ -238,7 +244,7 @@ final readonly class RoundLedger
         return ['round' => $reviewer->round()->id()->toRfc4122(), 'reviewer' => $reviewer->id()->toRfc4122(), 'role' => $reviewer->roleName(), 'tier' => $reviewer->tier()];
     }
 
-    private function append(LedgerEventKind $kind, ReviewStarted|ReviewerStarted|VerdictReceived|CatchUpOwed|ReviewerFailed|ReviewerBlocked|ReviewerStopped|JudgeDone|JudgingFailed|ReviewerFindingsRecorded|RecurringP1Found $payload): void
+    private function append(LedgerEventKind $kind, ReviewStarted|ReviewerStarted|VerdictReceived|CatchUpOwed|ReviewerFailed|ReviewerBlocked|ReviewerStopped|JudgeDone|JudgingFailed|ReviewerFindingsRecorded|RecurringP1Found|EscalationVerdictReused $payload): void
     {
         $result = $this->ledger->append(new LedgerEvent($kind, $this->serializer->serialize($payload, JsonEncoder::FORMAT)));
 

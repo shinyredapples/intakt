@@ -68,8 +68,9 @@ a.card:hover { background: var(--tint-2); }
 a.card.needs:hover, .card.needs.is-hover { filter: brightness(.98); }
 .card.is-hover { background: var(--tint-2); }
 .card.needs.is-hover { background: var(--amber-tint); }
-.card .top { display: flex; align-items: center; gap: var(--s8); margin-bottom: var(--s4); color: var(--muted); font-size: var(--t13); }
-/* A change named like a branch is as long as a title; it gives way to the project name, which keeps up to 60%. */
+/* The Replay chip wraps to its own line in a narrow column, because beside the change and project it squeezed the change to nothing. */
+.card .top { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s4) var(--s8); margin-bottom: var(--s4); color: var(--muted); font-size: var(--t13); }
+/* A change named like a branch is as long as a title; it is cut with an ellipsis, and the project name wraps below it when both do not fit one line. */
 .card .top .num { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .card .top .pname { flex: none; margin-left: auto; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .card .title {
@@ -250,7 +251,9 @@ a.card.needs:hover, .card.needs.is-hover { filter: brightness(.98); }
 .empty > .character { margin-bottom: var(--s16); }
 .col-empty { margin: 0; padding: var(--s8) 2px; color: var(--muted); font-size: var(--t13); }
 
-/* Board: the nine columns side by side, scrolled sideways where they do not fit (docs/design/mocks/index.html). */
+/* Board: its columns side by side, scrolled sideways where they do not fit (docs/design/mocks/index.html). */
+/* Wraps, because the names of six columns are wider than a phone. */
+.coming-next { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s8); margin: 0 0 var(--s16); color: var(--muted); font-size: var(--t15); }
 .content.wide { max-width: none; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 /* Positioned, because an absolute .sr-only label in a folded strip past the edge otherwise escapes the scroller and widens the page. */
@@ -612,7 +615,19 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
 .sb-finding { display: flex; gap: var(--s8); align-items: baseline; margin-bottom: var(--s8); padding: var(--s8) var(--s12); border-radius: var(--r-btn); background: var(--raised); color: var(--ink); text-decoration: none; overflow-wrap: anywhere; }
 .sb-finding:hover { background: var(--page); }
 .sev { flex: none; padding: 2px var(--s8); border-radius: var(--r-chip); background: var(--tint); font-size: var(--t13); font-weight: 600; }
-.sb-finding code, .finding-card code { padding: 0 var(--s4); border-radius: var(--r-chip); background: var(--tint); }
+/* The verdict card sits right under the title, so on a phone the outcome and the first finding to fix fit on the first screen; one line per finding on a wide screen, its text cut short, because the full card below holds the rest. */
+.verdict-card { margin: var(--s8) 0 var(--s12); }
+.verdict-card .verdict-words { margin: 0; font-size: var(--t17); overflow-wrap: anywhere; }
+.verdict-card .verdict-to-fix { margin: var(--s8) 0 var(--s4); font-size: var(--t13); color: var(--muted); }
+.verdict-findings { margin: 0; padding: 0; list-style: none; }
+.verdict-findings a { display: flex; gap: var(--s8); align-items: baseline; min-height: 44px; padding: var(--s4) 0; color: var(--ink); text-decoration: none; }
+.verdict-findings a:hover .vf-title { text-decoration: underline; }
+.verdict-findings .vf-title { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The place keeps up to half the line whatever the text's length, and only its path is cut, so the line number always shows. */
+.verdict-findings .vf-place { display: flex; flex: 0 0 auto; max-width: 50%; min-width: 0; white-space: nowrap; color: var(--muted); font-size: var(--t13); }
+.verdict-findings .vf-path { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.verdict-findings .vf-line { flex: none; }
+.sb-finding code, .finding-card code, .verdict-findings code { padding: 0 var(--s4); border-radius: var(--r-chip); background: var(--tint); }
 /* A judged round's findings are cards like the Now block's in one column, because a table column squeezed each finding to 110 px on a phone. */
 .finding-cards { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s8); }
 /* An open finding of the Now block links to its card, and the sticky top bar would otherwise cover the card's chip and id. */
@@ -622,8 +637,21 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
 .fc-body p { margin: 0; }
 .fc-place, .fc-call, .fc-merged { color: var(--muted); font-size: var(--t13); }
 .fc-call { font-weight: 600; }
+/* A dropped card's quotes stay behind a closed disclosure, because most readers only need the one line that says why the judge never saw it. */
+.fc-quotes { font-size: var(--t13); }
+.fc-quotes > summary { display: inline-flex; align-items: center; gap: var(--s4); cursor: pointer; color: var(--link); font: 500 var(--t13)/1 var(--f-head); padding: var(--s4) 0; }
+.fc-quote-list { list-style: none; margin: var(--s4) 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--s4) var(--s8); }
+/* A counted quote may wrap onto the next line, so its line breaks and indentation stay as the check read them, while a long one still wraps on a phone. */
+.fc-quote-list code { white-space: pre-wrap; overflow-wrap: anywhere; }
+.fc-unchecked, .fc-reason { color: var(--muted); }
+.fc-quotes > p + p { margin-top: var(--s4); }
 @media (max-width: 760px) {
   .sb-finding { min-height: 44px; }
+  .fc-quotes > summary { min-height: 44px; }
+  /* On a phone the place takes its own line under the text, because beside it the place left the text about 15 characters, too few to say what to fix; the text gets the row and at most two lines. */
+  .verdict-findings a { flex-wrap: wrap; row-gap: 0; }
+  .verdict-findings .vf-title { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; white-space: normal; overflow-wrap: anywhere; }
+  .verdict-findings .vf-place { flex-basis: 100%; max-width: 100%; }
   .finding-card { flex-wrap: wrap; }
   /* The Timeline and Live log switch sticks under the top bar too, measured 66 px tall at 390 wide, because a card hidden under it reads as a link that went nowhere. */
   .ttabs ~ .task-grid .finding-card { scroll-margin-top: calc(var(--top) + 66px + var(--s16)); }
@@ -708,8 +736,12 @@ details.ev > summary time { margin-left: auto; color: var(--muted); font-size: v
 /* No tint and no hover, so a line with nothing to open does not look like a strip that opens. */
 .working-none { display: flex; align-items: center; min-height: 44px; padding: 0 var(--s16); color: var(--muted); }
 .lanes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s8); }
-.lane { padding: var(--s12) var(--s16); border-radius: var(--r-card); background: var(--tint); display: grid; gap: var(--s4); min-width: 0; align-content: start; }
-.lane .who { display: flex; align-items: center; gap: var(--s8); font: 500 var(--t13)/1.3 var(--f-head); color: var(--muted); }
+/* A lane links to its round's review page, so it reads and answers the pointer like a card, not like link text; one column no wider than the lane, because an auto column grows to its longest unbreakable word and pushes the lane's text into the next lane. */
+.lane { padding: var(--s12) var(--s16); border-radius: var(--r-card); background: var(--tint); display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s4); min-width: 0; align-content: start; color: var(--ink); text-decoration: none; }
+a.lane:hover { background: var(--tint-2); }
+.lane .meta span { white-space: normal; overflow-wrap: anywhere; }
+/* Wraps, because in a narrow lane the fixed-size character leaves too little room for the role and the start time on one line. */
+.lane .who { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s4) var(--s8); min-width: 0; overflow-wrap: anywhere; font: 500 var(--t13)/1.3 var(--f-head); color: var(--muted); }
 .lane .who .elapsed { margin-left: auto; font-family: var(--f-body); }
 .lane .what { font-size: var(--t15); overflow-wrap: anywhere; }
 @media (min-width: 1700px) {
@@ -723,31 +755,54 @@ details.ev > summary time { margin-left: auto; color: var(--muted); font-size: v
   .lanes { grid-template-columns: minmax(0, 1fr); }
 }
 
-/* The demo caption sits in the main column after the content, sticky at the bottom, so it stays in view without covering the end of a page. */
+/* The demo caption sits in the main column after the content, sticky at the bottom, so it stays in view without covering the end of a page. Progress is dots. */
 .tour-caption {
   position: sticky; bottom: 0; z-index: 15; display: flex; align-items: center; gap: var(--s12); margin-top: auto;
   padding: var(--s12) var(--s32); border-top: 1px solid var(--hairline); background: var(--raised);
 }
-.tour-caption .tour-count { flex: none; font: 500 var(--t13)/1.3 var(--f-head); color: var(--muted); white-space: nowrap; }
-.tour-caption .tour-line { flex: 1; margin: 0; min-width: 0; }
+.tour-caption .tour-dots { flex: none; display: flex; gap: var(--s4); }
+.tour-caption .tour-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--hairline); }
+.tour-caption .tour-dot.done { background: var(--muted); }
+.tour-caption .tour-dot.now { width: 20px; border-radius: 4px; background: var(--primary); }
+.tour-caption .tour-line { flex: 1; margin: 0; min-width: 0; font-weight: 600; }
 .tour-caption .tour-review { flex: none; white-space: nowrap; }
 [data-tour="closed"] .tour-caption { display: none; }
+/* One row of 44 px on a phone: the dots become a bar along its top edge, the line links to the review and Close stays; Pause is for a desk. While it shows, the tab bar is 56 px with 48 px tabs, so the two together stay at 100 px above the safe area. */
 @media (max-width: 760px) {
-  .tour-caption { bottom: calc(var(--bar) + env(safe-area-inset-bottom)); flex-wrap: wrap; padding: var(--s8) var(--s16); }
-  .tour-caption .tour-line { flex-basis: 100%; order: -1; }
+  :root:has(.tour-caption):not([data-tour="closed"]) { --bar: 56px; }
+  :root:has(.tour-caption):not([data-tour="closed"]) .rail .nav { height: 48px; }
+  .tour-caption { bottom: calc(var(--bar) + env(safe-area-inset-bottom)); gap: var(--s8); min-height: 44px; padding: 0 0 0 var(--s16); border-top: 0; }
+  .tour-caption .tour-dots { position: absolute; top: -1px; left: 0; right: 0; gap: 2px; }
+  .tour-caption .tour-dot, .tour-caption .tour-dot.now { flex: 1; width: auto; height: 3px; border-radius: 0; }
+  .tour-caption .tour-line { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: var(--t15); line-height: 1.3; }
+  .tour-caption .tour-review { position: absolute; inset: 0; }
+  /* Clipped like .sr-only rather than drawn at 0 px, so the link keeps its name without a text too small to read. */
+  .tour-caption .tour-review span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .tour-caption [data-tour-pause] { display: none; }
+  .tour-caption [data-tour-close] { position: relative; z-index: 1; flex: none; min-width: 44px; }
 }
 
-/* Trends: stat tiles, the figure big above its label; two per row on a phone (decisions D2 and D7 of issue 2858). */
-.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(208px, 1fr)); gap: var(--s12); margin: 0; }
-.tile { display: flex; flex-direction: column-reverse; justify-content: flex-end; gap: var(--s4); padding: var(--s12) var(--s16); border-radius: var(--r-card); background: var(--tint); }
+/* Trends: stat tiles first, the figure big above its short label; three per row on a phone so the headline figures fill the first screen (issue 3141). */
+.trends-head { align-items: center; }
+.demo-toggle { display: inline-flex; align-items: center; gap: var(--s4); }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: var(--s12); margin: 0; }
+/* A tile's tip hangs from its own tile, not from its label or the grid: from the label it ran past a phone's right edge, from the grid it opened below the last row, off screen (review of issue 3198). */
+.tile .term { position: static; }
+.tile { position: relative; display: flex; flex-direction: column-reverse; justify-content: flex-end; gap: var(--s4); padding: var(--s12) var(--s16); border-radius: var(--r-card); background: var(--tint); }
 .tile dt { color: var(--muted); font-size: var(--t13); }
 .tile dd { margin: 0; color: var(--ink); font: 700 var(--t28)/1.2 var(--f-body); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-.tile[data-no-data] dd { color: var(--muted); font-size: var(--t17); font-weight: 500; }
-.tiles-note { margin: var(--s12) 0 0; font-size: var(--t13); }
-a.fchip { display: inline-flex; align-items: center; text-decoration: none; }
+.tile .tile-date { display: block; color: var(--muted); font: 400 var(--t13)/1.4 var(--f-body); }
+.tile .term-tip { left: 0; right: 0; width: auto; max-width: none; }
 @media (max-width: 760px) {
-  .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s8); }
+  .tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s8); }
+  .tile { padding: var(--s8) var(--s12); }
   .tile dd { font-size: var(--t21); }
+  .tile .term { display: inline-flex; align-items: center; min-height: 44px; }
+  /* A third of a phone is too narrow to read a tip, so it spans two columns, opening away from the grid's nearer edge. */
+  .tile .term-tip { right: auto; width: calc(200% + var(--s8)); }
+  .tile:nth-child(3n+2) .term-tip { left: calc(-50% - var(--s8) / 2); }
+  .tile:nth-child(3n) .term-tip { left: auto; right: 0; }
+  .demo-toggle { height: 44px; }
 }
 
 /* Trends charts (issue 2935 adds the per-day pair) as DESIGN.md's Charts (trends) and the mocks' trends page: one hue, hairline grid, small multiples in rows of three; they stack on a phone (issue 2934). */
@@ -757,8 +812,13 @@ a.fchip { display: inline-flex; align-items: center; text-decoration: none; }
 .chart h2 { margin: 0; font-size: var(--t17); }
 .takeaway { margin: var(--s4) 0 var(--s4); color: var(--ink); max-width: 72ch; }
 .takeaway[data-no-data] { color: var(--muted); }
+.chart h2 .figure-kind, .sub-h .figure-kind { vertical-align: 2px; font-weight: 500; }
 .chart-key { margin: 0 0 var(--s12); font-size: var(--t13); max-width: 72ch; }
+.chart-legend { margin: var(--s4) 0 var(--s12); }
+.c-swatch { width: 12px; height: 12px; border-radius: 3px; background: var(--primary); }
+.c-swatch.c-whole { opacity: .35; }
 .multiples { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s16) var(--s32); }
+.multiples.one { grid-template-columns: minmax(0, 1fr); }
 .multiples.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .multiple { margin: 0; min-width: 0; }
 .multiple .sub-h { margin: 0 0 var(--s4); font: 600 var(--t15)/1.3 var(--f-head); }
