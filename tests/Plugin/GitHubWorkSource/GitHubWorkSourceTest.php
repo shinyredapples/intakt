@@ -280,7 +280,6 @@ final class GitHubWorkSourceTest extends KernelTestCase
         $source = $this->source();
         $source->queue('alpha');
         $this->reads->listsUnchanged();
-        // The failure is recorded after the plan was made and before the pick takes the lock.
         $this->duringHistory = static fn () => $source->failedForGood('alpha', 5, 'failed meanwhile');
 
         $pick = $source->nextWork('alpha', WorkerState::Free);
