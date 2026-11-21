@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Plugin\GitHubWorkSource\Infrastructure;
 
 use Doctrine\Common\EventManager;
+use Doctrine\DBAL\Exception\LockWaitTimeoutException;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManager;
@@ -65,9 +66,13 @@ final readonly class IntakeStore
 
                 return true;
             });
-        } catch (UniqueConstraintViolationException) {
-            // The first sync of a project finds no row to lock, so a worker that inserted the row meanwhile stored the newer listing, and this one loses.
-            return false;
+        } catch (UniqueConstraintViolationException|LockWaitTimeoutException $failure) {
+            // The first sync of a project finds no row to lock, so a worker that commits the row after it was read makes the insert collide (or, on SQLite in WAL mode, the stale read snapshot refuses the write). It loses only when the newer listing is really stored; any other failure stays one.
+            if ($this->syncStateOf($project)->generation !== $readBefore->generation) {
+                return false;
+            }
+
+            throw $failure;
         }
     }
 

@@ -5,6 +5,10 @@ declare(strict_types=1);
 namespace Intakt\Tests\Plugin\GitHubWorkSource\Infrastructure;
 
 use DateTimeZone;
+use Doctrine\Common\EventManager;
+use Doctrine\DBAL\DriverManager;
+use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
+use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Event\OnFlushEventArgs;
 use Doctrine\ORM\Event\PostLoadEventArgs;
@@ -248,7 +252,44 @@ final class IntakeStoreTest extends KernelTestCase
         self::assertSame(2, $this->store->syncStateOf('alpha')->generation);
     }
 
-    public function testTheFirstWriteOfAProjectLosesWithoutAnExceptionWhenAnotherWorkerInsertedTheSyncStateMeanwhile(): void
+    public function testTheFirstWriteOfAProjectLosesWithoutAnExceptionWhenAnotherWorkerCommittedItsListingAfterTheSyncStateWasRead(): void
+    {
+        $file = (string) tempnam(sys_get_temp_dir(), 'intake');
+        $first = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'path' => $file]);
+        $second = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'path' => $file]);
+        try {
+            $first->fetchOne('PRAGMA journal_mode=WAL');
+            $events = new EventManager();
+            $losing = new EntityManager($first, $this->entities->getConfiguration(), $events);
+            new SchemaTool($losing)->createSchema([$losing->getClassMetadata(IntakeValidator::class), $losing->getClassMetadata(StoredIssue::class)]);
+            $winner = new IntakeStore(new EntityManager($second, $this->entities->getConfiguration(), new EventManager()));
+            $events->addEventListener([Events::onFlush], new readonly class($winner, $this->stored(Issues::task(8))) {
+                public function __construct(private IntakeStore $winner, private StoredIssue $newer)
+                {
+                }
+
+                public function onFlush(): void
+                {
+                    if (!$this->winner->recordIfStill('alpha', $this->winner->syncStateOf('alpha'), new ListingRows([$this->newer], 'W/"newer"'))) {
+                        throw new LogicException('The other worker must commit first.');
+                    }
+                }
+            });
+            $loser = new IntakeStore($losing);
+
+            $written = $loser->recordIfStill('alpha', $loser->syncStateOf('alpha'), new ListingRows([$this->stored(Issues::task(7))], null));
+
+            self::assertFalse($written);
+            self::assertSame([8], array_map(static fn (StoredIssue $issue): int => $issue->number(), $loser->issuesOf('alpha')));
+            self::assertSame('W/"newer"', $loser->syncStateOf('alpha')->validator);
+        } finally {
+            $second->close();
+            $first->close();
+            unlink($file);
+        }
+    }
+
+    public function testAFirstWriteThatFailsWhileNoOtherWorkerStoredAListingLetsTheFailureThrough(): void
     {
         $inserting = new class {
             public function onFlush(OnFlushEventArgs $event): void
@@ -259,12 +300,14 @@ final class IntakeStoreTest extends KernelTestCase
         $events = $this->entities->getEventManager();
         $events->addEventListener([Events::onFlush], $inserting);
         try {
-            $written = $this->store->recordIfStill('alpha', SyncState::neverSynced(), new ListingRows([$this->stored(Issues::task(7))], null));
+            (void) $this->store->recordIfStill('alpha', SyncState::neverSynced(), new ListingRows([$this->stored(Issues::task(7))], null));
+            self::fail('The failed write was expected to throw.');
+        } catch (UniqueConstraintViolationException) {
         } finally {
             $events->removeEventListener([Events::onFlush], $inserting);
         }
 
-        self::assertFalse($written);
+        self::assertSame(0, $this->store->syncStateOf('alpha')->generation);
         self::assertSame([], $this->store->issuesOf('alpha'));
     }
 
