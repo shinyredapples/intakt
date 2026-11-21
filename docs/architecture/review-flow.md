@@ -76,9 +76,9 @@ Part 2a of the escalation of a recurring P1 (issue #3300). Nothing calls it yet:
 
 `findingFirst()` splits the diff at its `diff --git` headers and puts first every section whose path (`DiffPaths`) equals a name `FindingKeys::citedIn()` gives, or whose last path part equals it.
 
-`citedIn()` gives the finding's `file` field and every citation of its text, read as for the key (`codeSpansOf()`, `wordsOf()`), without the checkout; a citation written as `./src/Z.php` matches nothing.
+`citedIn()` gives the finding's `file` field and every citation of its text, read as for the key (`codeSpansOf()`, `wordsOf()`), without the checkout; a plain word of the text counts only with an extension or a directory, so "check" never matches `bin/check`; a citation written as `./src/Z.php` matches nothing.
 
-The cited sections are always shown whole; the other sections follow and are cut at `PromptCut::CEILING_BYTES` together with them, with the cut note after the fence.
+The cited sections are always shown whole; the other sections follow and are cut at `PromptCut::CEILING_BYTES` together with them, with the cut note after the fence (`FencedText::omitted()`, which does not point to tools, because the review has none).
 
 When no section matches, or the cited sections alone are over the ceiling, it throws `CitedCodeNotShown` with Intakt's own reason, and no prompt is built.
 

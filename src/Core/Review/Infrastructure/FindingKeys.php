@@ -53,7 +53,9 @@ final readonly class FindingKeys
      */
     public function citedIn(Finding $finding): array
     {
-        $citations = array_filter([...$this->codeSpansOf($finding->text), ...$this->wordsOf($finding->text)], $this->mayNameAFile(...));
+        // A plain word counts only when it has an extension or a directory, so "check" in a sentence never matches bin/check.
+        $words = array_filter($this->wordsOf($finding->text), fn (string $word): bool => str_contains($word, '/') || 1 === preg_match(self::FILE_EXTENSION, $word));
+        $citations = array_filter([...$this->codeSpansOf($finding->text), ...$words], $this->mayNameAFile(...));
 
         return array_values(array_unique(null === $finding->file ? $citations : [$finding->file, ...$citations]));
     }

@@ -89,6 +89,23 @@ final class EscalationPromptTest extends TestCase
         $this->findingFirst($this->finding('src/Gone.php', 'See `docs/x.md`.'), $this->section('src/A.php', 'a'));
     }
 
+    public function testAPlainWordOfTheTextIsNoCitationOfAFileInTheDiff(): void
+    {
+        $this->expectExceptionObject(CitedCodeNotShown::notInDiff());
+
+        $this->findingFirst($this->finding('src/Gone.php', 'The check is skipped.'), $this->section('bin/check', 'x'));
+    }
+
+    public function testACutNoteDoesNotSendTheToollessReviewerToItsTools(): void
+    {
+        $rest = $this->section('src/A.php', str_repeat('a', PromptCut::CEILING_BYTES));
+
+        $shown = $this->findingFirst($this->finding('src/B.php', 'A problem.'), $this->section('src/B.php', 'b').$rest);
+
+        self::assertStringContainsString('Intakt cut this text', $shown);
+        self::assertStringNotContainsString('your tools', $shown);
+    }
+
     public function testCitedSectionsOverTheCeilingAreReportedWithIntaktsOwnReason(): void
     {
         $cited = $this->section('src/B.php', str_repeat('b', PromptCut::CEILING_BYTES));
