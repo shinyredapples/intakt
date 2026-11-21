@@ -197,7 +197,7 @@ final readonly class MainHistory implements CommitHistory
     }
 
     /**
-     * @param list<string>              $arguments
+     * @param list<string>                $arguments
      * @param array<string, string|false> $overrides
      *
      * @throws MainNotRead
