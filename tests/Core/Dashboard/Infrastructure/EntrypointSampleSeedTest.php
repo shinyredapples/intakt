@@ -234,7 +234,42 @@ final class EntrypointSampleSeedTest extends TestCase
 
         $this->waitForTheServer();
 
-        self::assertSame(['bin/console doctrine:migrations:migrate --no-interaction --allow-no-migration'], $this->consoleCallsBeforeTheConsumers());
+        self::assertNotContains('bin/console intakt:sample:seed', $this->consoleCallsBeforeTheConsumers());
+    }
+
+    public function testAStartAfterTheProjectFileWasRemovedBuildsTheContainerAgain(): void
+    {
+        new Filesystem()->dumpFile($this->directory.'/var/cache/test/container-with-the-removed-projects', 'old');
+        $this->startEntrypoint([]);
+
+        $this->waitForTheServer();
+
+        self::assertSame([
+            'bin/console doctrine:migrations:migrate --no-interaction --allow-no-migration',
+            'bin/console cache:warmup --no-interaction',
+        ], $this->consoleCallsBeforeTheConsumers());
+        self::assertDirectoryDoesNotExist($this->directory.'/var/cache/test', 'the container compiled with the removed project file survived');
+    }
+
+    public function testAStartRemovesTheContainerCompiledIntoTheBuildDirectory(): void
+    {
+        new Filesystem()->dumpFile($this->directory.'/build/test/old-container', 'old');
+        $this->startEntrypoint(['INTAKT_CONFIG' => $this->directory.'/intakt.yaml', 'APP_BUILD_DIR' => $this->directory.'/build']);
+
+        $this->waitForTheServer();
+
+        self::assertDirectoryDoesNotExist($this->directory.'/build/test', 'the container in APP_BUILD_DIR survived');
+    }
+
+    public function testAStartRemovesTheCacheARelativeCacheDirectoryNames(): void
+    {
+        new Filesystem()->dumpFile($this->directory.'/moved-cache/test/old-container', 'old');
+        $this->startEntrypoint(['INTAKT_CONFIG' => $this->directory.'/intakt.yaml', 'APP_CACHE_DIR' => 'moved-cache']);
+
+        $this->waitForTheServer();
+
+        self::assertDirectoryDoesNotExist($this->directory.'/moved-cache/test', 'the container in the relative APP_CACHE_DIR survived');
+        self::assertDirectoryExists($this->directory.'/moved-cache', 'more than the environment folder was removed');
     }
 
     public function testAStartWithAProjectFileBuildsTheContainerAgainBeforeTheWorkers(): void
@@ -602,6 +637,9 @@ final class EntrypointSampleSeedTest extends TestCase
         // In the test's directory, so removing the cache never touches this checkout.
         $process = new Process([dirname(__DIR__, 4).'/docker/entrypoint.sh'], $this->directory, [
             'APP_ENV' => 'test',
+            // Cleared, because the start removes the folders they name and a test worker's own cache would be among them.
+            'APP_CACHE_DIR' => false,
+            'APP_BUILD_DIR' => false,
             'PATH' => $this->stubPrograms().':'.getenv('PATH'),
             'CALLS' => $this->callsFile(),
             'APP_SECRET' => self::SECRET,

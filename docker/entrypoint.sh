@@ -61,9 +61,19 @@ rm -f "$READY_MARK"
 
 php bin/console doctrine:migrations:migrate --no-interaction --allow-no-migration
 
-# The cache directory is removed by hand, because cache:clear kept the image's container after the seed; the warmup runs in a new process so it reads the current keys and project file.
+# Resolved as Symfony's kernel resolves APP_CACHE_DIR and APP_BUILD_DIR, so the folder removed is the one the kernel compiles into.
+kernel_dir() {
+    local dir=$1
+    [[ $dir == /* ]] || dir="$PWD/$dir"
+    echo "$dir/${APP_ENV:-prod}"
+}
+
+# The cache and build folders are removed by hand, because cache:clear kept the image's container after the seed; the warmup runs in a new process so it reads the current keys and project file.
 rebuild_container() {
-    rm -rf "var/cache/${APP_ENV:-prod}"
+    local cache="var/cache/${APP_ENV:-prod}"
+    [[ -z ${APP_CACHE_DIR:-} ]] || cache=$(kernel_dir "$APP_CACHE_DIR")
+    rm -rf "$cache"
+    [[ -z ${APP_BUILD_DIR:-} ]] || rm -rf "$(kernel_dir "$APP_BUILD_DIR")"
     php bin/console cache:warmup --no-interaction
 }
 
@@ -105,8 +115,8 @@ if [[ -n ${INTAKT_SAMPLE_REPOSITORY:-} ]]; then
     print_provider_notes_once
     # Set last, so the health check is green only once the sample is seeded; cleared above on every start, so a restart is not healthy before the seed has run again.
     touch "$READY_MARK"
-# The project file is read only while the container is compiled, and the image compiled its own without one, so a start that has a project file builds it again before any worker acts on the old projects. A set INTAKT_CONFIG counts without its file, because a restart after the file was removed still holds the projects it named.
-elif [[ -n ${INTAKT_CONFIG:-} || -e config/intakt.yaml ]]; then
+# The project file is read only while the container is compiled, so every start builds it again before any worker acts on old projects: the image compiled its own without a project file, and a restart after the file was changed or removed still holds the projects the last start compiled.
+else
     rebuild_container
 fi
 
