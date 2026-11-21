@@ -66,14 +66,14 @@ final readonly class AccountPlatform implements PlatformInterface
             $result = $this->platform->invoke($model, $input, $options);
             // Boundary: records every failure of the account and rethrows it, because a cooldown or a log must follow whatever the platform threw.
         } catch (Throwable $failure) {
-            $this->failed($failure);
+            $accountError = $this->recordFailure($failure);
 
             // A guard for a platform that fails while sending only, because Symfony's HTTP client reports a failed name lookup when the answer is read, which the vendor retries instead.
             if ($failure instanceof TransportExceptionInterface) {
                 $this->failures->unreachable($this->account);
             }
 
-            if (!$this->coolDownAfter($failure) instanceof Closure) {
+            if (!$accountError) {
                 // The failover gets no logger and chains no cause, so this is the only record of why the call was not sent.
                 $this->logger->warning('Account {account} could not send the call.', ['account' => $this->account->key(), 'exception' => $failure]);
             }
@@ -115,18 +115,34 @@ final readonly class AccountPlatform implements PlatformInterface
         return $result;
     }
 
-    // The raw answer is known only once the call was sent, so a failure while sending has none.
+    // Void, because Symfony AI's onError and the stream listener take a callback that returns nothing.
     private function failed(Throwable $failure, ?RawResultInterface $answer = null): void
+    {
+        $this->recordFailure($failure, $answer);
+    }
+
+    // True when the failure itself is an account error, also one already recorded, because the send path logs every other failure itself; the raw answer is known only once the call was sent, so a failure while sending has none.
+    private function recordFailure(Throwable $failure, ?RawResultInterface $answer = null): bool
     {
         // Once the answer has started, StreamedAnswer wraps the provider's exception, so the cooldown looks through to it.
         $cause = $failure instanceof IncompleteStreamException ? $failure->getPrevious() ?? $failure : $failure;
         $coolDown = $this->coolDownAfter($cause, $answer);
 
-        if ($coolDown instanceof Closure && $this->failures->record($this->account, $cause)) {
+        // A retryable wrapper counts as an account error, because the send path classified the thrown exception itself before it looked through to the cause.
+        $thrownIsAccountError = $cause === $failure || $failure instanceof RetryableExceptionInterface;
+
+        if (!$coolDown instanceof Closure) {
+            return $failure instanceof RetryableExceptionInterface;
+        }
+
+        if ($this->failures->record($this->account, $cause)) {
             // Logged whole, because the log redacts a key the provider's text echoes.
             $this->logger->warning('Account {account} failed.', ['account' => $this->account->key(), 'exception' => $cause]);
             $coolDown();
         }
+
+        // A wrapped limit still gets the send warning, because the wrapper is what was thrown.
+        return $thrownIsAccountError;
     }
 
     // Matched by the exception type only, because the provider's text can change (plan T5); null for anything else, such as an answer Intakt could not read, because the account answered and stays usable (issue #1831).
