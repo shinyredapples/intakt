@@ -54,7 +54,7 @@ final readonly class ReviewerOutcome
 
         $lab = AiLab::of($this->model);
 
-        return null === $lab ? $this->model : AiLab::modelName($this->model).' ('.$lab->value.')';
+        return $lab instanceof AiLab ? AiLab::modelName($this->model).' ('.$lab->value.')' : $this->model;
     }
 
     public function outcome(): ?ReviewOutcome
