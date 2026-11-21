@@ -1,9 +1,10 @@
 Evidence for #1460, rebuilt on commit 7a315b037 (the last product-code commit of the branch).
 The later merge of main (ea14ef18b) changes no board file: only the review page's reviewer
 model cells (_reviewer_cells, _reviewer_model_cell, _now_reviewer, round_changed) and FindingText.
-ui-check.txt was rerun on head 6ecb3b363 (the merge of the current main, which changes no file
-under src, templates or assets) on the same kind of install: change 41 judged, change 42 with two
-reviewers working, both with a model on their reviewers, added through the Ledger contract.
+ui-check.txt was rerun on head a77e046d7, after the merge of main 5f5f57848 (the review page's
+verdict card, the card top line that wraps, #3155), on a fresh install of the same kind: change 41
+judged, change 42 with two reviewers working, both with a model on their reviewers, added through
+the Ledger contract. It covers the review page of both rounds.
 
 Install: APP_ENV=test, APP_DEBUG=0, a fresh SQLite database migrated with doctrine:migrations:migrate,
 served by PHP's built-in server on localhost:7780 (DASHBOARD_PORT). The ledger holds two rounds:
