@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Ai\Infrastructure;
 
+use DateTimeImmutable;
+use DateTimeZone;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Infrastructure\AccountCooldownWindows;
@@ -327,6 +329,27 @@ final class AccountCooldownWindowsTest extends TestCase
         /** @var list<array{0: string, 1: string}> $logs */
         $logs = $logger->cleanLogs();
         self::assertSame('error', $logs[0][0]);
+    }
+
+    // Forced order (decision 67 of #2860): the first worker's save is refused and a second worker cools the account for 60 s before the first reads the window back, so the window read back is not the first worker's own.
+    public function testARefusedSaveFollowedByAnotherWorkersCooldownRecordsOnlyTheOtherCooldownAndIsLogged(): void
+    {
+        $pool = new RefusingASaveAfterAStep();
+        $logger = new BufferingLogger();
+        $other = new AccountCooldownWindows($this->readings, $pool, new LockFactory(new InMemoryStore()), new NativeClock(), $this->ledger, new NullLogger(), StoredSerializerFactory::create(), $this->accounts());
+        $first = new AccountCooldownWindows($this->readings, $pool, new LockFactory(new InMemoryStore()), new NativeClock(), $this->ledger, $logger, StoredSerializerFactory::create(), $this->accounts());
+        $pool->step = fn () => $other->coolDown($this->default(), 60);
+
+        $first->coolDown($this->default(), 120);
+
+        self::assertSame([LedgerEventKind::AccountCooledDown], $this->ledger->kinds());
+        $until = $this->ledger->payloads()[0]['until'];
+        self::assertIsString($until);
+        $end = DateTimeImmutable::createFromFormat(DATE_ATOM, $until, new DateTimeZone('UTC'));
+        self::assertInstanceOf(DateTimeImmutable::class, $end);
+        self::assertEqualsWithDelta(60, $end->getTimestamp() - new NativeClock()->now()->getTimestamp(), 1);
+        self::assertEqualsWithDelta(60, $other->secondsUntilFree($this->default()), 1);
+        self::assertContains('The cooldown of account {account} could not be saved.', array_column($logger->cleanLogs(), 1));
     }
 
     public function testARejectionIsReportedToTheOwnerWithItsAccount(): void

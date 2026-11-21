@@ -150,14 +150,22 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
             return;
         }
 
-        // A cache that refuses the save still accepts the token, so the account would read free while its event said it cooled: read back, and log the refusal instead of recording it.
-        if (0 === $this->secondsUntilFree($account)) {
+        // A cache that refuses the save still accepts the token, so the account would read free while its event said it cooled, and another worker may save its own window before the read-back: only a window that ends at this call's end is recorded, anything else is logged as a refusal.
+        if (!$this->isSavedUntil($account, $until)) {
             $this->logger->warning('The cooldown of account {account} could not be saved.', ['account' => $account->key()]);
 
             return;
         }
 
         $this->record($account, $until);
+    }
+
+    // Compared to the second, because every wait is read and reported in whole seconds, so a window that ends in this call's second is its own.
+    private function isSavedUntil(Account $account, DateTimeImmutable $until): bool
+    {
+        $window = $this->window($account);
+
+        return 0 === $window->getRemainingTokens() && $window->getRetryAfter()->getTimestamp() === $until->getTimestamp();
     }
 
     // No token, so reading the window never starts or saves one.
