@@ -50,7 +50,7 @@ final class LatestJudgedRoundTest extends KernelTestCase
         self::assertSame($newer, $rounds->latestJudgedAt('alpha', self::PULL, SampleIdentity::HEAD)?->id()->toRfc4122());
     }
 
-    public function testNoRoundIsTheLatestJudgedOfAHeadNoRoundReviewed(): void
+    public function testAHeadNoRoundReviewedHasNoLatestJudgedRound(): void
     {
         $fixture = new RoundFixture(self::getContainer());
         $this->judgedRound($fixture);
