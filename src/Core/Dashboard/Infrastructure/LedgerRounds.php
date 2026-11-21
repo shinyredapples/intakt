@@ -12,6 +12,7 @@ use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\ReviewerOutcome;
 use Intakt\Core\Dashboard\Domain\ReviewerProgress;
 use Intakt\Core\Dashboard\Domain\RoundFinding;
+use Intakt\Core\Dashboard\Domain\Timeline;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\CatchUpOwed;
@@ -112,13 +113,7 @@ final class LedgerRounds
     {
         $rounds = $this->membersOf($round);
 
-        if ([] === $rounds) {
-            return null;
-        }
-
-        $review = new Review(array_map($this->completed(...), $rounds));
-
-        return $this->isALegacyTimeline($rounds) ? $review->asHistoryOnly() : $review;
+        return [] === $rounds ? null : new Review(array_map($this->completed(...), $rounds), $this->timelineOf($rounds));
     }
 
     // Empty for a round never started readably; known from the starts alone, so a read of one review can learn which rounds to read before it reads them.
@@ -201,11 +196,12 @@ final class LedgerRounds
     /**
      * @param non-empty-list<ReviewedRound> $members
      */
-    private function isALegacyTimeline(array $members): bool
+    private function timelineOf(array $members): Timeline
     {
         $member = $members[0];
+        $keptApart = $member->change !== ChangeAddress::canonical($member->change) && count($members) < count($this->sameReviewAs($member));
 
-        return $member->change !== ChangeAddress::canonical($member->change) && count($members) < count($this->sameReviewAs($member));
+        return $keptApart ? Timeline::HistoryOnly : Timeline::Current;
     }
 
     // A round number twice among the spellings of one pull request means two spellings were stored apart before the migration to the canonical address (Version20261122100000), each with a numbering of its own; only the chosen round's spelling is then its review, because mixing two numberings would make a legacy round the latest and offer a round number storage does not expect.
