@@ -204,7 +204,7 @@ final class WaitingPageHubTest extends KernelTestCase
     }
 
     /**
-     * @param list<string>                               $actions
+     * @param list<string>                             $actions
      * @param array<string, list<string>>|list<string> $topics
      */
     private function token(array $actions, array $topics): string
