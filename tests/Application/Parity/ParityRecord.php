@@ -89,6 +89,21 @@ final readonly class ParityRecord
     /**
      * @return list<array{int, string, ?string}>
      */
+    /**
+     * @return list<string> every section heading by the reader's own rule, the page title (the first heading) left out
+     */
+    public function sectionHeadings(string $record): array
+    {
+        $headings = [];
+        foreach (explode("\n", $record) as $line) {
+            if (1 === preg_match(self::SECTION_HEADING, $line, $heading)) {
+                $headings[] = trim($heading[1] ?? '');
+            }
+        }
+
+        return array_slice($headings, 1);
+    }
+
     private function linesWithSections(string $record): array
     {
         $section = null;

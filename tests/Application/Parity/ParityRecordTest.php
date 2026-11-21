@@ -49,9 +49,8 @@ final class ParityRecordTest extends TestCase
     public function testEverySectionHeadingOfTheRecordIsAJudgedSection(): void
     {
         $record = (string) file_get_contents(dirname(__DIR__, 3).'/docs/architecture/parity.md');
-        preg_match_all('/^## +(.+?)\s*$/m', $record, $headings);
 
-        self::assertSame(ParityRecord::JUDGED_SECTIONS, $headings[1]);
+        self::assertSame(ParityRecord::JUDGED_SECTIONS, $this->repositoryTests()->sectionHeadings($record));
     }
 
     public function testTheOpenItemsOfTheJudgedSectionsAreTheBehaviorsNotBuiltYet(): void
@@ -79,6 +78,7 @@ final class ParityRecordTest extends TestCase
             'Reviews, line 49: An unchanged head with an outside requirement goes on hold, not to review.',
             'Reviews, line 50: Evidence only the owner can give reaches status without a send-back.',
             'Reviews, line 52: Probes run in a no-network sandbox with a fixed command surface; infrastructure failures alert, never become findings.',
+            'Reviews, line 53: An out-of-limit reviewer gets a same-tier substitute whose verdict counts, and a catch-up is owed.',
             'Reviews, line 54: A rejection beside an out-of-limit reviewer goes to the builder without a substitute.',
             'Reviews, line 55: A crash during a catch-up neither loses nor doubles it.',
             'Reviews, line 56: A P1 on two heads is escalated to the strong tier; its verdict is reused on unchanged files.',
@@ -324,6 +324,13 @@ final class ParityRecordTest extends TestCase
         $record = '## CI'."\n".'- [x] A behavior. [T1]; Intakt: `ParityRecordTest::testAnIndentedDoneItemIsJudged` (not built yet: the lane, T2)';
 
         self::assertSame([], $this->repositoryTests()->notBuiltItems($record));
+    }
+
+    public function testEverySectionHeadingOfAnyLevelOrSeparatorIsFoundSoNoneHidesAnItem(): void
+    {
+        $record = "# Title\n## One\n# Two\n##\tThree\n### Deeper\n";
+
+        self::assertSame(['One', 'Two', 'Three'], $this->repositoryTests()->sectionHeadings($record));
     }
 
     public function testAnOpenItemOutsideTheJudgedSectionsIsNeitherJudgedNorListed(): void
