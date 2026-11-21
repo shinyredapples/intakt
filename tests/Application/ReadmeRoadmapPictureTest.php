@@ -50,7 +50,15 @@ final class ReadmeRoadmapPictureTest extends TestCase
             $file = $this->root().'/docs/assets/roadmap-'.$theme.'.svg';
             $svg = (string) file_get_contents($file);
 
-            self::assertStringContainsString('href="data:image/webp;base64,', $svg);
+            self::assertSame(1, preg_match('/href="data:image\/webp;base64,([A-Za-z0-9+\/=]+)"/', $svg, $match));
+            $webp = base64_decode($match[1], true);
+            self::assertIsString($webp);
+            // A WebP file is a RIFF container: "RIFF", the length of the rest as 32-bit little endian, then "WEBP", so a cut or empty payload fails.
+            self::assertSame('RIFF', substr($webp, 0, 4));
+            self::assertSame('WEBP', substr($webp, 8, 4));
+            $length = unpack('V', substr($webp, 4, 4));
+            self::assertIsArray($length);
+            self::assertSame(strlen($webp) - 8, $length[1]);
             self::assertLessThan(120_000, filesize($file));
         }
     }
