@@ -32,7 +32,16 @@ const OLD_RULE = '.lane { grid-template-columns: none; } .lane .meta span { whit
         const strip = document.querySelector('details.working');
         const snapshot = () => [...strip.querySelectorAll('.lane')].map((lane) => {
           const b = lane.getBoundingClientRect(); const w = lane.querySelector('.who').getBoundingClientRect();
-          return [b.left, b.top, b.width, b.height, w.left, w.top, w.width, w.height].map((n) => Math.round(n * 100) / 100).join(',');
+          // The rendered line boxes of every text node, so the role, tier and start time moving inside a steady container still counts.
+          const texts = [];
+          const walker = document.createTreeWalker(lane, NodeFilter.SHOW_TEXT);
+          for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+            if (node.data.trim() === '') continue;
+            const range = document.createRange();
+            range.selectNodeContents(node);
+            texts.push(...[...range.getClientRects()].map((r) => [r.left, r.top, r.width, r.height]));
+          }
+          return [b.left, b.top, b.width, b.height, w.left, w.top, w.width, w.height, ...texts.flat()].map((n) => Math.round(n * 100) / 100).join(',');
         }).join('|');
         const openedAt = performance.now();
         strip.open = true;
@@ -82,7 +91,7 @@ const OLD_RULE = '.lane { grid-template-columns: none; } .lane .meta span { whit
       const over = fit.filter((l) => l.over > 0);
       failures += over.length;
       console.log(`board ${theme} ${width}${old ? ' (old rule)' : ''}: HTTP ${response.status()}, ${columns} lane columns, strip opened at ${opened.openedAt} ms, ${opened.images} lane images loaded by ${opened.loadedAt} ms, `
-        + `lane shift from opening through image load ${opened.lanes.toFixed(3)} (whole page ${opened.page.toFixed(3)}), frames where a lane or its role line moved from the first open frame ${opened.moved}, `
+        + `lane shift from opening through image load ${opened.lanes.toFixed(3)} (whole page ${opened.page.toFixed(3)}), frames where a lane, its role line or any of its text moved from the first open frame ${opened.moved}, `
         + `lanes ${fit.map((l) => `${l.lane} px wide, role line ${l.lines} px tall, ${l.over > 0 ? `text spills ${l.over} px` : 'text fits'}`).join('; ')}`);
       if (width === 780 && !old) await page.screenshot({ path: path.join(__dirname, `board-lanes-${theme}-780.png`), fullPage: false });
     } finally {
