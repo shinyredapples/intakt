@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\Contract;
 
 use ArrayIterator;
+use Countable;
 use IteratorAggregate;
 use Traversable;
 
@@ -12,7 +13,7 @@ use Traversable;
 /**
  * @implements IteratorAggregate<int, string>
  */
-final readonly class QuotesCounted implements IteratorAggregate
+final readonly class QuotesCounted implements Countable, IteratorAggregate
 {
     /** @var list<string> */
     private array $quotes;

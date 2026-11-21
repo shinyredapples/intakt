@@ -28,6 +28,6 @@ final class CountedQuotesTest extends TestCase
         $quotes = new CountedQuotes()->of('`b` then `a` then `b`.');
 
         self::assertSame(['b', 'a', 'b'], iterator_to_array($quotes));
-        self::assertSame(3, $quotes->count());
+        self::assertCount(3, $quotes);
     }
 }
