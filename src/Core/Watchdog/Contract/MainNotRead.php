@@ -26,6 +26,12 @@ final class MainNotRead extends RuntimeException
         return new self(sprintf('Main was not read, because %s is a shallow repository.', $repository));
     }
 
+    // Because a walk that stops early (a repository cut shallow during the read) would hide the commits behind the stop from the watchdog.
+    public static function brokenWalk(string $commit, string $tip): self
+    {
+        return new self(sprintf('Main was not read, because the first-parent walk from %s to %s is not an unbroken chain.', $commit, $tip));
+    }
+
     public static function because(string $reason): self
     {
         return new self(sprintf('Main was not read, because %s.', $reason));

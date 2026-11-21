@@ -457,15 +457,7 @@ final class MainHistoryTest extends TestCase
         $base = $this->repository->commitEmpty('Base');
         $cut = $this->repository->commitEmpty('Cut');
         $this->repository->commitEmpty('Tip');
-        $bin = $this->keys.'/shallow-bin';
-        mkdir($bin);
-        $git = escapeshellarg((string) new ExecutableFinder()->find('git'));
-        $shallow = escapeshellarg($this->repository->path.'/.git/shallow');
-        $script = "#!/bin/sh\ncase \" \$* \" in\n    *\" --is-shallow-repository \"*)\n        ".$git." \"\$@\" || exit \$?\n        printf '%s\\n' ".escapeshellarg($cut).' > '.$shallow."\n        ;;\n    *) exec ".$git." \"\$@\" ;;\nesac\n";
-        file_put_contents($bin.'/git', $script);
-        chmod($bin.'/git', 0o700);
-        $path = getenv('PATH');
-        putenv('PATH='.$bin.':'.$path);
+        $path = $this->cutShallowAfterGitAnswers('--is-shallow-repository', $cut);
 
         try {
             $this->expectException(MainNotRead::class);
@@ -474,6 +466,74 @@ final class MainHistoryTest extends TestCase
         } finally {
             putenv('PATH='.$path);
         }
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function commitsTheLateCutLands(): iterable
+    {
+        yield 'the tip, so the walk lists it alone' => ['Tip'];
+        yield 'a commit in between, so the walk starts there' => ['Unsigned'];
+    }
+
+    #[DataProvider('commitsTheLateCutLands')]
+    public function testARepositoryCutShallowAfterTheAncestryCheckIsRefusedInsteadOfWalkedWithCommitsMissing(string $cutAt): void
+    {
+        $base = $this->repository->commitEmpty('Base');
+        $commits = ['Unsigned' => $this->repository->commitEmpty('Unsigned'), 'Tip' => $this->repository->commitEmpty('Tip')];
+        $path = $this->cutShallowAfterGitAnswers('--is-ancestor', $commits[$cutAt]);
+
+        try {
+            $this->expectException(MainNotRead::class);
+            $this->expectExceptionMessageMatches('/ is not an unbroken chain/');
+
+            $this->history([])->firstParentsSince($base);
+        } finally {
+            putenv('PATH='.$path);
+        }
+    }
+
+    public function testTheWalkFromACommitMainHoldsOnlyThroughASecondParentIsReadDownToTheFork(): void
+    {
+        $this->repository->commitEmpty('Fork');
+        $this->repository->checkoutNewBranch('change');
+        $side = $this->repository->commitEmpty('Side');
+        $this->repository->checkout('main');
+        $seen = $this->repository->commitEmpty('Seen');
+        $this->repository->checkout('change');
+        $merge = $this->repository->merge('main');
+        $this->repository->checkout('main');
+        $this->repository->resetTo($merge);
+
+        self::assertSame([$side, $merge], $this->history([])->firstParentsSince($seen));
+    }
+
+    public function testALinkedWorkTreeIsReadWhenThePathOfItsGitDirectoryHoldsALineBreak(): void
+    {
+        $seen = $this->repository->commitEmpty('Seen');
+        $broken = $this->repository->path."\nproject";
+        rename($this->repository->path, $broken);
+
+        try {
+            new Process(['git', '-C', $broken, 'worktree', 'add', '--quiet', '--detach', $broken.'/linked'])->mustRun();
+
+            self::assertTrue(new MainHistory(new HardenedGit(), $broken.'/linked', [], new Filesystem())->contains($seen));
+        } finally {
+            rename($broken, $this->repository->path);
+        }
+    }
+
+    public function testAFolderWhoseGitFileNamesNoGitDirectoryRaisesMainNotRead(): void
+    {
+        $seen = $this->repository->commitFile('sub/file', 'content');
+        $this->repository->configure('core.worktree', $this->repository->path.'/sub');
+        file_put_contents($this->repository->path.'/sub/.git', "gitdir: ../missing\n");
+
+        $this->expectException(MainNotRead::class);
+        $this->expectExceptionMessageMatches('/ is not the repository itself /');
+
+        new MainHistory(new HardenedGit(), $this->repository->path.'/sub', [], new Filesystem())->contains($seen);
     }
 
     public function testAnExistingInfoAttributesFileRaisesMainNotRead(): void
@@ -608,6 +668,22 @@ final class MainHistoryTest extends TestCase
     }
 
     // The values from before the test, because later tests must inherit the environment the run started with.
+    // Puts a git in front of the real one that writes the shallow entry right after git answered the named query, and returns the search path to restore.
+    private function cutShallowAfterGitAnswers(string $option, string $entry): string
+    {
+        $bin = $this->keys.'/shallow-bin';
+        mkdir($bin);
+        $git = escapeshellarg((string) new ExecutableFinder()->find('git'));
+        $shallow = escapeshellarg($this->repository->path.'/.git/shallow');
+        $script = "#!/bin/sh\ncase \" \$* \" in\n    *\" ".$option." \"*)\n        ".$git." \"\$@\" || exit \$?\n        printf '%s\\n' ".escapeshellarg($entry).' > '.$shallow."\n        ;;\n    *) exec ".$git." \"\$@\" ;;\nesac\n";
+        file_put_contents($bin.'/git', $script);
+        chmod($bin.'/git', 0o700);
+        $path = (string) getenv('PATH');
+        putenv('PATH='.$bin.':'.$path);
+
+        return $path;
+    }
+
     private function restoreGitDir(string|false $process, mixed $server): void
     {
         putenv(false === $process ? 'GIT_DIR' : 'GIT_DIR='.$process);

@@ -86,9 +86,51 @@ final readonly class MainHistory implements CommitHistory
             throw MainHistoryRewritten::dropped($commit, $tip);
         }
 
-        $commits = trim($this->read(['rev-list', '--first-parent', '--reverse', $commit.'..'.$tip]));
+        // The full id, because the walk's own parent ids are compared with it.
+        $since = trim($this->read(['rev-parse', '--verify', $commit.'^{commit}']));
+        $walk = trim($this->read(['rev-list', '--first-parent', '--reverse', '--parents', $since.'..'.$tip]));
 
-        return '' === $commits ? [] : explode("\n", $commits);
+        return $this->unbrokenChain('' === $walk ? [] : explode("\n", $walk), $since, $tip);
+    }
+
+    // The walk proves itself from its own output, because a repository cut shallow after the ancestry check makes git end the walk early without an error, and a check before or after the walk cannot see a cut in between.
+    /**
+     * @param list<string> $walk each line a commit and its parents
+     *
+     * @return list<string>
+     *
+     * @throws MainNotRead
+     * @throws RuntimeException
+     */
+    private function unbrokenChain(array $walk, string $since, string $tip): array
+    {
+        $commits = [];
+        $last = null;
+        foreach ($walk as $line) {
+            $ids = explode(' ', $line);
+            $firstParent = $ids[1] ?? null;
+            if (null === $firstParent || !$this->continues($firstParent, $last, $since)) {
+                throw MainNotRead::brokenWalk($since, $tip);
+            }
+
+            $commits[] = $last = $ids[0];
+        }
+
+        return ($last ?? $since) === $tip ? $commits : throw MainNotRead::brokenWalk($since, $tip);
+    }
+
+    /**
+     * @throws MainNotRead
+     * @throws RuntimeException
+     */
+    private function continues(string $firstParent, ?string $last, string $since): bool
+    {
+        if (null !== $last) {
+            return $firstParent === $last;
+        }
+
+        // The oldest commit stands on the commit itself, or on an ancestor of it when main holds the commit only through a second parent (a fast-forward to a branch that merged main). A cut can hide ancestry but never invent it, so a yes here is true.
+        return $firstParent === $since || $this->holds(['merge-base', '--is-ancestor', $firstParent, $since]);
     }
 
     /**
@@ -144,25 +186,17 @@ final readonly class MainHistory implements CommitHistory
         }
     }
 
+    /**
+     * @throws MainNotRead
+     * @throws RuntimeException
+     */
     private function ownGitDirectory(string $directory): string
     {
-        $dotGit = $directory.'/.git';
-        $target = is_file($dotGit) ? $this->gitFileTarget($dotGit, $directory) : $dotGit;
-
-        $resolved = realpath($target);
+        // Asked of git, because a linked work tree or a submodule has a .git file that names its git directory, and only git reads that file the way git does (a path in it may hold a line break).
+        $answer = $this->run(['rev-parse', '--resolve-git-dir', $directory.'/.git'], ['GIT_WORK_TREE' => false]);
+        $resolved = $answer->isSuccessful() ? realpath(self::withoutLineBreak($answer->getOutput())) : false;
 
         return false === $resolved ? '' : $resolved;
-    }
-
-    // Because a linked work tree or a submodule has a .git file that names its git directory.
-    private function gitFileTarget(string $dotGit, string $directory): string
-    {
-        $content = @file_get_contents($dotGit);
-        if (false === $content || 1 !== preg_match('/^gitdir: (.+?)\r?\n?$/', $content, $match)) {
-            return '';
-        }
-
-        return str_starts_with($match[1], '/') ? $match[1] : $directory.'/'.$match[1];
     }
 
     /**
@@ -179,8 +213,13 @@ final readonly class MainHistory implements CommitHistory
             throw MainNotRead::notTheRepository($this->directory(), '');
         }
 
-        // Only git's one line break is removed, because a folder name may end in a space.
-        return str_ends_with($answer->getOutput(), "\n") ? substr($answer->getOutput(), 0, -1) : $answer->getOutput();
+        return self::withoutLineBreak($answer->getOutput());
+    }
+
+    // Only git's one line break is removed, because a folder name may end in a space.
+    private static function withoutLineBreak(string $output): string
+    {
+        return str_ends_with($output, "\n") ? substr($output, 0, -1) : $output;
     }
 
     /**
