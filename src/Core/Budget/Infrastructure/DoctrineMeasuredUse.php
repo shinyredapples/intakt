@@ -17,7 +17,7 @@ use Override;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 
-// Readings are appended, never updated in place, so two workers recording one window at once need no lock: the higher position is the latest.
+// Readings are appended, never updated in place, so two workers recording one window at once need no lock: the later takenAt is the latest, and the higher position breaks a tie within one second.
 #[AsAlias(MeasuredUse::class)]
 final readonly class DoctrineMeasuredUse implements MeasuredUse
 {
@@ -49,7 +49,7 @@ final readonly class DoctrineMeasuredUse implements MeasuredUse
     {
         $latest = $this->entities->getRepository(WindowReadingRecord::class)->findOneBy(
             ['provider' => $account->provider, 'account' => $account->name, 'usageWindow' => $window],
-            ['position' => 'DESC'],
+            ['takenAt' => 'DESC', 'position' => 'DESC'],
         );
         if (null === $latest) {
             return null;
@@ -72,6 +72,7 @@ final readonly class DoctrineMeasuredUse implements MeasuredUse
     }
 
     // Only the latest reading of a window is ever read, so the older ones are dropped to keep the table at about one row per window.
+    // A reading stamped earlier but stored last deletes only what is older still, so the fresher one stays as evidence the account was read.
     private function forgetReadingsBefore(WindowReadingRecord $record): void
     {
         $this->entities->createQueryBuilder()
@@ -79,10 +80,11 @@ final readonly class DoctrineMeasuredUse implements MeasuredUse
             ->where('reading.provider = :provider')
             ->andWhere('reading.account = :account')
             ->andWhere('reading.usageWindow = :window')
-            ->andWhere('reading.position < :position')
+            ->andWhere('reading.takenAt < :takenAt OR (reading.takenAt = :takenAt AND reading.position < :position)')
             ->setParameter('provider', $record->provider)
             ->setParameter('account', $record->account)
             ->setParameter('window', $record->usageWindow)
+            ->setParameter('takenAt', $record->takenAt, 'utc_datetime_immutable')
             ->setParameter('position', $record->position)
             ->getQuery()
             ->execute();
