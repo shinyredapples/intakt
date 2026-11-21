@@ -23,6 +23,7 @@ use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\JudgeDoneFinding;
 use Intakt\Core\Review\Contract\JudgingFailed;
 use Intakt\Core\Review\Contract\QuorumPolicy;
+use Intakt\Core\Review\Contract\RecurringP1Found;
 use Intakt\Core\Review\Contract\ReviewerBlocked;
 use Intakt\Core\Review\Contract\ReviewerFailed;
 use Intakt\Core\Review\Contract\ReviewerFindingsRecorded;
@@ -96,6 +97,7 @@ final readonly class RoundLedger
             $reported->reviewer->round()->id()->toRfc4122(),
             $reported->reviewer->id()->toRfc4122(),
             $reported->findings,
+            $reported->severities,
         ));
     }
 
@@ -148,7 +150,13 @@ final readonly class RoundLedger
             $judged->sameCause,
             $votes,
             $this->p1KeysOf($round, $judged),
+            $judged->fallback,
         ));
+    }
+
+    public function recurringP1Found(RecurringP1Found $found): void
+    {
+        $this->append(LedgerEventKind::RecurringP1Found, $found);
     }
 
     // Keyed at the head the round judged, because only the reviewed checkout holds the files a P1 named as the reviewers saw them.
@@ -229,7 +237,7 @@ final readonly class RoundLedger
         return ['round' => $reviewer->round()->id()->toRfc4122(), 'reviewer' => $reviewer->id()->toRfc4122(), 'role' => $reviewer->roleName(), 'tier' => $reviewer->tier()];
     }
 
-    private function append(LedgerEventKind $kind, ReviewStarted|ReviewerStarted|VerdictReceived|CatchUpOwed|ReviewerFailed|ReviewerBlocked|ReviewerStopped|JudgeDone|JudgingFailed|ReviewerFindingsRecorded $payload): void
+    private function append(LedgerEventKind $kind, ReviewStarted|ReviewerStarted|VerdictReceived|CatchUpOwed|ReviewerFailed|ReviewerBlocked|ReviewerStopped|JudgeDone|JudgingFailed|ReviewerFindingsRecorded|RecurringP1Found $payload): void
     {
         $result = $this->ledger->append(new LedgerEvent($kind, $this->serializer->serialize($payload, JsonEncoder::FORMAT)));
 

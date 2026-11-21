@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Journeys\Support;
 
+use Intakt\Core\Ai\Contract\ProjectNotConfigured;
+use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Kernel;
 use Intakt\Plugin\Vendor\Contract\KeyCheck;
 use Intakt\Plugin\Vendor\Contract\Vendor;
@@ -20,6 +22,8 @@ use Symfony\Component\Messenger\Bridge\Doctrine\Transport\DoctrineTransport;
 // A journey test case, because what it proves is that the instance's container and the journey agree on where the hub records.
 #[CoversClass(JourneyTestCase::class)]
 #[UsesClass(JourneyVendor::class)]
+#[UsesClass(ScriptedJourneyVendor::class)]
+#[UsesClass(ScriptedHttpClient::class)]
 #[UsesClass(JourneyKeyCheck::class)]
 #[UsesClass(RecordingHub::class)]
 #[UsesClass(JourneySteps::class)]
@@ -43,9 +47,31 @@ final class JourneyContainerTest extends JourneyTestCase
         return 'journey support';
     }
 
-    public function testTheTestContainerReviewsWithTheJourneyVendor(): void
+    public function testTheTestContainerReviewsWithTheScriptedJourneyVendor(): void
     {
-        self::assertInstanceOf(JourneyVendor::class, $this->container()->get(Vendor::class));
+        self::assertInstanceOf(ScriptedJourneyVendor::class, $this->container()->get(Vendor::class));
+    }
+
+    public function testWithAScriptDirectoryTheTestContainersVendorAsksSymfonyAiVendor(): void
+    {
+        $before = $_SERVER;
+        $_SERVER['INTAKT_JOURNEY_SCRIPTS'] = sys_get_temp_dir();
+
+        try {
+            $vendor = $this->container()->get(Vendor::class);
+            self::assertInstanceOf(Vendor::class, $vendor);
+
+            $this->expectException(ProjectNotConfigured::class);
+
+            $vendor->mapsAModelTo('no-such-project', Tier::Standard);
+        } finally {
+            $_SERVER = $before;
+        }
+    }
+
+    public function testTheTestContainersHttpClientIsTheScriptedOne(): void
+    {
+        self::assertInstanceOf(ScriptedHttpClient::class, $this->container()->get('http_client'));
     }
 
     public function testTheTestContainerChecksPastedKeysWithTheJourneyKeyCheck(): void
