@@ -29,7 +29,7 @@ final class ChangeAddressTest extends TestCase
      */
     public static function otherFormsOfOnePullRequest(): iterable
     {
-        yield 'a fragment' => ["https://github.com/Acme/Widgets/pull/7#discussion"];
+        yield 'a fragment' => ['https://github.com/Acme/Widgets/pull/7#discussion'];
         yield 'a query' => ['https://github.com/Acme/Widgets/pull/7?tab=files'];
         yield 'a trailing slash' => ['https://github.com/Acme/Widgets/pull/7/'];
         yield 'a trailing newline' => ["https://github.com/Acme/Widgets/pull/7\n"];

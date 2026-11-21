@@ -175,7 +175,7 @@ final class LedgerRounds
         }
 
         $others = array_filter($this->started, static fn (ReviewedRound $other): bool => $other !== $chosen && $chosen->isOfTheSameReviewAs($other));
-        $rounds = self::oneSequenceOf($chosen, [$chosen, ...array_values($others)]);
+        $rounds = $this->oneSequenceOf($chosen, [$chosen, ...array_values($others)]);
         usort($rounds, static fn (ReviewedRound $one, ReviewedRound $other): int => ($one->number ?? 0) <=> ($other->number ?? 0));
 
         return $rounds;
@@ -187,7 +187,7 @@ final class LedgerRounds
      *
      * @return list<ReviewedRound>
      */
-    private static function oneSequenceOf(ReviewedRound $chosen, array $rounds): array
+    private function oneSequenceOf(ReviewedRound $chosen, array $rounds): array
     {
         $numbers = array_filter(array_map(static fn (ReviewedRound $round): ?int => $round->number, $rounds), static fn (?int $number): bool => null !== $number);
 
