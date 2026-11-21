@@ -61,16 +61,24 @@ final readonly class Workspace
         return is_file($this->tool($name));
     }
 
-    /**
-     * @return list<string>
-     */
-    public function phpFiles(): array
+    // Because a gate that tells its tool whether it sees only some files must take that answer from the list it passes, not from a second read of a tree that may have changed in between.
+    public function phpFileSelection(): PhpFileSelection
     {
-        if (Mode::ChangedFilesOnly === $this->mode) {
-            return $this->changedOrAllPhpFiles();
+        if (Mode::ChangedFilesOnly !== $this->mode) {
+            return PhpFileSelection::everyFile($this->allPhpFilesOrFail());
         }
 
-        return $this->allPhpFilesOrFail();
+        $mergeBase = $this->mergeBase();
+
+        if (null === $mergeBase) {
+            throw new ScopeFailure('no base branch found, pass --base=<ref>');
+        }
+
+        if ($this->changesWhatEveryPhpFileDependsOn($mergeBase)) {
+            return PhpFileSelection::everyFile($this->allPhpFilesOrFail());
+        }
+
+        return PhpFileSelection::of($this->scope->changedPhpFiles($mergeBase), $this->scope->allPhpFiles());
     }
 
     /**
@@ -182,22 +190,9 @@ final readonly class Workspace
         return $this->runner->runConcurrently($commands, $this->root);
     }
 
-    /**
-     * @return list<string>
-     */
-    private function changedOrAllPhpFiles(): array
+    private function changesWhatEveryPhpFileDependsOn(string $mergeBase): bool
     {
-        $mergeBase = $this->mergeBase();
-
-        if (null === $mergeBase) {
-            throw new ScopeFailure('no base branch found, pass --base=<ref>');
-        }
-
-        if ($this->changesAnyOf($mergeBase, [...self::GATE_DEFINITIONS, ...self::CONTAINER_CONFIGURATION]) || $this->changesImportedServices($mergeBase)) {
-            return $this->allPhpFilesOrFail();
-        }
-
-        return $this->scope->changedPhpFiles($mergeBase);
+        return $this->changesAnyOf($mergeBase, [...self::GATE_DEFINITIONS, ...self::CONTAINER_CONFIGURATION]) || $this->changesImportedServices($mergeBase);
     }
 
     /**
