@@ -400,11 +400,11 @@ final class CompleteListingTest extends KernelTestCase
         $this->reads->lists([Issues::task(11, ['ready'])]);
         $this->reads->lists([Issues::task(3), $waiting]);
         $this->reads->during = function () use ($waiting): void {
-            // The second worker saw #3 closed and #11 opened, and stored #11 without its history under its own eligibility label.
-            self::assertTrue($this->store->recordIfStill('alpha', $this->store->syncStateOf('alpha'), new ListingRows([$this->vouchedRowOf($waiting), $this->rowOfListed(Issues::task(11, ['ready']))], 'W/"issues-2"')));
+            $closedThreeAndOpenedElevenUnvouched = [$this->vouchedRowOf($waiting), $this->rowOfListed(Issues::task(11, ['ready']))];
+            self::assertTrue($this->store->recordIfStill('alpha', $this->store->syncStateOf('alpha'), new ListingRows($closedThreeAndOpenedElevenUnvouched, 'W/"issues-2"')));
             $this->histories->during = function () use ($waiting): void {
-                // The third worker saw #3 reopened.
-                self::assertTrue($this->store->recordIfStill('alpha', $this->store->syncStateOf('alpha'), new ListingRows([$this->vouchedRowOf(Issues::task(3)), $this->vouchedRowOf($waiting), $this->rowOfListed(Issues::task(11, ['ready']))], 'W/"issues-3"')));
+                $reopenedThree = [$this->vouchedRowOf(Issues::task(3)), $this->vouchedRowOf($waiting), $this->rowOfListed(Issues::task(11, ['ready']))];
+                self::assertTrue($this->store->recordIfStill('alpha', $this->store->syncStateOf('alpha'), new ListingRows($reopenedThree, 'W/"issues-3"')));
             };
         };
 
