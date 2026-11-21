@@ -18,9 +18,9 @@ final class InstallGhTest extends SandboxTestCase
     private const array FAKES = [
         'curl' => '#!/bin/sh'."\n".'echo "curl $*" >> "$CALLS"',
         'gpg' => '#!/bin/sh'."\n".'echo "gpg $*" >> "$CALLS"'."\n".'if [ "$1" = --export ] && [ -n "$HAS_KEY" ]; then echo key; fi',
-        'dpkg' => '#!/bin/sh'."\n".'echo amd64',
+        'dpkg' => '#!/bin/sh'."\n".'if [ "$1" = -L ]; then printf "%s\n" /usr/share/doc/gh "$APT/gh"; else echo amd64; fi',
         'sudo' => '#!/bin/sh'."\n".'echo "sudo $*" >> "$CALLS"'."\n".'if [ "$1" = tee ]; then cat > /dev/null; fi'."\n"
-            .'if [ "$1 $2" = "apt-get install" ]; then printf "#!/bin/sh\necho \"gh version 2.83.0 (2025-11-04)\"\n" > "$BIN/gh"; chmod +x "$BIN/gh"; fi',
+            .'if [ "$1 $2" = "apt-get install" ]; then printf "#!/bin/sh\necho \"gh version 2.83.0 (2025-11-04)\"\n" > "$APT/gh"; chmod +x "$APT/gh"; fi',
     ];
 
     private const array INSTALL = [
@@ -33,30 +33,44 @@ final class InstallGhTest extends SandboxTestCase
         'sudo apt-get install -y -qq gh',
     ];
 
-    public function testARecentGhIsKept(): void
+    public function testARecentGhIsKeptAndItsVersionPrinted(): void
     {
-        $sandbox = $this->sandbox('2.48.0');
+        $sandbox = $this->sandbox('2.48.0', 'bin');
 
         $result = $this->runScript($sandbox, true);
 
         self::assertTrue($result->succeeded(), $result->errors);
         self::assertSame([], $this->calls($sandbox));
+        self::assertStringContainsString('gh version 2.48.0', $result->output);
     }
 
-    public function testAnOlderGhIsReplacedFromThePinnedRepository(): void
+    public function testAnOlderPackagedGhIsUpgradedInPlace(): void
     {
-        $sandbox = $this->sandbox('2.45.0');
+        $sandbox = $this->sandbox('2.45.0', 'usr/bin');
 
         $result = $this->runScript($sandbox, true);
 
         self::assertTrue($result->succeeded(), $result->errors);
         self::assertSame(self::INSTALL, $this->callPrefixes($sandbox));
         self::assertStringContainsString('gh version 2.83.0', $result->output);
+        self::assertSame('', file_get_contents($sandbox->root.'/github-path'));
+    }
+
+    public function testAnOlderGhEarlierOnPathIsShadowedForLaterSteps(): void
+    {
+        $sandbox = $this->sandbox('2.45.0', 'bin');
+
+        $result = $this->runScript($sandbox, true);
+
+        self::assertTrue($result->succeeded(), $result->errors);
+        self::assertSame(self::INSTALL, $this->callPrefixes($sandbox));
+        self::assertStringContainsString('gh version 2.83.0', $result->output);
+        self::assertSame($sandbox->root.'/usr/bin'."\n", file_get_contents($sandbox->root.'/github-path'));
     }
 
     public function testAMissingGhIsInstalledAndTheScratchFolderRemoved(): void
     {
-        $sandbox = $this->sandbox(null);
+        $sandbox = $this->sandbox(null, 'bin');
 
         $result = $this->runScript($sandbox, true);
 
@@ -67,7 +81,7 @@ final class InstallGhTest extends SandboxTestCase
 
     public function testADownloadWithoutThePinnedKeyStopsBeforeAnyPrivilegedCommand(): void
     {
-        $sandbox = $this->sandbox(null);
+        $sandbox = $this->sandbox(null, 'bin');
 
         $result = $this->runScript($sandbox, false);
 
@@ -77,30 +91,31 @@ final class InstallGhTest extends SandboxTestCase
         self::assertSame([], array_values(array_diff((array) scandir($sandbox->root.'/tmp'), ['.', '..'])));
     }
 
-    private function sandbox(?string $ghVersion): Sandbox
+    private function sandbox(?string $ghVersion, string $ghFolder): Sandbox
     {
         $sandbox = $this->emptySandbox();
         $sandbox->write('calls', '');
+        $sandbox->write('github-path', '');
 
         foreach (self::FAKES as $name => $fake) {
             $sandbox->write('bin/'.$name, $fake."\n");
         }
 
         if (null !== $ghVersion) {
-            $sandbox->write('bin/gh', '#!/bin/sh'."\n".'echo "gh version '.$ghVersion.' (2024-01-01)"'."\n");
+            $sandbox->write($ghFolder.'/gh', '#!/bin/sh'."\n".'echo "gh version '.$ghVersion.' (2024-01-01)"'."\n");
         }
 
         return $sandbox;
     }
 
-    // Only the fakes and the few real tools the script needs are on PATH, so a gh installed on this machine stays out.
+    // Only fakes, apt's install folder and the real tools the script needs are on PATH, so this machine's gh stays out.
     private function runScript(Sandbox $sandbox, bool $hasKey): ProcessResult
     {
-        $environment = ['CALLS' => $sandbox->root.'/calls', 'BIN' => $sandbox->root.'/bin', 'TMPDIR' => $sandbox->root.'/tmp', 'HAS_KEY' => $hasKey ? '1' : ''];
+        $environment = ['CALLS' => $sandbox->root.'/calls', 'APT' => $sandbox->root.'/usr/bin', 'GITHUB_PATH' => $sandbox->root.'/github-path', 'TMPDIR' => $sandbox->root.'/tmp', 'HAS_KEY' => $hasKey ? '1' : ''];
 
         return $sandbox->runScript(
-            'chmod +x bin/*; mkdir tmp tools; for tool in sed mktemp rm cat chmod; do ln -s "$(command -v "$tool")" "tools/$tool"; done; '
-            .'PATH="$PWD/bin:$PWD/tools" /bin/sh '.escapeshellarg(self::SCRIPT),
+            'mkdir -p tmp tools usr/bin; chmod +x bin/* usr/bin/* 2>/dev/null || true; for tool in sed mktemp rm cat chmod; do ln -s "$(command -v "$tool")" "tools/$tool"; done; '
+            .'PATH="$PWD/bin:$PWD/usr/bin:$PWD/tools" /bin/sh '.escapeshellarg(self::SCRIPT),
             $environment,
         );
     }
