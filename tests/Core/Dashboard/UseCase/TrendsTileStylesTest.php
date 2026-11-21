@@ -11,29 +11,50 @@ use PHPUnit\Framework\TestCase;
 #[CoversNothing]
 final class TrendsTileStylesTest extends TestCase
 {
-    // Because a tip anchored at its label's left edge runs past a phone's right edge from the third tile of a row (review of #3198).
-    public function testATilesTooltipIsAnchoredToTheTileGridNotToItsLabel(): void
+    // Because a tip hung from the grid opens below its last row, off a phone's screen while its focused label is visible (review of #3198).
+    public function testATilesTooltipHangsFromItsOwnTileNotFromTheGrid(): void
     {
         $rules = $this->rulesOf($this->sheetOutsideThePhoneRules());
 
-        self::assertMatchesRegularExpression('/position:\s*relative;/', $rules['.tiles'] ?? '');
+        self::assertMatchesRegularExpression('/position:\s*relative;/', $rules['.tile'] ?? '');
+        self::assertDoesNotMatchRegularExpression('/position:/', $rules['.tiles'] ?? '');
         self::assertMatchesRegularExpression('/position:\s*static;/', $rules['.tile .term'] ?? '');
     }
 
-    public function testATilesTooltipStartsAtTheGridsLeftEdgeAndIsNeverWiderThanTheGrid(): void
+    public function testOutsideAPhoneATilesTooltipSpansExactlyItsTile(): void
     {
-        $rules = $this->rulesOf($this->sheetOutsideThePhoneRules());
+        $tip = $this->rulesOf($this->sheetOutsideThePhoneRules())['.tile .term-tip'] ?? '';
 
-        self::assertMatchesRegularExpression('/left:\s*0;/', $rules['.tile .term-tip'] ?? '');
-        self::assertMatchesRegularExpression('/max-width:\s*100%;/', $rules['.tile .term-tip'] ?? '');
+        self::assertMatchesRegularExpression('/left:\s*0;/', $tip);
+        self::assertMatchesRegularExpression('/right:\s*0;/', $tip);
+        self::assertMatchesRegularExpression('/width:\s*auto;/', $tip);
+        self::assertMatchesRegularExpression('/max-width:\s*none;/', $tip);
     }
 
-    public function testNoRuleForAPhoneMovesATilesLabelBackIntoAPositionedBox(): void
+    public function testOnAPhoneATilesTooltipSpansTwoColumnsAndTheGapBetweenThem(): void
     {
         $phoneRules = $this->rulesOf(implode("\n", $this->phoneBlocks()[1]));
+        self::assertMatchesRegularExpression('/gap:\s*(var\(--s\d+\));/', $phoneRules['.tiles'] ?? '', 'the phone grid names its gap');
+        preg_match('/gap:\s*(var\(--s\d+\));/', $phoneRules['.tiles'] ?? '', $gap);
 
-        self::assertDoesNotMatchRegularExpression('/position:/', $phoneRules['.tile .term'] ?? '');
-        self::assertDoesNotMatchRegularExpression('/position:|left:|max-width:/', $phoneRules['.tile .term-tip'] ?? '');
+        self::assertStringContainsString('width: calc(200% + '.$gap[1].');', $phoneRules['.tile .term-tip'] ?? '');
+        self::assertMatchesRegularExpression('/right:\s*auto;/', $phoneRules['.tile .term-tip'] ?? '');
+    }
+
+    public function testOnAPhoneTheMiddleTilesTooltipIsCenteredOnItSoItStaysInsideTheGrid(): void
+    {
+        $phoneRules = $this->rulesOf(implode("\n", $this->phoneBlocks()[1]));
+        preg_match('/gap:\s*(var\(--s\d+\));/', $phoneRules['.tiles'] ?? '', $gap);
+
+        self::assertStringContainsString('left: calc(-50% - '.($gap[1] ?? '?').' / 2);', $phoneRules['.tile:nth-child(3n+2) .term-tip'] ?? '');
+    }
+
+    public function testOnAPhoneTheLastTileOfARowOpensItsTooltipToTheLeft(): void
+    {
+        $tip = $this->rulesOf(implode("\n", $this->phoneBlocks()[1]))['.tile:nth-child(3n) .term-tip'] ?? '';
+
+        self::assertMatchesRegularExpression('/left:\s*auto;/', $tip);
+        self::assertMatchesRegularExpression('/right:\s*0;/', $tip);
     }
 
     private function sheet(): string
