@@ -386,7 +386,7 @@ final class DependencySnapshotsTest extends TestCase
         return $this->directory.'/store/.evicting-'.$this->key($lock)->value;
     }
 
-    // The state an eviction stopped half-way through deleting leaves: renamed away from its key, with some files already gone.
+    // Forced on disk, because no test can stop a real eviction between its rename and the end of its delete.
     private function halfRemove(string $lock): void
     {
         rename($this->snapshotOf($lock), $this->evictingOf($lock));
