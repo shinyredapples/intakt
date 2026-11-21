@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Gates;
 
+use FilesystemIterator;
 use Intakt\Gates\CheckCommand;
 use Intakt\Gates\ChildCommand;
 use Intakt\Gates\FullReport;
@@ -23,7 +24,6 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
-use FilesystemIterator;
 use SplFileInfo;
 
 #[CoversClass(FullReport::class)]
