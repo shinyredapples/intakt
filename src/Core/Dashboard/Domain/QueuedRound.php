@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\Domain;
 
-// A round the watcher queued for a pull request that no worker has started yet, so it has a round id and its review page but no review.
+// A round the watcher queued that has not started, so it has a round id but no review and no review page yet.
 final readonly class QueuedRound
 {
     public function __construct(

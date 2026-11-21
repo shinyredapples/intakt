@@ -8,59 +8,70 @@ use Intakt\Core\Dashboard\Domain\QueuedRound;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 
-// A started round is left out because from its start it is a review the board shows, and a stale one because a newer head of its pull request replaced it.
+// The latest watcher line of a pull request decides, as in LedgerWaitingHeads, so a newer head or a closed pull request ends the wait; a started round is left out because from its start it is a review the board shows.
 final readonly class LedgerQueuedRounds
 {
-    // Newest first, because Up next lists them after the board's cards, which come newest first.
+    private const array WATCHER_LINES = [
+        LedgerEventKind::HeadPending,
+        LedgerEventKind::HeadRed,
+        LedgerEventKind::HeadFailed,
+        LedgerEventKind::HeadHandedOver,
+        LedgerEventKind::RoundQueued,
+        LedgerEventKind::HeadForgotten,
+    ];
+
+    // Newest queue line first, because Up next lists them after the board's cards, which come newest first.
     /**
      * @return list<QueuedRound>
      */
     public function in(RecordedEvents $events): array
     {
-        $queued = [];
-        $done = [];
+        $latest = [];
+        $started = [];
 
-        foreach ($events as $recorded) {
+        foreach ($events as $order => $recorded) {
             $kind = $recorded->event->kind;
-
-            if (!in_array($kind, [LedgerEventKind::RoundQueued, LedgerEventKind::ReviewStarted, LedgerEventKind::VerdictsStale], true)) {
-                continue;
-            }
-
             $payload = LedgerPayload::of($recorded);
-            $round = $payload['round'] ?? null;
 
-            if (!is_string($round) || '' === $round) {
-                continue;
-            }
-
-            if (LedgerEventKind::RoundQueued !== $kind) {
-                $done[$round] = true;
+            if (LedgerEventKind::ReviewStarted === $kind && is_string($payload['round'] ?? null)) {
+                $started[$payload['round']] = true;
 
                 continue;
             }
 
-            $queued += $this->queuedOf($round, $payload);
+            $project = $payload['project'] ?? null;
+            $change = $payload['change'] ?? null;
+
+            if (!in_array($kind, self::WATCHER_LINES, true) || !is_string($project) || !is_string($change)) {
+                continue;
+            }
+
+            // Keyed by project, then pull request, so no name either side sends can make two keys meet.
+            $latest[$project][$change] = $this->queuedOf($kind, $project, $change, $payload['round'] ?? null, $order);
         }
 
-        return array_reverse(array_values(array_diff_key($queued, $done)));
-    }
-
-    public function roundIn(RecordedEvents $events, string $round): ?QueuedRound
-    {
-        return array_find($this->in($events), static fn (QueuedRound $queued): bool => $queued->round === $round);
+        return $this->waiting($latest, $started);
     }
 
     /**
-     * @param array<string, mixed> $payload
-     *
-     * @return array<string, QueuedRound>
+     * @return array{order: int, round: QueuedRound}|null
      */
-    private function queuedOf(string $round, array $payload): array
+    private function queuedOf(LedgerEventKind $kind, string $project, string $change, mixed $round, int $order): ?array
     {
-        $project = $payload['project'] ?? null;
-        $change = $payload['change'] ?? null;
+        return LedgerEventKind::RoundQueued === $kind && is_string($round) && '' !== $round ? ['order' => $order, 'round' => new QueuedRound($round, $project, $change)] : null;
+    }
 
-        return is_string($project) && is_string($change) ? [$round => new QueuedRound($round, $project, $change)] : [];
+    /**
+     * @param array<array-key, array<array-key, array{order: int, round: QueuedRound}|null>> $latest
+     * @param array<string, true>                                                             $started
+     *
+     * @return list<QueuedRound>
+     */
+    private function waiting(array $latest, array $started): array
+    {
+        $waiting = array_filter(array_merge([], ...array_map(static fn (array $changes): array => array_values(array_filter($changes)), array_values($latest))), static fn (array $queued): bool => !isset($started[$queued['round']->round]));
+        usort($waiting, static fn (array $one, array $other): int => $other['order'] <=> $one['order']);
+
+        return array_map(static fn (array $queued): QueuedRound => $queued['round'], $waiting);
     }
 }

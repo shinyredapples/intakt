@@ -8,7 +8,6 @@ use Intakt\Core\Build\Contract\BuildStep;
 use Intakt\Core\Build\Contract\BuildStepOutcome;
 use Intakt\Core\Dashboard\Domain\Board;
 use Intakt\Core\Dashboard\Domain\BuildTask;
-use Intakt\Core\Dashboard\Domain\QueuedRound;
 use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\ReviewerOutcome;
@@ -32,7 +31,6 @@ final readonly class LedgerReviewPages
         private RoundEndings $endings,
         private ReplayMarks $marks,
         private LedgerBuildSteps $buildSteps = new LedgerBuildSteps(),
-        private LedgerQueuedRounds $queued = new LedgerQueuedRounds(),
     ) {
     }
 
@@ -79,12 +77,6 @@ final readonly class LedgerReviewPages
     public function reviewsOf(RecordedEvents $events): array
     {
         return $this->rounds($events)->reviews();
-    }
-
-    // Read from the rows that name the round alone, because only a round the ledger never started asks, and its queue line, start and stale mark all name it.
-    public function queuedRoundOf(string $round): ?QueuedRound
-    {
-        return $this->queued->roundIn($this->ledger->readMentioning([$round]), $round);
     }
 
     // Read from the rows that name the round alone, because a live update goes out for each streamed text and must not read every start the ledger holds; the latest start wins, as on the page, and null means the reviewer has not started in that round.

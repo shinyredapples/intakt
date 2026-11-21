@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\Domain;
 
+// Queued rounds come apart from the started ones, because a round has no review page until it starts, so the page lists it without a link.
 final readonly class UpNext
 {
     public const string NOTHING_PLANNED = 'Nothing running or queued.';

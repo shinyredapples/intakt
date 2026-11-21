@@ -31,9 +31,7 @@ final class LedgerQueuedRoundsTest extends TestCase
         $first = $this->ledger->queueRoundOf('alpha', '7', 'a');
         $second = $this->ledger->queueRoundOf('beta', '8', 'b');
 
-        $queued = new LedgerQueuedRounds()->in($this->ledger->readInOrder());
-
-        self::assertSame([[$second, 'beta', 'Pull request 8'], [$first, 'alpha', 'Pull request 7']], array_map(static fn (QueuedRound $round): array => [$round->round, $round->project, $round->title()], $queued));
+        self::assertSame([[$second, 'beta', 'Pull request 8'], [$first, 'alpha', 'Pull request 7']], $this->queued());
     }
 
     public function testARoundWhoseReviewStartedIsNoLongerQueued(): void
@@ -41,38 +39,47 @@ final class LedgerQueuedRoundsTest extends TestCase
         $round = $this->ledger->queueRoundOf('alpha', '7', 'a');
         $this->ledger->startRound($round, 'alpha');
 
-        self::assertSame([], new LedgerQueuedRounds()->in($this->ledger->readInOrder()));
+        self::assertSame([], $this->queued());
     }
 
-    public function testARoundTheWatcherMarkedStaleIsNoLongerQueued(): void
+    public function testANewerWatcherLineOfThePullRequestEndsTheWait(): void
     {
-        $round = $this->ledger->queueRoundOf('alpha', '7', 'a');
-        $this->ledger->markVerdictsStale('alpha', '7', $round);
+        $this->ledger->queueRoundOf('alpha', '7', 'a');
+        $this->ledger->keepHeadPending('alpha', '7', 'b');
 
-        self::assertSame([], new LedgerQueuedRounds()->in($this->ledger->readInOrder()));
+        self::assertSame([], $this->queued());
+    }
+
+    public function testARoundQueuedAgainAfterAnotherLineIsListed(): void
+    {
+        $this->ledger->forgetHead('alpha', '7', 'a');
+        $round = $this->ledger->queueRoundOf('alpha', '7', 'b');
+
+        self::assertSame([[$round, 'alpha', 'Pull request 7']], $this->queued());
+    }
+
+    public function testTheSamePullRequestNumberInTwoProjectsIsTwoRounds(): void
+    {
+        $alpha = $this->ledger->queueRoundOf('alpha', '7', 'a');
+        $beta = $this->ledger->queueRoundOf('beta', '7', 'b');
+
+        self::assertSame([[$beta, 'beta', 'Pull request 7'], [$alpha, 'alpha', 'Pull request 7']], $this->queued());
     }
 
     public function testAQueueLineWithoutARoundOrProjectIsSkipped(): void
     {
         $this->ledger->append(new LedgerEvent(LedgerEventKind::RoundQueued, '{"project":"alpha","change":"7","head":"a"}'));
-        $this->ledger->append(new LedgerEvent(LedgerEventKind::RoundQueued, '{"change":"7","head":"a","round":"r-1"}'));
-        $this->ledger->append(new LedgerEvent(LedgerEventKind::RoundQueued, '{"project":"alpha","change":"7","head":"a","round":""}'));
+        $this->ledger->append(new LedgerEvent(LedgerEventKind::RoundQueued, '{"change":"8","head":"a","round":"r-1"}'));
+        $this->ledger->append(new LedgerEvent(LedgerEventKind::RoundQueued, '{"project":"alpha","change":"9","head":"a","round":""}'));
 
-        self::assertSame([], new LedgerQueuedRounds()->in($this->ledger->readInOrder()));
+        self::assertSame([], $this->queued());
     }
 
-    public function testOneQueuedRoundIsFoundByItsId(): void
+    /**
+     * @return list<array{string, string, string}>
+     */
+    private function queued(): array
     {
-        $this->ledger->queueRoundOf('alpha', '7', 'a');
-        $round = $this->ledger->queueRoundOf('alpha', '8', 'b');
-
-        self::assertSame('8', new LedgerQueuedRounds()->roundIn($this->ledger->readInOrder(), $round)?->change);
-    }
-
-    public function testAnUnknownRoundIsNotFound(): void
-    {
-        $this->ledger->queueRoundOf('alpha', '7', 'a');
-
-        self::assertNull(new LedgerQueuedRounds()->roundIn($this->ledger->readInOrder(), 'r-unknown'));
+        return array_map(static fn (QueuedRound $round): array => [$round->round, $round->project, $round->title()], new LedgerQueuedRounds()->in($this->ledger->readInOrder()));
     }
 }

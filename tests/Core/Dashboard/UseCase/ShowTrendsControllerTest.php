@@ -26,7 +26,12 @@ use Intakt\Core\Dashboard\UseCase\ShowTrends\ShowTrendsController;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Review\Contract\ReplayMark;
+use Intakt\Core\Review\Contract\RoundEnding;
+use Intakt\Core\Review\Contract\RoundEndings;
+use Intakt\Core\Review\Contract\RoundEnds;
 use Intakt\Core\Review\Contract\SampleChange;
+use Intakt\Core\Review\UseCase\ReviewChange\RoundEndReasons;
+use Intakt\Tests\Support\FixedRoundEndings;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -560,29 +565,46 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
         self::assertEqualsCanonicalizing(array_unique($board), $upNext);
     }
 
-    public function testUpNextListsARoundTheWatcherQueuedAsWaitingToStartWithItsReviewLink(): void
+    public function testUpNextLeavesOutARoundThatEndedWithoutTheJudgesCallWhileTheBoardKeepsItInReview(): void
     {
-        $round = $this->ledger->queueRoundOf('alpha', '7', 'abc123');
+        self::getContainer()->set(RoundEndings::class, new FixedRoundEndings(new RoundEnding(RoundEnds::JudgingFailed, RoundEndReasons::JUDGING_FAILED)));
+        $this->ledger->startRoundOf('feat/a', 'r-1', 1);
+        $this->ledger->startReviewer('r-1', 'correctness');
+
+        $board = $this->browser->request('GET', '/?board')->filter('#col-in-review a[href="/reviews/r-1"]');
+        $upNext = $this->browser->request('GET', '/trends')->filter('#up-next');
+
+        self::assertNotCount(0, $board);
+        self::assertSame(['Nothing running or queued.'], $upNext->filter('p')->each(static fn (Crawler $line): string => $line->text()));
+    }
+
+    public function testUpNextListsARoundTheWatcherQueuedAsWaitingToStartWithoutALink(): void
+    {
+        $this->ledger->queueRoundOf('alpha', '7', 'abc123');
 
         $upNext = $this->browser->request('GET', '/trends')->filter('#up-next');
 
         self::assertSame(['Waiting to start'], $upNext->filter('h3')->each(static fn (Crawler $title): string => $title->text()));
-        self::assertSame('/reviews/'.$round, $upNext->filter('a.review-link')->attr('href'));
-        self::assertSame(['Pull request 7', 'alpha', 'Queued, no worker has started it yet'], $upNext->filter('.review-title, .review-facts > span')->each(static fn (Crawler $part): string => $part->text()));
+        self::assertCount(0, $upNext->filter('a.review-link'));
+        self::assertCount(0, $upNext->filter('p'));
+        self::assertSame(['Pull request 7', 'alpha', 'Queued, not started yet'], $upNext->filter('.review-line .review-title, .review-line .review-facts > span')->each(static fn (Crawler $part): string => $part->text()));
     }
 
-    public function testUpNextLeavesOutAQueuedRoundOnceItsReviewStarted(): void
+    public function testUpNextLinksAQueuedRoundOnceItsReviewStarted(): void
     {
         $round = $this->ledger->queueRoundOf('alpha', '7', 'abc123');
         $this->ledger->startRound($round, 'alpha');
 
-        self::assertSame(['/reviews/'.$round], $this->browser->request('GET', '/trends')->filter('#up-next a.review-link')->each(static fn (Crawler $link): string => (string) $link->attr('href')));
+        $upNext = $this->browser->request('GET', '/trends')->filter('#up-next');
+
+        self::assertSame(['/reviews/'.$round], $upNext->filter('a.review-link')->each(static fn (Crawler $link): string => (string) $link->attr('href')));
+        self::assertCount(0, $upNext->filter('.review-line'));
     }
 
-    public function testUpNextLeavesOutAQueuedRoundMarkedStale(): void
+    public function testUpNextLeavesOutAQueuedRoundOnceANewerWatcherLineReplacedIt(): void
     {
-        $round = $this->ledger->queueRoundOf('alpha', '7', 'abc123');
-        $this->ledger->markVerdictsStale('alpha', '7', $round);
+        $this->ledger->queueRoundOf('alpha', '7', 'abc123');
+        $this->ledger->forgetHead('alpha', '7', 'abc123');
 
         self::assertSame('Nothing running or queued.', $this->browser->request('GET', '/trends')->filter('#up-next p')->text());
     }

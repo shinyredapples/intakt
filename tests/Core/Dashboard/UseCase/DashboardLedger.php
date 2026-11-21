@@ -291,11 +291,6 @@ final class DashboardLedger implements Ledger
         return $round;
     }
 
-    public function markVerdictsStale(string $project, string $change, string $round): void
-    {
-        $this->add(LedgerEventKind::VerdictsStale, ['project' => $project, 'change' => $change, 'round' => $round, 'head' => 'a']);
-    }
-
     public function forgetHead(string $project, string $change, string $head): void
     {
         $this->add(LedgerEventKind::HeadForgotten, ['project' => $project, 'change' => $change, 'head' => $head]);

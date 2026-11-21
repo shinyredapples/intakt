@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Intakt\Core\Dashboard\UseCase\ShowReview;
 
 use Intakt\Core\Dashboard\Contract\DashboardRoutes;
-use Intakt\Core\Dashboard\Domain\QueuedRound;
 use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
@@ -33,7 +32,7 @@ final readonly class ShowReviewController
         $review = $this->reviews->reviewOf($round);
 
         if (!$review instanceof Review) {
-            return $this->queuedOrNotFound($request, $round);
+            throw new NotFoundHttpException('The ledger holds no review with this round.');
         }
 
         return new Response($this->pages->render($request, 'dashboard/review.html.twig', [
@@ -42,18 +41,6 @@ final readonly class ShowReviewController
             'topics' => $this->unfinishedTopicsOf($review),
             'summary' => $this->summaryOfTheActiveRound($review),
         ]));
-    }
-
-    // A round the watcher queued has this page before a worker starts it, because Trends' Up next links it while it waits.
-    private function queuedOrNotFound(Request $request, string $round): Response
-    {
-        $queued = $this->reviews->queuedRoundOf($round);
-
-        if (!$queued instanceof QueuedRound) {
-            throw new NotFoundHttpException('The ledger holds no review with this round.');
-        }
-
-        return new Response($this->pages->render($request, 'dashboard/review_queued.html.twig', ['queued' => $queued]));
     }
 
     /**
