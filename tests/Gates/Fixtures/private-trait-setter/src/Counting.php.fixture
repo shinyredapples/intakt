@@ -1,0 +1,23 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+trait Counting
+{
+    private function setCount(int $count): int
+    {
+        return $count;
+    }
+
+    protected function setStep(int $step): int
+    {
+        return $step;
+    }
+
+    public function settle(): int
+    {
+        return $this->setCount($this->setStep(1));
+    }
+}
