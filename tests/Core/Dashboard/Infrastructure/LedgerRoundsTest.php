@@ -29,6 +29,9 @@ use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\CatchUpOwed;
 use Intakt\Core\Review\Contract\ChangeDecision;
+use Intakt\Core\Review\Contract\CountedQuotes;
+use Intakt\Core\Review\Contract\QuotesCounted;
+use Intakt\Core\Review\Domain\QuotesInChange;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\DroppedFinding;
 use Intakt\Core\Review\Contract\FailureInWords;
@@ -83,6 +86,9 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(JudgeDone::class)]
 #[UsesClass(FindingIds::class)]
 #[UsesClass(DroppedFinding::class)]
+#[UsesClass(CountedQuotes::class)]
+#[UsesClass(QuotesCounted::class)]
+#[UsesClass(QuotesInChange::class)]
 #[UsesClass(JudgeDoneFinding::class)]
 #[UsesClass(UsageStarted::class)]
 #[UsesClass(UsageSettled::class)]
@@ -427,7 +433,7 @@ final class LedgerRoundsTest extends TestCase
         );
 
         self::assertInstanceOf(Review::class, $review);
-        self::assertEquals([new RoundFinding('F1', 'P2', 'Call `ghost`.', [], 'src/A.php', 3, 'none of its 1 quoted code fragments is in the change')], $review->rounds[0]->dropped);
+        self::assertEquals([new RoundFinding('F1', 'P2', 'Call `ghost`.', [], 'src/A.php', 3, 'none of its 1 quoted code fragments is in the change', new QuotesCounted('ghost'))], $review->rounds[0]->dropped);
         self::assertSame([], $review->rounds[0]->findings);
     }
 
