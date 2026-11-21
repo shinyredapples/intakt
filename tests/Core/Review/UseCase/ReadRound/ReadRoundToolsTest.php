@@ -200,7 +200,7 @@ final class ReadRoundToolsTest extends KernelTestCase
         $data = json_decode(json_encode($answer, JSON_THROW_ON_ERROR), true, flags: JSON_THROW_ON_ERROR);
 
         self::assertSame(['roundId', 'judged', 'act', 'mark'], array_keys($data));
-        self::assertSame(['id', 'severity', 'file', 'line', 'symbol', 'text', 'fixable_by', 'repeat', 'requirement', 'evidence', 'regression', 'merged', 'judge_note'], array_keys($this->firstActEntryAsJson($answer)));
+        self::assertSame(['id', 'severity', 'file', 'line', 'symbol', 'text', 'fixable_by', 'repeat', 'requirement', 'evidence', 'regression', 'gate_gap', 'merged', 'judge_note'], array_keys($this->firstActEntryAsJson($answer)));
     }
 
     public function testAJudgeAnswerThatRejectsAP1LeavesItOnTheActListWithTheJudgesNote(): void
@@ -292,6 +292,7 @@ final class ReadRoundToolsTest extends KernelTestCase
             'requirement' => null,
             'evidence' => null,
             'regression' => false,
+            'gate_gap' => false,
             'merged' => [],
         ], $findings[0]);
     }

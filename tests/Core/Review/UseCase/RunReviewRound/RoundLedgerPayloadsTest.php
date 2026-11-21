@@ -84,7 +84,7 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
 
     private const string REVIEWER = '0195f0a2-7c1e-7000-8000-000000000002';
 
-    private const string MERGED_ROW = '{"round":"'.self::ROUND.'","act":["F1","F3"],"follow_ups":["F4"],"findings":[{"id":"F1","severity":"P1","text":"A bug.","merged":["F3"],"file":null,"line":null,"judge_note":null}],"dropped":[],"same_cause":{"F3":"F1"},"votes":[],"p1_keys":[],"fallback":null}';
+    private const string MERGED_ROW = '{"round":"'.self::ROUND.'","act":["F1","F3"],"follow_ups":["F4"],"findings":[{"id":"F1","severity":"P1","text":"A bug.","merged":["F3"],"file":null,"line":null,"judge_note":null,"gate_gap":false}],"dropped":[],"same_cause":{"F3":"F1"},"votes":[],"p1_keys":[],"fallback":null}';
 
     private const string IDENTITY = '{"round":"'.self::ROUND.'","reviewer":"'.self::REVIEWER.'","role":"security","tier":"strong"';
 
@@ -267,7 +267,7 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
     {
         $done = new JudgeDone(self::ROUND, new FindingIds('f1'), new FindingIds('f2'), [new JudgeDoneFinding('f1', Severity::P1, 'A bug.'), new JudgeDoneFinding('f2', Severity::P3, 'A nit.')]);
 
-        self::assertSame('{"round":"'.self::ROUND.'","act":["f1"],"follow_ups":["f2"],"findings":[{"id":"f1","severity":"P1","text":"A bug.","merged":[],"file":null,"line":null,"judge_note":null},{"id":"f2","severity":"P3","text":"A nit.","merged":[],"file":null,"line":null,"judge_note":null}],"dropped":[],"same_cause":[],"votes":[],"p1_keys":[],"fallback":null}', $this->written($done));
+        self::assertSame('{"round":"'.self::ROUND.'","act":["f1"],"follow_ups":["f2"],"findings":[{"id":"f1","severity":"P1","text":"A bug.","merged":[],"file":null,"line":null,"judge_note":null,"gate_gap":false},{"id":"f2","severity":"P3","text":"A nit.","merged":[],"file":null,"line":null,"judge_note":null,"gate_gap":false}],"dropped":[],"same_cause":[],"votes":[],"p1_keys":[],"fallback":null}', $this->written($done));
     }
 
     public function testADoneJudgeListsEachDroppedFindingWithItsIdPlaceAndReason(): void
@@ -335,9 +335,9 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
         $payload = $ledger->payloads()[0];
         self::assertSame(['F1', 'F2'], $payload['act']);
         self::assertSame([
-            ['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of F1.', 'merged' => ['F2'], 'file' => 'src/A.php', 'line' => 7, 'judge_note' => null],
-            ['id' => 'F2', 'severity' => 'P1', 'text' => 'Text of F2.', 'merged' => [], 'file' => 'src/A.php', 'line' => 7, 'judge_note' => null],
-            ['id' => 'F3', 'severity' => 'P3', 'text' => 'Text of F3.', 'merged' => [], 'file' => 'src/A.php', 'line' => 8, 'judge_note' => null],
+            ['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of F1.', 'merged' => ['F2'], 'file' => 'src/A.php', 'line' => 7, 'judge_note' => null, 'gate_gap' => false],
+            ['id' => 'F2', 'severity' => 'P1', 'text' => 'Text of F2.', 'merged' => [], 'file' => 'src/A.php', 'line' => 7, 'judge_note' => null, 'gate_gap' => false],
+            ['id' => 'F3', 'severity' => 'P3', 'text' => 'Text of F3.', 'merged' => [], 'file' => 'src/A.php', 'line' => 8, 'judge_note' => null, 'gate_gap' => false],
         ], $payload['findings']);
     }
 
@@ -351,8 +351,8 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
         $this->roundLedger($ledger)->judgeDone($round, JudgedFindings::of($judgement, $findings), []);
 
         self::assertSame([
-            ['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of F1.', 'merged' => ['F2'], 'file' => 'src/A.php', 'line' => 7, 'judge_note' => null],
-            ['id' => 'F2', 'severity' => 'P2', 'text' => 'Text of F2.', 'merged' => [], 'file' => 'src/A.php', 'line' => 7, 'judge_note' => 'Not reachable.'],
+            ['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of F1.', 'merged' => ['F2'], 'file' => 'src/A.php', 'line' => 7, 'judge_note' => null, 'gate_gap' => false],
+            ['id' => 'F2', 'severity' => 'P2', 'text' => 'Text of F2.', 'merged' => [], 'file' => 'src/A.php', 'line' => 7, 'judge_note' => 'Not reachable.', 'gate_gap' => false],
         ], $ledger->payloads()[0]['findings']);
     }
 
@@ -375,6 +375,37 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
         $finding = self::getContainer()->get('serializer.stored')->deserialize('{"id":"f1","severity":"P1","text":"A bug.","judge_note":"Not reachable."}', JudgeDoneFinding::class, JsonEncoder::FORMAT);
 
         self::assertSame('Not reachable.', $finding->judgeNote);
+    }
+
+    public function testADoneJudgeRecordsTheGateGapMarkerOfEachFinding(): void
+    {
+        $round = new RoundFixture(self::getContainer())->start(1);
+        $ledger = new InMemoryLedger();
+        $gap = new Finding('F1', Severity::P3, 'src/A.php', 7, null, 'The gate misses a static closure.', FixableBy::Owner, false, 'phpstan', null, gate_gap: true);
+        $findings = [$gap, $this->findingAt('F2', Severity::P3, 20)];
+
+        $this->roundLedger($ledger)->judgeDone($round, JudgedFindings::of(new Judgement([]), $findings), []);
+
+        self::assertSame([true, false], array_column($ledger->payloads()[0]['findings'], 'gate_gap'));
+    }
+
+    public function testAJudgeRowWithTheGateGapMarkerReadsBackAndIsWrittenAgainWithIt(): void
+    {
+        $row = '{"id":"f1","severity":"P3","text":"A gap.","merged":[],"file":null,"line":null,"judge_note":null,"gate_gap":true}';
+
+        $finding = $this->serializer()->deserialize($row, JudgeDoneFinding::class, JsonEncoder::FORMAT);
+
+        self::assertInstanceOf(JudgeDoneFinding::class, $finding);
+        self::assertTrue($finding->gateGap);
+        self::assertSame($row, $this->written($finding));
+    }
+
+    public function testAJudgeRowWrittenWithoutTheGateGapMarkerReadsAsNotAGateGap(): void
+    {
+        $finding = $this->serializer()->deserialize('{"id":"f1","severity":"P1","text":"A bug.","merged":[],"file":null,"line":null,"judge_note":null}', JudgeDoneFinding::class, JsonEncoder::FORMAT);
+
+        self::assertInstanceOf(JudgeDoneFinding::class, $finding);
+        self::assertFalse($finding->gateGap);
     }
 
     public function testARecurringP1FoundIsWrittenWithItsRoundFindingKeyAndFirstRound(): void

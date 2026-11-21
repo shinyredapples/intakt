@@ -118,12 +118,41 @@ final class StoredJsonTest extends KernelTestCase
     {
         $json = $this->serializer()->serialize($this->finding()->withMerged(new FindingIds('F2')), JsonEncoder::FORMAT);
 
-        self::assertStringEndsWith(',"regression":true,"merged":["F2"]}', $json);
+        self::assertStringEndsWith(',"regression":true,"gate_gap":false,"merged":["F2"]}', $json);
+    }
+
+    public function testAFindingMarkedAsAGateGapIsWrittenWithTheMarkerAndReadsBackWithIt(): void
+    {
+        $finding = new Finding('a', Severity::P3, 'src/A.php', 7, null, 'The gate misses a static closure.', FixableBy::Owner, false, 'phpstan', null, gate_gap: true);
+
+        $json = $this->serializer()->serialize([$finding], JsonEncoder::FORMAT);
+        $read = $this->serializer()->deserialize($json, Finding::class.'[]', JsonEncoder::FORMAT);
+
+        self::assertStringContainsString('"regression":false,"gate_gap":true,', $json);
+        self::assertEquals([$finding], $read);
+    }
+
+    public function testATrackedFindingMarkedAsAGateGapReadsBackWithTheMarker(): void
+    {
+        $gap = new Finding('a', Severity::P3, null, null, null, 'The gate misses a case.', FixableBy::Owner, false, 'phpstan', null, gate_gap: true);
+        $tracked = [new TrackedFinding('a', $gap, [1], FindingStatus::Open)];
+
+        $read = $this->serializer()->deserialize($this->serializer()->serialize($tracked, JsonEncoder::FORMAT), TrackedFinding::class.'[]', JsonEncoder::FORMAT);
+
+        self::assertEquals($tracked, $read);
+    }
+
+    public function testAFindingRowWrittenWithoutTheGateGapMarkerReadsAsNotAGateGap(): void
+    {
+        $read = $this->serializer()->deserialize('['.self::TODAYS_FINDING.']', Finding::class.'[]', JsonEncoder::FORMAT);
+
+        self::assertInstanceOf(Finding::class, $read[0]);
+        self::assertFalse($read[0]->gate_gap);
     }
 
     public function testAFindingRowWithMergedIdsWrittenBeforeTheIdsWereOneValueReadsBackAndIsWrittenAgainUnchanged(): void
     {
-        $row = '[{"id":"a","severity":"P2","file":"src\/A.php","line":7,"symbol":null,"text":"Broken.","fixable_by":"builder","repeat":false,"requirement":null,"evidence":{"probe":"php -l","output":"ok"},"regression":true,"merged":["F2","F3"]}]';
+        $row = '[{"id":"a","severity":"P2","file":"src\/A.php","line":7,"symbol":null,"text":"Broken.","fixable_by":"builder","repeat":false,"requirement":null,"evidence":{"probe":"php -l","output":"ok"},"regression":true,"gate_gap":false,"merged":["F2","F3"]}]';
 
         $read = $this->serializer()->deserialize($row, Finding::class.'[]', JsonEncoder::FORMAT);
 

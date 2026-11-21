@@ -195,7 +195,7 @@ final class JudgeRoundTest extends KernelTestCase
         $this->fixture->judge(new ScriptedJudgement(new Judgement([])))($this->judgingOf($round));
 
         self::assertSame(
-            [['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of A.', 'merged' => [], 'file' => null, 'line' => null, 'judge_note' => null], ['id' => 'F2', 'severity' => 'P2', 'text' => 'Text of B.', 'merged' => [], 'file' => null, 'line' => null, 'judge_note' => null], ['id' => 'F3', 'severity' => 'P3', 'text' => 'Text of C.', 'merged' => [], 'file' => null, 'line' => null, 'judge_note' => null]],
+            [['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of A.', 'merged' => [], 'file' => null, 'line' => null, 'judge_note' => null, 'gate_gap' => false], ['id' => 'F2', 'severity' => 'P2', 'text' => 'Text of B.', 'merged' => [], 'file' => null, 'line' => null, 'judge_note' => null, 'gate_gap' => false], ['id' => 'F3', 'severity' => 'P3', 'text' => 'Text of C.', 'merged' => [], 'file' => null, 'line' => null, 'judge_note' => null, 'gate_gap' => false]],
             $this->judgeDonePayloads()[0]['findings'],
         );
     }
@@ -592,7 +592,7 @@ final class JudgeRoundTest extends KernelTestCase
 
         $this->fixture->judge(new ScriptedJudgement(new Judgement([])))($this->judgingOf($round));
 
-        self::assertSame([['id' => 'F2', 'severity' => 'P2', 'text' => '`old` is still read.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => 1, 'judge_note' => null]], $this->judgeDonePayloads()[0]['findings']);
+        self::assertSame([['id' => 'F2', 'severity' => 'P2', 'text' => '`old` is still read.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => 1, 'judge_note' => null, 'gate_gap' => false]], $this->judgeDonePayloads()[0]['findings']);
     }
 
     public function testTwoFindingsTheJudgeGivesOneCauseAreRecordedAsOneEntryWithTheHigherSeverityAndTheLink(): void
@@ -603,7 +603,7 @@ final class JudgeRoundTest extends KernelTestCase
 
         $payload = $this->judgeDonePayloads()[0];
         self::assertSame(['F2' => 'F1'], $payload['same_cause']);
-        self::assertSame([['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of A.', 'merged' => ['F2'], 'file' => 'src/Thing.php', 'line' => 3, 'judge_note' => null], ['id' => 'F2', 'severity' => 'P1', 'text' => 'Text of B.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => 5, 'judge_note' => null]], $payload['findings']);
+        self::assertSame([['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of A.', 'merged' => ['F2'], 'file' => 'src/Thing.php', 'line' => 3, 'judge_note' => null, 'gate_gap' => false], ['id' => 'F2', 'severity' => 'P1', 'text' => 'Text of B.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => 5, 'judge_note' => null, 'gate_gap' => false]], $payload['findings']);
     }
 
     public function testTwoFindingsInOneHunkWithDifferentCausesAreRecordedAsTwoEntries(): void
@@ -763,8 +763,8 @@ final class JudgeRoundTest extends KernelTestCase
     private function twoSeparateEntries(int $lineOfB): array
     {
         return [
-            ['id' => 'F1', 'severity' => 'P2', 'text' => 'Text of A.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => 3, 'judge_note' => null],
-            ['id' => 'F2', 'severity' => 'P1', 'text' => 'Text of B.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => $lineOfB, 'judge_note' => null],
+            ['id' => 'F1', 'severity' => 'P2', 'text' => 'Text of A.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => 3, 'judge_note' => null, 'gate_gap' => false],
+            ['id' => 'F2', 'severity' => 'P1', 'text' => 'Text of B.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => $lineOfB, 'judge_note' => null, 'gate_gap' => false],
         ];
     }
 

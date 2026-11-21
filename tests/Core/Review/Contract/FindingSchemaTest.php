@@ -22,6 +22,14 @@ final class FindingSchemaTest extends TestCase
         self::assertArrayNotHasKey('fixableBy', $properties);
     }
 
+    public function testTheStructuredOutputSchemaOfAFindingAsksForTheGateGapMarkerAsABoolean(): void
+    {
+        /** @var array<string, array<string, mixed>> $properties */
+        $properties = new ResponseFormatFactory()->create(Finding::class)['json_schema']['schema']['properties'];
+
+        self::assertSame(['type' => 'boolean'], $properties['gate_gap']);
+    }
+
     public function testTheStructuredOutputSchemaOfAFindingDoesNotAskForMergedIds(): void
     {
         /** @var array<string, mixed> $properties */
