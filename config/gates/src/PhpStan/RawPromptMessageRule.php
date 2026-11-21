@@ -25,8 +25,9 @@ use PhpParser\Node\Identifier;
 use PhpParser\Node\Name;
 use PhpParser\Node\Scalar\String_;
 use PhpParser\Node\Stmt\Class_;
+use PhpParser\Node\Stmt\Trait_;
+use PhpParser\NodeFinder;
 use PHPStan\Analyser\Scope;
-use PHPStan\Reflection\ClassReflection;
 use PHPStan\Rules\IdentifierRuleError;
 use PHPStan\Rules\Rule;
 use PHPStan\Rules\RuleErrorBuilder;
@@ -41,7 +42,7 @@ use Symfony\AI\Platform\Message\UserMessage;
 
 // Model messages are built only by the assembly class, so Intakt's own text arrives as literals and untrusted text only fenced: docs/design/05-architecture/14-threat-model.md#third-party-text
 /**
- * @implements Rule<Expr>
+ * @implements Rule<Node>
  */
 final readonly class RawPromptMessageRule implements Rule
 {
@@ -67,6 +68,7 @@ final readonly class RawPromptMessageRule implements Rule
         RoundReviewer::class => ['intakt.reviewerRole', 'new RoundReviewer() outside ReviewRound: a round reviewer carries its panel member\'s role prompt, so let ReviewRound build it from a PanelReviewer of the round\'s panel.'],
         ReviewerConversation::class => ['intakt.reviewerConversation', 'new ReviewerConversation() outside ReviewWithReviewerHandler and SymfonyAiVendor: a conversation carries the role prompt PromptAssembly::systemWithRole() puts into the system message, so start it in ReviewWithReviewerHandler from $reviewer->rolePrompt(), or copy an existing conversation\'s rolePrompt in SymfonyAiVendor\'s retry.'],
     ];
+    private const string TRAIT_ADVICE = 'A trait builds an object whose class is known only in the class that uses it: a trait body is outside ConfiguredPanels, SampleProject, ReviewRound, ReviewWithReviewerHandler and SymfonyAiVendor, so it may not build a ReviewerRole, RoundReviewer or ReviewerConversation; name the class it builds, or build the object in a class.';
 
     public function __construct(private string $root)
     {
@@ -74,7 +76,7 @@ final readonly class RawPromptMessageRule implements Rule
 
     public function getNodeType(): string
     {
-        return Expr::class;
+        return Node::class;
     }
 
     /**
@@ -83,6 +85,14 @@ final readonly class RawPromptMessageRule implements Rule
     public function processNode(Node $node, Scope $scope): array
     {
         if (!$this->isJudged($scope)) {
+            return [];
+        }
+
+        if ($node instanceof Trait_) {
+            return $this->traitFindings($node, $scope);
+        }
+
+        if (!$node instanceof Expr) {
             return [];
         }
 
@@ -186,29 +196,68 @@ final readonly class RawPromptMessageRule implements Rule
             return $this->rawMessage('new '.substr($messageClass, (int) strrpos($messageClass, '\\') + 1).'()');
         }
 
-        $carrier = $this->namedClass($construction->class, array_keys(self::BUILDERS), $scope);
-
-        if (null === $carrier) {
+        // because traitFindings() judges every construction in a trait where the trait is declared, also in a trait no analyzed class uses
+        if ($scope->isInTrait()) {
             return null;
         }
 
-        if (!$this->isBuiltByItsBuilder($carrier, $scope)) {
-            [$identifier, $advice] = self::BUILDER_FINDINGS[$carrier];
+        // because a class-string union may name an allowed carrier beside a refused one, every carrier it names is judged
+        $carriers = $this->namedClasses($construction->class, array_keys(self::BUILDERS), $scope);
+        $misplaced = array_find($carriers, fn (string $carrier): bool => !array_any(self::BUILDERS[$carrier], fn (string $builder): bool => $this->isInClass($scope, $builder)));
 
-            return RuleErrorBuilder::message($advice)->identifier($identifier)->build();
+        if (null !== $misplaced) {
+            return $this->misplacedCarrier($misplaced);
         }
 
-        if (self::CONVERSATION === $carrier && !$this->rolePromptIsProven($construction, $scope)) {
+        if (in_array(self::CONVERSATION, $carriers, true) && !$this->rolePromptIsProven($construction, $scope)) {
             return RuleErrorBuilder::message($this->isInClass($scope, self::RETRY) ? self::RETRY_ADVICE : self::ROLE_ADVICE)->identifier('intakt.unprovenRolePrompt')->build();
         }
 
         return null;
     }
 
-    private function isBuiltByItsBuilder(string $carrier, Scope $scope): bool
+    // PHPStan analyzes a trait's body only inside a class that uses it, so the trait is judged where it is declared, without the using class's types: a trait body is outside every builder, and a class it names only at run time may be a carrier
+    /**
+     * @return list<IdentifierRuleError>
+     */
+    private function traitFindings(Trait_ $trait, Scope $scope): array
     {
-        return !$scope->getTraitReflection() instanceof ClassReflection
-            && array_any(self::BUILDERS[$carrier], fn (string $builder): bool => $this->isInClass($scope, $builder));
+        $findings = [];
+        foreach (new NodeFinder()->findInstanceOf($trait->stmts, New_::class) as $construction) {
+            $names = $this->traitClassNamesOf($construction->class, $scope);
+            $carrier = null === $names ? null : $this->matching($names, array_keys(self::BUILDERS))[0] ?? null;
+
+            if (null === $names) {
+                $findings[] = RuleErrorBuilder::message(self::TRAIT_ADVICE)->identifier('intakt.reviewerRole')->line($construction->getStartLine())->build();
+            } elseif (null !== $carrier) {
+                $findings[] = $this->misplacedCarrier($carrier, $construction->getStartLine());
+            }
+        }
+
+        return $findings;
+    }
+
+    // null when the class is known only at run time: `self`, `static` and `parent` name the using class, and a variable's type is known only inside it
+    /**
+     * @return list<string>|null
+     */
+    private function traitClassNamesOf(Name|Expr|Class_ $class, Scope $scope): ?array
+    {
+        $names = match (true) {
+            $class instanceof Class_ => [],
+            $class instanceof Name => $class->isSpecialClassName() ? null : [$class->toString()],
+            default => $this->classNamesOf($scope->getType($class)),
+        };
+
+        return [] === $names && $class instanceof Expr ? null : $names;
+    }
+
+    private function misplacedCarrier(string $carrier, ?int $line = null): IdentifierRuleError
+    {
+        [$identifier, $advice] = self::BUILDER_FINDINGS[$carrier];
+        $finding = RuleErrorBuilder::message($advice)->identifier($identifier);
+
+        return (null === $line ? $finding : $finding->line($line))->build();
     }
 
     /**
@@ -216,13 +265,34 @@ final readonly class RawPromptMessageRule implements Rule
      */
     private function namedClass(Name|Expr|Class_ $class, array $candidates, Scope $scope): ?string
     {
+        return $this->namedClasses($class, $candidates, $scope)[0] ?? null;
+    }
+
+    /**
+     * @param list<string> $candidates
+     *
+     * @return list<string>
+     */
+    private function namedClasses(Name|Expr|Class_ $class, array $candidates, Scope $scope): array
+    {
         $names = match (true) {
             $class instanceof Name => [$scope->resolveName($class)],
             $class instanceof Expr => $this->classNamesOf($scope->getType($class)),
             default => [],
         };
 
-        return array_find($candidates, static fn (string $candidate): bool => array_any($names, static fn (string $name): bool => 0 === strcasecmp($name, $candidate)));
+        return $this->matching($names, $candidates);
+    }
+
+    /**
+     * @param list<string> $names
+     * @param list<string> $candidates
+     *
+     * @return list<string>
+     */
+    private function matching(array $names, array $candidates): array
+    {
+        return array_values(array_filter($candidates, static fn (string $candidate): bool => array_any($names, static fn (string $name): bool => 0 === strcasecmp($name, $candidate))));
     }
 
     // because `$message::ofUser()` names the class through an object and `new $class()` through a class-name string, constant or typed `class-string<...>`

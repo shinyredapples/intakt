@@ -27,6 +27,7 @@ final class RawPromptMessageRuleTest extends PhpStanRuleTestCase
     private const string VENDOR = 'src/Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiVendor.php';
     private const string BUILDER_PARAMETERS = '(string $text, UuidV7 $id, \Intakt\Core\Review\Domain\ReviewRound $round, PanelReviewer $member, ReviewerConversation $stopped, RoundReviewer $reviewer, ?ReviewerConversation $maybe, array $arguments)';
     private const int FIRST_CASE_LINE = 23;
+    private const int TRAIT_CASE_LINE = 14;
 
     protected function ruleFor(string $root): RawPromptMessageRule
     {
@@ -483,10 +484,84 @@ final class RawPromptMessageRuleTest extends PhpStanRuleTestCase
         $namespace = substr($class, 0, (int) strrpos($class, '\\'));
         $folder = 'src/'.str_replace('\\', '/', substr($namespace, strlen('Intakt\\')));
         $sandbox = $this->emptySandbox();
-        $sandbox->write($folder.'/Builds.php', "<?php\n\ndeclare(strict_types=1);\n\nnamespace {$namespace};\n\ntrait Builds\n{\n    public function build(string \$text, \\Symfony\\Component\\Uid\\UuidV7 \$id, \\Intakt\\Core\\Review\\Domain\\ReviewRound \$round, \\Intakt\\Core\\Review\\Contract\\PanelReviewer \$member, \\Intakt\\Core\\Review\\Contract\\ReviewerConversation \$stopped): mixed\n    {\n        return {$expression};\n    }\n}\n");
-        $sandbox->write($folder.'/'.substr($class, strlen($namespace) + 1).'.php', "<?php\n\ndeclare(strict_types=1);\n\nnamespace {$namespace};\n\nfinal class ".substr($class, strlen($namespace) + 1)."\n{\n    use Builds;\n}\n");
+        $sandbox->write($folder.'/Builds.php', $this->traitBuilding($namespace, $expression));
+        $sandbox->write($folder.'/'.substr($class, strlen($namespace) + 1).'.php', "<?php\n\ndeclare(strict_types=1);\n\nnamespace {$namespace};\n\nfinal readonly class ".substr($class, strlen($namespace) + 1)."\n{\n    use Builds;\n}\n");
 
-        self::assertStringContainsString($folder.'/Builds.php (in context of class '.$class.'):11 '.$identifier, $this->ruleFindingsIn($sandbox));
+        $findings = $this->ruleFindingsIn($sandbox);
+
+        self::assertSame(1, substr_count($findings, $identifier), $findings);
+        self::assertStringContainsString($folder.'/Builds.php:'.self::TRAIT_CASE_LINE.' '.$identifier, $findings);
+    }
+
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function unusedTraitBuilders(): iterable
+    {
+        yield 'a role' => ['new \Intakt\Core\Review\Contract\ReviewerRole(\'x\', $text)', 'intakt.reviewerRole'];
+        yield 'an imported round reviewer' => ['new RoundReviewer($id, $round, $member)', 'intakt.reviewerRole'];
+        yield 'a conversation in another letter case' => ['new \Intakt\Core\Review\Contract\reviewerconversation($stopped->rolePrompt, $id)', 'intakt.reviewerConversation'];
+        yield 'a role through its class constant' => ['new (\Intakt\Core\Review\Contract\ReviewerRole::class)(\'x\', $text)', 'intakt.reviewerRole'];
+        yield 'a role through a class-name string' => ['new (\'Intakt\\Core\\Review\\Contract\\ReviewerRole\')(\'x\', $text)', 'intakt.reviewerRole'];
+        yield 'a class in a variable' => ['new $text(\'x\', $text)', 'intakt.reviewerRole'];
+        yield 'a typed class string' => ['new $role(\'x\', $text)', 'intakt.reviewerRole'];
+        yield 'the using class' => ['new self(\'x\', $text)', 'intakt.reviewerRole'];
+        yield 'the using class at run time' => ['new static(\'x\', $text)', 'intakt.reviewerRole'];
+    }
+
+    #[DataProvider('unusedTraitBuilders')]
+    public function testATraitNoClassUsesIsJudgedWhereItIsDeclared(string $expression, string $identifier): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/Sample/Builds.php', $this->traitBuilding('Intakt\Sample', $expression));
+
+        self::assertStringContainsString('src/Sample/Builds.php:'.self::TRAIT_CASE_LINE.' '.$identifier, $this->ruleFindingsIn($sandbox));
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function traitConstructionsOfOtherClasses(): iterable
+    {
+        yield 'a named class' => ['new \Intakt\Core\Review\Contract\PanelReviewer($stopped->rolePrompt, $id, 1)'];
+        yield 'a class constant' => ['new (\ArrayObject::class)()'];
+        yield 'an anonymous class' => ['new class () {}'];
+    }
+
+    #[DataProvider('traitConstructionsOfOtherClasses')]
+    public function testATraitThatBuildsAnotherNamedClassPasses(string $expression): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/Sample/Builds.php', $this->traitBuilding('Intakt\Sample', $expression));
+
+        self::assertSame('', $this->ruleFindingsIn($sandbox));
+    }
+
+    /**
+     * @return iterable<string, array{string, string, string, string}>
+     */
+    public static function carrierUnions(): iterable
+    {
+        yield 'a conversation behind a role in the panel configuration' => ['src/Core/Review/Infrastructure/ConfiguredPanels.php', ConfiguredPanels::class, 'new (\'\' === $text ? ReviewerRole::class : ReviewerConversation::class)(\'x\', $text)', 'intakt.reviewerConversation'];
+        yield 'a role behind a conversation in the handler' => [self::HANDLER, ReviewWithReviewerHandler::class, 'new (\'\' === $text ? ReviewerConversation::class : ReviewerRole::class)($reviewer->rolePrompt(), $id)', 'intakt.reviewerRole'];
+        yield 'a round reviewer behind a role in the sample project' => ['src/Core/Review/UseCase/SeedSampleProject/SampleProject.php', SampleProject::class, 'new (\'\' === $text ? ReviewerRole::class : RoundReviewer::class)($id, $round, $member)', 'intakt.reviewerRole'];
+    }
+
+    #[DataProvider('carrierUnions')]
+    public function testEveryClassAClassStringUnionNamesIsJudged(string $path, string $class, string $expression, string $identifier): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write($path, $this->classWithCases($class, self::BUILDER_PARAMETERS, [$expression]));
+
+        self::assertStringContainsString($path.':'.self::FIRST_CASE_LINE.' '.$identifier, $this->ruleFindingsIn($sandbox));
+    }
+
+    public function testAnUnprovenRolePromptBehindAnAllowedCarrierIsRefused(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write(self::HANDLER, $this->classWithCases(ReviewWithReviewerHandler::class, self::BUILDER_PARAMETERS, ['new (\'\' === $text ? ReviewerConversation::class : ReviewerConversation::class)($text, $id)']));
+
+        self::assertStringContainsString(self::HANDLER.':'.self::FIRST_CASE_LINE.' intakt.unprovenRolePrompt', $this->ruleFindingsIn($sandbox));
     }
 
     public function testRolesRoundReviewersAndConversationsBuiltUnderTestsAreNotJudged(): void
@@ -514,6 +589,13 @@ final class RawPromptMessageRuleTest extends PhpStanRuleTestCase
         $sandbox->write('src/Sample/Report.php', $this->classWithCases('Intakt\Sample\Report', self::BUILDER_PARAMETERS, [$expression]));
 
         self::assertStringContainsString($advice, $this->ruleFindingsIn($sandbox));
+    }
+
+    private function traitBuilding(string $namespace, string $expression): string
+    {
+        $parameters = 'string $text, \Symfony\Component\Uid\UuidV7 $id, \Intakt\Core\Review\Domain\ReviewRound $round, \Intakt\Core\Review\Contract\PanelReviewer $member, \Intakt\Core\Review\Contract\ReviewerConversation $stopped, string $role';
+
+        return "<?php\n\ndeclare(strict_types=1);\n\nnamespace {$namespace};\n\nuse Intakt\\Core\\Review\\Domain\\RoundReviewer;\n\ntrait Builds\n{\n    /** @param class-string<\\Intakt\\Core\\Review\\Contract\\ReviewerRole> \$role */\n    public function build({$parameters}): mixed\n    {\n        return {$expression};\n    }\n}\n";
     }
 
     /**
