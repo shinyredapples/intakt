@@ -40,18 +40,16 @@ final class ShippedRecordingTest extends TestCase
         self::assertContains(LedgerEventKind::JudgeDone, $kinds);
     }
 
-    // The keys the Trends charts read were added to a recording made before them, derived from what it already held (#3053), so taking them out and deriving them again gives the shipped text back.
-    public function testTheShippedTrendsKeysAreDerivedFromTheRecordedContent(): void
+    // The Trends charts read who reported what and whether the judge answered, so the keyless demo fills them only while the recording holds both (#3053, #3221).
+    public function testTheShippedRecordingHoldsWhatEachReviewerReportedAndTheJudgesOwnAnswer(): void
     {
-        $format = new RecordingFormat(StoredSerializerFactory::create());
-        $shipped = $this->shipped();
-        $before = new Recording($shipped->reviewedAt, $shipped->intaktVersion, $shipped->models, $shipped->project, $shipped->change, array_values(array_map(
-            $this->withoutFallback(...),
-            array_filter($shipped->events, static fn (RecordedLedgerEvent $event): bool => LedgerEventKind::ReviewerFindingsRecorded !== $event->kind),
-        )), $shipped->updates);
+        $events = $this->shipped()->events;
+        $reported = array_filter($events, static fn (RecordedLedgerEvent $event): bool => LedgerEventKind::ReviewerFindingsRecorded === $event->kind);
+        $judged = array_values(array_filter($events, static fn (RecordedLedgerEvent $event): bool => LedgerEventKind::JudgeDone === $event->kind));
 
-        self::assertCount(2, array_filter($shipped->events, static fn (RecordedLedgerEvent $event): bool => LedgerEventKind::ReviewerFindingsRecorded === $event->kind));
-        self::assertSame($this->text(), $format->write(new RecordingWithTrendsKeys(StoredSerializerFactory::create())->of($before)));
+        self::assertCount(2, $reported);
+        self::assertCount(1, $judged);
+        self::assertFalse(json_decode($judged[0]->payload, true, flags: JSON_THROW_ON_ERROR)['fallback']);
     }
 
     public function testTheImagePointsTheDemoAtTheShippedRecording(): void
@@ -84,19 +82,6 @@ final class ShippedRecordingTest extends TestCase
         yield 'a provider or forge token' => ['~\b(sk-|ghp_|gho_|github_pat_|xox[bp]-)~'];
         yield 'a private key' => ['~PRIVATE KEY~'];
         yield 'a bearer header' => ['~Bearer\s+\S~i'];
-    }
-
-    private function withoutFallback(RecordedLedgerEvent $event): RecordedLedgerEvent
-    {
-        if (LedgerEventKind::JudgeDone !== $event->kind) {
-            return $event;
-        }
-
-        /** @var array<string, mixed> $payload */
-        $payload = json_decode($event->payload, true, flags: JSON_THROW_ON_ERROR);
-        unset($payload['fallback']);
-
-        return new RecordedLedgerEvent($event->id, $event->kind, json_encode($payload, JSON_PRESERVE_ZERO_FRACTION | JSON_THROW_ON_ERROR), $event->recordedAt);
     }
 
     private function shipped(): Recording
