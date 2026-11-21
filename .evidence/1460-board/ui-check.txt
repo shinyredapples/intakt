@@ -1,57 +1,16 @@
-board light 1440: HTTP 200
-board light 1920: HTTP 200
-board light 390: HTTP 200
-board dark 1440: HTTP 200
-board dark 1920: HTTP 200
-board dark 390: HTTP 200
-components light 1440: HTTP 200
-components light 1920: HTTP 200
-components light 390: HTTP 200
-components dark 1440: HTTP 200
-components dark 1920: HTTP 200
-components dark 390: HTTP 200
-projects light 1440: HTTP 200
-projects light 1920: HTTP 200
-projects light 390: HTTP 200
-projects dark 1440: HTTP 200
-projects dark 1920: HTTP 200
-projects dark 390: HTTP 200
-reviews light 1440: HTTP 200
-reviews light 1920: HTTP 200
-reviews light 390: HTTP 200
-reviews dark 1440: HTTP 200
-reviews dark 1920: HTTP 200
-reviews dark 390: HTTP 200
-search light 1440: HTTP 200
-search light 1920: HTTP 200
-search light 390: HTTP 200
-search dark 1440: HTTP 200
-search dark 1920: HTTP 200
-search dark 390: HTTP 200
-setup light 1440: HTTP 200
-setup light 1920: HTTP 200
-setup light 390: HTTP 200
-setup dark 1440: HTTP 200
-setup dark 1920: HTTP 200
-setup dark 390: HTTP 200
-trends light 1440: HTTP 200
-trends light 1920: HTTP 200
-trends light 390: HTTP 200
-trends dark 1440: HTTP 200
-trends dark 1920: HTTP 200
-trends dark 390: HTTP 200
-waiting light 1440: HTTP 200
-waiting light 1920: HTTP 200
-waiting light 390: HTTP 200
-waiting dark 1440: HTTP 200
-waiting dark 1920: HTTP 200
-waiting dark 390: HTTP 200
-review light 1440: HTTP 200
-review light 1920: HTTP 200
-review light 390: HTTP 200
-review dark 1440: HTTP 200
-review dark 1920: HTTP 200
-review dark 390: HTTP 200
+bin/ui-check rerun on head 105e8f876 (after the merge of main d5cd7e49d, so the review page renders
+main's reviewer cells: _reviewer_cells, _reviewer_model_cell, _now_reviewer, _now_reviewer_model).
+The page of one review is /reviews/round-42, the newest round (two reviewers working).
+
+GET /: HTTP 200
+GET /components: HTTP 200
+GET /projects: HTTP 200
+GET /reviews: HTTP 200
+GET /setup: HTTP 200
+GET /trends: HTTP 200
+GET /waiting: HTTP 200
+GET /reviews/round-42: HTTP 200
+
 board light 1440: axe critical 0, serious 0, moderate 0, minor 0
 board light 1920: axe critical 0, serious 0, moderate 0, minor 0
 board light 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
