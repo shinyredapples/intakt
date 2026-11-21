@@ -1,6 +1,7 @@
-bin/ui-check rerun on head 105e8f876 (after the merge of main d5cd7e49d, so the review page renders
-main's reviewer cells: _reviewer_cells, _reviewer_model_cell, _now_reviewer, _now_reviewer_model).
-The page of one review is /reviews/round-42, the newest round (two reviewers working).
+bin/ui-check rerun on head 6ecb3b363 (the merge of the current main), with bin/ui-check itself:
+NODE_PATH=<playwright>:<axe-core 4.14.1> PLAYWRIGHT_BROWSERS_PATH=<browsers> bin/ui-check http://localhost:7780
+The review page renders main's reviewer cells: /reviews/round-42 (the newest round, two reviewers
+working) shows its reviewers' model ("model-b", 6 times in the page).
 
 GET /: HTTP 200
 GET /components: HTTP 200
