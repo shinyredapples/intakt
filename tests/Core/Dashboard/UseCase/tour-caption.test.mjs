@@ -187,3 +187,105 @@ test('a page without a caption lets every update through', () => {
 
     assert.deepEqual(rendered, [stream]);
 });
+
+class FakeMark extends FakeElement {
+    scrolled = 0;
+
+    scrollIntoView() {
+        this.scrolled += 1;
+    }
+}
+
+// A page that holds elements by id, answering the one selector shape the caption template writes: [id="..."].
+class FakeReviewPage extends FakePage {
+    constructor(caption, ids) {
+        super(caption);
+        this.marks = new Map(ids.map((id) => [id, new FakeMark()]));
+    }
+
+    querySelector(selector) {
+        const id = /^\[id="(.*)"\]$/.exec(selector)?.[1];
+
+        return (id && this.marks.get(id)) || null;
+    }
+
+    querySelectorAll() {
+        return [...this.marks.values()].filter((mark) => mark.hasAttribute('data-tour-focus'));
+    }
+}
+
+function captionAt(selector, stage = 'reviewers-read') {
+    const caption = new FakeCaption();
+    caption.setAttribute('data-tour-at', selector);
+    caption.setAttribute('data-stage', stage);
+
+    return caption;
+}
+
+test('a caption marks the reviewers list of its own round, not another review\'s', () => {
+    const page = new FakeReviewPage(captionAt('[id="round-a-now-reviewers"]'), ['round-a-now-reviewers', 'round-b-now-reviewers']);
+
+    captionTour(page, new FakeStorage());
+
+    assert.equal(page.marks.get('round-a-now-reviewers').getAttribute('data-tour-focus'), 'reviewers-read');
+    assert.equal(page.marks.get('round-b-now-reviewers').hasAttribute('data-tour-focus'), false);
+});
+
+test('a caption for round A marks nothing on a page for round B', () => {
+    const page = new FakeReviewPage(captionAt('[id="round-a-now-reviewers"]'), ['round-b-now-reviewers', 'round-b-judged']);
+
+    captionTour(page, new FakeStorage());
+
+    assert.equal(page.querySelectorAll().length, 0);
+});
+
+test('a new stage moves the mark to the element it talks about and scrolls it into view once', async () => {
+    const page = new FakeReviewPage(captionAt('[id="round-a-now-reviewers"]'), ['round-a-now-reviewers', 'round-a-judged']);
+    captionTour(page, new FakeStorage());
+
+    page.caption = captionAt('[id="round-a-judged"]', 'round-ends');
+    page.stream('tour-caption');
+    await Promise.resolve();
+    await Promise.resolve();
+    page.listeners['turbo:load']();
+
+    assert.equal(page.marks.get('round-a-now-reviewers').hasAttribute('data-tour-focus'), false);
+    assert.equal(page.marks.get('round-a-judged').getAttribute('data-tour-focus'), 'round-ends');
+    assert.equal(page.marks.get('round-a-judged').scrolled, 1);
+});
+
+test('a selector the page cannot parse marks nothing and breaks nothing', () => {
+    const page = new FakeReviewPage(captionAt('[id="round-a-now-reviewers"]'), ['round-a-now-reviewers']);
+    page.querySelector = () => { throw new SyntaxError('not a selector'); };
+
+    captionTour(page, new FakeStorage());
+
+    assert.equal(page.querySelectorAll().length, 0);
+});
+
+test('a resume moves the mark to the stage that arrived while paused', async () => {
+    const page = new FakeReviewPage(captionAt('[id="round-a-now-reviewers"]'), ['round-a-now-reviewers', 'round-a-judged']);
+    const first = page.caption;
+    captionTour(page, new FakeStorage());
+    page.click(first.pause);
+    page.stream('tour-caption');
+    page.caption = captionAt('[id="round-a-judged"]', 'round-ends');
+    page.caption.pause = first.pause;
+
+    page.click(first.pause);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    assert.equal(page.marks.get('round-a-judged').getAttribute('data-tour-focus'), 'round-ends');
+});
+
+test('close takes the mark off, and a later update marks nothing', async () => {
+    const page = new FakeReviewPage(captionAt('[id="round-a-now-reviewers"]'), ['round-a-now-reviewers']);
+    page.documentElement = { dataset: {} };
+    captionTour(page, new FakeStorage());
+
+    page.click({ closest: (selector) => (selector === '[data-tour-close]' ? {} : null) });
+    page.listeners['turbo:load']();
+
+    assert.equal(page.marks.get('round-a-now-reviewers').hasAttribute('data-tour-focus'), false);
+});
