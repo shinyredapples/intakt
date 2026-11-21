@@ -166,7 +166,7 @@ final class EscalateRecurringP1Test extends KernelTestCase
 
         $this->fixture->escalate(new EscalateRecurringP1($second, 'F9', $this->keyOfFirstRound()), $escalations);
 
-        self::assertSame([[], EscalationRequests::FINDING_GONE],[$escalations->requests, $this->payloadsOf(LedgerEventKind::EscalationFailed)[0]['reason'] ?? null]);
+        self::assertSame([[], EscalationRequests::FINDING_GONE], [$escalations->requests, $this->payloadsOf(LedgerEventKind::EscalationFailed)[0]['reason'] ?? null]);
     }
 
     public function testAVerdictKeptByAnotherWriterDuringTheCallIsReusedInsteadOfKeptTwice(): void
