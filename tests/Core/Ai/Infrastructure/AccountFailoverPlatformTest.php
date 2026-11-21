@@ -177,7 +177,7 @@ final class AccountFailoverPlatformTest extends TestCase
     {
         $logger = new BufferingLogger();
         $failure = new class('Cut off.', 0, new RateLimitExceededException(300)) extends IncompleteStreamException implements RetryableExceptionInterface {};
-        $account = new AccountPlatform($this->account(Account::DEFAULT), $this->answering(static fn (): never => throw $failure), $this->cooldowns, new NativeClock(), $logger, new SendFailures());
+        $account = new AccountPlatform($this->account(Account::DEFAULT), $this->answering(static fn (): never => throw $failure), $this->cooldowns, new NativeClock(), $logger, new SendFailures(), new NoPinnedProviderCooldowns(), null);
 
         try {
             $account->invoke('big', 'Review.');
@@ -195,7 +195,7 @@ final class AccountFailoverPlatformTest extends TestCase
     {
         $logger = new BufferingLogger();
         $failure = new RateLimitExceededException(300);
-        $account = new AccountPlatform($this->account(Account::DEFAULT), $this->answering(static fn (): never => throw $failure), $this->cooldowns, new NativeClock(), $logger, new SendFailures());
+        $account = new AccountPlatform($this->account(Account::DEFAULT), $this->answering(static fn (): never => throw $failure), $this->cooldowns, new NativeClock(), $logger, new SendFailures(), new NoPinnedProviderCooldowns(), null);
         $this->sendFailing($account);
         $logger->cleanLogs();
 
