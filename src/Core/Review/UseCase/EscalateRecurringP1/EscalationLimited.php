@@ -11,6 +11,10 @@ final class EscalationLimited extends RecoverableMessageHandlingException
 {
     public static function after(?int $resetInSeconds): self
     {
-        return new self('The provider limited or failed the escalation review\'s call.', retryDelay: null === $resetInSeconds ? null : $resetInSeconds * 1000, forceRetry: false);
+        return new self(
+            'The provider limited or failed the escalation review\'s call.',
+            retryDelay: null === $resetInSeconds ? null : $resetInSeconds * 1000,
+            forceRetry: false,
+        );
     }
 }
