@@ -18,6 +18,7 @@ use Intakt\Core\Watchdog\Contract\SignatureStatus;
 use Intakt\Core\Watchdog\Contract\Violation;
 use Intakt\Core\Watchdog\Contract\WatchedMain;
 use Intakt\Core\Watchdog\Domain\CommitClassifier;
+use Intakt\Core\Watchdog\Infrastructure\FirstParentChain;
 use Intakt\Core\Watchdog\Infrastructure\MainHistory;
 use Intakt\Core\Watchdog\Infrastructure\OwnerKey;
 use Intakt\Core\Watchdog\Infrastructure\OwnerKeyRefused;
@@ -34,6 +35,7 @@ use Symfony\Component\Process\ExecutableFinder;
 use Symfony\Component\Process\Process;
 
 #[CoversClass(MainHistory::class)]
+#[CoversClass(FirstParentChain::class)]
 #[CoversClass(OwnerKey::class)]
 #[CoversClass(OwnerKeyRefused::class)]
 #[CoversClass(MainHistoryRewritten::class)]
@@ -668,7 +670,7 @@ final class MainHistoryTest extends TestCase
     }
 
     // The values from before the test, because later tests must inherit the environment the run started with.
-    // Puts a git in front of the real one that writes the shallow entry right after git answered the named query, and returns the search path to restore.
+    // A git in front of the real one writes the shallow entry right after git answered the named query, because only that forces the cut between two reads; the search path to restore is returned.
     private function cutShallowAfterGitAnswers(string $option, string $entry): string
     {
         $bin = $this->keys.'/shallow-bin';

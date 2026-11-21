@@ -90,47 +90,14 @@ final readonly class MainHistory implements CommitHistory
         $since = trim($this->read(['rev-parse', '--verify', $commit.'^{commit}']));
         $walk = trim($this->read(['rev-list', '--first-parent', '--reverse', '--parents', $since.'..'.$tip]));
 
-        return $this->unbrokenChain('' === $walk ? [] : explode("\n", $walk), $since, $tip);
-    }
-
-    // The walk proves itself from its own output, because a repository cut shallow after the ancestry check makes git end the walk early without an error, and a check before or after the walk cannot see a cut in between.
-    /**
-     * @param list<string> $walk each line a commit and its parents
-     *
-     * @return list<string>
-     *
-     * @throws MainNotRead
-     * @throws RuntimeException
-     */
-    private function unbrokenChain(array $walk, string $since, string $tip): array
-    {
-        $commits = [];
-        $last = null;
-        foreach ($walk as $line) {
-            $ids = explode(' ', $line);
-            $firstParent = $ids[1] ?? null;
-            if (null === $firstParent || !$this->continues($firstParent, $last, $since)) {
-                throw MainNotRead::brokenWalk($since, $tip);
-            }
-
-            $commits[] = $last = $ids[0];
-        }
-
-        return ($last ?? $since) === $tip ? $commits : throw MainNotRead::brokenWalk($since, $tip);
-    }
-
-    /**
-     * @throws MainNotRead
-     * @throws RuntimeException
-     */
-    private function continues(string $firstParent, ?string $last, string $since): bool
-    {
-        if (null !== $last) {
-            return $firstParent === $last;
-        }
-
+        $chain = FirstParentChain::fromWalk('' === $walk ? [] : explode("\n", $walk), $since, $tip);
         // The oldest commit stands on the commit itself, or on an ancestor of it when main holds the commit only through a second parent (a fast-forward to a branch that merged main). A cut can hide ancestry but never invent it, so a yes here is true.
-        return $firstParent === $since || $this->holds(['merge-base', '--is-ancestor', $firstParent, $since]);
+        $foot = $chain->foot ?? $since;
+        if ($foot !== $since && !$this->holds(['merge-base', '--is-ancestor', $foot, $since])) {
+            throw MainNotRead::brokenWalk($since, $tip);
+        }
+
+        return $chain->commits;
     }
 
     /**
