@@ -221,7 +221,7 @@ final class CheckMainTest extends TestCase
         return [$unsigned, $base, new WatchedMain($seen, [new RecordedMerge($head, $base)])];
     }
 
-    // A git in front of the real one writes the base as the shallow boundary right before the coverage is read, after the shallow check, and removes it again when the read ends or leaves it in place; the search path is restored in tearDown.
+    // A git in front of the real one, because only that forces the cut between the shallow check and the coverage read; a cut removed when the read ends is one no later check can see.
     private function gitThatCutsShallowAt(string $entry, bool $onlyWhileRunning): void
     {
         $this->bin = sys_get_temp_dir().'/intakt-watchdog-git-'.bin2hex(random_bytes(6));
