@@ -124,7 +124,7 @@ final readonly class OpenListItems
         return [] === $columns && MarkdownText::continuesAParagraph($lineAbove, $line);
     }
 
-    private function opensAnHtmlBlock(int $start): bool
+    public function opensAnHtmlBlock(int $start): bool
     {
         $lineStart = MarkdownText::lineStartAt($this->text, $start);
         $indent = MarkdownText::withSpacesForTabs(substr($this->text, $lineStart, $start - $lineStart));

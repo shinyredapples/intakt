@@ -171,7 +171,8 @@ final readonly class EvidenceItems
             return 1;
         }
 
-        $isParagraphLine = '' !== trim($line) && self::indentOf($line) <= 3 && null === self::contentColumnOf($line);
+        // A thematic break is no paragraph line, so a `-` below it is an empty item, not a Setext underline.
+        $isParagraphLine = '' !== trim($line) && self::indentOf($line) <= 3 && null === self::contentColumnOf($line) && !MarkdownText::isThematicBreak($line);
 
         return $isParagraphLine && 1 === preg_match(self::SETEXT_UNDERLINE, $lines[$index + 1] ?? '') ? 2 : 0;
     }

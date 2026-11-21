@@ -88,6 +88,7 @@ The check guards a builder's own description, and a reviewer still reads the bod
 - a list marker inside a code span that runs over several lines still starts an item for the fences after it, while one inside a fence or an HTML comment starts none;
 - a fence opened right after a nested marker (`10. Outer`, a blank line, then `    - ~~~`): such a fence is outside the subset, so a reference shown inside it may be refused, the safe direction; a fence on its own line inside a nested item is found;
 - an ordered marker not numbered 1 right under an item's text (`- Outer`, then `  2. ~~~`, then `     <!-- E1 -->`): the rule that such a marker continues a paragraph is applied only outside a list, so the nested `2. ~~~` still opens a fence and a reference hidden in a comment below it may count;
-- the line above an item that cannot interrupt a paragraph counts as a paragraph line unless it is blank or an ATX heading, so after indented code or the closing line of a fence such an item may still be read as text.
+- a reference after an escaped comment opener (`\<!-- E1`) is read as hidden, so it may be refused, the safe direction;
+- the line above an item that cannot interrupt a paragraph counts as a paragraph line unless it is blank, an ATX heading or a thematic break, so after indented code or the closing line of a fence such an item may still be read as text.
 
 Not a limit, but easy to misread: a tab after a list marker puts the item's content at the next tab stop (column four after `-`), so a fence opened there with its content indented only two spaces is outside the item, as in Markdown itself: the item's fence ends at once, and a second fence line indented two spaces opens a block of its own.

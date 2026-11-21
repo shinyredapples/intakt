@@ -26,12 +26,12 @@ final readonly class MarkdownText
 
     public static function visible(string $markdown): string
     {
-        return self::read($markdown, static fn (string $fence): string => $fence);
+        return self::read($markdown, static fn (string $fence): string => $fence, false);
     }
 
     public static function visibleProse(string $markdown): string
     {
-        return self::read($markdown, self::lineBreaksOf(...));
+        return self::read($markdown, self::lineBreaksOf(...), true);
     }
 
     // A tab in the indent or after a list marker runs to the next tab stop, as Markdown reads it (https://spec.commonmark.org/0.31.2/#tabs).
@@ -42,7 +42,7 @@ final readonly class MarkdownText
 
     public static function listItemColumnOf(string $line): ?int
     {
-        if (1 === preg_match(self::THEMATIC_BREAK, $line) || 1 !== preg_match(self::LIST_ITEM, $line, $match, PREG_UNMATCHED_AS_NULL)) {
+        if (self::isThematicBreak($line) || 1 !== preg_match(self::LIST_ITEM, $line, $match, PREG_UNMATCHED_AS_NULL)) {
             return null;
         }
 
@@ -52,14 +52,19 @@ final readonly class MarkdownText
         return strlen($match[1]) + strlen($match[2]) + (0 === $spaces || $spaces > 4 ? 1 : $spaces);
     }
 
-    // Outside a list, an item whose marker line is empty, or an ordered item not numbered 1, does not interrupt a paragraph, so right after a paragraph line it is text (https://spec.commonmark.org/0.31.2/#list-items). The line above is a paragraph line unless it is blank or an ATX heading.
+    // Outside a list, an item whose marker line is empty, or an ordered item not numbered 1, does not interrupt a paragraph, so right after a paragraph line it is text (https://spec.commonmark.org/0.31.2/#list-items). The line above is a paragraph line unless it is blank, an ATX heading or a thematic break.
     public static function continuesAParagraph(string $lineAbove, string $line): bool
     {
-        if ('' === trim($lineAbove) || 1 === preg_match(self::ATX_HEADING, $lineAbove) || 1 !== preg_match(self::LIST_ITEM, $line, $match, PREG_UNMATCHED_AS_NULL)) {
+        if ('' === trim($lineAbove) || 1 === preg_match(self::ATX_HEADING, $lineAbove) || self::isThematicBreak($lineAbove) || 1 !== preg_match(self::LIST_ITEM, $line, $match, PREG_UNMATCHED_AS_NULL)) {
             return false;
         }
 
         return null === $match[4] || (null !== $match[3] && 1 !== (int) $match[3]);
+    }
+
+    public static function isThematicBreak(string $line): bool
+    {
+        return 1 === preg_match(self::THEMATIC_BREAK, $line);
     }
 
     public static function lineStartAt(string $text, int $position): int
@@ -82,7 +87,7 @@ final readonly class MarkdownText
     /**
      * @param callable(string): string $fenced
      */
-    private static function read(string $markdown, callable $fenced): string
+    private static function read(string $markdown, callable $fenced, bool $blocksHideTheirLine): string
     {
         $text = str_replace(["\r\n", "\r"], "\n", $markdown);
         $read = '';
@@ -98,7 +103,7 @@ final readonly class MarkdownText
                 MarkdownPart::Fence, MarkdownPart::FenceAfterAMarker => FencedBlock::at($text, $start, $items),
                 MarkdownPart::Code => ($codeSpans = $codeSpans->inTheParagraphAt($start))->spanOrLiteralAt($start, $offset),
                 MarkdownPart::Literal => $match['fence'][0],
-                default => self::commentAt($text, $start),
+                default => self::commentAt($text, $start, $blocksHideTheirLine && $items->readUpTo(self::lineStartAt($text, $start) + 1)->opensAnHtmlBlock($start)),
             };
             $read .= substr($text, $offset, $start - $offset).self::shown($kind, $part, $fenced);
             $offset = $start + strlen($part);
@@ -154,17 +159,24 @@ final readonly class MarkdownText
     {
         return match ($kind) {
             MarkdownPart::FenceAfterAMarker => self::afterTheOpeningLine($part, $fenced),
-            MarkdownPart::Fence => $fenced($part),
+            MarkdownPart::Fence => $fenced(self::withoutTheInfoString($part)),
             MarkdownPart::Code, MarkdownPart::Literal => $part,
             default => self::lineBreaksOf($part),
         };
     }
 
-    private static function commentAt(string $text, int $start): string
+    // In a task, a comment whose `<!--` opens its line is an HTML block up to the end of the line holding its `-->`, so the text after it on that line is no paragraph line and the next line continues no paragraph (https://spec.commonmark.org/0.31.2/#html-blocks, kind 2). In a body that text is shown, so a reference there still counts.
+    private static function commentAt(string $text, int $start, bool $opensABlock): string
     {
         $end = strpos($text, self::COMMENT_END, $start + strlen('<!--'));
 
-        return substr($text, $start, false === $end ? null : $end + strlen(self::COMMENT_END) - $start);
+        if (false === $end) {
+            return substr($text, $start);
+        }
+
+        $end += strlen(self::COMMENT_END);
+
+        return substr($text, $start, ($opensABlock ? self::lineEndAt($text, $end) : $end) - $start);
     }
 
     private static function atTabStops(string $prefix): string
@@ -182,14 +194,23 @@ final readonly class MarkdownText
         return str_repeat("\n", substr_count($text, "\n"));
     }
 
-    // The opening line of a fence after a list marker stays as it is, because the marker still starts an item.
+    // The opening line of a fence after a list marker stays, because the marker still starts an item.
     /**
      * @param callable(string): string $fenced
      */
     private static function afterTheOpeningLine(string $fence, callable $fenced): string
     {
+        $fence = self::withoutTheInfoString($fence);
         $lineEnd = strcspn($fence, "\n");
 
         return substr($fence, 0, $lineEnd).$fenced(substr($fence, $lineEnd));
+    }
+
+    // A fence's info string is not shown, so a reference there does not count (https://spec.commonmark.org/0.31.2/#info-string).
+    private static function withoutTheInfoString(string $fence): string
+    {
+        $indent = strspn($fence, " \t");
+
+        return substr($fence, 0, $indent + strspn($fence, $fence[$indent], $indent)).substr($fence, strcspn($fence, "\n"));
     }
 }

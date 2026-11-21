@@ -352,4 +352,29 @@ final class PullRequestTextRuleTest extends TestCase
     {
         self::assertSame([], PullRequestTextRule::judge("## Evidence\n- Show the result.", "<!-- note --> lead-in\n10. ~~~\n    <!-- E1 -->\n    ~~~")->missingItems);
     }
+
+    public function testAnOrderedItemAfterACommentWithTextOnItsLineIsAnEvidenceItem(): void
+    {
+        self::assertSame([1], PullRequestTextRule::judge("## Evidence\n<!-- note --> lead-in\n10. Show the result.", 'Done')->missingItems);
+    }
+
+    public function testAnEmptyMarkerUnderAThematicBreakIsAnItemNotASetextUnderline(): void
+    {
+        self::assertSame([2], PullRequestTextRule::judge("## Evidence\n- First\n\n---\n-\n  Second", 'E1')->missingItems);
+    }
+
+    public function testAReferenceInAFenceInfoStringDoesNotCount(): void
+    {
+        self::assertSame([1], PullRequestTextRule::judge("## Evidence\n- Show the result.", "~~~ E1\nunrelated\n~~~")->missingItems);
+    }
+
+    public function testAReferenceOnAFenceContentLineStillCounts(): void
+    {
+        self::assertSame([], PullRequestTextRule::judge("## Evidence\n- Show the result.", "~~~ text\nE1 shown here\n~~~")->missingItems);
+    }
+
+    public function testAReferenceInTheInfoStringOfAFenceAfterAMarkerDoesNotCount(): void
+    {
+        self::assertSame([1], PullRequestTextRule::judge("## Evidence\n- Show the result.", "- ~~~ E1\n  unrelated\n  ~~~")->missingItems);
+    }
 }
