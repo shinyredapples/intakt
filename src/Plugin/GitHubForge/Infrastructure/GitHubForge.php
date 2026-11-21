@@ -39,6 +39,7 @@ final readonly class GitHubForge implements Forge, ForgeWrites
     // An HTML comment, so the token is invisible on the pull request while the orchestrator can still match it.
     private const string TOKEN_MARKER = '<!-- intakt-review-token: %s -->';
     private const string VERDICT_MARKER = '<!-- intakt-verdict: %s -->';
+    private const string OWNER_ASK_MARKER = '<!-- intakt-owner-ask: %s part %d -->';
     private const string STATUS_CONTEXT = 'intakt/review';
     private const string JSON = 'application/vnd.github+json';
     private const string DIFF = 'application/vnd.github.diff';
@@ -130,16 +131,16 @@ final readonly class GitHubForge implements Forge, ForgeWrites
     }
 
     // No stale check, because the status and the comment name the head they judge, so a head that moved on keeps its own verdict.
-    public function publishVerdict(string $project, ChangeId $change, PublishedVerdict $verdict): void
+    public function publishVerdict(string $project, ChangeId $change, PublishedVerdict $verdict): bool
     {
-        $this->app->whenConfigured(fn () => $this->publishAsTheApp($change, $verdict));
+        return $this->app->whenConfigured(fn () => $this->publishAsTheApp($change, $verdict));
     }
 
     private function publishAsTheApp(ChangeId $change, PublishedVerdict $verdict): void
     {
         $address = PullRequestAddress::of($change);
         $comments = $verdict->comments();
-        if (array_any($comments, $this->secrets->findsSecretIn(...))) {
+        if (array_any([...$comments, ...$verdict->ownerAsks], $this->secrets->findsSecretIn(...))) {
             throw ReviewTextHoldsSecret::afterRedaction();
         }
 
@@ -153,9 +154,11 @@ final readonly class GitHubForge implements Forge, ForgeWrites
     private function postVerdict(PullRequestAddress $address, PublishedVerdict $verdict, array $comments): void
     {
         // The comment before the status, so a head never shows Intakt's status without the comment that explains it; a retry finds the comment by its marker and posts it once.
-        $marker = sprintf(self::VERDICT_MARKER, $verdict->token->value);
-        foreach ($this->comments->notYetPosted($address, $marker, $comments) as $comment) {
-            $this->post($address->issuePath().'/comments', ['body' => $comment."\n\n".$marker]);
+        $this->postOnce($address, sprintf(self::VERDICT_MARKER, $verdict->token->value), $comments);
+
+        // Each part of the ask by a marker of its own, so a retry posts the part an earlier try did not reach, and an ask the review comment did not carry.
+        foreach ($verdict->ownerAsks as $part => $ask) {
+            $this->postOnce($address, sprintf(self::OWNER_ASK_MARKER, $verdict->token->value, $part + 1), [$ask]);
         }
 
         $this->post($address->repositoryPath().'/statuses/'.$verdict->head->hash, [
@@ -163,6 +166,16 @@ final readonly class GitHubForge implements Forge, ForgeWrites
             'context' => self::STATUS_CONTEXT,
             'description' => $verdict->description,
         ]);
+    }
+
+    /**
+     * @param list<string> $comments
+     */
+    private function postOnce(PullRequestAddress $address, string $marker, array $comments): void
+    {
+        foreach ($this->comments->notYetPosted($address, $marker, $comments) as $comment) {
+            $this->post($address->issuePath().'/comments', ['body' => $comment."\n\n".$marker]);
+        }
     }
 
     private function isStale(Change $change): bool

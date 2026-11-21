@@ -17,17 +17,19 @@ use Intakt\Plugin\Forge\Contract\HeadStatus;
 use Intakt\Plugin\Forge\Contract\PublishedVerdict;
 use JsonException;
 
-// Asked on the forge and in the ledger, because a protected head of a pull request handed to Intakt merges only with the owner's approval of that head: docs/design/05-architecture/08-merge.md
+// Asked on the forge and in the ledger, because a protected head of a pull request handed to Intakt merges only with the owner's approval of that head, and the request lists every protected change of it: docs/design/05-architecture/08-merge.md
 final readonly class OwnerAsks
 {
     private const string DESCRIPTION = 'Intakt approves this head; it touches protected paths and waits for the owner.';
     private const string HEADING = '**Waiting for the owner** (head %s)';
+    private const string CONTINUED = '**Waiting for the owner** (head %s), continued';
     private const string ASK = 'This head touches protected paths, so it merges only once the owner has approved this head.';
     private const string UNREADABLE = 'Intakt could not read which paths this head changes, so it counts as protected.';
     private const string LISTED = 'Protected paths:';
-    private const string MORE = '- and %d more';
-    // Bounded, because the forge refuses a comment past its size limit and the ledger line keeps every path.
-    private const int LISTED_PATHS = 50;
+    // Bytes per part of the ask, below GitHub's 65536 characters per comment with room for the marker, because a part past the limit is refused and a byte is never fewer characters.
+    private const int PART_BYTES = 60000;
+    // Each written as an entity, because GitHub renders markdown inside <code>, and a newline, a comment opener, emphasis or an issue link in a file name would forge a line of the ask or hide the rest of it.
+    private const string MARKUP = '/[&<>"\'`\\\\*_#\[\]~|!()]/';
 
     public function __construct(
         private HandedOverChanges $handed,
@@ -49,7 +51,7 @@ final readonly class OwnerAsks
         }
 
         // Pending, never success, so Intakt's status cannot stand in for the owner's approval.
-        return new OwnerAsk($changes, new PublishedVerdict($verdict->head, HeadStatus::Pending, self::DESCRIPTION, $verdict->comment."\n\n".$this->askText($verdict->head, $changes), $verdict->token));
+        return new OwnerAsk($changes, new PublishedVerdict($verdict->head, HeadStatus::Pending, self::DESCRIPTION, $verdict->comment, $verdict->token, $this->partsOf($verdict->head, $changes)));
     }
 
     // Read and appended under the change's publication lock, which every publication of the change holds, so two rounds of one head record one ask.
@@ -69,7 +71,10 @@ final readonly class OwnerAsks
         }
     }
 
-    private function askText(CommitId $head, ProtectedChanges $changes): string
+    /**
+     * @return list<string>
+     */
+    private function partsOf(CommitId $head, ProtectedChanges $changes): array
     {
         $lines = [sprintf(self::HEADING, $head->hash), '', self::ASK];
 
@@ -78,21 +83,34 @@ final readonly class OwnerAsks
             $lines = [...$lines, '', self::UNREADABLE];
         }
 
-        if ([] !== $changes->paths) {
-            $listed = array_map($this->lineOf(...), array_slice($changes->paths, 0, self::LISTED_PATHS));
-            $more = count($changes->paths) - self::LISTED_PATHS;
-            $lines = [...$lines, '', self::LISTED, ...$listed, ...($more > 0 ? [sprintf(self::MORE, $more)] : [])];
+        if ([] === $changes->paths) {
+            return [implode("\n", $lines)];
         }
 
-        return implode("\n", $lines);
+        $parts = [];
+        $part = implode("\n", [...$lines, '', self::LISTED]);
+        $listed = 0;
+        foreach (array_map($this->lineOf(...), $changes->paths) as $line) {
+            // A part ends only after a path, so no part is posted that lists none.
+            if ($listed > 0 && strlen($part) + 1 + strlen($line) > self::PART_BYTES) {
+                $parts[] = $part;
+                $part = sprintf(self::CONTINUED, $head->hash)."\n";
+                $listed = 0;
+            }
+
+            $part .= "\n".$line;
+            ++$listed;
+        }
+
+        return [...$parts, $part];
     }
 
-    // Escaped, because git allows a newline, a comment opener or markup in a file name, which would forge a line of the ask or hide the rest of the comment.
+    // Control bytes and backslashes spelled out first, so a newline in a name stays on its line; invalid UTF-8 replaced, because git allows any bytes in a file name and the forge takes only text.
     private function lineOf(string $path): string
     {
-        $escaped = htmlspecialchars(addcslashes($path, "\0..\37\177\\"), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $spelled = mb_scrub(addcslashes($path, "\0..\37\177\\"), 'UTF-8');
 
-        return '- <code>'.str_replace('`', '&#96;', $escaped).'</code>';
+        return '- <code>'.preg_replace_callback(self::MARKUP, static fn (array $match): string => '&#'.ord($match[0]).';', $spelled).'</code>';
     }
 
     private function isAskedAlready(ReviewRound $round, string $head): bool
@@ -106,6 +124,7 @@ final readonly class OwnerAsks
         return false;
     }
 
+    // The change without letter case, as the hand-over is read, because two rounds may name one pull request in two spellings.
     private function names(RecordedEvent $recorded, ReviewRound $round, string $head): bool
     {
         try {
@@ -115,7 +134,9 @@ final readonly class OwnerAsks
             return false;
         }
 
-        return is_array($payload) && [$round->project(), $round->change(), $head] === [$payload['project'] ?? null, $payload['change'] ?? null, $payload['head'] ?? null];
+        $change = is_array($payload) ? ($payload['change'] ?? null) : null;
+
+        return is_string($change) && strtolower($change) === strtolower($round->change()) && [$round->project(), $head] === [$payload['project'] ?? null, $payload['head'] ?? null];
     }
 
     // Invalid UTF-8 substituted, because git allows any bytes in a file name and the line must still be written.

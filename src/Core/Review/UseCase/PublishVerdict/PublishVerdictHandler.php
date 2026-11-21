@@ -78,20 +78,20 @@ final readonly class PublishVerdictHandler
         }
     }
 
-    // The ask recorded after the forge write, so no ledger line names an ask the pull request does not show.
+    // The ask recorded only after a forge write that happened, so no ledger line names an ask the pull request does not show.
     private function publishReviewOf(ReviewRound $round): void
     {
         $verdict = $this->verdicts->of($round);
         $ask = $this->ownerAsks->askFor($round, $verdict);
-        $this->publish($round, $ask->verdict ?? $verdict);
+        $published = $this->publish($round, $ask->verdict ?? $verdict);
 
-        if ($ask instanceof OwnerAsk) {
+        if ($published && $ask instanceof OwnerAsk) {
             $this->ownerAsks->record($round, $ask);
         }
     }
 
-    private function publish(ReviewRound $round, PublishedVerdict $verdict): void
+    private function publish(ReviewRound $round, PublishedVerdict $verdict): bool
     {
-        $this->forge->publishVerdict($round->project(), new ChangeId($round->change()), $verdict);
+        return $this->forge->publishVerdict($round->project(), new ChangeId($round->change()), $verdict);
     }
 }

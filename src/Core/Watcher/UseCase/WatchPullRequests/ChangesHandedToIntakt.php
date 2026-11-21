@@ -6,6 +6,7 @@ namespace Intakt\Core\Watcher\UseCase\WatchPullRequests;
 
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Review\Contract\PublishHandedOverChange;
 use Intakt\Plugin\Forge\Contract\ChangeAuthorship;
 use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
@@ -13,6 +14,7 @@ use Intakt\Plugin\Forge\Contract\OpenChange;
 use Intakt\Plugin\Forge\Contract\Opening;
 use JsonException;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\Messenger\MessageBusInterface;
 
 // Decided from Intakt's own push records, and from the author the forge sets only where a record does not say, because a pull request's title, labels and branch are text others can shape: docs/architecture/handed-to-intakt.md
 final readonly class ChangesHandedToIntakt
@@ -22,6 +24,7 @@ final readonly class ChangesHandedToIntakt
         private WatcherLedger $records,
         private ChangeAuthorship $authorship,
         private LoggerInterface $logger,
+        private MessageBusInterface $commands,
     ) {
     }
 
@@ -39,8 +42,10 @@ final readonly class ChangesHandedToIntakt
         // Every author is read before the first line is appended, because a failure behind an append rolls the tick's transaction back under a line the entity manager still holds, and the ledger's next append then collides with it.
         [$created, $notCreated] = $this->authorsAmong($project, $open);
 
+        // Published once it is handed over, because a round judged before this tick found it the loop's and published nothing; in the tick's transaction, so the queued publication commits with the line it reads.
         foreach ($created as $change) {
             $this->records->changeHandedToIntakt($project, $change);
+            $this->commands->dispatch(new PublishHandedOverChange($project, $change->id->value));
         }
 
         // Recorded, because the author the forge sets never changes, so the forge is asked once per pull request and not on every tick.
