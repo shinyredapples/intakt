@@ -44,7 +44,9 @@ final class GateChildFullResultTest extends SandboxTestCase
         $slots = GateSlots::chosen('1', 1, 1);
         self::assertInstanceOf(GateSlots::class, $slots);
 
-        $reports = new GateChildren(dirname(__DIR__, 2), $sandbox->root, $slots, [])->reportsOf(['dashes'], ['--root='.$sandbox->root, '--only=dashes']);
+        $children = new GateChildren(dirname(__DIR__, 2), $sandbox->root, $slots, []);
+
+        $reports = $children->reportsOf(['dashes'], ['--root='.$sandbox->root, '--only=dashes'], $children->scratchOutsideTheTree());
 
         self::assertCount(12, $this->findingsIn((string) $reports[0]->kept));
         self::assertStringEndsWith('"omitted":2}', $reports[0]->line);
@@ -56,7 +58,9 @@ final class GateChildFullResultTest extends SandboxTestCase
         $slots = GateSlots::chosen('1', 1, 1);
         self::assertInstanceOf(GateSlots::class, $slots);
 
-        $reports = new GateChildren(dirname(__DIR__, 2), sys_get_temp_dir(), $slots, [])->reportsOf(['dashes'], ['--root='.$sandbox->root, '--only=dashes']);
+        $children = new GateChildren(dirname(__DIR__, 2), sys_get_temp_dir(), $slots, []);
+
+        $reports = $children->reportsOf(['dashes'], ['--root='.$sandbox->root, '--only=dashes'], $children->scratchOutsideTheTree());
 
         self::assertNull($reports[0]->kept);
     }
