@@ -81,7 +81,7 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
 
     public function testWithoutAReadableBenchTableThereIsNoBenchTile(): void
     {
-        self::getContainer()->set(PublishedBench::class, new PublishedBench(self::projectDir().'/no-such-readme.md'));
+        self::getContainer()->set(PublishedBench::class, new PublishedBench($this->projectDir().'/no-such-readme.md'));
         $this->ledger->startRound('r-1', 'alpha');
 
         $page = $this->browser->request('GET', '/trends');
@@ -310,7 +310,7 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
             $page->filter('#chart-catches tbody tr')->each(static fn (Crawler $row): string => sprintf('%s (%s alone)', $row->filter('td')->eq(2)->text(), $row->filter('td')->eq(3)->text())),
         );
         self::assertSame(
-            ['Kept to fix' => '1','Merged as duplicate' => '1', 'Deferred to a follow-up issue' => '0', 'Rejected' => '1'],
+            ['Kept to fix' => '1', 'Merged as duplicate' => '1', 'Deferred to a follow-up issue' => '0', 'Rejected' => '1'],
             array_column($page->filter('#chart-judge tbody tr')->each(static fn (Crawler $row): array => [$row->filter('td')->eq(0)->text(), $row->filter('td')->eq(1)->text()]), 1, 0),
         );
         self::assertSame(['1', '1', '0', '1'], $page->filter('#chart-judge .c-label')->each(static fn (Crawler $label): string => $label->text()));
@@ -637,13 +637,13 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
 
     private function publishedBench(): BenchHeadline
     {
-        $bench = new PublishedBench(self::projectDir().'/README.md')->headline();
+        $bench = new PublishedBench($this->projectDir().'/README.md')->headline();
         self::assertNotNull($bench, 'The README has no readable review bench table.');
 
         return $bench;
     }
 
-    private static function projectDir(): string
+    private function projectDir(): string
     {
         $dir = self::getContainer()->getParameter('kernel.project_dir');
         self::assertIsString($dir);
