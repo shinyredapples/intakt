@@ -420,12 +420,13 @@ final class CompleteListingTest extends KernelTestCase
 
     public function testASyncStateReadRefusedByAnotherWorkersPendingCommitLeavesTheListingShortWithoutAnException(): void
     {
-        $this->withAPendingCommit(function (): void {
+        $this->withAPendingCommit(function (Closure $pend): void {
+            $pend();
             $this->reads->lists([Issues::task(7)]);
 
             self::assertNull($this->listingOver($this->reads, $this->histories)->planOf('alpha'));
             self::assertSame(['Another writer holds the intake rows of project "alpha" and has not committed them.'], $this->shortListingReasons());
-        }, beforeTheListing: true);
+        });
     }
 
     public function testARowReadRefusedByAnotherWorkersPendingCommitDuringTheListingLeavesTheListingShortWithoutAnException(): void
@@ -436,14 +437,14 @@ final class CompleteListingTest extends KernelTestCase
 
             self::assertNull($this->listingOver($this->reads, $this->histories)->planOf('alpha'));
             self::assertSame(['Another writer holds the intake rows of project "alpha" and has not committed them.'], $this->shortListingReasons());
-        }, beforeTheListing: false);
+        });
     }
 
     // A reader keeps its shared lock open, so the writer's commit is refused and leaves its pending lock, which refuses every new read of the file until it commits.
     /**
      * @param Closure(Closure(): void): void $test
      */
-    private function withAPendingCommit(Closure $test, bool $beforeTheListing): void
+    private function withAPendingCommit(Closure $test): void
     {
         $shared = self::getContainer()->get('doctrine.orm.entity_manager');
         self::assertInstanceOf(EntityManagerInterface::class, $shared);
@@ -469,9 +470,6 @@ final class CompleteListingTest extends KernelTestCase
                 } catch (RetryableException) {
                 }
             };
-            if ($beforeTheListing) {
-                $pend();
-            }
 
             $test($pend);
         } finally {

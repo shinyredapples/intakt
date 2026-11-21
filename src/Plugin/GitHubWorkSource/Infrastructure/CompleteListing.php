@@ -46,7 +46,7 @@ final readonly class CompleteListing
         try {
             return $this->syncOf($project);
         } catch (ProjectHeldByAnotherWriter $held) {
-            // The other writer has not committed, so neither listing is the stored one yet: nothing is written and the next tick reads what it committed.
+            // A refusal before a won write leaves nothing written, and one of the plan's read after a won write keeps the rows written, which are the newest committed listing: either way only this tick's plan is skipped and the next tick plans from what is stored.
             return $this->shortListing($project, $held);
         }
     }
