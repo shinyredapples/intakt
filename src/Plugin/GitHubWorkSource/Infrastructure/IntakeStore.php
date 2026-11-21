@@ -104,6 +104,7 @@ final readonly class IntakeStore
     private function inTransaction(EntityManagerInterface $manager, callable $write): bool
     {
         $connection = $manager->getConnection();
+        $outer = $connection->getTransactionNestingLevel();
         $connection->beginTransaction();
         try {
             $written = $write($manager);
@@ -113,21 +114,45 @@ final readonly class IntakeStore
             return $written;
         } catch (Throwable $failure) {
             $manager->close();
-            $this->rollBackAfter($connection);
+            $this->rollBackAfter($connection, $outer);
 
-            throw $failure;
+            throw $this->refusalBehind($failure);
         }
     }
 
-    // DBAL counts the transaction as ended before it asks the driver, so a refused rollback leaves the connection usable, and the failure that ended the write is still thrown.
-    private function rollBackAfter(Connection $connection): void
+    // The flush runs its statements in a nested transaction of its own and rolls it back in a finally block: when the server already aborted the whole transaction, that rollback is refused and thrown instead, with the statement's refusal at the end of its chain of previous exceptions.
+    private function refusalBehind(Throwable $failure): Throwable
     {
-        if (!$connection->isTransactionActive()) {
+        for ($cause = $failure; $cause instanceof Throwable; $cause = $cause->getPrevious()) {
+            if ($cause instanceof RetryableException) {
+                return $cause;
+            }
+        }
+
+        return $failure;
+    }
+
+    // Back to the level the write started at, because the flush leaves its nested level counted when its own rollback was refused. A refused rollback is ignored, so the failure that ended the write is still thrown.
+    private function rollBackAfter(Connection $connection, int $outer): void
+    {
+        for ($level = $connection->getTransactionNestingLevel(); $level > $outer; --$level) {
+            try {
+                $connection->rollBack();
+            } catch (Exception) {
+                $this->leaveALostSavepoint($connection, $level);
+            }
+        }
+    }
+
+    // DBAL counts the outermost transaction as ended before it asks the driver, but a nested one only after its savepoint rolled back. A commit of the nested level counts it as ended also when the release of its savepoint is refused, and it keeps nothing, because the level above is rolled back next.
+    private function leaveALostSavepoint(Connection $connection, int $level): void
+    {
+        if ($connection->getTransactionNestingLevel() !== $level) {
             return;
         }
 
         try {
-            $connection->rollBack();
+            $connection->commit();
         } catch (Exception) {
         }
     }

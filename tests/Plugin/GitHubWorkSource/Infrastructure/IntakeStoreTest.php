@@ -454,6 +454,49 @@ final class IntakeStoreTest extends KernelTestCase
         self::assertSame(0, $connection->getTransactionNestingLevel());
     }
 
+    public function testADeadlockOnAStatementOfTheFlushWhoseTransactionTheDatabaseAbortedIsNamedAsHeld(): void
+    {
+        $connection = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'memory' => true]);
+        $events = new EventManager();
+        $manager = new EntityManager($connection, $this->entities->getConfiguration(), $events);
+        new SchemaTool($manager)->createSchema([$manager->getClassMetadata(IntakeValidator::class), $manager->getClassMetadata(StoredIssue::class)]);
+        $store = new IntakeStore($manager);
+        self::assertTrue($store->recordIfStill('alpha', $store->syncStateOf('alpha'), new ListingRows([], null)));
+        // On preUpdate and not onFlush, because only preUpdate runs inside the unit of work's own nested transaction, where a real statement deadlocks.
+        $deadlock = new class($connection) {
+            /** @var list<int> */
+            public array $levels = [];
+
+            public function __construct(private readonly Connection $connection)
+            {
+            }
+
+            public function preUpdate(): never
+            {
+                $this->levels[] = $this->connection->getTransactionNestingLevel();
+                $native = $this->connection->getNativeConnection();
+                if ($native instanceof PDO) {
+                    $native->rollBack();
+                }
+
+                throw new DeadlockException(Exception::new(new PDOException('Deadlock found when trying to get lock')), null);
+            }
+        };
+        $events->addEventListener([Events::preUpdate], $deadlock);
+
+        $held = null;
+        try {
+            (void) $store->recordIfStill('alpha', $store->syncStateOf('alpha'), new ListingRows([], 'new'));
+        } catch (ProjectHeldByAnotherWriter $held) {
+        }
+
+        self::assertSame([2], $deadlock->levels);
+        self::assertInstanceOf(ProjectHeldByAnotherWriter::class, $held);
+        self::assertInstanceOf(DeadlockException::class, $held->getPrevious());
+        self::assertSame(1, $store->syncStateOf('alpha')->generation);
+        self::assertSame(0, $connection->getTransactionNestingLevel());
+    }
+
     public function testAFirstWriteThatFailsWhileNoOtherWorkerStoredAListingLetsTheFailureThrough(): void
     {
         $inserting = new class {
