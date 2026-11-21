@@ -284,4 +284,17 @@ final class EvidenceItemsTest extends TestCase
     {
         self::assertSame(0, EvidenceItems::countIn("- Example\n  <!-- note -->\n  ## Evidence\n  - Show the result."));
     }
+
+    public function testAHiddenCommentOrFenceAfterABlankLineBetweenLabelItemsKeepsTheLaterItems(): void
+    {
+        self::assertSame(2, EvidenceItems::countIn("Evidence:\n- E1. a\n\n<!-- note -->\n- E2. b\n"));
+        self::assertSame(2, EvidenceItems::countIn("Evidence:\n- E1. a\n\n```\nx\n```\n- E2. b\n"));
+        self::assertSame(2, EvidenceItems::countIn("## Evidence\n- E1. a\n\n<!-- note -->\n- E2. b\n"));
+    }
+
+    public function testAnOutdentedCommentEndsTheItemWithCrOrCrlfLineBreaksToo(): void
+    {
+        self::assertSame(1, EvidenceItems::countIn("- Example\r\n<!-- note -->\r\n  ## Evidence\r\n- Show the result."));
+        self::assertSame(1, EvidenceItems::countIn("- Example\r<!-- note -->\r  ## Evidence\r- Show the result."));
+    }
 }

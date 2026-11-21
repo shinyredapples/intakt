@@ -14,6 +14,8 @@ final readonly class HiddenBlockOpeners
      */
     public static function proseLinesOf(string $task): array
     {
+        // Split like the prose reader, which reads a CR or CRLF as a line break too, so the raw and the visible lines stay aligned.
+        $task = str_replace(["\r\n", "\r"], "\n", $task);
         $raw = array_map(MarkdownText::withSpacesForTabs(...), explode("\n", $task));
         $visible = array_map(MarkdownText::withSpacesForTabs(...), explode("\n", MarkdownText::visibleProse($task)));
 

@@ -78,7 +78,7 @@ final readonly class EvidenceItems
         return null === $end ? $lines : array_slice($lines, 0, $end);
     }
 
-    // A lower-case line ending in a colon right after an item is kept, because it is the item wrapped onto a new line, not a label.
+    // A lower-case line ending in a colon right after an item is kept, because it is the item wrapped onto a new line, not a label. A thematic break is no text, and it is also what stands in for a hidden comment or fence, so a note hidden between two items does not cut the list.
     /**
      * @param list<string> $section
      */
@@ -90,7 +90,7 @@ final readonly class EvidenceItems
             return true;
         }
 
-        return '' === trim($section[$index - 1]) && 1 === preg_match('/^\S/', $line) && null === self::contentColumnOf($line);
+        return '' === trim($section[$index - 1]) && 1 === preg_match('/^\S/', $line) && null === self::contentColumnOf($line) && !MarkdownText::isThematicBreak($line);
     }
 
     // The end of the section is decided while walking the items, because only there the content column of the open item is known, and a heading indented to it is part of that item.
