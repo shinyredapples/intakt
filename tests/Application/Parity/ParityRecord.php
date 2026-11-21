@@ -18,7 +18,13 @@ final readonly class ParityRecord
     // Only a top or second level heading starts a section, so a deeper heading cannot switch judging off inside one.
     private const string SECTION_HEADING = '/^#{1,2}(?:\s+(.*))?$/';
 
-    private const string NOT_BUILT = 'not built yet';
+    // GitHub renders a `*`, `+` or numbered item as a list item too, so in a judged section any item without the exact checkbox is reported, not skipped.
+    private const string LIST_ITEM = '/^\s*(?:[-*+]|\d+[.)])(?:\s|$)/';
+
+    // Because the words alone can stand in a sentence that denies them, only the record's own form counts, and it must name the task that builds the rest.
+    private const string NOT_BUILT = '/(?:^\s*|\(|; )not built yet(?: \(|: )[^)]*?\b(T\d+)\b/';
+
+    private const string NOT_BUILT_FORM = 'an open item must say after `Intakt:` what is not built yet, as `not built yet (<what>, T<n>)` or `not built yet: <what>, T<n>`';
 
     private const string FIRST_SENTENCE = '/^(.*?\.)(?:\s|$)/';
 
@@ -55,14 +61,15 @@ final readonly class ParityRecord
     }
 
     /**
-     * @return list<string>
+     * @return array<string, string> the task that builds each behavior, by its section and first sentence
      */
     public function notBuiltItems(string $record): array
     {
         $items = [];
         foreach ($this->linesWithSections($record) as [, $line, $section]) {
-            if ($this->isJudgedOpenItem($line, $section) && $this->saysNotBuilt($line)) {
-                $items[] = sprintf('%s: %s', $section, $this->nameOf($line));
+            $task = $this->isJudgedOpenItem($line, $section) ? $this->notBuiltTaskOf($line) : null;
+            if (null !== $task) {
+                $items[sprintf('%s: %s', $section, $this->nameOf($line))] = $task;
             }
         }
 
@@ -105,13 +112,17 @@ final readonly class ParityRecord
             return $names->problemsOf($line) ?? ['names no Intakt test after `Intakt:`'];
         }
 
-        if (!$this->isJudgedOpenItem($line, $section)) {
+        if (!in_array($section, self::JUDGED_SECTIONS, true) || 1 !== preg_match(self::LIST_ITEM, $line)) {
             return [];
         }
 
+        if (1 !== preg_match(self::OPEN_ITEM, $line)) {
+            return ['a list item of a judged section must start with `- [ ]` or `- [x]`'];
+        }
+
         $problems = $names->problemsOf($line) ?? [];
-        if (!$this->saysNotBuilt($line)) {
-            $problems[] = sprintf('an open item must say after `Intakt:` what is %s', self::NOT_BUILT);
+        if (null === $this->notBuiltTaskOf($line)) {
+            $problems[] = self::NOT_BUILT_FORM;
         }
 
         return $problems;
@@ -122,11 +133,14 @@ final readonly class ParityRecord
         return in_array($section, self::JUDGED_SECTIONS, true) && 1 === preg_match(self::OPEN_ITEM, $line);
     }
 
-    private function saysNotBuilt(string $item): bool
+    private function notBuiltTaskOf(string $item): ?string
     {
         $start = strpos($item, IntaktTestNames::INTAKT_PART);
+        if (false === $start || 1 !== preg_match(self::NOT_BUILT, substr($item, $start + strlen(IntaktTestNames::INTAKT_PART)), $status)) {
+            return null;
+        }
 
-        return false !== $start && str_contains(substr($item, $start), self::NOT_BUILT);
+        return $status[1];
     }
 
     private function nameOf(string $item): string
