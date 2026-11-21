@@ -1,0 +1,38 @@
+done light 1440: "Columns 4 to 9 of 9" [...GGGGGG] board 1136 of 1692; switcher hidden
+running light 1440: "Columns 1 to 6 of 9" [GGGGGG...] board 1136 of 1624; switcher hidden
+done light 1920: "Columns 2 to 9 of 9" [.GGGGGGGG] board 1584 of 1692; switcher hidden
+running light 1920: "Columns 1 to 8 of 9" [GGGGGGGG.] board 1584 of 1624; switcher hidden
+done light 390: map hidden; switcher Waiting on you 44px | Backlog 44px | Ready 44px | Planned 44px | Building 44px | Checking 44px | In review 44px | Merging 44px | Done 44px [pressed]
+running light 390: map hidden; switcher Waiting on you 44px [pressed] | Backlog 44px | Ready 44px | Planned 44px | Building 44px | Checking 44px | In review 44px | Merging 44px | Done 44px
+done dark 1440: "Columns 4 to 9 of 9" [...GGGGGG] board 1136 of 1692; switcher hidden
+running dark 1440: "Columns 1 to 6 of 9" [GGGGGG...] board 1136 of 1624; switcher hidden
+done dark 1920: "Columns 2 to 9 of 9" [.GGGGGGGG] board 1584 of 1692; switcher hidden
+running dark 1920: "Columns 1 to 8 of 9" [GGGGGGGG.] board 1584 of 1624; switcher hidden
+done dark 390: map hidden; switcher Waiting on you 44px | Backlog 44px | Ready 44px | Planned 44px | Building 44px | Checking 44px | In review 44px | Merging 44px | Done 44px [pressed]
+running dark 390: map hidden; switcher Waiting on you 44px [pressed] | Backlog 44px | Ready 44px | Planned 44px | Building 44px | Checking 44px | In review 44px | Merging 44px | Done 44px
+map segment at 1440: segment 24 x 24 px, bar 18px x 8px, segments 0 px apart (bars 6 px apart), 9 segments
+
+Keyboard walk-through (1440, light, review running):
+1. 3 x Tab -> a.nav "Board" focus-visible=true outline=solid 2px
+   Enter -> http://localhost:7781/?board=1; map "Columns 1 to 6 of 9" [GGGGGG...] board 1136 of 1624
+2. 12 x Tab -> summary "Who is working2 working" focus-visible=true outline=solid 2px
+   Enter -> open=true
+   Escape -> open=false, focus summary "Who is working2 working" focus-visible=true outline=solid 2px
+   Space -> open=true
+3. 11 x Tab -> button.col-fold "Show Backlog0 tasks" focus-visible=true outline=solid 2px; map "Columns 1 to 6 of 9" [GGGGGG...] board 1136 of 1624
+   Enter -> collapsed=false, focus button.btn.quiet.sm.col-hide "Hide Backlog" focus-visible=true outline=solid 2px; map "Columns 1 to 5 of 9" [GGGGG....] board 1136 of 1692
+   Escape -> collapsed=true, focus button.col-fold "Show Backlog0 tasks" focus-visible=true outline=solid 2px; map "Columns 1 to 6 of 9" [GGGGGG...] board 1136 of 1624
+   Space -> collapsed=false, focus button.btn.quiet.sm.col-hide "Hide Backlog" focus-visible=true outline=solid 2px; map "Columns 1 to 5 of 9" [GGGGG....] board 1136 of 1692
+4. 4 x Shift+Tab -> button.sm-seg "In review" focus-visible=true outline=solid 2px
+   Enter -> focus section#col-in-review.col "In review" focus-visible=true outline=solid 2px; map "Columns 4 to 9 of 9" [...GGGGGG] board 1136 of 1692
+5. 1 x Tab -> a.card "#sample-changedemo-replayReplay Review of sample-c" focus-visible=true outline=solid 2px
+   Enter -> /reviews/01a1f261-3829-7222-812d-3260f5198464
+
+Done the board opened (1440, light, review finished):
+23 x Tab -> a.card "#sample-changedemo-replayReplay Changes requested " focus-visible=true outline=solid 2px; collapsed=false
+Escape -> collapsed=false, focus a.card "#sample-changedemo-replayReplay Changes requested " focus-visible=true outline=solid 2px
+1 x Shift+Tab -> button.btn.quiet.sm.col-hide "Hide Done" focus-visible=true outline=solid 2px
+Enter -> collapsed=true, focus button.col-fold "Show Done1 task" focus-visible=true outline=solid 2px; map "Columns 4 to 9 of 9" [...GGGGGG] board 1136 of 1624
+
+390 tap In review -> pressed In review, column at 16 px
+390 swipe to the end -> pressed Done
