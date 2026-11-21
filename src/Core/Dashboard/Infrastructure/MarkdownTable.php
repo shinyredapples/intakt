@@ -7,7 +7,7 @@ namespace Intakt\Core\Dashboard\Infrastructure;
 // The cells of the one pipe table in a section, so a second table or a row of another shape never stands in for it.
 final readonly class MarkdownTable
 {
-    // Four spaces of indentation make a code block, never a table.
+    // Up to three spaces only, because Markdown reads a line indented four spaces as code, whose pipes never start a table.
     private const string TABLE_LINE = '/^ {0,3}\S/';
     private const string CELL_BOUNDARY = '/(?<!\\\)\|/';
     private const string DELIMITER_CELL = '/^:?-+:?$/';
@@ -16,7 +16,7 @@ final readonly class MarkdownTable
     /**
      * @param list<string> $lines
      *
-     * @return list<list<string>>|null header row, delimiter row, then body rows
+     * @return list<list<string>>|null
      */
     public static function only(array $lines): ?array
     {

@@ -77,7 +77,7 @@ final readonly class MarkdownSection
     {
         $lines = [];
         $closing = null;
-        $inComment = false;
+        $carried = '';
         foreach (explode("\n", str_replace(["\r\n", "\r"], "\n", $text)) as $line) {
             if (null !== $closing) {
                 $closing = self::stillOpen($closing, $line);
@@ -86,7 +86,7 @@ final readonly class MarkdownSection
                 continue;
             }
 
-            [$line, $inComment] = self::withoutComments($line, $inComment);
+            [$line, $carried] = self::uncommented($carried.$line);
             $closing = self::opening($line);
             $lines[] = null === $closing ? $line : '';
         }
@@ -94,15 +94,16 @@ final readonly class MarkdownSection
         return $lines;
     }
 
+    // A comment left open carries its opening to the next line, so every line up to its close stays unpublished.
     /**
-     * @return array{string, bool} the line's published text, and whether a comment is still open after it
+     * @return array{string, string}
      */
-    private static function withoutComments(string $line, bool $inComment): array
+    private static function uncommented(string $line): array
     {
-        $text = (string) preg_replace(self::CLOSED_COMMENT, '', ($inComment ? self::COMMENT_OPENING : '').$line);
+        $text = (string) preg_replace(self::CLOSED_COMMENT, '', $line);
         $opening = strpos($text, self::COMMENT_OPENING);
 
-        return false === $opening ? [$text, false] : [substr($text, 0, $opening), true];
+        return false === $opening ? [$text, ''] : [substr($text, 0, $opening), self::COMMENT_OPENING];
     }
 
     private static function opening(string $line): ?string
