@@ -919,8 +919,10 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
     public function testARoundUpdateKeepsTheStartingModelOfASubstitutedReviewerWhenTheCatchUpNamesNoModel(): void
     {
-        $this->givenARunningRound();
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->startReviewerOn('round-1', 'correctness', 'original-model');
         $page = $this->browser->request('GET', '/reviews/round-1');
+        self::assertSame('original-model', $this->rowsOf($page)[0][1]);
 
         $updated = $this->replaced($page, $this->substitutedRoundChange(null));
 
