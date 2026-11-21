@@ -1,0 +1,323 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Tests\Plugin\GitHubWorkSource;
+
+use Closure;
+use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\ORM\Tools\SchemaTool;
+use Intakt\Plugin\GitHubForge\Contract\IssueHistories;
+use Intakt\Plugin\GitHubForge\Contract\IssueHistory;
+use Intakt\Plugin\GitHubForge\Contract\IssueListing;
+use Intakt\Plugin\GitHubForge\Contract\IssueReads;
+use Intakt\Plugin\GitHubForge\Contract\LabelApplication;
+use Intakt\Plugin\GitHubForge\Contract\SteeringAccounts;
+use Intakt\Plugin\GitHubForge\Contract\TrustNotChecked;
+use Intakt\Plugin\GitHubForge\Infrastructure\GitHubIssueHistories;
+use Intakt\Plugin\GitHubForge\Infrastructure\GitHubIssueReads;
+use Intakt\Plugin\GitHubWorkSource\Domain\HeldIssue;
+use Intakt\Plugin\GitHubWorkSource\Domain\IntakePlan;
+use Intakt\Plugin\GitHubWorkSource\Domain\IntakeRules;
+use Intakt\Plugin\GitHubWorkSource\Domain\IntakeValidator;
+use Intakt\Plugin\GitHubWorkSource\Domain\IssueReferences;
+use Intakt\Plugin\GitHubWorkSource\Domain\ItemReading;
+use Intakt\Plugin\GitHubWorkSource\Domain\ListingRows;
+use Intakt\Plugin\GitHubWorkSource\Domain\QueuedIssue;
+use Intakt\Plugin\GitHubWorkSource\Domain\StoredIssue;
+use Intakt\Plugin\GitHubWorkSource\Domain\SyncState;
+use Intakt\Plugin\GitHubWorkSource\Domain\TaskFailure;
+use Intakt\Plugin\GitHubWorkSource\Domain\Vouching;
+use Intakt\Plugin\GitHubWorkSource\Infrastructure\CompleteListing;
+use Intakt\Plugin\GitHubWorkSource\Infrastructure\GitHubWorkSource;
+use Intakt\Plugin\GitHubWorkSource\Infrastructure\IntakeStore;
+use Intakt\Plugin\WorkSource\Contract\HeldTask;
+use Intakt\Plugin\WorkSource\Contract\NothingPicked;
+use Intakt\Plugin\WorkSource\Contract\Task;
+use Intakt\Plugin\WorkSource\Contract\WorkPick;
+use Intakt\Plugin\WorkSource\Contract\WorkQueue;
+use Intakt\Plugin\WorkSource\Contract\WorkerState;
+use Intakt\Tests\Application\EmptyDatabase;
+use Intakt\Tests\Plugin\GitHubForge\RecordedIssueApi;
+use Intakt\Tests\Support\KernelTestCase;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\Group;
+use PHPUnit\Framework\Attributes\UsesClass;
+use Symfony\Component\ErrorHandler\BufferingLogger;
+
+#[Group('persistence')]
+#[CoversClass(GitHubWorkSource::class)]
+#[UsesClass(CompleteListing::class)]
+#[UsesClass(IntakeStore::class)]
+#[UsesClass(StoredIssue::class)]
+#[UsesClass(TaskFailure::class)]
+#[UsesClass(IntakeRules::class)]
+#[UsesClass(IntakePlan::class)]
+#[UsesClass(HeldIssue::class)]
+#[UsesClass(IssueReferences::class)]
+#[UsesClass(ItemReading::class)]
+#[UsesClass(IntakeValidator::class)]
+#[UsesClass(ListingRows::class)]
+#[UsesClass(QueuedIssue::class)]
+#[UsesClass(SyncState::class)]
+#[UsesClass(Vouching::class)]
+#[UsesClass(IssueListing::class)]
+#[UsesClass(GitHubIssueReads::class)]
+#[UsesClass(GitHubIssueHistories::class)]
+#[UsesClass(WorkPick::class)]
+#[UsesClass(WorkQueue::class)]
+#[UsesClass(Task::class)]
+#[UsesClass(HeldTask::class)]
+final class GitHubWorkSourceTest extends KernelTestCase
+{
+    private IntakeStore $store;
+    private RecordedIssueReads $reads;
+    private BufferingLogger $logger;
+    private string $editor = 'ana';
+    private bool $writeAccess = true;
+    /** @var list<string> */
+    private array $asked = [];
+    /** @var list<int> */
+    private array $historiesRead = [];
+    private ?Closure $duringHistory = null;
+    private ?TrustNotChecked $accessFailure = null;
+
+    protected function setUp(): void
+    {
+        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
+        self::assertInstanceOf(EntityManagerInterface::class, $entities);
+        EmptyDatabase::in(self::getContainer());
+        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        $this->store = new IntakeStore($entities);
+        $this->reads = new RecordedIssueReads();
+        $this->logger = new BufferingLogger();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->logger->cleanLogs();
+        parent::tearDown();
+    }
+
+    public function testAWorkerThatWillNotTakeWorkMakesNoForgeCall(): void
+    {
+        $this->reads->lists([Issues::task(1)]);
+
+        foreach ([WorkerState::NoFreeSlot, WorkerState::Paused, WorkerState::Draining, WorkerState::HeldByBudget] as $state) {
+            $pick = $this->source()->nextWork('alpha', $state);
+
+            self::assertSame(NothingPicked::WorkerNotTakingWork, $pick->nothing);
+        }
+
+        self::assertSame(0, $this->reads->listings);
+        self::assertSame([], $this->historiesRead);
+        self::assertSame([], $this->asked);
+    }
+
+    public function testTheTaskThatSortsFirstIsPickedAndIsAReworkWhenATrustedPullRequestClosesIt(): void
+    {
+        $this->reads->lists([Issues::task(7), Issues::task(8), Issues::pullRequest(12, 'Closes #8')]);
+
+        $pick = $this->source()->nextWork('alpha', WorkerState::Free);
+
+        self::assertEquals(new Task(8, 'Task 8', 12), $pick->task);
+    }
+
+    public function testAnIssueEditedByAnUntrustedAccountIsNotPickedUntilATrustedEditFollows(): void
+    {
+        $this->editor = 'mallory';
+        $this->reads->lists([Issues::task(5)]);
+        $source = $this->source();
+
+        self::assertSame(NothingPicked::NoTaskReady, $source->nextWork('alpha', WorkerState::Free)->nothing);
+
+        $this->editor = 'ana';
+        $this->reads->lists([Issues::task(5, ['intakt'], ['updatedAt' => '2026-11-10T11:00:00Z'])], 'W/"issues-2"');
+
+        self::assertSame(5, $source->nextWork('alpha', WorkerState::Free)->task?->number);
+    }
+
+    public function testWriteAccessOfTheAuthorAndTheLastEditorIsAskedAgainBeforeAPick(): void
+    {
+        $this->reads->lists([Issues::task(5)]);
+        $source = $this->source();
+        self::assertSame(5, $source->queue('alpha')->ready()[0]->number);
+        $this->asked = [];
+        $this->reads->listsUnchanged();
+
+        self::assertSame(5, $source->nextWork('alpha', WorkerState::Free)->task?->number);
+        self::assertSame(['ana', 'ana'], $this->asked);
+
+        $this->writeAccess = false;
+        $this->reads->listsUnchanged();
+
+        self::assertSame(NothingPicked::NoTaskReady, $source->nextWork('alpha', WorkerState::Free)->nothing);
+    }
+
+    public function testATrustCheckThatFailsIsLoggedAsAFailedCheckAndPicksNothing(): void
+    {
+        $this->reads->lists([Issues::task(5), Issues::task(6)]);
+        $source = $this->source();
+        $source->queue('alpha');
+        $this->accessFailure = TrustNotChecked::becauseGitHubRefused(502);
+        $this->reads->listsUnchanged();
+
+        $pick = $source->nextWork('alpha', WorkerState::Free);
+
+        self::assertSame(NothingPicked::TrustNotChecked, $pick->nothing);
+        $logs = $this->logger->cleanLogs();
+        self::assertCount(1, $logs);
+        self::assertSame('warning', $logs[0][0]);
+        self::assertStringContainsString('write-access check of task #{number}', $logs[0][1]);
+        self::assertSame(5, $logs[0][2]['number']);
+        self::assertSame('GitHub refused the trust check with status 502.', $logs[0][2]['reason']);
+    }
+
+    public function testATaskThatWaitsForAnOpenIssueIsHeldAndTheIssueItWaitsForIsPicked(): void
+    {
+        $this->reads->lists([Issues::task(3), Issues::task(10, ['intakt'], ['body' => 'Waits for #3'])]);
+        $source = $this->source();
+
+        $queue = $source->queue('alpha');
+
+        self::assertSame([3], array_map(static fn (Task $task): int => $task->number, $queue->ready()));
+        self::assertSame([[10, 'waits for #3']], array_map(static fn (HeldTask $held): array => [$held->task->number, $held->reason], $queue->held()));
+        self::assertSame(3, $source->nextWork('alpha', WorkerState::Free)->task?->number);
+    }
+
+    public function testTheDependentOfATaskFailedForGoodIsHeldAndNotPicked(): void
+    {
+        $this->reads->lists([Issues::task(3), Issues::task(10, ['intakt'], ['body' => 'Waits for #3'])]);
+        $source = $this->source();
+        $source->queue('alpha');
+
+        $source->failedForGood('alpha', 3, 'the build broke');
+        $this->reads->listsUnchanged();
+        $queue = $source->queue('alpha');
+
+        self::assertSame([], $queue->ready());
+        self::assertSame(['failed for good: the build broke', 'depends on #3, which failed for good: the build broke'], array_map(static fn (HeldTask $held): string => $held->reason, $queue->held()));
+        $this->reads->listsUnchanged();
+        self::assertSame(NothingPicked::NoTaskReady, $source->nextWork('alpha', WorkerState::Free)->nothing);
+    }
+
+    public function testATaskMarkedFailedBetweenTheListingAndThePickIsNeverPicked(): void
+    {
+        $this->reads->lists([Issues::task(5), Issues::task(6)]);
+        $source = $this->source();
+        $source->queue('alpha');
+        $this->reads->listsUnchanged();
+        // The failure is recorded after the plan was made and before the pick takes the lock.
+        $this->duringHistory = static fn () => $source->failedForGood('alpha', 5, 'failed meanwhile');
+
+        $pick = $source->nextWork('alpha', WorkerState::Free);
+
+        self::assertSame(6, $pick->task?->number);
+        self::assertSame(['failed meanwhile'], array_values($this->store->failuresOf('alpha')));
+    }
+
+    public function testMoreReadyIssuesThanOnePageHoldsPickTheIssueThatSortsFirstOnTheLastPage(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->page(2, 100), 2 => $this->page(1, 1)];
+        $api->namingNext = [1];
+        $api->stable = true;
+        $api->graphql = $this->historyAnswer();
+
+        $pick = $this->sourceOver($api->reads(), $api->histories())->nextWork('alpha', WorkerState::Free);
+
+        self::assertSame(1, $pick->task?->number);
+    }
+
+    public function testALaterPageThatFailsPicksNothingAndLogsTheReason(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->page(2, 100), 2 => '502'];
+        $api->namingNext = [1];
+        $api->graphql = $this->historyAnswer();
+
+        $pick = $this->sourceOver($api->reads(), $api->histories())->nextWork('alpha', WorkerState::Free);
+
+        self::assertSame(NothingPicked::ListingIncomplete, $pick->nothing);
+        $logs = $this->logger->cleanLogs();
+        self::assertCount(1, $logs);
+        self::assertSame('GitHub answered 502 to a read.', $logs[0][2]['reason']);
+    }
+
+    public function testAQueueOverAListingThatCameBackShortIsIncomplete(): void
+    {
+        self::assertFalse($this->source()->queue('alpha')->complete);
+    }
+
+    public function testATaskThatIsNotInTheListingCannotBeMarkedFailed(): void
+    {
+        $this->expectException(\Intakt\Plugin\WorkSource\Contract\TaskNotQueued::class);
+
+        $this->source()->failedForGood('alpha', 99, 'no such task');
+    }
+
+    private function source(): GitHubWorkSource
+    {
+        $histories = self::createStub(IssueHistories::class);
+        $histories->method('of')->willReturnCallback(function (string $project, int $number): IssueHistory {
+            $this->historiesRead[] = $number;
+            $during = $this->duringHistory;
+            $this->duringHistory = null;
+            if ($during instanceof Closure) {
+                $during();
+            }
+
+            $listed = $this->reads->lastListed[$number];
+
+            return new IssueHistory($this->editor, array_map(static fn (string $label): LabelApplication => new LabelApplication($label, 'ana'), $listed->labels), $listed->body, $listed->labels);
+        });
+
+        return $this->sourceOver($this->reads, $histories);
+    }
+
+    private function sourceOver(IssueReads $reads, IssueHistories $histories): GitHubWorkSource
+    {
+        $accounts = self::createStub(SteeringAccounts::class);
+        $accounts->method('steers')->willReturnCallback(function (string $project, string $account): bool {
+            $this->asked[] = $account;
+            if ($this->accessFailure instanceof TrustNotChecked) {
+                throw $this->accessFailure;
+            }
+
+            return $this->writeAccess && 'ana' === $account;
+        });
+        $listing = new CompleteListing($reads, $histories, $accounts, $this->store, new IntakeRules('intakt'), new IssueReferences(), $this->logger);
+
+        return new GitHubWorkSource($listing, $histories, $accounts, $this->store, $this->logger);
+    }
+
+    private function historyAnswer(): string
+    {
+        $item = [
+            '__typename' => 'Issue',
+            'updatedAt' => '2026-11-10T10:00:00Z',
+            'body' => '',
+            'labels' => ['pageInfo' => ['hasNextPage' => false], 'nodes' => [['name' => 'intakt']]],
+            'author' => ['__typename' => 'User', 'login' => 'ana'],
+            'userContentEdits' => ['nodes' => []],
+            'timelineItems' => ['pageInfo' => ['hasNextPage' => false], 'nodes' => [['__typename' => 'LabeledEvent', 'actor' => ['__typename' => 'User', 'login' => 'ana'], 'label' => ['name' => 'intakt']]]],
+        ];
+
+        return json_encode(['data' => ['repository' => ['issueOrPullRequest' => $item]]], JSON_THROW_ON_ERROR);
+    }
+
+    private function page(int $from, int $count): string
+    {
+        $issues = array_map(static fn (int $number): array => [
+            'number' => $number,
+            'title' => 'Issue '.$number,
+            'body' => '',
+            'user' => ['login' => 'ana'],
+            'labels' => [['name' => 'intakt']],
+            'milestone' => null,
+            'updated_at' => '2026-11-10T10:00:00Z',
+        ], range($from, $from + $count - 1));
+
+        return json_encode($issues, JSON_THROW_ON_ERROR);
+    }
+}

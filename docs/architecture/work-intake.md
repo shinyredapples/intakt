@@ -1,10 +1,10 @@
 # Work intake from GitHub issues
 
-Plan task T47. `Plugin/WorkSource` is the contract. No implementation of it exists yet and nothing calls it; `Plugin/GitHubWorkSource` holds the parts of the GitHub one built so far: its rules (`Domain\IntakeRules`), its stored state and the complete-listing sync that keeps that state (both below), which nothing runs yet either. The rules are those of [Choosing work](../design/05-architecture/03-choosing-work.md) (step 1, eligible, and step 5, prioritized) and [Labels](../design/05-architecture/04-labels.md).
+Plan task T47. `Plugin/WorkSource` is the contract. `Plugin/GitHubWorkSource` holds the GitHub implementation, `Infrastructure\GitHubWorkSource`: its rules (`Domain\IntakeRules`), its stored state, the complete-listing sync that keeps that state and the pick (all below). Nothing calls it yet. The rules are those of [Choosing work](../design/05-architecture/03-choosing-work.md) (step 1, eligible, and step 5, prioritized) and [Labels](../design/05-architecture/04-labels.md).
 
 ## Contract (`Plugin/WorkSource/Contract`)
 
-- `WorkSource::nextWork(project, WorkerState)` answers a `WorkPick`: a `Task` (number, title, and `reworkOf`, the number of its open pull request or null) or a `NothingPicked` reason. A worker state other than `free` (`no-free-slot`, `paused`, `draining`, `held-by-budget`) is meant to return before any forge read, so an idle worker makes no forge call.
+- `WorkSource::nextWork(project, WorkerState)` answers a `WorkPick`: a `Task` (number, title, and `reworkOf`, the number of its open pull request or null) or a `NothingPicked` reason. A worker state other than `free` (`no-free-slot`, `paused`, `draining`, `held-by-budget`) returns `NothingPicked::WorkerNotTakingWork` before any forge call, so an idle worker makes none.
 - `WorkSource::queue(project)` answers a `WorkQueue`: the ready tasks in pick order and the held ones (`HeldTask`, with a reason), or `incomplete`. `TaskNotQueued` is the failure for a task that is not in the queue.
 - `WorkSource::failedForGood(project, number, reason)` records that a task failed for good, so the tasks that wait on it are held with that reason.
 
@@ -40,3 +40,14 @@ Issue #3062, part 1 of #2908. `CompleteListing::planOf(project)` (`#[NoDiscard]`
 - **Closed failures** (decision 3 of #2908). Removing the row of a closed issue keeps its failed-for-good reason, because failures live in `work_source_failure`, so its dependents stay held.
 
 Tests: `tests/Plugin/GitHubWorkSource/Infrastructure/CompleteListingTest.php` (group `persistence`, SQLite; the paging cases run `GitHubIssueReads` and `GitHubIssueHistories` over recorded GitHub answers).
+
+## Pick, queue and failure (`Infrastructure\GitHubWorkSource`)
+
+Issue #2667, part 3 of #1602.
+
+- **`nextWork`** returns for a worker that will not take work first, then takes the `IntakePlan` of `CompleteListing::planOf()`; a short listing (`null`, its reason already logged) is `ListingIncomplete`. It walks the ready tasks in order. For each it asks again whether the author and the last editor have write access (`SteeringAccounts::steers()`, the last editor from `IssueHistories::of()`), because access may have been withdrawn since the row was vouched. An account that no longer steers skips that task. A check that fails (`ForgeReadFailed`, `ForgeRateLimited`, `TrustNotChecked`) is logged as a failed write-access check, not as an untrusted account, and ends the tick with `TrustNotChecked` so a task behind it is not picked in its place.
+- **Failure re-read under the lock.** Before returning a task, the pick reads the failure records with `IntakeStore::failuresUnderTheListingLock()`: a lock on the project's sync row (`work_source_validator`), the row `recordIfStill()` and `failForGood()` lock too. A task, or a task it waits for, that failed for good since the plan was made is skipped. The pick is ordered before any failure that commits after that read.
+- **`queue`** answers the plan's ready and held tasks (`reworkOf` from the open pull request that closes the task), or `incomplete` for a short listing. **`failedForGood`** is `IntakeStore::failForGood()`, which takes the sync row's lock before it writes.
+- **Pages.** The listing reads every page before anything is sorted, so the issue that sorts first on the last page is picked; a later page that fails leaves the listing short, so nothing is picked and the reason is logged.
+
+Tests: `tests/Plugin/GitHubWorkSource/GitHubWorkSourceTest.php` (group `persistence`, SQLite), including the forced order of a failure recorded between the plan and the pick.

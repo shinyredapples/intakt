@@ -25,6 +25,21 @@ final readonly class QueuedIssue
         return $this->reading->listed->number;
     }
 
+    public function title(): string
+    {
+        return $this->reading->listed->title;
+    }
+
+    public function author(): string
+    {
+        return $this->reading->listed->author;
+    }
+
+    public function updatedAt(): DateTimeImmutable
+    {
+        return $this->reading->listed->updatedAt;
+    }
+
     public function isPullRequest(): bool
     {
         return $this->reading->listed->isPullRequest;
