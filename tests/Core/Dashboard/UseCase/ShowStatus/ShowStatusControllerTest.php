@@ -103,6 +103,14 @@ final class ShowStatusControllerTest extends WebTestCase
         self::assertStringNotContainsString('"projects"', (string) $this->browser->getResponse()->getContent());
     }
 
+    public function testTheStatusEndpointRefusesALoopbackHostWithTheWrongPort(): void
+    {
+        $this->browser->request('GET', '/status', server: ['HTTP_HOST' => 'localhost:9999']);
+
+        self::assertResponseStatusCodeSame(400);
+        self::assertStringNotContainsString('"projects"', (string) $this->browser->getResponse()->getContent());
+    }
+
     public function testTheStatusEndpointRefusesAPostRequest(): void
     {
         $this->browser->request('POST', '/status');
