@@ -31,7 +31,7 @@ final class RecordingChangeOpening implements ChangeOpening
         ++$this->ownerChecks;
 
         if ($this->openedByAnother) {
-            throw new ForgeWriteFailed(sprintf('The open pull request of branch %s was not opened by this App, so Intakt leaves it alone.', $branch));
+            throw new ForgeWriteFailed(sprintf('An open pull request of branch %s was not opened by this App, so Intakt leaves it alone.', $branch));
         }
     }
 
