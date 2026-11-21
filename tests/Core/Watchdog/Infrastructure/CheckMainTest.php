@@ -221,7 +221,7 @@ final class CheckMainTest extends TestCase
         return [$unsigned, $base, new WatchedMain($seen, [new RecordedMerge($head, $base)])];
     }
 
-    // A cut removed when the read ends is one no later check can see.
+    // The cut is removed when the read ends, because only such a cut is one no later shallow check can see.
     private function gitThatCutsShallowAtOnlyWhileTheCoverageIsRead(string $entry): void
     {
         $this->gitThatRunsOnTheCoverageRead($this->cutShallowAt($entry)."\n        ".$this->realGit()." \"\$@\"\n        status=\$?\n        rm -f ".$this->shallowFile()."\n        exit \$status");
