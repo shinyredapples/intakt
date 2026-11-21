@@ -82,7 +82,6 @@ final class GitHubWorkSourceTest extends KernelTestCase
     /** @var list<string> */
     private array $writers = ['ana', 'bea'];
     private string $labelApplier = 'ana';
-    /** @var array<string, string> */
     private ?ForgeReadFailed $historyFailure = null;
     /** @var list<string> */
     private array $asked = [];
