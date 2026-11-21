@@ -1,0 +1,7 @@
+light 1440: map hidden; board client 1136 scroll 1136 at 0; page scrolls sideways=false; columns col-waiting-on-you, col-in-review, col-done (folded); switcher hidden
+  coming next line: Coming next Backlog, Ready, Planned, Building, Checking and Merging show here once a task is in one of them
+light 1920: map hidden; board client 1584 scroll 1584 at 0; page scrolls sideways=false; columns col-waiting-on-you, col-in-review, col-done (folded); switcher hidden
+light 390: map not displayed (phone); board client 390 scroll 1138 at 0; page scrolls sideways=false; columns col-waiting-on-you, col-in-review, col-done (folded); switcher 3 buttons: Waiting on you 0 tasks 44px [pressed] | In review 1 task 44px | Done 1 task 44px
+dark 1440: map hidden; board client 1136 scroll 1136 at 0; page scrolls sideways=false; columns col-waiting-on-you, col-in-review, col-done (folded); switcher hidden
+dark 1920: map hidden; board client 1584 scroll 1584 at 0; page scrolls sideways=false; columns col-waiting-on-you, col-in-review, col-done (folded); switcher hidden
+dark 390: map not displayed (phone); board client 390 scroll 1138 at 0; page scrolls sideways=false; columns col-waiting-on-you, col-in-review, col-done (folded); switcher 3 buttons: Waiting on you 0 tasks 44px [pressed] | In review 1 task 44px | Done 1 task 44px

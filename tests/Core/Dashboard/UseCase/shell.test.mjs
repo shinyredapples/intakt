@@ -535,6 +535,24 @@ test('a pushed column keeps the cards this tab showed with show more', () => {
     assert.equal(page.column('col-in-review').hasAttribute('data-expanded'), true);
 });
 
+// assets/column-fold.js folds a column on Escape only when the reader opened it from its strip, and a push must not forget that.
+test('a pushed column keeps the mark that this tab opened it from its strip', () => {
+    const page = new Browser('light').open();
+    page.column('col-in-review').setAttribute('data-opened', '');
+
+    page.pushColumn('col-in-review');
+
+    assert.equal(page.column('col-in-review').hasAttribute('data-opened'), true);
+});
+
+test('a pushed column this tab never opened carries no such mark', () => {
+    const page = new Browser('light').open();
+
+    page.pushColumn('col-in-review');
+
+    assert.equal(page.column('col-in-review').hasAttribute('data-opened'), false);
+});
+
 test('a pushed column this tab never expanded stays limited to its first page', () => {
     const page = new Browser('light').open();
 
@@ -560,6 +578,16 @@ test('a term focused inside a card keeps focus when the column is pushed', () =>
     page.pushColumn('col-in-review');
 
     assert.equal(page.focused(), page.column('col-in-review').terms[1]);
+});
+
+// assets/board-map.js focuses the column a jump lands on, so a push before the next Tab must not drop the keyboard back at the page start.
+test('a column focused by a jump keeps focus when it is pushed', () => {
+    const page = new Browser('light').open();
+    page.column('col-in-review').focus();
+
+    page.pushColumn('col-in-review');
+
+    assert.equal(page.focused(), page.column('col-in-review'));
 });
 
 test('a pushed column leaves focus alone when it was outside the column', () => {

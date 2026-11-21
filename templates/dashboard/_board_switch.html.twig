@@ -1,0 +1,3 @@
+{#- The words inside one phone switcher button, shared by the board and by the counts LiveBoardHeadline pushes, so a pushed count never differs from a page loaded after it. The button itself stays, so its pressed state and the keyboard focus it holds do too. -#}
+{%- set count = board.countOf(column) -%}
+{{ column.value }} {{ include('dashboard/components/count.html.twig', {n: count, needs: column == constant('Intakt\\Core\\Dashboard\\Domain\\BoardColumn::WaitingOnYou') and count > 0}, with_context = false) }}<span class="sr-only"> {{ count == 1 ? 'task' : 'tasks' }}</span>
