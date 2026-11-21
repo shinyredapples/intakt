@@ -20,9 +20,21 @@ final class RecordingChangeOpening implements ChangeOpening
     public int $calls = 0;
     public ?Closure $during = null;
     public ?ChangeText $text = null;
+    public int $checks = 0;
+    public ?Closure $checking = null;
 
     /** @var array<string, ChangeId> */
     private array $pulls = [];
+
+    #[Override]
+    public function refuseForeignChange(ProposedChange $change): void
+    {
+        ++$this->checks;
+
+        if ($this->checking instanceof Closure) {
+            ($this->checking)($change);
+        }
+    }
 
     #[Override]
     public function openOrUpdate(ProposedChange $change): OpenedChange

@@ -7,6 +7,7 @@ namespace Intakt\Plugin\GitHubForge\Infrastructure;
 use Intakt\Plugin\Forge\Contract\ChangeOpening;
 use Intakt\Plugin\Forge\Contract\ChangeTextHoldsSecret;
 use Intakt\Plugin\Forge\Contract\ForgeCredentialsRefused;
+use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
 use Intakt\Plugin\Forge\Contract\OpenedChange;
@@ -33,6 +34,11 @@ final readonly class GitHubChangeOpener implements ChangeOpening
     ) {
     }
 
+    public function refuseForeignChange(ProposedChange $change): void
+    {
+        $this->numberOfOpenPullRequest($this->addressOf($change->project), $change->branch);
+    }
+
     public function openOrUpdate(ProposedChange $change): OpenedChange
     {
         $text = $change->text;
@@ -42,7 +48,8 @@ final readonly class GitHubChangeOpener implements ChangeOpening
         }
 
         $repository = $this->addressOf($change->project);
-        $open = $this->openPullRequestOf($repository, $change->branch);
+        // Asked again, because another account can open a pull request of the branch between the check before the push and this write.
+        $open = $this->numberOfOpenPullRequest($repository, $change->branch);
         $payload = ['title' => $text->title, 'body' => $text->body, 'base' => $change->base];
 
         // The look-up comes first and a write is never retried, so a crash between the two leaves at most the pull request the next call finds.
@@ -50,34 +57,7 @@ final readonly class GitHubChangeOpener implements ChangeOpening
             return new OpenedChange($repository->pullRequest($this->numberOf($this->send('POST', $repository->path().'/pulls', [...$payload, 'head' => $change->branch]))), Opening::Created);
         }
 
-        $opening = $this->wasCreatedByThisApp($open) ? Opening::Created : Opening::Updated;
-
-        return new OpenedChange($repository->pullRequest($this->numberOf($this->send('PATCH', $repository->path().'/pulls/'.$this->numberOf($open), $payload))), $opening);
-    }
-
-    /**
-     * @param array<mixed> $pull
-     */
-    private function wasCreatedByThisApp(array $pull): bool
-    {
-        // A push that stopped after GitHub created the pull request but before its record finds it open on the retry; GitHub alone sets the author, so only this App's own bot account marks it as Intakt's creation.
-        $author = $pull['user'] ?? null;
-        $login = is_array($author) ? ($author['login'] ?? null) : null;
-
-        // Refused before the write, because an answer of updated is final for the pull request and an author GitHub did not name may be this App's.
-        if (!is_string($login) || '' === $login) {
-            throw new ForgeWriteFailed('GitHub answered the open pull request without its author\'s login, so it is not updated before its author can be checked against this App.');
-        }
-
-        if (!$this->identities->isBot($login)) {
-            return false;
-        }
-
-        try {
-            return $this->identities->isOwn($login);
-        } catch (TrustNotChecked $unchecked) {
-            throw new ForgeWriteFailed('The author of the open pull request could not be checked against this App: '.$unchecked->getMessage(), 0, $unchecked);
-        }
+        return new OpenedChange($repository->pullRequest($this->numberOf($this->send('PATCH', $repository->path().'/pulls/'.$open, $payload))), Opening::Created);
     }
 
     private function addressOf(string $project): RepositoryAddress
@@ -89,10 +69,8 @@ final readonly class GitHubChangeOpener implements ChangeOpening
         }
     }
 
-    /**
-     * @return array<mixed>|null
-     */
-    private function openPullRequestOf(RepositoryAddress $repository, string $branch): ?array
+    // Every listed match is checked, never only the first, because the branch can have open pull requests to several bases and a push moves the head of each.
+    private function numberOfOpenPullRequest(RepositoryAddress $repository, string $branch): ?int
     {
         $query = ['state' => 'open', 'head' => $repository->headOf($branch), 'per_page' => 100];
         $listed = $this->decoded($this->request('GET', $repository->path().'/pulls', ['query' => $query]));
@@ -101,13 +79,60 @@ final readonly class GitHubChangeOpener implements ChangeOpening
             throw new ForgeWriteFailed('GitHub answered the pull request look-up with something other than a list.');
         }
 
+        $own = [];
+
         foreach ($listed as $pull) {
-            if (is_array($pull) && is_array($pull['head'] ?? null) && ($pull['head']['ref'] ?? null) === $branch) {
-                return $pull;
+            if ($this->isOfBranch($pull, $branch)) {
+                $own[] = $this->ownNumberOf($pull);
             }
         }
 
-        return null;
+        return array_first($own);
+    }
+
+    // A listed entry whose branch cannot be read is refused, because it may be another account's pull request of this branch.
+    private function isOfBranch(mixed $pull, string $branch): bool
+    {
+        $ref = is_array($pull) && is_array($pull['head'] ?? null) ? ($pull['head']['ref'] ?? null) : null;
+
+        return is_string($ref) ? $ref === $branch : throw new ForgeWriteFailed('GitHub listed an open pull request without its branch, so the branch is left alone.');
+    }
+
+    /**
+     * @param array<mixed> $pull
+     */
+    private function ownNumberOf(array $pull): int
+    {
+        // GitHub alone sets the author, so only this App's own bot account marks a pull request as Intakt's own; a retry after a push that stopped before its record finds it open.
+        if (!$this->wasCreatedByThisApp($pull)) {
+            throw new ForgeWriteFailed('The branch has an open pull request that another account opened, so Intakt leaves it alone and neither pushes to the branch nor writes to the pull request.');
+        }
+
+        return $this->numberOf($pull);
+    }
+
+    /**
+     * @param array<mixed> $pull
+     */
+    private function wasCreatedByThisApp(array $pull): bool
+    {
+        $author = $pull['user'] ?? null;
+        $login = is_array($author) ? ($author['login'] ?? null) : null;
+
+        // Refused, because an author GitHub did not name may be another account.
+        if (!is_string($login) || '' === $login) {
+            throw new ForgeWriteFailed('GitHub answered an open pull request of the branch without its author\'s login, so the branch is left alone before its author can be checked against this App.');
+        }
+
+        if (!$this->identities->isBot($login)) {
+            return false;
+        }
+
+        try {
+            return $this->identities->isOwn($login);
+        } catch (TrustNotChecked $unchecked) {
+            throw new ForgeWriteFailed('The author of an open pull request of the branch could not be checked against this App: '.$unchecked->getMessage(), 0, $unchecked);
+        }
     }
 
     /**
@@ -141,6 +166,9 @@ final readonly class GitHubChangeOpener implements ChangeOpening
             $response = $this->calls->asInstallation($method, $path, $options);
             $status = $response->getStatusCode();
             $body = $response->getContent(false);
+        } catch (ForgeRateLimited $limited) {
+            // Chained, because the pause carries when the call may be tried again and nothing of the request.
+            throw new ForgeWriteFailed('GitHub is rate limited for a pull request call: '.$limited->getMessage(), 0, $limited);
         } catch (ExceptionInterface $failure) {
             throw $this->unreachable($failure::class);
         }
