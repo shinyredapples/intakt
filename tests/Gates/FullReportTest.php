@@ -21,11 +21,16 @@ use Intakt\Gates\ScratchDirectory;
 use Intakt\Gates\StopSignalForwarding;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
+use RecursiveDirectoryIterator;
+use RecursiveIteratorIterator;
+use FilesystemIterator;
+use SplFileInfo;
 
 #[CoversClass(FullReport::class)]
 #[CoversClass(CheckCommand::class)]
+#[CoversClass(GateChildren::class)]
+#[CoversClass(ScratchDirectory::class)]
 #[UsesClass(ChildCommand::class)]
-#[UsesClass(GateChildren::class)]
 #[UsesClass(GateReport::class)]
 #[UsesClass(GateResult::class)]
 #[UsesClass(GateSlots::class)]
@@ -35,7 +40,6 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[UsesClass(ProcessResult::class)]
 #[UsesClass(ProcessRunner::class)]
 #[UsesClass(RunningChild::class)]
-#[UsesClass(ScratchDirectory::class)]
 #[UsesClass(StopSignalForwarding::class)]
 final class FullReportTest extends SandboxTestCase
 {
@@ -104,6 +108,39 @@ final class FullReportTest extends SandboxTestCase
         $run = $sandbox->checkWith([GateSlots::VARIABLE => '1'], '--only=dashes');
 
         $this->assertNoReportAndTheSameVerdict($run, $outside);
+    }
+
+    public function testBinCheckPrintsOnlyJsonAndNoReportKeyWhenTheTempDirectoryIsMissing(): void
+    {
+        $sandbox = $this->sandboxWithTwelveDashes();
+        $home = dirname(__DIR__, 2);
+        $missing = $this->emptySandbox()->root.'/missing';
+
+        $run = new CheckRun(new ProcessRunner()->run(['php', '-d', 'display_errors=1', '-d', 'error_reporting=-1', '-d', 'sys_temp_dir='.$missing, $home.'/bin/check', '--root='.$sandbox->root, '--only=dashes'], $home, [GateSlots::VARIABLE => '1']));
+
+        self::assertSame([], array_values(array_filter($run->lines(), static fn (string $line): bool => !json_validate($line))), $run->output());
+        $summary = $this->summaryOf($run);
+        self::assertSame(['result', 'failed'], array_keys($summary->entries()), $run->output());
+        self::assertSame([['fail', ['dashes']], 1], [$this->verdictOf($summary), $run->exitCode()], $run->output());
+        self::assertDirectoryDoesNotExist($sandbox->root.'/'.FullReport::FOLDER);
+    }
+
+    public function testAScratchEntryThatCannotBeRemovedStillLeavesTheReportAndItsVerdict(): void
+    {
+        $home = $this->homeWhoseChildLocksAScratchEntry();
+        $temp = $this->emptySandbox();
+        $tree = $this->emptySandbox();
+
+        try {
+            $run = new CheckRun(new ProcessRunner()->run(['php', $home->root.'/bin/check', '--root='.$tree->root, '--only=dashes'], $home->root, [GateSlots::VARIABLE => '1', 'TMPDIR' => $temp->root]));
+        } finally {
+            $locked = $this->unlockedFoldersIn($temp->root);
+        }
+
+        $summary = $this->summaryOf($run);
+        self::assertNotSame(0, $locked, 'the child locked no scratch entry, so the cleanup could not fail');
+        self::assertSame([['fail', ['dashes']], 1], [$this->verdictOf($summary), $run->exitCode()], $run->output());
+        self::assertSame(['notes.md:1 locked'], $this->findingsIn($this->reportIn($tree->root.'/'.$summary->get('report')->text())));
     }
 
     public function testTheFullReportIsAsciiOnlyEvenWhenAFindingHoldsNonAsciiText(): void
@@ -204,6 +241,33 @@ final class FullReportTest extends SandboxTestCase
         }
 
         return $sandbox;
+    }
+
+    // Because the children run the home's own child entry, a home whose entry locks a folder inside its scratch folder forces the cleanup to fail without a seam in bin/check.
+    private function homeWhoseChildLocksAScratchEntry(): Sandbox
+    {
+        $real = dirname(__DIR__, 2);
+        $home = $this->sandboxWith('locked-scratch');
+        $home->write('bin/check', (string) file_get_contents($real.'/bin/check'));
+        $home->symlink('vendor', $real.'/vendor');
+
+        return $home;
+    }
+
+    // Because Symfony's remove() may have renamed the locked folder before it failed, every folder under the temp directory gets its mode back, so the sandbox can be removed.
+    private function unlockedFoldersIn(string $temp): int
+    {
+        $locked = 0;
+        $folders = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($temp, FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::SELF_FIRST);
+
+        foreach ($folders as $folder) {
+            if ($folder instanceof SplFileInfo && $folder->isDir() && !$folder->isWritable()) {
+                chmod($folder->getPathname(), 0o700);
+                ++$locked;
+            }
+        }
+
+        return $locked;
     }
 
     private function twelveFindings(): GateResult
