@@ -91,8 +91,8 @@ final class DemoTourJourneyTest extends JourneyTestCase
         $page = $dashboard->request('GET', '/reviews/'.self::SECOND);
 
         self::assertSame('The reviewers reported no findings, so the judge had nothing to mark.', $page->filter('#round-'.self::SECOND.'-judged')->text());
-        self::assertSame('Stage 7 of 7', $page->filter('#tour-caption .tour-count')->text());
-        self::assertSame('The new round is judged with nothing left to fix, so the findings are closed.', $page->filter('#tour-caption .tour-line')->text());
+        // The tour has ended, so a page loaded now holds only the empty caption; the last stage was shown by the live update alone.
+        self::assertCount(1, $page->filter('div#tour-caption[hidden]'));
     }
 
     /**

@@ -729,7 +729,7 @@ final class FirstRunControllerTest extends WebTestCase
         $page = $this->firstRunPage(self::PROJECTS, []);
 
         self::assertSame(
-            ['Watch a recorded real review now', 'Paste one provider key or Hugging Face token and run the demo review'],
+            ['Watch a recorded review', 'Run it live with your key'],
             $page->filter('#demo-choices h3')->each(static fn (Crawler $title): string => $title->text()),
         );
     }
@@ -757,7 +757,7 @@ final class FirstRunControllerTest extends WebTestCase
 
         $page = $this->firstRunPage(self::PROJECTS, []);
 
-        self::assertSame('Watch a recorded real review now', $page->filter('#choice-recorded h3')->text());
+        self::assertSame('Watch a recorded review', $page->filter('#choice-recorded h3')->text());
         self::assertSame(DemoReadiness::NoRecording->sentence(), $page->filter('#choice-recorded .recorded-when')->text());
         self::assertCount(0, $page->filter('form.play-demo'));
         self::assertCount(0, $page->filter('#choice-recorded pre, #choice-recorded code'));
@@ -771,8 +771,9 @@ final class FirstRunControllerTest extends WebTestCase
 
         $page = $this->firstRunPage(self::PROJECTS, []);
 
-        self::assertSame(DemoReadiness::Ready->sentence(), $page->filter('#choice-recorded .recorded-when')->text());
-        self::assertSame('Play the demo run', $page->filter('#choice-recorded form.play-demo .btn.secondary')->text());
+        self::assertCount(0, $page->filter('#choice-recorded .recorded-when'));
+        self::assertSame('No key needed', $page->filter('#choice-recorded .chip')->text());
+        self::assertSame(['Play the demo run'], $page->filter('main .btn.primary')->each(static fn (Crawler $button): string => $button->text()));
         self::assertCount(1, $page->filter('form.play-demo'));
     }
 

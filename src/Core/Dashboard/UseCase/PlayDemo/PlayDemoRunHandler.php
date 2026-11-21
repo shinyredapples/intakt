@@ -18,8 +18,8 @@ use Symfony\Component\Filesystem\Filesystem;
 #[AsCommandHandler(handles: PlayDemoRun::class)]
 final readonly class PlayDemoRunHandler
 {
-    // Four times the recorded pace, so a run of a few minutes fits a short look at the dashboard.
-    public const float FACTOR = 4.0;
+    // One and a half times the recorded pace, so the shipped 50 s recording fills the review page for about half a minute: long enough to watch the findings arrive.
+    public const float FACTOR = 1.5;
 
     public function __construct(
         private ReplaysRecording $replays,

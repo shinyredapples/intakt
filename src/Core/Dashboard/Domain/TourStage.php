@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\Domain;
 
-// In the order a demo run passes them, because the caption counts a stage by its place in this list.
+// In the order a demo run passes them, because the caption draws a stage as one dot by its place in this list. A later round passes the same stages again, so the tour never promises a stage the shipped one-round recording does not reach.
 enum TourStage: string
 {
     case ChangeArrives = 'change-arrives';
@@ -12,16 +12,10 @@ enum TourStage: string
     case FindingsArrive = 'findings-arrive';
     case JudgeWeighs = 'judge-weighs';
     case RoundEnds = 'round-ends';
-    case NextRound = 'next-round';
-    case FindingsClosed = 'findings-closed';
 
     public static function of(Review $review): self
     {
         $latest = $review->latest();
-
-        if (count($review->rounds) > 1) {
-            return self::ofALaterRound($review, $latest);
-        }
 
         if ($latest->isJudged()) {
             return self::RoundEnds;
@@ -33,13 +27,11 @@ enum TourStage: string
     public function sentence(): string
     {
         return match ($this) {
-            self::ChangeArrives => 'A change arrives, and Intakt opens review round 1 on it.',
-            self::ReviewersRead => 'The reviewers read the change; what each one writes streams into its row.',
-            self::FindingsArrive => 'The first verdicts are in: each reviewer that answered shows its findings.',
-            self::JudgeWeighs => 'Every reviewer has answered; the judge weighs their findings and builds the act list.',
-            self::RoundEnds => 'The round is judged: the act list names the findings to fix now.',
-            self::NextRound => 'The change comes back as a new round, and the reviewers read it again.',
-            self::FindingsClosed => 'The new round is judged with nothing left to fix, so the findings are closed.',
+            self::ChangeArrives => 'A change arrives, and Intakt starts its review.',
+            self::ReviewersRead => 'Two reviewers from different AI labs read the change.',
+            self::FindingsArrive => 'Findings arrive as each reviewer answers.',
+            self::JudgeWeighs => 'The judge checks every finding against the change.',
+            self::RoundEnds => 'Done: To fix lists what the change still needs.',
         };
     }
 
@@ -53,13 +45,10 @@ enum TourStage: string
         return count(self::cases());
     }
 
-    private static function ofALaterRound(Review $review, ReviewedRound $latest): self
+    // The last stage, so the caption can close itself once the tour has said everything.
+    public function isLast(): bool
     {
-        if (!$latest->isJudged()) {
-            return self::NextRound;
-        }
-
-        return [] === $review->openFindings() ? self::FindingsClosed : self::RoundEnds;
+        return self::count() === $this->number();
     }
 
     // A reviewer not started yet counts as still reading, so the judge's stage begins only once the whole panel is done.

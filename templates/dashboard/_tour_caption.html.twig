@@ -1,10 +1,15 @@
-{#- Nothing outside the compose demo; an empty element before a demo run, so the live update that starts the tour has a target. assets/tour-caption.js pauses and closes it. -#}
+{#- Nothing outside the compose demo; an empty element before a demo run, so the live update that starts the tour has a target. A page loaded after the last stage holds the empty element too, so a tour that ended never stays on every page; only the live update shows the last stage, and assets/tour-caption.js closes it after a moment. assets/tour-caption.js pauses and closes it. -#}
+{#- The element on the review page each stage talks about; assets/tour-caption.js marks it, and a page without it marks nothing. -#}
+{%- set focus = {'change-arrives': '#state-block-title', 'reviewers-read': '[id$="-now-reviewers"]', 'findings-arrive': '[id$="-now-reviewers"]', 'judge-weighs': '[id$="-now-judge"]', 'round-ends': '[id$="-judged"]'} %}
 {%- if caption is not null %}
-{%- if caption.stage is null %}
+{%- if caption.stage is null or (on_load|default(false) and caption.stage.isLast) %}
 <div id="tour-caption" hidden></div>
 {%- else %}
-<aside id="tour-caption" class="tour-caption" aria-label="Demo tour" data-stage="{{ caption.stage.value }}">
-    <span class="tour-count">Stage {{ caption.stage.number }} of {{ caption.stage.count }}</span>
+<aside id="tour-caption" class="tour-caption" aria-label="Demo tour" data-stage="{{ caption.stage.value }}" data-tour-at="{{ focus[caption.stage.value] }}"{% if caption.stage.isLast %} data-tour-last{% endif %}>
+    <span class="tour-dots" aria-hidden="true">
+        {%- for stage in enum_cases('Intakt\\Core\\Dashboard\\Domain\\TourStage') %}<span class="tour-dot{% if stage.number < caption.stage.number %} done{% elseif stage is same as(caption.stage) %} now{% endif %}"></span>{% endfor -%}
+    </span>
+    <span class="tour-count sr-only">Stage {{ caption.stage.number }} of {{ caption.stage.count }}</span>
     <p class="tour-line">{{ caption.stage.sentence }}</p>
     <a class="tour-review" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_REVIEW'), {round: caption.round}) }}">Open the review</a>
     <button type="button" class="btn quiet sm" data-tour-pause aria-pressed="false">Pause</button>

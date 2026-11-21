@@ -187,3 +187,64 @@ test('a page without a caption lets every update through', () => {
 
     assert.deepEqual(rendered, [stream]);
 });
+
+// A caption that names the element its stage talks about, on a page that can find that element and holds a window.
+function pointingPage({ stage = 'judge-weighs', last = false, follow = false } = {}) {
+    const caption = new FakeCaption();
+    caption.setAttribute('data-stage', stage);
+    caption.setAttribute('data-tour-at', '#judge');
+    if (last) {
+        caption.setAttribute('data-tour-last', '');
+    }
+    const link = new FakeElement();
+    link.setAttribute('href', '/reviews/r1');
+    caption.querySelector = (selector) => (selector === '[data-tour-pause]' ? caption.pause : selector === 'a.tour-review' ? link : null);
+    const target = new FakeElement();
+    target.scrolls = 0;
+    target.scrollIntoView = () => target.scrolls++;
+    const page = new FakePage(caption);
+    const window = { visited: [], timers: [], location: { assign: (href) => window.visited.push(href) }, setTimeout: (run) => window.timers.push(run), matchMedia: () => ({ matches: true }) };
+    page.defaultView = window;
+    page.querySelector = (selector) => (selector === '#judge' ? target : selector === '[data-tour-follow]' && follow ? {} : null);
+    page.querySelectorAll = () => [];
+    const storage = new FakeStorage();
+    captionTour(page, storage);
+
+    return { caption, page, target, window, storage };
+}
+
+test('the element the stage talks about is marked and scrolled into view once', () => {
+    const { page, target } = pointingPage();
+
+    page.listeners['turbo:load']();
+
+    assert.equal(target.getAttribute('data-tour-focus'), 'judge-weighs');
+    assert.equal(target.scrolls, 1);
+});
+
+test('a page that follows the tour takes the visitor to the review once the run has started', () => {
+    const { window, target } = pointingPage({ follow: true });
+
+    assert.deepEqual(window.visited, ['/reviews/r1']);
+    assert.equal(target.getAttribute('data-tour-focus'), null);
+});
+
+test('the last stage closes the caption after a moment', () => {
+    const { page, window, storage } = pointingPage({ last: true, follow: true });
+
+    assert.deepEqual(window.visited, []);
+    assert.equal(window.timers.length, 1);
+    window.timers[0]();
+
+    assert.equal(page.documentElement.dataset.tour, 'closed');
+    assert.equal(storage.items.get('intakt-tour'), 'closed');
+});
+
+test('a paused last stage stays open', () => {
+    const { caption, page, window } = pointingPage({ last: true });
+
+    page.click(caption.pause);
+    window.timers[0]();
+
+    assert.equal(page.documentElement.dataset.tour, undefined);
+});
