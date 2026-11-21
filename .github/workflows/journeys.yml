@@ -74,6 +74,12 @@ jobs:
         with:
           name: journeys-output
           path: ${{ runner.temp }}
+      # A CI_RUNS_ON runner's anonymous pulls share its address's Docker Hub limit; logged in as ci.yml's jobs are.
+      - name: Log in to Docker Hub
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: .github/ci/docker-hub-login.sh
       - name: Build the CI image
         run: .github/ci/build-image.sh
       - name: Install gh when the runner lacks it

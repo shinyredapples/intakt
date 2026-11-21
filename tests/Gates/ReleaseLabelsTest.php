@@ -51,6 +51,30 @@ final class ReleaseLabelsTest extends SandboxTestCase
         self::assertFalse($this->runWorkflow($sandbox, 'docs: z')->succeeded());
     }
 
+    public function testTheInstallStepInstallsUbuntusGhOnlyWhenTheRunnerLacksIt(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('calls', '');
+        $sandbox->write('bin/sudo', "#!/bin/sh\necho \"sudo \$*\" >> \"\$CALLS\"\n");
+
+        self::assertTrue($this->runInstallStep($sandbox)->succeeded());
+        self::assertSame("sudo apt-get update -qq\nsudo apt-get install -y -qq gh\n", file_get_contents($sandbox->root.'/calls'));
+
+        $sandbox->write('calls', '');
+        $sandbox->write('bin/gh', "#!/bin/sh\n");
+        self::assertTrue($this->runInstallStep($sandbox)->succeeded());
+        self::assertSame('', file_get_contents($sandbox->root.'/calls'));
+    }
+
+    // Only the fakes are on PATH, so a gh installed on this machine stays out.
+    private function runInstallStep(Sandbox $sandbox): ProcessResult
+    {
+        /** @var array{jobs: array{label: array{steps: list<array{run: string}>}}} $workflow */
+        $workflow = Yaml::parseFile(__DIR__.'/../../.github/workflows/release-labels.yml');
+
+        return $sandbox->runScript('chmod +x bin/*; PATH="$PWD/bin"; '.$workflow['jobs']['label']['steps'][0]['run'], ['CALLS' => $sandbox->root.'/calls']);
+    }
+
     private function sandboxLabeled(string $labels): Sandbox
     {
         $sandbox = $this->emptySandbox();

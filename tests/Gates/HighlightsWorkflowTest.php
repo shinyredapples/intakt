@@ -114,7 +114,15 @@ final class HighlightsWorkflowTest extends TestCase
         self::assertArrayNotHasKey('GH_TOKEN', $build['env'] ?? []);
         self::assertCount(1, $logins);
         self::assertSame(['DOCKERHUB_USERNAME' => '${{ secrets.DOCKERHUB_USERNAME }}', 'DOCKERHUB_TOKEN' => '${{ secrets.DOCKERHUB_TOKEN }}'], $logins[0]['env'] ?? null);
-        self::assertStringNotContainsString('secrets.', Yaml::dump(array_values(array_filter($steps, static fn (array $step): bool => !$isLogin($step))), 8));
+        // Only the login's two expected values are taken out, so a further secret anywhere else, the login step included, still fails.
+        $withoutTheLoginValues = array_map(static function (array $step) use ($isLogin): array {
+            if ($isLogin($step)) {
+                unset($step['env']['DOCKERHUB_USERNAME'], $step['env']['DOCKERHUB_TOKEN']);
+            }
+
+            return $step;
+        }, $steps);
+        self::assertStringNotContainsString('secrets.', Yaml::dump($withoutTheLoginValues, 8));
     }
 
     public function testTheAssembledPageReadsTheRecordedAnswersAsTheContainerSeesThem(): void
