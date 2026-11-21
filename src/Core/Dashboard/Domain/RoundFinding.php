@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\Domain;
 
+use Intakt\Core\Review\Contract\QuotesCounted;
+
 final readonly class RoundFinding
 {
     public JudgeCall $call;
@@ -19,6 +21,7 @@ final readonly class RoundFinding
         public ?string $file = null,
         public ?int $line = null,
         public ?string $droppedBecause = null,
+        public QuotesCounted $quotes = new QuotesCounted(),
     ) {
         $this->call = JudgeCall::NotActedOn;
     }

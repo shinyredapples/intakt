@@ -16,6 +16,7 @@ use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\CatchUpOwed;
 use Intakt\Core\Review\Contract\ChangeDecision;
+use Intakt\Core\Review\Contract\CountedQuotes;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\DroppedFinding;
 use Intakt\Core\Review\Contract\FailureInWords;
@@ -70,6 +71,7 @@ final class LedgerRounds
         private readonly FailureInWords $failures,
         private readonly RoundEndings $endings,
         private readonly ReplayMarks $marks,
+        private readonly CountedQuotes $quotes = new CountedQuotes(),
     ) {
         $this->tokens = new LedgerTokens();
     }
@@ -238,7 +240,8 @@ final class LedgerRounds
      */
     private function droppedFindings(RecordedEvent $recorded): array
     {
-        return array_map(static fn (DroppedFinding $finding): RoundFinding => new RoundFinding($finding->id, $finding->severity->value, $finding->text, [], $finding->file, $finding->line, $finding->reason), $this->payloads->droppedOf($recorded));
+        // The quotes come from the quote check itself, never from the card's own reading of the text, so the list is the one the recorded reason counted.
+        return array_map(fn (DroppedFinding $finding): RoundFinding => new RoundFinding($finding->id, $finding->severity->value, $finding->text, [], $finding->file, $finding->line, $finding->reason, $this->quotes->of($finding->text)), $this->payloads->droppedOf($recorded));
     }
 
     /**
