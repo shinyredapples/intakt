@@ -102,18 +102,17 @@ final readonly class QueuedIssue
     {
         $body = $history->body;
 
-        return $this->holdsWhatSteers($history->currentLabels, $references->waitsFor($body), $references->unreadableWaits($body), $references->closedBy($body));
+        return $this->hasLabels($history->currentLabels) && $this->namesNumbers(new ItemReading($this->reading->listed, $references->waitsFor($body), $references->unreadableWaits($body), $references->closedBy($body)));
     }
 
-    /**
-     * @param list<string> $labels
-     * @param list<int>    $waitsFor
-     * @param list<string> $unreadableWaits
-     * @param list<int>    $closedBy
-     */
-    public function holdsWhatSteers(array $labels, array $waitsFor, array $unreadableWaits, array $closedBy): bool
+    public function steersAlike(self $other): bool
     {
-        return $this->hasLabels($labels) && $this->reading->waitsFor === $waitsFor && $this->reading->unreadableWaits === $unreadableWaits && $this->reading->closedBy === $closedBy;
+        return $this->hasLabels($other->reading->listed->labels) && $this->namesNumbers($other->reading);
+    }
+
+    private function namesNumbers(ItemReading $other): bool
+    {
+        return $this->reading->waitsFor === $other->waitsFor && $this->reading->unreadableWaits === $other->unreadableWaits && $this->reading->closedBy === $other->closedBy;
     }
 
     // In any order, because GitHub does not promise one, and sorted as strings, because a numeric sort holds `1` and `01` equal and leaves them in the order they came.

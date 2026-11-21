@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Plugin\GitHubWorkSource;
 
 use Closure;
+use Doctrine\Common\EventManager;
 use Doctrine\DBAL\DriverManager;
 use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
@@ -368,7 +369,7 @@ final class GitHubWorkSourceTest extends KernelTestCase
         self::assertInstanceOf(EntityManagerInterface::class, $shared);
         $connection = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'path' => $file]);
         $connection->executeStatement('PRAGMA busy_timeout = 0');
-        $manager = new EntityManager($connection, $shared->getConfiguration(), $shared->getEventManager());
+        $manager = new EntityManager($connection, $shared->getConfiguration(), new EventManager());
         new SchemaTool($manager)->createSchema($manager->getMetadataFactory()->getAllMetadata());
 
         return new IntakeStore($manager);

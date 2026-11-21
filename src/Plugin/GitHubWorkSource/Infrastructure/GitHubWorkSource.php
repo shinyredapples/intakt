@@ -86,20 +86,25 @@ final readonly class GitHubWorkSource implements WorkSource
                 continue;
             }
 
-            try {
-                $failed = $this->isHeldByAFailure($project, $issue);
-            } catch (ProjectHeldByAnotherWriter $held) {
-                $this->logger->warning('The failures of project {project} could not be read before task #{number} is picked, so nothing is picked this tick: {reason}', ['number' => $issue->number(), 'project' => $project, 'reason' => $held->getMessage(), 'exception' => $held]);
-
-                return WorkPick::nothing(NothingPicked::ListingIncomplete);
-            }
-
-            if (!$failed) {
-                return WorkPick::picked($this->taskOf($issue, $plan));
+            $pick = $this->pickUnlessFailed($project, $issue, $plan);
+            if ($pick instanceof WorkPick) {
+                return $pick;
             }
         }
 
         return WorkPick::nothing(NothingPicked::NoTaskReady);
+    }
+
+    // Null when the task failed for good, so the next one is tried; a refused read ends the tick, because a failure may be stored that it did not see.
+    private function pickUnlessFailed(string $project, QueuedIssue $issue, IntakePlan $plan): ?WorkPick
+    {
+        try {
+            return $this->isHeldByAFailure($project, $issue) ? null : WorkPick::picked($this->taskOf($issue, $plan));
+        } catch (ProjectHeldByAnotherWriter $held) {
+            $this->logger->warning('The failures of project {project} could not be read before task #{number} is picked, so nothing is picked this tick: {reason}', ['number' => $issue->number(), 'project' => $project, 'reason' => $held->getMessage(), 'exception' => $held]);
+
+            return WorkPick::nothing(NothingPicked::ListingIncomplete);
+        }
     }
 
     // Asked again before each pick, because access may have been withdrawn since the item was vouched. The history must still be of the planned item, because an edit in the second of the listing keeps the update time and may add a wait or change a label the plan does not hold.
