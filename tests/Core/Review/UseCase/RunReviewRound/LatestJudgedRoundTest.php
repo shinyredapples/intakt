@@ -16,6 +16,10 @@ final class LatestJudgedRoundTest extends KernelTestCase
 {
     private const string PULL = 'https://github.com/acme/widgets/pull/7';
 
+    private const string OTHER_SPELLING = 'https://github.com/Acme/Widgets/pull/7';
+
+    private const string ANOTHER_PULL = 'https://github.com/acme/widgets/pull/8';
+
     public function testTheLatestJudgedRoundOfAHeadIsTheOneNoLaterRoundSupersedesThoughTheClockWentBackBetweenThem(): void
     {
         $fixture = new RoundFixture(self::getContainer());
@@ -36,7 +40,7 @@ final class LatestJudgedRoundTest extends KernelTestCase
         self::assertSame($newer, $fixture->transactions()->latestJudgedAt('alpha', self::PULL, SampleIdentity::HEAD)?->id()->toRfc4122());
     }
 
-    public function testTheLatestJudgedRoundOfAHeadIsTheNewerOneThoughAnotherSpellingOfTheAddressNumbersItsRoundsHigher(): void
+    public function testARoundJudgedUnderAnotherSpellingOfTheAddressContinuesTheOneSequenceAsTheLatestJudgedRound(): void
     {
         $fixture = new RoundFixture(self::getContainer());
         $this->judgedRound($fixture);
@@ -45,8 +49,34 @@ final class LatestJudgedRoundTest extends KernelTestCase
         $fixture->clock->modify('+1 second');
         $newer = $this->judgedRound($fixture, 'https://github.com/Acme/widgets/pull/7');
 
-        // No assertion on the round numbers, because rounds opened now number both spellings as one sequence (StoredFindings::openRound()); the lookup across spellings is kept for old rounds stored apart.
-        self::assertSame($newer, $fixture->transactions()->latestJudgedAt('alpha', self::PULL, SampleIdentity::HEAD)?->id()->toRfc4122());
+        self::assertSame([3, $newer], [$fixture->round($newer)->number(), $fixture->transactions()->latestJudgedAt('alpha', self::PULL, SampleIdentity::HEAD)?->id()->toRfc4122()]);
+    }
+
+    public function testTheHighestNumberedRoundOfTheOneSequenceIsTheLatestJudgedRoundThoughTheClockWentBackBeforeItsSpellingWasJudged(): void
+    {
+        $fixture = new RoundFixture(self::getContainer());
+        $this->judgedRound($fixture);
+        $second = $this->judgedRound($fixture);
+        $this->roundLeftUnderAnOldSpelling($fixture);
+        $fixture->clock->modify('-1 hour');
+        $newest = $this->judgedRound($fixture, self::OTHER_SPELLING);
+        $rounds = $fixture->transactions();
+
+        self::assertSame(
+            [$newest, true, false],
+            [$rounds->latestJudgedAt('alpha', self::PULL, SampleIdentity::HEAD)?->id()->toRfc4122(), $rounds->judgedAfter($fixture->round($second)), $rounds->judgedAfter($fixture->round($newest))],
+        );
+    }
+
+    public function testTheLatestJudgedRoundIsTheSameWhateverSpellingTheWatcherNamesThePullRequestWith(): void
+    {
+        $fixture = new RoundFixture(self::getContainer());
+        $this->judgedRound($fixture);
+        $this->roundLeftUnderAnOldSpelling($fixture);
+        $fixture->clock->modify('-1 hour');
+        $newest = $this->judgedRound($fixture);
+
+        self::assertSame($newest, $fixture->transactions()->latestJudgedAt('alpha', self::OTHER_SPELLING, SampleIdentity::HEAD)?->id()->toRfc4122());
     }
 
     public function testAHeadNoRoundReviewedHasNoLatestJudgedRound(): void
@@ -55,6 +85,16 @@ final class LatestJudgedRoundTest extends KernelTestCase
         $this->judgedRound($fixture);
 
         self::assertNull($fixture->transactions()->latestJudgedAt('alpha', self::PULL, str_repeat('0', 40)));
+    }
+
+    // Judged on another pull request and written under an old spelling of this one, as an install stored it before rounds were stored canonically and migration Version20261122100000 left it apart; its id is newer than any round judged after the clock went back.
+    private function roundLeftUnderAnOldSpelling(RoundFixture $fixture): void
+    {
+        $this->judgedRound($fixture, self::ANOTHER_PULL);
+
+        foreach (['change_findings', 'review_round'] as $table) {
+            $fixture->entities->getConnection()->executeStatement(sprintf('UPDATE %s SET change_ref = ? WHERE change_ref = ?', $table), [self::OTHER_SPELLING, self::ANOTHER_PULL]);
+        }
     }
 
     private function judgedRound(RoundFixture $fixture, string $address = self::PULL): string
