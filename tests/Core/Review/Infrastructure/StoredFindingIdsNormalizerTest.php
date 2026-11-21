@@ -127,11 +127,12 @@ final class StoredFindingIdsNormalizerTest extends TestCase
         new StoredFindingIdsNormalizer()->denormalize(['F2' => 3], SameCause::class);
     }
 
-    public function testAStoredLinkOfAFindingToItselfFailsToRead(): void
+    public function testAStoredLinkOfAFindingToItselfStillReadsBack(): void
     {
-        $this->expectException(UnexpectedValueException::class);
+        $read = new StoredFindingIdsNormalizer()->denormalize(['F2' => 'F2'], SameCause::class);
 
-        new StoredFindingIdsNormalizer()->denormalize(['F2' => 'F2'], SameCause::class);
+        self::assertInstanceOf(SameCause::class, $read);
+        self::assertSame('F2', $read->causeOf('F2'));
     }
 
     public function testAStoredLinkWithAnEmptyCauseFailsToRead(): void

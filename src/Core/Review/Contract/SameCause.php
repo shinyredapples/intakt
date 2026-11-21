@@ -36,6 +36,21 @@ final readonly class SameCause implements IteratorAggregate
             throw new InvalidArgumentException(sprintf('Finding "%s" cannot be its own cause.', $finding));
         }
 
+        return $this->put($finding, $cause);
+    }
+
+    // Only for reading a stored row, because rows written before the guard may hold a finding as its own cause and must read back and write back unchanged.
+    public function withStored(string $finding, string $cause): self
+    {
+        if ('' === $finding || '' === $cause) {
+            throw new InvalidArgumentException('A same-cause link needs a finding id and a cause id.');
+        }
+
+        return $this->put($finding, $cause);
+    }
+
+    private function put(string $finding, string $cause): self
+    {
         $causes = $this->causes;
         $causes[$finding] = $cause;
 

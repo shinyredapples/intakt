@@ -54,7 +54,7 @@ final class StoredFindingIdsNormalizer implements NormalizerInterface, Denormali
         $sameCause = new SameCause();
         foreach ($strings as $finding => $cause) {
             try {
-                $sameCause = $sameCause->with((string) $finding, $cause);
+                $sameCause = $sameCause->withStored((string) $finding, $cause);
             } catch (InvalidArgumentException $refused) {
                 throw new UnexpectedValueException(sprintf('A stored "%s" holds a link it refuses: %s', $type, $refused->getMessage()), 0, $refused);
             }

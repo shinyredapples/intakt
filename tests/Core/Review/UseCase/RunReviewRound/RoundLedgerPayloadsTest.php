@@ -358,6 +358,16 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
         self::assertSame(self::MERGED_ROW, $this->written($done));
     }
 
+    public function testAJudgeRowWithAFindingAsItsOwnCauseReadsBackAndIsWrittenAgainUnchanged(): void
+    {
+        $row = '{"round":"'.self::ROUND.'","act":["F1"],"follow_ups":[],"findings":[],"dropped":[],"same_cause":{"F1":"F1"},"votes":[],"p1_keys":[],"fallback":null}';
+
+        $done = $this->serializer()->deserialize($row, JudgeDone::class, JsonEncoder::FORMAT);
+
+        self::assertInstanceOf(JudgeDone::class, $done);
+        self::assertSame($row, $this->written($done));
+    }
+
     public function testAJudgeRowWithAKeyedActListReadsInOrderAndIsWrittenBackAsAList(): void
     {
         $done = $this->serializer()->deserialize('{"round":"'.self::ROUND.'","act":{"3":"F3","1":"F1"},"follow_ups":[],"findings":[],"dropped":[],"same_cause":[],"votes":[],"p1_keys":[],"fallback":null}', JudgeDone::class, JsonEncoder::FORMAT);
