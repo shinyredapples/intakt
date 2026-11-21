@@ -58,7 +58,7 @@ final class HandedOverRoundLookupTest extends KernelTestCase
 
         $canonical = $this->judgeRound($fixture, self::PULL, SampleIdentity::HEAD);
 
-        self::assertSame($canonical, $rounds->latestJudgedAt('alpha', self::PULL, SampleIdentity::HEAD)?->id()->toRfc4122());
+        self::assertSame($canonical, $rounds->latestJudgedAt('alpha', self::PULL, SampleIdentity::HEAD)->id()->toRfc4122());
         self::assertTrue($rounds->judgedAfter($fixture->round($legacy)));
     }
 
