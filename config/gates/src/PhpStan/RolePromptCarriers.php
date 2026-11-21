@@ -109,13 +109,23 @@ final readonly class RolePromptCarriers
 
         foreach ($finder->findInstanceOf($trait->stmts, Class_::class) as $anonymous) {
             foreach ($finder->findInstanceOf($anonymous->stmts, New_::class) as $construction) {
-                if ($construction->class instanceof Name && $construction->class->isSpecialClassName()) {
+                if ($this->namesTheAnonymousClass($construction->class)) {
                     $ids[spl_object_id($construction)] = true;
                 }
             }
         }
 
         return $ids;
+    }
+
+    // because `self::class`, `static::class` and `parent::class` name the same class as `self`, `static` and `parent`
+    private function namesTheAnonymousClass(Name|Expr|Class_ $class): bool
+    {
+        if ($class instanceof ClassConstFetch) {
+            return $class->class instanceof Name && $class->name instanceof Identifier && 'class' === $class->name->toLowerString() && $class->class->isSpecialClassName();
+        }
+
+        return $class instanceof Name && $class->isSpecialClassName();
     }
 
     public function unusedTraitFinding(string $file, int $line): IdentifierRuleError

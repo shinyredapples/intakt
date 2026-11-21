@@ -147,6 +147,26 @@ final class UnusedTraitCarrierRuleTest extends PhpStanRuleTestCase
         yield 'self' => ['new self()'];
         yield 'static' => ['new static()'];
         yield 'parent' => ['new parent()'];
+        yield 'self::class' => ['new (self::class)()'];
+        yield 'static::class' => ['new (static::class)()'];
+        yield 'parent::class' => ['new (parent::class)()'];
+        yield 'self::class in any case' => ['new (SELF::CLASS)()'];
+    }
+
+    public function testATraitNoClassUsesMayNotBuildItsUsingClassFromAClassConstant(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/Sample/Builds.php', $this->traitBuilding('new (static::class)(\'x\', $text)'));
+
+        self::assertStringStartsWith('src/Sample/Builds.php:14 intakt.reviewerRole A trait no class uses', $this->ruleFindingsIn($sandbox));
+    }
+
+    public function testAnAnonymousClassInATraitNoClassUsesMayNotBuildAClassFromAnotherConstant(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/Sample/Builds.php', $this->traitWithAnonymousClassBuilding('new (self::ROLE)(\'x\', $text)'));
+
+        self::assertStringStartsWith('src/Sample/Builds.php:17 intakt.reviewerRole A trait no class uses', $this->ruleFindingsIn($sandbox));
     }
 
     #[DataProvider('anonymousClassesBuildingThemselves')]
