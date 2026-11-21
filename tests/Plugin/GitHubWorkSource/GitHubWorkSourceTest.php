@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Intakt\Tests\Plugin\GitHubWorkSource;
 
 use Closure;
+use Doctrine\DBAL\DriverManager;
+use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Plugin\GitHubForge\Contract\IssueHistories;
@@ -75,7 +77,10 @@ final class GitHubWorkSourceTest extends KernelTestCase
     private RecordedIssueReads $reads;
     private BufferingLogger $logger;
     private string $editor = 'ana';
-    private bool $writeAccess = true;
+    /** @var list<string> */
+    private array $writers = ['ana', 'bea'];
+    private string $labelApplier = 'ana';
+    private ?string $editedBody = null;
     /** @var list<string> */
     private array $asked = [];
     /** @var list<int> */
@@ -140,19 +145,87 @@ final class GitHubWorkSourceTest extends KernelTestCase
 
     public function testWriteAccessOfTheAuthorAndTheLastEditorIsAskedAgainBeforeAPick(): void
     {
-        $this->reads->lists([Issues::task(5)]);
+        $this->reads->lists([Issues::task(5, ['intakt'], ['author' => 'bea'])]);
         $source = $this->source();
         self::assertSame(5, $source->queue('alpha')->ready()[0]->number);
         $this->asked = [];
         $this->reads->listsUnchanged();
 
         self::assertSame(5, $source->nextWork('alpha', WorkerState::Free)->task?->number);
-        self::assertSame(['ana', 'ana'], $this->asked);
+        self::assertSame(['bea', 'ana'], $this->asked);
+    }
 
-        $this->writeAccess = false;
+    public function testATaskWhoseLastEditorLostWriteAccessSinceItWasListedIsNotPicked(): void
+    {
+        $this->reads->lists([Issues::task(5, ['intakt'], ['author' => 'bea'])]);
+        $source = $this->source();
+        $source->queue('alpha');
+        $this->writers = ['bea'];
         $this->reads->listsUnchanged();
 
         self::assertSame(NothingPicked::NoTaskReady, $source->nextWork('alpha', WorkerState::Free)->nothing);
+    }
+
+    public function testATaskWhoseAuthorLostWriteAccessSinceItWasListedIsNotPicked(): void
+    {
+        $this->reads->lists([Issues::task(5, ['intakt'], ['author' => 'bea'])]);
+        $source = $this->source();
+        $source->queue('alpha');
+        $this->writers = ['ana'];
+        $this->reads->listsUnchanged();
+
+        self::assertSame(NothingPicked::NoTaskReady, $source->nextWork('alpha', WorkerState::Free)->nothing);
+    }
+
+    public function testAnIdeaLabelKeepsATaskWithTheEligibilityLabelFromBeingPicked(): void
+    {
+        $this->reads->lists([Issues::task(5, ['intakt', 'idea']), Issues::task(6)]);
+
+        self::assertSame(6, $this->source()->nextWork('alpha', WorkerState::Free)->task?->number);
+    }
+
+    public function testAnEligibilityLabelAppliedByAnAccountWithoutWriteAccessIsNotPicked(): void
+    {
+        $this->labelApplier = 'mallory';
+        $this->reads->lists([Issues::task(5)]);
+
+        self::assertSame(NothingPicked::NoTaskReady, $this->source()->nextWork('alpha', WorkerState::Free)->nothing);
+    }
+
+    public function testAWaitAddedInTheSecondOfTheListingAfterThePlanKeepsTheTaskFromBeingPicked(): void
+    {
+        $this->reads->lists([Issues::task(5), Issues::task(6)]);
+        $source = $this->source();
+        self::assertSame(5, $source->queue('alpha')->ready()[0]->number);
+        $this->reads->listsUnchanged();
+        $this->editedBody = 'Waits for #6';
+
+        $pick = $source->nextWork('alpha', WorkerState::Free);
+
+        self::assertSame(NothingPicked::TrustNotChecked, $pick->nothing);
+        self::assertSame('GitHub holds #5 with other text or labels than it was planned with, so its history is not of the planned item.', $this->onlyLog()['context']['reason'] ?? null);
+    }
+
+    public function testAWriterHoldingTheDatabaseWhenThePickReadsTheFailuresPicksNothingAndLogsTheReason(): void
+    {
+        $file = (string) tempnam(sys_get_temp_dir(), 'intake');
+        $writer = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'path' => $file]);
+        try {
+            $this->store = $this->storeOnAFileThatRefusesBusyReads($file);
+            $this->reads->lists([Issues::task(5)]);
+            $source = $this->source();
+            $source->queue('alpha');
+            $this->reads->listsUnchanged();
+            $this->duringHistory = static fn () => $writer->executeStatement('BEGIN EXCLUSIVE');
+
+            $pick = $source->nextWork('alpha', WorkerState::Free);
+
+            self::assertSame(NothingPicked::ListingIncomplete, $pick->nothing);
+            self::assertSame('Another writer holds the intake rows of project "alpha" and has not committed them.', $this->onlyLog()['context']['reason'] ?? null);
+        } finally {
+            $writer->close();
+            unlink($file);
+        }
     }
 
     public function testATrustCheckThatFailsIsLoggedAsAFailedCheckAndPicksNothing(): void
@@ -284,10 +357,22 @@ final class GitHubWorkSourceTest extends KernelTestCase
 
             $listed = $this->reads->lastListed[$number];
 
-            return new IssueHistory($this->editor, array_map(static fn (string $label): LabelApplication => new LabelApplication($label, 'ana'), $listed->labels), $listed->body, $listed->labels);
+            return new IssueHistory($this->editor, array_map(fn (string $label): LabelApplication => new LabelApplication($label, $this->labelApplier), $listed->labels), $this->editedBody ?? $listed->body, $listed->labels);
         });
 
         return $this->sourceOver($this->reads, $histories);
+    }
+
+    private function storeOnAFileThatRefusesBusyReads(string $file): IntakeStore
+    {
+        $shared = self::getContainer()->get('doctrine.orm.entity_manager');
+        self::assertInstanceOf(EntityManagerInterface::class, $shared);
+        $connection = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'path' => $file]);
+        $connection->executeStatement('PRAGMA busy_timeout = 0');
+        $manager = new EntityManager($connection, $shared->getConfiguration(), $shared->getEventManager());
+        new SchemaTool($manager)->createSchema($manager->getMetadataFactory()->getAllMetadata());
+
+        return new IntakeStore($manager);
     }
 
     private function sourceOver(IssueReads $reads, IssueHistories $histories): GitHubWorkSource
@@ -299,11 +384,11 @@ final class GitHubWorkSourceTest extends KernelTestCase
                 throw $this->accessFailure;
             }
 
-            return $this->writeAccess && 'ana' === $account;
+            return in_array($account, $this->writers, true);
         });
         $listing = new CompleteListing($reads, $histories, $accounts, $this->store, new IntakeRules('intakt'), new IssueReferences(), $this->logger);
 
-        return new GitHubWorkSource($listing, $histories, $accounts, $this->store, $this->logger);
+        return new GitHubWorkSource($listing, $histories, $accounts, new IssueReferences(), $this->store, $this->logger);
     }
 
     private function historyAnswer(): string

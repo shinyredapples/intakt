@@ -11,6 +11,8 @@ use Intakt\Plugin\GitHubForge\Contract\SteeringAccounts;
 use Intakt\Plugin\GitHubForge\Contract\TrustNotChecked;
 use Intakt\Plugin\GitHubWorkSource\Domain\HeldIssue;
 use Intakt\Plugin\GitHubWorkSource\Domain\IntakePlan;
+use Intakt\Plugin\GitHubWorkSource\Domain\IssueReferences;
+use Intakt\Plugin\GitHubWorkSource\Domain\ProjectHeldByAnotherWriter;
 use Intakt\Plugin\GitHubWorkSource\Domain\QueuedIssue;
 use Intakt\Plugin\WorkSource\Contract\HeldTask;
 use Intakt\Plugin\WorkSource\Contract\NothingPicked;
@@ -27,6 +29,7 @@ final readonly class GitHubWorkSource implements WorkSource
         private CompleteListing $listing,
         private IssueHistories $histories,
         private SteeringAccounts $accounts,
+        private IssueReferences $references,
         private IntakeStore $store,
         private LoggerInterface $logger,
     ) {
@@ -83,7 +86,15 @@ final readonly class GitHubWorkSource implements WorkSource
                 continue;
             }
 
-            if (!$this->isHeldByAFailure($project, $issue)) {
+            try {
+                $failed = $this->isHeldByAFailure($project, $issue);
+            } catch (ProjectHeldByAnotherWriter $held) {
+                $this->logger->warning('The failures of project {project} could not be read before task #{number} is picked, so nothing is picked this tick: {reason}', ['number' => $issue->number(), 'project' => $project, 'reason' => $held->getMessage(), 'exception' => $held]);
+
+                return WorkPick::nothing(NothingPicked::ListingIncomplete);
+            }
+
+            if (!$failed) {
                 return WorkPick::picked($this->taskOf($issue, $plan));
             }
         }
@@ -91,7 +102,7 @@ final readonly class GitHubWorkSource implements WorkSource
         return WorkPick::nothing(NothingPicked::NoTaskReady);
     }
 
-    // Asked again before each pick, because access may have been withdrawn since the item was vouched.
+    // Asked again before each pick, because access may have been withdrawn since the item was vouched. The history must still be of the planned item, because an edit in the second of the listing keeps the update time and may add a wait or change a label the plan does not hold.
     private function isStillSteered(string $project, QueuedIssue $issue): bool
     {
         if (!$this->accounts->steers($project, $issue->author())) {
@@ -99,6 +110,9 @@ final readonly class GitHubWorkSource implements WorkSource
         }
 
         $history = $this->histories->of($project, $issue->number(), $issue->updatedAt());
+        if (!$issue->isListedAs($history, $this->references)) {
+            throw new ForgeReadFailed(sprintf('GitHub holds #%d with other text or labels than it was planned with, so its history is not of the planned item.', $issue->number()));
+        }
 
         return $this->accounts->steers($project, $history->lastEditor);
     }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Plugin\GitHubWorkSource\Domain;
 
 use DateTimeImmutable;
+use Intakt\Plugin\GitHubForge\Contract\IssueHistory;
 
 // What the listing showed of one open issue or pull request, and what its history said once read, because only an item that can steer the queue is worth that read.
 final readonly class QueuedIssue
@@ -94,6 +95,38 @@ final readonly class QueuedIssue
     public function closedBy(): array
     {
         return $this->reading->closedBy;
+    }
+
+    // The numbers a text names, not the text, because only they steer and a row whose listing went unchanged keeps them without the body.
+    public function isListedAs(IssueHistory $history, IssueReferences $references): bool
+    {
+        $body = $history->body;
+
+        return $this->holdsWhatSteers($history->currentLabels, $references->waitsFor($body), $references->unreadableWaits($body), $references->closedBy($body));
+    }
+
+    /**
+     * @param list<string> $labels
+     * @param list<int>    $waitsFor
+     * @param list<string> $unreadableWaits
+     * @param list<int>    $closedBy
+     */
+    public function holdsWhatSteers(array $labels, array $waitsFor, array $unreadableWaits, array $closedBy): bool
+    {
+        return $this->hasLabels($labels) && $this->reading->waitsFor === $waitsFor && $this->reading->unreadableWaits === $unreadableWaits && $this->reading->closedBy === $closedBy;
+    }
+
+    // In any order, because GitHub does not promise one, and sorted as strings, because a numeric sort holds `1` and `01` equal and leaves them in the order they came.
+    /**
+     * @param list<string> $labels
+     */
+    private function hasLabels(array $labels): bool
+    {
+        $own = $this->reading->listed->labels;
+        sort($own, SORT_STRING);
+        sort($labels, SORT_STRING);
+
+        return $own === $labels;
     }
 
     /**
