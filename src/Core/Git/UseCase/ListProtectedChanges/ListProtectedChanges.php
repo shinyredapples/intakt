@@ -6,7 +6,7 @@ namespace Intakt\Core\Git\UseCase\ListProtectedChanges;
 
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Core\Git\Domain\ChangeNotRead;
-use Intakt\Core\Git\Domain\ProtectedChanges;
+use Intakt\Core\Git\Contract\ProtectedChanges;
 use Intakt\Core\Git\Domain\ProtectedPaths;
 use NoDiscard;
 

@@ -49,4 +49,5 @@ enum LedgerEventKind: string
     case RecurringP1Found = 'recurring_p1_found';
     case ChangeHandedToIntakt = 'change_handed_to_intakt';
     case ChangeNotHandedToIntakt = 'change_not_handed_to_intakt';
+    case OwnerAsked = 'owner_asked';
 }

@@ -8,7 +8,7 @@ use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Domain\ChangedPath;
 use Intakt\Core\Git\Domain\ChangeNotRead;
-use Intakt\Core\Git\Domain\ProtectedChanges;
+use Intakt\Core\Git\Contract\ProtectedChanges;
 use Intakt\Core\Git\Domain\ProtectedPaths;
 use Intakt\Core\Git\UseCase\ListProtectedChanges\ChangedPaths;
 use Intakt\Core\Git\UseCase\ListProtectedChanges\CommitNameRefused;

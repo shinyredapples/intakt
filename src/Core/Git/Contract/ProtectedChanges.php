@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Core\Git\Domain;
+namespace Intakt\Core\Git\Contract;
 
 final readonly class ProtectedChanges
 {

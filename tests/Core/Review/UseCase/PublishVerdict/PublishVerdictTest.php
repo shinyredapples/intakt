@@ -5,6 +5,17 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Review\UseCase\PublishVerdict;
 
 use Intakt\Core\Budget\Infrastructure\ConfiguredPrices;
+use Intakt\Core\Git\Contract\ProtectedChanges;
+use Intakt\Core\Git\Contract\ProtectedHeads;
+use Intakt\Core\Ledger\Contract\Ledger;
+use Intakt\Core\Ledger\Contract\LedgerEvent;
+use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\RecordedEvent;
+use Intakt\Core\Review\UseCase\PublishVerdict\OwnerAsk;
+use Intakt\Core\Review\UseCase\PublishVerdict\OwnerAskNotRecorded;
+use Intakt\Core\Review\UseCase\PublishVerdict\OwnerAsks;
+use Intakt\Core\Watcher\Contract\HandedOverChanges;
+use Intakt\Tests\Core\Dashboard\UseCase\AppendRefusingLedger;
 use Intakt\Core\Review\Contract\ChangeDecision;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
@@ -66,6 +77,11 @@ use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
 #[CoversClass(QueuePublicationOfJudgedRound::class)]
 #[CoversClass(VerdictForTheLoop::class)]
 #[CoversClass(LoopReviewComment::class)]
+#[CoversClass(OwnerAsks::class)]
+#[CoversClass(OwnerAsk::class)]
+#[CoversClass(OwnerAskNotRecorded::class)]
+#[UsesClass(HandedOverChanges::class)]
+#[UsesClass(ProtectedChanges::class)]
 #[CoversClass(RoundLedgerReading::class)]
 #[UsesClass(PublishedVerdict::class)]
 #[UsesClass(HeadStatus::class)]
@@ -93,11 +109,175 @@ final class PublishVerdictTest extends KernelTestCase
     private ScriptedGitHub $github;
     private LockFactory $locks;
 
+    private ProtectedChanges $protectedChanges;
+
     protected function setUp(): void
     {
         $this->fixture = new RoundFixture(self::getContainer(), new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']));
         $this->github = new ScriptedGitHub();
         $this->locks = new LockFactory(new InMemoryStore());
+        $this->protectedChanges = ProtectedChanges::touching([]);
+    }
+
+    public function testAPullRequestHandedToIntaktInALiveProjectGetsTheReviewPostedWithTheRoundsToken(): void
+    {
+        $this->handOver('alpha', self::PULL);
+
+        $roundId = $this->publishRoundJudgedOn([], new ConfiguredProjectModes([]));
+
+        self::assertSame([
+            [self::COMMENT, ['body' => self::HEADING."\n\n```json\n".'{"verdict":"approve","head":"'.SampleIdentity::HEAD.'","summary":"2 of 2 reviewers approve; findings to act on: 0."}'."\n```\n\n".$this->marker($roundId)]],
+            [self::STATUS, ['state' => 'success', 'context' => 'intakt/review', 'description' => 'Intakt approves this head.']],
+        ], $this->github->writes);
+        self::assertSame([], $this->ownerAsks());
+    }
+
+    public function testAPullRequestHandedToIntaktInAnotherLetterCaseIsPublishedToo(): void
+    {
+        $this->handOver('alpha', 'https://github.com/Acme/Widgets/pull/7');
+
+        $this->publishRoundJudgedOn([], new ConfiguredProjectModes([]));
+
+        self::assertSame(['success'], array_column(array_column($this->github->writes, 1), 'state'));
+    }
+
+    public function testAPullRequestHandedToIntaktInAnotherProjectPublishesNothingInALiveProject(): void
+    {
+        $this->handOver('beta', self::PULL);
+
+        $this->publishRoundJudgedOn([], new ConfiguredProjectModes([]));
+
+        self::assertSame([], $this->github->writes);
+    }
+
+    public function testAHandedOverHeadThatTouchesProtectedPathsGetsTheReviewWithTheOwnerAskAndAPendingStatus(): void
+    {
+        $this->handOver('alpha', self::PULL);
+        $this->protectedChanges = ProtectedChanges::touching(['.github/workflows/ci.yaml', 'bin/check']);
+
+        $roundId = $this->publishRoundJudgedOn([], new ConfiguredProjectModes([]));
+
+        self::assertSame([
+            [self::COMMENT, ['body' => $this->approvedComment($roundId, $this->ask('Protected paths:', '- <code>.github/workflows/ci.yaml</code>', '- <code>bin/check</code>'))]],
+            [self::STATUS, ['state' => 'pending', 'context' => 'intakt/review', 'description' => 'Intakt approves this head; it touches protected paths and waits for the owner.']],
+        ], $this->github->writes);
+        self::assertSame([['project' => 'alpha', 'change' => self::PULL, 'head' => SampleIdentity::HEAD, 'round' => $roundId, 'paths' => ['.github/workflows/ci.yaml', 'bin/check'], 'unreadable' => null]], $this->ownerAsks());
+    }
+
+    public function testAHandedOverHeadWhoseProtectedPathsCannotBeReadAsksTheOwnerWithoutPostingGitsReason(): void
+    {
+        $this->handOver('alpha', self::PULL);
+        $this->protectedChanges = ProtectedChanges::unreadable('/var/lib/intakt/mirrors/alpha.git is no folder');
+
+        $roundId = $this->publishRoundJudgedOn([], new ConfiguredProjectModes([]));
+
+        self::assertSame($this->approvedComment($roundId, $this->ask('Intakt could not read which paths this head changes, so it counts as protected.')), $this->commentBody());
+        self::assertSame(['pending'], array_column(array_column(array_slice($this->github->writes, 1), 1), 'state'));
+        self::assertSame(['/var/lib/intakt/mirrors/alpha.git is no folder'], array_column($this->ownerAsks(), 'unreadable'));
+    }
+
+    public function testAProtectedPathThatCouldForgeTheAskIsPostedEscaped(): void
+    {
+        $this->handOver('alpha', self::PULL);
+        $this->protectedChanges = ProtectedChanges::touching(["bin/a\n- <code>b</code> `c` <!-- d"]);
+
+        $this->publishRoundJudgedOn([], new ConfiguredProjectModes([]));
+
+        self::assertStringContainsString("Protected paths:\n- <code>bin/a\\n- &lt;code&gt;b&lt;/code&gt; &#96;c&#96; &lt;!-- d</code>\n\n<!-- intakt-verdict: ", $this->commentBody());
+    }
+
+    public function testAnAskListsFiftyProtectedPathsAndCountsTheRest(): void
+    {
+        $this->handOver('alpha', self::PULL);
+        $paths = array_map(static fn (int $n): string => sprintf('bin/%02d', $n), range(1, 51));
+        $this->protectedChanges = ProtectedChanges::touching($paths);
+
+        $this->publishRoundJudgedOn([], new ConfiguredProjectModes([]));
+
+        self::assertStringContainsString("- <code>bin/50</code>\n- and 1 more\n\n", $this->commentBody());
+        self::assertStringNotContainsString('bin/51', $this->commentBody());
+        self::assertSame([$paths], array_column($this->ownerAsks(), 'paths'));
+    }
+
+    public function testAnAskOfExactlyFiftyProtectedPathsListsEachWithoutARest(): void
+    {
+        $this->handOver('alpha', self::PULL);
+        $this->protectedChanges = ProtectedChanges::touching(array_map(static fn (int $n): string => sprintf('bin/%02d', $n), range(1, 50)));
+
+        $this->publishRoundJudgedOn([], new ConfiguredProjectModes([]));
+
+        self::assertStringContainsString("- <code>bin/50</code>\n\n<!-- intakt-verdict: ", $this->commentBody());
+    }
+
+    public function testARetriedPublicationOfAProtectedHeadPostsTheAskOnceAndRecordsOneAsk(): void
+    {
+        $this->handOver('alpha', self::PULL);
+        $this->protectedChanges = ProtectedChanges::touching(['bin/check']);
+        $roundId = $this->judgedRound(self::PULL, []);
+        $this->github->refuseOnce('/statuses/'.SampleIdentity::HEAD, 502);
+        $handler = $this->handler(new ConfiguredProjectModes([]));
+        try {
+            $handler(new PublishVerdict($roundId));
+            self::fail('A refused status must fail the publication.');
+        } catch (ForgeWriteFailed) {
+        }
+
+        $handler(new PublishVerdict($roundId));
+        $handler(new PublishVerdict($roundId));
+
+        self::assertSame([self::COMMENT, self::STATUS, self::STATUS, self::STATUS], array_column($this->github->writes, 0));
+        self::assertCount(1, $this->ownerAsks());
+    }
+
+    public function testASecondRoundOfTheSameProtectedHeadRecordsNoSecondAsk(): void
+    {
+        $this->handOver('alpha', self::PULL);
+        $this->protectedChanges = ProtectedChanges::touching(['bin/check']);
+
+        $first = $this->judgedApprovalAt(SampleIdentity::HEAD);
+        $this->handler(new ConfiguredProjectModes([]))(new PublishVerdict($first));
+        $second = $this->judgedApprovalAt(SampleIdentity::HEAD);
+        $this->handler(new ConfiguredProjectModes([]))(new PublishVerdict($second));
+
+        self::assertSame([$first], array_column($this->ownerAsks(), 'round'));
+    }
+
+    public function testAHandedOverProtectedHeadWithChangesAsksNoOwner(): void
+    {
+        $this->handOver('alpha', self::PULL);
+        $this->protectedChanges = ProtectedChanges::touching(['bin/check']);
+
+        $this->publishRoundJudgedOn(['Look at part 1.' => $this->changes($this->placed('A', Severity::P2, 'Fix the guard.'))], new ConfiguredProjectModes([]));
+
+        self::assertSame(['failure'], array_column(array_column(array_slice($this->github->writes, 1), 1), 'state'));
+        self::assertStringNotContainsString('Waiting for the owner', $this->commentBody());
+        self::assertSame([], $this->ownerAsks());
+    }
+
+    public function testAProtectedHeadThatIsNotHandedToIntaktIsPublishedForTheLoopWithoutAnAsk(): void
+    {
+        $this->protectedChanges = ProtectedChanges::touching(['bin/check']);
+
+        $this->publishRoundJudgedOn([]);
+
+        self::assertSame(['success'], array_column(array_column(array_slice($this->github->writes, 1), 1), 'state'));
+        self::assertSame([], $this->ownerAsks());
+    }
+
+    public function testAnAskTheLedgerRefusesFailsThePublicationAfterTheForgeShowsIt(): void
+    {
+        $this->handOver('alpha', self::PULL);
+        $this->protectedChanges = ProtectedChanges::touching(['bin/check']);
+        $roundId = $this->judgedRound(self::PULL, []);
+
+        try {
+            $this->handler(new ConfiguredProjectModes([]), new AppendRefusingLedger($this->fixture->ledger()))(new PublishVerdict($roundId));
+            self::fail('A refused ask must fail the publication.');
+        } catch (OwnerAskNotRecorded $refused) {
+            self::assertSame('The owner ask for head '.SampleIdentity::HEAD.' could not be recorded: disk full', $refused->getMessage());
+        }
+
+        self::assertSame(['pending'], array_column(array_column(array_slice($this->github->writes, 1), 1), 'state'));
     }
 
     public function testAnApprovedHeadGetsTheCommentThenASuccessStatus(): void
@@ -274,7 +454,7 @@ final class PublishVerdictTest extends KernelTestCase
             $published[] = [$verdict->status, $verdict->description];
         });
 
-        new PublishVerdictHandler($this->fixture->transactions(), new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']), $this->verdicts(), $forge, new ChangePublications($this->locks), $this->fixture->log)(new PublishVerdict($roundId));
+        $this->handlerOver($forge, new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']))(new PublishVerdict($roundId));
 
         self::assertSame([HeadStatus::Failure, 'Intakt withdrew its review: this head does not boot.'], array_last($published));
     }
@@ -560,7 +740,7 @@ final class PublishVerdictTest extends KernelTestCase
      */
     private function deliverEach(array $publications, ForgeWrites $forge): array
     {
-        $handler = new PublishVerdictHandler($this->fixture->transactions(), new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']), $this->verdicts(), $forge, new ChangePublications($this->locks), $this->fixture->log);
+        $handler = $this->handlerOver($forge, new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']));
         $refused = [];
 
         foreach ($publications as $publication) {
@@ -652,9 +832,50 @@ final class PublishVerdictTest extends KernelTestCase
         return array_values(array_filter($sent, static fn (object $message): bool => $message instanceof PublishVerdict && $roundId === $message->roundId));
     }
 
-    private function handler(ConfiguredProjectModes $modes): PublishVerdictHandler
+    private function handler(ConfiguredProjectModes $modes, ?Ledger $askLedger = null): PublishVerdictHandler
     {
-        return new PublishVerdictHandler($this->fixture->transactions(), $modes, $this->verdicts(), $this->github->forge(), new ChangePublications($this->locks), $this->fixture->log);
+        return $this->handlerOver($this->github->forge(), $modes, $askLedger);
+    }
+
+    private function handlerOver(ForgeWrites $forge, ConfiguredProjectModes $modes, ?Ledger $askLedger = null): PublishVerdictHandler
+    {
+        $handed = new HandedOverChanges($this->fixture->ledger());
+        $asks = new OwnerAsks($handed, $this->protectedHeads(), $askLedger ?? $this->fixture->ledger());
+
+        return new PublishVerdictHandler($this->fixture->transactions(), $modes, $handed, $this->verdicts(), $asks, $forge, new ChangePublications($this->locks), $this->fixture->log);
+    }
+
+    private function protectedHeads(): ProtectedHeads
+    {
+        $heads = self::createStub(ProtectedHeads::class);
+        $heads->method('of')->willReturnCallback(fn (string $project, string $head): ProtectedChanges => $this->protectedChanges);
+
+        return $heads;
+    }
+
+    private function handOver(string $project, string $change): void
+    {
+        self::assertTrue($this->fixture->ledger()->append(new LedgerEvent(LedgerEventKind::ChangeHandedToIntakt, json_encode(['project' => $project, 'change' => $change, 'head' => SampleIdentity::HEAD], JSON_THROW_ON_ERROR)))->succeeded());
+    }
+
+    /**
+     * @return list<array<mixed>>
+     */
+    private function ownerAsks(): array
+    {
+        $payloads = array_map(static fn (RecordedEvent $recorded): mixed => json_decode($recorded->event->payload, true, flags: JSON_THROW_ON_ERROR), iterator_to_array($this->fixture->ledger()->readOfKind(LedgerEventKind::OwnerAsked), false));
+
+        return array_values(array_filter($payloads, is_array(...)));
+    }
+
+    private function ask(string ...$lines): string
+    {
+        return implode("\n", ['**Waiting for the owner** (head '.SampleIdentity::HEAD.')', '', 'This head touches protected paths, so it merges only once the owner has approved this head.', '', ...$lines]);
+    }
+
+    private function approvedComment(string $roundId, string $ask): string
+    {
+        return self::HEADING."\n\n```json\n".'{"verdict":"approve","head":"'.SampleIdentity::HEAD.'","summary":"2 of 2 reviewers approve; findings to act on: 0."}'."\n```\n\n".$ask."\n\n".$this->marker($roundId);
     }
 
     private function verdicts(): VerdictForTheLoop

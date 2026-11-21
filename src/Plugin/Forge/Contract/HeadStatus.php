@@ -10,4 +10,6 @@ enum HeadStatus: string
     case Success = 'success';
     case Failure = 'failure';
     case Error = 'error';
+    // Only for an approved protected head handed to Intakt, which waits for the owner: docs/architecture/handed-to-intakt.md
+    case Pending = 'pending';
 }
