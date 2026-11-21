@@ -5,18 +5,15 @@
   </picture>
 </h1>
 
+[![ci](https://github.com/shinyredapples/intakt/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/shinyredapples/intakt/actions/workflows/ci.yml)
+
 Your coding agent says it is done. Intakt tells you whether to believe it.
 
-A panel of reviewers on models from different AI labs reviews the change and a judge marks every finding against the task: every P1 and P2 finding whose quote checks out reaches the act list whatever the judge answers. Your own agent runs this loop over MCP until the verdict is clean. On the [review bench](#review-bench), the panel found 11 of 15 planted defects (measured, 2026-11-16).
+A panel of reviewers on models from two AI labs reviews the change, and a judge marks every finding against the task. Your own agent runs this loop over MCP until the verdict is clean. On the [review bench](#review-bench) the panel found 11 of 15 planted defects (measured, 2026-11-16). Building it got [12 fixes merged upstream](#found-and-fixed-upstream) in Symfony, Symfony AI and Doctrine.
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/team-dark-1x.webp 1x, docs/assets/team-dark.webp 2x" width="760" height="116">
-    <img src="docs/assets/team-light-1x.webp" srcset="docs/assets/team-light-1x.webp 1x, docs/assets/team-light.webp 2x" alt="The Intakt team: the octopus conductor with a baton, then the Tech lead, Developer, Code reviewer, Judge, Security engineer, Designer, AI engineer and Maintainer, each drawn as an animal with its tool" width="760" height="113" loading="lazy">
-  </picture>
-  <br>
-  The octopus conducts: Tech lead, Developer, Code reviewer, Judge, Security engineer, Designer, AI engineer and Maintainer, in that order.
-</p>
+<!-- VIDEO THUMBNAIL: put the linked thumbnail of the demo video here once it is uploaded (#3142). -->
+
+![The dashboard's review page for the sample change: the reviewers' verdicts, the findings with the judge's call on each, and the tokens per round, measured](docs/assets/dashboard-review.png)
 
 PHP 8.5, Symfony AI · [Status](#status): what works today and what is planned · [Guides](docs/guide/README.md) · [Showcase](docs/showcase/README.md) · [For judges](docs/judges.md) · [Hackathon](docs/hackathon.md) · [Releases](https://github.com/shinyredapples/intakt/releases)
 
@@ -27,24 +24,11 @@ git clone https://github.com/shinyredapples/intakt.git && cd intakt
 docker compose up -d --wait
 ```
 
-No key? Open http://localhost:7781/demo and press **Play the demo run**.
+No key? Open http://localhost:7781/demo and press **Play the demo run**: the recording of a real review of the sample change plays onto the dashboard without calling any model ([details](docs/user/README.md#playing-the-demo-run-in-the-dashboard)).
 
-With your agent: `claude mcp add --transport http intakt http://localhost:7781/mcp/owner --header "Authorization: Bearer <the token>"` (token: first-run page step 4, or `intakt:demo`), install the [skill](skills/intakt-review/README.md) and say *intakt review the demo*.
+With your agent: the clone's `.mcp.json` connects Claude Code. Run `export INTAKT_MCP_TOKEN=<token from the first-run page>`, start `claude` in the clone, install the [skill](skills/intakt-review/README.md) and say *intakt review the demo* ([details](docs/user/mcp.md)).
 
-The demo run plays the shipped recording of a real review of the sample change onto the dashboard without calling any model, with a caption on every page that names each stage up to the judge's act list ([details](docs/user/README.md#playing-the-demo-run-in-the-dashboard)).
-
-The demo reviews a sample change with two reviewers ([how long it takes](#timed-run)): open http://localhost:7781. A new install opens on a first-run page with two choices: **watch a recorded real review now**, with no key (its **Play the demo run** button plays the tour above; the shipped recording is ready on first start, and the page says why it cannot play if `.env.local` empties `INTAKT_DEMO_RECORDING` or points it at a missing file), or **paste one provider key or Hugging Face token and run the demo review**: save it, run `docker compose restart intakt` so the sample project gets its reviewers, reload the setup page, then press **Start the first review**, which opens its live review page (once the demo run has played, step 3 shows **Open the review** instead: use the terminal command below). Calls are billed to the key's or token's owner; a Hugging Face token alone puts the reviewers on models from two AI labs ([Hugging Face details](docs/user/README.md#running-the-demo-on-a-hugging-face-token)).
-
-From the terminal: `docker compose exec intakt php bin/console intakt:demo` runs the same demo review and prints its verdict ([read it](docs/user/README.md#reading-a-verdict)). The [demo walkthrough](docs/guide/demo-walkthrough.md) retells it in plain words; [the review flow](docs/architecture/review-flow.md) draws it inside.
-
-MCP: your agent loops, fixes and reports ([details](docs/user/mcp.md)).
-
-<details>
-<summary>Screenshot: the dashboard's review page for the sample change</summary>
-
-![The dashboard's review page for the sample feat/cart change: two rounds with two reviewers each, their verdicts, the findings with the judge's call on each, and the tokens per round, measured](docs/assets/dashboard-review.png)
-
-</details>
+With a key: paste one provider key or Hugging Face token on http://localhost:7781/setup, run `docker compose restart intakt`, then press **Start the first review** ([Hugging Face details](docs/user/README.md#running-the-demo-on-a-hugging-face-token)). Or from the terminal: `docker compose exec intakt php bin/console intakt:demo` prints the verdict ([read it](docs/user/README.md#reading-a-verdict)). Calls are billed to the key's owner. The [demo walkthrough](docs/guide/demo-walkthrough.md) retells the run in plain words; [the review flow](docs/architecture/review-flow.md) draws it inside.
 
 ### Timed run
 
@@ -121,6 +105,15 @@ One row per reproduction in `upstream/`, merged first. *Intakt's* marks a pull r
 | symfony/ai | [Codex: usage of a turn without an answer lost](upstream/ai-codex-platform-usage-without-answer/) | not filed: unreachable through a `Platform` |
 
 How each folder was checked and filed: [`upstream/`](upstream/README.md).
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/team-dark-1x.webp 1x, docs/assets/team-dark.webp 2x" width="760" height="116">
+    <img src="docs/assets/team-light-1x.webp" srcset="docs/assets/team-light-1x.webp 1x, docs/assets/team-light.webp 2x" alt="The Intakt team: the octopus conductor with a baton, then the Tech lead, Developer, Code reviewer, Judge, Security engineer, Designer, AI engineer and Maintainer, each drawn as an animal with its tool" width="760" height="113" loading="lazy">
+  </picture>
+  <br>
+  The octopus conducts: Tech lead, Developer, Code reviewer, Judge, Security engineer, Designer, AI engineer and Maintainer, in that order.
+</p>
 
 ## The first release: the review loop
 
