@@ -140,7 +140,7 @@ function doneTheBoardOpened() {
     return { page, column };
 }
 
-test('Escape on a card in a Done the board opened by itself leaves it open', () => {
+test('Escape on Hide in a Done the board opened by itself leaves it open', () => {
     const { page, column } = doneTheBoardOpened();
     const key = new FakeKey(column.hide);
 
