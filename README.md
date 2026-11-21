@@ -9,7 +9,9 @@
 
 Your coding agent says it is done. Intakt tells you whether to believe it.
 
-A panel of reviewers on models from two AI labs reviews the change, and a judge marks every finding against the task. Your own agent runs this loop over MCP until the verdict is clean. On the [review bench](#review-bench) the panel found 11 of 15 planted defects (measured, 2026-11-16). Building it got [12 fixes (11 pull requests) merged upstream](#found-and-fixed-upstream) in Symfony, Symfony AI and Doctrine.
+Reviewers on models from different AI labs review the change, and a judge marks every finding against the task. Start a review from the dashboard, or let your own agent run the loop over MCP until the verdict is clean. On the [review bench](#review-bench) the panel caught more planted defects than either of its reviewers alone: 11 of 15, against 10 and 8 (measured, 2026-11-16).
+
+Along the way, building Intakt led to [12 fixes (11 pull requests) merged upstream](#found-and-fixed-upstream) in Symfony, Symfony AI and Doctrine.
 
 <!-- VIDEO THUMBNAIL: put the linked thumbnail of the demo video here once it is uploaded (#3142). -->
 

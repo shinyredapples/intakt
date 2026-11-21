@@ -37,7 +37,7 @@ the dates from [the journey](journey.md#milestones):
 - **The review page:** every round with its reviewers, their verdicts, the findings and the judge's call on each
   ([reading a verdict](user/README.md#reading-a-verdict), [a tour of the dashboard](guide/a-tour-of-the-dashboard.md)).
 - **Trends:** figures about the reviews of every project as tiles ([the Trends page](user/README.md#the-trends-page)).
-- **The review bench:** the panel found 11 of 15 planted defects (measured, 2026-11-16) with 2 false alarms
+- **The review bench:** the panel caught more planted defects than either of its reviewers alone, 11 of 15 against 10 and 8 (measured, 2026-11-16), with 2 false alarms
   ([review bench](../README.md#review-bench)).
 - **MCP tools and the agent skill:** your agent starts reviews, reads the findings and loops until the verdict is clean
   ([MCP](user/mcp.md), [the skill](../skills/intakt-review/README.md)).
