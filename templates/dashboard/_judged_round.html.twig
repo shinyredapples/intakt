@@ -34,7 +34,16 @@
             <div class="fc-body">
                 <p class="fc-title"><span class="mono fc-id">{{ finding.id }}</span> <span class="fc-text">{{ include('dashboard/_finding_text.html.twig', {finding: finding, missing: 'Text not recorded.'}, with_context = false) }}</span></p>
                 <p class="fc-place{% if finding.place is not null %} mono{% endif %}">{{ finding.place ?? 'File and line not recorded' }}</p>
-                <p class="fc-call">Dropped before the judge: {{ finding.droppedBecause }}</p>
+                {#- Every dropped finding comes from the quote check, so the row names it in plain words and keeps the recorded reason behind the disclosure; the code at the reviewed head is not in the ledger, so the quotes are shown, not the lines near them. -#}
+                <p class="fc-call">Quote not found in the code</p>
+                <details class="fc-quotes">
+                    <summary>Quoted code{{ include('dashboard/components/icon.html.twig', {name: 'chevron', small: true, extra: 'chev'}, with_context = false) }}</summary>
+                    {% set quoted = finding.text is null ? [] : finding_spans(finding.text)|filter(span => span.code) %}
+                    {% if quoted is not empty %}
+                    <p class="fc-quoted">{% for span in quoted %}<code>{{ span.text }}</code>{% if not loop.last %} {% endif %}{% endfor %}</p>
+                    {% endif %}
+                    <p class="fc-reason">Dropped before the judge: {{ finding.droppedBecause }}. File names and numbers count neither way.</p>
+                </details>
             </div>
         </li>
         {% endfor %}

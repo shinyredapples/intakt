@@ -150,7 +150,30 @@ final class JudgedRoundFindingsPageTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame([['P2', 'F1', 'Call ghostName first <b>now</b>.', 'src/A.php:3', 'Dropped before the judge: none of its 1 quoted code fragments is in the change']], $this->cardsOf($crawler->filter('#round-round-1 [data-dropped]')));
+        self::assertSame([['P2', 'F1', 'Call ghostName first <b>now</b>.', 'src/A.php:3', 'Quote not found in the code']], $this->cardsOf($crawler->filter('#round-round-1 [data-dropped]')));
+    }
+
+    public function testADroppedFindingShowsItsQuotedCodeAndItsRecordedReasonBehindADisclosure(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeWithOnlyADroppedFinding('round-1', 'Names like `ann` match `joanne` in `orders.log`.', 'none of its 2 quoted code fragments is in the change');
+
+        $quotes = $this->browser->request('GET', '/reviews/round-1')->filter('#round-round-1 [data-dropped] details.fc-quotes');
+
+        self::assertNull($quotes->attr('open'));
+        self::assertSame(['ann', 'joanne', 'orders.log'], $quotes->filter('.fc-quoted code')->each(static fn (Crawler $code): string => $code->text()));
+        self::assertSame('Dropped before the judge: none of its 2 quoted code fragments is in the change. File names and numbers count neither way.', $quotes->filter('.fc-reason')->text());
+    }
+
+    public function testADroppedFindingWithoutQuotedCodeShowsNoQuoteList(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeWithOnlyADroppedFinding('round-1', 'Nothing quoted here.', 'none of its 1 quoted code fragments is in the change');
+
+        $quotes = $this->browser->request('GET', '/reviews/round-1')->filter('#round-round-1 [data-dropped] details.fc-quotes');
+
+        self::assertCount(0, $quotes->filter('.fc-quoted'));
+        self::assertCount(1, $quotes->filter('.fc-reason'));
     }
 
     public function testADroppedFindingCanBeReachedByFindingNavigation(): void

@@ -144,7 +144,7 @@ final class MergedActEntryPageTest extends WebTestCase
 
         self::assertResponseIsSuccessful();
         self::assertSame([['P1', 'F2', 'Take the lock first.', 'Fix now']], $this->pageRows($page->filter('.finding-card:not([data-dropped])')));
-        self::assertSame([['P2', 'F1', 'Call ghostName first.', 'Dropped before the judge: none of its 1 quoted code fragments is in the change']], $this->pageRows($page->filter('[data-dropped]')));
+        self::assertSame([['P2', 'F1', 'Call ghostName first.', 'Quote not found in the code']], $this->pageRows($page->filter('[data-dropped]')));
     }
 
     /**

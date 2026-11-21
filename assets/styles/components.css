@@ -622,6 +622,10 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
 .fc-body p { margin: 0; }
 .fc-place, .fc-call, .fc-merged { color: var(--muted); font-size: var(--t13); }
 .fc-call { font-weight: 600; }
+/* A dropped finding's quotes on demand (issue 3144): the summary is a 44 px tap target like other disclosures, and the reason stays muted beneath the quotes. */
+.fc-quotes > summary { display: inline-flex; align-items: center; gap: var(--s4); min-height: 44px; color: var(--link); font: 500 var(--t13)/1 var(--f-head); cursor: pointer; }
+.fc-quotes .fc-quoted { display: flex; flex-wrap: wrap; gap: var(--s4); margin: var(--s4) 0 0; }
+.fc-quotes .fc-reason { margin: var(--s4) 0 0; color: var(--muted); font-size: var(--t13); }
 @media (max-width: 760px) {
   .sb-finding { min-height: 44px; }
   .finding-card { flex-wrap: wrap; }
