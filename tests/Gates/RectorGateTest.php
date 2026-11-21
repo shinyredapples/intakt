@@ -107,4 +107,22 @@ final class RectorGateTest extends SandboxTestCase
         self::assertTrue($run->failed('rector'), $run->output());
         self::assertStringContainsString('RemoveUnusedVariableAssignRector', $run->findingsOf('rector'));
     }
+
+    // Because a paths file that cannot be written must fail the gate with its reason, not end the gate's process.
+    public function testAPathsFileThatCannotBeWrittenFailsTheGateWithItsReason(): void
+    {
+        $sandbox = $this->sandboxWith('dead-code');
+        $folder = sys_get_temp_dir().'/rector-unwritable-paths-'.getmypid();
+        new Filesystem()->mkdir($folder);
+        file_put_contents($folder.'/rector-paths', 'a file where the folder belongs');
+
+        try {
+            $run = $sandbox->checkWith(['INTAKT_GATES_CACHE' => $folder], '--only=rector');
+        } finally {
+            new Filesystem()->remove($folder);
+        }
+
+        self::assertTrue($run->failed('rector'), $run->output());
+        self::assertStringContainsString('cannot write the rector paths file', $run->findingsOf('rector'));
+    }
 }

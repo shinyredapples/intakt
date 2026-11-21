@@ -62,9 +62,24 @@ final class RectorPathsFileTest extends TestCase
         self::assertStringStartsWith(getcwd().'/var/rector-paths-file-test-'.getmypid().'/rector-paths/', $file);
     }
 
+    // Because a symlink left under the final name would otherwise redirect the write to whatever file it points at.
+    public function testASymlinkUnderTheFinalNameIsReplacedAndItsTargetKept(): void
+    {
+        $target = $this->folder.'/target.txt';
+        file_put_contents($target, 'unchanged');
+        new Filesystem()->mkdir($this->folder.'/rector-paths');
+        symlink($target, $this->folder.'/rector-paths/'.hash('xxh128', '["src/A.php"]').'.json');
+
+        $file = RectorPathsFile::written(['src/A.php']);
+
+        self::assertFalse(is_link($file));
+        self::assertSame(['src/A.php'], RectorPathsFile::read($file));
+        self::assertSame('unchanged', file_get_contents($target));
+    }
+
     public function testAMissingFileFailsTheRead(): void
     {
-        self::assertReadFails($this->folder.'/absent.json', 'is missing or unreadable');
+        $this->assertReadFails($this->folder.'/absent.json', 'is missing or unreadable');
     }
 
     public function testAnUnreadableFileFailsTheRead(): void
@@ -76,7 +91,7 @@ final class RectorPathsFileTest extends TestCase
         file_put_contents($this->folder.'/locked.json', '["src/A.php"]');
         chmod($this->folder.'/locked.json', 0o000);
 
-        self::assertReadFails($this->folder.'/locked.json', 'is missing or unreadable');
+        $this->assertReadFails($this->folder.'/locked.json', 'is missing or unreadable');
     }
 
     /**
@@ -98,10 +113,10 @@ final class RectorPathsFileTest extends TestCase
     {
         file_put_contents($this->folder.'/paths.json', $contents);
 
-        self::assertReadFails($this->folder.'/paths.json', $reason);
+        $this->assertReadFails($this->folder.'/paths.json', $reason);
     }
 
-    private static function assertReadFails(string $file, string $reason): void
+    private function assertReadFails(string $file, string $reason): void
     {
         try {
             RectorPathsFile::read($file);

@@ -20,13 +20,24 @@ final readonly class RectorPathsFile
     public static function written(array $paths): string
     {
         $contents = self::encoded($paths);
-        $file = self::folder().'/'.hash('xxh128', $contents).'.json';
+        $folder = self::folder();
+        $file = $folder.'/'.hash('xxh128', $contents).'.json';
 
         try {
-            // Because dumpFile() writes a temporary file in the same folder and renames it, the final name never holds a partly written list.
-            new Filesystem()->dumpFile($file, $contents);
+            new Filesystem()->mkdir($folder);
         } catch (IOException $failure) {
             throw new ScopeFailure('cannot write the rector paths file: '.$failure->getMessage(), 0, $failure);
+        }
+
+        // The list goes to a temporary file in the same folder and rename() replaces the final directory entry, so the final name never holds a partly written list and a symlink there is replaced, never followed.
+        $temporary = tempnam($folder, 'paths-');
+
+        if (false === $temporary || strlen($contents) !== file_put_contents($temporary, $contents) || !rename($temporary, $file)) {
+            if (is_string($temporary) && is_file($temporary)) {
+                unlink($temporary);
+            }
+
+            throw new ScopeFailure('cannot write the rector paths file '.$file);
         }
 
         return $file;
