@@ -59,7 +59,7 @@ final class TrendsFromTheShippedRecordingTest extends DashboardPageTestCase
             ['Correctness', 'P1', '2', '0'], ['Correctness', 'P2', '2', '2'], ['Correctness', 'P3', '0', '0'],
             ['Security', 'P1', '1', '0'], ['Security', 'P2', '2', '0'], ['Security', 'P3', '1', '1'],
         ], $this->rowsOf($page, '#chart-catches'));
-        self::assertSame([['Kept on the act list', '5'], ['Merged as duplicate', '3'], ['Deferred to a follow-up issue', '0'], ['Rejected', '0']], $this->rowsOf($page, '#chart-judge'));
+        self::assertSame([['Kept to fix', '5'], ['Merged as duplicate', '3'], ['Deferred to a follow-up issue', '0'], ['Rejected', '0']], $this->rowsOf($page, '#chart-judge'));
     }
 
     // At a pace no clock waits for, because the mock clock's sleep only moves its moment.

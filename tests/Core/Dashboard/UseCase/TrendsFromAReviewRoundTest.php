@@ -63,7 +63,7 @@ final class TrendsFromAReviewRoundTest extends DashboardPageTestCase
             ['Role-1', 'P1', '1', '1'], ['Role-1', 'P2', '0', '0'], ['Role-1', 'P3', '1', '1'],
             ['Role-2', 'P1', '0', '0'], ['Role-2', 'P2', '0', '0'], ['Role-2', 'P3', '1', '1'],
         ], $this->rowsOf($page, '#chart-catches'));
-        self::assertSame([['Kept on the act list', '1'], ['Merged as duplicate', '0'], ['Deferred to a follow-up issue', '1'], ['Rejected', '1']], $this->rowsOf($page, '#chart-judge'));
+        self::assertSame([['Kept to fix', '1'], ['Merged as duplicate', '0'], ['Deferred to a follow-up issue', '1'], ['Rejected', '1']], $this->rowsOf($page, '#chart-judge'));
     }
 
     public function testARoundTheJudgeCouldNotAnswerAddsNothingToTheJudgeChart(): void
