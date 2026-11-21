@@ -25,6 +25,10 @@
 <div class="page-head">
     <div>
         <h1>Review of {{ review.change ?: 'round ' ~ round }} in {{ review.project }}</h1>
+        {# Only once the latest round is judged or ended, because a round in review has no answer yet and the state block below says where it stands. #}
+        {% if latest.isJudged or latest.hasEnded %}
+        {{ include('dashboard/_verdict_card.html.twig', {latest: latest, open: open, judged: judged.round ?? null}, with_context = false) }}
+        {% endif %}
         {% if review.everyRoundIsAReplay %}
         <p class="replay-mark">{{ include(chip, {label: 'Replay', on_page: true}, with_context = false) }} A recording played back: its verdicts were never given on this change and never count as one.</p>
         {% endif %}

@@ -127,6 +127,21 @@ final readonly class ReviewRounds
         return array_any($later, static fn (ReviewRound $other): bool => $other->identity()->commits->head->hash === $head->hash);
     }
 
+    // Without letter case, because the watcher names the pull request as the forge lists it and the round as the push or the request named it.
+    public function latestJudgedAt(string $project, string $change, string $head): ?ReviewRound
+    {
+        /** @var list<ReviewRound> $rounds */
+        $rounds = $this->entities->createQuery(sprintf('SELECT r FROM %s r WHERE r.subject.project = :project AND LOWER(r.change.change) = :change AND r.state = :judged ORDER BY r.change.number DESC, r.id DESC', ReviewRound::class))
+            ->setParameter('project', $project)
+            ->setParameter('change', strtolower($change))
+            ->setParameter('judged', RoundState::Judged->value)
+            ->getResult();
+
+        $atHead = array_filter($rounds, static fn (ReviewRound $round): bool => $round->identity()->commits->head->hash === $head);
+
+        return $this->newestAcrossSpellings($this->highestNumberedPerSpelling($atHead));
+    }
+
     /**
      * @return list<ReviewRound>
      */
@@ -241,6 +256,40 @@ final readonly class ReviewRounds
         if ($this->entities->find(ReplayProject::class, $round->project()) instanceof ReplayProject) {
             $round->markAsReplay();
         }
+    }
+
+    // Within one spelling by round number as judgedAfter() orders them, because an id follows a clock that can go back and would pick a round the publication then drops as superseded; the rounds come highest number first.
+    /**
+     * @param array<ReviewRound> $rounds
+     *
+     * @return array<string, ReviewRound>
+     */
+    private function highestNumberedPerSpelling(array $rounds): array
+    {
+        $highest = [];
+
+        foreach ($rounds as $round) {
+            $highest[$round->change()] ??= $round;
+        }
+
+        return $highest;
+    }
+
+    // Across spellings by id, because each spelling numbers its rounds from one, so a number says nothing about which spelling reviewed last.
+    /**
+     * @param array<string, ReviewRound> $rounds
+     */
+    private function newestAcrossSpellings(array $rounds): ?ReviewRound
+    {
+        $newest = null;
+
+        foreach ($rounds as $round) {
+            if (null === $newest || $round->id()->compare($newest->id()) > 0) {
+                $newest = $round;
+            }
+        }
+
+        return $newest;
     }
 
     private function newId(): UuidV7
