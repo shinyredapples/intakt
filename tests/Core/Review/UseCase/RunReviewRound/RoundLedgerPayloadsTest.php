@@ -24,6 +24,8 @@ use Intakt\Core\Review\Contract\JudgeDoneFinding;
 use Intakt\Core\Review\Contract\Judgement;
 use Intakt\Core\Review\Contract\Mark;
 use Intakt\Core\Review\Contract\QuorumPolicy;
+use Intakt\Core\Review\Contract\EscalationOutcome;
+use Intakt\Core\Review\Contract\EscalationVerdictReused;
 use Intakt\Core\Review\Contract\RecurringP1Found;
 use Intakt\Core\Review\Contract\ReviewerBlocked;
 use Intakt\Core\Review\Contract\ReviewerFailed;
@@ -59,6 +61,7 @@ use Symfony\Component\Serializer\SerializerInterface;
 #[CoversClass(DroppedFinding::class)]
 #[CoversClass(RoundLedger::class)]
 #[CoversClass(RecurringP1Found::class)]
+#[CoversClass(EscalationVerdictReused::class)]
 #[UsesClass(OnePerPlace::class)]
 #[UsesClass(FindingKeys::class)]
 #[UsesClass(FindingKey::class)]
@@ -333,6 +336,11 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
     public function testARecurringP1FoundIsWrittenWithItsRoundFindingKeyAndFirstRound(): void
     {
         self::assertSame('{"round":"'.self::ROUND.'","finding":"F1","key":"abc","first_round":"r1"}', $this->written(new RecurringP1Found(self::ROUND, 'F1', 'abc', 'r1')));
+    }
+
+    public function testAnEscalationVerdictReusedIsWrittenWithItsRoundFindingKeyOutcomeAndVerdictRound(): void
+    {
+        self::assertSame('{"round":"'.self::ROUND.'","finding":"F1","key":"abc","outcome":"confirmed","verdict_round":"r1"}', $this->written(new EscalationVerdictReused(self::ROUND, 'F1', 'abc', EscalationOutcome::Confirmed, 'r1')));
     }
 
     public function testADoneJudgeWithoutFollowUpsStillWritesTheKey(): void
