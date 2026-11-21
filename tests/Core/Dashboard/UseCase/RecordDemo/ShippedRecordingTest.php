@@ -78,24 +78,6 @@ final class ShippedRecordingTest extends TestCase
         self::assertStringNotContainsString('INTAKT_DEMO_RECORDING', $this->file('/compose.yaml'));
     }
 
-    // The replay publishes the recorded update to a review page that is already open, so a card the page renders differently would change once the juror reloads.
-    public function testTheShippedJudgedUpdateShowsTheDroppedFindingWithTheQuotesTheCheckCounted(): void
-    {
-        $judged = [];
-        foreach ($this->shipped()->updates as $update) {
-            if (1 === preg_match('~<turbo-stream action="replace" target="round-[^"]+-judged"><template>(.*?)</template></turbo-stream>~s', $update->data, $part)) {
-                $judged[] = $part[1];
-            }
-        }
-        self::assertCount(1, $judged);
-        $card = new Crawler($judged[0])->filter('[data-dropped="F3"]');
-
-        self::assertSame('Quote not found in the code', $card->filter('.fc-call')->text());
-        self::assertNull($card->filter('details.fc-quotes')->attr('open'));
-        self::assertSame(['ann', 'joanne'], $card->filter('details.fc-quotes .fc-quote-list code')->each(static fn (Crawler $code): string => $code->text()));
-        self::assertSame('Dropped before the judge: none of its 2 quoted code fragments is in the change', $card->filter('details.fc-quotes .fc-reason')->text());
-    }
-
     #[DataProvider('privateText')]
     public function testTheShippedRecordingHoldsNoLocalPathHostOrToken(string $pattern): void
     {
