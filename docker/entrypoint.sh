@@ -70,11 +70,22 @@ kernel_dir() {
 
 # The cache and build folders are removed by hand, because cache:clear kept the image's container after the seed; the warmup runs in a new process so it reads the current keys and project file.
 rebuild_container() {
-    local cache="var/cache/${APP_ENV:-prod}"
-    [[ -z ${APP_CACHE_DIR:-} ]] || cache=$(kernel_dir "$APP_CACHE_DIR")
+    local cache_dir build_dir cache="var/cache/${APP_ENV:-prod}"
+    cache_dir=$(kernel_value APP_CACHE_DIR)
+    build_dir=$(kernel_value APP_BUILD_DIR)
+    [[ -z $cache_dir ]] || cache=$(kernel_dir "$cache_dir")
     rm -rf "$cache"
-    [[ -z ${APP_BUILD_DIR:-} ]] || rm -rf "$(kernel_dir "$APP_BUILD_DIR")"
+    [[ -z $build_dir ]] || rm -rf "$(kernel_dir "$build_dir")"
     php bin/console cache:warmup --no-interaction
+}
+
+# A value in the environment wins, as it does for Symfony's Dotenv; one the environment leaves out is asked of Dotenv, booted as bin/console boots it, because a dotenv file (.env.prod.local) moves the kernel's folders just as the environment does.
+kernel_value() {
+    if [[ -n ${!1:-} ]]; then
+        echo "${!1}"
+        return 0
+    fi
+    php -r 'require "vendor/autoload.php"; (new Symfony\Component\Dotenv\Dotenv())->bootEnv(".env"); echo $_SERVER[$argv[1]] ?? "";' "$1"
 }
 
 # Assigned apart from the export, because export would hide a failed write, and a start without the token would leave the printed MCP setup unusable.

@@ -39,6 +39,9 @@ final class EntrypointSampleSeedTest extends TestCase
     {
         $this->directory = sys_get_temp_dir().'/intakt-entrypoint-seed-'.bin2hex(random_bytes(6));
         new Filesystem()->copy(dirname(__DIR__, 4).'/config/sample-project.yaml', $this->dataFile());
+        // What the start's real PHP reads from the image's working directory when it asks Symfony's Dotenv for the kernel's folders.
+        new Filesystem()->symlink(dirname(__DIR__, 4).'/vendor', $this->directory.'/vendor');
+        new Filesystem()->dumpFile($this->directory.'/.env', '');
     }
 
     protected function tearDown(): void
@@ -270,6 +273,53 @@ final class EntrypointSampleSeedTest extends TestCase
 
         self::assertDirectoryDoesNotExist($this->directory.'/moved-cache/test', 'the container in the relative APP_CACHE_DIR survived');
         self::assertDirectoryExists($this->directory.'/moved-cache', 'more than the environment folder was removed');
+    }
+
+    public function testAStartRemovesTheContainerInTheBuildDirectoryADotenvFileNames(): void
+    {
+        $this->givenTheDotenvFileOfTheEnvironment('APP_BUILD_DIR='.$this->directory.'/dotenv-build');
+        new Filesystem()->dumpFile($this->directory.'/dotenv-build/test/old-container', 'old');
+        $this->startEntrypoint(['INTAKT_CONFIG' => $this->directory.'/intakt.yaml']);
+
+        $this->waitForTheServer();
+
+        self::assertDirectoryDoesNotExist($this->directory.'/dotenv-build/test', 'the container in the APP_BUILD_DIR of .env.test.local survived');
+    }
+
+    public function testAStartRemovesTheCacheADotenvFileNames(): void
+    {
+        $this->givenTheDotenvFileOfTheEnvironment('APP_CACHE_DIR=dotenv-cache');
+        new Filesystem()->dumpFile($this->directory.'/dotenv-cache/test/old-container', 'old');
+        $this->startEntrypoint(['INTAKT_CONFIG' => $this->directory.'/intakt.yaml']);
+
+        $this->waitForTheServer();
+
+        self::assertDirectoryDoesNotExist($this->directory.'/dotenv-cache/test', 'the container in the APP_CACHE_DIR of .env.test.local survived');
+    }
+
+    public function testABuildDirectoryInTheEnvironmentWinsOverTheOneADotenvFileNames(): void
+    {
+        $this->givenTheDotenvFileOfTheEnvironment('APP_BUILD_DIR='.$this->directory.'/dotenv-build');
+        new Filesystem()->dumpFile($this->directory.'/dotenv-build/test/not-the-kernels', 'kept');
+        new Filesystem()->dumpFile($this->directory.'/build/test/old-container', 'old');
+        $this->startEntrypoint(['INTAKT_CONFIG' => $this->directory.'/intakt.yaml', 'APP_BUILD_DIR' => $this->directory.'/build']);
+
+        $this->waitForTheServer();
+
+        self::assertDirectoryDoesNotExist($this->directory.'/build/test', 'the container in the environment\'s APP_BUILD_DIR survived');
+        self::assertFileExists($this->directory.'/dotenv-build/test/not-the-kernels', 'a folder the kernel does not compile into was removed');
+    }
+
+    public function testADotenvFileThatCannotBeReadStopsTheStartBeforeTheServer(): void
+    {
+        $this->givenTheDotenvFileOfTheEnvironment('APP_BUILD_DIR="never closed');
+        $this->startEntrypoint(['INTAKT_CONFIG' => $this->directory.'/intakt.yaml']);
+
+        $this->entrypoint?->wait();
+
+        self::assertNotSame(0, $this->entrypoint?->getExitCode());
+        self::assertStringNotContainsString('cache:warmup', $this->calls());
+        self::assertStringNotContainsString('frankenphp run', $this->calls());
     }
 
     public function testAStartWithAProjectFileBuildsTheContainerAgainBeforeTheWorkers(): void
@@ -684,13 +734,19 @@ final class EntrypointSampleSeedTest extends TestCase
         ];
     }
 
-    // Stand-ins that note each call; the console steps end at once (the seed with SEED_STATUS), the server and the consumers wait to be stopped, without the test's pipes, so a sleep the entrypoint leaves behind cannot hold the test.
+    // The file Symfony's Dotenv reads last for the test environment these starts run in.
+    private function givenTheDotenvFileOfTheEnvironment(string $line): void
+    {
+        new Filesystem()->dumpFile($this->directory.'/.env.test.local', $line."\n");
+    }
+
+    // Stand-ins that note each call (the inline script that asks Dotenv for the kernel's folders goes to the real PHP unnoted, because its answer is what the start acts on); the console steps end at once (the seed with SEED_STATUS), the server and the consumers wait to be stopped, without the test's pipes, so a sleep the entrypoint leaves behind cannot hold the test.
     private function stubPrograms(): string
     {
         $programs = $this->directory.'/stubs';
         $filesystem = new Filesystem();
         // A consumer started without --quiet prints Symfony's banner (the success line to standard output, the comments to standard error) only once the review block is out (bounded), so the test forces the order a slow consumer start takes; with CONSUMERS_IGNORE_SIGTERM a consumer ignores the stop like one whose worker does not exist yet (upstream/messenger-consume-ignores-early-sigterm), so the stop runs its whole grace period; with SHOW_SECONDS the review block takes that long and notes its end, so the test forces a stop that arrives while it runs.
-        $filesystem->dumpFile($programs.'/php', "#!/bin/bash\necho \"php \$*\" >> \"\$CALLS\"\ncase \"\$*\" in *messenger:consume*) [[ \" \$* \" == *' --quiet '* ]] || { for _ in {1..600}; do grep -q intakt:sample:show \"\$CALLS\" && break; sleep 0.1; done; sleep 0.3; echo ' [OK] Consuming messages from transport.'; echo ' // Quit the worker with CONTROL-C.' >&2; }; [[ -n \${CONSUMERS_IGNORE_SIGTERM:-} ]] && { trap '' TERM; echo 'a consumer ignores the stop' >> \"\$CALLS\"; }; exec sleep 60 </dev/null >/dev/null 2>&1;; *intakt:sample:seed*) [[ -e var/cache/test/image-container ]] && { echo 'the image container survived until the seed' >&2; exit 3; }; echo \"\$MCP_OWNER_TOKEN \$MCP_OWNER_ACCESS\" > \"\$CALLS.seen\"; echo \"\${OPENAI_COMPATIBLE_BASE_URL:-} \${OPENAI_COMPATIBLE_API_KEY:-}\" > \"\$CALLS.compatible\"; [[ -n \${SECRETS_SEEN:-} ]] && echo \"\$APP_SECRET \$MERCURE_JWT_SECRET\" > \"\$SECRETS_SEEN\"; mkdir -p var/cache/test; touch var/cache/test/seeded-container; exit \"\${SEED_STATUS:-0}\";; *cache:warmup*) exit \"\${WARMUP_STATUS:-0}\";; *intakt:demo:create*) exit \"\${CREATE_STATUS:-0}\";; *intakt:ai:tiers*) exit \"\${TIERS_STATUS:-0}\";; *intakt:sample:show*) [[ -n \${SHOW_SECONDS:-} ]] && { sleep \"\$SHOW_SECONDS\" </dev/null >/dev/null 2>&1; echo 'the slow show ended' >> \"\$CALLS\"; }; echo 'the review block'; exit \"\${SHOW_STATUS:-0}\";; esac\nexit 0\n");
+        $filesystem->dumpFile($programs.'/php', "#!/bin/bash\n[[ \$1 == -r ]] && exec ".escapeshellarg(PHP_BINARY)." \"\$@\"\necho \"php \$*\" >> \"\$CALLS\"\ncase \"\$*\" in *messenger:consume*) [[ \" \$* \" == *' --quiet '* ]] || { for _ in {1..600}; do grep -q intakt:sample:show \"\$CALLS\" && break; sleep 0.1; done; sleep 0.3; echo ' [OK] Consuming messages from transport.'; echo ' // Quit the worker with CONTROL-C.' >&2; }; [[ -n \${CONSUMERS_IGNORE_SIGTERM:-} ]] && { trap '' TERM; echo 'a consumer ignores the stop' >> \"\$CALLS\"; }; exec sleep 60 </dev/null >/dev/null 2>&1;; *intakt:sample:seed*) [[ -e var/cache/test/image-container ]] && { echo 'the image container survived until the seed' >&2; exit 3; }; echo \"\$MCP_OWNER_TOKEN \$MCP_OWNER_ACCESS\" > \"\$CALLS.seen\"; echo \"\${OPENAI_COMPATIBLE_BASE_URL:-} \${OPENAI_COMPATIBLE_API_KEY:-}\" > \"\$CALLS.compatible\"; [[ -n \${SECRETS_SEEN:-} ]] && echo \"\$APP_SECRET \$MERCURE_JWT_SECRET\" > \"\$SECRETS_SEEN\"; mkdir -p var/cache/test; touch var/cache/test/seeded-container; exit \"\${SEED_STATUS:-0}\";; *cache:warmup*) exit \"\${WARMUP_STATUS:-0}\";; *intakt:demo:create*) exit \"\${CREATE_STATUS:-0}\";; *intakt:ai:tiers*) exit \"\${TIERS_STATUS:-0}\";; *intakt:sample:show*) [[ -n \${SHOW_SECONDS:-} ]] && { sleep \"\$SHOW_SECONDS\" </dev/null >/dev/null 2>&1; echo 'the slow show ended' >> \"\$CALLS\"; }; echo 'the review block'; exit \"\${SHOW_STATUS:-0}\";; esac\nexit 0\n");
         // The server notes its run only after the scheduler watcher (bounded): the entrypoint starts them in parallel, so the test forces the order it must survive.
         $filesystem->dumpFile($programs.'/frankenphp', "#!/bin/bash\ncase \"\$*\" in *validate*) ;; *) for _ in {1..600}; do grep -q scheduler_watcher \"\$CALLS\" && break; sleep 0.1; done;; esac\necho \"frankenphp \$*\" >> \"\$CALLS\"\ncase \"\$*\" in *validate*) [[ -n \${SECRETS_SEEN:-} ]] && echo \"\$APP_SECRET \$MERCURE_JWT_SECRET\" > \"\$SECRETS_SEEN\"; exit 0;; esac\necho 'the server started'\nexec sleep 60 </dev/null >/dev/null 2>&1\n");
         // The health check answers only once the server runs and after CURL_FAILURES refused calls, so the test forces a start where the server is not up yet; with CURL_SECONDS every call takes that long and notes its end, so the test forces a stop that arrives while one runs; the TERM trap is its first statement and kills the pause only once one started ($! stays empty until then), so a stop in any order ends the call and no pause outlives the test.
