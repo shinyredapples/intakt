@@ -34,7 +34,7 @@ First clone and start Intakt as in steps 1 and 2 of path a.
 This path runs a live review, so first do steps 1 and 2 of path b (keep a key, restart, wait until healthy): without them the `sample` project has no reviewers.
 
 1. Get the token: `docker compose exec intakt php bin/console intakt:sample:show /app/var/data/sample-repository` prints `Connect an MCP client: claude mcp add ... --header "Authorization: Bearer <token>"`. Step 4 of the first-run page at http://localhost:7781/setup ("Your own agent") shows the address, `http://localhost:7781/mcp/owner`.
-2. Run the printed `claude mcp add` line in the clone, then start `claude` there.
+2. The clone carries a `.mcp.json` for that address, so there is nothing to add: run `export INTAKT_MCP_TOKEN=<the token from step 1>`, then start `claude` in the clone and approve the `intakt` server it offers. `claude mcp list` shows `intakt` as connected. (Or run the printed `claude mcp add` line instead.)
 3. Install the skill: copy `skills/intakt-review` to `~/.claude/skills/intakt-review` ([details](../skills/intakt-review/README.md)).
 4. Say "intakt review the demo". The agent starts the review with `start_review`, fixes only what the act list names inside the container, and reports the verdict, the rounds used and why it stopped.
 
