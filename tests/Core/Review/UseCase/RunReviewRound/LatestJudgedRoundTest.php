@@ -36,11 +36,33 @@ final class LatestJudgedRoundTest extends KernelTestCase
         self::assertSame($newer, $fixture->transactions()->latestJudgedAt('alpha', self::PULL, SampleIdentity::HEAD)?->id()->toRfc4122());
     }
 
-    private function judgedRound(RoundFixture $fixture): string
+    public function testTheLatestJudgedRoundOfAHeadIsTheNewerOneThoughAnotherSpellingOfTheAddressNumbersItsRoundsHigher(): void
+    {
+        $fixture = new RoundFixture(self::getContainer());
+        $this->judgedRound($fixture);
+        $fixture->clock->modify('+1 second');
+        $older = $this->judgedRound($fixture);
+        $fixture->clock->modify('+1 second');
+        $newer = $this->judgedRound($fixture, 'https://github.com/Acme/widgets/pull/7');
+        $rounds = $fixture->transactions();
+
+        self::assertGreaterThan($rounds->stored($newer)->number(), $rounds->stored($older)->number());
+        self::assertSame($newer, $rounds->latestJudgedAt('alpha', self::PULL, SampleIdentity::HEAD)?->id()->toRfc4122());
+    }
+
+    public function testNoRoundIsTheLatestJudgedOfAHeadNoRoundReviewed(): void
+    {
+        $fixture = new RoundFixture(self::getContainer());
+        $this->judgedRound($fixture);
+
+        self::assertNull($fixture->transactions()->latestJudgedAt('alpha', self::PULL, str_repeat('0', 40)));
+    }
+
+    private function judgedRound(RoundFixture $fixture, string $address = self::PULL): string
     {
         $sent = count($fixture->bus->messages);
         $judged = count($fixture->judgings());
-        $round = $fixture->startAtHead(self::PULL, SampleIdentity::HEAD);
+        $round = $fixture->startAtHead($address, SampleIdentity::HEAD);
         $vendor = new VerdictPerRole([]);
 
         foreach (array_slice($fixture->bus->messages, $sent) as $message) {
