@@ -25,11 +25,19 @@ The clone already carries a `.mcp.json` that points Claude Code at the demo. The
    docker compose exec intakt php bin/console intakt:sample:show /app/var/data/sample-repository
    ```
 
-2. Copy the token from that line into your shell:
+   Among its lines is this one:
 
    ```
-   export INTAKT_MCP_TOKEN=<token from the line intakt:sample:show prints>
+   Connect an MCP client: claude mcp add --transport http intakt http://localhost:7781/mcp/owner --header "Authorization: Bearer <token>"
    ```
+
+2. Copy the token after `Bearer` in that line into your shell:
+
+   ```
+   export INTAKT_MCP_TOKEN=<token>
+   ```
+
+   Or run the printed `claude mcp add` line instead.
 
 3. Start `claude` in the clone and approve the `intakt` MCP server when Claude Code asks.
 
