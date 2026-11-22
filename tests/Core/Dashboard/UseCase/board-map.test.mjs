@@ -360,6 +360,19 @@ test('swiping the phone board presses the column it settled on and scrolls the s
     assert.equal(switcher.scrollLeft, 316 - 16);
 });
 
+test('a swipe while a switcher button holds the keyboard focus presses the settled column but leaves the strip where it is', () => {
+    const board = new FakeBoard(16, 358, 16);
+    board.clientWidth = 390;
+    const { page, switcher } = boardOnAPage({ board });
+    page.activeElement = switcher.buttons[0];
+
+    board.scrollLeft = 8 * 374;
+    page.dispatch('scroll', { target: board });
+
+    assert.equal(switcher.buttons[8].getAttribute('aria-pressed'), 'true');
+    assert.equal(switcher.scrollLeft, 0);
+});
+
 test('a second scroll before the pause replaces the first one\'s timer, so only where the board settled is pressed', () => {
     const { page, view, board, switcher } = phoneBoardOnAPage();
 

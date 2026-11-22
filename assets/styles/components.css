@@ -291,8 +291,9 @@ a.card.needs:hover, .card.needs.is-hover { filter: brightness(.98); }
 .stagemap[hidden] { display: none; }
 .sm-bar { display: inline-flex; }
 .sm-seg { display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 0; background: none; cursor: pointer; }
-.sm-seg::before { content: ""; width: 18px; height: 8px; border-radius: 3px; background: var(--tint-2); }
-.sm-seg.in::before { background: var(--primary); }
+/* An out-of-view column's bar is a thinner --muted line, so it stands out from the page by at least 3:1 in both themes (WCAG 1.4.11, the mock's --tint-2 gave 1.13:1 and 1.30:1), and the columns in view keep the mock's full --primary bar, told apart by height as well as color. */
+.sm-seg::before { content: ""; width: 18px; height: 4px; border-radius: 2px; background: var(--muted); }
+.sm-seg.in::before { height: 8px; border-radius: 3px; background: var(--primary); }
 /* A focused column shows where a jump landed; the ring sits inside, so the board's scroller does not cut it off. */
 .board .col:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; border-radius: var(--r-card); }
 .colswitch { display: none; }

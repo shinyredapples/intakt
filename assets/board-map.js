@@ -140,7 +140,8 @@ function pressSettledColumn(page, board) {
     const settled = distances.indexOf(Math.min(...distances));
     const buttons = [...switcher.querySelectorAll('button')];
     buttons.forEach((button, i) => button.setAttribute('aria-pressed', String(i === settled)));
-    if (buttons[settled]) {
+    // A switcher button that holds the keyboard focus keeps the strip where it is, so a swipe never scrolls the focused button out of view (WCAG 2.4.11).
+    if (buttons[settled] && !buttons.includes(page.activeElement)) {
         switcher.scrollLeft = Math.max(0, buttons[settled].offsetLeft - SWITCHER_INSET);
     }
 }
