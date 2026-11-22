@@ -14,24 +14,25 @@ final readonly class CheckedLockFiles
     {
     }
 
+    // Null when the merged tree's files cannot be known before the merge, or one is missing, so the check installs itself.
     /**
      * @param non-empty-list<string> $paths
      *
-     * @return ?non-empty-array<string, string> null when the files of the merged tree cannot be known before the merge, or one is missing
+     * @return ?non-empty-array<string, string>
      *
      * @throws HandBackNotChecked
      */
     public function of(string $repository, string $head, array $paths): ?array
     {
-        $main = $this->git->answer($repository, ['rev-parse', '--verify', '--quiet', 'HEAD^{commit}']);
-        // The job checks a branch that lacks main on its merge with main, which holds the head's file only where main's is the same.
-        $holdsMain = null === $main || '' === $main || $this->git->succeeds($repository, ['merge-base', '--is-ancestor', $main, $head]);
+        $main = $this->git->answer($repository, ['rev-parse', '--verify', '--quiet', 'HEAD^{commit}']) ?? '';
+        // Main's file must match, because the job checks a branch that lacks main on its merge with main, which holds the head's file only where main's is the same.
+        $holdsMain = '' === $main || $this->git->succeeds($repository, ['merge-base', '--is-ancestor', $main, $head]);
         $files = [];
 
         foreach ($paths as $path) {
             $blob = $this->blobAt($repository, $head, $path);
 
-            if (null === $blob || (!$holdsMain && $blob !== $this->blobAt($repository, (string) $main, $path))) {
+            if (null === $blob || (!$holdsMain && $blob !== $this->blobAt($repository, $main, $path))) {
                 return null;
             }
 

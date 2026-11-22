@@ -162,14 +162,18 @@ final class ContainerJobRunnerTest extends TestCase
             ['Type' => 'bind', 'Source' => '/srv/installs/1', 'Target' => '/kept', 'ReadOnly' => false],
             array_last($this->mountsOf('install-1')),
         );
-        self::assertContains('INTAKT_JOB_KEPT=/kept', $this->engine->definitionOf('install-1')['Env']);
+        $environment = $this->engine->definitionOf('install-1')['Env'];
+        self::assertIsArray($environment);
+        self::assertContains('INTAKT_JOB_KEPT=/kept', $environment);
     }
 
     public function testAJobWithoutAKeptFolderGetsNoKeptFolderVariable(): void
     {
         $this->whenJobRuns($this->spec('build-1'));
 
-        self::assertNotContains('INTAKT_JOB_KEPT=/kept', $this->engine->definitionOf('build-1')['Env']);
+        $environment = $this->engine->definitionOf('build-1')['Env'];
+        self::assertIsArray($environment);
+        self::assertNotContains('INTAKT_JOB_KEPT=/kept', $environment);
     }
 
     public function testAJobGetsAWipedHomeAndNoEnvironmentFromTheOrchestrator(): void

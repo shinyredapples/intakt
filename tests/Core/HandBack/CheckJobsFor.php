@@ -27,7 +27,7 @@ use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\FlockStore;
 
-// Builds the check job as the container wires it, with its snapshot store, installs and locks in one scratch folder.
+// Shared by every test that runs a check, because a check now needs a snapshot store, an install folder and locks, kept in one scratch folder so a test removes them with it.
 final readonly class CheckJobsFor
 {
     public const string CHECK_SCRIPT = __DIR__.'/../../../docker/job/check.sh';
