@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Watchdog;
 
+use Intakt\Core\Ledger\Contract\Mentions;
 use DateTimeImmutable;
 use Intakt\Core\Ledger\Contract\AppendResult;
 use Intakt\Core\Ledger\Contract\Ledger;
@@ -46,11 +47,8 @@ final class HaltLedger implements Ledger
         return new RecordedEvents(array_values(array_filter($this->recorded, static fn (RecordedEvent $recorded): bool => $kind === $recorded->event->kind)));
     }
 
-    /**
-     * @param list<string> $texts
-     */
     #[Override]
-    public function readMentioning(array $texts): RecordedEvents
+    public function readMentioning(Mentions $texts): RecordedEvents
     {
         return new RecordedEvents([]);
     }

@@ -301,7 +301,7 @@ final class ListProtectedChangesTest extends TestCase
             $head = $repository->commitFile('bin/check', 'two');
             $repository->checkout('main');
 
-            self::assertSame(['bin/check'], $this->listed($repository->path.'/.git', $head)->paths]);
+            self::assertSame(['bin/check'], [...$this->listed($repository->path.'/.git', $head)->paths]);
         } finally {
             $repository->remove();
         }

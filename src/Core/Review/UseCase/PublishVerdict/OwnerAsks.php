@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\UseCase\PublishVerdict;
 
+use Intakt\Core\Ledger\Contract\Mentions;
 use Intakt\Core\Git\Contract\ProtectedChanges;
 use Intakt\Core\Git\Contract\ProtectedHeads;
 use Intakt\Core\Ledger\Contract\Ledger;
@@ -115,7 +116,7 @@ final readonly class OwnerAsks
 
     private function isAskedAlready(ReviewRound $round, string $head): bool
     {
-        foreach ($this->ledger->readMentioning([$head]) as $recorded) {
+        foreach ($this->ledger->readMentioning(new Mentions($head)) as $recorded) {
             if (LedgerEventKind::OwnerAsked === $recorded->event->kind && $this->names($recorded, $round, $head)) {
                 return true;
             }

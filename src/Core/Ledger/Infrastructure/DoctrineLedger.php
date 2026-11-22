@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Ledger\Infrastructure;
 
+use Intakt\Core\Ledger\Contract\Mentions;
 use DateTimeZone;
 use Doctrine\DBAL\Exception;
 use Doctrine\ORM\EntityManagerInterface;
@@ -64,13 +65,10 @@ final readonly class DoctrineLedger implements Ledger
         return $this->recordedEventsOf(['kind' => $kind->value]);
     }
 
-    /**
-     * @param list<string> $texts
-     */
-    public function readMentioning(array $texts): RecordedEvents
+    public function readMentioning(Mentions $texts): RecordedEvents
     {
         $records = [];
-        foreach (array_chunk($texts, self::TEXTS_PER_QUERY) as $chunk) {
+        foreach (array_chunk([...$texts], self::TEXTS_PER_QUERY) as $chunk) {
             foreach ($this->recordsMentioningAnyOf($chunk) as $record) {
                 $records[$record->position] = $record;
             }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\UseCase\EscalateRecurringP1;
 
+use Intakt\Core\Ledger\Contract\Mentions;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
@@ -30,7 +31,7 @@ final readonly class EscalationsOfChange
     public function recordedFor(string $round, string $key): EscalationVerdictKept|EscalationVerdictReused|EscalationReviewFailed|null
     {
         // Only the events naming the round, because the ledger holds the events of every round.
-        foreach ($this->ledger->readMentioning([$round]) as $recorded) {
+        foreach ($this->ledger->readMentioning(new Mentions($round)) as $recorded) {
             $class = self::KINDS[$recorded->event->kind->value] ?? null;
             $event = null === $class ? null : $this->payloads->of($recorded, $class);
 

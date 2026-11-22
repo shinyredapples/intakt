@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Git\UseCase\PushBranch;
 
+use Intakt\Core\Ledger\Contract\Mentions;
 use Intakt\Core\Ledger\Contract\AppendResult;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
@@ -47,13 +48,10 @@ final class RecordingLedger implements Ledger
         return $this->recorded(array_values(array_filter($this->events, static fn (LedgerEvent $event): bool => $event->kind === $kind)));
     }
 
-    /**
-     * @param list<string> $texts
-     */
     #[Override]
-    public function readMentioning(array $texts): RecordedEvents
+    public function readMentioning(Mentions $texts): RecordedEvents
     {
-        return $this->recorded(array_values(array_filter($this->events, static fn (LedgerEvent $event): bool => array_any($texts, static fn (string $text): bool => str_contains($event->payload, $text)))));
+        return $this->recorded(array_values(array_filter($this->events, static fn (LedgerEvent $event): bool => array_any([...$texts], static fn (string $text): bool => str_contains($event->payload, $text)))));
     }
 
     /**

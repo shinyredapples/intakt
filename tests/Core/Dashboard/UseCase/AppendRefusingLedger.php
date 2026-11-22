@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
+use Intakt\Core\Ledger\Contract\Mentions;
 use Intakt\Core\Ledger\Contract\AppendResult;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
@@ -31,10 +32,7 @@ final readonly class AppendRefusingLedger implements Ledger
         return $this->reads->readOfKind($kind);
     }
 
-    /**
-     * @param list<string> $texts
-     */
-    public function readMentioning(array $texts): RecordedEvents
+    public function readMentioning(Mentions $texts): RecordedEvents
     {
         return $this->reads->readMentioning($texts);
     }

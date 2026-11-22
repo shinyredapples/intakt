@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Ledger;
 
+use Intakt\Core\Ledger\Contract\Mentions;
 use Closure;
 use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
@@ -85,7 +86,7 @@ final class DoctrineLedgerTest extends KernelTestCase
             self::assertTrue($ledger->append(new LedgerEvent($kind, $payload))->succeeded());
         }
 
-        $payloads = array_map(static fn (RecordedEvent $event): string => $event->event->payload, iterator_to_array($ledger->readMentioning(['r-2', 'r-1'])));
+        $payloads = array_map(static fn (RecordedEvent $event): string => $event->event->payload, iterator_to_array($ledger->readMentioning(new Mentions('r-2', 'r-1'))));
 
         self::assertSame(['{"round":"r-2"}', '{"round":"r-1"}', '{"call":"c-1","round":"r-2"}'], $payloads);
     }
@@ -98,7 +99,7 @@ final class DoctrineLedgerTest extends KernelTestCase
             self::assertTrue($ledger->append(new LedgerEvent(LedgerEventKind::JudgeDone, $payload))->succeeded());
         }
 
-        $payloads = array_map(static fn (RecordedEvent $event): string => $event->event->payload, iterator_to_array($ledger->readMentioning(['a_b', '50%!'])));
+        $payloads = array_map(static fn (RecordedEvent $event): string => $event->event->payload, iterator_to_array($ledger->readMentioning(new Mentions('a_b', '50%!'))));
 
         self::assertSame(['{"note":"a_b"}', '{"note":"50%!"}'], $payloads);
     }
@@ -112,7 +113,7 @@ final class DoctrineLedgerTest extends KernelTestCase
             self::assertTrue($ledger->append(new LedgerEvent(LedgerEventKind::UsageRecorded, $payload))->succeeded());
         }
 
-        $payloads = array_map(static fn (RecordedEvent $event): string => $event->event->payload, iterator_to_array($ledger->readMentioning($calls)));
+        $payloads = array_map(static fn (RecordedEvent $event): string => $event->event->payload, iterator_to_array($ledger->readMentioning(new Mentions(...$calls))));
 
         self::assertSame(['{"call":"'.$calls[1099].'"}', '{"call":"'.$calls[0].'","also":"'.$calls[1099].'"}', '{"call":"'.$calls[500].'"}'], $payloads);
     }
@@ -122,7 +123,7 @@ final class DoctrineLedgerTest extends KernelTestCase
         $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');
         self::assertTrue($ledger->append(new LedgerEvent(LedgerEventKind::JudgeDone, '{"round":"r-1"}'))->succeeded());
 
-        self::assertSame([], iterator_to_array($ledger->readMentioning([])));
+        self::assertSame([], iterator_to_array($ledger->readMentioning(new Mentions())));
     }
 
     public function testEventsAreReadInAppendOrderAfterTheClockStepsBack(): void

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\Infrastructure;
 
+use Intakt\Core\Ledger\Contract\Mentions;
 use Intakt\Core\Build\Contract\BuildStep;
 use Intakt\Core\Build\Contract\BuildStepOutcome;
 use Intakt\Core\Dashboard\Domain\Board;
@@ -46,8 +47,8 @@ final readonly class LedgerReviewPages
             return null;
         }
 
-        $added = $this->addUnseen($rounds, $this->ledger->readMentioning($members), []);
-        $this->addUnseen($rounds, $this->ledger->readMentioning($rounds->callsOf($members)), $added);
+        $added = $this->addUnseen($rounds, $this->ledger->readMentioning(new Mentions(...$members)), []);
+        $this->addUnseen($rounds, $this->ledger->readMentioning(new Mentions(...$rounds->callsOf($members))), $added);
 
         return $rounds->reviewOf($round);
     }
@@ -86,7 +87,7 @@ final readonly class LedgerReviewPages
     {
         $started = null;
 
-        foreach ($this->ledger->readMentioning([$round]) as $recorded) {
+        foreach ($this->ledger->readMentioning(new Mentions($round)) as $recorded) {
             $row = $this->payloads->reviewerRowOf($recorded);
 
             if ($row instanceof ReviewerStarted && $row->round === $round && $row->reviewer === $reviewer) {
