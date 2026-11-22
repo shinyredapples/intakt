@@ -9,6 +9,7 @@ final readonly class JobSpec
 {
     public const string WORK_AREA = '/work';
     public const string OUTPUT_DIRECTORY = '/output';
+    public const string KEPT_FOLDER = '/kept';
 
     /**
      * @param list<string>   $command
@@ -21,6 +22,7 @@ final readonly class JobSpec
         public array $inputs,
         public JobLimits $limits,
         public JobEgress $egress,
+        public ?JobKeptFolder $kept = null,
     ) {
     }
 }
