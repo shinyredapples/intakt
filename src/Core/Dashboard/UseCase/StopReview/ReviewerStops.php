@@ -8,7 +8,6 @@ use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\ReviewerOutcome;
 use Intakt\Core\Dashboard\Domain\ReviewerProgress;
-use Intakt\Core\Dashboard\Domain\ReviewState;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\RoundLock;
 use Intakt\Core\Ledger\Contract\Ledger;
@@ -31,7 +30,7 @@ final readonly class ReviewerStops
     /**
      * @return array{string, string}|null
      */
-    // Null when the ledger shows no running reviewer with this id in an unjudged round, so the caller answers that nothing could be stopped.
+    // Null when the ledger shows no running reviewer with this id in a round still in review, so the caller answers that nothing could be stopped.
     #[NoDiscard('the flash line is the only report of the press')]
     public function requestStopOf(string $round, string $reviewer): ?array
     {
@@ -54,7 +53,7 @@ final readonly class ReviewerStops
     /**
      * @return array{string, string}|null
      */
-    // Null when the ledger shows no unjudged round with this id, so the caller answers that there is no such round to stop.
+    // Null when the ledger shows no round still in review with this id, so the caller answers that there is no such round to stop.
     #[NoDiscard('the flash line is the only report of the press')]
     public function requestStopOfRound(string $round): ?array
     {
@@ -80,12 +79,12 @@ final readonly class ReviewerStops
     /**
      * @return list<string>|null
      */
-    // Null when the round is unknown or judged, so nothing in it can be stopped any more.
+    // Null when the round is unknown, judged or ended without the judge's call, the same rounds whose page hides the Stop forms, so nothing in it can be stopped any more.
     private function runningReviewersOf(?Review $review, string $round): ?array
     {
         $reviewed = array_find($review->rounds ?? [], static fn (ReviewedRound $candidate): bool => $candidate->round === $round);
 
-        if (!$reviewed instanceof ReviewedRound || ReviewState::Judged === $reviewed->state) {
+        if (!$reviewed instanceof ReviewedRound || $reviewed->isJudged() || $reviewed->hasEnded()) {
             return null;
         }
 

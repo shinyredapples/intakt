@@ -56,7 +56,7 @@ To watch more, open the Full record: its live log shows each reviewer at work, t
 
 On the board, the sample change sits in **In review** while the panel reads it. On an older 4-core desktop, the demo review took 42 seconds to its verdict (median of ten runs). A provider under load can take longer.
 
-If you change your mind, the **Stop** button ends the round. Press it twice: the first press asks you to confirm.
+If you change your mind, the **Stop** button asks the running reviewers to stop. Press it twice: the first press asks you to confirm. If the round has already ended, even when a page you left open still shows the button, Intakt refuses the press and stops nothing.
 
 ## When the owl is done
 

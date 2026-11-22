@@ -30,6 +30,7 @@ final class BuildScriptTest extends TestCase
     private string $bin = '';
     private string $prompt = '';
     private string $gates = '4';
+    private string $preamble = '';
     // False removes the variable, so a value the test run itself was started with never reaches the script.
     private string|false $inherited = false;
     // False for the same reason, because the test run itself may run inside a CLI session that sets both.
@@ -177,6 +178,125 @@ final class BuildScriptTest extends TestCase
         self::assertStringContainsString("claude cut after 3 seconds, its commits are kept\n", $this->outputFile('build.log'));
     }
 
+    public function testATermReachingTheWatchdogAfterItsKillWasSentStillCountsAsACut(): void
+    {
+        // The stand-in shell holds the watchdog after its kill until the build has sent its TERM, so the TERM always arrives inside the window between the kill and the exit.
+        $this->preamble = 'rm -f "$TMPDIR/termsent"; kill() { command kill "$@"; if [ "$2" = TERM ]; then : > "$TMPDIR/termsent"; fi; }';
+        $sh = escapeshellarg((string) new ExecutableFinder()->find('sh'));
+        file_put_contents($this->bin.'/sh', <<<SH
+            #!/bin/sh
+            if [ "\$1" = -c ]; then
+                script="\$2"
+                shift 2
+                exec {$sh} -c "\$script; s=\\\$?; while [ ! -e \\\$TMPDIR/termsent ]; do sleep 0.05; done; sleep 0.3; exit \\\$s" "\$@"
+            fi
+            exec {$sh} "\$@"
+            SH);
+        chmod($this->bin.'/sh', 0o755);
+        $this->givenTheCli(<<<'SH'
+            echo 'built' > built.txt
+            git add built.txt
+            git commit --quiet -m 'feat: build the task'
+            sleep 30
+            SH);
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5', 3);
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertStringContainsString("claude cut after 3 seconds, its commits are kept\n", $this->outputFile('build.log'));
+    }
+
+    public function testASessionKilledFromElsewhereWhoseChildOutlivesItIsNotCutWhenTheTermIsLate(): void
+    {
+        // Because the build's TERM is delayed by a test-only function until the watchdog's allowance has passed, the order is forced without repeated runs.
+        $this->preamble = 'kill() { if [ "$2" = TERM ]; then sleep 3; fi; command kill "$@"; }';
+        $this->givenTheCli(<<<'SH'
+            sleep 30 &
+            kill -s KILL $$
+            SH);
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5', 1);
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertStringContainsString("claude exited with 137\n", $this->outputFile('build.log'));
+        self::assertStringNotContainsString('cut after', $this->outputFile('build.log'));
+    }
+
+    public function testASessionLeaderKilledFromElsewhereAndNotYetReapedIsNotTakenForACutWhenItsChildOutlivesIt(): void
+    {
+        // The CLI stops the build script so it cannot reap the leader, and then kills the leader. A helper resumes the script only once the leader and the watchdog are both zombies, because then the watchdog has decided, which forces the zombie order however late it runs. The helper finds them in the kernel's proc children file (/proc/<pid>/task/<pid>/children), so the test needs a kernel that provides it.
+        $this->givenTheCli(<<<'SH'
+            parent=$PPID
+            sleep 30 &
+            setsid sh -c 'until (set -- $(cat "/proc/$1/task/$1/children"); [ $# -ge 2 ] && for c; do grep -q "^State:.Z" "/proc/$c/status" || exit 1; done); do sleep 0.05; done; kill -s CONT "$1"' helper "$parent" > /dev/null 2>&1 &
+            kill -s STOP "$parent"
+            until grep -q '^State:.T' "/proc/$parent/status"; do sleep 0.01; done
+            kill -s KILL $$
+            SH);
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5', 1);
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertStringContainsString("claude exited with 137\n", $this->outputFile('build.log'));
+        self::assertStringNotContainsString('cut after', $this->outputFile('build.log'));
+    }
+
+    public function testASessionLeaderThreadThatEndedWhileAnotherThreadStillRunsIsStillCutAtItsAllowance(): void
+    {
+        $python = new ExecutableFinder()->find('python3');
+        if (null === $python) {
+            self::markTestSkipped('python3 is not on the PATH, and the thread fixture needs it.');
+        }
+        // The leader thread ends on its own, so the kernel shows the leader in state Z while the other thread keeps the session running. The other thread marks when the leader shows state Z with two threads. A stand-in shell starts the watchdog only then, so its allowance cannot pass while the leader still runs, however slow the start.
+        $this->givenTheCli('exec '.escapeshellarg($python).' -I -c '.escapeshellarg(<<<'PY'
+            import ctypes, os, threading, time
+            def finish():
+                status = '/proc/%d/status' % os.getpid()
+                while True:
+                    with open(status) as file:
+                        lines = file.read().splitlines()
+                    if any(line.startswith('State:\tZ') for line in lines) and 'Threads:\t2' in lines:
+                        break
+                    time.sleep(0.01)
+                open(os.environ['RECORD'] + '/ready', 'w').close()
+                time.sleep(10)
+                os._exit(0)
+            threading.Thread(target=finish).start()
+            ctypes.CDLL(None).pthread_exit(None)
+            PY));
+        $sh = escapeshellarg((string) new ExecutableFinder()->find('sh'));
+        file_put_contents($this->bin.'/sh', <<<SH
+            #!/bin/sh
+            if [ "\$1" = -c ]; then
+                while [ ! -e "\$RECORD/ready" ]; do sleep 0.05; done
+            fi
+            exec {$sh} "\$@"
+            SH);
+        chmod($this->bin.'/sh', 0o755);
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5', 1);
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertFileExists($this->history->folder.'/ready');
+        self::assertStringContainsString("claude cut after 1 seconds, its commits are kept\n", $this->outputFile('build.log'));
+    }
+
+    public function testASessionLeaderWhoseNameHoldsALineBreakAndAZombieStateIsStillCutAtItsAllowance(): void
+    {
+        // The first line of the leader's /proc stat would then end in what looks like state Z, which must not stop the cut.
+        $this->givenTheCli(<<<'SH'
+            printf 'a) Z\nb' > "/proc/$$/comm"
+            head -n 1 "/proc/$$/stat" > "$RECORD/stat"
+            sleep 30
+            SH);
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5', 1);
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertStringEndsWith(' (a) Z', rtrim((string) file_get_contents($this->history->folder.'/stat'), "\n"));
+        self::assertStringContainsString("claude cut after 1 seconds, its commits are kept\n", $this->outputFile('build.log'));
+    }
+
     public function testASessionThatPutsAFolderWhereACutMarkerCouldBeIsStillCutAtItsAllowance(): void
     {
         $this->givenTheCli(<<<'SH'
@@ -212,6 +332,39 @@ final class BuildScriptTest extends TestCase
         self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
         self::assertStringContainsString("claude exited with 137\n", $this->outputFile('build.log'));
         self::assertStringNotContainsString('cut after', $this->outputFile('build.log'));
+    }
+
+    public function testASessionKilledBySigkillLongBeforeItsAllowanceIsBundledWithoutWaitingForTheAllowance(): void
+    {
+        // The run's limit sits far below the allowance, so a script that waits out the allowance fails here by timing out.
+        $this->givenTheCli(<<<'SH'
+            echo 'built' > built.txt
+            git add built.txt
+            git commit --quiet -m 'feat: build the task'
+            kill -s KILL $$
+            SH);
+        $this->timeout = 15;
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5', 120);
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertSame("built\n", $this->fileAtTheBundlesHead('task', 'built.txt'));
+        self::assertStringContainsString("claude exited with 137\n", $this->outputFile('build.log'));
+        self::assertStringNotContainsString('cut after', $this->outputFile('build.log'));
+    }
+
+    public function testASessionKilledBySigkillBeforeItsAllowanceLeavesNoWatchdogBehind(): void
+    {
+        $this->givenTheCli('until [ -s "$RECORD/sleeps" ]; do :; done; kill -s KILL $$');
+        $this->givenSleepRecordsItsProcess();
+        $this->timeout = 15;
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5', 120);
+
+        self::assertSame(0, $run->getExitCode());
+        $sleeps = $this->recordedSleeps();
+        self::assertNotSame([], $sleeps);
+        self::assertSame([], $this->stillRunningAfter($sleeps, self::WATCHDOG_DEADLINE));
     }
 
     public function testASessionThatEndsByItsTurnLimitKeepsItsCommitsAndIsNotLoggedAsCut(): void
@@ -1249,7 +1402,7 @@ final class BuildScriptTest extends TestCase
     private function whenTheBuildRuns(string $branch, string $model, int $allowance = 600): Process
     {
         $run = new Process(
-            ['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-build', $this->source ?? $this->history->work, $this->prompt, $branch, $model, '7', (string) $allowance, $this->gates, '1800'],
+            ['/bin/sh', '-c', $this->preamble."\n".file_get_contents(self::SCRIPT), 'intakt-build', $this->source ?? $this->history->work, $this->prompt, $branch, $model, '7', (string) $allowance, $this->gates, '1800'],
             $this->startFolder,
             $this->environment(),
             timeout: $this->timeout,

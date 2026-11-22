@@ -29,7 +29,7 @@ final readonly class StopReviewController
     public function __invoke(Request $request, string $round, string $reviewer): Response
     {
         $this->press->refuseWithoutToken($request, self::TOKEN_ID, 'The form token is missing or wrong, so nothing was stopped.');
-        $line = $this->stops->requestStopOf($round, $reviewer) ?? throw new NotFoundHttpException('The ledger shows no running reviewer with this id in an unjudged round.');
+        $line = $this->stops->requestStopOf($round, $reviewer) ?? throw new NotFoundHttpException('The ledger shows no running reviewer with this id in a round still in review.');
         $this->press->flash($request, $line);
 
         return new RedirectResponse($this->urls->generate(DashboardRoutes::SHOW_REVIEW, ['round' => $round]), Response::HTTP_SEE_OTHER);

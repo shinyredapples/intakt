@@ -194,7 +194,7 @@ final readonly class RoundLedger
 
         $shown = array_map(static fn (Finding $finding): Finding => $entries[$finding->id] ?? $finding, $findings);
 
-        return array_map(fn (Finding $finding): JudgeDoneFinding => new JudgeDoneFinding($finding->id, $finding->severity, $finding->text, $finding->merged, $finding->file, $finding->line, $this->storedNote($judged->notes->noteOf($finding->id))), $shown);
+        return array_map(fn (Finding $finding): JudgeDoneFinding => new JudgeDoneFinding($finding->id, $finding->severity, $finding->text, $finding->merged, $finding->file, $finding->line, $this->storedNote($judged->notes->noteOf($finding->id)), $finding->gate_gap), $shown);
     }
 
     // Keyed at the head the round judged, because only the reviewed checkout holds the files a P1 named as the reviewers saw them.

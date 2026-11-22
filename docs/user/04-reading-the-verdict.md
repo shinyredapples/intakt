@@ -28,7 +28,7 @@ In the Full record, read a card from left to right:
 2. **The id,** such as F1. It names this problem for the rest of the review.
 3. **The text.** What is wrong, and often how to fix it.
 4. **The place,** a file and a line, such as `src/discount.js:3`.
-5. **Also reported as,** when another reviewer found the same problem at the same place. You fix it once.
+5. **Also reported as,** when another reviewer found the same problem at the same place. You fix it once. Each other id is listed once.
 6. **The owl's call,** in plain words: **Fix now**.
 
 Start with the P1 cards. In the demo, F1 brings back a discount bug and F2 lets a customer name run shell commands.
