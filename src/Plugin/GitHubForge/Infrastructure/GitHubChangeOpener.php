@@ -51,13 +51,14 @@ final readonly class GitHubChangeOpener implements ChangeOpening
         $repository = $this->addressOf($change->project);
         // Asked again, because another account can open a pull request of the branch between the check before the push and this write.
         $open = $this->ownNumberToBase($this->ownPullRequestsOf($repository, $change->branch), $change->base);
-        $payload = ['title' => $text->title, 'body' => $text->body, 'base' => $change->base];
+        $payload = ['title' => $text->title, 'body' => $text->body];
 
         // The look-up comes first and a write is never retried, so a crash between the two leaves at most the pull request the next call finds.
         if (null === $open) {
-            return new OpenedChange($repository->pullRequest($this->numberOf($this->send('POST', $repository->path().'/pulls', [...$payload, 'head' => $change->branch]))), Opening::Created);
+            return new OpenedChange($repository->pullRequest($this->numberOf($this->send('POST', $repository->path().'/pulls', [...$payload, 'base' => $change->base, 'head' => $change->branch]))), Opening::Created);
         }
 
+        // The update sends no base, because one sent would move back a pull request retargeted after the look-up.
         return new OpenedChange($repository->pullRequest($this->numberOf($this->send('PATCH', $repository->path().'/pulls/'.$open, $payload))), Opening::Created);
     }
 

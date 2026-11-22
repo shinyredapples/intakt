@@ -368,7 +368,20 @@ final class GitHubChangeOpenerTest extends TestCase
         $change = $github->opener()->openOrUpdate(new ProposedChange('widgets', 'task', 'main', new ChangeText('New title', 'New body')));
 
         self::assertSame('https://github.com/acme/widgets/pull/7', $change->id->value);
-        self::assertSame([['PATCH '.self::API.'/pulls/7', ['title' => 'New title', 'body' => 'New body', 'base' => 'main']]], $github->writes);
+        self::assertSame([['PATCH '.self::API.'/pulls/7', ['title' => 'New title', 'body' => 'New body']]], $github->writes);
+    }
+
+    public function testTheTextUpdateOfThisAppsPullRequestSendsNoBaseThatCouldUndoALaterRetarget(): void
+    {
+        $github = new ScriptedGitHub();
+        $github->openPulls = [
+            ['number' => 8, 'head' => ['ref' => 'task'], 'base' => ['ref' => 'release'], 'user' => ['login' => 'intakt[bot]']],
+            ['number' => 7, 'head' => ['ref' => 'task'], 'base' => ['ref' => 'main'], 'user' => ['login' => 'intakt[bot]']],
+        ];
+
+        $github->opener()->openOrUpdate(new ProposedChange('widgets', 'task', 'main', new ChangeText('Title', 'Body')));
+
+        self::assertSame([['PATCH '.self::API.'/pulls/7', ['title' => 'Title', 'body' => 'Body']]], $github->writes);
     }
 
     public function testAPullRequestOfAnotherBranchIsNotTakenForTheBranchsOwn(): void
