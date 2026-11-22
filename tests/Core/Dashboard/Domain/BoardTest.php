@@ -18,6 +18,7 @@ use Intakt\Core\Dashboard\Domain\ReviewerOutcome;
 use Intakt\Core\Dashboard\Domain\RoundPlace;
 use Intakt\Core\Dashboard\Domain\RoundStart;
 use Intakt\Core\Dashboard\Domain\WhoIsWorking;
+use Intakt\Core\Dashboard\Domain\WorkingCard;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -26,6 +27,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(Board::class)]
 #[CoversClass(BoardColumn::class)]
 #[CoversClass(Review::class)]
+#[CoversClass(WorkingCard::class)]
 #[UsesClass(ReviewedRound::class)]
 #[UsesClass(ReviewerOutcome::class)]
 #[UsesClass(Lane::class)]
@@ -254,6 +256,31 @@ final class BoardTest extends TestCase
         $running = $this->round('r1', 'feat/a', 1)->withOutcomes([new ReviewerOutcome('r1-a', 'correctness', 'standard', $this->morning())]);
 
         self::assertNull(new Board([new Review([$running])])->nobodyWorkingLine());
+    }
+
+    public function testWorkingNowShowsTheBuildsTasksInFlightBeforeTheReviewsInProgress(): void
+    {
+        $inReview = new Review([$this->round('r1', 'feat/a', 1)]);
+        $done = new Review([$this->round('r2', 'feat/b', 1)->judgedWith([], $this->morning())]);
+
+        $cards = new Board([$inReview, $done], [$this->inFlight('alpha'), $this->failed('beta')])->workingNow();
+
+        self::assertSame(
+            [['task-1', 'Build', 'developer', null], ['feat/a', 'Review', 'code_reviewer', 'r1']],
+            array_map(static fn (WorkingCard $card): array => [$card->title, $card->step->value, $card->character->value, $card->round], $cards),
+        );
+    }
+
+    public function testAWorkingCardOfAReviewWithoutAChangeIsNamedAfterItsRound(): void
+    {
+        $cards = new Board([new Review([$this->round('r1', '', 1)])])->workingNow();
+
+        self::assertSame('Round r1', $cards[0]->title);
+    }
+
+    public function testWhoIsWorkingHasNoEmptyLineWhileATaskIsBuilt(): void
+    {
+        self::assertNull(new Board([], [$this->inFlight('alpha')])->nobodyWorkingLine());
     }
 
     public function testATaskTheBuildRecordedEndsTheFirstDayBeforeAnyReview(): void

@@ -111,10 +111,22 @@ final readonly class Board
         return [] === $this->cardsIn($column) ? $column->emptyLine() : null;
     }
 
-    // Null while a reviewer runs, because the strip then lists the lanes instead; the words are the first day's, so the board keeps one wording for this line (#2731).
+    // The build's tasks first, because they are earlier on the path than the reviews in progress, so the cards read in the path's order (UX2 home, #3326).
+    /**
+     * @return list<WorkingCard>
+     */
+    public function workingNow(): array
+    {
+        return [
+            ...array_map(WorkingCard::ofTask(...), $this->tasksInFlight()),
+            ...array_map(WorkingCard::ofReview(...), $this->cardsIn(BoardColumn::InReview)),
+        ];
+    }
+
+    // Null while a card works, because Working now then shows the cards instead; the words are the first day's, so the board keeps one wording for this line (#2731).
     public function nobodyWorkingLine(): ?string
     {
-        return [] === $this->whoIsWorking()->lanes() ? 'Nobody is working yet: reviewers appear here while they review a change' : null;
+        return [] === $this->workingNow() ? 'Nobody is working yet: reviewers appear here while they review a change' : null;
     }
 
     // Done opens while every other column is empty, so a finished review is seen on arrival instead of behind its strip.

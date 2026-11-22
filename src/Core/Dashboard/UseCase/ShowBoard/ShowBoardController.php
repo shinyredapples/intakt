@@ -60,7 +60,7 @@ final readonly class ShowBoardController
             'board' => $board,
             'failing' => array_map($this->redacted(...), $this->failingHeads->in($events)),
             'failing_mains' => array_map($this->redactedMain(...), $this->failingMains->in($events)),
-            'working' => $board->whoIsWorking(),
+            'waiting' => $this->notices->stillRunningOldestFirst(),
             'columns' => $board->shownColumns(),
             'coming_next' => $board->comingNext(),
         ])));
@@ -77,7 +77,7 @@ final readonly class ShowBoardController
             || str_contains($request->headers->get('User-Agent') ?? '', 'Mobi');
     }
 
-    // A quiet install (nothing waits on the owner, nothing runs) opens its newest review on a phone, because an empty Waiting on you shows nothing of the product (#3142); the notices are read last, so a busy board never asks the database.
+    // A quiet install (nothing waits on the owner, nothing runs) opens its newest review on a phone, because an empty Waiting on you shows nothing of the product (#3142); the notices are read last, so a busy phone is not sent to the database twice.
     private function quietRoundOf(Board $board): ?RedirectResponse
     {
         $newest = $board->newestReviewAtRest();

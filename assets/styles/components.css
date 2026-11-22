@@ -729,34 +729,55 @@ details.ev > summary time { margin-left: auto; color: var(--muted); font-size: v
   .log { margin-top: 0; }
 }
 
-/* Who is working */
+/* Board: Needs you and Working now (UX2 home) */
+/* The one amber card of the page, because it is the only thing on it that asks something of the owner. */
+.needs-you { display: flex; align-items: center; gap: var(--s16); margin: var(--s24) 0 0; padding: var(--s16); border: 1px solid color-mix(in srgb, var(--amber) 45%, transparent); border-radius: var(--r-overlay); background: var(--amber-tint); color: var(--ink); text-decoration: none; }
+.needs-you:hover { filter: brightness(.98); }
+.needs-you .character { width: 96px; height: 96px; }
+.needs-you .grow { display: grid; flex: 1; min-width: 0; gap: var(--s4); }
+.needs-you .kicker { color: var(--muted); font: 700 var(--t13)/1.3 var(--f-body); letter-spacing: .06em; text-transform: uppercase; }
+.needs-you .count { font: 600 var(--t28)/1.15 var(--f-head); }
+.needs-you .go { flex: none; transform: rotate(-90deg); }
+/* The octopus appears once per page, so the board's own octopus steps aside while Needs you conducts; a sibling rule, because a pushed board replaces that octopus without knowing about the card. */
+.needs-you ~ #board-octopus .character, .needs-you ~ #board-octopus.asleep { display: none; }
 .working { margin: var(--s24) 0 var(--s32); }
-.working summary { display: flex; align-items: center; gap: var(--s12); min-height: 44px; padding: 0 var(--s16); border-radius: var(--r-card); background: var(--tint); cursor: pointer; }
-.working summary:hover { background: var(--tint-2); }
-.w-title { font: 600 var(--t15)/1.3 var(--f-head); }
-.w-dots { display: inline-flex; gap: var(--s4); }
-.w-sum { color: var(--muted); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.working[open] summary { margin-bottom: var(--s8); }
-/* No tint and no hover, so a line with nothing to open does not look like a strip that opens. */
+.working > h2 { margin: 0 0 var(--s12); font: 600 var(--t21)/1.3 var(--f-head); }
+.w-count { color: var(--muted); font-weight: 400; }
+/* No tint and no hover, so a line with nothing to open does not look like a card that opens. */
 .working-none { display: flex; align-items: center; min-height: 44px; padding: 0 var(--s16); color: var(--muted); }
-.lanes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s8); }
-/* A lane links to its round's review page, so it reads and answers the pointer like a card, not like link text; one column no wider than the lane, because an auto column grows to its longest unbreakable word and pushes the lane's text into the next lane. */
-.lane { padding: var(--s12) var(--s16); border-radius: var(--r-card); background: var(--tint); display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s4); min-width: 0; align-content: start; color: var(--ink); text-decoration: none; }
-a.lane:hover { background: var(--tint-2); }
-.lane .meta span { white-space: normal; overflow-wrap: anywhere; }
-/* Wraps, because in a narrow lane the fixed-size character leaves too little room for the role and the start time on one line. */
-.lane .who { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s4) var(--s8); min-width: 0; overflow-wrap: anywhere; font: 500 var(--t13)/1.3 var(--f-head); color: var(--muted); }
-.lane .who .elapsed { margin-left: auto; font-family: var(--f-body); }
-.lane .what { font-size: var(--t15); overflow-wrap: anywhere; }
-@media (min-width: 1700px) {
-  .lanes { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.w-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: var(--s12); }
+.wcard { display: grid; gap: var(--s4); min-width: 0; }
+.wcard-head { display: flex; align-items: flex-start; gap: var(--s8); }
+.wcard-head .grow { display: grid; flex: 1; min-width: 0; }
+.wcard-title { font: 600 var(--t17)/1.3 var(--f-head); overflow-wrap: anywhere; }
+.wcard .meta span { overflow-wrap: anywhere; }
+/* The path: the role stands on the current step (orange ring, bold label), done steps are filled, later ones outlined. The ring is the one amber outside Needs you, by the owner's UX2 decision, so the amber audit names it. */
+.path { position: relative; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); margin: 0; padding: calc(var(--s48) + var(--s12)) 0 0; list-style: none; }
+.path li { position: relative; padding-top: calc(var(--s24) - 2px); color: var(--muted); font-size: var(--t13); text-align: center; }
+.path li::before { content: ""; position: absolute; top: 5px; left: -50%; right: 50%; height: 3px; background: var(--hairline); }
+.path li:first-child::before { display: none; }
+.path li::after { content: ""; position: absolute; top: 0; left: calc(50% - 7px); width: 14px; height: 14px; box-sizing: border-box; border: 3px solid var(--hairline); border-radius: 50%; background: var(--raised); }
+.path li.done, .path li.now { color: var(--ink); }
+.path li.done::before, .path li.now::before { background: var(--primary); }
+.path li.done::after { border-color: var(--primary); background: var(--primary); }
+.path li.now { font-weight: 700; }
+.path li.now::after { top: -2px; left: calc(50% - 9px); width: 18px; height: 18px; border-color: var(--amber); box-shadow: 0 0 0 2px color-mix(in srgb, var(--amber) 30%, transparent); }
+.path .who { position: absolute; bottom: calc(100% - 4px); left: 50%; display: flex; transform: translateX(-50%); }
+.path .who .character { width: 56px; height: 56px; }
+/* The only motion of the page: the role fades in on its step. */
+@media (prefers-reduced-motion: no-preference) {
+  .path .who { animation: who-arrives .4s ease-out 1; }
+  @keyframes who-arrives { from { opacity: 0; } to { opacity: 1; } }
+}
+@media (min-width: 1024px) {
+  .needs-you { padding: var(--s24); }
+  .needs-you .character { width: 144px; height: 144px; }
 }
 @media (max-width: 760px) {
+  .needs-you { margin-top: var(--s16); }
   .working { margin: var(--s16) 0 var(--s24); }
-  .working summary { min-height: 48px; }
   .working-none { min-height: 48px; }
-  .w-dots { display: none; }
-  .lanes { grid-template-columns: minmax(0, 1fr); }
+  .w-cards { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* The demo caption sits in the main column after the content, sticky at the bottom, so it stays in view without covering the end of a page. Progress is dots. */

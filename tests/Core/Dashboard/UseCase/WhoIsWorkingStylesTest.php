@@ -11,32 +11,34 @@ use PHPUnit\Framework\TestCase;
 #[CoversNothing]
 final class WhoIsWorkingStylesTest extends TestCase
 {
-    public function testTheSummaryIsAtLeast44PxTallAndAtLeast48OnAPhone(): void
+    public function testAWorkingCardTitleUsesTheSeventeenPixelTokenAndWrapsLongNames(): void
     {
-        self::assertMatchesRegularExpression('/min-height:\s*44px/', $this->rule('.working summary', $this->sheet()));
-        self::assertMatchesRegularExpression('/min-height:\s*48px/', $this->rule('.working summary', $this->phoneBlock()));
+        $title = $this->rule('.wcard-title', $this->sheet());
+
+        self::assertMatchesRegularExpression('/font:\s*600 var\(--t17\)/', $title);
+        self::assertMatchesRegularExpression('/overflow-wrap:\s*anywhere/', $title);
+        self::assertMatchesRegularExpression('/overflow-wrap:\s*anywhere/', $this->rule('.wcard .meta span', $this->sheet()));
     }
 
-    public function testTheLaneTextUsesTheFifteenPixelTokenAtLeast(): void
+    public function testOnAPhoneTheWorkingCardsStackInOneColumn(): void
     {
-        self::assertMatchesRegularExpression('/font-size:\s*var\(--t15\)/', $this->rule('.lane .what', $this->sheet()));
-        self::assertMatchesRegularExpression('/font:\s*500 var\(--t13\)/', $this->rule('.lane .who', $this->sheet()));
+        self::assertMatchesRegularExpression('/grid-template-columns:\s*minmax\(0, 1fr\);/', $this->rule('.w-cards', $this->phoneBlock()));
     }
 
-    public function testOnAPhoneTheLanesStackInOneColumn(): void
+    public function testTheCurrentStepOfThePathHasTheAmberRingAndABoldLabel(): void
     {
-        self::assertMatchesRegularExpression('/grid-template-columns:\s*minmax\(0, 1fr\);/', $this->rule('.lanes', $this->phoneBlock()));
+        self::assertMatchesRegularExpression('/border-color:\s*var\(--amber\)/', $this->rule('.path li.now::after', $this->sheet()));
+        self::assertMatchesRegularExpression('/font-weight:\s*700/', $this->rule('.path li.now', $this->sheet()));
     }
 
-    public function testALaneKeepsItsRoleLineInsideItsColumnAboveThePhoneBreakpoint(): void
+    public function testTheRoleFadesInOnItsStepOnlyWithoutAReducedMotionPreference(): void
     {
-        $who = $this->rule('.lane .who', $this->sheet());
+        self::assertSame(1, preg_match('/@media \(prefers-reduced-motion: no-preference\) \{\s*\.path \.who \{ animation:/', $this->sheet()));
+    }
 
-        self::assertMatchesRegularExpression('/flex-wrap:\s*wrap/', $who);
-        self::assertMatchesRegularExpression('/min-width:\s*0/', $who);
-        self::assertMatchesRegularExpression('/overflow-wrap:\s*anywhere/', $who);
-        self::assertMatchesRegularExpression('/grid-template-columns:\s*minmax\(0, 1fr\)/', $this->rule('.lane', $this->sheet()));
-        self::assertMatchesRegularExpression('/overflow-wrap:\s*anywhere/', $this->rule('.lane .meta span', $this->sheet()));
+    public function testTheBoardOctopusStepsAsideWhileNeedsYouConducts(): void
+    {
+        self::assertMatchesRegularExpression('/display:\s*none/', $this->rule('.needs-you ~ #board-octopus .character, .needs-you ~ #board-octopus.asleep', $this->sheet()));
     }
 
     public function testTheChevronTurnsWhenTheSummaryIsOpen(): void
@@ -44,8 +46,8 @@ final class WhoIsWorkingStylesTest extends TestCase
         self::assertMatchesRegularExpression('/rotate\(180deg\)/', $this->rule('details[open] > summary .chev', $this->sheet()));
     }
 
-    // A tinted line with a hover would look like the strip that opens, which it is not.
-    public function testTheNobodyIsWorkingLineIsMutedWithoutTintAtTheSummarysHeight(): void
+    // A tinted line with a hover would look like a card that opens, which it is not.
+    public function testTheNobodyIsWorkingLineIsMutedWithoutTint(): void
     {
         $rule = $this->rule('.working-none', $this->sheet());
 

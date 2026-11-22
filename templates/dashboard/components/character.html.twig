@@ -1,11 +1,11 @@
-{#- Both theme images are always emitted because a pane's theme can differ from the page's, so CSS picks the visible one by the nearest [data-theme]. -#}
+{#- Both theme images are always emitted because a pane's theme can differ from the page's, so CSS picks the visible one by the nearest [data-theme]; alt is empty unless the image carries meaning the words beside it do not (a role standing on its step), and only the visible image of the two is read. -#}
 {%- set mascot = character in enum_cases('Intakt\\Core\\Dashboard\\Domain\\MascotPose') -%}
 {%- for theme in ['light', 'dark'] -%}
 {%- if mascot -%}
 {%- set file = 'images/mascot/octopus-' ~ character.value ~ '-' ~ theme ~ '-' -%}
-<img class="character character-{{ theme }}" src="{{ asset(file ~ size ~ '.webp') }}" srcset="{{ asset(file ~ size ~ '.webp') }} 1x, {{ asset(file ~ size * 2 ~ '.webp') }} 2x" alt="" width="{{ size }}" height="{{ size }}" loading="lazy">
+<img class="character character-{{ theme }}" src="{{ asset(file ~ size ~ '.webp') }}" srcset="{{ asset(file ~ size ~ '.webp') }} 1x, {{ asset(file ~ size * 2 ~ '.webp') }} 2x" alt="{{ alt|default('') }}" width="{{ size }}" height="{{ size }}" loading="lazy">
 {%- else -%}
 {%- set file = 'images/roles/' ~ character.value ~ '-' ~ theme ~ '-' -%}
-<img class="character character-{{ theme }}" src="{{ asset(file ~ character.imageWidth(size, 2) ~ '.webp') }}" srcset="{{ asset(file ~ character.imageWidth(size, 2) ~ '.webp') }} 1x, {{ asset(file ~ character.imageWidth(size, 4) ~ '.webp') }} 2x" alt="" width="{{ size }}" height="{{ size }}" loading="lazy">
+<img class="character character-{{ theme }}" src="{{ asset(file ~ character.imageWidth(size, 2) ~ '.webp') }}" srcset="{{ asset(file ~ character.imageWidth(size, 2) ~ '.webp') }} 1x, {{ asset(file ~ character.imageWidth(size, 4) ~ '.webp') }} 2x" alt="{{ alt|default('') }}" width="{{ size }}" height="{{ size }}" loading="lazy">
 {%- endif -%}
 {%- endfor -%}
