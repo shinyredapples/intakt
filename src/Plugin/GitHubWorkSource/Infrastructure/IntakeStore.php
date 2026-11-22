@@ -97,11 +97,15 @@ final readonly class IntakeStore
         }
     }
 
-    // Not the manager's own wrapInTransaction(): a server that aborts a deadlock victim's transaction itself refuses the rollback that follows, and that refusal would replace the deadlock, so the write would escape as a failure instead of being named as held.
+    // Not the manager's own wrapInTransaction(): a server that aborts a deadlock victim's transaction itself refuses the rollback that follows, and that refusal would replace the deadlock, so the write would escape as a failure instead of being named as held, and a refused nested rollback would leave its level open on the shared connection.
     /**
-     * @param callable(EntityManagerInterface): bool $write
+     * @template T
+     *
+     * @param callable(EntityManagerInterface): T $write
+     *
+     * @return T
      */
-    private function inTransaction(EntityManagerInterface $manager, callable $write): bool
+    private function inTransaction(EntityManagerInterface $manager, callable $write): mixed
     {
         $connection = $manager->getConnection();
         $outer = $connection->getTransactionNestingLevel();
@@ -247,7 +251,7 @@ final readonly class IntakeStore
     private function underTheListingLock(string $project, callable $work): mixed
     {
         try {
-            return $this->ownManager()->wrapInTransaction(function (EntityManagerInterface $manager) use ($project, $work): mixed {
+            return $this->inTransaction($this->ownManager(), function (EntityManagerInterface $manager) use ($project, $work): mixed {
                 $this->lockTheSyncRow($manager, $project);
 
                 return $work($manager);

@@ -35,6 +35,7 @@ use Intakt\Plugin\GitHubWorkSource\Domain\Vouching;
 use Intakt\Plugin\GitHubWorkSource\Infrastructure\IntakeStore;
 use Intakt\Plugin\WorkSource\Contract\TaskNotQueued;
 use Intakt\Tests\Application\EmptyDatabase;
+use Intakt\Tests\Plugin\GitHubWorkSource\CommitOnValidatorLoad;
 use Intakt\Tests\Plugin\GitHubWorkSource\Issues;
 use Intakt\Tests\Plugin\GitHubWorkSource\WriterBetweenWriteAndCommit;
 use Intakt\Tests\Support\KernelTestCase;
@@ -571,6 +572,76 @@ final class IntakeStoreTest extends KernelTestCase
         self::assertInstanceOf(DeadlockException::class, $held->getPrevious());
         self::assertSame(1, $store->syncStateOf('alpha')->generation);
         self::assertSame(0, $connection->getTransactionNestingLevel());
+    }
+
+    public function testADeadlockWhileThePickReadsTheFailuresUnderTheListingLockIsNamedAsHeld(): void
+    {
+        $connection = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'memory' => true]);
+        $events = new EventManager();
+        $manager = new EntityManager($connection, $this->entities->getConfiguration(), $events);
+        new SchemaTool($manager)->createSchema($manager->getMetadataFactory()->getAllMetadata());
+        $store = new IntakeStore($manager);
+        self::assertTrue($store->recordIfStill('alpha', $store->syncStateOf('alpha'), new ListingRows([], null)));
+        // Rolled back here, because a server such as InnoDB aborts the victim's transaction itself before it reports the deadlock, so the rollback that follows is refused.
+        $events->addEventListener([Events::postLoad], new CommitOnValidatorLoad(static function () use ($connection): void {
+            $native = $connection->getNativeConnection();
+            if ($native instanceof PDO) {
+                $native->rollBack();
+            }
+
+            throw new DeadlockException(Exception::new(new PDOException('Deadlock found when trying to get lock')), null);
+        }));
+
+        $held = null;
+        try {
+            $store->failuresUnderTheListingLock('alpha');
+        } catch (ProjectHeldByAnotherWriter $held) {
+        }
+
+        self::assertInstanceOf(ProjectHeldByAnotherWriter::class, $held);
+        self::assertInstanceOf(DeadlockException::class, $held->getPrevious());
+        self::assertSame(0, $connection->getTransactionNestingLevel());
+    }
+
+    public function testADeadlockRecordingAFailureLeavesNoTransactionOpenSoTheRetryIsStored(): void
+    {
+        $connection = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'memory' => true]);
+        $events = new EventManager();
+        $manager = new EntityManager($connection, $this->entities->getConfiguration(), $events);
+        new SchemaTool($manager)->createSchema($manager->getMetadataFactory()->getAllMetadata());
+        $store = new IntakeStore($manager);
+        self::assertTrue($store->recordIfStill('alpha', $store->syncStateOf('alpha'), new ListingRows([StoredIssue::of('alpha', new ItemReading(Issues::task(5), [], [], []))], null)));
+        $store->failForGood('alpha', 5, 'original reason');
+        // On preUpdate, because only preUpdate runs inside the unit of work's own nested transaction, whose refused rollback used to leave a level open.
+        $deadlock = new readonly class($connection) {
+            public function __construct(private Connection $connection)
+            {
+            }
+
+            public function preUpdate(): never
+            {
+                $native = $this->connection->getNativeConnection();
+                if ($native instanceof PDO) {
+                    $native->rollBack();
+                }
+
+                throw new DeadlockException(Exception::new(new PDOException('Deadlock found when trying to get lock')), null);
+            }
+        };
+        $events->addEventListener([Events::preUpdate], $deadlock);
+
+        $failure = null;
+        try {
+            $store->failForGood('alpha', 5, 'not committed');
+        } catch (DeadlockException $failure) {
+        }
+        $events->removeEventListener([Events::preUpdate], $deadlock);
+
+        self::assertInstanceOf(DeadlockException::class, $failure);
+        self::assertSame(0, $connection->getTransactionNestingLevel());
+        self::assertSame([5 => 'original reason'], $store->failuresOf('alpha'));
+        $store->failForGood('alpha', 5, 'retry stored');
+        self::assertSame([5 => 'retry stored'], $store->failuresOf('alpha'));
     }
 
     public function testAFirstWriteThatFailsWhileNoOtherWorkerStoredAListingLetsTheFailureThrough(): void
