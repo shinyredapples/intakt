@@ -138,19 +138,22 @@ A task can stall for a reason the Developer can't fix, for example it needs anot
 
 ```mermaid
 flowchart LR
-  w[Work can't continue] --> h[On hold]
+  w[Work can't continue] -- "another outside reason" --> h[On hold]
+  w -- "it needs the newest project" --> left{A try left?}
+  left -- yes --> rebuild
+  left -- no --> m
   h -- "the task it waits for is done" --> go[Back in the queue]
   h -- "the project moved on" --> rebuild[Rebuilt with the newest project]
   h -- "Intakt was updated" --> retry[One more review]
   rebuild -- fixed --> go
   retry -- fixed --> go
-  rebuild -- "still stuck (needs the project)" --> m
+  rebuild -- "still clashes with the newest project" --> m
   rebuild -- "still stuck (other reason)" --> h
   retry -- still stuck --> h
   h -- "stuck after a few tries" --> m[The Maintainer decides]
 ```
 
-(Planned: none of this paragraph is built yet; until the hold task is built, a held task gets one more review.) A task never waits for its own pull request: if the Developer names it as the thing to wait for, Intakt does not hold the task but hands it over with the Developer's reason. When a task waits for a pull request, Intakt looks up the task that pull request belongs to, and (planned) lets the waiting task start only once that pull request is really merged, not when its task is merely closed. When the project moves on, a held task is rebuilt with the newest project rather than reviewed again unchanged, since only a rebuild can change it. When a change clashes with the newest project only in the project's shared lists (files that many changes each add a line to), Intakt (planned) joins both sides itself and checks the result. Any other change that clashes with the newest project, a clash in the shared lists that Intakt cannot join safely or whose joined result fails the checks, or a change that needs something from the newest project, is rebuilt from it once or split by the Maintainer, never reviewed again unchanged, and a task handed over again for the same reason is split, or goes to you when it cannot be. When a hand-over is about failed checks and Intakt's safety check of the workflow files does not clear the change, it says only how many checks failed, never their names, because the change itself wrote those names.
+(Planned: none of this paragraph is built yet; until the hold task is built, a held task gets one more review.) A task never waits for its own pull request: if the Developer names it as the thing to wait for, Intakt does not hold the task but hands it over with the Developer's reason. When a task waits for a pull request, Intakt looks up the task that pull request belongs to, and (planned) lets the waiting task start only once that pull request is really merged, not when its task is merely closed. When the project moves on, a held task is rebuilt with the newest project rather than reviewed again unchanged, since only a rebuild can change it. When a change clashes with the newest project only in the project's shared lists (files that many changes each add a line to), Intakt (planned) joins both sides itself and checks the result. Any other change that clashes with the newest project, a clash in the shared lists that Intakt cannot join safely or whose joined result fails the checks, or a change that needs something from the newest project, does not go on hold at all: it is rebuilt from the newest project once if the task has a try left, and goes straight to the Maintainer if it has none or if the rebuild still leaves it stuck. It is never reviewed again unchanged, not even after Intakt was updated. A task handed over to the Maintainer a second time, for any reason, is split, or goes to you when it cannot be. When a hand-over is about failed checks and Intakt's safety check of the workflow files does not clear the change, it says only how many checks failed, never their names, because the change itself wrote those names.
 
 Holds are for reasons outside the change. If a change grows too big while it is being fixed, Intakt does not send it back to the Developer, who cannot split it, and does not hold it either: the Maintainer splits it into smaller tasks (planned: until this is built, you split it). A change that is big only because it moves documentation text from one page to others is not split: a check confirms the text moved unchanged, and reviewers read only the rest (also planned).
 

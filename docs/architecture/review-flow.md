@@ -1,5 +1,18 @@
 ## Review flow
 
+### In short
+
+A review starts from one of three doors: the `intakt:review` command, the MCP `start_review` tool or the dashboard button. Intakt opens a round with one reviewer per panel member and queues each reviewer as its own message, so workers review in parallel. Each reviewer reads the change with read-only tools and returns a verdict. When every reviewer is in, the judge sorts the findings into the act list and follow-ups, and the quorum policy decides the outcome from the counted votes. Every step is an event in the ledger, which the dashboard review page is rendered from.
+
+Worth knowing:
+
+- A round is refused before it opens when a tier it needs is not mapped.
+- A finding that quotes code is dropped before judging when none of its quoted code fragments is in the change (the quote check). A finding without a checkable quote, or with at least one quote that is in the change, is kept.
+- Every kept P1 and P2 reaches the act list, whatever the judge marked it.
+- A P1 that recurs on another head gets an escalation review, and its verdict is kept and reused.
+
+The rest of this page is the detailed reference.
+
 One review from a door to the act list. The pages [Review rounds](review-rounds.md), [Judge](vendor.md#judge) and [Quorum policies](quorum-policies.md) hold the details; this page only shows how they connect. The round's states (collecting, complete, judged) are the `review_round` state machine, declared by the Workflow attributes on `src/Core/Review/Infrastructure/ReviewRoundStateMachine.php`; each reviewer's states (queued, running, verdict, failed, blocked) are the `reviewer` state machine, declared the same way on `src/Core/Review/Infrastructure/ReviewerStateMachine.php` ([Review rounds](review-rounds.md)).
 
 ```mermaid
@@ -17,7 +30,7 @@ flowchart TD
     verdicts --> complete{"Every reviewer in?"}
     complete -->|no| wait["The round stays collecting"]
     complete -->|yes| collected["Round complete: findings join the change's finding list"]
-    collected --> judge["JudgeRound: the quote check drops findings quoting code not in the change, the judge marks the rest act, defer or reject (a P3 that is a local edit in a touched file is act); every P1 and P2 it was given reaches the act list whatever its mark; a P1 or P2 marked defer or reject keeps the judge's note, if it gave one; an act list entry that merged findings keeps its own note, or else the first note of a finding it merged"]
+    collected --> judge["JudgeRound: the quote check drops findings with a checkable quote when none of their quoted fragments is in the change, the judge marks the rest act, defer or reject (a P3 that is a local edit in a touched file is act); every P1 and P2 it was given reaches the act list whatever its mark; a P1 or P2 marked defer or reject keeps the judge's note, if it gave one; an act list entry that merged findings keeps its own note, or else the first note of a finding it merged"]
     judge --> act["Act list (every kept P1 and P2, and the P3s marked act), follow-ups (the P3s marked defer), the quote check's dropped findings, of any severity, with their reasons and the changed lines nearest to each quote, each reviewer's counted vote and a key for each P1 in judge_done"]
     act --> recurring["recurring_p1_found for each round on another head than the first that flagged the same P1 key"]
     recurring --> ledger
@@ -121,8 +134,15 @@ An `EscalationFailed` records `escalation_failed` (`Contract\EscalationReviewFai
 An `EscalationReviewed` is kept with `KeptVerdicts::keep()` under the round's lock (`ReviewRounds::withLockedRound()`), with `escalation_reviewed` (`Contract\EscalationVerdictKept`: `round`, `finding`, `key`, `outcome`, `reasons`, redacted) in the same transaction.
 When another round kept a verdict for the key first (`VerdictAlreadyKept`), this round records `escalation_verdict_reused` with that verdict instead, so a key holds one verdict and the answer this round paid for is dropped.
 Every write (`escalation_reviewed`, `escalation_verdict_reused`, `escalation_failed`) runs under the round's lock and reads `recordedFor()` again there first, so a second delivery of the same message that settled the round and key while the key's lock had expired leaves them one outcome.
-An exception from the call is thrown on as `EscalationCallFailed`: its message holds the key, Intakt's words for the failure (`FailureInWords`) and the failure's class, never the provider's message or its chain, so the worker's log and a failed message hold no provider text.
-The queue retries it like any other failure. The handler starts no re-review.
+Any other exception from the call is thrown on as `EscalationCallFailed`: its message holds the key, Intakt's words for the failure (`FailureInWords`) and the failure's class, never the provider's message or its chain, so the worker's log and a failed message hold no provider text.
+The queue retries it like any other failure (the `async` transport's `max_retries`, two). The handler starts no re-review.
+`ProviderRateLimited` and `VendorAccountBusy` become `EscalationLimited::untilFree()`, a `RecoverableMessageHandlingException` with `forceRetry` on: the rate limit's reset is the delay, a busy account names none, so the transport's `max_delay` caps the wait; they are never parked.
+`ProviderFailedTransiently` becomes `EscalationLimited::bounded()`, with `forceRetry` off.
+`BoundTransientEscalationFailures`, a middleware of `command.bus` (`#[AsMessageMiddleware]`), counts those failures in its own stamp, `TransientEscalationFailures`, because the `RedeliveryStamp` also counts the forced retries.
+It asks the `async` transport's retry strategy (injected as `messenger.retry.multiplier_retry_strategy.async`) as if that count were the only retries: below the bound the failure becomes `EscalationLimited::retriedIn()`, forced, with the strategy's delay (about 1 and 2 seconds); at the bound it becomes an `UnrecoverableMessageHandlingException`, so the message is parked.
+`RecordRecurringP1s` queues each `EscalateRecurringP1` with a `DispatchOnFailureStamp` (Messenger 8.2) carrying `RecordFailedEscalation` (`round`, `finding`, `key`), routed to `async`.
+When the escalation is parked after its retries, for any error, `RecordFailedEscalationHandler` takes the key's lock (`EscalateRecurringP1Handler::lockNameOf()`; held, it throws `EscalationBusy` and comes back), then the round's lock, and records `escalation_failed` with `RecordFailedEscalationHandler::PARKED` only while `recordedFor()` holds nothing for the round and key, then logs an error.
+Tests for the limits and failures, in the same file: a busy account and a rate limit retried with `forceRetry` on, a transient failure after forced retries still retried, a busy account after the transient retries ran out still retried, a vendor that keeps failing transiently or rejects the key ending in one `escalation_failed`, and a record that finds the round and key settled or the key's lock held.
 
 Tests: `tests/Core/Review/UseCase/EscalateRecurringP1/EscalateRecurringP1Test.php` (group `persistence`: one escalation queued without a kept verdict and none with one, the finding alone with the round's diff in the call, confirmed and rejected verdicts kept and recorded, an unreadable answer, a finding the round did not report, a finding whose cited code is over the ceiling, a kept verdict reused without a call, a later round reusing at its judging, redeliveries after a review, a failure and a reuse, the race of two rounds forced during the call, a busy key retried, a redelivery after the key's lock expired (a review and a failure), a provider failure without its message in the log or the failed message, and `intakt:ledger:events` showing both outcomes, answered by the application's handler behind a queue worker on a Doctrine queue in SQLite, and a later reuse) and `RoundLedgerPayloadsTest` (both payloads as written).
 

@@ -7,6 +7,7 @@ Guides that explain Intakt without assuming you know how it is built. Each one d
 | [How Intakt works](how-intakt-works.md) | the big picture: who does what, what needs you |
 | [The journey of a task](the-journey-of-a-task.md) | every step from picking a task to merging it |
 | [The engine room](the-engine-room.md) | what lanes, queues, locks, cycles, budgets and draining mean |
+| [Running one task](running-one-task.md) | building one issue with `intakt:build:task`: its steps, where it stops, and its lines in the ledger |
 | [Writing a good task](writing-a-good-task.md) | how to write tasks Intakt builds in one go |
 | [Steering Intakt](steering-intakt.md) | the labels, comments and approvals you can use |
 | [A tour of the dashboard](a-tour-of-the-dashboard.md) | what the board, cards and badges show |
@@ -24,6 +25,7 @@ Guides that explain Intakt without assuming you know how it is built. Each one d
 | [Writing a plugin](writing-a-plugin.md) | adding a forge, an AI company or a notifier |
 | [Testing a new check](testing-a-new-check.md) | how a rule of Intakt's own checks is tested, and switched on before the code is clean |
 | [Checking the whole product](checking-the-whole-product.md) | what the journey checks cover and how to run one |
+| [The journey page](the-journey-page.md) | how the page about Intakt's own build is kept up to date, its charts and its kept merge count |
 | [A demo walkthrough](demo-walkthrough.md) | a guided first run with the sample project, and recording a review to play it back |
 | [The review bench](review-bench.md) | how well the reviewers find mistakes, and what measuring it costs |
 | [Looking inside a development install](looking-inside-a-development-install.md) | reading what a request did from its profile, in a development install only |

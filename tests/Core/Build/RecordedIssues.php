@@ -29,6 +29,13 @@ final readonly class RecordedIssues implements IssueReads
         return IssueListing::listed(array_map($this->listed(...), $this->read()), null);
     }
 
+    public function readOpen(string $project, int $number): ?ListedIssue
+    {
+        $recorded = array_find($this->read(), static fn (array $issue): bool => $issue['number'] === $number && !isset($issue['pull_request']));
+
+        return null === $recorded ? null : $this->listed($recorded);
+    }
+
     /**
      * @param Issue $issue
      */

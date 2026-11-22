@@ -306,15 +306,6 @@ test('a finding id in the session summary brings the timeline back, where its en
     assert.deepEqual(page.selected(), ['true', 'false']);
 });
 
-test('a finding link in the state block brings the timeline back, where its entry is', () => {
-    const page = reviewPageOnAPhone();
-    page.click({ target: page.tabs[1] });
-
-    page.click({ target: findingLink('#round-1-finding-F1') });
-
-    assert.equal(page.grid.getAttribute('data-pane'), 'timeline');
-});
-
 test('a reported finding without a timeline entry keeps the live log', () => {
     const page = reviewPageOnAPhone();
     page.click({ target: page.tabs[1] });
@@ -335,11 +326,11 @@ test('a finding id merged into an act entry brings the timeline back, where that
     assert.equal(page.grid.getAttribute('data-pane'), 'timeline');
 });
 
-test('a finding link without a timeline entry keeps the live log', () => {
+test('a finding link to the Full record keeps the chosen pane, because it opens another page', () => {
     const page = reviewPageOnAPhone();
     page.click({ target: page.tabs[1] });
 
-    page.click({ target: findingLink('#round-2-finding-F1') });
+    page.click({ target: findingLink('/reviews/1/record#round-1-finding-F1') });
 
     assert.equal(page.grid.getAttribute('data-pane'), 'log');
 });
