@@ -112,6 +112,19 @@ Locks are short-lived: a job that waits for something outside (CI, you) gives it
 - A **stand-in** is something else: a cheaper reviewer on an in-between version while a company's allowance is tight. The usual reviewer still reviews the final version, so a stand-in never has the last word.
 - A **catch-up review** is the missing reviewer's review, done later once its company is available again. Today Intakt only notes that a catch-up is owed, each time a substitute reviews. Planned: Intakt runs it by itself and checks the change as it was merged. It will never block a merge; if it finds a real problem, that becomes a new task, which waits for you to label it before the builders pick it up; smaller suggestions go to the [follow-up inbox](the-journey-of-a-task.md#7-afterwards) like any review's.
 
+## Router providers and their pause
+
+Some AI companies are routers: Hugging Face, for example, passes each call on to another company that runs the model. You can name that company, the **router provider**, after a colon in the model's name, such as `moonshotai/Kimi-K3.1-Pro:deepinfra`, and every call for that model then goes to it.
+
+When the router provider says "too many calls" (a rate limit), Intakt pauses it on that account: for as long as the answer asked, for one minute when it gave no time, and never longer than a day. While the pause lasts, Intakt sends that router provider no call from that account, from any worker on this computer. The account pauses as well, as for any rate limit.
+
+What happens to the call then:
+- When another account of the same company is free, the call goes there at once.
+- When no account is free and you named a substitute, the substitute reviews in its place.
+- Otherwise the reviewer waits until the first account is free again.
+
+Moving on to another router provider instead of waiting is planned.
+
 ## Cycles and generations: second chances
 
 A **cycle** is one round of *build, check, review*. When the reviewers leave something that must be fixed, the task goes around again.
