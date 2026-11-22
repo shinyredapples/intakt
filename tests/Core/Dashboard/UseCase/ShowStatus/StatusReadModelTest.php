@@ -23,7 +23,7 @@ use Intakt\Core\Dashboard\Domain\RoundPlace;
 use Intakt\Core\Dashboard\Domain\RoundStart;
 use Intakt\Core\Dashboard\Infrastructure\LedgerBuildSteps;
 use Intakt\Core\Dashboard\Infrastructure\LedgerFailingHeads;
-use Intakt\Core\Dashboard\Infrastructure\LedgerPayload;
+use Intakt\Core\Ledger\Contract\PayloadFields;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\LedgerTokens;
@@ -68,7 +68,7 @@ use Symfony\Component\Messenger\Transport\Receiver\ReceiverInterface;
 #[UsesClass(LedgerRounds::class)]
 #[UsesClass(ReplayMarks::class)]
 #[UsesClass(LedgerFailingHeads::class)]
-#[UsesClass(LedgerPayload::class)]
+#[UsesClass(PayloadFields::class)]
 #[UsesClass(LedgerTokens::class)]
 #[UsesClass(RoundPayloads::class)]
 #[UsesClass(LedgerPayloads::class)]

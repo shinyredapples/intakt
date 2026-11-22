@@ -7,7 +7,7 @@ namespace Intakt\Tests\Core\Dashboard\Infrastructure;
 use Intakt\Core\Dashboard\Domain\FailingHead;
 use Intakt\Core\Dashboard\Domain\HeadFault;
 use Intakt\Core\Dashboard\Infrastructure\LedgerFailingHeads;
-use Intakt\Core\Dashboard\Infrastructure\LedgerPayload;
+use Intakt\Core\Ledger\Contract\PayloadFields;
 use Intakt\Tests\Core\Dashboard\UseCase\DashboardLedger;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -16,7 +16,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(LedgerFailingHeads::class)]
 #[CoversClass(FailingHead::class)]
 #[UsesClass(HeadFault::class)]
-#[UsesClass(LedgerPayload::class)]
+#[UsesClass(PayloadFields::class)]
 final class LedgerFailingHeadsTest extends TestCase
 {
     private DashboardLedger $ledger;

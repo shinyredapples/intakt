@@ -9,7 +9,7 @@ use Intakt\Core\Git\Contract\ProtectedHeads;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
-use Intakt\Core\Ledger\Contract\LedgerPayload;
+use Intakt\Core\Ledger\Contract\PayloadFields;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Watcher\Contract\HandedOverChanges;
@@ -127,10 +127,10 @@ final readonly class OwnerAsks
     // The change without letter case, as the hand-over is read, because two rounds may name one pull request in two spellings.
     private function names(RecordedEvent $recorded, ReviewRound $round, string $head): bool
     {
-        $payload = LedgerPayload::of($recorded);
-        $change = $payload['change'] ?? null;
+        $payload = PayloadFields::of($recorded);
+        $change = $payload->text('change');
 
-        return is_string($change) && strtolower($change) === strtolower($round->change()) && [$round->project(), $head] === [$payload['project'] ?? null, $payload['head'] ?? null];
+        return null !== $change && strtolower($change) === strtolower($round->change()) && [$round->project(), $head] === [$payload->text('project'), $payload->text('head')];
     }
 
     // Invalid UTF-8 substituted, because git allows any bytes in a file name and the line must still be written.

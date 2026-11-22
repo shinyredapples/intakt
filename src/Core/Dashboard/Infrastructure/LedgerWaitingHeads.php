@@ -7,7 +7,7 @@ namespace Intakt\Core\Dashboard\Infrastructure;
 use DateTimeImmutable;
 use DateTimeZone;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
-use Intakt\Core\Ledger\Contract\LedgerPayload;
+use Intakt\Core\Ledger\Contract\PayloadFields;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 
 // The latest watcher line of a pull request decides, as in LedgerFailingHeads, so a head read again after a failure waits again and a queued round or a closed pull request ends the wait.
@@ -36,16 +36,16 @@ final readonly class LedgerWaitingHeads
                 continue;
             }
 
-            $payload = LedgerPayload::of($recorded);
-            $project = $payload['project'] ?? null;
-            $change = $payload['change'] ?? null;
+            $payload = PayloadFields::of($recorded);
+            $project = $payload->text('project');
+            $change = $payload->text('change');
 
-            if (!is_string($project) || !is_string($change)) {
+            if (null === $project || null === $change) {
                 continue;
             }
 
             // Keyed by project, then pull request, so no name either side sends can make two keys meet.
-            $latest[$project][$change] = $this->waitOf($kind, $payload['read_again_at'] ?? null);
+            $latest[$project][$change] = $this->waitOf($kind, $payload->text('read_again_at'));
         }
 
         return $this->waiting($latest);
@@ -54,7 +54,7 @@ final readonly class LedgerWaitingHeads
     /**
      * @return array{decision: 'pending'|'red', read_again_at: ?string}|null
      */
-    private function waitOf(LedgerEventKind $kind, mixed $readAgainAt): ?array
+    private function waitOf(LedgerEventKind $kind, ?string $readAgainAt): ?array
     {
         $decision = match ($kind) {
             LedgerEventKind::HeadPending => 'pending',
@@ -85,9 +85,9 @@ final readonly class LedgerWaitingHeads
     }
 
     // Read and written again, so a malformed moment in a row reads as none instead of reaching the status as it was stored.
-    private function momentOf(mixed $moment): ?string
+    private function momentOf(?string $moment): ?string
     {
-        $parsed = is_string($moment) ? DateTimeImmutable::createFromFormat(DATE_ATOM, $moment, new DateTimeZone('UTC')) : false;
+        $parsed = null === $moment ? false : DateTimeImmutable::createFromFormat(DATE_ATOM, $moment, new DateTimeZone('UTC'));
 
         return false === $parsed ? null : $parsed->format(DATE_ATOM);
     }

@@ -17,7 +17,7 @@ use Intakt\Core\Dashboard\Domain\ReviewSummary;
 use Intakt\Core\Dashboard\Domain\RoundFinding;
 use Intakt\Core\Dashboard\Domain\RoundPlace;
 use Intakt\Core\Dashboard\Domain\RoundStart;
-use Intakt\Core\Dashboard\Infrastructure\LedgerPayload;
+use Intakt\Core\Ledger\Contract\PayloadFields;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviews;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
@@ -60,7 +60,7 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 #[UsesClass(Cost::class)]
 #[UsesClass(RoundLedgerReading::class)]
 #[UsesClass(TokenUsageRow::class)]
-#[UsesClass(LedgerPayload::class)]
+#[UsesClass(PayloadFields::class)]
 #[UsesClass(ProjectMode::class)]
 #[UsesClass(LedgerReviews::class)]
 #[UsesClass(ListReviewsController::class)]

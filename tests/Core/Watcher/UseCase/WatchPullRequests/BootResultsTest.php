@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Watcher\UseCase\WatchPullRequests;
 
+use DateTimeImmutable;
 use Doctrine\DBAL\DriverManager;
 use Doctrine\DBAL\Schema\Schema;
 use Doctrine\ORM\EntityManager;
@@ -46,6 +47,7 @@ use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Uid\Uuid;
+use Symfony\Component\Uid\UuidV7;
 
 #[Group('persistence')]
 #[CoversClass(BootResults::class)]
@@ -434,10 +436,12 @@ final class BootResultsTest extends KernelTestCase
     public function testAFailingMainIsFoundFromTheBootLinesOfTheProjectOnly(): void
     {
         $ledger = $this->createMock(Ledger::class);
-        $ledger->expects(self::once())->method('readOfKindsMentioning')->with([LedgerEventKind::BootResultComputed, LedgerEventKind::MainBootFailed], ['"project":"acme"'])->willReturn(new RecordedEvents([]));
+        $ledger->expects(self::once())->method('readOfKindsMentioning')->with([LedgerEventKind::BootResultComputed, LedgerEventKind::MainBootFailed], ['"project":"acme"'])->willReturn(new RecordedEvents([
+            new RecordedEvent(new UuidV7(), new LedgerEvent(LedgerEventKind::MainBootFailed, '{"project":"acme","main":"abc","tool_fingerprint":"tools-1","reason":"No status."}'), new DateTimeImmutable('2026-10-27 12:00:00')),
+        ]));
         $ledger->expects(self::never())->method('readMentioning');
 
-        self::assertNotInstanceOf(FailingMain::class, new WatcherLedger($ledger)->failingMainOf('acme'));
+        self::assertEquals(new FailingMain('acme', 'abc', 'tools-1', 'No status.'), new WatcherLedger($ledger)->failingMainOf('acme'));
     }
 
     public function testAnAlertTheLedgerRefusedIsRecordedOnceWhenTheLedgerRecovers(): void

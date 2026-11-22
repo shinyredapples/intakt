@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
 use Intakt\Core\Dashboard\Infrastructure\LedgerBuildSteps;
-use Intakt\Core\Dashboard\Infrastructure\LedgerPayload;
+use Intakt\Core\Ledger\Contract\PayloadFields;
 use Intakt\Core\Dashboard\UseCase\ShowTask\ShowTaskController;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -15,7 +15,7 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 #[CoversClass(ShowTaskController::class)]
 #[CoversClass(LedgerBuildSteps::class)]
-#[UsesClass(LedgerPayload::class)]
+#[UsesClass(PayloadFields::class)]
 final class ShowTaskControllerTest extends DashboardPageTestCase
 {
     public function testATaskThatStoppedAtTheMirrorShowsTheMirrorStepFailedWithItsReason(): void

@@ -7,7 +7,7 @@ namespace Intakt\Core\Dashboard\Infrastructure;
 use Intakt\Core\Build\Contract\BuildStep;
 use Intakt\Core\Build\Contract\BuildStepOutcome;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
-use Intakt\Core\Ledger\Contract\LedgerPayload;
+use Intakt\Core\Ledger\Contract\PayloadFields;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 
@@ -71,14 +71,14 @@ final readonly class LedgerBuildSteps
      */
     private function stepOf(RecordedEvent $recorded): ?array
     {
-        $payload = LedgerPayload::of($recorded);
-        $project = $payload['project'] ?? null;
-        $task = $payload['task'] ?? null;
-        $step = is_string($payload['step'] ?? null) ? BuildStep::tryFrom($payload['step']) : null;
-        $outcome = is_string($payload['outcome'] ?? null) ? BuildStepOutcome::tryFrom($payload['outcome']) : null;
-        $failure = $payload['failure'] ?? null;
+        $payload = PayloadFields::of($recorded);
+        $project = $payload->text('project');
+        $task = $payload->text('task');
+        $step = BuildStep::tryFrom($payload->text('step') ?? '');
+        $outcome = BuildStepOutcome::tryFrom($payload->text('outcome') ?? '');
+        $failure = $payload->text('failure');
 
-        if (!is_string($project) || '' === $project || !is_string($task) || '' === $task || null === $step || null === $outcome) {
+        if (null === $project || '' === $project || null === $task || '' === $task || null === $step || null === $outcome) {
             return null;
         }
 
@@ -87,7 +87,7 @@ final readonly class LedgerBuildSteps
             return null;
         }
 
-        if (!is_string($failure) && null !== $failure) {
+        if (null === $failure && !$payload->lacks('failure')) {
             return null;
         }
 

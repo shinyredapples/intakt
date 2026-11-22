@@ -14,7 +14,7 @@ use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\ReviewerOutcome;
 use Intakt\Core\Dashboard\Domain\ReviewOutcome;
-use Intakt\Core\Dashboard\Infrastructure\LedgerPayload;
+use Intakt\Core\Ledger\Contract\PayloadFields;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviews;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
@@ -69,7 +69,7 @@ use Twig\Environment;
 #[UsesClass(LivePageRendering::class)]
 #[UsesClass(LedgerRounds::class)]
 #[UsesClass(LedgerTokens::class)]
-#[UsesClass(LedgerPayload::class)]
+#[UsesClass(PayloadFields::class)]
 #[UsesClass(LedgerReviews::class)]
 #[UsesClass(Review::class)]
 #[UsesClass(ReviewedRound::class)]

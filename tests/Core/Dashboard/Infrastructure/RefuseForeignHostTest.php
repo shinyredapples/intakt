@@ -11,7 +11,7 @@ use Intakt\Core\Dashboard\Domain\ReviewSummary;
 use Intakt\Core\Dashboard\Domain\RoundPlace;
 use Intakt\Core\Dashboard\Domain\RoundStart;
 use Intakt\Core\Dashboard\Infrastructure\DashboardHost;
-use Intakt\Core\Dashboard\Infrastructure\LedgerPayload;
+use Intakt\Core\Ledger\Contract\PayloadFields;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviews;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
@@ -31,7 +31,7 @@ use Symfony\Component\HttpKernel\HttpKernelInterface;
 
 #[CoversClass(RefuseForeignHost::class)]
 #[UsesClass(DashboardHost::class)]
-#[UsesClass(LedgerPayload::class)]
+#[UsesClass(PayloadFields::class)]
 #[UsesClass(LedgerReviewPages::class)]
 #[UsesClass(LedgerReviews::class)]
 #[UsesClass(LedgerRounds::class)]

@@ -10,7 +10,7 @@ use Intakt\Core\Dashboard\Domain\ReviewerOutcome;
 use Intakt\Core\Dashboard\Domain\RoundPlace;
 use Intakt\Core\Dashboard\Domain\RoundStart;
 use Intakt\Core\Dashboard\Infrastructure\FormPress;
-use Intakt\Core\Dashboard\Infrastructure\LedgerPayload;
+use Intakt\Core\Ledger\Contract\PayloadFields;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\LedgerTokens;
@@ -30,7 +30,7 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 #[CoversClass(FormPress::class)]
 #[UsesClass(LedgerReviewPages::class)]
 #[UsesClass(LedgerRounds::class)]
-#[UsesClass(LedgerPayload::class)]
+#[UsesClass(PayloadFields::class)]
 #[UsesClass(LedgerTokens::class)]
 #[UsesClass(Review::class)]
 #[UsesClass(ReviewedRound::class)]

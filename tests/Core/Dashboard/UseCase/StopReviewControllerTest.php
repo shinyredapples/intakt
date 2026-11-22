@@ -9,7 +9,7 @@ use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\ReviewerOutcome;
 use Intakt\Core\Dashboard\Domain\RoundPlace;
 use Intakt\Core\Dashboard\Domain\RoundStart;
-use Intakt\Core\Dashboard\Infrastructure\LedgerPayload;
+use Intakt\Core\Ledger\Contract\PayloadFields;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\LedgerTokens;
@@ -29,7 +29,7 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 #[CoversClass(ReviewerStops::class)]
 #[UsesClass(LedgerReviewPages::class)]
 #[UsesClass(LedgerRounds::class)]
-#[UsesClass(LedgerPayload::class)]
+#[UsesClass(PayloadFields::class)]
 #[UsesClass(LedgerTokens::class)]
 #[UsesClass(Review::class)]
 #[UsesClass(ReviewedRound::class)]
