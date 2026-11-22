@@ -48,6 +48,8 @@ enum LedgerEventKind: string
     case ReviewerFindingsRecorded = 'reviewer_findings_recorded';
     case RecurringP1Found = 'recurring_p1_found';
     case EscalationVerdictReused = 'escalation_verdict_reused';
+    case EscalationReviewed = 'escalation_reviewed';
+    case EscalationFailed = 'escalation_failed';
     case ChangeHandedToIntakt = 'change_handed_to_intakt';
     case ChangeNotHandedToIntakt = 'change_not_handed_to_intakt';
     case OwnerAsked = 'owner_asked';
