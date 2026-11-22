@@ -44,6 +44,17 @@ flowchart LR
 
 A task that fails one of them is not built. Intakt leaves one comment listing what is missing, and picks the task up again once you have added it.
 
+## Writing a bug task
+
+Give a bug the `bug` label and describe it in four parts, each under its own heading or in bold:
+
+- **When:** the steps or the input that show the bug.
+- **Today:** what happens now.
+- **Expected:** what should happen.
+- **Must keep working:** what the fix must not change.
+
+If a part is missing or empty, Intakt builds nothing. It asks you a question that names the missing part; add it, or remove the `bug` label. A complete bug task goes on, and the builder first writes a test that fails today and commits it, and only then fixes the bug. A bug no test can show (a vendor outage, a device only you have) keeps the usual evidence rules.
+
 ## The template
 
 Copy this into a new issue and fill it in:
