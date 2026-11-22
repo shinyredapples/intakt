@@ -1,3 +1,6 @@
+> **Judging the Symfony AI & MCP Hackathon?** Release [v0.4.1](https://github.com/shinyredapples/intakt/releases/tag/v0.4.1) is the version we submitted and tested:
+> `git clone --branch v0.4.1 https://github.com/shinyredapples/intakt`. Main is welcome too: it has what we built after the deadline, but it is not the tested submission.
+
 <h1 align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/intakt-lockup-dark.svg">
