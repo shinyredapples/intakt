@@ -29,26 +29,19 @@ use Intakt\Core\Review\Contract\StreamCutBy;
 use Intakt\Core\Review\Contract\StreamEndedEarly;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictUnreadable;
-use Intakt\Plugin\Vendor\Contract\NoProviderLeft;
-use Intakt\Plugin\Vendor\Contract\ProviderFailedTransiently;
-use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
-use Intakt\Plugin\Vendor\Contract\ProviderRejectedTheKey;
 use Intakt\Plugin\Vendor\Contract\ProviderUnreachable;
 use Intakt\Plugin\Vendor\Contract\Vendor;
 use Intakt\Plugin\Vendor\Contract\VendorAccountBusy;
 use Intakt\Plugin\Vendor\Contract\VendorReview;
 use Override;
-use Symfony\AI\Platform\Exception\AuthenticationException;
 use Symfony\AI\Platform\Exception\IncompleteStreamException;
 use Symfony\AI\Platform\Exception\MaxOutputTokensException;
-use Symfony\AI\Platform\Exception\RateLimitExceededException;
 use Symfony\AI\Platform\Exception\RetryableExceptionInterface;
 use Symfony\AI\Platform\Result\DeferredResult;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autoconfigure;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Uid\UuidV7;
-use Symfony\Contracts\HttpClient\Exception\TransportExceptionInterface;
 use Throwable;
 
 // Public because no service injects it before the panel (plan T8), and an unused private service is removed.
@@ -316,17 +309,8 @@ final readonly class SymfonyAiVendor implements Vendor
         return array_any($rounds, static fn (DeferredResult $round): bool => ($raw = $round->getRawResult()) instanceof ReviewServerReads && $raw->readThrough($access));
     }
 
-    // Matched on the exception type because the provider's text can change and carries anything (plan T5).
     private function typed(Throwable $failure): Throwable
     {
-        return match (true) {
-            $failure instanceof RateLimitExceededException => new ProviderRateLimited($failure->getRetryAfter(), $failure),
-            $failure instanceof EveryProviderOut => new NoProviderLeft($failure->getMessage(), $failure),
-            $failure instanceof AuthenticationException => new ProviderRejectedTheKey($failure),
-            $failure instanceof EveryAccountCoolingDown => new ProviderRateLimited($failure->secondsUntilAnAccountIsFree, $failure),
-            $failure instanceof RetryableExceptionInterface => new ProviderFailedTransiently($failure),
-            $failure instanceof TransportExceptionInterface => new ProviderUnreachable($failure),
-            default => $failure,
-        };
+        return TypedProviderFailure::of($failure);
     }
 }

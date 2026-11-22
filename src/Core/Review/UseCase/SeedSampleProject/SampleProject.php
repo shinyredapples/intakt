@@ -199,7 +199,7 @@ final readonly class SampleProject
         $prices = [];
         foreach ($models as $tier) {
             foreach ([$tier, ...$tier['substitutes'] ?? []] as $priced) {
-                $prices[$priced['model']] = $this->data->price($priced['model']);
+                $prices[$priced['model']] = iterator_to_array($this->data->price($priced['model']));
             }
         }
 

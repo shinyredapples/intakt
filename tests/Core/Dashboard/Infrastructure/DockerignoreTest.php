@@ -23,6 +23,16 @@ final class DockerignoreTest extends TestCase
         self::assertNotContains('.env', $this->excludedPaths());
     }
 
+    // The Trends page reads its bench headline from this page inside the image, so the docs exclusion keeps it.
+    public function testTheBuildContextKeepsTheBenchPage(): void
+    {
+        $paths = $this->excludedPaths();
+
+        self::assertContains('docs', $paths);
+        self::assertContains('!docs/bench.md', $paths);
+        self::assertGreaterThan(array_search('docs', $paths, true), array_search('!docs/bench.md', $paths, true));
+    }
+
     /**
      * @return iterable<string, array{string}>
      */

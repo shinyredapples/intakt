@@ -34,11 +34,12 @@ final class ReviewsPageQueriesTest extends WebTestCase
         $this->fixture = new RoundFixture(self::getContainer());
     }
 
-    public function testTheReviewsPageWithThreeRoundsRunsFifteenQueries(): void
+    // Sixteen, because the shell reads the owner notices once for the You count, whatever the rounds.
+    public function testTheReviewsPageWithThreeRoundsRunsSixteenQueries(): void
     {
         $this->givenRounds(3);
 
-        self::assertSame(15, $this->queriesOfTheReviewsPage());
+        self::assertSame(16, $this->queriesOfTheReviewsPage());
     }
 
     private function givenRounds(int $count): void

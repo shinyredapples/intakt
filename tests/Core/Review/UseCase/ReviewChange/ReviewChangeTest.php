@@ -24,6 +24,7 @@ use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\FlagProjectAsReplay;
 use Intakt\Core\Review\Contract\IgnoredProgress;
 use Intakt\Core\Review\Contract\JudgeRequest;
+use Intakt\Core\Review\Contract\ModelNames;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\QuorumPolicy;
@@ -71,6 +72,7 @@ use Symfony\Component\Serializer\SerializerInterface;
 #[CoversClass(ReviewChange::class)]
 #[CoversClass(RoundLedgerReading::class)]
 #[CoversClass(ChangeReview::class)]
+#[UsesClass(ModelNames::class)]
 #[CoversClass(RoundNotNext::class)]
 #[CoversClass(RoundTierNotMapped::class)]
 #[CoversClass(StoredVerdicts::class)]
