@@ -113,6 +113,10 @@ Anything Intakt or its maintainer agent can settle never shows up here.
 
 Two short panels sit beside the list on a wide screen and under it on a smaller one. **Meanwhile** shows what Intakt is doing while it waits for you: each review running now, with how long it has run and a link to watch it. Building tasks will show there too, later. **You handled today** lists what left the list today, with the time it left. Both panels show what was true when the page loaded; reload the page to see newer changes.
 
+## One review, in two views
+
+The review page keeps to one message. It shows the owl's card with the answer ("Pass 1 · Checked", "Changes needed", "5 to fix · 2 urgent"), the button with a line saying what it does next, and one **To fix** card per thing to fix: how urgent it is (**Urgent**, **Should fix** or **Nice to have**), what it is and where in the code. Tap a card to open that finding in the **Full record**, which the link at the bottom also opens. The Full record holds what the review page held before under the card: the line with small icons, the timeline of every round with its tables and findings, and the live log while a round runs.
+
 ## Alerts and notifications
 
 Every event that might need attention is sorted by one question: who can act on it. The diagram, the delivery record and the fallback notifier below are planned; today a usage outage only appears on the Waiting on you page.

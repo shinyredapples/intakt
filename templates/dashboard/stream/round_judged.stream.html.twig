@@ -4,6 +4,8 @@
 <turbo-stream action="replace" target="round-{{ round }}-now-phase"><template><span id="round-{{ round }}-now-phase">{{ include('dashboard/components/term.html.twig', {term: 'checked', words: 'checked', ask: true}, with_context = false) }}</span></template></turbo-stream>
 {% if (reviewed ?? null) is not null %}
 <turbo-stream action="replace" target="round-{{ round }}-verdict"><template>{{ include('dashboard/_round_verdict.html.twig', {reviewed: reviewed, newest: (review ?? null) is not null and (review.rounds|last).round == reviewed.round}, with_context = false) }}</template></turbo-stream>
+{# The owl's card of the newest pass comes in with the call, so the main view answers without a reload. #}
+{% if (review ?? null) is not null and (review.rounds|last).round == reviewed.round %}<turbo-stream action="replace" target="review-verdict"><template>{{ include('dashboard/_verdict_card.html.twig', {latest: reviewed, open: reviewed.actFindings}, with_context = false) }}</template></turbo-stream>{% endif %}
 <turbo-stream action="replace" target="round-{{ round }}-judged"><template>{{ include('dashboard/_judged_round.html.twig', {reviewed: reviewed}, with_context = false) }}</template></turbo-stream>
 <turbo-stream action="replace" target="round-{{ round }}-now-findings"><template>{{ include('dashboard/_now_findings.html.twig', {round: round, open: reviewed.actFindings, judged: reviewed.round}, with_context = false) }}</template></turbo-stream>
 <turbo-stream action="replace" target="round-{{ round }}-now-judge"><template>{{ include('dashboard/_now_judge.html.twig', {reviewed: reviewed}, with_context = false) }}</template></turbo-stream>

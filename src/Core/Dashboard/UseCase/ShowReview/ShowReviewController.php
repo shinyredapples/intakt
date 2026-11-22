@@ -29,6 +29,21 @@ final readonly class ShowReviewController
     #[Route('/reviews/{round}', name: DashboardRoutes::SHOW_REVIEW, methods: ['GET'])]
     public function __invoke(Request $request, string $round): Response
     {
+        return $this->show($request, $round, ['record' => false]);
+    }
+
+    // The timeline, the reviewers, the tokens and the cost on a view of their own, so the review's main view keeps one message (owner decision for #3360); it takes the same live updates.
+    #[Route('/reviews/{round}/record', name: DashboardRoutes::SHOW_REVIEW_RECORD, methods: ['GET'])]
+    public function record(Request $request, string $round): Response
+    {
+        return $this->show($request, $round, ['record' => true]);
+    }
+
+    /**
+     * @param array{record: bool} $view
+     */
+    private function show(Request $request, string $round, array $view): Response
+    {
         $review = $this->reviews->reviewOf($round);
 
         if (!$review instanceof Review) {
@@ -36,6 +51,7 @@ final readonly class ShowReviewController
         }
 
         return new Response($this->pages->render($request, 'dashboard/review.html.twig', [
+            ...$view,
             'review' => $review,
             'round' => $round,
             'topics' => $this->unfinishedTopicsOf($review),

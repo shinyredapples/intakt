@@ -73,6 +73,14 @@ On a review page, "Start round N" and "Stop this reviewer" share one lock per re
 
 The review page uses plain words, while the CLI, the MCP tools and these docs keep the technical terms: **Review pass** is a round (so "Now: round 2 in review" reads "Now: Review pass 2 in review"), **To fix** is the act list (the open findings), **Checked** means judged, and **Changes needed** is the outcome Changes requested. Pointing at one of these words, or at its "?", shows the technical term.
 
+### The review page's main view and Full record
+
+`/reviews/<round id>` is the review's main view, with one message: the title, the task, the owl's card once the latest round is judged or has ended (`Pass N · Checked`, then **Approved**, **Changes needed**, **Blocked:** or **Failed:** with the reason, then `N to fix · K urgent`), the start or stop button with a line saying what happens next, the state block while a round is in review, the **To fix** cards while none is, and a **Full record** link. A round judged while the page is open shows its card at once. Each To fix card shows how urgent the finding is (**Urgent** for P1, **Should fix** for P2, **Nice to have** for P3, the P number in its tooltip), its text cut to two lines and its file and line, and opens the finding in the Full record. The owl's card replaces the card with its one-line findings described above.
+
+The state block stays on the main view while a round is in review, because it is the page's one message until the judge has decided; it lists the findings to fix then, so the To fix cards wait until no round is in review and the findings never show twice.
+
+`/reviews/<round id>/record` is the **Full record**: the Replay line, the line of facts, the Timeline with each round's tables, findings and the judge's call, and the Live log, as described above, with the same live updates. The Now box's links open it.
+
 ### The Trends page
 
 `/trends` (**Trends** in the menu, after Projects) shows how the reviews went, read from the ledger's review rounds of every project, whatever the project filter shows. The page opens with tiles, three per row on a phone, each giving one figure above a short label; point at a label or reach it with the Tab key and a tooltip says what the figure counts. A tile shows only when there is a figure for it, so a page with few reviews shows fewer tiles:

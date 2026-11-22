@@ -47,6 +47,11 @@ final readonly class RoundFinding
         return [$this->id, ...$this->merged];
     }
 
+    public function urgency(): ?FindingUrgency
+    {
+        return FindingUrgency::of($this->severity);
+    }
+
     public function place(): ?string
     {
         if (null === $this->file) {

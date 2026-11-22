@@ -1,7 +1,7 @@
-{#- The call in the outcome words every page uses, so the Now box and the round below never word the same call apart. -#}
+{#- The call in the outcome words every page uses, so the Now box and the round in the Full record never word the same call apart. -#}
 {% set outcome = reviewed.reviewOutcome %}
 {% set to_fix = reviewed.actFindings|length %}
 <div id="round-{{ reviewed.round }}-now-judge">
 <p class="now-call"><strong class="now-outcome"{% if outcome is not null and outcome.plainWords != outcome.value %} title="{{ outcome.value }}"{% endif %}>{{ outcome is null ? 'outcome not recorded' : outcome.plainWords }}</strong>, <span class="now-to-fix">{{ to_fix }} {{ to_fix == 1 ? 'finding' : 'findings' }} to fix</span>.</p>
-<p class="muted"><a href="#round-{{ reviewed.round }}">{{ to_fix == 0 ? 'See the round below.' : 'See each finding in the round below.' }}</a></p>
+<p class="muted"><a href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_REVIEW_RECORD'), {round: reviewed.round}) }}#round-{{ reviewed.round }}">{{ to_fix == 0 ? 'See the round below.' : 'See each finding in the round below.' }}</a></p>
 </div>
