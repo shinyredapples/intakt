@@ -1,8 +1,9 @@
-{#- A review's outcome (ReviewOutcome) as a chip: its icon and its words; green only for Approved, red only for Failed, the others neutral. -#}
+{#- A review's outcome (ReviewOutcome) as a chip: its icon and its words; green only for Approved, red only for Failed, the others neutral. plain gives the review page's plain words, with the outcome's own words in the tooltip so the docs still match (#3183). -#}
 {%- set outcomes = enum('Intakt\\Core\\Dashboard\\Domain\\ReviewOutcome') -%}
+{%- set plain_words = plain|default(false) and outcome.plainWords != outcome.value -%}
 {{ include('dashboard/components/chip.html.twig', {
     icon: outcome.icon,
-    label: outcome.value,
+    label: plain_words ? outcome.plainWords : outcome.value,
     broken: outcome is same as(outcomes.Failed),
     on_page: on_page|default(false),
-}|merge(outcome is same as(outcomes.Approved) ? {extra: 'approved'} : {}), with_context = false) }}
+}|merge(outcome is same as(outcomes.Approved) ? {extra: 'approved'} : {})|merge(plain_words ? {title: outcome.value} : {}), with_context = false) }}
