@@ -48,6 +48,7 @@ final readonly class BuildTask
         private PushStep $pushes,
         private ParkedTasks $parkedTasks,
         private Ledger $ledger,
+        private PushRemoteCheck $remoteCheck,
     ) {
     }
 
@@ -57,6 +58,13 @@ final readonly class BuildTask
     #[NoDiscard('the outcome says which step the run stopped at')]
     public function run(BuildTaskRequest $request): BuildTaskOutcome
     {
+        // Before anything is read, recorded or pushed, because a remote outside the configured repository makes every later step act on two repositories.
+        $refusal = $this->remoteCheck->failureOf($request);
+
+        if (null !== $refusal) {
+            return new BuildTaskOutcome(BuildStep::Push, $refusal, null);
+        }
+
         $task = $this->readTask($request);
 
         if (!$task instanceof ListedIssue) {

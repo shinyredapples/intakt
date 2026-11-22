@@ -28,6 +28,7 @@ use Intakt\Core\Build\UseCase\BuildTask\HandBackCheck;
 use Intakt\Core\Build\UseCase\BuildTask\HandBackFile;
 use Intakt\Core\Build\UseCase\BuildTask\ParkedTasks;
 use Intakt\Core\Build\UseCase\BuildTask\PrePushCheck;
+use Intakt\Core\Build\UseCase\BuildTask\PushRemoteCheck;
 use Intakt\Core\Build\UseCase\BuildTask\PushStep;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
@@ -69,6 +70,7 @@ use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
 use Intakt\Tests\Core\Build\ScriptedJobRunner;
 use Intakt\Tests\Plugin\GitHubWorkSource\Issues;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
+use Intakt\Plugin\GitHubForge\Contract\ConfiguredRepositories;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -91,6 +93,7 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(PrePushCheck::class)]
 #[UsesClass(PushStep::class)]
 #[UsesClass(ParkedTasks::class)]
+#[UsesClass(PushRemoteCheck::class)]
 #[UsesClass(BranchPushRequest::class)]
 #[UsesClass(PushedBranch::class)]
 #[UsesClass(RefusedPush::class)]
@@ -342,7 +345,7 @@ final class BuildTaskCommandTest extends TestCase
         // On a database that cannot be opened, because the parked run's output is proven on the install's own database in BuildTaskParksOnSqliteTest.
         $parked = new ParkedTasks(DriverManager::getConnection(['driver' => 'pdo_sqlite', 'path' => $this->folder.'/missing/data.db']), $ledger, self::createStub(ManagerRegistry::class), new MockClock());
 
-        return new BuildTask($issues, $checkout, $routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files), new PushStep($branches, $checkout), $parked, $ledger);
+        return new BuildTask($issues, $checkout, $routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files), new PushStep($branches, $checkout), $parked, $ledger, new PushRemoteCheck(self::createStub(ConfiguredRepositories::class)));
     }
 
     private function listing(ListedIssue $task): IssueReads
