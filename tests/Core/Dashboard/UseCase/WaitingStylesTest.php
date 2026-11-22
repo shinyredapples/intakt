@@ -12,6 +12,7 @@ use PHPUnit\Framework\TestCase;
 final class WaitingStylesTest extends TestCase
 {
     private const string WIDE = 'width >= 1100px';
+    private const string PHONE = 'max-width: 760px';
     private const string BESIDE = '/grid-template-columns:\s*48px minmax\(0, 1fr\) 340px;\s*grid-template-areas:\s*"char title act" "char meta act" "conseq conseq act";/';
 
     // Below 1100 px the reactions come last in one column, so Tab reaches them after the words.
