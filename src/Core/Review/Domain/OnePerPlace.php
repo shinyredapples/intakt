@@ -144,8 +144,8 @@ final readonly class OnePerPlace
     // The same id may be reported twice, so an id joins the list once and the entry never lists its own.
     private function idsMergedInto(Finding $entry, Finding $finding): FindingIds
     {
-        $ids = [...$entry->merged];
-        foreach ([$finding->id, ...$finding->merged] as $id) {
+        $ids = [];
+        foreach ([...$entry->merged, $finding->id, ...$finding->merged] as $id) {
             if ($id !== $entry->id && !in_array($id, $ids, true)) {
                 $ids[] = $id;
             }
