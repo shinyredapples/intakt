@@ -28,8 +28,6 @@ use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Cache\CacheItemPoolInterface;
-use Psr\Log\LoggerInterface;
-use Psr\Log\NullLogger;
 use Symfony\Component\Cache\Adapter\ArrayAdapter;
 use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\ErrorHandler\BufferingLogger;
@@ -51,6 +49,8 @@ use Twig\Environment;
 #[UsesClass(LiveEvent::class)]
 final class LiveBoardHeadlineTest extends KernelTestCase
 {
+    private BufferingLogger $log;
+
     public function testTheBoardPublishedWithoutARoundIsAnEmptyBoardWithItsWaitingOctopusOnTheShellTopic(): void
     {
         $live = new PublishedLiveEvents();
@@ -192,12 +192,16 @@ final class LiveBoardHeadlineTest extends KernelTestCase
         $pool = self::createStub(CacheItemPoolInterface::class);
         $pool->method('getItem')->willThrowException(new InvalidArgumentException('disk full'));
         $live = new PublishedLiveEvents();
-        $log = new BufferingLogger();
 
-        $this->headlineOn(new DashboardLedger(), $live, $pool, $log)->publishTheBoard();
+        $this->headlineOn(new DashboardLedger(), $live, $pool)->publishTheBoard();
 
         self::assertSame([], $live->events);
-        self::assertSame(['warning', 'The board headline was not published.'], array_slice($log->cleanLogs()[0], 0, 2));
+        self::assertSame([['warning', 'The board headline was not published.']], array_map(static fn (mixed $record): array => is_array($record) ? [$record[0] ?? null, $record[1] ?? null] : [], $this->log->cleanLogs()));
+    }
+
+    protected function setUp(): void
+    {
+        $this->log = new BufferingLogger();
     }
 
     private function pushedDoneColumnOf(int $judged): Crawler
@@ -224,12 +228,12 @@ final class LiveBoardHeadlineTest extends KernelTestCase
         return new Crawler($live->events[0]->turboStream)->filter('turbo-stream[target="col-done"] section#col-done');
     }
 
-    private function headlineOn(DashboardLedger $ledger, PublishedLiveEvents $live, CacheItemPoolInterface $lastPushed = new ArrayAdapter(), LoggerInterface $logger = new NullLogger()): LiveBoardHeadline
+    private function headlineOn(DashboardLedger $ledger, PublishedLiveEvents $live, CacheItemPoolInterface $lastPushed = new ArrayAdapter()): LiveBoardHeadline
     {
         $twig = self::getContainer()->get(Environment::class);
         self::assertInstanceOf(Environment::class, $twig);
         $pages = new LedgerReviewPages($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), new UnpricedRoundCosts(), new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), new ReplayMarks(new ReplayMarkBus()));
 
-        return new LiveBoardHeadline($pages, $twig, $live, new LockFactory(new InMemoryStore()), $lastPushed, $logger);
+        return new LiveBoardHeadline($pages, $twig, $live, new LockFactory(new InMemoryStore()), $lastPushed, $this->log);
     }
 }
