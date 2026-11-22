@@ -82,7 +82,7 @@ final class LedgerReviewPagesOnSqliteTest extends KernelTestCase
 
         self::assertNotSame([], $this->selects->queries());
         foreach ($this->selects->queries() as [$sql, $params]) {
-            $plan = implode(', ', array_column($this->connection->fetchAllAssociative('EXPLAIN QUERY PLAN '.$sql, $params), 'detail'));
+            $plan = implode(', ', array_map(static fn (mixed $detail): string => is_string($detail) ? $detail : '', array_column($this->connection->fetchAllAssociative('EXPLAIN QUERY PLAN '.$sql, $params), 'detail')));
 
             self::assertStringContainsString('USING INDEX ledger_event_subject', $plan);
             self::assertStringNotContainsString('SCAN', $plan);
