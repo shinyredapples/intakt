@@ -36,6 +36,8 @@ final class BuildScriptTest extends TestCase
     private string|false $inheritedTimeout = false;
     // Seconds the script may run, so a git waiting on a pipe fails its test instead of holding the suite.
     private int $timeout = 20;
+    private ?string $startFolder = null;
+    private ?string $pathHead = null;
     private ?string $source = null;
 
     protected function setUp(): void
@@ -735,6 +737,30 @@ final class BuildScriptTest extends TestCase
         $this->thenTheJobEndedBeforeTheSessionBecauseOfItsTimeout($run);
     }
 
+    public function testARelativePathEntryDoesNotLetThePreflightCheckAnotherTimeoutThanTheBundleStepUses(): void
+    {
+        // The relative entry names a file in the folder the script starts in and none in the clone, where the bundle step runs.
+        $folder = $this->history->folder.'/relative';
+        mkdir($folder.'/image-bin', 0o755, true);
+        $timeout = (string) new ExecutableFinder()->find('timeout');
+        file_put_contents($folder.'/image-bin/timeout', "#!/bin/sh\nexec '{$timeout}' \"\$@\"\n");
+        chmod($folder.'/image-bin/timeout', 0o755);
+        $this->givenTheTimeout(<<<'SH'
+            echo 'timeout: unsupported option' >&2
+            exit 2
+            SH);
+        $this->givenTheCli(<<<'SH'
+            touch "$RECORD/ran"
+            git commit --quiet --allow-empty -m 'feat: build the task'
+            SH);
+        $this->startFolder = $folder;
+        $this->pathHead = 'image-bin:'.$this->bin;
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        $this->thenTheJobEndedBeforeTheSessionBecauseOfItsTimeout($run);
+    }
+
     public function testATimeoutThatReportsTheStatusOfTheGitItEndedStillLogsTheCut(): void
     {
         // The cut must be logged for this timeout too, because it ends with 143, the status of a git ended by TERM, and not with its own 124.
@@ -1224,7 +1250,7 @@ final class BuildScriptTest extends TestCase
     {
         $run = new Process(
             ['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-build', $this->source ?? $this->history->work, $this->prompt, $branch, $model, '7', (string) $allowance, $this->gates, '1800'],
-            null,
+            $this->startFolder,
             $this->environment(),
             timeout: $this->timeout,
         );
@@ -1243,7 +1269,7 @@ final class BuildScriptTest extends TestCase
             'HOME' => $this->work,
             'TMPDIR' => $this->work,
             'INTAKT_JOB_OUTPUT' => $this->output,
-            'PATH' => $this->bin.':'.getenv('PATH'),
+            'PATH' => ($this->pathHead ?? $this->bin).':'.getenv('PATH'),
             'RECORD' => $this->history->folder,
             'INTAKT_GATE_SLOTS' => $this->inherited,
             'BASH_DEFAULT_TIMEOUT_MS' => $this->inheritedTimeout,

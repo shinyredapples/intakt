@@ -42,12 +42,19 @@ fi
 bundle_time_limit=30
 # The form the bundle step uses, tried before the session: an image whose timeout is missing or rejects it would otherwise spend the session and then lose its commits.
 # Never an unbounded bundle instead, which would let the builder hold the slot again.
-if ! timeout -k 5 "$bundle_time_limit" true >> "$log" 2>&1; then
+cd "$clone" || exit 1
+# Resolved from inside the clone and kept as an absolute path, because a relative PATH entry names another file here than at the bundle step.
+bundle_timeout="$(command -v timeout 2>/dev/null)"
+case "$bundle_timeout" in
+    /*) ;;
+    '') bundle_timeout='' ;;
+    *) bundle_timeout="$PWD/$bundle_timeout" ;;
+esac
+if [ -z "$bundle_timeout" ] || ! "$bundle_timeout" -k 5 "$bundle_time_limit" true >> "$log" 2>&1; then
     echo 'the image'"'"'s timeout cannot bound the bundle step' >> "$log"
     exit 1
 fi
 
-cd "$clone" || exit 1
 base="$(git rev-parse HEAD)"
 # The bytes of a QUESTION.json the checkout already holds, read before the session and kept in a variable the builder cannot write:
 # the checkout's bytes and not the commit's, because a checkout that converts line endings holds other bytes than the commit.
@@ -110,7 +117,7 @@ fi
 chmod u+rwx -- "$output"
 # A named pipe or a link in the log's place would make the first append wait or write elsewhere, so the log is started again, without what the builder replaced.
 if [ ! -f "$log" ] || [ -L "$log" ]; then
-    rm -f -- "$log"
+    rm -rf -- "$log"
 fi
 printf 'claude exited with %d\n' "$status" >> "$log"
 if [ "$cut" -eq 0 ]; then
@@ -202,7 +209,7 @@ fi
 
 # The kill follows the TERM, so a git that does not end on TERM is still ended; the short option, because a project's image may carry a timeout (such as BusyBox's) that has no long one.
 # The branch by its full name, so a branch the builder checked out instead is never what is handed back; git refuses an empty bundle.
-timeout -k 5 "$bundle_time_limit" git bundle create --quiet "$output/handback.bundle" "refs/heads/$branch" "^$base" >> "$log" 2>&1
+"$bundle_timeout" -k 5 "$bundle_time_limit" git bundle create --quiet "$output/handback.bundle" "refs/heads/$branch" "^$base" >> "$log" 2>&1
 bundled=$?
 # 124 is timeout's status for a cut, 137 its status once the kill was needed, and 143 that of a timeout that reports the status of the git its TERM ended instead of its own;
 # the builder's processes are gone by now, so only the limit sends git these signals.
