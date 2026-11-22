@@ -186,10 +186,20 @@ if [ "$settings_replaced" -eq 0 ]; then
     exit 0
 fi
 
+# Bounded because the builder can leave state git waits on that is not a setting, such as a named pipe at a ref or at packed-refs, which would hold the slot until the job is timed out;
+# a bundle of the branch's new commits takes seconds, and the limit stays far below the 600 seconds the job keeps for this script after the allowance.
+bundle_time_limit=30
+# The kill follows the TERM, so a git that does not end on TERM is still ended.
 # The branch by its full name, so a branch the builder checked out instead is never what is handed back; git refuses an empty bundle.
-if ! git bundle create --quiet "$output/handback.bundle" "refs/heads/$branch" "^$base" >> "$log" 2>&1; then
-    # What a failed bundle left is not the branch, so it is not handed back either.
-    rm -f -- "$output/handback.bundle"
+timeout --kill-after=5 "$bundle_time_limit" git bundle create --quiet "$output/handback.bundle" "refs/heads/$branch" "^$base" >> "$log" 2>&1
+bundled=$?
+# 124 is timeout's status for a cut, 137 its status once the kill was needed.
+if [ "$bundled" -eq 124 ] || [ "$bundled" -eq 137 ]; then
+    printf 'no bundle is handed back: git bundle create was cut after %d seconds\n' "$bundle_time_limit" >> "$log"
+fi
+if [ "$bundled" -ne 0 ]; then
+    # What a failed or cut bundle left is not the branch, so it is not handed back either; a killed git leaves its lock file too.
+    rm -f -- "$output/handback.bundle" "$output/handback.bundle.lock"
     if [ -e "$output/handback.bundle" ] || [ -L "$output/handback.bundle" ]; then
         echo 'the output folder could not be cleared' >> "$log"
         exit 3
