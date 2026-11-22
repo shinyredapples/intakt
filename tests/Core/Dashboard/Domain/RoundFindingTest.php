@@ -65,6 +65,7 @@ final class RoundFindingTest extends TestCase
     {
         self::assertNull(new RoundFinding('F1', 'P2', "\xff\xfe")->headline());
     }
+
     public function testAFindingsHeadlineEndsAtItsFirstLine(): void
     {
         self::assertSame('No test covers Cart::total', new RoundFinding('F1', 'P2', "No test covers Cart::total\nAdd one for an empty cart.")->headline());
