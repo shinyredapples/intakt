@@ -160,6 +160,13 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         self::assertSame('A build is running. Nothing needs you.', $this->browser->request('GET', '/')->filter('.page-head .lead')->text());
     }
 
+    public function testABuildInFlightKeepsTheStatusLineFromCallingTheBoardQuiet(): void
+    {
+        $this->ledger->passBuildStep('alpha', 'task-7', 'task');
+
+        self::assertSame('Running smoothly · 1 build running', trim($this->browser->request('GET', '/')->filter('a.status-line')->text()));
+    }
+
     public function testATaskWhoseLatestStepFailedWithNoCardShowsTheAsleepOctopus(): void
     {
         $this->ledger->passBuildStep('alpha', 'task-7', 'task');

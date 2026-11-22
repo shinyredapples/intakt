@@ -38,12 +38,15 @@ final readonly class ListWaitingController
     public function __invoke(Request $request, #[MapQueryParameter] ?string $project = null): Response
     {
         $now = $this->clock->now();
+        $items = array_map(
+            fn (OutageNotice $notice): WaitingItem => WaitingItem::ofOutage($notice, $this->statusPages[$notice->account->provider->value] ?? null),
+            $this->notices->stillRunningOldestFirst(),
+        );
 
+        // The shell's You count comes from this list, because a second read could miss a notice that ended between the two and show the item without a count.
         return new Response($this->pages->render($request, 'dashboard/waiting.html.twig', [
-            'items' => array_map(
-                fn (OutageNotice $notice): WaitingItem => WaitingItem::ofOutage($notice, $this->statusPages[$notice->account->provider->value] ?? null),
-                $this->notices->stillRunningOldestFirst(),
-            ),
+            'items' => $items,
+            'waiting_listed' => count($items),
             'now' => $now,
             'linked_project' => $project,
             'project_trail' => in_array($project, $this->filterProjects->names(), true) ? $project : null,

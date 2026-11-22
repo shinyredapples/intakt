@@ -48,6 +48,18 @@ final class WhoIsWorkingTest extends TestCase
         self::assertSame('Quiet · nobody working', new WhoIsWorking([])->statusLine());
     }
 
+    public function testTheStatusLineCountsABuildInFlightWhileNoReviewerWorks(): void
+    {
+        self::assertSame('Running smoothly · 1 build running', new WhoIsWorking([], 1)->statusLine());
+    }
+
+    public function testTheStatusLineCountsTheReviewersAndTheBuildsInFlight(): void
+    {
+        $working = new WhoIsWorking([$this->review('feat/a', 1, [$this->running('r1-a')])], 2);
+
+        self::assertSame('Running smoothly · 1 reviewer working, 2 builds running', $working->statusLine());
+    }
+
     public function testTheStatusLineCountsOneReviewerInTheSingular(): void
     {
         $working = new WhoIsWorking([$this->review('feat/a', 1, [$this->running('r1-a')])]);

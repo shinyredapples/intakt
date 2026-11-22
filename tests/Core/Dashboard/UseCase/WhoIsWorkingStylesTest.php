@@ -44,7 +44,7 @@ final class WhoIsWorkingStylesTest extends TestCase
         self::assertMatchesRegularExpression('/rotate\(180deg\)/', $this->rule('details[open] > summary .chev', $this->sheet()));
     }
 
-    // A tinted line with a hover would look like a link, which it is not.
+    // It is the Status page's plain line, not a lane card or the board's status line, so it takes neither's tint nor hover.
     public function testTheNobodyIsWorkingLineIsMutedWithoutTintAtTheStatusLinesHeight(): void
     {
         $rule = $this->rule('.working-none', $this->sheet());

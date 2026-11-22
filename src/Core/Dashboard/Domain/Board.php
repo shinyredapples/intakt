@@ -36,10 +36,10 @@ final readonly class Board
         return array_values(array_filter($this->cards, static fn (Review $card): bool => $card->column() === $column));
     }
 
-    // From the cards in their order, so the newest review's reviewers come first.
+    // From the cards in their order, so the newest review's reviewers come first, with the builds in flight the headline counts.
     public function whoIsWorking(): WhoIsWorking
     {
-        return new WhoIsWorking($this->cards);
+        return new WhoIsWorking($this->cards, count($this->tasksInFlight()));
     }
 
     // From the same lanes and Waiting on you cards the page shows, so the line never tells a different story than the board below it.
