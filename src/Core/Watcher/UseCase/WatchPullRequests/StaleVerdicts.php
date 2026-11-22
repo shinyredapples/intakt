@@ -19,6 +19,7 @@ use LogicException;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Messenger\Stamp\HandledStamp;
+use Throwable;
 
 // Review alone decides whether the verdicts of an earlier head still stand (T11), because it holds the round's recorded identity; the Watcher only records the answer.
 final readonly class StaleVerdicts
@@ -59,8 +60,18 @@ final readonly class StaleVerdicts
     public function withdrawOwed(WatchedProject $project, OpenChange $change): void
     {
         foreach ($this->rounds->owingWithdrawal($project->name, $change) as $round) {
-            $this->commands->dispatch(new MarkVerdictsStale($round->roundId()));
+            $this->withdraw($round);
             $this->rounds->withdrawn($round);
+        }
+    }
+
+    private function withdraw(StartedRound $round): void
+    {
+        try {
+            $this->commands->dispatch(new MarkVerdictsStale($round->roundId()));
+        } catch (Throwable $refused) {
+            // Boundary: rethrown with Review's own reason, because the head_failed card shows only the cause and the bus's wrapper does not say it was the withdrawal that failed.
+            throw VerdictsWithdrawalRefused::because($refused);
         }
     }
 
