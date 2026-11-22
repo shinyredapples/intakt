@@ -43,6 +43,7 @@ use Symfony\Component\Console\Tester\CommandTester;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
+use Symfony\Component\Process\ExecutableFinder;
 use Symfony\Component\Process\Process;
 
 #[CoversClass(GuardMainCommand::class)]
@@ -78,6 +79,7 @@ final class GuardMainCommandTest extends TestCase
     private string $keys;
     private HaltLedger $ledger;
     private LedgerHalts $halts;
+    private ?string $path = null;
 
     #[Override]
     protected function setUp(): void
@@ -92,6 +94,9 @@ final class GuardMainCommandTest extends TestCase
     #[Override]
     protected function tearDown(): void
     {
+        if (null !== $this->path) {
+            putenv('PATH='.$this->path);
+        }
         $this->repository->remove();
         new Filesystem()->remove($this->keys);
     }
@@ -166,6 +171,42 @@ final class GuardMainCommandTest extends TestCase
 
         self::assertSame(Command::SUCCESS, $tester->getStatusCode());
         self::assertSame([LedgerEventKind::MainHalted, LedgerEventKind::HaltCleared], $this->ledger->kinds());
+    }
+
+    public function testARewriteThatMovesToAnotherReplacementWhileTheGuardReadsRaisesACardForTheNewHead(): void
+    {
+        $base = $this->repository->commitEmpty('Base');
+        $seen = $this->repository->commitEmpty('Seen, then dropped');
+        $this->repository->resetTo($base);
+        $first = $this->repository->commitEmpty('First replacement');
+        $this->whenTheGuardRuns($seen, []);
+        $this->halts->clear($this->onlyStandingCard());
+        $this->repository->resetTo($base);
+        $second = $this->repository->commitEmpty('Second replacement');
+        $this->repository->resetTo($first);
+        $this->gitMovesMainAfterItsFirstRead($second);
+
+        $tester = $this->whenTheGuardRuns($seen, []);
+
+        self::assertSame($second, trim($this->repository->log('-1', '--format=%H')));
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString('commit '.$seen.' history_rewritten', $tester->getDisplay());
+        self::assertSame([LedgerEventKind::MainHalted, LedgerEventKind::HaltCleared, LedgerEventKind::MainHalted], $this->ledger->kinds());
+    }
+
+    public function testAMainThatMovesOnEveryReadRaisesNoCardAndIsNeverReportedClean(): void
+    {
+        $seen = $this->repository->commitEmpty('Seen');
+        $one = $this->repository->commitEmpty('Seeded unsigned commit');
+        $other = $this->repository->commitEmpty('Another unsigned commit');
+        $this->gitMovesMainOnEveryRead($other, $one);
+
+        $tester = $this->whenTheGuardRuns($seen, []);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString('main moved', $tester->getDisplay());
+        self::assertStringNotContainsString('is not halted', $tester->getDisplay());
+        self::assertSame([], $this->ledger->kinds());
     }
 
     public function testAnOwnerSignedCommitRaisesNoCardAndExitsWithZero(): void
@@ -288,6 +329,33 @@ final class GuardMainCommandTest extends TestCase
         $tester->execute($input);
 
         return $tester;
+    }
+
+    // A git on the PATH that moves main right after the watchdog reads it, because only that forces a push between two of the guard's reads.
+    private function gitMovesMainAfterItsFirstRead(string $commit): void
+    {
+        $this->gitMovesMainAfterARead(sprintf('if [ ! -f %1$s/moved ]; then %2$s update-ref refs/heads/main %3$s; touch %1$s/moved; fi', escapeshellarg($this->keys), $this->realGit(), $commit));
+    }
+
+    private function gitMovesMainOnEveryRead(string $one, string $other): void
+    {
+        $flip = escapeshellarg($this->keys.'/flipped');
+        $this->gitMovesMainAfterARead(sprintf('if [ -f %1$s ]; then %2$s update-ref refs/heads/main %3$s; rm %1$s; else %2$s update-ref refs/heads/main %4$s; touch %1$s; fi', $flip, $this->realGit(), $one, $other));
+    }
+
+    private function gitMovesMainAfterARead(string $move): void
+    {
+        $bin = $this->keys.'/bin';
+        mkdir($bin);
+        file_put_contents($bin.'/git', sprintf("#!/bin/sh\ncase \" \$* \" in\n*' show-ref --verify --hash refs/heads/main '*) %1\$s \"\$@\" || exit \$?; %2\$s; exit 0;;\nesac\nexec %1\$s \"\$@\"\n", $this->realGit(), $move));
+        chmod($bin.'/git', 0o755);
+        $this->path = (string) getenv('PATH');
+        putenv('PATH='.$bin.PATH_SEPARATOR.$this->path);
+    }
+
+    private function realGit(): string
+    {
+        return escapeshellarg(new ExecutableFinder()->find('git') ?? self::fail('git is not installed'));
     }
 
     private function privateKey(string $name): string

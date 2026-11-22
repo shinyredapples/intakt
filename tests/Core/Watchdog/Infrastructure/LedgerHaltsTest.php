@@ -143,6 +143,23 @@ final class LedgerHaltsTest extends TestCase
         self::assertTrue($this->halts->wasRaised('acme/shop', $this->unsigned('a'), str_repeat('d', 40)));
     }
 
+    public function testAHaltWrittenWithoutMainsHeadStillStandsWithItsProjectAndReason(): void
+    {
+        $this->appended(new LedgerEvent(LedgerEventKind::MainHalted, '{"project":"acme/shop","commit":"'.str_repeat('a', 40).'","violation":"unsigned"}'));
+
+        $card = $this->onlyCard($this->halts->standing());
+        self::assertSame('acme/shop', $card->project);
+        self::assertSame(Violation::Unsigned, $card->violation?->violation);
+        self::assertTrue($this->halts->wasRaised('acme/shop', $this->unsigned('a'), self::HEAD));
+    }
+
+    public function testARewriteWrittenWithoutMainsHeadDoesNotCoverALaterRewrite(): void
+    {
+        $this->appended(new LedgerEvent(LedgerEventKind::MainHalted, '{"project":"acme/shop","commit":"'.str_repeat('a', 40).'","violation":"history_rewritten"}'));
+
+        self::assertFalse($this->halts->wasRaised('acme/shop', $this->rewritten('a'), self::HEAD));
+    }
+
     public function testAHaltTheLedgerRefusesIsReportedNotRecorded(): void
     {
         $this->ledger->refuseAppends();

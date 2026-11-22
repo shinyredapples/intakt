@@ -59,7 +59,8 @@ final readonly class ClearHaltCommand
         try {
             $answer = $io->askQuestion(self::ownerTokenQuestion());
         } catch (RuntimeException) {
-            throw new OnlyTheOwnerClearsAHalt('Only the owner clears a halt, and this terminal cannot hide the owner token, so it was not asked.');
+            // Also the end of the input, because a run with nothing to read gave no token either.
+            throw new OnlyTheOwnerClearsAHalt('Only the owner clears a halt, and no owner token was read: this terminal cannot hide it, or the input ended.');
         }
 
         return is_string($answer) ? $answer : '';

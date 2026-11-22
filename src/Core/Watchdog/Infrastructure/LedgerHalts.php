@@ -45,7 +45,7 @@ final readonly class LedgerHalts implements Halts
         return array_values(array_filter($this->standing(), static fn (OwnerCard $card): bool => $card->halts($project)));
     }
 
-    // Cleared cards count too, because the owner already checked that commit and a new card for it would halt the project again for nothing; a rewrite counts only with the same new head, because another force push over the same dropped head is a new rewrite.
+    // Cleared cards count too, because the owner already checked that commit and a new card for it would halt the project again for nothing; a rewrite counts only with the same new head, because another force push over the same dropped head is a new rewrite (a card without a head covers none, so an old card never hides a new rewrite).
     public function wasRaised(string $project, MainViolation $violation, string $head): bool
     {
         return array_any($this->raisedPayloads(), static fn (HaltPayload $raised): bool => $raised->project === $project
