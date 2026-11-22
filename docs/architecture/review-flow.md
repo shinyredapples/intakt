@@ -64,9 +64,11 @@ The next part of plan task T61 (issue #3077): `JudgedRounds::record()` locks the
 
 ## A kept escalation verdict
 
-Part 2 of the escalation of a recurring P1 (issue #1767). `Domain\KeptVerdict` is the stored verdict of one finding (table `kept_verdict`, migration `Version20261121100000`): the finding key (column `finding_key`, the primary key, so a finding on unchanged files never holds two verdicts), the `Contract\EscalationOutcome` (`confirmed` or `rejected`), the reasons, the round whose escalation review gave it and when it was kept (UTC, from the clock, in column type `utc_datetime_immutable`, so it reads back in UTC whatever PHP's default zone). `Infrastructure\KeptVerdicts::keep()` inserts one inside the caller's transaction, in a savepoint and without a lookup first, and throws `Domain\VerdictAlreadyKept` when the primary key refuses the insert, also when another writer inserted the key meanwhile; the entity manager stays open. `ofKey()` reads the row through the connection, past Doctrine's identity map (with `recorded_at` converted as `utc_datetime_immutable`), so a lookup always reflects what the database holds, also on the same entity manager after a transaction that read the verdict rolled back. Nothing in this part calls `keep()`: the escalation review that writes a verdict is a later part of T61, so no install holds a kept verdict yet and the tests seed one.
+Part 2 of the escalation of a recurring P1 (issue #1767). `Domain\KeptVerdict` is the stored verdict of one finding (table `kept_verdict`, migration `Version20261121100000`): the finding key (column `finding_key`, the primary key, so a finding on unchanged files never holds two verdicts), the `Contract\EscalationOutcome` (`confirmed` or `rejected`), the reasons, the round whose escalation review gave it and when it was kept (UTC, from the clock, in column type `utc_datetime_immutable`, so it reads back in UTC whatever PHP's default zone). `Infrastructure\KeptVerdicts::keep()` inserts one inside the caller's transaction, in a savepoint and without a lookup first, and throws `Domain\VerdictAlreadyKept` when the primary key refuses the insert, also when another writer inserted the key meanwhile; the entity manager stays open. `ofKey()` reads the row through the connection, past Doctrine's identity map (with `recorded_at` converted as `utc_datetime_immutable`), so a lookup always reflects what the database holds, also on the same entity manager after a transaction that read the verdict rolled back. `EscalateRecurringP1Handler` calls `keep()` (see [The escalation review](#the-escalation-review)).
 
 `UseCase\JudgeRound\RecordRecurringP1s::of()` is the one place that records the recurrences of a round, for `JudgedRounds::record()` and for `RecordFailedJudgingHandler`, under the locks both already hold. For each `RecurringP1Found` it appends the `recurring_p1_found` event, then looks the key up with `KeptVerdicts::ofKey()` and, when a verdict is kept, appends `escalation_verdict_reused` in the same transaction (`Contract\EscalationVerdictReused`: `round`, `finding`, `key`, `outcome`, `verdict_round`, the round that gave the verdict). The round itself is judged as usual; the kept verdict is the separate escalation verdict of that finding, and its reuse stands in for asking for an escalation review again. It asks no model. The match is on the exact key, which holds the finding's text and the content of every file it names, so an edit of a named file gives another key and the old verdict is not reused; a finding that names no regular file gets no key, never reaches the lookup and is judged again. Tests: `RecurringP1sTest` (reuse with its outcome and verdict round, the event after `recurring_p1_found` in `intakt:ledger:events`, no kept verdict, another key after an edit, a recurrence under the new key that reuses nothing, no key, the recurrence released by a recorded failed judging), `KeptVerdictsTest` (group `persistence`: found by key, unknown key, UTC time also read back from the database in another default zone, a second verdict for a key refused, a second insert refused as `VerdictAlreadyKept` with the entity manager open, a verdict kept and read in a transaction that rolled back no longer found) and `RoundLedgerPayloadsTest` (the payload as written).
+
+When no verdict is kept for the key, `RecordRecurringP1s` dispatches `EscalateRecurringP1` (`round`, `finding`, `key`) in the same transaction instead (see [The escalation review](#the-escalation-review)).
 
 ## The escalation prompt
 
@@ -86,7 +88,7 @@ Tests: `tests/Core/Review/Infrastructure/EscalationPromptTest.php` (the `file` f
 
 ## The escalation call
 
-Issue #3301. Nothing calls it yet: the handler that queues it and keeps its verdict comes with a later part of T61.
+Issue #3301. `EscalateRecurringP1Handler` calls it (see [The escalation review](#the-escalation-review)).
 
 `Infrastructure\EscalationAgent` is the `Contract\EscalationReviewer`: `review(project, round, EscalationRequest)` returns `EscalationReviewed` or `EscalationFailed`.
 
@@ -101,9 +103,26 @@ It builds the messages with `EscalationPrompt::messagesFor()` and calls `Escalat
 
 A provider error from the call is thrown unchanged by the agent, as the vendor's typed error (see [Vendor](vendor.md#escalation-review)), so the queue tries the escalation again.
 
-The ledger kinds `escalation_reviewed` and `escalation_failed` exist for these results; nothing appends them yet.
+`EscalateRecurringP1Handler` records these results as `escalation_reviewed` and `escalation_failed`.
 
 Tests: `tests/Core/Review/Infrastructure/EscalationAgentTest.php` (a confirmed answer, redacted and trimmed reasons, an unreadable answer, an unmapped strong tier and cited code not in the diff without a call, the strong tier, the round and the prompt of the call, a provider error thrown unchanged).
+
+## The escalation review
+
+Issue #3302. `UseCase\EscalateRecurringP1\EscalateRecurringP1Handler` (`#[AsCommandHandler]`) handles `EscalateRecurringP1`, which `config/packages/messenger.yaml` routes to the `async` transport.
+`RecordRecurringP1s` queues it in the judging's transaction, so it commits with the recurrence and the strong-tier call holds none of the judging's locks.
+The handler takes a Symfony Lock per key (`review-escalation-` and the key's SHA-256) without waiting; when it is held, it throws `EscalationBusy`, a `RecoverableMessageHandlingException`, so Messenger brings the message back later.
+The lock has Symfony Lock's default time to live of 300 seconds, so a longer call can overlap a second delivery of the key; the round's lock below then decides.
+It reads `EscalationsOfChange::recordedFor(round, key)`: when the ledger holds an `escalation_reviewed`, `escalation_verdict_reused` or `escalation_failed` for that round and key, it asks no model and records nothing, so a redelivery, also after a failure, changes nothing.
+When a verdict is kept for the key, it records `escalation_verdict_reused` and asks no model.
+Otherwise `EscalationRequests::of()` builds the `EscalationRequest` from the one finding the round reported under that id and the round's diff; an id the round did not report records `escalation_failed` with `EscalationRequests::FINDING_GONE`, and no model is asked.
+It calls `EscalationReviewer::review()` (the `EscalationAgent`).
+An `EscalationFailed` records `escalation_failed` (`Contract\EscalationReviewFailed`: `round`, `finding`, `key`, `reason`, Intakt's own reason) and keeps nothing.
+An `EscalationReviewed` is kept with `KeptVerdicts::keep()` under the round's lock (`ReviewRounds::withLockedRound()`), with `escalation_reviewed` (`Contract\EscalationVerdictKept`: `round`, `finding`, `key`, `outcome`, `reasons`, redacted) in the same transaction.
+When another round kept a verdict for the key first (`VerdictAlreadyKept`), this round records `escalation_verdict_reused` with that verdict instead, so a key holds one verdict and the answer this round paid for is dropped.
+A provider error from the call is not caught, so the queue tries the escalation again. The handler starts no re-review.
+
+Tests: `tests/Core/Review/UseCase/EscalateRecurringP1/EscalateRecurringP1Test.php` (group `persistence`: one escalation queued without a kept verdict and none with one, the finding alone with the round's diff in the call, confirmed and rejected verdicts kept and recorded, an unreadable answer, a finding the round did not report, a finding whose cited code is over the ceiling, a kept verdict reused without a call, a later round reusing at its judging, redeliveries after a review, a failure and a reuse, the race of two rounds forced during the call, a busy key retried, and `intakt:ledger:events` showing both outcomes and a later reuse) and `RoundLedgerPayloadsTest` (both payloads as written).
 
 ## One address per pull request
 
