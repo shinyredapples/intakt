@@ -1,2 +1,2 @@
-<td id="round-{{ round }}-reviewer-{{ outcome.id }}-model">{{ outcome.modelInWords }}</td>
-{#- Its own partial, because a round update replaces this cell with the same markup a reload renders once a substitute's model replaces the start's; trimmed after, because a stream template must match the page's markup. -#}
+<td id="round-{{ round }}-reviewer-{{ outcome.id }}-model"{% if outcome.model is not null and outcome.model is not same as('') %} title="{{ outcome.model }}"{% endif %}>{{ outcome.modelAndLab }}</td>
+{#- Its own partial, because a round update replaces this cell with the same markup a reload renders once a substitute's model replaces the start's; trimmed after, because a stream template must match the page's markup. The raw id stays in the title, because the docs, the CLI and MCP name reviewers by it, compared strictly, because Twig reads a model id "0" as false. -#}

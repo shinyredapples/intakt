@@ -10,6 +10,8 @@ use Intakt\Core\Dashboard\Infrastructure\LedgerPayload;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
 use Intakt\Core\Review\Contract\CountedQuotes;
+use Intakt\Core\Review\Contract\NearLine;
+use Intakt\Core\Review\Contract\QuoteNearLines;
 use Intakt\Core\Review\Contract\QuotesCounted;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\TestWith;
@@ -22,6 +24,8 @@ use Symfony\Component\DomCrawler\Crawler;
 #[UsesClass(LedgerPayload::class)]
 #[UsesClass(CountedQuotes::class)]
 #[UsesClass(QuotesCounted::class)]
+#[UsesClass(QuoteNearLines::class)]
+#[UsesClass(NearLine::class)]
 final class JudgedRoundFindingsPageTest extends DashboardPageTestCase
 {
     public function testAJudgedFindingIsACardWithItsSeverityChipFileAndLineAndTheCallInWords(): void
@@ -45,6 +49,32 @@ final class JudgedRoundFindingsPageTest extends DashboardPageTestCase
         self::assertSame(['Lock::acquire()', 'write()'], $title->filter('code')->each(static fn (Crawler $code): string => $code->text()));
         self::assertSame('F1 Call Lock::acquire() before <b>write()</b>.', $title->text());
         self::assertStringNotContainsString('`', $crawler->filter('#round-round-1 .finding-cards')->text());
+    }
+
+    public function testACardsTitleIsTheFindingsHeadlineAndTheWholeTextFollowsIt(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeToFixAtLine7OfA('round-1', 'Keep `Ready? yes` as the prompt. More.');
+
+        $card = $this->browser->request('GET', '/reviews/round-1')->filter('#round-round-1 .finding-card');
+
+        self::assertSame(['F1 Keep Ready? yes as the prompt.', 'Keep Ready? yes as the prompt. More.'], [$card->filter('.fc-title')->text(), $card->filter('.fc-detail')->text()]);
+    }
+
+    public function testACardOfOneSentenceHasNoTextBelowItsTitle(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeToFixAtLine7OfA('round-1', 'Take the lock first.');
+
+        self::assertCount(0, $this->browser->request('GET', '/reviews/round-1')->filter('#round-round-1 .finding-card .fc-detail'));
+    }
+
+    public function testACardWhoseTextIsOnlyUnicodeWhiteSpaceSaysTheTextIsNotRecorded(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeToFixAtLine7OfA('round-1', "\u{00A0}\u{2003}");
+
+        self::assertSame('F1 Text not recorded.', $this->browser->request('GET', '/reviews/round-1')->filter('#round-round-1 .finding-card .fc-title')->text());
     }
 
     public function testAFindingsCardAndTheNowBlockShowItsEmphasisWithoutTheMarks(): void
@@ -246,12 +276,125 @@ final class JudgedRoundFindingsPageTest extends DashboardPageTestCase
         self::assertSame("ghostName(\n    other)", $crawler->filter('#round-round-1 [data-dropped] details.fc-quotes .fc-quote-list code')->text(normalizeWhitespace: false));
     }
 
+    public function testADroppedFindingRecordedWithNearestLinesShowsEachLineWithItsPlaceUnderItsQuote(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeWithADroppedFindingAndItsNearestLines('round-1', 'Call `reasonForDrop()`.', [
+            ['quote' => 'reasonForDrop()', 'lines' => [['file' => 'src/Q.php', 'line' => 12, 'text' => 'public function reasonToDrop(): ?string'], ['file' => 'src/R.php', 'line' => 4, 'text' => '$reason = $quotes->reasonToDrop($finding);']]],
+        ]);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        $disclosure = $crawler->filter('#round-round-1 [data-dropped] details.fc-quotes');
+        self::assertSame(['reasonForDrop()'], $this->quotesIn($disclosure));
+        self::assertSame([['src/Q.php:12', 'public function reasonToDrop(): ?string'], ['src/R.php:4', '$reason = $quotes->reasonToDrop($finding);']], $this->nearLinesIn($disclosure->filter('.fc-quote-list > li')->eq(0)));
+    }
+
+    public function testADroppedFindingRecordedBeforeNearestLinesWereKeptShowsItsQuotesAndNoNearestLines(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeWithOnlyADroppedFinding('round-1', 'Call `ghostName`.', 'none of its 1 quoted code fragments is in the change');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        $disclosure = $crawler->filter('#round-round-1 [data-dropped] details.fc-quotes');
+        self::assertSame(['ghostName'], $this->quotesIn($disclosure));
+        self::assertCount(0, $disclosure->filter('.fc-near-lines'));
+    }
+
+    public function testEachQuoteShowsOnlyItsOwnNearestLines(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeWithADroppedFindingAndItsNearestLines('round-1', 'Call `ghostName` and `otherGhost`.', [
+            ['quote' => 'otherGhost', 'lines' => [['file' => 'src/B.php', 'line' => 9, 'text' => 'otherHost();']]],
+            ['quote' => 'ghostName', 'lines' => [['file' => 'src/A.php', 'line' => 2, 'text' => 'hostName();']]],
+        ]);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        $quotes = $crawler->filter('#round-round-1 [data-dropped] details.fc-quotes .fc-quote-list > li');
+        self::assertSame([['src/A.php:2', 'hostName();']], $this->nearLinesIn($quotes->eq(0)));
+        self::assertSame([['src/B.php:9', 'otherHost();']], $this->nearLinesIn($quotes->eq(1)));
+    }
+
+    public function testAQuoteWithNoRecordedNearestLinesShowsTheQuoteAlone(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeWithADroppedFindingAndItsNearestLines('round-1', 'Call `ghostName` and `otherGhost`.', [
+            ['quote' => 'otherGhost', 'lines' => [['file' => 'src/B.php', 'line' => 9, 'text' => 'otherHost();']]],
+        ]);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        $quotes = $crawler->filter('#round-round-1 [data-dropped] details.fc-quotes .fc-quote-list > li');
+        self::assertSame('ghostName', $quotes->eq(0)->text());
+        self::assertCount(0, $quotes->eq(0)->filter('.fc-near-lines'));
+    }
+
+    public function testARepeatedQuoteShowsItsNearestLinesEachTime(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeWithADroppedFindingAndItsNearestLines('round-1', 'Call `ghostName` once, not `ghostName` twice.', [
+            ['quote' => 'ghostName', 'lines' => [['file' => 'src/A.php', 'line' => 2, 'text' => 'hostName();']]],
+        ]);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        $quotes = $crawler->filter('#round-round-1 [data-dropped] details.fc-quotes .fc-quote-list > li');
+        self::assertSame([[['src/A.php:2', 'hostName();']], [['src/A.php:2', 'hostName();']]], $quotes->each(fn (Crawler $quote): array => $this->nearLinesIn($quote)));
+    }
+
+    public function testANearestLineIsEscapedSoMarkupInTheChangeIsNotRendered(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeWithADroppedFindingAndItsNearestLines('round-1', 'Call `ghostName`.', [
+            ['quote' => 'ghostName', 'lines' => [['file' => 'src/<i>A</i>.php', 'line' => 2, 'text' => '<img src=x onerror=ghost(1)>']]],
+        ]);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        $disclosure = $crawler->filter('#round-round-1 [data-dropped] details.fc-quotes');
+        self::assertCount(0, $disclosure->filter('img, i'));
+        self::assertSame([['src/<i>A</i>.php:2', '<img src=x onerror=ghost(1)>']], $this->nearLinesIn($disclosure->filter('.fc-quote-list > li')->eq(0)));
+    }
+
+    public function testTheDisclosureWithNearestLinesStillStartsClosed(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeWithADroppedFindingAndItsNearestLines('round-1', 'Call `ghostName`.', [
+            ['quote' => 'ghostName', 'lines' => [['file' => 'src/A.php', 'line' => 2, 'text' => 'hostName();']]],
+        ]);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertNull($crawler->filter('#round-round-1 [data-dropped] details.fc-quotes')->attr('open'));
+    }
+
+    public function testADroppedFindingWithUnreadableNearestLinesIsLeftOutAndThePageStillShows(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeWithADroppedFindingAndItsNearestLines('round-1', 'Call `ghostName`.', 'not a list');
+
+        $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertResponseIsSuccessful();
+        self::assertCount(0, $this->browser->getCrawler()->filter('#round-round-1 [data-dropped]'));
+    }
+
     /**
      * @return list<string>
      */
     private function quotesIn(Crawler $disclosure): array
     {
-        return $disclosure->filter('.fc-quote-list code')->each(static fn (Crawler $code): string => $code->text());
+        return $disclosure->filter('.fc-quote-list > li > code')->each(static fn (Crawler $code): string => $code->text());
+    }
+
+    /**
+     * @return list<array{string, string}>
+     */
+    private function nearLinesIn(Crawler $quote): array
+    {
+        return $quote->filter('.fc-near-lines > li')->each(static fn (Crawler $line): array => [$line->filter('.fc-near-place')->text(), $line->filter('code')->text()]);
     }
 
     public function testADroppedFindingCanBeReachedByFindingNavigation(): void

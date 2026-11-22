@@ -227,6 +227,20 @@ final class DashboardLedger implements Ledger
     }
 
     /**
+     * @param list<array{quote: mixed, lines: mixed}>|string $nearest
+     */
+    public function judgeWithADroppedFindingAndItsNearestLines(string $round, string $text, array|string $nearest): void
+    {
+        $this->add(LedgerEventKind::JudgeDone, [
+            'round' => $round,
+            'act' => [],
+            'follow_ups' => [],
+            'findings' => [],
+            'dropped' => [['id' => 'F1', 'severity' => 'P2', 'text' => $text, 'file' => 'src/A.php', 'line' => 3, 'reason' => 'none of its quoted code fragments is in the change', 'nearest' => $nearest]],
+        ]);
+    }
+
+    /**
      * @param list<string> $act
      * @param list<string> $followUps
      */

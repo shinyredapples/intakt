@@ -7,10 +7,10 @@ namespace Intakt\Core\Dashboard\Infrastructure;
 use Intakt\Core\Dashboard\Domain\BenchHeadline;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
-// Read from the README's review bench table, the one place the published run is kept, so the tile changes with the next published run and never carries a copied figure.
+// Read from the review bench table of docs/bench.md, the one place the published run is kept, so the tile changes with the next published run and never carries a copied figure.
 final readonly class PublishedBench
 {
-    private const string SECTION_HEADING = '/^### Review bench[ \t]*$/';
+    private const string SECTION_HEADING = '/^## Review bench[ \t]*$/';
     // Only the unit the bench measures in, so a column of another unit, such as per change, is never shown as a total.
     private const string FOUND_COLUMN = '/^Defects found(?: \(measured\))?$/';
     private const string FALSE_ALARMS_COLUMN = '/^False alarms(?: \(measured\))?$/';
@@ -18,14 +18,16 @@ final readonly class PublishedBench
     private const string FOUND_CELL = '/^(\d+) of (\d+)$/';
     private const string COUNT_CELL = '/^\d+$/';
     private const string RUN_DATE = '/^Date of the run: ((\d{4})-(\d{2})-(\d{2}))\./';
+    // Every occurrence is counted, whatever its digits, so two sentences make the count ambiguous.
+    private const string REPEAT = '/\bEach change ran (\d+) times\./';
 
     public function __construct(
-        #[Autowire('%kernel.project_dir%/README.md')]
+        #[Autowire('%kernel.project_dir%/docs/bench.md')]
         private string $readme,
     ) {
     }
 
-    // Null when the README or its table is missing or changed shape, so the page shows no bench tile rather than a wrong one.
+    // Null when the bench page or its table is missing or changed shape, so the page shows no bench tile rather than a wrong one.
     public function headline(): ?BenchHeadline
     {
         $section = MarkdownSection::named($this->text(), self::SECTION_HEADING);
@@ -40,7 +42,22 @@ final readonly class PublishedBench
             return null;
         }
 
-        return new BenchHeadline($panel[0], $panel[1], $panel[2], $ranOn);
+        return new BenchHeadline($panel[0], $panel[1], $panel[2], $ranOn, $this->runs($section));
+    }
+
+    /**
+     * @param list<string> $section
+     */
+    private function runs(array $section): ?int
+    {
+        $repeats = array_merge(...array_map(
+            static fn (string $line): array => false === preg_match_all(self::REPEAT, $line, $matches) ? [] : $matches[1],
+            $section,
+        ));
+
+        $runs = 1 === count($repeats) ? $this->countOf($repeats[0]) : null;
+
+        return 0 === $runs ? null : $runs;
     }
 
     private function text(): string
@@ -79,7 +96,7 @@ final readonly class PublishedBench
         return [$defects, $planted, $falseAlarms];
     }
 
-    // A count beyond the integer range or zero-padded (02) is refused rather than read, so the tile never shows a figure the README does not hold as written.
+    // A count beyond the integer range or zero-padded (02) is refused rather than read, so the tile never shows a figure the bench page does not hold as written.
     private function countOf(string $digits): ?int
     {
         $count = filter_var($digits, FILTER_VALIDATE_INT, ['options' => ['min_range' => 0]]);

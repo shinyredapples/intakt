@@ -12,6 +12,7 @@ use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Infrastructure\AccountFailoverPlatform;
 use Intakt\Core\Ai\Infrastructure\AccountPlatform;
 use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
+use Intakt\Core\Ai\Infrastructure\ModelWaits;
 use Intakt\Core\Ai\Infrastructure\SendFailures;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
 use Intakt\Core\Ai\Infrastructure\TypedRejectionConverter;
@@ -45,6 +46,7 @@ use Intakt\Plugin\SymfonyAiVendor\Infrastructure\VendorAccountLimit;
 use Intakt\Plugin\Vendor\Contract\ProviderUnreachable;
 use Intakt\Plugin\Vendor\Contract\VendorReview;
 use Intakt\Tests\Core\Ai\Infrastructure\NoCooldowns;
+use Intakt\Tests\Core\Ai\Infrastructure\NoPinnedProviderCooldowns;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\Contract\VerdictDocument;
 use Intakt\Tests\Core\Review\Infrastructure\RemembersNothing;
@@ -74,6 +76,7 @@ use Throwable;
 // The real path of a failed name lookup: the Anthropic bridge built by its own factory over an HTTP client whose response fails when it is read, as Symfony's client reports a lookup, so no second account is tried and the vendor asks the reviewer again.
 #[CoversClass(SymfonyAiVendor::class)]
 #[CoversClass(AccountFailoverPlatform::class)]
+#[UsesClass(ModelWaits::class)]
 #[CoversClass(ProviderUnreachable::class)]
 #[UsesClass(AccountPlatform::class)]
 #[UsesClass(SendFailures::class)]
@@ -186,7 +189,7 @@ final class AnthropicUnreachableRetryTest extends KernelTestCase
         });
         $capabilities = [Capability::INPUT_MESSAGES, Capability::OUTPUT_TEXT, Capability::OUTPUT_STRUCTURED, Capability::OUTPUT_STREAMING, Capability::TOOL_CALLING];
         $bridge = Factory::createPlatform('test', $http, new ModelCatalog(['big' => ['class' => Claude::class, 'capabilities' => $capabilities]]), eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
-        $accounts = new AccountFailoverPlatform(Provider::Anthropic, [Account::DEFAULT => $bridge], new NoCooldowns(), new MockClock(self::NOW), new NullLogger());
+        $accounts = new AccountFailoverPlatform(Provider::Anthropic, [Account::DEFAULT => $bridge], new NoCooldowns(), new MockClock(self::NOW), new NullLogger(), new NoPinnedProviderCooldowns());
         $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['strong' => ['provider' => 'anthropic', 'model' => 'big']]]], []);
         $tiers = new TierPlatform($resolver, new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => $accounts]), new NoCooldowns(), new NullLogger());
         $reviewer = new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates()), new ReviewerStopping(new StopRequests(new InMemoryLedger(), new LedgerPayloads(StoredSerializerFactory::create())))));

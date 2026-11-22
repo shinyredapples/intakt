@@ -6,12 +6,14 @@
 {%- else %}
 {%- set round = caption.round %}
 {%- set focus = {'change-arrives': '[id="round-' ~ round ~ '-now-phase"]', 'reviewers-read': '[id="round-' ~ round ~ '-now-reviewers"]', 'findings-arrive': '[id="round-' ~ round ~ '-now-reviewers"]', 'judge-weighs': '[id="round-' ~ round ~ '-now-judge"]', 'round-ends': '[id="round-' ~ round ~ '-judged"]'} %}
-<aside id="tour-caption" class="tour-caption" aria-label="Demo tour" data-stage="{{ caption.stage.value }}" data-round="{{ round }}" data-tour-at="{{ focus[caption.stage.value] }}">
+<aside id="tour-caption" class="tour-caption" aria-label="Demo tour" data-stage="{{ caption.stage.value }}" data-round="{{ round }}" data-tour-at="{{ focus[caption.stage.value] }}"{% if caption.stage.number == caption.stage.count %} data-tour-last{% endif %}>
     <span class="tour-dots" role="img" aria-label="Step {{ caption.stage.number }} of {{ caption.stage.count }}">
         {%- for stage in enum_cases('Intakt\\Core\\Dashboard\\Domain\\TourStage') %}<span class="tour-dot{% if stage.number < caption.stage.number %} done{% elseif stage is same as(caption.stage) %} now{% endif %}"></span>{% endfor -%}
     </span>
-    <p class="tour-line">{{ caption.stage.sentence }}</p>
-    <a class="tour-review" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_REVIEW'), {round: round}) }}">Open the review</a>
+    <p class="tour-line">{{ caption.stage.sentence }}
+        {%- if caption.reviewers is not empty %} <span class="tour-reviewers">Reviewers: {% for outcome in caption.reviewers %}<span{% if outcome.model is not null and outcome.model is not same as('') %} title="{{ outcome.model }}"{% endif %}>{{ outcome.modelAndLab }}</span>{% if not loop.last %}, {% endif %}{% endfor %}.</span>{% endif -%}
+    </p>
+    <a class="tour-review" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_REVIEW'), {round: round}) }}"><span>Open the review</span></a>
     <button type="button" class="btn quiet sm" data-tour-pause aria-pressed="false">Pause</button>
     <button type="button" class="btn quiet sm" data-tour-close>Close</button>
 </aside>

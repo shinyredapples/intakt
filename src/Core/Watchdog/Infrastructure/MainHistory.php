@@ -29,6 +29,8 @@ final readonly class MainHistory implements CommitHistory
     // One header per object format, because git names the signature header after the hash the repository uses.
     private const array SIGNATURE_HEADERS = ['sha1' => 'gpgsig', 'sha256' => 'gpgsig-sha256'];
 
+    private const array NAME_LENGTHS = ['sha1' => 40, 'sha256' => 64];
+
     // An empty shallow file is git's own way to read no shallow entries, so git follows the real parents and fails on one that is missing.
     private const array NO_SHALLOW_ENTRIES = ['--shallow-file', ''];
 
@@ -50,6 +52,8 @@ final readonly class MainHistory implements CommitHistory
         private string $repository,
         array $ownerKeys,
         private Filesystem $filesystem,
+        // Main's head read once for a whole check, because every read of one check must see the same main.
+        private ?string $pinnedTip = null,
     ) {
         $this->ownerKeys = array_map(static fn (string $line, int $index): string => OwnerKey::fromLine($line, $index + 1)->typeAndKey, $ownerKeys, array_keys($ownerKeys));
     }
@@ -127,6 +131,29 @@ final readonly class MainHistory implements CommitHistory
         }
 
         return $this->ownerSigned(...$signed) ? SignatureStatus::OwnerSigned : SignatureStatus::UnknownKey;
+    }
+
+    /**
+     * @throws MainNotRead
+     * @throws RuntimeException
+     */
+    public function head(): string
+    {
+        $this->mustBeReadable();
+
+        return $this->tip();
+    }
+
+    /**
+     * @throws MainNotRead
+     * @throws RuntimeException
+     */
+    public function commitNameLength(): int
+    {
+        $this->mustBeReadable();
+        $format = trim($this->read(['rev-parse', '--show-object-format']));
+
+        return self::NAME_LENGTHS[$format] ?? throw MainNotRead::because(sprintf('the repository uses the object format "%s", which the watchdog does not know', $format));
     }
 
     /**
@@ -231,7 +258,7 @@ final readonly class MainHistory implements CommitHistory
     private function tip(): string
     {
         // show-ref --verify takes the exact ref only, because rev-parse would fall back to a tag named refs/heads/main once the branch is gone.
-        return trim($this->read(['show-ref', '--verify', '--hash', self::MAIN]));
+        return $this->pinnedTip ?? trim($this->read(['show-ref', '--verify', '--hash', self::MAIN]));
     }
 
     /**

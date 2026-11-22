@@ -26,4 +26,4 @@ No error: on PHP 8.5 `clone with` can give a readonly property another value, so
 - **Development branch:** still fails on `phpstan/phpstan` 2.3.x-dev a60e937 (scratch copy, 2026-11-17).
 - **Existing issue or pull request:** phpstan/phpstan#14838 (open, 2026-06-17), "false-positive error when read-only object is modified through php8.5 clone with", the same bug. Related: phpstan/phpstan#14841 (open), the same remembered type for classes with `__clone()`.
 - **Pull requests and commits:** phpstan/phpstan-src#5893 "Do not remember readonly properties' constructor-narrowed types in other methods when `clone with` is available (PHP 8.5)" fixed this, but was closed without merging on 2026-09-20. Searched 2026-11-17 in `phpstan/phpstan` issues (`clone with readonly`, `clone with always evaluate`, `clone with remembered`, `readonly constructor narrow clone`) and in `phpstan/phpstan-src` issues and pull requests (`clone with readonly`).
-- **Decision:** `already reported` as phpstan/phpstan#14838; nothing to file.
+- **Decision:** `already reported` as phpstan/phpstan#14838; nothing to file. Checked 2026-11-22: phpstan/phpstan#14838 and #14841 are still open.

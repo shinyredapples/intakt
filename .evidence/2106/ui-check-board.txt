@@ -1,6 +1,0 @@
-board light 1440: axe critical 0, serious 0, moderate 0, minor 0
-board light 1920: axe critical 0, serious 0, moderate 0, minor 0
-board light 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
-board dark 1440: axe critical 0, serious 0, moderate 0, minor 0
-board dark 1920: axe critical 0, serious 0, moderate 0, minor 0
-board dark 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0

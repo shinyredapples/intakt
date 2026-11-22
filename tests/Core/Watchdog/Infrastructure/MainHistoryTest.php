@@ -318,6 +318,29 @@ final class MainHistoryTest extends TestCase
         self::assertSame(SignatureStatus::OwnerSigned, $this->history([$this->publicKey('owner')])->signatureOf($signed));
     }
 
+    public function testASha1RepositoryNamesCommitsWithFortyCharacters(): void
+    {
+        $this->repository->commitEmpty('Seen');
+
+        self::assertSame(40, $this->history([])->commitNameLength());
+    }
+
+    public function testASha256RepositoryNamesCommitsWithSixtyFourCharacters(): void
+    {
+        $this->repository->remove();
+        $this->repository = new TemporaryRepository('sha256');
+        $this->repository->commitEmpty('Seen');
+
+        self::assertSame(64, $this->history([])->commitNameLength());
+    }
+
+    public function testTheNameLengthIsNotReadFromAFolderThatIsNotTheRepository(): void
+    {
+        $this->expectException(MainNotRead::class);
+
+        new MainHistory(new HardenedGit(), $this->repository->path.'/missing', [], new Filesystem())->commitNameLength();
+    }
+
     public function testFirstParentsSinceACommitComeOldestFirstWithoutTheCommitsAMergeBroughtFromItsSideBranch(): void
     {
         $seen = $this->repository->commitEmpty('Seen');

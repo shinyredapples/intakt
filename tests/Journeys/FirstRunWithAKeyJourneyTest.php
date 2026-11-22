@@ -15,7 +15,7 @@ final class FirstRunWithAKeyJourneyTest extends JourneyTestCase
 {
     // Built from parts, so no key-shaped literal sits in the repository; the test environment's key check accepts it without a call.
     private const string TOKEN_BODY = 'journeyplaceholder';
-    private const string ENDED_TEXT = 'Judged.';
+    private const string ENDED_TEXT = 'Checked.';
     private const string OUTCOME = '/^Outcome: \S+, decided by the quorum policy \S+ over all 2 reviewers\./';
 
     private string $directory = '';
@@ -110,7 +110,7 @@ final class FirstRunWithAKeyJourneyTest extends JourneyTestCase
         $page = $this->visit($this->review);
 
         self::assertStringContainsString(self::ENDED_TEXT, $page->filter('#round-'.$round.'-state')->text());
-        self::assertSame('judged', mb_strtolower($page->filter('.state-judged')->text()));
+        self::assertSame('checked', mb_strtolower($page->filter('.state-judged')->text()));
         self::assertMatchesRegularExpression(self::OUTCOME, $page->filter('#round-'.$round.'-outcome')->text());
     }
 

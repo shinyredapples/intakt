@@ -10,6 +10,7 @@ use Intakt\Core\Ai\Infrastructure\AccountCooldownWindows;
 use Intakt\Core\Ai\Infrastructure\AccountFailoverPlatform;
 use Intakt\Core\Ai\Infrastructure\AccountPlatform;
 use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
+use Intakt\Core\Ai\Infrastructure\ModelWaits;
 use Intakt\Core\Ai\Infrastructure\SendFailures;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
 use Intakt\Core\Ai\Infrastructure\TypedRejectionConverter;
@@ -42,6 +43,7 @@ use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
 use Intakt\Plugin\Vendor\Contract\Vendor;
 use Intakt\Plugin\Vendor\Contract\VendorAccountOut;
 use Intakt\Tests\Core\Ai\Infrastructure\FailingWhenRead;
+use Intakt\Tests\Core\Ai\Infrastructure\NoPinnedProviderCooldowns;
 use Intakt\Tests\Core\Budget\ReadingsInMemory;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\Contract\VerdictDocument;
@@ -76,6 +78,7 @@ use Symfony\Component\Semaphore\Store\LockStore;
 #[CoversClass(ReviewerMovesToAnotherAccount::class)]
 #[CoversClass(AccountLimitedVendor::class)]
 #[CoversClass(AccountFailoverPlatform::class)]
+#[UsesClass(ModelWaits::class)]
 #[CoversClass(AccountPlatform::class)]
 #[CoversClass(AccountCooldownWindows::class)]
 #[UsesClass(ReviewerLeases::class)]
@@ -217,7 +220,7 @@ final class SameVendorAccountFailoverTest extends KernelTestCase
             return $answer;
         }, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
         $platforms = [Account::DEFAULT => new FailingWhenRead(new RateLimitExceededException(300)), 'team' => $team];
-        $accounts = new AccountFailoverPlatform(Provider::Anthropic, $platforms, $this->cooldowns, new NativeClock(), new NullLogger());
+        $accounts = new AccountFailoverPlatform(Provider::Anthropic, $platforms, $this->cooldowns, new NativeClock(), new NullLogger(), new NoPinnedProviderCooldowns());
         $tiers = new TierPlatform($resolver, new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => $accounts]), $this->cooldowns, new NullLogger());
         $reviewer = new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates()), new ReviewerStopping(new StopRequests(new InMemoryLedger(), new LedgerPayloads(StoredSerializerFactory::create())))));
         $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 3);

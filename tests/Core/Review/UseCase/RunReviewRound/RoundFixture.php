@@ -21,6 +21,7 @@ use Intakt\Core\Ledger\Infrastructure\DoctrineLedger;
 use Intakt\Core\Memory\Contract\MemoryIndex;
 use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Review\Contract\ChangeSource;
+use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelReviewer;
@@ -39,12 +40,20 @@ use Intakt\Core\Review\Domain\ReviewSubject;
 use Intakt\Core\Review\Domain\ReviewTarget;
 use Intakt\Core\Review\Domain\RoundReviewer;
 use Intakt\Core\Review\Domain\TrackedFinding;
+use Intakt\Core\Review\Infrastructure\AddedLinesInCheckout;
 use Intakt\Core\Review\Infrastructure\ChangeText;
+use Intakt\Core\Review\Infrastructure\DiffAddedLines;
 use Intakt\Core\Review\Infrastructure\DiffHunks;
 use Intakt\Core\Review\Infrastructure\DiffPaths;
+use Intakt\Core\Review\Infrastructure\EscalationAgent;
+use Intakt\Core\Review\Infrastructure\EscalationPrompt;
 use Intakt\Core\Review\Infrastructure\FindingKeys;
 use Intakt\Core\Review\Infrastructure\KeptVerdicts;
 use Intakt\Core\Review\Infrastructure\StopRequests;
+use Intakt\Core\Review\UseCase\EscalateRecurringP1\EscalateRecurringP1;
+use Intakt\Core\Review\UseCase\EscalateRecurringP1\EscalateRecurringP1Handler;
+use Intakt\Core\Review\UseCase\EscalateRecurringP1\EscalationRequests;
+use Intakt\Core\Review\UseCase\EscalateRecurringP1\EscalationsOfChange;
 use Intakt\Core\Review\UseCase\IndexResolvedFindings\IndexResolvedFindings;
 use Intakt\Core\Review\UseCase\IndexResolvedFindings\IndexResolvedFindingsHandler;
 use Intakt\Core\Review\UseCase\JudgeRound\FailedJudgings;
@@ -71,10 +80,12 @@ use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRoundHandler;
 use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
 use Intakt\Core\ReviewerForLoop\Contract\ProjectModes;
 use Intakt\Core\ReviewerForLoop\Infrastructure\ConfiguredProjectModes;
+use Intakt\Plugin\Vendor\Contract\EscalationReviews;
 use Intakt\Plugin\Vendor\Contract\Vendor;
 use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Core\Review\RecordedRoundUpdates;
 use Intakt\Tests\Core\Review\SampleIdentity;
+use Intakt\Tests\Core\Review\UseCase\EscalateRecurringP1\QueuedEscalations;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\TestContainer;
@@ -96,12 +107,15 @@ final readonly class RoundFixture
 {
     public const string TASK = 'Add the thing.';
     public const string DIFF = "diff --git a/src/Thing.php b/src/Thing.php\n@@ -1,9 +1,9 @@\n-old\n+new\n";
+    // Also changes RecordingBus.php, a file of the checkout, so an escalation of a finding that names it has the finding's hunk to show.
+    public const string DIFF_OF_RECORDING_BUS = self::DIFF."diff --git a/RecordingBus.php b/RecordingBus.php\n@@ -3 +3 @@\n-old\n+new\n";
     public const string CHANGE = 'feat/thing';
     public const string MODEL = 'standard-model';
     public const string SUBSTITUTE_MODEL = 'substitute-model';
 
     public EntityManagerInterface $entities;
     public RecordingBus $bus;
+    public QueuedEscalations $escalations;
     public MockClock $clock;
     public BufferingLogger $log;
     public EventDispatcher $events;
@@ -113,11 +127,13 @@ final readonly class RoundFixture
     public function __construct(
         private TestContainer $container,
         private ProjectModes $modes = new ConfiguredProjectModes([]),
+        private string $checkoutRoot = __DIR__,
     ) {
         $entities = $container->get('doctrine.orm.entity_manager');
         $this->entities = $entities;
         $this->serializer = $container->get('serializer.stored');
         $this->bus = new RecordingBus();
+        $this->escalations = new QueuedEscalations();
         $this->clock = new MockClock('2026-10-30 12:00:00', 'UTC');
         $this->log = new BufferingLogger();
         $this->events = new EventDispatcher();
@@ -150,6 +166,15 @@ final readonly class RoundFixture
     public function startAtHead(string $change, string $head): string
     {
         return $this->startWith($this->commandAt($change, $head, 2), $this->bus);
+    }
+
+    // As startAtHead(), on a diff the test writes, so a test can make the change longer than a prompt holds.
+    public function startWithDiffAtHead(string $change, string $head, string $diff): string
+    {
+        $command = $this->commandAt($change, $head, 2);
+        $target = new ReviewTarget(new ReviewSubject('alpha', $this->checkoutRoot, self::TASK, $diff), $command->target->identity);
+
+        return $this->startWith(new RunReviewRound($target, $command->panel, $command->round), $this->bus);
     }
 
     public function commandFor(string $change, int $reviewers): RunReviewRound
@@ -238,7 +263,7 @@ final readonly class RoundFixture
 
     public function judge(Vendor $vendor): JudgeRoundHandler
     {
-        return new JudgeRoundHandler(new JudgedRounds($this->rounds($this->entities), $this->storedFindingsOn($this->entities), $this->roundLedger($this->ledger), new ChangeText(new DiffPaths()), new DiffHunks(new DiffPaths()), new DiffPaths(), new StoredVerdicts($this->serializer), $this->noFailedJudgings(), $this->recordRecurringP1s($this->ledger)), $vendor, $this->events);
+        return new JudgeRoundHandler(new JudgedRounds($this->rounds($this->entities), $this->storedFindingsOn($this->entities), $this->roundLedger($this->ledger), new ChangeText(new DiffPaths()), new DiffHunks(new DiffPaths()), new AddedLinesInCheckout(new DiffAddedLines(new DiffPaths()), $this->container->get(Redactor::class)), new DiffPaths(), new StoredVerdicts($this->serializer), $this->noFailedJudgings(), $this->recordRecurringP1s($this->ledger)), $vendor, $this->events, $this->container->get(Redactor::class));
     }
 
     public function recurringP1s(Ledger $ledger, InMemoryTransport $failed = new InMemoryTransport()): RecurringP1s
@@ -253,7 +278,17 @@ final readonly class RoundFixture
 
     private function recordRecurringP1s(Ledger $ledger): RecordRecurringP1s
     {
-        return new RecordRecurringP1s($this->recurringP1s($ledger), $this->keptVerdicts(), $this->roundLedger($ledger));
+        return new RecordRecurringP1s($this->recurringP1s($ledger), $this->keptVerdicts(), $this->roundLedger($ledger), $this->escalations);
+    }
+
+    // A new handler on every delivery, because a restarted worker has one too and a redelivery must find the kept verdict in the database, not in the handler; other locks stand for a key lock that expired.
+    public function escalate(EscalateRecurringP1 $message, EscalationReviews $reviews, ?LockFactory $locks = null): void
+    {
+        $agent = new EscalationAgent(new EscalationPrompt(new Fence()), new ScriptedVendor(), $reviews, $this->container->get(Redactor::class));
+        $rounds = $this->rounds($this->entities);
+        $recorded = new EscalationsOfChange($this->ledger, $this->ledgerPayloads());
+
+        new EscalateRecurringP1Handler($rounds, new EscalationRequests($this->storedFindingsOn($this->entities)), $this->keptVerdicts(), $agent, $this->roundLedger($this->ledger), $recorded, $locks ?? $this->locks)($message);
     }
 
     // The application's queue, because the round's workflow, taken from the container, queues the judging through the application's bus.
@@ -416,7 +451,7 @@ final readonly class RoundFixture
 
     private function subject(): ReviewSubject
     {
-        return new ReviewSubject('alpha', __DIR__, self::TASK, self::DIFF);
+        return new ReviewSubject('alpha', $this->checkoutRoot, self::TASK, self::DIFF);
     }
 
     private function rounds(EntityManagerInterface $entities, ?Ledger $ledger = null): ReviewRounds

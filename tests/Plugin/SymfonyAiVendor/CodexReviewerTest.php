@@ -26,6 +26,7 @@ use Intakt\Core\Ai\Infrastructure\CompletedCodexTurn;
 use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
 use Intakt\Core\Ai\Infrastructure\ConfinedCodexClient;
 use Intakt\Core\Ai\Infrastructure\IsolatedCodexCli;
+use Intakt\Core\Ai\Infrastructure\ModelWaits;
 use Intakt\Core\Ai\Infrastructure\ProjectModelCatalog;
 use Intakt\Core\Ai\Infrastructure\SendFailures;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
@@ -74,6 +75,7 @@ use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
 use Intakt\Plugin\Vendor\Contract\ProviderRejectedTheKey;
 use Intakt\Plugin\Vendor\Contract\VendorReview;
 use Intakt\Tests\Core\Ai\Infrastructure\CodexLoginTest;
+use Intakt\Tests\Core\Ai\Infrastructure\NoPinnedProviderCooldowns;
 use Intakt\Tests\Core\Budget\ReadingsInMemory;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\Infrastructure\RemembersNothing;
@@ -113,6 +115,7 @@ use Throwable;
 #[UsesClass(CodexEffort::class)]
 #[UsesClass(CodexTokenRefresh::class)]
 #[UsesClass(AccountFailoverPlatform::class)]
+#[UsesClass(ModelWaits::class)]
 #[UsesClass(AccountPlatform::class)]
 #[UsesClass(AccountCooldownWindows::class)]
 #[UsesClass(AccountErrorReported::class)]
@@ -658,7 +661,7 @@ final class CodexReviewerTest extends KernelTestCase
         $logins = new CodexLogins($this->root.'/codex', new CodexTokenRefresh($this->tokenEndpoint, $clock), new LockFactory(new InMemoryStore()));
         $cli = new IsolatedCodexCli($logins, new CodexSettings(self::MODEL, CodexEffort::High), 'team');
         $codex = new CodexPlatformFactory(ScriptedReviewer::in(self::getContainer())->dispatcher)->create($cli, new ProjectModelCatalog(self::PROJECTS)->models(Provider::Codex));
-        $accounts = new AccountFailoverPlatform(Provider::Codex, ['team' => $codex], $this->cooldowns, $clock, new NullLogger());
+        $accounts = new AccountFailoverPlatform(Provider::Codex, ['team' => $codex], $this->cooldowns, $clock, new NullLogger(), new NoPinnedProviderCooldowns());
         $platforms = new ServiceLocator([Provider::Codex->value => static fn (): PlatformInterface => $accounts]);
         $reviewer = new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates()), new ReviewerStopping(new StopRequests(new InMemoryLedger(), new LedgerPayloads(StoredSerializerFactory::create())))));
         $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);

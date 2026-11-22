@@ -123,6 +123,36 @@ final class DemoTourTest extends TestCase
         self::assertSame(TourStage::FindingsArrive, $this->caption()->stage);
     }
 
+    public function testWhileTheReviewersReadTheCaptionHoldsTheReviewersOfTheLatestRound(): void
+    {
+        $this->startRound('r1', 1);
+        $this->startReviewer('r1', 'correctness');
+        $this->startReviewer('r1', 'security');
+
+        self::assertSame(['correctness', 'security'], array_map(static fn (ReviewerOutcome $outcome): string => $outcome->role, $this->caption()->reviewers));
+    }
+
+    public function testWhileFindingsArriveTheCaptionStillHoldsTheReviewers(): void
+    {
+        $this->startRound('r1', 1);
+        $this->startReviewer('r1', 'correctness');
+        $this->startReviewer('r1', 'security');
+        $this->answer('r1', 'correctness', 2);
+
+        self::assertCount(2, $this->caption()->reviewers);
+    }
+
+    public function testOnceEveryReviewerAnsweredTheCaptionNamesNoReviewer(): void
+    {
+        $this->startRound('r1', 1);
+        $this->startReviewer('r1', 'correctness');
+        $this->startReviewer('r1', 'security');
+        $this->answer('r1', 'correctness', 2);
+        $this->answer('r1', 'security', 0);
+
+        self::assertSame([], $this->caption()->reviewers);
+    }
+
     public function testEveryReviewerAnsweredIsTheJudgesStage(): void
     {
         $this->startRound('r1', 1);
@@ -194,6 +224,11 @@ final class DemoTourTest extends TestCase
             self::assertMatchesRegularExpression('/^[A-Z][^.]*[.]$/', $stage->sentence());
             self::assertLessThanOrEqual(100, strlen($stage->sentence()));
         }
+    }
+
+    public function testTheLastStageSaysTheRoundIsCheckedInTheReviewPagesPlainWords(): void
+    {
+        self::assertSame('Checked: To fix lists what still needs changing.', TourStage::RoundEnds->sentence());
     }
 
     public function testEveryStageSentenceIsAtMostNineWords(): void

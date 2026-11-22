@@ -166,10 +166,75 @@ final class PlayDemoControllerTest extends DashboardPageTestCase
         $this->browser->request('POST', '/demo', ['_token' => $token]);
 
         self::assertResponseStatusCodeSame(303);
-        self::assertResponseRedirects('/demo');
+        self::assertMatchesRegularExpression('~^/demo\?play=[0-9a-f]{32}$~', (string) $this->browser->getResponse()->headers->get('Location'));
         self::assertEquals([new PlayDemoRun()], array_map(static fn (Envelope $sent): object => $sent->getMessage(), $this->queued()));
         $this->browser->followRedirect();
         self::assertSelectorTextContains('.flash-success', 'The demo run is starting');
+    }
+
+    public function testThePagePlaysRedirectReachesTellsTheTourToFollowTheRun(): void
+    {
+        $token = $this->tokenFromThePage();
+        $this->browser->request('POST', '/demo', ['_token' => $token]);
+
+        $page = $this->browser->followRedirect();
+
+        self::assertSame(['The demo run is starting: the caption at the bottom of each page names the stage it is in.'], $page->filter('[data-tour-follow]')->each(static fn (Crawler $line): string => $line->text()));
+    }
+
+    public function testALaterVisitToTheDemoPageDoesNotTellTheTourToFollow(): void
+    {
+        $token = $this->tokenFromThePage();
+        $this->browser->request('POST', '/demo', ['_token' => $token]);
+        $this->browser->followRedirect();
+
+        self::assertCount(0, $this->demoPage()->filter('[data-tour-follow]'));
+    }
+
+    public function testAVisitFromAnotherTabBeforePlaysRedirectArrivesLeavesTheFollowToTheRedirect(): void
+    {
+        $token = $this->tokenFromThePage();
+        $this->browser->request('POST', '/demo', ['_token' => $token]);
+        $redirect = (string) $this->browser->getResponse()->headers->get('Location');
+
+        $otherTab = $this->demoPage();
+        $page = $this->browser->request('GET', $redirect);
+
+        self::assertCount(0, $otherTab->filter('[data-tour-follow]'));
+        self::assertCount(1, $page->filter('[data-tour-follow]'));
+    }
+
+    public function testAPlaySignThatNoPlayGaveDoesNotTellTheTourToFollow(): void
+    {
+        $token = $this->tokenFromThePage();
+        $this->browser->request('POST', '/demo', ['_token' => $token]);
+
+        $page = $this->browser->request('GET', '/demo?play='.str_repeat('0', 32));
+
+        self::assertResponseIsSuccessful();
+        self::assertCount(0, $page->filter('[data-tour-follow]'));
+    }
+
+    public function testAPlaySignInAnotherShapeIsIgnored(): void
+    {
+        $page = $this->browser->request('GET', '/demo?play=started');
+
+        self::assertResponseIsSuccessful();
+        self::assertCount(0, $page->filter('[data-tour-follow]'));
+    }
+
+    public function testASuccessLineFromAnotherFormDoesNotTellTheTourToFollow(): void
+    {
+        $this->demoPage();
+        $session = $this->browser->getRequest()->getSession();
+        self::assertInstanceOf(FlashBagAwareSessionInterface::class, $session);
+        $session->getFlashBag()->add('success', 'The provider key is kept.');
+        $session->save();
+
+        $page = $this->demoPage();
+
+        self::assertSame('The provider key is kept.', $page->filter('.flash-success')->text());
+        self::assertCount(0, $page->filter('[data-tour-follow]'));
     }
 
     public function testPressingPlayWithoutAValidTokenStartsNothing(): void
@@ -235,6 +300,26 @@ final class PlayDemoControllerTest extends DashboardPageTestCase
         self::assertCount(1, $caption->filter('button[data-tour-close]'));
     }
 
+    public function testWhileTheReviewersReadTheCaptionNamesAKnownReviewerAsModelAndAiLabWithItsIdInTheTitle(): void
+    {
+        $this->demoRunAt(1);
+        $this->startReviewerOf('correctness', 'moonshotai/Kimi-K3.1:deepinfra');
+
+        $reviewer = $this->demoPage()->filter('aside#tour-caption .tour-reviewers span');
+
+        self::assertSame(['Kimi K3.1 (Moonshot AI)', 'moonshotai/Kimi-K3.1:deepinfra'], [$reviewer->text(), $reviewer->attr('title')]);
+        self::assertSame(TourStage::ReviewersRead->sentence().' Reviewers: Kimi K3.1 (Moonshot AI).', $this->demoPage()->filter('aside#tour-caption .tour-line')->text());
+    }
+
+    public function testTheCaptionNamesAReviewerOfAnUnknownModelByItsIdAlone(): void
+    {
+        $this->demoRunAt(1);
+        $this->startReviewerOf('correctness', 'acme/robot-7');
+        $this->startReviewerOf('security', 'glm-5');
+
+        self::assertSame(['acme/robot-7', 'GLM 5 (Z.ai)'], $this->demoPage()->filter('aside#tour-caption .tour-reviewers span')->each(static fn (Crawler $name): string => $name->text()));
+    }
+
     public function testTheCaptionSitsAfterThePageContentAndNotInIt(): void
     {
         $this->demoRunAt(1);
@@ -252,6 +337,16 @@ final class PlayDemoControllerTest extends DashboardPageTestCase
         $this->demoRunAt(2);
 
         self::assertSame(TourStage::ChangeArrives->value, $this->demoPage()->filter('aside#tour-caption')->attr('data-stage'));
+    }
+
+    public function testOnlyTheCaptionOfTheLastStageSaysItIsTheLast(): void
+    {
+        $this->demoRunAt(1);
+        self::assertCount(0, $this->demoPage()->filter('aside#tour-caption[data-tour-last]'));
+
+        $this->ledger->append(new LedgerEvent(LedgerEventKind::JudgeDone, '{"round":"demo-round-1","act":[],"follow_ups":[]}'));
+
+        self::assertSame(TourStage::RoundEnds->value, $this->demoPage()->filter('aside#tour-caption[data-tour-last]')->attr('data-stage'));
     }
 
     public function testTheCaptionShowsOneDotPerStageWithTheCurrentOneMarkedAndNoStageCount(): void
@@ -314,12 +409,12 @@ final class PlayDemoControllerTest extends DashboardPageTestCase
         self::assertNotSame('', $page->filter('form.play-demo input[name=_token]')->attr('value'));
     }
 
-    public function testWithoutTheChoicesTheFirstRunPageShowsTheNoKeyNeededChipBesidePlay(): void
+    public function testTheFirstRunPageSaysPlayNeedsNoKeyAndWhatItShows(): void
     {
         $page = $this->browser->request('GET', '/setup');
 
-        self::assertSame('No key needed', $page->filter('.play-demo-offer .chip')->text());
-        self::assertCount(0, $page->filter('.play-demo-offer p'));
+        self::assertSame('1 minute · no key', $page->filter('#see-review .fr-when')->text());
+        self::assertSame('Two AI labs read a change, then the owl decides what to fix.', $page->filter('#see-review .next')->text());
     }
 
     public function testTheFirstRunPageOffersNoDemoRunOnceItIsInTheLedger(): void
@@ -364,6 +459,11 @@ final class PlayDemoControllerTest extends DashboardPageTestCase
     {
         $this->flagAsReplay(CreateDemoProjectCommand::NAME);
         $this->ledger->append(new LedgerEvent(LedgerEventKind::ReviewStarted, sprintf('{"round":"demo-round-%d","project":"%s","reviewers":2,"change":"sample-change","number":%d,"replay_factor":4.0}', $number, CreateDemoProjectCommand::NAME, $number)));
+    }
+
+    private function startReviewerOf(string $role, string $model): void
+    {
+        $this->ledger->append(new LedgerEvent(LedgerEventKind::ReviewerStarted, sprintf('{"round":"demo-round-1","reviewer":"demo-round-1-%1$s","role":"%1$s","tier":"standard","model":"%2$s"}', $role, $model)));
     }
 
     /**

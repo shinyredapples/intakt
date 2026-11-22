@@ -21,16 +21,16 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
 {
     // Not a credential, because the seed only checks that a key is present, and no step calls a provider.
     private const string PLACEHOLDER_KEY = 'journey-placeholder';
-    private const string ENDED_TEXT = 'Judged.';
+    private const string ENDED_TEXT = 'Checked.';
     // The sample's test vendor leaves nothing to fix, so the link must not promise findings.
     private const string ROUND_BELOW = 'See the round below.';
     private const string PROGRESS = '/^\d+ of \d+ reviewers finished\.$/';
     private const string NONE_STARTED = '0 of 2 reviewers started.';
     private const string ALL_STARTED = '2 of 2 reviewers started.';
     private const string ALL_FINISHED = '2 of 2 reviewers finished.';
-    private const string IDLE = 'Nothing is running. Nothing needs you.';
+    private const string IDLE = 'Nothing is running.';
     private const string HEADLINE_TARGET = 'target="board-headline"';
-    private const string REVIEWING = '/^The Code reviewers are reviewing change \S+ of '.SampleProject::NAME.'\. The Code reviewers are reviewing 1 change\. Nothing needs you\.$/';
+    private const string REVIEWING = '/^The Code reviewers are reviewing change \S+ of '.SampleProject::NAME.'\. The Code reviewers are reviewing 1 change\.$/';
 
     private string $directory = '';
 
@@ -145,15 +145,15 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
         $table = [];
 
         foreach ($updates as $update) {
-            preg_match_all('#<li class="character-row">(?:<img [^>]+>)+<span><strong>([^<]+)</strong> \((?:<span id="round-'.$round.'-now-reviewer-[^"]+-model">)?([^<)]+)(?:</span>)?\): <span id="round-'.$round.'-now-reviewer-[^"]+-state">(.+?)</span></li>#s', $update->getData(), $rows, PREG_SET_ORDER);
+            preg_match_all('#<li class="character-row">(?:<img [^>]+>)+<span><strong>([^<]+)</strong> \((?:<span id="round-'.$round.'-now-reviewer-[^"]+-model"(?: title="[^"]*")?>)?([^<]+?)(?:</span>)?\): <span id="round-'.$round.'-now-reviewer-[^"]+-state">(.+?)</span></li>#s', $update->getData(), $rows, PREG_SET_ORDER);
             $now = [...$now, ...array_map(static fn (array $row): array => [$row[1], $row[2], trim(strip_tags($row[3]))], $rows)];
-            preg_match_all('#<template><tr><td>([^<]+)</td>\s*<td(?: id="round-'.$round.'-reviewer-[^"]+-model")?>([^<]+)</td>#', $update->getData(), $rows, PREG_SET_ORDER);
+            preg_match_all('#<template><tr><td>([^<]+)</td>\s*<td(?: id="round-'.$round.'-reviewer-[^"]+-model")?(?: title="[^"]*")?>([^<]+)</td>#', $update->getData(), $rows, PREG_SET_ORDER);
             $table = [...$table, ...array_map(static fn (array $row): array => [$row[1], $row[2]], $rows)];
         }
 
         self::assertSame(['correctness', 'security'], array_values(array_unique(array_column($now, 0))));
         self::assertNotSame([], $now);
-        self::assertSame([], array_diff(array_column($now, 2), ['Approved', 'Changes requested', 'Blocked']));
+        self::assertSame([], array_diff(array_column($now, 2), ['Approved', 'Changes needed', 'Blocked']));
         self::assertSame(['correctness', 'security'], array_values(array_unique(array_column($table, 0))));
         // Named by a model, because the sample maps a model to every tier, so neither the fallback for an unread start nor the one for an unrecorded model may show.
         self::assertSame([], array_filter([...array_column($now, 1), ...array_column($table, 1)], static fn (string $model): bool => str_contains($model, 'not read') || str_contains($model, 'not recorded')));
@@ -165,7 +165,7 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
         $page = $this->visit('/reviews/'.$round);
 
         self::assertStringContainsString(self::ENDED_TEXT, $page->filter('#round-'.$round.'-state')->text());
-        self::assertSame('judged', mb_strtolower($page->filter('.state-judged')->text()));
+        self::assertSame('checked', mb_strtolower($page->filter('.state-judged')->text()));
 
         return $page;
     }

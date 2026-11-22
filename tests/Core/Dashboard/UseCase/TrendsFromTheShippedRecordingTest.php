@@ -51,15 +51,14 @@ final class TrendsFromTheShippedRecordingTest extends DashboardPageTestCase
 
         $page = $this->browser->request('GET', '/trends');
 
-        self::assertNotEmpty($this->rowsOf($page, '#chart-catches'), 'Which reviewer caught what has no row.');
-        self::assertNotEmpty($this->rowsOf($page, '#chart-judge'), 'What the judge did has no row.');
-        self::assertSame([], $page->filter('#chart-catches .takeaway[data-no-data], #chart-judge .takeaway[data-no-data]')->each(static fn (Crawler $takeaway): string => $takeaway->text()));
-        self::assertSame(['Shows once there are reviews on 3 days'], $page->filter('#chart-per-day .takeaway[data-no-data]')->each(static fn (Crawler $takeaway): string => $takeaway->text()));
+        self::assertNotEmpty($this->rowsOf($page, '#chart-catches'), 'Catches by reviewer has no row.');
+        self::assertNotEmpty($this->rowsOf($page, '#chart-judge'), 'Checked findings has no row.');
+        self::assertSelectorNotExists('#chart-per-day');
         self::assertSame([
             ['Correctness', 'P1', '2', '0'], ['Correctness', 'P2', '2', '2'], ['Correctness', 'P3', '0', '0'],
             ['Security', 'P1', '1', '0'], ['Security', 'P2', '2', '0'], ['Security', 'P3', '1', '1'],
         ], $this->rowsOf($page, '#chart-catches'));
-        self::assertSame([['Kept on the act list', '5'], ['Merged as duplicate', '3'], ['Deferred to a follow-up issue', '0'], ['Rejected', '0']], $this->rowsOf($page, '#chart-judge'));
+        self::assertSame([['Kept to fix', '5'], ['Merged as duplicate', '3'], ['Deferred to a follow-up issue', '0'], ['Rejected', '0']], $this->rowsOf($page, '#chart-judge'));
     }
 
     // At a pace no clock waits for, because the mock clock's sleep only moves its moment.
