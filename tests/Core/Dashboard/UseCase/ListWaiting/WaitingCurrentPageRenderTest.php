@@ -5,27 +5,23 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Dashboard\UseCase\ListWaiting;
 
 use Intakt\Core\Budget\Contract\OwnerNotices;
+use Intakt\Core\Budget\Contract\OwnerNoticesOfTheDay;
+use Intakt\Core\Dashboard\Infrastructure\WaitingPageReading;
 use Intakt\Core\Dashboard\UseCase\ListWaiting\ListWaitingController;
-use Intakt\Core\Ledger\Contract\Ledger;
-use Intakt\Tests\Core\Dashboard\UseCase\DashboardLedger;
 use Intakt\Tests\Core\Dashboard\UseCase\DashboardPageTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\DomCrawler\Crawler;
 
 #[CoversClass(ListWaitingController::class)]
+#[UsesClass(WaitingPageReading::class)]
+#[UsesClass(OwnerNoticesOfTheDay::class)]
 final class WaitingCurrentPageRenderTest extends DashboardPageTestCase
 {
-    protected function setUp(): void
-    {
-        $this->browser = self::createClient(server: ['HTTP_HOST' => 'localhost:7780']);
-        $this->ledger = new DashboardLedger();
-        self::getContainer()->set(Ledger::class, $this->ledger);
-    }
-
     public function testOnlyWaitingIsMarkedAsTheCurrentPage(): void
     {
         $notices = self::createStub(OwnerNotices::class);
-        $notices->method('stillRunningOldestFirst')->willReturn([]);
+        $notices->method('waitingAndEndedOnTheDayOf')->willReturn(new OwnerNoticesOfTheDay([], []));
         self::getContainer()->set(OwnerNotices::class, $notices);
         $this->ledger->startRound('round-1', 'sample');
 
