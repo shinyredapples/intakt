@@ -128,7 +128,7 @@ final readonly class DoctrineLedger implements Ledger
      */
     private function recordsOf(array $criteria): array
     {
-        return array_values($this->registry->getManager()->getRepository(EventRecord::class)->findBy($criteria, ['position' => 'ASC']));
+        return $this->registry->getManager()->getRepository(EventRecord::class)->findBy($criteria, ['position' => 'ASC']);
     }
 
     /**

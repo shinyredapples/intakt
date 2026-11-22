@@ -22,7 +22,7 @@ use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\Clock\MockClock;
 
-// An SQLite column with NOCASE stands in for MySQL's default collation, which ignores case when it compares the subject.
+// An SQLite column with NOCASE, because it ignores case as MySQL's default collation does, and the suite cannot rely on a MySQL server.
 #[Group('persistence')]
 #[CoversClass(DoctrineLedger::class)]
 #[UsesClass(EventRecord::class)]
