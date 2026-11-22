@@ -748,6 +748,8 @@ final class MercureRoundUpdatesTest extends TestCase
         $twig->addFunction(new TwigFunction('component_option', new ComponentOptions()->of(...)));
         // Registered because a placed reviewer row shows a character, whose images the asset mapper names in the app.
         $twig->addFunction(new TwigFunction('asset', static fn (string $path): string => '/'.$path));
+        // Registered because the judged stream links the Now box's findings to the Full record by its route.
+        $twig->addFunction(new TwigFunction('path', static fn (string $route, array $parameters = []): string => $route.'?'.http_build_query($parameters)));
         // Registered because a judged finding's text shows its backtick spans as code.
         $twig->addFunction(new TwigFunction('finding_spans', new FindingSpans()->of(...)));
         $twig->addFunction(new TwigFunction('finding_title_spans', new FindingSpans()->ofATitle(...)));

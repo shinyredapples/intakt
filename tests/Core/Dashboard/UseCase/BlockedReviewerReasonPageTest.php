@@ -89,7 +89,7 @@ final class BlockedReviewerReasonPageTest extends WebTestCase
     {
         $this->reviewedByTheCommand();
 
-        $state = $this->browser->request('GET', '/reviews/'.$this->roundId)->filter('#round-'.$this->roundId.'-reviewer-'.$this->blockedReviewer().'-state');
+        $state = $this->browser->request('GET', '/reviews/'.$this->roundId.'/record')->filter('#round-'.$this->roundId.'-reviewer-'.$this->blockedReviewer().'-state');
 
         self::assertSame(['Blocked', OutOfProvidersForRole::REASON], [$state->filter('.chip')->text(), $state->filter('.muted')->text()]);
     }

@@ -93,7 +93,7 @@ final class FirstRunWithAKeyJourneyTest extends JourneyTestCase
 
     private function openTheLiveReviewPage(): void
     {
-        $page = $this->visit($this->review);
+        $page = $this->visit($this->review.'/record');
 
         self::assertCount(1, $page->filter('#round-'.$this->round().'-state'));
         self::assertStringContainsString('sample-change', $page->filter('h1')->text());
@@ -107,7 +107,7 @@ final class FirstRunWithAKeyJourneyTest extends JourneyTestCase
     private function readTheVerdict(): void
     {
         $round = $this->round();
-        $page = $this->visit($this->review);
+        $page = $this->visit($this->review.'/record');
 
         self::assertStringContainsString(self::ENDED_TEXT, $page->filter('#round-'.$round.'-state')->text());
         self::assertSame('checked', mb_strtolower($page->filter('.state-judged')->text()));

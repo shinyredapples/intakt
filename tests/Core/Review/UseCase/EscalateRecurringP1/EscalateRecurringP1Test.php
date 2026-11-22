@@ -27,18 +27,26 @@ use Intakt\Core\Review\Infrastructure\CitedCodeNotShown;
 use Intakt\Core\Review\Infrastructure\EscalationAgent;
 use Intakt\Core\Review\Infrastructure\EscalationPrompt;
 use Intakt\Core\Review\Infrastructure\KeptVerdicts;
+use Intakt\Core\Review\UseCase\EscalateRecurringP1\BoundTransientEscalationFailures;
 use Intakt\Core\Review\UseCase\EscalateRecurringP1\EscalateRecurringP1;
 use Intakt\Core\Review\UseCase\EscalateRecurringP1\EscalateRecurringP1Handler;
 use Intakt\Core\Review\UseCase\EscalateRecurringP1\EscalationBusy;
 use Intakt\Core\Review\UseCase\EscalateRecurringP1\EscalationCallFailed;
+use Intakt\Core\Review\UseCase\EscalateRecurringP1\EscalationLimited;
 use Intakt\Core\Review\UseCase\EscalateRecurringP1\EscalationRequests;
 use Intakt\Core\Review\UseCase\EscalateRecurringP1\EscalationsOfChange;
+use Intakt\Core\Review\UseCase\EscalateRecurringP1\RecordFailedEscalation;
+use Intakt\Core\Review\UseCase\EscalateRecurringP1\RecordFailedEscalationHandler;
+use Intakt\Core\Review\UseCase\EscalateRecurringP1\TransientEscalationFailures;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRound;
 use Intakt\Core\Review\UseCase\JudgeRound\RecordRecurringP1s;
 use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
 use Intakt\Plugin\Vendor\Contract\EscalationReviews;
+use Intakt\Plugin\Vendor\Contract\ProviderFailedTransiently;
+use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
 use Intakt\Plugin\Vendor\Contract\ProviderRejectedTheKey;
 use Intakt\Plugin\Vendor\Contract\Vendor;
+use Intakt\Plugin\Vendor\Contract\VendorAccountBusy;
 use Intakt\Tests\Core\Review\UseCase\JudgeRound\ScriptedJudgement;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\ScriptedVendor;
@@ -61,10 +69,16 @@ use Symfony\Component\Messenger\Bridge\Doctrine\Transport\DoctrineTransport;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\Event\WorkerMessageFailedEvent;
 use Symfony\Component\Messenger\Exception\HandlerFailedException;
+use Symfony\Component\Messenger\MessageBusInterface;
+use Symfony\Component\Messenger\Stamp\DelayStamp;
+use Symfony\Component\Messenger\Stamp\DispatchOnFailureStamp;
+use Symfony\Component\Messenger\Stamp\ReceivedStamp;
 use Symfony\Component\Messenger\Stamp\RedeliveryStamp;
+use Symfony\Component\Messenger\Stamp\StampInterface;
 use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
 use Symfony\Component\Messenger\Transport\Serialization\PhpSerializer;
 use Symfony\Component\Messenger\Worker;
+use Throwable;
 
 #[Group('persistence')]
 #[CoversClass(EscalateRecurringP1Handler::class)]
@@ -77,6 +91,11 @@ use Symfony\Component\Messenger\Worker;
 #[CoversClass(RoundLedger::class)]
 #[CoversClass(EscalationVerdictKept::class)]
 #[CoversClass(EscalationReviewFailed::class)]
+#[CoversClass(EscalationLimited::class)]
+#[CoversClass(BoundTransientEscalationFailures::class)]
+#[CoversClass(TransientEscalationFailures::class)]
+#[CoversClass(RecordFailedEscalation::class)]
+#[CoversClass(RecordFailedEscalationHandler::class)]
 #[UsesClass(EscalationAgent::class)]
 #[UsesClass(EscalationPrompt::class)]
 #[UsesClass(CitedCodeNotShown::class)]
@@ -331,6 +350,132 @@ final class EscalateRecurringP1Test extends KernelTestCase
         self::assertLoggedError('critical', sprintf('Error thrown while handling message %1$s. Removing from transport after 2 retries. Error: "Handling "%1$s" failed: %2$s"', EscalateRecurringP1::class, $failure->getMessage()));
     }
 
+    public function testAQueuedEscalationCarriesTheRecordOfItsFailureAsItsFailureStamp(): void
+    {
+        $this->recurredOnASecondHead();
+        $message = $this->fixture->escalations->messages[0];
+
+        self::assertEquals(new RecordFailedEscalation($message->round, $message->finding, $message->key), $this->fixture->escalations->envelopes[0]->last(DispatchOnFailureStamp::class)?->getMessage());
+    }
+
+    public function testABusyVendorAccountIsWaitedOutWithAForcedRetryAndRecordsNoFailedEscalation(): void
+    {
+        $this->recurredOnASecondHead();
+
+        try {
+            $this->escalateQueued($this->throwing(VendorAccountBusy::at('main')));
+            self::fail('The busy account did not reach the queue.');
+        } catch (EscalationLimited $limited) {
+            self::assertSame([true, null], [$limited->forceRetry(), $limited->getRetryDelay()]);
+        }
+
+        self::assertSame([], $this->payloadsOf(LedgerEventKind::EscalationFailed));
+    }
+
+    public function testARateLimitedEscalationIsRetriedAfterTheProvidersResetWithAForcedRetry(): void
+    {
+        $this->recurredOnASecondHead();
+
+        try {
+            $this->escalateQueued($this->throwing(new ProviderRateLimited(30, new RuntimeException('limited'))));
+            self::fail('The rate limit did not reach the queue.');
+        } catch (EscalationLimited $limited) {
+            self::assertSame([true, 30000], [$limited->forceRetry(), $limited->getRetryDelay()]);
+        }
+    }
+
+    public function testATransientFailureAfterForcedRetriesIsStillRetriedAndRecordsNoFailedEscalation(): void
+    {
+        $this->recurredOnASecondHead();
+
+        $this->withStrongTier($this->throwing(new ProviderFailedTransiently(new RuntimeException('overloaded'))));
+
+        $failed = $this->failedDelivery($this->received(new RedeliveryStamp(2)));
+
+        self::assertSame([true, 1], [$failed->willRetry(), $failed->getEnvelope()->last(TransientEscalationFailures::class)?->count]);
+        self::assertEqualsWithDelta(1000, $this->retryDelay(), 100);
+        self::assertSame([], $this->payloadsOf(LedgerEventKind::EscalationFailed));
+    }
+
+    public function testABusyVendorAccountAfterTheTransientFailuresRanOutIsStillRetried(): void
+    {
+        $this->recurredOnASecondHead();
+
+        $this->withStrongTier($this->throwing(VendorAccountBusy::at('main')));
+
+        $failed = $this->failedDelivery($this->received(new RedeliveryStamp(2), new TransientEscalationFailures(2)));
+
+        self::assertSame([true, 2], [$failed->willRetry(), $failed->getEnvelope()->last(TransientEscalationFailures::class)?->count]);
+    }
+
+    public function testAVendorThatKeepsFailingTransientlyEndsWithOneFailedEscalationForTheRoundAndKey(): void
+    {
+        $second = $this->recurredOnASecondHead();
+        $failing = $this->throwing(new ProviderFailedTransiently(new RuntimeException('overloaded')));
+
+        $delays = $this->deliveredUntilParked($this->fixture->escalations->envelopes[0], $failing);
+
+        self::assertSame([3, 2], [count($failing->calls), count($delays)]);
+        self::assertEqualsWithDelta(1000, $delays[0], 100);
+        self::assertEqualsWithDelta(2000, $delays[1], 200);
+        self::assertSame([['round' => $second, 'finding' => 'F1', 'key' => $this->keyOf('F1'), 'reason' => RecordFailedEscalationHandler::PARKED]], $this->payloadsOf(LedgerEventKind::EscalationFailed));
+        self::assertLoggedError('critical', sprintf('Error thrown while handling message %1$s. Removing from transport after 2 retries. Error: "Handling "%1$s" failed: The provider failed the escalation review\'s call 3 times; the escalation is parked."', EscalateRecurringP1::class));
+        self::assertLoggedError('error', sprintf('The escalation review of finding F1 in round %s failed for good; no verdict was kept.', $second));
+    }
+
+    public function testAnEscalationQueuedBeforeTheFailureStampExistedStillRecordsItsFailureWhenParked(): void
+    {
+        $this->recurredOnASecondHead();
+        $unstamped = $this->fixture->escalations->envelopes[0]->withoutAll(DispatchOnFailureStamp::class);
+
+        $this->deliveredUntilParked($unstamped, $this->throwing(new ProviderFailedTransiently(new RuntimeException('overloaded'))));
+
+        self::assertCount(1, $this->payloadsOf(LedgerEventKind::EscalationFailed));
+        self::assertLoggedError('critical', sprintf('Error thrown while handling message %1$s. Removing from transport after 2 retries. Error: "Handling "%1$s" failed: The provider failed the escalation review\'s call 3 times; the escalation is parked."', EscalateRecurringP1::class));
+        self::assertLoggedError('error', sprintf('The escalation review of finding F1 in round %s failed for good; no verdict was kept.', $this->fixture->escalations->messages[0]->round));
+    }
+
+    public function testAnEscalationParkedAfterItsRetriesForAnyOtherErrorRecordsOneFailedEscalation(): void
+    {
+        $second = $this->recurredOnASecondHead();
+        $rejecting = $this->throwing(new ProviderRejectedTheKey(new RuntimeException('rejected')));
+
+        $this->deliveredUntilParked($this->fixture->escalations->envelopes[0], $rejecting);
+
+        self::assertSame([3, [RecordFailedEscalationHandler::PARKED]], [count($rejecting->calls), array_column($this->payloadsOf(LedgerEventKind::EscalationFailed), 'reason')]);
+        self::assertLoggedError('critical', sprintf('Error thrown while handling message %1$s. Removing from transport after 2 retries. Error: "Handling "%1$s" failed: %2$s"', EscalateRecurringP1::class, EscalationCallFailed::of($this->keyOf('F1'), new ProviderRejectedTheKey(new RuntimeException('rejected')))->getMessage()));
+        self::assertLoggedError('error', sprintf('The escalation review of finding F1 in round %s failed for good; no verdict was kept.', $second));
+    }
+
+    public function testARecordOfAFailedEscalationWritesNothingWhenTheRoundAndKeyAreSettled(): void
+    {
+        $this->recurredOnASecondHead();
+        $this->escalateQueued(new ScriptedEscalations(new EscalationVerdict(EscalationOutcome::Confirmed, 'The bus drops it.')));
+        $message = $this->fixture->escalations->messages[0];
+
+        $this->commands()->dispatch(new Envelope(new RecordFailedEscalation($message->round, $message->finding, $message->key), [new ReceivedStamp('async')]));
+
+        self::assertSame([[], 1], [$this->payloadsOf(LedgerEventKind::EscalationFailed), count($this->payloadsOf(LedgerEventKind::EscalationReviewed))]);
+    }
+
+    public function testARecordOfAFailedEscalationWhoseKeyIsHeldComesBackLater(): void
+    {
+        $this->recurredOnASecondHead();
+        $message = $this->fixture->escalations->messages[0];
+        $held = self::getContainer()->get(LockFactory::class)->createLock(EscalateRecurringP1Handler::lockNameOf($message->key));
+        $held->acquire();
+
+        try {
+            $this->commands()->dispatch(new Envelope(new RecordFailedEscalation($message->round, $message->finding, $message->key), [new ReceivedStamp('async')]));
+            self::fail('The held key did not send the record back.');
+        } catch (HandlerFailedException $failed) {
+            self::assertCount(1, $failed->getWrappedExceptions(EscalationBusy::class));
+            self::assertSame([], $this->payloadsOf(LedgerEventKind::EscalationFailed));
+        } finally {
+            $held->release();
+        }
+    }
+
     public function testTheLedgerEventsShowAConfirmedAndARejectedEscalationAndALaterRoundsReuse(): void
     {
         $this->judged($this->completedAt(self::HEAD_A, $this->keyedP1(), $this->otherP1()));
@@ -369,6 +514,89 @@ final class EscalateRecurringP1Test extends KernelTestCase
     private function escalateQueued(ScriptedEscalations $escalations): void
     {
         $this->fixture->escalate($this->fixture->escalations->messages[0], $escalations);
+    }
+
+    private function throwing(Throwable $failure): ScriptedEscalations
+    {
+        return new ScriptedEscalations(null, static function () use ($failure): never {
+            throw $failure;
+        });
+    }
+
+    // With the received stamp, because only a received envelope is handled at once instead of being sent to the async transport again.
+    private function received(StampInterface ...$stamps): Envelope
+    {
+        return $this->fixture->escalations->envelopes[0]->with(new ReceivedStamp('async'), ...$stamps);
+    }
+
+    // Through the application's bus, middleware and failure listeners, because they decide whether a worker retries or parks the message.
+    private function failedDelivery(Envelope $received): WorkerMessageFailedEvent
+    {
+        try {
+            $this->commands()->dispatch($received);
+        } catch (HandlerFailedException $failed) {
+            $event = new WorkerMessageFailedEvent($failed->getEnvelope(), 'async', $failed);
+            self::getContainer()->get('event_dispatcher')->dispatch($event);
+
+            return $event;
+        }
+
+        self::fail('The escalation did not fail.');
+    }
+
+    private function retryDelay(): ?int
+    {
+        return array_last($this->asyncQueue()->getSent())?->last(DelayStamp::class)?->getDelay();
+    }
+
+    // A worker's steps without its wait, because the in-memory transport holds a delayed retry back until its delay has passed; each retry is received again at once, then the queued record of the failure.
+    /**
+     * @return list<int>
+     */
+    private function deliveredUntilParked(Envelope $queued, EscalationReviews $reviews): array
+    {
+        $this->withStrongTier($reviews);
+        $delivery = $queued;
+        $delays = [];
+
+        while ($this->failedDelivery($delivery->with(new ReceivedStamp('async')))->willRetry()) {
+            $delivery = array_last($this->asyncQueue()->getSent());
+            self::assertInstanceOf(Envelope::class, $delivery);
+            $delays[] = $delivery->last(DelayStamp::class)?->getDelay() ?? 0;
+        }
+
+        foreach ($this->asyncQueue()->getSent() as $sent) {
+            if ($sent->getMessage() instanceof RecordFailedEscalation) {
+                $this->commands()->dispatch($sent->with(new ReceivedStamp('async')));
+            }
+        }
+
+        return $delays;
+    }
+
+    private function commands(): MessageBusInterface
+    {
+        $bus = self::getContainer()->get('command.bus');
+        self::assertInstanceOf(MessageBusInterface::class, $bus);
+
+        return $bus;
+    }
+
+    private function asyncQueue(): InMemoryTransport
+    {
+        $queue = self::getContainer()->get('messenger.transport.async');
+        self::assertInstanceOf(InMemoryTransport::class, $queue);
+
+        return $queue;
+    }
+
+    // The async queue emptied too, because the rounds the fixture started queued their judgings there.
+    private function withStrongTier(EscalationReviews $reviews): void
+    {
+        $container = self::getContainer();
+        $container->set(Vendor::class, new ScriptedVendor());
+        $container->set(EscalationReviews::class, $reviews);
+        $this->asyncQueue()->reset();
     }
 
     private function completedAt(string $head, Finding ...$findings): string
