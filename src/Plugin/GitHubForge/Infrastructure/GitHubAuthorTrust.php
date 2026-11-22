@@ -7,7 +7,6 @@ namespace Intakt\Plugin\GitHubForge\Infrastructure;
 use Intakt\Plugin\Forge\Contract\AuthorTrust;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\GitHubForge\Contract\TrustNotChecked;
-use Intakt\Plugin\GitHubForge\Domain\SteeringTrust;
 use NoDiscard;
 use Psr\Log\LoggerInterface;
 use Throwable;
@@ -27,7 +26,7 @@ final readonly class GitHubAuthorTrust implements AuthorTrust
     public function isAuthorTrusted(ChangeId $change): bool
     {
         try {
-            return $this->trustOfAuthor(PullRequestAddress::of($change))->steers();
+            return $this->trustOfAuthor(PullRequestAddress::of($change));
             // Boundary: logs any failure and counts the author as untrusted, because a check that cannot answer must never let a head run.
         } catch (Throwable $unanswered) {
             $this->logger->warning('The pull request author counts as untrusted, because the trust check could not answer.', ['change' => $change->value, 'exception' => $unanswered]);
@@ -36,16 +35,44 @@ final readonly class GitHubAuthorTrust implements AuthorTrust
         }
     }
 
-    private function trustOfAuthor(PullRequestAddress $pull): SteeringTrust
+    private function trustOfAuthor(PullRequestAddress $pull): bool
     {
-        return $this->trust->check($pull->owner.'/'.$pull->repository, $this->authorOf($pull));
+        $answer = $this->github->ofInstallation($pull->pullRequestPath(), $this->tokens->current()->value);
+        $login = $this->authorOf($answer);
+        $fromTheBaseRepository = $this->isFromTheBaseRepository($answer, $pull);
+
+        return $fromTheBaseRepository && $this->trust->check($pull->owner.'/'.$pull->repository, $login)->steers();
     }
 
-    private function authorOf(PullRequestAddress $pull): string
+    /**
+     * @param array<mixed> $answer
+     */
+    private function authorOf(array $answer): string
     {
-        $user = $this->github->ofInstallation($pull->pullRequestPath(), $this->tokens->current()->value)['user'] ?? null;
+        $user = $answer['user'] ?? null;
         $login = is_array($user) ? ($user['login'] ?? null) : null;
 
         return is_string($login) ? $login : throw TrustNotChecked::becauseTheAnswerIsInvalid();
+    }
+
+    /**
+     * @param array<mixed> $answer
+     */
+    private function isFromTheBaseRepository(array $answer, PullRequestAddress $pull): bool
+    {
+        // A fork's owner can push new heads under the author's name, so only a head in the base repository counts; a deleted fork has no repository and counts as foreign.
+        $head = $answer['head'] ?? null;
+
+        if (!is_array($head) || !array_key_exists('repo', $head)) {
+            throw TrustNotChecked::becauseTheAnswerIsInvalid();
+        }
+
+        if (null === $head['repo']) {
+            return false;
+        }
+
+        $name = is_array($head['repo']) ? ($head['repo']['full_name'] ?? null) : null;
+
+        return is_string($name) ? 0 === strcasecmp($name, $pull->owner.'/'.$pull->repository) : throw TrustNotChecked::becauseTheAnswerIsInvalid();
     }
 }

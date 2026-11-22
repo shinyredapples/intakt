@@ -51,4 +51,12 @@ final class RecordedIssueReads implements IssueReads
 
         return $this->next ?? throw new ForgeReadFailed('GitHub answered 502 to a read.');
     }
+
+    // The issue as it was last scripted, because GitHub answers a single read with what a listing would show.
+    public function readOpen(string $project, int $number): ?ListedIssue
+    {
+        $issue = $this->lastListed[$number] ?? null;
+
+        return null === $issue || $issue->isPullRequest ? null : $issue;
+    }
 }

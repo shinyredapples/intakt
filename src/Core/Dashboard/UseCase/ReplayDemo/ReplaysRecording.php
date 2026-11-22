@@ -7,6 +7,7 @@ namespace Intakt\Core\Dashboard\UseCase\ReplayDemo;
 use DateTimeImmutable;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Contract\LiveUpdates;
+use Intakt\Core\Dashboard\Infrastructure\ReplayedJudgedState;
 use Intakt\Core\Dashboard\Infrastructure\ReplayedStart;
 use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Dashboard\Infrastructure\TourCaptionUpdates;
@@ -35,6 +36,7 @@ final readonly class ReplaysRecording
         private LockFactory $locks,
         private ReplayMarks $marks,
         private TourCaptionUpdates $captions,
+        private ReplayedJudgedState $judged,
     ) {
     }
 
@@ -114,18 +116,19 @@ final readonly class ReplaysRecording
         $steps = $this->timelineOf($recording);
         $start = $this->clock->now();
         $number = 0;
+        $judgedAfter = new JudgedRoundEnds()->of($steps);
 
-        foreach ($steps as $step) {
+        foreach ($steps as $index => $step) {
             $due = $this->secondsBetween($this->momentOf($steps[0]), $this->momentOf($step)) / $factor;
             $this->clock->sleep(max(0.0, $due - $this->secondsBetween($start, $this->clock->now())));
 
             if ($step instanceof CapturedUpdate) {
                 $this->updates->publish(new LiveEvent($step->topic, $step->data));
-
-                continue;
+            } else {
+                $this->append(new LedgerEvent($step->kind, $this->asReplayed($step, $recording->project, $factor)), $recording, $number++);
             }
 
-            $this->append(new LedgerEvent($step->kind, $this->asReplayed($step, $recording->project, $factor)), $recording, $number++);
+            $this->judged->publishEach($judgedAfter[$index] ?? []);
         }
     }
 

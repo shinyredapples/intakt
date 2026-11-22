@@ -43,6 +43,9 @@ final class RecordedTrust
     public const string PULL_BY_STRANGER = 'https://github.com/acme/widget/pull/6';
     public const string PULL_WITHOUT_AUTHOR = 'https://github.com/acme/widget/pull/7';
     public const string PULL_WITH_EMPTY_AUTHOR = 'https://github.com/acme/widget/pull/8';
+    public const string PULL_FROM_FORK = 'https://github.com/acme/widget/pull/9';
+    public const string PULL_FROM_DELETED_FORK = 'https://github.com/acme/widget/pull/10';
+    public const string PULL_WITHOUT_HEAD_REPO = 'https://github.com/acme/widget/pull/11';
     public const string PULL_UNKNOWN = 'https://github.com/acme/widget/pull/99';
 
     private const array PULLS = [
@@ -54,6 +57,9 @@ final class RecordedTrust
         6 => 'pull_by_stranger.json',
         7 => 'pull_without_author.json',
         8 => 'pull_with_empty_author.json',
+        9 => 'pull_from_fork.json',
+        10 => 'pull_from_deleted_fork.json',
+        11 => 'pull_without_head_repo.json',
     ];
 
     /** @var list<string> */

@@ -34,7 +34,7 @@ interface ProviderDescriptor
     // The provider the project tiers name this provider's models under, because the check model defaults to that provider's light tier.
     public function tierProvider(): Provider;
 
-    // Null takes the light tier's model, so no model id sits in PHP and a retired model is replaced in the owner's config.
+    // Null takes the light tier's model (on a fresh install the sample project's), so no model id sits in PHP and a retired model is replaced in config.
     /**
      * @return non-empty-string|null
      */

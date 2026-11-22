@@ -1,5 +1,18 @@
 # Requirements and external commands
 
+## In short
+
+Intakt and its checks call programs outside PHP, such as `git`, `composer`, `gitleaks` and the `claude` and `codex` CLIs. This page lists each one, who calls it, what for, and whether you need it. To run Intakt you need only Docker or Podman, because the container image ships the rest. To work on Intakt and run `bin/check`, you need more tools on your machine, and `bin/check` names any that are missing before it runs a gate.
+
+Worth knowing:
+
+- The full `bin/check` needs Linux tools such as `unshare` and `setsid`; on another system, run it in the development container.
+- Calls through Symfony Process use an argument list, never a shell string, and always have a time limit.
+- Every `git` call is hardened, so the repository's own config and attributes cannot run code.
+- A change that adds a new external command adds it to this page in the same change.
+
+The rest of this page is the detailed reference.
+
 Every program outside PHP's own code that Intakt or its checks call, who calls it, and whether you need it. A change that adds a new external command adds it here in the same change.
 
 ## To run Intakt

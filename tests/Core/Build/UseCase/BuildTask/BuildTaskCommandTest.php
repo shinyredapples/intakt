@@ -65,7 +65,6 @@ use Intakt\Plugin\Forge\Contract\ChangeText;
 use Intakt\Plugin\Forge\Contract\JobCredentials;
 use Intakt\Plugin\Forge\Contract\OpenedChange;
 use Intakt\Plugin\GitHubForge\Contract\ConfiguredRepositories;
-use Intakt\Plugin\GitHubForge\Contract\IssueListing;
 use Intakt\Plugin\GitHubForge\Contract\IssueReads;
 use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
@@ -110,7 +109,6 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(RefusedHandBack::class)]
 #[UsesClass(HandBackRefusal::class)]
 #[UsesClass(JobCredentials::class)]
-#[UsesClass(IssueListing::class)]
 #[UsesClass(Issues::class)]
 #[UsesClass(ScriptedJobRunner::class)]
 #[UsesClass(RunBuildJob::class)]
@@ -371,7 +369,7 @@ final class BuildTaskCommandTest extends TestCase
     private function listing(ListedIssue $task): IssueReads
     {
         $reads = self::createStub(IssueReads::class);
-        $reads->method('listOpen')->willReturn(IssueListing::listed([$task], null));
+        $reads->method('readOpen')->willReturn($task);
 
         return $reads;
     }
