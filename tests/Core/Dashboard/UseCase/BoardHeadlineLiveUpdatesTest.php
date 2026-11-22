@@ -168,8 +168,7 @@ final class BoardHeadlineLiveUpdatesTest extends DashboardPageTestCase
         self::assertCount(0, $this->browser->request('GET', '/lanes')->filter('#'.$target));
     }
 
-    // Morphed with the card the page shows, so the pinned Turbo keeps that card as the same node and a focused card link keeps the focus;
-    // whether Turbo keeps a morphed node is left to the browser check, as for the first-day links.
+    // Morphed with the card the page shows, because then a focused card link keeps the focus, which only the browser check shows the pinned Turbo does.
     public function testAPushWhileAReviewStaysInProgressMorphsTheWorkingNowCardThePageShows(): void
     {
         $this->pushedHeadlineAfterAReviewerStarted();
