@@ -9,6 +9,10 @@ final readonly class HiddenBlockOpeners
 {
     private const string BLOCK_OPENER = '/^( {0,3})(?:<!--|`{3,}|~{3,})/';
 
+    private const string EMPTY_MARKER = '/^ *(?:[-*+]|\d{1,9}[.)]) *$/';
+
+    private const string MARKER_WITH_CONTENT = '/^ *(?:[-*+]|\d{1,9}[.)]) +\S/';
+
     /**
      * @return list<string>
      */
@@ -16,12 +20,17 @@ final readonly class HiddenBlockOpeners
     {
         // Split like the prose reader, which reads a CR or CRLF as a line break too, so the raw and the visible lines stay aligned.
         $task = str_replace(["\r\n", "\r"], "\n", $task);
+        // A byte order mark is no text, so a task that starts with one still starts with its heading.
+        $task = str_starts_with($task, "\u{FEFF}") ? substr($task, 3) : $task;
         $raw = array_map(MarkdownText::withSpacesForTabs(...), explode("\n", $task));
         $visible = array_map(MarkdownText::withSpacesForTabs(...), explode("\n", MarkdownText::visibleProse($task)));
 
         foreach ($visible as $index => $line) {
             if ('' === trim($line) && 1 === preg_match(self::BLOCK_OPENER, $raw[$index] ?? '', $match)) {
                 $visible[$index] = $match[1].'***';
+            } elseif (1 === preg_match(self::EMPTY_MARKER, $line) && 1 === preg_match(self::MARKER_WITH_CONTENT, $raw[$index] ?? '')) {
+                // A comment or fence on the marker line is the item's content, so the item is not empty and interrupts a paragraph like any other (https://spec.commonmark.org/0.31.2/#list-items); a word stands in for it.
+                $visible[$index] = rtrim($line).' hidden';
             }
         }
 

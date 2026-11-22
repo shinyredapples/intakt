@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\HandBack\Domain;
 use Intakt\Core\HandBack\Domain\CodeSpans;
 use Intakt\Core\HandBack\Domain\EvidenceItems;
 use Intakt\Core\HandBack\Domain\FencedBlock;
+use Intakt\Core\HandBack\Domain\HiddenBlockOpeners;
 use Intakt\Core\HandBack\Domain\MarkdownPart;
 use Intakt\Core\HandBack\Domain\MarkdownText;
 use Intakt\Core\HandBack\Domain\OpenListItems;
@@ -20,6 +21,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(MarkdownPart::class)]
 #[UsesClass(CodeSpans::class)]
 #[UsesClass(FencedBlock::class)]
+#[UsesClass(HiddenBlockOpeners::class)]
 #[UsesClass(OpenListItems::class)]
 #[UsesClass(ParagraphEnd::class)]
 final class EvidenceItemsTest extends TestCase
@@ -296,5 +298,17 @@ final class EvidenceItemsTest extends TestCase
     {
         self::assertSame(1, EvidenceItems::countIn("- Example\r\n<!-- note -->\r\n  ## Evidence\r\n- Show the result."));
         self::assertSame(1, EvidenceItems::countIn("- Example\r<!-- note -->\r  ## Evidence\r- Show the result."));
+    }
+
+    public function testACommentOnTheMarkerLineMakesTheItemNonEmptySoItInterruptsTheParagraphAbove(): void
+    {
+        self::assertSame(1, EvidenceItems::countIn("## Evidence\nIntroductory paragraph.\n- <!-- note -->\n  Show the result."));
+        self::assertSame(2, EvidenceItems::countIn("## Evidence\nIntroductory paragraph.\n- <!-- note -->\n  Show the result.\n- E2. Another."));
+        self::assertSame(0, EvidenceItems::countIn("## Evidence\nIntroductory paragraph.\n-\n  Not an item."));
+    }
+
+    public function testAByteOrderMarkBeforeTheHeadingIsIgnored(): void
+    {
+        self::assertSame(1, EvidenceItems::countIn("\u{FEFF}## Evidence\n- E1. Show the result.\n"));
     }
 }

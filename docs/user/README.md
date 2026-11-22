@@ -660,7 +660,7 @@ Before the job starts, Intakt compares each file the change touches with the ver
 
 It prints any lost files (`lost docs/guide.md: 120 lines to 1`), the last 40 lines of the check's output, and `passed` (exit 0) or `failed:` with the reason and, for a failed command, its exit code (exit 1). A refused bundle prints `refused:` and the reason. Without Docker it fails with `The Docker Engine is not reachable: there is no socket at /var/run/docker.sock.` Nothing runs this check on its own yet: the push and the build lane will.
 
-A build's pull request text has its own check: it must name every Evidence item of the task, and its body must stay at or under 4000 characters, so reviewers can read it quickly.
+A build's pull request text has its own check: it must name every Evidence item of the task, and its body must stay at or under 4000 characters, so reviewers can read it quickly. The first line is the title and is left out: a reference there does not count, and the cap counts only the body below it.
 
 ```
 php bin/console intakt:check:pull-request-text task.md PR.md
