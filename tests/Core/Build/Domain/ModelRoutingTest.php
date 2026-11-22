@@ -145,11 +145,11 @@ final class ModelRoutingTest extends TestCase
         self::assertSame(TierReason::SensitivePath, $choice->reason);
     }
 
-    public function testAConfirmedEscalationKeepsTheLabelReasonWhenTheLabelAlreadyNamesStrong(): void
+    public function testAConfirmedEscalationGivesItsReasonEvenWhenTheLabelAlreadyNamesStrong(): void
     {
         $choice = $this->choose(new BuildFacts(Tier::Strong, [], null, EscalationOutcome::Confirmed));
 
-        self::assertSame(TierReason::Label, $choice->reason);
+        self::assertSame([Tier::Strong, TierReason::ConfirmedEscalation], [$choice->tier, $choice->reason]);
     }
 
     public function testFactsAfterAnEscalationKeepTheirLabelPathsAndSetback(): void

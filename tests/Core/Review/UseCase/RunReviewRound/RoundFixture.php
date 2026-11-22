@@ -290,9 +290,9 @@ final readonly class RoundFixture
         new EscalateRecurringP1Handler($rounds, new EscalationRequests($this->storedFindingsOn($this->entities)), $this->keptVerdicts(), $agent, $this->roundLedger($this->ledger), $this->escalationsOfChange(), $locks ?? $this->locks)($message);
     }
 
-    public function escalationsOfChange(): EscalationsOfChange
+    public function escalationsOfChange(?Ledger $ledger = null): EscalationsOfChange
     {
-        return new EscalationsOfChange($this->rounds($this->entities), $this->ledger, $this->ledgerPayloads());
+        return new EscalationsOfChange($this->rounds($this->entities), $ledger ?? $this->ledger, $this->ledgerPayloads());
     }
 
     // The application's queue, because the round's workflow, taken from the container, queues the judging through the application's bus.

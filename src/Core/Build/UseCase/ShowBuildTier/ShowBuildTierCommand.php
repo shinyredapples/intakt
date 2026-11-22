@@ -9,6 +9,7 @@ use Intakt\Core\Build\Contract\BuildRouting;
 use Intakt\Core\Build\Contract\Setback;
 use Intakt\Core\Platform\Contract\ReportableFailure;
 use Intakt\Core\Review\Contract\ChangeEscalations;
+use Intakt\Core\Review\Contract\EscalationOutcome;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\MapInput;
 use Symfony\Component\Console\Command\Command;
@@ -34,7 +35,7 @@ final readonly class ShowBuildTierCommand
         }
 
         try {
-            $choice = $this->routing->tierFor($input->project, BuildFacts::fromLabels($input->label, $input->path, $setback)->afterEscalation(null === $input->change ? null : $this->escalations->outcomeAtLatestHead($input->project, $input->change)));
+            $choice = $this->routing->tierFor($input->project, BuildFacts::fromLabels($input->label, $input->path, $setback)->afterEscalation($this->escalationOf($input)));
         } catch (ReportableFailure $failure) {
             $io->error($failure->getMessage());
 
@@ -44,5 +45,10 @@ final readonly class ShowBuildTierCommand
         $io->writeln(sprintf('tier %s, reason %s', $choice->tier->value, $choice->reason->value));
 
         return Command::SUCCESS;
+    }
+
+    private function escalationOf(ShowBuildTierInput $input): ?EscalationOutcome
+    {
+        return null === $input->change ? null : $this->escalations->outcomeAtLatestHead($input->project, $input->change);
     }
 }

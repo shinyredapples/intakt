@@ -10,6 +10,7 @@ use Intakt\Core\Build\Contract\BuildRoutingNotConfigured;
 use Intakt\Core\Build\Contract\Setback;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuilderNotOnClaudeCode;
 use Intakt\Core\Review\Contract\ChangeEscalations;
+use Intakt\Core\Review\Contract\EscalationOutcome;
 use Intakt\Core\Review\Contract\EscalationStillPending;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\MapInput;
@@ -46,7 +47,7 @@ final readonly class ChooseBuildModelCommand
         try {
             $chosen = $this->chooseBuildModel->chooseFor(
                 new BuildAttempt($input->project, $input->task, $input->attempt),
-                BuildFacts::fromLabels($input->label, $input->path, $setback)->afterEscalation(null === $input->change ? null : $this->escalations->outcomeAtLatestHead($input->project, $input->change)),
+                BuildFacts::fromLabels($input->label, $input->path, $setback)->afterEscalation($this->escalationOf($input)),
             );
         } catch (BuildRoutingNotConfigured|TierResolutionFailure|BuilderNotOnClaudeCode|ModelChoiceNotRecorded|EscalationStillPending $failure) {
             $io->error($failure->getMessage());
@@ -57,5 +58,10 @@ final readonly class ChooseBuildModelCommand
         $io->writeln(sprintf('tier %s, reason %s, provider %s, model %s', $chosen->choice->tier->value, $chosen->choice->reason->value, $chosen->model->provider->value, $chosen->model->model));
 
         return Command::SUCCESS;
+    }
+
+    private function escalationOf(ChooseBuildModelInput $input): ?EscalationOutcome
+    {
+        return null === $input->change ? null : $this->escalations->outcomeAtLatestHead($input->project, $input->change);
     }
 }

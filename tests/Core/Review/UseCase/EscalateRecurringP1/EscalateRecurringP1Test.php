@@ -8,6 +8,7 @@ use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\EscalationFailed;
+use Doctrine\DBAL\Platforms\AbstractMySQLPlatform;
 use Intakt\Core\Review\Contract\EscalationOutcome;
 use Intakt\Core\Review\Contract\EscalationRequest;
 use Intakt\Core\Review\Contract\EscalationReviewed;
@@ -115,6 +116,8 @@ final class EscalateRecurringP1Test extends KernelTestCase
     private const string HEAD_A = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
     private const string HEAD_B = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
     private const string HEAD_C = 'cccccccccccccccccccccccccccccccccccccccc';
+    private const string PULL = 'https://github.com/acme/widgets/pull/7';
+    private const string FORGE_SPELLING = 'https://github.com/Acme/Widgets/pull/7';
     // Changes RecordingBus.php and ScriptedVendor.php, files of the fixture's checkout, so a finding naming either has a key and its code to show.
     private const string DIFF = RoundFixture::DIFF_OF_RECORDING_BUS."diff --git a/ScriptedVendor.php b/ScriptedVendor.php\n@@ -5 +5 @@\n-old\n+new\n";
 
@@ -555,6 +558,88 @@ final class EscalateRecurringP1Test extends KernelTestCase
         $this->judged($this->completedAt(self::HEAD_A, $this->keyedP1()));
 
         self::assertSame([null, null], [$this->fixture->escalationsOfChange()->outcomeAtLatestHead('alpha', self::CHANGE), $this->fixture->escalationsOfChange()->outcomeAtLatestHead('alpha', 'another-change')]);
+    }
+
+    public function testARoundOpenedOnANewerHeadWhileTheLedgerIsReadIsNotAnsweredWithTheOldHeadsConfirmation(): void
+    {
+        $this->recurredOnASecondHead();
+        $this->escalateQueued(new ScriptedEscalations(new EscalationVerdict(EscalationOutcome::Confirmed, 'The bus drops it.')));
+
+        $ledger = new BeforeEachReadMentioning($this->fixture->ledger(), function (int $read): void {
+            if (1 === $read) {
+                $this->fixture->startAtHead(self::CHANGE, self::HEAD_C);
+            }
+        });
+
+        self::assertNull($this->fixture->escalationsOfChange($ledger)->outcomeAtLatestHead('alpha', self::CHANGE));
+    }
+
+    public function testAChangeThatGetsANewHeadAtEveryReadIsStillPendingAfterThreeReads(): void
+    {
+        $this->recurredOnASecondHead();
+        $this->escalateQueued(new ScriptedEscalations(new EscalationVerdict(EscalationOutcome::Confirmed, 'The bus drops it.')));
+
+        $ledger = new BeforeEachReadMentioning($this->fixture->ledger(), function (int $read): void {
+            $this->fixture->startAtHead(self::CHANGE, str_repeat((string) $read, 40));
+        });
+
+        $this->expectException(EscalationStillPending::class);
+
+        $this->fixture->escalationsOfChange($ledger)->outcomeAtLatestHead('alpha', self::CHANGE);
+    }
+
+    public function testAChangeThatGetsANewHeadAtTwoReadsIsAnsweredAtTheThird(): void
+    {
+        $this->recurredOnASecondHead();
+        $this->escalateQueued(new ScriptedEscalations(new EscalationVerdict(EscalationOutcome::Confirmed, 'The bus drops it.')));
+
+        $ledger = new BeforeEachReadMentioning($this->fixture->ledger(), function (int $read): void {
+            if ($read <= 2) {
+                $this->fixture->startAtHead(self::CHANGE, str_repeat((string) $read, 40));
+            }
+        });
+
+        self::assertNull($this->fixture->escalationsOfChange($ledger)->outcomeAtLatestHead('alpha', self::CHANGE));
+    }
+
+    public function testAChangeNamedInTheForgesSpellingReadsTheConfirmationOfItsCanonicalRounds(): void
+    {
+        $this->confirmedUnder(self::PULL);
+
+        self::assertSame(EscalationOutcome::Confirmed, $this->fixture->escalationsOfChange()->outcomeAtLatestHead('alpha', self::FORGE_SPELLING));
+    }
+
+    public function testAConfirmationOfRoundsLeftUnderAnOldSpellingIsReadForTheCanonicalAddress(): void
+    {
+        $this->confirmedUnder(self::FORGE_SPELLING);
+
+        self::assertSame(EscalationOutcome::Confirmed, $this->fixture->escalationsOfChange()->outcomeAtLatestHead('alpha', self::PULL));
+    }
+
+    public function testANewerCanonicalRoundOnAnotherHeadIsTheLatestBesideRoundsLeftUnderAnOldSpelling(): void
+    {
+        $this->confirmedUnder(self::FORGE_SPELLING);
+
+        $this->fixture->startAtHead(self::PULL, self::HEAD_C);
+
+        self::assertNull($this->fixture->escalationsOfChange()->outcomeAtLatestHead('alpha', self::PULL));
+    }
+
+    // Moved to the address after the confirmation, as an older install stored it and migration Version20261122100000 left an old spelling apart.
+    private function confirmedUnder(string $address): void
+    {
+        if ($this->fixture->entities->getConnection()->getDatabasePlatform() instanceof AbstractMySQLPlatform) {
+            self::markTestSkipped('MySQL and MariaDB compare the address without letter case, so an old spelling that differs only in letter case shares the row of the canonical one there.');
+        }
+
+        $this->recurredOnASecondHead();
+        $this->escalateQueued(new ScriptedEscalations(new EscalationVerdict(EscalationOutcome::Confirmed, 'The bus drops it.')));
+
+        foreach (['change_findings', 'review_round'] as $table) {
+            $this->fixture->entities->getConnection()->executeStatement(sprintf('UPDATE %s SET change_ref = ? WHERE change_ref = ?', $table), [$address, self::CHANGE]);
+        }
+
+        $this->fixture->entities->clear();
     }
 
     /**

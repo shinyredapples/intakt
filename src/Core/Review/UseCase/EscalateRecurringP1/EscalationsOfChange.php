@@ -36,20 +36,30 @@ final readonly class EscalationsOfChange implements ChangeEscalations
     ) {
     }
 
+    private const int READS = 3;
+
     #[Override]
     public function outcomeAtLatestHead(string $project, string $change): ?EscalationOutcome
     {
-        $latest = $this->rounds->latestOfChange($project, $change);
+        $rounds = $this->roundsAtTheLatestHead($project, $change);
 
-        if (!$latest instanceof ReviewRound) {
-            return null;
+        // Read again after the ledger, because a round opened on a newer head in between makes a late verdict of the old head no longer the latest head's, and a change that keeps moving has no settled outcome yet.
+        for ($read = 1; $read <= self::READS; ++$read) {
+            if ([] === $rounds) {
+                return null;
+            }
+
+            $events = $this->eventsOf($rounds);
+            $reread = $this->roundsAtTheLatestHead($project, $change);
+
+            if ($reread === $rounds) {
+                return $this->outcomeIn($events, $change);
+            }
+
+            $rounds = $reread;
         }
 
-        $events = $this->eventsOf($this->roundsAtTheHeadOf($latest));
-        $this->refuseWhilePending($events, $change);
-        $outcomes = array_map(static fn (EscalationVerdictKept|EscalationVerdictReused $escalation): EscalationOutcome => $escalation->outcome, $this->verdictsIn($events));
-
-        return in_array(EscalationOutcome::Confirmed, $outcomes, true) ? EscalationOutcome::Confirmed : array_first($outcomes);
+        throw EscalationStillPending::of($change);
     }
 
     // What the ledger holds for the key in that round, so a redelivered or busy message neither asks a model again nor records its outcome twice.
@@ -64,16 +74,40 @@ final readonly class EscalationsOfChange implements ChangeEscalations
         return null;
     }
 
-    // Every round of the change on the latest round's head, because a rejection's re-review is a newer round on the same head and must not hide a confirmation of the round before it.
+    /**
+     * @param list<RecurringP1Found|EscalationVerdictKept|EscalationVerdictReused|EscalationReviewFailed> $events
+     */
+    private function outcomeIn(array $events, string $change): ?EscalationOutcome
+    {
+        $this->refuseWhilePending($events, $change);
+        $outcomes = array_map(static fn (EscalationVerdictKept|EscalationVerdictReused $escalation): EscalationOutcome => $escalation->outcome, $this->verdictsIn($events));
+
+        return in_array(EscalationOutcome::Confirmed, $outcomes, true) ? EscalationOutcome::Confirmed : array_first($outcomes);
+    }
+
     /**
      * @return array<string, true>
      */
-    private function roundsAtTheHeadOf(ReviewRound $latest): array
+    private function roundsAtTheLatestHead(string $project, string $change): array
+    {
+        $ofChange = $this->rounds->ofEverySpelling($project, $change);
+        $latest = array_first($ofChange);
+
+        return $latest instanceof ReviewRound ? $this->roundsAtTheHeadOf($latest, $ofChange) : [];
+    }
+
+    // Every round of the change on the latest round's head, in every spelling, because a rejection's re-review is a newer round on the same head and must not hide a confirmation of the round before it.
+    /**
+     * @param list<ReviewRound> $ofChange
+     *
+     * @return array<string, true>
+     */
+    private function roundsAtTheHeadOf(ReviewRound $latest, array $ofChange): array
     {
         $head = $this->headOf($latest);
         $rounds = [$latest->id()->toRfc4122() => true];
 
-        foreach ($this->rounds->ofChange($latest) as $round) {
+        foreach ($ofChange as $round) {
             if (null !== $head && $this->headOf($round) === $head) {
                 $rounds[$round->id()->toRfc4122()] = true;
             }

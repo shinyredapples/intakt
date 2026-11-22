@@ -21,8 +21,8 @@ final readonly class ModelRouting
             return new TierChoice(Tier::Strong, TierReason::SensitivePath);
         }
 
-        // Not one of the setbacks escalate_on lists, because the escalation review's confirmation is the design's rule for a recurring P1, never a project's choice; a label that already names strong keeps its reason.
-        if (EscalationOutcome::Confirmed === $facts->escalation && Tier::Strong !== $facts->labelledTier) {
+        // Not one of the setbacks escalate_on lists, because the escalation review's confirmation is the design's rule for a recurring P1, never a project's choice; only a sensitive path outranks it, so a strong label does not hide why the build is strong.
+        if (EscalationOutcome::Confirmed === $facts->escalation) {
             return new TierChoice(Tier::Strong, TierReason::ConfirmedEscalation);
         }
 
