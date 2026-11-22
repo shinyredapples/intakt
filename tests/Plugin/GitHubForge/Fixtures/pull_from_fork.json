@@ -1,0 +1,1 @@
+{"url":"https://api.github.com/repos/acme/widget/pulls/1","html_url":"https://github.com/acme/widget/pull/1","number":9,"state":"open","user":{"login":"alice","id":101,"type":"User"},"head":{"ref":"feature/one","sha":"1111111111111111111111111111111111111111","repo":{"full_name":"mallory/widget"}},"base":{"ref":"main","sha":"4444444444444444444444444444444444444444"}}

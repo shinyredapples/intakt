@@ -127,6 +127,24 @@ final class GitHubAuthorTrustTest extends TestCase
         self::assertSame([], array_filter($this->github->requested, static fn (string $url): bool => str_contains($url, '/collaborators/')));
     }
 
+    public function testAWritersPullRequestFromAForkIsNotTrusted(): void
+    {
+        self::assertFalse($this->isTrusted(RecordedTrust::PULL_FROM_FORK));
+        self::assertSame([], array_filter($this->github->requested, static fn (string $url): bool => str_contains($url, '/collaborators/')));
+    }
+
+    public function testAWritersPullRequestWhoseForkWasDeletedIsNotTrusted(): void
+    {
+        self::assertFalse($this->isTrusted(RecordedTrust::PULL_FROM_DELETED_FORK));
+        self::assertSame([], $this->logger->lines);
+    }
+
+    public function testAPullRequestAnswerWithoutAHeadRepositoryIsNotTrustedAndLogged(): void
+    {
+        self::assertFalse($this->isTrusted(RecordedTrust::PULL_WITHOUT_HEAD_REPO));
+        self::assertCount(1, $this->logger->lines);
+    }
+
     public function testAFailedTokenExchangeLeavesTheAuthorUntrusted(): void
     {
         $this->github = new RecordedTrust(401);
