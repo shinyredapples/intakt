@@ -226,6 +226,11 @@ final class DemoTourTest extends TestCase
         }
     }
 
+    public function testTheLastStageSaysTheRoundIsCheckedInTheReviewPagesPlainWords(): void
+    {
+        self::assertSame('Checked: To fix lists what still needs changing.', TourStage::RoundEnds->sentence());
+    }
+
     public function testEveryStageSentenceIsAtMostNineWords(): void
     {
         foreach (TourStage::cases() as $stage) {

@@ -32,6 +32,20 @@ final class GlossaryTermTest extends TestCase
         self::assertSame([], array_map(static fn (GlossaryTerm $term): string => $term->value, array_values($missing)));
     }
 
+    public function testTheToFixTermKeepsTheTechnicalNameActListInOneSentence(): void
+    {
+        self::assertSame('fix', GlossaryTerm::ToFix->value);
+        self::assertStringStartsWith('The act list: ', GlossaryTerm::ToFix->explanation());
+        self::assertSame(1, substr_count(GlossaryTerm::ToFix->explanation(), '.'));
+    }
+
+    public function testTheCheckedTermKeepsTheTechnicalNameJudgedInOneSentence(): void
+    {
+        self::assertSame('checked', GlossaryTerm::Checked->value);
+        self::assertStringStartsWith('Judged: ', GlossaryTerm::Checked->explanation());
+        self::assertSame(1, substr_count(GlossaryTerm::Checked->explanation(), '.'));
+    }
+
     /**
      * @return list<string>
      */

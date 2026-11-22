@@ -117,7 +117,7 @@ final class MercureHubTest extends TestCase
 
         $this->publishThree();
 
-        self::assertSame(['1 of 2 reviewers finished.', '2 of 2 reviewers finished.', 'Judged.'], $this->roundStatesIn($this->read($stream, 3)));
+        self::assertSame(['1 of 2 reviewers finished.', '2 of 2 reviewers finished.', 'Checked.'], $this->roundStatesIn($this->read($stream, 3)));
     }
 
     public function testAClientThatReconnectsWithLastEventIdReceivesTheEventsItMissed(): void
@@ -131,7 +131,7 @@ final class MercureHubTest extends TestCase
         $this->updates->roundChanged(Uuid::fromString($this->round), new RoundProgress(2, 2, true));
         $second = $this->subscribe($seen[0]['id']);
 
-        self::assertSame(['2 of 2 reviewers finished.', 'Judged.'], $this->roundStatesIn($this->read($second, 2)));
+        self::assertSame(['2 of 2 reviewers finished.', 'Checked.'], $this->roundStatesIn($this->read($second, 2)));
     }
 
     // The dashboard's connection controller reconnects with a new EventSource, which cannot set the Last-Event-ID header.
@@ -151,7 +151,7 @@ final class MercureHubTest extends TestCase
             'timeout' => self::SECONDS_TO_WAIT,
         ]);
 
-        self::assertSame(['2 of 2 reviewers finished.', 'Judged.'], $this->roundStatesIn($this->read($second, 2)));
+        self::assertSame(['2 of 2 reviewers finished.', 'Checked.'], $this->roundStatesIn($this->read($second, 2)));
     }
 
     public function testAClientWithoutASubscriberTokenReceivesNothing(): void

@@ -15,7 +15,7 @@ final class FirstRunWithAKeyJourneyTest extends JourneyTestCase
 {
     // Built from parts, so no key-shaped literal sits in the repository; the test environment's key check accepts it without a call.
     private const string TOKEN_BODY = 'journeyplaceholder';
-    private const string ENDED_TEXT = 'Judged.';
+    private const string ENDED_TEXT = 'Checked.';
     private const string OUTCOME = '/^Outcome: \S+, decided by the quorum policy \S+ over all 2 reviewers\./';
 
     private string $directory = '';

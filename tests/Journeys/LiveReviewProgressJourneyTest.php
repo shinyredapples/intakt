@@ -21,7 +21,7 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
 {
     // Not a credential, because the seed only checks that a key is present, and no step calls a provider.
     private const string PLACEHOLDER_KEY = 'journey-placeholder';
-    private const string ENDED_TEXT = 'Judged.';
+    private const string ENDED_TEXT = 'Checked.';
     // The sample's test vendor leaves nothing to fix, so the link must not promise findings.
     private const string ROUND_BELOW = 'See the round below.';
     private const string PROGRESS = '/^\d+ of \d+ reviewers finished\.$/';

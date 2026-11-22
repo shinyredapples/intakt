@@ -60,6 +60,12 @@ enum ReviewOutcome: string
         };
     }
 
+    // The review page speaks plain words while the CLI, MCP and the docs keep the value, so the page shows the value only in a tooltip (#3183).
+    public function plainWords(): string
+    {
+        return self::ChangesRequested === $this ? 'Changes needed' : $this->value;
+    }
+
     private static function ofReviewers(ReviewedRound $round): ?self
     {
         return $round->isJudged() && $round->reviewers > 0 && $round->failedReviewers() === $round->reviewers ? self::Failed : null;

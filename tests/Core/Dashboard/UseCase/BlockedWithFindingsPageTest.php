@@ -111,8 +111,8 @@ final class BlockedWithFindingsPageTest extends WebTestCase
         $lines = explode("\n", rtrim($console->getDisplay(), "\n"));
 
         self::assertResponseIsSuccessful();
-        self::assertSame([['role-1', 'Changes requested'], ['role-2', 'Approved']], $this->rows($page, 'table.reviewers tbody tr', 'td'));
-        self::assertEqualsCanonicalizing(['Changes requested', 'Approved'], $this->nowStates);
+        self::assertSame([['role-1', 'Changes needed'], ['role-2', 'Approved']], $this->rows($page, 'table.reviewers tbody tr', 'td'));
+        self::assertEqualsCanonicalizing(['Changes needed', 'Approved'], $this->nowStates);
         self::assertSame('Outcome: Changes requested, decided by the quorum policy all over all 2 reviewers.', $page->filter('#round-'.$this->roundId.'-outcome')->text());
         self::assertSame(ReviewExit::Changes->value, $console->getStatusCode());
         self::assertSame('changes (round 1 counted)', $lines[0]);
