@@ -78,7 +78,7 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
         $headline = $this->browser->request('GET', '/trends')->filter('.bench-headline');
 
         self::assertSame(sprintf('The review panel found %d of %d planted defects', $bench->found, $bench->planted), $headline->filter('.bench-result')->text());
-        self::assertStringContainsString($bench->falseAlarms.($bench->falseAlarms === 1 ? ' false alarm' : ' false alarms').' in all', $headline->filter('.bench-meta')->text());
+        self::assertStringContainsString($bench->falseAlarms.(1 === $bench->falseAlarms ? ' false alarm' : ' false alarms').' in all', $headline->filter('.bench-meta')->text());
         self::assertSame('measured', $headline->filter('.figure-kind')->attr('data-kind'));
         self::assertSame([$bench->ranOn, 'Run of '.$bench->ranOn], [$headline->filter('time')->attr('datetime'), $headline->filter('time')->text()]);
     }
