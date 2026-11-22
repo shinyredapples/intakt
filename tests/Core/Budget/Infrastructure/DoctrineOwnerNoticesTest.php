@@ -20,6 +20,7 @@ use Intakt\Core\Budget\Contract\EndedOutageNotice;
 use Intakt\Core\Budget\Contract\MeasuredUse;
 use Intakt\Core\Budget\Contract\OutageNotice;
 use Intakt\Core\Budget\Contract\OwnerNoticesChanged;
+use Intakt\Core\Budget\Contract\OwnerNoticesOfTheDay;
 use Intakt\Core\Budget\Contract\ReadingOutcome;
 use Intakt\Core\Budget\Contract\Usage;
 use Intakt\Core\Budget\Contract\UsageWindow;
@@ -57,6 +58,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[UsesClass(OutageNotice::class)]
 #[UsesClass(EndedOutageNotice::class)]
 #[UsesClass(OwnerNoticesChanged::class)]
+#[UsesClass(OwnerNoticesOfTheDay::class)]
 #[UsesClass(OutageNoticeRecord::class)]
 #[UsesClass(Account::class)]
 #[UsesClass(Usage::class)]
@@ -632,6 +634,131 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
 
         self::assertSame(0, $heard);
         self::assertCount(1, $this->notices()->stillRunningOldestFirst());
+    }
+
+    // The recovery commits just before the reader's next statement on the notices, so a read made of two statements would list the outage in both lists.
+    public function testANoticeThatEndsBetweenTwoReadsIsWaitingInTheFirstAndEndedInTheSecond(): void
+    {
+        $this->store('main', new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
+        $recovery = function (): void {
+            $this->record('main', '2026-11-02 12:00:00');
+        };
+        $hook = new class($recovery) extends AbstractLogger {
+            private int $noticeReads = 0;
+
+            public function __construct(private ?Closure $recovery)
+            {
+            }
+
+            public function log(mixed $level, string|Stringable $message, array $context = []): void
+            {
+                $sql = is_string($context['sql'] ?? null) ? $context['sql'] : '';
+                if (!$this->recovery instanceof Closure || !str_starts_with($sql, 'SELECT') || !str_contains($sql, 'FROM budget_outage_notice') || 1 === ++$this->noticeReads) {
+                    return;
+                }
+
+                $recover = $this->recovery;
+                $this->recovery = null;
+                $recover();
+            }
+        };
+        $connection = DriverManager::getConnection($this->entities->getConnection()->getParams(), new Configuration()->setMiddlewares([new Middleware($hook)]));
+        $reader = new DoctrineOwnerNotices(new EntityManager($connection, $this->entities->getConfiguration()));
+
+        $first = $reader->waitingAndEndedOnTheDayOf(new DateTimeImmutable('2026-11-02T20:00:00+00:00'));
+        $second = $reader->waitingAndEndedOnTheDayOf(new DateTimeImmutable('2026-11-02T20:00:00+00:00'));
+
+        self::assertSame([['main'], []], $this->namesOf($first));
+        self::assertSame([[], ['main']], $this->namesOf($second));
+    }
+
+    public function testTheCombinedReadListsWaitingNoticesOldestFirstAndEndedNoticesNewestFirst(): void
+    {
+        $this->store('waiting-later', new DateTimeImmutable('2026-11-02T12:00:00+00:00'));
+        $this->store('waiting-first', new DateTimeImmutable('2026-11-02T09:00:00+00:00'));
+        $this->store('ended-early', new DateTimeImmutable('2026-11-02T09:00:00+00:00'));
+        $this->store('ended-late', new DateTimeImmutable('2026-11-02T12:00:00+00:00'));
+        $this->record('ended-late', '2026-11-02 15:00:00');
+        $this->record('ended-early', '2026-11-02 13:00:00');
+
+        $notices = $this->notices()->waitingAndEndedOnTheDayOf(new DateTimeImmutable('2026-11-02T20:00:00+00:00'));
+
+        self::assertSame([['waiting-first', 'waiting-later'], ['ended-late', 'ended-early']], $this->namesOf($notices));
+    }
+
+    public function testNoticesEndedAtOneMomentAreListedByTheCombinedReadLastStoredFirst(): void
+    {
+        $this->store('a', new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
+        $this->store('b', new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
+        $this->record('a', '2026-11-02 12:00:00');
+        $this->record('b', '2026-11-02 12:00:00');
+
+        self::assertSame([[], ['b', 'a']], $this->namesOf($this->notices()->waitingAndEndedOnTheDayOf(new DateTimeImmutable('2026-11-02T20:00:00+00:00'))));
+    }
+
+    public function testTheCombinedReadCarriesEachNoticesMoments(): void
+    {
+        $this->store('waiting', new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
+        $this->store('ended', new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
+        $this->record('ended', '2026-11-02 12:30:00');
+
+        $notices = $this->notices()->waitingAndEndedOnTheDayOf(new DateTimeImmutable('2026-11-02T20:00:00+00:00'));
+
+        self::assertSame('claude_code.waiting 08:00 11:00', $notices->waitingOldestFirst[0]->account->key().' '.$notices->waitingOldestFirst[0]->lastReadingAt->format('H:i').' '.$notices->waitingOldestFirst[0]->noticedAt->format('H:i'));
+        self::assertSame('claude_code.ended 2026-11-02 12:30:00', $notices->endedNewestFirst[0]->account->key().' '.$notices->endedNewestFirst[0]->endedAt->format('Y-m-d H:i:s'));
+    }
+
+    public function testANoticeEndedOnAnotherUtcDayIsInNeitherListOfTheCombinedRead(): void
+    {
+        $this->store('main', new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
+        $this->record('main', '2026-11-02 23:59:59');
+
+        self::assertSame([[], []], $this->namesOf($this->notices()->waitingAndEndedOnTheDayOf(new DateTimeImmutable('2026-11-03T00:00:00+00:00'))));
+    }
+
+    // The day is the UTC day of the moment, because every moment Intakt stores is UTC.
+    public function testTheCombinedReadTakesAMomentInAnotherZoneAsItsUtcDay(): void
+    {
+        $this->store('main', new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
+        $this->record('main', '2026-11-02 23:30:00');
+
+        self::assertSame([[], ['main']], $this->namesOf($this->notices()->waitingAndEndedOnTheDayOf(new DateTimeImmutable('2026-11-03T01:00:00+02:00'))));
+    }
+
+    // The saved end alone decides, because a late write or the cleanup of old readings can remove the reading that ended it.
+    public function testANoticeWithASavedEndIsOnlyEndedInTheCombinedReadOnceItsEndingReadingIsGone(): void
+    {
+        $this->store('main', new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
+        $this->record('main', '2026-11-02 12:00:00');
+        $this->entities->getConnection()->executeStatement('DELETE FROM budget_window_reading');
+
+        self::assertSame([[], ['main']], $this->namesOf($this->notices()->waitingAndEndedOnTheDayOf(new DateTimeImmutable('2026-11-02T20:00:00+00:00'))));
+    }
+
+    // A notice from before ends were kept has no end, and its newer reading still keeps it from waiting.
+    public function testANoticeThatEndedBeforeEndsWereKeptIsInNeitherListOfTheCombinedRead(): void
+    {
+        $this->store('main', new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
+        $this->record('main', '2026-11-02 12:00:00');
+        $this->entities->getConnection()->executeStatement('UPDATE budget_outage_notice SET ended_at = NULL');
+
+        self::assertSame([[], []], $this->namesOf($this->notices()->waitingAndEndedOnTheDayOf(new DateTimeImmutable('2026-11-02T20:00:00+00:00'))));
+    }
+
+    public function testNoNoticeGivesTwoEmptyListsInTheCombinedRead(): void
+    {
+        self::assertSame([[], []], $this->namesOf($this->notices()->waitingAndEndedOnTheDayOf(new DateTimeImmutable('2026-11-02T20:00:00+00:00'))));
+    }
+
+    /**
+     * @return array{list<string>, list<string>}
+     */
+    private function namesOf(OwnerNoticesOfTheDay $notices): array
+    {
+        return [
+            array_map(static fn (OutageNotice $notice): string => $notice->account->name, $notices->waitingOldestFirst),
+            array_map(static fn (EndedOutageNotice $notice): string => $notice->account->name, $notices->endedNewestFirst),
+        ];
     }
 
     private function record(string $account, string $at): void
