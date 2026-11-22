@@ -9,3 +9,5 @@
 {% for column in [constant('Intakt\\Core\\Dashboard\\Domain\\BoardColumn::InReview'), constant('Intakt\\Core\\Dashboard\\Domain\\BoardColumn::Done')] %}
 <turbo-stream action="replace" target="col-{{ column.value|lower|replace({' ': '-'}) }}"><template>{{ include('dashboard/_board_column.html.twig', {board: board, column: column, limit: limit, pushed: true}, with_context = false) }}</template></turbo-stream>
 {% endfor %}
+{#- The status line, replaced from the partial the board page includes: it is the board's one summary of who works, so a pushed board never says "Quiet" after a reviewer started. -#}
+<turbo-stream action="replace" target="status-line"><template>{{ include('dashboard/_status_line.html.twig', {working: board.whoIsWorking()}, with_context = false) }}</template></turbo-stream>

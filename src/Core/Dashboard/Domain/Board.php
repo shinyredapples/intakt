@@ -45,10 +45,10 @@ final readonly class Board
         return array_reverse(array_values(array_filter($this->cards, static fn (Review $card): bool => $card->activeRound() instanceof ReviewedRound)));
     }
 
-    // From the cards in their order, so the newest review's reviewers come first.
+    // From the cards in their order, so the newest review's reviewers come first, with the builds in flight the headline counts.
     public function whoIsWorking(): WhoIsWorking
     {
-        return new WhoIsWorking($this->cards);
+        return new WhoIsWorking($this->cards, count($this->tasksInFlight()));
     }
 
     // From the same lanes and Waiting on you cards the page shows, so the line never tells a different story than the board below it.
@@ -123,7 +123,7 @@ final readonly class Board
     // Null while a reviewer runs, because the strip then lists the lanes instead; the words are the first day's, so the board keeps one wording for this line (#2731).
     public function nobodyWorkingLine(): ?string
     {
-        return [] === $this->whoIsWorking()->lanes() ? 'Nobody is working yet: reviewers appear here while they review a change' : null;
+        return [] === $this->whoIsWorking()->lanes() ? 'No reviewer is working right now: reviewers appear here while they review a change' : null;
     }
 
     // Done opens while every other column is empty, so a finished review is seen on arrival instead of behind its strip.

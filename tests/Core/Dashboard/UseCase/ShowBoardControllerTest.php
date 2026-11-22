@@ -160,6 +160,13 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         self::assertSame('A build is running. Nothing needs you.', $this->browser->request('GET', '/')->filter('.page-head .lead')->text());
     }
 
+    public function testABuildInFlightKeepsTheStatusLineFromCallingTheBoardQuiet(): void
+    {
+        $this->ledger->passBuildStep('alpha', 'task-7', 'task');
+
+        self::assertSame('Running smoothly · 1 build running', trim($this->browser->request('GET', '/')->filter('a.status-line')->text()));
+    }
+
     public function testATaskWhoseLatestStepFailedWithNoCardShowsTheAsleepOctopus(): void
     {
         $this->ledger->passBuildStep('alpha', 'task-7', 'task');
@@ -679,132 +686,34 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         self::assertSame([$project, $project], [$cards->last()->filter('.pname')->text(), $cards->last()->filter('.pname')->attr('title')]);
     }
 
-    public function testEachRunningReviewerIsALaneWithItsProjectChangeAndRound(): void
-    {
-        $this->ledger->startRoundOf('42', 'round-1', 1);
-        $this->ledger->startReviewer('round-1', 'correctness');
-
-        $lanes = $this->browser->request('GET', '/')->filter('.working .lane');
-
-        self::assertCount(1, $lanes);
-        self::assertSame('42', $lanes->filter('.what')->text());
-        self::assertSame('Round 1', $lanes->filter('.meta span')->last()->text());
-        self::assertStringStartsWith('correctness', $lanes->filter('.who')->text());
-    }
-
-    public function testEachLaneLinksToTheReviewPageOfTheRoundItIsWorkingOn(): void
-    {
-        $this->ledger->startRoundOf('42', 'round-1', 1);
-        $this->ledger->startReviewer('round-1', 'correctness');
-        $this->ledger->startRoundOf('43', 'round-2', 3);
-        $this->ledger->startReviewer('round-2', 'security');
-
-        $lanes = $this->browser->request('GET', '/')->filter('.working a.lane');
-
-        self::assertSame(
-            [['/reviews/round-1', 'Round 1'], ['/reviews/round-2', 'Round 3']],
-            $lanes->each(static fn (Crawler $lane): array => [$lane->attr('href'), $lane->filter('.meta span')->last()->text()]),
-        );
-    }
-
-    public function testEachLaneShowsADecorative24PixelMeerkatInBothThemes(): void
-    {
-        $this->ledger->startRoundOf('42', 'round-1', 1);
-        $this->ledger->startReviewer('round-1', 'correctness');
-
-        $images = $this->browser->request('GET', '/')->filter('.working .lane .who img.character');
-
-        self::assertSame(
-            [['', '24', '24', 'lazy', null, null], ['', '24', '24', 'lazy', null, null]],
-            $images->each(static fn (Crawler $image): array => [$image->attr('alt'), $image->attr('width'), $image->attr('height'), $image->attr('loading'), $image->attr('role'), $image->attr('aria-label')]),
-        );
-        self::assertSame(1, preg_match('~^\S*/roles/code_reviewer-light-\S+\.webp 1x, \S*/roles/code_reviewer-light-\S+\.webp 2x$~', $images->eq(0)->attr('srcset') ?? ''));
-        self::assertSame(1, preg_match('~^\S*/roles/code_reviewer-dark-\S+\.webp 1x, \S*/roles/code_reviewer-dark-\S+\.webp 2x$~', $images->eq(1)->attr('srcset') ?? ''));
-    }
-
-    public function testTheMeerkatSitsAfterTheLiveDotAndBeforeTheRole(): void
-    {
-        $this->ledger->startRoundOf('42', 'round-1', 1);
-        $this->ledger->startReviewer('round-1', 'correctness');
-
-        $who = $this->browser->request('GET', '/')->filter('.working .lane .who');
-
-        self::assertSame(['span dot ok', 'img character character-light', 'img character character-dark', 'span elapsed'], $who->children()->each(static fn (Crawler $child): string => $child->nodeName().' '.$child->attr('class')));
-        self::assertSame('correctness, standard', $who->getNode(0)?->childNodes->item(3)?->textContent);
-    }
-
-    public function testTheLanesRoleTierAndTimeReadTheSameBesideTheMeerkat(): void
-    {
-        $this->ledger->startRoundOf('42', 'round-1', 1);
-        $this->ledger->startReviewer('round-1', 'correctness');
-
-        $who = $this->browser->request('GET', '/')->filter('.working .lane .who');
-
-        self::assertSame('correctness, standardsince 12:00 UTC', $who->text());
-    }
-
-    public function testTheWhoIsWorkingSummaryAndTheCardsShowNoCharacter(): void
-    {
-        $this->ledger->startRoundOf('42', 'round-1', 1);
-        $this->ledger->startReviewer('round-1', 'correctness');
-
-        $page = $this->browser->request('GET', '/');
-
-        self::assertCount(0, $page->filter('.working summary img, .board .card img, .working .lane .meta img, .working .lane .what img'));
-    }
-
-    public function testABoardWithNobodyWorkingShowsNoMeerkat(): void
-    {
-        $this->ledger->startRoundOf('42', 'round-1', 1);
-        $this->ledger->judgeRound('round-1');
-
-        self::assertCount(0, $this->browser->request('GET', '/')->filter('img[src*="/roles/"]'));
-    }
-
-    public function testAReviewerThatHasAnsweredIsNoLane(): void
-    {
-        $this->ledger->startRoundOf('42', 'round-1', 1);
-        $this->ledger->startReviewer('round-1', 'correctness');
-        $this->ledger->answer('round-1', 'correctness', 0);
-
-        $page = $this->browser->request('GET', '/');
-
-        self::assertCount(0, $page->filter('.working .lane'));
-    }
-
-    public function testTheSummaryCountsTheRunningReviewersInWords(): void
+    public function testTheBoardShowsTheStatusLineInPlaceOfTheLanesLinkedToTheStatusPage(): void
     {
         $this->ledger->startRoundOf('42', 'round-1', 1);
         $this->ledger->startReviewer('round-1', 'correctness');
         $this->ledger->startReviewer('round-1', 'security');
 
-        $summary = $this->browser->request('GET', '/')->filter('.working .w-sum');
+        $page = $this->browser->request('GET', '/');
 
-        self::assertSame('2 working', $summary->text());
+        self::assertSame('Running smoothly · 2 reviewers working', $page->filter('a.status-line')->text());
+        self::assertSame('/lanes', $page->filter('a.status-line')->attr('href'));
+        self::assertCount(0, $page->filter('.lane, details.working, .working-none'));
+        self::assertCount(1, $page->filter('a.status-line + section .board-wrap > .board'));
     }
 
-    public function testOnceAReviewHasRunABoardWithNobodyRunningSaysInAPlainLineAboveTheColumnsWhatLandsThere(): void
+    public function testOnceAReviewHasRunABoardWithNobodyRunningSaysSoQuietly(): void
     {
         $this->ledger->startRoundOf('42', 'round-1', 1);
         $this->ledger->judgeRound('round-1');
 
-        $page = $this->browser->request('GET', '/');
-
-        self::assertSame('Nobody is working yet: reviewers appear here while they review a change', $page->filter('p.working-none')->text());
-        self::assertCount(0, $page->filter('details.working, .working summary, .working .chev'));
-        self::assertCount(1, $page->filter('p.working-none + section .board-wrap > .board'));
+        self::assertSame('Quiet · nobody working', $this->browser->request('GET', '/')->filter('a.status-line')->text());
     }
 
-    public function testWhileAReviewerRunsTheSummaryIsAClosedDisclosureWithAChevronAboveTheColumns(): void
+    public function testTheStatusLineAndTheCardsShowNoCharacter(): void
     {
         $this->ledger->startRoundOf('42', 'round-1', 1);
         $this->ledger->startReviewer('round-1', 'correctness');
 
-        $page = $this->browser->request('GET', '/');
-
-        self::assertCount(1, $page->filter('details.working:not([open]) > summary svg.chev'));
-        self::assertCount(1, $page->filter('details.working + section .board-wrap > .board'));
-        self::assertCount(0, $page->filter('.working-none'));
+        self::assertCount(0, $this->browser->request('GET', '/')->filter('.status-line img, .board .card img'));
     }
 
     public function testTheBoardLinksToTheReviewListBehindIt(): void
@@ -841,11 +750,9 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         );
     }
 
-    public function testOnAFreshInstallWhoIsWorkingSaysThatReviewersAppearWhileTheyReview(): void
+    public function testOnAFreshInstallTheStatusLineSaysNobodyIsWorking(): void
     {
-        $page = $this->browser->request('GET', '/');
-
-        self::assertSame('Nobody is working yet: reviewers appear here while they review a change', $page->filter('p.working-none')->text());
+        self::assertSame('Quiet · nobody working', $this->browser->request('GET', '/')->filter('a.status-line')->text());
     }
 
     public function testABoardWithoutFailingHeadsShowsNoBanner(): void
@@ -855,7 +762,7 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         self::assertCount(0, $this->browser->request('GET', '/')->filter('.banner'));
     }
 
-    public function testEachFailingHeadIsABrokenBannerOfItsProjectAboveWhoIsWorking(): void
+    public function testEachFailingHeadIsABrokenBannerOfItsProjectAboveTheStatusLine(): void
     {
         $this->ledger->failHead('alpha', '7', 1);
         $this->ledger->failHead('beta', '8', 1);
@@ -863,8 +770,8 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         $page = $this->browser->request('GET', '/');
 
         self::assertSame(['alpha', 'beta'], $page->filter('.page-head ~ .banner.broken')->each(static fn (Crawler $banner): ?string => $banner->attr('data-project')));
-        self::assertCount(1, $page->filter('.banner ~ .working-none'));
-        self::assertCount(0, $page->filter('.working-none ~ .banner'));
+        self::assertCount(1, $page->filter('.banner ~ .status-line'));
+        self::assertCount(0, $page->filter('.status-line ~ .banner'));
     }
 
     public function testAMainThatFailsToBootIsOneBrokenBannerOfItsProject(): void
