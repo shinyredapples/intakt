@@ -54,14 +54,6 @@ final class TrendsTileStylesTest extends TestCase
         self::assertMatchesRegularExpression('/right:\s*0;/', $tip);
     }
 
-    private function sheet(): string
-    {
-        $sheet = file_get_contents(__DIR__.'/../../../../assets/styles/components.css');
-        self::assertIsString($sheet);
-
-        return $sheet;
-    }
-
     /**
      * @return array{list<string>, list<string>}
      */
@@ -70,6 +62,14 @@ final class TrendsTileStylesTest extends TestCase
         preg_match_all('/@media \(max-width: 760px\) \{(.*?)\n\}/s', $this->sheet(), $blocks);
 
         return [$blocks[0], $blocks[1]];
+    }
+
+    private function sheet(): string
+    {
+        $sheet = file_get_contents(__DIR__.'/../../../../assets/styles/components.css');
+        self::assertIsString($sheet);
+
+        return $sheet;
     }
 
     private function phoneGap(): string

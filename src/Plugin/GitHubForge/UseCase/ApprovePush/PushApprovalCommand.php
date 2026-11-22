@@ -47,6 +47,12 @@ final readonly class PushApprovalCommand
         return $outcome->decision->letsItPush() ? Command::SUCCESS : Command::FAILURE;
     }
 
+    private function printable(string $text): string
+    {
+        // Because a file name or a workflow's text may hold a newline or an escape sequence, which would forge a line of this listing or steer the terminal.
+        return OutputFormatter::escape(addcslashes($text, "\0..\37\177\\"));
+    }
+
     private function show(SymfonyStyle $io, PushOutcome $outcome, TaskIssue $issue): void
     {
         foreach ($outcome->scan->findings as $found) {
@@ -63,11 +69,5 @@ final readonly class PushApprovalCommand
             PushDecision::Asked => sprintf('push: held, the owner was asked on issue #%d to approve %s', $issue->number, $outcome->commit),
             PushDecision::StillAsked => sprintf('push: held, still waiting for the owner\'s approve %s on issue #%d', $outcome->commit, $issue->number),
         });
-    }
-
-    private function printable(string $text): string
-    {
-        // Because a file name or a workflow's text may hold a newline or an escape sequence, which would forge a line of this listing or steer the terminal.
-        return OutputFormatter::escape(addcslashes($text, "\0..\37\177\\"));
     }
 }

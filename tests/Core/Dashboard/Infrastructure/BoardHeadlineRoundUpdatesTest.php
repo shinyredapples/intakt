@@ -69,15 +69,6 @@ final class BoardHeadlineRoundUpdatesTest extends KernelTestCase
 
     private LockFactory $locks;
 
-    protected function setUp(): void
-    {
-        $this->ledger = new DashboardLedger();
-        $this->round = new RecordedRoundUpdates();
-        $this->live = new PublishedLiveEvents();
-        $this->log = new BufferingLogger();
-        $this->locks = new LockFactory(new InMemoryStore());
-    }
-
     public function testAStartedReviewerPublishesTheBoardHeadlineOnTheShellTopic(): void
     {
         $this->ledger->startRoundOf('feat/a', self::ROUND, 1);
@@ -199,6 +190,15 @@ final class BoardHeadlineRoundUpdatesTest extends KernelTestCase
 
         self::assertCount(2, $this->live->events);
         self::assertSame('The Code reviewers are reviewing change feat/a of alpha and change feat/b of alpha. The Code reviewers are reviewing 2 changes.', $this->headlineIn(1));
+    }
+
+    protected function setUp(): void
+    {
+        $this->ledger = new DashboardLedger();
+        $this->round = new RecordedRoundUpdates();
+        $this->live = new PublishedLiveEvents();
+        $this->log = new BufferingLogger();
+        $this->locks = new LockFactory(new InMemoryStore());
     }
 
     private function updates(): BoardHeadlineRoundUpdates

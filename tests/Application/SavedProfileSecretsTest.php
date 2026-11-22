@@ -30,13 +30,6 @@ final class SavedProfileSecretsTest extends WebTestCase
 
     private const string QUERY_CANARY = 'canary-query-3c7b';
 
-    protected function tearDown(): void
-    {
-        unset($_SERVER['INTAKT_PROFILE_CANARY'], $_ENV['INTAKT_PROFILE_CANARY'], $_SERVER['SERVER_PROFILE_CANARY']);
-        putenv('INTAKT_PROFILE_CANARY');
-        parent::tearDown();
-    }
-
     public function testASavedProfileHoldsNoneOfTheSecretsOfItsRequest(): void
     {
         $_SERVER['INTAKT_PROFILE_CANARY'] = $_ENV['INTAKT_PROFILE_CANARY'] = self::ENVIRONMENT_CANARY;
@@ -79,6 +72,13 @@ final class SavedProfileSecretsTest extends WebTestCase
 
         self::assertFalse($client->getResponse()->headers->has('X-Debug-Token'));
         self::assertEmpty($client->getProfile());
+    }
+
+    protected function tearDown(): void
+    {
+        unset($_SERVER['INTAKT_PROFILE_CANARY'], $_ENV['INTAKT_PROFILE_CANARY'], $_SERVER['SERVER_PROFILE_CANARY']);
+        putenv('INTAKT_PROFILE_CANARY');
+        parent::tearDown();
     }
 
     // Read as written to disk rather than through the profiler, because the rule is about what a saved profile file holds.

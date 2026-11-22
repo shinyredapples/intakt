@@ -89,11 +89,6 @@ final class RecordingFormatTest extends TestCase
         self::format()->read($json);
     }
 
-    private static function written(): string
-    {
-        return self::format()->write(self::recording());
-    }
-
     private static function without(string $key): string
     {
         $decoded = json_decode(self::written(), true, flags: JSON_THROW_ON_ERROR);
@@ -101,6 +96,11 @@ final class RecordingFormatTest extends TestCase
         unset($decoded[$key]);
 
         return json_encode($decoded, JSON_THROW_ON_ERROR);
+    }
+
+    private static function written(): string
+    {
+        return self::format()->write(self::recording());
     }
 
     private static function format(): RecordingFormat

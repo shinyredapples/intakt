@@ -8,6 +8,7 @@ use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
+use Intakt\Core\Review\Contract\ResolvedFinding;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\FindingLedger;
@@ -173,22 +174,6 @@ final class FindingLedgerTest extends TestCase
         $ledger->recordRound(9, [$this->finding('F1')]);
 
         self::assertSame([5, 9], $ledger->all()[0]->rounds);
-    }
-
-    private function recordRefusedRound(FindingLedger $ledger, int $round): void
-    {
-        self::assertInstanceOf(RoundNotAfterLatest::class, $this->refusalOf($ledger, $round), 'Round '.$round.' was recorded out of order.');
-    }
-
-    private function refusalOf(FindingLedger $ledger, int $round): ?RoundNotAfterLatest
-    {
-        try {
-            $ledger->recordRound($round, [$this->finding('F1'), $this->finding('new')]);
-        } catch (RoundNotAfterLatest $refusal) {
-            return $refusal;
-        }
-
-        return null;
     }
 
     public function testAVerdictWithResolvedIdsClosesThoseFindings(): void
@@ -415,13 +400,29 @@ final class FindingLedgerTest extends TestCase
         self::assertSame(['F1', 'R3-F2'], FindingLedger::apartFor(3, $earlier->all())->recordVerdict(3, $this->verdict([], [$this->finding('F1', true), $this->finding('b')])));
     }
 
+    private function recordRefusedRound(FindingLedger $ledger, int $round): void
+    {
+        self::assertInstanceOf(RoundNotAfterLatest::class, $this->refusalOf($ledger, $round), 'Round '.$round.' was recorded out of order.');
+    }
+
+    private function refusalOf(FindingLedger $ledger, int $round): ?RoundNotAfterLatest
+    {
+        try {
+            $ledger->recordRound($round, [$this->finding('F1'), $this->finding('new')]);
+        } catch (RoundNotAfterLatest $refusal) {
+            return $refusal;
+        }
+
+        return null;
+    }
+
     /**
      * @param list<string>  $resolved
      * @param list<Finding> $findings
      */
     private function verdict(array $resolved, array $findings): Verdict
     {
-        return new Verdict(Decision::Changes, $findings, $resolved, []);
+        return new Verdict(Decision::Changes, $findings, array_map(static fn (string $id): ResolvedFinding => new ResolvedFinding($id), $resolved), []);
     }
 
     private function finding(string $id, bool $repeat = false, Severity $severity = Severity::P2): Finding

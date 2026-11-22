@@ -22,6 +22,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use ReflectionClass;
 use Symfony\Component\Messenger\Bridge\Doctrine\Transport\DoctrineTransport;
 use Symfony\Component\Messenger\Envelope;
+use Symfony\Component\Messenger\Transport\Receiver\ListableReceiverInterface;
 use Symfony\Component\Messenger\Transport\Receiver\ReceiverInterface;
 use Symfony\Component\Serializer\SerializerInterface;
 use Symfony\Component\Uid\Uuid;
@@ -39,33 +40,6 @@ final class FailedJudgingsTest extends KernelTestCase
     private ?string $configuredDsn;
     private DoctrineTransport $failed;
     private DoctrineTransport $async;
-
-    protected function setUp(): void
-    {
-        $configured = $_ENV[self::TRANSPORT_DSN] ?? null;
-        $this->configuredDsn = is_string($configured) ? $configured : null;
-        $_ENV[self::TRANSPORT_DSN] = 'doctrine://default';
-
-        $container = self::getContainer();
-        EmptyDatabase::in($container);
-        $failed = $container->get('messenger.transport.failed');
-        $async = $container->get('messenger.transport.async');
-        assert($failed instanceof DoctrineTransport && $async instanceof DoctrineTransport);
-        $this->failed = $failed;
-        $this->async = $async;
-        $this->failed->setup();
-    }
-
-    protected function tearDown(): void
-    {
-        if (null === $this->configuredDsn) {
-            unset($_ENV[self::TRANSPORT_DSN]);
-        } else {
-            $_ENV[self::TRANSPORT_DSN] = $this->configuredDsn;
-        }
-
-        parent::tearDown();
-    }
 
     public function testAParkedJudgingOfTheRoundIsAFailedJudging(): void
     {
@@ -145,6 +119,43 @@ final class FailedJudgingsTest extends KernelTestCase
         self::assertSame([], $this->judgings($unlisted)->failedRounds());
     }
 
+    public function testThePollOfOneRoundReadsTheFailureTransportUpToTheBoundAtMost(): void
+    {
+        $failed = $this->createMock(ListableReceiverInterface::class);
+        $failed->expects($this->once())->method('all')->with(FailedJudgings::PARKED_MESSAGES_READ)->willReturn([]);
+
+        $this->judgings($failed)->hasFailed(self::ROUND);
+    }
+
+    public function testThePollOfOneRoundOnABacklogPastTheBoundReadsAndLeavesEveryMessageParked(): void
+    {
+        $this->parkPublications(FailedJudgings::PARKED_MESSAGES_READ);
+        $this->failed->send(new Envelope(new JudgeRound(self::ROUND)));
+        $listed = 0;
+        $counting = self::createStub(ListableReceiverInterface::class);
+        $counting->method('all')->willReturnCallback(function (?int $limit) use (&$listed): iterable {
+            foreach ($this->failed->all($limit) as $envelope) {
+                ++$listed;
+
+                yield $envelope;
+            }
+        });
+
+        $this->judgings($counting)->hasFailed(self::ROUND);
+
+        self::assertSame(FailedJudgings::PARKED_MESSAGES_READ, $listed);
+        self::assertSame(FailedJudgings::PARKED_MESSAGES_READ + 1, $this->failed->getMessageCount());
+    }
+
+    public function testABacklogPastTheBoundDoesNotHideAParkedJudgingFromTheFailedRounds(): void
+    {
+        $this->parkPublications(FailedJudgings::PARKED_MESSAGES_READ);
+        $this->failed->send(new Envelope(new JudgeRound(self::ROUND)));
+
+        self::assertArrayHasKey(self::ROUND, $this->judgings($this->failed)->failedRounds());
+        self::assertSame(FailedJudgings::PARKED_MESSAGES_READ + 1, $this->failed->getMessageCount());
+    }
+
     public function testAParkedJudgingWithoutARoundIdIsLeftOutOfTheFailedRoundsAndStaysParked(): void
     {
         $this->failed->send(new Envelope(new JudgeRound(self::ROUND)));
@@ -152,6 +163,40 @@ final class FailedJudgingsTest extends KernelTestCase
 
         self::assertSame([self::ROUND => true], $this->judgings($this->failed)->failedRounds());
         self::assertSame(2, $this->failed->getMessageCount());
+    }
+
+    protected function setUp(): void
+    {
+        $configured = $_ENV[self::TRANSPORT_DSN] ?? null;
+        $this->configuredDsn = is_string($configured) ? $configured : null;
+        $_ENV[self::TRANSPORT_DSN] = 'doctrine://default';
+
+        $container = self::getContainer();
+        EmptyDatabase::in($container);
+        $failed = $container->get('messenger.transport.failed');
+        $async = $container->get('messenger.transport.async');
+        assert($failed instanceof DoctrineTransport && $async instanceof DoctrineTransport);
+        $this->failed = $failed;
+        $this->async = $async;
+        $this->failed->setup();
+    }
+
+    protected function tearDown(): void
+    {
+        if (null === $this->configuredDsn) {
+            unset($_ENV[self::TRANSPORT_DSN]);
+        } else {
+            $_ENV[self::TRANSPORT_DSN] = $this->configuredDsn;
+        }
+
+        parent::tearDown();
+    }
+
+    private function parkPublications(int $count): void
+    {
+        for ($parked = 0; $parked < $count; ++$parked) {
+            $this->failed->send(new Envelope(new PublishVerdict('0192a000-0000-7000-8000-000000000003')));
+        }
     }
 
     private function judgings(ReceiverInterface $failed): FailedJudgings

@@ -93,16 +93,12 @@ final readonly class FindingKeys
         return array_values(array_column(array_merge(...$found), null, 0));
     }
 
-    // The file field is one citation by itself, read whole, so only the text is checked for names outside citations.
     /**
-     * @param list<string>                            $citations
-     * @param list<list<array{string, string}>|false> $files
-     *
      * @return list<string>
      */
-    private function citationsOfHashedFiles(array $citations, array $files): array
+    private function wordsOf(string $text): array
     {
-        return array_values(array_filter($citations, static fn (string $citation, int $index): bool => is_array($files[$index] ?? null) && [] !== $files[$index], ARRAY_FILTER_USE_BOTH));
+        return array_map(fn (string $word): string => $this->asPath($this->withoutLineNumber((string) preg_replace(self::WORD_EDGES, '', $word))), $this->rawWordsOf($text));
     }
 
     // Each span read whole, so a cited path with a space or any other character stays one path.
@@ -114,25 +110,6 @@ final readonly class FindingKeys
         preg_match_all(self::CODE_SPAN, $text, $spans);
 
         return array_map(fn (string $span): string => $this->asPath($this->withoutLineNumber(trim($span))), $spans[2]);
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function wordsOf(string $text): array
-    {
-        return array_map(fn (string $word): string => $this->asPath($this->withoutLineNumber((string) preg_replace(self::WORD_EDGES, '', $word))), $this->rawWordsOf($text));
-    }
-
-    // Read with the spans taken out, so a word of a span with a space is never taken for a path of its own.
-    /**
-     * @return list<string>
-     */
-    private function rawWordsOf(string $text): array
-    {
-        $words = preg_split('/\s+/u', (string) preg_replace(self::CODE_SPAN, ' ', $text), flags: PREG_SPLIT_NO_EMPTY);
-
-        return false === $words ? [] : $words;
     }
 
     private function withoutLineNumber(string $citation): string
@@ -151,21 +128,6 @@ final readonly class FindingKeys
         return [] === array_filter(explode('/', $candidate), static fn (string $segment): bool => 1 !== preg_match(self::FRAGMENT, $segment));
     }
 
-    // The file field holds a path with no line number (the line has its own field), so it is taken as written and must be a file that can be hashed.
-    /**
-     * @return list<array{string, string}>|false
-     */
-    private function fileOfTheFileField(Checkout $checkout, ?string $file): array|false
-    {
-        if (null === $file) {
-            return [];
-        }
-
-        $hashed = $this->hashOf($checkout, $file);
-
-        return null === $hashed || false === $hashed ? false : [$hashed];
-    }
-
     /**
      * @param list<string> $citations
      *
@@ -174,6 +136,16 @@ final readonly class FindingKeys
     private function withDirectory(array $citations): array
     {
         return array_values(array_filter($citations, static fn (string $citation): bool => str_contains($citation, '/')));
+    }
+
+    /**
+     * @param list<string> $citations
+     *
+     * @return list<string>
+     */
+    private function withoutDirectory(array $citations): array
+    {
+        return array_values(array_filter($citations, static fn (string $citation): bool => !str_contains($citation, '/')));
     }
 
     // A path that names no regular file gives no key when it has a file extension or its parent is in the checkout, because it most likely cites a file there in a form the key cannot read (src/B.php::run(), src/B.php#L12); only a word pointing nowhere (and/or) or an existing directory is skipped.
@@ -195,30 +167,6 @@ final readonly class FindingKeys
         return true === $this->isInCheckout($checkout, $path) || false === $this->isInCheckout($checkout, dirname($path)) ? [] : false;
     }
 
-    // Null for a place that may not be looked at (a link out of the checkout), so its caller can stay on the safe side.
-    private function isInCheckout(Checkout $checkout, string $path): ?bool
-    {
-        try {
-            $checkout->resolve($path);
-        } catch (PathNotInCheckout) {
-            return false;
-        } catch (PathOutsideCheckout) {
-            return null;
-        }
-
-        return true;
-    }
-
-    /**
-     * @param list<string> $citations
-     *
-     * @return list<string>
-     */
-    private function withoutDirectory(array $citations): array
-    {
-        return array_values(array_filter($citations, static fn (string $citation): bool => !str_contains($citation, '/')));
-    }
-
     // A name without a directory stands for every file of the checkout that carries it: several give no key, because the name alone cannot tell which of them the finding means.
     /**
      * @return list<array{string, string}>|false
@@ -234,6 +182,44 @@ final readonly class FindingKeys
         $hashed = 1 === count($paths) ? $this->hashOf($checkout, $paths[0]) : false;
 
         return null === $hashed || false === $hashed ? false : [$hashed];
+    }
+
+    // The file field holds a path with no line number (the line has its own field), so it is taken as written and must be a file that can be hashed.
+    /**
+     * @return list<array{string, string}>|false
+     */
+    private function fileOfTheFileField(Checkout $checkout, ?string $file): array|false
+    {
+        if (null === $file) {
+            return [];
+        }
+
+        $hashed = $this->hashOf($checkout, $file);
+
+        return null === $hashed || false === $hashed ? false : [$hashed];
+    }
+
+    // Read with the spans taken out, so a word of a span with a space is never taken for a path of its own.
+    /**
+     * @return list<string>
+     */
+    private function rawWordsOf(string $text): array
+    {
+        $words = preg_split('/\s+/u', (string) preg_replace(self::CODE_SPAN, ' ', $text), flags: PREG_SPLIT_NO_EMPTY);
+
+        return false === $words ? [] : $words;
+    }
+
+    // The file field is one citation by itself, read whole, so only the text is checked for names outside citations.
+    /**
+     * @param list<string>                            $citations
+     * @param list<list<array{string, string}>|false> $files
+     *
+     * @return list<string>
+     */
+    private function citationsOfHashedFiles(array $citations, array $files): array
+    {
+        return array_values(array_filter($citations, static fn (string $citation, int $index): bool => is_array($files[$index] ?? null) && [] !== $files[$index], ARRAY_FILTER_USE_BOTH));
     }
 
     // A name no file carries that starts with a file's name and goes on with a character that is no letter or digit (B.php::run(), B.php#L12) most likely cites that file in a form the key cannot read.
@@ -270,6 +256,20 @@ final readonly class FindingKeys
     private function hasFileExtension(string $candidate): bool
     {
         return 1 === preg_match(self::FILE_EXTENSION, $candidate);
+    }
+
+    // Null for a place that may not be looked at (a link out of the checkout), so its caller can stay on the safe side.
+    private function isInCheckout(Checkout $checkout, string $path): ?bool
+    {
+        try {
+            $checkout->resolve($path);
+        } catch (PathNotInCheckout) {
+            return false;
+        } catch (PathOutsideCheckout) {
+            return null;
+        }
+
+        return true;
     }
 
     // Whitespace runs become one space outside backtick spans and double quotes, so a reflowed finding keeps its key while a quoted value keeps its spacing; single quotes do not keep spacing, because a single quote is also an apostrophe ("the change's lock") and cannot reliably mark a value.

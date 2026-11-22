@@ -41,11 +41,6 @@ final class LongRunTest extends KernelTestCase
 
     private ScriptedRound $run;
 
-    protected function setUp(): void
-    {
-        $this->run = new ScriptedRound(new RoundFixture(self::getContainer()), self::getContainer());
-    }
-
     public function testAReviewerStillAskingForToolsAtTheRoundLimitOnItsRetryTooFailsAndBlocksTheRoundWithThatReason(): void
     {
         $review = $this->stillAskingForTools();
@@ -115,6 +110,11 @@ final class LongRunTest extends KernelTestCase
         self::assertSame([], [...$review->reasons]);
         self::assertSame([['started', 'settled']], array_values($this->run->usagePhasesByCall()));
         self::assertSame([self::TOOL_ROUNDS + 1], $this->usageRowsOfEndingEvents());
+    }
+
+    protected function setUp(): void
+    {
+        $this->run = new ScriptedRound(new RoundFixture(self::getContainer()), self::getContainer());
     }
 
     /**

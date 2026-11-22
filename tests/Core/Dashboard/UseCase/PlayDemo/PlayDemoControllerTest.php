@@ -46,36 +46,6 @@ final class PlayDemoControllerTest extends DashboardPageTestCase
     /** @var array<string, array{server: mixed, env: mixed}> */
     private array $saved = [];
 
-    protected function setUp(): void
-    {
-        foreach (self::VARIABLES as $name) {
-            $this->saved[$name] = ['server' => $_SERVER[$name] ?? null, 'env' => $_ENV[$name] ?? null];
-        }
-
-        $this->recording = sys_get_temp_dir().'/intakt-play-demo-page-'.bin2hex(random_bytes(6)).'.json';
-        new Filesystem()->dumpFile($this->recording, '{}');
-        $this->onTheComposeDemo('intakt', $this->recording);
-        parent::setUp();
-        // Kept between requests, so the ledger double and the transport stay for the post after the page that hands out the token.
-        $this->browser->disableReboot();
-    }
-
-    protected function tearDown(): void
-    {
-        foreach ($this->saved as $name => $before) {
-            unset($_SERVER[$name], $_ENV[$name]);
-            if (null !== $before['server']) {
-                $_SERVER[$name] = $before['server'];
-            }
-            if (null !== $before['env']) {
-                $_ENV[$name] = $before['env'];
-            }
-        }
-
-        new Filesystem()->remove($this->recording);
-        parent::tearDown();
-    }
-
     public function testTheDemoPageOffersPlayTheDemoRunWithAFormToken(): void
     {
         $page = $this->demoPage();
@@ -460,6 +430,36 @@ final class PlayDemoControllerTest extends DashboardPageTestCase
         $this->browser->request('POST', '/demo', ['_token' => $token]);
 
         self::assertCount(1, $this->queued());
+    }
+
+    protected function setUp(): void
+    {
+        foreach (self::VARIABLES as $name) {
+            $this->saved[$name] = ['server' => $_SERVER[$name] ?? null, 'env' => $_ENV[$name] ?? null];
+        }
+
+        $this->recording = sys_get_temp_dir().'/intakt-play-demo-page-'.bin2hex(random_bytes(6)).'.json';
+        new Filesystem()->dumpFile($this->recording, '{}');
+        $this->onTheComposeDemo('intakt', $this->recording);
+        parent::setUp();
+        // Kept between requests, so the ledger double and the transport stay for the post after the page that hands out the token.
+        $this->browser->disableReboot();
+    }
+
+    protected function tearDown(): void
+    {
+        foreach ($this->saved as $name => $before) {
+            unset($_SERVER[$name], $_ENV[$name]);
+            if (null !== $before['server']) {
+                $_SERVER[$name] = $before['server'];
+            }
+            if (null !== $before['env']) {
+                $_ENV[$name] = $before['env'];
+            }
+        }
+
+        new Filesystem()->remove($this->recording);
+        parent::tearDown();
     }
 
     private function demoPage(): Crawler

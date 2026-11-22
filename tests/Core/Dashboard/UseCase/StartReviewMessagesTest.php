@@ -57,6 +57,20 @@ final class StartReviewMessagesTest extends WebTestCase
 
     private TemporaryRepository $repository;
 
+    public function testStartingTheNextRoundFromTheDashboardDispatchesTheStartAndQueuesOneMessagePerReviewer(): void
+    {
+        $round = $this->fixture->startFromSource(new ChangeSource($this->repository->path, 'main'));
+
+        self::assertSame([
+            [self::QUERIES, ReplayMarkOfRound::class],
+            [self::COMMANDS, StartReview::class],
+            [self::COMMANDS, RunReviewRound::class],
+            [self::COMMANDS, RoundOpened::class],
+            [self::COMMANDS, ReviewWithReviewer::class],
+            [self::COMMANDS, ReviewWithReviewer::class],
+        ], $this->messagesOfTheStartOf($round));
+    }
+
     protected function setUp(): void
     {
         $this->repository = new TemporaryRepository();
@@ -76,20 +90,6 @@ final class StartReviewMessagesTest extends WebTestCase
         $this->removeKeptSnapshots();
         $this->repository->remove();
         parent::tearDown();
-    }
-
-    public function testStartingTheNextRoundFromTheDashboardDispatchesTheStartAndQueuesOneMessagePerReviewer(): void
-    {
-        $round = $this->fixture->startFromSource(new ChangeSource($this->repository->path, 'main'));
-
-        self::assertSame([
-            [self::QUERIES, ReplayMarkOfRound::class],
-            [self::COMMANDS, StartReview::class],
-            [self::COMMANDS, RunReviewRound::class],
-            [self::COMMANDS, RoundOpened::class],
-            [self::COMMANDS, ReviewWithReviewer::class],
-            [self::COMMANDS, ReviewWithReviewer::class],
-        ], $this->messagesOfTheStartOf($round));
     }
 
     /**

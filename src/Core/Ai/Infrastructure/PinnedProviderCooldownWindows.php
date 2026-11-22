@@ -77,6 +77,19 @@ final readonly class PinnedProviderCooldownWindows implements PinnedProviderCool
         return 0 < $left ? intdiv($left + self::MICROSECONDS - 1, self::MICROSECONDS) : 0;
     }
 
+    private function endOf(string $key): ?DateTimeImmutable
+    {
+        $until = $this->pool->getItem($key)->get();
+
+        return $until instanceof DateTimeImmutable ? $until : null;
+    }
+
+    // Hashed, because a router provider name comes from a model id and may hold characters PSR-6 reserves in keys.
+    private function keyOf(PinnedProvider $provider): string
+    {
+        return self::PREFIX.hash('xxh128', $provider->key());
+    }
+
     // True when a running window already ends as late, because answers in flight arrive in any order and the later end must stay.
     private function extend(string $key, DateTimeImmutable $until): bool
     {
@@ -94,18 +107,5 @@ final readonly class PinnedProviderCooldownWindows implements PinnedProviderCool
         } finally {
             $lock->release();
         }
-    }
-
-    private function endOf(string $key): ?DateTimeImmutable
-    {
-        $until = $this->pool->getItem($key)->get();
-
-        return $until instanceof DateTimeImmutable ? $until : null;
-    }
-
-    // Hashed, because a router provider name comes from a model id and may hold characters PSR-6 reserves in keys.
-    private function keyOf(PinnedProvider $provider): string
-    {
-        return self::PREFIX.hash('xxh128', $provider->key());
     }
 }

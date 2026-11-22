@@ -79,19 +79,6 @@ final class ReviewChangeCommandTest extends TestCase
 {
     private TemporaryRepository $repository;
 
-    protected function setUp(): void
-    {
-        $this->repository = new TemporaryRepository();
-        $this->repository->commitFile('README.md', "base\n");
-        $this->repository->checkoutNewBranch('sample');
-        $this->repository->commitFile('src/Feature.php', "<?php\n");
-    }
-
-    protected function tearDown(): void
-    {
-        $this->repository->remove();
-    }
-
     /**
      * @return iterable<string, array{Decision, int}>
      */
@@ -322,6 +309,19 @@ final class ReviewChangeCommandTest extends TestCase
         $this->whenTheCommandRuns($reviews);
     }
 
+    protected function setUp(): void
+    {
+        $this->repository = new TemporaryRepository();
+        $this->repository->commitFile('README.md', "base\n");
+        $this->repository->checkoutNewBranch('sample');
+        $this->repository->commitFile('src/Feature.php', "<?php\n");
+    }
+
+    protected function tearDown(): void
+    {
+        $this->repository->remove();
+    }
+
     /**
      * @param Closure(string): void $look
      */
@@ -343,17 +343,6 @@ final class ReviewChangeCommandTest extends TestCase
         $reviews->method('review')->willReturn($this->outcome($decision));
 
         return $reviews;
-    }
-
-    private function outcome(Decision $decision): ChangeReview
-    {
-        $finding = new Finding('F1', Severity::P1, 'src/Feature.php', 3, null, 'Missing check.', FixableBy::Builder, false, null, null);
-        $verdicts = [
-            new PanelVerdict(Tier::Strong, new Verdict(Decision::Changes, [$finding], [], [])),
-            new PanelVerdict(Tier::Standard, new Verdict(Decision::Approve, [], [], [])),
-        ];
-
-        return new ChangeReview('0192a000-0000-7000-8000-000000000000', 1, $decision, $verdicts, [$finding], RoundTokens::of(2, new TokenFigures(100, 0, 0, 0, 20)), Cost::inUsd(0.00014), Decision::Blocked === $decision ? new BlockReasons('correctness: provider refused the key') : new BlockReasons());
     }
 
     /**
@@ -380,6 +369,17 @@ final class ReviewChangeCommandTest extends TestCase
     private function report(): ReviewReport
     {
         return new ReviewReport(StoredSerializerFactory::create());
+    }
+
+    private function outcome(Decision $decision): ChangeReview
+    {
+        $finding = new Finding('F1', Severity::P1, 'src/Feature.php', 3, null, 'Missing check.', FixableBy::Builder, false, null, null);
+        $verdicts = [
+            new PanelVerdict(Tier::Strong, new Verdict(Decision::Changes, [$finding], [], [])),
+            new PanelVerdict(Tier::Standard, new Verdict(Decision::Approve, [], [], [])),
+        ];
+
+        return new ChangeReview('0192a000-0000-7000-8000-000000000000', 1, $decision, $verdicts, [$finding], RoundTokens::of(2, new TokenFigures(100, 0, 0, 0, 20)), Cost::inUsd(0.00014), Decision::Blocked === $decision ? new BlockReasons('correctness: provider refused the key') : new BlockReasons());
     }
 
     private function onePanel(): Panels

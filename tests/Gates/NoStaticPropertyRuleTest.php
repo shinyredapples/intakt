@@ -19,11 +19,6 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[UsesClass(StaticAnalysisGate::class)]
 final class NoStaticPropertyRuleTest extends PhpStanRuleTestCase
 {
-    protected function ruleFor(string $root): NoStaticPropertyRule
-    {
-        return new NoStaticPropertyRule($root);
-    }
-
     /**
      * @return iterable<string, non-empty-list<CheckRun|string>>
      */
@@ -114,5 +109,10 @@ final class NoStaticPropertyRuleTest extends PhpStanRuleTestCase
     public function testAStaticPropertyOutsideTheRepositoryCodeFoldersPassesStaticAnalysis(): void
     {
         $this->assertRuleAccepts('static-property-migration');
+    }
+
+    protected function ruleFor(string $root): NoStaticPropertyRule
+    {
+        return new NoStaticPropertyRule($root);
     }
 }

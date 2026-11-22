@@ -61,19 +61,6 @@ final class StartReviewToolTest extends TestCase
 {
     private TemporaryRepository $repository;
 
-    protected function setUp(): void
-    {
-        $this->repository = new TemporaryRepository();
-        $this->repository->commitFile('README.md', "base\n");
-        $this->repository->checkoutNewBranch('sample');
-        $this->repository->commitFile('src/Feature.php', "<?php\n");
-    }
-
-    protected function tearDown(): void
-    {
-        $this->repository->remove();
-    }
-
     public function testTheToolReviewsTheNamedBranchAndAnswersWithTheActList(): void
     {
         $seen = null;
@@ -150,26 +137,17 @@ final class StartReviewToolTest extends TestCase
         $this->tool(self::createStub(ChangeReviews::class))($this->gateway(), $this->review(round: 0));
     }
 
-    private function gateway(): ClientGateway
+    protected function setUp(): void
     {
-        return new ClientGateway(self::createStub(SessionInterface::class));
+        $this->repository = new TemporaryRepository();
+        $this->repository->commitFile('README.md', "base\n");
+        $this->repository->checkoutNewBranch('sample');
+        $this->repository->commitFile('src/Feature.php', "<?php\n");
     }
 
-    /**
-     * @return array<string, mixed>
-     */
-    private function review(string $task = 'Add the thing.', ?int $round = null): array
+    protected function tearDown(): void
     {
-        return ['project' => 'alpha', 'task' => $task, 'change' => 'sample', 'repository' => $this->repository->path, 'round' => $round];
-    }
-
-    private function tool(ChangeReviews $reviews): StartReviewTool
-    {
-        $reviewer = new PanelReviewer(new ReviewerRole('core', 'Review the change.'), new ReviewerModel(Tier::Strong, Provider::Anthropic), 10);
-        $panels = self::createStub(Panels::class);
-        $panels->method('panelForChange')->willReturn(new Panel([$reviewer], QuorumPolicy::All));
-
-        return new StartReviewTool(new LocalChangeReview($panels, $reviews));
+        $this->repository->remove();
     }
 
     private function ending(RoundEnds $end, string $reason): ChangeReviews
@@ -192,5 +170,27 @@ final class StartReviewToolTest extends TestCase
         });
 
         return $reviews;
+    }
+
+    private function tool(ChangeReviews $reviews): StartReviewTool
+    {
+        $reviewer = new PanelReviewer(new ReviewerRole('core', 'Review the change.'), new ReviewerModel(Tier::Strong, Provider::Anthropic), 10);
+        $panels = self::createStub(Panels::class);
+        $panels->method('panelForChange')->willReturn(new Panel([$reviewer], QuorumPolicy::All));
+
+        return new StartReviewTool(new LocalChangeReview($panels, $reviews));
+    }
+
+    private function gateway(): ClientGateway
+    {
+        return new ClientGateway(self::createStub(SessionInterface::class));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function review(string $task = 'Add the thing.', ?int $round = null): array
+    {
+        return ['project' => 'alpha', 'task' => $task, 'change' => 'sample', 'repository' => $this->repository->path, 'round' => $round];
     }
 }

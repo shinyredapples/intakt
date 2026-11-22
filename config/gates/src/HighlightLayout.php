@@ -79,19 +79,6 @@ final readonly class HighlightLayout
     }
 
     /**
-     * @param list<string> $body
-     *
-     * @return array{lines: list<string>, kind: HighlightRowKind}
-     */
-    private static function sectionOf(array $body): array
-    {
-        $lines = self::withoutTrailingBlanks($body);
-        $isTable = 1 === preg_match(self::SEPARATOR_ROW, array_last($lines) ?? '');
-
-        return ['lines' => $lines, 'kind' => $isTable ? HighlightRowKind::TableRow : HighlightRowKind::ListItem];
-    }
-
-    /**
      * @param list<string> $lines
      *
      * @return list<string>
@@ -103,5 +90,18 @@ final readonly class HighlightLayout
         }
 
         return $lines;
+    }
+
+    /**
+     * @param list<string> $body
+     *
+     * @return array{lines: list<string>, kind: HighlightRowKind}
+     */
+    private static function sectionOf(array $body): array
+    {
+        $lines = self::withoutTrailingBlanks($body);
+        $isTable = 1 === preg_match(self::SEPARATOR_ROW, array_last($lines) ?? '');
+
+        return ['lines' => $lines, 'kind' => $isTable ? HighlightRowKind::TableRow : HighlightRowKind::ListItem];
     }
 }

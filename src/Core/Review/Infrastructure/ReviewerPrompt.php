@@ -13,6 +13,7 @@ use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\UntrustedSource;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictParser;
+use Intakt\Core\Review\Infrastructure\ReviewerAnswer\Verdict as ReviewerAnswer;
 use Symfony\AI\Agent\Execution\ExecutionInterface;
 use Symfony\AI\Agent\Toolbox\ToolboxInterface;
 use Symfony\AI\Platform\Exception\UnexpectedResultTypeException;
@@ -93,14 +94,6 @@ final readonly class ReviewerPrompt
         return MessageBag::forId($conversation->id, ...$messages);
     }
 
-    /**
-     * @param list<Finding> $open
-     */
-    private function listOf(array $open): string
-    {
-        return implode("\n\n", array_map(static fn (Finding $finding): string => $finding->listEntry(), $open));
-    }
-
     public function cutsInputOf(ReviewBrief $brief): bool
     {
         return $this->cut->cuts($brief->change->task) || $this->cut->cuts($brief->change->diff);
@@ -119,8 +112,17 @@ final readonly class ReviewerPrompt
             $result = $execution->getResult();
             $answer = $result instanceof MultiPartResult ? self::verdictPartOf($result) : $result->getContent();
 
-            return $answer instanceof Verdict ? $answer : throw new UnexpectedResultTypeException(Verdict::class, get_debug_type($answer));
+            // The contract class in the refusal, because its message reaches VerdictUnreadable and must stay the same.
+            return $answer instanceof ReviewerAnswer ? $answer->toVerdict() : throw new UnexpectedResultTypeException(Verdict::class, get_debug_type($answer));
         });
+    }
+
+    /**
+     * @param list<Finding> $open
+     */
+    private function listOf(array $open): string
+    {
+        return implode("\n\n", array_map(static fn (Finding $finding): string => $finding->listEntry(), $open));
     }
 
     // Looked up among the parts, because a multi-part result's own content is the list of its parts, never the verdict one of them holds.

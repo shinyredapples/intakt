@@ -19,11 +19,6 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[UsesClass(ContainerRegistration::class)]
 final class StatefulServiceResetRuleTest extends PhpStanRuleTestCase
 {
-    protected function ruleFor(string $root): StatefulServiceResetRule
-    {
-        return new StatefulServiceResetRule(new ContainerRegistration($root));
-    }
-
     /**
      * @return iterable<string, non-empty-list<CheckRun|string>>
      */
@@ -114,5 +109,10 @@ final class StatefulServiceResetRuleTest extends PhpStanRuleTestCase
     public function testAnAttributeOfTheSameShortNameFromAnotherNamespaceDoesNotExemptAProperty(): void
     {
         $this->assertRuleRejects('kept-for-the-process-lookalike', 'src/Notice.php:9 intakt.statefulService Service property $reported');
+    }
+
+    protected function ruleFor(string $root): StatefulServiceResetRule
+    {
+        return new StatefulServiceResetRule(new ContainerRegistration($root));
     }
 }

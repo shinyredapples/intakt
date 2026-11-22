@@ -21,17 +21,6 @@ final class LogRecordsTest extends TestCase
 
     private LogRecords $records;
 
-    protected function setUp(): void
-    {
-        $this->file = (string) tempnam(sys_get_temp_dir(), 'intakt-log-records-test-');
-        $this->records = new LogRecords($this->file);
-    }
-
-    protected function tearDown(): void
-    {
-        $this->records->discard();
-    }
-
     public function testALoggedErrorTheTestAssertsIsRemovedFromTheRecord(): void
     {
         $this->runLogger()->error('Disk on fire.');
@@ -100,6 +89,17 @@ final class LogRecordsTest extends TestCase
         self::assertSame(0, proc_close($holder['process']));
         self::assertSame(0, proc_close($removal['process']));
         self::assertSame([['level' => LogLevel::ERROR, 'message' => 'Smoke in the hall.']], $this->records->takeErrors());
+    }
+
+    protected function setUp(): void
+    {
+        $this->file = (string) tempnam(sys_get_temp_dir(), 'intakt-log-records-test-');
+        $this->records = new LogRecords($this->file);
+    }
+
+    protected function tearDown(): void
+    {
+        $this->records->discard();
     }
 
     private function runLogger(): RecordingLogger

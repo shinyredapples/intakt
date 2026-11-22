@@ -49,23 +49,6 @@ final class GitBuildCheckoutTest extends TestCase
 
     private TemporaryRepository $remote;
 
-    protected function setUp(): void
-    {
-        $this->mirrors = sys_get_temp_dir().'/intakt-mirrors-'.bin2hex(random_bytes(6));
-        $this->remote = new TemporaryRepository();
-        $this->remote->commitFile('a.txt', 'one');
-    }
-
-    protected function tearDown(): void
-    {
-        if (in_array(StatThatThrows::PROTOCOL, stream_get_wrappers(), true)) {
-            stream_wrapper_unregister(StatThatThrows::PROTOCOL);
-        }
-
-        new Filesystem()->remove([$this->mirrors, $this->mirrors.'-clone']);
-        $this->remote->remove();
-    }
-
     #[RunInSeparateProcess]
     public function testAnUnexpectedInvalidArgumentExceptionPassesThroughTheMirrorPath(): void
     {
@@ -125,6 +108,23 @@ final class GitBuildCheckoutTest extends TestCase
         $this->expectExceptionObject(new InvalidArgumentException('unexpected'));
 
         $this->checkout(new Filesystem())->takeCheckedHead('alpha', new BranchHead('feat/task', $this->remote->objectAt('main')), StatThatThrows::PROTOCOL.'://clone');
+    }
+
+    protected function setUp(): void
+    {
+        $this->mirrors = sys_get_temp_dir().'/intakt-mirrors-'.bin2hex(random_bytes(6));
+        $this->remote = new TemporaryRepository();
+        $this->remote->commitFile('a.txt', 'one');
+    }
+
+    protected function tearDown(): void
+    {
+        if (in_array(StatThatThrows::PROTOCOL, stream_get_wrappers(), true)) {
+            stream_wrapper_unregister(StatThatThrows::PROTOCOL);
+        }
+
+        new Filesystem()->remove([$this->mirrors, $this->mirrors.'-clone']);
+        $this->remote->remove();
     }
 
     private function filesystemThatThrows(): Filesystem

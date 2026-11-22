@@ -1,0 +1,28 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+final readonly class Job
+{
+    public function run(string $input): string
+    {
+        return $this->finish($this->prepare($input));
+    }
+
+    private function prepare(string $input): string
+    {
+        return trim($input);
+    }
+
+    private function tidy(string $output): string
+    {
+        return rtrim($output, '.');
+    }
+
+    private function finish(string $output): string
+    {
+        return $this->tidy($output).'.';
+    }
+}

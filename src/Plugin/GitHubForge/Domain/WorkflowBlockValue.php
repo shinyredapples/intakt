@@ -58,13 +58,13 @@ final readonly class WorkflowBlockValue
         return null;
     }
 
-    private function lead(string $line): int
-    {
-        return strlen($line) - strlen(ltrim($line, ' '));
-    }
-
     private function isBlank(string $line): bool
     {
         return '' === trim($line, " \t");
+    }
+
+    private function lead(string $line): int
+    {
+        return strlen($line) - strlen(ltrim($line, ' '));
     }
 }
