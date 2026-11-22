@@ -7,6 +7,8 @@ namespace Intakt\Core\Dashboard\UseCase\ReplayDemo;
 use DateTimeImmutable;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Contract\LiveUpdates;
+use Intakt\Core\Dashboard\Infrastructure\MercureRoundUpdates;
+use Intakt\Core\Dashboard\Infrastructure\ReplayedJudgedState;
 use Intakt\Core\Dashboard\Infrastructure\ReplayedStart;
 use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Dashboard\Infrastructure\TourCaptionUpdates;
@@ -35,6 +37,7 @@ final readonly class ReplaysRecording
         private LockFactory $locks,
         private ReplayMarks $marks,
         private TourCaptionUpdates $captions,
+        private ReplayedJudgedState $judged,
     ) {
     }
 
@@ -114,19 +117,57 @@ final readonly class ReplaysRecording
         $steps = $this->timelineOf($recording);
         $start = $this->clock->now();
         $number = 0;
+        $judgedAfter = $this->judgedRoundsByLastStep($steps);
 
-        foreach ($steps as $step) {
+        foreach ($steps as $index => $step) {
             $due = $this->secondsBetween($this->momentOf($steps[0]), $this->momentOf($step)) / $factor;
             $this->clock->sleep(max(0.0, $due - $this->secondsBetween($start, $this->clock->now())));
 
             if ($step instanceof CapturedUpdate) {
                 $this->updates->publish(new LiveEvent($step->topic, $step->data));
-
-                continue;
+            } else {
+                $this->append(new LedgerEvent($step->kind, $this->asReplayed($step, $recording->project, $factor)), $recording, $number++);
             }
 
-            $this->append(new LedgerEvent($step->kind, $this->asReplayed($step, $recording->project, $factor)), $recording, $number++);
+            foreach ($judgedAfter[$index] ?? [] as $round) {
+                $this->judged->publish($round);
+            }
         }
+    }
+
+    // After the last step of a judged round, its row or its last recorded update, because the recorded updates carry the review page of the templates the recording was made with, and the judged state rendered with today's must stay the last update of the round's topic (#3470).
+    /**
+     * @param list<RecordedLedgerEvent|CapturedUpdate> $steps
+     *
+     * @return array<int, list<string>>
+     */
+    private function judgedRoundsByLastStep(array $steps): array
+    {
+        $last = [];
+
+        foreach ($steps as $index => $step) {
+            $round = $step instanceof RecordedLedgerEvent && LedgerEventKind::JudgeDone === $step->kind ? self::roundOf($step->payload) : null;
+
+            if (null !== $round) {
+                $last[$round] = $index;
+            }
+        }
+
+        foreach ($steps as $index => $step) {
+            foreach (array_keys($last) as $round) {
+                if ($step instanceof CapturedUpdate && MercureRoundUpdates::topicOf($round) === $step->topic && $index > $last[$round]) {
+                    $last[$round] = $index;
+                }
+            }
+        }
+
+        $byStep = [];
+
+        foreach ($last as $round => $index) {
+            $byStep[$index][] = (string) $round;
+        }
+
+        return $byStep;
     }
 
     // Merged rather than sorted, so each list keeps its recorded order; a row goes before an update of the same moment, because the page an update reloads must find that row.
