@@ -60,7 +60,7 @@ final class ReviewerIdOrderTest extends KernelTestCase
         self::assertSame(['role-1', 'role-2'], array_map(static fn (RoundReviewer $reviewer): string => $reviewer->roleName(), $fixture->round($round->id()->toRfc4122())->reviewers()));
     }
 
-    // A millisecond earlier on every call, as a clock that an NTP step sets back hands out times.
+    // A millisecond earlier on every call, because a clock that a time sync sets back makes each later id sort before the one taken just before it.
     private function clockGoingBack(): ClockInterface
     {
         $now = new DateTimeImmutable('2026-11-22 08:30:00.005');
