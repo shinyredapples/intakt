@@ -57,6 +57,11 @@ final class BoardHeadlineMarkupTest extends KernelTestCase
         self::assertSame('The Code reviewers are reviewing change 3 of sample and change 5 of sample. The Code reviewers are reviewing 2 changes.', $link->text());
     }
 
+    public function testTheLeadLinkCarriesTheClassThatSizesItsTouchTarget(): void
+    {
+        self::assertCount(1, $this->rendered(new Headline(new WhoIsWorking([$this->review('round-3', '3')]), 1))->filter('a.headline-run'));
+    }
+
     public function testTheLeadHasNoLinkWhenNothingIsRunning(): void
     {
         $line = $this->rendered(new Headline(new WhoIsWorking([]), 1));

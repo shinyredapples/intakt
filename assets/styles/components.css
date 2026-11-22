@@ -520,6 +520,8 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
   .headline-short { display: inline; }
   /* The first-day headline is a link alone in its line, so no sentence exempts it from the phone's 44 px touch target (DESIGN.md). */
   .page-head .lead .headline-setup { display: inline-block; min-height: 44px; }
+  /* The running headline is a link alone in its line too, since the line no longer goes on to what waits (UX2 home, issue 3326). */
+  .page-head .lead .headline-run { display: inline-block; min-height: 44px; }
 }
 
 /* The pages' sections, data tables (the mocks' .ledger), the failing-head cards and the live log of a running review. */
