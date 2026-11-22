@@ -76,7 +76,8 @@ A rule marked "enforced by `bin/check`" is checked by the named gate, whose fail
 
 ## Docs, pull requests, commits
 
-- User-visible changes update `docs/user/` and `docs/architecture/` in the same change; docs state only what the code does.
+- User-visible changes update the reference (`docs/reference/`), the story chapters in `docs/user/` they make untrue, and `docs/architecture/` in the same change; docs state only what the code does.
+- Write for people. A user chapter is a short scene, then numbered steps; paragraphs of at most about 60 words, one idea per section. A change rewrites the section it touches and keeps it short; it never extends a paragraph or appends its rules to a page. Detail only contributors need goes to `docs/reference/` or `docs/architecture/`, never into `docs/user/`. A technical page over about 1,500 words opens with an "In short" section of at most about 120 words, which every change keeps true. The `docs` gate will enforce this (#3409); until then reviewers apply it.
 - `docs/architecture/` has one page per topic, listed in its `README.md`: a change updates the page of the topic it touches (`quality-gates.md` for a gate, `ai-providers.md` for a provider, `review-flow.md` for the path of a review), and a new topic gets its own page and one line in that index, never a section in the index itself.
 - A change that starts using, or stops using, a Symfony or Symfony AI feature updates its row of `docs/highlights.md` (status, task and issue, path; never the pull request number) in the same change, always as a new fragment `docs/highlights.d/<issue>-<slug>.md` holding the whole row under its `## <section>` heading, never as an edit of `docs/highlights.md` or of another change's fragment; `bin/highlights` assembles the page, which git ignores and no change commits.
 - A change that adds, removes or changes an external command Intakt or its gates call updates `docs/architecture/requirements.md` in the same change.
