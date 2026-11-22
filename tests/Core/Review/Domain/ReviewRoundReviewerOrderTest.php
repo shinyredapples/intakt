@@ -11,6 +11,7 @@ use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\ReviewerModel;
 use Intakt\Core\Review\Contract\ReviewerRole;
+use Intakt\Core\Review\Contract\VerdictIdentity;
 use Intakt\Core\Review\Domain\ChangeRound;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\ReviewSubject;
@@ -21,6 +22,7 @@ use Intakt\Tests\Core\Review\SampleIdentity;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
+use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Uid\UuidV7;
 
@@ -28,6 +30,13 @@ use Symfony\Component\Uid\UuidV7;
 #[Group('persistence')]
 #[CoversClass(ReviewRound::class)]
 #[CoversClass(RoundReviewer::class)]
+#[UsesClass(ReviewTarget::class)]
+#[UsesClass(ReviewSubject::class)]
+#[UsesClass(ChangeRound::class)]
+#[UsesClass(VerdictIdentity::class)]
+#[UsesClass(PanelReviewer::class)]
+#[UsesClass(ReviewerRole::class)]
+#[UsesClass(ReviewerModel::class)]
 final class ReviewRoundReviewerOrderTest extends KernelTestCase
 {
     private EntityManagerInterface $entities;
