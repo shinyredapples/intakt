@@ -6,10 +6,10 @@ namespace Intakt\Plugin\GitHubWorkSource\Domain;
 
 final readonly class IssueReferences
 {
-    // Any line that starts with the words, after blockquote markers (`>`, repeated, with spaces or not) and a list marker (`-`, `*`, `+`, `1.` or `1)`) or not, with `**`, `__`, `*` or `_` around the words (the same mark on both sides) and the colon inside or outside, because a wait that goes unseen lets a task be built before its base. Possessive, because a long line must not stop the scan of the lines after it.
-    private const string WAITS_LINE = '/^[ \t]*+((?:>[ \t]*+)*+(?:(?:[-*+]|\d{1,9}[.)])[ \t]++)?(?:(\*\*|__|\*|_)Waits[ \t]++for[ \t]*+:?\2|Waits[ \t]++for)(?=[ \t:\r]|$)[ \t]*+:?[ \t]*+(.*?))[ \t\r]*+$/i';
-    // A note may follow the numbers but must hold no digit of any script, because a number Intakt skipped would be a wait it misses.
-    private const string NUMBERS = '/^(#\d+(?:[ \t]*(?:,[ \t]*(?:and[ \t]+|&[ \t]*)?|and[ \t]+|&[ \t]*)#\d+)*)(?![ \t]*(?:[,&]|and\b))[^#\p{N}]*+$/iu';
+    // Any line that starts with the words, after blockquote markers (`>`, repeated, with spaces or not) and a list marker (`-`, `*`, `+`, `1.` or `1)`) or not, with `**`, `__`, `*` or `_` around the words (the same mark on both sides) and the colon inside or outside, because a wait that goes unseen lets a task be built before its base. Anything but a letter, a digit or `_` may follow the words (`Waits for#9`, `Waits for, #9`), so only a joined word (`Waits for_example`) is no wait line. Possessive, because a long line must not stop the scan of the lines after it.
+    private const string WAITS_LINE = '/^[ \t]*+((?:>[ \t]*+)*+(?:(?:[-*+]|\d{1,9}[.)])[ \t]++)?(?:(\*\*|__|\*|_)Waits[ \t]++for[ \t]*+:?\2|Waits[ \t]++for)(?!\w)[ \t]*+:?[ \t]*+(.*?))[ \t\r]*+$/i';
+    // A number is ASCII digits only, because numbersIn() reads no other digit. A note may follow the numbers but must hold no digit of any script, because a number Intakt skipped would be a wait it misses.
+    private const string NUMBERS = '/^(#[0-9]+(?:[ \t]*(?:,[ \t]*(?:and[ \t]+|&[ \t]*)?|and[ \t]+|&[ \t]*)#[0-9]+)*)(?![ \t]*(?:[,&]|and\b))[^#\p{N}]*+$/iu';
     private const string EXTERNAL_OPENS = '/^[ \t]*<!-- external -->[ \t]*\r?$/';
     private const string EXTERNAL_CLOSES = '/^[ \t]*<!-- \/external -->[ \t]*\r?$/';
     private const string CLOSING = '/\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*:?\s+#(\d+)\b/i';

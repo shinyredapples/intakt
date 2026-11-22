@@ -43,7 +43,9 @@ final class IssueReferencesTest extends TestCase
         yield 'in a numbered list with a parenthesis' => ['2) Waits for #9', [9]];
         yield 'in bold with a space before the colon' => ['**Waits for :** #9', [9]];
         yield 'in bold with the colon after a space outside' => ['**Waits for** : #9', [9]];
-        yield 'after a line of blockquote markers' => [str_repeat('>', 20000)."\nWaits for #9", [9]];
+        yield 'no space before the number' => ['Waits for#9', [9]];
+        yield 'in bold with no space before the number' => ['**Waits for**#9', [9]];
+        yield 'after a line of blockquote markers'=> [str_repeat('>', 20000)."\nWaits for #9", [9]];
         yield 'a word joined to the words' => ['Waits for_example #9', []];
         yield 'emphasis that does not close' => ['**Waits for_ #9', []];
         yield 'inside an external block' => ["<!-- external -->\nWaits for #9\nWaits for the base\n<!-- /external -->", []];
@@ -77,7 +79,14 @@ final class IssueReferencesTest extends TestCase
         yield 'a bare number in the note' => ['Waits for #9 then 10', ['Waits for #9 then 10']];
         yield 'a fullwidth number in the note' => ['Waits for #9 then １０', ['Waits for #9 then １０']];
         yield 'an Arabic-Indic number in the note' => ['Waits for #9 then ١٠', ['Waits for #9 then ١٠']];
-        yield 'text that is not UTF-8' => ["Waits for #9 then \xFF", ["Waits for #9 then \xFF"]];
+        yield 'a fullwidth number after the sign' => ['Waits for #9 and #１０', ['Waits for #9 and #１０']];
+        yield 'an Arabic-Indic number after the sign' => ['Waits for #١٠', ['Waits for #١٠']];
+        yield 'a fullwidth number inside the list' => ['Waits for #9, #１０ and #11', ['Waits for #9, #１０ and #11']];
+        yield 'a fullwidth digit that ends a number' => ['Waits for #1２', ['Waits for #1２']];
+        yield 'one Arabic-Indic digit after the sign' => ['Waits for #٩', ['Waits for #٩']];
+        yield 'a comma after the words' => ['Waits for, #9', ['Waits for, #9']];
+        yield 'a no-break space after the words' => ["Waits for\u{00A0}#9", ["Waits for\u{00A0}#9"]];
+        yield 'text that is not UTF-8'=> ["Waits for #9 then \xFF", ["Waits for #9 then \xFF"]];
         yield 'in a numbered list in a blockquote, no number' => ['> 1. **Waits for** the base', ['> 1. **Waits for** the base']];
         yield 'in bold with a space before the colon, a bare number' => ['**Waits for :** #9 then 10', ['**Waits for :** #9 then 10']];
         yield 'after an external block, no number' => ["<!-- external -->\nWaits for #8\n<!-- /external -->\nWaits for the base", ['Waits for the base']];
