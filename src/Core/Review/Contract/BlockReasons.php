@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\Contract;
 
 use ArrayIterator;
-use Countable;
 use IteratorAggregate;
 use Traversable;
 
@@ -13,7 +12,7 @@ use Traversable;
 /**
  * @implements IteratorAggregate<int, string>
  */
-final readonly class BlockReasons implements IteratorAggregate, Countable
+final readonly class BlockReasons implements IteratorAggregate
 {
     /** @var list<string> */
     private array $reasons;
@@ -34,10 +33,5 @@ final readonly class BlockReasons implements IteratorAggregate, Countable
     public function getIterator(): Traversable
     {
         return new ArrayIterator($this->reasons);
-    }
-
-    public function count(): int
-    {
-        return count($this->reasons);
     }
 }

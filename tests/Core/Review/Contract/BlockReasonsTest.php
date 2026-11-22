@@ -32,11 +32,6 @@ final class BlockReasonsTest extends TestCase
         self::assertSame(['role-1 reviewer failed'], [...$reasons]);
     }
 
-    public function testTheReasonsAreCounted(): void
-    {
-        self::assertCount(2, new BlockReasons('a', 'b'));
-    }
-
     public function testReasonsSpreadFromAStringKeyedArrayIterateAsAList(): void
     {
         self::assertSame(['a', 'b'], [...new BlockReasons(...['first' => 'a', 'second' => 'b'])]);
