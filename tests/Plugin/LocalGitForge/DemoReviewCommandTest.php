@@ -307,7 +307,7 @@ final class DemoReviewCommandTest extends TestCase
                 return new MockResponse('{"error":{"message":"rate limited"}}', ['http_code' => 429, 'response_headers' => ['content-type: application/json', 'retry-after: 300']]);
             }
 
-            return new MockResponse(json_encode(['choices' => [['index' => 0, 'message' => ['role' => 'assistant', 'content' => 'reviewed'], 'finish_reason' => 'stop']]], JSON_THROW_ON_ERROR), ['response_headers' => ['content-type: application/json']]);
+            return new MockResponse(json_encode(['choices' => [['index' => 0, 'message' => ['role' => 'assistant', 'content' => 'approve'], 'finish_reason' => 'stop']]], JSON_THROW_ON_ERROR), ['response_headers' => ['content-type: application/json']]);
         });
         $config = [SampleChange::PROJECT => ['tiers' => ['strong' => ['provider' => Provider::OpenAiCompatible->value, 'model' => self::KIMI, 'substitutes' => [['provider' => Provider::OpenAiCompatible->value, 'model' => self::KIMI_TOGETHER]]]]]];
         $bridge = Factory::createPlatform(
@@ -321,17 +321,19 @@ final class DemoReviewCommandTest extends TestCase
         $platform = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $bridge], $accounts, $this->clock, new NullLogger(), $pins);
         $tiers = new TierPlatform(new ConfiguredTierResolver($config, []), new ServiceLocator([Provider::OpenAiCompatible->value => static fn (): PlatformInterface => $platform]), $accounts, new NullLogger());
         $reviews = self::createStub(ChangeReviews::class);
+        // The decision is the fallback's answer as the HTTP response carried it, so the demo can only approve when that response reached it; no clock move between the attempts, so the retry follows at once.
         $reviews->method('review')->willReturnCallback(function (ChangeReviewRequest $request, ReviewProgress $progress) use ($tiers): ChangeReview {
-            foreach ([1, 2] as $attempt) {
+            $answer = null;
+            while (null === $answer) {
                 $progress->reached($this->waitingOnCorrectness());
 
                 try {
-                    $tiers->invoke($tiers->answering(SampleChange::PROJECT, Tier::Strong), new TierRequest(new MessageBag(Message::ofUser('Review.'))))->asText();
+                    $answer = $tiers->invoke($tiers->answering(SampleChange::PROJECT, Tier::Strong), new TierRequest(new MessageBag(Message::ofUser('Review.'))))->asText();
                 } catch (RateLimitExceededException) {
                 }
             }
 
-            return $this->outcome(Decision::Approve);
+            return $this->outcome(Decision::from($answer));
         });
         $this->tiers = $tiers;
 

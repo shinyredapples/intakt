@@ -92,7 +92,7 @@ final readonly class ReviewWithReviewerHandler
         }
 
         $verdict = $this->goalposts->applyToVerdict($round->number(), $review->verdict->asRecorded(), $brief->open);
-        if ($this->leases->recordVerdict($reviewer, $verdict, $review->substitute)) {
+        if ($this->leases->recordVerdict($reviewer, $verdict, $review->substitute, $review->substituteModel)) {
             $this->progress->publishStopOf($reviewer);
         }
     }

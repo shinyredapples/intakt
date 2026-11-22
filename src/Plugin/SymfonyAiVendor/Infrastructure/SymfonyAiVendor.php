@@ -91,7 +91,7 @@ final readonly class SymfonyAiVendor implements Vendor
         };
 
         // Around the whole review on the provider that answers it, so a substitute keeps its own limit and a review refused for a busy account reserves and counts no usage.
-        return $this->accounts->run($answering->provider, fn (): VendorReview => new VendorReview($this->blockedWhenCut($answering, fn (): Verdict => $this->retriedOnce($first, $retry)), $substitute));
+        return $this->accounts->run($answering->provider, fn (): VendorReview => new VendorReview($this->blockedWhenCut($answering, fn (): Verdict => $this->retriedOnce($first, $retry)), $substitute?->provider, $substitute?->model));
     }
 
     // Retried once, because a call stopped by the output limit or an answer that is no verdict leaves nothing to judge and the same room could stop it again, a changes verdict without findings is no verdict either, an endpoint that could not be reached is often reached on the next call, and a stream cut before its answer completed may be a streaming fault the provider does not have unstreamed; a second failure fails the reviewer. A stream that a subscription CLI cut is not retried, because its call never streamed, and neither is a cut caused by a provider outage, because the outage has already cooled the account down and retrying would turn a blocked reviewer into a waiting one.
@@ -183,10 +183,10 @@ final readonly class SymfonyAiVendor implements Vendor
         }
     }
 
-    // Read from the model chosen before the review, never from its text, so a reviewer cannot claim to be a substitute; against the configured model, because a disabled one is substituted too.
-    private function substituteOf(string $project, Tier $tier, ResolvedModel $answering): ?Provider
+    // Read from the model chosen before the review, never from its text, so a reviewer cannot claim to be a substitute; against the configured model, because a disabled one is substituted too; a pinned fallback of the same model owes no catch-up, another model on the own provider does.
+    private function substituteOf(string $project, Tier $tier, ResolvedModel $answering): ?ResolvedModel
     {
-        return $this->resolver->configured($project, $tier)->provider === $answering->provider ? null : $answering->provider;
+        return $answering->isTheSameModelAs($this->resolver->configured($project, $tier)) ? null : $answering;
     }
 
     private function verdictOn(ResolvedModel $answering, UsageReservation $reservation, ReviewRequest $request): Verdict

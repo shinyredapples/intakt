@@ -85,15 +85,10 @@ final readonly class TierPlatform implements TierInvoker
         return [$own, ...$fallbacks, ...$others];
     }
 
-    // Same provider and the same model (the part before the colon, where a router names its pinned provider); another model on the own provider is a substitute. A provider is judged once by its first model, except the own provider, which is judged per model because each pin has its own window.
+    // Another model on the own provider is a substitute. A provider is judged once by its first model, except the own provider, which is judged per model because each pin has its own window.
     private function isFallbackOfTheOwnModel(ResolvedModel $own, ResolvedModel $model): bool
     {
-        return $model !== $own && $model->provider === $own->provider && $this->modelPart($model) === $this->modelPart($own);
-    }
-
-    private function modelPart(ResolvedModel $model): string
-    {
-        return explode(':', $model->model, 2)[0];
+        return $model !== $own && $model->isTheSameModelAs($own);
     }
 
     // The shortest wait, because the call may go on as soon as any one of the provider's pins frees.

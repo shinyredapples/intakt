@@ -13,6 +13,7 @@ use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierInvoker;
 use Intakt\Core\Ai\Contract\TierResolutionFailure;
 use Intakt\Core\Review\Contract\AwaitedReviewer;
+use Intakt\Core\Review\Contract\FinishedState;
 use Intakt\Core\Review\Contract\ReviewProgress;
 use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Core\Review\Contract\SampleChange;
@@ -33,6 +34,11 @@ final class DemoProgress implements ReviewProgress
 
     private ?DateTimeImmutable $lastSaid = null;
 
+    /**
+     * @var list<AwaitedReviewer>
+     */
+    private array $awaited = [];
+
     public function __construct(
         private readonly OutputInterface $output,
         private readonly TierInvoker $tiers,
@@ -42,7 +48,14 @@ final class DemoProgress implements ReviewProgress
 
     public function reached(RoundProgress $progress): void
     {
-        if ($progress->judged || ([] === $progress->awaited && !$progress->findingsToJudge)) {
+        if ($progress->judged) {
+            return;
+        }
+
+        $this->stopWhenBlockedByAWait($progress);
+        $this->awaited = $progress->awaited;
+
+        if ([] === $progress->awaited && !$progress->findingsToJudge) {
             return;
         }
 
@@ -60,6 +73,41 @@ final class DemoProgress implements ReviewProgress
         if ($this->lastSaid instanceof DateTimeImmutable && $now >= $this->lastSaid->modify('+'.self::REPEAT_SECONDS.' seconds')) {
             $this->say(sprintf('Still waiting after %d s on %s.', $now->getTimestamp() - $this->since->getTimestamp(), $waitingOn), $now);
         }
+    }
+
+    // Asked for each reviewer that left the awaited list blocked since the last poll, because the worker may record a reviewer blocked by its cooling pins before the demo polls again, and the demo must still stop with the plain message then; a blocked round without a wait ends as usual.
+    private function stopWhenBlockedByAWait(RoundProgress $progress): void
+    {
+        if (!in_array(FinishedState::Blocked, $progress->finished, true)) {
+            return;
+        }
+
+        foreach ($this->leftSinceLastPoll($progress->awaited) as $reviewer) {
+            $this->modelOf($reviewer->role.' reviewer', $reviewer->tier);
+        }
+    }
+
+    // Counted one by one, because two reviewers of the same role and tier look alike and only one of them may have left.
+    /**
+     * @param list<AwaitedReviewer> $stillAwaited
+     *
+     * @return list<AwaitedReviewer>
+     */
+    private function leftSinceLastPoll(array $stillAwaited): array
+    {
+        $left = [];
+        foreach ($this->awaited as $reviewer) {
+            $kept = array_find_key($stillAwaited, static fn (AwaitedReviewer $awaited): bool => $awaited->role === $reviewer->role && $awaited->tier === $reviewer->tier);
+            if (null === $kept) {
+                $left[] = $reviewer;
+
+                continue;
+            }
+
+            unset($stillAwaited[$kept]);
+        }
+
+        return $left;
     }
 
     // The judge only once every reviewer is in, because it reads their findings.

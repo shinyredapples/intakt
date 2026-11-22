@@ -31,7 +31,7 @@ use Symfony\Component\Process\Process;
 
 final readonly class LocalGitForge implements Forge, AuthorTrust
 {
-    // Named apart from the snapshots withSnapshotOf() removes itself, so the removal after the judge never races a command that removes its own.
+    // Named apart from the snapshots withSnapshotOf() removes itself, so the removal after the judge never touches those; a kept snapshot may be removed by both the command and the removal after the judge, which removeSnapshot() tolerates.
     public const string KEPT_SNAPSHOT_PREFIX = 'intakt-kept-review-';
 
     private const string SNAPSHOT_PREFIX = 'intakt-review-';
@@ -117,11 +117,15 @@ final readonly class LocalGitForge implements Forge, AuthorTrust
         return $this->addWorktree($head, self::KEPT_SNAPSHOT_PREFIX);
     }
 
-    // Skips a snapshot already gone, because a stopped command removes it before the work returns.
+    // Asked whether the snapshot is gone only after git failed, never before, because another remover may take it between a check and the removal: a stopped command removes it before the work returns, and RemoveKeptSnapshot removes a kept one once its round is judged, while the command that waited for that round removes it too.
     public function removeSnapshot(string $snapshot): void
     {
-        if (is_dir($snapshot)) {
+        try {
             $this->read(['worktree', 'remove', '--force', $snapshot]);
+        } catch (ForgeReadFailed $failure) {
+            if (is_dir($snapshot)) {
+                throw $failure;
+            }
         }
     }
 

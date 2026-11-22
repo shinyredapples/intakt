@@ -38,7 +38,7 @@ final readonly class ReviewerMoves
 
     // Says whether it answered a stop request, because only this decision may show the reviewer as stopped: the ledger read again later can hold a newer request or an older run's stop.
     #[NoDiscard]
-    public function receive(RoundReviewer $reviewer, Verdict $verdict, ?Provider $substitute): bool
+    public function receive(RoundReviewer $reviewer, Verdict $verdict, ?Provider $substitute, ?string $substituteModel = null): bool
     {
         $reviewer->recordVerdict($this->serializer->serialize($verdict, JsonEncoder::FORMAT), $substitute);
         $this->machine->apply($reviewer, ReviewerTransition::Receive->value);
@@ -46,7 +46,7 @@ final readonly class ReviewerMoves
         $stopped = $this->answerStopRequest($reviewer, $verdict);
 
         if ($substitute instanceof Provider) {
-            $this->ledger->catchUpOwed($reviewer, $substitute);
+            $this->ledger->catchUpOwed($reviewer, $substitute, $substituteModel);
         }
 
         return $stopped;

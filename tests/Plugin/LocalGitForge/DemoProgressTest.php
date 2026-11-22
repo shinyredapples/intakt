@@ -12,6 +12,7 @@ use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierInvoker;
 use Intakt\Core\Review\Contract\AwaitedReviewer;
+use Intakt\Core\Review\Contract\FinishedState;
 use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Core\Review\Contract\SampleChange;
 use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\DemoProgress;
@@ -130,6 +131,48 @@ final class DemoProgressTest extends TestCase
 
         self::assertInstanceOf(DemoProviderBusy::class, $busy);
         self::assertStringStartsWith('The correctness reviewer cannot get an answer: openai_compatible is rate-limited for 42 s and no fallback is free.', $busy->getMessage());
+    }
+
+    // Forced order: the worker records the reviewer blocked by its cooling pin before the next poll, so the reviewer is no longer awaited when the demo looks again.
+    public function testAReviewerBlockedByACoolingPinBetweenTwoPollsStillStopsTheDemo(): void
+    {
+        $tiers = self::createStub(TierInvoker::class);
+        $tiers->method('answering')->willReturnOnConsecutiveCalls(
+            new ResolvedModel(Provider::OpenAiCompatible, self::KIMI),
+            self::throwException(new EveryProviderOut([ProviderOutage::coolingDown(Provider::OpenAiCompatible, 60)])),
+        );
+        $progress = $this->progress($tiers);
+        $progress->reached(new RoundProgress(0, 1, false, [], 1, [new AwaitedReviewer('correctness', Tier::Strong)]));
+
+        $busy = $this->failureOf(static fn () => $progress->reached(new RoundProgress(1, 1, false, ['reviewer' => FinishedState::Blocked], 1, [], false)));
+
+        self::assertInstanceOf(DemoProviderBusy::class, $busy);
+        self::assertStringStartsWith('The correctness reviewer cannot get an answer: openai_compatible is rate-limited for 60 s', $busy->getMessage());
+    }
+
+    public function testAReviewerBlockedWhileItsTierIsFreeEndsTheDemoAsUsual(): void
+    {
+        $progress = $this->progress($this->answering());
+        $progress->reached(new RoundProgress(0, 1, false, [], 1, [new AwaitedReviewer('correctness', Tier::Strong)]));
+
+        $progress->reached(new RoundProgress(1, 1, false, ['reviewer' => FinishedState::Blocked], 1, [], false));
+
+        self::assertSame(['Waiting on the correctness reviewer ('.self::KIMI.').'], $this->lines());
+    }
+
+    public function testAReviewerThatAnsweredBetweenTwoPollsIsNotAskedAboutAgain(): void
+    {
+        $tiers = self::createStub(TierInvoker::class);
+        $tiers->method('answering')->willReturnOnConsecutiveCalls(
+            new ResolvedModel(Provider::OpenAiCompatible, self::KIMI),
+            self::throwException(new EveryAccountCoolingDown(Provider::OpenAiCompatible, 60)),
+        );
+        $progress = $this->progress($tiers);
+        $progress->reached(new RoundProgress(0, 1, false, [], 1, [new AwaitedReviewer('correctness', Tier::Strong)]));
+
+        $progress->reached(new RoundProgress(1, 1, false, ['reviewer' => FinishedState::Verdict], 1, [], false));
+
+        self::assertSame(['Waiting on the correctness reviewer ('.self::KIMI.').'], $this->lines());
     }
 
     // Keys rejected or a disabled provider are no rate limit, so the demo leaves them to the reviewer, which ends with its own reason.

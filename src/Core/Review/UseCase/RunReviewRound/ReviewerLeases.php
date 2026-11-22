@@ -50,9 +50,9 @@ final readonly class ReviewerLeases
 
     // Says whether the stored verdict answered a stop request, because the stop may be shown only once this transaction has committed.
     #[NoDiscard]
-    public function recordVerdict(RoundReviewer $reviewer, Verdict $verdict, ?Provider $substitute): bool
+    public function recordVerdict(RoundReviewer $reviewer, Verdict $verdict, ?Provider $substitute, ?string $substituteModel = null): bool
     {
-        return true === $this->record($reviewer, fn (RoundReviewer $stored): bool => $this->moves->receive($stored, $verdict, $substitute));
+        return true === $this->record($reviewer, fn (RoundReviewer $stored): bool => $this->moves->receive($stored, $verdict, $substitute, $substituteModel));
     }
 
     public function recordFailure(RoundReviewer $reviewer, string $failure): void

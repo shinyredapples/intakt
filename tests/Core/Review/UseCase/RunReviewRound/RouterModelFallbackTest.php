@@ -17,6 +17,7 @@ use Intakt\Core\Ai\Infrastructure\PinnedProviderCooldownWindows;
 use Intakt\Core\Ai\Infrastructure\SendFailures;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
 use Intakt\Core\Ai\Infrastructure\TypedRejectionConverter;
+use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\PromptCut;
@@ -102,6 +103,8 @@ final class RouterModelFallbackTest extends KernelTestCase
 
     private const string FALLBACK = 'moonshotai/Kimi-K3.1-Pro:together';
 
+    private const string OTHER_MODEL = 'deepseek-ai/DeepSeek-V4:novita';
+
     private RoundFixture $fixture;
 
     private AccountCooldownWindows $cooldowns;
@@ -146,9 +149,51 @@ final class RouterModelFallbackTest extends KernelTestCase
         self::assertSame(0, $this->cooldowns->secondsUntilAnAccountIsFree(Provider::OpenAiCompatible));
     }
 
-    private function vendor(): Vendor
+    // Maintainer decision 3 of issue #2861: another model on the own provider is a substitute, so its verdict owes a catch-up recorded under that model, even when a pinned fallback of the same model is listed before it on that provider.
+    public function testAnotherModelOnTheOwnProviderAnsweringAfterThePinned429OwesACatchUpUnderItsModel(): void
     {
-        $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['standard' => ['provider' => Provider::OpenAiCompatible->value, 'model' => self::PINNED, 'substitutes' => [['provider' => Provider::OpenAiCompatible->value, 'model' => self::FALLBACK]]]]]], []);
+        $round = $this->fixture->start(1);
+        $message = $this->fixture->bus->messages[0];
+        $this->pins->coolDown(new PinnedProvider(new Account(Provider::OpenAiCompatible, Account::DEFAULT), 'together'), 600);
+        $vendor = $this->vendor([self::FALLBACK, self::OTHER_MODEL]);
+
+        try {
+            $this->fixture->deliver($message, $vendor);
+        } catch (ReviewerMovesToAnotherAccount) {
+        }
+
+        $this->fixture->deliver($message, $vendor);
+
+        $reviewer = $this->fixture->round($round->id()->toRfc4122())->reviewers()[0];
+        self::assertSame([self::PINNED, self::OTHER_MODEL], $this->sent);
+        self::assertSame([Provider::OpenAiCompatible, true], [$reviewer->substitute(), $reviewer->owesCatchUp()]);
+        self::assertSame([self::OTHER_MODEL], $this->catchUpModels());
+    }
+
+    /**
+     * @return list<mixed>
+     */
+    private function catchUpModels(): array
+    {
+        $models = [];
+        foreach ($this->fixture->ledger()->readInOrder() as $recorded) {
+            if (LedgerEventKind::CatchUpOwed === $recorded->event->kind) {
+                /** @var array<string, mixed> $payload */
+                $payload = json_decode($recorded->event->payload, true, flags: JSON_THROW_ON_ERROR);
+                $models[] = $payload['model'] ?? null;
+            }
+        }
+
+        return $models;
+    }
+
+    /**
+     * @param list<non-empty-string> $substitutes
+     */
+    private function vendor(array $substitutes = [self::FALLBACK]): Vendor
+    {
+        $listed = array_map(static fn (string $model): array => ['provider' => Provider::OpenAiCompatible->value, 'model' => $model], $substitutes);
+        $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['standard' => ['provider' => Provider::OpenAiCompatible->value, 'model' => self::PINNED, 'substitutes' => $listed]]]], []);
         $router = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $this->router()], $this->cooldowns, new NativeClock(), new NullLogger(), $this->pins);
         $tiers = new TierPlatform($resolver, new ServiceLocator([Provider::OpenAiCompatible->value => static fn (): PlatformInterface => $router]), $this->cooldowns, new NullLogger());
         $reviewer = new ReviewerAgent(new ReviewerPrompt(new Fence(), new PromptCut(new Fence()), new VerdictParser()), new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates()), new ReviewerStopping(new StopRequests(new InMemoryLedger(), new LedgerPayloads(StoredSerializerFactory::create())))));
