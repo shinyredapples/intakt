@@ -1,0 +1,4 @@
+{#- The Waiting on you page's head, list and panels, each from the partial the page includes, so a pushed page never differs from one loaded after it. Morphed, so an item link or a Meanwhile link the push carries unchanged stays the same node and keeps the keyboard focus it holds. -#}
+<turbo-stream action="replace" method="morph" target="waiting-head"><template>{{ include('dashboard/_waiting_head.html.twig', {items: page.items}, with_context = false) }}</template></turbo-stream>
+<turbo-stream action="replace" method="morph" target="waiting-list"><template>{{ include('dashboard/_waiting_list.html.twig', {items: page.items, now: now}, with_context = false) }}</template></turbo-stream>
+<turbo-stream action="replace" method="morph" target="waiting-side"><template>{{ include('dashboard/_waiting_side.html.twig', {page: page, now: now}, with_context = false) }}</template></turbo-stream>

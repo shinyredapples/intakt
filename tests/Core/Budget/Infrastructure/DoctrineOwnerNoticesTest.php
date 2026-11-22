@@ -208,7 +208,7 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
         $logger = $this->createMock(LoggerInterface::class);
         $logger->expects($this->once())->method('warning')->with(self::anything(), ['account' => 'claude_code.main', 'since' => '2026-11-02T08:00:01+00:00']);
         $dispatcher = new EventDispatcher();
-        $dispatcher->addListener(UsageReadingsStayedAway::class, new DoctrineOutageNotices($this->entities, new LockFactory(new InMemoryStore()), $logger)->noticeOnce(...));
+        $dispatcher->addListener(UsageReadingsStayedAway::class, new DoctrineOutageNotices($this->entities, new LockFactory(new InMemoryStore()), $logger, new EventDispatcher())->noticeOnce(...));
 
         new OutageWatch($slowLookups, $clock, $dispatcher)->watch($account);
 
@@ -537,7 +537,7 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
             }
         };
         $connection = DriverManager::getConnection($this->entities->getConnection()->getParams(), new Configuration()->setMiddlewares([new Middleware($hook)]));
-        $notices = new DoctrineOutageNotices(new EntityManager($connection, $this->entities->getConfiguration()), new LockFactory(new InMemoryStore()), self::createStub(LoggerInterface::class));
+        $notices = new DoctrineOutageNotices(new EntityManager($connection, $this->entities->getConfiguration()), new LockFactory(new InMemoryStore()), self::createStub(LoggerInterface::class), new EventDispatcher());
 
         $notices->noticeOnce(new UsageReadingsStayedAway(new Account(Provider::ClaudeCode, 'main'), new DateTimeImmutable('2026-11-02T08:00:00+00:00'), new DateTimeImmutable('2026-11-02T11:00:00+00:00')));
 
@@ -570,7 +570,7 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
             }
         };
         $writer = DriverManager::getConnection($connection->getParams(), new Configuration()->setMiddlewares([new Middleware($hook)]));
-        $notices = new DoctrineOutageNotices(new EntityManager($writer, $this->entities->getConfiguration()), new LockFactory(new InMemoryStore()), self::createStub(LoggerInterface::class));
+        $notices = new DoctrineOutageNotices(new EntityManager($writer, $this->entities->getConfiguration()), new LockFactory(new InMemoryStore()), self::createStub(LoggerInterface::class), new EventDispatcher());
 
         $notices->noticeOnce(new UsageReadingsStayedAway(new Account(Provider::ClaudeCode, 'main'), new DateTimeImmutable('2026-11-02T08:00:00+00:00'), new DateTimeImmutable('2026-11-02T11:00:00+00:00')));
 
@@ -796,7 +796,7 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
 
     private function outageNotices(): DoctrineOutageNotices
     {
-        return new DoctrineOutageNotices($this->entities, new LockFactory(new InMemoryStore()), self::createStub(LoggerInterface::class));
+        return new DoctrineOutageNotices($this->entities, new LockFactory(new InMemoryStore()), self::createStub(LoggerInterface::class), new EventDispatcher());
     }
 
     /**

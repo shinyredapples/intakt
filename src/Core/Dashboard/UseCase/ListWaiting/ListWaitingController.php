@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Dashboard\UseCase\ListWaiting;
 
 use Intakt\Core\Dashboard\Contract\DashboardRoutes;
+use Intakt\Core\Dashboard\Contract\DashboardTopics;
 use Intakt\Core\Dashboard\Infrastructure\FilterProjects;
 use Intakt\Core\Dashboard\Infrastructure\LivePageRendering;
 use Intakt\Core\Dashboard\Infrastructure\WaitingPageReading;
@@ -37,6 +38,7 @@ final readonly class ListWaitingController
             'now' => $this->clock->now(),
             'linked_project' => $project,
             'project_trail' => in_array($project, $this->filterProjects->names(), true) ? $project : null,
+            'topics' => [DashboardTopics::WAITING],
         ]));
     }
 }
