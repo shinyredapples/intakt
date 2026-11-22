@@ -36,6 +36,7 @@ use Symfony\Component\Uid\UuidV7;
 #[UsesClass(LedgerEvent::class)]
 #[UsesClass(LedgerEventKind::class)]
 #[UsesClass(LedgerEventsAreAppendOnly::class)]
+#[UsesClass(Mentions::class)]
 #[UsesClass(RecordedEvent::class)]
 #[UsesClass(UtcDateTimeImmutableType::class)]
 final class DoctrineLedgerTest extends KernelTestCase

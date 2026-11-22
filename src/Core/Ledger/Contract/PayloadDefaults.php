@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Ledger\Contract;
 
 use ArrayIterator;
+use InvalidArgumentException;
 use IteratorAggregate;
 use Traversable;
 
@@ -19,8 +20,15 @@ final readonly class PayloadDefaults implements IteratorAggregate
 
     public function __construct(mixed ...$values)
     {
-        /** @var array<string, mixed> $named */
-        $named = $values;
+        $named = [];
+        foreach ($values as $name => $value) {
+            if (!\is_string($name)) {
+                throw new InvalidArgumentException('Payload defaults are named by constructor parameter; a positional default would never be read.');
+            }
+
+            $named[$name] = $value;
+        }
+
         $this->values = $named;
     }
 
