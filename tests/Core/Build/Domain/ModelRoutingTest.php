@@ -11,6 +11,7 @@ use Intakt\Core\Build\Contract\TierChoice;
 use Intakt\Core\Build\Contract\TierReason;
 use Intakt\Core\Build\Domain\ModelRouting;
 use Intakt\Core\Build\Domain\RoutingRules;
+use Intakt\Core\Review\Contract\EscalationOutcome;
 use Intakt\Core\Review\Contract\PathGlob;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -121,6 +122,41 @@ final class ModelRoutingTest extends TestCase
         $choice = $this->choose(new BuildFacts(Tier::Strong, [], Setback::Stall));
 
         self::assertSame(TierReason::Label, $choice->reason);
+    }
+
+    public function testABuildAfterAConfirmedEscalationRunsOnTheStrongTierEvenWhenTheProjectEscalatesOnNoSetback(): void
+    {
+        $choice = $this->choose(new BuildFacts(Tier::Light, [], null, EscalationOutcome::Confirmed), []);
+
+        self::assertSame([Tier::Strong, TierReason::ConfirmedEscalation], [$choice->tier, $choice->reason]);
+    }
+
+    public function testABuildAfterARejectedEscalationKeepsItsLabelledTier(): void
+    {
+        $choice = $this->choose(new BuildFacts(Tier::Light, [], null, EscalationOutcome::Rejected));
+
+        self::assertSame([Tier::Light, TierReason::Label], [$choice->tier, $choice->reason]);
+    }
+
+    public function testASensitivePathStillWinsOverAConfirmedEscalation(): void
+    {
+        $choice = $this->choose(new BuildFacts(null, ['src/Security/a.php'], null, EscalationOutcome::Confirmed));
+
+        self::assertSame(TierReason::SensitivePath, $choice->reason);
+    }
+
+    public function testAConfirmedEscalationGivesItsReasonEvenWhenTheLabelAlreadyNamesStrong(): void
+    {
+        $choice = $this->choose(new BuildFacts(Tier::Strong, [], null, EscalationOutcome::Confirmed));
+
+        self::assertSame([Tier::Strong, TierReason::ConfirmedEscalation], [$choice->tier, $choice->reason]);
+    }
+
+    public function testFactsAfterAnEscalationKeepTheirLabelPathsAndSetback(): void
+    {
+        $facts = BuildFacts::fromLabels(['model:light'], ['a.php'], Setback::Stall)->afterEscalation(EscalationOutcome::Confirmed);
+
+        self::assertEquals(new BuildFacts(Tier::Light, ['a.php'], Setback::Stall, EscalationOutcome::Confirmed), $facts);
     }
 
     public function testABuildWithoutPathsOrSensitiveRulesGetsTheDefault(): void

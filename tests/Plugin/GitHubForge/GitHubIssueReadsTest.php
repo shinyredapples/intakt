@@ -365,6 +365,16 @@ final class GitHubIssueReadsTest extends TestCase
         self::assertSame('GitHub answered a Link header this forge cannot read.', $this->failureOf($api)->getMessage());
     }
 
+    public function testALinkHeaderWithAnEmptyListElementFailsTheListing(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->page(1, 100), 2 => $this->page(101, 1)];
+        $api->namingNext = [1];
+        $api->nextLink = '<https://api.github.com/repositories/1/issues?page=%d>; rel="next", , <https://api.github.com/repositories/1/issues?page=1>; rel="first"';
+
+        self::assertSame('GitHub answered a Link header this forge cannot read.', $this->failureOf($api)->getMessage());
+    }
+
     public function testARateLimitedLaterPageFailsTheListingAsRateLimited(): void
     {
         $api = new RecordedIssueApi();
