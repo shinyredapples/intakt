@@ -17,6 +17,7 @@ final readonly class BranchGit
 
     public function __construct(
         private HardenedGit $hardened,
+        private GuardedRun $guardedRun,
         private float $timeoutSeconds = 600,
     ) {
     }
@@ -115,6 +116,6 @@ final readonly class BranchGit
      */
     private function finished(Process $process, array $arguments): Process
     {
-        return GuardedRun::of($process, 'git '.($arguments[0] ?? ''));
+        return $this->guardedRun->run($process, 'git '.($arguments[0] ?? ''));
     }
 }

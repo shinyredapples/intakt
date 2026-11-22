@@ -134,19 +134,12 @@ final readonly class BuildTask
     private function readTask(BuildTaskRequest $request): ListedIssue|string
     {
         try {
-            $listing = $this->issues->listOpen($request->project, null);
+            $issue = $this->issues->readOpen($request->project, $request->issue);
         } catch (ForgeReadFailed|ForgeRateLimited $failure) {
             return $failure->getMessage();
         }
 
-        foreach ($listing->issues() as $issue) {
-            // Because GitHub lists pull requests among the issues, and a pull request is no task.
-            if ($issue->number === $request->issue && !$issue->isPullRequest) {
-                return $issue;
-            }
-        }
-
-        return sprintf('project "%s" has no open issue %d', $request->project, $request->issue);
+        return $issue ?? sprintf('project "%s" has no open issue %d', $request->project, $request->issue);
     }
 
     private function updateMirror(BuildTaskRequest $request): ?string

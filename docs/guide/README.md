@@ -7,6 +7,7 @@ Guides that explain Intakt without assuming you know how it is built. Each one d
 | [How Intakt works](how-intakt-works.md) | the big picture: who does what, what needs you |
 | [The journey of a task](the-journey-of-a-task.md) | every step from picking a task to merging it |
 | [The engine room](the-engine-room.md) | what lanes, queues, locks, cycles, budgets and draining mean |
+| [Running one task](running-one-task.md) | building one issue with `intakt:build:task`: its steps, where it stops, and its lines in the ledger |
 | [Writing a good task](writing-a-good-task.md) | how to write tasks Intakt builds in one go |
 | [Steering Intakt](steering-intakt.md) | the labels, comments and approvals you can use |
 | [A tour of the dashboard](a-tour-of-the-dashboard.md) | what the board, cards and badges show |

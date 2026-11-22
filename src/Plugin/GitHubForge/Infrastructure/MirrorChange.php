@@ -20,7 +20,7 @@ final readonly class MirrorChange
 
     public function __construct(
         private HardenedGit $hardened,
-        private BinaryFiles $binaryFiles = new BinaryFiles(),
+        private BinaryFiles $binaryFiles,
     ) {
     }
 

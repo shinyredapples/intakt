@@ -7,6 +7,8 @@ namespace Intakt\Core\Review\UseCase\EscalateRecurringP1;
 use Closure;
 use Intakt\Core\Platform\Contract\AsCommandHandler;
 use Intakt\Core\Review\Contract\EscalationFailed;
+use Intakt\Core\Review\Contract\EscalationRequest;
+use Intakt\Core\Review\Contract\EscalationReviewed;
 use Intakt\Core\Review\Contract\EscalationReviewer;
 use Intakt\Core\Review\Contract\EscalationReviewFailed;
 use Intakt\Core\Review\Contract\EscalationVerdict;
@@ -18,10 +20,13 @@ use Intakt\Core\Review\Domain\VerdictAlreadyKept;
 use Intakt\Core\Review\Infrastructure\KeptVerdicts;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
 use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
+use Intakt\Plugin\Vendor\Contract\ProviderFailedTransiently;
+use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
+use Intakt\Plugin\Vendor\Contract\VendorAccountBusy;
 use Symfony\Component\Lock\LockFactory;
 use Throwable;
 
-// Queued from the judging's transaction and run after it, so the strong tier's call holds none of the judging's locks; a failure of the call goes to the queue, which tries the escalation again, as Intakt's own exception without the provider's message.
+// Queued from the judging's transaction and run after it, so the strong tier's call holds none of the judging's locks; a failure of the call goes to the queue, which tries the escalation again, as Intakt's own exception without the provider's message: a busy account or a rate limit is waited out, and any other failure ends parked, where the failure stamp records escalation_failed.
 #[AsCommandHandler]
 final readonly class EscalateRecurringP1Handler
 {
@@ -41,7 +46,7 @@ final readonly class EscalateRecurringP1Handler
     // Not waited for, because Messenger brings a busy message back and it then finds the verdict the holder of the key kept, so two deliveries of one key rarely pay for two answers.
     public function __invoke(EscalateRecurringP1 $command): void
     {
-        $lock = $this->locks->createLock(self::LOCK_PREFIX.hash('sha256', $command->key));
+        $lock = $this->locks->createLock(self::lockNameOf($command->key));
 
         if (!$lock->acquire()) {
             throw EscalationBusy::of($command->key);
@@ -85,11 +90,7 @@ final readonly class EscalateRecurringP1Handler
             return;
         }
 
-        try {
-            $result = $this->reviewer->review($round->project(), $round->id(), $request);
-        } catch (Throwable $failure) {
-            throw EscalationCallFailed::of($command->key, $failure);
-        }
+        $result = $this->answerOf($round, $command, $request);
 
         if ($result instanceof EscalationFailed) {
             $this->failed($round, $command, $result->reason);
@@ -98,6 +99,27 @@ final readonly class EscalateRecurringP1Handler
         }
 
         $this->keep($round, $command, $result->verdict);
+    }
+
+    // The same lock for the escalation and the record of its failure, so the two never write for one key at once.
+    public static function lockNameOf(string $key): string
+    {
+        return self::LOCK_PREFIX.hash('sha256', $key);
+    }
+
+    private function answerOf(ReviewRound $round, EscalateRecurringP1 $command, EscalationRequest $request): EscalationReviewed|EscalationFailed
+    {
+        try {
+            return $this->reviewer->review($round->project(), $round->id(), $request);
+        } catch (ProviderRateLimited $limited) {
+            throw EscalationLimited::untilFree($limited->retryAfterSeconds);
+        } catch (VendorAccountBusy) {
+            throw EscalationLimited::untilFree(null);
+        } catch (ProviderFailedTransiently) {
+            throw EscalationLimited::bounded();
+        } catch (Throwable $failure) {
+            throw EscalationCallFailed::of($command->key, $failure);
+        }
     }
 
     private function failed(ReviewRound $round, EscalateRecurringP1 $command, string $reason): void
