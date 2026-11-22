@@ -46,6 +46,10 @@ final class ComponentStylesTest extends WebTestCase
         self::assertNotEmpty($amberSelectors);
         foreach ($amberSelectors as $selector) {
             foreach (explode(',', $selector) as $part) {
+                // The current step of a Working now path takes the orange ring (owner's UX2 decision), the one amber outside Needs you.
+                if ('.path li.now::after' === trim($part)) {
+                    continue;
+                }
                 self::assertStringContainsString('.needs', $part, $selector);
             }
         }

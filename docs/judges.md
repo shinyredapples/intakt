@@ -15,7 +15,7 @@ The video's script and shot list: [docs/video.md](video.md)
 
 1. `git clone https://github.com/shinyredapples/intakt.git && cd intakt`
 2. `docker compose up -d --wait`: it returns once the container is healthy.
-3. Open http://localhost:7781. You see **Set up Intakt** with two choices: "Watch a recorded review" and "Run it live with your key".
+3. Open http://localhost:7781. You see the first-run page, titled **See a real review**, with **Play the demo run** as its one main button and, below, **Use your own project** with three cards: "1. Add a key here", "2. Add a project" and "3. First review".
 4. Open http://localhost:7781/demo and press **Play the demo run**. You see "The demo run is starting: the caption at the bottom of each page names the stage it is in." The caption shows one progress dot per stage (five in all) and a short line; the last one reads "Checked: To fix lists what still needs changing." As soon as the first stage shows, the page takes you to the review, and eight seconds after the last stage the caption closes by itself.
 5. The review of `sample-change` in `demo-replay` carries the **Replay** mark; its reviewers ran on models from two AI labs, Claude (`opus`) and GPT (`gpt-6.2-sol`). Round 1 reads "Changes requested": `correctness` (`opus`) and `security` (`gpt-6.2-sol`) each asked for changes with 4 findings. Under "Findings and the judge's call", F1 (P1, `src/discount.js:3`, also reported as F6), F2 (P1, `src/report.js:4`, also reported as F5, F7), F3 (P2), F4 (P2) and F8 (P3) read **Fix now**.
 
@@ -23,17 +23,17 @@ The video's script and shot list: [docs/video.md](video.md)
 
 First clone and start Intakt as in steps 1 and 2 of path a.
 
-1. Open http://localhost:7781/setup, the first-run page (once path a has played, http://localhost:7781 opens the board instead in a desktop browser, and a phone opens the newest review, since the board is then at rest; `/?board=1` is the board on any device). Paste the key or token in step 1 ("A key or token for Anthropic, OpenAI or Hugging Face") and press **Keep the key**. Calls are billed to the key's owner.
+1. Open http://localhost:7781/setup, the first-run page (once path a has played, http://localhost:7781 opens the board instead in a desktop browser, and a phone opens the newest review, since the board is then at rest; `/?board=1` is the board on any device). Paste the key or token in card 1 ("A key or token for Anthropic, OpenAI or Hugging Face") and press **Keep the key**. Calls are billed to the key's owner.
 2. `docker compose restart intakt`, so the sample project gets its reviewers. Wait until `docker compose ps` shows the container as healthy.
-3. Reload http://localhost:7781/setup: step 2 now reads "1 project is configured." and lists the `sample` project. Then start the live review:
-   - **If you skipped path a:** press **Start the first review** in step 3. Its live review page opens: each reviewer's row fills in as it answers, then the round shows its outcome (`approve`, `changes` or `blocked`) and "Findings and the judge's call" lists the act list, each entry marked **Fix now**.
-   - **If you played path a:** step 3 shows **Open the review** for the recorded run and no start button. Run `docker compose exec intakt php bin/console intakt:demo` instead. It runs the same live review and prints the verdict, each reviewer, the act list and an "Open the review:" line with the address of its review page.
+3. Reload http://localhost:7781/setup: card 2 now reads "1 project is configured." and lists the `sample` project. Then start the live review:
+   - **If you skipped path a:** press **Start the first review** in card 3. Its live review page opens: each reviewer's row fills in as it answers, then the round shows its outcome (`approve`, `changes` or `blocked`) and "Findings and the judge's call" lists the act list, each entry marked **Fix now**.
+   - **If you played path a:** card 3 shows **Open the review** for the recorded run and no start button. Run `docker compose exec intakt php bin/console intakt:demo` instead. It runs the same live review and prints the verdict, each reviewer, the act list and an "Open the review:" line with the address of its review page.
 
 ## c. With your agent over MCP
 
 This path runs a live review, so first do steps 1 and 2 of path b (keep a key, restart, wait until healthy): without them the `sample` project has no reviewers.
 
-1. Get the token: `docker compose exec intakt php bin/console intakt:sample:show /app/var/data/sample-repository` prints `Connect an MCP client: claude mcp add ... --header "Authorization: Bearer <token>"`. Step 4 of the first-run page at http://localhost:7781/setup ("Your own agent") shows the address, `http://localhost:7781/mcp/owner`.
+1. Get the token: `docker compose exec intakt php bin/console intakt:sample:show /app/var/data/sample-repository` prints `Connect an MCP client: claude mcp add ... --header "Authorization: Bearer <token>"`, with the address `http://localhost:7781/mcp/owner` in it (the first-run page shows no address or command).
 2. The clone carries a `.mcp.json` for that address, so there is nothing to add: run `export INTAKT_MCP_TOKEN=<the token from step 1>`, then start `claude` in the clone and approve the `intakt` server it offers. `claude mcp list` shows `intakt` as connected. (Or run the printed `claude mcp add` line instead.)
 3. Install the skill: copy `skills/intakt-review` to `~/.claude/skills/intakt-review` ([details](../skills/intakt-review/README.md)).
 4. Say "intakt review the demo". The agent starts the review with `start_review`, fixes only what the act list names inside the container, and reports the verdict, the rounds used and why it stopped.

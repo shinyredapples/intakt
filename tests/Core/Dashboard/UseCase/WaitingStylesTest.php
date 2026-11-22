@@ -11,55 +11,50 @@ use PHPUnit\Framework\TestCase;
 #[CoversNothing]
 final class WaitingStylesTest extends TestCase
 {
-    private const string BRIDGE = 'width < 1100px';
+    private const string WIDE = 'width >= 1100px';
     private const string PHONE = 'max-width: 760px';
-    private const string STACKED = '/grid-template-columns:\s*minmax\(0, 1fr\);\s*grid-template-areas:\s*"title" "meta" "conseq" "why" "act";/';
+    private const string BESIDE = '/grid-template-columns:\s*48px minmax\(0, 1fr\) 340px;\s*grid-template-areas:\s*"char title act" "char meta act" "conseq conseq act";/';
 
-    // DESIGN.md's bridge (761 to 1099 px) is single column, and act after why keeps the tab order of D6.
-    public function testBelow1100WideAWaitingItemIsOneColumnOfTitleMetaConsequenceWhyAndChoicesInThatOrder(): void
+    // Below 1100 px the reactions come last in one column, so Tab reaches them after the words.
+    public function testBelow1100WideAWaitingItemStacksTheRoleTitleMetaConsequenceAndReactionsInThatOrder(): void
     {
-        $rules = $this->rulesOf($this->mediaBlocks(self::BRIDGE));
+        $rules = $this->rulesOf($this->sheetOutside(self::WIDE));
 
-        self::assertMatchesRegularExpression(self::STACKED, $rules['.wait-item'] ?? '');
+        self::assertMatchesRegularExpression('/grid-template-columns:\s*48px minmax\(0, 1fr\);\s*grid-template-areas:\s*"char title" "char meta" "conseq conseq" "act act";/', $rules['.wait-item'] ?? '');
     }
 
-    // Fractional widths are checked because a zoomed window has them, and max-width: 1099px misses 1099.5 px.
-    public function testAWaitingItemIsOneColumnAtEveryWidthBelow1100IncludingAFractionalOne(): void
+    // Fractional widths are checked because a zoomed window has them.
+    public function testTheReactionsSitBesideTheWordsOnlyFrom1100WideIncludingAFractionalWidthBelow(): void
     {
         $sheet = (string) preg_replace('~/\*.*?\*/~s', '', $this->sheet());
         preg_match_all('/@media \(([^)]+)\) \{(.*?)\n\}/s', $sheet, $blocks, PREG_SET_ORDER);
-        $queries = array_column(array_filter($blocks, fn (array $block): bool => 1 === preg_match(self::STACKED, $this->rulesOf($block[2])['.wait-item'] ?? '')), 1);
-        self::assertCount(1, $queries);
+        $queries = array_column(array_filter($blocks, fn (array $block): bool => 1 === preg_match(self::BESIDE, $this->rulesOf($block[2])['.wait-item'] ?? '')), 1);
+        self::assertSame([self::WIDE], $queries);
 
         foreach ([761.0, 1099.0, 1099.5, 1099.99, 1100.0, 1440.0] as $width) {
-            self::assertSame($width < 1100.0, $this->matchesWidth($queries[0], $width), (string) $width);
+            self::assertSame($width >= 1100.0, $this->matchesWidth($queries[0], $width), (string) $width);
         }
     }
 
-    public function testFrom1100WideAWaitingItemKeepsItsChoicesInA340PxColumnBesideTheWords(): void
+    // At least 44 px, because that is the smallest touch target the design allows.
+    public function testAReactionIsAtLeast44PxTallAtEveryWidth(): void
     {
-        $rules = $this->rulesOf($this->sheetOutside(self::BRIDGE, self::PHONE));
-
-        self::assertMatchesRegularExpression('/grid-template-columns:\s*minmax\(0, 1fr\) 340px;\s*grid-template-areas:\s*"title act" "meta act" "conseq act" "why act";/', $rules['.wait-item'] ?? '');
+        self::assertMatchesRegularExpression('/min-height:\s*56px;/', $this->rulesOf($this->sheet())['.wait-act'] ?? '');
+        self::assertArrayNotHasKey('.wait-act', $this->rulesOf($this->mediaBlocks(self::WIDE)));
     }
 
-    public function testTheWhySummaryIsShownAtEveryWidth(): void
+    // No disclosure on an overview page (UX2): the Why is gone, so no rule styles one.
+    public function testNoWaitingRuleStylesADisclosure(): void
     {
-        foreach ([$this->sheet(), $this->mediaBlocks(self::BRIDGE), $this->mediaBlocks(self::PHONE)] as $sheet) {
-            self::assertDoesNotMatchRegularExpression('/display:\s*none/', $this->rulesOf($sheet)['.wait-item .why summary'] ?? '');
+        foreach (array_keys($this->rulesOf($this->sheet())) as $selector) {
+            if (str_contains($selector, 'wait')) {
+                self::assertDoesNotMatchRegularExpression('/\.why|summary|details|\.copy/', $selector);
+            }
         }
-        self::assertMatchesRegularExpression('/display:\s*inline-flex;/', $this->rulesOf($this->sheetOutside(self::BRIDGE, self::PHONE))['.wait-item .why summary'] ?? '');
     }
 
-    public function testOnlyAt760WideAndBelowIsTheWhySummaryAtLeast44PxTall(): void
-    {
-        self::assertMatchesRegularExpression('/^\s*min-height:\s*44px;\s*$/', $this->rulesOf($this->mediaBlocks(self::PHONE))['.wait-item .why summary'] ?? '');
-        self::assertArrayNotHasKey('.wait-item .why summary', $this->rulesOf($this->mediaBlocks(self::BRIDGE)));
-        self::assertDoesNotMatchRegularExpression('/min-height/', $this->rulesOf($this->sheetOutside(self::BRIDGE, self::PHONE))['.wait-item .why summary'] ?? '');
-    }
-
-    // The template's heading level follows the page outline, so the mock's look must not depend on the tag.
-    public function testTheLeadTakesTheMocksHeadingLookFromItsClass(): void
+    // The template's heading level follows the page outline, so the look must not depend on the tag.
+    public function testTheLeadTakesItsHeadingLookFromItsClass(): void
     {
         $rules = $this->rulesOf($this->sheet());
 
@@ -68,11 +63,15 @@ final class WaitingStylesTest extends TestCase
         self::assertArrayNotHasKey('.wait-item h3', $rules);
     }
 
-    public function testAWaitingItemTakesTheAmberTintOnlyAsANeedsCard(): void
+    public function testTheHeroUsesANeutralSurfaceNeverTheAmberTintAndANeedsCardTakesAnAmberEdge(): void
     {
         $rules = $this->rulesOf($this->sheet());
 
-        self::assertMatchesRegularExpression('/^\s*background:\s*var\(--amber-tint\);\s*$/', $rules['.wait-item.needs'] ?? '');
+        self::assertStringNotContainsString('amber-tint', $rules['.wait-hero.needs'] ?? '');
+        self::assertStringContainsString('background: var(--raised);', $rules['.wait-hero.needs'] ?? '');
+        self::assertStringNotContainsString('--amber', $rules['.wait-hero.needs'] ?? '');
+        self::assertStringContainsString('border: 1px solid var(--hairline);', $rules['.wait-hero.needs'] ?? '');
+        self::assertMatchesRegularExpression('/^\s*border-color:\s*color-mix\(in srgb, var\(--amber\) 60%, transparent\);\s*$/', $rules['.wait-item.needs'] ?? '');
         self::assertStringNotContainsString('--amber', $rules['.wait-item'] ?? '');
     }
 
@@ -126,6 +125,7 @@ final class WaitingStylesTest extends TestCase
         return match (true) {
             1 === preg_match('/^max-width: (\d+(?:\.\d+)?)px$/', $query, $limit) => $width <= (float) $limit[1],
             1 === preg_match('/^width < (\d+(?:\.\d+)?)px$/', $query, $limit) => $width < (float) $limit[1],
+            1 === preg_match('/^width >= (\d+(?:\.\d+)?)px$/', $query, $limit) => $width >= (float) $limit[1],
             1 === preg_match('/^width <= (\d+(?:\.\d+)?)px$/', $query, $limit) => $width <= (float) $limit[1],
             default => self::fail($query),
         };
