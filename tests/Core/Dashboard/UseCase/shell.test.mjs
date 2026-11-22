@@ -607,3 +607,31 @@ test('a pushed column tells the page once its cards are filtered', () => {
 
     assert.equal(seen.length, 1);
 });
+
+test('a pushed Working now hides the cards of the projects the filter hides', () => {
+    const page = new Browser('light').open();
+    page.chooseProject('alpha');
+
+    page.pushWorkingNow(['alpha', 'beta', 'beta']);
+
+    assert.deepEqual(page.shownWorkingNow(), ['alpha']);
+});
+
+test('a card focused in Working now keeps focus when Working now is pushed', () => {
+    const page = new Browser('light').open();
+    page.workingNow().cards[1].focus();
+
+    page.pushWorkingNow();
+
+    assert.equal(page.focusedLink(), '/reviews/round-2');
+    assert.equal(page.workingNow().cards.includes(page.focused()), true);
+});
+
+test('a pushed Working now leaves focus alone when it was outside the section', () => {
+    const page = new Browser('light').open();
+    page.railToggle.focus();
+
+    page.pushWorkingNow();
+
+    assert.equal(page.focused(), page.railToggle);
+});

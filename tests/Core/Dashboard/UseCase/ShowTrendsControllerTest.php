@@ -54,38 +54,93 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
         self::assertSame('No reviews yet', $page->filter('main .empty h2')->text());
         self::assertSame(1, preg_match('~octopus-waiting-light[^"]*\.webp$~', $page->filter('main .empty img.character')->attr('src') ?? ''));
         self::assertSame([], $this->tiles($page));
-        self::assertSame(['bench'], $page->filter('.tiles .tile')->each(static fn (Crawler $tile): string => (string) $tile->attr('data-tile')));
+        self::assertCount(0, $page->filter('.tiles'));
     }
 
-    public function testTheFirstTileIsThePublishedBenchResultMarkedMeasuredWithTheDateOfItsRunAsVisibleText(): void
+    public function testThePageNameStaysAHiddenHeadingAndTheBenchSentenceIsNotTheH1(): void
+    {
+        $this->publishedBench();
+        $this->ledger->startRound('r-1', 'alpha');
+
+        $page = $this->browser->request('GET', '/trends');
+
+        self::assertSame(['Trends'], $page->filter('main h1')->each(static fn (Crawler $h1): string => $h1->text()));
+        self::assertSame('sr-only', $page->filter('main h1')->attr('class'));
+        self::assertCount(1, $page->filter('main .bench-headline .bench-result'));
+        self::assertCount(0, $page->filter('main h1 .bench-result'));
+    }
+
+    public function testTheHeadlineStatesTheBenchResultInWordsWithItsFalseAlarmsMeasuredAndRunDate(): void
     {
         $bench = $this->publishedBench();
         $this->ledger->startRound('r-1', 'alpha');
 
-        $tile = $this->browser->request('GET', '/trends')->filter('.tiles .tile')->first();
+        $headline = $this->browser->request('GET', '/trends')->filter('.bench-headline');
 
-        self::assertSame(['bench', $bench->reading()], [$tile->attr('data-tile'), $tile->filter('dd')->getNode(0)?->firstChild?->textContent]);
-        self::assertSame('measured', $tile->filter('.figure-kind')->attr('data-kind'));
-        self::assertSame([$bench->ranOn, 'Run of '.$bench->ranOn], [$tile->filter('dd time.tile-date')->attr('datetime'), $tile->filter('dd time.tile-date')->text()]);
-    }
-
-    public function testTheBenchTilesFocusableLabelCarriesItsFalseAlarms(): void
-    {
-        $bench = $this->publishedBench();
-
-        $label = $this->browser->request('GET', '/trends')->filter('[data-tile="bench"] dt .term');
-
-        self::assertSame('0', $label->attr('tabindex'));
-        self::assertStringEndsWith('; '.$bench->falseAlarms.' false alarms.', $label->filter('.term-tip')->text());
+        self::assertSame(sprintf('The review panel found %d of %d planted defects', $bench->found, $bench->planted), $headline->filter('.bench-result')->text());
+        self::assertStringContainsString($bench->falseAlarms.(1 === $bench->falseAlarms ? ' false alarm' : ' false alarms').' in all', $headline->filter('.bench-meta')->text());
+        if (null !== $bench->runs) {
+            self::assertStringContainsString(' '.$bench->runs.(1 === $bench->runs ? ' run' : ' runs'), $headline->filter('.bench-meta')->text());
+        }
+        self::assertSame('measured', $headline->filter('.figure-kind')->attr('data-kind'));
+        self::assertSame([$bench->ranOn, 'Run of '.$bench->ranOn], [$headline->filter('time')->attr('datetime'), $headline->filter('time')->text()]);
     }
 
     public function testABenchRunWithOneFalseAlarmNamesItInTheSingular(): void
     {
         self::getContainer()->set(PublishedBench::class, new PublishedBench(__DIR__.'/ShowTrends/a-bench-run-with-one-false-alarm.md'));
 
-        $tip = $this->browser->request('GET', '/trends')->filter('[data-tile="bench"] dt .term-tip');
+        $meta = $this->browser->request('GET', '/trends')->filter('.bench-headline .bench-meta');
 
-        self::assertStringEndsWith('; 1 false alarm.', $tip->text());
+        self::assertStringContainsString('1 false alarm in all', $meta->text());
+    }
+
+    public function testTheOctopusAppearsOncePerPageWithTheHeadlineAndOnceOnTheEmptyState(): void
+    {
+        $this->publishedBench();
+        $empty = $this->browser->request('GET', '/trends');
+        self::assertSame(1, $this->octopuses($empty));
+
+        $this->ledger->startRound('r-1', 'alpha');
+        $page = $this->browser->request('GET', '/trends');
+
+        self::assertSame(1, $this->octopuses($page));
+    }
+
+    public function testEachTileShowsItsRoleCharacterAndItsVisibleCaption(): void
+    {
+        self::getContainer()->set(Prices::class, new ConfiguredPrices(['model-a' => ['input' => 2.0, 'output' => 10.0, 'cache_read' => 0.2, 'cache_write' => 2.5]], '2026-11-13'));
+        $this->givenAJudgedRoundWithTwoReporters();
+        $this->ledger->useTokens('r-1', 1000, 100);
+
+        $page = $this->browser->request('GET', '/trends');
+
+        $shown = [];
+        foreach ($page->filter('.tiles .tile') as $node) {
+            $tile = new Crawler($node);
+            $shown[(string) $tile->attr('data-tile')] = [
+                1 === preg_match('~/roles/(code_reviewer|judge)-light-~', $tile->filter('img.character-light')->attr('src') ?? '', $role) ? $role[1] : '',
+                $tile->filter('dd.tile-caption')->text(),
+            ];
+        }
+
+        self::assertSame([
+            'passes' => ['code_reviewer', 'Reviews run so far'],
+            'to-fix' => ['judge', 'Serious, kept by the judge'],
+            'alone' => ['code_reviewer', 'Findings no one else raised'],
+            'verdict-time' => ['judge', 'Median, start to verdict'],
+            'trends-cost' => ['judge', 'Mean over priced passes'],
+        ], $shown);
+    }
+
+    public function testATileKeepsItsDecorativeImagesInsideADescription(): void
+    {
+        $this->ledger->startRound('r-1', 'alpha');
+
+        $page = $this->browser->request('GET', '/trends');
+
+        self::assertCount(0, $page->filter('dl.tiles > div.tile > :not(dt):not(dd)'));
+        self::assertCount(2, $page->filter('dl.tiles dd.tile-caption img.character'));
     }
 
     public function testThePassesTileExplainsAStandaloneReviewPassWithoutCallingItABuild(): void
@@ -98,7 +153,7 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
         self::assertSame('Review passes started, whether run on their own or for a build.', $tile->filter('.term-tip')->text());
     }
 
-    public function testWithoutAReadableBenchTableThereIsNoBenchTile(): void
+    public function testWithoutAReadableBenchTableThereIsNoBenchSentenceAndNoDefectsFoundTileButTheOctopusStays(): void
     {
         self::getContainer()->set(PublishedBench::class, new PublishedBench($this->projectDir().'/no-such-readme.md'));
         $this->ledger->startRound('r-1', 'alpha');
@@ -106,6 +161,9 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
         $page = $this->browser->request('GET', '/trends');
 
         self::assertSame(['passes'], $page->filter('.tiles .tile')->each(static fn (Crawler $tile): string => (string) $tile->attr('data-tile')));
+        self::assertCount(0, $page->filter('.bench-result'));
+        self::assertSame(1, $this->octopuses($page));
+        self::assertStringNotContainsString('Defects found', $page->text());
     }
 
     public function testTheTilesComeBeforeTheFirstChart(): void
@@ -285,11 +343,11 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
         self::assertSelectorNotExists('.page-head .actions');
     }
 
-    public function testTheRailListsTrendsAfterProjectsAndMarksItCurrentOnTheTrendsPage(): void
+    public function testTheRailListsTrendsAfterYouAndMarksItCurrentOnTheTrendsPage(): void
     {
         $page = $this->browser->request('GET', '/trends');
 
-        self::assertSame(['Waiting on you', 'Board', 'Projects', 'Trends'], $page->filter('.rail a.nav')->each(static fn (Crawler $item): string => trim($item->text())));
+        self::assertSame(['Now', 'You', 'Trends', 'Projects'], $page->filter('.rail a.nav')->each(static fn (Crawler $item): string => trim($item->text())));
         self::assertSame(['trends'], $page->filter('.rail [aria-current="page"]')->each(static fn (Crawler $item): string => (string) $item->attr('data-k')));
     }
 
@@ -323,7 +381,9 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
 
         $page = $this->browser->request('GET', '/trends');
 
-        self::assertSame('Show as table', $page->filter('#chart-catches details.c-table summary')->text());
+        self::assertCount(0, $page->filter('details'));
+        self::assertStringNotContainsString('Show as table', $page->text());
+        self::assertCount(2, $page->filter('main table.sr-only'));
         self::assertSame(
             $page->filter('#chart-catches .c-label')->each(static fn (Crawler $label): string => $label->text()),
             $page->filter('#chart-catches tbody tr')->each(static fn (Crawler $row): string => sprintf('%s (%s alone)', $row->filter('td')->eq(2)->text(), $row->filter('td')->eq(3)->text())),
@@ -697,7 +757,7 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
     {
         $tiles = [];
 
-        foreach ($page->filter('.tiles .tile:not([data-tile="bench"])') as $tile) {
+        foreach ($page->filter('.tiles .tile') as $tile) {
             $crawler = new Crawler($tile);
             $label = $crawler->filter('dt .term')->getNode(0)?->firstChild->textContent ?? '';
             $tiles[trim($label)] = $crawler->filter('dd')->text();
@@ -706,10 +766,15 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
         return $tiles;
     }
 
+    private function octopuses(Crawler $page): int
+    {
+        return $page->filter('main img.character-light[src*="/mascot/"]')->count();
+    }
+
     private function publishedBench(): BenchHeadline
     {
-        $bench = new PublishedBench($this->projectDir().'/README.md')->headline();
-        self::assertNotNull($bench, 'The README has no readable review bench table.');
+        $bench = new PublishedBench($this->projectDir().'/docs/bench.md')->headline();
+        self::assertNotNull($bench, 'The bench page has no readable review bench table.');
 
         return $bench;
     }
