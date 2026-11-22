@@ -1,6 +1,6 @@
 # Measured: the timed run and the review bench
 
-The figures the [README](../README.md#measured) sums up, with how each was measured. The dashboard's **Trends** page reads its bench headline from the review bench table below (see [the Trends page](user/README.md#the-trends-page)), so the table keeps its shape: the `Defects found` and `False alarms` columns, a `Panel` row, one `Date of the run:` line and one `Each change ran N times.` sentence.
+The figures the [README](../README.md#measured) sums up, with how each was measured. The dashboard's **Trends** page reads its bench headline from the review bench table below (see [the Trends page](reference/user-manual.md#the-trends-page)), so the table keeps its shape: the `Defects found` and `False alarms` columns, a `Panel` row, one `Date of the run:` line and one `Each change ran N times.` sentence.
 
 ## Timed run
 
@@ -32,4 +32,4 @@ docker compose exec intakt php bin/console intakt:bench --project=sample --repea
 
 Each change ran 3 times. In the open-model run seven of the eight changes varied between the three runs (in the Claude and GPT run none did): a single run's result for one change is partly luck, so your own run will not match these figures exactly.
 
-Date of the run: 2026-11-21. Claude and GPT run: subscription CLIs (`claude_code` model `opus`, `codex` model `gpt-6.2-sol` with effort high, judge on Claude `haiku`), 24 rounds, all three runs agreeing on every change; the panel's figures are the union of its two reviewers' findings, and all three false alarms came from the GPT reviewer. Open-model run: 2026-11-16. Models (the demo's Hugging Face mapping): `correctness` (tier strong) `moonshotai/Kimi-K3:deepinfra`, `security` (tier standard) `openai/gpt-oss-120b:novita`. What a run costs and how to read these figures: [the review bench](user/README.md#the-review-bench) in the user guide.
+Date of the run: 2026-11-21. Claude and GPT run: subscription CLIs (`claude_code` model `opus`, `codex` model `gpt-6.2-sol` with effort high, judge on Claude `haiku`), 24 rounds, all three runs agreeing on every change; the panel's figures are the union of its two reviewers' findings, and all three false alarms came from the GPT reviewer. Open-model run: 2026-11-16. Models (the demo's Hugging Face mapping): `correctness` (tier strong) `moonshotai/Kimi-K3:deepinfra`, `security` (tier standard) `openai/gpt-oss-120b:novita`. What a run costs and how to read these figures: [the review bench](reference/user-manual.md#the-review-bench) in the user guide.
