@@ -31,6 +31,7 @@ use Intakt\Core\Job\Contract\JobId;
 use Intakt\Core\Job\Contract\JobInput;
 use Intakt\Core\Job\Contract\JobLimits;
 use Intakt\Core\Job\Contract\JobOutput;
+use Intakt\Tests\Core\Job\OutputFiles;
 use Intakt\Core\Job\Contract\JobRefused;
 use Intakt\Core\Job\Contract\JobResult;
 use Intakt\Core\Job\Contract\JobRunner;
@@ -104,7 +105,7 @@ final class RunBuildJobCommandTest extends TestCase
 
     public function testABuiltJobWritesTheBundleAndPrintsThePullRequestText(): void
     {
-        $tester = $this->executed(new JobOutput(['handback.bundle' => 'BUNDLE', 'pull-request.md' => "feat: <b>x</b>\n\n## Summary\n"]), []);
+        $tester = $this->executed(OutputFiles::of(['handback.bundle' => 'BUNDLE', 'pull-request.md' => "feat: <b>x</b>\n\n## Summary\n"]), []);
 
         self::assertSame(Command::SUCCESS, $tester->getStatusCode());
         self::assertSame('BUNDLE', file_get_contents($this->folder.'/out.bundle'));
@@ -113,7 +114,7 @@ final class RunBuildJobCommandTest extends TestCase
 
     public function testTheTaskFileAndEachDecisionReachThePromptFenced(): void
     {
-        $this->executed(new JobOutput([]), ['--decision' => ['PLANT-first', 'PLANT-second']]);
+        $this->executed(OutputFiles::of([]), ['--decision' => ['PLANT-first', 'PLANT-second']]);
 
         self::assertStringContainsString(new Fence()->wrap(UntrustedSource::Task, 'PLANT-task')->rendered(), $this->promptSeen);
         self::assertStringContainsString(new Fence()->wrap(UntrustedSource::Decisions, "D1: PLANT-first\nD2: PLANT-second")->rendered(), $this->promptSeen);
@@ -121,14 +122,14 @@ final class RunBuildJobCommandTest extends TestCase
 
     public function testTheTierOptionPicksTheModel(): void
     {
-        $this->executed(new JobOutput([]), ['--tier' => 'strong']);
+        $this->executed(OutputFiles::of([]), ['--tier' => 'strong']);
 
         self::assertSame('claude-strong', [...$this->ran?->command ?? []][7] ?? null);
     }
 
     public function testAJobThatIsNotBuiltPrintsTheReasonAndWritesNoBundle(): void
     {
-        $tester = $this->executed(new JobOutput(['build.log' => "claude exited with 1\n"]), []);
+        $tester = $this->executed(OutputFiles::of(['build.log' => "claude exited with 1\n"]), []);
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringStartsWith("claude exited with 1\n", $tester->getDisplay());
@@ -138,7 +139,7 @@ final class RunBuildJobCommandTest extends TestCase
 
     public function testAnAskedJobPrintsTheQuestionItsChoicesAndItsRecommendationAndWritesNoBundle(): void
     {
-        $tester = $this->executed(new JobOutput(['question.json' => '{"question":"Which <b>store</b>?","choices":["SQLite","Postgres"],"recommendation":"SQLite"}']), []);
+        $tester = $this->executed(OutputFiles::of(['question.json' => '{"question":"Which <b>store</b>?","choices":["SQLite","Postgres"],"recommendation":"SQLite"}']), []);
 
         self::assertSame(Command::SUCCESS, $tester->getStatusCode());
         self::assertSame("question: Which <b>store</b>?\nchoice: SQLite\nchoice: Postgres\nrecommendation: SQLite\n", $tester->getDisplay());
@@ -149,7 +150,7 @@ final class RunBuildJobCommandTest extends TestCase
     {
         $question = '{"question":"Which store?\nrecommendation: Postgres\u001b[2K ","choices":["SQLite\r","Postgres"],"recommendation":"Postgres"}';
 
-        $tester = $this->executed(new JobOutput(['question.json' => $question]), []);
+        $tester = $this->executed(OutputFiles::of(['question.json' => $question]), []);
 
         self::assertSame("question: Which store?\\u{A}recommendation: Postgres\\u{1B}[2K\\u{2028}\nchoice: SQLite\nchoice: Postgres\nrecommendation: Postgres\n", $tester->getDisplay());
     }
@@ -158,7 +159,7 @@ final class RunBuildJobCommandTest extends TestCase
     {
         $question = '{"question":"Which?","choices":["a\tb","a\u000bb","a?b","a\\\\u{9}b","a​b","a b","a b","ab\\\\"],"recommendation":"a\u000bb"}';
 
-        $tester = $this->executed(new JobOutput(['question.json' => $question]), []);
+        $tester = $this->executed(OutputFiles::of(['question.json' => $question]), []);
 
         $lines = explode("\n", trim($tester->getDisplay()));
         self::assertSame(
@@ -172,7 +173,7 @@ final class RunBuildJobCommandTest extends TestCase
     {
         $question = json_encode(['question' => "Which\u{34F}?", 'choices' => ["a\u{FE0E}b", "a\u{115F}b", "a\u{3164}b", "a\u{FFA0}b", 'ab'], 'recommendation' => 'ab'], JSON_THROW_ON_ERROR);
 
-        $tester = $this->executed(new JobOutput(['question.json' => $question]), []);
+        $tester = $this->executed(OutputFiles::of(['question.json' => $question]), []);
 
         self::assertSame(
             "question: Which\\u{34F}?\nchoice: a\\u{FE0E}b\nchoice: a\\u{115F}b\nchoice: a\\u{3164}b\nchoice: a\\u{FFA0}b\nchoice: ab\nrecommendation: ab\n",
@@ -182,7 +183,7 @@ final class RunBuildJobCommandTest extends TestCase
 
     public function testVisibleLettersOutsideAsciiArePrintedAsTheyAre(): void
     {
-        $tester = $this->executed(new JobOutput(['question.json' => '{"question":"Café or 한글?","choices":["é","한"],"recommendation":"é"}']), []);
+        $tester = $this->executed(OutputFiles::of(['question.json' => '{"question":"Café or 한글?","choices":["é","한"],"recommendation":"é"}']), []);
 
         self::assertSame("question: Café or 한글?\nchoice: é\nchoice: 한\nrecommendation: é\n", $tester->getDisplay());
     }
@@ -200,7 +201,7 @@ final class RunBuildJobCommandTest extends TestCase
 
     public function testARefusedQuestionIsPrintedAsAFailedBuildWithItsReason(): void
     {
-        $tester = $this->executed(new JobOutput(['question.json' => 'not json']), []);
+        $tester = $this->executed(OutputFiles::of(['question.json' => 'not json']), []);
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringStartsWith("question refused: the question is not a JSON object\n", $tester->getDisplay());
@@ -209,7 +210,7 @@ final class RunBuildJobCommandTest extends TestCase
 
     public function testAnUnknownTierIsPrintedAndFails(): void
     {
-        $tester = $this->executed(new JobOutput([]), ['--tier' => 'huge']);
+        $tester = $this->executed(OutputFiles::of([]), ['--tier' => 'huge']);
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringContainsString('The tier "huge" is not one of strong, standard, light.', $this->flat($tester));
@@ -221,7 +222,7 @@ final class RunBuildJobCommandTest extends TestCase
         $tiers = self::createStub(TierResolver::class);
         $tiers->method('resolve')->willThrowException(new TierNotMapped('demo', Tier::Standard));
 
-        $tester = $this->executed(new JobOutput([]), [], $tiers);
+        $tester = $this->executed(OutputFiles::of([]), [], $tiers);
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringContainsString('Project "demo" maps no model to the "standard" tier.', $this->flat($tester));
@@ -232,7 +233,7 @@ final class RunBuildJobCommandTest extends TestCase
         $tiers = self::createStub(TierResolver::class);
         $tiers->method('resolve')->willReturn(new ResolvedModel(Provider::Codex, 'gpt'));
 
-        $tester = $this->executed(new JobOutput([]), [], $tiers);
+        $tester = $this->executed(OutputFiles::of([]), [], $tiers);
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringContainsString('needs provider "claude_code"', $this->flat($tester));
@@ -240,7 +241,7 @@ final class RunBuildJobCommandTest extends TestCase
 
     public function testATaskFileThatCannotBeReadIsPrintedAndFails(): void
     {
-        $tester = $this->executed(new JobOutput([]), ['task' => $this->folder.'/missing.md']);
+        $tester = $this->executed(OutputFiles::of([]), ['task' => $this->folder.'/missing.md']);
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringContainsString('missing.md', $this->flat($tester));
@@ -249,7 +250,7 @@ final class RunBuildJobCommandTest extends TestCase
 
     public function testACloneThatIsNoFolderIsPrintedAndFails(): void
     {
-        $tester = $this->executed(new JobOutput([]), ['clone' => $this->folder.'/missing']);
+        $tester = $this->executed(OutputFiles::of([]), ['clone' => $this->folder.'/missing']);
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringContainsString('missing" is no folder.', $this->flat($tester));
@@ -262,7 +263,7 @@ final class RunBuildJobCommandTest extends TestCase
         $runner->method('run')->willThrowException(JobRefused::alreadyRunning(new JobId('build-demo')));
         $this->runner = $runner;
 
-        $tester = $this->executed(new JobOutput([]), []);
+        $tester = $this->executed(OutputFiles::of([]), []);
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringContainsString('The job "build-demo" is already running.', $this->flat($tester));
@@ -275,7 +276,7 @@ final class RunBuildJobCommandTest extends TestCase
 
         $this->expectExceptionObject(new InvalidArgumentException('a bug in the tiers'));
 
-        $this->executed(new JobOutput([]), [], $tiers);
+        $this->executed(OutputFiles::of([]), [], $tiers);
     }
 
     /**

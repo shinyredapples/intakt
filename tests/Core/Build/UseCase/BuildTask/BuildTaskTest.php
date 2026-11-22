@@ -110,6 +110,7 @@ use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
 use Intakt\Tests\Core\Build\ScriptedJobRunner;
 use Intakt\Tests\Core\Git\RecordingClock;
+use Intakt\Tests\Core\Job\OutputFiles;
 use Intakt\Tests\Core\Git\TemporaryRepository;
 use Intakt\Tests\Core\Git\UseCase\PushBranch\ProgramOnPath;
 use Intakt\Tests\Core\Git\UseCase\PushBranch\PushScenario;
@@ -411,7 +412,7 @@ final class BuildTaskTest extends TestCase
         $this->checkRunner->method('run')->willReturnCallback(function (JobSpec $spec) use (&$mainInTheMirror): JobResult {
             $mainInTheMirror = $this->git(['rev-parse', 'HEAD'], $spec->inputs[0]->hostPath);
 
-            return new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput([RunCheckJob::RESULT => "passed\n", RunCheckJob::LOG => "ok\n"]));
+            return new JobResult(new JobEnd(JobCause::Exited, 0), OutputFiles::of([RunCheckJob::RESULT => "passed\n", RunCheckJob::LOG => "ok\n"]));
         });
 
         $outcome = $this->taskOf(new InMemoryLedger(), [Issues::task(7)])->run($this->request(7, $this->remote->path));
@@ -760,7 +761,7 @@ final class BuildTaskTest extends TestCase
             $ran = $spec;
             $prompt = (string) file_get_contents($spec->inputs[1]->hostPath);
 
-            return new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput([]));
+            return new JobResult(new JobEnd(JobCause::Exited, 0), OutputFiles::of([]));
         });
         $this->runner = $runner;
 
@@ -1037,7 +1038,7 @@ final class BuildTaskTest extends TestCase
         $runner->method('run')->willReturnCallback(function (JobSpec $spec) use ($files): JobResult {
             $this->checked = $spec;
 
-            return new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput($files));
+            return new JobResult(new JobEnd(JobCause::Exited, 0), OutputFiles::of($files));
         });
 
         return $runner;
@@ -1103,7 +1104,7 @@ final class BuildTaskTest extends TestCase
             $bundle = (string) file_get_contents($job.'.bundle');
             new Filesystem()->remove([$job, $job.'.bundle']);
 
-            return new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput([RunBuildJob::BUNDLE => $bundle, RunBuildJob::PULL_REQUEST_TEXT => $text]));
+            return new JobResult(new JobEnd(JobCause::Exited, 0), OutputFiles::of([RunBuildJob::BUNDLE => $bundle, RunBuildJob::PULL_REQUEST_TEXT => $text]));
         });
 
         return $runner;

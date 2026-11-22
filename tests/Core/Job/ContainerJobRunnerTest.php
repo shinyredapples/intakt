@@ -16,6 +16,7 @@ use Intakt\Core\Job\Contract\JobId;
 use Intakt\Core\Job\Contract\JobInput;
 use Intakt\Core\Job\Contract\JobLimits;
 use Intakt\Core\Job\Contract\JobOutput;
+use Intakt\Core\Job\Contract\JobOutputFile;
 use Intakt\Core\Job\Contract\JobOutputRefused;
 use Intakt\Core\Job\Contract\JobRefused;
 use Intakt\Core\Job\Contract\JobResult;
@@ -191,9 +192,23 @@ final class ContainerJobRunnerTest extends TestCase
 
         $result = $this->whenJobRuns($this->spec('build-1'));
 
-        self::assertSame(['result.json'], $result->output->names());
+        self::assertSame(['result.json'], $this->namesOf($result->output));
         self::assertSame('{"done":true}', $result->output->contents('result.json'));
         self::assertEquals(new JobEnd(JobCause::Exited, 0), $result->end);
+    }
+
+    public function testAnOutputNamedLikeANumberKeepsItsNameAsText(): void
+    {
+        $this->engine->behaveAs('build-1', static function (string $output): array {
+            file_put_contents($output.'/7', 'seven');
+
+            return [0, false];
+        });
+
+        $result = $this->whenJobRuns($this->spec('build-1'));
+
+        self::assertSame(['7'], $this->namesOf($result->output));
+        self::assertSame('seven', $result->output->contents('7'));
     }
 
     public function testAJobCannotReachAnotherJobsOutputDirectory(): void
@@ -358,7 +373,7 @@ final class ContainerJobRunnerTest extends TestCase
 
         $result = $this->whenJobRuns($this->spec('build-1'));
 
-        self::assertSame(['bundle', 'result'], $result->output->names());
+        self::assertSame(['bundle', 'result'], $this->namesOf($result->output));
         self::assertSame(JobOutputDirectories::MAX_BYTES - 1, strlen((string) $result->output->contents('bundle')));
     }
 
@@ -389,7 +404,7 @@ final class ContainerJobRunnerTest extends TestCase
 
         $result = $this->whenJobRuns($this->spec('build-1'));
 
-        self::assertCount(JobOutputDirectories::MAX_FILES, $result->output->names());
+        self::assertCount(JobOutputDirectories::MAX_FILES, $result->output->files());
     }
 
     public function testAFolderLeftWithoutPermissionsIsRefusedAndRemovedAllTheSame(): void
@@ -646,7 +661,7 @@ final class ContainerJobRunnerTest extends TestCase
         $result = $this->whenJobRuns($this->spec('build-1'));
 
         self::assertSame([LedgerEventKind::JobEnded], $this->ledger->kinds());
-        self::assertSame([], $result->output->names());
+        self::assertSame([], $result->output->files());
     }
 
     public function testABrokenMountTheStartCheckLogsIsRecordedWithItsReasonBeforeTheEnd(): void
@@ -931,6 +946,14 @@ final class ContainerJobRunnerTest extends TestCase
     /**
      * @return array<string, mixed>
      */
+    /**
+     * @return list<string>
+     */
+    private function namesOf(JobOutput $output): array
+    {
+        return array_map(static fn (JobOutputFile $file): string => $file->name, $output->files());
+    }
+
     private function hostConfigOf(string $job): array
     {
         /** @var array<string, mixed> $host */

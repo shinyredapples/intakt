@@ -27,11 +27,6 @@ final readonly class EnvironmentVariables implements IteratorAggregate
         return [] === $this->items;
     }
 
-    public function contains(string $item): bool
-    {
-        return in_array($item, $this->items, true);
-    }
-
     /**
      * @return Traversable<int, string>
      */

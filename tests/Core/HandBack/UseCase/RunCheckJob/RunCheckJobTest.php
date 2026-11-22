@@ -42,6 +42,7 @@ use Intakt\Plugin\Forge\Contract\JobCredentials;
 use Intakt\Plugin\Gate\Contract\Gate;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
 use Intakt\Tests\Core\HandBack\BuildHistory;
+use Intakt\Tests\Core\Job\OutputFiles;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -152,7 +153,7 @@ final class RunCheckJobTest extends TestCase
         $gate->method('checkSteps')->willReturn(['true']);
         $gate->method('registryHosts')->willReturn([]);
 
-        (void) $this->checkJob($this->runnerLeaving(new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput(['check-result' => "passed\n"]))), $gate)
+        (void) $this->checkJob($this->runnerLeaving(new JobResult(new JobEnd(JobCause::Exited, 0), OutputFiles::of(['check-result' => "passed\n"]))), $gate)
             ->run(new CheckJob(new HandBack($this->history->mirror, 'task', $this->history->bundle('main..task'), false, new JobCredentials()), 'job-image', null, new Paths()));
 
         self::assertTrue($this->ranSpec()->egress->isNone());
@@ -480,7 +481,7 @@ final class RunCheckJobTest extends TestCase
      */
     private function whenTheJobLeaves(array $files, ?CheckJob $job = null, ?JobEnd $end = null): CheckJobOutcome|RefusedHandBack
     {
-        $runner = $this->runnerLeaving(new JobResult($end ?? new JobEnd(JobCause::Exited, 1), new JobOutput($files)));
+        $runner = $this->runnerLeaving(new JobResult($end ?? new JobEnd(JobCause::Exited, 1), OutputFiles::of($files)));
 
         return $this->checkJob($runner)->run($job ?? $this->job($this->history->bundle('main..task'), null, []));
     }

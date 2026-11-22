@@ -22,16 +22,6 @@ final readonly class ReviewTools implements IteratorAggregate
         $this->items = array_values($items);
     }
 
-    public function isEmpty(): bool
-    {
-        return [] === $this->items;
-    }
-
-    public function contains(string $item): bool
-    {
-        return in_array($item, $this->items, true);
-    }
-
     /**
      * @return Traversable<int, string>
      */

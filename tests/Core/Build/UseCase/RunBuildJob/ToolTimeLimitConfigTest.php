@@ -31,6 +31,7 @@ use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\PromptCut;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
 use Intakt\Tests\Core\Build\ScriptedJobRunner;
+use Intakt\Tests\Core\Job\OutputFiles;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -71,7 +72,7 @@ final class ToolTimeLimitConfigTest extends KernelTestCase
         $runner->method('run')->willReturnCallback(static function (JobSpec $spec) use (&$ran): JobResult {
             $ran = $spec;
 
-            return new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput([]));
+            return new JobResult(new JobEnd(JobCause::Exited, 0), OutputFiles::of([]));
         });
         $tiers = self::createStub(TierResolver::class);
         $tiers->method('resolve')->willReturn(new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'));

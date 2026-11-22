@@ -46,6 +46,7 @@ use Intakt\Core\Job\Contract\JobSpec;
 use Intakt\Plugin\Forge\Contract\JobCredentials;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
 use Intakt\Tests\Core\HandBack\BuildHistory;
+use Intakt\Tests\Core\Job\OutputFiles;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -175,7 +176,7 @@ final class RunCheckJobCommandTest extends TestCase
         $runner = $this->createMock(JobRunner::class);
         $runner->expects(self::once())->method('run')
             ->with(self::callback(static fn (JobSpec $spec): bool => ['make check'] === array_slice([...$spec->command], 8)))
-            ->willReturn(new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput(['check-result' => "passed\n"])));
+            ->willReturn(new JobResult(new JobEnd(JobCause::Exited, 0), OutputFiles::of(['check-result' => "passed\n"])));
 
         $tester = $this->executed($runner, ['--check-command' => 'make check']);
 
@@ -243,7 +244,7 @@ final class RunCheckJobCommandTest extends TestCase
     private function runnerLeaving(array $files): JobRunner
     {
         $runner = self::createStub(JobRunner::class);
-        $runner->method('run')->willReturn(new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput($files)));
+        $runner->method('run')->willReturn(new JobResult(new JobEnd(JobCause::Exited, 0), OutputFiles::of($files)));
 
         return $runner;
     }

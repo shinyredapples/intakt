@@ -8,6 +8,7 @@ use Intakt\Core\Job\Contract\JobId;
 use Intakt\Core\Job\Contract\JobInput;
 use Intakt\Core\Job\Contract\JobLimits;
 use Intakt\Core\Job\Contract\JobOutput;
+use Intakt\Core\Job\Contract\JobOutputFile;
 use Intakt\Core\Job\Contract\JobRefused;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -118,11 +119,11 @@ final class JobSpecTest extends TestCase
         new JobLimits($memoryBytes, $cpus, $seconds);
     }
 
-    public function testAnOutputNamedLikeANumberKeepsItsNameAsText(): void
+    public function testAnOutputGivesTheContentsOfAFileByItsName(): void
     {
-        $output = new JobOutput(['7' => 'seven']);
+        $output = new JobOutput(new JobOutputFile('7', 'seven'), new JobOutputFile('result.json', '{}'));
 
-        self::assertSame(['7'], $output->names());
+        self::assertSame('seven', $output->contents('7'));
         self::assertNull($output->contents('missing'));
     }
 }
