@@ -43,33 +43,36 @@ final readonly class GuardMain
     public function guarded(GuardMainInput $input): GuardedMain
     {
         $this->mustNameAProject($input->project);
-        $noticed = $this->recordedFor($input->project, $this->check->checked($input->repository, $input->watchedMain(), $input->ownerKey));
+        $checked = $this->check->checked($input->repository, $input->watchedMain(), $input->ownerKey);
+        if ($checked->classification->isClean() && [] === $checked->classification->ownerPushes) {
+            return new GuardedMain($this->halts->standingOf($input->project), []);
+        }
 
-        return new GuardedMain($this->halts->standingOf($input->project), $noticed);
+        return $this->recordedFor($input->project, $checked);
     }
 
+    // The name goes into every halt and notice the ledger stores as JSON, so a name JSON cannot encode is refused before anything is read or recorded.
     private function mustNameAProject(string $project): void
     {
         if ('' === trim($project)) {
             throw new AHaltNamesItsProject('A halt names its project, and the project given is empty.');
         }
+        if (!mb_check_encoding($project, 'UTF-8')) {
+            throw new AHaltNamesItsProject('A halt names its project, and the project name given is not valid UTF-8.');
+        }
     }
 
-    /**
-     * @return list<string>
-     */
-    private function recordedFor(string $project, CheckedMain $checked): array
+    // Every ledger read runs before the first notice is appended, because a read that fails after an append would lose a notice the ledger already took.
+    private function recordedFor(string $project, CheckedMain $checked): GuardedMain
     {
-        if ($checked->classification->isClean() && [] === $checked->classification->ownerPushes) {
-            return [];
-        }
-
         $lock = $this->locks->createLock(self::LOCK);
         $lock->acquire(true);
         try {
             $this->raiseCardsFor($project, $checked);
+            $standing = $this->halts->standingOf($project);
+            $unnoticed = array_values(array_diff($checked->classification->ownerPushes, $this->notices->noticedOf($project)));
 
-            return $this->noticesGivenFor($project, $checked->classification->ownerPushes);
+            return new GuardedMain($standing, $this->noticesGivenFor($project, $unnoticed));
         } finally {
             $lock->release();
         }
@@ -85,17 +88,14 @@ final readonly class GuardMain
     }
 
     /**
-     * @param list<string> $ownerPushes
+     * @param list<string> $unnoticed
      *
      * @return list<string>
      */
-    private function noticesGivenFor(string $project, array $ownerPushes): array
+    private function noticesGivenFor(string $project, array $unnoticed): array
     {
         $given = [];
-        foreach ($ownerPushes as $commit) {
-            if ($this->notices->wasNoticed($project, $commit)) {
-                continue;
-            }
+        foreach ($unnoticed as $commit) {
             try {
                 $this->notices->notice($project, $commit);
             } catch (NoticeNotRecorded $refused) {

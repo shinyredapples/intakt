@@ -12,6 +12,7 @@ use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Override;
+use RuntimeException;
 use Symfony\Component\Uid\Uuid;
 
 final class HaltLedger implements Ledger
@@ -22,6 +23,11 @@ final class HaltLedger implements Ledger
     private bool $refusing = false;
 
     private ?int $limit = null;
+
+    private ?LedgerEventKind $unreadable = null;
+
+    /** @var array<string, int> */
+    private array $reads = [];
 
     #[Override]
     public function append(LedgerEvent $event): AppendResult
@@ -45,6 +51,11 @@ final class HaltLedger implements Ledger
     #[Override]
     public function readOfKind(LedgerEventKind $kind): RecordedEvents
     {
+        $this->reads[$kind->value] = ($this->reads[$kind->value] ?? 0) + 1;
+        if ($kind === $this->unreadable) {
+            throw new RuntimeException('the ledger cannot be read');
+        }
+
         return new RecordedEvents(array_values(array_filter($this->recorded, static fn (RecordedEvent $recorded): bool => $kind === $recorded->event->kind)));
     }
 
@@ -70,6 +81,21 @@ final class HaltLedger implements Ledger
     public function takeAppendsAgain(): void
     {
         $this->limit = null;
+    }
+
+    public function failReadsOf(LedgerEventKind $kind): void
+    {
+        $this->unreadable = $kind;
+    }
+
+    public function readAgain(): void
+    {
+        $this->unreadable = null;
+    }
+
+    public function readsOf(LedgerEventKind $kind): int
+    {
+        return $this->reads[$kind->value] ?? 0;
     }
 
     /**

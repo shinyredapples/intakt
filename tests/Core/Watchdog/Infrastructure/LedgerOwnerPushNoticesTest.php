@@ -39,7 +39,7 @@ final class LedgerOwnerPushNoticesTest extends TestCase
     {
         $this->notices->notice('acme/shop', self::COMMIT);
 
-        self::assertTrue($this->notices->wasNoticed('acme/shop', self::COMMIT));
+        self::assertSame([self::COMMIT], $this->notices->noticedOf('acme/shop'));
         self::assertSame([LedgerEventKind::OwnerPushNoticed], $this->ledger->kinds());
         self::assertSame(['{"project":"acme\/shop","commit":"'.self::COMMIT.'"}'], $this->ledger->payloads());
     }
@@ -48,21 +48,21 @@ final class LedgerOwnerPushNoticesTest extends TestCase
     {
         $this->notices->notice('acme/shop', str_repeat('b', 40));
 
-        self::assertFalse($this->notices->wasNoticed('acme/shop', self::COMMIT));
+        self::assertNotContains(self::COMMIT, $this->notices->noticedOf('acme/shop'));
     }
 
     public function testACommitNoticedForAnotherProjectIsNotNoticedForThisOne(): void
     {
         $this->notices->notice('acme/blog', self::COMMIT);
 
-        self::assertFalse($this->notices->wasNoticed('acme/shop', self::COMMIT));
+        self::assertSame([], $this->notices->noticedOf('acme/shop'));
     }
 
     public function testANoticeRowThatDoesNotReadNoticesNothing(): void
     {
         $this->ledger->append(new LedgerEvent(LedgerEventKind::OwnerPushNoticed, '{"project":"acme/shop"}'));
 
-        self::assertFalse($this->notices->wasNoticed('acme/shop', self::COMMIT));
+        self::assertSame([], $this->notices->noticedOf('acme/shop'));
     }
 
     public function testANoticeTheLedgerRefusesThrowsAndLeavesTheCommitUnnoticed(): void
@@ -76,6 +76,6 @@ final class LedgerOwnerPushNoticesTest extends TestCase
             self::assertSame('The notice for '.self::COMMIT.' was not recorded, because the ledger refused it: the ledger is down.', $refused->getMessage());
         }
 
-        self::assertFalse($this->notices->wasNoticed('acme/shop', self::COMMIT));
+        self::assertSame([], $this->notices->noticedOf('acme/shop'));
     }
 }

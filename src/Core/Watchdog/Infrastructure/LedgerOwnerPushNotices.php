@@ -19,16 +19,20 @@ final readonly class LedgerOwnerPushNotices
     ) {
     }
 
-    public function wasNoticed(string $project, string $commit): bool
+    /**
+     * @return list<string>
+     */
+    public function noticedOf(string $project): array
     {
+        $noticed = [];
         foreach ($this->ledger->readOfKind(LedgerEventKind::OwnerPushNoticed) as $recorded) {
             $payload = $this->payloads->of($recorded, OwnerPushNoticePayload::class);
-            if ($payload instanceof OwnerPushNoticePayload && $payload->project === $project && $payload->commit === $commit) {
-                return true;
+            if ($payload instanceof OwnerPushNoticePayload && $payload->project === $project) {
+                $noticed[] = $payload->commit;
             }
         }
 
-        return false;
+        return $noticed;
     }
 
     /**

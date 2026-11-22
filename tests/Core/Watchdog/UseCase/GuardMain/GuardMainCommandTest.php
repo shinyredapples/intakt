@@ -44,6 +44,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Tester\ApplicationTester;
 use Symfony\Component\Console\Tester\CommandTester;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Lock\LockFactory;
@@ -342,6 +343,54 @@ final class GuardMainCommandTest extends TestCase
         self::assertSame([LedgerEventKind::OwnerPushNoticed, LedgerEventKind::OwnerPushNoticed], $this->ledger->kinds());
     }
 
+    public function testANoticeLedgerThatCannotBeReadWritesNoNoticeExitsWithOneAndARetryGivesBothNotices(): void
+    {
+        $seen = $this->repository->commitEmpty('Seen');
+        $first = $this->repository->commitSignedWith($this->privateKey('owner'), 'First owner change');
+        $second = $this->repository->commitSignedWith($this->privateKey('owner'), 'Second owner change');
+        $this->ledger->failReadsOf(LedgerEventKind::OwnerPushNoticed);
+
+        $failed = $this->whenTheApplicationRunsTheGuard(['project' => self::PROJECT, 'repository' => $this->repository->path, 'last-seen-head' => $seen, '--owner-key' => [$this->publicKey('owner')]]);
+
+        self::assertSame(Command::FAILURE, $failed->getStatusCode());
+        self::assertStringNotContainsString('notice acme/shop', $failed->getDisplay());
+        self::assertSame([], $this->ledger->kinds());
+
+        $this->ledger->readAgain();
+        $retry = $this->whenTheGuardRuns($seen, ['--owner-key' => [$this->publicKey('owner')]]);
+
+        self::assertSame(Command::SUCCESS, $retry->getStatusCode());
+        self::assertSame(sprintf("notice acme/shop: commit %s owner_signed, pushed without the gate\nnotice acme/shop: commit %s owner_signed, pushed without the gate\nacme/shop is not halted: no owner card stands\n", $first, $second), $retry->getDisplay());
+        self::assertSame([LedgerEventKind::OwnerPushNoticed, LedgerEventKind::OwnerPushNoticed], $this->ledger->kinds());
+    }
+
+    public function testTheRecordedNoticesAreReadOnceAGuardRunHoweverManyOwnerPushesThereAre(): void
+    {
+        $seen = $this->repository->commitEmpty('Seen');
+        $this->repository->commitSignedWith($this->privateKey('owner'), 'First owner change');
+        $this->repository->commitSignedWith($this->privateKey('owner'), 'Second owner change');
+        $this->repository->commitSignedWith($this->privateKey('owner'), 'Third owner change');
+
+        $tester = $this->whenTheGuardRuns($seen, ['--owner-key' => [$this->publicKey('owner')]]);
+
+        self::assertSame(Command::SUCCESS, $tester->getStatusCode());
+        self::assertSame(1, $this->ledger->readsOf(LedgerEventKind::OwnerPushNoticed));
+        self::assertCount(3, $this->ledger->kinds());
+    }
+
+    public function testAProjectNameThatIsNotValidUtf8IsRefusedWithTwoAndNothingIsRecorded(): void
+    {
+        $seen = $this->repository->commitEmpty('Seen');
+        $this->repository->commitSignedWith($this->privateKey('owner'), 'Owner change');
+        $this->repository->commitEmpty('Seeded unsigned commit');
+
+        $tester = $this->whenTheGuardRunsWith(['project' => "demo\xFF", 'repository' => $this->repository->path, 'last-seen-head' => $seen, '--owner-key' => [$this->publicKey('owner')]]);
+
+        self::assertSame(Command::INVALID, $tester->getStatusCode());
+        self::assertStringContainsString('project name given is not valid', $tester->getDisplay());
+        self::assertSame([], $this->ledger->kinds());
+    }
+
     public function testAStandingCardKeepsTheProjectHaltedWhileMainIsCleanAgain(): void
     {
         $seen = $this->repository->commitEmpty('Seen');
@@ -458,6 +507,22 @@ final class GuardMainCommandTest extends TestCase
         $application->addCommand(new GuardMainCommand($guard));
         $tester = new CommandTester($application->find(GuardMainCommand::NAME));
         $tester->execute($input);
+
+        return $tester;
+    }
+
+    // Through the application, because a ledger that throws on a read is caught and reported there, as on a real install.
+    /**
+     * @param array<string, string|list<string>> $input
+     */
+    private function whenTheApplicationRunsTheGuard(array $input): ApplicationTester
+    {
+        $guard = new GuardMain(new CheckMain(new HardenedGit(), new Filesystem()), $this->halts, $this->notices, new LockFactory($this->store));
+        $application = new Application();
+        $application->setAutoExit(false);
+        $application->addCommand(new GuardMainCommand($guard));
+        $tester = new ApplicationTester($application);
+        $tester->run(['command' => GuardMainCommand::NAME, ...$input]);
 
         return $tester;
     }
