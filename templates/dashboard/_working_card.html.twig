@@ -1,0 +1,18 @@
+{#- One change in progress: the role doing it stands on the current step of the path, done steps are filled and later ones outlined, so no avatar column is needed; the hedgehog stands beside the meerkat while security reads (UX2 home, #3326). A task the build runs has no round to open yet, so its card is no link. -#}
+{%- set steps = enum_cases('Intakt\\Core\\Dashboard\\Domain\\WorkStep') -%}
+{%- set tag = card.round is null ? 'div' : 'a' -%}
+<{{ tag }} class="card wcard" data-project="{{ card.project }}"{% if card.round is not null %} href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_REVIEW'), {round: card.round}) }}"{% endif %}>
+    <span class="wcard-head">
+        <span class="grow"><span class="wcard-title">{{ card.title }}</span><span class="meta"><span>{{ card.project }}</span></span></span>
+        {{ include('dashboard/components/chip.html.twig', {label: card.state, dot: 'ok'}, with_context = false) }}
+    </span>
+    <ol class="path" aria-label="Progress: {{ card.step.value }}, step {{ card.step.position }} of {{ steps|length }}">
+    {%- for step in steps -%}
+        {%- if step == card.step -%}
+        <li class="now"><span class="who{% if card.roles|length > 1 %} duo{% endif %}">{% for role in card.roles %}{{ include('dashboard/components/character.html.twig', {character: role, size: 48, alt: role.label ~ ', now on ' ~ step.value}, with_context = false) }}{% endfor %}</span>{{ step.value }}</li>
+        {%- else -%}
+        <li{% if step.comesBefore(card.step) %} class="done"{% endif %}>{{ step.value }}<span class="sr-only"> ({{ step.comesBefore(card.step) ? 'done' : 'next' }})</span></li>
+        {%- endif -%}
+    {%- endfor -%}
+    </ol>
+</{{ tag }}>

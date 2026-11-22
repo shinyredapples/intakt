@@ -32,7 +32,7 @@ final readonly class FirstReviewStep
         if (!$this->review instanceof Review) {
             return $this->sampleCanStart
                 ? sprintf('No review has run yet: start the review of the change %s of the %s project.', SampleChange::CHANGE, SampleChange::PROJECT)
-                : 'No review has run yet, and this install has no sample change to start one from: review a change of your own project with intakt:review or your agent.';
+                : 'No review has run yet, and this page has no sample change to start one from: your coding agent can ask for a review of a change of your own project.';
         }
 
         return sprintf('The first review, of the change %s of the %s project, %s.', $this->review->change, $this->review->project, $this->outcome($this->review->latest()));

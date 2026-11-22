@@ -28,8 +28,12 @@ final readonly class ListWaitingController
     // Outage notices belong to no project, so they stay on the page under every project filter.
     public function __invoke(Request $request, #[MapQueryParameter] ?string $project = null): Response
     {
+        $page = $this->reading->read();
+
+        // The shell's You count comes from this list, because a second read could miss a notice that ended between the two and show the item without a count.
         return new Response($this->pages->render($request, 'dashboard/waiting.html.twig', [
-            'page' => $this->reading->read(),
+            'page' => $page,
+            'waiting_listed' => count($page->items),
             'now' => $this->clock->now(),
             'linked_project' => $project,
             'project_trail' => in_array($project, $this->filterProjects->names(), true) ? $project : null,

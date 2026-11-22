@@ -28,13 +28,13 @@ final class DashboardPhoneShellTest extends DashboardPageTestCase
         self::assertSame('Search', $search->filter('.ph-short')->text());
     }
 
-    // Because History and Settings, the pages under More, are not built yet, a More item would open an empty sheet.
-    public function testTheMoreItemIsLeftOutWhileNoPageUnderItIsBuilt(): void
+    // A phone's bar holds Now, You and Trends, so Projects is reached through More.
+    public function testTheMoreItemOpensTheSheetWithProjects(): void
     {
         $page = $this->browser->request('GET', '/projects');
 
-        self::assertCount(0, $page->filter('[data-more-toggle]'));
-        self::assertCount(0, $page->filter('[data-more-sheet]'));
+        self::assertCount(1, $page->filter('.rail-in button.nav.more[data-more-toggle]'));
+        self::assertSame(['Projects'], $page->filter('#more.menu[data-more-sheet] nav a')->each(static fn (Crawler $link): string => trim($link->text())));
     }
 
     public function testTheMoreItemOpensTheSheetOfThePagesUnderIt(): void

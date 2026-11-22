@@ -1,4 +1,4 @@
-From 49ef023ee27b18fa395c7fb67c865d7c9f28c9a8 Mon Sep 17 00:00:00 2001
+From 6371efc0fee8830178deed7247b335c3007a6dbb Mon Sep 17 00:00:00 2001
 From: Intakt Builder <builder@localhost>
 Date: Sat, 21 Nov 2026 00:13:54 +0000
 Subject: [PATCH] Roll back the transaction when the database refuses to commit
@@ -6,11 +6,11 @@ Subject: [PATCH] Roll back the transaction when the database refuses to commit
 
 ---
  src/Connection.php                   |  26 +++++-
- tests/Functional/TransactionTest.php | 116 +++++++++++++++++++++++++++
- 2 files changed, 140 insertions(+), 2 deletions(-)
+ tests/Functional/TransactionTest.php | 121 +++++++++++++++++++++++++++
+ 2 files changed, 145 insertions(+), 2 deletions(-)
 
 diff --git a/src/Connection.php b/src/Connection.php
-index c024b90..e5b7e16 100644
+index c024b9014..e5b7e16a0 100644
 --- a/src/Connection.php
 +++ b/src/Connection.php
 @@ -972,13 +972,16 @@ class Connection implements ServerVersionProvider
@@ -67,7 +67,7 @@ index c024b90..e5b7e16 100644
      private function updateTransactionStateAfterCommit(): void
      {
 diff --git a/tests/Functional/TransactionTest.php b/tests/Functional/TransactionTest.php
-index 89ffa5b..b05e899 100644
+index 89ffa5bca..fc500cf22 100644
 --- a/tests/Functional/TransactionTest.php
 +++ b/tests/Functional/TransactionTest.php
 @@ -5,9 +5,13 @@ declare(strict_types=1);
@@ -84,10 +84,16 @@ index 89ffa5b..b05e899 100644
  use Doctrine\DBAL\Schema\Column;
  use Doctrine\DBAL\Schema\PrimaryKeyConstraint;
  use Doctrine\DBAL\Schema\Table;
-@@ -19,11 +23,123 @@ use function func_get_args;
+@@ -15,15 +19,132 @@ use Doctrine\DBAL\Tests\FunctionalTestCase;
+ use Doctrine\DBAL\Tests\TestUtil;
+ use Doctrine\DBAL\Types\Types;
+ 
++use function array_map;
+ use function func_get_args;
  use function restore_error_handler;
  use function set_error_handler;
  use function sprintf;
++use function strval;
 +use function sys_get_temp_dir;
 +use function tempnam;
 +use function unlink;
@@ -137,7 +143,10 @@ index 89ffa5b..b05e899 100644
 +        $writer->insert('refused_commit', ['id' => 2]);
 +        $writer->commit();
 +
-+        self::assertSame([2], $writer->fetchFirstColumn('SELECT id FROM refused_commit'));
++        self::assertSame(['2'], array_map(
++            strval(...),
++            $writer->fetchFirstColumn('SELECT id FROM refused_commit'),
++        ));
 +    }
 +
 +    public function testTransactionalWithRefusedCommit(): void

@@ -48,7 +48,7 @@ final class PublishedBenchTest extends TestCase
 
     public function testATableWithoutTheReviewBenchHeadingGivesNoHeadline(): void
     {
-        self::assertNull($this->headlineOf(str_replace('### Review bench', '### Other bench', $this->section())));
+        self::assertNull($this->headlineOf(str_replace('## Review bench', '## Other bench', $this->section())));
     }
 
     public function testARenamedThirdColumnGivesNoHeadline(): void
@@ -170,7 +170,7 @@ final class PublishedBenchTest extends TestCase
 
     public function testARunDateInsideFencedCodeGivesNoHeadline(): void
     {
-        $readme = "### Review bench\n\n".$this->table(self::SMALL_PANEL)."\n\n```text\nDate of the run: 2026-11-16.\n```\n";
+        $readme = "## Review bench\n\n".$this->table(self::SMALL_PANEL)."\n\n```text\nDate of the run: 2026-11-16.\n```\n";
 
         self::assertNull($this->headlineOf($readme));
     }
@@ -199,14 +199,14 @@ final class PublishedBenchTest extends TestCase
 
     public function testACommentedOutRunDateGivesNoHeadline(): void
     {
-        $readme = "### Review bench\n\n".$this->table(self::SMALL_PANEL)."\n\n<!--\nDate of the run: 2026-11-16.\n-->\n";
+        $readme = "## Review bench\n\n".$this->table(self::SMALL_PANEL)."\n\n<!--\nDate of the run: 2026-11-16.\n-->\n";
 
         self::assertNull($this->headlineOf($readme));
     }
 
     public function testACommentOnTheRunDateLineKeepsTheDate(): void
     {
-        $readme = "### Review bench\n\n".$this->table(self::SMALL_PANEL)."\n\nDate of the run: 2026-11-16. <!-- a note -->\n";
+        $readme = "## Review bench\n\n".$this->table(self::SMALL_PANEL)."\n\nDate of the run: 2026-11-16. <!-- a note -->\n";
 
         self::assertSame('2026-11-16', $this->headlineOf($readme)?->ranOn);
     }
@@ -327,7 +327,7 @@ final class PublishedBenchTest extends TestCase
 
     public function testTheShippedReadmeStillParses(): void
     {
-        $headline = new PublishedBench(__DIR__.'/../../../../README.md')->headline();
+        $headline = new PublishedBench(__DIR__.'/../../../../docs/bench.md')->headline();
 
         self::assertNotNull($headline);
         self::assertMatchesRegularExpression('/^\d+ of \d+$/', $headline->reading());
@@ -337,13 +337,13 @@ final class PublishedBenchTest extends TestCase
 
     private function section(string $header = self::HEADER, string $panel = self::PANEL, string $date = self::DATE): string
     {
-        return "# Intakt\n\n### Review bench\n\nThe bench, below:\n\n```\nphp bin/console intakt:bench\n```\n\n"
+        return "# Intakt\n\n## Review bench\n\nThe bench, below:\n\n```\nphp bin/console intakt:bench\n```\n\n"
             ."{$header}\n| --- | --- | --- | --- |\n{$panel}\n| `security` alone | 8 of 15 | 0 | about 4,350 |\n\n{$date}\n";
     }
 
     private function bench(string $body): string
     {
-        return "### Review bench\n\n{$body}\n\nDate of the run: 2026-11-16.\n";
+        return "## Review bench\n\n{$body}\n\nDate of the run: 2026-11-16.\n";
     }
 
     private function table(string $rows): string

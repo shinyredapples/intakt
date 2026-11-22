@@ -2,6 +2,43 @@
 
 One folder per likely bug in a library Intakt uses (Symfony AI, the PHP MCP SDK, Symfony components, Doctrine): a minimal reproduction (PHPUnit tests, or a script named `reproduce.php`) and `REPORT.md` with the exact versions, what happens and what was expected. Each folder has a row in the "Found in the beta" table of `docs/highlights.md` that names `upstream/<folder>/`, added as a fragment in [`docs/highlights.d/`](../docs/highlights.d/) (`bin/highlights` builds the page); the `reproductions` gate of `bin/check` fails on a folder without one.
 
+## Found and fixed upstream
+
+Building Intakt led to 12 fixes (11 pull requests) merged upstream in Symfony, Symfony AI and Doctrine. One row per reproduction in this folder, merged first. *Intakt's* marks a pull request or issue this project sent; *fixed upstream* marks a bug Intakt reproduced and others fixed; *already reported* marks an issue others filed first.
+
+| Project | Bug | Upstream |
+| --- | --- | --- |
+| symfony/ai | [SQLite store: a quote breaks FTS5](ai-sqlite-store-unescaped-fts-quote/) | [#2874](https://github.com/symfony/ai/pull/2874) Intakt's, merged |
+| symfony/ai | [Claude Code: tools the CLI ran come back as tool calls](ai-claude-code-platform-cli-tool-calls/) | [#2875](https://github.com/symfony/ai/pull/2875) Intakt's, merged |
+| symfony/ai | [Codex: tools the CLI ran come back as tool calls](ai-codex-platform-cli-tool-calls/) | [#2875](https://github.com/symfony/ai/pull/2875) Intakt's, merged |
+| symfony/ai | [`#[Positive]` gets a boolean `exclusiveMinimum`](ai-platform-positive-boolean-exclusive-minimum/) | [#2888](https://github.com/symfony/ai/pull/2888) Intakt's, merged |
+| Doctrine | [PostgreSQL without `server_version` fails](doctrine-bundle-postgresql-empty-server-version/) | [DoctrineBundle#2335](https://github.com/doctrine/DoctrineBundle/pull/2335) Intakt's, merged |
+| symfony/symfony | [NaN skips config validation](config-nan-skips-validation/) | [#67911](https://github.com/symfony/symfony/pull/67911) Intakt's, merged |
+| symfony/symfony | [`messenger:consume` ignores an early SIGTERM](messenger-consume-ignores-early-sigterm/) | [#67912](https://github.com/symfony/symfony/pull/67912) Intakt's, merged |
+| symfony/symfony | [Serializer list accepts any object](serializer-object-collection-accepts-any-object/) | [#67913](https://github.com/symfony/symfony/pull/67913) Intakt's, merged |
+| symfony/ai | [Codex: a cut turn reads as complete](ai-codex-platform-cut-off-stream/) | [#2889](https://github.com/symfony/ai/pull/2889) Intakt's, merged |
+| symfony/ai | [Codex: earlier user messages dropped](ai-codex-platform-last-user-message/) | [#2891](https://github.com/symfony/ai/pull/2891) Intakt's, merged |
+| symfony/ai | [Claude Code: cache token split lost](ai-claude-code-platform-cache-token-split/) | [#2963](https://github.com/symfony/ai/pull/2963) Intakt's, merged |
+| symfony/ai | [`Provider` keeps a resolved model](ai-platform-provider-keeps-resolved-model/) | [#2851](https://github.com/symfony/ai/pull/2851) fixed upstream, merged |
+| symfony/ai | [Failover retries a failed platform](ai-failover-platform-retries-a-failed-platform/) | [#2890](https://github.com/symfony/ai/pull/2890) Intakt's, open |
+| symfony/symfony | [Messenger: a stopped worker hides the rest of its fetched batch](messenger-concurrency-limit-hides-fetched-message/) | [#68307](https://github.com/symfony/symfony/pull/68307) Intakt's, open |
+| symfony/symfony | [`debug:config` fails when the cached container is stale](framework-debug-config-stale-container/) | [#68310](https://github.com/symfony/symfony/pull/68310) Intakt's, open |
+| symfony/ai | [Typed answer of a multi-part reply missed](ai-structured-output-multi-part-answers/) | [#2945](https://github.com/symfony/ai/issues/2945) Intakt's, reported |
+| symfony/ai | [Failover misses a deferred 429](ai-failover-platform-deferred-rate-limit/) | [#2944](https://github.com/symfony/ai/issues/2944) Intakt's, reported |
+| symfony/ai | [Claude Code: response format passed as `Array`](ai-claude-code-platform-structured-output/) | [#2962](https://github.com/symfony/ai/issues/2962) Intakt's, reported |
+| symfony/ai | [Failed streamed tool run reports no usage](ai-agent-streamed-tool-call-cut-stream/) | [comment on #2617](https://github.com/symfony/ai/pull/2617#issuecomment-6876304595) Intakt's, reported |
+| PHPStan | [Readonly type kept after `clone with`](phpstan-clone-with-readonly-constructor-type/) | [phpstan#14838](https://github.com/phpstan/phpstan/issues/14838) already reported |
+| FrankenPHP | [`php-cli` crashes on SIGTERM](frankenphp-messenger-consume-sigterm/) | [frankenphp#2479](https://github.com/php/frankenphp/issues/2479) already reported, still fails on 1.14.0 (checked 2026-11-22) |
+| Doctrine | [A refused commit leaves the transaction open](dbal-failed-commit-leaves-transaction-open/) | [#7633](https://github.com/doctrine/dbal/pull/7633) Intakt's, open |
+| Rector | [Parallel workers fail on a long path list](rector-parallel-argument-list/) | [rector-src#9012](https://github.com/rectorphp/rector-src/pull/9012) Intakt's, closed without merging |
+| MCP SDK | [Three parallel `tools/call` on one session](mcp-parallel-tools-call-one-session/) | passes, nothing to file |
+| symfony/ai | [Worker-mode state of two models and two MCP sessions](ai-worker-mode-state/) | passes, nothing to file |
+| symfony/ai | [Structured output with enums and nested lists](ai-structured-output-enums-nested-lists/) | passes, nothing to file |
+| symfony/ai | [Generic bridge: check whether a complete stream is read as cut](ai-generic-platform-cut-stream/) | passes, nothing to file |
+| symfony/ai | [AI Mate: a symlinked `vendor` moves the root](ai-mate-symlinked-vendor-root/) | not filed: Composer's autoloaders do not support it either |
+| symfony/ai | [Claude Code: a cut run without streaming](ai-claude-code-platform-cut-off-stream/) | not filed: the exceptions raised are accurate |
+| symfony/ai | [Codex: usage of a turn without an answer lost](ai-codex-platform-usage-without-answer/) | not filed: unreachable through a `Platform` |
+
 ## Before a new folder
 
 Upstream often fixes a bug in a pull request with no issue, or only in a commit on its development branch, so every reproduction starts with a duplicate check, in this order:
