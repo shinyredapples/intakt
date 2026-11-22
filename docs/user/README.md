@@ -73,6 +73,8 @@ On a review page, "Start round N" and "Stop this reviewer" share one lock per re
 
 The review page uses plain words, while the CLI, the MCP tools and these docs keep the technical terms: **Review pass** is a round (so "Now: round 2 in review" reads "Now: Review pass 2 in review"), **To fix** is the act list (the open findings), **Checked** means judged, and **Changes needed** is the outcome Changes requested. Pointing at one of these words, or at its "?", shows the technical term.
 
+Under the task, the review page shows the path of the change: every earlier pass as done, each followed by a done Fix when it ended with changes requested, the step it is on now (bold, ringed, with the role whose turn it is standing on it: the meerkat while a pass is in review, the beaver when there is something to fix, the tortoise once it can be merged), then the steps still to come. Pass 2 in review reads Pass 1, Fix, Pass 2, Merge with Pass 2 current. When the judge's call arrives while the page is open, the path moves on to Fix or Merge without a reload. A pass that was blocked or failed shows no path, because there is no next step to name.
+
 ### The Trends page
 
 `/trends` (**Trends** in the menu, after Projects) shows how the reviews went, read from the ledger's review rounds of every project, whatever the project filter shows. The page opens with tiles, three per row on a phone, each giving one figure above a short label; point at a label or reach it with the Tab key and a tooltip says what the figure counts. A tile shows only when there is a figure for it, so a page with few reviews shows fewer tiles:

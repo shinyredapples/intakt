@@ -528,6 +528,23 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertSame($reloaded->filter('#round-'.$id.'-verdict')->text(), $updated->filter('#round-'.$id.'-verdict')->text());
     }
 
+    public function testAJudgedRoundPushedToThePageMovesThePathOnToTheFix(): void
+    {
+        $round = $this->givenTheHubRecordsWhatIsPublishedForARoundWithoutSummary();
+        $id = $round->toRfc4122();
+        $this->ledger->startRoundOfQuorum('feat/thing', $id, 'all');
+        $page = $this->browser->request('GET', '/reviews/'.$id);
+        self::assertStringStartsWith('Pass', $page->filter('#review-path li.now')->text());
+
+        $this->givenTheRoundIsJudgedWith($round, ['F1' => 'act']);
+
+        $updated = $this->replaced($page, $this->publishedStreams());
+        self::assertSame(['Fix', 'Developer (beaver), now on Fix'], [$updated->filter('#review-path li.now')->text(), $updated->filter('#review-path li.now img.character-light')->attr('alt')]);
+        self::assertCount(1, $updated->filter('#review-path li[aria-current="step"]'));
+        self::assertSame('Fix', $updated->filter('#review-path li[aria-current="step"]')->text());
+        self::assertSame($this->browser->request('GET', '/reviews/'.$id)->filter('#review-path')->outerHtml(), $updated->filter('#review-path')->outerHtml());
+    }
+
     public function testARoundApprovedWhileThePageIsOpenShowsTheSameBowingOctopusAsANewLoad(): void
     {
         $round = $this->givenTheHubRecordsWhatIsPublishedForARoundWithoutSummary();
