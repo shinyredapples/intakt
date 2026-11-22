@@ -12,6 +12,7 @@ use Intakt\Core\Bench\Domain\BenchFigures;
 use Intakt\Core\Bench\Domain\RunVerdict;
 use Intakt\Core\Bench\UseCase\RunBench\BenchReport;
 use Intakt\Core\Review\Contract\Decision;
+use Intakt\Core\Review\Contract\ModelNames;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\RoundTokens;
@@ -53,7 +54,7 @@ final class BenchReportTest extends TestCase
 
     public function testAHarnessFailureIsLeftOutOfTheDefectCountsButItsTokensAreTotaled(): void
     {
-        $failed = new BenchReviewerResult('reviewer', Tier::Standard, new RunVerdict(false, [], [], [], [], 'tool failed'), new RoundTokens(1, 100, 0, 0, 0, 10, 110), 1000, ['big']);
+        $failed = new BenchReviewerResult('reviewer', Tier::Standard, new RunVerdict(false, [], [], [], [], 'tool failed'), new RoundTokens(1, 100, 0, 0, 0, 10, 110), 1000, new ModelNames('big'));
 
         $lines = new BenchReport()->linesOf([new RepeatedChange('example', [new BenchReview('example', Decision::Blocked, [$failed], [])])]);
 
@@ -86,7 +87,7 @@ final class BenchReportTest extends TestCase
      */
     private function totalsOf(array $models): array
     {
-        $results = array_map(static fn (array $named): BenchReviewerResult => new BenchReviewerResult('reviewer', Tier::Standard, new RunVerdict(false, [], [], [], [], null), new RoundTokens(1, 10, 0, 0, 0, 2, 12), 1, $named), $models);
+        $results = array_map(static fn (array $named): BenchReviewerResult => new BenchReviewerResult('reviewer', Tier::Standard, new RunVerdict(false, [], [], [], [], null), new RoundTokens(1, 10, 0, 0, 0, 2, 12), 1, new ModelNames(...$named)), $models);
         $lines = new BenchReport()->linesOf([new RepeatedChange('example', [new BenchReview('example', Decision::Approve, $results, [])])]);
 
         return array_slice($lines, (int) array_search('totals per reviewer and model over every run:', $lines, true) + 1);
@@ -97,7 +98,7 @@ final class BenchReportTest extends TestCase
      */
     private function reportOf(Finding $alarm): array
     {
-        $result = new BenchReviewerResult('reviewer', Tier::Standard, new RunVerdict(true, [], [], [$alarm], [], null), new RoundTokens(1, 10, 0, 0, 0, 2, 12), 1, ['big']);
+        $result = new BenchReviewerResult('reviewer', Tier::Standard, new RunVerdict(true, [], [], [$alarm], [], null), new RoundTokens(1, 10, 0, 0, 0, 2, 12), 1, new ModelNames('big'));
 
         return new BenchReport()->linesOf([new RepeatedChange('clean', [new BenchReview('clean', Decision::Changes, [$result], [])])]);
     }

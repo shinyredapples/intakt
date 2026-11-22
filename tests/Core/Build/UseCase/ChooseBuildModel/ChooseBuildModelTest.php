@@ -9,6 +9,8 @@ use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Build\Contract\BuildFacts;
+use Intakt\Core\Git\Contract\Paths;
+use Intakt\Core\Review\Contract\Labels;
 use Intakt\Core\Build\Contract\Setback;
 use Intakt\Core\Build\Contract\TierChoice;
 use Intakt\Core\Build\Domain\ModelRouting;
@@ -45,7 +47,7 @@ final class ChooseBuildModelTest extends TestCase
     {
         $ledger = new InMemoryLedger();
 
-        $chosen = $this->use($ledger)->chooseFor($this->attemptNumber(1), BuildFacts::fromLabels([], ['README.md']));
+        $chosen = $this->use($ledger)->chooseFor($this->attemptNumber(1), BuildFacts::fromLabels(new Labels(), new Paths('README.md')));
 
         self::assertSame(Tier::Standard, $chosen->choice->tier);
         self::assertSame([LedgerEventKind::ModelChosen], $ledger->kinds());
@@ -56,7 +58,7 @@ final class ChooseBuildModelTest extends TestCase
     {
         $ledger = new InMemoryLedger();
 
-        (void) $this->use($ledger)->chooseFor($this->attemptNumber(1), BuildFacts::fromLabels(['model:light'], ['README.md']));
+        (void) $this->use($ledger)->chooseFor($this->attemptNumber(1), BuildFacts::fromLabels(new Labels('model:light'), new Paths('README.md')));
 
         self::assertSame('light', $ledger->payloads()[0]['tier']);
         self::assertSame('label', $ledger->payloads()[0]['reason']);
@@ -66,7 +68,7 @@ final class ChooseBuildModelTest extends TestCase
     {
         $ledger = new InMemoryLedger();
 
-        (void) $this->use($ledger)->chooseFor($this->attemptNumber(1), BuildFacts::fromLabels(['model:light'], ['src/Security/Login.php']));
+        (void) $this->use($ledger)->chooseFor($this->attemptNumber(1), BuildFacts::fromLabels(new Labels('model:light'), new Paths('src/Security/Login.php')));
 
         self::assertSame('strong', $ledger->payloads()[0]['tier']);
         self::assertSame('sensitive-path', $ledger->payloads()[0]['reason']);
@@ -77,7 +79,7 @@ final class ChooseBuildModelTest extends TestCase
     {
         $ledger = new InMemoryLedger();
 
-        (void) $this->use($ledger)->chooseFor($this->attemptNumber(2), BuildFacts::fromLabels([], ['README.md'], $setback));
+        (void) $this->use($ledger)->chooseFor($this->attemptNumber(2), BuildFacts::fromLabels(new Labels(), new Paths('README.md'), $setback));
 
         self::assertSame('strong', $ledger->payloads()[0]['tier']);
         self::assertSame('setback', $ledger->payloads()[0]['reason']);
@@ -97,7 +99,7 @@ final class ChooseBuildModelTest extends TestCase
     {
         $ledger = new InMemoryLedger();
 
-        (void) $this->use($ledger)->chooseFor($this->attemptNumber(2), BuildFacts::fromLabels([], ['README.md']));
+        (void) $this->use($ledger)->chooseFor($this->attemptNumber(2), BuildFacts::fromLabels(new Labels(), new Paths('README.md')));
 
         self::assertSame('standard', $ledger->payloads()[0]['tier']);
     }
@@ -106,7 +108,7 @@ final class ChooseBuildModelTest extends TestCase
     {
         $ledger = new InMemoryLedger();
 
-        (void) $this->use($ledger)->chooseFor($this->attemptNumber(3), BuildFacts::fromLabels([], []));
+        (void) $this->use($ledger)->chooseFor($this->attemptNumber(3), BuildFacts::fromLabels(new Labels(), new Paths()));
 
         self::assertSame(
             ['project' => 'alpha', 'task' => 'T60', 'attempt' => 3, 'tier' => 'standard', 'reason' => 'default', 'provider' => 'claude_code', 'model' => 'standard-model'],
@@ -118,7 +120,7 @@ final class ChooseBuildModelTest extends TestCase
     {
         $ledger = new InMemoryLedger();
 
-        (void) $this->use($ledger)->chooseFor($this->attemptNumber(1), BuildFacts::fromLabels(['model:claude-opus-5-5'], []));
+        (void) $this->use($ledger)->chooseFor($this->attemptNumber(1), BuildFacts::fromLabels(new Labels('model:claude-opus-5-5'), new Paths()));
 
         self::assertSame('default', $ledger->payloads()[0]['reason']);
     }
@@ -127,7 +129,7 @@ final class ChooseBuildModelTest extends TestCase
     {
         $this->expectException(ModelChoiceNotRecorded::class);
 
-        (void) $this->use(new InMemoryLedger(0))->chooseFor($this->attemptNumber(1), BuildFacts::fromLabels([], []));
+        (void) $this->use(new InMemoryLedger(0))->chooseFor($this->attemptNumber(1), BuildFacts::fromLabels(new Labels(), new Paths()));
     }
 
     public function testATierOnAProviderABuildCannotRunOnIsRefusedWithoutRecording(): void
@@ -137,7 +139,7 @@ final class ChooseBuildModelTest extends TestCase
         $tiers->method('resolve')->willReturn(new ResolvedModel(Provider::Anthropic, 'standard-model'));
 
         try {
-            (void) $this->use($ledger, $tiers)->chooseFor($this->attemptNumber(1), BuildFacts::fromLabels([], []));
+            (void) $this->use($ledger, $tiers)->chooseFor($this->attemptNumber(1), BuildFacts::fromLabels(new Labels(), new Paths()));
             self::fail('A provider other than Claude Code was accepted.');
         } catch (BuilderNotOnClaudeCode $refusal) {
             self::assertEquals(new BuilderNotOnClaudeCode('alpha', Tier::Standard, Provider::Anthropic), $refusal);

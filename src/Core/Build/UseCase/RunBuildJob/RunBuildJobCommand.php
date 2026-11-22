@@ -7,6 +7,7 @@ namespace Intakt\Core\Build\UseCase\RunBuildJob;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierResolutionFailure;
 use Intakt\Core\Build\Contract\BuildBrief;
+use Intakt\Core\Build\Contract\Decisions;
 use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Job\Contract\JobRefused;
 use Intakt\Core\Platform\Contract\ReportableFailure;
@@ -63,7 +64,7 @@ final readonly class RunBuildJobCommand
 
     private function jobOf(RunBuildJobInput $input): BuildJob
     {
-        $brief = new BuildBrief($this->filesystem->readFile($input->task), $input->decision, null);
+        $brief = new BuildBrief($this->filesystem->readFile($input->task), new Decisions(...$input->decision), null);
 
         return new BuildJob($input->project, $input->clone, $input->branch, $brief, $this->tierOf($input->tier), $input->image);
     }

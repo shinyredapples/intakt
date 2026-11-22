@@ -7,6 +7,9 @@ namespace Intakt\Core\Build\UseCase\BuildTask;
 use Intakt\Core\Ai\Contract\TierResolutionFailure;
 use Intakt\Core\Build\Contract\BuildBrief;
 use Intakt\Core\Build\Contract\BuildFacts;
+use Intakt\Core\Build\Contract\Decisions;
+use Intakt\Core\Git\Contract\Paths;
+use Intakt\Core\Review\Contract\Labels;
 use Intakt\Core\Build\Contract\BuildRouting;
 use Intakt\Core\Build\Contract\BuildRoutingNotConfigured;
 use Intakt\Core\Build\Contract\BuildStep;
@@ -229,8 +232,8 @@ final readonly class BuildTask
     private function jobOf(BuildTaskRequest $request, ListedIssue $task): BuildJob
     {
         // No paths and no setback, because a first build has no file forecast and no earlier round.
-        $choice = $this->routing->tierFor($request->project, BuildFacts::fromLabels($task->labels, []));
-        $brief = new BuildBrief($task->title."\n\n".$task->body, [], null);
+        $choice = $this->routing->tierFor($request->project, BuildFacts::fromLabels(new Labels(...$task->labels), new Paths()));
+        $brief = new BuildBrief($task->title."\n\n".$task->body, new Decisions(), null);
 
         return new BuildJob($request->project, $request->directory, $request->branch, $brief, $choice->tier, $request->image);
     }

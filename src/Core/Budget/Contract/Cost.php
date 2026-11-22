@@ -9,29 +9,26 @@ use Closure;
 // Unknown as soon as one call has no price, because a partial sum would read as the whole cost and a cost is an estimate, so it carries the date of the price list it was worked out from.
 final readonly class Cost
 {
-    /**
-     * @param list<string> $unpriced
-     */
     private function __construct(
         public ?float $usd,
-        public array $unpriced,
+        public UnpricedModels $unpriced,
         public ?string $priceDate = null,
     ) {
     }
 
     public static function none(): self
     {
-        return new self(0.0, []);
+        return new self(0.0, new UnpricedModels());
     }
 
     public static function inUsd(float $usd, ?string $priceDate = null): self
     {
-        return new self($usd, [], $priceDate);
+        return new self($usd, new UnpricedModels(), $priceDate);
     }
 
     public static function unknown(string ...$unpriced): self
     {
-        return new self(null, array_values(array_unique($unpriced)));
+        return new self(null, new UnpricedModels(...$unpriced));
     }
 
     public function plus(self $other): self
@@ -55,11 +52,11 @@ final readonly class Cost
             return '0.0000' === $dollars && $this->usd > 0.0 ? 'less than 0.0001 USD' : $dollars.' USD';
         }
 
-        if ([] === $this->unpriced) {
+        if ($this->unpriced->isEmpty()) {
             return 'unknown';
         }
 
-        return 'unknown, no price for '.implode(', ', array_map($visible ?? static fn (string $model): string => $model, $this->unpriced));
+        return 'unknown, no price for '.implode(', ', array_map($visible ?? static fn (string $model): string => $model, [...$this->unpriced]));
     }
 
     // One wording for the console and the dashboard, because an estimate is only as current as its price list and an owner should read the same day on both.

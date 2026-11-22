@@ -8,6 +8,8 @@ use Intakt\Core\Ai\Contract\TierResolutionFailure;
 use Intakt\Core\Build\Contract\BuildFacts;
 use Intakt\Core\Build\Contract\BuildRoutingNotConfigured;
 use Intakt\Core\Build\Contract\Setback;
+use Intakt\Core\Git\Contract\Paths;
+use Intakt\Core\Review\Contract\Labels;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuilderNotOnClaudeCode;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\MapInput;
@@ -42,7 +44,7 @@ final readonly class ChooseBuildModelCommand
         try {
             $chosen = $this->chooseBuildModel->chooseFor(
                 new BuildAttempt($input->project, $input->task, $input->attempt),
-                BuildFacts::fromLabels($input->label, $input->path, $setback),
+                BuildFacts::fromLabels(new Labels(...$input->label), new Paths(...$input->path), $setback),
             );
         } catch (BuildRoutingNotConfigured|TierResolutionFailure|BuilderNotOnClaudeCode|ModelChoiceNotRecorded $failure) {
             $io->error($failure->getMessage());

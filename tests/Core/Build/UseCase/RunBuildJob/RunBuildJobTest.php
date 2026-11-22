@@ -9,6 +9,7 @@ use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Build\Contract\BuildBrief;
+use Intakt\Core\Build\Contract\Decisions;
 use Intakt\Core\Build\Domain\BuilderPrompt;
 use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\Domain\GatesAtOnce;
@@ -233,9 +234,9 @@ final class RunBuildJobTest extends TestCase
     {
         (void) $this->runBuilds(new JobOutput([]))->run($this->job());
         $first = $this->ran?->id->value;
-        (void) $this->runBuilds(new JobOutput([]))->run(new BuildJob('demo', $this->folder.'/clone', 'task', new BuildBrief('again', [], null), Tier::Light, 'img'));
+        (void) $this->runBuilds(new JobOutput([]))->run(new BuildJob('demo', $this->folder.'/clone', 'task', new BuildBrief('again', new Decisions(), null), Tier::Light, 'img'));
         $second = $this->ran?->id->value;
-        (void) $this->runBuilds(new JobOutput([]))->run(new BuildJob('demot', $this->folder.'/clone', 'ask', new BuildBrief('x', [], null), Tier::Light, 'img'));
+        (void) $this->runBuilds(new JobOutput([]))->run(new BuildJob('demot', $this->folder.'/clone', 'ask', new BuildBrief('x', new Decisions(), null), Tier::Light, 'img'));
 
         self::assertSame($first, $second);
         self::assertNotSame($first, $this->ran?->id->value);
@@ -256,7 +257,7 @@ final class RunBuildJobTest extends TestCase
     {
         $this->expectExceptionObject(BuildCloneIsNoFolder::at($this->folder.'/missing'));
 
-        (void) $this->runBuilds(new JobOutput([]))->run(new BuildJob('demo', $this->folder.'/missing', 'task', new BuildBrief('x', [], null), Tier::Standard, 'img'));
+        (void) $this->runBuilds(new JobOutput([]))->run(new BuildJob('demo', $this->folder.'/missing', 'task', new BuildBrief('x', new Decisions(), null), Tier::Standard, 'img'));
     }
 
     public function testAJobWithoutABundleMadeNoCommits(): void
@@ -339,7 +340,7 @@ final class RunBuildJobTest extends TestCase
 
     private function job(Tier $tier = Tier::Standard): BuildJob
     {
-        return new BuildJob('demo', $this->folder.'/clone', 'task', new BuildBrief('PLANT-task', [], null), $tier, 'intakt-job-demo:1');
+        return new BuildJob('demo', $this->folder.'/clone', 'task', new BuildBrief('PLANT-task', new Decisions(), null), $tier, 'intakt-job-demo:1');
     }
 
     private function runBuilds(JobOutput $output, ?ResolvedModel $model = null, JobEnd $end = new JobEnd(JobCause::Exited, 0)): RunBuildJob

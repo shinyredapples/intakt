@@ -11,6 +11,7 @@ use Intakt\Core\Bench\Contract\RepeatedChange;
 use Intakt\Core\Bench\Domain\FailureCause;
 use Intakt\Core\Bench\Domain\RunVerdict;
 use Intakt\Core\Review\Contract\Decision;
+use Intakt\Core\Review\Contract\ModelNames;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\RoundTokens;
@@ -88,6 +89,6 @@ final class RepeatedChangeTest extends TestCase
 
     private function benchRun(Decision $decision, RunVerdict $verdict): BenchReview
     {
-        return new BenchReview('free-shipping', $decision, [new BenchReviewerResult('role-1', Tier::Standard, $verdict, new RoundTokens(1, 100, 0, 0, 0, 10, 110), 1000, [])], []);
+        return new BenchReview('free-shipping', $decision, [new BenchReviewerResult('role-1', Tier::Standard, $verdict, new RoundTokens(1, 100, 0, 0, 0, 10, 110), 1000, new ModelNames())], new ModelNames());
     }
 }

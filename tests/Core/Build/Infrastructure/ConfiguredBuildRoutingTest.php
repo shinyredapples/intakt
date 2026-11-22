@@ -6,6 +6,8 @@ namespace Intakt\Tests\Core\Build\Infrastructure;
 
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Build\Contract\BuildFacts;
+use Intakt\Core\Git\Contract\Paths;
+use Intakt\Core\Review\Contract\Labels;
 use Intakt\Core\Build\Contract\BuildRoutingNotConfigured;
 use Intakt\Core\Build\Contract\Setback;
 use Intakt\Core\Build\Contract\TierChoice;
@@ -29,7 +31,7 @@ final class ConfiguredBuildRoutingTest extends TestCase
 {
     public function testAProjectIsRoutedByItsOwnRules(): void
     {
-        $choice = $this->routing()->tierFor('alpha', new BuildFacts(null, ['src/Security/a.php']));
+        $choice = $this->routing()->tierFor('alpha', new BuildFacts(null, new Paths('src/Security/a.php')));
 
         self::assertSame(Tier::Strong, $choice->tier);
         self::assertSame(TierReason::SensitivePath, $choice->reason);
@@ -37,16 +39,16 @@ final class ConfiguredBuildRoutingTest extends TestCase
 
     public function testAnotherProjectKeepsItsOwnDefaultTier(): void
     {
-        $choice = $this->routing()->tierFor('beta', new BuildFacts(null, ['src/Security/a.php']));
+        $choice = $this->routing()->tierFor('beta', new BuildFacts(null, new Paths('src/Security/a.php')));
 
         self::assertSame(Tier::Light, $choice->tier);
     }
 
     public function testTheConfiguredEscalationListReachesTheRoutingRules(): void
     {
-        $stalled = $this->routing()->tierFor('alpha', new BuildFacts(null, [], Setback::Stall));
-        $blocked = $this->routing()->tierFor('alpha', new BuildFacts(null, [], Setback::BlockingFinding));
-        $betaStalled = $this->routing()->tierFor('beta', new BuildFacts(null, [], Setback::Stall));
+        $stalled = $this->routing()->tierFor('alpha', new BuildFacts(null, new Paths(), Setback::Stall));
+        $blocked = $this->routing()->tierFor('alpha', new BuildFacts(null, new Paths(), Setback::BlockingFinding));
+        $betaStalled = $this->routing()->tierFor('beta', new BuildFacts(null, new Paths(), Setback::Stall));
 
         self::assertSame(TierReason::Setback, $stalled->reason);
         self::assertSame(TierReason::Default, $blocked->reason);
@@ -57,7 +59,7 @@ final class ConfiguredBuildRoutingTest extends TestCase
     {
         $this->expectException(BuildRoutingNotConfigured::class);
 
-        $this->routing()->tierFor('gamma', new BuildFacts(null, []));
+        $this->routing()->tierFor('gamma', new BuildFacts(null, new Paths()));
     }
 
     private function routing(): ConfiguredBuildRouting

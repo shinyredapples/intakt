@@ -7,6 +7,8 @@ namespace Intakt\Core\Build\UseCase\ShowBuildTier;
 use Intakt\Core\Build\Contract\BuildFacts;
 use Intakt\Core\Build\Contract\BuildRouting;
 use Intakt\Core\Build\Contract\Setback;
+use Intakt\Core\Git\Contract\Paths;
+use Intakt\Core\Review\Contract\Labels;
 use Intakt\Core\Platform\Contract\ReportableFailure;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\MapInput;
@@ -31,7 +33,7 @@ final readonly class ShowBuildTierCommand
         }
 
         try {
-            $choice = $this->routing->tierFor($input->project, BuildFacts::fromLabels($input->label, $input->path, $setback));
+            $choice = $this->routing->tierFor($input->project, BuildFacts::fromLabels(new Labels(...$input->label), new Paths(...$input->path), $setback));
         } catch (ReportableFailure $failure) {
             $io->error($failure->getMessage());
 

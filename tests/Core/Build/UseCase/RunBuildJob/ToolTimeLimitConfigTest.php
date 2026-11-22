@@ -9,6 +9,7 @@ use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Build\Contract\BuildBrief;
+use Intakt\Core\Build\Contract\Decisions;
 use Intakt\Core\Build\Domain\BuilderPrompt;
 use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\Domain\GatesAtOnce;
@@ -82,7 +83,7 @@ final class ToolTimeLimitConfigTest extends KernelTestCase
         try {
             $job = self::getContainer()->get(RunBuildJob::class);
             self::assertInstanceOf(RunBuildJob::class, $job);
-            (void) $job->run(new BuildJob('demo', $folder.'/clone', 'task', new BuildBrief('PLANT-task', [], null), Tier::Standard, 'intakt-job-demo:1'));
+            (void) $job->run(new BuildJob('demo', $folder.'/clone', 'task', new BuildBrief('PLANT-task', new Decisions(), null), Tier::Standard, 'intakt-job-demo:1'));
         } finally {
             new Filesystem()->remove($folder);
         }
