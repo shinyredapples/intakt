@@ -13,6 +13,11 @@ use Intakt\Core\Ledger\Contract\RecordedEvents;
 // The latest step of a task decides, because a build run stops at its first failed step and a new run of the task starts again at its first step.
 final readonly class LedgerBuildSteps
 {
+    // Prefixed apart, so no run id a row names can stand for an unnamed run.
+    private const string NAMED = 'named:';
+
+    private const string UNNAMED = 'unnamed:';
+
     /**
      * @return list<array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string}>
      */
@@ -45,7 +50,10 @@ final readonly class LedgerBuildSteps
      */
     public function latestRunOf(RecordedEvents $events, string $project, string $task): array
     {
-        $run = [];
+        /** @var array<string, list<array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string}>> $runs */
+        $runs = [];
+        $latest = null;
+        $unnamed = null;
 
         foreach ($events as $recorded) {
             $step = LedgerEventKind::BuildStepEnded === $recorded->event->kind ? $this->stepOf($recorded) : null;
@@ -54,23 +62,46 @@ final readonly class LedgerBuildSteps
                 continue;
             }
 
-            if ($this->startsNewRun($run, $step['step'])) {
-                $run = [];
+            $key = $this->runKeyOf($recorded, $runs, $unnamed, $step['step']);
+
+            // Left out, because one run ends each step once, so a second row of a step in the same run is not one the build writes.
+            if (null === $key || in_array($step['step'], array_column($runs[$key] ?? [], 'step'), true)) {
+                continue;
             }
 
-            $run[] = $step;
+            if (!isset($runs[$key])) {
+                $runs[$key] = [];
+                $latest = $key;
+            }
+
+            $unnamed = str_starts_with($key, self::UNNAMED) ? $key : $unnamed;
+            $runs[$key][] = $step;
         }
 
-        return $run;
+        return null === $latest ? [] : $runs[$latest];
     }
 
-    // A repeated step means another run began, because one run ends each step once; this also holds when the other run's task row was dropped as malformed.
+    // A row the build wrote names its run, so overlapping runs stay apart and the run started last is the latest. A row written before runs were named belongs to the unnamed run before it, unless it is a task row or repeats a step of that run, because both mean another run began.
     /**
-     * @param list<array{step: string}> $run
+     * @param array<string, list<array{step: string}>> $runs
      */
-    private function startsNewRun(array $run, string $step): bool
+    private function runKeyOf(RecordedEvent $recorded, array $runs, ?string $unnamed, string $step): ?string
     {
-        return BuildStep::Task->value === $step || in_array($step, array_column($run, 'step'), true);
+        $run = LedgerPayload::of($recorded)['run'] ?? null;
+
+        if (is_string($run) && '' !== $run) {
+            return self::NAMED.$run;
+        }
+
+        if (null !== $run) {
+            return null;
+        }
+
+        if (null === $unnamed || BuildStep::Task->value === $step || in_array($step, array_column($runs[$unnamed], 'step'), true)) {
+            return self::UNNAMED.count($runs);
+        }
+
+        return $unnamed;
     }
 
     // A row whose step, outcome or failure is not one the build writes is left out, so a malformed row cannot reach the status as it was stored.

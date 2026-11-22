@@ -24,7 +24,7 @@ final readonly class StoredRoundEndings implements RoundEndings
     {
         return new StoredRoundEndingLookup(
             $this->failedJudgings->recordedTimes(),
-            $this->failedJudgings->parked(),
+            $this->failedJudgings,
             $this->clock,
             $this->upperWait,
             $this->reasons,

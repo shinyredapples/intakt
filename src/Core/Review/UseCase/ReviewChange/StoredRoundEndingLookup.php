@@ -8,20 +8,24 @@ use DateTimeImmutable;
 use Intakt\Core\Review\Contract\RoundEnding;
 use Intakt\Core\Review\Contract\RoundEndingLookup;
 use Intakt\Core\Review\Contract\RoundEnds;
+use Intakt\Core\Review\UseCase\JudgeRound\FailedJudgings;
 use Symfony\Component\Clock\ClockInterface;
 
-final readonly class StoredRoundEndingLookup implements RoundEndingLookup
+// Not readonly, because it keeps the transport's listing once a round needed it; it lives for one ledger read only.
+final class StoredRoundEndingLookup implements RoundEndingLookup
 {
+    /** @var array<string, true>|null */
+    private ?array $parked = null;
+
     /**
      * @param array<string, DateTimeImmutable> $failedAt
-     * @param array<string, true>              $parked
      */
     public function __construct(
-        private array $failedAt,
-        private array $parked,
-        private ClockInterface $clock,
-        private UpperWait $upperWait,
-        private RoundEndReasons $reasons,
+        private readonly array $failedAt,
+        private readonly FailedJudgings $failedJudgings,
+        private readonly ClockInterface $clock,
+        private readonly UpperWait $upperWait,
+        private readonly RoundEndReasons $reasons,
     ) {
     }
 
@@ -29,7 +33,7 @@ final readonly class StoredRoundEndingLookup implements RoundEndingLookup
     {
         $failedAt = $this->failedAt[$roundId] ?? null;
 
-        if ($failedAt instanceof DateTimeImmutable || isset($this->parked[$roundId])) {
+        if ($failedAt instanceof DateTimeImmutable || $this->isParked($roundId)) {
             return new RoundEnding(RoundEnds::JudgingFailed, $this->reasons->judgingFailed(), $failedAt);
         }
 
@@ -41,5 +45,13 @@ final readonly class StoredRoundEndingLookup implements RoundEndingLookup
         }
 
         return new RoundEnding(RoundEnds::NoOutcomeInTime, $this->reasons->noOutcomeInTime($seconds), $deadline);
+    }
+
+    // Listed on the first round the ledger records no failure of, so a read whose failures the ledger holds never lists the transport, and a read of many rounds lists it once.
+    private function isParked(string $roundId): bool
+    {
+        $this->parked ??= $this->failedJudgings->parked();
+
+        return isset($this->parked[$roundId]);
     }
 }

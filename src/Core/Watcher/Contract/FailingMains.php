@@ -40,11 +40,12 @@ final readonly class FailingMains
         $payload = $this->payloadOf($recorded);
         $pair = $this->pairOf($payload);
         $reason = $this->failureReasonOf($recorded, $payload);
-        $booted = LedgerEventKind::BootResultComputed === $recorded->event->kind && 'booted' === ($payload['state'] ?? null);
-
         $computed = LedgerEventKind::BootResultComputed === $recorded->event->kind;
+        $booted = $computed && 'booted' === ($payload['state'] ?? null);
+        // A crash is no result of the pair, because the boot is tried again after its backoff, so a later booted line of the pair is still its first result.
+        $settled = $booted || $computed && 'failed' === ($payload['state'] ?? null);
 
-        if (null === $pair || null === $reason && !$computed) {
+        if (null === $pair || null === $reason && !$settled) {
             return [$failing, $seen];
         }
 
@@ -53,7 +54,7 @@ final readonly class FailingMains
         if (null !== $reason) {
             $failing[$project] = new FailingMain($project, $main, $tools, $reason);
         } elseif ($booted && ($this->readFromStore($payload) || !isset($seen[$project][$main][$tools]))) {
-            // Any computed line marks its pair as seen, a failed one too, but only a booted line can clear. Otherwise only a main commit or tool fingerprint the project has not booted or failed before clears it: a computed booted line of a pair already seen is a worker that lost the store, could not read the cache or finished late, not a recovery.
+            // A computed booted or failed line marks its pair as seen, but only a booted line can clear. Otherwise only a main commit or tool fingerprint the project has not booted or failed before clears it: a computed booted line of a pair already seen is a worker that lost the store, could not read the cache or finished late, not a recovery.
             unset($failing[$project]);
         }
 

@@ -128,14 +128,16 @@ final class BuildTaskParksOnSqliteTest extends KernelTestCase
             [['project' => 'alpha', 'task' => 7, 'question' => '"PLANT-question: keep the old flag?"', 'recommendation' => '"drop it"']],
             array_map(static fn (array $row): array => [...$row, 'task' => is_numeric($row['task']) ? (int) $row['task'] : $row['task']], $this->connection()->fetchAllAssociative('SELECT project, task, question, recommendation FROM build_parked_task')),
         );
+        $payloads = array_map(static fn (mixed $payload): string => is_string($payload) ? $payload : '', $this->connection()->fetchFirstColumn('SELECT payload FROM ledger_event ORDER BY position'));
+        $run = 1 === preg_match('/"run":"([0-9a-f]{32})"/', $payloads[0] ?? '', $match) ? $match[1] : 'no run';
         self::assertSame(
             [
-                '{"project":"alpha","task":"7","step":"task","outcome":"passed","failure":null}',
-                '{"project":"alpha","task":"7","step":"mirror","outcome":"passed","failure":null}',
-                '{"project":"alpha","task":"7","step":"clone","outcome":"passed","failure":null}',
-                '{"project":"alpha","task":"7","step":"build_job","outcome":"asked","failure":null}',
+                '{"project":"alpha","task":"7","run":"'.$run.'","step":"task","outcome":"passed","failure":null}',
+                '{"project":"alpha","task":"7","run":"'.$run.'","step":"mirror","outcome":"passed","failure":null}',
+                '{"project":"alpha","task":"7","run":"'.$run.'","step":"clone","outcome":"passed","failure":null}',
+                '{"project":"alpha","task":"7","run":"'.$run.'","step":"build_job","outcome":"asked","failure":null}',
             ],
-            $this->connection()->fetchFirstColumn('SELECT payload FROM ledger_event ORDER BY position'),
+            $payloads,
         );
         self::assertSame([], glob($this->folder.'/hand-backs/*'));
     }

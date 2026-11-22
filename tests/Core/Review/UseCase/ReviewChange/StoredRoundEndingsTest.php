@@ -138,6 +138,19 @@ final class StoredRoundEndingsTest extends TestCase
         self::assertSame(RoundEnds::JudgingFailed, $lookup->ofUnjudged('round-3', 2, $startedAt)?->end);
     }
 
+    public function testRoundsTheLedgerRecordsAsFailedEndWithoutListingTheFailureTransport(): void
+    {
+        $transport = $this->createMock(ListableReceiverInterface::class);
+        $transport->expects(self::never())->method('all');
+        $ledger = self::createStub(Ledger::class);
+        $ledger->method('readOfKind')->willReturn($this->judgingFailuresOf(['round-1', 'round-2']));
+        $lookup = $this->lookupOn($transport, $ledger, '2026-10-28T12:00:00+00:00');
+        $startedAt = new DateTimeImmutable('2026-10-28T12:00:00+00:00');
+
+        self::assertSame(RoundEnds::JudgingFailed, $lookup->ofUnjudged('round-1', 2, $startedAt)?->end);
+        self::assertSame(RoundEnds::JudgingFailed, $lookup->ofUnjudged('round-2', 2, $startedAt)?->end);
+    }
+
     /**
      * @param list<string>   $recorded
      * @param list<Envelope> $parked

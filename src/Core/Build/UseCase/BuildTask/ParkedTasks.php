@@ -33,7 +33,7 @@ final readonly class ParkedTasks
     /**
      * @throws TaskNotParked
      */
-    public function park(string $project, int $task, BuildQuestion $question): void
+    public function park(string $project, int $task, string $run, BuildQuestion $question): void
     {
         // Refused before any write, because inside a caller's transaction the commit only releases a savepoint and the caller could still take the question back.
         if ($this->connection->isTransactionActive()) {
@@ -42,7 +42,7 @@ final readonly class ParkedTasks
 
         $record = new ParkedTaskRecord($project, $task, $question, $this->clock->now()->setTimezone(new DateTimeZone('UTC')));
 
-        if ($this->storedWithItsAskedStep($record, $project, $task)) {
+        if ($this->storedWithItsAskedStep($record, $project, $task, $run)) {
             return;
         }
 
@@ -53,7 +53,7 @@ final readonly class ParkedTasks
         throw TaskNotParked::for($project, $task);
     }
 
-    private function storedWithItsAskedStep(ParkedTaskRecord $record, string $project, int $task): bool
+    private function storedWithItsAskedStep(ParkedTaskRecord $record, string $project, int $task, string $run): bool
     {
         try {
             $this->connection->beginTransaction();
@@ -61,7 +61,7 @@ final readonly class ParkedTasks
             $this->connection->delete(ParkedTaskRecord::TABLE, $record->keyRow());
             $this->connection->insert(ParkedTaskRecord::TABLE, $record->row(), ParkedTaskRecord::rowTypes());
 
-            if (!$this->ledger->append(new LedgerEvent(LedgerEventKind::BuildStepEnded, $this->askedPayload($project, $task)))->succeeded()) {
+            if (!$this->ledger->append(new LedgerEvent(LedgerEventKind::BuildStepEnded, $this->askedPayload($project, $task, $run)))->succeeded()) {
                 return false;
             }
 
@@ -95,11 +95,12 @@ final readonly class ParkedTasks
     }
 
     // Because the question is untrusted text, the payload names the task by its number only, as every other step's does.
-    private function askedPayload(string $project, int $task): string
+    private function askedPayload(string $project, int $task, string $run): string
     {
         return json_encode([
             'project' => $project,
             'task' => (string) $task,
+            'run' => $run,
             'step' => BuildStep::BuildJob->value,
             'outcome' => BuildStepOutcome::Asked->value,
             'failure' => null,

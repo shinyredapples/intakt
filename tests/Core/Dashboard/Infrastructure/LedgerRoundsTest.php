@@ -827,18 +827,21 @@ final class LedgerRoundsTest extends TestCase
         self::assertSame($ending, $review?->rounds[0]->ending);
     }
 
-    public function testSeveralUnjudgedRoundsOfOneReadTakeOneLookupOfRoundEndings(): void
+    public function testTheUnjudgedRoundsOfSeveralReviewsInOneReadShareOneLookupOfRoundEndings(): void
     {
-        $lookup = self::createStub(RoundEndingLookup::class);
+        $lookup = $this->createMock(RoundEndingLookup::class);
+        $lookup->expects(self::exactly(4))->method('ofUnjudged')->willReturn(null);
         $endings = $this->createMock(RoundEndings::class);
         $endings->expects(self::once())->method('lookup')->willReturn($lookup);
-        $this->endings = $endings;
+        $rounds = new LedgerRounds(new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $this->noCosts(), new ChangeDecision(), new FailureInWords(), $endings, new ReplayMarks(new ReplayMarkBus()));
+        $rounds->add($this->event(LedgerEventKind::ReviewStarted, self::START));
+        $rounds->add($this->event(LedgerEventKind::ReviewStarted, '{"round":"r2","project":"alpha","reviewers":2,"change":"feat/thing","number":1}'));
+        $rounds->add($this->event(LedgerEventKind::ReviewStarted, '{"round":"r3","project":"alpha","reviewers":2,"change":"feat/other","number":2}'));
+        $rounds->add($this->event(LedgerEventKind::ReviewStarted, '{"round":"r4","project":"alpha","reviewers":2,"change":"feat/other","number":2}'));
 
-        $this->reviewOf('r1',
-            $this->event(LedgerEventKind::ReviewStarted, self::START),
-            $this->event(LedgerEventKind::ReviewStarted, '{"round":"r2","project":"alpha","reviewers":2,"change":"feat/other","number":2}'),
-            $this->event(LedgerEventKind::ReviewStarted, '{"round":"r3","project":"alpha","reviewers":2,"change":"feat/third","number":3}'),
-        );
+        $reviews = $rounds->reviews();
+
+        self::assertSame([2, 2], array_map(static fn (Review $review): int => count($review->rounds), $reviews));
     }
 
     public function testAJudgedRoundGetsNoEndingEvenWhenTheReviewModuleNamesOne(): void

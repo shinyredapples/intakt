@@ -226,18 +226,76 @@ final class ShowTaskControllerTest extends DashboardPageTestCase
         self::assertStringNotContainsString('failed', $page->filter('main')->text());
     }
 
-    public function testAStepThatRepeatsStartsANewRunSoTheLatestRunShowsEachStepOnce(): void
+    public function testAnUnnamedStepThatRepeatsWithoutATaskRowStartsANewRunSoEachStepShowsOnce(): void
     {
         $this->ledger->passBuildStep('alpha', '42', 'task');
         $this->ledger->passBuildStep('alpha', '42', 'mirror');
-        $this->ledger->passBuildStep('alpha', '42', 'task');
         $this->ledger->passBuildStep('alpha', '42', 'clone');
-        $this->ledger->passBuildStep('alpha', '42', 'mirror');
+        $this->ledger->failBuildStep('42', 'mirror', 'fetch refused');
+
+        $page = $this->browser->request('GET', '/tasks/alpha/42');
+
+        self::assertCount(1, $page->filter('#step-mirror'));
+        self::assertSame(['Mirror Failed', 'Clone Not reached'], array_slice($this->stepHeads($page), 0, 2));
+    }
+
+    public function testAnOlderRunThatEndsAStepAfterTheNewerRunFailedItLeavesTheNewerRunsFailureShown(): void
+    {
+        $this->stepOfRun('older', 'task');
+        $this->stepOfRun('newer', 'task');
+        $this->stepOfRun('newer', 'mirror', 'fetch refused');
+        $this->stepOfRun('older', 'mirror');
+        $this->stepOfRun('older', 'clone');
+
+        $page = $this->browser->request('GET', '/tasks/alpha/42');
+
+        self::assertSame(['Task Passed', 'Mirror Failed', 'Clone Not reached'], array_slice($this->stepHeads($page), 0, 3));
+        self::assertStringContainsString('Stopped at mirror: fetch refused', $page->filter('#task-where')->text());
+    }
+
+    public function testTheRunStartedLastIsTheLatestRunThoughAnOlderRunWroteTheLastRow(): void
+    {
+        $this->stepOfRun('older', 'task');
+        $this->stepOfRun('newer', 'task');
+        $this->stepOfRun('older', 'mirror');
+
+        $page = $this->browser->request('GET', '/tasks/alpha/42');
+
+        self::assertSame(['Task Passed', 'Mirror Not reached'], array_slice($this->stepHeads($page), 0, 2));
+    }
+
+    public function testANamedRunAfterUnnamedRowsShowsOnlyItsOwnSteps(): void
+    {
+        $this->ledger->passBuildStep('alpha', '42', 'task');
+        $this->ledger->failBuildStep('42', 'mirror', 'git fetch exited with 128');
+        $this->stepOfRun('named', 'task');
+
+        $page = $this->browser->request('GET', '/tasks/alpha/42');
+
+        self::assertSame(['Task Passed', 'Mirror Not reached'], array_slice($this->stepHeads($page), 0, 2));
+    }
+
+    public function testASecondRowOfAStepInTheSameNamedRunIsLeftOut(): void
+    {
+        $this->stepOfRun('named', 'task');
+        $this->stepOfRun('named', 'mirror');
+        $this->stepOfRun('named', 'mirror', 'fetch refused');
 
         $page = $this->browser->request('GET', '/tasks/alpha/42');
 
         self::assertCount(1, $page->filter('#step-mirror'));
         self::assertSame('Mirror Passed', $page->filter('#step-mirror .round-head')->text());
+    }
+
+    public function testARowWhoseRunIsNotTextIsLeftOut(): void
+    {
+        $this->stepOfRun('named', 'task');
+        $this->ledger->recordBuildStep(['project' => 'alpha', 'task' => '42', 'run' => 7, 'step' => 'mirror', 'outcome' => 'failed', 'failure' => 'fetch refused']);
+        $this->ledger->recordBuildStep(['project' => 'alpha', 'task' => '42', 'run' => '', 'step' => 'mirror', 'outcome' => 'failed', 'failure' => 'fetch refused']);
+
+        $page = $this->browser->request('GET', '/tasks/alpha/42');
+
+        self::assertSame(['Task Passed', 'Mirror Not reached'], array_slice($this->stepHeads($page), 0, 2));
     }
 
     public function testARunWhoseTaskRowWasDroppedAsMalformedDoesNotMixInThePreviousRunsSteps(): void
@@ -315,6 +373,11 @@ final class ShowTaskControllerTest extends DashboardPageTestCase
     private function stepHeads(Crawler $page): array
     {
         return $page->filter('section.build-step .round-head')->each(static fn (Crawler $head): string => $head->text());
+    }
+
+    private function stepOfRun(string $run, string $step, ?string $failure = null): void
+    {
+        $this->ledger->recordBuildStep(['project' => 'alpha', 'task' => '42', 'run' => $run, 'step' => $step, 'outcome' => null === $failure ? 'passed' : 'failed', 'failure' => $failure]);
     }
 
     private function passStepsBeforeThePush(): void
