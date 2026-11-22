@@ -259,7 +259,7 @@ final class LocalGitForgeTest extends TestCase
         self::assertFileDoesNotExist($this->repository->path.'/src/New.php');
     }
 
-    // Forced order: the judged round's removal takes the kept snapshot right after the command's removal could have seen it present, which made the command fail with ForgeReadFailed and lose its verdict.
+    // Forced order, because the race is otherwise rare: the judged round's removal takes the kept snapshot right after the command's removal could have seen it present, which made the command fail with ForgeReadFailed and lose its verdict.
     #[RunInSeparateProcess]
     public function testAKeptSnapshotTheJudgedRoundRemovesMeanwhileIsNoFailureForTheCommand(): void
     {

@@ -779,7 +779,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
         self::assertSame(Provider::OpenAi, $review->substitute);
     }
 
-    // Maintainer decision 3 of issue #2861: another model on the tier's own provider is a substitute and owes a catch-up, recorded under the model that answered.
+    // Recorded under the model that answered, because another model on the tier's own provider is a substitute and owes a catch-up (maintainer decision 3 of issue #2861).
     public function testAnotherModelOnTheOwnProviderIsReturnedAsASubstituteWithItsModel(): void
     {
         $review = $this->answeredOnTheOwnProviderBy('owner/other:two')->review('alpha', Tier::Strong, $this->request());

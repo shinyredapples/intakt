@@ -55,7 +55,7 @@ final readonly class LocalChangeReview
                 static fn () => $forge->removeSnapshot($snapshot),
                 fn (): ChangeReview => $this->reviews->review($request($snapshot), $progress),
             );
-            // Boundary: a demo that stops waiting leaves the queued round running in the worker, which still reads the snapshot; RemoveKeptSnapshot removes it once the round is judged.
+            // Boundary: kept when a demo stops waiting, because the queued round goes on in the worker and still reads the snapshot; RemoveKeptSnapshot removes it once the round is judged.
         } catch (DemoProviderBusy $busy) {
             $roundGoesOn = true;
 
