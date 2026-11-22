@@ -16,7 +16,7 @@ use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
 use JsonException;
 use Symfony\Contracts\HttpClient\Exception\ExceptionInterface;
 
-// Apart from the pull request reads, because intake lists issues, pull requests among them, and must read every page of them.
+// Apart from the pull request reads, because intake lists issues, pull requests among them, and must read every page of them, while a build reads its one task alone.
 final readonly class GitHubIssueReads implements IssueReads
 {
     private const int PAGE_SIZE = 100;
@@ -25,6 +25,7 @@ final readonly class GitHubIssueReads implements IssueReads
     private const int OK = 200;
     private const int NOT_MODIFIED = 304;
     private const int UNAUTHORIZED = 401;
+    private const int NOT_FOUND = 404;
 
     public function __construct(
         private GitHubCalls $calls,
@@ -52,6 +53,38 @@ final readonly class GitHubIssueReads implements IssueReads
 
         // The validator belongs to the first page only, so a list of several pages has none and the next listing is full.
         return IssueListing::listed($issues['issues'], 1 === $issues['pages'] ? $first['etag'] : null);
+    }
+
+    // No listing slot, because the budget reserve paces the watcher's routine listings and a build reads its one task once.
+    public function readOpen(string $project, int $number): ?ListedIssue
+    {
+        $answer = $this->answerTo('GET', $this->repositories->addressOf($project)->path().'/issues/'.$number, []);
+        if (self::NOT_FOUND === $answer['status']) {
+            return null;
+        }
+
+        if (self::OK !== $answer['status']) {
+            throw $this->refused($answer['status']);
+        }
+
+        $data = $this->issueOf($answer['body']);
+        $issue = $this->listed($data);
+
+        return $issue->isPullRequest || 'open' !== $this->at($data, 'state') ? null : $issue;
+    }
+
+    /**
+     * @return array<mixed>
+     */
+    private function issueOf(string $body): array
+    {
+        $issue = $this->decode($body);
+        // `[]` decodes to the same empty array as `{}`, so only the answer's first character tells a list from an object.
+        if (!str_starts_with(ltrim($body), '{')) {
+            throw new ForgeReadFailed('GitHub answered an issue that is not an object.');
+        }
+
+        return $issue;
     }
 
     /**
@@ -228,6 +261,32 @@ final readonly class GitHubIssueReads implements IssueReads
      */
     private function send(string $method, string $path, array $options): array
     {
+        $answer = $this->answerTo($method, $path, $options);
+        $status = $answer['status'];
+        $headers = $answer['headers'];
+
+        // Only a whole page counts, because another 2xx such as `206 Partial Content` would list part of a page as all of it.
+        if (self::OK !== $status && self::NOT_MODIFIED !== $status) {
+            throw $this->refused($status);
+        }
+
+        return ['status' => $status, 'body' => $answer['body'], 'etag' => $this->entityTags->checked($headers['etag'][0] ?? null), 'next' => $this->nextLinks->namesNext($headers['link'] ?? []), 'date' => $headers['date'][0] ?? null];
+    }
+
+    private function refused(int $status): ForgeReadFailed
+    {
+        return new ForgeReadFailed(sprintf('GitHub answered %d to a read.', $status), previous: self::UNAUTHORIZED === $status ? new ForgeCredentialsRefused() : null);
+    }
+
+    /**
+     * @param array<string, mixed> $options
+     *
+     * @return array{status: int, body: string, headers: array<string, list<string>>}
+     *
+     * @throws ForgeRateLimited
+     */
+    private function answerTo(string $method, string $path, array $options): array
+    {
         $options['auth_bearer'] = $this->bearer();
         $options['headers'] = ['Accept' => 'application/vnd.github+json', ...(is_array($options['headers'] ?? null) ? $options['headers'] : [])];
 
@@ -240,12 +299,7 @@ final readonly class GitHubIssueReads implements IssueReads
             throw $this->unreachable($failure::class);
         }
 
-        // Only a whole page counts, because another 2xx such as `206 Partial Content` would list part of a page as all of it.
-        if (self::OK !== $status && self::NOT_MODIFIED !== $status) {
-            throw new ForgeReadFailed(sprintf('GitHub answered %d to a read.', $status), previous: self::UNAUTHORIZED === $status ? new ForgeCredentialsRefused() : null);
-        }
-
-        return ['status' => $status, 'body' => $body, 'etag' => $this->entityTags->checked($headers['etag'][0] ?? null), 'next' => $this->nextLinks->namesNext($headers['link'] ?? []), 'date' => $headers['date'][0] ?? null];
+        return ['status' => $status, 'body' => $body, 'headers' => $headers];
     }
 
     // Not chained to the client's exception, because its trace holds the request options with the bearer token.
