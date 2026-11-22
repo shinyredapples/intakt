@@ -1,8 +1,0 @@
-Set up Intakt slot, pushed stream (morph): <turbo-stream action="replace" method="morph" target="board-setup"><template>...</template></turbo-stream>
-  the link is the same node: true, it holds the focus: true, document.activeElement: a#board-setup
-Set up Intakt slot, control (plain replace): <turbo-stream action="replace" target="board-setup"><template>...</template></turbo-stream>
-  the link is the same node: false, it holds the focus: true, document.activeElement: a#board-setup
-headline link, pushed stream (morph): <turbo-stream action="update" method="morph" target="board-headline"><template>...</template></turbo-stream>
-  the link is the same node: true, it holds the focus: true, document.activeElement: a.headline-setup
-headline link, control (plain update): <turbo-stream action="update" target="board-headline"><template>...</template></turbo-stream>
-  the link is the same node: false, it holds the focus: false, document.activeElement: body
