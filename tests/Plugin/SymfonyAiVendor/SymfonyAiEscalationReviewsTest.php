@@ -176,7 +176,9 @@ final class SymfonyAiEscalationReviewsTest extends KernelTestCase
             $_ = $this->reviews(static fn (): never => throw new AuthenticationException('Invalid key sk-ant-abc...xyz.'), new InMemoryLedger(accepted: 1), log: $log)->escalate('alpha', Uuid::fromString(self::ROUND), $this->messages());
             self::fail('The provider error must reach the queue.');
         } catch (ProviderRejectedTheKey) {
-            [[, , $context]] = $log->cleanLogs();
+            $entry = $log->cleanLogs()[0] ?? null;
+            self::assertIsArray($entry);
+            $context = $entry[2] ?? null;
             self::assertIsArray($context);
             self::assertSame([['call', 'failure'], []], [array_keys($context), array_filter($context, static fn (mixed $value): bool => $value instanceof Throwable)]);
             self::assertIsString($context['failure']);
