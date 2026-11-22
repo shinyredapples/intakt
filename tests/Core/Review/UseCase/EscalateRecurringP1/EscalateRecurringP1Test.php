@@ -511,13 +511,13 @@ final class EscalateRecurringP1Test extends KernelTestCase
         });
     }
 
-    // The queued envelope with its failure stamp, as a worker of the async transport receives it.
+    // With the received stamp, because only a received envelope is handled at once instead of being sent to the async transport again.
     private function received(StampInterface ...$stamps): Envelope
     {
         return $this->fixture->escalations->envelopes[0]->with(new ReceivedStamp('async'), ...$stamps);
     }
 
-    // One delivery through the application's bus, middleware and failure listeners, as a worker hands a failed message to them.
+    // Through the application's bus, middleware and failure listeners, because they decide whether a worker retries or parks the message.
     private function failedDelivery(Envelope $received): WorkerMessageFailedEvent
     {
         try {
@@ -537,7 +537,7 @@ final class EscalateRecurringP1Test extends KernelTestCase
         return array_last($this->asyncQueue()->getSent())?->last(DelayStamp::class)?->getDelay();
     }
 
-    // A worker's steps without its wait for the delays: each retry the application's listeners send is received again at once, then the record of the failure they queue once the message is parked; the delays they asked for are returned.
+    // A worker's steps without its wait, because the in-memory transport holds a delayed retry back until its delay has passed; each retry is received again at once, then the queued record of the failure.
     /**
      * @return list<int>
      */

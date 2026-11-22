@@ -48,7 +48,7 @@ final readonly class BoundTransientEscalationFailures implements MiddlewareInter
 
         $strategy = $this->strategies->get($received->getTransportName());
         assert($strategy instanceof RetryStrategyInterface);
-        $earlier = $envelope->last(TransientEscalationFailures::class)?->count ?? 0;
+        $earlier = $envelope->last(TransientEscalationFailures::class)->count ?? 0;
         $alone = new Envelope($envelope->getMessage(), [new RedeliveryStamp($earlier)]);
         $outcome = $strategy->isRetryable($alone)
             ? EscalationLimited::retriedIn($strategy->getWaitingTime($alone))
