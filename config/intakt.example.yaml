@@ -11,6 +11,7 @@ budget:
     # Optional: the price of each model, keyed by the model name exactly as a tier (or substitute) names it, never the name a provider's answer reports, in US dollars per million tokens, for the cost line of a review.
     # input and output are required; cache_read and cache_write default to input. A round that used a model without a price shows its cost as unknown.
     # Optional: the day you read the prices (YYYY-MM-DD, in quotes: YAML would turn an unquoted date into a timestamp); the review shows it beside the estimated cost, and says the price date is unknown without it.
+    # The shipped date is the earliest day any price in the table below was read; prices read on a later day carry the earlier date.
     price_date: '2026-11-13'
     prices:
         claude-opus-5-5: { input: 5, output: 25, cache_read: 0.5, cache_write: 6.25 }

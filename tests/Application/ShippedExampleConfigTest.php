@@ -50,6 +50,29 @@ final class ShippedExampleConfigTest extends TestCase
         );
     }
 
+    public function testTheShippedExampleMapsTheTiersOfBothProjectsAndPinsCodexToTheShippedModels(): void
+    {
+        $config = $this->example();
+
+        self::assertSame(
+            [
+                'strong' => ['provider' => 'anthropic', 'model' => 'claude-opus-5-5'],
+                'standard' => ['provider' => 'anthropic', 'model' => 'claude-sonnet-5-5'],
+                'light' => ['provider' => 'anthropic', 'model' => 'claude-haiku-5-5'],
+            ],
+            $config['projects']['alpha']['tiers'],
+        );
+        self::assertSame(
+            [
+                'strong' => ['provider' => 'openai', 'model' => 'gpt-6.2-sol'],
+                'standard' => ['provider' => 'openai', 'model' => 'gpt-6.1-terra'],
+                'light' => ['provider' => 'openai', 'model' => 'gpt-6-luna'],
+            ],
+            $config['projects']['beta']['tiers'],
+        );
+        self::assertSame('gpt-6.2-sol', $config['codex']['model']);
+    }
+
     public function testTheShippedExampleAndTheSampleProjectCarryTheSamePriceDate(): void
     {
         $sample = Yaml::parseFile($this->root().'/config/sample-project.yaml');
