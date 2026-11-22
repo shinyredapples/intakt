@@ -123,7 +123,7 @@ final readonly class Board
     // Null while a reviewer runs, because the strip then lists the lanes instead; the words are the first day's, so the board keeps one wording for this line (#2731).
     public function nobodyWorkingLine(): ?string
     {
-        return [] === $this->whoIsWorking()->lanes() ? 'Nobody is working yet: reviewers appear here while they review a change' : null;
+        return [] === $this->whoIsWorking()->lanes() ? 'No reviewer is working right now: reviewers appear here while they review a change' : null;
     }
 
     // Done opens while every other column is empty, so a finished review is seen on arrival instead of behind its strip.

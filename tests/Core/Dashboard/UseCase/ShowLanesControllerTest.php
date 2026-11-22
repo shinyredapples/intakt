@@ -60,8 +60,18 @@ final class ShowLanesControllerTest extends DashboardPageTestCase
 
         $page = $this->browser->request('GET', '/lanes');
 
-        self::assertSame('Nobody is working yet: reviewers appear here while they review a change', $page->filter('p.working-none')->text());
+        self::assertSame('No reviewer is working right now: reviewers appear here while they review a change', $page->filter('p.working-none')->text());
         self::assertCount(0, $page->filter('.lane'));
+    }
+
+    public function testWithOnlyABuildInFlightTheStatusPageLeadsWithTheBuildAndNeverSaysNobodyIsWorking(): void
+    {
+        $this->ledger->passBuildStep('alpha', 'task-7', 'task');
+
+        $page = $this->browser->request('GET', '/lanes');
+
+        self::assertStringContainsString('1 build running', $page->filter('.page-head .lead')->text());
+        self::assertStringNotContainsString('Nobody is working', $page->filter('main')->text());
     }
 
     public function testEachRunningReviewerIsALaneWithItsProjectChangeAndRound(): void
