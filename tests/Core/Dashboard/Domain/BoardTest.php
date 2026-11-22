@@ -239,14 +239,14 @@ final class BoardTest extends TestCase
 
     public function testOnTheFirstDayWhoIsWorkingSaysThatReviewersAppearWhileTheyReview(): void
     {
-        self::assertSame('Nobody is working yet: reviewers appear here while they review a change', new Board([])->nobodyWorkingLine());
+        self::assertSame('No reviewer is working right now: reviewers appear here while they review a change', new Board([])->nobodyWorkingLine());
     }
 
     public function testWhoIsWorkingKeepsItsLineWhenNobodyRunsOnceAReviewHasRun(): void
     {
         $board = new Board([new Review([$this->round('r1', 'feat/a', 1)->judgedWith([], $this->morning())])]);
 
-        self::assertSame('Nobody is working yet: reviewers appear here while they review a change', $board->nobodyWorkingLine());
+        self::assertSame('No reviewer is working right now: reviewers appear here while they review a change', $board->nobodyWorkingLine());
     }
 
     public function testWhoIsWorkingHasNoEmptyLineWhileAReviewerRuns(): void

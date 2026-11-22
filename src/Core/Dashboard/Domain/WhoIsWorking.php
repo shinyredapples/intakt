@@ -13,7 +13,7 @@ final readonly class WhoIsWorking
     /**
      * @param list<Review> $reviews
      */
-    public function __construct(array $reviews)
+    public function __construct(array $reviews, private int $builds = 0)
     {
         $this->lanes = array_merge(...array_map($this->lanesOf(...), $reviews));
     }
@@ -29,6 +29,25 @@ final readonly class WhoIsWorking
     public function working(): int
     {
         return count($this->lanes);
+    }
+
+    // The quiet line of the shell: reviewers are the only lanes with a source today, so it counts them and names no total. A build has no lane yet but is counted, so the line never calls the board quiet while the headline says a build runs.
+    public function statusLine(): string
+    {
+        $parts = array_filter([
+            match ($this->working()) {
+                0 => null,
+                1 => '1 reviewer working',
+                default => sprintf('%d reviewers working', $this->working()),
+            },
+            match ($this->builds) {
+                0 => null,
+                1 => '1 build running',
+                default => sprintf('%d builds running', $this->builds),
+            },
+        ]);
+
+        return [] === $parts ? 'Quiet · nobody working' : 'Running smoothly · '.implode(', ', $parts);
     }
 
     /**

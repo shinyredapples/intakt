@@ -110,6 +110,33 @@ final class BoardHeadlineLiveUpdatesTest extends DashboardPageTestCase
         self::assertSame(self::REVIEWING, $updated->filter('.page-head .lead')->text());
     }
 
+    public function testAReviewerStartedAfterThePageLoadedChangesTheStatusLineThroughThePushedUpdate(): void
+    {
+        $page = $this->browser->request('GET', '/');
+        self::assertSame('Quiet · nobody working', trim($page->filter('#status-line')->text()));
+
+        $pushed = new Crawler($this->pushedHeadlineAfterAReviewerStarted())->filter('turbo-stream[action="replace"][target="status-line"] template');
+
+        self::assertCount(1, $pushed);
+        self::assertSame('Running smoothly · 1 reviewer working', trim($pushed->filter('#status-line')->text()));
+        $loaded = $this->browser->request('GET', '/');
+        self::assertSame(trim($loaded->filter('#status-line')->outerHtml()), trim($pushed->html()));
+    }
+
+    public function testThePushedBoardReplacesNothingOnTheStatusPageThatListensToTheSameTopic(): void
+    {
+        $this->ledger->startRoundOf('feat/b', '0190d1a2-7b3c-7def-8123-456789abcdef', 1);
+        $this->ledger->startReviewer('0190d1a2-7b3c-7def-8123-456789abcdef', 'correctness');
+        $page = $this->browser->request('GET', '/lanes');
+        self::assertCount(1, $page->filter('.working .lane'));
+
+        $targets = new Crawler($this->pushedHeadlineAfterAReviewerStarted())->filter('turbo-stream')
+            ->each(static fn (Crawler $stream): string => (string) $stream->attr('target'));
+
+        self::assertNotSame([], $targets);
+        self::assertSame([], array_values(array_filter($targets, static fn (string $target): bool => 0 < $page->filter('#'.$target)->count())));
+    }
+
     public function testAJudgedRoundPushedToTheBoardTakesItsReviewersOutOfTheHeadline(): void
     {
         $page = $this->browser->request('GET', '/');

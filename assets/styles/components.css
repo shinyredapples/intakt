@@ -358,6 +358,7 @@ details[open] > summary .chev { transform: rotate(180deg); }
 .rail .nav { display: flex; align-items: center; gap: var(--s12); width: 100%; height: 40px; padding: 0 var(--s12); border: 0; border-radius: var(--r-btn); background: none; color: var(--ink); font: 500 var(--t15)/1 var(--f-head); text-align: left; text-decoration: none; cursor: pointer; }
 .rail .nav:hover { background: var(--tint); }
 .rail .nav[aria-current="page"] { background: var(--selected); }
+.rail .nav .count { margin-left: auto; }
 .rail .spacer { flex: 1; }
 .logo-dark { display: none; }
 [data-theme="dark"] .logo-light { display: none; }
@@ -375,6 +376,8 @@ details[open] > summary .chev { transform: rotate(180deg); }
 [data-rail="collapsed"] .rail .brand .mark { display: block; }
 [data-rail="collapsed"] .rail .nav { justify-content: center; padding: 0; }
 [data-rail="collapsed"] .rail .collapse svg { transform: scaleX(-1); }
+[data-rail="collapsed"] .rail .nav { position: relative; }
+[data-rail="collapsed"] .rail .nav .count { position: absolute; top: 0; right: 0; min-width: 18px; height: 18px; padding: 0 var(--s4); }
 .main { display: flex; flex-direction: column; min-width: 0; }
 .topbar { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: var(--s12); height: var(--top); padding: 0 var(--s32); border-bottom: 1px solid var(--hairline); background: var(--page); }
 .topbar .grow { flex: 1; }
@@ -408,6 +411,9 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
   .rail .nav, [data-rail="collapsed"] .rail .nav { flex: 1; flex-direction: column; justify-content: center; gap: var(--s4); min-width: 0; height: 56px; padding: var(--s4) 2px; }
   .rail .nav.more { display: flex; }
   .rail .nav .label, [data-rail="collapsed"] .rail .nav .label { display: block; white-space: nowrap; }
+  /* Over the icon's corner, as a phone's tab badge sits, so the label keeps its line. */
+  .rail .nav { position: relative; }
+  .rail .nav .count, [data-rail="collapsed"] .rail .nav .count { position: absolute; top: var(--s4); left: calc(50% + var(--s4)); right: auto; margin: 0; }
   .topbar { gap: var(--s8); padding: 0 var(--s12); }
   .topbar .brand-m { display: flex; align-items: center; min-height: 44px; }
   .topbar .brand-m img { width: auto; height: 26px; }
@@ -734,14 +740,14 @@ details.ev > summary time { margin-left: auto; color: var(--muted); font-size: v
   .log { margin-top: 0; }
 }
 
-/* Who is working */
+/* Status line and the Status page's lanes */
 .working { margin: var(--s24) 0 var(--s32); }
-.working summary { display: flex; align-items: center; gap: var(--s12); min-height: 44px; padding: 0 var(--s16); border-radius: var(--r-card); background: var(--tint); cursor: pointer; }
-.working summary:hover { background: var(--tint-2); }
-.w-title { font: 600 var(--t15)/1.3 var(--f-head); }
-.w-dots { display: inline-flex; gap: var(--s4); }
-.w-sum { color: var(--muted); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.working[open] summary { margin-bottom: var(--s8); }
+/* Quiet on purpose: one muted line that links to the Status page, never a strip that opens. */
+.status-line { display: flex; align-items: center; gap: var(--s12); min-height: 44px; margin: var(--s16) 0 var(--s24); padding: 0 var(--s16); border-radius: var(--r-card); background: var(--tint); color: var(--muted); text-decoration: none; }
+.status-line:hover { background: var(--tint-2); }
+.status-line .grow { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.status-line > .i:first-child { color: var(--primary); }
+.status-line .go { transform: rotate(-90deg); }
 /* No tint and no hover, so a line with nothing to open does not look like a strip that opens. */
 .working-none { display: flex; align-items: center; min-height: 44px; padding: 0 var(--s16); color: var(--muted); }
 .lanes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s8); }
@@ -758,9 +764,8 @@ a.lane:hover { background: var(--tint-2); }
 }
 @media (max-width: 760px) {
   .working { margin: var(--s16) 0 var(--s24); }
-  .working summary { min-height: 48px; }
+  .status-line { min-height: 48px; margin: var(--s12) 0 var(--s16); }
   .working-none { min-height: 48px; }
-  .w-dots { display: none; }
   .lanes { grid-template-columns: minmax(0, 1fr); }
 }
 
