@@ -109,7 +109,7 @@ final readonly class GitHubWorkSource implements WorkSource
     private function pickUnlessFailed(string $project, QueuedIssue $issue, IntakePlan $plan): ?WorkPick
     {
         try {
-            return $this->isHeldByAFailure($project, $issue) ? null : WorkPick::picked($this->taskOf($issue, $plan));
+            return $this->isHeldByAFailure($project, $issue, $plan) ? null : WorkPick::picked($this->taskOf($issue, $plan));
         } catch (ProjectHeldByAnotherWriter $held) {
             $this->logger->warning('The failures of project {project} could not be read before task #{number} is picked, so nothing is picked this tick: {reason}', ['number' => $issue->number(), 'project' => $project, 'reason' => $held->getMessage(), 'exception' => $held]);
 
@@ -117,12 +117,12 @@ final readonly class GitHubWorkSource implements WorkSource
         }
     }
 
-    // Read under the lock a failure is recorded with, so a task marked failed after the plan was made is never picked.
-    private function isHeldByAFailure(string $project, QueuedIssue $issue): bool
+    // Read under the lock a failure is recorded with, so a task marked failed after the plan was made is never picked. Its waits are the ones the plan resolved, because a wait on a pull request stands for the tasks that pull request closes.
+    private function isHeldByAFailure(string $project, QueuedIssue $issue, IntakePlan $plan): bool
     {
         $failures = $this->store->failuresUnderTheListingLock($project);
 
-        return isset($failures[$issue->number()]) || array_any($issue->waitsFor(), static fn (int $target): bool => isset($failures[$target]));
+        return isset($failures[$issue->number()]) || array_any($plan->dependsOn[$issue->number()] ?? [], static fn (int $target): bool => isset($failures[$target]));
     }
 
     private function taskOf(QueuedIssue $issue, IntakePlan $plan): Task

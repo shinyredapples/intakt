@@ -7,8 +7,10 @@ namespace Intakt\Tests\Plugin\GitHubWorkSource;
 use Closure;
 use Doctrine\Common\EventManager;
 use Doctrine\DBAL\DriverManager;
+use Doctrine\DBAL\Exception\RetryableException;
 use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\ORM\Events;
 use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\GitHubForge\Contract\IssueHistories;
@@ -290,6 +292,57 @@ final class GitHubWorkSourceTest extends KernelTestCase
         self::assertSame(['failed meanwhile'], array_values($this->store->failuresOf('alpha')));
     }
 
+    public function testAFailureAnotherConnectionTriesToRecordWhileThePickReadsTheFailuresIsRefusedInsteadOfMissed(): void
+    {
+        $file = (string) tempnam(sys_get_temp_dir(), 'intake');
+        $events = new EventManager();
+        try {
+            $writer = $this->storeOnAFileThatRefusesBusyReads($file);
+            $this->store = $this->storeOnAFileInWalMode($file, $events);
+            $this->reads->lists([Issues::task(5)]);
+            $source = $this->source();
+            $source->queue('alpha');
+            $this->reads->listsUnchanged();
+            $refused = null;
+            $commit = static function () use ($writer, &$refused): void {
+                try {
+                    $writer->failForGood('alpha', 5, 'failed during the pick');
+                    $refused = false;
+                } catch (RetryableException) {
+                    $refused = true;
+                }
+            };
+            $this->duringHistory = static fn () => $events->addEventListener(Events::postLoad, new CommitOnValidatorLoad($commit));
+
+            $pick = $source->nextWork('alpha', WorkerState::Free);
+
+            self::assertTrue($refused);
+            self::assertSame(5, $pick->task?->number);
+            self::assertSame([], $this->store->failuresOf('alpha'));
+        } finally {
+            unlink($file);
+        }
+    }
+
+    public function testATaskWhoseWaitedForPullRequestClosesATaskMarkedFailedBetweenTheListingAndThePickIsNeverPicked(): void
+    {
+        $task = Issues::task(5, ['intakt'], ['body' => 'Waits for #12']);
+        $pullRequest = Issues::pullRequest(12, 'Closes #9');
+        $this->reads->lists([$task, $pullRequest]);
+        $source = $this->source();
+        self::assertSame([5], array_map(static fn (Task $ready): int => $ready->number, $source->queue('alpha')->ready()));
+        $this->reads->listsUnchanged();
+        $this->duringHistory = function () use ($source, $task, $pullRequest): void {
+            $this->reads->lists([$task, $pullRequest, Issues::task(9)], 'W/"issues-2"');
+            $source->queue('alpha');
+            $source->failedForGood('alpha', 9, 'failed meanwhile');
+        };
+
+        $pick = $source->nextWork('alpha', WorkerState::Free);
+
+        self::assertSame(NothingPicked::NoTaskReady, $pick->nothing);
+    }
+
     public function testMoreReadyIssuesThanOnePageHoldsPickTheIssueThatSortsFirstOnTheLastPage(): void
     {
         $api = new RecordedIssueApi();
@@ -378,6 +431,16 @@ final class GitHubWorkSourceTest extends KernelTestCase
         new SchemaTool($manager)->createSchema($manager->getMetadataFactory()->getAllMetadata());
 
         return new IntakeStore($manager);
+    }
+
+    private function storeOnAFileInWalMode(string $file, EventManager $events): IntakeStore
+    {
+        $shared = self::getContainer()->get('doctrine.orm.entity_manager');
+        self::assertInstanceOf(EntityManagerInterface::class, $shared);
+        $connection = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'path' => $file]);
+        $connection->executeQuery('PRAGMA journal_mode = WAL')->fetchOne();
+
+        return new IntakeStore(new EntityManager($connection, $shared->getConfiguration(), $events));
     }
 
     private function sourceOver(IssueReads $reads, IssueHistories $histories): GitHubWorkSource

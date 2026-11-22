@@ -203,8 +203,8 @@ final readonly class IntakeStore
     // Apart from the issue rows, so a task that is closed after it failed for good still holds the tasks that wait on it. Under the lock the listing's write takes, so a failure and a listing write never interleave and a pick that reads the failures under that lock sees every failure recorded before it.
     public function failForGood(string $project, int $number, string $reason): void
     {
-        $this->ownManager()->wrapInTransaction(static function (EntityManagerInterface $manager) use ($project, $number, $reason): void {
-            $manager->find(IntakeValidator::class, $project, LockMode::PESSIMISTIC_WRITE);
+        $this->ownManager()->wrapInTransaction(function (EntityManagerInterface $manager) use ($project, $number, $reason): void {
+            $this->lockTheSyncRow($manager, $project);
             if (!$manager->find(StoredIssue::class, ['project' => $project, 'number' => $number]) instanceof StoredIssue) {
                 throw TaskNotQueued::named($project, $number);
             }
@@ -235,10 +235,23 @@ final readonly class IntakeStore
     public function failuresUnderTheListingLock(string $project): array
     {
         return $this->readOf($project, fn (): array => $this->ownManager()->wrapInTransaction(function (EntityManagerInterface $manager) use ($project): array {
-            $manager->find(IntakeValidator::class, $project, LockMode::PESSIMISTIC_WRITE);
+            $this->lockTheSyncRow($manager, $project);
 
             return $this->reasonsOf($manager, $project);
         }));
+    }
+
+    // SQLite has no row lock, and in WAL mode a transaction reads from the snapshot of its first read, so a failure could commit between the row read and the failure read and be missed. A write that changes no row, sent before any read, takes SQLite's write lock and reads the latest commit; a server database changes nothing for it and relies on the row lock.
+    private function lockTheSyncRow(EntityManagerInterface $manager, string $project): void
+    {
+        $sync = $manager->getClassMetadata(IntakeValidator::class);
+        $column = $sync->getColumnName('project');
+        $manager->getConnection()->createQueryBuilder()
+            ->update($sync->getTableName())
+            ->set($column, $column)
+            ->where('1 = 0')
+            ->executeStatement();
+        $manager->find(IntakeValidator::class, $project, LockMode::PESSIMISTIC_WRITE);
     }
 
     /**
