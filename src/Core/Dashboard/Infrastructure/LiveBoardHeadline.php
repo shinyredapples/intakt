@@ -124,17 +124,6 @@ final readonly class LiveBoardHeadline
         }
     }
 
-    private function remembered(string $signature): void
-    {
-        try {
-            $item = $this->lastPushed->getItem(self::LAST_PUSHED);
-            $this->lastPushed->save($item->set($signature));
-            // Boundary: logs a pool that cannot be written and goes on, because the board is already pushed and a missing record costs one repeat push.
-        } catch (Throwable $failure) {
-            $this->logger->warning('The last pushed board could not be recorded.', ['exception' => $failure]);
-        }
-    }
-
     // The boards are compared, not the rendered streams, because a rendered term carries a fresh random id each time and two renders of one board never match; hashed, so the cache keeps a short value however many cards the board has.
     private function signatureOf(Board $board): string
     {
@@ -144,5 +133,16 @@ final readonly class LiveBoardHeadline
     private function streamOf(Board $board): string
     {
         return $this->twig->render(self::TEMPLATE, ['headline' => $board->headline(), 'board' => $board]);
+    }
+
+    private function remembered(string $signature): void
+    {
+        try {
+            $item = $this->lastPushed->getItem(self::LAST_PUSHED);
+            $this->lastPushed->save($item->set($signature));
+            // Boundary: logs a pool that cannot be written and goes on, because the board is already pushed and a missing record costs one repeat push.
+        } catch (Throwable $failure) {
+            $this->logger->warning('The last pushed board could not be recorded.', ['exception' => $failure]);
+        }
     }
 }

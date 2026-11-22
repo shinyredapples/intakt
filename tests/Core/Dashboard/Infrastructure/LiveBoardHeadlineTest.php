@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\Infrastructure;
 
+use ArrayObject;
 use Intakt\Core\Dashboard\Contract\DashboardTopics;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Contract\LiveUpdates;
@@ -222,12 +223,12 @@ final class LiveBoardHeadlineTest extends KernelTestCase
     public function testAReturnToAnEarlierBoardIsPushedWhenThePoolRefusedTheRecordOfTheNewerOne(): void
     {
         $stored = new ArrayAdapter();
-        $refusing = false;
+        $refusing = new ArrayObject(['on' => false]);
         $pool = self::createStub(CacheItemPoolInterface::class);
         $pool->method('getItem')->willReturnCallback($stored->getItem(...));
         $pool->method('deleteItem')->willReturnCallback($stored->deleteItem(...));
-        $pool->method('save')->willReturnCallback(static function (CacheItemInterface $item) use (&$refusing, $stored): bool {
-            return !$refusing && $stored->save($item);
+        $pool->method('save')->willReturnCallback(static function (CacheItemInterface $item) use ($refusing, $stored): bool {
+            return !$refusing['on'] && $stored->save($item);
         });
         $live = new PublishedLiveEvents();
         $idle = new DashboardLedger();
@@ -235,9 +236,9 @@ final class LiveBoardHeadlineTest extends KernelTestCase
         $active->startRoundOf('change-1', 'r1', 1);
 
         $this->headlineOn($idle, $live, $pool)->publishTheBoard();
-        $refusing = true;
+        $refusing['on'] = true;
         $this->headlineOn($active, $live, $pool)->publishTheBoard();
-        $refusing = false;
+        $refusing['on'] = false;
         $this->headlineOn($idle, $live, $pool)->publishTheBoard();
 
         self::assertCount(3, $live->events);
