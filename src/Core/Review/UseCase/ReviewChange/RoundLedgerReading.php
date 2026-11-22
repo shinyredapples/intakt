@@ -89,20 +89,22 @@ final readonly class RoundLedgerReading implements RoundCosts
     {
         $recorded = $this->usageRows();
 
-        return $this->tokensOfCalls($this->startsFor($roundId, $recorded), $this->usagesByCall($recorded));
+        $starts = $this->startsFor($roundId, $recorded);
+
+        return $this->tokensOfCalls($starts, $this->usagesByCall($recorded, $starts));
     }
 
-    // One read of the usage rows and one of the round's rows for all of its reviewers, because a read per reviewer scanned the ledger again for each.
     /**
      * @param list<string> $reviewerIds
      *
      * @return array<string, ReviewerFigures>
      */
+    // One read of the usage rows and one of the round's rows for all of its reviewers, because a read per reviewer scanned the ledger again for each.
     public function figuresOfReviewers(string $roundId, array $reviewerIds): array
     {
         $recorded = $this->usageRows();
         $starts = $this->startsFor($roundId, $recorded);
-        $usages = $this->usagesByCall($recorded);
+        $usages = $this->usagesByCall($recorded, $starts);
         $moments = $this->momentsOfReviewers($roundId);
         $figures = [];
 
@@ -167,18 +169,20 @@ final readonly class RoundLedgerReading implements RoundCosts
     }
 
     /**
-     * @param list<RecordedEvent> $recorded
+     * @param list<RecordedEvent>         $recorded
+     * @param array<string, UsageStarted> $calls
      *
      * @return array<string, list<TokenUsageRow>>
      */
-    private function usagesByCall(array $recorded): array
+    // Only the round's calls are kept, because the ledger holds the usage of every round and the rest would only be held in memory.
+    private function usagesByCall(array $recorded, array $calls): array
     {
         $usages = [];
 
         foreach ($recorded as $row) {
             $ended = $this->endingOf($row);
 
-            if (null !== $ended) {
+            if (null !== $ended && array_key_exists($ended->call, $calls)) {
                 $usages[$ended->call] = [...$usages[$ended->call] ?? [], ...$ended->usages];
             }
         }
@@ -228,7 +232,7 @@ final readonly class RoundLedgerReading implements RoundCosts
         return $moments;
     }
 
-    // A blocked reviewer has ended too, because its message went to the failure transport and it will answer no more.
+    // A blocked reviewer has ended too, whatever blocked it, because it will answer no more.
     private function reviewerRowOf(RecordedEvent $recorded): ReviewerStarted|VerdictReceived|ReviewerFailed|ReviewerStopped|ReviewerBlocked|null
     {
         $payload = match ($recorded->event->kind) {
@@ -243,10 +247,10 @@ final readonly class RoundLedgerReading implements RoundCosts
         return null === $payload ? null : $this->payloads->of($recorded, $payload);
     }
 
-    // From the reviewer's first start to its last end in the ledger, in milliseconds, because the ledger's clock is the one the workers share; null while it has no end.
     /**
      * @param array{started: list<DateTimeImmutable>, ended: list<DateTimeImmutable>} $moments
      */
+    // From the reviewer's first start to its last end in the ledger, in milliseconds, because the ledger's clock is the one the workers share; null while it has no end.
     private function millisecondsOf(array $moments): ?int
     {
         if ([] === $moments['started'] || [] === $moments['ended']) {

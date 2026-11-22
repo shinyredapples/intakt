@@ -36,6 +36,8 @@ use Symfony\AI\Platform\Bridge\Generic\Completions\TokenUsageExtractor as Comple
 use Symfony\AI\Platform\Result\InMemoryRawResult;
 use Symfony\AI\Platform\TokenUsage\TokenUsageInterface;
 use Symfony\Component\Serializer\Encoder\JsonEncoder;
+use Symfony\Component\Serializer\SerializerInterface;
+use WeakReference;
 
 #[Group('persistence')]
 #[CoversClass(RoundLedgerReading::class)]
@@ -316,6 +318,39 @@ final class RoundLedgerReadingTest extends KernelTestCase
         $figures = $this->reading()->figuresOfReviewers(self::ROUND, ['r1'])['r1'];
 
         self::assertSame([0, [], null], [$figures->tokens->calls, [...$figures->models], $figures->milliseconds]);
+    }
+
+    public function testReadingTheTokensOfARoundDoesNotRetainTheUsageOfOtherRounds(): void
+    {
+        foreach (['unrelated-one', 'unrelated-two', 'unrelated-three'] as $call) {
+            $this->append(LedgerEventKind::UsageRecorded, ['call' => $call]);
+        }
+
+        $firstUsage = null;
+        $serializer = $this->createStub(SerializerInterface::class);
+        $serializer->method('deserialize')->willReturnCallback(
+            static function (string $json, string $class) use (&$firstUsage): ?UsageSettled {
+                if (UsageSettled::class !== $class) {
+                    return null;
+                }
+
+                $call = json_decode($json, true, flags: JSON_THROW_ON_ERROR)['call'];
+                if ('unrelated-three' === $call) {
+                    self::assertNull($firstUsage?->get(), 'The usage of an unrelated call is still retained.');
+                }
+
+                $usage = new TokenUsageRow(null, null, 42, null, null, null, null, null, null, null, null, null, null);
+                if ('unrelated-one' === $call) {
+                    $firstUsage = WeakReference::create($usage);
+                }
+
+                return new UsageSettled($call, 'settled', [$usage]);
+            },
+        );
+
+        $reading = new RoundLedgerReading($this->ledger, new LedgerPayloads($serializer), new ConfiguredPrices([]));
+
+        self::assertSame(0, $reading->tokensOf(self::ROUND)->calls);
     }
 
     public function testReadingTheFiguresOfARoundsReviewersReadsTheLedgerTwiceHoweverManyReviewersItHas(): void
