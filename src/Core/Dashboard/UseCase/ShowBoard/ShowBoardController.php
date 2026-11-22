@@ -63,7 +63,7 @@ final readonly class ShowBoardController
             'failing' => array_map($this->redacted(...), $this->failingHeads->in($events)),
             'failing_mains' => array_map($this->redactedMain(...), $this->failingMains->in($events)),
             'working' => $board->whoIsWorking(),
-            'waiting' =>$this->notices->stillRunningOldestFirst(),
+            'waiting' => $this->notices->stillRunningOldestFirst(),
             'now' => $this->clock->now(),
             'columns' => $board->shownColumns(),
             'coming_next' => $board->comingNext(),
