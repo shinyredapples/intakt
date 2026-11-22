@@ -349,6 +349,33 @@ final class PlayDemoControllerTest extends DashboardPageTestCase
         self::assertSame(TourStage::RoundEnds->value, $this->demoPage()->filter('aside#tour-caption[data-tour-last]')->attr('data-stage'));
     }
 
+    public function testThePageTheLastStageLinksToHoldsTheElementTheStageMarks(): void
+    {
+        $this->browser->disableReboot();
+        $this->demoRunAt(1);
+        $this->ledger->append(new LedgerEvent(LedgerEventKind::JudgeDone, '{"round":"demo-round-1","act":[],"follow_ups":[]}'));
+        $caption = $this->demoPage()->filter('aside#tour-caption[data-tour-last]');
+
+        $review = $this->browser->request('GET', (string) $caption->filter('a.tour-review')->attr('href'));
+
+        self::assertSame('#review-verdict[data-round="demo-round-1"]', $caption->attr('data-tour-at'));
+        self::assertCount(1, $review->filter((string) $caption->attr('data-tour-at')));
+    }
+
+    public function testAnotherRoundsReviewPageHoldsNoElementTheLastStageMarks(): void
+    {
+        $this->browser->disableReboot();
+        $this->demoRunAt(1);
+        $this->ledger->append(new LedgerEvent(LedgerEventKind::JudgeDone, '{"round":"demo-round-1","act":[],"follow_ups":[]}'));
+        $this->ledger->startRoundOf('feat/thing', 'round-9', 1);
+        $this->ledger->judgeFindings('round-9', []);
+        $at = (string) $this->demoPage()->filter('aside#tour-caption')->attr('data-tour-at');
+
+        $other = $this->browser->request('GET', '/reviews/round-9');
+
+        self::assertSame([1, 0], [$other->filter('#review-verdict')->count(), $other->filter($at)->count()]);
+    }
+
     public function testTheCaptionShowsOneDotPerStageWithTheCurrentOneMarkedAndNoStageCount(): void
     {
         $this->demoRunAt(1);

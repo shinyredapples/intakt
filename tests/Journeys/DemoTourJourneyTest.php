@@ -85,18 +85,21 @@ final class DemoTourJourneyTest extends JourneyTestCase
 
     private function readTheActListOfRound1(KernelBrowser $dashboard): void
     {
-        $page = $dashboard->request('GET', '/reviews/'.self::FIRST);
+        $page = $dashboard->request('GET', '/reviews/'.self::FIRST.'/record');
 
         self::assertStringContainsString(self::FINDING, $page->filter('#round-'.self::FIRST.'-judged li.finding-card')->text());
     }
 
     private function readTheClosedFindingsOfRound2(KernelBrowser $dashboard): void
     {
+        $record = $dashboard->request('GET', '/reviews/'.self::SECOND.'/record');
+        self::assertSame('The reviewers reported no findings, so the judge had nothing to mark.', $record->filter('#round-'.self::SECOND.'-judged')->text());
+
         $page = $dashboard->request('GET', '/reviews/'.self::SECOND);
 
-        self::assertSame('The reviewers reported no findings, so the judge had nothing to mark.', $page->filter('#round-'.self::SECOND.'-judged')->text());
         self::assertSame('Step 5 of 5', $page->filter('#tour-caption .tour-dots')->attr('aria-label'));
-        self::assertSame('[id="round-'.self::SECOND.'-judged"]', $page->filter('#tour-caption')->attr('data-tour-at'));
+        self::assertSame('#review-verdict[data-round="'.self::SECOND.'"]', $page->filter('#tour-caption')->attr('data-tour-at'));
+        self::assertSame(['Approved', 1], [$page->filter('#review-verdict .verdict-words')->text(), $page->filter((string) $page->filter('#tour-caption')->attr('data-tour-at'))->count()]);
         self::assertSame(TourStage::RoundEnds->sentence(), $page->filter('#tour-caption .tour-line')->text());
     }
 

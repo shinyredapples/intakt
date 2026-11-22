@@ -30,7 +30,7 @@ final class ReviewPageFigureKindsTest extends DashboardPageTestCase
         $this->givenAJudgedRound('round-2', 2);
         $this->givenAJudgedRound('round-3', 3);
 
-        $crawler = $this->browser->request('GET', '/reviews/round-3');
+        $crawler = $this->browser->request('GET', '/reviews/round-3/record');
 
         self::assertSame(
             ['kind-summary-cost', 'kind-round-round-3-findings', 'kind-round-round-3-cost'],
@@ -44,7 +44,7 @@ final class ReviewPageFigureKindsTest extends DashboardPageTestCase
         $this->givenAJudgedRound();
         $this->givenAJudgedRound('round-2', 2);
 
-        $crawler = $this->browser->request('GET', '/reviews/round-2');
+        $crawler = $this->browser->request('GET', '/reviews/round-2/record');
 
         self::assertSame(['Findings', 'Cost', 0], [
             $crawler->filter('#round-round-1 table.reviewers thead th.num')->text(),
@@ -57,7 +57,7 @@ final class ReviewPageFigureKindsTest extends DashboardPageTestCase
     {
         $this->givenAJudgedRound();
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertSame('alphafeat/thing 1 round 1,300 tokens', $this->wordsOf($crawler->filter('.page-head p.meta'), before: ' Cost:'));
     }
@@ -67,7 +67,7 @@ final class ReviewPageFigureKindsTest extends DashboardPageTestCase
         $this->givenPricesOf('2026-11-13');
         $this->givenAJudgedRound();
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertSame(['estimated'], $crawler->filter('.page-head p.meta .figure-kind')->each(static fn (Crawler $label): ?string => $label->attr('data-kind')));
     }
@@ -76,7 +76,7 @@ final class ReviewPageFigureKindsTest extends DashboardPageTestCase
     {
         $this->givenAJudgedRound();
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         $tokens = $crawler->filter('#round-round-1 table.tokens tbody td.num');
         self::assertSame(['1000', '0', '0', '0', '300', '1300'], $tokens->each(static fn (Crawler $cell): string => $cell->html()));
@@ -87,7 +87,7 @@ final class ReviewPageFigureKindsTest extends DashboardPageTestCase
         $this->givenPricesOf('2026-11-13');
         $this->givenAJudgedRound();
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertSame('Cost: 0.0050 USD estimated, prices of 2026-11-13', $this->wordsOf($crawler->filter('.page-head p.meta > span:nth-child(5)')));
     }
@@ -97,7 +97,7 @@ final class ReviewPageFigureKindsTest extends DashboardPageTestCase
         $this->givenPricesOf('2026-11-13');
         $this->givenAJudgedRound();
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         $cost = $crawler->filter('#round-round-1 table.tokens tbody td:last-child');
         self::assertSame(['0.0050 USD, prices of 2026-11-13', 0], [$cost->text(), $cost->filter('.figure-kind')->count()]);
@@ -108,7 +108,7 @@ final class ReviewPageFigureKindsTest extends DashboardPageTestCase
         $this->givenPricesOf(null);
         $this->givenAJudgedRound();
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertSame('0.0050 USD, price date unknown', $crawler->filter('#round-round-1 table.tokens tbody td:last-child')->text());
     }
@@ -117,7 +117,7 @@ final class ReviewPageFigureKindsTest extends DashboardPageTestCase
     {
         $this->givenAJudgedRound();
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertSame('unknown, no price for model-a', $crawler->filter('#round-round-1 table.tokens tbody td:last-child')->text());
         self::assertSame('Cost: unknown, no price for model-a', $this->wordsOf($crawler->filter('.page-head p.meta > span:nth-child(5)')));
@@ -127,7 +127,7 @@ final class ReviewPageFigureKindsTest extends DashboardPageTestCase
     {
         $this->givenAJudgedRound();
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertSame(['Cost', 0], [$crawler->filter('#round-round-1 table.tokens thead th')->last()->text(), $crawler->filter('#round-round-1 table.tokens .figure-kind')->count()]);
     }
@@ -137,7 +137,7 @@ final class ReviewPageFigureKindsTest extends DashboardPageTestCase
         $this->givenPricesOf('2026-11-13');
         $this->givenAJudgedRound();
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         $kinds = $crawler->filter('#round-round-1 table.tokens th')->each(static fn (Crawler $head): array => $head->filter('.figure-kind')->each(static fn (Crawler $label): ?string => $label->attr('data-kind')));
         self::assertSame([[], [], [], [], [], [], ['estimated']], $kinds);
@@ -149,7 +149,7 @@ final class ReviewPageFigureKindsTest extends DashboardPageTestCase
         $this->givenPricesOf('2026-11-13');
         $this->givenARunningRoundWhoseSessionCosts(Cost::inUsd(0.1, '2026-11-13'));
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertSame(
             [['0.1000 USD, prices of 2026-11-13', 0], ['0.0050 USD, prices of 2026-11-13', 0]],
@@ -183,7 +183,7 @@ final class ReviewPageFigureKindsTest extends DashboardPageTestCase
     {
         $this->givenAJudgedRound();
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         $count = $crawler->filter('#round-round-1 details.ev > summary .small')->last();
         self::assertSame(['outcome not recorded, 2 findings', 0], [$count->text(), $count->filter('.figure-kind')->count()]);
@@ -193,7 +193,7 @@ final class ReviewPageFigureKindsTest extends DashboardPageTestCase
     {
         $this->givenAJudgedRound();
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         $head = $crawler->filter('#round-round-1 table.reviewers thead th.num');
         self::assertSame(['Findings counted', ['counted']], [$this->wordsOf($head), $head->filter('.figure-kind')->each(static fn (Crawler $label): ?string => $label->attr('data-kind'))]);
@@ -205,7 +205,7 @@ final class ReviewPageFigureKindsTest extends DashboardPageTestCase
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
         $this->ledger->startReviewer('round-1', 'correctness');
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         $count = $crawler->filter('#round-round-1 table.reviewers tbody td.num');
         self::assertSame(['no answer yet', 0], [$count->text(), $count->filter('.figure-kind')->count()]);
@@ -216,7 +216,7 @@ final class ReviewPageFigureKindsTest extends DashboardPageTestCase
         $this->givenPricesOf('2026-11-13');
         $this->givenAJudgedRound();
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         $labels = $crawler->filter('.figure-kind');
         self::assertSame(
@@ -231,7 +231,7 @@ final class ReviewPageFigureKindsTest extends DashboardPageTestCase
         $this->givenPricesOf('2026-11-13');
         $this->givenAJudgedRound();
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertSame([null, null, null], $crawler->filter('.figure-kind')->each(static fn (Crawler $label): ?string => $label->attr('tabindex')));
     }
@@ -241,7 +241,7 @@ final class ReviewPageFigureKindsTest extends DashboardPageTestCase
         $this->givenPricesOf('2026-11-13');
         $this->givenAJudgedRound();
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         $labels = $crawler->filter('#round-round-1 .table-scroll .figure-kind');
         self::assertCount(2, $labels);

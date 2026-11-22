@@ -22,12 +22,9 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
     // Not a credential, because the seed only checks that a key is present, and no step calls a provider.
     private const string PLACEHOLDER_KEY = 'journey-placeholder';
     private const string ENDED_TEXT = 'Checked.';
-    // The sample's test vendor leaves nothing to fix, so the link must not promise findings.
-    private const string ROUND_BELOW = 'See the round below.';
     private const string PROGRESS = '/^\d+ of \d+ reviewers finished\.$/';
     private const string NONE_STARTED = '0 of 2 reviewers started.';
     private const string ALL_STARTED = '2 of 2 reviewers started.';
-    private const string ALL_FINISHED = '2 of 2 reviewers finished.';
     private const string IDLE = 'Nothing is running. Nothing needs you.';
     private const string HEADLINE_TARGET = 'target="board-headline"';
     private const string REVIEWING = '/^The Code reviewers are reviewing change \S+ of '.SampleProject::NAME.'\. The Code reviewers are reviewing 1 change\. Nothing needs you\.$/';
@@ -118,13 +115,22 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
     private function openTheRunningRound(string $round): Crawler
     {
         // Without a live listener, because the instance has no hub secret to authorize one, so the updates are read from the recording hub.
-        $page = $this->visit('/reviews/'.$round);
+        $page = $this->bothViews($round);
 
         self::assertSame('in progress', mb_strtolower($page->filter('.state-running')->text()));
         self::assertMatchesRegularExpression(self::PROGRESS, $page->filter('#round-'.$round.'-state')->text());
         self::assertSame(self::NONE_STARTED, $page->filter('#round-'.$round.'-started')->text());
 
         return $page;
+    }
+
+    // The main view and the Full record as one document, because a listener holds both and each update targets the parts of one of them.
+    private function bothViews(string $round): Crawler
+    {
+        $main = $this->visit('/reviews/'.$round)->filter('body')->html();
+        $record = $this->visit('/reviews/'.$round.'/record')->filter('body')->html();
+
+        return new Crawler('<!DOCTYPE html><html><body>'.$main.$record.'</body></html>', 'http://localhost/');
     }
 
     /**
@@ -162,7 +168,7 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
 
     private function openTheJudgedRound(string $round): Crawler
     {
-        $page = $this->visit('/reviews/'.$round);
+        $page = $this->bothViews($round);
 
         self::assertStringContainsString(self::ENDED_TEXT, $page->filter('#round-'.$round.'-state')->text());
         self::assertSame('checked', mb_strtolower($page->filter('.state-judged')->text()));
@@ -174,15 +180,13 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
     private function readTheJudgedContentWithoutAReload(string $round, Crawler $live, Crawler $judged): void
     {
         self::assertStringContainsString(self::ENDED_TEXT, $live->filter('#round-'.$round.'-state')->text());
-        self::assertStringStartsWith($judged->filter('#round-'.$round.' .ev-head .chip:not(.replay-mark)')->text().', ', $live->filter('#round-'.$round.'-now-judge')->text());
-        self::assertSame($judged->filter('#round-'.$round.' .ev-head .chip:not(.replay-mark)')->text(), $live->filter('#round-'.$round.'-now-judge .now-outcome')->text());
-        self::assertStringStartsWith($live->filter('#round-'.$round.'-now-findings a.sb-finding')->count().' ', $live->filter('#round-'.$round.'-now-judge .now-to-fix')->text());
-        self::assertSame('0 findings to fix', $live->filter('#round-'.$round.'-now-judge .now-to-fix')->text());
-        self::assertSame(self::ROUND_BELOW, $live->filter('#round-'.$round.'-now-judge p.muted')->text());
+        self::assertSame($judged->filter('#round-'.$round.' .ev-head .chip:not(.replay-mark)')->text(), $live->filter('#review-verdict .verdict-words')->text());
+        self::assertSame('0 to fix · 0 urgent', $live->filter('#review-verdict .verdict-count')->text());
+        self::assertSame([0, 0], [$live->filter('.state-block')->count(), $judged->filter('.state-block')->count()]);
         self::assertNotSame('', $live->filter('#round-'.$round.'-judged')->text());
-        self::assertSame([self::ALL_STARTED, self::ALL_FINISHED], [$live->filter('#round-'.$round.'-started')->text(), $live->filter('#round-'.$round.'-now-progress')->text()]);
+        self::assertSame(self::ALL_STARTED, $live->filter('#round-'.$round.'-started')->text());
 
-        foreach (['#round-'.$round.'-started', '#round-'.$round.'-verdict', '#round-'.$round.'-judged', '#round-'.$round.'-tokens', '#review-summary-tokens', '#review-summary-cost'] as $part) {
+        foreach (['#review-verdict', '#round-'.$round.'-started','#round-'.$round.'-verdict', '#round-'.$round.'-judged', '#round-'.$round.'-tokens', '#review-summary-tokens', '#review-summary-cost'] as $part) {
             self::assertSame($judged->filter($part)->text(), $live->filter($part)->text(), $part.' on the page that stayed open differs from a fresh load');
         }
 

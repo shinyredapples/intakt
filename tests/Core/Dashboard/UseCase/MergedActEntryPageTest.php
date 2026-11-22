@@ -84,7 +84,7 @@ final class MergedActEntryPageTest extends WebTestCase
         $review = $this->reviewed([$this->findingAt('A', Severity::P2), $this->findingAt('B', Severity::P1)]);
         $report = new ReviewReport($this->serializer());
 
-        $page = $this->browser->request('GET', '/reviews/'.$review->roundId);
+        $page = $this->browser->request('GET', '/reviews/'.$review->roundId.'/record');
 
         self::assertResponseIsSuccessful();
         self::assertContains('F1+F2 P1 src/A.php:7: Text of A.', $report->asLines($review));
@@ -101,7 +101,7 @@ final class MergedActEntryPageTest extends WebTestCase
 
         $review = $this->reviewed([$second, $first], $judgement, self::DISCOUNT_DIFF);
         $report = new ReviewReport($this->serializer());
-        $page = $this->browser->request('GET', '/reviews/'.$review->roundId);
+        $page = $this->browser->request('GET', '/reviews/'.$review->roundId.'/record');
 
         self::assertResponseIsSuccessful();
         self::assertContains('F1+F2 P1 src/discount.js:14: An order of exactly 100 lost its discount.', $report->asLines($review));
@@ -115,7 +115,7 @@ final class MergedActEntryPageTest extends WebTestCase
         $second = new Finding('B', Severity::P2, 'src/discount.js', 41, null, 'Text of B.', FixableBy::Builder, false, null, null);
 
         $review = $this->reviewed([$first, $second], new Judgement([new JudgedFinding('F1', Mark::Act), new JudgedFinding('F2', Mark::Act, 'F1')]), self::DISCOUNT_DIFF);
-        $page = $this->browser->request('GET', '/reviews/'.$review->roundId);
+        $page = $this->browser->request('GET', '/reviews/'.$review->roundId.'/record');
 
         self::assertSame([['P1', 'F1', 'Text of A.', 'Fix now'], ['P2', 'F2', 'Text of B.', 'Fix now']], $this->pageRows($page->filter('.finding-card')));
     }
@@ -126,7 +126,7 @@ final class MergedActEntryPageTest extends WebTestCase
         $review = $this->reviewed([$this->findingAt('A', Severity::P2), $this->findingAt('B', Severity::P2), $this->findingAt('C', Severity::P1)]);
         $act = $this->fixture->findingStore()->actListOf($this->fixture->round($review->roundId), $this->judgeDoneOf($review));
 
-        $page = $this->browser->request('GET', '/reviews/'.$review->roundId);
+        $page = $this->browser->request('GET', '/reviews/'.$review->roundId.'/record');
 
         self::assertResponseIsSuccessful();
         self::assertCount(1, $act);
@@ -140,7 +140,7 @@ final class MergedActEntryPageTest extends WebTestCase
         $judged = new Finding('B', Severity::P1, 'src/B.php', 12, 'ghostSymbol', 'Take the lock first.', FixableBy::Builder, false, null, null);
         $review = $this->reviewed([$dropped, $judged]);
 
-        $page = $this->browser->request('GET', '/reviews/'.$review->roundId);
+        $page = $this->browser->request('GET', '/reviews/'.$review->roundId.'/record');
 
         self::assertResponseIsSuccessful();
         self::assertSame([['P1', 'F2', 'Take the lock first.', 'Fix now']], $this->pageRows($page->filter('.finding-card:not([data-dropped])')));
