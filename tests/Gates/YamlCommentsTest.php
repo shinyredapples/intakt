@@ -88,7 +88,7 @@ final class YamlCommentsTest extends TestCase
 
     public function testAnUnclosedQuoteOrBlockScalarEndsTheScanWithoutAComment(): void
     {
-        foreach (["key: '\n# TODO", "key: \"\n# TODO", "key: \"\\", "key: |\n  # TODO", 'key: [a'] as $document) {
+        foreach (["key: '\n# TODO", "key: \"\n# TODO", 'key: "\\', "key: |\n  # TODO", 'key: [a'] as $document) {
             self::assertSame([], $this->markersOn($document), $document);
         }
     }

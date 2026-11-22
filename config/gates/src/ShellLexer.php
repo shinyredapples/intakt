@@ -15,7 +15,7 @@ final class ShellLexer
     // Because these are the shell's metacharacters, a word starts right after any of them.
     private const string WORD_BREAKS = " \t\n;&|()<>";
     private const string SPECIAL_IN_CODE = " \t\n;&|()<>#'\"`\\$";
-    private const string SPECIAL_IN_DOUBLE_QUOTES = "\"`\\$";
+    private const string SPECIAL_IN_DOUBLE_QUOTES = '"`\$';
     private const string SPECIAL_IN_PARAMETER = "}'\"`\\$";
 
     private readonly int $length;
