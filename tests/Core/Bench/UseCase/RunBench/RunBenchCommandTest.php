@@ -28,6 +28,7 @@ use Intakt\Core\Bench\UseCase\RunBench\RunBench;
 use Intakt\Core\Bench\UseCase\RunBench\RunBenchCommand;
 use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Git\Contract\HardenedGit;
+use Intakt\Core\Review\Contract\BlockReasons;
 use Intakt\Core\Review\Contract\ChangeDescription;
 use Intakt\Core\Review\Contract\ChangeReview;
 use Intakt\Core\Review\Contract\ChangeReviewRequest;
@@ -35,6 +36,7 @@ use Intakt\Core\Review\Contract\ChangeReviews;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
+use Intakt\Core\Review\Contract\Labels;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\Panels;
@@ -94,6 +96,8 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(Cost::class)]
 #[UsesClass(HardenedGit::class)]
 #[UsesClass(ChangeDescription::class)]
+#[UsesClass(BlockReasons::class)]
+#[UsesClass(Labels::class)]
 #[UsesClass(ChangeReviewRequest::class)]
 #[UsesClass(RequestedRound::class)]
 #[UsesClass(ReviewTerms::class)]
@@ -346,7 +350,7 @@ final class RunBenchCommandTest extends TestCase
     {
         $failed = new ReviewerOutcome('role-1', Tier::Standard, null, 'stopped at its output limit', new RoundTokens(1, 100, 0, 0, 0, 0, 100), 500, ['big']);
 
-        return $this->everySecondReview(new ChangeReview('round', 1, Decision::Blocked, [], [], new RoundTokens(1, 100, 0, 0, 0, 0, 100), Cost::none(), [], reviewers: [$failed]));
+        return $this->everySecondReview(new ChangeReview('round', 1, Decision::Blocked, [], [], new RoundTokens(1, 100, 0, 0, 0, 0, 100), Cost::none(), new BlockReasons(), reviewers: [$failed]));
     }
 
     /**
@@ -356,7 +360,7 @@ final class RunBenchCommandTest extends TestCase
     {
         $nothing = new ReviewerOutcome('role-1', Tier::Standard, new Verdict(Decision::Approve, [], [], []), null, new RoundTokens(1, 500, 0, 0, 0, 40, 540), 3000, $models);
 
-        return $this->everySecondReview(new ChangeReview('round', 1, Decision::Approve, [], [], new RoundTokens(1, 500, 0, 0, 0, 40, 540), Cost::none(), [], reviewers: [$nothing]));
+        return $this->everySecondReview(new ChangeReview('round', 1, Decision::Approve, [], [], new RoundTokens(1, 500, 0, 0, 0, 40, 540), Cost::none(), new BlockReasons(), reviewers: [$nothing]));
     }
 
     // The second run of each change gets the other answer, because the runs of a change follow each other.
@@ -378,7 +382,7 @@ final class RunBenchCommandTest extends TestCase
         $finding = new Finding('F1', Severity::P1, 'src/shipping.js', $this->plantedLine(), null, 'Off by one.', FixableBy::Builder, false, null, null);
         $reviewer = new ReviewerOutcome('role-1', Tier::Standard, new Verdict(Decision::Changes, [$finding], [], []), null, new RoundTokens(1, 500, 0, 0, 0, 40, 540), 3000, ['big']);
         $reviews = self::createStub(ChangeReviews::class);
-        $reviews->method('review')->willReturn(new ChangeReview('round', 1, Decision::Changes, [], [$finding], new RoundTokens(1, 500, 0, 0, 0, 40, 540), Cost::none(), [], reviewers: [$reviewer]));
+        $reviews->method('review')->willReturn(new ChangeReview('round', 1, Decision::Changes, [], [$finding], new RoundTokens(1, 500, 0, 0, 0, 40, 540), Cost::none(), new BlockReasons(), reviewers: [$reviewer]));
 
         return $reviews;
     }
