@@ -151,6 +151,20 @@ final class DoctrineLedgerTest extends KernelTestCase
         self::assertSame(['{"note":"a_b"}', '{"note":"50%!"}'], $payloads);
     }
 
+    public function testAReadByKindsAndMoreTextsThanOneQueryHoldsReturnsEachMatchingEventOnceInTheOrderTheyWereAppended(): void
+    {
+        $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');
+        $calls = array_map(static fn (int $n): string => sprintf('00000000-0000-7000-8000-%012d', $n), range(1, 1100));
+
+        foreach ([[LedgerEventKind::UsageRecorded, '{"call":"'.$calls[1099].'"}'], [LedgerEventKind::JudgeDone, '{"call":"'.$calls[0].'"}'], [LedgerEventKind::UsageRecorded, '{"call":"'.$calls[0].'","also":"'.$calls[1099].'"}'], [LedgerEventKind::UsageRecorded, '{"call":"'.$calls[500].'"}']] as [$kind, $payload]) {
+            self::assertTrue($ledger->append(new LedgerEvent($kind, $payload))->succeeded());
+        }
+
+        $payloads = array_map(static fn (RecordedEvent $event): string => $event->event->payload, iterator_to_array($ledger->readOfKindsMentioning([LedgerEventKind::UsageRecorded], $calls)));
+
+        self::assertSame(['{"call":"'.$calls[1099].'"}', '{"call":"'.$calls[0].'","also":"'.$calls[1099].'"}', '{"call":"'.$calls[500].'"}'], $payloads);
+    }
+
     public function testAReadByNoKindOrNoTextReadsNothing(): void
     {
         $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');

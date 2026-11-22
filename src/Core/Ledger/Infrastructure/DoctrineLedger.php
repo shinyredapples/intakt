@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Ledger\Infrastructure;
 
+use Closure;
 use DateTimeZone;
 use Doctrine\DBAL\Exception;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Exception\EntityManagerClosed;
+use Doctrine\ORM\QueryBuilder;
 use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Ledger\Contract\AppendResult;
 use Intakt\Core\Ledger\Contract\Ledger;
@@ -69,16 +71,7 @@ final readonly class DoctrineLedger implements Ledger
      */
     public function readMentioning(array $texts): RecordedEvents
     {
-        $records = [];
-        foreach (array_chunk($texts, self::TEXTS_PER_QUERY) as $chunk) {
-            foreach ($this->recordsMentioningAnyOf($chunk) as $record) {
-                $records[$record->position] = $record;
-            }
-        }
-
-        ksort($records);
-
-        return $this->eventsOf($records);
+        return $this->eventsMentioning($texts, static fn (QueryBuilder $query): QueryBuilder => $query);
     }
 
     /**
@@ -92,9 +85,23 @@ final readonly class DoctrineLedger implements Ledger
         }
 
         $values = array_map(static fn (LedgerEventKind $kind): string => $kind->value, $kinds);
+
+        return $this->eventsMentioning($texts, static fn (QueryBuilder $query): QueryBuilder => $query->andWhere('event.kind IN (:kinds)')->setParameter('kinds', $values));
+    }
+
+    // Both mention reads share the chunking and the append order, so an event named in two chunks is kept once and the reads cannot drift apart.
+    /**
+     * @param list<string>                         $texts
+     * @param Closure(QueryBuilder): QueryBuilder $narrowed
+     */
+    private function eventsMentioning(array $texts, Closure $narrowed): RecordedEvents
+    {
         $records = [];
         foreach (array_chunk($texts, self::TEXTS_PER_QUERY) as $chunk) {
-            foreach ($this->recordsMentioningAnyOf($chunk, $values) as $record) {
+            /** @var list<EventRecord> $found */
+            $found = $narrowed($this->queryMentioningAnyOf($chunk))->getQuery()->getResult();
+
+            foreach ($found as $record) {
                 $records[$record->position] = $record;
             }
         }
@@ -105,12 +112,9 @@ final readonly class DoctrineLedger implements Ledger
     }
 
     /**
-     * @param list<string>      $texts
-     * @param list<string>|null $kinds
-     *
-     * @return list<EventRecord>
+     * @param list<string> $texts
      */
-    private function recordsMentioningAnyOf(array $texts, ?array $kinds = null): array
+    private function queryMentioningAnyOf(array $texts): QueryBuilder
     {
         $manager = $this->registry->getManager();
         assert($manager instanceof EntityManagerInterface);
@@ -122,16 +126,7 @@ final readonly class DoctrineLedger implements Ledger
             $query->setParameter('text'.$index, '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $text).'%');
         }
 
-        $query->where($query->expr()->orX(...$mentions));
-
-        if (null !== $kinds) {
-            $query->andWhere('event.kind IN (:kinds)')->setParameter('kinds', $kinds);
-        }
-
-        /** @var list<EventRecord> $records */
-        $records = $query->getQuery()->getResult();
-
-        return $records;
+        return $query->where($query->expr()->orX(...$mentions));
     }
 
     /**
