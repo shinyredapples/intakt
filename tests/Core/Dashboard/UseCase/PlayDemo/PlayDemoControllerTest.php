@@ -12,7 +12,7 @@ use Intakt\Core\Dashboard\UseCase\PlayDemo\DemoReadiness;
 use Intakt\Core\Dashboard\UseCase\PlayDemo\DemoRuns;
 use Intakt\Core\Dashboard\UseCase\PlayDemo\PlayDemoController;
 use Intakt\Core\Dashboard\UseCase\PlayDemo\PlayDemoRun;
-use Intakt\Core\Dashboard\UseCase\PlayDemo\ShowDemoController;
+use Intakt\Core\Dashboard\UseCase\ShowDemo\ShowDemoController;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Tests\Core\Dashboard\UseCase\DashboardPageTestCase;

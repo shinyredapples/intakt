@@ -2,10 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Core\Dashboard\UseCase\StopReview;
+namespace Intakt\Core\Dashboard\UseCase\StopRound;
 
 use Intakt\Core\Dashboard\Contract\DashboardRoutes;
 use Intakt\Core\Dashboard\Infrastructure\FormPress;
+use Intakt\Core\Dashboard\UseCase\StopReview\ReviewerStops;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;

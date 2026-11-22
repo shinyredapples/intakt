@@ -16,7 +16,7 @@ use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\LedgerTokens;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
 use Intakt\Core\Dashboard\UseCase\StopReview\ReviewerStops;
-use Intakt\Core\Dashboard\UseCase\StopReview\StopRoundController;
+use Intakt\Core\Dashboard\UseCase\StopRound\StopRoundController;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;

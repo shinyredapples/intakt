@@ -1,0 +1,28 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Tests\Sample;
+
+use PHPUnit\Framework\Attributes\DataProvider;
+
+final class MailerTest
+{
+    public static function testCases(): iterable
+    {
+        yield 'one' => [1];
+    }
+
+    #[DataProvider('testCases')]
+    public function testEachCaseIsSentOnce(int $case): void
+    {
+    }
+
+    private function testHelper(): void
+    {
+    }
+
+    public function helper(): void
+    {
+    }
+}

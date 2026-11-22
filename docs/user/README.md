@@ -52,6 +52,8 @@ Looking for a setting, a command option or an exact rule? The [complete referenc
 
 The `left-undone` check of `bin/check` refuses a new TODO, FIXME or XXX comment in the PHP, Twig and JavaScript lines a change adds. The same words inside a JavaScript string, template literal or regular expression do not count, and a comment in the form `TODO(#123): <reason>` that names an issue is allowed ([examples and exceptions](../reference/user-manual.md#when-the-left-undone-gate-reports-a-todo-comment-a-skipped-test-or-a-not-implemented-throw)).
 
+`bin/check` also asks that a test method is named like a sentence (`test` and at least three words, such as `testAStaleLockIsReleased`) and that a route is named after its module and use case folder (`dashboard_show_board`); a failure says how to rename it.
+
 One rule to know before your first build: for a project with a `github` entry, the `--remote` of `intakt:build:task` must be that configured GitHub repository's `https://github.com/<owner>/<name>` address, or the command refuses before it does anything ([the `intakt:build:task` options](../reference/user-manual.md#building-one-task)).
 
 The [plain-words guides](../guide/README.md) explain how Intakt works inside.

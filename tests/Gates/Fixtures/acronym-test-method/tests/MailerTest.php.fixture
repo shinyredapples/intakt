@@ -1,0 +1,12 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Tests\Sample;
+
+final class MailerTest
+{
+    public function testMCPWorks(): void
+    {
+    }
+}

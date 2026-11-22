@@ -49,7 +49,7 @@ A rule marked "enforced by `bin/check`" is checked by the named gate, whose fail
 - Typed objects across module boundaries, never arrays; array shapes only inside a module.
 - `DateTimeImmutable` in UTC, `hrtime()` for elapsed time.
 - A handler that ignores its message names it with `handles:` and takes no parameter, because Rector removes an unused one.
-- Routes, commands, listeners and MCP tools use Symfony's attributes; route names are `<module>_<use_case>`.
+- Routes, commands, listeners and MCP tools use Symfony's attributes; route names are `<module>_<use_case>` (enforced by `bin/check` (`tests`)).
 - Logging, Doctrine mapping and the dependency policy: see [Conventions](docs/architecture/conventions.md).
 
 ## Tests
@@ -59,7 +59,7 @@ A rule marked "enforced by `bin/check`" is checked by the named gate, whose fail
 - A test that ends with an unasserted error log record fails: enforced by `bin/check` (`tests`).
 - Coverage metadata is `#[CoversClass]` on the test class (or `#[CoversNothing]`); strict coverage metadata waits until CI collects coverage.
 - An expected error log is asserted with `AssertsLoggedErrors`, never printed.
-- Every change brings tests named as sentences (`test...`), one behavior each, given/when/then, builders over long setup.
+- Every change brings tests named as sentences (`test` and at least three words in camel case, data providers excluded: enforced by `bin/check` (`phpstan`)), one behavior each, given/when/then, builders over long setup.
 - `#[UsesClass]` where a test exercises other classes. `createStub` by default; `createMock` only to assert a call on an outside boundary.
 - SQLite by default; persistence tests in the `persistence` group. Races proven by forced order, never repetition. No shipped config, real credentials or live providers in tests.
 
