@@ -85,20 +85,43 @@ final class RouteNamesTest extends KernelTestCase
         $problems = [];
 
         foreach ($routes as $name => $route) {
-            $controller = $route->getDefault('_controller');
+            $found = $this->moduleAndUseCaseOf($route);
 
-            if (1 !== preg_match('/^Intakt\\\\(?:Core|Plugin)\\\\(.+?)\\\\UseCase\\\\([^\\\\]+)\\\\/', is_string($controller) ? $controller : '', $found)) {
-                continue;
-            }
-
-            $expected = $this->snake(str_replace('\\', '', $found[1])).'_'.$this->snake($found[2]);
-
-            if ($name !== $expected && !str_starts_with($name, $expected.'_')) {
-                $problems[] = sprintf('%s: name it %s (<module>_<use_case>, or that name followed by _<action> for a second route of the use case), after the module %s and the folder UseCase/%s/', $name, $expected, $found[1], $found[2]);
+            if ([] !== $found && !$this->isNamedAfter($name, $found)) {
+                $problems[] = sprintf('%s: name it %s (<module>_<use_case>, or that name followed by _<action> for a second route of the use case), after the module %s and the folder UseCase/%s/', $name, $this->expectedName($found), $found[1], $found[2]);
             }
         }
 
         return $problems;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function moduleAndUseCaseOf(Route $route): array
+    {
+        $controller = $route->getDefault('_controller');
+        $matched = preg_match('/^Intakt\\\\(?:Core|Plugin)\\\\(.+?)\\\\UseCase\\\\([^\\\\]+)\\\\/', is_string($controller) ? $controller : '', $found);
+
+        return 1 === $matched ? $found : [];
+    }
+
+    /**
+     * @param list<string> $found
+     */
+    private function isNamedAfter(string $name, array $found): bool
+    {
+        $expected = $this->expectedName($found);
+
+        return $name === $expected || str_starts_with($name, $expected.'_');
+    }
+
+    /**
+     * @param list<string> $found
+     */
+    private function expectedName(array $found): string
+    {
+        return $this->snake(str_replace('\\', '', $found[1])).'_'.$this->snake($found[2]);
     }
 
     private function snake(string $words): string

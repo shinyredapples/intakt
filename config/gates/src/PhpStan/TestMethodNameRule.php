@@ -86,19 +86,19 @@ final readonly class TestMethodNameRule implements Rule
         return $method->isPublic() && str_starts_with($name, self::PREFIX) && !in_array($name, $providers, true);
     }
 
-    private function readsAsSentence(string $name): bool
-    {
-        $words = substr($name, strlen(self::PREFIX));
-
-        // a run of capitals is one word, so testMCPToolWorks counts MCP, Tool and Works
-        return 1 === preg_match('/^[A-Z0-9]/', $words) && preg_match_all('/[A-Z]+(?![a-z])|[A-Z]?[a-z]+|[0-9]+/', $words) >= self::MINIMUM_WORDS;
-    }
-
     private function notASentence(ClassMethod $method): IdentifierRuleError
     {
         $name = $method->name->toString();
         $message = sprintf('Test method %s() does not read as a sentence: name it test followed by at least three words in camel case, for example testAStaleLockIsReleased(); a data provider named by #[DataProvider] is exempt.', $name);
 
         return RuleErrorBuilder::message($message)->identifier('intakt.testName')->line($method->name->getStartLine())->build();
+    }
+
+    private function readsAsSentence(string $name): bool
+    {
+        $words = substr($name, strlen(self::PREFIX));
+
+        // a run of capitals is one word, so testMCPToolWorks counts MCP, Tool and Works
+        return 1 === preg_match('/^[A-Z0-9]/', $words) && preg_match_all('/[A-Z]+(?![a-z])|[A-Z]?[a-z]+|[0-9]+/', $words) >= self::MINIMUM_WORDS;
     }
 }
