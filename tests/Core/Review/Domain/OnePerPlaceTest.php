@@ -79,6 +79,23 @@ final class OnePerPlaceTest extends TestCase
         self::assertSame(['F2', 'F3'], [...$act[0]->merged]);
     }
 
+    public function testAFindingReportedTwiceWithTheSameIdGivesOneEntryWithNoMergedIds(): void
+    {
+        $act = new OnePerPlace()->actList([$this->finding('F1', 'src/A.php', 7), $this->finding('F1', 'src/A.php', 7)], ['F1']);
+
+        self::assertCount(1, $act);
+        self::assertSame([], [...$act[0]->merged]);
+    }
+
+    public function testAMergedIdReportedTwiceIsListedOnce(): void
+    {
+        $reported = [$this->finding('F1', 'src/A.php', 7), $this->finding('F2', 'src/A.php', 7), $this->finding('F2', 'src/A.php', 7)];
+
+        $act = new OnePerPlace()->actList($reported, ['F1', 'F2']);
+
+        self::assertSame(['F2'], [...$act[0]->merged]);
+    }
+
     public function testFindingsAtOnePlaceThatTheJudgeMarksDifferentlyStaySeparate(): void
     {
         $act = new OnePerPlace()->actList([$this->finding('F1', 'src/A.php', 7), $this->finding('F2', 'src/A.php', 7)->withSeverity(Severity::P1)], ['F1']);

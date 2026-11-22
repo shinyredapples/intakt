@@ -135,10 +135,23 @@ final readonly class OnePerPlace
     {
         $merged = $entry
             ->withSeverity($this->higher($entry->severity, $finding->severity))
-            ->withMerged(new FindingIds(...[...$entry->merged, $finding->id, ...$finding->merged]));
+            ->withMerged($this->idsMergedInto($entry, $finding));
         $note = $finding->judgeNote();
 
         return null === $entry->judgeNote() && null !== $note ? $merged->withJudgeNote($note) : $merged;
+    }
+
+    // The same id may be reported twice, so an id joins the list once and the entry never lists its own.
+    private function idsMergedInto(Finding $entry, Finding $finding): FindingIds
+    {
+        $ids = [...$entry->merged];
+        foreach ([$finding->id, ...$finding->merged] as $id) {
+            if ($id !== $entry->id && !in_array($id, $ids, true)) {
+                $ids[] = $id;
+            }
+        }
+
+        return new FindingIds(...$ids);
     }
 
     private function higher(Severity $one, Severity $other): Severity
