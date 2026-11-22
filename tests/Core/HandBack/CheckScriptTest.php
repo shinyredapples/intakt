@@ -38,6 +38,7 @@ final class CheckScriptTest extends TestCase
 
     protected function tearDown(): void
     {
+        new Process(['chmod', '-R', 'u+w', $this->history->folder])->run();
         $this->history->remove();
     }
 
@@ -503,6 +504,77 @@ final class CheckScriptTest extends TestCase
         self::assertSame("conflicts-with-main\n", $this->outputFile('check-result'), $this->outputFile('check.log'));
         self::assertStringContainsString('CONFLICT (', $this->outputFile('check.log'));
         self::assertFileDoesNotExist($this->work.'/clone/ran');
+    }
+
+    public function testAMountedSnapshotIsCopiedWritableIntoTheCloneBeforeTheFirstStep(): void
+    {
+        $this->history->commit('Build work');
+        $snapshot = $this->readOnlySnapshotHolding(['vendor/composer/installed.json' => "{\"packages\": []}\n", '.hidden/kept.txt' => "kept\n"]);
+
+        $run = $this->whenTheCheckRunsWith(
+            ['--dependencies', $snapshot],
+            $this->history->bundle('main..task'),
+            'test -f vendor/composer/installed.json',
+            'test -f .hidden/kept.txt',
+            'touch vendor/composer/autoload_real.php',
+        );
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
+        self::assertSame("passed\n", $this->outputFile('check-result'));
+        self::assertStringStartsWith('$ copy the dependency snapshot '.$snapshot."\n\$ test -f", $this->outputFile('check.log'));
+        self::assertFileExists($snapshot.'/vendor/composer/installed.json');
+    }
+
+    public function testATreeThatAlreadyHoldsAFolderOfTheSnapshotGetsNoneOfItAndInstallsItself(): void
+    {
+        $this->history->commitFile('vendor/committed.txt', "committed\n", 'Commit a vendor folder');
+        $snapshot = $this->readOnlySnapshotHolding(['vendor/composer/installed.json' => "{\"packages\": []}\n"]);
+
+        $run = $this->whenTheCheckRunsWith(['--dependencies', $snapshot], $this->history->bundle('main..task'), 'test ! -e vendor/composer/installed.json', 'test -f vendor/committed.txt');
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
+        self::assertStringContainsString("the tree already holds vendor, so the check installs its dependencies itself\n", $this->outputFile('check.log'));
+    }
+
+    public function testACheckWithoutASnapshotRunsItsStepsWithoutAVendorFolder(): void
+    {
+        $this->history->commit('Build work');
+
+        $run = $this->whenTheCheckRunsWith([], $this->history->bundle('main..task'), 'test ! -e vendor');
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
+        self::assertStringNotContainsString('dependency snapshot', $this->outputFile('check.log'));
+    }
+
+    /**
+     * @param array<string, string> $files
+     */
+    private function readOnlySnapshotHolding(array $files): string
+    {
+        $snapshot = $this->history->folder.'/snapshot';
+
+        foreach ($files as $path => $content) {
+            new Filesystem()->dumpFile($snapshot.'/'.$path, $content);
+        }
+
+        new Process(['chmod', '-R', 'a-w', $snapshot])->mustRun();
+
+        return $snapshot;
+    }
+
+    /**
+     * @param list<string> $options
+     */
+    private function whenTheCheckRunsWith(array $options, string $bundle, string ...$steps): Process
+    {
+        $run = new Process(
+            ['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-check', $this->history->mirror, $bundle, 'task', ...$options, '--', ...array_values($steps)],
+            null,
+            $this->environment(),
+        );
+        $run->run();
+
+        return $run;
     }
 
     private function mainMovesWith(string $path, string $content): string

@@ -1,0 +1,52 @@
+#!/bin/sh
+# The install job's command: the locked install from the lock files alone, so no other file of the tree and no step a builder wrote runs before Intakt keeps the install.
+# Usage: install.sh <lock folder> <probe> <install> <lock file> [lock file ...]
+# The platform, the log and the result go to INTAKT_JOB_OUTPUT; the install, without the lock files, goes to INTAKT_JOB_KEPT.
+set -u
+
+lock="$1"
+probe="$2"
+install="$3"
+shift 3
+
+output="${INTAKT_JOB_OUTPUT:-/output}"
+kept="${INTAKT_JOB_KEPT:-/kept}"
+work="${TMPDIR:-/work}/install"
+log="$output/install.log"
+
+result() {
+    printf '%s\n' "$1" > "$output/install-result"
+}
+
+# Read in the same job, so a save is refused when the image's platform changed after the key was made.
+if ! sh -c "$probe" > "$output/platform" 2>> "$log" < /dev/null; then
+    result 'no-platform'
+    exit 1
+fi
+
+if ! mkdir -p "$work" || ! cp -R "$lock/." "$work/"; then
+    result 'not-prepared'
+    exit 1
+fi
+
+cd "$work" || exit 1
+
+printf '$ %s\n' "$install" >> "$log"
+sh -c "$install" >> "$log" 2>&1 < /dev/null
+status=$?
+if [ "$status" -ne 0 ]; then
+    result "failed $status"
+    exit "$status"
+fi
+
+for file in "$@"; do
+    rm -f -- "$work/$file"
+done
+
+# Owner-writable before the copy, because an archive can hold a folder without permissions, which would stop the orchestrator's save and its cleanup.
+if ! chmod -R u+rwX . || ! cp -R ./. "$kept/"; then
+    result 'not-kept'
+    exit 1
+fi
+
+result 'installed'

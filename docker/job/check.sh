@@ -1,6 +1,6 @@
 #!/bin/sh
 # The check job's command, so the builder's own run of the checks is never what lets a change through.
-# Usage: check.sh <mirror> <bundle> <branch> -- <step> [step ...]
+# Usage: check.sh <mirror> <bundle> <branch> [--dependencies <snapshot>] -- <step> [step ...]
 # The result goes to files in INTAKT_JOB_OUTPUT, the job's only way to hand its result back.
 set -u
 
@@ -8,6 +8,11 @@ mirror="$1"
 bundle="$2"
 branch="$3"
 shift 3
+dependencies=''
+if [ "${1-}" = '--dependencies' ]; then
+    dependencies="$2"
+    shift 2
+fi
 if [ "${1-}" = '--' ]; then
     shift
 fi
@@ -78,6 +83,47 @@ result() {
     printf '%s\n' "$1" > "$output/check-result"
 }
 
+# Each top-level entry of the snapshot, hidden ones included, without the glob patterns that matched nothing.
+snapshot_entries() {
+    for entry in "$dependencies"/* "$dependencies"/.[!.]* "$dependencies"/..?*; do
+        if [ -e "$entry" ] || [ -L "$entry" ]; then
+            printf '%s\n' "${entry##*/}"
+        fi
+    done
+}
+
+# Copied writable into the clone, so the gate's own install finds the locked packages in place and makes only the files that depend on this tree.
+# A subshell, so the split on line breaks alone and the glob switched off stay inside it.
+use_dependencies() (
+    entries=$(snapshot_entries)
+    IFS='
+'
+    set -f
+    for name in $entries; do
+        if [ -e "$clone/$name" ] || [ -L "$clone/$name" ]; then
+            printf 'the tree already holds %s, so the check installs its dependencies itself\n' "$name"
+            return 0
+        fi
+    done
+    printf '$ copy the dependency snapshot %s\n' "$dependencies"
+    copied=0
+    if cp -R "$dependencies/." "$clone/"; then
+        copied=1
+        for name in $entries; do
+            chmod -R u+w "$clone/$name" || copied=0
+        done
+    fi
+    if [ "$copied" -eq 1 ]; then
+        return 0
+    fi
+    # A partial copy could name packages as installed that are not there, so nothing of it is kept.
+    printf 'the dependency snapshot could not be copied, so the check installs its dependencies itself\n'
+    for name in $entries; do
+        chmod -R u+w "$clone/$name" 2> /dev/null
+        rm -rf -- "${clone:?}/$name"
+    done
+)
+
 if ! apply > "$log" 2>&1; then
     result 'not-applied'
     exit 1
@@ -93,6 +139,10 @@ if ! merge_main >> "$log" 2>&1; then
         result 'not-merged'
     fi
     exit 1
+fi
+
+if [ -n "$dependencies" ]; then
+    use_dependencies >> "$log" 2>&1
 fi
 
 for step in "$@"; do
