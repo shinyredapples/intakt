@@ -117,7 +117,7 @@ final class StartReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame('Start round 3', trim($crawler->filter('form.start-review button[type=submit]')->text()));
+        self::assertSame('Start pass 3', trim($crawler->filter('form.start-review button[type=submit]')->text()));
     }
 
     // The start form is rendered for the stream's sake, and the in-review marker hides it, so only Stop shows.
@@ -164,7 +164,7 @@ final class StartReviewControllerTest extends DashboardPageTestCase
 
         self::assertCount(0, $crawler->filter('.now-runs'));
         self::assertCount(0, $crawler->filter('form.stop-round'));
-        self::assertSame(['Start round 2'], $crawler->filter('.task-actions button')->each(static fn (Crawler $button): string => trim($button->text())));
+        self::assertSame(['Start pass 2'], $crawler->filter('.task-actions button')->each(static fn (Crawler $button): string => trim($button->text())));
     }
 
     // The start form stays rendered for the judged round's stream, so the in-review marker is what keeps it from showing beside Stop.

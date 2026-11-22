@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\Domain;
 
+use Intakt\Core\Dashboard\Domain\FindingUrgency;
 use Intakt\Core\Dashboard\Domain\RoundFinding;
 use Intakt\Core\Review\Contract\NearLine;
 use Intakt\Core\Review\Contract\QuoteNearLines;
@@ -12,6 +13,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(RoundFinding::class)]
+#[UsesClass(FindingUrgency::class)]
 #[UsesClass(NearLine::class)]
 #[UsesClass(QuoteNearLines::class)]
 final class RoundFindingTest extends TestCase
@@ -34,6 +36,21 @@ final class RoundFindingTest extends TestCase
     public function testAFindingWithoutTextOrWithOnlyWhiteSpaceHasNoHeadline(): void
     {
         self::assertSame([null, null], [new RoundFinding('F1', null, null)->headline(), new RoundFinding('F1', 'P2', " \n\t ")->headline()]);
+    }
+
+    public function testAFindingsExplanationIsTheTextAfterItsHeadlineOnOneLine(): void
+    {
+        self::assertSame('It drops the last item. Add a test.', new RoundFinding('F1', 'P1', "The total is off by 1.5. It drops\nthe last item.\n\nAdd a test.")->explanation());
+    }
+
+    public function testAFindingWhoseHeadlineIsAllOfItsTextHasNoExplanation(): void
+    {
+        self::assertSame([null, null], [new RoundFinding('F1', 'P1', 'The total is off. ')->explanation(), new RoundFinding('F1', 'P1', null)->explanation()]);
+    }
+
+    public function testAFindingsUrgencyComesFromItsSeverity(): void
+    {
+        self::assertSame([FindingUrgency::Urgent, null], [new RoundFinding('F1', 'P1', 'A.')->urgency(), new RoundFinding('F1', null, 'A.')->urgency()]);
     }
 
     public function testAFindingsPlaceReadsFileColonLine(): void

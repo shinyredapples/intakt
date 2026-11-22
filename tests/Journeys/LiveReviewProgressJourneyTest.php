@@ -23,7 +23,7 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
     private const string PLACEHOLDER_KEY = 'journey-placeholder';
     private const string ENDED_TEXT = 'Checked.';
     // The sample's test vendor leaves nothing to fix, so the link must not promise findings.
-    private const string ROUND_BELOW = 'See the round below.';
+    private const string ROUND_BELOW = 'See the pass in the Full record.';
     private const string PROGRESS = '/^\d+ of \d+ reviewers finished\.$/';
     private const string NONE_STARTED = '0 of 2 reviewers started.';
     private const string ALL_STARTED = '2 of 2 reviewers started.';
@@ -118,13 +118,22 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
     private function openTheRunningRound(string $round): Crawler
     {
         // Without a live listener, because the instance has no hub secret to authorize one, so the updates are read from the recording hub.
-        $page = $this->visit('/reviews/'.$round);
+        $page = $this->bothViews($round);
 
         self::assertSame('in progress', mb_strtolower($page->filter('.state-running')->text()));
         self::assertMatchesRegularExpression(self::PROGRESS, $page->filter('#round-'.$round.'-state')->text());
         self::assertSame(self::NONE_STARTED, $page->filter('#round-'.$round.'-started')->text());
 
         return $page;
+    }
+
+    // The main view and the Full record as one document, because a listener holds both and each update targets the parts of one of them.
+    private function bothViews(string $round): Crawler
+    {
+        $main = $this->visit('/reviews/'.$round)->filter('body')->html();
+        $record = $this->visit('/reviews/'.$round.'/record')->filter('body')->html();
+
+        return new Crawler('<!DOCTYPE html><html><body>'.$main.$record.'</body></html>', 'http://localhost/');
     }
 
     /**
@@ -162,7 +171,7 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
 
     private function openTheJudgedRound(string $round): Crawler
     {
-        $page = $this->visit('/reviews/'.$round);
+        $page = $this->bothViews($round);
 
         self::assertStringContainsString(self::ENDED_TEXT, $page->filter('#round-'.$round.'-state')->text());
         self::assertSame('checked', mb_strtolower($page->filter('.state-judged')->text()));

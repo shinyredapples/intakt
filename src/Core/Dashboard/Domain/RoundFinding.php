@@ -59,6 +59,24 @@ final readonly class RoundFinding
         return 1 === preg_match('/^(?:`[^`]*`|[^`]|`)*?[.!?](?=\s)/u', $line, $sentence) ? $sentence[0] : $line;
     }
 
+    // The text after the headline as one line, because a card shows it clamped under the headline; null when the headline is all of the text.
+    public function explanation(): ?string
+    {
+        $headline = $this->headline();
+        if (null === $headline) {
+            return null;
+        }
+
+        $rest = trim(preg_replace('/\s+/u', ' ', substr(trim((string) $this->text), strlen($headline))) ?? '');
+
+        return '' === $rest ? null : $rest;
+    }
+
+    public function urgency(): ?FindingUrgency
+    {
+        return FindingUrgency::of($this->severity);
+    }
+
     public function place(): ?string
     {
         if (null === $this->file) {
