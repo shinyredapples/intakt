@@ -322,7 +322,7 @@ final readonly class ReviewRounds
     // The ids are sorted before they are handed out in panel order, because a stored round lists its reviewers by id and an id taken at a clock time that went back would sort before the one taken just before it.
     private function addThePanelInIdOrder(ReviewRound $round, Panel $panel): void
     {
-        $ids = array_map(fn (): UuidV7 => $this->newId(), $panel->reviewers);
+        $ids = array_map($this->newId(...), $panel->reviewers);
         usort($ids, static fn (UuidV7 $one, UuidV7 $other): int => $one->compare($other));
 
         foreach ($panel->reviewers as $position => $member) {
