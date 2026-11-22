@@ -105,6 +105,76 @@ namespace Intakt\Tests\Core\HandBack\Infrastructure {
             self::assertSame(0o444, fileperms($snapshot.'/vendor/autoload.php') & 0o777);
         }
 
+        public function testAWriteIntoASnapshotOrTheStoreFailsForItsOwnerAndOthers(): void
+        {
+            if (0 === posix_geteuid()) {
+                self::markTestSkipped('root can write through any mode');
+            }
+
+            $store = $this->storeKeeping(10);
+            $store->save($this->key('a'), $this->install('a'));
+            $snapshot = $this->store.'/'.$this->key('a')->value;
+
+            self::assertFalse(@file_put_contents($snapshot.'/vendor/autoload.php', 'changed'));
+            self::assertFalse(@file_put_contents($snapshot.'/vendor/new.php', 'new'));
+            self::assertFalse(@mkdir($snapshot.'/extra'));
+            self::assertSame(0o700, fileperms($this->store) & 0o777);
+            self::assertSame('a', file_get_contents($snapshot.'/vendor/autoload.php'));
+        }
+
+        public function testAnAbsoluteLinkIntoTheInstallStillWorksWhenTheInstallIsGone(): void
+        {
+            $install = $this->install('a');
+            new Filesystem()->symlink($install.'/vendor/autoload.php', $install.'/vendor/bin/absolute-link');
+            $store = $this->storeKeeping(10);
+            $store->save($this->key('a'), $install);
+            new Filesystem()->remove($install);
+
+            $lease = $store->lease($this->key('a'));
+
+            self::assertInstanceOf(DependencySnapshotLease::class, $lease);
+            self::assertSame('a', file_get_contents($lease->folder.'/vendor/bin/absolute-link'));
+            self::assertSame('../autoload.php', readlink($lease->folder.'/vendor/bin/absolute-link'));
+            self::assertSame('../autoload.php', readlink($lease->folder.'/vendor/bin/autoload-link'));
+        }
+
+        public function testALinkOutOfTheInstallRefusesTheSaveAndLeavesNoSnapshot(): void
+        {
+            foreach (['/usr/bin/env', '../../outside'] as $target) {
+                $install = $this->install('a');
+                new Filesystem()->symlink($target, $install.'/vendor/escape');
+
+                try {
+                    $this->storeKeeping(10)->save($this->key('a'), $install);
+                    self::fail('the save of an install with a link out of it must be refused');
+                } catch (IOException) {
+                    self::assertSame([], $this->snapshots());
+                }
+
+                new Filesystem()->remove($install);
+            }
+        }
+
+        public function testAFileExecutableByItsGroupOnlyStaysExecutableInTheSnapshot(): void
+        {
+            $install = $this->install('a');
+            new Filesystem()->chmod($install.'/vendor/autoload.php', 0o654);
+            $this->storeKeeping(10)->save($this->key('a'), $install);
+
+            self::assertSame(0o555, fileperms($this->store.'/'.$this->key('a')->value.'/vendor/autoload.php') & 0o777);
+        }
+
+        public function testADamagedUseOrderCountsAsNothingRecorded(): void
+        {
+            $store = $this->storeKeeping(10);
+            $store->save($this->key('a'), $this->install('a'));
+            file_put_contents($this->store.'/'.DependencySnapshotUses::FILE, '{broken');
+
+            $store->save($this->key('b'), $this->install('b'));
+
+            self::assertSame($this->names('a', 'b'), $this->snapshots());
+        }
+
         public function testTheLeastRecentlyUsedSnapshotIsEvictedPastTheCount(): void
         {
             $store = $this->storeKeeping(2);
