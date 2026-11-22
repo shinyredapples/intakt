@@ -52,12 +52,8 @@ final class InMemoryLedger implements Ledger
         return new RecordedEvents([]);
     }
 
-    /**
-     * @param list<LedgerEventKind> $kinds
-     * @param list<string>          $texts
-     */
     #[Override]
-    public function readOfKindsMentioning(array $kinds, array $texts): RecordedEvents
+    public function readOfKindsMentioning(Mentions $texts, LedgerEventKind ...$kinds): RecordedEvents
     {
         return new RecordedEvents([]);
     }

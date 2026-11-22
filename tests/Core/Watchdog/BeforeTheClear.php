@@ -57,13 +57,9 @@ final class BeforeTheClear implements Ledger
         return $this->inner->readMentioning($texts);
     }
 
-    /**
-     * @param list<LedgerEventKind> $kinds
-     * @param list<string>          $texts
-     */
     #[Override]
-    public function readOfKindsMentioning(array $kinds, array $texts): RecordedEvents
+    public function readOfKindsMentioning(Mentions $texts, LedgerEventKind ...$kinds): RecordedEvents
     {
-        return $this->inner->readOfKindsMentioning($kinds, $texts);
+        return $this->inner->readOfKindsMentioning($texts, ...$kinds);
     }
 }

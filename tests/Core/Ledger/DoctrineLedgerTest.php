@@ -135,7 +135,7 @@ final class DoctrineLedgerTest extends KernelTestCase
             self::assertTrue($ledger->append(new LedgerEvent($kind, $payload))->succeeded());
         }
 
-        $events = $ledger->readOfKindsMentioning([LedgerEventKind::ReviewStarted, LedgerEventKind::JudgeDone], ['r-2', 'r-1']);
+        $events = $ledger->readOfKindsMentioning(new Mentions('r-2', 'r-1'), LedgerEventKind::ReviewStarted, LedgerEventKind::JudgeDone);
 
         self::assertSame([[LedgerEventKind::JudgeDone, '{"round":"r-1"}'], [LedgerEventKind::ReviewStarted, '{"round":"r-1"}'], [LedgerEventKind::JudgeDone, '{"round":"r-2"}']], array_map(static fn (RecordedEvent $event): array => [$event->event->kind, $event->event->payload], iterator_to_array($events)));
     }
@@ -148,7 +148,7 @@ final class DoctrineLedgerTest extends KernelTestCase
             self::assertTrue($ledger->append(new LedgerEvent(LedgerEventKind::JudgeDone, $payload))->succeeded());
         }
 
-        $payloads = array_map(static fn (RecordedEvent $event): string => $event->event->payload, iterator_to_array($ledger->readOfKindsMentioning([LedgerEventKind::JudgeDone], ['a_b', '50%!'])));
+        $payloads = array_map(static fn (RecordedEvent $event): string => $event->event->payload, iterator_to_array($ledger->readOfKindsMentioning(new Mentions('a_b', '50%!'), LedgerEventKind::JudgeDone)));
 
         self::assertSame(['{"note":"a_b"}', '{"note":"50%!"}'], $payloads);
     }
@@ -162,7 +162,7 @@ final class DoctrineLedgerTest extends KernelTestCase
             self::assertTrue($ledger->append(new LedgerEvent($kind, $payload))->succeeded());
         }
 
-        $payloads = array_map(static fn (RecordedEvent $event): string => $event->event->payload, iterator_to_array($ledger->readOfKindsMentioning([LedgerEventKind::UsageRecorded], $calls)));
+        $payloads = array_map(static fn (RecordedEvent $event): string => $event->event->payload, iterator_to_array($ledger->readOfKindsMentioning(new Mentions(...$calls), LedgerEventKind::UsageRecorded)));
 
         self::assertSame(['{"call":"'.$calls[1099].'"}', '{"call":"'.$calls[0].'","also":"'.$calls[1099].'"}', '{"call":"'.$calls[500].'"}'], $payloads);
     }
@@ -172,8 +172,8 @@ final class DoctrineLedgerTest extends KernelTestCase
         $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');
         self::assertTrue($ledger->append(new LedgerEvent(LedgerEventKind::JudgeDone, '{"round":"r-1"}'))->succeeded());
 
-        self::assertSame([], iterator_to_array($ledger->readOfKindsMentioning([], ['r-1'])));
-        self::assertSame([], iterator_to_array($ledger->readOfKindsMentioning([LedgerEventKind::JudgeDone], [])));
+        self::assertSame([], iterator_to_array($ledger->readOfKindsMentioning(new Mentions('r-1'))));
+        self::assertSame([], iterator_to_array($ledger->readOfKindsMentioning(new Mentions(), LedgerEventKind::JudgeDone)));
     }
 
     public function testEventsAreReadInAppendOrderAfterTheClockStepsBack(): void

@@ -36,13 +36,9 @@ final class LedgerWrittenAfterRead implements Ledger
         return $this->ledger->readMentioning($texts);
     }
 
-    /**
-     * @param list<LedgerEventKind> $kinds
-     * @param list<string>          $texts
-     */
-    public function readOfKindsMentioning(array $kinds, array $texts): RecordedEvents
+    public function readOfKindsMentioning(Mentions $texts, LedgerEventKind ...$kinds): RecordedEvents
     {
-        return $this->ledger->readOfKindsMentioning($kinds, $texts);
+        return $this->ledger->readOfKindsMentioning($texts, ...$kinds);
     }
 
     public function readInOrder(): RecordedEvents

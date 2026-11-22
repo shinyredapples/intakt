@@ -41,13 +41,9 @@ final class DashboardLedger implements Ledger
         return new RecordedEvents(array_values(array_filter($this->recorded, static fn (RecordedEvent $recorded): bool => array_any([...$texts], static fn (string $text): bool => str_contains($recorded->event->payload, $text)))));
     }
 
-    /**
-     * @param list<LedgerEventKind> $kinds
-     * @param list<string>          $texts
-     */
-    public function readOfKindsMentioning(array $kinds, array $texts): RecordedEvents
+    public function readOfKindsMentioning(Mentions $texts, LedgerEventKind ...$kinds): RecordedEvents
     {
-        return new RecordedEvents(array_values(array_filter($this->recorded, static fn (RecordedEvent $recorded): bool => in_array($recorded->event->kind, $kinds, true) && array_any($texts, static fn (string $text): bool => str_contains($recorded->event->payload, $text)))));
+        return new RecordedEvents(array_values(array_filter($this->recorded, static fn (RecordedEvent $recorded): bool => in_array($recorded->event->kind, $kinds, true) && array_any([...$texts], static fn (string $text): bool => str_contains($recorded->event->payload, $text)))));
     }
 
     public function startRound(string $round, string $project): void
