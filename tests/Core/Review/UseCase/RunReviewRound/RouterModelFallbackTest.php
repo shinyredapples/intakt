@@ -67,7 +67,6 @@ use Symfony\AI\Platform\Result\TextResult;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
 use Symfony\AI\Platform\TokenUsage\TokenUsage;
 use Symfony\Component\Cache\Adapter\ArrayAdapter;
-use Symfony\Component\Clock\NativeClock;
 use Symfony\Component\DependencyInjection\ServiceLocator;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
@@ -119,8 +118,9 @@ final class RouterModelFallbackTest extends KernelTestCase
     protected function setUp(): void
     {
         $this->fixture = new RoundFixture(self::getContainer());
-        $this->cooldowns = new AccountCooldownWindows(new ReadingsInMemory(new NativeClock()), new ArrayAdapter(), new LockFactory(new InMemoryStore()), new NativeClock(), $this->fixture->ledger(), new NullLogger(), StoredSerializerFactory::create(), [Provider::OpenAiCompatible->value => [Account::DEFAULT]]);
-        $this->pins = new PinnedProviderCooldownWindows(new ArrayAdapter(), new NativeClock(), new LockFactory(new InMemoryStore()));
+        // The fixture's stopped clock, because a slow database engine could otherwise let a second pass before the pin's wait is read.
+        $this->cooldowns = new AccountCooldownWindows(new ReadingsInMemory($this->fixture->clock), new ArrayAdapter(), new LockFactory(new InMemoryStore()), $this->fixture->clock, $this->fixture->ledger(), new NullLogger(), StoredSerializerFactory::create(), [Provider::OpenAiCompatible->value => [Account::DEFAULT]]);
+        $this->pins = new PinnedProviderCooldownWindows(new ArrayAdapter(), $this->fixture->clock, new LockFactory(new InMemoryStore()));
     }
 
     public function testARouter429MovesTheReviewerAtOnceToThePinnedFallbackWhichCompletesTheRound(): void
@@ -194,7 +194,7 @@ final class RouterModelFallbackTest extends KernelTestCase
     {
         $listed = array_map(static fn (string $model): array => ['provider' => Provider::OpenAiCompatible->value, 'model' => $model], $substitutes);
         $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['standard' => ['provider' => Provider::OpenAiCompatible->value, 'model' => self::PINNED, 'substitutes' => $listed]]]], []);
-        $router = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $this->router()], $this->cooldowns, new NativeClock(), new NullLogger(), $this->pins);
+        $router = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $this->router()], $this->cooldowns, $this->fixture->clock, new NullLogger(), $this->pins);
         $tiers = new TierPlatform($resolver, new ServiceLocator([Provider::OpenAiCompatible->value => static fn (): PlatformInterface => $router]), $this->cooldowns, new NullLogger());
         $reviewer = new ReviewerAgent(new ReviewerPrompt(new Fence(), new PromptCut(new Fence()), new VerdictParser()), new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates()), new ReviewerStopping(new StopRequests(new InMemoryLedger(), new LedgerPayloads(StoredSerializerFactory::create())))));
         $servers = self::createStub(ReviewServerAccesses::class);
