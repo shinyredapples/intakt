@@ -13,6 +13,7 @@ use PHPStan\Rules\IdentifierRuleError;
 use PHPStan\Rules\Rule;
 use PHPStan\Rules\RuleErrorBuilder;
 use PHPStan\Type\Constant\ConstantStringType;
+use PHPUnit\Framework\Attributes\Test;
 
 /**
  * @implements Rule<InClassNode>
@@ -21,7 +22,7 @@ final readonly class TestMethodNameRule implements Rule
 {
     private const string PREFIX = 'test';
 
-    private const string TEST_ATTRIBUTE = 'PHPUnit\Framework\Attributes\Test';
+    private const string TEST_ATTRIBUTE = Test::class;
 
     private const int MINIMUM_WORDS = 3;
 
