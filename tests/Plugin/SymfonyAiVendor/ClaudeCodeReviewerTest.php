@@ -52,6 +52,7 @@ use Intakt\Core\Review\Infrastructure\JudgePrompt;
 use Intakt\Core\Review\Infrastructure\LiveProgress;
 use Intakt\Core\Review\Infrastructure\MalformedToolCalls;
 use Intakt\Core\Review\Infrastructure\ReviewerAgent;
+use Intakt\Core\Review\Infrastructure\ReviewerAnswer\Verdict as ReviewerAnswer;
 use Intakt\Core\Review\Infrastructure\ReviewerPrompt;
 use Intakt\Core\Review\Infrastructure\ReviewerRuns;
 use Intakt\Core\Review\Infrastructure\ReviewerStopping;
@@ -558,7 +559,7 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
 
     private function verdictSchema(): string
     {
-        return json_encode(new ResponseFormatFactory()->create(Verdict::class)['json_schema']['schema'], JSON_THROW_ON_ERROR);
+        return json_encode(new ResponseFormatFactory()->create(ReviewerAnswer::class)['json_schema']['schema'], JSON_THROW_ON_ERROR);
     }
 
     private function servers(): ReviewServerAccesses

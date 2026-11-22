@@ -13,6 +13,7 @@ use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\FindingStatus;
 use Intakt\Core\Review\Domain\TrackedFinding;
+use Intakt\Core\Review\Infrastructure\ReviewerAnswer\Verdict as ReviewerAnswer;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -25,6 +26,9 @@ use Symfony\Component\Serializer\SerializerInterface;
 final class StoredJsonTest extends KernelTestCase
 {
     private const string TODAYS_FINDING = '{"id":"a","severity":"P2","file":"src/A.php","line":7,"symbol":null,"text":"Broken.","fixable_by":"builder","repeat":false,"requirement":null,"evidence":{"probe":"php -l","output":"ok"},"regression":true}';
+
+    // Written by the stored serializer on main before the answer document existed, so it pins the stored round JSON.
+    private const string VERDICT_FROM_MAIN = '{"verdict":"changes","findings":[{"id":"a","severity":"P2","file":"src\/A.php","line":7,"symbol":null,"text":"Broken.","fixable_by":"builder","repeat":false,"requirement":null,"evidence":{"probe":"php -l","output":"ok"},"regression":true,"merged":[]}],"resolved":["b"],"follow_ups":["later"]}';
 
     public function testAVerdictWrittenThroughTheSerializerReadsBackEqual(): void
     {
@@ -85,6 +89,20 @@ final class StoredJsonTest extends KernelTestCase
         $read = $this->serializer()->deserialize($row, Verdict::class, JsonEncoder::FORMAT);
 
         self::assertEquals(new Verdict(Decision::Changes, [$this->finding()], ['b'], ['later']), $read);
+    }
+
+    public function testARoundStoredBeforeTheAnswerDocumentStillDecodesToTheSameVerdict(): void
+    {
+        $read = $this->serializer()->deserialize(self::VERDICT_FROM_MAIN, ReviewerAnswer::class, JsonEncoder::FORMAT);
+
+        self::assertEquals(new Verdict(Decision::Changes, [$this->finding()], ['b'], ['later']), $read->toVerdict());
+    }
+
+    public function testEncodingAVerdictGivesTheSameJsonAsBeforeTheAnswerDocument(): void
+    {
+        $json = $this->serializer()->serialize(new Verdict(Decision::Changes, [$this->finding()], ['b'], ['later']), JsonEncoder::FORMAT);
+
+        self::assertSame(self::VERDICT_FROM_MAIN, $json);
     }
 
     public function testATrackedFindingRowWrittenByJsonEncodeStillReadsBack(): void
