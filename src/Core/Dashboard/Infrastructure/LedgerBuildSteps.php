@@ -54,8 +54,7 @@ final readonly class LedgerBuildSteps
                 continue;
             }
 
-            // A repeated step means another run began, because one run ends each step once; this also holds when the other run's task row was dropped as malformed.
-            if (BuildStep::Task->value === $step['step'] || in_array($step['step'], array_column($run, 'step'), true)) {
+            if ($this->startsNewRun($run, $step['step'])) {
                 $run = [];
             }
 
@@ -63,6 +62,15 @@ final readonly class LedgerBuildSteps
         }
 
         return $run;
+    }
+
+    // A repeated step means another run began, because one run ends each step once; this also holds when the other run's task row was dropped as malformed.
+    /**
+     * @param list<array{step: string}> $run
+     */
+    private function startsNewRun(array $run, string $step): bool
+    {
+        return BuildStep::Task->value === $step || in_array($step, array_column($run, 'step'), true);
     }
 
     // A row whose step, outcome or failure is not one the build writes is left out, so a malformed row cannot reach the status as it was stored.

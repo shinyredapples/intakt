@@ -89,7 +89,7 @@ final readonly class FailedJudgings
         return $times;
     }
 
-    // The same bounded list as isParked(), read once for a caller that decides many rounds.
+    // Bounded like isParked(), because a caller that decides many rounds reads the transport once and must not list it whole.
     /**
      * @return array<string, true>
      */
