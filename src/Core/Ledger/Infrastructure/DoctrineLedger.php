@@ -91,7 +91,7 @@ final readonly class DoctrineLedger implements Ledger
 
     // Both mention reads share the chunking and the append order, so an event named in two chunks is kept once and the reads cannot drift apart.
     /**
-     * @param list<string>                         $texts
+     * @param list<string>                        $texts
      * @param Closure(QueryBuilder): QueryBuilder $narrowed
      */
     private function eventsMentioning(array $texts, Closure $narrowed): RecordedEvents

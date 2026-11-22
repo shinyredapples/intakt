@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
 use Intakt\Core\Dashboard\Infrastructure\LedgerBuildSteps;
-use Intakt\Core\Ledger\Contract\PayloadFields;
 use Intakt\Core\Dashboard\UseCase\ShowTask\ShowTaskController;
+use Intakt\Core\Ledger\Contract\PayloadFields;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\LogLevel;

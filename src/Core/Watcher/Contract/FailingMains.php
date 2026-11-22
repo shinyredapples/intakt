@@ -83,7 +83,7 @@ final readonly class FailingMains
         $main = $payload->text('main');
         $tools = $payload->text('tool_fingerprint');
 
-        if (null === $project || null === $main || null === $tools) {
+        if (in_array(null, [$project, $main, $tools], true)) {
             return null;
         }
 
