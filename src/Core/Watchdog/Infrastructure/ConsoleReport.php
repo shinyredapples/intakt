@@ -7,6 +7,7 @@ namespace Intakt\Core\Watchdog\Infrastructure;
 use DateTimeInterface;
 use Intakt\Core\Watchdog\Contract\MainViolation;
 use Intakt\Core\Watchdog\Contract\OwnerCard;
+use Intakt\Core\Watchdog\Contract\SignatureStatus;
 
 // One home for the watchdog's console lines, because every door prints text that git, a path or a caller supplied.
 final readonly class ConsoleReport
@@ -20,6 +21,11 @@ final readonly class ConsoleReport
 
         // Unicode's own controls and line breaks (a next line, a line separator, a direction override) do the same; text that is not UTF-8 has every byte above ASCII escaped, because no character can be told apart in it.
         return preg_replace_callback(self::UNICODE_CONTROLS, static fn (array $match): string => sprintf('\u{%04X}', mb_ord($match[0], 'UTF-8')), $escaped) ?? addcslashes($escaped, "\200..\377");
+    }
+
+    public static function noticeLine(string $project, string $commit): string
+    {
+        return sprintf('notice %s: commit %s %s, pushed without the gate', self::printable($project), $commit, SignatureStatus::OwnerSigned->value);
     }
 
     public static function cardLine(OwnerCard $card): string

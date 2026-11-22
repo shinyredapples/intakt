@@ -137,7 +137,7 @@ final class StoredIssue
         $listed = new ListedIssue($this->number, $this->title, '', $this->labels, $this->author, $this->instant($this->updatedAt), null === $this->milestoneDue ? null : $this->instant($this->milestoneDue), $this->pullRequest);
         $reading = new ItemReading($listed, $this->waitsFor, $this->unreadableWaits, $this->closedBy);
 
-        return new QueuedIssue($reading, null === $this->trusted ? null : new Vouching($this->trusted, $this->vouchedLabels));
+        return new QueuedIssue($reading, $this->storedVouching());
     }
 
     public function project(): string
@@ -193,5 +193,14 @@ final class StoredIssue
         $instant = DateTimeImmutable::createFromFormat(self::MOMENT, $moment, new DateTimeZone('UTC'));
 
         return false === $instant ? throw new LogicException('A stored moment is not in the stored format: '.$moment) : $instant;
+    }
+
+    private function storedVouching(): ?Vouching
+    {
+        return match ($this->trusted) {
+            null => null,
+            true => Vouching::restored($this->vouchedLabels),
+            false => Vouching::untrusted(),
+        };
     }
 }
