@@ -18,6 +18,7 @@ use Intakt\Core\Ai\Infrastructure\AccountPlatform;
 use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
 use Intakt\Core\Ai\Infrastructure\ModelWaits;
 use Intakt\Core\Ai\Infrastructure\PinnedProviderCooldownWindows;
+use Intakt\Core\Ai\Infrastructure\ProjectModelCatalog;
 use Intakt\Core\Ai\Infrastructure\SendFailures;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
 use Intakt\Core\Budget\Contract\Cost;
@@ -67,14 +68,11 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
-use Symfony\AI\Platform\Exception\RateLimitExceededException;
 use Symfony\AI\Platform\Bridge\Generic\Factory;
+use Symfony\AI\Platform\Exception\RateLimitExceededException;
 use Symfony\AI\Platform\Message\Message;
 use Symfony\AI\Platform\Message\MessageBag;
 use Symfony\AI\Platform\ModelCatalog\InMemoryModelCatalog;
-use Symfony\Component\HttpClient\MockHttpClient;
-use Symfony\Component\HttpClient\Response\MockResponse;
-use Intakt\Core\Ai\Infrastructure\ProjectModelCatalog;
 use Symfony\AI\Platform\PlatformInterface;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
 use Symfony\Component\Cache\Adapter\ArrayAdapter;
@@ -84,6 +82,8 @@ use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
 use Symfony\Component\DependencyInjection\ServiceLocator;
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\HttpClient\MockHttpClient;
+use Symfony\Component\HttpClient\Response\MockResponse;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Routing\Generator\UrlGenerator;
@@ -308,7 +308,12 @@ final class DemoReviewCommandTest extends TestCase
             return new MockResponse(json_encode(['choices' => [['index' => 0, 'message' => ['role' => 'assistant', 'content' => 'reviewed'], 'finish_reason' => 'stop']]], JSON_THROW_ON_ERROR), ['response_headers' => ['content-type: application/json']]);
         });
         $config = [SampleChange::PROJECT => ['tiers' => ['strong' => ['provider' => Provider::OpenAiCompatible->value, 'model' => self::KIMI, 'substitutes' => [['provider' => Provider::OpenAiCompatible->value, 'model' => self::KIMI_TOGETHER]]]]]];
-        $bridge = Factory::createPlatform('https://router.example', 'test', httpClient: $http, modelCatalog: new InMemoryModelCatalog(new ProjectModelCatalog($config)->models(Provider::OpenAiCompatible)));
+        $bridge = Factory::createPlatform(
+            'https://router.example',
+            'test',
+            httpClient: $http,
+            modelCatalog: new InMemoryModelCatalog(new ProjectModelCatalog($config)->models(Provider::OpenAiCompatible)),
+        );
         $pins = new PinnedProviderCooldownWindows(new ArrayAdapter(), $this->clock, new LockFactory(new InMemoryStore()));
         $accounts = new AccountWindowsOnAClock($this->clock, [Provider::OpenAiCompatible->value => [Account::DEFAULT]]);
         $platform = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $bridge], $accounts, $this->clock, new NullLogger(), $pins);
