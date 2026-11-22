@@ -18,7 +18,7 @@ AI code review by a panel from different AI labs. A finding whose quoted code is
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/dashboard-review-dark.png">
-  <img src="docs/assets/dashboard-review.png" alt="The review page of the sample change: the owl\'s verdict card says Changes needed, 5 to fix and 2 urgent, the path shows pass 1 done and the beaver on Fix, and the To fix cards list each finding with its urgency, its first sentence and its file and line." width="760" height="475">
+  <img src="docs/assets/dashboard-review.png" alt="The review page of the sample change: the owl's verdict card says Changes needed, 5 to fix and 2 urgent, the path shows pass 1 done and the beaver on Fix, and the To fix cards list each finding with its urgency, its first sentence and its file and line." width="760" height="475">
 </picture>
 
 ## Five-minute start
