@@ -70,8 +70,7 @@ final readonly class GitHubChangeOpener implements ChangeOpening
         }
     }
 
-    // Every listed match is checked, never only the first, because the branch can have open pull requests to several bases and a push moves the head of each.
-    // The answer maps the number of each of this App's own open pull requests of the branch to its unread `base`, read only by the pick, so that every match's author is checked first.
+    // Every match is checked, never only the first, because the branch can have open pull requests to several bases and a push moves the head of each; each `base` is read only by the pick, so every author is checked first.
     /**
      * @return array<int, mixed>
      */
