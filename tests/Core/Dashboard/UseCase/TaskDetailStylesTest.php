@@ -72,7 +72,18 @@ final class TaskDetailStylesTest extends TestCase
     {
         $rules = $this->rulesOf($this->mediaBlocks('max-width: 760px'));
 
-        self::assertMatchesRegularExpression('/^\s*scroll-margin-top:\s*calc\(var\(--top\) \+ 44px \+ 2 \* 3px \+ 2 \* var\(--s8\) \+ var\(--s16\)\);\s*$/', $rules['.ttabs ~ .task-grid .finding-card'] ?? '');
+        self::assertMatchesRegularExpression('/^\s*scroll-margin-top:\s*calc\(var\(--top\) \+ var\(--tab-h\) \+ 2 \* var\(--seg-pad\) \+ 2 \* var\(--ttabs-pad\) \+ var\(--s16\)\);\s*$/', $rules['.ttabs ~ .task-grid .finding-card'] ?? '');
+    }
+
+    // Needed because a size written by hand in the switch but not in the offset put a followed card under the switch again.
+    public function testOnAPhoneTheSwitchTakesItsSizesFromTheValuesTheScrollOffsetAddsUp(): void
+    {
+        $phone = $this->rulesOf($this->mediaBlocks('max-width: 760px'));
+        $wide = $this->rulesOf($this->sheetOutside('max-width: 760px'));
+
+        self::assertMatchesRegularExpression('/height:\s*var\(--tab-h\);/', $phone['.seg button'] ?? '');
+        self::assertMatchesRegularExpression('/padding:\s*var\(--seg-pad\);/', $wide['.seg'] ?? '');
+        self::assertMatchesRegularExpression('/padding:\s*var\(--ttabs-pad\) var\(--s16\);/', $phone['.ttabs'] ?? '');
     }
 
     public function testTheStylesheetHidesTheStartOfARoundWhileARoundIsInReview(): void

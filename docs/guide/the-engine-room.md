@@ -121,7 +121,7 @@ When the router provider says "too many calls" (a rate limit), Intakt pauses it 
 What happens to the call then:
 - When another account of the same company is free, the call goes there at once.
 - When no account is free and you named a substitute, the substitute reviews in its place.
-- Otherwise the reviewer waits until the first account is free again.
+- Otherwise the reviewer waits until an account can take the call again, which is never before the router provider's pause on it ends.
 
 Moving on to another router provider instead of waiting is planned.
 
