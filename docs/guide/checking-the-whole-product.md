@@ -1,6 +1,6 @@
 # Checking the whole product
 
-Every change proves itself, and reviewers read what changed. Neither shows whether Intakt as a whole still works after hundreds of changes. **Journeys** do: each one starts a fresh, empty copy of Intakt, then does what a person would do and checks what they would see.
+Every change proves itself, and reviewers read what changed. Neither shows whether Intakt as a whole still works after hundreds of changes. **Journeys** do: each one starts a fresh, empty copy of Intakt, then does what a person would do and checks what they would see. (The [journey page](the-journey-page.md), the story of how Intakt was built, is something else.)
 
 A journey is not part of the checks every change passes (`bin/check` and `bin/check --fast` leave them out), because starting a whole copy takes longer. Run them with:
 

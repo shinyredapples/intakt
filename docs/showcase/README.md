@@ -53,7 +53,7 @@ Pull request #53 configures the AI providers, with keys from the environment or 
 
 > [P1] `config/packages/ai.php:21`: Revealing the entire vault unconditionally can abort boot even when every provider credential is supplied through the environment. The probe confirmed that an unrelated vault entry plus a base64-valid, wrong-length `SYMFONY_DECRYPTION_SECRET` throws `SodiumException`
 
-and summed it up as: "the probe passed all eight provider tests and four vault edge cases; two malformed-decryption-key cases failed during boot". The escalation reviewer reran the case and confirmed it. The next build fixed it. The [user guide](../user/README.md) now says that a secret Intakt cannot decrypt counts as not set.
+and summed it up as: "the probe passed all eight provider tests and four vault edge cases; two malformed-decryption-key cases failed during boot". The escalation reviewer reran the case and confirmed it. The next build fixed it. The [user guide](../reference/user-manual.md) now says that a secret Intakt cannot decrypt counts as not set.
 
 ### A repeated finding that went to escalation (#83)
 
