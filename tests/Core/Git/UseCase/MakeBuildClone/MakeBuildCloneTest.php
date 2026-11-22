@@ -47,20 +47,6 @@ final class MakeBuildCloneTest extends TestCase
 
     private TemporaryRepository $remote;
 
-    protected function setUp(): void
-    {
-        $this->mirrors = sys_get_temp_dir().'/intakt-mirrors-'.bin2hex(random_bytes(6));
-        $this->clone = $this->mirrors.'-clone';
-        $this->remote = new TemporaryRepository();
-        $this->remote->commitFile('a.txt', 'one');
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove([$this->mirrors, $this->clone]);
-        $this->remote->remove();
-    }
-
     public function testTheBuildCloneHoldsMainAndTheTasksBranchAndNoOtherRef(): void
     {
         $task = $this->givenABranch('feat/task', 'b.txt');
@@ -411,6 +397,20 @@ final class MakeBuildCloneTest extends TestCase
         yield 'a previous branch' => ['@{-1}'];
         yield 'a lock file' => ['x.lock'];
         yield 'a leading slash' => ['/main'];
+    }
+
+    protected function setUp(): void
+    {
+        $this->mirrors = sys_get_temp_dir().'/intakt-mirrors-'.bin2hex(random_bytes(6));
+        $this->clone = $this->mirrors.'-clone';
+        $this->remote = new TemporaryRepository();
+        $this->remote->commitFile('a.txt', 'one');
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove([$this->mirrors, $this->clone]);
+        $this->remote->remove();
     }
 
     private function givenABranch(string $name, string $file): string

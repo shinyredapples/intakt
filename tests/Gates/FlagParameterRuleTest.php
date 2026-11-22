@@ -19,11 +19,6 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[UsesClass(ContainerRegistration::class)]
 final class FlagParameterRuleTest extends PhpStanRuleTestCase
 {
-    protected function ruleFor(string $root): FlagParameterRule
-    {
-        return new FlagParameterRule($root, new ContainerRegistration($root));
-    }
-
     /**
      * @return iterable<string, non-empty-list<CheckRun|string>>
      */
@@ -159,5 +154,10 @@ final class FlagParameterRuleTest extends PhpStanRuleTestCase
     public function testAPromotedBooleanOfAReadonlyClassOutsideTheSourceFolderFailsStaticAnalysis(): void
     {
         $this->assertRuleRejects('readonly-gate-class-with-flag', 'config/gates/src/Strictness.php:9 intakt.flagParameter Parameter $strict is a flag');
+    }
+
+    protected function ruleFor(string $root): FlagParameterRule
+    {
+        return new FlagParameterRule($root, new ContainerRegistration($root));
     }
 }

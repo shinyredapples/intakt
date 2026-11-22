@@ -42,6 +42,17 @@ final readonly class WorkflowsGate implements Gate
         return [] !== $findings ? $findings : [$this->failureOf($result)];
     }
 
+    private function finding(JsonNode $finding): string
+    {
+        $location = $finding->get('locations')->get('0');
+        $path = $location->get('symbolic')->get('key')->get('Local')->get('verbatim_path')->text();
+        $row = $location->get('concrete')->get('location')->get('start_point')->get('row')->text();
+        // Because a finding without a local file and line still fails the gate, it must not read as an empty path on line 1.
+        $where = '' === $path || !is_numeric($row) ? 'outside a local file' : $path.':'.((int) $row + 1);
+
+        return $where.' '.$finding->get('ident')->text().': '.$finding->get('desc')->text();
+    }
+
     // Because zizmor may fail without printing anything, the exit code is the cause that is never empty.
     private function failureOf(ProcessResult $result): string
     {
@@ -54,16 +65,5 @@ final readonly class WorkflowsGate implements Gate
     private function errorOf(ProcessResult $result): string
     {
         return preg_replace('/\s+/', ' ', trim($result->errors."\n".$result->output)) ?? $result->firstErrorLine();
-    }
-
-    private function finding(JsonNode $finding): string
-    {
-        $location = $finding->get('locations')->get('0');
-        $path = $location->get('symbolic')->get('key')->get('Local')->get('verbatim_path')->text();
-        $row = $location->get('concrete')->get('location')->get('start_point')->get('row')->text();
-        // Because a finding without a local file and line still fails the gate, it must not read as an empty path on line 1.
-        $where = '' === $path || !is_numeric($row) ? 'outside a local file' : $path.':'.((int) $row + 1);
-
-        return $where.' '.$finding->get('ident')->text().': '.$finding->get('desc')->text();
     }
 }

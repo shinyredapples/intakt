@@ -21,11 +21,6 @@ final class RawPromptMessageRuleTest extends PhpStanRuleTestCase
     private const string HANDLER = 'src/Core/Review/UseCase/RunReviewRound/ReviewWithReviewerHandler.php';
     private const int FIRST_CASE_LINE = 19;
 
-    protected function ruleFor(string $root): RawPromptMessageRule
-    {
-        return new RawPromptMessageRule($root);
-    }
-
     /**
      * @return iterable<string, array{list<string>}>
      */
@@ -330,6 +325,11 @@ final class RawPromptMessageRuleTest extends PhpStanRuleTestCase
         $sandbox->write('src/Plugin/Sample/Retry.php', $this->classWithCases('Intakt\Plugin\Sample\\Retry', '(string $text, UuidV7 $id)', ['new ReviewerConversation($text, $id)']));
 
         self::assertSame('', $this->ruleFindingsIn($sandbox));
+    }
+
+    protected function ruleFor(string $root): RawPromptMessageRule
+    {
+        return new RawPromptMessageRule($root);
     }
 
     /**

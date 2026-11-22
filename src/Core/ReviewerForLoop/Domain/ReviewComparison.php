@@ -48,44 +48,6 @@ final readonly class ReviewComparison
     /**
      * @template T of LoopFinding
      *
-     * @param non-empty-list<array{int, T}> $sameLine
-     * @param list<MergedSpot<T>>           $spots
-     *
-     * @return list<MergedSpot<T>>
-     */
-    private function placed(array $sameLine, array $spots): array
-    {
-        // Findings on one line tie in the sort, so every one the spot admits joins it before any of them opens a new spot; otherwise the reviewers' order would decide which spots form.
-        $last = array_pop($spots);
-        $waiting = [];
-        foreach ($sameLine as [$review, $finding]) {
-            if (null !== $last && $last->admits($finding, $review)) {
-                $last = $last->joinedBy($finding, $review);
-                continue;
-            }
-
-            $waiting[] = [$review, $finding];
-        }
-
-        $spots = null === $last ? $spots : [...$spots, $last];
-        if ([] === $waiting) {
-            return $spots;
-        }
-
-        [$review, $finding] = array_shift($waiting);
-        $spots[] = MergedSpot::of($finding, $review);
-
-        return [] === $waiting ? $spots : $this->placed($waiting, $spots);
-    }
-
-    private function withinWindow(?int $linesApart): bool
-    {
-        return null !== $linesApart && $linesApart <= self::LINE_WINDOW;
-    }
-
-    /**
-     * @template T of LoopFinding
-     *
      * @param list<list<T>> $reviews
      *
      * @return list<non-empty-list<array{int, T}>>
@@ -115,6 +77,39 @@ final readonly class ReviewComparison
         }
 
         return $groups;
+    }
+
+    /**
+     * @template T of LoopFinding
+     *
+     * @param non-empty-list<array{int, T}> $sameLine
+     * @param list<MergedSpot<T>>           $spots
+     *
+     * @return list<MergedSpot<T>>
+     */
+    private function placed(array $sameLine, array $spots): array
+    {
+        // Findings on one line tie in the sort, so every one the spot admits joins it before any of them opens a new spot; otherwise the reviewers' order would decide which spots form.
+        $last = array_pop($spots);
+        $waiting = [];
+        foreach ($sameLine as [$review, $finding]) {
+            if (null !== $last && $last->admits($finding, $review)) {
+                $last = $last->joinedBy($finding, $review);
+                continue;
+            }
+
+            $waiting[] = [$review, $finding];
+        }
+
+        $spots = null === $last ? $spots : [...$spots, $last];
+        if ([] === $waiting) {
+            return $spots;
+        }
+
+        [$review, $finding] = array_shift($waiting);
+        $spots[] = MergedSpot::of($finding, $review);
+
+        return [] === $waiting ? $spots : $this->placed($waiting, $spots);
     }
 
     /**
@@ -164,5 +159,10 @@ final readonly class ReviewComparison
         }
 
         return $closest;
+    }
+
+    private function withinWindow(?int $linesApart): bool
+    {
+        return null !== $linesApart && $linesApart <= self::LINE_WINDOW;
     }
 }

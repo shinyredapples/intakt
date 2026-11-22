@@ -76,18 +76,6 @@ final readonly class ReplayedReviewRows
     /**
      * @param list<RecordedEvent> $rows
      * @param list<string>        $rounds
-     * @param list<int|string>    $calls
-     *
-     * @return list<RecordedEvent>
-     */
-    private function rowsOf(array $rows, array $rounds, array $calls): array
-    {
-        return array_values(array_filter($rows, fn (RecordedEvent $row): bool => $this->belongs($row, $rounds, $calls)));
-    }
-
-    /**
-     * @param list<RecordedEvent> $rows
-     * @param list<string>        $rounds
      *
      * @return array<string, string|null>
      */
@@ -104,6 +92,18 @@ final readonly class ReplayedReviewRows
         }
 
         return $calls;
+    }
+
+    /**
+     * @param list<RecordedEvent> $rows
+     * @param list<string>        $rounds
+     * @param list<int|string>    $calls
+     *
+     * @return list<RecordedEvent>
+     */
+    private function rowsOf(array $rows, array $rounds, array $calls): array
+    {
+        return array_values(array_filter($rows, fn (RecordedEvent $row): bool => $this->belongs($row, $rounds, $calls)));
     }
 
     /**

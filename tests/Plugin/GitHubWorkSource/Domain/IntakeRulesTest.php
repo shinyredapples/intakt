@@ -328,16 +328,6 @@ final class IntakeRulesTest extends TestCase
     }
 
     /**
-     * @param list<QueuedIssue> $rows
-     *
-     * @return list<int>
-     */
-    private function readyOf(array $rows): array
-    {
-        return $this->numbers($this->plan($rows)->ready);
-    }
-
-    /**
      * @param list<QueuedIssue>  $rows
      * @param array<int, string> $failures
      */
@@ -381,6 +371,16 @@ final class IntakeRulesTest extends TestCase
     private function row(ListedIssue $listed, ?IssueHistory $history = null): QueuedIssue
     {
         return $this->vouched($this->unread($listed)[0], $listed, $history);
+    }
+
+    /**
+     * @param list<QueuedIssue> $rows
+     *
+     * @return list<int>
+     */
+    private function readyOf(array $rows): array
+    {
+        return $this->numbers($this->plan($rows)->ready);
     }
 
     // Without a history the author last edited the item and applied every label, because most cases are about something else.

@@ -134,17 +134,6 @@ final class StoredRoundEndingsTest extends TestCase
     }
 
     /**
-     * @param list<Envelope> $parked
-     */
-    private function endingsReading(Ledger $ledger, string $now, array $parked = []): StoredRoundEndings
-    {
-        $transport = self::createStub(ListableReceiverInterface::class);
-        $transport->method('all')->willReturn($parked);
-
-        return new StoredRoundEndings(new FailedJudgings($transport, $ledger, new LedgerPayloads(StoredSerializerFactory::create())), new MockClock($now), new UpperWait(4, 2));
-    }
-
-    /**
      * @param list<string> $rounds
      */
     private function judgingFailuresOf(array $rounds): RecordedEvents
@@ -153,5 +142,16 @@ final class StoredRoundEndingsTest extends TestCase
             static fn (string $round): RecordedEvent => new RecordedEvent(Uuid::v7(), new LedgerEvent(LedgerEventKind::JudgingFailed, json_encode(['round' => $round], JSON_THROW_ON_ERROR)), new DateTimeImmutable('2026-10-28T12:00:00+00:00')),
             $rounds,
         ));
+    }
+
+    /**
+     * @param list<Envelope> $parked
+     */
+    private function endingsReading(Ledger $ledger, string $now, array $parked = []): StoredRoundEndings
+    {
+        $transport = self::createStub(ListableReceiverInterface::class);
+        $transport->method('all')->willReturn($parked);
+
+        return new StoredRoundEndings(new FailedJudgings($transport, $ledger, new LedgerPayloads(StoredSerializerFactory::create())), new MockClock($now), new UpperWait(4, 2));
     }
 }

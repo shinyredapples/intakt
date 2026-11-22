@@ -33,17 +33,6 @@ final class ListProtectedChangesTest extends TestCase
 
     private string $base;
 
-    protected function setUp(): void
-    {
-        $this->repository = new TemporaryRepository();
-        $this->givenMainWithTheProtectedFiles($this->repository);
-    }
-
-    protected function tearDown(): void
-    {
-        $this->repository->remove();
-    }
-
     public function testAChangeToAProtectedFileIsListed(): void
     {
         $head = $this->givenABranchCommitting('bin/check', 'two');
@@ -305,6 +294,17 @@ final class ListProtectedChangesTest extends TestCase
         } finally {
             $repository->remove();
         }
+    }
+
+    protected function setUp(): void
+    {
+        $this->repository = new TemporaryRepository();
+        $this->givenMainWithTheProtectedFiles($this->repository);
+    }
+
+    protected function tearDown(): void
+    {
+        $this->repository->remove();
     }
 
     private function givenMainWithTheProtectedFiles(TemporaryRepository $repository): void

@@ -76,21 +76,6 @@ final class FrontPageFocusContrastTest extends TestCase
     }
 
     /**
-     * @param array<string, string> $variables
-     */
-    private function resolved(array $variables, string $value, string $theme): string
-    {
-        while (1 === preg_match('/^var\((--[\w-]+)\)$/', $value, $name)) {
-            self::assertArrayHasKey($name[1], $variables, $theme.' theme defines '.$name[1]);
-            $value = $variables[$name[1]];
-        }
-
-        self::assertMatchesRegularExpression('/^#[0-9A-Fa-f]{6}$/', $value, $value.' in the '.$theme.' theme is an opaque color');
-
-        return $value;
-    }
-
-    /**
      * @param list<array{selectors: list<string>, declarations: array<string, string>}> $rules
      * @param list<string>                                                              $selectors
      *
@@ -113,6 +98,21 @@ final class FrontPageFocusContrastTest extends TestCase
         self::assertArrayHasKey($property, $declarations, implode(', ', $selectors).' sets '.$property);
 
         return $declarations[$property];
+    }
+
+    /**
+     * @param array<string, string> $variables
+     */
+    private function resolved(array $variables, string $value, string $theme): string
+    {
+        while (1 === preg_match('/^var\((--[\w-]+)\)$/', $value, $name)) {
+            self::assertArrayHasKey($name[1], $variables, $theme.' theme defines '.$name[1]);
+            $value = $variables[$name[1]];
+        }
+
+        self::assertMatchesRegularExpression('/^#[0-9A-Fa-f]{6}$/', $value, $value.' in the '.$theme.' theme is an opaque color');
+
+        return $value;
     }
 
     private function contrast(string $foreground, string $background): float

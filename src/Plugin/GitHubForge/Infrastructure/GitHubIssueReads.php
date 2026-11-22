@@ -76,29 +76,28 @@ final readonly class GitHubIssueReads implements IssueReads
     }
 
     /**
-     * @param array<mixed> $issue
+     * @return array<string, int|string>
      */
-    private function isOpen(array $issue): bool
+    private function page(int $page): array
     {
-        return match ($issue['state'] ?? null) {
-            'open' => true,
-            'closed' => false,
-            default => throw new ForgeReadFailed('GitHub answered an issue whose state is neither open nor closed.'),
-        };
+        return ['state' => 'open', 'per_page' => self::PAGE_SIZE, 'page' => $page];
     }
 
     /**
-     * @return array<mixed>
+     * @param array<string, int|string> $query
+     *
+     * @return array{status: int, body: string, etag: ?string, next: bool, date: ?string}
      */
-    private function issueOf(string $body): array
+    private function get(string $path, array $query, ?string $validator = null): array
     {
-        $issue = $this->decode($body);
-        // `[]` decodes to the same empty array as `{}`, so only the answer's first character tells a list from an object.
-        if (!str_starts_with(ltrim($body), '{')) {
-            throw new ForgeReadFailed('GitHub answered an issue that is not an object.');
+        $headers = null === $validator ? [] : ['If-None-Match' => $validator];
+        $answer = $this->send('GET', $path, ['query' => $query, 'headers' => $headers]);
+        if (self::NOT_MODIFIED !== $answer['status']) {
+            return $answer;
         }
 
-        return $issue;
+        // Without a validator there is no earlier listing a 304 could stand for, so taking it as unchanged would report issues never read.
+        return null !== $validator ? ['status' => $answer['status'], 'body' => '', 'etag' => $validator, 'next' => false, 'date' => $answer['date']] : throw new ForgeReadFailed('GitHub answered 304 to a read without a validator.');
     }
 
     /**
@@ -136,29 +135,6 @@ final readonly class GitHubIssueReads implements IssueReads
         }
     }
 
-    // An issue that closes or opens on a page already read moves every later page by one, so an issue at a page boundary is read twice or never; only a 304 for every page read before the last says none of them moved.
-    /**
-     * @param array<int, ?string> $validators
-     *
-     * @throws ForgeReadFailed
-     * @throws ForgeRateLimited
-     */
-    private function confirmUnmoved(string $path, array $validators): void
-    {
-        $moved = array_find_key($validators, fn (?string $validator, int $page): bool => self::NOT_MODIFIED !== $this->get($path, $this->page($page), $validator)['status']);
-        if (null !== $moved) {
-            throw new ForgeReadFailed(sprintf('GitHub did not confirm that page %d of the open issues stayed the same while the later pages were read.', $moved));
-        }
-    }
-
-    /**
-     * @return array<string, int|string>
-     */
-    private function page(int $page): array
-    {
-        return ['state' => 'open', 'per_page' => self::PAGE_SIZE, 'page' => $page];
-    }
-
     /**
      * @return list<array<mixed>>
      */
@@ -173,35 +149,19 @@ final readonly class GitHubIssueReads implements IssueReads
         return array_map(static fn (mixed $issue): array => is_array($issue) ? $issue : throw new ForgeReadFailed('GitHub listed an issue that is not an object.'), $issues);
     }
 
+    // An issue that closes or opens on a page already read moves every later page by one, so an issue at a page boundary is read twice or never; only a 304 for every page read before the last says none of them moved.
     /**
-     * @return array<mixed>
-     */
-    private function decode(string $body): array
-    {
-        try {
-            $data = json_decode($body, true, flags: JSON_THROW_ON_ERROR);
-        } catch (JsonException $invalid) {
-            throw new ForgeReadFailed('GitHub answered something other than JSON.', $invalid->getCode(), previous: $invalid);
-        }
-
-        return is_array($data) ? $data : throw new ForgeReadFailed('GitHub answered JSON that is not an object or a list.');
-    }
-
-    /**
-     * @param array<string, int|string> $query
+     * @param array<int, ?string> $validators
      *
-     * @return array{status: int, body: string, etag: ?string, next: bool, date: ?string}
+     * @throws ForgeReadFailed
+     * @throws ForgeRateLimited
      */
-    private function get(string $path, array $query, ?string $validator = null): array
+    private function confirmUnmoved(string $path, array $validators): void
     {
-        $headers = null === $validator ? [] : ['If-None-Match' => $validator];
-        $answer = $this->send('GET', $path, ['query' => $query, 'headers' => $headers]);
-        if (self::NOT_MODIFIED !== $answer['status']) {
-            return $answer;
+        $moved = array_find_key($validators, fn (?string $validator, int $page): bool => self::NOT_MODIFIED !== $this->get($path, $this->page($page), $validator)['status']);
+        if (null !== $moved) {
+            throw new ForgeReadFailed(sprintf('GitHub did not confirm that page %d of the open issues stayed the same while the later pages were read.', $moved));
         }
-
-        // Without a validator there is no earlier listing a 304 could stand for, so taking it as unchanged would report issues never read.
-        return null !== $validator ? ['status' => $answer['status'], 'body' => '', 'etag' => $validator, 'next' => false, 'date' => $answer['date']] : throw new ForgeReadFailed('GitHub answered 304 to a read without a validator.');
     }
 
     /**
@@ -223,11 +183,6 @@ final readonly class GitHubIssueReads implements IssueReads
         }
 
         return ['status' => $status, 'body' => $answer['body'], 'etag' => $this->entityTags->checked($headers['etag'][0] ?? null), 'next' => $this->nextLinks->namesNext($headers['link'] ?? []), 'date' => $headers['date'][0] ?? null];
-    }
-
-    private function refused(int $status): ForgeReadFailed
-    {
-        return new ForgeReadFailed(sprintf('GitHub answered %d to a read.', $status), previous: self::UNAUTHORIZED === $status ? new ForgeCredentialsRefused() : null);
     }
 
     /**
@@ -254,10 +209,49 @@ final readonly class GitHubIssueReads implements IssueReads
         return ['status' => $status, 'body' => $body, 'headers' => $headers];
     }
 
-    // Not chained to the client's exception, because its trace holds the request options with the bearer token.
-    private function unreachable(string $failure): ForgeReadFailed
+    private function refused(int $status): ForgeReadFailed
     {
-        return new ForgeReadFailed(sprintf('GitHub could not be reached (%s).', $failure));
+        return new ForgeReadFailed(sprintf('GitHub answered %d to a read.', $status), previous: self::UNAUTHORIZED === $status ? new ForgeCredentialsRefused() : null);
+    }
+
+    /**
+     * @return array<mixed>
+     */
+    private function issueOf(string $body): array
+    {
+        $issue = $this->decode($body);
+        // `[]` decodes to the same empty array as `{}`, so only the answer's first character tells a list from an object.
+        if (!str_starts_with(ltrim($body), '{')) {
+            throw new ForgeReadFailed('GitHub answered an issue that is not an object.');
+        }
+
+        return $issue;
+    }
+
+    /**
+     * @param array<mixed> $issue
+     */
+    private function isOpen(array $issue): bool
+    {
+        return match ($issue['state'] ?? null) {
+            'open' => true,
+            'closed' => false,
+            default => throw new ForgeReadFailed('GitHub answered an issue whose state is neither open nor closed.'),
+        };
+    }
+
+    /**
+     * @return array<mixed>
+     */
+    private function decode(string $body): array
+    {
+        try {
+            $data = json_decode($body, true, flags: JSON_THROW_ON_ERROR);
+        } catch (JsonException $invalid) {
+            throw new ForgeReadFailed('GitHub answered something other than JSON.', $invalid->getCode(), previous: $invalid);
+        }
+
+        return is_array($data) ? $data : throw new ForgeReadFailed('GitHub answered JSON that is not an object or a list.');
     }
 
     private function bearer(): string
@@ -269,5 +263,11 @@ final readonly class GitHubIssueReads implements IssueReads
         } catch (InstallationNotReadBack|InstallationDoesNotMatchConfiguration $refused) {
             throw new ForgeReadFailed('No GitHub read before the installation is confirmed: '.$refused->getMessage(), $refused->getCode(), previous: $refused);
         }
+    }
+
+    // Not chained to the client's exception, because its trace holds the request options with the bearer token.
+    private function unreachable(string $failure): ForgeReadFailed
+    {
+        return new ForgeReadFailed(sprintf('GitHub could not be reached (%s).', $failure));
     }
 }

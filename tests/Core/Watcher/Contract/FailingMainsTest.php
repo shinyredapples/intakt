@@ -16,11 +16,6 @@ final class FailingMainsTest extends TestCase
 {
     private DashboardLedger $ledger;
 
-    protected function setUp(): void
-    {
-        $this->ledger = new DashboardLedger();
-    }
-
     public function testAMainThatFailsToBootIsOneItemOfItsProject(): void
     {
         $this->ledger->failMainBoot('alpha', 'No status.');
@@ -123,6 +118,11 @@ final class FailingMainsTest extends TestCase
         $this->ledger->bootMain('alpha');
 
         self::assertSame([], $this->failing());
+    }
+
+    protected function setUp(): void
+    {
+        $this->ledger = new DashboardLedger();
     }
 
     /**

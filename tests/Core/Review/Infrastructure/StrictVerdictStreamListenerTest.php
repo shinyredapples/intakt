@@ -36,11 +36,6 @@ final class StrictVerdictStreamListenerTest extends TestCase
      */
     private array $read = [];
 
-    protected function setUp(): void
-    {
-        $this->tally = new StreamTally();
-    }
-
     public function testAStreamThatGaveOnlyThinkingIsCutAsAnUnfinishedAnswerWithTheChunksItCounted(): void
     {
         $cut = $this->completedAfter(new TokenUsage(promptTokens: 100), new ThinkingDelta('The diff adds a cart.'));
@@ -57,6 +52,11 @@ final class StrictVerdictStreamListenerTest extends TestCase
 
         self::assertNull($this->completedAfter(new TextDelta($answer)));
         self::assertSame([$answer], $this->read);
+    }
+
+    protected function setUp(): void
+    {
+        $this->tally = new StreamTally();
     }
 
     private function completedAfter(TokenUsage|ThinkingDelta|TextDelta ...$deltas): ?StreamEndedEarly

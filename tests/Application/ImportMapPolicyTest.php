@@ -50,18 +50,6 @@ final class ImportMapPolicyTest extends KernelTestCase
 
     private ?ImportMapGenerator $wiredGenerator = null;
 
-    protected function setUp(): void
-    {
-        $this->directory = sys_get_temp_dir().'/intakt-importmap-'.bin2hex(random_bytes(6));
-        new Filesystem()->mkdir($this->directory);
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->directory);
-        parent::tearDown();
-    }
-
     public function testTheRepositoryAsksForSha384IntegrityInTheImportMap(): void
     {
         self::assertSame(['sha384'], $this->repositoryAssetMapperSetting('importmap_integrity_algorithms'));
@@ -144,6 +132,18 @@ final class ImportMapPolicyTest extends KernelTestCase
         self::assertSame(self::NEWER, $this->pinnedVersion());
     }
 
+    protected function setUp(): void
+    {
+        $this->directory = sys_get_temp_dir().'/intakt-importmap-'.bin2hex(random_bytes(6));
+        new Filesystem()->mkdir($this->directory);
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->directory);
+        parent::tearDown();
+    }
+
     private function repositoryAssetMapperSetting(string $key): mixed
     {
         $config = Yaml::parseFile(dirname(__DIR__, 2).'/config/packages/asset_mapper.yaml');
@@ -160,6 +160,15 @@ final class ImportMapPolicyTest extends KernelTestCase
         self::assertInstanceOf(ImportMapUpdateChecker::class, $checker);
 
         return $checker->getMinimumReleaseAge();
+    }
+
+    // Because asset-map:compile stores this raw data, a deployed install renders the hash of the bytes it compiled.
+    private function compileTheImportMapOf(string $content): void
+    {
+        $this->served = $content;
+        $data = $this->wiredGenerator()->getRawImportMapData();
+        new CompiledAssetMapperConfigReader($this->directory.'/public/assets')->saveConfig('importmap.json', $data);
+        new CompiledAssetMapperConfigReader($this->directory.'/public/assets')->saveConfig('entrypoint.app.json', []);
     }
 
     // The container's own generator, so the integrity algorithms are the wired ones; only its file sources point at this test's directory.
@@ -195,15 +204,6 @@ final class ImportMapPolicyTest extends KernelTestCase
         ));
 
         return $assetMapper;
-    }
-
-    // Because asset-map:compile stores this raw data, a deployed install renders the hash of the bytes it compiled.
-    private function compileTheImportMapOf(string $content): void
-    {
-        $this->served = $content;
-        $data = $this->wiredGenerator()->getRawImportMapData();
-        new CompiledAssetMapperConfigReader($this->directory.'/public/assets')->saveConfig('importmap.json', $data);
-        new CompiledAssetMapperConfigReader($this->directory.'/public/assets')->saveConfig('entrypoint.app.json', []);
     }
 
     /**

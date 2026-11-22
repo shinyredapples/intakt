@@ -76,6 +76,12 @@ final readonly class DoctrineInstallWideFailures implements InstallWideFailures
         $this->backOff('a hand-over failed', $failure);
     }
 
+    // Length-prefixed parts, so no class name and message can be moved against each other to make two errors look alike.
+    private function errorKey(Throwable $failure): string
+    {
+        return hash('sha256', sprintf('%d:%s%d:%s', strlen($failure::class), $failure::class, strlen($failure->getMessage()), $failure->getMessage()));
+    }
+
     private function record(string $item, string $errorKey): void
     {
         $this->reopenEntityManager();
@@ -108,17 +114,6 @@ final readonly class DoctrineInstallWideFailures implements InstallWideFailures
         return 0 < (int) $others;
     }
 
-    private function cutoff(DateTimeImmutable $now): DateTimeImmutable
-    {
-        return $now->sub(new DateInterval(self::SAME_ERROR_WITHIN));
-    }
-
-    // Length-prefixed parts, so no class name and message can be moved against each other to make two errors look alike.
-    private function errorKey(Throwable $failure): string
-    {
-        return hash('sha256', sprintf('%d:%s%d:%s', strlen($failure::class), $failure::class, strlen($failure->getMessage()), $failure->getMessage()));
-    }
-
     private function backOff(string $cause, Throwable $failure): void
     {
         $this->reopenEntityManager();
@@ -132,5 +127,10 @@ final readonly class DoctrineInstallWideFailures implements InstallWideFailures
         if (!$this->entities->isOpen()) {
             $this->doctrine->resetManager();
         }
+    }
+
+    private function cutoff(DateTimeImmutable $now): DateTimeImmutable
+    {
+        return $now->sub(new DateInterval(self::SAME_ERROR_WITHIN));
     }
 }

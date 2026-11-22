@@ -37,14 +37,6 @@ final class TrendsFromTheShippedRecordingTest extends DashboardPageTestCase
 
     private const string SHIPPED = '/fixtures/demo/sample-change-review.json';
 
-    #[Override]
-    protected function setUp(): void
-    {
-        parent::setUp();
-        $this->flagAsReplay(CreateDemoProjectCommand::NAME);
-        $this->givenTheDownloadedScriptsExist();
-    }
-
     public function testReplayingTheShippedRecordingFillsBothTrendsCharts(): void
     {
         $this->replayed($this->shipped());
@@ -61,14 +53,12 @@ final class TrendsFromTheShippedRecordingTest extends DashboardPageTestCase
         self::assertSame([['Kept to fix', '5'], ['Merged as duplicate', '3'], ['Deferred to a follow-up issue', '0'], ['Rejected', '0']], $this->rowsOf($page, '#chart-judge'));
     }
 
-    // At a pace no clock waits for, because the mock clock's sleep only moves its moment.
-    private function replayed(Recording $recording): void
+    #[Override]
+    protected function setUp(): void
     {
-        $updates = new PublishedLiveEvents();
-        $marks = new ReplayMarks(new MarkAnsweringQueries(ReplayMark::Replay));
-        $replays = new ReplaysRecording($this->ledger, $updates, new MockClock('2026-11-20T09:00:00+00:00'), new LockFactory(new InMemoryStore()), $marks, TourCaptionsOn::captions($updates, TourCaptionsOn::tour($this->ledger, $marks, '')), TourCaptionsOn::judged($this->ledger, $marks));
-
-        $replays->replay($recording, 1000.0);
+        parent::setUp();
+        $this->flagAsReplay(CreateDemoProjectCommand::NAME);
+        $this->givenTheDownloadedScriptsExist();
     }
 
     private function shipped(): Recording
@@ -77,6 +67,16 @@ final class TrendsFromTheShippedRecordingTest extends DashboardPageTestCase
         self::assertIsString($text);
 
         return new RecordingFormat(StoredSerializerFactory::create())->read($text);
+    }
+
+    // At a pace no clock waits for, because the mock clock's sleep only moves its moment.
+    private function replayed(Recording $recording): void
+    {
+        $updates = new PublishedLiveEvents();
+        $marks = new ReplayMarks(new MarkAnsweringQueries(ReplayMark::Replay));
+        $replays = new ReplaysRecording($this->ledger, $updates, new MockClock('2026-11-20T09:00:00+00:00'), new LockFactory(new InMemoryStore()), $marks, TourCaptionsOn::captions($updates, TourCaptionsOn::tour($this->ledger, $marks, '')), TourCaptionsOn::judged($this->ledger, $marks));
+
+        $replays->replay($recording, 1000.0);
     }
 
     /**

@@ -62,11 +62,6 @@ final class OutputLimitRetryTest extends KernelTestCase
 {
     private RoundFixture $fixture;
 
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-    }
-
     public function testAReviewerStoppedByTheOutputLimitOnceGivesItsVerdictOnTheRetryBesideTheOtherReviewer(): void
     {
         $this->fixture->start(2);
@@ -92,6 +87,11 @@ final class OutputLimitRetryTest extends KernelTestCase
         self::assertSame([ReviewerState::Failed, ReviewerState::Verdict], $this->states());
         self::assertSame([LedgerEventKind::ReviewerFailed, LedgerEventKind::VerdictReceived], $this->endings());
         self::assertSame([MaxOutputTokensException::class], $this->failures());
+    }
+
+    protected function setUp(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer());
     }
 
     private function vendorStoppingTheFirstCalls(int $stops): SymfonyAiVendor

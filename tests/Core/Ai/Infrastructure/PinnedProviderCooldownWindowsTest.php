@@ -34,20 +34,6 @@ final class PinnedProviderCooldownWindowsTest extends TestCase
     private LockFactory $locks;
     private ?string $directory = null;
 
-    protected function setUp(): void
-    {
-        $this->pool = new ArrayAdapter();
-        $this->clock = new MockClock('2026-11-19T12:00:00Z');
-        $this->locks = new LockFactory(new InMemoryStore());
-    }
-
-    protected function tearDown(): void
-    {
-        if (null !== $this->directory) {
-            new Filesystem()->remove($this->directory);
-        }
-    }
-
     public function testAPinnedProviderThatWasNeverCooledDownIsUsable(): void
     {
         self::assertFalse($this->cooldowns()->isCoolingDown($this->deepinfra()));
@@ -268,6 +254,20 @@ final class PinnedProviderCooldownWindowsTest extends TestCase
             self::fail('The window was expected not to be saved.');
         } catch (PinnedProviderCooldownNotSaved $notSaved) {
             self::assertSame($cause, $notSaved->getPrevious());
+        }
+    }
+
+    protected function setUp(): void
+    {
+        $this->pool = new ArrayAdapter();
+        $this->clock = new MockClock('2026-11-19T12:00:00Z');
+        $this->locks = new LockFactory(new InMemoryStore());
+    }
+
+    protected function tearDown(): void
+    {
+        if (null !== $this->directory) {
+            new Filesystem()->remove($this->directory);
         }
     }
 

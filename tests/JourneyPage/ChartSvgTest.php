@@ -130,16 +130,16 @@ final class ChartSvgTest extends TestCase
         return new DailyChart('chart', 'Chart', $form, $this->days(1), $series, $this->source());
     }
 
-    private function source(): FigureSource
-    {
-        return new FigureSource(FigureKind::Measured, 'the usage file');
-    }
-
     /**
      * @return list<DateTimeImmutable>
      */
     private function days(int $count): array
     {
         return array_map(static fn (int $day): DateTimeImmutable => new DateTimeImmutable('2026-10-26T00:00:00Z')->modify('+'.$day.' days'), range(0, $count - 1));
+    }
+
+    private function source(): FigureSource
+    {
+        return new FigureSource(FigureKind::Measured, 'the usage file');
     }
 }

@@ -93,6 +93,16 @@ final class ReviewPathTest extends TestCase
         self::assertSame(['Code reviewer (meerkat)', 'Developer (beaver)', 'Maintainer (tortoise)'], array_map(static fn (StepRole $role): string => $role->label(), StepRole::cases()));
     }
 
+    private function judged(int $number, Decision $decision): ReviewedRound
+    {
+        return $this->round($number)->judgedWith([], new DateTimeImmutable('2026-11-22T12:00:00+00:00'))->decidedAs($decision);
+    }
+
+    private function round(?int $number): ReviewedRound
+    {
+        return new ReviewedRound(new RoundStart('round-'.($number ?? 0), 'alpha', 2), new RoundPlace('feat/thing', $number), new DateTimeImmutable('2026-11-22T11:00:00+00:00'), null);
+    }
+
     /**
      * @return list<string>
      */
@@ -102,15 +112,5 @@ final class ReviewPathTest extends TestCase
             static fn (PathStep $step): string => trim($step->label.' '.$step->state->value.' '.$step->who?->value),
             new Review([$first, ...array_values($later)])->path(),
         );
-    }
-
-    private function judged(int $number, Decision $decision): ReviewedRound
-    {
-        return $this->round($number)->judgedWith([], new DateTimeImmutable('2026-11-22T12:00:00+00:00'))->decidedAs($decision);
-    }
-
-    private function round(?int $number): ReviewedRound
-    {
-        return new ReviewedRound(new RoundStart('round-'.($number ?? 0), 'alpha', 2), new RoundPlace('feat/thing', $number), new DateTimeImmutable('2026-11-22T11:00:00+00:00'), null);
     }
 }

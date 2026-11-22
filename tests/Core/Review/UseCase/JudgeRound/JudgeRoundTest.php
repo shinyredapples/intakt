@@ -110,17 +110,6 @@ final class JudgeRoundTest extends KernelTestCase
     private RoundFixture $fixture;
     private ?TemporaryRepository $checkout = null;
 
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-    }
-
-    protected function tearDown(): void
-    {
-        $this->checkout?->remove();
-        parent::tearDown();
-    }
-
     public function testACompletedRoundIsQueuedForJudgingOnce(): void
     {
         $round = $this->completedRound();
@@ -714,6 +703,17 @@ final class JudgeRoundTest extends KernelTestCase
         self::assertSame('the judge saw [redacted] in the diff', $redacted);
     }
 
+    protected function setUp(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer());
+    }
+
+    protected function tearDown(): void
+    {
+        $this->checkout?->remove();
+        parent::tearDown();
+    }
+
     private function completedRound(): ReviewRound
     {
         $round = $this->fixture->start(2);
@@ -723,17 +723,6 @@ final class JudgeRoundTest extends KernelTestCase
         foreach ($this->fixture->bus->messages as $message) {
             $this->fixture->deliver($message, $vendor);
         }
-
-        return $this->fixture->round($round->id()->toRfc4122());
-    }
-
-    /**
-     * @param list<Finding> $findings
-     */
-    private function roundReporting(array $findings): ReviewRound
-    {
-        $round = $this->fixture->start(1);
-        $this->fixture->deliver($this->fixture->bus->messages[0], new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, $findings, [], [])]));
 
         return $this->fixture->round($round->id()->toRfc4122());
     }
@@ -833,5 +822,16 @@ final class JudgeRoundTest extends KernelTestCase
     private function finding(string $id, Severity $severity): Finding
     {
         return new Finding($id, $severity, null, null, null, 'Text of '.$id.'.', FixableBy::Builder, false, null, null);
+    }
+
+    /**
+     * @param list<Finding> $findings
+     */
+    private function roundReporting(array $findings): ReviewRound
+    {
+        $round = $this->fixture->start(1);
+        $this->fixture->deliver($this->fixture->bus->messages[0], new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, $findings, [], [])]));
+
+        return $this->fixture->round($round->id()->toRfc4122());
     }
 }

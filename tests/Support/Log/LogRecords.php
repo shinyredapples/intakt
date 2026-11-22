@@ -102,6 +102,18 @@ final readonly class LogRecords
     }
 
     /**
+     * @param resource $handle
+     *
+     * @return list<Record>
+     */
+    private function records($handle): array
+    {
+        $lines = explode(PHP_EOL, (string) stream_get_contents($handle, offset: 0));
+
+        return array_map($this->decoded(...), array_values(array_filter($lines, static fn (string $line): bool => '' !== $line)));
+    }
+
+    /**
      * @template T
      *
      * @param Closure(resource): T $change
@@ -121,18 +133,6 @@ final readonly class LogRecords
         } finally {
             fclose($handle);
         }
-    }
-
-    /**
-     * @param resource $handle
-     *
-     * @return list<Record>
-     */
-    private function records($handle): array
-    {
-        $lines = explode(PHP_EOL, (string) stream_get_contents($handle, offset: 0));
-
-        return array_map($this->decoded(...), array_values(array_filter($lines, static fn (string $line): bool => '' !== $line)));
     }
 
     /**

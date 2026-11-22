@@ -91,6 +91,25 @@ final readonly class HeaderSpans
         $spans->add($valueStart + strlen($open), $valueEnd, Redaction::MARKER.$open);
     }
 
+    private function endOfQuotedList(string $text, int $from, string $brackets): int
+    {
+        [$open, $close] = str_split($brackets);
+        // Quoted strings are skipped whole because a bracket inside a header value must not close the list.
+        $tokens = '~\'(?:\\\\.|[^\'\\\\])*\'|"(?:\\\\.|[^"\\\\])*"|['.preg_quote($brackets, '~').']~s';
+        preg_match_all($tokens, $text, $matches, PREG_OFFSET_CAPTURE, $from);
+
+        $depth = 1;
+        foreach ($matches[0] as [$token, $position]) {
+            $depth += $open === $token ? 1 : 0;
+            $depth -= $close === $token ? 1 : 0;
+            if (0 === $depth) {
+                return $position + 1;
+            }
+        }
+
+        return strlen($text);
+    }
+
     // Only structured data quotes its keys (JSON, var_export), so only there can a closing bracket be trusted to end the value.
     private function isValueOfQuotedKey(string $text, int $nameStart): bool
     {
@@ -117,24 +136,5 @@ final readonly class HeaderSpans
         $listEnd = '~\G[ \t]*+(?:[,\]})]|\R|\z)~';
 
         return 1 === preg_match($listStart, $text, offset: $afterOpen) && 1 === preg_match($listEnd, $text, offset: $end);
-    }
-
-    private function endOfQuotedList(string $text, int $from, string $brackets): int
-    {
-        [$open, $close] = str_split($brackets);
-        // Quoted strings are skipped whole because a bracket inside a header value must not close the list.
-        $tokens = '~\'(?:\\\\.|[^\'\\\\])*\'|"(?:\\\\.|[^"\\\\])*"|['.preg_quote($brackets, '~').']~s';
-        preg_match_all($tokens, $text, $matches, PREG_OFFSET_CAPTURE, $from);
-
-        $depth = 1;
-        foreach ($matches[0] as [$token, $position]) {
-            $depth += $open === $token ? 1 : 0;
-            $depth -= $close === $token ? 1 : 0;
-            if (0 === $depth) {
-                return $position + 1;
-            }
-        }
-
-        return strlen($text);
     }
 }

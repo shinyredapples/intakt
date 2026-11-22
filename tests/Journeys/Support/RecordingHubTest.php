@@ -23,16 +23,6 @@ final class RecordingHubTest extends TestCase
     /** @var list<Update> */
     private array $posted = [];
 
-    protected function setUp(): void
-    {
-        $this->directory = sys_get_temp_dir().'/intakt-recording-hub-'.bin2hex(random_bytes(6));
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->directory);
-    }
-
     public function testAPublishedUpdateIsReadBackInTheOrderItWasPublished(): void
     {
         $hub = $this->recordingHub();
@@ -96,6 +86,16 @@ final class RecordingHubTest extends TestCase
         $hub = $this->recordingHub();
 
         self::assertSame([self::PUBLIC_URL, 'mercure_access_token'], [$hub->getPublicUrl(), $hub->getCookieName()]);
+    }
+
+    protected function setUp(): void
+    {
+        $this->directory = sys_get_temp_dir().'/intakt-recording-hub-'.bin2hex(random_bytes(6));
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->directory);
     }
 
     private function recordingHub(): RecordingHub

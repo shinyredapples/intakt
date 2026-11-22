@@ -35,33 +35,6 @@ final class ProfilerAllowListTest extends TestCase
 
     private ?Kernel $kernel = null;
 
-    protected function setUp(): void
-    {
-        $this->sharedCache = $_SERVER['APP_CACHE_DIR'] ?? null;
-        $this->cache = sys_get_temp_dir().'/intakt-profiler-allow-list-'.bin2hex(random_bytes(6));
-        $_SERVER['APP_CACHE_DIR'] = $this->cache;
-        $this->sharedDatabase = [$_SERVER['DATABASE_URL'] ?? null, $_ENV['DATABASE_URL'] ?? null];
-        // In memory, because a fresh checkout has no var/ directory for the environment's database file.
-        $_SERVER['DATABASE_URL'] = $_ENV['DATABASE_URL'] = 'sqlite:///:memory:';
-    }
-
-    protected function tearDown(): void
-    {
-        $this->kernel?->shutdown();
-        [$_SERVER['DATABASE_URL'], $_ENV['DATABASE_URL']] = $this->sharedDatabase;
-        if (null === $_SERVER['DATABASE_URL']) {
-            unset($_SERVER['DATABASE_URL']);
-        }
-        if (null === $_ENV['DATABASE_URL']) {
-            unset($_ENV['DATABASE_URL']);
-        }
-        unset($_SERVER['APP_CACHE_DIR']);
-        if (null !== $this->sharedCache) {
-            $_SERVER['APP_CACHE_DIR'] = $this->sharedCache;
-        }
-        new Filesystem()->remove($this->cache);
-    }
-
     public function testASavedDevelopmentProfileHoldsExactlyTheCollectorsThatMeasureARequest(): void
     {
         self::assertSame(['db', 'memory', 'messenger', 'time'], $this->collectorsOfASavedProfile(new Kernel('dev', true)));
@@ -98,6 +71,33 @@ final class ProfilerAllowListTest extends TestCase
         self::assertInstanceOf(DoctrineDataCollector::class, $collector);
         self::assertSame(200, $client->getResponse()->getStatusCode());
         self::assertGreaterThan(0, $collector->getQueryCount());
+    }
+
+    protected function setUp(): void
+    {
+        $this->sharedCache = $_SERVER['APP_CACHE_DIR'] ?? null;
+        $this->cache = sys_get_temp_dir().'/intakt-profiler-allow-list-'.bin2hex(random_bytes(6));
+        $_SERVER['APP_CACHE_DIR'] = $this->cache;
+        $this->sharedDatabase = [$_SERVER['DATABASE_URL'] ?? null, $_ENV['DATABASE_URL'] ?? null];
+        // In memory, because a fresh checkout has no var/ directory for the environment's database file.
+        $_SERVER['DATABASE_URL'] = $_ENV['DATABASE_URL'] = 'sqlite:///:memory:';
+    }
+
+    protected function tearDown(): void
+    {
+        $this->kernel?->shutdown();
+        [$_SERVER['DATABASE_URL'], $_ENV['DATABASE_URL']] = $this->sharedDatabase;
+        if (null === $_SERVER['DATABASE_URL']) {
+            unset($_SERVER['DATABASE_URL']);
+        }
+        if (null === $_ENV['DATABASE_URL']) {
+            unset($_ENV['DATABASE_URL']);
+        }
+        unset($_SERVER['APP_CACHE_DIR']);
+        if (null !== $this->sharedCache) {
+            $_SERVER['APP_CACHE_DIR'] = $this->sharedCache;
+        }
+        new Filesystem()->remove($this->cache);
     }
 
     // The holder is reset after the schema is created, because otherwise its statements would count as the request's queries.
