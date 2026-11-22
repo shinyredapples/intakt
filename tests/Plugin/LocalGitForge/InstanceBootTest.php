@@ -62,6 +62,8 @@ final class InstanceBootTest extends TestCase
         PHP;
 
     // Not shaped like a real token, so the secret scan has nothing to find, while the plugin's report still cannot hold it by chance.
+    private const string FAILING_COMPOSER = "#!/bin/sh\necho 'the lock file does not match' >&2\nexit 1\n";
+
     private const string PROBE_TOKEN = 'probe-token-of-the-booting-install';
 
     private TemporaryRepository $repository;
@@ -169,7 +171,7 @@ final class InstanceBootTest extends TestCase
     {
         $head = $this->repository->commitFile('src/Feature.php', "<?php\n");
 
-        $outcome = $this->bootWithoutComposerAnd($head, ['composer' => 0o644]);
+        $outcome = $this->bootWithoutComposerAnd($head, ['composer' => [0o644, self::FAILING_COMPOSER]]);
 
         self::assertSame(BootState::Crashed, $outcome->state, $outcome->reason);
         self::assertStringStartsWith('composer could not run: ', $outcome->reason);
@@ -179,7 +181,7 @@ final class InstanceBootTest extends TestCase
     {
         $head = $this->repository->commitFile('src/Feature.php', "<?php\n");
 
-        $outcome = $this->bootWithoutComposerAnd($head, ['composer' => 0o755]);
+        $outcome = $this->bootWithoutComposerAnd($head, ['composer' => [0o755, self::FAILING_COMPOSER]]);
 
         self::assertSame(BootState::Failed, $outcome->state, $outcome->reason);
         self::assertSame('composer install failed: the lock file does not match', $outcome->reason);
@@ -199,7 +201,7 @@ final class InstanceBootTest extends TestCase
     {
         $head = $this->repository->commitFile('src/Feature.php', "<?php\n");
 
-        $outcome = $this->bootWithoutComposerAnd($head, ['composer' => 0o755], "#!/bin/sh\nexec sleep 30\n", new InstanceBoot(installSeconds: 1));
+        $outcome = $this->bootWithoutComposerAnd($head, ['composer' => [0o755, "#!/bin/sh\nexec sleep 30\n"]], new InstanceBoot(installSeconds: 1));
 
         self::assertSame(BootState::Failed, $outcome->state, $outcome->reason);
         self::assertSame('composer install passed its time limit of 1 seconds.', $outcome->reason);
@@ -428,19 +430,19 @@ final class InstanceBootTest extends TestCase
         return new InstanceBoot()->of($this->at($head), $this->main);
     }
 
-    // A PATH of every command of the real one except composer, plus the given stubs (name to file mode), each a script that exits with 1, so a test decides whether composer is missing, not executable or failing.
+    // A PATH of every command of the real one except composer, plus the given stubs (name to file mode and script), so a test decides whether composer is missing, not executable or failing.
     /**
-     * @param array<string, int> $stubs
+     * @param array<string, array{int, string}> $stubs
      */
-    private function bootWithoutComposerAnd(string $head, array $stubs, string $stubBody = "#!/bin/sh\necho 'the lock file does not match' >&2\nexit 1\n", ?InstanceBoot $boot = null): BootOutcome
+    private function bootWithoutComposerAnd(string $head, array $stubs, ?InstanceBoot $boot = null): BootOutcome
     {
         $tools = $this->repository->path.'-tools';
         mkdir($tools);
         $path = getenv('PATH');
         $this->linkCommandsExceptComposer((string) $path, $tools);
 
-        foreach ($stubs as $stub => $mode) {
-            file_put_contents($tools.'/'.$stub, $stubBody);
+        foreach ($stubs as $stub => [$mode, $body]) {
+            file_put_contents($tools.'/'.$stub, $body);
             chmod($tools.'/'.$stub, $mode);
         }
 

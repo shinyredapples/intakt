@@ -100,7 +100,7 @@ final readonly class InstanceBoot
     {
         $install = $this->run(self::INSTALL, $snapshot, $this->installSeconds);
 
-        if (null === $install) {
+        if (!$install instanceof Process) {
             return BootOutcome::failed(sprintf('composer install passed its time limit of %d seconds.', $this->installSeconds));
         }
 
@@ -120,7 +120,7 @@ final readonly class InstanceBoot
 
         $boot = $this->run([...self::STATUS_ON_STDOUT, PHP_BINARY, self::HARNESS], $snapshot, $this->bootSeconds);
 
-        if (null === $boot) {
+        if (!$boot instanceof Process) {
             return BootOutcome::failed(sprintf('%s passed its time limit of %d seconds.', self::HARNESS, $this->bootSeconds));
         }
 
