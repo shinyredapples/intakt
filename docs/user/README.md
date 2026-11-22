@@ -1,5 +1,20 @@
 # Intakt user guide
 
+## Start here
+
+This guide is long because it covers every feature. Most readers need only these sections:
+
+- **Start Intakt:** run `docker compose up -d --wait` and open the dashboard, see [The demo with docker compose](#the-demo-with-docker-compose).
+- **Watch the demo:** play a recorded review in the dashboard with no key, see [Playing the demo run in the dashboard](#playing-the-demo-run-in-the-dashboard).
+- **Run a review:** review a branch with `intakt:review`, see [Reviewing a branch](#reviewing-a-branch).
+- **Read a verdict:** the outcome, each reviewer and the act list, see [Reading a verdict](#reading-a-verdict).
+- **Follow it in the browser:** the board, the review list and each review, see [The dashboard](#the-dashboard).
+- **Connect your agent over MCP:** start and read reviews from Claude Code or another MCP client, see [Connecting an agent through MCP](mcp.md).
+- **See the figures:** review counts and charts across projects, see [The Trends page](#the-trends-page).
+- **Change the settings:** provider keys in [Configuring providers and API keys](#configuring-providers-and-api-keys), the review panel in [Capability tiers per project](#capability-tiers-per-project).
+
+The rest of this page is the detailed reference, feature by feature.
+
 For owners who run Intakt. Each feature gets a page here, written in the same change as the feature: what it does, how to set it up, and what to do when it goes wrong.
 
 Intakt runs on PHP 8.5.12 or later and Symfony 8.2, which is a beta until 8.2.0 is released: an install holds Symfony 8.2.0-BETA2, locked before it was 3 days old by the owner's one-time exception ([The release cooldown for dependencies](#the-release-cooldown-for-dependencies)).
