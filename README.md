@@ -104,6 +104,7 @@ One row per reproduction in `upstream/`, merged first. *Intakt's* marks a pull r
 | PHPStan | [Readonly type kept after `clone with`](upstream/phpstan-clone-with-readonly-constructor-type/) | [phpstan#14838](https://github.com/phpstan/phpstan/issues/14838) already reported |
 | FrankenPHP | [`php-cli` crashes on SIGTERM](upstream/frankenphp-messenger-consume-sigterm/) | [frankenphp#2479](https://github.com/php/frankenphp/issues/2479) already reported, still fails on 1.13.6 (checked 2026-11-21) |
 | Doctrine | [A refused commit leaves the transaction open](upstream/dbal-failed-commit-leaves-transaction-open/) | [#7633](https://github.com/doctrine/dbal/pull/7633) Intakt's, open |
+| Rector | [Parallel workers fail on a long path list](upstream/rector-parallel-argument-list/) | [rector-src#9012](https://github.com/rectorphp/rector-src/pull/9012) Intakt's, closed without merging |
 | MCP SDK | [Three parallel `tools/call` on one session](upstream/mcp-parallel-tools-call-one-session/) | passes, nothing to file |
 | symfony/ai | [Worker-mode state of two models and two MCP sessions](upstream/ai-worker-mode-state/) | passes, nothing to file |
 | symfony/ai | [Structured output with enums and nested lists](upstream/ai-structured-output-enums-nested-lists/) | passes, nothing to file |
