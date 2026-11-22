@@ -12,6 +12,7 @@ use Intakt\Core\Review\Contract\EscalationOutcome;
 use Intakt\Core\Review\Contract\EscalationRequest;
 use Intakt\Core\Review\Contract\EscalationReviewed;
 use Intakt\Core\Review\Contract\EscalationReviewFailed;
+use Intakt\Core\Review\Contract\EscalationStillPending;
 use Intakt\Core\Review\Contract\EscalationVerdict;
 use Intakt\Core\Review\Contract\EscalationVerdictKept;
 use Intakt\Core\Review\Contract\EscalationVerdictReused;
@@ -96,6 +97,7 @@ use Throwable;
 #[CoversClass(TransientEscalationFailures::class)]
 #[CoversClass(RecordFailedEscalation::class)]
 #[CoversClass(RecordFailedEscalationHandler::class)]
+#[CoversClass(EscalationStillPending::class)]
 #[UsesClass(EscalationAgent::class)]
 #[UsesClass(EscalationPrompt::class)]
 #[UsesClass(CitedCodeNotShown::class)]
@@ -490,6 +492,69 @@ final class EscalateRecurringP1Test extends KernelTestCase
         self::assertSame(1, substr_count($printed, ' escalation_reviewed {"round":"'.$vendor->round.'","finding":"F2","key":"'.$vendor->key.'","outcome":"rejected","reasons":"The vendor keeps it."}'));
         self::assertSame(1, substr_count($printed, ' escalation_verdict_reused '));
         self::assertGreaterThan(strrpos($printed, ' escalation_reviewed '), strpos($printed, ' escalation_verdict_reused '));
+    }
+
+    public function testWhileTheEscalationIsQueuedAndNotYetHandledTheReaderRefusesToGiveAnOutcome(): void
+    {
+        $this->recurredOnASecondHead();
+
+        $this->expectException(EscalationStillPending::class);
+
+        $this->fixture->escalationsOfChange()->outcomeAtLatestHead('alpha', self::CHANGE);
+    }
+
+    public function testAfterAConfirmedEscalationTheChangesLatestHeadReadsConfirmed(): void
+    {
+        $this->recurredOnASecondHead();
+
+        $this->escalateQueued(new ScriptedEscalations(new EscalationVerdict(EscalationOutcome::Confirmed, 'The bus drops it.')));
+
+        self::assertSame(EscalationOutcome::Confirmed, $this->fixture->escalationsOfChange()->outcomeAtLatestHead('alpha', self::CHANGE));
+    }
+
+    public function testAfterARejectedEscalationTheChangesLatestHeadReadsRejected(): void
+    {
+        $this->recurredOnASecondHead();
+
+        $this->escalateQueued(new ScriptedEscalations(new EscalationVerdict(EscalationOutcome::Rejected, 'The retry delivers it.')));
+
+        self::assertSame(EscalationOutcome::Rejected, $this->fixture->escalationsOfChange()->outcomeAtLatestHead('alpha', self::CHANGE));
+    }
+
+    public function testAFailedEscalationLeavesTheChangeWithoutAnOutcomeAndNoLongerPending(): void
+    {
+        $this->recurredOnASecondHead();
+
+        $this->escalateQueued(new ScriptedEscalations(null));
+
+        self::assertNull($this->fixture->escalationsOfChange()->outcomeAtLatestHead('alpha', self::CHANGE));
+    }
+
+    public function testAnotherRoundOnTheConfirmedHeadKeepsTheConfirmation(): void
+    {
+        $this->recurredOnASecondHead();
+        $this->escalateQueued(new ScriptedEscalations(new EscalationVerdict(EscalationOutcome::Confirmed, 'The bus drops it.')));
+
+        $this->fixture->startAtHead(self::CHANGE, self::HEAD_B);
+
+        self::assertSame(EscalationOutcome::Confirmed, $this->fixture->escalationsOfChange()->outcomeAtLatestHead('alpha', self::CHANGE));
+    }
+
+    public function testARoundOnANewerHeadHasNoEscalationOutcomeUntilItIsEscalated(): void
+    {
+        $this->recurredOnASecondHead();
+        $this->escalateQueued(new ScriptedEscalations(new EscalationVerdict(EscalationOutcome::Confirmed, 'The bus drops it.')));
+
+        $this->fixture->startAtHead(self::CHANGE, self::HEAD_C);
+
+        self::assertNull($this->fixture->escalationsOfChange()->outcomeAtLatestHead('alpha', self::CHANGE));
+    }
+
+    public function testAChangeWithoutRoundsOrWithoutARecurrenceHasNoEscalationOutcome(): void
+    {
+        $this->judged($this->completedAt(self::HEAD_A, $this->keyedP1()));
+
+        self::assertSame([null, null], [$this->fixture->escalationsOfChange()->outcomeAtLatestHead('alpha', self::CHANGE), $this->fixture->escalationsOfChange()->outcomeAtLatestHead('alpha', 'another-change')]);
     }
 
     /**

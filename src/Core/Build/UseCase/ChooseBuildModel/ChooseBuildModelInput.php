@@ -31,4 +31,7 @@ final class ChooseBuildModelInput
     /** @var list<string> */
     #[Option('A path the build touches, repeatable')]
     public array $path = [];
+
+    #[Option('The change (branch) the build continues, whose latest review round may have confirmed an escalation')]
+    public ?string $change = null;
 }

@@ -179,6 +179,18 @@ final readonly class ReviewRounds
             && $round->identity()->commits->head->hash === $head);
     }
 
+    // In canonical form, because a round stores the change canonically and the caller may name it as the forge lists it.
+    public function latestOfChange(string $project, string $change): ?ReviewRound
+    {
+        $latest = $this->entities->createQuery(sprintf('SELECT r FROM %s r WHERE r.subject.project = :project AND r.change.change = :change ORDER BY r.change.number DESC', ReviewRound::class))
+            ->setParameter('project', $project)
+            ->setParameter('change', ChangeAddress::canonical($change))
+            ->setMaxResults(1)
+            ->getOneOrNullResult();
+
+        return $latest instanceof ReviewRound ? $latest : null;
+    }
+
     // Compared as stored, as judgedAfter() compares them, so the rounds come as one numbered sequence.
     /**
      * @return list<ReviewRound>
