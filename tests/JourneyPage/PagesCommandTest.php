@@ -15,6 +15,9 @@ final class PagesCommandTest extends TestCase
     private const string BIN = __DIR__.'/../../bin';
     private const string FIXTURES = __DIR__.'/Fixtures';
     private const string JOURNEY_PAGE = __DIR__.'/../../docs/journey.md';
+    private const string FRONT_PAGE = __DIR__.'/../../docs/pages';
+    // Because the site is read on phones too, each picture, font and script stays small.
+    private const int LARGEST_ASSET = 150_000;
     private const array DRAWINGS = ['tokens-by-lane', 'tokens-by-account', 'tokens-per-merge', 'issues-per-day', 'open-issues', 'timeline'];
 
     private string $root = '';
@@ -30,6 +33,7 @@ final class PagesCommandTest extends TestCase
         }
 
         $files->symlink((string) realpath(__DIR__.'/../../vendor'), $this->root.'/vendor');
+        $files->mirror(self::FRONT_PAGE, $this->root.'/docs/pages');
         $files->copy(self::FIXTURES.'/journey.md', $this->root.'/docs/journey.md');
         $files->copy(self::FIXTURES.'/usage.jsonl', $this->root.'/docs/journey/usage.jsonl');
         $files->dumpFile($this->root.'/docs/highlights.d/layout.md', "# Highlights\n\n## Tooling\n\n| Feature | Status |\n|---|---|\n");
@@ -51,7 +55,7 @@ final class PagesCommandTest extends TestCase
         $run = $this->runPages();
 
         self::assertSame(0, $run->getExitCode(), $run->getErrorOutput());
-        self::assertStringContainsString('| Clock | done |', $this->site('index.md'));
+        self::assertStringContainsString('| Clock | done |', $this->site('highlights/index.md'));
         self::assertMatchesRegularExpression('/\| Pull requests merged \| 3 counted \(to \d{4}-\d{2}-\d{2}\) \|/', $this->site('journey/index.md'));
     }
 
@@ -96,14 +100,51 @@ final class PagesCommandTest extends TestCase
     {
         $this->runPages();
 
-        self::assertStringStartsWith("# Highlights\n\nHow Intakt was built, with its milestones, token use and issue flow: [the journey](journey/).\n\n## Tooling\n", $this->site('index.md'));
+        self::assertStringStartsWith("# Highlights\n\nHow Intakt was built, with its milestones, token use and issue flow: [the journey](../journey/).\n\n## Tooling\n", $this->site('highlights/index.md'));
+    }
+
+    public function testTheFrontPageAndItsAssetsAreCopiedUnchanged(): void
+    {
+        $this->runPages();
+
+        foreach ($this->frontPageFiles() as $path) {
+            self::assertSame((string) file_get_contents(self::FRONT_PAGE.'/'.$path), $this->site($path), $path);
+        }
+    }
+
+    public function testTheFrontPageGivesJekyllNothingToRender(): void
+    {
+        $page = (string) file_get_contents(self::FRONT_PAGE.'/index.html');
+
+        self::assertStringStartsWith('<!doctype html>', $page, 'a page with front matter would get a layout and Liquid');
+        self::assertDoesNotMatchRegularExpression('/\{[{%]/', $page);
+    }
+
+    public function testTheFrontPageLinksTheOtherPagesRelativelyAndHoldsEveryAssetItNames(): void
+    {
+        $page = (string) file_get_contents(self::FRONT_PAGE.'/index.html');
+        preg_match_all('/(?:href|src)="(?!https:\/\/|#)([^"]*)"/', $page, $links);
+        preg_match_all('/url\(([^)]+)\)/', (string) file_get_contents(self::FRONT_PAGE.'/assets/site.css'), $fonts);
+
+        self::assertSame(['./', 'highlights/', 'journey/'], array_values(array_unique(array_filter($links[1], static fn (string $link): bool => !str_starts_with($link, 'assets/')))));
+
+        foreach ([...array_filter($links[1], static fn (string $link): bool => str_starts_with($link, 'assets/')), ...array_map(static fn (string $font): string => 'assets/'.$font, $fonts[1])] as $asset) {
+            self::assertFileExists(self::FRONT_PAGE.'/'.$asset);
+        }
+    }
+
+    public function testEveryAssetOfTheFrontPageIsSmall(): void
+    {
+        foreach ($this->frontPageFiles() as $path) {
+            self::assertLessThan(self::LARGEST_ASSET, filesize(self::FRONT_PAGE.'/'.$path), $path);
+        }
     }
 
     public function testTheSiteHoldsOnlyThePagesAndTheirDrawings(): void
     {
         $this->runPages();
 
-        $expected = ['index.md', 'journey/index.md', ...array_map(static fn (string $name): string => 'journey/'.$name.'.svg', self::DRAWINGS)];
+        $expected = [...$this->frontPageFiles(), 'highlights/index.md', 'journey/index.md', ...array_map(static fn (string $name): string => 'journey/'.$name.'.svg', self::DRAWINGS)];
         sort($expected);
         self::assertSame($expected, $this->siteFiles());
     }
@@ -166,11 +207,19 @@ final class PagesCommandTest extends TestCase
      */
     private function siteFiles(): array
     {
-        $paths = [...(array) glob($this->root.'/site/*.*'), ...(array) glob($this->root.'/site/journey/*')];
+        $paths = [...(array) glob($this->root.'/site/*.*'), ...(array) glob($this->root.'/site/assets/*'), ...(array) glob($this->root.'/site/highlights/*'), ...(array) glob($this->root.'/site/journey/*')];
         $files = array_map(fn (string $path): string => substr($path, strlen($this->root.'/site/')), array_filter($paths, is_string(...)));
         sort($files);
 
         return $files;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function frontPageFiles(): array
+    {
+        return ['index.html', ...array_map(static fn (string $path): string => 'assets/'.basename($path), array_filter((array) glob(self::FRONT_PAGE.'/assets/*'), is_string(...)))];
     }
 
     private function expected(string $name): string

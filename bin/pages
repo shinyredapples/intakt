@@ -7,7 +7,7 @@ use Intakt\Tests\JourneyPage\MermaidTimeline;
 use Symfony\Component\Process\Process;
 
 const USAGE = "usage: bin/pages <folder> [--recorded=<folder with the recorded API answers>]\n";
-const JOURNEY_LINK = "How Intakt was built, with its milestones, token use and issue flow: [the journey](journey/).\n";
+const JOURNEY_LINK = "How Intakt was built, with its milestones, token use and issue flow: [the journey](../journey/).\n";
 
 $autoload = __DIR__.'/../vendor/autoload.php';
 
@@ -57,10 +57,15 @@ $journey = (string) file_get_contents($root.'/docs/journey.md');
 $highlights = explode("\n", (string) file_get_contents($root.'/docs/highlights.md'), 2);
 // Pages serves the journey page at /journey/, so its drawings lie beside it, and its Jekyll does not render Mermaid.
 $files = [
-    'index.md' => $highlights[0]."\n\n".JOURNEY_LINK.($highlights[1] ?? ''),
+    'highlights/index.md' => $highlights[0]."\n\n".JOURNEY_LINK.($highlights[1] ?? ''),
     // Correct only because docs/journey.md links nothing under journey/ but the *.svg drawings copied below (PagesCommandTest pins it).
     'journey/index.md' => (string) preg_replace(MermaidTimeline::BLOCK, '![Timeline](timeline.svg)', str_replace('](journey/', '](', $journey)),
 ];
+
+// The front page and its assets have no front matter, so Jekyll copies them unchanged and runs no Liquid on them.
+foreach ([$root.'/docs/pages/index.html', ...(glob($root.'/docs/pages/assets/*') ?: [])] as $file) {
+    $files[substr($file, strlen($root.'/docs/pages/'))] = (string) file_get_contents($file);
+}
 
 foreach (glob($root.'/docs/journey/*.svg') ?: [] as $drawing) {
     $files['journey/'.basename($drawing)] = (string) file_get_contents($drawing);
@@ -73,9 +78,11 @@ if ([] === $changed) {
     exit(0);
 }
 
-if (!is_dir($folder.'/journey') && !@mkdir($folder.'/journey', recursive: true)) {
-    fwrite(STDERR, 'cannot make '.$folder."/journey\n");
-    exit(1);
+foreach (['highlights', 'journey', 'assets'] as $subfolder) {
+    if (!is_dir($folder.'/'.$subfolder) && !@mkdir($folder.'/'.$subfolder, recursive: true)) {
+        fwrite(STDERR, 'cannot make '.$folder.'/'.$subfolder."\n");
+        exit(1);
+    }
 }
 
 foreach ($changed as $path => $content) {

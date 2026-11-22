@@ -166,7 +166,7 @@ Development continues after the hackathon: [the hackathon page](docs/hackathon.m
 - [Releases](https://github.com/shinyredapples/intakt/releases): tagged versions and their notes; [how a release is cut](docs/releasing.md).
 - [Why the AI can't wreck your project](docs/guide/why-the-ai-cant-wreck-your-project.md): the safety design in plain words.
 - [Showcase](docs/showcase/README.md): this repository built by an AI loop, in figures and examples.
-- [Highlights](https://shinyredapples.github.io/intakt/): every Symfony and Symfony AI feature Intakt uses or plans, with its status, published from main (built from [`docs/highlights.d/`](docs/highlights.d/)).
+- [Highlights](https://shinyredapples.github.io/intakt/highlights/): every Symfony and Symfony AI feature Intakt uses or plans, with its status, published from main (built from [`docs/highlights.d/`](docs/highlights.d/)).
 - [Journey](docs/journey.md): how Intakt got from an empty repository to the demo, with its milestones, decisions, capacity, CI, token use (measured) and issue flow (counted).
 - [Spec](docs/spec.md) and [plan](docs/plan.md) of the first release.
 - [AGENTS.md](AGENTS.md): the rules for anyone, person or agent, changing the code.
