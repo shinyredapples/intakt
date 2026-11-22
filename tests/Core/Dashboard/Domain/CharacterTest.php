@@ -50,6 +50,13 @@ final class CharacterTest extends TestCase
         self::assertSame('Owl with a gavel', Character::Judge->description());
     }
 
+    public function testTheMaintainerIsATortoiseWithAToolbox(): void
+    {
+        self::assertSame('maintainer', Character::Maintainer->value);
+        self::assertSame('Maintainer', Character::Maintainer->label());
+        self::assertSame('Tortoise with a toolbox', Character::Maintainer->description());
+    }
+
     public function testTheDeveloperIsABeaverWithAWrench(): void
     {
         self::assertSame('developer', Character::Developer->value);

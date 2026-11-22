@@ -9,6 +9,7 @@ enum Character: string
 {
     case CodeReviewer = 'code_reviewer';
     case Judge = 'judge';
+    case Maintainer = 'maintainer';
     case Developer = 'developer';
 
     // The files hold 1x and 2x of the sizes the pages show (24 and 48 px), so any other size would name a file that does not exist.
@@ -26,6 +27,7 @@ enum Character: string
         return match ($this) {
             self::CodeReviewer => 'Code reviewer',
             self::Judge => 'Judge',
+            self::Maintainer => 'Maintainer',
             self::Developer => 'Developer',
         };
     }
@@ -35,6 +37,7 @@ enum Character: string
         return match ($this) {
             self::CodeReviewer => 'Meerkat with a magnifying glass',
             self::Judge => 'Owl with a gavel',
+            self::Maintainer => 'Tortoise with a toolbox',
             self::Developer => 'Beaver with a wrench',
         };
     }
