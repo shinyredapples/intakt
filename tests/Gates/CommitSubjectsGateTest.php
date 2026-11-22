@@ -168,13 +168,6 @@ final class CommitSubjectsGateTest extends SandboxTestCase
         self::assertTrue($sandbox->runGate(new CommitSubjectsGate())->failed('commits'));
     }
 
-    private function describe(Sandbox $sandbox): string
-    {
-        $parents = explode(' ', trim($sandbox->git('log', '--format=%P', '--max-count=1', 'HEAD')->output));
-
-        return trim($sandbox->git('rev-parse', 'HEAD')->output).':'.$parents[1];
-    }
-
     // Because main~1 plays the base the event reports, a merge on it is GitHub's test merge before main moved.
     private function testMergeOnReportedBase(): Sandbox
     {
@@ -182,6 +175,13 @@ final class CommitSubjectsGateTest extends SandboxTestCase
         $sandbox->git('switch', '--quiet', '--create', 'test-merge', 'main~1');
 
         return $this->mergeChange($sandbox);
+    }
+
+    private function describe(Sandbox $sandbox): string
+    {
+        $parents = explode(' ', trim($sandbox->git('log', '--format=%P', '--max-count=1', 'HEAD')->output));
+
+        return trim($sandbox->git('rev-parse', 'HEAD')->output).':'.$parents[1];
     }
 
     private function testMergeOnMovedBase(): Sandbox

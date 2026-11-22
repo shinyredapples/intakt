@@ -196,14 +196,6 @@ final class RoundStreamCheckTest extends TestCase
         $this->check([]);
     }
 
-    /**
-     * @param list<string> $data
-     */
-    private function check(array $data): void
-    {
-        new RoundStreamCheck()->assertFitsThePage(self::ROUND, array_map($this->onTopic(...), $data), new Crawler(self::PAGE));
-    }
-
     private function expectFailure(string $message): void
     {
         $this->expectException(AssertionFailedError::class);
@@ -213,16 +205,6 @@ final class RoundStreamCheckTest extends TestCase
     private function onTopic(string $data): Update
     {
         return new Update(MercureRoundUpdates::topicOf(self::ROUND), $data, true);
-    }
-
-    private function progress(int $finished): string
-    {
-        return $this->state(sprintf('%d of 2 reviewers finished.', $finished));
-    }
-
-    private function judged(): string
-    {
-        return $this->state('Checked.');
     }
 
     private function state(string $text): string
@@ -241,5 +223,23 @@ final class RoundStreamCheckTest extends TestCase
     private function update(string $action, string $target, string $content): string
     {
         return sprintf('<turbo-stream action="%s" target="%s"><template>%s</template></turbo-stream>', $action, $target, $content);
+    }
+
+    private function progress(int $finished): string
+    {
+        return $this->state(sprintf('%d of 2 reviewers finished.', $finished));
+    }
+
+    private function judged(): string
+    {
+        return $this->state('Checked.');
+    }
+
+    /**
+     * @param list<string> $data
+     */
+    private function check(array $data): void
+    {
+        new RoundStreamCheck()->assertFitsThePage(self::ROUND, array_map($this->onTopic(...), $data), new Crawler(self::PAGE));
     }
 }

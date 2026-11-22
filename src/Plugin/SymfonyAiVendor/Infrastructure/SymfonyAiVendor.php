@@ -87,84 +87,28 @@ final readonly class SymfonyAiVendor implements Vendor
         return $this->accounts->run($answering->provider, fn (): VendorReview => new VendorReview($this->blockedWhenCut($answering, fn (): Verdict => $this->retriedOnce($first, $retry)), $substitute));
     }
 
-    // Retried once, because a call stopped by the output limit or an answer that is no verdict leaves nothing to judge and the same room could stop it again, a changes verdict without findings is no verdict either, an endpoint that could not be reached is often reached on the next call, and a stream cut before its answer completed may be a streaming fault the provider does not have unstreamed; a second failure fails the reviewer. A stream that a subscription CLI cut is not retried, because its call never streamed, and neither is a cut caused by a provider outage, because the outage has already cooled the account down and retrying would turn a blocked reviewer into a waiting one.
     /**
-     * @param Closure(): Verdict                                                                                                                $first
-     * @param Closure(MaxOutputTokensException|VerdictUnreadable|ChangesWithoutFindings|ProviderUnreachable|IncompleteStreamException): Verdict $retry
+     * @throws VendorAccountBusy
      */
-    private function retriedOnce(Closure $first, Closure $retry): Verdict
+    #[Override]
+    public function judge(string $project, JudgeRequest $request): Judgement
+    {
+        $answering = $this->answering($project, self::JUDGE_TIER);
+
+        return $this->accounts->run($answering->provider, fn (): Judgement => $this->judgementOn($answering, $this->usage->reserve($project, new AnsweringTier(self::JUDGE_TIER, $answering), $request->round), $request));
+    }
+
+    // Read from the mapping that throws TierNotMapped on a call, so the answer and the call never disagree; it covers only the mapping, not whether a provider is available, so a tier whose provider is disabled still counts even when no substitute answers for it.
+    #[Override]
+    public function mapsAModelTo(string $project, Tier $tier): bool
     {
         try {
-            return $first();
-        } catch (MaxOutputTokensException|VerdictUnreadable|ChangesWithoutFindings|ProviderUnreachable|IncompleteStreamException $failure) {
-            return $retry($failure);
+            $this->resolver->configured($project, $tier);
+        } catch (TierNotMapped) {
+            return false;
         }
-    }
 
-    // A second cut keeps the first cut's reason, so the reviewer ends as it did before the retry; a provider failure of the retry follows its own rule, so an outage is handled as one, and no other failure of it is retried, because retriedOnce() catches only the first try's.
-    /**
-     * @param Closure(): Verdict $unstreamed
-     */
-    private function unstreamedAfter(IncompleteStreamException $cut, Closure $unstreamed): Verdict
-    {
-        try {
-            return $unstreamed();
-        } catch (IncompleteStreamException) {
-            throw $cut;
-        }
-    }
-
-    // Blocked only once no try is left, so every cut try is recorded in the ledger before the reviewer ends with the last cut's reason.
-    /**
-     * @param Closure(): Verdict $review
-     */
-    private function blockedWhenCut(ResolvedModel $answering, Closure $review): Verdict
-    {
-        try {
-            return $review();
-        } catch (IncompleteStreamException $incomplete) {
-            return Verdict::incompleteStream($incomplete->getMessage(), $this->evidenceOfCut($answering, $incomplete));
-        }
-    }
-
-    // Kept on the finding, because the message alone cannot tell a provider that cut the stream from a platform or an Intakt check that misread a complete one (issue #1964); every try asks the same provider and model.
-    private function evidenceOfCut(ResolvedModel $answering, IncompleteStreamException $cut): Evidence
-    {
-        return new Evidence(
-            sprintf('the call to %s, model %s', $answering->provider->value, $answering->model),
-            $cut instanceof StreamEndedEarly ? $cut->described() : sprintf('cut by: %s, outside a counted stream', StreamCutBy::Platform->value),
-        );
-    }
-
-    // Twice the tier's default when the mapping sent none, because the model's own default stopped the call then.
-    private function withMoreRoom(ResolvedModel $answering, Tier $tier): ResolvedModel
-    {
-        return $answering->withMaxOutput(self::RETRY_ROOM * ($answering->maxOutput ?? $tier->defaultMaxOutput()));
-    }
-
-    // A new conversation, because the stopped one is stored under its id and the store refuses a second start under it.
-    private function inNewConversation(ReviewRequest $request): ReviewRequest
-    {
-        $stopped = $request->conversation;
-        $conversation = new ReviewerConversation($stopped->rolePrompt, new UuidV7(UuidV7::generate($this->clock->now())), $stopped->round, $stopped->reviewerId, askedAgain: true);
-
-        return new ReviewRequest($request->checkout, $request->brief, $conversation);
-    }
-
-    // Told what its answer lacked, so the same reviewer names its findings or approves instead of repeating an empty changes answer.
-    private function askedToNameFindings(ReviewRequest $request): ReviewRequest
-    {
-        $refused = $request->conversation;
-        $conversation = new ReviewerConversation(
-            $refused->rolePrompt,
-            new UuidV7(UuidV7::generate($this->clock->now())),
-            $refused->round,
-            $refused->reviewerId,
-            askedAgain: true,
-            askedToNameFindings: true,
-        );
-
-        return new ReviewRequest($request->checkout, $request->brief, $conversation);
+        return true;
     }
 
     private function answering(string $project, Tier $tier): ResolvedModel
@@ -202,6 +146,101 @@ final readonly class SymfonyAiVendor implements Vendor
         return $this->verdictThrough(new TierRoutedPlatform($this->tiers, $answering, catalog: new UnstreamedModelCatalog()), $reservation, $request);
     }
 
+    // Twice the tier's default when the mapping sent none, because the model's own default stopped the call then.
+    private function withMoreRoom(ResolvedModel $answering, Tier $tier): ResolvedModel
+    {
+        return $answering->withMaxOutput(self::RETRY_ROOM * ($answering->maxOutput ?? $tier->defaultMaxOutput()));
+    }
+
+    // A new conversation, because the stopped one is stored under its id and the store refuses a second start under it.
+    private function inNewConversation(ReviewRequest $request): ReviewRequest
+    {
+        $stopped = $request->conversation;
+        $conversation = new ReviewerConversation($stopped->rolePrompt, new UuidV7(UuidV7::generate($this->clock->now())), $stopped->round, $stopped->reviewerId, askedAgain: true);
+
+        return new ReviewRequest($request->checkout, $request->brief, $conversation);
+    }
+
+    // Told what its answer lacked, so the same reviewer names its findings or approves instead of repeating an empty changes answer.
+    private function askedToNameFindings(ReviewRequest $request): ReviewRequest
+    {
+        $refused = $request->conversation;
+        $conversation = new ReviewerConversation(
+            $refused->rolePrompt,
+            new UuidV7(UuidV7::generate($this->clock->now())),
+            $refused->round,
+            $refused->reviewerId,
+            askedAgain: true,
+            askedToNameFindings: true,
+        );
+
+        return new ReviewRequest($request->checkout, $request->brief, $conversation);
+    }
+
+    // A second cut keeps the first cut's reason, so the reviewer ends as it did before the retry; a provider failure of the retry follows its own rule, so an outage is handled as one, and no other failure of it is retried, because retriedOnce() catches only the first try's.
+    /**
+     * @param Closure(): Verdict $unstreamed
+     */
+    private function unstreamedAfter(IncompleteStreamException $cut, Closure $unstreamed): Verdict
+    {
+        try {
+            return $unstreamed();
+        } catch (IncompleteStreamException) {
+            throw $cut;
+        }
+    }
+
+    // Retried once, because a call stopped by the output limit or an answer that is no verdict leaves nothing to judge and the same room could stop it again, a changes verdict without findings is no verdict either, an endpoint that could not be reached is often reached on the next call, and a stream cut before its answer completed may be a streaming fault the provider does not have unstreamed; a second failure fails the reviewer. A stream that a subscription CLI cut is not retried, because its call never streamed, and neither is a cut caused by a provider outage, because the outage has already cooled the account down and retrying would turn a blocked reviewer into a waiting one.
+    /**
+     * @param Closure(): Verdict                                                                                                                $first
+     * @param Closure(MaxOutputTokensException|VerdictUnreadable|ChangesWithoutFindings|ProviderUnreachable|IncompleteStreamException): Verdict $retry
+     */
+    private function retriedOnce(Closure $first, Closure $retry): Verdict
+    {
+        try {
+            return $first();
+        } catch (MaxOutputTokensException|VerdictUnreadable|ChangesWithoutFindings|ProviderUnreachable|IncompleteStreamException $failure) {
+            return $retry($failure);
+        }
+    }
+
+    // Blocked only once no try is left, so every cut try is recorded in the ledger before the reviewer ends with the last cut's reason.
+    /**
+     * @param Closure(): Verdict $review
+     */
+    private function blockedWhenCut(ResolvedModel $answering, Closure $review): Verdict
+    {
+        try {
+            return $review();
+        } catch (IncompleteStreamException $incomplete) {
+            return Verdict::incompleteStream($incomplete->getMessage(), $this->evidenceOfCut($answering, $incomplete));
+        }
+    }
+
+    // Kept on the finding, because the message alone cannot tell a provider that cut the stream from a platform or an Intakt check that misread a complete one (issue #1964); every try asks the same provider and model.
+    private function evidenceOfCut(ResolvedModel $answering, IncompleteStreamException $cut): Evidence
+    {
+        return new Evidence(
+            sprintf('the call to %s, model %s', $answering->provider->value, $answering->model),
+            $cut instanceof StreamEndedEarly ? $cut->described() : sprintf('cut by: %s, outside a counted stream', StreamCutBy::Platform->value),
+        );
+    }
+
+    // Only a subscription CLI is given the review server, because every other provider reaches it through the reviewer's own toolbox; the judge reads no repository.
+    /**
+     * @return array<string, mixed>
+     */
+    private function serverOptions(ResolvedModel $answering, ReviewRequest $request): array
+    {
+        $round = $request->conversation->round;
+
+        if ($answering->provider->readsTheCheckout() || !$round instanceof Uuid) {
+            return [];
+        }
+
+        return [ReviewServerAccess::OPTION => $this->servers->forRound($round)];
+    }
+
     private function verdictThrough(TierRoutedPlatform $platform, UsageReservation $reservation, ReviewRequest $request): Verdict
     {
         try {
@@ -230,32 +269,6 @@ final readonly class SymfonyAiVendor implements Vendor
         return $verdict->withholdsApprovalWithoutFinding() ? throw ChangesWithoutFindings::fromTheReviewer() : $verdict;
     }
 
-    // Only a subscription CLI is given the review server, because every other provider reaches it through the reviewer's own toolbox; the judge reads no repository.
-    /**
-     * @return array<string, mixed>
-     */
-    private function serverOptions(ResolvedModel $answering, ReviewRequest $request): array
-    {
-        $round = $request->conversation->round;
-
-        if ($answering->provider->readsTheCheckout() || !$round instanceof Uuid) {
-            return [];
-        }
-
-        return [ReviewServerAccess::OPTION => $this->servers->forRound($round)];
-    }
-
-    /**
-     * @throws VendorAccountBusy
-     */
-    #[Override]
-    public function judge(string $project, JudgeRequest $request): Judgement
-    {
-        $answering = $this->answering($project, self::JUDGE_TIER);
-
-        return $this->accounts->run($answering->provider, fn (): Judgement => $this->judgementOn($answering, $this->usage->reserve($project, new AnsweringTier(self::JUDGE_TIER, $answering), $request->round), $request));
-    }
-
     private function judgementOn(ResolvedModel $answering, UsageReservation $reservation, JudgeRequest $request): Judgement
     {
         $platform = new TierRoutedPlatform($this->tiers, $answering);
@@ -277,19 +290,6 @@ final readonly class SymfonyAiVendor implements Vendor
         $this->usage->settle($reservation, ...$platform->rounds());
 
         return $judgement;
-    }
-
-    // Read from the mapping that throws TierNotMapped on a call, so the answer and the call never disagree; it covers only the mapping, not whether a provider is available, so a tier whose provider is disabled still counts even when no substitute answers for it.
-    #[Override]
-    public function mapsAModelTo(string $project, Tier $tier): bool
-    {
-        try {
-            $this->resolver->configured($project, $tier);
-        } catch (TierNotMapped) {
-            return false;
-        }
-
-        return true;
     }
 
     // Decided here in plain code, because a reviewer that never saw the change can still answer approve; per call, because a subscription CLI reads the change only through the review server this call gave it.

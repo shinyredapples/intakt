@@ -132,6 +132,17 @@ final readonly class LoopReviewReader
 
     /**
      * @param list<array{text: string, json: bool}> $lines
+     */
+    private function verdictOf(array $lines): LoopVerdict
+    {
+        $declared = $this->declaredVerdict($lines);
+
+        // An open P1 or P2 finding means changes whatever the JSON says, because the loop's rules count it so.
+        return LoopVerdict::Approve === $declared && $this->hasBlockingFinding($lines) ? LoopVerdict::Changes : $declared;
+    }
+
+    /**
+     * @param list<array{text: string, json: bool}> $lines
      *
      * @return list<LoopFinding>
      */
@@ -155,12 +166,22 @@ final readonly class LoopReviewReader
     /**
      * @param list<array{text: string, json: bool}> $lines
      */
-    private function verdictOf(array $lines): LoopVerdict
+    private function declaredVerdict(array $lines): LoopVerdict
     {
-        $declared = $this->declaredVerdict($lines);
+        $candidates = $this->verdictCandidates($lines);
+        if ([] === $candidates) {
+            return LoopVerdict::Unreadable;
+        }
 
-        // An open P1 or P2 finding means changes whatever the JSON says, because the loop's rules count it so.
-        return LoopVerdict::Approve === $declared && $this->hasBlockingFinding($lines) ? LoopVerdict::Changes : $declared;
+        try {
+            $decoded = json_decode(array_last($candidates)['text'], true, 16, JSON_THROW_ON_ERROR);
+        } catch (JsonException) {
+            return LoopVerdict::Unreadable;
+        }
+
+        $value = is_array($decoded) ? ($decoded['verdict'] ?? null) : null;
+
+        return (is_string($value) ? LoopVerdict::tryFrom($value) : null) ?? LoopVerdict::Unreadable;
     }
 
     // A P2 after a "Follow-ups:" line does not block, because the loop files a re-review's P2 there and still approves.
@@ -179,27 +200,6 @@ final readonly class LoopReviewReader
         }
 
         return false;
-    }
-
-    /**
-     * @param list<array{text: string, json: bool}> $lines
-     */
-    private function declaredVerdict(array $lines): LoopVerdict
-    {
-        $candidates = $this->verdictCandidates($lines);
-        if ([] === $candidates) {
-            return LoopVerdict::Unreadable;
-        }
-
-        try {
-            $decoded = json_decode(array_last($candidates)['text'], true, 16, JSON_THROW_ON_ERROR);
-        } catch (JsonException) {
-            return LoopVerdict::Unreadable;
-        }
-
-        $value = is_array($decoded) ? ($decoded['verdict'] ?? null) : null;
-
-        return (is_string($value) ? LoopVerdict::tryFrom($value) : null) ?? LoopVerdict::Unreadable;
     }
 
     /**

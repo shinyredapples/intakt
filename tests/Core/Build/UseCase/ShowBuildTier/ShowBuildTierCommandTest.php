@@ -13,6 +13,9 @@ use Intakt\Core\Build\Domain\RoutingRules;
 use Intakt\Core\Build\Infrastructure\ConfiguredBuildRouting;
 use Intakt\Core\Build\UseCase\ShowBuildTier\ShowBuildTierCommand;
 use Intakt\Core\Build\UseCase\ShowBuildTier\ShowBuildTierInput;
+use Intakt\Core\Review\Contract\ChangeEscalations;
+use Intakt\Core\Review\Contract\EscalationOutcome;
+use Intakt\Core\Review\Contract\EscalationStillPending;
 use Intakt\Core\Review\Contract\PathGlob;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -30,6 +33,7 @@ use Symfony\Component\Console\Tester\CommandTester;
 #[UsesClass(BuildFacts::class)]
 #[UsesClass(TierChoice::class)]
 #[UsesClass(PathGlob::class)]
+#[UsesClass(EscalationStillPending::class)]
 final class ShowBuildTierCommandTest extends TestCase
 {
     public function testItPrintsTheDefaultTierForAnOrdinaryBuild(): void
@@ -68,6 +72,29 @@ final class ShowBuildTierCommandTest extends TestCase
         self::assertStringContainsString('tier standard, reason default', $tester->getDisplay());
     }
 
+    public function testItPrintsTheStrongTierAndConfirmedEscalationReasonForAChangeWhoseLatestRoundConfirmedAnEscalation(): void
+    {
+        $tester = $this->execute(['project' => 'alpha', '--change' => 'feat/confirmed']);
+
+        self::assertStringContainsString('tier strong, reason confirmed-escalation', $tester->getDisplay());
+    }
+
+    public function testItKeepsTheDefaultTierForAChangeWhoseLatestRoundRejectedTheEscalation(): void
+    {
+        $tester = $this->execute(['project' => 'alpha', '--change' => 'feat/rejected']);
+
+        self::assertStringContainsString('tier standard, reason default', $tester->getDisplay());
+    }
+
+    public function testItChoosesNoTierForAChangeWhoseEscalationReviewHasNotAnsweredYet(): void
+    {
+        $tester = $this->execute(['project' => 'alpha', '--change' => 'feat/pending']);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString('is still pending', $tester->getDisplay());
+        self::assertStringNotContainsString('tier standard', $tester->getDisplay());
+    }
+
     public function testItRefusesAnUnknownSetback(): void
     {
         $tester = $this->execute(['project' => 'alpha', '--setback' => 'oops']);
@@ -91,7 +118,9 @@ final class ShowBuildTierCommandTest extends TestCase
     {
         $routing = new ConfiguredBuildRouting(['alpha' => ['tier' => Tier::Standard->value, 'sensitive_paths' => ['src/**/Security/**'], 'escalate_on' => ['blocking-finding', 'stall']]], new ModelRouting());
         $application = new Application();
-        $application->addCommand(new ShowBuildTierCommand($routing));
+        $escalations = self::createStub(ChangeEscalations::class);
+        $escalations->method('outcomeAtLatestHead')->willReturnCallback(static fn (string $project, string $change): ?EscalationOutcome => 'feat/pending' === $change ? throw EscalationStillPending::of($change) : EscalationOutcome::tryFrom(substr($change, strlen('feat/'))));
+        $application->addCommand(new ShowBuildTierCommand($routing, $escalations));
         $tester = new CommandTester($application->find('intakt:build:tier'));
         $tester->execute($input);
 

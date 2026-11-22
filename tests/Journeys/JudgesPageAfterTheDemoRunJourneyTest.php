@@ -19,11 +19,6 @@ final class JudgesPageAfterTheDemoRunJourneyTest extends JourneyTestCase
     // Far above the recording's length in seconds, so the replay writes its rows without waiting between them.
     private const string REPLAY_FACTOR = '100000';
 
-    protected function journey(): string
-    {
-        return 'judges page after the demo run';
-    }
-
     public function testAfterTheDemoRunTheJudgesPageLeadsToTheKeyFormAndTheDemoCommandInsteadOfAButtonThatIsGone(): void
     {
         $this->step('create the database', $this->createTheDatabase(...));
@@ -32,6 +27,11 @@ final class JudgesPageAfterTheDemoRunJourneyTest extends JourneyTestCase
         $this->step('open the dashboard on the board', fn () => $this->openTheDashboardOnTheBoard($dashboard));
         $this->step('find the key form but no start button on the setup page', fn () => $this->findTheKeyFormButNoStartButton($dashboard));
         $this->step('read the route the judges page gives', $this->readTheRouteTheJudgesPageGives(...));
+    }
+
+    protected function journey(): string
+    {
+        return 'judges page after the demo run';
     }
 
     private function createTheDatabase(): void
@@ -45,6 +45,14 @@ final class JudgesPageAfterTheDemoRunJourneyTest extends JourneyTestCase
         $this->console(['intakt:demo:remove'], $this->environment());
         $this->console(['intakt:demo:create'], $this->environment());
         $this->console(['intakt:demo:replay', self::ROOT.'/fixtures/demo/sample-change-review.json', '--factor='.self::REPLAY_FACTOR], $this->environment());
+    }
+
+    /**
+     * @return array{INTAKT_COMPOSE_SERVICE: string}
+     */
+    private function environment(): array
+    {
+        return ['INTAKT_COMPOSE_SERVICE' => 'intakt'];
     }
 
     private function openTheDashboardOnTheBoard(KernelBrowser $dashboard): void
@@ -81,13 +89,5 @@ final class JudgesPageAfterTheDemoRunJourneyTest extends JourneyTestCase
         $start = (int) strpos($page, $from);
 
         return substr($page, $start, (int) strpos($page, $to) - $start);
-    }
-
-    /**
-     * @return array{INTAKT_COMPOSE_SERVICE: string}
-     */
-    private function environment(): array
-    {
-        return ['INTAKT_COMPOSE_SERVICE' => 'intakt'];
     }
 }

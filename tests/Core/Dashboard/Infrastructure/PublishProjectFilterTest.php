@@ -74,11 +74,6 @@ final class PublishProjectFilterTest extends TestCase
 
     private ?PublishProjectFilter $secondWorker = null;
 
-    protected function setUp(): void
-    {
-        $this->log = new BufferingLogger();
-    }
-
     public function testAnOpenedRoundPublishesTheProjectFilterOnTheShellTopicAsAPrivateUpdate(): void
     {
         $this->publisher($this->hubThatAccepts(), $this->ledgerOf('alpha'))(new RoundOpened('r1', 'alpha'));
@@ -204,20 +199,9 @@ final class PublishProjectFilterTest extends TestCase
         self::assertSame([], $this->posted);
     }
 
-    private function publisher(MockHttpClient $hub, Ledger $ledger, LockFactory $locks = new LockFactory(new InMemoryStore())): PublishProjectFilter
+    protected function setUp(): void
     {
-        $projects = new FilterProjects(ListedReviews::on($ledger));
-        $updates = new MercureLiveUpdates(new Hub(self::HUB, new StaticTokenProvider(self::TOKEN), httpClient: $hub), $this->log);
-
-        return new PublishProjectFilter($projects, new Environment(new FilesystemLoader(__DIR__.'/../../../../templates')), $updates, $locks, $this->log);
-    }
-
-    private function ledgerOf(string ...$projects): Ledger
-    {
-        $ledger = self::createStub(Ledger::class);
-        $ledger->method('readInOrder')->willReturn($this->eventsOf(...$projects));
-
-        return $ledger;
+        $this->log = new BufferingLogger();
     }
 
     private function eventsOf(string ...$projects): RecordedEvents
@@ -240,6 +224,22 @@ final class PublishProjectFilterTest extends TestCase
 
             return new MockResponse('urn:uuid:'.count($this->posted));
         });
+    }
+
+    private function ledgerOf(string ...$projects): Ledger
+    {
+        $ledger = self::createStub(Ledger::class);
+        $ledger->method('readInOrder')->willReturn($this->eventsOf(...$projects));
+
+        return $ledger;
+    }
+
+    private function publisher(MockHttpClient $hub, Ledger $ledger, LockFactory $locks = new LockFactory(new InMemoryStore())): PublishProjectFilter
+    {
+        $projects = new FilterProjects(ListedReviews::on($ledger));
+        $updates = new MercureLiveUpdates(new Hub(self::HUB, new StaticTokenProvider(self::TOKEN), httpClient: $hub), $this->log);
+
+        return new PublishProjectFilter($projects, new Environment(new FilesystemLoader(__DIR__.'/../../../../templates')), $updates, $locks, $this->log);
     }
 
     /**

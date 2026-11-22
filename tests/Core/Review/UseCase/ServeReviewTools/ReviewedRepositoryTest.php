@@ -49,15 +49,6 @@ final class ReviewedRepositoryTest extends KernelTestCase
 
     private ReviewedRepository $repository;
 
-    protected function setUp(): void
-    {
-        self::bootKernel();
-        $this->fixture = new RoundFixture(self::getContainer());
-        $repository = self::getContainer()->get(ReviewedRepository::class);
-        self::assertInstanceOf(ReviewedRepository::class, $repository);
-        $this->repository = $repository;
-    }
-
     public function testAnUnexpectedFailureDuringASearchPassesThroughInsteadOfBecomingARefusal(): void
     {
         $this->signInAs($this->fixture->start(1)->id()->toRfc4122());
@@ -126,6 +117,15 @@ final class ReviewedRepositoryTest extends KernelTestCase
         $this->expectExceptionMessageIsOrContains('does not exist at the head under review');
 
         $this->repository->readFile('missing.php');
+    }
+
+    protected function setUp(): void
+    {
+        self::bootKernel();
+        $this->fixture = new RoundFixture(self::getContainer());
+        $repository = self::getContainer()->get(ReviewedRepository::class);
+        self::assertInstanceOf(ReviewedRepository::class, $repository);
+        $this->repository = $repository;
     }
 
     private function signInAs(string $round): void

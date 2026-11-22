@@ -88,17 +88,27 @@ setsid claude -p --model "$model" --max-turns "$turns" --output-format json --da
 session=$!
 # The allowance ends the session only, never this script, so a cut session still reaches the bundle below; the watchdog is in a session of its own too, so its sleep goes with it.
 # It reports the cut by its exit status, not by a file, because the builder can write anywhere a file could be and so stop the kill or fake a cut.
-setsid sh -c 'sleep "$1" && kill -s KILL -- "-$2"' watchdog "$allowance" "$session" > /dev/null 2>&1 &
+# A TERM ends it without a cut only before it sends the kill: it then ends its own group, its sleep and itself, with a status that is no cut;
+# it ignores TERM from before it sends the kill, so a watchdog that has cut still reports the cut when the TERM below reaches it.
+# Its sleep runs in the background, because the shell runs a trap only once a command in the foreground has ended.
+# It cuts only a session whose leader is alive and not a zombie (state Z in /proc, which kill -0 does not tell apart): a leader killed from elsewhere stays a zombie until the wait below reaps it,
+# so a watchdog that wakes in between does not take a surviving child of that session for a cut. Without /proc the state cannot be read and the leader counts as alive.
+# The state is read from the State line of /proc status and not from /proc stat, because the builder can give the leader a name with a line break and a state of its own after it,
+# which status writes escaped on its Name line and stat writes as it is, ahead of the real state.
+# A leader thread that ended while another thread of its process still runs shows state Z too, so the leader counts as a zombie only when its Threads line, which follows State, also says 1.
+setsid sh -c 'zombie() { z=; while read -r key value; do case "$key" in State:) case "$value" in Z*) z=1;; *) return 1;; esac;; Threads:) [ -n "$z" ] && [ "$value" = 1 ]; return;; esac; done < "/proc/$1/status"; return 1; }; trap '\''kill -s KILL 0'\'' TERM; sleep "$1" & wait "$!" && trap "" TERM && kill -0 "$2" && ! zombie "$2" && kill -s KILL -- "-$2"' watchdog "$allowance" "$session" > /dev/null 2>&1 &
 watchdog=$!
 wait "$session"
 status=$?
-# A session ended by SIGKILL may be the watchdog's cut, which ending the watchdog now would hide; waiting for it ends at the allowance at the latest.
 if [ "$status" -ne 137 ]; then
-    # Its group exists only once setsid has run, which a session that ends at once can beat, so the kill is tried again.
+    # The watchdog's kill always ends the session with 137, so any other status rules out a cut; its group exists only once setsid has run, which a session that ends at once can beat, so the kill is tried again.
     for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
         kill -s KILL -- "-$watchdog" 2>/dev/null && break
         sleep 0.1
     done
+else
+    # Status 137 does not rule out a cut (the watchdog's own kill gives it), but a SIGKILL from elsewhere (such as the out-of-memory killer) gives it too, so the watchdog is asked to stop instead of waited out for the rest of the allowance; one that has already cut ignores the TERM.
+    kill -s TERM "$watchdog" 2>/dev/null
 fi
 wait "$watchdog" 2>/dev/null
 cut=$?

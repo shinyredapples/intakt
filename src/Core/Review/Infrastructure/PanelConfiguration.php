@@ -52,26 +52,6 @@ final readonly class PanelConfiguration implements ConfigurationInterface
         return $tree;
     }
 
-    private function reviewers(ArrayNodeDefinition $reviewers): void
-    {
-        $reviewers->isRequired()->requiresAtLeastOneElement();
-        // Keys would be dropped silently, and a key that reads like a role name is easy to mistake for the role.
-        $reviewers->validate()->ifTrue(static fn (array $list): bool => !array_is_list($list))->thenInvalid('The reviewers must be a list, not a map.');
-        $reviewer = $reviewers->arrayPrototype()->children();
-        $this->text($reviewer, 'role');
-        $reviewer->enumNode('tier')->isRequired()->values(array_column(Tier::cases(), 'value'));
-        $reviewer->enumNode('provider')->isRequired()->values(array_column(Provider::cases(), 'value'));
-        $this->text($reviewer, 'prompt');
-        $reviewer->integerNode('budget')->isRequired()->min(1);
-    }
-
-    private function text(NodeBuilder $reviewer, string $key): void
-    {
-        $reviewer->stringNode($key)->isRequired()->cannotBeEmpty()
-            ->validate()->ifTrue(static fn (string $text): bool => !mb_check_encoding($text, 'UTF-8'))->thenInvalid(sprintf('The "%s" key must be valid UTF-8.', $key))->end()
-            ->validate()->ifTrue(static fn (string $text): bool => 1 === preg_match('/^\s*$/u', $text))->thenInvalid(sprintf('The "%s" key must not be blank.', $key))->end();
-    }
-
     /**
      * @param array<int|string, array{quorum: string, reviewers: list<array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}>, rules: list<array{min_lines?: positive-int, paths: list<string>, reviewers: list<array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}>}>}> $panels
      *
@@ -91,6 +71,26 @@ final readonly class PanelConfiguration implements ConfigurationInterface
         }
 
         return $panels;
+    }
+
+    private function reviewers(ArrayNodeDefinition $reviewers): void
+    {
+        $reviewers->isRequired()->requiresAtLeastOneElement();
+        // Keys would be dropped silently, and a key that reads like a role name is easy to mistake for the role.
+        $reviewers->validate()->ifTrue(static fn (array $list): bool => !array_is_list($list))->thenInvalid('The reviewers must be a list, not a map.');
+        $reviewer = $reviewers->arrayPrototype()->children();
+        $this->text($reviewer, 'role');
+        $reviewer->enumNode('tier')->isRequired()->values(array_column(Tier::cases(), 'value'));
+        $reviewer->enumNode('provider')->isRequired()->values(array_column(Provider::cases(), 'value'));
+        $this->text($reviewer, 'prompt');
+        $reviewer->integerNode('budget')->isRequired()->min(1);
+    }
+
+    private function text(NodeBuilder $reviewer, string $key): void
+    {
+        $reviewer->stringNode($key)->isRequired()->cannotBeEmpty()
+            ->validate()->ifTrue(static fn (string $text): bool => !mb_check_encoding($text, 'UTF-8'))->thenInvalid(sprintf('The "%s" key must be valid UTF-8.', $key))->end()
+            ->validate()->ifTrue(static fn (string $text): bool => 1 === preg_match('/^\s*$/u', $text))->thenInvalid(sprintf('The "%s" key must not be blank.', $key))->end();
     }
 
     /**

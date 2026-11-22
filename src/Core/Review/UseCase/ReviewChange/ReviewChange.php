@@ -193,6 +193,21 @@ final readonly class ReviewChange implements ChangeReviews
         return $this->findings->actListOf($round, $this->ledger->judgeDoneOf($round->id()->toRfc4122()));
     }
 
+    private function reasonsOf(ReviewRound $round): BlockReasons
+    {
+        $reasons = ReplayMark::Replay === $round->replayMark() ? [$this->reasons->replay()] : [];
+
+        foreach ($round->reviewers() as $reviewer) {
+            $reason = $this->reasonOf($reviewer);
+
+            if (null !== $reason) {
+                $reasons[] = $reviewer->roleName().' reviewer '.$reason;
+            }
+        }
+
+        return new BlockReasons(...$reasons);
+    }
+
     /**
      * @return list<ReviewerOutcome>
      */
@@ -215,21 +230,6 @@ final readonly class ReviewChange implements ChangeReviews
             $this->ledger->millisecondsOfReviewer($reviewerId),
             new ModelNames(...$this->ledger->modelsOfReviewer($roundId, $reviewerId)),
         );
-    }
-
-    private function reasonsOf(ReviewRound $round): BlockReasons
-    {
-        $reasons = ReplayMark::Replay === $round->replayMark() ? [$this->reasons->replay()] : [];
-
-        foreach ($round->reviewers() as $reviewer) {
-            $reason = $this->reasonOf($reviewer);
-
-            if (null !== $reason) {
-                $reasons[] = $reviewer->roleName().' reviewer '.$reason;
-            }
-        }
-
-        return new BlockReasons(...$reasons);
     }
 
     // Blocked and failed are named apart, so the line says what the dashboard's chip says for the same reviewer.

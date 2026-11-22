@@ -55,19 +55,6 @@ final class StartReviewAtHeadHandlerTest extends TestCase
     private TemporaryRepository $repository;
     private string $checked;
 
-    protected function setUp(): void
-    {
-        $this->repository = new TemporaryRepository();
-        $this->repository->commitFile('README.md', "base\n");
-        $this->repository->checkoutNewBranch('7');
-        $this->checked = $this->repository->commitFile('src/Feature.php', "<?php\n");
-    }
-
-    protected function tearDown(): void
-    {
-        $this->repository->remove();
-    }
-
     public function testTheRoundReviewsTheHeadTheCallerCheckedEvenWhenTheBranchHasMovedPastIt(): void
     {
         $this->repository->commitFile('src/Unchecked.php', "<?php\n");
@@ -120,14 +107,17 @@ final class StartReviewAtHeadHandlerTest extends TestCase
         self::assertSame(['src/Feature.php'], $answer->move->paths);
     }
 
-    private function startAt(string $head): StartReviewAtHead
+    protected function setUp(): void
     {
-        return new StartReviewAtHead(new StartReview('alpha', 'Add the thing.', new RequestedRound('7', null, new ChangeSource($this->repository->path, 'main'))), new CommitId($head));
+        $this->repository = new TemporaryRepository();
+        $this->repository->commitFile('README.md', "base\n");
+        $this->repository->checkoutNewBranch('7');
+        $this->checked = $this->repository->commitFile('src/Feature.php', "<?php\n");
     }
 
-    private function removeSnapshot(string $snapshot): void
+    protected function tearDown(): void
     {
-        new LocalGitForge(LocalRepository::existingAt($this->repository->path, 'main'), new NameStatusParser())->removeSnapshot($snapshot);
+        $this->repository->remove();
     }
 
     private function review(ChangeReviews $reviews): LocalChangeReview
@@ -137,5 +127,15 @@ final class StartReviewAtHeadHandlerTest extends TestCase
         $panels->method('panelForChange')->willReturn(new Panel([$reviewer], QuorumPolicy::All));
 
         return new LocalChangeReview($panels, $reviews);
+    }
+
+    private function startAt(string $head): StartReviewAtHead
+    {
+        return new StartReviewAtHead(new StartReview('alpha', 'Add the thing.', new RequestedRound('7', null, new ChangeSource($this->repository->path, 'main'))), new CommitId($head));
+    }
+
+    private function removeSnapshot(string $snapshot): void
+    {
+        new LocalGitForge(LocalRepository::existingAt($this->repository->path, 'main'), new NameStatusParser())->removeSnapshot($snapshot);
     }
 }

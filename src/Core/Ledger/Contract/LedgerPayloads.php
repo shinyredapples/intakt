@@ -23,31 +23,31 @@ final readonly class LedgerPayloads
     /**
      * @template T of object
      *
-     * @param class-string<T>      $class
-     * @param array<string, mixed> $absentAs
+     * @param class-string<T> $class
      *
      * @return T|null
      */
     // A key in $absentAs takes its value only when the row lacks it, because rows written before the key existed stay as they were, while a present key that does not fit still skips the row.
-    public function of(RecordedEvent $recorded, string $class, array $absentAs = []): ?object
+    public function of(RecordedEvent $recorded, string $class, PayloadDefaults $absentAs = new PayloadDefaults()): ?object
     {
-        return $this->deserialized($recorded->event->payload, $class, [AbstractNormalizer::DEFAULT_CONSTRUCTOR_ARGUMENTS => [$class => $absentAs]]);
+        return $this->deserialized($recorded->event->payload, $class, [AbstractNormalizer::DEFAULT_CONSTRUCTOR_ARGUMENTS => [$class => [...$absentAs]]]);
     }
 
     /**
      * @template T of object
      *
-     * @param class-string<T>      $class
-     * @param array<string, mixed> $unreadAs
+     * @param class-string<T> $class
      *
      * @return T|null
      */
     // A key in $unreadAs is never read from the row and takes the given value, for a reader that must not lose the rest of a row to that one key.
-    public function ofWithout(RecordedEvent $recorded, string $class, array $unreadAs): ?object
+    public function ofWithout(RecordedEvent $recorded, string $class, PayloadDefaults $unreadAs): ?object
     {
+        $values = [...$unreadAs];
+
         return $this->deserialized($recorded->event->payload, $class, [
-            AbstractNormalizer::DEFAULT_CONSTRUCTOR_ARGUMENTS => [$class => $unreadAs],
-            AbstractNormalizer::IGNORED_ATTRIBUTES => array_keys($unreadAs),
+            AbstractNormalizer::DEFAULT_CONSTRUCTOR_ARGUMENTS => [$class => $values],
+            AbstractNormalizer::IGNORED_ATTRIBUTES => array_keys($values),
         ]);
     }
 

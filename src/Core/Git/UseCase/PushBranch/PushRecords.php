@@ -97,12 +97,6 @@ final readonly class PushRecords
         $this->append(LedgerEventKind::ChangeOpened, [...$this->keyOf($request, $head), 'change' => $change->id->value, self::TEXT_DIGEST => $this->digestOf($request->text), 'opening' => $change->opening->value]);
     }
 
-    // A digest, because the ledger keeps none of the builder's words; the title's length goes first, so no title and body read as another pair.
-    private function digestOf(ChangeText $text): string
-    {
-        return hash('sha256', strlen($text->title).':'.$text->title.$text->body);
-    }
-
     /**
      * @return array{project: string, branch: string, head: string}
      */
@@ -156,6 +150,12 @@ final readonly class PushRecords
         }
 
         return is_array($decoded) ? $decoded : [];
+    }
+
+    // A digest, because the ledger keeps none of the builder's words; the title's length goes first, so no title and body read as another pair.
+    private function digestOf(ChangeText $text): string
+    {
+        return hash('sha256', strlen($text->title).':'.$text->title.$text->body);
     }
 
     /**

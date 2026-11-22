@@ -304,11 +304,11 @@ final class DashboardComponentsTest extends KernelTestCase
 
     public function testANeedsYouCardIsAmberWithTheDotAndTheAsk(): void
     {
-        $card = $this->render('card', [...$this->card(), 'ask' => 'Approve this version: it touches secret handling'])->filter('a.card');
+        $card = $this->render('card', [...$this->card(), 'ask' => 'Approve this version: secrets limit, ForgeTokenStore.php changed'])->filter('a.card');
 
         self::assertSame('card needs', $card->attr('class'));
         self::assertCount(1, $card->filter('.top .dot.needs'));
-        self::assertSame('Approve this version: it touches secret handling', $card->filter('.title + p.blocker')->text());
+        self::assertSame('Approve this version: secrets limit, ForgeTokenStore.php changed', $card->filter('.title + p.blocker')->text());
     }
 
     public function testACardWithAnEmptyAskIsAPlainCard(): void
@@ -707,9 +707,17 @@ final class DashboardComponentsTest extends KernelTestCase
         self::assertSame('Set up Intakt', $empty->filter('a')->text());
     }
 
-    public function testAnEmptyColumnSaysNothingHere(): void
+    public function testAnEmptyColumnSaysTheLineItsCallerGives(): void
     {
-        self::assertSame('Nothing here', $this->render('column_empty', [])->filter('.col-empty')->text());
+        self::assertSame('Tasks appear here once they are ready to plan', $this->render('column_empty', ['text' => 'Tasks appear here once they are ready to plan'])->filter('.col-empty')->text());
+    }
+
+    // Maintainer decision 5 of #2740: a column with no line of its own fails, because a fallback line tells a newcomer nothing.
+    public function testAnEmptyColumnWithoutALineFailsToRender(): void
+    {
+        $this->expectException(RuntimeError::class);
+
+        $this->render('column_empty', []);
     }
 
     /**

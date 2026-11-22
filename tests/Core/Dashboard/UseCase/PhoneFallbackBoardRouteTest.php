@@ -13,12 +13,6 @@ use Twig\Environment;
 #[CoversClass(ShowErrorController::class)]
 final class PhoneFallbackBoardRouteTest extends DashboardPageTestCase
 {
-    protected function setUp(): void
-    {
-        $this->browser = self::createClient(server: ['HTTP_HOST' => 'localhost:7780']);
-        self::getContainer()->set(Ledger::class, new DashboardLedger());
-    }
-
     public function testThePlainErrorPagesBoardLinkOpensTheBoardOnAPhone(): void
     {
         $twig = self::createStub(Environment::class);
@@ -38,5 +32,11 @@ final class PhoneFallbackBoardRouteTest extends DashboardPageTestCase
         $this->browser->click($missing->selectLink('Back to the board')->link());
 
         self::assertResponseStatusCodeSame(200);
+    }
+
+    protected function setUp(): void
+    {
+        $this->browser = self::createClient(server: ['HTTP_HOST' => 'localhost:7780']);
+        self::getContainer()->set(Ledger::class, new DashboardLedger());
     }
 }

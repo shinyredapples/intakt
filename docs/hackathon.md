@@ -10,6 +10,8 @@ what was achieved inside that window, and what comes next. Development continues
   </picture>
 </p>
 
+The 90-second demo video: [on YouTube](https://youtu.be/-8v0nflAQBk).
+
 ## The plan
 
 The first release is the review loop ([spec](spec.md), [plan](plan.md)): a panel of reviewers on models from different

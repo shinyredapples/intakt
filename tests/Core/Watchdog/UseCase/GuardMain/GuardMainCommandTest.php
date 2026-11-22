@@ -19,18 +19,23 @@ use Intakt\Core\Watchdog\Domain\CheckedMain;
 use Intakt\Core\Watchdog\Domain\CommitClassifier;
 use Intakt\Core\Watchdog\Domain\HaltClearedPayload;
 use Intakt\Core\Watchdog\Domain\HaltPayload;
+use Intakt\Core\Watchdog\Domain\OwnerPushNoticePayload;
 use Intakt\Core\Watchdog\Infrastructure\ConsoleReport;
 use Intakt\Core\Watchdog\Infrastructure\FirstParentChain;
 use Intakt\Core\Watchdog\Infrastructure\HaltNotRecorded;
 use Intakt\Core\Watchdog\Infrastructure\LedgerHalts;
+use Intakt\Core\Watchdog\Infrastructure\LedgerOwnerPushNotices;
 use Intakt\Core\Watchdog\Infrastructure\MainHistory;
+use Intakt\Core\Watchdog\Infrastructure\NoticeNotRecorded;
 use Intakt\Core\Watchdog\Infrastructure\OwnerKey;
 use Intakt\Core\Watchdog\UseCase\CheckMain\CheckMain;
 use Intakt\Core\Watchdog\UseCase\GuardMain\AHaltNamesItsProject;
+use Intakt\Core\Watchdog\UseCase\GuardMain\GuardedMain;
 use Intakt\Core\Watchdog\UseCase\GuardMain\GuardMain;
 use Intakt\Core\Watchdog\UseCase\GuardMain\GuardMainCommand;
 use Intakt\Core\Watchdog\UseCase\GuardMain\GuardMainInput;
 use Intakt\Tests\Core\Git\TemporaryRepository;
+use Intakt\Tests\Core\Watchdog\BeforeTheLock;
 use Intakt\Tests\Core\Watchdog\HaltLedger;
 use Intakt\Tests\Support\StoredSerializerFactory;
 use Override;
@@ -39,6 +44,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Tester\ApplicationTester;
 use Symfony\Component\Console\Tester\CommandTester;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Lock\LockFactory;
@@ -49,8 +55,12 @@ use Symfony\Component\Process\Process;
 #[CoversClass(GuardMainCommand::class)]
 #[CoversClass(GuardMain::class)]
 #[CoversClass(GuardMainInput::class)]
+#[CoversClass(GuardedMain::class)]
 #[CoversClass(AHaltNamesItsProject::class)]
 #[CoversClass(ConsoleReport::class)]
+#[UsesClass(LedgerOwnerPushNotices::class)]
+#[UsesClass(OwnerPushNoticePayload::class)]
+#[UsesClass(NoticeNotRecorded::class)]
 #[UsesClass(CheckMain::class)]
 #[UsesClass(CheckedMain::class)]
 #[UsesClass(CommitClassifier::class)]
@@ -79,27 +89,9 @@ final class GuardMainCommandTest extends TestCase
     private string $keys;
     private HaltLedger $ledger;
     private LedgerHalts $halts;
+    private LedgerOwnerPushNotices $notices;
+    private BeforeTheLock $store;
     private ?string $path = null;
-
-    #[Override]
-    protected function setUp(): void
-    {
-        $this->repository = new TemporaryRepository();
-        $this->keys = sys_get_temp_dir().'/intakt-watchdog-keys-'.bin2hex(random_bytes(6));
-        mkdir($this->keys);
-        $this->ledger = new HaltLedger();
-        $this->halts = new LedgerHalts($this->ledger, new LedgerPayloads(StoredSerializerFactory::create()));
-    }
-
-    #[Override]
-    protected function tearDown(): void
-    {
-        if (null !== $this->path) {
-            putenv('PATH='.$this->path);
-        }
-        $this->repository->remove();
-        new Filesystem()->remove($this->keys);
-    }
 
     public function testASeededUnsignedCommitHaltsTheProjectWithACardNamingTheCommitAndExitsWithOne(): void
     {
@@ -209,15 +201,170 @@ final class GuardMainCommandTest extends TestCase
         self::assertSame([], $this->ledger->kinds());
     }
 
-    public function testAnOwnerSignedCommitRaisesNoCardAndExitsWithZero(): void
+    public function testAnOwnerSignedCommitPrintsOneNoticeRaisesNoCardAndExitsWithZero(): void
+    {
+        $seen = $this->repository->commitEmpty('Seen');
+        $owner = $this->repository->commitSignedWith($this->privateKey('owner'), 'Owner change');
+
+        $tester = $this->whenTheGuardRuns($seen, ['--owner-key' => [$this->publicKey('owner')]]);
+
+        self::assertSame(Command::SUCCESS, $tester->getStatusCode());
+        self::assertSame(sprintf("notice acme/shop: commit %s owner_signed, pushed without the gate\nacme/shop is not halted: no owner card stands\n", $owner), $tester->getDisplay());
+        self::assertSame([LedgerEventKind::OwnerPushNoticed], $this->ledger->kinds());
+    }
+
+    public function testTheSameOwnerSignedCommitSeenAgainGivesNoSecondNotice(): void
     {
         $seen = $this->repository->commitEmpty('Seen');
         $this->repository->commitSignedWith($this->privateKey('owner'), 'Owner change');
+        $this->whenTheGuardRuns($seen, ['--owner-key' => [$this->publicKey('owner')]]);
 
         $tester = $this->whenTheGuardRuns($seen, ['--owner-key' => [$this->publicKey('owner')]]);
 
         self::assertSame(Command::SUCCESS, $tester->getStatusCode());
         self::assertSame("acme/shop is not halted: no owner card stands\n", $tester->getDisplay());
+        self::assertSame([LedgerEventKind::OwnerPushNoticed], $this->ledger->kinds());
+    }
+
+    public function testASecondCloneThatReadsTheSameOwnerSignedCommitGivesNoSecondNotice(): void
+    {
+        $seen = $this->repository->commitEmpty('Seen');
+        $this->repository->commitSignedWith($this->privateKey('owner'), 'Owner change');
+        $clone = $this->cloneOfTheRepository();
+        $this->whenTheGuardRuns($seen, ['--owner-key' => [$this->publicKey('owner')]]);
+
+        $tester = $this->whenTheGuardRunsWith(['project' => self::PROJECT, 'repository' => $clone, 'last-seen-head' => $seen, '--owner-key' => [$this->publicKey('owner')]]);
+
+        self::assertSame(Command::SUCCESS, $tester->getStatusCode());
+        self::assertSame("acme/shop is not halted: no owner card stands\n", $tester->getDisplay());
+        self::assertSame([LedgerEventKind::OwnerPushNoticed], $this->ledger->kinds());
+    }
+
+    public function testASecondCloneWhoseGuardFinishesBetweenTheFirstGuardsReadAndItsRecordTakesTheOnlyNotice(): void
+    {
+        $seen = $this->repository->commitEmpty('Seen');
+        $owner = $this->repository->commitSignedWith($this->privateKey('owner'), 'Owner change');
+        $clone = $this->cloneOfTheRepository();
+        $second = null;
+        $this->store->runFirst(function () use ($clone, $seen, &$second): void {
+            $second = $this->whenTheGuardRunsWith(['project' => self::PROJECT, 'repository' => $clone, 'last-seen-head' => $seen, '--owner-key' => [$this->publicKey('owner')]]);
+        });
+
+        $first = $this->whenTheGuardRuns($seen, ['--owner-key' => [$this->publicKey('owner')]]);
+
+        self::assertInstanceOf(CommandTester::class, $second);
+        self::assertStringContainsString('notice acme/shop: commit '.$owner, $second->getDisplay());
+        self::assertSame("acme/shop is not halted: no owner card stands\n", $first->getDisplay());
+        self::assertSame([LedgerEventKind::OwnerPushNoticed], $this->ledger->kinds());
+    }
+
+    public function testTheSameOwnerSignedCommitIsNoticedOnceForEachProject(): void
+    {
+        $seen = $this->repository->commitEmpty('Seen');
+        $owner = $this->repository->commitSignedWith($this->privateKey('owner'), 'Owner change');
+        $this->whenTheGuardRuns($seen, ['--owner-key' => [$this->publicKey('owner')]]);
+
+        $tester = $this->whenTheGuardRunsWith(['project' => 'acme/blog', 'repository' => $this->repository->path, 'last-seen-head' => $seen, '--owner-key' => [$this->publicKey('owner')]]);
+
+        self::assertStringContainsString('notice acme/blog: commit '.$owner, $tester->getDisplay());
+        self::assertSame([LedgerEventKind::OwnerPushNoticed, LedgerEventKind::OwnerPushNoticed], $this->ledger->kinds());
+    }
+
+    public function testAnOwnerPushNextToAViolationIsNoticedAndTheCardStillHalts(): void
+    {
+        $seen = $this->repository->commitEmpty('Seen');
+        $owner = $this->repository->commitSignedWith($this->privateKey('owner'), 'Owner change');
+        $unsigned = $this->repository->commitEmpty('Seeded unsigned commit');
+
+        $tester = $this->whenTheGuardRuns($seen, ['--owner-key' => [$this->publicKey('owner')]]);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertSame(sprintf("notice acme/shop: commit %s owner_signed, pushed without the gate\ncard %s halts acme/shop: commit %s unsigned, raised 2026-11-21T09:00:00+00:00\n", $owner, $this->onlyStandingCard()->id->toRfc4122(), $unsigned), $tester->getDisplay());
+        self::assertSame([LedgerEventKind::MainHalted, LedgerEventKind::OwnerPushNoticed], $this->ledger->kinds());
+    }
+
+    public function testANoticeTheLedgerRefusesExitsWithOneAndIsNeverReportedClean(): void
+    {
+        $seen = $this->repository->commitEmpty('Seen');
+        $this->repository->commitSignedWith($this->privateKey('owner'), 'Owner change');
+        $this->ledger->refuseAppends();
+
+        $tester = $this->whenTheGuardRuns($seen, ['--owner-key' => [$this->publicKey('owner')]]);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString('The notice for', $tester->getDisplay());
+        self::assertStringNotContainsString('is not halted', $tester->getDisplay());
+    }
+
+    public function testANoticeTheLedgerRefusesAfterTakingAnEarlierOneIsPrintedBeforeTheErrorAndNotGivenAgainOnRetry(): void
+    {
+        $seen = $this->repository->commitEmpty('Seen');
+        $first = $this->repository->commitSignedWith($this->privateKey('owner'), 'First owner change');
+        $second = $this->repository->commitSignedWith($this->privateKey('owner'), 'Second owner change');
+        $this->ledger->refuseAppendsBeyond(1);
+
+        $refused = $this->whenTheGuardRuns($seen, ['--owner-key' => [$this->publicKey('owner')]]);
+
+        self::assertSame(Command::FAILURE, $refused->getStatusCode());
+        $display = $refused->getDisplay();
+        self::assertStringContainsString('notice acme/shop: commit '.$first, $display);
+        self::assertStringNotContainsString('notice acme/shop: commit '.$second, $display);
+        self::assertLessThan(strpos($display, 'The notice for'), strpos($display, 'notice acme/shop: commit '.$first));
+        self::assertSame([LedgerEventKind::OwnerPushNoticed], $this->ledger->kinds());
+
+        $this->ledger->takeAppendsAgain();
+        $retry = $this->whenTheGuardRuns($seen, ['--owner-key' => [$this->publicKey('owner')]]);
+
+        self::assertSame(Command::SUCCESS, $retry->getStatusCode());
+        self::assertSame(sprintf("notice acme/shop: commit %s owner_signed, pushed without the gate\nacme/shop is not halted: no owner card stands\n", $second), $retry->getDisplay());
+        self::assertSame([LedgerEventKind::OwnerPushNoticed, LedgerEventKind::OwnerPushNoticed], $this->ledger->kinds());
+    }
+
+    public function testANoticeLedgerThatCannotBeReadWritesNoNoticeExitsWithOneAndARetryGivesBothNotices(): void
+    {
+        $seen = $this->repository->commitEmpty('Seen');
+        $first = $this->repository->commitSignedWith($this->privateKey('owner'), 'First owner change');
+        $second = $this->repository->commitSignedWith($this->privateKey('owner'), 'Second owner change');
+        $this->ledger->failReadsOf(LedgerEventKind::OwnerPushNoticed);
+
+        $failed = $this->whenTheApplicationRunsTheGuard(['project' => self::PROJECT, 'repository' => $this->repository->path, 'last-seen-head' => $seen, '--owner-key' => [$this->publicKey('owner')]]);
+
+        self::assertSame(Command::FAILURE, $failed->getStatusCode());
+        self::assertStringNotContainsString('notice acme/shop', $failed->getDisplay());
+        self::assertSame([], $this->ledger->kinds());
+
+        $this->ledger->readAgain();
+        $retry = $this->whenTheGuardRuns($seen, ['--owner-key' => [$this->publicKey('owner')]]);
+
+        self::assertSame(Command::SUCCESS, $retry->getStatusCode());
+        self::assertSame(sprintf("notice acme/shop: commit %s owner_signed, pushed without the gate\nnotice acme/shop: commit %s owner_signed, pushed without the gate\nacme/shop is not halted: no owner card stands\n", $first, $second), $retry->getDisplay());
+        self::assertSame([LedgerEventKind::OwnerPushNoticed, LedgerEventKind::OwnerPushNoticed], $this->ledger->kinds());
+    }
+
+    public function testTheRecordedNoticesAreReadOnceAGuardRunHoweverManyOwnerPushesThereAre(): void
+    {
+        $seen = $this->repository->commitEmpty('Seen');
+        $this->repository->commitSignedWith($this->privateKey('owner'), 'First owner change');
+        $this->repository->commitSignedWith($this->privateKey('owner'), 'Second owner change');
+        $this->repository->commitSignedWith($this->privateKey('owner'), 'Third owner change');
+
+        $tester = $this->whenTheGuardRuns($seen, ['--owner-key' => [$this->publicKey('owner')]]);
+
+        self::assertSame(Command::SUCCESS, $tester->getStatusCode());
+        self::assertSame(1, $this->ledger->readsOf(LedgerEventKind::OwnerPushNoticed));
+        self::assertCount(3, $this->ledger->kinds());
+    }
+
+    public function testAProjectNameThatIsNotValidUtf8IsRefusedWithTwoAndNothingIsRecorded(): void
+    {
+        $seen = $this->repository->commitEmpty('Seen');
+        $this->repository->commitSignedWith($this->privateKey('owner'), 'Owner change');
+        $this->repository->commitEmpty('Seeded unsigned commit');
+
+        $tester = $this->whenTheGuardRunsWith(['project' => "demo\xFF", 'repository' => $this->repository->path, 'last-seen-head' => $seen, '--owner-key' => [$this->publicKey('owner')]]);
+
+        self::assertSame(Command::INVALID, $tester->getStatusCode());
+        self::assertStringContainsString('project name given is not valid', $tester->getDisplay());
         self::assertSame([], $this->ledger->kinds());
     }
 
@@ -301,20 +448,62 @@ final class GuardMainCommandTest extends TestCase
         self::assertSame("acme/shop\\nforged is not halted: no owner card stands\n", $tester->getDisplay());
     }
 
-    private function onlyStandingCard(): OwnerCard
+    public function testAProjectNameWithFormatterTagsIsPrintedAsTypedInTheNotice(): void
     {
-        $standing = $this->halts->standing();
-        self::assertCount(1, $standing);
+        $seen = $this->repository->commitEmpty('Seen');
+        $owner = $this->repository->commitSignedWith($this->privateKey('owner'), 'Owner change');
 
-        return $standing[0];
+        $tester = $this->whenTheGuardRunsWith(['project' => '<info>demo</info>', 'repository' => $this->repository->path, 'last-seen-head' => $seen, '--owner-key' => [$this->publicKey('owner')]]);
+
+        self::assertStringContainsString(sprintf('notice <info>demo</info>: commit %s owner_signed', $owner), $tester->getDisplay());
     }
 
-    /**
-     * @param array<string, list<string>> $options
-     */
-    private function whenTheGuardRuns(string $seen, array $options): CommandTester
+    #[Override]
+    protected function setUp(): void
     {
-        return $this->whenTheGuardRunsWith(['project' => self::PROJECT, 'repository' => $this->repository->path, 'last-seen-head' => $seen, ...$options]);
+        $this->repository = new TemporaryRepository();
+        $this->keys = sys_get_temp_dir().'/intakt-watchdog-keys-'.bin2hex(random_bytes(6));
+        mkdir($this->keys);
+        $this->ledger = new HaltLedger();
+        $payloads = new LedgerPayloads(StoredSerializerFactory::create());
+        $this->halts = new LedgerHalts($this->ledger, $payloads);
+        $this->notices = new LedgerOwnerPushNotices($this->ledger, $payloads);
+        $this->store = new BeforeTheLock(new InMemoryStore());
+    }
+
+    #[Override]
+    protected function tearDown(): void
+    {
+        if (null !== $this->path) {
+            putenv('PATH='.$this->path);
+        }
+        $this->repository->remove();
+        new Filesystem()->remove($this->keys);
+    }
+
+    // Through the application, because a ledger that throws on a read is caught and reported there, as on a real install.
+    /**
+     * @param array<string, string|list<string>> $input
+     */
+    private function whenTheApplicationRunsTheGuard(array $input): ApplicationTester
+    {
+        $guard = new GuardMain(new CheckMain(new HardenedGit(), new Filesystem()), $this->halts, $this->notices, new LockFactory($this->store));
+        $application = new Application();
+        $application->setAutoExit(false);
+        $application->addCommand(new GuardMainCommand($guard));
+        $tester = new ApplicationTester($application);
+        $tester->run(['command' => GuardMainCommand::NAME, ...$input]);
+
+        return $tester;
+    }
+
+    // Kept under the keys folder, because tearDown removes that folder and so the clone with it.
+    private function cloneOfTheRepository(): string
+    {
+        $clone = $this->keys.'/clone';
+        new Process(['git', 'clone', '--quiet', $this->repository->path, $clone])->mustRun();
+
+        return $clone;
     }
 
     /**
@@ -322,7 +511,7 @@ final class GuardMainCommandTest extends TestCase
      */
     private function whenTheGuardRunsWith(array $input): CommandTester
     {
-        $guard = new GuardMain(new CheckMain(new HardenedGit(), new Filesystem()), $this->halts, new LockFactory(new InMemoryStore()));
+        $guard = new GuardMain(new CheckMain(new HardenedGit(), new Filesystem()), $this->halts, $this->notices, new LockFactory($this->store));
         $application = new Application();
         $application->addCommand(new GuardMainCommand($guard));
         $tester = new CommandTester($application->find(GuardMainCommand::NAME));
@@ -343,6 +532,11 @@ final class GuardMainCommandTest extends TestCase
         $this->gitMovesMainAfterARead(sprintf('if [ -f %1$s ]; then %2$s update-ref refs/heads/main %3$s; rm %1$s; else %2$s update-ref refs/heads/main %4$s; touch %1$s; fi', $flip, $this->realGit(), $one, $other));
     }
 
+    private function realGit(): string
+    {
+        return escapeshellarg(new ExecutableFinder()->find('git') ?? self::fail('git is not installed'));
+    }
+
     private function gitMovesMainAfterARead(string $move): void
     {
         $bin = $this->keys.'/bin';
@@ -351,11 +545,6 @@ final class GuardMainCommandTest extends TestCase
         chmod($bin.'/git', 0o755);
         $this->path = (string) getenv('PATH');
         putenv('PATH='.$bin.PATH_SEPARATOR.$this->path);
-    }
-
-    private function realGit(): string
-    {
-        return escapeshellarg(new ExecutableFinder()->find('git') ?? self::fail('git is not installed'));
     }
 
     private function privateKey(string $name): string
@@ -373,5 +562,21 @@ final class GuardMainCommandTest extends TestCase
         $parts = explode(' ', trim((string) file_get_contents($this->privateKey($name).'.pub')));
 
         return $parts[0].' '.$parts[1];
+    }
+
+    /**
+     * @param array<string, list<string>> $options
+     */
+    private function whenTheGuardRuns(string $seen, array $options): CommandTester
+    {
+        return $this->whenTheGuardRunsWith(['project' => self::PROJECT, 'repository' => $this->repository->path, 'last-seen-head' => $seen, ...$options]);
+    }
+
+    private function onlyStandingCard(): OwnerCard
+    {
+        $standing = $this->halts->standing();
+        self::assertCount(1, $standing);
+
+        return $standing[0];
     }
 }

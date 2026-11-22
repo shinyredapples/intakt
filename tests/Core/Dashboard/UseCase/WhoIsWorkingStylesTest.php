@@ -62,18 +62,18 @@ final class WhoIsWorkingStylesTest extends TestCase
         return (string) preg_replace('~/\*.*?\*/~s', '', $sheet);
     }
 
-    private function phoneBlock(): string
-    {
-        preg_match_all('/@media \(max-width: 760px\) \{(.*?)\n\}/s', $this->sheet(), $blocks);
-
-        return implode("\n", $blocks[1]);
-    }
-
     private function rule(string $selector, string $css): string
     {
         preg_match_all('/([^{}]+)\{([^{}]*)\}/', $css, $rules, PREG_SET_ORDER);
         $found = array_filter($rules, static fn (array $rule): bool => trim($rule[1]) === $selector);
 
         return [] === $found ? self::fail($selector) : implode(' ', array_column($found, 2));
+    }
+
+    private function phoneBlock(): string
+    {
+        preg_match_all('/@media \(max-width: 760px\) \{(.*?)\n\}/s', $this->sheet(), $blocks);
+
+        return implode("\n", $blocks[1]);
     }
 }

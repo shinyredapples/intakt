@@ -60,15 +60,6 @@ final class SteeringTrustCheckTest extends TestCase
     private MockClock $clock;
     private RateLimitReadings $readings;
 
-    protected function setUp(): void
-    {
-        $this->github = new RecordedTrust();
-        $this->logger = new RecordingLogger();
-        $this->key = AppKey::generate();
-        $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
-        $this->readings = FreshReadings::at($this->clock);
-    }
-
     public function testAPermissionReadWaitsForTheResetOfTheInstallation(): void
     {
         $this->pauseTheInstallation();
@@ -310,6 +301,15 @@ final class SteeringTrustCheckTest extends TestCase
         self::assertSame([], $this->github->requested);
     }
 
+    protected function setUp(): void
+    {
+        $this->github = new RecordedTrust();
+        $this->logger = new RecordingLogger();
+        $this->key = AppKey::generate();
+        $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
+        $this->readings = FreshReadings::at($this->clock);
+    }
+
     #[NoDiscard]
     private function check(string $login): SteeringTrust
     {
@@ -329,13 +329,6 @@ final class SteeringTrustCheckTest extends TestCase
         return new SteeringTrustCheck(new SteeringIdentities($answers, $this->jwt(), $maintainerSlug), $answers, $this->tokens());
     }
 
-    private function answers(): TrustAnswers
-    {
-        $http = $this->github->client();
-
-        return new TrustAnswers(new GitHubCalls($http, $this->readings, $this->installationTokens($http)));
-    }
-
     private function tokens(): CheckedInstallationTokens
     {
         $http = $this->github->client();
@@ -345,17 +338,24 @@ final class SteeringTrustCheckTest extends TestCase
         return new CheckedInstallationTokens(new InstallationReadBack(new InstallationReader($this->jwt(), $tokens, new GitHubCalls($http, $this->readings, $tokens)), $expected, $this->logger), $tokens);
     }
 
-    private function installationTokens(HttpClientInterface $http): InstallationTokens
-    {
-        return new InstallationTokens(new InstallationTokenMinter($this->jwt(), $http, $this->logger), '678', $this->clock);
-    }
-
     private function pauseTheInstallation(): void
     {
         try {
             $this->readings->observe('678', 429, ['retry-after' => ['600']]);
         } catch (ForgeRateLimited) {
         }
+    }
+
+    private function answers(): TrustAnswers
+    {
+        $http = $this->github->client();
+
+        return new TrustAnswers(new GitHubCalls($http, $this->readings, $this->installationTokens($http)));
+    }
+
+    private function installationTokens(HttpClientInterface $http): InstallationTokens
+    {
+        return new InstallationTokens(new InstallationTokenMinter($this->jwt(), $http, $this->logger), '678', $this->clock);
     }
 
     private function jwt(): AppJwt

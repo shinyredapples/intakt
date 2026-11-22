@@ -38,6 +38,23 @@ final readonly class Devcontainer
     }
 
     /**
+     * @return array<mixed>
+     */
+    private static function decoded(string $jsonc): array
+    {
+        $keepStrings = static fn (array $match): string => is_string($match[1] ?? null) ? $match[1] : '';
+        $json = preg_replace_callback(self::TRAILING_COMMA, $keepStrings, preg_replace_callback(self::COMMENT, $keepStrings, $jsonc) ?? '');
+
+        try {
+            $config = json_decode($json ?? '', true, flags: JSON_THROW_ON_ERROR);
+        } catch (JsonException $broken) {
+            throw JobImageNotBuilt::notJson(self::PATH, $broken->getMessage());
+        }
+
+        return is_array($config) && ([] === $config || !array_is_list($config)) ? $config : throw JobImageNotBuilt::notJson(self::PATH, 'not an object');
+    }
+
+    /**
      * @param array<mixed> $build
      */
     private static function fromBuild(array $build): JobImagePlan
@@ -52,15 +69,6 @@ final readonly class Devcontainer
         }
 
         return JobImagePlan::fromTree(JobImageSource::Devcontainer, $tree, '' === $tree ? $path : Path::makeRelative($path, $tree));
-    }
-
-    private static function fromImage(string $image): JobImagePlan
-    {
-        if (!ImageReference::isImage($image)) {
-            throw JobImageNotBuilt::notAnImage($image);
-        }
-
-        return JobImagePlan::generated(JobImageSource::Devcontainer, sprintf("FROM %s\n", $image));
     }
 
     private static function insideRepository(string $context): string
@@ -88,20 +96,12 @@ final readonly class Devcontainer
         return is_string($value) ? $value : throw JobImageNotBuilt::notText($key);
     }
 
-    /**
-     * @return array<mixed>
-     */
-    private static function decoded(string $jsonc): array
+    private static function fromImage(string $image): JobImagePlan
     {
-        $keepStrings = static fn (array $match): string => is_string($match[1] ?? null) ? $match[1] : '';
-        $json = preg_replace_callback(self::TRAILING_COMMA, $keepStrings, preg_replace_callback(self::COMMENT, $keepStrings, $jsonc) ?? '');
-
-        try {
-            $config = json_decode($json ?? '', true, flags: JSON_THROW_ON_ERROR);
-        } catch (JsonException $broken) {
-            throw JobImageNotBuilt::notJson(self::PATH, $broken->getMessage());
+        if (!ImageReference::isImage($image)) {
+            throw JobImageNotBuilt::notAnImage($image);
         }
 
-        return is_array($config) && ([] === $config || !array_is_list($config)) ? $config : throw JobImageNotBuilt::notJson(self::PATH, 'not an object');
+        return JobImagePlan::generated(JobImageSource::Devcontainer, sprintf("FROM %s\n", $image));
     }
 }

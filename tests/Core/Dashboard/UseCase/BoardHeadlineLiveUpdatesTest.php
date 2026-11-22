@@ -59,29 +59,6 @@ final class BoardHeadlineLiveUpdatesTest extends DashboardPageTestCase
      */
     private array $published = [];
 
-    #[Override]
-    protected function setUp(): void
-    {
-        $before = $_SERVER['MERCURE_JWT_SECRET'] ?? null;
-        $this->secretBefore = is_string($before) ? $before : null;
-        // A fresh random key, because a committed one would be a secret; the page only signs a listener's token with it.
-        $_SERVER['MERCURE_JWT_SECRET'] = $_ENV['MERCURE_JWT_SECRET'] = bin2hex(random_bytes(16));
-        parent::setUp();
-        // One kernel for the whole test, because the page, the pushed update and the page loaded again read the same ledger.
-        $this->browser->disableReboot();
-        $this->givenTheHubRecordsWhatIsPublished();
-        $this->givenTheDownloadedScriptsExist();
-    }
-
-    #[Override]
-    protected function tearDown(): void
-    {
-        $secret = $this->secretBefore ?? '';
-        $_SERVER['MERCURE_JWT_SECRET'] = $_ENV['MERCURE_JWT_SECRET'] = $secret;
-        $this->removeTheStandIns();
-        parent::tearDown();
-    }
-
     public function testTheBoardListensToTheShellTopicWhenLiveUpdatesAreOn(): void
     {
         $source = $this->browser->request('GET', '/')->filter('turbo-mercure-stream-source');
@@ -168,20 +145,19 @@ final class BoardHeadlineLiveUpdatesTest extends DashboardPageTestCase
         self::assertCount(0, $this->browser->request('GET', '/lanes')->filter('#'.$target));
     }
 
-    // Morphed, so a review that stays in progress keeps its card as the same node, and a card link with the keyboard focus keeps it.
-    public function testAPushWhileAReviewStaysInProgressKeepsItsWorkingNowCardAsTheSameNode(): void
+    // Morphed with the card the page shows, because then a focused card link keeps the focus, which only the browser check shows the pinned Turbo does.
+    public function testAPushWhileAReviewStaysInProgressMorphsTheWorkingNowCardThePageShows(): void
     {
         $this->pushedHeadlineAfterAReviewerStarted();
-        $page = $this->browser->request('GET', '/');
-        $card = $page->filter('#working-now a.wcard')->getNode(0);
-        self::assertNotNull($card);
+        $card = $this->browser->request('GET', '/')->filter('#working-now a.wcard');
+        self::assertCount(1, $card);
 
         $this->ledger->startReviewer(self::ROUND, 'correctness');
         $this->roundUpdates()->reviewerStarted(Uuid::fromString(self::ROUND), 'correctness');
 
-        $pushed = $this->lastShellUpdate();
-        self::assertCount(1, new Crawler($pushed)->filter('turbo-stream[action="replace"][method="morph"][target="working-now"]'));
-        self::assertSame($card, $this->replaced($page, $pushed)->filter('#working-now a.wcard')->getNode(0));
+        $stream = new Crawler($this->lastShellUpdate())->filter('turbo-stream[action="replace"][method="morph"][target="working-now"]');
+        self::assertCount(1, $stream);
+        self::assertSame($card->outerHtml(), new Crawler($stream->filter('template')->html())->filter('#working-now a.wcard')->outerHtml());
     }
 
     public function testAJudgedRoundPushedToTheBoardTakesItsReviewersOutOfTheHeadline(): void
@@ -379,16 +355,21 @@ final class BoardHeadlineLiveUpdatesTest extends DashboardPageTestCase
         self::assertCount(0, $streams->filter('turbo-stream[action="update"][target="board-headline"]:not([method="morph"])'));
     }
 
-    public function testABoardPushedEmptyToAnEmptyBoardLeavesTheSetUpLinkInPlaceSoItKeepsTheKeyboardFocus(): void
+    // board-push-focus.browser.mjs applies these files with the pinned Turbo, so they must stay what the board renders and pushes.
+    public function testTheBrowserChecksPageHeadIsTheHeadOfAnEmptyBoard(): void
     {
         $page = $this->browser->request('GET', '/');
-        $link = $page->filter('.page-head .actions a#board-setup[href="/setup"]')->getNode(0);
-        self::assertNotNull($link);
+
+        self::assertSame($this->browserFixture('head.html'), $page->filter('.page-head')->outerHtml());
+    }
+
+    public function testTheBrowserChecksStreamsAreTheMorphsPushedToAnEmptyBoard(): void
+    {
         $this->roundUpdates()->reviewerStarted(Uuid::fromString(self::ROUND), 'security');
 
-        $updated = $this->replaced($page, $this->lastShellUpdate());
+        $morphs = new Crawler($this->lastShellUpdate())->filter('turbo-stream[method="morph"]')->each(static fn (Crawler $stream): string => $stream->outerHtml());
 
-        self::assertSame($link, $updated->filter('.page-head .actions a#board-setup[href="/setup"]')->getNode(0));
+        self::assertSame($this->browserFixture('streams.html'), implode("\n", $morphs));
     }
 
     public function testThePushedBoardLeavesTheReviewListLinkInPlaceSoItKeepsTheKeyboardFocus(): void
@@ -424,6 +405,29 @@ final class BoardHeadlineLiveUpdatesTest extends DashboardPageTestCase
         self::assertResponseIsSuccessful();
         self::assertCount(0, $page->filter('turbo-mercure-stream-source'));
         self::assertSame(self::REVIEWING, $page->filter('#board-headline')->text());
+    }
+
+    #[Override]
+    protected function setUp(): void
+    {
+        $before = $_SERVER['MERCURE_JWT_SECRET'] ?? null;
+        $this->secretBefore = is_string($before) ? $before : null;
+        // A fresh random key, because a committed one would be a secret; the page only signs a listener's token with it.
+        $_SERVER['MERCURE_JWT_SECRET'] = $_ENV['MERCURE_JWT_SECRET'] = bin2hex(random_bytes(16));
+        parent::setUp();
+        // One kernel for the whole test, because the page, the pushed update and the page loaded again read the same ledger.
+        $this->browser->disableReboot();
+        $this->givenTheHubRecordsWhatIsPublished();
+        $this->givenTheDownloadedScriptsExist();
+    }
+
+    #[Override]
+    protected function tearDown(): void
+    {
+        $secret = $this->secretBefore ?? '';
+        $_SERVER['MERCURE_JWT_SECRET'] = $_ENV['MERCURE_JWT_SECRET'] = $secret;
+        $this->removeTheStandIns();
+        parent::tearDown();
     }
 
     // Without a hub key no listener can be authorized, as when the hub is not set up; read when the kernel boots, so it takes a new one.
@@ -507,18 +511,22 @@ final class BoardHeadlineLiveUpdatesTest extends DashboardPageTestCase
         return $page;
     }
 
-    // Like Turbo's replace: the template's nodes take the target's place, so an empty template takes the target away.
+    private function browserFixture(string $name): string
+    {
+        $contents = file_get_contents(__DIR__.'/board-push-focus/'.$name);
+        self::assertIsString($contents);
+
+        return rtrim($contents, "\n");
+    }
+
+    // Like Turbo's replace, a morph too, because only board-push-focus.browser.mjs shows whether the pinned Turbo keeps a morphed node and its focus.
     private function replaced(Crawler $page, string $streams): Crawler
     {
         foreach (new Crawler($streams)->filter('turbo-stream[action="replace"]')->each(static fn (Crawler $stream): Crawler => $stream) as $stream) {
             $template = $stream->filter('template')->getNode(0);
             self::assertNotNull($template);
 
-            // Turbo morphs a `method="morph"` stream into the shown element, so an element pushed with the markup it already has stays the same node.
-            $shownAlready = 'morph' === $stream->attr('method') ? trim($stream->filter('template')->html()) : null;
-            $targets = $page->filter('[id="'.$stream->attr('target').'"]')->reduce(static fn (Crawler $old): bool => $old->outerHtml() !== $shownAlready);
-
-            foreach ($targets->each(static fn (Crawler $old): ?DOMNode => $old->getNode(0)) as $target) {
+            foreach ($page->filter('[id="'.$stream->attr('target').'"]')->each(static fn (Crawler $old): ?DOMNode => $old->getNode(0)) as $target) {
                 self::assertNotNull($target);
                 $parent = $target->parentNode;
                 $document = $target->ownerDocument;

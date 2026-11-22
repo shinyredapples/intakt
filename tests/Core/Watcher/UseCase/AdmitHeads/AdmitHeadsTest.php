@@ -37,13 +37,6 @@ final class AdmitHeadsTest extends TestCase
     private RecordingLogger $log;
     private AdmitHeads $admit;
 
-    protected function setUp(): void
-    {
-        $this->forge = new RecordedChecks([str_repeat('a', 40) => 'pending', str_repeat('b', 40) => 'green', str_repeat('c', 40) => 'red', str_repeat('d', 40) => 'cancelled', str_repeat('e', 40) => 'rerun', str_repeat('f', 40) => 'cancelled-after-success', str_repeat('1', 40) => 'failed-dependabot-suite']);
-        $this->log = new RecordingLogger();
-        $this->admit = new AdmitHeads($this->forge, new AdmissionDecision(), new MockClock('2026-11-02T10:00:00+00:00'), $this->log);
-    }
-
     public function testANewHeadWithPendingCiStartsNoRoundAndIsReadAgainAfterTheInterval(): void
     {
         $decision = ($this->admit)('demo', $this->change('1', 'a'));
@@ -119,6 +112,13 @@ final class AdmitHeadsTest extends TestCase
         $this->expectException(ForgeReadFailed::class);
 
         (new AdmitHeads($forge, new AdmissionDecision(), new MockClock(), $this->log))('demo', $this->change('1', 'a'));
+    }
+
+    protected function setUp(): void
+    {
+        $this->forge = new RecordedChecks([str_repeat('a', 40) => 'pending', str_repeat('b', 40) => 'green', str_repeat('c', 40) => 'red', str_repeat('d', 40) => 'cancelled', str_repeat('e', 40) => 'rerun', str_repeat('f', 40) => 'cancelled-after-success', str_repeat('1', 40) => 'failed-dependabot-suite']);
+        $this->log = new RecordingLogger();
+        $this->admit = new AdmitHeads($this->forge, new AdmissionDecision(), new MockClock('2026-11-02T10:00:00+00:00'), $this->log);
     }
 
     private function change(string $id, string $head): OpenChange
