@@ -152,6 +152,14 @@ final readonly class RoundFixture
         return $this->round($this->startOn($this->bus, $reviewers));
     }
 
+    // On a panel the test hands in, so a round can run the reviewers a real configuration names.
+    public function startOnPanel(Panel $panel): ReviewRound
+    {
+        $command = new RunReviewRound(new ReviewTarget($this->subject(), SampleIdentity::of(self::TASK, $panel)), $panel, new RequestedRound(self::CHANGE));
+
+        return $this->round($this->startWith($command, $this->bus));
+    }
+
     public function startOn(MessageBusInterface $queue, int $reviewers): string
     {
         return $this->startFor(self::CHANGE, $queue, $reviewers);
