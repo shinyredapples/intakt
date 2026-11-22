@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\AccountCooldowns;
 use Intakt\Core\Ai\Contract\AiServices;
+use Intakt\Core\Ai\Contract\PinnedProviderCooldowns;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Infrastructure\AccountFailoverPlatform;
@@ -311,7 +312,7 @@ return static function (ContainerConfigurator $container): void {
         }
 
         $container->services()->set($provider->accountsId(), AccountFailoverPlatform::class)
-            ->args([$provider, $platforms, new ReferenceConfigurator(AccountCooldowns::class), new ReferenceConfigurator(ClockInterface::class), new ReferenceConfigurator('logger')]);
+            ->args([$provider, $platforms, new ReferenceConfigurator(AccountCooldowns::class), new ReferenceConfigurator(ClockInterface::class), new ReferenceConfigurator('logger'), new ReferenceConfigurator(PinnedProviderCooldowns::class)]);
         $enabledAccounts[$provider->value] = array_keys($enabled);
         $tierPlatforms[$provider->value] = new ReferenceConfigurator($provider->accountsId());
     }

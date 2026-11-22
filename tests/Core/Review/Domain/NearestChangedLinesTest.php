@@ -74,13 +74,25 @@ final class NearestChangedLinesTest extends TestCase
         self::assertSame(mb_substr($line, 0, NearestChangedLines::MAX_LINE_LENGTH), $text);
     }
 
-    public function testALongQuoteIsStoredCutToTheLengthCap(): void
+    public function testALongQuoteIsStoredWholeSoItStaysTheKeyOfItsLines(): void
     {
         $quote = 'dropReason('.str_repeat('a, ', 100).'b)';
 
         $nearest = $this->nearestFor('`'.$quote.'` is unused.', [['src/A.php', 1, '$reason = 1;']]);
 
-        self::assertSame(mb_substr($quote, 0, NearestChangedLines::MAX_LINE_LENGTH), $nearest[0]->quote);
+        self::assertSame($quote, $nearest[0]->quote);
+    }
+
+    public function testAQuoteLongerThanTheLengthCapDoesNotShareItsKeyWithAQuoteEqualToItsFirstPart(): void
+    {
+        $short = 'ghostName'.str_repeat('.', 151);
+        $long = $short.' + phantomWidget';
+
+        $nearest = $this->nearestFor('Try `'.$long.'` and `'.$short.'`.', [['src/A.php', 2, 'ghostTitle();'], ['src/B.php', 4, 'phantomWidgetReal();']]);
+
+        self::assertSame([$long, $short], array_map(static fn (QuoteNearLines $near): string => $near->quote, $nearest));
+        self::assertSame('src/B.php', $nearest[0]->lines[0]->file);
+        self::assertSame('src/A.php', $nearest[1]->lines[0]->file);
     }
 
     public function testANamePartInsideALongerWordIsNotShared(): void
