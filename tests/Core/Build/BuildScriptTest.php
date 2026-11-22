@@ -737,7 +737,7 @@ final class BuildScriptTest extends TestCase
 
     public function testATimeoutThatReportsTheStatusOfTheGitItEndedStillLogsTheCut(): void
     {
-        // Such a timeout ends with 143, the status of a git ended by TERM, and not with its own 124.
+        // The cut must be logged for this timeout too, because it ends with 143, the status of a git ended by TERM, and not with its own 124.
         $timeout = (string) new ExecutableFinder()->find('timeout');
         $this->givenTheTimeout("exec '{$timeout}' --preserve-status \"\$@\"");
         $this->givenTheCli(<<<'SH'
