@@ -22,7 +22,7 @@ final readonly class PayloadDefaults implements IteratorAggregate
     {
         $named = [];
         foreach ($values as $name => $value) {
-            if (!\is_string($name)) {
+            if (!is_string($name)) {
                 throw new InvalidArgumentException('Payload defaults are named by constructor parameter; a positional default would never be read.');
             }
 
