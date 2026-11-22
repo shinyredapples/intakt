@@ -26,7 +26,7 @@ final readonly class TestMethodNameRule implements Rule
 
     private const int MINIMUM_WORDS = 3;
 
-    // a run of capitals is one word (testMCPToolWorks counts MCP, Tool and Works), and digits belong to the word they follow
+    // because an acronym reads as one word (testMCPToolWorks has three) and a lone digit is no word (testItSends2 has two)
     private const string WORD = '[A-Z](?:[a-z0-9]+|[A-Z0-9]*(?![a-z]))';
 
     public function __construct(private string $root)
