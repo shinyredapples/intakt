@@ -51,6 +51,32 @@ final class JudgedRoundFindingsPageTest extends DashboardPageTestCase
         self::assertStringNotContainsString('`', $crawler->filter('#round-round-1 .finding-cards')->text());
     }
 
+    public function testACardsTitleIsTheFindingsHeadlineAndTheWholeTextFollowsIt(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeToFixAtLine7OfA('round-1', 'Keep `Ready? yes` as the prompt. More.');
+
+        $card = $this->browser->request('GET', '/reviews/round-1')->filter('#round-round-1 .finding-card');
+
+        self::assertSame(['F1 Keep Ready? yes as the prompt.', 'Keep Ready? yes as the prompt. More.'], [$card->filter('.fc-title')->text(), $card->filter('.fc-detail')->text()]);
+    }
+
+    public function testACardOfOneSentenceHasNoTextBelowItsTitle(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeToFixAtLine7OfA('round-1', 'Take the lock first.');
+
+        self::assertCount(0, $this->browser->request('GET', '/reviews/round-1')->filter('#round-round-1 .finding-card .fc-detail'));
+    }
+
+    public function testACardWhoseTextIsOnlyUnicodeWhiteSpaceSaysTheTextIsNotRecorded(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeToFixAtLine7OfA('round-1', "\u{00A0}\u{2003}");
+
+        self::assertSame('F1 Text not recorded.', $this->browser->request('GET', '/reviews/round-1')->filter('#round-round-1 .finding-card .fc-title')->text());
+    }
+
     public function testAFindingsCardAndTheNowBlockShowItsEmphasisWithoutTheMarks(): void
     {
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);

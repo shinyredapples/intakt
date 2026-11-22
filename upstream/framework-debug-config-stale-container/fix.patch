@@ -1,0 +1,54 @@
+From 5dc0e556a20dc8401187d956b833725d6a30e2a1 Mon Sep 17 00:00:00 2001
+From: Harald Ponce de Leon <haraldpdl@gmail.com>
+Date: Fri, 20 Nov 2026 23:40:24 +0100
+Subject: [PATCH] [FrameworkBundle] Fix `debug:config` when booting the kernel
+ copy rebuilds the container
+
+---
+ .../Command/ConfigDebugCommand.php             |  3 +++
+ .../Functional/ConfigDebugCommandTest.php      | 18 ++++++++++++++++++
+ 2 files changed, 21 insertions(+)
+
+diff --git a/src/Symfony/Bundle/FrameworkBundle/Command/ConfigDebugCommand.php b/src/Symfony/Bundle/FrameworkBundle/Command/ConfigDebugCommand.php
+index 51dcc84b9809a..f18590993c474 100644
+--- a/src/Symfony/Bundle/FrameworkBundle/Command/ConfigDebugCommand.php
++++ b/src/Symfony/Bundle/FrameworkBundle/Command/ConfigDebugCommand.php
+@@ -151,6 +151,9 @@ private function compileContainer(): ContainerBuilder
+         $kernel = clone $this->getApplication()->getKernel();
+         $kernel->boot();
+ 
++        // booting may have built the container with the extensions of the bundles already; an extension is loaded once only
++        (new \ReflectionMethod($kernel, 'initializeBundles'))->invoke($kernel);
++
+         $method = new \ReflectionMethod($kernel, 'buildContainer');
+         $container = $method->invoke($kernel);
+         if ($this->envVarProcessors) {
+diff --git a/src/Symfony/Bundle/FrameworkBundle/Tests/Functional/ConfigDebugCommandTest.php b/src/Symfony/Bundle/FrameworkBundle/Tests/Functional/ConfigDebugCommandTest.php
+index 8902c44d7d730..d9e5807704c9b 100644
+--- a/src/Symfony/Bundle/FrameworkBundle/Tests/Functional/ConfigDebugCommandTest.php
++++ b/src/Symfony/Bundle/FrameworkBundle/Tests/Functional/ConfigDebugCommandTest.php
+@@ -85,6 +85,24 @@ public function testDumpWithBundleRegisteringServicesInBuild(bool $debug)
+         $this->assertStringContainsString('secret: test', $tester->getDisplay());
+     }
+ 
++    public function testDumpWhenTheCachedContainerIsStale()
++    {
++        // a resource dated in the future keeps the cached container stale, so the command's copy of the kernel builds the container again when it boots
++        $configFile = __DIR__.'/app/ConfigDump/config.yml';
++        $mtime = filemtime($configFile);
++        touch($configFile, time() + 10);
++
++        try {
++            $tester = $this->createCommandTester(true);
++            $ret = $tester->execute(['name' => 'framework', 'path' => 'secret']);
++        } finally {
++            touch($configFile, $mtime);
++        }
++
++        $this->assertSame(0, $ret, 'Returns 0 in case of success');
++        $this->assertStringContainsString('test', $tester->getDisplay());
++    }
++
+     /**
+      * @testWith [true]
+      *           [false]
