@@ -1,5 +1,18 @@
 ## Forge contract and the local git forge
 
+### In short
+
+The forge is where changes live. The Forge contract gives the rest of Intakt typed reads of a change: its commits, its diff, a file as it is at the head, and whether and how the head moved. Writes (review comments and the verdict status on a head) sit in a separate contract, so a read-only forge implements none of them. The local git forge, where a local branch against the base branch is the pull request, and the GitHub forge both implement the reads. The page also covers the forge budget, author trust, the open pull request and issue listings, and the verdict identity.
+
+Worth knowing:
+
+- The local git forge runs git with an argument list, no shell, hardened settings and a 60-second timeout.
+- Failures are typed: `ChangeNotFound`, `FileNotFoundAtHead` and `ForgeReadFailed`.
+- A changed task, check command or panel policy makes a recorded verdict stale.
+- `intakt:change:summarize` prints a summary of a local branch's change.
+
+The rest of this page is the detailed reference.
+
 `Plugin/Forge/Contract` holds what reading a change needs, as typed objects only:
 
 - `Forge::change(ChangeId)` returns a `Change`: the id, the `commits` (`CommitRange`: `base` and `head` as `CommitId`, full hashes) and the `diff` (`Diff`: the unified `patch` text and the `files`, a `ChangedFiles` collection of `ChangedFile`: path and `FileStatus` added, modified or deleted; a rename shows as a delete and an add).
