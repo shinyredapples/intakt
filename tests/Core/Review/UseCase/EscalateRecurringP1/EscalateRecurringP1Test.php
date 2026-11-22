@@ -51,11 +51,20 @@ use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Component\Console\Tester\CommandTester;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
+use Symfony\Component\Messenger\Bridge\Doctrine\Transport\Connection;
+use Symfony\Component\Messenger\Bridge\Doctrine\Transport\DoctrineTransport;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\Event\WorkerMessageFailedEvent;
 use Symfony\Component\Messenger\Exception\HandlerFailedException;
 use Symfony\Component\Messenger\Stamp\RedeliveryStamp;
 use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
+use Symfony\Component\Messenger\Transport\Serialization\PhpSerializer;
+use Symfony\Component\Messenger\Worker;
+use Psr\Log\LoggerInterface;
+use Symfony\Component\EventDispatcher\EventDispatcherInterface;
+use Intakt\Plugin\Vendor\Contract\EscalationReviews;
+use Intakt\Plugin\Vendor\Contract\Vendor;
+use Intakt\Tests\Core\Review\UseCase\RunReviewRound\ScriptedVendor;
 
 #[Group('persistence')]
 #[CoversClass(EscalateRecurringP1Handler::class)]
@@ -327,8 +336,7 @@ final class EscalateRecurringP1Test extends KernelTestCase
         $this->judged($this->completedAt(self::HEAD_A, $this->keyedP1(), $this->otherP1()));
         $this->judged($this->completedAt(self::HEAD_B, $this->repeated($this->keyedP1()), $this->repeated($this->otherP1(), 'F2')));
         [$bus, $vendor] = $this->fixture->escalations->messages;
-        $this->fixture->escalate($bus, new ScriptedEscalations(new EscalationVerdict(EscalationOutcome::Confirmed, 'The bus drops it.')));
-        $this->fixture->escalate($vendor, new ScriptedEscalations(new EscalationVerdict(EscalationOutcome::Rejected, 'The vendor keeps it.')));
+        $this->workerAnswers($this->fixture->escalations->messages, new EscalationVerdict(EscalationOutcome::Confirmed, 'The bus drops it.'), new EscalationVerdict(EscalationOutcome::Rejected, 'The vendor keeps it.'));
         $this->judged($this->completedAt(self::HEAD_C, $this->repeated($this->keyedP1())));
 
         $printed = $this->ledgerEvents();
@@ -428,6 +436,25 @@ final class EscalateRecurringP1Test extends KernelTestCase
     private function keptOf(string $finding): ?KeptVerdict
     {
         return $this->fixture->keptVerdicts()->ofKey($this->keyOf($finding));
+    }
+
+    // The application's handler and command bus behind a worker that reads a Doctrine queue on the test's SQLite database, with only the strong tier scripted, as messenger:consume runs it.
+    /**
+     * @param list<EscalateRecurringP1> $messages
+     */
+    private function workerAnswers(array $messages, EscalationVerdict ...$verdicts): void
+    {
+        $container = self::getContainer();
+        $container->set(Vendor::class, new ScriptedVendor());
+        $container->set(EscalationReviews::class, new VerdictsInTurn(array_values($verdicts)));
+        $queue = new DoctrineTransport(new Connection(['queue_name' => 'escalations'], $container->get('doctrine.dbal.default_connection')), new PhpSerializer());
+        foreach ($messages as $message) {
+            $queue->send(new Envelope($message));
+        }
+
+        new Worker(['async' => $queue], $container->get('command.bus'), $container->get(EventDispatcherInterface::class), $container->get(LoggerInterface::class))->run(['sleep' => 0, 'stop_when_empty' => true]);
+
+        self::assertSame(0, $queue->getMessageCount());
     }
 
     // Through the application's failure listeners, as a worker hands the message on once its retries are used up.
