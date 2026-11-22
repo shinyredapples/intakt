@@ -25,18 +25,6 @@ final class MirrorChangeTest extends TestCase
 {
     private TemporaryRepository $repository;
 
-    protected function setUp(): void
-    {
-        $this->repository = new TemporaryRepository();
-        $this->repository->commitFile('bin/check', "old\n");
-        $this->repository->checkoutNewBranch('head');
-    }
-
-    protected function tearDown(): void
-    {
-        $this->repository->remove();
-    }
-
     public function testTheChangeIsTheHeadsCommitAndEverythingItAddsSinceItForkedFromMain(): void
     {
         $head = $this->repository->commitFile('bin/check', "new\n");
@@ -116,6 +104,18 @@ final class MirrorChangeTest extends TestCase
         $this->expectExceptionObject(CommitNotRead::because('the head and main have 0 merge bases, so the change has no single diff'));
 
         $this->read('other');
+    }
+
+    protected function setUp(): void
+    {
+        $this->repository = new TemporaryRepository();
+        $this->repository->commitFile('bin/check', "old\n");
+        $this->repository->checkoutNewBranch('head');
+    }
+
+    protected function tearDown(): void
+    {
+        $this->repository->remove();
     }
 
     private function read(string $head): HeldChange

@@ -59,29 +59,6 @@ final class BoardHeadlineLiveUpdatesTest extends DashboardPageTestCase
      */
     private array $published = [];
 
-    #[Override]
-    protected function setUp(): void
-    {
-        $before = $_SERVER['MERCURE_JWT_SECRET'] ?? null;
-        $this->secretBefore = is_string($before) ? $before : null;
-        // A fresh random key, because a committed one would be a secret; the page only signs a listener's token with it.
-        $_SERVER['MERCURE_JWT_SECRET'] = $_ENV['MERCURE_JWT_SECRET'] = bin2hex(random_bytes(16));
-        parent::setUp();
-        // One kernel for the whole test, because the page, the pushed update and the page loaded again read the same ledger.
-        $this->browser->disableReboot();
-        $this->givenTheHubRecordsWhatIsPublished();
-        $this->givenTheDownloadedScriptsExist();
-    }
-
-    #[Override]
-    protected function tearDown(): void
-    {
-        $secret = $this->secretBefore ?? '';
-        $_SERVER['MERCURE_JWT_SECRET'] = $_ENV['MERCURE_JWT_SECRET'] = $secret;
-        $this->removeTheStandIns();
-        parent::tearDown();
-    }
-
     public function testTheBoardListensToTheShellTopicWhenLiveUpdatesAreOn(): void
     {
         $source = $this->browser->request('GET', '/')->filter('turbo-mercure-stream-source');
@@ -428,6 +405,29 @@ final class BoardHeadlineLiveUpdatesTest extends DashboardPageTestCase
         self::assertResponseIsSuccessful();
         self::assertCount(0, $page->filter('turbo-mercure-stream-source'));
         self::assertSame(self::REVIEWING, $page->filter('#board-headline')->text());
+    }
+
+    #[Override]
+    protected function setUp(): void
+    {
+        $before = $_SERVER['MERCURE_JWT_SECRET'] ?? null;
+        $this->secretBefore = is_string($before) ? $before : null;
+        // A fresh random key, because a committed one would be a secret; the page only signs a listener's token with it.
+        $_SERVER['MERCURE_JWT_SECRET'] = $_ENV['MERCURE_JWT_SECRET'] = bin2hex(random_bytes(16));
+        parent::setUp();
+        // One kernel for the whole test, because the page, the pushed update and the page loaded again read the same ledger.
+        $this->browser->disableReboot();
+        $this->givenTheHubRecordsWhatIsPublished();
+        $this->givenTheDownloadedScriptsExist();
+    }
+
+    #[Override]
+    protected function tearDown(): void
+    {
+        $secret = $this->secretBefore ?? '';
+        $_SERVER['MERCURE_JWT_SECRET'] = $_ENV['MERCURE_JWT_SECRET'] = $secret;
+        $this->removeTheStandIns();
+        parent::tearDown();
     }
 
     // Without a hub key no listener can be authorized, as when the hub is not set up; read when the kernel boots, so it takes a new one.

@@ -102,12 +102,6 @@ abstract class DashboardPageTestCase extends WebTestCase
         return false === $files ? [] : $files;
     }
 
-    private function serveTheSameFactsIn(TestContainer $container): void
-    {
-        $container->set(Ledger::class, $this->ledger);
-        $container->set(ReplayMarks::class, new ReplayMarks($this->replayMarks));
-    }
-
     protected function flagAsReplay(string $project): void
     {
         $this->replayMarks->flag($project);
@@ -116,5 +110,11 @@ abstract class DashboardPageTestCase extends WebTestCase
     protected function storeRoundAs(string $round, ReplayMark $mark): void
     {
         $this->replayMarks->store($round, $mark);
+    }
+
+    private function serveTheSameFactsIn(TestContainer $container): void
+    {
+        $container->set(Ledger::class, $this->ledger);
+        $container->set(ReplayMarks::class, new ReplayMarks($this->replayMarks));
     }
 }

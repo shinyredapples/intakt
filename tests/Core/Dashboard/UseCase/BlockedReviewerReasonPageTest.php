@@ -68,15 +68,6 @@ final class BlockedReviewerReasonPageTest extends WebTestCase
     /** @var list<string> */
     private array $nowState = [];
 
-    protected function setUp(): void
-    {
-        $this->browser = self::createClient(server: ['HTTP_HOST' => 'localhost:7780']);
-        $this->browser->disableReboot();
-        // The page reads the round's end from the clock, so it must share the fixture's time or the round is long overdue and leaves the Now box.
-        self::clockAt('2026-10-30 12:00:00 UTC');
-        $this->fixture = new RoundFixture(self::getContainer());
-    }
-
     public function testTheReviewCommandNamesTheBlockedReviewerAndItsReason(): void
     {
         $console = $this->reviewedByTheCommand();
@@ -101,6 +92,15 @@ final class BlockedReviewerReasonPageTest extends WebTestCase
         self::assertSame(['Blocked', OutOfProvidersForRole::REASON], $this->nowState);
     }
 
+    protected function setUp(): void
+    {
+        $this->browser = self::createClient(server: ['HTTP_HOST' => 'localhost:7780']);
+        $this->browser->disableReboot();
+        // The page reads the round's end from the clock, so it must share the fixture's time or the round is long overdue and leaves the Now box.
+        self::clockAt('2026-10-30 12:00:00 UTC');
+        $this->fixture = new RoundFixture(self::getContainer());
+    }
+
     // Runs intakt:review on a branch of a temporary repository, so the console lines are the command's own output.
     private function reviewedByTheCommand(): CommandTester
     {
@@ -121,6 +121,27 @@ final class BlockedReviewerReasonPageTest extends WebTestCase
         }
 
         return $tester;
+    }
+
+    private function blockedReviewer(): string
+    {
+        foreach ($this->fixture->transactions()->stored($this->roundId)->reviewers() as $reviewer) {
+            if ('role-1' === $reviewer->roleName()) {
+                return $reviewer->id()->toRfc4122();
+            }
+        }
+
+        self::fail('The round has no role-1 reviewer.');
+    }
+
+    private function panel(): Panel
+    {
+        $members = array_map(
+            static fn (int $number): PanelReviewer => new PanelReviewer(new ReviewerRole('role-'.$number, 'Look at part '.$number.'.'), new ReviewerModel(Tier::Standard, Provider::Anthropic), 1),
+            [1, 2],
+        );
+
+        return new Panel($members, QuorumPolicy::All);
     }
 
     private function reviewChange(): ReviewChange
@@ -156,26 +177,5 @@ final class BlockedReviewerReasonPageTest extends WebTestCase
             $vendor,
             $fixture->noFailedJudgings(),
         );
-    }
-
-    private function blockedReviewer(): string
-    {
-        foreach ($this->fixture->transactions()->stored($this->roundId)->reviewers() as $reviewer) {
-            if ('role-1' === $reviewer->roleName()) {
-                return $reviewer->id()->toRfc4122();
-            }
-        }
-
-        self::fail('The round has no role-1 reviewer.');
-    }
-
-    private function panel(): Panel
-    {
-        $members = array_map(
-            static fn (int $number): PanelReviewer => new PanelReviewer(new ReviewerRole('role-'.$number, 'Look at part '.$number.'.'), new ReviewerModel(Tier::Standard, Provider::Anthropic), 1),
-            [1, 2],
-        );
-
-        return new Panel($members, QuorumPolicy::All);
     }
 }

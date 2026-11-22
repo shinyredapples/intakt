@@ -56,13 +56,6 @@ final class GitHubChangeAuthorshipTest extends TestCase
     private AppKey $key;
     private MockClock $clock;
 
-    protected function setUp(): void
-    {
-        $this->github = new RecordedTrust();
-        $this->key = AppKey::generate();
-        $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
-    }
-
     public function testAPullRequestThisAppsBotAccountCreatedIsCreatedByIntakt(): void
     {
         self::assertTrue($this->isCreatedByIntakt(RecordedTrust::PULL_BY_OWN_IDENTITY));
@@ -128,6 +121,13 @@ final class GitHubChangeAuthorshipTest extends TestCase
         } catch (ForgeReadFailed) {
             self::assertSame([], $this->github->requested);
         }
+    }
+
+    protected function setUp(): void
+    {
+        $this->github = new RecordedTrust();
+        $this->key = AppKey::generate();
+        $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
     }
 
     private function isCreatedByIntakt(string $change): bool

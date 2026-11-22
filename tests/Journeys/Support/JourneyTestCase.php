@@ -182,27 +182,6 @@ abstract class JourneyTestCase extends TestCase
         return $browser;
     }
 
-    /**
-     * @param array<string,string> $environment
-     */
-    private function bootDriverKernel(array $environment): Kernel
-    {
-        // Because a second call would otherwise save the first call's settings as the ones to put back.
-        $this->shutDownDriverKernel();
-
-        // Read from $_ENV first by the container, and put back after the test, so the harness's other tests keep what .env.test gives them.
-        foreach ([...$this->driverEnvironment(), ...$environment] as $name => $value) {
-            $before = $_ENV[$name] ?? null;
-            $this->environmentBefore[$name] = is_string($before) ? $before : null;
-            $_ENV[$name] = $value;
-        }
-
-        $this->driverKernel = new Kernel(self::ENVIRONMENT, false);
-        $this->driverKernel->boot();
-
-        return $this->driverKernel;
-    }
-
     // On the shared queue, because the worker that runs the queued round is another console process than the tick that queued it.
     /**
      * @param array<string,string> $environment
@@ -230,25 +209,6 @@ abstract class JourneyTestCase extends TestCase
         $this->containerRebuild($this->console(...))->rebuild($environment, self::CONSOLE_SECONDS);
     }
 
-    /**
-     * @param Closure(list<string>, array<string,string>, int): string $console
-     */
-    private function watcherStartOn(Closure $console): WatcherStart
-    {
-        return new WatcherStart($console, $this->containerRebuild($console));
-    }
-
-    /**
-     * @param Closure(list<string>, array<string,string>, int): string $console
-     */
-    private function containerRebuild(Closure $console): ContainerRebuild
-    {
-        // Asked of the kernel, because it alone decides where the instance's container is compiled, from the APP_CACHE_DIR bin/instance gives the journey too.
-        $kernel = new Kernel(self::ENVIRONMENT, false);
-
-        return new ContainerRebuild(ContainerRebuild::loaderOf($kernel, $kernel->getBuildDir()), $console);
-    }
-
     #[After]
     final protected function shutDownDriverKernel(): void
     {
@@ -268,6 +228,57 @@ abstract class JourneyTestCase extends TestCase
         }
 
         $this->environmentBefore = [];
+    }
+
+    final protected function address(): string
+    {
+        $address = getenv(self::ADDRESS_VARIABLE);
+
+        if (!is_string($address) || '' === $address) {
+            self::fail(self::ADDRESS_VARIABLE.' is not set: run the journeys with bin/check --journeys');
+        }
+
+        return $address;
+    }
+
+    /**
+     * @param array<string,string> $environment
+     */
+    private function bootDriverKernel(array $environment): Kernel
+    {
+        // Because a second call would otherwise save the first call's settings as the ones to put back.
+        $this->shutDownDriverKernel();
+
+        // Read from $_ENV first by the container, and put back after the test, so the harness's other tests keep what .env.test gives them.
+        foreach ([...$this->driverEnvironment(), ...$environment] as $name => $value) {
+            $before = $_ENV[$name] ?? null;
+            $this->environmentBefore[$name] = is_string($before) ? $before : null;
+            $_ENV[$name] = $value;
+        }
+
+        $this->driverKernel = new Kernel(self::ENVIRONMENT, false);
+        $this->driverKernel->boot();
+
+        return $this->driverKernel;
+    }
+
+    /**
+     * @param Closure(list<string>, array<string,string>, int): string $console
+     */
+    private function watcherStartOn(Closure $console): WatcherStart
+    {
+        return new WatcherStart($console, $this->containerRebuild($console));
+    }
+
+    /**
+     * @param Closure(list<string>, array<string,string>, int): string $console
+     */
+    private function containerRebuild(Closure $console): ContainerRebuild
+    {
+        // Asked of the kernel, because it alone decides where the instance's container is compiled, from the APP_CACHE_DIR bin/instance gives the journey too.
+        $kernel = new Kernel(self::ENVIRONMENT, false);
+
+        return new ContainerRebuild(ContainerRebuild::loaderOf($kernel, $kernel->getBuildDir()), $console);
     }
 
     // The defaults bin/console reads, because the journey's PHPUnit loads no Dotenv; parsed rather than loaded, because a worker handed Dotenv's list of loaded names would load the in-memory queue of .env.test over the shared one.
@@ -305,16 +316,5 @@ abstract class JourneyTestCase extends TestCase
         $port = $this->settingsIn(self::TEST_SETTINGS)['DASHBOARD_PORT'] ?? null;
 
         return is_string($port) && '' !== $port ? $port : self::fail('DASHBOARD_PORT is not set in '.self::TEST_SETTINGS);
-    }
-
-    final protected function address(): string
-    {
-        $address = getenv(self::ADDRESS_VARIABLE);
-
-        if (!is_string($address) || '' === $address) {
-            self::fail(self::ADDRESS_VARIABLE.' is not set: run the journeys with bin/check --journeys');
-        }
-
-        return $address;
     }
 }

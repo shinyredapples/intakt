@@ -84,11 +84,6 @@ final class ReadRoundToolsTest extends KernelTestCase
 {
     private RoundFixture $fixture;
 
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-    }
-
     public function testTheStatusOfARoundWaitingForItsReviewersListsThemQueued(): void
     {
         $round = $this->fixture->start(2);
@@ -359,6 +354,11 @@ final class ReadRoundToolsTest extends KernelTestCase
         self::assertSame(ReplayMark::Replay, $this->actList()($round->id()->toRfc4122())->mark);
     }
 
+    protected function setUp(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer());
+    }
+
     private function flag(string $project): void
     {
         new FlagProjectAsReplayHandler($this->fixture->entities)(new FlagProjectAsReplay($project));
@@ -393,18 +393,6 @@ final class ReadRoundToolsTest extends KernelTestCase
     private function notesOf(array $act): array
     {
         return array_combine(array_map(static fn (Finding $entry): string => $entry->id, $act), array_map(static fn (Finding $entry): ?string => $entry->judgeNote(), $act));
-    }
-
-    /**
-     * @param list<Finding> $findings
-     */
-    private function judgedRoundReporting(array $findings): ReviewRound
-    {
-        $round = $this->fixture->start(1);
-        $this->fixture->deliver($this->fixture->bus->messages[0], new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, $findings, [], [])]));
-        $this->fixture->judge(new ScriptedJudgement(new Judgement([])))(new JudgeRound($round->id()->toRfc4122()));
-
-        return $this->fixture->round($round->id()->toRfc4122());
     }
 
     private function statusTool(): RoundStatusTool
@@ -487,6 +475,18 @@ final class ReadRoundToolsTest extends KernelTestCase
     private function quoting(string $id, string $text): Finding
     {
         return new Finding($id, Severity::P1, 'src/Thing.php', 1, null, $text, FixableBy::Builder, false, null, null);
+    }
+
+    /**
+     * @param list<Finding> $findings
+     */
+    private function judgedRoundReporting(array $findings): ReviewRound
+    {
+        $round = $this->fixture->start(1);
+        $this->fixture->deliver($this->fixture->bus->messages[0], new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, $findings, [], [])]));
+        $this->fixture->judge(new ScriptedJudgement(new Judgement([])))(new JudgeRound($round->id()->toRfc4122()));
+
+        return $this->fixture->round($round->id()->toRfc4122());
     }
 
     private function finding(string $id, Severity $severity): Finding

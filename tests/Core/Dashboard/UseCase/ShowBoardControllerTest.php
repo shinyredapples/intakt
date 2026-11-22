@@ -81,19 +81,6 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
      */
     private array $readings = [];
 
-    // Nothing waits unless a test says so, because the board reads the owner notices for its Needs you card on every load and a page test creates no schema.
-    protected function setUp(): void
-    {
-        parent::setUp();
-        $stub = self::createStub(OwnerNotices::class);
-        $stub->method('stillRunningOldestFirst')->willReturnCallback(function (): array {
-            $reading = array_shift($this->readings) ?? $this->notices;
-
-            return $reading instanceof RuntimeException ? throw $reading : $reading;
-        });
-        self::getContainer()->set(OwnerNotices::class, $stub);
-    }
-
     public function testTheRootAddressShowsTheBoard(): void
     {
         $page = $this->browser->request('GET', '/');
@@ -1093,6 +1080,19 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         $this->browser->request('GET', '/', server: ['HTTP_HOST' => 'attacker.example:7780']);
 
         self::assertResponseStatusCodeSame(Response::HTTP_BAD_REQUEST);
+    }
+
+    // Nothing waits unless a test says so, because the board reads the owner notices for its Needs you card on every load and a page test creates no schema.
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $stub = self::createStub(OwnerNotices::class);
+        $stub->method('stillRunningOldestFirst')->willReturnCallback(function (): array {
+            $reading = array_shift($this->readings) ?? $this->notices;
+
+            return $reading instanceof RuntimeException ? throw $reading : $reading;
+        });
+        self::getContainer()->set(OwnerNotices::class, $stub);
     }
 
     private function column(Crawler $page, string $name): Crawler

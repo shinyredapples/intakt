@@ -66,36 +66,6 @@ final readonly class CheckHandBack implements HandBackChecks
         }
     }
 
-    /**
-     * @throws HandBackNotChecked
-     */
-    private function checkedIn(GivenHistory $history, HandBack $handBack, string $head): AcceptedHandBack|RefusedHandBack
-    {
-        $refusal = $this->refusalToUnbundle($handBack, $history)
-            ?? $this->refusalOfUnshipped($handBack, $head, $history)
-            ?? $this->refusalOfFastForward($head, $history)
-            ?? $this->refusalOfMerges($handBack, $head, $history);
-
-        if ($refusal instanceof HandBackRefusal) {
-            return new RefusedHandBack($refusal);
-        }
-
-        $stripped = $this->stripped->of($history, $head, $handBack->mountedCredentials);
-
-        return $stripped instanceof AcceptedHandBack ? $this->scanned($stripped, $handBack, $history) : $stripped;
-    }
-
-    /**
-     * @throws HandBackNotChecked
-     */
-    private function scanned(AcceptedHandBack $stripped, HandBack $handBack, GivenHistory $history): AcceptedHandBack|RefusedHandBack
-    {
-        // The stripped and redacted commits, because they are what the push sends.
-        $refusal = $this->secrets->refusalOf($history, $stripped->head, $handBack->mountedCredentials);
-
-        return $refusal instanceof HandBackRefusal ? new RefusedHandBack($refusal) : $stripped;
-    }
-
     private function givenHistory(HandBack $handBack): GivenHistory
     {
         $repository = $this->resolved($handBack->repository);
@@ -166,6 +136,25 @@ final readonly class CheckHandBack implements HandBackChecks
         return null;
     }
 
+    /**
+     * @throws HandBackNotChecked
+     */
+    private function checkedIn(GivenHistory $history, HandBack $handBack, string $head): AcceptedHandBack|RefusedHandBack
+    {
+        $refusal = $this->refusalToUnbundle($handBack, $history)
+            ?? $this->refusalOfUnshipped($handBack, $head, $history)
+            ?? $this->refusalOfFastForward($head, $history)
+            ?? $this->refusalOfMerges($handBack, $head, $history);
+
+        if ($refusal instanceof HandBackRefusal) {
+            return new RefusedHandBack($refusal);
+        }
+
+        $stripped = $this->stripped->of($history, $head, $handBack->mountedCredentials);
+
+        return $stripped instanceof AcceptedHandBack ? $this->scanned($stripped, $handBack, $history) : $stripped;
+    }
+
     private function refusalToUnbundle(HandBack $handBack, GivenHistory $history): ?HandBackRefusal
     {
         // Unbundling writes the objects only, never a ref, so a refused bundle moves no branch.
@@ -223,5 +212,16 @@ final readonly class CheckHandBack implements HandBackChecks
         }
 
         return null;
+    }
+
+    /**
+     * @throws HandBackNotChecked
+     */
+    private function scanned(AcceptedHandBack $stripped, HandBack $handBack, GivenHistory $history): AcceptedHandBack|RefusedHandBack
+    {
+        // The stripped and redacted commits, because they are what the push sends.
+        $refusal = $this->secrets->refusalOf($history, $stripped->head, $handBack->mountedCredentials);
+
+        return $refusal instanceof HandBackRefusal ? new RefusedHandBack($refusal) : $stripped;
     }
 }

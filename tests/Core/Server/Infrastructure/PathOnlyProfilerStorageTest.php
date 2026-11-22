@@ -18,16 +18,6 @@ final class PathOnlyProfilerStorageTest extends TestCase
 {
     private string $folder;
 
-    protected function setUp(): void
-    {
-        $this->folder = sys_get_temp_dir().'/intakt-path-only-profiles-'.bin2hex(random_bytes(6));
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->folder);
-    }
-
     public function testASavedProfileKeepsThePathOfItsUrlWithoutTheQuery(): void
     {
         $storage = new PathOnlyProfilerStorage(new FileProfilerStorage('file:'.$this->folder));
@@ -102,6 +92,16 @@ final class PathOnlyProfilerStorageTest extends TestCase
 
         self::assertNull($storage->read('e1f2a3')?->getUrl());
         self::assertStringNotContainsString('canary-bad-7f2a', $this->everythingSaved());
+    }
+
+    protected function setUp(): void
+    {
+        $this->folder = sys_get_temp_dir().'/intakt-path-only-profiles-'.bin2hex(random_bytes(6));
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->folder);
     }
 
     private function profile(string $token, ?string $url): Profile

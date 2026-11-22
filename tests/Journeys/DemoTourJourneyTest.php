@@ -30,6 +30,16 @@ final class DemoTourJourneyTest extends JourneyTestCase
 
     private string $directory = '';
 
+    public function testAFreshInstallWithoutAKeyPlaysTheDemoRunToTheClosedFindingsOfRound2(): void
+    {
+        $this->step('create the database', $this->createTheDatabase(...));
+        $this->step('set up an empty demo project', $this->setUpAnEmptyDemoProject(...));
+        $dashboard = $this->step('press Play the demo run', $this->pressPlayTheDemoRun(...));
+        $this->step('let the queue worker play the run', $this->letTheWorkerPlayTheRun(...));
+        $this->step('read the act list of round 1', fn () => $this->readTheActListOfRound1($dashboard));
+        $this->step('read the closed findings of round 2', fn () => $this->readTheClosedFindingsOfRound2($dashboard));
+    }
+
     protected function tearDown(): void
     {
         if ('' !== $this->directory) {
@@ -40,16 +50,6 @@ final class DemoTourJourneyTest extends JourneyTestCase
     protected function journey(): string
     {
         return 'demo tour without a provider key';
-    }
-
-    public function testAFreshInstallWithoutAKeyPlaysTheDemoRunToTheClosedFindingsOfRound2(): void
-    {
-        $this->step('create the database', $this->createTheDatabase(...));
-        $this->step('set up an empty demo project', $this->setUpAnEmptyDemoProject(...));
-        $dashboard = $this->step('press Play the demo run', $this->pressPlayTheDemoRun(...));
-        $this->step('let the queue worker play the run', $this->letTheWorkerPlayTheRun(...));
-        $this->step('read the act list of round 1', fn () => $this->readTheActListOfRound1($dashboard));
-        $this->step('read the closed findings of round 2', fn () => $this->readTheClosedFindingsOfRound2($dashboard));
     }
 
     private function createTheDatabase(): void

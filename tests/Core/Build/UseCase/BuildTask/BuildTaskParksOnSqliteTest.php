@@ -118,25 +118,6 @@ final class BuildTaskParksOnSqliteTest extends KernelTestCase
 
     private string $folder = '';
 
-    protected function setUp(): void
-    {
-        $this->folder = sys_get_temp_dir().'/intakt-build-task-parks-'.bin2hex(random_bytes(6));
-        new Filesystem()->mkdir($this->folder.'/clone');
-        // A bundle and a text beside the question, because a question ends the build whatever else the job left.
-        new Filesystem()->dumpFile($this->folder.'/output/'.RunBuildJob::BUNDLE, 'BUNDLE');
-        new Filesystem()->dumpFile($this->folder.'/output/'.RunBuildJob::PULL_REQUEST_TEXT, "feat: task 7\n");
-        new Filesystem()->dumpFile($this->folder.'/output/'.RunBuildJob::QUESTION, self::QUESTION);
-        $tool = new SchemaTool($this->manager());
-        $tool->dropDatabase();
-        $tool->createSchema($this->manager()->getMetadataFactory()->getAllMetadata());
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->folder);
-        parent::tearDown();
-    }
-
     public function testABuildJobThatEndsWithAQuestionParksTheTaskWithItsAskedStepAndRunsNoLaterStep(): void
     {
         $outcome = $this->buildTask()->run(new BuildTaskRequest('alpha', 7, 'remote', 'feat/task', $this->folder.'/clone', 'intakt-job-alpha:1'));
@@ -172,6 +153,25 @@ final class BuildTaskParksOnSqliteTest extends KernelTestCase
         self::assertStringContainsString('build_job asked: the task is parked until its question is answered', $tester->getDisplay());
         self::assertStringNotContainsString('build_job passed', $tester->getDisplay());
         self::assertStringNotContainsString('PLANT', $tester->getDisplay());
+    }
+
+    protected function setUp(): void
+    {
+        $this->folder = sys_get_temp_dir().'/intakt-build-task-parks-'.bin2hex(random_bytes(6));
+        new Filesystem()->mkdir($this->folder.'/clone');
+        // A bundle and a text beside the question, because a question ends the build whatever else the job left.
+        new Filesystem()->dumpFile($this->folder.'/output/'.RunBuildJob::BUNDLE, 'BUNDLE');
+        new Filesystem()->dumpFile($this->folder.'/output/'.RunBuildJob::PULL_REQUEST_TEXT, "feat: task 7\n");
+        new Filesystem()->dumpFile($this->folder.'/output/'.RunBuildJob::QUESTION, self::QUESTION);
+        $tool = new SchemaTool($this->manager());
+        $tool->dropDatabase();
+        $tool->createSchema($this->manager()->getMetadataFactory()->getAllMetadata());
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->folder);
+        parent::tearDown();
     }
 
     private function buildTask(): BuildTask

@@ -79,19 +79,6 @@ final readonly class LedgerHalts implements Halts
     }
 
     /**
-     * @return list<OwnerCard>
-     */
-    private function raised(): array
-    {
-        $cards = [];
-        foreach ($this->ledger->readOfKind(LedgerEventKind::MainHalted) as $recorded) {
-            $cards[] = $this->cardOf($recorded);
-        }
-
-        return $cards;
-    }
-
-    /**
      * @return list<HaltPayload>
      */
     private function raisedPayloads(): array
@@ -105,20 +92,6 @@ final readonly class LedgerHalts implements Halts
         }
 
         return $payloads;
-    }
-
-    private function cardOf(RecordedEvent $recorded): OwnerCard
-    {
-        $payload = $this->payloads->of($recorded, HaltPayload::class);
-        if (!$payload instanceof HaltPayload) {
-            return OwnerCard::unreadable($recorded->id, $recorded->recordedAt);
-        }
-
-        try {
-            return new OwnerCard($recorded->id, $payload->project, new MainViolation($payload->commit, $payload->violation), $recorded->recordedAt);
-        } catch (CommitNameNotFull) {
-            return OwnerCard::unreadable($recorded->id, $recorded->recordedAt);
-        }
     }
 
     // A clear that does not read lifts nothing, so the halt it meant stays in effect.
@@ -136,5 +109,32 @@ final readonly class LedgerHalts implements Halts
         }
 
         return $cleared;
+    }
+
+    /**
+     * @return list<OwnerCard>
+     */
+    private function raised(): array
+    {
+        $cards = [];
+        foreach ($this->ledger->readOfKind(LedgerEventKind::MainHalted) as $recorded) {
+            $cards[] = $this->cardOf($recorded);
+        }
+
+        return $cards;
+    }
+
+    private function cardOf(RecordedEvent $recorded): OwnerCard
+    {
+        $payload = $this->payloads->of($recorded, HaltPayload::class);
+        if (!$payload instanceof HaltPayload) {
+            return OwnerCard::unreadable($recorded->id, $recorded->recordedAt);
+        }
+
+        try {
+            return new OwnerCard($recorded->id, $payload->project, new MainViolation($payload->commit, $payload->violation), $recorded->recordedAt);
+        } catch (CommitNameNotFull) {
+            return OwnerCard::unreadable($recorded->id, $recorded->recordedAt);
+        }
     }
 }

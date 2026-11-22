@@ -77,19 +77,6 @@ final class ReviewJobInContainerTest extends TestCase
     /** @var array<string, mixed> */
     private array $networkWhileRunning = [];
 
-    protected function setUp(): void
-    {
-        $this->folder = sys_get_temp_dir().'/intakt-review-container-'.bin2hex(random_bytes(6));
-        new Filesystem()->mkdir($this->folder.'/checkout');
-        $this->engine = new FakeDockerEngine();
-        $this->ledger = new InMemoryLedger();
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->folder);
-    }
-
     public function testTheReviewerGetsTheCheckoutOfTheHeadAsAReadOnlyMount(): void
     {
         $answer = $this->reviewInContainer();
@@ -126,6 +113,19 @@ final class ReviewJobInContainerTest extends TestCase
         self::assertNotNull($this->ran);
         self::assertSame([LedgerEventKind::JobEgressRefused, LedgerEventKind::JobEnded], $this->ledger->kinds());
         self::assertSame(['job' => $this->ran->id->value, 'method' => 'CONNECT', 'target' => 'outside.example:443'], $this->ledger->payloads()[0]);
+    }
+
+    protected function setUp(): void
+    {
+        $this->folder = sys_get_temp_dir().'/intakt-review-container-'.bin2hex(random_bytes(6));
+        new Filesystem()->mkdir($this->folder.'/checkout');
+        $this->engine = new FakeDockerEngine();
+        $this->ledger = new InMemoryLedger();
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->folder);
     }
 
     private function reviewInContainer(string $proxyLog = ''): ReviewJobAnswer

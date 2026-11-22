@@ -92,6 +92,18 @@ final readonly class StrictVerdictConverter implements ResultConverterInterface
         return $this->inner->getTokenUsageExtractor();
     }
 
+    private function verdictFrom(string $content): ReviewerAnswer
+    {
+        try {
+            return $this->deserialized(AnswerForm::ProseAroundBlock === $this->form ? $this->fencedBlockOf($content) : $content);
+        } catch (ExceptionInterface $exception) {
+            // Named after the contract Verdict, the serializer's detail too, because both reach VerdictUnreadable and the reviewers' failure texts must not change.
+            $detail = new UnexpectedValueException(strtr($exception->getMessage(), [ReviewerAnswer::class => Verdict::class]), $exception->getCode(), $exception);
+
+            throw new RuntimeException(sprintf('Cannot deserialize the content into the "%s" class.', Verdict::class), $exception->getCode(), previous: $detail);
+        }
+    }
+
     // Kept as parts, because the thinking blocks and their signatures must go back to the provider with the next request.
     private function convertedMultiPart(MultiPartResult $parts, RawResultInterface $result): ResultInterface
     {
@@ -118,14 +130,6 @@ final readonly class StrictVerdictConverter implements ResultConverterInterface
         return $rebuilt;
     }
 
-    // Checked here because Symfony AI's Validator subscriber checks only an object result, never one among parts.
-    private function validated(ReviewerAnswer $verdict): ReviewerAnswer
-    {
-        $violations = $this->validator->validate($verdict);
-
-        return 0 === count($violations) ? $verdict : throw new ValidationException($violations);
-    }
-
     // Dropped here because Symfony AI's structured output would read the narration before a tool call as the answer and fail on it.
     private function withoutNarration(MultiPartResult $parts, RawResultInterface $result): MultiPartResult
     {
@@ -138,16 +142,12 @@ final readonly class StrictVerdictConverter implements ResultConverterInterface
         return $rebuilt;
     }
 
-    private function verdictFrom(string $content): ReviewerAnswer
+    // Checked here because Symfony AI's Validator subscriber checks only an object result, never one among parts.
+    private function validated(ReviewerAnswer $verdict): ReviewerAnswer
     {
-        try {
-            return $this->deserialized(AnswerForm::ProseAroundBlock === $this->form ? $this->fencedBlockOf($content) : $content);
-        } catch (ExceptionInterface $exception) {
-            // Named after the contract Verdict, the serializer's detail too, because both reach VerdictUnreadable and the reviewers' failure texts must not change.
-            $detail = new UnexpectedValueException(strtr($exception->getMessage(), [ReviewerAnswer::class => Verdict::class]), $exception->getCode(), $exception);
+        $violations = $this->validator->validate($verdict);
 
-            throw new RuntimeException(sprintf('Cannot deserialize the content into the "%s" class.', Verdict::class), $exception->getCode(), previous: $detail);
-        }
+        return 0 === count($violations) ? $verdict : throw new ValidationException($violations);
     }
 
     // The subscription CLIs cannot hold the answer to a schema, so the model writes prose and one fenced block. The rule is deliberately simpler than Markdown and fails closed: anything but one plain top-level block leaves the text as it is, which then fails as invalid, because refusing a verdict costs a review while reading the wrong one of two costs the change.

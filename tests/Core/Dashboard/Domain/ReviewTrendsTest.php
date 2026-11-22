@@ -251,14 +251,6 @@ final class ReviewTrendsTest extends TestCase
         return $this->round($round, 'demo-replay')->markedAs(ReplayMark::Replay);
     }
 
-    /**
-     * @param list<RoundFinding> $findings
-     */
-    private function judgedWith(array $findings): ReviewedRound
-    {
-        return $this->round('r-1', 'alpha')->judgedWith($findings, new DateTimeImmutable('2026-10-28T11:10:00+00:00'));
-    }
-
     private function judgedAfter(string $round, int $seconds): ReviewedRound
     {
         return $this->round($round, 'alpha')->judgedWith([], new DateTimeImmutable('2026-10-28T11:00:00+00:00')->modify(sprintf('+%d seconds', $seconds)));
@@ -275,5 +267,13 @@ final class ReviewTrendsTest extends TestCase
     private function act(string $id, string $severity, array $merged = []): RoundFinding
     {
         return new RoundFinding($id, $severity, 'Text of '.$id.'.', $merged)->calledBy(JudgeCall::Act);
+    }
+
+    /**
+     * @param list<RoundFinding> $findings
+     */
+    private function judgedWith(array $findings): ReviewedRound
+    {
+        return $this->round('r-1', 'alpha')->judgedWith($findings, new DateTimeImmutable('2026-10-28T11:10:00+00:00'));
     }
 }

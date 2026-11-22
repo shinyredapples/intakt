@@ -288,11 +288,6 @@ final class ListWaitingControllerTest extends DashboardPageTestCase
         $this->ownerNoticesAre(new OwnerNoticesOfTheDay([], array_values($ended)));
     }
 
-    private function noticesAre(OutageNotice ...$notices): void
-    {
-        $this->ownerNoticesAre(new OwnerNoticesOfTheDay(array_values($notices), []));
-    }
-
     private function ownerNoticesAre(OwnerNoticesOfTheDay $ofTheDay): void
     {
         $stub = self::createStub(OwnerNotices::class);
@@ -303,5 +298,10 @@ final class ListWaitingControllerTest extends DashboardPageTestCase
     private function notice(string $account, DateTimeImmutable $lastReading, DateTimeImmutable $noticed): OutageNotice
     {
         return new OutageNotice(new Account(Provider::ClaudeCode, $account), $lastReading, $noticed);
+    }
+
+    private function noticesAre(OutageNotice ...$notices): void
+    {
+        $this->ownerNoticesAre(new OwnerNoticesOfTheDay(array_values($notices), []));
     }
 }
