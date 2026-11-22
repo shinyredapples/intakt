@@ -85,7 +85,7 @@ flowchart LR
 The Developer never pushes anything itself; it has no access to GitHub at all. Intakt does it:
 
 1. It **signs the commits with its own key**, so every commit on the branch is verifiably Intakt's.
-2. It **pushes the branch** to GitHub and opens (or updates) the **pull request**, with the Developer's description.
+2. It **pushes the branch** to GitHub and opens (or updates) the **pull request**, with the Developer's description. First it asks GitHub whether the branch already has an open pull request that someone else opened (a person, another loop or another App). If it does, Intakt stops there and pushes nothing, so it does not take over someone else's pull request. It only ever updates its own pull request to main; one of its own to another branch stays as it is, and Intakt opens a new one to main.
 3. GitHub's **CI** runs the checks again on GitHub's machines, as a second, independent opinion.
 
 One special case: if the change edits the **CI setup itself** and the new setup could reach more than a throwaway machine with read-only access, Intakt holds the push and asks you first, because GitHub runs a pushed CI setup straight away.

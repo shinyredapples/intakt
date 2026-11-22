@@ -9,6 +9,7 @@ use Intakt\Core\Budget\Contract\Holds;
 use Intakt\Core\Budget\Contract\SharedHold;
 use Intakt\Core\Budget\Contract\StartDecision;
 use Intakt\Core\Budget\Contract\StartGuard;
+use Intakt\Core\Watchdog\Contract\Halts;
 use Override;
 
 final readonly class BudgetGuard implements StartGuard
@@ -17,9 +18,11 @@ final readonly class BudgetGuard implements StartGuard
         private Holds $holds,
         private CeilingStartGuard $ceilings,
         private OutageWatch $outages,
+        private Halts $halts,
     ) {
     }
 
+    // A watchdog halt wins over every hold, because only the owner lifts it; any standing card refuses, since a start names no project yet.
     #[Override]
     public function decide(Account $account, int $callsRunning): StartDecision
     {
@@ -27,18 +30,28 @@ final readonly class BudgetGuard implements StartGuard
         $shared = array_first($this->holds->sharedInEffect());
 
         return match (true) {
+            $this->isHalted() => StartDecision::Halted,
             $shared instanceof SharedHold => $shared->decision(),
             $this->holds->isCoolingDown($account) => StartDecision::CoolingDown,
             default => $this->ceilings->decide($account, $callsRunning),
         };
     }
 
-    // Merging calls no model, so an approved head still lands through any account's cooldown and the shared holds that let merges through.
+    // Merging calls no model, so an approved head still lands through any account's cooldown and the shared holds that let merges through, but never through a halt.
     #[Override]
     public function decideMerge(): StartDecision
     {
+        if ($this->isHalted()) {
+            return StartDecision::Halted;
+        }
+
         $holding = array_find($this->holds->sharedInEffect(), static fn (SharedHold $hold): bool => $hold->holdsMerges());
 
         return $holding?->decision() ?? StartDecision::Start;
+    }
+
+    private function isHalted(): bool
+    {
+        return [] !== $this->halts->standing();
     }
 }
