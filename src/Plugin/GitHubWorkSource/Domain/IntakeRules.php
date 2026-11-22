@@ -131,7 +131,7 @@ final readonly class IntakeRules
             return 'unreadable wait: '.implode(', ', array_map(static fn (string $line): string => '"'.$line.'"', $task->unreadableWaits()));
         }
 
-        $failed =array_find($targets, static fn (int $target): bool => isset($failures[$target]));
+        $failed = array_find($targets, static fn (int $target): bool => isset($failures[$target]));
         if (null !== $failed) {
             return sprintf('depends on #%d, which failed for good: %s', $failed, $failures[$failed]);
         }
