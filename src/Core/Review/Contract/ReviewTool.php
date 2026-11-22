@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Contract;
 
+use Intakt\Core\Platform\Contract\Redaction;
 use Symfony\AI\Platform\Result\ToolCall;
 
 // The tools a reviewer reads the head with, named once here, because the live log shows each call in plain words and never by its tool name.
@@ -50,8 +51,13 @@ enum ReviewTool: string
         return self::isRoot($path) ? $searched : $searched.' in '.$path;
     }
 
+    // A model may search for or name a credential, and the words go to the live log, so each argument is redacted first.
     private static function textOf(mixed $argument): ?string
     {
-        return is_string($argument) && '' !== trim($argument) ? trim($argument) : null;
+        if (!is_string($argument) || '' === trim($argument)) {
+            return null;
+        }
+
+        return new Redaction()->redact(trim($argument));
     }
 }

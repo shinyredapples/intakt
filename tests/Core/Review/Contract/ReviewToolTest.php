@@ -40,6 +40,27 @@ final class ReviewToolTest extends TestCase
         yield 'a search by default of the whole head' => [ReviewTool::SearchFiles, ['text' => 'discount'], 'searched for "discount"'];
     }
 
+    public function testASearchForACredentialReadsAsTheMarkerAndNeverHoldsIt(): void
+    {
+        $credential = 'github_pat_'.str_repeat('A', 82);
+
+        $words = ReviewTool::SearchFiles->callInWords(new ToolCall('call-1', 'search_files', ['text' => $credential]));
+
+        self::assertSame('searched for "[redacted]"', $words);
+    }
+
+    public function testAReadAndAListingOfAPathHoldingACredentialNeverHoldItAndASearchPathNeither(): void
+    {
+        $credential = 'ghp_'.str_repeat('B', 30);
+
+        foreach (ReviewTool::cases() as $tool) {
+            $words = $tool->callInWords(new ToolCall('call-1', $tool->value, ['path' => 'src/'.$credential, 'text' => 'x']));
+
+            self::assertStringNotContainsString($credential, $words);
+            self::assertStringContainsString('[redacted]', $words);
+        }
+    }
+
     // The model writes the arguments, so a malformed one must still give a line and never the raw value.
     /**
      * @param array<string, mixed> $arguments
