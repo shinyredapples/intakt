@@ -136,7 +136,7 @@ final class SymfonyAiEscalationReviewsTest extends KernelTestCase
     {
         $this->expectException(ProviderRejectedTheKey::class);
 
-        $_ = $this->reviews(static fn (): never => throw new AuthenticationException('Invalid key.'))->escalate('alpha', Uuid::fromString(self::ROUND), $this->messages());
+        $this->reviews(static fn (): never => throw new AuthenticationException('Invalid key.'))->escalate('alpha', Uuid::fromString(self::ROUND), $this->messages());
     }
 
     public function testEveryAccountCoolingDownBeforeTheCallIsThrownAsTheVendorsRateLimitAndReservesNothing(): void
