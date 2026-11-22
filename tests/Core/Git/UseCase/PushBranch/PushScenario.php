@@ -106,7 +106,7 @@ final readonly class PushScenario
     // Through another lock store than the in-memory one, because a store can fail where memory cannot.
     public function pushWithLockStore(PersistingStoreInterface $store, ?SigningKey $key = null): PushBranch
     {
-        $git = new BranchGit(new HardenedGit());
+        $git = new BranchGit(new HardenedGit(), new GuardedRun());
 
         return new PushBranch($git, new SignedCommits($git, $key ?? $this->signingKey($this->key)), new PushRecords($this->ledger), $this->changes, new LockFactory($store));
     }
