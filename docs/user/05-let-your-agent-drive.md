@@ -53,7 +53,7 @@ Here is what your agent does after you say it:
 
 You can watch every pass on the dashboard while it runs. After a pass asks for changes, the beaver stands on the Fix step of the path.
 
-![The review page after two passes driven by an agent: the path reads Pass 1, Fix, Pass 2, Fix, Pass 3, Merge, with the beaver standing on the second Fix; the line shows 2 rounds, 16,692 tokens and an estimated cost of 0.0434 USD; the Now box shows review pass 2 checked, both reviewers asking for changes, F1 still to fix, and the owl's call "Changes needed, 2 findings to fix"](../assets/guide/second-pass.webp)
+![An earlier version of the review page after two passes driven by an agent: the path reads Pass 1, Fix, Pass 2, Fix, Pass 3, Merge, with the beaver standing on the second Fix; the line shows 2 rounds, 16,692 tokens and an estimated cost of 0.0434 USD; the Now box shows review pass 2 checked, both reviewers asking for changes, F1 still to fix, and the owl's call "Changes needed, 2 findings to fix"](../assets/guide/second-pass.webp)
 
 ## When it stops
 
