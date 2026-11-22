@@ -87,7 +87,7 @@ final class FirstReviewOfTwoReviewersTest extends KernelTestCase
 
     private string $configuration;
 
-    /** @var array{tiers: array<string, array{provider: string, model: string}>, review: array{quorum: string, reviewers: list<array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}>}} */
+    /** @var array{tiers: array<string, array{provider: string, model: non-empty-string}>, review: array{quorum: string, reviewers: list<array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}>}} */
     private array $seeded;
 
     private int $answered = 0;
@@ -144,7 +144,7 @@ final class FirstReviewOfTwoReviewersTest extends KernelTestCase
     }
 
     /**
-     * @return array{tiers: array<string, array{provider: string, model: string}>, review: array{quorum: string, reviewers: list<array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}>}}
+     * @return array{tiers: array<string, array{provider: string, model: non-empty-string}>, review: array{quorum: string, reviewers: list<array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}>}}
      */
     private function seedTheSampleProject(): array
     {
@@ -152,9 +152,10 @@ final class FirstReviewOfTwoReviewersTest extends KernelTestCase
         $accounts = self::createStub(EnabledAccounts::class);
         $accounts->method('of')->willReturnCallback(static fn (Provider $provider): array => in_array($provider, $keyed, true) ? [new Account($provider, Account::DEFAULT)] : []);
         $sample = new SampleProject($accounts, null);
-        $sample->write($this->configuration, $sample->keyedProviders());
+        self::assertSame($keyed, $sample->keyedProviders());
+        $sample->write($this->configuration, $keyed);
 
-        /** @var array{projects: array<string, array{tiers: array<string, array{provider: string, model: string}>, review: array{quorum: string, reviewers: list<array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}>}}>} $written */
+        /** @var array{projects: array<string, array{tiers: array<string, array{provider: string, model: non-empty-string}>, review: array{quorum: string, reviewers: list<array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}>}}>} $written */
         $written = Yaml::parseFile($this->configuration);
 
         return $written['projects'][SampleProject::NAME];
