@@ -80,7 +80,7 @@ final readonly class BranchGit
         $arguments = ['config', '--null', '--get-regexp', '^url\..*\.(push)?insteadof$'];
         $process = $this->finished($this->process($repository, $arguments, []), $arguments);
 
-        // Exit code 1 is git config's answer for no matching key.
+        // Exit code 1 means no rewrite, because git config answers a search that matches no key with it.
         return match ($process->getExitCode()) {
             0 => array_map(static fn (string $entry): string => explode("\n", $entry, 2)[1] ?? '', array_values(array_filter(explode("\0", $process->getOutput()), static fn (string $entry): bool => '' !== $entry))),
             1 => [],
