@@ -34,6 +34,7 @@
     {{ include('dashboard/components/character.html.twig', {character: item.character, size: 48}, with_context = false) }}
     <h2 class="wait-lead" id="wait-{{ loop.index }}">{{ item.lead }}</h2>
     {{ include('dashboard/components/meta.html.twig', {facts: [
+        {text: item.character.label},
         {text: 'All projects'},
         {icon: 'clock', text: item.waitingFor(now)},
     ]}, with_context = false) }}

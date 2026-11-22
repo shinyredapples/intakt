@@ -854,7 +854,7 @@ a.lane:hover { background: var(--tint-2); }
 }
 
 /* Waiting on you (UX2): the waiting octopus once at the top, then one card per item with the role who waits, what needs the owner and one tap with a line saying what happens next. Only this page's rules; the frame owns the header and nav. */
-.wait-hero.needs { display: flex; align-items: center; gap: var(--s16); margin-bottom: var(--s16); padding: var(--s16); border: 1px solid color-mix(in srgb, var(--amber) 45%, transparent); border-radius: var(--r-overlay); background: var(--amber-tint); }
+.wait-hero.needs { display: flex; align-items: center; gap: var(--s16); margin-bottom: var(--s16); padding: var(--s16); border: 1px solid color-mix(in srgb, var(--amber) 45%, transparent); border-radius: var(--r-overlay); background: var(--raised); }
 .wait-hero .character { flex: none; }
 .wait-hero h1 { margin: 2px 0 var(--s4); }
 .wait-hero .lead { margin: 0; color: var(--muted); }

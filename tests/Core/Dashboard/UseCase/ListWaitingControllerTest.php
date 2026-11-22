@@ -10,7 +10,6 @@ use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Budget\Contract\OutageNotice;
 use Intakt\Core\Budget\Contract\OwnerNotices;
 use Intakt\Core\Dashboard\Domain\Character;
-use Intakt\Core\Dashboard\Domain\WaitingChoice;
 use Intakt\Core\Dashboard\Domain\WaitingItem;
 use Intakt\Core\Dashboard\Infrastructure\FilterProjects;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviews;
@@ -22,7 +21,6 @@ use Symfony\Component\DomCrawler\Crawler;
 
 #[CoversClass(ListWaitingController::class)]
 #[UsesClass(WaitingItem::class)]
-#[UsesClass(WaitingChoice::class)]
 #[UsesClass(Character::class)]
 #[UsesClass(OutageNotice::class)]
 #[UsesClass(Account::class)]
@@ -41,7 +39,9 @@ final class ListWaitingControllerTest extends DashboardPageTestCase
         self::assertCount(1, $item);
         self::assertStringContainsString('images/roles/maintainer-light-96', (string) $item->filter('img.character-light')->attr('src'));
         self::assertSame('No usage of account claude_code.main has been read since 2026-11-02 08:00 UTC', $item->filter('h2.wait-lead')->text());
-        self::assertSame('All projects', $item->filter('.meta span')->first()->text());
+        self::assertSame('Maintainer', $item->filter('.meta span')->first()->text());
+        self::assertSame('', (string) $item->filter('img.character-light')->attr('alt'));
+        self::assertStringContainsString('All projects', $item->filter('.meta')->text());
         self::assertStringContainsString('Waiting', $item->filter('.meta')->text());
         self::assertStringContainsString('at most one call at a time', $item->filter('.conseq')->text());
         self::assertSame('Open the provider\'s status page', $item->filter('a.wait-act.primary b')->text());
@@ -49,13 +49,14 @@ final class ListWaitingControllerTest extends DashboardPageTestCase
     }
 
     // No disclosure and no command to copy, because an overview page leads to one tap and details live on their own page (UX2).
-    public function testAnItemHasNoWhyDisclosureAndNoCommandToCopy(): void
+    public function testAWaitingCardOffersNoCopyButtonNoCommandAndNoWhyDisclosure(): void
     {
         $this->noticesAre($this->notice('main', new DateTimeImmutable('2026-11-02T08:00:00+00:00'), new DateTimeImmutable('2026-11-02T11:00:00+00:00')));
 
         $page = $this->browser->request('GET', '/waiting');
 
         self::assertCount(0, $page->filter('main details, main summary'));
+        self::assertStringContainsString('Maintainer', $page->filter('.wait-item')->text());
         self::assertCount(0, $page->filter('main [data-copy], main code'));
         self::assertStringNotContainsString('bin/console', $page->filter('main')->text());
     }

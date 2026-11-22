@@ -62,11 +62,12 @@ final class WaitingStylesTest extends TestCase
         self::assertArrayNotHasKey('.wait-item h3', $rules);
     }
 
-    public function testOnlyTheHeroTakesTheAmberTintAndANeedsCardTakesAnAmberEdge(): void
+    public function testTheHeroUsesANeutralSurfaceNeverTheAmberTintAndANeedsCardTakesAnAmberEdge(): void
     {
         $rules = $this->rulesOf($this->sheet());
 
-        self::assertStringContainsString('background: var(--amber-tint);', $rules['.wait-hero.needs'] ?? '');
+        self::assertStringNotContainsString('amber-tint', $rules['.wait-hero.needs'] ?? '');
+        self::assertStringContainsString('background: var(--raised);', $rules['.wait-hero.needs'] ?? '');
         self::assertMatchesRegularExpression('/^\s*border-color:\s*color-mix\(in srgb, var\(--amber\) 60%, transparent\);\s*$/', $rules['.wait-item.needs'] ?? '');
         self::assertStringNotContainsString('--amber', $rules['.wait-item'] ?? '');
     }
