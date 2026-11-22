@@ -23,12 +23,6 @@ final class ParityRecordTest extends TestCase
     /** @var list<string> */
     private array $scratches = [];
 
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->scratches);
-        $this->scratches = [];
-    }
-
     public function testEveryDoneParityItemNamesAnIntaktTestThatExists(): void
     {
         $root = dirname(__DIR__, 3);
@@ -681,6 +675,12 @@ final class ParityRecordTest extends TestCase
             ['line 1: OnlyFixtureTest is no test class under tests/', 'line 1: TwinTest is no test class under tests/'],
             $tests->unprovenItems('- [x] A behavior. [T1]; Intakt: `OnlyFixtureTest::testIt`, `TwinTest::testIt`'),
         );
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->scratches);
+        $this->scratches = [];
     }
 
     protected function testAProtectedHelperIsNoTest(): void

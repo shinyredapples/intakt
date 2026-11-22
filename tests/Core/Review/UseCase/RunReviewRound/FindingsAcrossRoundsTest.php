@@ -72,11 +72,6 @@ final class FindingsAcrossRoundsTest extends KernelTestCase
 
     private RoundFixture $fixture;
 
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-    }
-
     public function testTheFirstRoundTellsNoReviewerOfOpenFindings(): void
     {
         $vendor = $this->round(self::CHANGE, [self::FIRST => $this->changes([], [$this->finding('a')])]);
@@ -347,12 +342,9 @@ final class FindingsAcrossRoundsTest extends KernelTestCase
         self::assertSame([], $this->fixture->openFindingsOf($round));
     }
 
-    /**
-     * @param array<string, Verdict> $verdicts
-     */
-    private function round(string $change, array $verdicts): VerdictPerRole
+    protected function setUp(): void
     {
-        return $this->deliver($this->started($change), $verdicts);
+        $this->fixture = new RoundFixture(self::getContainer());
     }
 
     private function started(string $change): RecordingBus
@@ -385,6 +377,11 @@ final class FindingsAcrossRoundsTest extends KernelTestCase
         return array_map(static fn (Finding $finding): string => $finding->id, $brief->open);
     }
 
+    private function finding(string $id, bool $repeat = false, Severity $severity = Severity::P2): Finding
+    {
+        return new Finding($id, $severity, 'src/A.php', 3, null, 'Text '.$id, FixableBy::Builder, $repeat, null, null);
+    }
+
     /**
      * @param list<string>  $resolved
      * @param list<Finding> $findings
@@ -394,9 +391,12 @@ final class FindingsAcrossRoundsTest extends KernelTestCase
         return new Verdict(Decision::Changes, $findings, $resolved, []);
     }
 
-    private function finding(string $id, bool $repeat = false, Severity $severity = Severity::P2): Finding
+    /**
+     * @param array<string, Verdict> $verdicts
+     */
+    private function round(string $change, array $verdicts): VerdictPerRole
     {
-        return new Finding($id, $severity, 'src/A.php', 3, null, 'Text '.$id, FixableBy::Builder, $repeat, null, null);
+        return $this->deliver($this->started($change), $verdicts);
     }
 
     // The message of SQLite's stale snapshot, because that is the failure a retry is for.

@@ -28,19 +28,6 @@ final class CheckScriptTest extends TestCase
     /** @var array<string, string> */
     private array $jobVariables = [];
 
-    protected function setUp(): void
-    {
-        $this->history = new BuildHistory();
-        $this->output = $this->history->folder.'/output';
-        $this->work = $this->history->folder.'/job';
-        new Filesystem()->mkdir([$this->output, $this->work]);
-    }
-
-    protected function tearDown(): void
-    {
-        $this->history->remove();
-    }
-
     /**
      * @return iterable<string, array{array<string, string>}>
      */
@@ -472,6 +459,19 @@ final class CheckScriptTest extends TestCase
 
         self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
         self::assertSame("passed\n", $this->outputFile('check-result'));
+    }
+
+    protected function setUp(): void
+    {
+        $this->history = new BuildHistory();
+        $this->output = $this->history->folder.'/output';
+        $this->work = $this->history->folder.'/job';
+        new Filesystem()->mkdir([$this->output, $this->work]);
+    }
+
+    protected function tearDown(): void
+    {
+        $this->history->remove();
     }
 
     private function thenACleanMergeEndsPassedOnItsMergeCommit(): void

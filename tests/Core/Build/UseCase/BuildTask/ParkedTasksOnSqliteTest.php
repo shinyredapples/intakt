@@ -43,19 +43,6 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
 
     private string $root = '';
 
-    protected function setUp(): void
-    {
-        $this->root = sys_get_temp_dir().'/intakt-parked-tasks-'.bin2hex(random_bytes(4));
-        new Filesystem()->mkdir($this->root);
-        $this->resetDatabase();
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->root);
-        parent::tearDown();
-    }
-
     public function testAParkedTaskIsStoredWithItsQuestionChoicesAndRecommendationAndAnAskedStep(): void
     {
         $this->parkedTasks()->park('sample', 42, BuildQuestion::fromHandedBack(self::QUESTION));
@@ -175,6 +162,19 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
         self::assertSame([], $this->ledgerRows());
     }
 
+    protected function setUp(): void
+    {
+        $this->root = sys_get_temp_dir().'/intakt-parked-tasks-'.bin2hex(random_bytes(4));
+        new Filesystem()->mkdir($this->root);
+        $this->resetDatabase();
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->root);
+        parent::tearDown();
+    }
+
     // The rollback journal is set, because the database file outlives a test and a review test may have left it in WAL, where a reader does not refuse a commit.
     private function resetDatabase(): void
     {
@@ -187,27 +187,6 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
         $tool->createSchema($this->manager()->getMetadataFactory()->getAllMetadata());
     }
 
-    private function failureOfParkingWhileTheReaderHolds(): string
-    {
-        // No wait, because SQLite would otherwise wait its busy timeout before it refuses the commit.
-        $this->connection()->executeStatement('PRAGMA busy_timeout = 0');
-
-        return $this->failureOfParking($this->parkedTasks());
-    }
-
-    private function failureOfParking(ParkedTasks $parked): string
-    {
-        try {
-            $parked->park('sample', 42, BuildQuestion::fromHandedBack(self::QUESTION));
-        } catch (TaskNotParked $notParked) {
-            self::assertNull($notParked->getPrevious());
-
-            return $notParked->getMessage();
-        }
-
-        self::fail('The task was parked.');
-    }
-
     private function readerHoldingASharedLock(): Connection
     {
         $path = $this->connection()->getParams()['path'] ?? self::fail('The test database is not an SQLite file.');
@@ -218,14 +197,17 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
         return $reader;
     }
 
+    private function failureOfParkingWhileTheReaderHolds(): string
+    {
+        // No wait, because SQLite would otherwise wait its busy timeout before it refuses the commit.
+        $this->connection()->executeStatement('PRAGMA busy_timeout = 0');
+
+        return $this->failureOfParking($this->parkedTasks());
+    }
+
     private function parkedTasks(): ParkedTasks
     {
         return new ParkedTasks($this->connection(), $this->ledger(), $this->registry(), $this->clock());
-    }
-
-    private function clock(): MockClock
-    {
-        return new MockClock('2026-11-20 11:00:00', 'Europe/Berlin');
     }
 
     /**
@@ -266,6 +248,19 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
         return $this->manager()->getConnection();
     }
 
+    private function failureOfParking(ParkedTasks $parked): string
+    {
+        try {
+            $parked->park('sample', 42, BuildQuestion::fromHandedBack(self::QUESTION));
+        } catch (TaskNotParked $notParked) {
+            self::assertNull($notParked->getPrevious());
+
+            return $notParked->getMessage();
+        }
+
+        self::fail('The task was parked.');
+    }
+
     private function manager(): EntityManagerInterface
     {
         $manager = $this->registry()->getManager();
@@ -280,5 +275,10 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
         self::assertInstanceOf(ManagerRegistry::class, $registry);
 
         return $registry;
+    }
+
+    private function clock(): MockClock
+    {
+        return new MockClock('2026-11-20 11:00:00', 'Europe/Berlin');
     }
 }

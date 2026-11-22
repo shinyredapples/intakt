@@ -174,24 +174,6 @@ final class CodexReviewerTest extends KernelTestCase
 
     private MockHttpClient $tokenEndpoint;
 
-    protected function setUp(): void
-    {
-        $this->root = sys_get_temp_dir().'/intakt-codex-reviewer-'.bin2hex(random_bytes(6));
-        new Filesystem()->dumpFile($this->root.'/codex/logins/team/auth.json', CodexLoginTest::json('2026-11-01T00:00:00Z'));
-        $this->path = (string) getenv('PATH');
-        putenv('PATH='.$this->root.'/bin:'.$this->path);
-        $this->ledger = new InMemoryLedger();
-        $this->tokenEndpoint = new MockHttpClient();
-        $this->cooldowns = new AccountCooldownWindows(new ReadingsInMemory(new MockClock(self::NOW)), new ArrayAdapter(), new LockFactory(new InMemoryStore()), new MockClock(self::NOW), $this->ledger, new NullLogger(), StoredSerializerFactory::create(), ['codex' => ['team']]);
-    }
-
-    protected function tearDown(): void
-    {
-        putenv('PATH='.$this->path);
-        new Filesystem()->remove($this->root);
-        parent::tearDown();
-    }
-
     public function testACompleteRecordedStreamYieldsATypedVerdict(): void
     {
         $this->replaying('complete');
@@ -589,6 +571,24 @@ final class CodexReviewerTest extends KernelTestCase
         self::assertSame(IncompleteStreamException::class, $this->ledger->payloads()[1]['failure']);
     }
 
+    protected function setUp(): void
+    {
+        $this->root = sys_get_temp_dir().'/intakt-codex-reviewer-'.bin2hex(random_bytes(6));
+        new Filesystem()->dumpFile($this->root.'/codex/logins/team/auth.json', CodexLoginTest::json('2026-11-01T00:00:00Z'));
+        $this->path = (string) getenv('PATH');
+        putenv('PATH='.$this->root.'/bin:'.$this->path);
+        $this->ledger = new InMemoryLedger();
+        $this->tokenEndpoint = new MockHttpClient();
+        $this->cooldowns = new AccountCooldownWindows(new ReadingsInMemory(new MockClock(self::NOW)), new ArrayAdapter(), new LockFactory(new InMemoryStore()), new MockClock(self::NOW), $this->ledger, new NullLogger(), StoredSerializerFactory::create(), ['codex' => ['team']]);
+    }
+
+    protected function tearDown(): void
+    {
+        putenv('PATH='.$this->path);
+        new Filesystem()->remove($this->root);
+        parent::tearDown();
+    }
+
     // Replays a recording as the codex CLI on PATH, so the call goes through the login handoff and the bridge's own process result as a live run would.
     private function replaying(string $recording, int $exitCode = 0): void
     {
@@ -637,21 +637,11 @@ final class CodexReviewerTest extends KernelTestCase
         return $this->vendor($servers)->review('alpha', Tier::Strong, $request ?? $this->request());
     }
 
-    private function request(): ReviewRequest
-    {
-        return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$this->openFinding('F1'), $this->openFinding('F2')], 1), new ReviewerConversation('You review for correctness.', new UuidV7()));
-    }
-
     private function requestInRound(): ReviewRequest
     {
         $request = $this->request();
 
         return new ReviewRequest($request->checkout, $request->brief, new ReviewerConversation('You review for correctness.', new UuidV7(), new UuidV7()));
-    }
-
-    private function openFinding(string $id): Finding
-    {
-        return new Finding($id, Severity::P2, null, null, null, 'Earlier.', FixableBy::Builder, false, null, null);
     }
 
     private function vendor(?ReviewServerAccesses $servers): SymfonyAiVendor
@@ -667,5 +657,15 @@ final class CodexReviewerTest extends KernelTestCase
         $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
 
         return new SymfonyAiVendor(new TierPlatform($resolver, $platforms, $this->cooldowns, new NullLogger()), $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($this->ledger, $clock, new NullLogger(), StoredSerializerFactory::create()), $limit, $clock, $servers ?? $this->servers());
+    }
+
+    private function request(): ReviewRequest
+    {
+        return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$this->openFinding('F1'), $this->openFinding('F2')], 1), new ReviewerConversation('You review for correctness.', new UuidV7()));
+    }
+
+    private function openFinding(string $id): Finding
+    {
+        return new Finding($id, Severity::P2, null, null, null, 'Earlier.', FixableBy::Builder, false, null, null);
     }
 }

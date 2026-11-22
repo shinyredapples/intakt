@@ -57,6 +57,15 @@ final readonly class DoctrineOutageNotices
         $this->endIfReadSince($notice);
     }
 
+    private function wasNoticed(UsageReadingsStayedAway $outage): bool
+    {
+        return null !== $this->entities->getRepository(OutageNoticeRecord::class)->findOneBy([
+            'provider' => $outage->account->provider,
+            'account' => $outage->account->name,
+            'lastReadingAt' => $outage->lastReadingAt,
+        ]);
+    }
+
     // A reading can land any time before this row is stored, and its own end of outages found no row yet, so the notice is ended by it here; looked up only once the row is stored, because a reading stored later finds the row itself. It looks again until the earliest reading stays the same across an update, because an earlier reading stored meanwhile skips a notice with no end yet (it cannot tell it from one that predates ends being kept), and a competing writer may have saved the same end first, which moves no row here; the loop stops once a pass changes nothing: it finds no reading after the outage, or the same earliest reading as the one it just ended with.
     private function endIfReadSince(OutageNoticeRecord $notice): void
     {
@@ -104,14 +113,5 @@ final readonly class DoctrineOutageNotices
             ->setParameter('position', $notice->position)
             ->getQuery()
             ->execute();
-    }
-
-    private function wasNoticed(UsageReadingsStayedAway $outage): bool
-    {
-        return null !== $this->entities->getRepository(OutageNoticeRecord::class)->findOneBy([
-            'provider' => $outage->account->provider,
-            'account' => $outage->account->name,
-            'lastReadingAt' => $outage->lastReadingAt,
-        ]);
     }
 }

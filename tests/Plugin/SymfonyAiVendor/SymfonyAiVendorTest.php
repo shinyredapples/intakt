@@ -207,22 +207,6 @@ final class SymfonyAiVendorTest extends KernelTestCase
 
     private EventDispatcherInterface $dispatcher;
 
-    #[Override]
-    protected function setUp(): void
-    {
-        $this->limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
-        $this->platformKernel = self::createKernel();
-        $this->platformKernel->boot();
-        $this->dispatcher = ScriptedReviewer::in($this->platformKernel->getContainer())->dispatcher;
-    }
-
-    #[Override]
-    protected function tearDown(): void
-    {
-        $this->platformKernel->shutdown();
-        parent::tearDown();
-    }
-
     public function testAStructuredCallReturnsTheVerdictTheModelAnswered(): void
     {
         $vendor = $this->vendorAnswering(VerdictDocument::fromTheDesign()->json());
@@ -440,11 +424,6 @@ final class SymfonyAiVendorTest extends KernelTestCase
         self::assertNotSame($reviewer->ids[0], $reviewer->ids[1]);
     }
 
-    private function vendorAnswering(string $output): SymfonyAiVendor
-    {
-        return $this->vendor(static fn (): string => $output);
-    }
-
     public function testAnAnsweredCallIsRecordedOnceAsStartedThenSettledWithItsTokens(): void
     {
         $ledger = new InMemoryLedger();
@@ -557,69 +536,6 @@ final class SymfonyAiVendorTest extends KernelTestCase
         self::assertInstanceOf(ProviderFailedTransiently::class, $failure);
         self::assertSame(['started', 'unsettled'], array_column($ledger->payloads(), 'phase'));
         self::assertSame(ServerException::class, $ledger->payloads()[1]['failure']);
-    }
-
-    private function thrownBy(Closure $call): ?Throwable
-    {
-        try {
-            $call();
-        } catch (Throwable $thrown) {
-            return $thrown;
-        }
-
-        return null;
-    }
-
-    /**
-     * @param callable(): Generator<mixed, DeltaInterface, mixed, mixed> $lastRound
-     */
-    private function toolRoundThen(callable $lastRound): Closure
-    {
-        /** @var list<callable(): Generator<mixed, DeltaInterface, mixed, mixed>> $rounds */
-        $rounds = [$this->toolRound(...), $lastRound];
-
-        // A call after the script is the unstreamed retry of a stream cut without a provider outage, and it is cut again, so the reviewer still ends blocked.
-        return static function () use (&$rounds): StreamResult {
-            $round = array_shift($rounds) ?? self::cutAgain();
-
-            return new StreamResult($round());
-        };
-    }
-
-    private function toolRound(): Generator
-    {
-        yield new ToolCallComplete([new ToolCall('1', 'read_file', ['path' => 'missing.txt'])]);
-        yield new TokenUsage(
-            promptTokens: 110,
-            model: 'big',
-        );
-    }
-
-    private function cutMidText(): Generator
-    {
-        yield new TokenUsage(
-            promptTokens: 120,
-            model: 'big',
-        );
-        yield new TextDelta('{"verdict":"approve",');
-
-        throw new IncompleteStreamException('The stream ended before its terminal event.');
-    }
-
-    /**
-     * @return Closure(): Generator<mixed, DeltaInterface, mixed, mixed>
-     */
-    private function brokenMidText(Throwable $outage): Closure
-    {
-        return static function () use ($outage): Generator {
-            yield new TokenUsage(
-                promptTokens: 120,
-                model: 'big',
-            );
-            yield new TextDelta('{"verdict":');
-
-            throw $outage;
-        };
     }
 
     public function testACallThatFailsIsLeftUnsettledOnce(): void
@@ -1239,6 +1155,90 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $resetter->reset();
 
         self::assertSame([], $this->dispatcher->getCalledListeners());
+    }
+
+    #[Override]
+    protected function setUp(): void
+    {
+        $this->limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
+        $this->platformKernel = self::createKernel();
+        $this->platformKernel->boot();
+        $this->dispatcher = ScriptedReviewer::in($this->platformKernel->getContainer())->dispatcher;
+    }
+
+    #[Override]
+    protected function tearDown(): void
+    {
+        $this->platformKernel->shutdown();
+        parent::tearDown();
+    }
+
+    private function vendorAnswering(string $output): SymfonyAiVendor
+    {
+        return $this->vendor(static fn (): string => $output);
+    }
+
+    private function thrownBy(Closure $call): ?Throwable
+    {
+        try {
+            $call();
+        } catch (Throwable $thrown) {
+            return $thrown;
+        }
+
+        return null;
+    }
+
+    private function cutMidText(): Generator
+    {
+        yield new TokenUsage(
+            promptTokens: 120,
+            model: 'big',
+        );
+        yield new TextDelta('{"verdict":"approve",');
+
+        throw new IncompleteStreamException('The stream ended before its terminal event.');
+    }
+
+    /**
+     * @param callable(): Generator<mixed, DeltaInterface, mixed, mixed> $lastRound
+     */
+    private function toolRoundThen(callable $lastRound): Closure
+    {
+        /** @var list<callable(): Generator<mixed, DeltaInterface, mixed, mixed>> $rounds */
+        $rounds = [$this->toolRound(...), $lastRound];
+
+        // A call after the script is the unstreamed retry of a stream cut without a provider outage, and it is cut again, so the reviewer still ends blocked.
+        return static function () use (&$rounds): StreamResult {
+            $round = array_shift($rounds) ?? self::cutAgain();
+
+            return new StreamResult($round());
+        };
+    }
+
+    private function toolRound(): Generator
+    {
+        yield new ToolCallComplete([new ToolCall('1', 'read_file', ['path' => 'missing.txt'])]);
+        yield new TokenUsage(
+            promptTokens: 110,
+            model: 'big',
+        );
+    }
+
+    /**
+     * @return Closure(): Generator<mixed, DeltaInterface, mixed, mixed>
+     */
+    private function brokenMidText(Throwable $outage): Closure
+    {
+        return static function () use ($outage): Generator {
+            yield new TokenUsage(
+                promptTokens: 120,
+                model: 'big',
+            );
+            yield new TextDelta('{"verdict":');
+
+            throw $outage;
+        };
     }
 
     private static function cutAgain(): never

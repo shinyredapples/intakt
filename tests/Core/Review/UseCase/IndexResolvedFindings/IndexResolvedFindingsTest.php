@@ -82,19 +82,6 @@ final class IndexResolvedFindingsTest extends KernelTestCase
     private StoreProjectMemory $memory;
     private ?RecordingBus $lastQueue = null;
 
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-        $store = new Store();
-        $platform = MockPlatformFactory::createPlatform(static fn (Model $model, array|string|object $input): VectorResult => new VectorResult(
-            array_map(static fn (): Vector => new Vector([1.0, 0.0]), is_array($input) ? $input : [$input]),
-        ));
-        $vectorizer = new Vectorizer($platform, 'embedder');
-        $documents = new MemoryDocuments();
-        $this->index = new StoreMemoryIndex(new DocumentIndexer(new DocumentProcessor($vectorizer, $store)), $documents);
-        $this->memory = new StoreProjectMemory(new Retriever($store, $vectorizer), $documents);
-    }
-
     public function testAFindingAReviewerMarksResolvedIsIndexedWithItsCauseAndFileWhenTheRoundCompletes(): void
     {
         $this->roundReporting([$this->finding('a')]);
@@ -236,20 +223,17 @@ final class IndexResolvedFindingsTest extends KernelTestCase
         self::assertSame([], $bus->messages);
     }
 
-    /**
-     * @param list<Finding> $findings
-     */
-    private function roundReporting(array $findings): string
+    protected function setUp(): void
     {
-        return $this->deliveredRound([self::FIRST => new Verdict(Decision::Changes, $findings, [], [])]);
-    }
-
-    /**
-     * @param list<string> $resolved
-     */
-    private function roundResolving(array $resolved): string
-    {
-        return $this->deliveredRound([self::FIRST => new Verdict(Decision::Changes, [], $resolved, [])]);
+        $this->fixture = new RoundFixture(self::getContainer());
+        $store = new Store();
+        $platform = MockPlatformFactory::createPlatform(static fn (Model $model, array|string|object $input): VectorResult => new VectorResult(
+            array_map(static fn (): Vector => new Vector([1.0, 0.0]), is_array($input) ? $input : [$input]),
+        ));
+        $vectorizer = new Vectorizer($platform, 'embedder');
+        $documents = new MemoryDocuments();
+        $this->index = new StoreMemoryIndex(new DocumentIndexer(new DocumentProcessor($vectorizer, $store)), $documents);
+        $this->memory = new StoreProjectMemory(new Retriever($store, $vectorizer), $documents);
     }
 
     /**
@@ -277,16 +261,6 @@ final class IndexResolvedFindingsTest extends KernelTestCase
         }
     }
 
-    /**
-     * @param list<string> $files
-     *
-     * @return list<MemoryEntry>
-     */
-    private function remembered(array $files): array
-    {
-        return $this->memory->relevantTo(new MemoryQuery('alpha', new Paths(...$files), 100000))->entries;
-    }
-
     private function indexFailingWith(Throwable $failure): MemoryIndex
     {
         $index = self::createStub(MemoryIndex::class);
@@ -298,5 +272,31 @@ final class IndexResolvedFindingsTest extends KernelTestCase
     private function finding(string $id, bool $repeat = false): Finding
     {
         return new Finding($id, Severity::P2, 'src/A.php', 3, null, 'Text '.$id, FixableBy::Builder, $repeat, 'The rule '.$id.'.', new Evidence('probe '.$id, 'output '.$id));
+    }
+
+    /**
+     * @param list<Finding> $findings
+     */
+    private function roundReporting(array $findings): string
+    {
+        return $this->deliveredRound([self::FIRST => new Verdict(Decision::Changes, $findings, [], [])]);
+    }
+
+    /**
+     * @param list<string> $resolved
+     */
+    private function roundResolving(array $resolved): string
+    {
+        return $this->deliveredRound([self::FIRST => new Verdict(Decision::Changes, [], $resolved, [])]);
+    }
+
+    /**
+     * @param list<string> $files
+     *
+     * @return list<MemoryEntry>
+     */
+    private function remembered(array $files): array
+    {
+        return $this->memory->relevantTo(new MemoryQuery('alpha', new Paths(...$files), 100000))->entries;
     }
 }

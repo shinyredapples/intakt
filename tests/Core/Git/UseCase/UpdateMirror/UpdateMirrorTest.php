@@ -46,24 +46,6 @@ final class UpdateMirrorTest extends TestCase
 
     private ?string $originalPath = null;
 
-    protected function setUp(): void
-    {
-        $this->mirrors = sys_get_temp_dir().'/intakt-mirrors-'.bin2hex(random_bytes(6));
-        $this->wrapper = $this->mirrors.'-bin';
-        $this->remote = new TemporaryRepository();
-        $this->remote->commitFile('a.txt', 'one');
-    }
-
-    protected function tearDown(): void
-    {
-        if (null !== $this->originalPath) {
-            $this->withPath($this->originalPath);
-        }
-
-        new Filesystem()->remove([$this->mirrors, $this->wrapper]);
-        $this->remote->remove();
-    }
-
     public function testTheFirstUpdateOfAProjectCreatesItsBareMirror(): void
     {
         $path = $this->update('alpha', $this->remote->path);
@@ -436,6 +418,24 @@ final class UpdateMirrorTest extends TestCase
         } catch (MirrorNotUpdated $failed) {
             self::assertStringContainsString('HEAD names refs/heads/topic', $failed->getMessage());
         }
+    }
+
+    protected function setUp(): void
+    {
+        $this->mirrors = sys_get_temp_dir().'/intakt-mirrors-'.bin2hex(random_bytes(6));
+        $this->wrapper = $this->mirrors.'-bin';
+        $this->remote = new TemporaryRepository();
+        $this->remote->commitFile('a.txt', 'one');
+    }
+
+    protected function tearDown(): void
+    {
+        if (null !== $this->originalPath) {
+            $this->withPath($this->originalPath);
+        }
+
+        new Filesystem()->remove([$this->mirrors, $this->wrapper]);
+        $this->remote->remove();
     }
 
     private function beforeTheFirstGitCallWith(string $command, string $action): void

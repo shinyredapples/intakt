@@ -99,15 +99,6 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
 
     private string $firstHeadRuns = 'runs_in_progress.json';
 
-    protected function setUp(): void
-    {
-        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
-        self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        $this->entities = $entities;
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
-    }
-
     public function testATickOverTwoRecordedPullRequestsRecordsOnePendingHeadAndQueuesOneRound(): void
     {
         $commands = new RecordingCommandBus();
@@ -199,17 +190,18 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         self::assertSame(1, preg_match_all('/ change_handed_to_intakt \{[^}]*pull\\\\\/7/', $events));
     }
 
+    protected function setUp(): void
+    {
+        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
+        self::assertInstanceOf(EntityManagerInterface::class, $entities);
+        $this->entities = $entities;
+        EmptyDatabase::in(self::getContainer());
+        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+    }
+
     private function pushOf(string $branch, string $head): BranchPushRequest
     {
         return new BranchPushRequest('alpha', 'repo', 'origin', $branch, new AcceptedHandBack(null, str_repeat($head, 40), 0), new ChangeText('Title', 'E1'));
-    }
-
-    private function recordedEvents(): string
-    {
-        $tester = new CommandTester(new Application(self::bootKernel())->find('intakt:ledger:events'));
-        $tester->execute([]);
-
-        return $tester->getDisplay();
     }
 
     private function handler(RecordingCommandBus $commands): WatchPullRequestsHandler
@@ -242,6 +234,14 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         $projects = new WatchedProjects(['alpha' => ['repository' => 'repo', 'base' => 'main', 'task' => 'Review it.', 'github' => 'acme/widgets']]);
 
         return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $ledger, $this->entities->getConnection(), new ChangesHandedToIntakt($ledgerStore, $ledger, self::createStub(ChangeAuthorship::class), $logger, $commands)), new LookAtHeads(new HeadLocks($pending, $locks, $installWide, $logger), $decisions, $settle));
+    }
+
+    private function recordedEvents(): string
+    {
+        $tester = new CommandTester(new Application(self::bootKernel())->find('intakt:ledger:events'));
+        $tester->execute([]);
+
+        return $tester->getDisplay();
     }
 
     private function reads(MockClock $clock): GitHubWatchReads

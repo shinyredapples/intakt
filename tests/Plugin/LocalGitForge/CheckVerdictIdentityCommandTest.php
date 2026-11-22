@@ -92,19 +92,6 @@ final class CheckVerdictIdentityCommandTest extends TestCase
 {
     private TemporaryRepository $repository;
 
-    protected function setUp(): void
-    {
-        $this->repository = new TemporaryRepository();
-        $this->repository->commitFile('README.md', "base\n");
-        $this->repository->checkoutNewBranch('sample');
-        $this->repository->commitFile('src/Feature.php', "<?php\n");
-    }
-
-    protected function tearDown(): void
-    {
-        $this->repository->remove();
-    }
-
     public function testItPrintsTheIdentityOfTheBranchStartingWithItsHeadAndBase(): void
     {
         $tester = $this->whenTheCommandRuns([]);
@@ -229,6 +216,19 @@ final class CheckVerdictIdentityCommandTest extends TestCase
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringContainsString(RepositoryNotFound::at('no-such-repository')->getMessage(), $tester->getDisplay());
+    }
+
+    protected function setUp(): void
+    {
+        $this->repository = new TemporaryRepository();
+        $this->repository->commitFile('README.md', "base\n");
+        $this->repository->checkoutNewBranch('sample');
+        $this->repository->commitFile('src/Feature.php', "<?php\n");
+    }
+
+    protected function tearDown(): void
+    {
+        $this->repository->remove();
     }
 
     private function recordedIdentity(): string

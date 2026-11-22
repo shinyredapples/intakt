@@ -59,17 +59,6 @@ final class StoredSessionSummariesTest extends KernelTestCase
 
     private ReviewCredential $credential;
 
-    protected function setUp(): void
-    {
-        $kernel = self::bootKernel();
-        self::assertInstanceOf(Kernel::class, $kernel);
-        $this->app = $kernel;
-        $this->fixture = new RoundFixture(self::getContainer());
-        $credential = self::getContainer()->get(ReviewCredential::class);
-        self::assertInstanceOf(ReviewCredential::class, $credential);
-        $this->credential = $credential;
-    }
-
     public function testToolCallsAreCountedByKind(): void
     {
         $round = $this->fixture->start(1)->id()->toRfc4122();
@@ -308,12 +297,15 @@ final class StoredSessionSummariesTest extends KernelTestCase
         self::assertNull($this->summaries()->ofRound('round-1'));
     }
 
-    private function summaryOf(string $roundId, ?Cost $cost = null): SessionSummary
+    protected function setUp(): void
     {
-        $summary = $this->summaries($cost)->ofRound($roundId);
-        self::assertInstanceOf(SessionSummary::class, $summary);
-
-        return $summary;
+        $kernel = self::bootKernel();
+        self::assertInstanceOf(Kernel::class, $kernel);
+        $this->app = $kernel;
+        $this->fixture = new RoundFixture(self::getContainer());
+        $credential = self::getContainer()->get(ReviewCredential::class);
+        self::assertInstanceOf(ReviewCredential::class, $credential);
+        $this->credential = $credential;
     }
 
     private function summaries(?Cost $cost = null): StoredSessionSummaries
@@ -322,14 +314,6 @@ final class StoredSessionSummariesTest extends KernelTestCase
         $costs->method('costOf')->willReturn($cost ?? Cost::none());
 
         return new StoredSessionSummaries($this->fixture->transactions(), $this->fixture->findingStore(), $costs, new RoundToolCalls($this->fixture->entities, new NullLogger()));
-    }
-
-    private function completedRound(Verdict $verdict): string
-    {
-        $started = $this->startedRound();
-        $this->finish($started, $verdict);
-
-        return $started['round'];
     }
 
     /**
@@ -389,6 +373,20 @@ final class StoredSessionSummariesTest extends KernelTestCase
         $server->call('tools/call', ['name' => $tool, 'arguments' => $arguments], 3);
     }
 
+    private function summaryOf(string $roundId, ?Cost $cost = null): SessionSummary
+    {
+        $summary = $this->summaries($cost)->ofRound($roundId);
+        self::assertInstanceOf(SessionSummary::class, $summary);
+
+        return $summary;
+    }
+
+    // The table is dropped, because then the insert fails in the database itself, as it would when the database refuses it.
+    private function recordingFails(): void
+    {
+        $this->fixture->entities->getConnection()->executeStatement('DROP TABLE round_tool_call');
+    }
+
     /**
      * @param array<string, string> $arguments
      *
@@ -402,15 +400,17 @@ final class StoredSessionSummariesTest extends KernelTestCase
         return ['isError' => $response['result']['isError'] ?? false, 'text' => $response['result']['content'][0]['text']];
     }
 
-    // The table is dropped, because then the insert fails in the database itself, as it would when the database refuses it.
-    private function recordingFails(): void
-    {
-        $this->fixture->entities->getConnection()->executeStatement('DROP TABLE round_tool_call');
-    }
-
     private function finding(string $id, ?string $text = null): Finding
     {
         return new Finding($id, Severity::P2, 'src/A.php', 3, null, $text ?? 'Text '.$id, FixableBy::Builder, false, null, null);
+    }
+
+    private function completedRound(Verdict $verdict): string
+    {
+        $started = $this->startedRound();
+        $this->finish($started, $verdict);
+
+        return $started['round'];
     }
 
     /**

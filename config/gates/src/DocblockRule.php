@@ -65,6 +65,26 @@ final readonly class DocblockRule
         return null;
     }
 
+    /**
+     * @return list<array{string, string}>|null
+     */
+    private function tagsOf(string $docblock): ?array
+    {
+        $tags = [];
+
+        foreach ($this->linesOf($docblock) as $line) {
+            if (1 === preg_match('/^@([\w-]+)\s*(.*)$/', $line, $match)) {
+                $tags[] = [$match[1], $match[2]];
+            } elseif ('' !== $line && [] === $tags) {
+                return null;
+            } elseif ('' !== $line) {
+                $tags = $this->withContinuation($tags, $line);
+            }
+        }
+
+        return $tags;
+    }
+
     private function tagProblem(string $tag, string $body): ?string
     {
         $shape = self::SHAPES[preg_replace(self::TOOL_PREFIX, '', $tag) ?? $tag] ?? null;
@@ -99,23 +119,14 @@ final readonly class DocblockRule
     }
 
     /**
-     * @return list<array{string, string}>|null
+     * @return list<string>
      */
-    private function tagsOf(string $docblock): ?array
+    private function linesOf(string $docblock): array
     {
-        $tags = [];
+        $inner = preg_replace(['~^/\*\*~', '~\*/$~'], '', trim($docblock));
+        $lines = preg_split('/\R/', (string) $inner);
 
-        foreach ($this->linesOf($docblock) as $line) {
-            if (1 === preg_match('/^@([\w-]+)\s*(.*)$/', $line, $match)) {
-                $tags[] = [$match[1], $match[2]];
-            } elseif ('' !== $line && [] === $tags) {
-                return null;
-            } elseif ('' !== $line) {
-                $tags = $this->withContinuation($tags, $line);
-            }
-        }
-
-        return $tags;
+        return array_map(static fn (string $line): string => trim((string) preg_replace('/^\s*\*\s?/', '', $line)), false === $lines ? [] : $lines);
     }
 
     /**
@@ -129,16 +140,5 @@ final readonly class DocblockRule
         $tags[] = [$tag, $body.' '.$line];
 
         return $tags;
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function linesOf(string $docblock): array
-    {
-        $inner = preg_replace(['~^/\*\*~', '~\*/$~'], '', trim($docblock));
-        $lines = preg_split('/\R/', (string) $inner);
-
-        return array_map(static fn (string $line): string => trim((string) preg_replace('/^\s*\*\s?/', '', $line)), false === $lines ? [] : $lines);
     }
 }

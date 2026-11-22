@@ -155,6 +155,13 @@ final class JavaScriptLexer
         return $separators;
     }
 
+    private function after(int $previous, int $end): int
+    {
+        $this->previous = $previous;
+
+        return $end;
+    }
+
     private function afterTemplateText(int $offset): int
     {
         $source = $this->literals->source;
@@ -215,15 +222,6 @@ final class JavaScriptLexer
         };
     }
 
-    private function afterEquals(int $offset): int
-    {
-        if ('>' === ($this->literals->source[$offset + 1] ?? '')) {
-            return $this->after(self::STATEMENT_END, $offset + 2);
-        }
-
-        return $this->after(self::OPERATOR, $offset + 1);
-    }
-
     private function bindingOfAForOfHeadEnded(): bool
     {
         return self::FOR_HEAD === array_last($this->frames) && in_array($this->previous, self::ENDS_AN_OPERAND, true);
@@ -251,6 +249,62 @@ final class JavaScriptLexer
         }
 
         return $this->open(in_array($this->previous, self::OPENS_A_BLOCK, true) ? self::BLOCK : self::BRACE, $offset);
+    }
+
+    private function open(int $frame, int $offset): int
+    {
+        $this->frames[] = $frame;
+
+        return $this->after(in_array($frame, [self::BLOCK, self::EXPRESSION_BODY], true) ? self::STATEMENT_END : self::OPERATOR, $offset + 1);
+    }
+
+    // Because the parenthesis that closes an `if`, `while`, `for` or `with` head ends no operand, a slash after it starts a pattern.
+    private function afterClosingBracket(int $offset): int
+    {
+        $frame = self::TEMPLATE_EXPRESSION === array_last($this->frames) ? null : $this->close();
+
+        return $this->after(match ($frame) {
+            self::HEAD_PARENTHESIS, self::FOR_HEAD => self::STATEMENT_END,
+            self::PARENTHESIS => self::CLOSING_PARENTHESIS,
+            default => self::OPERAND,
+        }, $offset + 1);
+    }
+
+    private function close(): ?int
+    {
+        $depth = count($this->frames);
+        unset($this->expressionBodies[$depth], $this->openTernaries[$depth]);
+
+        return array_pop($this->frames);
+    }
+
+    // Because a statement may follow the brace that closes a block, a slash after it starts a pattern, while after an object or a function or class expression it divides.
+    private function afterClosingBrace(int $offset): int
+    {
+        return match ($this->close()) {
+            self::TEMPLATE_EXPRESSION => $this->afterTemplateText($offset + 1),
+            self::BLOCK => $this->after(self::STATEMENT_END, $offset + 1),
+            default => $this->after(self::OPERAND, $offset + 1),
+        };
+    }
+
+    private function afterDot(int $offset): int
+    {
+        if ('..' === substr($this->literals->source, $offset + 1, 2)) {
+            return $this->after(self::OPERATOR, $offset + 3);
+        }
+
+        return $this->after(self::DOT, $offset + 1);
+    }
+
+    // Because `x++ / 2` divides, an increment or decrement ends an operand.
+    private function afterPlusOrMinus(int $offset, string $char): int
+    {
+        if ($char === ($this->literals->source[$offset + 1] ?? '')) {
+            return $this->after(self::OPERAND, $offset + 2);
+        }
+
+        return $this->after(self::OPERATOR, $offset + 1);
     }
 
     // Because `?.` and `??` are no conditional, only a lone `?` waits for its `:`.
@@ -297,66 +351,12 @@ final class JavaScriptLexer
         return $this->after(self::STATEMENT_END, $offset + 1);
     }
 
-    private function open(int $frame, int $offset): int
+    private function afterEquals(int $offset): int
     {
-        $this->frames[] = $frame;
-
-        return $this->after(in_array($frame, [self::BLOCK, self::EXPRESSION_BODY], true) ? self::STATEMENT_END : self::OPERATOR, $offset + 1);
-    }
-
-    private function close(): ?int
-    {
-        $depth = count($this->frames);
-        unset($this->expressionBodies[$depth], $this->openTernaries[$depth]);
-
-        return array_pop($this->frames);
-    }
-
-    // Because the parenthesis that closes an `if`, `while`, `for` or `with` head ends no operand, a slash after it starts a pattern.
-    private function afterClosingBracket(int $offset): int
-    {
-        $frame = self::TEMPLATE_EXPRESSION === array_last($this->frames) ? null : $this->close();
-
-        return $this->after(match ($frame) {
-            self::HEAD_PARENTHESIS, self::FOR_HEAD => self::STATEMENT_END,
-            self::PARENTHESIS => self::CLOSING_PARENTHESIS,
-            default => self::OPERAND,
-        }, $offset + 1);
-    }
-
-    // Because a statement may follow the brace that closes a block, a slash after it starts a pattern, while after an object or a function or class expression it divides.
-    private function afterClosingBrace(int $offset): int
-    {
-        return match ($this->close()) {
-            self::TEMPLATE_EXPRESSION => $this->afterTemplateText($offset + 1),
-            self::BLOCK => $this->after(self::STATEMENT_END, $offset + 1),
-            default => $this->after(self::OPERAND, $offset + 1),
-        };
-    }
-
-    private function afterDot(int $offset): int
-    {
-        if ('..' === substr($this->literals->source, $offset + 1, 2)) {
-            return $this->after(self::OPERATOR, $offset + 3);
-        }
-
-        return $this->after(self::DOT, $offset + 1);
-    }
-
-    // Because `x++ / 2` divides, an increment or decrement ends an operand.
-    private function afterPlusOrMinus(int $offset, string $char): int
-    {
-        if ($char === ($this->literals->source[$offset + 1] ?? '')) {
-            return $this->after(self::OPERAND, $offset + 2);
+        if ('>' === ($this->literals->source[$offset + 1] ?? '')) {
+            return $this->after(self::STATEMENT_END, $offset + 2);
         }
 
         return $this->after(self::OPERATOR, $offset + 1);
-    }
-
-    private function after(int $previous, int $end): int
-    {
-        $this->previous = $previous;
-
-        return $end;
     }
 }

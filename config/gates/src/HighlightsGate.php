@@ -63,6 +63,16 @@ final readonly class HighlightsGate implements Gate
     }
 
     /**
+     * @return Closure(string): bool
+     */
+    private function existenceOn(string $root, ?ProcessResult $tracked): Closure
+    {
+        $exists = $this->trackedOrPresent($root, $tracked);
+
+        return static fn (string $path): bool => $exists(preg_replace(self::LEADING_DOT_SLASH, '', $path) ?? $path);
+    }
+
+    /**
      * @param Closure(string): bool $exists
      *
      * @return list<string>
@@ -94,6 +104,44 @@ final readonly class HighlightsGate implements Gate
         }
 
         return $findings;
+    }
+
+    /**
+     * @return Closure(string): bool
+     */
+    private function trackedOrPresent(string $root, ?ProcessResult $tracked): Closure
+    {
+        // Without git there is no branch, so the working tree stands in for it.
+        if (!$tracked instanceof ProcessResult) {
+            return static fn (string $path): bool => file_exists($root.'/'.$path);
+        }
+
+        $known = [];
+
+        foreach (explode("\0", $tracked->output) as $file) {
+            for ($path = $file; '' !== $path && '.' !== $path; $path = dirname($path)) {
+                $known[$path] = true;
+            }
+        }
+
+        return static fn (string $path): bool => isset($known[rtrim($path, '/')]);
+    }
+
+    /**
+     * @return list<string>|null
+     */
+    private function cellsOf(string $line): ?array
+    {
+        $line = trim($line);
+
+        if (1 !== preg_match(self::CELL_BORDER, $line)) {
+            return null;
+        }
+
+        $cells = preg_split(self::CELL_BORDER, (string) preg_replace(self::OUTER_PIPES, '', $line));
+
+        // A table decodes an escaped pipe before inline parsing, also inside a code span (GFM), so `a\|b.md` names a|b.md.
+        return false === $cells ? null : array_map(static fn (string $cell): string => str_replace('\|', '|', trim($cell)), $cells);
     }
 
     /**
@@ -215,58 +263,10 @@ final readonly class HighlightsGate implements Gate
     }
 
     /**
-     * @return Closure(string): bool
-     */
-    private function existenceOn(string $root, ?ProcessResult $tracked): Closure
-    {
-        $exists = $this->trackedOrPresent($root, $tracked);
-
-        return static fn (string $path): bool => $exists(preg_replace(self::LEADING_DOT_SLASH, '', $path) ?? $path);
-    }
-
-    /**
-     * @return Closure(string): bool
-     */
-    private function trackedOrPresent(string $root, ?ProcessResult $tracked): Closure
-    {
-        // Without git there is no branch, so the working tree stands in for it.
-        if (!$tracked instanceof ProcessResult) {
-            return static fn (string $path): bool => file_exists($root.'/'.$path);
-        }
-
-        $known = [];
-
-        foreach (explode("\0", $tracked->output) as $file) {
-            for ($path = $file; '' !== $path && '.' !== $path; $path = dirname($path)) {
-                $known[$path] = true;
-            }
-        }
-
-        return static fn (string $path): bool => isset($known[rtrim($path, '/')]);
-    }
-
-    /**
      * @param list<string> $cells
      */
     private function isSeparator(array $cells): bool
     {
         return [] === array_filter($cells, static fn (string $cell): bool => 1 !== preg_match('/^:?-+:?$/', $cell));
-    }
-
-    /**
-     * @return list<string>|null
-     */
-    private function cellsOf(string $line): ?array
-    {
-        $line = trim($line);
-
-        if (1 !== preg_match(self::CELL_BORDER, $line)) {
-            return null;
-        }
-
-        $cells = preg_split(self::CELL_BORDER, (string) preg_replace(self::OUTER_PIPES, '', $line));
-
-        // A table decodes an escaped pipe before inline parsing, also inside a code span (GFM), so `a\|b.md` names a|b.md.
-        return false === $cells ? null : array_map(static fn (string $cell): string => str_replace('\|', '|', trim($cell)), $cells);
     }
 }

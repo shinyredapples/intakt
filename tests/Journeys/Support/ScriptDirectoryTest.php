@@ -21,18 +21,6 @@ final class ScriptDirectoryTest extends TestCase
 {
     private string $path;
 
-    protected function setUp(): void
-    {
-        $this->path = new Filesystem()->tempnam(sys_get_temp_dir(), 'scripts-');
-        new Filesystem()->remove($this->path);
-        new Filesystem()->mkdir($this->path);
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->path);
-    }
-
     public function testEachStartedCallGetsTheNextFreeNumber(): void
     {
         $scripts = $this->scripts();
@@ -239,6 +227,18 @@ final class ScriptDirectoryTest extends TestCase
         $this->expectException(ScriptNotArmed::class);
 
         $this->scripts()->script();
+    }
+
+    protected function setUp(): void
+    {
+        $this->path = new Filesystem()->tempnam(sys_get_temp_dir(), 'scripts-');
+        new Filesystem()->remove($this->path);
+        new Filesystem()->mkdir($this->path);
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->path);
     }
 
     private function scripts(): ScriptDirectory

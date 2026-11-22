@@ -70,11 +70,6 @@ final class VerdictTest extends TestCase
         self::assertSame([true, false], [$blocked->mayCountAsApproval(), $withAP2->mayCountAsApproval()]);
     }
 
-    private function changes(Severity ...$severities): Verdict
-    {
-        return new Verdict(Decision::Changes, array_map(static fn (Severity $severity): Finding => new Finding('A', $severity, null, null, null, 'Text.', FixableBy::Builder, false, null, null), array_values($severities)), [], []);
-    }
-
     public function testAReviewersBlockedVerdictWithFindingsIsRecordedAsChanges(): void
     {
         $verdict = new Verdict(Decision::Blocked, [$this->finding()], ['F0'], ['a follow-up']);
@@ -182,6 +177,11 @@ final class VerdictTest extends TestCase
     {
         self::assertSame(Decision::Approve, new Verdict(Decision::Approve, [], [], [])->asRecorded()->verdict);
         self::assertSame(Decision::Changes, new Verdict(Decision::Changes, [$this->finding()], [], [])->asRecorded()->verdict);
+    }
+
+    private function changes(Severity ...$severities): Verdict
+    {
+        return new Verdict(Decision::Changes, array_map(static fn (Severity $severity): Finding => new Finding('A', $severity, null, null, null, 'Text.', FixableBy::Builder, false, null, null), array_values($severities)), [], []);
     }
 
     private function finding(): Finding

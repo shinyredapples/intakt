@@ -166,23 +166,6 @@ final class ReviewerVerdictTest extends WebTestCase
 
     private string $diff = 'diff --git a/a b/a';
 
-    protected function setUp(): void
-    {
-        $this->fixture = new ReviewCheckout();
-        $this->conversations = new InMemoryMessageStore();
-        $this->conversation = new UuidV7();
-        $this->round = new UuidV7();
-        $this->updates = new RecordedRoundUpdates();
-        $this->catalog = new UnstreamedModelCatalog();
-        $this->ledger = new InMemoryLedger();
-    }
-
-    protected function tearDown(): void
-    {
-        $this->fixture->remove();
-        parent::tearDown();
-    }
-
     public function testAProviderThatStreamsOnlyWhenAskedPublishesTheReadAnswerAndGivesTheVerdictOfTheSameAnswerUnstreamed(): void
     {
         $this->catalog = new FallbackModelCatalog();
@@ -983,6 +966,23 @@ final class ReviewerVerdictTest extends WebTestCase
         self::assertToolCallCount(2);
         self::assertStringContainsString('loop over the items and add up the price', $this->sent[2]);
         self::assertStringContainsString('interface CartRepository', $this->sent[2]);
+    }
+
+    protected function setUp(): void
+    {
+        $this->fixture = new ReviewCheckout();
+        $this->conversations = new InMemoryMessageStore();
+        $this->conversation = new UuidV7();
+        $this->round = new UuidV7();
+        $this->updates = new RecordedRoundUpdates();
+        $this->catalog = new UnstreamedModelCatalog();
+        $this->ledger = new InMemoryLedger();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->fixture->remove();
+        parent::tearDown();
     }
 
     // Because the toolbox is built per review and the platform per test, the collector is built from this run's platform instead of a profiled request.

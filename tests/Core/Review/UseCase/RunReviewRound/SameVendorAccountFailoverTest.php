@@ -98,12 +98,6 @@ final class SameVendorAccountFailoverTest extends KernelTestCase
     private RoundFixture $fixture;
     private AccountCooldownWindows $cooldowns;
 
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-        $this->cooldowns = new AccountCooldownWindows(new ReadingsInMemory(new NativeClock()), new ArrayAdapter(), new LockFactory(new InMemoryStore()), new NativeClock(), $this->fixture->ledger(), new NullLogger(), StoredSerializerFactory::create(), [Provider::Anthropic->value => [Account::DEFAULT, 'team']]);
-    }
-
     public function testAReviewerWhoseAccountIsOutIsQueuedAgainForAnImmediateRetry(): void
     {
         $this->fixture->start(1);
@@ -193,16 +187,10 @@ final class SameVendorAccountFailoverTest extends KernelTestCase
         self::assertSame(['anthropic.team', 'anthropic.team'], $this->usageAccounts());
     }
 
-    // Delivered again as Messenger does after the recoverable move, so the retry runs on the next account.
-    private function deliverUntilItStays(ReviewWithReviewer $message, Vendor $vendor): void
+    protected function setUp(): void
     {
-        try {
-            $this->fixture->deliver($message, $vendor);
-            self::fail('The limited account gave a verdict.');
-        } catch (ReviewerMovesToAnotherAccount) {
-        }
-
-        $this->fixture->deliver($message, $vendor);
+        $this->fixture = new RoundFixture(self::getContainer());
+        $this->cooldowns = new AccountCooldownWindows(new ReadingsInMemory(new NativeClock()), new ArrayAdapter(), new LockFactory(new InMemoryStore()), new NativeClock(), $this->fixture->ledger(), new NullLogger(), StoredSerializerFactory::create(), [Provider::Anthropic->value => [Account::DEFAULT, 'team']]);
     }
 
     private function vendorOnTwoAccounts(): Vendor
@@ -227,6 +215,18 @@ final class SameVendorAccountFailoverTest extends KernelTestCase
         $vendor = new SymfonyAiVendor($tiers, $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($this->fixture->ledger(), $this->fixture->clock, new NullLogger(), StoredSerializerFactory::create()), $limit, $this->fixture->clock, self::createStub(ReviewServerAccesses::class));
 
         return new AccountLimitedVendor($vendor, $resolver, $this->cooldowns);
+    }
+
+    // Delivered again as Messenger does after the recoverable move, so the retry runs on the next account.
+    private function deliverUntilItStays(ReviewWithReviewer $message, Vendor $vendor): void
+    {
+        try {
+            $this->fixture->deliver($message, $vendor);
+            self::fail('The limited account gave a verdict.');
+        } catch (ReviewerMovesToAnotherAccount) {
+        }
+
+        $this->fixture->deliver($message, $vendor);
     }
 
     /**

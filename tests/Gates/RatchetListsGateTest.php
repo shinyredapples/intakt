@@ -70,26 +70,6 @@ final class RatchetListsGateTest extends SandboxTestCase
         return array_map(static fn (array $change): array => [$change[0], $change[3]], self::listChanges());
     }
 
-    /**
-     * @return array<string, array{string, string, string, list<string>}>
-     */
-    private static function listChanges(): array
-    {
-        $entry = self::entry('#^Only booleans$#', 2, '../src/A.php');
-
-        return [
-            'an added entry fails' => ['ratchet/added-entry.neon', self::listOf(self::HEADER, $entry), self::listOf(self::HEADER, $entry.self::entry('#^Only booleans$#', 1, '../src/B.php')), ['entry not on the target branch', 'src/B.php']],
-            'a raised count fails' => ['ratchet/raised-count.neon', self::listOf(self::HEADER, $entry), self::listOf(self::HEADER, self::entry('#^Only booleans$#', 3, '../src/A.php')), ['count rose from 2 to 3']],
-            'a widened message pattern fails' => ['ratchet/widened-pattern.neon', self::listOf(self::HEADER, $entry), self::listOf(self::HEADER, self::entry('#.*#', 2, '../src/A.php')), ['entry not on the target branch', '#.*#']],
-            'a changed path fails' => ['ratchet/changed-path.neon', self::listOf(self::HEADER, $entry), self::listOf(self::HEADER, self::entry('#^Only booleans$#', 2, '../src/Moved.php')), ['entry not on the target branch', 'src/Moved.php']],
-            'a changed identifier fails' => ['ratchet/changed-identifier.neon', self::listOf(self::HEADER, $entry), self::listOf(self::HEADER, str_replace('if.condNotBoolean', 'if.other', $entry)), ['entry not on the target branch', 'if.other']],
-            'a deleted entry passes' => ['ratchet/deleted-entry.neon', self::listOf(self::HEADER, $entry.self::entry('#^Only booleans$#', 1, '../src/B.php')), self::listOf(self::HEADER, $entry), []],
-            'a lowered count passes' => ['ratchet/lowered-count.neon', self::listOf(self::HEADER, $entry), self::listOf(self::HEADER, self::entry('#^Only booleans$#', 1, '../src/A.php')), []],
-            'an unchanged list passes' => ['ratchet/unchanged.neon', self::listOf(self::HEADER, $entry), self::listOf(self::HEADER, $entry), []],
-            'deleting the last entry with an empty list passes' => ['ratchet/emptied.neon', self::listOf(self::HEADER, $entry), self::HEADER."parameters:\n\tignoreErrors: []\n", []],
-        ];
-    }
-
     public function testANewListPassesWithItsIncludeInTheSameChange(): void
     {
         $sandbox = $this->repositoryOnMain($this->configurationIncluding());
@@ -285,6 +265,26 @@ final class RatchetListsGateTest extends SandboxTestCase
     }
 
     /**
+     * @return array<string, array{string, string, string, list<string>}>
+     */
+    private static function listChanges(): array
+    {
+        $entry = self::entry('#^Only booleans$#', 2, '../src/A.php');
+
+        return [
+            'an added entry fails' => ['ratchet/added-entry.neon', self::listOf(self::HEADER, $entry), self::listOf(self::HEADER, $entry.self::entry('#^Only booleans$#', 1, '../src/B.php')), ['entry not on the target branch', 'src/B.php']],
+            'a raised count fails' => ['ratchet/raised-count.neon', self::listOf(self::HEADER, $entry), self::listOf(self::HEADER, self::entry('#^Only booleans$#', 3, '../src/A.php')), ['count rose from 2 to 3']],
+            'a widened message pattern fails' => ['ratchet/widened-pattern.neon', self::listOf(self::HEADER, $entry), self::listOf(self::HEADER, self::entry('#.*#', 2, '../src/A.php')), ['entry not on the target branch', '#.*#']],
+            'a changed path fails' => ['ratchet/changed-path.neon', self::listOf(self::HEADER, $entry), self::listOf(self::HEADER, self::entry('#^Only booleans$#', 2, '../src/Moved.php')), ['entry not on the target branch', 'src/Moved.php']],
+            'a changed identifier fails' => ['ratchet/changed-identifier.neon', self::listOf(self::HEADER, $entry), self::listOf(self::HEADER, str_replace('if.condNotBoolean', 'if.other', $entry)), ['entry not on the target branch', 'if.other']],
+            'a deleted entry passes' => ['ratchet/deleted-entry.neon', self::listOf(self::HEADER, $entry.self::entry('#^Only booleans$#', 1, '../src/B.php')), self::listOf(self::HEADER, $entry), []],
+            'a lowered count passes' => ['ratchet/lowered-count.neon', self::listOf(self::HEADER, $entry), self::listOf(self::HEADER, self::entry('#^Only booleans$#', 1, '../src/A.php')), []],
+            'an unchanged list passes' => ['ratchet/unchanged.neon', self::listOf(self::HEADER, $entry), self::listOf(self::HEADER, $entry), []],
+            'deleting the last entry with an empty list passes' => ['ratchet/emptied.neon', self::listOf(self::HEADER, $entry), self::HEADER."parameters:\n\tignoreErrors: []\n", []],
+        ];
+    }
+
+    /**
      * @param array<string, array{string, string, string, list<string>}> $changes
      */
     private function changeLists(array $changes): CheckRun
@@ -336,6 +336,13 @@ final class RatchetListsGateTest extends SandboxTestCase
         }
     }
 
+    private function configurationIncluding(string ...$lists): string
+    {
+        $includes = array_map(static fn (string $list): string => '    - '.$list."\n", ['../../vendor/phpstan/phpstan-strict-rules/rules.neon', 'phpstan-cache.php', ...$lists]);
+
+        return "includes:\n".implode('', $includes)."\nparameters:\n    level: max\n";
+    }
+
     private function repositoryOnMain(string $configuration, ?string $list = null): Sandbox
     {
         $sandbox = $this->emptySandbox();
@@ -352,20 +359,13 @@ final class RatchetListsGateTest extends SandboxTestCase
         return $sandbox;
     }
 
-    private function configurationIncluding(string ...$lists): string
+    private static function entry(string $message, int $count, string $path): string
     {
-        $includes = array_map(static fn (string $list): string => '    - '.$list."\n", ['../../vendor/phpstan/phpstan-strict-rules/rules.neon', 'phpstan-cache.php', ...$lists]);
-
-        return "includes:\n".implode('', $includes)."\nparameters:\n    level: max\n";
+        return "\t\t-\n\t\t\tmessage: '".$message."'\n\t\t\tidentifier: if.condNotBoolean\n\t\t\tcount: ".$count."\n\t\t\tpath: ".$path."\n";
     }
 
     private static function listOf(string $header, string $entries): string
     {
         return $header."parameters:\n\tignoreErrors:\n".$entries;
-    }
-
-    private static function entry(string $message, int $count, string $path): string
-    {
-        return "\t\t-\n\t\t\tmessage: '".$message."'\n\t\t\tidentifier: if.condNotBoolean\n\t\t\tcount: ".$count."\n\t\t\tpath: ".$path."\n";
     }
 }

@@ -43,6 +43,16 @@ final readonly class JobContainers
         }
     }
 
+    // A volume the image declares stays writable under ReadonlyRootfs, so the job could write outside its work area and output directory.
+    private function refuseImageVolumes(JobSpec $spec): void
+    {
+        $volumes = $this->engine->imageVolumes($spec->image);
+
+        if ([] !== $volumes) {
+            throw JobRefused::forImageVolumes($spec->image, $volumes);
+        }
+    }
+
     // The log is read before the container is removed, because the engine keeps it only as long as the container.
     private function runInContainer(JobSpec $spec, string $outputDirectory, EgressRoute $route): ContainerEnd
     {
@@ -56,16 +66,6 @@ final readonly class JobContainers
             return new ContainerEnd($end, $this->engine->standardErrorHead($container, StartCheckLog::MAX_BYTES), $request->mark);
         } finally {
             $this->engine->remove($container);
-        }
-    }
-
-    // A volume the image declares stays writable under ReadonlyRootfs, so the job could write outside its work area and output directory.
-    private function refuseImageVolumes(JobSpec $spec): void
-    {
-        $volumes = $this->engine->imageVolumes($spec->image);
-
-        if ([] !== $volumes) {
-            throw JobRefused::forImageVolumes($spec->image, $volumes);
         }
     }
 
@@ -92,6 +92,11 @@ final readonly class JobContainers
         return max(0.0, (float) $deadline->format('U.u') - (float) $this->clock->now()->format('U.u'));
     }
 
+    private function endOf(ContainerState $state): JobEnd
+    {
+        return new JobEnd($state->memoryKilled ? JobCause::MemoryKilled : JobCause::Exited, $state->exitCode);
+    }
+
     // Classified from the state after the kill, because memory can kill the job in the last pause, and an exit code of a container still running was never confirmed.
     private function killed(string $container): JobEnd
     {
@@ -104,10 +109,5 @@ final readonly class JobContainers
         }
 
         return new JobEnd($state->memoryKilled ? JobCause::MemoryKilled : JobCause::TimedOut, $state->exitCode);
-    }
-
-    private function endOf(ContainerState $state): JobEnd
-    {
-        return new JobEnd($state->memoryKilled ? JobCause::MemoryKilled : JobCause::Exited, $state->exitCode);
     }
 }

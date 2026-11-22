@@ -76,11 +76,6 @@ final class ToolUsingReviewerJudgedTest extends KernelTestCase
      */
     private array $responses = [];
 
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-    }
-
     public function testTheFindingsOfAChangesAnswerAfterAToolCallReachTheJudge(): void
     {
         $round = $this->fixture->start(1);
@@ -121,6 +116,11 @@ final class ToolUsingReviewerJudgedTest extends KernelTestCase
 
         self::assertSame([Decision::Approve], $this->recordedDecisions());
         self::assertSame(0, $judge->calls);
+    }
+
+    protected function setUp(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer());
     }
 
     // The tool reads a file of the fixture's checkout, so the second request carries a real tool result.

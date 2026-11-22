@@ -86,49 +86,11 @@ final readonly class GitHubIssueComments
     }
 
     /**
-     * @throws ForgeWriteFailed
-     */
-    // Checked on every post, because a later run finds the request only by this App's mark, its unchanged times and its exact text, and a comment GitHub keeps otherwise would leave the owner's approve matching nothing.
-    private function confirmStored(string $answer, string $posted): void
-    {
-        try {
-            $decoded = json_decode($answer, true, flags: JSON_THROW_ON_ERROR);
-            $stored = $this->comment(is_array($decoded) ? $decoded : throw new ForgeReadFailed('GitHub answered something other than a comment.'));
-        } catch (JsonException|ForgeReadFailed $unread) {
-            throw new ForgeWriteFailed('GitHub answered the post without the comment it stored: '.($unread instanceof JsonException ? 'the answer is not JSON.' : $unread->getMessage()), $unread->getCode(), previous: $unread);
-        }
-
-        if (!$stored->byThisApp) {
-            throw new ForgeWriteFailed('GitHub stored the comment without this App\'s mark, so no run would find it as the request.');
-        }
-
-        if ($stored->edited) {
-            throw new ForgeWriteFailed('GitHub stored the comment with a change time apart from its post time, so every run would read it as edited.');
-        }
-
-        if ($posted !== $stored->body) {
-            throw new ForgeWriteFailed('GitHub stored other text than was posted, so no run would match it with the request.');
-        }
-    }
-
-    /**
      * @throws ForgeReadFailed
      */
     private function commentsPath(TaskIssue $issue): string
     {
         return $issue->number > 0 ? $this->repositories->addressOf($issue->project)->path().'/issues/'.$issue->number.'/comments' : throw new ForgeReadFailed(sprintf('%d is no issue number.', $issue->number));
-    }
-
-    // Not chained to the client's exception, because its trace holds the request options with the bearer token.
-    private function unreachable(string $failure): ForgeReadFailed
-    {
-        return new ForgeReadFailed(sprintf('GitHub could not be reached (%s).', $failure));
-    }
-
-    // Not chained either, because the trace of a failed post holds the bearer token too.
-    private function unreachableForWrite(string $failure): ForgeWriteFailed
-    {
-        return new ForgeWriteFailed(sprintf('GitHub could not be reached for a write (%s).', $failure));
     }
 
     /**
@@ -154,27 +116,6 @@ final readonly class GitHubIssueComments
         }
 
         return $this->listIn($body);
-    }
-
-    /**
-     * @return list<array<mixed>>
-     *
-     * @throws ForgeReadFailed
-     */
-    private function listIn(string $body): array
-    {
-        try {
-            $comments = json_decode($body, true, flags: JSON_THROW_ON_ERROR);
-        } catch (JsonException $invalid) {
-            throw new ForgeReadFailed('GitHub listed the comments as something other than JSON.', $invalid->getCode(), previous: $invalid);
-        }
-
-        // `{}` decodes to the same empty array as `[]`, so only the answer's first character tells an empty object from an empty list.
-        if (!is_array($comments) || !array_is_list($comments) || !str_starts_with(ltrim($body), '[')) {
-            throw new ForgeReadFailed('GitHub answered a comment listing that is not a list.');
-        }
-
-        return array_map(static fn (mixed $comment): array => is_array($comment) ? $comment : throw new ForgeReadFailed('GitHub listed a comment that is not an object.'), $comments);
     }
 
     /**
@@ -214,6 +155,33 @@ final readonly class GitHubIssueComments
         }
     }
 
+    // Not chained to the client's exception, because its trace holds the request options with the bearer token.
+    private function unreachable(string $failure): ForgeReadFailed
+    {
+        return new ForgeReadFailed(sprintf('GitHub could not be reached (%s).', $failure));
+    }
+
+    /**
+     * @return list<array<mixed>>
+     *
+     * @throws ForgeReadFailed
+     */
+    private function listIn(string $body): array
+    {
+        try {
+            $comments = json_decode($body, true, flags: JSON_THROW_ON_ERROR);
+        } catch (JsonException $invalid) {
+            throw new ForgeReadFailed('GitHub listed the comments as something other than JSON.', $invalid->getCode(), previous: $invalid);
+        }
+
+        // `{}` decodes to the same empty array as `[]`, so only the answer's first character tells an empty object from an empty list.
+        if (!is_array($comments) || !array_is_list($comments) || !str_starts_with(ltrim($body), '[')) {
+            throw new ForgeReadFailed('GitHub answered a comment listing that is not a list.');
+        }
+
+        return array_map(static fn (mixed $comment): array => is_array($comment) ? $comment : throw new ForgeReadFailed('GitHub listed a comment that is not an object.'), $comments);
+    }
+
     /**
      * @throws ForgeWriteFailed
      */
@@ -223,6 +191,38 @@ final readonly class GitHubIssueComments
             return $this->tokens->current()->value;
         } catch (InstallationTokenNotMinted|InstallationNotReadBack|InstallationDoesNotMatchConfiguration $refused) {
             throw new ForgeWriteFailed('No GitHub write of a comment: '.$refused->getMessage(), $refused->getCode(), previous: $refused);
+        }
+    }
+
+    // Not chained either, because the trace of a failed post holds the bearer token too.
+    private function unreachableForWrite(string $failure): ForgeWriteFailed
+    {
+        return new ForgeWriteFailed(sprintf('GitHub could not be reached for a write (%s).', $failure));
+    }
+
+    /**
+     * @throws ForgeWriteFailed
+     */
+    // Checked on every post, because a later run finds the request only by this App's mark, its unchanged times and its exact text, and a comment GitHub keeps otherwise would leave the owner's approve matching nothing.
+    private function confirmStored(string $answer, string $posted): void
+    {
+        try {
+            $decoded = json_decode($answer, true, flags: JSON_THROW_ON_ERROR);
+            $stored = $this->comment(is_array($decoded) ? $decoded : throw new ForgeReadFailed('GitHub answered something other than a comment.'));
+        } catch (JsonException|ForgeReadFailed $unread) {
+            throw new ForgeWriteFailed('GitHub answered the post without the comment it stored: '.($unread instanceof JsonException ? 'the answer is not JSON.' : $unread->getMessage()), $unread->getCode(), previous: $unread);
+        }
+
+        if (!$stored->byThisApp) {
+            throw new ForgeWriteFailed('GitHub stored the comment without this App\'s mark, so no run would find it as the request.');
+        }
+
+        if ($stored->edited) {
+            throw new ForgeWriteFailed('GitHub stored the comment with a change time apart from its post time, so every run would read it as edited.');
+        }
+
+        if ($posted !== $stored->body) {
+            throw new ForgeWriteFailed('GitHub stored other text than was posted, so no run would match it with the request.');
         }
     }
 }
