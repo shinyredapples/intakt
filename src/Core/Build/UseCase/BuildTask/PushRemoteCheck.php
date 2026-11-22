@@ -32,7 +32,7 @@ final readonly class PushRemoteCheck
         return sprintf('the remote "%s" is not the configured GitHub repository "%s" of project "%s"; pass its https://github.com/%s URL', $request->remote, $configured, $request->project, $configured);
     }
 
-    // "owner/name" of an https GitHub URL, or null for any other remote (ssh, a path, a file URL, another host).
+    // Only the https form is read, because that is the address the forge side names; any other form cannot be tied to it, so it reads as no repository.
     private function repositoryOf(string $remote): ?string
     {
         try {
