@@ -10,6 +10,7 @@ enum Character: string
     case CodeReviewer = 'code_reviewer';
     case Judge = 'judge';
     case Developer = 'developer';
+    case SecurityEngineer = 'security_engineer';
 
     // The files hold 1x and 2x of the sizes the pages show (24 and 48 px), so any other size would name a file that does not exist.
     public function imageWidth(int $size, int $density): int
@@ -27,6 +28,7 @@ enum Character: string
             self::CodeReviewer => 'Code reviewer',
             self::Judge => 'Judge',
             self::Developer => 'Developer',
+            self::SecurityEngineer => 'Security engineer',
         };
     }
 
@@ -36,6 +38,7 @@ enum Character: string
             self::CodeReviewer => 'Meerkat with a magnifying glass',
             self::Judge => 'Owl with a gavel',
             self::Developer => 'Beaver with a wrench',
+            self::SecurityEngineer => 'Hedgehog with a shield',
         };
     }
 }

@@ -50,7 +50,7 @@ final class BoardHeadlineLiveUpdatesTest extends DashboardPageTestCase
 
     private const string FIRST_REVIEW = 'Nothing is running yet. Start the first review.';
 
-    private const string REVIEWING = 'The Code reviewers are reviewing change feat/a of alpha. The Code reviewers are reviewing 1 change. Nothing needs you.';
+    private const string REVIEWING = 'The Code reviewers are reviewing change feat/a of alpha. The Code reviewers are reviewing 1 change.';
 
     private ?string $secretBefore = null;
 
@@ -119,7 +119,7 @@ final class BoardHeadlineLiveUpdatesTest extends DashboardPageTestCase
         $this->roundUpdates()->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(1, 1, true));
 
         $updated = $this->updated($page, $started.$this->lastShellUpdate());
-        self::assertSame('Nothing is running. Nothing needs you.', $updated->filter('#board-headline')->text());
+        self::assertSame('Nothing is running.', $updated->filter('#board-headline')->text());
     }
 
     public function testAStartedRoundsPushPutsItsCardInTheInReviewColumn(): void

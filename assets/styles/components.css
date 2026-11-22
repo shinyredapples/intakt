@@ -764,6 +764,7 @@ details.ev > summary time { margin-left: auto; color: var(--muted); font-size: v
 .path li.now::after { top: -2px; left: calc(50% - 9px); width: 18px; height: 18px; border-color: var(--amber); box-shadow: 0 0 0 2px color-mix(in srgb, var(--amber) 30%, transparent); }
 .path .who { position: absolute; bottom: calc(100% - 4px); left: 50%; display: flex; transform: translateX(-50%); }
 .path .who .character { width: 56px; height: 56px; }
+.path .who.duo .character { width: 44px; height: 44px; }
 /* The only motion of the page: the role fades in on its step. */
 @media (prefers-reduced-motion: no-preference) {
   .path .who { animation: who-arrives .4s ease-out 1; }

@@ -42,10 +42,10 @@ final readonly class Board
         return new WhoIsWorking($this->cards);
     }
 
-    // From the same lanes and Waiting on you cards the page shows, so the line never tells a different story than the board below it.
+    // From the same lanes the page shows, so the line never tells a different story than the board below it.
     public function headline(): Headline
     {
-        return new Headline($this->whoIsWorking(), $this->cardsIn(BoardColumn::WaitingOnYou), count($this->cards) + count($this->tasks), count($this->tasksInFlight()));
+        return new Headline($this->whoIsWorking(), count($this->cards) + count($this->tasks), count($this->tasksInFlight()));
     }
 
     // The first day is an install with no tasks and no reviews (#1792, D5), so a task the build has recorded ends it, in flight or at rest, before any review has run.
@@ -111,7 +111,7 @@ final readonly class Board
         return [] === $this->cardsIn($column) ? $column->emptyLine() : null;
     }
 
-    // The build's tasks first, because they are earlier on the path than the reviews in progress, so the cards read in the path's order (UX2 home, #3326).
+    // The build's tasks first, then the reviews in progress, then the judged changes with something left to fix, so the cards read in the path's order (UX2 home, #3326).
     /**
      * @return list<WorkingCard>
      */
@@ -120,6 +120,7 @@ final readonly class Board
         return [
             ...array_map(WorkingCard::ofTask(...), $this->tasksInFlight()),
             ...array_map(WorkingCard::ofReview(...), $this->cardsIn(BoardColumn::InReview)),
+            ...array_map(WorkingCard::ofReview(...), array_values(array_filter($this->cardsIn(BoardColumn::Done), static fn (Review $review): bool => [] !== $review->openFindings()))),
         ];
     }
 

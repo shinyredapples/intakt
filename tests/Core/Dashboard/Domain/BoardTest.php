@@ -9,16 +9,21 @@ use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Dashboard\Domain\Board;
 use Intakt\Core\Dashboard\Domain\BoardColumn;
 use Intakt\Core\Dashboard\Domain\BuildTask;
+use Intakt\Core\Dashboard\Domain\Character;
 use Intakt\Core\Dashboard\Domain\Headline;
+use Intakt\Core\Dashboard\Domain\JudgeCall;
 use Intakt\Core\Dashboard\Domain\Lane;
 use Intakt\Core\Dashboard\Domain\MascotPose;
 use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\ReviewerOutcome;
+use Intakt\Core\Dashboard\Domain\RoundFinding;
 use Intakt\Core\Dashboard\Domain\RoundPlace;
 use Intakt\Core\Dashboard\Domain\RoundStart;
 use Intakt\Core\Dashboard\Domain\WhoIsWorking;
 use Intakt\Core\Dashboard\Domain\WorkingCard;
+use Intakt\Core\Review\Contract\Decision;
+use Intakt\Core\ReviewerForLoop\Contract\ProjectMode;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -31,6 +36,8 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(ReviewedRound::class)]
 #[UsesClass(ReviewerOutcome::class)]
 #[UsesClass(Lane::class)]
+#[UsesClass(RoundFinding::class)]
+#[UsesClass(Character::class)]
 #[UsesClass(WhoIsWorking::class)]
 #[UsesClass(Headline::class)]
 #[UsesClass(BuildTask::class)]
@@ -205,14 +212,14 @@ final class BoardTest extends TestCase
         self::assertSame('Nothing is running yet. Start the first review.', new Board([])->headline()->opening());
     }
 
-    public function testTheBoardsHeadlineTellsOfItsRunningReviewsAndItsEmptyWaitingOnYou(): void
+    public function testTheBoardsHeadlineTellsOfItsRunningReviews(): void
     {
         $running = $this->round('r1', 'feat/a', 1)->withOutcomes([new ReviewerOutcome('r1-a', 'correctness', 'standard', $this->morning())]);
         $board = new Board([new Review([$running]), new Review([$this->round('r2', 'feat/b', 1)->judgedWith([], $this->morning())])]);
 
         $headline = $board->headline();
 
-        self::assertSame(['The Code reviewers are reviewing change feat/a of alpha.', 'Nothing needs you.'], [$headline->opening(), $headline->waitingWords()]);
+        self::assertSame('The Code reviewers are reviewing change feat/a of alpha.', $headline->opening());
     }
 
     public function testOnTheFirstDayEveryColumnGivesTheLineOfWhatLandsInIt(): void
@@ -267,8 +274,31 @@ final class BoardTest extends TestCase
 
         self::assertSame(
             [['task-1', 'Build', 'developer', null], ['feat/a', 'Review', 'code_reviewer', 'r1']],
-            array_map(static fn (WorkingCard $card): array => [$card->title, $card->step->value, $card->character->value, $card->round], $cards),
+            array_map(static fn (WorkingCard $card): array => [$card->title, $card->step->value, $card->roles[0]->value, $card->round], $cards),
         );
+    }
+
+    public function testAJudgedChangeWithSomethingToFixIsTheOwlsWithWhatIsLeftToFix(): void
+    {
+        $toFix = [new RoundFinding('F1', null, null)->calledBy(JudgeCall::Act), new RoundFinding('F2', null, null)->calledBy(JudgeCall::Act), new RoundFinding('F3', null, null)];
+        $judged = new Review([$this->round('r1', 'feat/a', 1)->judgedWith($toFix, $this->morning())]);
+        $clean = new Review([$this->round('r2', 'feat/b', 1)->judgedWith([], $this->morning())]);
+
+        $cards = new Board([$judged, $clean])->workingNow();
+
+        self::assertSame([['feat/a', 'Review', [Character::Judge], 'r1', '2 to fix']], array_map(static fn (WorkingCard $card): array => [$card->title, $card->step->value, $card->roles, $card->round, $card->state()], $cards));
+    }
+
+    public function testTheHedgehogStandsBesideTheMeerkatWhileTheSecurityReviewerReads(): void
+    {
+        $answered = new ReviewerOutcome('r1-c', 'correctness', 'standard', $this->morning())->answered(Decision::Approve, 0, ProjectMode::Live);
+        $reading = $this->round('r1', 'feat/a', 1)->withOutcomes([$answered, new ReviewerOutcome('r1-s', 'security', 'standard', $this->morning())]);
+        $done = $this->round('r2', 'feat/b', 1)->withOutcomes([$answered, new ReviewerOutcome('r2-s', 'security', 'standard', $this->morning())->answered(Decision::Approve, 0, ProjectMode::Live)]);
+
+        $cards = new Board([new Review([$reading]), new Review([$done])])->workingNow();
+
+        self::assertSame([[Character::CodeReviewer, Character::SecurityEngineer], [Character::CodeReviewer]], array_map(static fn (WorkingCard $card): array => $card->roles, $cards));
+        self::assertSame('Reviewing', $cards[0]->state());
     }
 
     public function testAWorkingCardOfAReviewWithoutAChangeIsNamedAfterItsRound(): void
