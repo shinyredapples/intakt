@@ -4,7 +4,7 @@
     {{- include('dashboard/components/character.html.twig', {character: enum('Intakt\\Core\\Dashboard\\Domain\\MascotPose').Waiting, size: 96}, with_context = false) -}}
     <span class="grow">
         <span class="kicker">Needs you</span>
-        <span class="count">{{ count }} {{ count == 1 ? 'decision' : 'decisions' }}</span>
+        <span class="decisions">{{ count }} {{ count == 1 ? 'decision' : 'decisions' }}</span>
         <span class="meta">Oldest since <time datetime="{{ waiting|first.noticedAt|date('c', 'UTC') }}">{{ waiting|first.noticedAt|date('H:i', 'UTC') }} UTC</time></span>
     </span>
     {{- include('dashboard/components/icon.html.twig', {name: 'chevron', small: true, extra: 'go'}, with_context = false) -}}

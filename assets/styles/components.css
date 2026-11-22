@@ -736,7 +736,7 @@ details.ev > summary time { margin-left: auto; color: var(--muted); font-size: v
 .needs-you .character { width: 96px; height: 96px; }
 .needs-you .grow { display: grid; flex: 1; min-width: 0; gap: var(--s4); }
 .needs-you .kicker { color: var(--muted); font: 700 var(--t13)/1.3 var(--f-body); letter-spacing: .06em; text-transform: uppercase; }
-.needs-you .count { font: 600 var(--t28)/1.15 var(--f-head); }
+.needs-you .decisions { font: 600 var(--t28)/1.15 var(--f-head); }
 .needs-you .go { flex: none; transform: rotate(-90deg); }
 /* The octopus appears once per page, so the board's own octopus steps aside while Needs you conducts; a sibling rule, because a pushed board replaces that octopus without knowing about the card. */
 .needs-you ~ #board-octopus .character, .needs-you ~ #board-octopus.asleep { display: none; }

@@ -805,7 +805,7 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
 
         $card = $this->browser->request('GET', '/?board=1')->filter('a.needs-you');
 
-        self::assertSame(['/waiting', '1 decision', 'Oldest since 11:00 UTC'], [$card->attr('href'), $card->filter('.count')->text(), $card->filter('.meta')->text()]);
+        self::assertSame(['/waiting', '1 decision', 'Oldest since 11:00 UTC'], [$card->attr('href'), $card->filter('.decisions')->text(), $card->filter('.meta')->text()]);
         self::assertCount(2, $card->filter('img[src*="octopus-waiting"]'));
     }
 
