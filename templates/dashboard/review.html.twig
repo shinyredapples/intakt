@@ -108,7 +108,7 @@
         </div>
         <div>
             <h3>{{ include(term_tpl, {term: 'fix', words: 'To fix', ask: true}, with_context = false) }}</h3>
-            {# Its own partial, because the judged round's live update replaces it with that round's findings to fix. #}
+            {# The newest round's judged live update removes the whole state block, this list with it, and puts in the To fix cards. #}
             {{ include('dashboard/_now_findings.html.twig', {round: active.round, open: open, judged: judged.round ?? null}, with_context = false) }}
         </div>
         <div>

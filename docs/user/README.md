@@ -81,7 +81,7 @@ Each To fix card is one finding to fix of the last judged pass: how urgent it is
 
 When the judge's call arrives while the main view is open, it changes without a reload, as a reload would show it: the owl's card comes in, the path moves on to Fix or Merge, the state block goes and the To fix cards take its place.
 
-`/reviews/<round id>/record` is the **Full record**, reached by that link: the Replay line, the line of facts, the Timeline with each round's tables, findings and the judge's call, and the Live log, as described above, with the same live updates, and a **Back to the review** link. It opens the newest judged round, and also the round its address names, so a finding link from the main view never lands inside a folded pass. An unknown round id gets `404 Not Found` on both views.
+`/reviews/<round id>/record` is the **Full record**, reached by that link: the Replay line, the line of facts, the Timeline with each round's tables, findings and the judge's call, and the Live log, as described above, with the same live updates, and a **Back to the review** link. It opens the newest round when the judge has decided it, and also the round its address names, so a finding link from the main view never lands inside a folded pass. An unknown round id gets `404 Not Found` on both views.
 
 ### The Trends page
 
