@@ -18,7 +18,7 @@ final class VerdictsWithdrawalRefused extends RuntimeException
         return new self(sprintf('Review refused to withdraw the verdicts of the head\'s round: %s: %s', $reason::class, $reason->getMessage()), 0, $refused);
     }
 
-    // The command bus wraps the handler's own exception, and that one says why Review refused (for example an unknown round).
+    // Unwrapped, because the command bus's wrapper hides the handler's own exception, which is the one that says why Review refused.
     private static function reasonOf(Throwable $refused): Throwable
     {
         return $refused instanceof HandlerFailedException ? array_first($refused->getWrappedExceptions()) ?? $refused : $refused;

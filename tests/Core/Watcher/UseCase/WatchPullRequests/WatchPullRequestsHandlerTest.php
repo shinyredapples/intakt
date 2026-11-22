@@ -1554,7 +1554,10 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         $line = array_search($kind, $this->ledger->kinds(), true);
         self::assertIsInt($line);
 
-        return $this->ledger->payloads()[$line]['cause'];
+        $cause = $this->ledger->payloads()[$line]['cause'];
+        self::assertIsString($cause);
+
+        return $cause;
     }
 
     private function tickEvery(string $interval, int $ticks): void
