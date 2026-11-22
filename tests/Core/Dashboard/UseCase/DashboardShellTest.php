@@ -72,7 +72,29 @@ final class DashboardShellTest extends DashboardPageTestCase
         $count = $this->browser->request('GET', '/trends')->filter('.rail a.nav[data-k="waiting"] .count');
 
         self::assertSame(['2'], $count->each(static fn (Crawler $badge): string => $badge->text()));
-        self::assertSame('2 waiting', $count->attr('aria-label'));
+        self::assertSame('true', $count->attr('aria-hidden'));
+    }
+
+    public function testTheYouLinkKeepsItsNameAlongWithTheWaitingCountWhenTheRailIsCollapsed(): void
+    {
+        $notices = self::createStub(OwnerNotices::class);
+        $notice = new OutageNotice(new Account(Provider::ClaudeCode, 'main'), new DateTimeImmutable('2026-11-01T08:00:00+00:00'), new DateTimeImmutable('2026-11-01T11:00:00+00:00'));
+        $notices->method('stillRunningOldestFirst')->willReturn([$notice, $notice, $notice]);
+        self::getContainer()->set(OwnerNotices::class, $notices);
+
+        $you = $this->browser->request('GET', '/trends')->filter('.rail a.nav[data-k="waiting"]');
+
+        self::assertSame('You, 3 waiting', $you->attr('aria-label'));
+    }
+
+    public function testEveryCurrentMarkOfTheRailOnAProjectsReviewListCarriesTheMarkTheShellClears(): void
+    {
+        $this->ledger->startRound('round-1', 'alpha');
+
+        $page = $this->browser->request('GET', '/reviews?project=alpha');
+
+        self::assertGreaterThan(0, $page->filter('.rail [aria-current]')->count());
+        self::assertCount(0, $page->filter('.rail [aria-current]:not([data-section-current])'));
     }
 
     public function testTheRailMarksTheBoardItemCurrentOnTheBoard(): void
@@ -127,7 +149,7 @@ final class DashboardShellTest extends DashboardPageTestCase
 
         $page = $this->browser->request('GET', '/reviews?project=alpha');
 
-        self::assertSame(['projects'], $page->filter('.rail [data-section-current]')->each(static fn (Crawler $item): string => (string) $item->attr('data-k')));
+        self::assertSame(['projects', 'more', ''], $page->filter('.rail [data-section-current]')->each(static fn (Crawler $item): string => (string) $item->attr('data-k')));
         self::assertCount(0, $this->browser->request('GET', '/projects')->filter('.rail [data-section-current]'));
     }
 

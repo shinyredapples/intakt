@@ -110,6 +110,19 @@ final class BoardHeadlineLiveUpdatesTest extends DashboardPageTestCase
         self::assertSame(self::REVIEWING, $updated->filter('.page-head .lead')->text());
     }
 
+    public function testAReviewerStartedAfterThePageLoadedChangesTheStatusLineThroughThePushedUpdate(): void
+    {
+        $page = $this->browser->request('GET', '/');
+        self::assertSame('Quiet · nobody working', trim($page->filter('#working')->text()));
+
+        $pushed = new Crawler($this->pushedHeadlineAfterAReviewerStarted())->filter('turbo-stream[action="replace"][target="working"] template');
+
+        self::assertCount(1, $pushed);
+        self::assertSame('Running smoothly · 1 reviewer working', trim($pushed->filter('#working')->text()));
+        $loaded = $this->browser->request('GET', '/');
+        self::assertSame(trim($loaded->filter('#working')->outerHtml()), trim($pushed->html()));
+    }
+
     public function testAJudgedRoundPushedToTheBoardTakesItsReviewersOutOfTheHeadline(): void
     {
         $page = $this->browser->request('GET', '/');

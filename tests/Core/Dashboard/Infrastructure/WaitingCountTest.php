@@ -10,6 +10,8 @@ use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Budget\Contract\OutageNotice;
 use Intakt\Core\Budget\Contract\OwnerNotices;
 use Intakt\Core\Dashboard\Infrastructure\WaitingCount;
+use Intakt\Tests\Support\Log\LogRecords;
+use Intakt\Tests\Support\Log\RecordingLogger;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -19,6 +21,8 @@ use RuntimeException;
 #[CoversClass(WaitingCount::class)]
 #[UsesClass(OutageNotice::class)]
 #[UsesClass(Account::class)]
+#[UsesClass(RecordingLogger::class)]
+#[UsesClass(LogRecords::class)]
 final class WaitingCountTest extends TestCase
 {
     public function testItCountsTheNoticesStillInForce(): void
@@ -36,5 +40,22 @@ final class WaitingCountTest extends TestCase
         $notices->method('stillRunningOldestFirst')->willThrowException(new RuntimeException('no such table'));
 
         self::assertSame(0, new WaitingCount($notices, new NullLogger())->now());
+    }
+
+    public function testAnUnreadableNoticeStoreLogsAWarning(): void
+    {
+        $file = tempnam(sys_get_temp_dir(), 'intakt-waiting-count-');
+        self::assertNotFalse($file);
+        $records = new LogRecords($file);
+        $notices = self::createStub(OwnerNotices::class);
+        $notices->method('stillRunningOldestFirst')->willThrowException(new RuntimeException('no such table'));
+
+        try {
+            new WaitingCount($notices, new RecordingLogger($records))->now();
+
+            self::assertSame([['level' => 'warning', 'message' => 'The You item shows no count, because the owner notices could not be read.', 'traced' => true]], $records->all());
+        } finally {
+            $records->discard();
+        }
     }
 }
