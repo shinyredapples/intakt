@@ -15,6 +15,11 @@ final class PagesCommandTest extends TestCase
     private const string BIN = __DIR__.'/../../bin';
     private const string FIXTURES = __DIR__.'/Fixtures';
     private const string JOURNEY_PAGE = __DIR__.'/../../docs/journey.md';
+    private const array FRONT_PAGE = [
+        'index.html' => "<!doctype html>\n<title>Front</title>\n<link rel=\"stylesheet\" href=\"assets/site.css\">\n",
+        'assets/site.css' => "body { color: #111; }\n",
+        'assets/theme.js' => "document.documentElement.dataset.theme = 'light';\n",
+    ];
     private const array DRAWINGS = ['tokens-by-lane', 'tokens-by-account', 'tokens-per-merge', 'issues-per-day', 'open-issues', 'timeline'];
 
     private string $root = '';
@@ -30,6 +35,11 @@ final class PagesCommandTest extends TestCase
         }
 
         $files->symlink((string) realpath(__DIR__.'/../../vendor'), $this->root.'/vendor');
+
+        foreach (self::FRONT_PAGE as $path => $content) {
+            $files->dumpFile($this->root.'/docs/pages/'.$path, $content);
+        }
+
         $files->copy(self::FIXTURES.'/journey.md', $this->root.'/docs/journey.md');
         $files->copy(self::FIXTURES.'/usage.jsonl', $this->root.'/docs/journey/usage.jsonl');
         $files->dumpFile($this->root.'/docs/highlights.d/layout.md', "# Highlights\n\n## Tooling\n\n| Feature | Status |\n|---|---|\n");
@@ -51,7 +61,7 @@ final class PagesCommandTest extends TestCase
         $run = $this->runPages();
 
         self::assertSame(0, $run->getExitCode(), $run->getErrorOutput());
-        self::assertStringContainsString('| Clock | done |', $this->site('index.md'));
+        self::assertStringContainsString('| Clock | done |', $this->site('highlights/index.md'));
         self::assertMatchesRegularExpression('/\| Pull requests merged \| 3 counted \(to \d{4}-\d{2}-\d{2}\) \|/', $this->site('journey/index.md'));
     }
 
@@ -96,14 +106,59 @@ final class PagesCommandTest extends TestCase
     {
         $this->runPages();
 
-        self::assertStringStartsWith("# Highlights\n\nHow Intakt was built, with its milestones, token use and issue flow: [the journey](journey/).\n\n## Tooling\n", $this->site('index.md'));
+        self::assertStringStartsWith("# Highlights\n\nHow Intakt was built, with its milestones, token use and issue flow: [the journey](../journey/).\n\n## Tooling\n", $this->site('highlights/index.md'));
+    }
+
+    public function testTheFrontPageAndItsAssetsAreCopiedUnchangedToTheSiteRoot(): void
+    {
+        $run = $this->runPages();
+
+        self::assertSame(0, $run->getExitCode(), $run->getErrorOutput());
+
+        foreach (self::FRONT_PAGE as $path => $content) {
+            self::assertSame($content, $this->site($path), $path);
+        }
+    }
+
+    public function testAnAssetInASubfolderArrivesUnchangedAtItsRelativePath(): void
+    {
+        new Filesystem()->dumpFile($this->root.'/docs/pages/assets/icons/logo.svg', "<svg/>\n");
+
+        $run = $this->runPages();
+
+        self::assertSame(0, $run->getExitCode(), $run->getErrorOutput());
+        self::assertSame("<svg/>\n", $this->site('assets/icons/logo.svg'));
+    }
+
+    public function testAMissingFrontPageSourceExitsNamingTheFileAndWritesNoIndexHtml(): void
+    {
+        unlink($this->root.'/docs/pages/index.html');
+
+        $run = $this->runPages();
+
+        self::assertSame(1, $run->getExitCode());
+        self::assertStringContainsString('cannot read '.$this->root.'/docs/pages/index.html', $run->getErrorOutput());
+        self::assertSame([], $this->siteFiles());
+    }
+
+    public function testAFolderHoldingAnOldRootIndexMdIsRefusedBeforeAnythingIsWritten(): void
+    {
+        mkdir($this->root.'/site');
+        file_put_contents($this->root.'/site/index.md', "# old\n");
+
+        $run = $this->runPages();
+
+        self::assertSame(1, $run->getExitCode());
+        self::assertStringContainsString('the front page replaces it: remove it or build into a fresh folder', $run->getErrorOutput());
+        self::assertSame(['index.md'], $this->siteFiles());
+        self::assertSame("# old\n", $this->site('index.md'));
     }
 
     public function testTheSiteHoldsOnlyThePagesAndTheirDrawings(): void
     {
         $this->runPages();
 
-        $expected = ['index.md', 'journey/index.md', ...array_map(static fn (string $name): string => 'journey/'.$name.'.svg', self::DRAWINGS)];
+        $expected = [...array_keys(self::FRONT_PAGE), 'highlights/index.md', 'journey/index.md', ...array_map(static fn (string $name): string => 'journey/'.$name.'.svg', self::DRAWINGS)];
         sort($expected);
         self::assertSame($expected, $this->siteFiles());
     }
@@ -166,7 +221,7 @@ final class PagesCommandTest extends TestCase
      */
     private function siteFiles(): array
     {
-        $paths = [...(array) glob($this->root.'/site/*.*'), ...(array) glob($this->root.'/site/journey/*')];
+        $paths = [...(array) glob($this->root.'/site/*.*'), ...(array) glob($this->root.'/site/assets/*'), ...(array) glob($this->root.'/site/highlights/*'), ...(array) glob($this->root.'/site/journey/*')];
         $files = array_map(fn (string $path): string => substr($path, strlen($this->root.'/site/')), array_filter($paths, is_string(...)));
         sort($files);
 
