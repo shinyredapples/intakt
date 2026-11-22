@@ -20,4 +20,14 @@ enum DemoReadiness: string
             self::Played => 'The demo run is in the ledger. To play it again, remove it with intakt:demo:remove and start the compose demo again.',
         };
     }
+
+    // The first-run page's line under its title, in plain words: no variable, file or command, because a visitor there has no terminal.
+    public function firstRunLine(): string
+    {
+        return match ($this) {
+            self::Ready => 'Two AI labs read a change, then the owl decides what to fix.',
+            self::NotComposeDemo, self::NoRecording => 'This install has no recorded review. Add a key below to run one live.',
+            self::Played => 'The recorded review has played. Its rounds are in the review list.',
+        };
+    }
 }

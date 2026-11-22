@@ -92,7 +92,7 @@ final class FirstInstallJourneyTest extends JourneyTestCase
 
         self::assertSame('Set up Intakt', $link->text());
         self::assertSame(self::FIRST_RUN, $link->attr('href'));
-        self::assertCount(4, $this->visit(self::FIRST_RUN)->filter('ol.steps > li'));
+        self::assertCount(3, $this->visit(self::FIRST_RUN)->filter('.own-steps > li'));
     }
 
     // Through the journey's own kernel, because only it has the sample repository the start button needs; it writes to the instance's ledger, so the instance shows the round; the container is rebuilt first, because the sample repository is read when it is built.
