@@ -8,7 +8,7 @@ It is Friday afternoon. You started a review half an hour ago, and the page stil
 
 ## First, look at Waiting on you
 
-Open **You** in the menu. Anything only you can decide shows up there, oldest first. When the page says **Nothing needs you**, the hold-up is somewhere else, and the cases below will find it.
+Open **You** in the menu. Anything only you can decide shows up there, oldest first, and the page updates itself while it stays open. When the page says **Nothing needs you**, the hold-up is somewhere else, and the cases below will find it.
 
 ![The Waiting on you page: the octopus above "Nothing needs you, Intakt keeps building and reviewing. When it needs a decision, it shows up here", then the sections Meanwhile, "No review is running now", and You handled today](../assets/guide/waiting-on-you.webp)
 
