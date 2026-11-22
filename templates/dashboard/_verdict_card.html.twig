@@ -5,7 +5,7 @@
 <section class="card verdict-card{% if needs %} needs{% endif %}" aria-labelledby="verdict-title">
     {% if outcome is not null or latest.isReplay %}
     <div class="top">
-        {%- if outcome is not null %}{{ include('dashboard/components/outcome_chip.html.twig', {outcome: outcome, on_page: true}, with_context = false) }}{% endif -%}
+        {%- if outcome is not null %}{{ include('dashboard/components/outcome_chip.html.twig', {outcome: outcome, on_page: true, plain: true}, with_context = false) }}{% endif -%}
         {#- Its own class and not replay-mark, because the page's replay line keeps that one and a card is no second line. -#}
         {%- if latest.isReplay %}{{ include('dashboard/components/chip.html.twig', {label: 'Replay', on_page: true, extra: 'verdict-replay'}, with_context = false) }}{% endif -%}
     </div>
@@ -20,11 +20,14 @@
         {%- elseif outcome is same as(outcomes.Failed) -%}
         Failed: {{ latest.ending.reason ?? 'every reviewer failed, so nobody checked this change' }}
         {%- else -%}
-        Judged, but the outcome was not recorded
+        Checked, but the outcome was not recorded
         {%- endif -%}
     </h2>
+    {#- The plain words of the review page, each with a "?" whose explanation names the technical term the docs use (#3183). -#}
+    {%- set term = 'dashboard/components/term.html.twig' %}
+    <p class="verdict-pass muted">{{ include(term, {term: 'pass', words: 'Review pass ' ~ (latest.number ?? '(number not recorded)'), ask: true}, with_context = false) }}{% if latest.isJudged %}, {{ include(term, {term: 'checked', words: 'Checked', ask: true}, with_context = false) }}{% endif %}</p>
     {% if open is not empty %}
-    <h3 class="verdict-to-fix">To fix</h3>
+    <h3 class="verdict-to-fix">{{ include(term, {term: 'fix', words: 'To fix', ask: true}, with_context = false) }}</h3>
     <ul class="verdict-findings">
         {% for finding in open %}
         <li><a href="#round-{{ judged }}-finding-{{ finding.id }}"><span class="sev">{{ finding.severity ?? '?' }}</span><span class="vf-title">{{ include('dashboard/_finding_text.html.twig', {finding: finding, missing: 'Text not recorded.'}, with_context = false) }}</span>{% if finding.file is not null %}{{ include('dashboard/_verdict_place.html.twig', {file: finding.file, line: finding.line}, with_context = false) }}{% endif %}</a></li>

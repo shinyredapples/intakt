@@ -254,6 +254,72 @@ final class PublishedBenchTest extends TestCase
         self::assertSame(['15 of 15', PHP_INT_MAX], [$headline->reading(), $headline->falseAlarms]);
     }
 
+    public function testARepeatSentenceOnItsOwnLineGivesTheRunCount(): void
+    {
+        self::assertSame(3, $this->headlineOf($this->section(date: self::DATE."\n\nEach change ran 3 times."))?->runs);
+    }
+
+    public function testARepeatSentenceInTheMiddleOfALineGivesTheRunCount(): void
+    {
+        self::assertSame(5, $this->headlineOf($this->section(date: 'Date of the run: 2026-11-16. Each change ran 5 times. Models: a.'))?->runs);
+    }
+
+    public function testTwoRepeatSentencesOnOneLineGiveNoRunCountButKeepTheTotals(): void
+    {
+        $headline = $this->headlineOf($this->section(date: self::DATE."\n\nEach change ran 3 times. Each change ran 5 times."));
+
+        self::assertNotNull($headline);
+        self::assertSame(['11 of 15', null], [$headline->reading(), $headline->runs]);
+    }
+
+    public function testTwoRepeatSentencesOnSeparateLinesGiveNoRunCount(): void
+    {
+        $headline = $this->headlineOf($this->section(date: self::DATE."\n\nEach change ran 3 times.\n\nEach change ran 3 times."));
+
+        self::assertNotNull($headline);
+        self::assertNull($headline->runs);
+    }
+
+    public function testASectionWithoutARepeatSentenceGivesNoRunCount(): void
+    {
+        $headline = $this->headlineOf($this->section());
+
+        self::assertNotNull($headline);
+        self::assertNull($headline->runs);
+    }
+
+    public function testARepeatSentenceOutsideTheSectionGivesNoRunCount(): void
+    {
+        self::assertNull($this->headlineOf($this->section()."\n## Later\n\nEach change ran 3 times.\n")?->runs);
+    }
+
+    public function testARepeatSentenceInsideFencedCodeGivesNoRunCount(): void
+    {
+        self::assertNull($this->headlineOf($this->section(date: self::DATE."\n\n```text\nEach change ran 3 times.\n```"))?->runs);
+    }
+
+    public function testZeroOrZeroPaddedRunsGiveNoRunCount(): void
+    {
+        self::assertNull($this->headlineOf($this->section(date: self::DATE."\n\nEach change ran 0 times."))?->runs);
+        self::assertNull($this->headlineOf($this->section(date: self::DATE."\n\nEach change ran 03 times."))?->runs);
+    }
+
+    public function testAMalformedSecondRepeatSentenceGivesNoRunCountButKeepsTheTotals(): void
+    {
+        foreach (['03', '0'] as $other) {
+            $headline = $this->headlineOf($this->section(date: self::DATE."\n\nEach change ran 3 times. Each change ran {$other} times."));
+
+            self::assertNotNull($headline);
+            self::assertNull($headline->runs);
+        }
+    }
+
+    public function testOneRunAndARunCountBeyondTheIntegerRange(): void
+    {
+        self::assertSame(1, $this->headlineOf($this->section(date: self::DATE."\n\nEach change ran 1 times."))?->runs);
+        self::assertNull($this->headlineOf($this->section(date: self::DATE."\n\nEach change ran ".PHP_INT_MAX.'0 times.'))?->runs);
+    }
+
     public function testAReadmePathThatIsAFolderGivesNoHeadline(): void
     {
         self::assertNull(new PublishedBench(__DIR__)->headline());
@@ -266,6 +332,7 @@ final class PublishedBenchTest extends TestCase
         self::assertNotNull($headline);
         self::assertMatchesRegularExpression('/^\d+ of \d+$/', $headline->reading());
         self::assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2}$/', $headline->ranOn);
+        self::assertSame(3, $headline->runs);
     }
 
     private function section(string $header = self::HEADER, string $panel = self::PANEL, string $date = self::DATE): string

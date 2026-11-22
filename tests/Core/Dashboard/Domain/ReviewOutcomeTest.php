@@ -33,6 +33,16 @@ final class ReviewOutcomeTest extends TestCase
         yield 'blocked' => [Decision::Blocked, ReviewOutcome::Blocked];
     }
 
+    public function testChangesRequestedReadsChangesNeededInPlainWords(): void
+    {
+        self::assertSame('Changes needed', ReviewOutcome::ChangesRequested->plainWords());
+    }
+
+    public function testTheOtherOutcomesKeepTheirOwnWordsInPlainWords(): void
+    {
+        self::assertSame(['Approved', 'Blocked', 'Failed'], array_map(static fn (ReviewOutcome $outcome): string => $outcome->plainWords(), [ReviewOutcome::Approved, ReviewOutcome::Blocked, ReviewOutcome::Failed]));
+    }
+
     #[DataProvider('decisions')]
     public function testAJudgedRoundTakesItsOutcomeFromTheDecision(Decision $decision, ReviewOutcome $outcome): void
     {

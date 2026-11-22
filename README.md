@@ -74,7 +74,7 @@ docker compose exec intakt php bin/console intakt:bench --project=sample --repea
 | `correctness` alone (open model) | 10 of 15 (1 harness failure left out, on a change without a defect) | 2 | about 2,460 |
 | `security` alone (open model) | 8 of 15 | 0 | about 4,350 |
 
-In the open-model run seven of the eight changes varied between the three runs (in the Claude and GPT run none did): a single run's result for one change is partly luck, so your own run will not match these figures exactly.
+Each change ran 3 times. In the open-model run seven of the eight changes varied between the three runs (in the Claude and GPT run none did): a single run's result for one change is partly luck, so your own run will not match these figures exactly.
 
 Date of the run: 2026-11-21. Claude and GPT run: subscription CLIs (`claude_code` model `opus`, `codex` model `gpt-6.2-sol` with effort high, judge on Claude `haiku`), 24 rounds, all three runs agreeing on every change; the panel's figures are the union of its two reviewers' findings, and all three false alarms came from the GPT reviewer. Open-model run: 2026-11-16. Models (the demo's Hugging Face mapping): `correctness` (tier strong) `moonshotai/Kimi-K3:deepinfra`, `security` (tier standard) `openai/gpt-oss-120b:novita`. What a run costs and how to read these figures: [the review bench](docs/user/README.md#the-review-bench) in the user guide.
 

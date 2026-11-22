@@ -1,5 +1,5 @@
-{#- A state chip: dot (ok, needs, broken or idle) or icon, then the words; on_page for a chip on the page rather than on a card; extra adds a class of the caller's. -#}
-<span class="chip{% if on_page|default(false) %} on-page{% endif %}{% if broken|default(false) %} broken{% else %} strong{% endif %}{% if extra is defined %} {{ extra }}{% endif %}">
+{#- A state chip: dot (ok, needs, broken or idle) or icon, then the words; on_page for a chip on the page rather than on a card; extra adds a class of the caller's; title keeps a technical term behind plain words. -#}
+<span class="chip{% if on_page|default(false) %} on-page{% endif %}{% if broken|default(false) %} broken{% else %} strong{% endif %}{% if extra is defined %} {{ extra }}{% endif %}"{% if title is defined %} title="{{ title }}"{% endif %}>
     {%- if dot is defined %}<span class="dot {{ dot }}"></span>{% endif %}
     {%- if icon is defined %}{{ include('dashboard/components/icon.html.twig', {name: icon, small: true}, with_context = false) }}{% endif %}
     {{- label -}}
