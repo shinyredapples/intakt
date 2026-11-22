@@ -54,7 +54,7 @@ final class ReviewPageWithoutHubTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
         self::assertResponseIsSuccessful();
-        self::assertSame('Live log of review pass 1', $crawler->filter('.task-grid > aside.log-pane h2')->text());
+        self::assertSame('Live log of review pass 1', $crawler->filter('.task-grid > section.log-pane h2')->text());
         self::assertSame('correctness (standard tier, model not recorded) live', $crawler->filter('.log-pane #reviewer-round-1-correctness h3')->text());
     }
 

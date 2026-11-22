@@ -72,7 +72,7 @@ final class TaskDetailStylesTest extends TestCase
     {
         $rules = $this->rulesOf($this->mediaBlocks('max-width: 760px'));
 
-        self::assertMatchesRegularExpression('/^\s*scroll-margin-top:\s*calc\(var\(--top\) \+ 66px \+ var\(--s16\)\);\s*$/', $rules['.ttabs ~ .task-grid .finding-card'] ?? '');
+        self::assertMatchesRegularExpression('/^\s*scroll-margin-top:\s*calc\(var\(--top\) \+ 44px \+ 2 \* 3px \+ 2 \* var\(--s8\) \+ var\(--s16\)\);\s*$/', $rules['.ttabs ~ .task-grid .finding-card'] ?? '');
     }
 
     public function testTheStylesheetHidesTheStartOfARoundWhileARoundIsInReview(): void

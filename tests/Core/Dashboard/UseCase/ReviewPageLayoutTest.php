@@ -65,6 +65,17 @@ final class ReviewPageLayoutTest extends DashboardPageTestCase
         self::assertCount(0, $crawler->filter('#live-log-pane :is(a[href], button, summary, [tabindex])'));
     }
 
+    // axe's aria-allowed-role refuses role="tabpanel" on an aside, and a section allows it.
+    public function testTheLiveLogTabPanelIsASectionSoItsRoleIsAllowed(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame('section', $crawler->filter('#live-log-pane')->nodeName());
+        self::assertCount(0, $crawler->filter('aside[role="tabpanel"]'));
+    }
+
     public function testEachTabPanelNamesTheHeadingThatLabelsItWhileBothPanesAreShown(): void
     {
         $this->givenARunningRound();

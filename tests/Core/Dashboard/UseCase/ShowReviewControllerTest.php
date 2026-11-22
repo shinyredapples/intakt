@@ -930,7 +930,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews/round-2');
 
         self::assertCount(2, $crawler->filter('.task-grid > .tl-pane .round'));
-        self::assertSame('Live log of review pass 2', $crawler->filter('.task-grid > aside.log-pane h2')->text());
+        self::assertSame('Live log of review pass 2', $crawler->filter('.task-grid > section.log-pane h2')->text());
         self::assertSame(['correctness (standard tier, model not recorded) live', 'security (standard tier, model not recorded) live'], $crawler->filter('.log-pane #round-round-2-live .live h3')->each(static fn (Crawler $heading): string => $heading->text()));
         self::assertCount(0, $crawler->filter('.tl-pane .live'));
     }

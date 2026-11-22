@@ -35,9 +35,9 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-2');
 
-        self::assertSame(['h2', 'div', 'section'], $crawler->filter('aside.log-pane')->children()->each(static fn (Crawler $part): string => $part->nodeName()));
-        self::assertCount(1, $crawler->filter('aside.log-pane > .log-main #round-round-2-live'));
-        self::assertSame('Session summary', $crawler->filter('aside.log-pane > section.log-summary')->attr('aria-label'));
+        self::assertSame(['h2', 'div', 'section'], $crawler->filter('section.log-pane')->children()->each(static fn (Crawler $part): string => $part->nodeName()));
+        self::assertCount(1, $crawler->filter('section.log-pane > .log-main #round-round-2-live'));
+        self::assertSame('Session summary', $crawler->filter('section.log-pane > section.log-summary')->attr('aria-label'));
     }
 
     public function testTheSummaryCountsTheToolCallsByKindWithTheirTotal(): void

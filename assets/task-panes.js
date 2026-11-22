@@ -91,7 +91,7 @@ function foldRound(event) {
     round.querySelector('summary').focus();
 }
 
-// The tabs are hidden while both panes are shown, so the panes are then a section and an aside named by their headings; on a phone each is a tab panel named by its tab and a Tab stop, so a live log with nothing focusable in it yet is still reached.
+// The tabs are hidden while both panes are shown, so the panes are then two sections named by their headings; on a phone each is a tab panel named by its tab and a Tab stop, so a live log with nothing focusable in it yet is still reached.
 function fitPanes(page, onPhone) {
     for (const tab of page.querySelectorAll(TAB)) {
         const pane = page.getElementById(tab.getAttribute('aria-controls'));
