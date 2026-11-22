@@ -93,7 +93,9 @@ session=$!
 # Its sleep runs in the background, because the shell runs a trap only once a command in the foreground has ended.
 # It cuts only a session whose leader is alive and not a zombie (state Z in /proc, which kill -0 does not tell apart): a leader killed from elsewhere stays a zombie until the wait below reaps it,
 # so a watchdog that wakes in between does not take a surviving child of that session for a cut. Without /proc the state cannot be read and the leader counts as alive.
-setsid sh -c 'trap '\''kill -s KILL 0'\'' TERM; sleep "$1" & wait "$!" && trap "" TERM && kill -0 "$2" && ! { read -r state < "/proc/$2/stat" && case "${state##*) }" in Z*) true;; *) false;; esac; } && kill -s KILL -- "-$2"' watchdog "$allowance" "$session" > /dev/null 2>&1 &
+# The state is read from the State line of /proc status and not from /proc stat, because the builder can give the leader a name with a line break and a state of its own after it,
+# which status writes escaped on its Name line and stat writes as it is, ahead of the real state.
+setsid sh -c 'zombie() { while read -r key value; do [ "$key" = State: ] && case "$value" in Z*) return 0;; *) return 1;; esac; done < "/proc/$1/status"; return 1; }; trap '\''kill -s KILL 0'\'' TERM; sleep "$1" & wait "$!" && trap "" TERM && kill -0 "$2" && ! zombie "$2" && kill -s KILL -- "-$2"' watchdog "$allowance" "$session" > /dev/null 2>&1 &
 watchdog=$!
 wait "$session"
 status=$?

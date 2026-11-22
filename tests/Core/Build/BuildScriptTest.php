@@ -242,11 +242,12 @@ final class BuildScriptTest extends TestCase
 
     public function testASessionLeaderKilledFromElsewhereAndNotYetReapedIsNotTakenForACutWhenItsChildOutlivesIt(): void
     {
-        // The CLI stops the build script so it cannot reap the leader, kills the leader, and a helper in a session of its own resumes the script after the allowance, which forces the zombie order.
+        // The CLI stops the build script so it cannot reap the leader, kills the leader, and a helper in a session of its own resumes the script once the watchdog has decided,
+        // that is once the leader and the watchdog, the script's only children, are both zombies, which forces the zombie order however late the watchdog runs.
         $this->givenTheCli(<<<'SH'
             parent=$PPID
             sleep 30 &
-            setsid sh -c 'sleep 3; kill -s CONT "$1"' helper "$parent" > /dev/null 2>&1 &
+            setsid sh -c 'until (set -- $(cat "/proc/$1/task/$1/children"); [ $# -ge 2 ] && for c; do grep -q "^State:.Z" "/proc/$c/status" || exit 1; done); do sleep 0.05; done; kill -s CONT "$1"' helper "$parent" > /dev/null 2>&1 &
             kill -s STOP "$parent"
             until grep -q '^State:.T' "/proc/$parent/status"; do sleep 0.01; done
             kill -s KILL $$
@@ -257,6 +258,20 @@ final class BuildScriptTest extends TestCase
         self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
         self::assertStringContainsString("claude exited with 137\n", $this->outputFile('build.log'));
         self::assertStringNotContainsString('cut after', $this->outputFile('build.log'));
+    }
+
+    public function testASessionLeaderWhoseNameHoldsALineBreakAndAZombieStateIsStillCutAtItsAllowance(): void
+    {
+        // The first line of the leader's /proc stat would then end in what looks like state Z, which must not stop the cut.
+        $this->givenTheCli(<<<'SH'
+            printf 'a) Z\nb' > "/proc/$$/comm"
+            sleep 30
+            SH);
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5', 1);
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertStringContainsString("claude cut after 1 seconds, its commits are kept\n", $this->outputFile('build.log'));
     }
 
     public function testASessionThatPutsAFolderWhereACutMarkerCouldBeIsStillCutAtItsAllowance(): void
