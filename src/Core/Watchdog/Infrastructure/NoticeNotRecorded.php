@@ -8,9 +8,8 @@ use RuntimeException;
 
 final class NoticeNotRecorded extends RuntimeException
 {
-    /**
-     * @var list<string> notices the ledger took before it refused this one, which the owner has not seen yet
-     */
+    // Because the ledger took these before it refused this one, and the owner has not seen them yet.
+    /** @var list<string> */
     public private(set) array $givenBefore = [];
 
     public static function noticing(string $commit, string $failure): self
