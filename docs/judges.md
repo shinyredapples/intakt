@@ -4,7 +4,7 @@ The tested submission is release [v0.4.1](https://github.com/shinyredapples/inta
 
 Your coding agent says it is done. Intakt tells you whether to believe it: a panel of reviewers on models from different AI labs reviews the change, every finding must quote the code it is about, and a judge makes one list to fix.
 
-Watch the 90-second demo: [https://youtu.be/HVDKah3Jauo](https://youtu.be/HVDKah3Jauo). Its script and shot list: [docs/video.md](video.md)
+Watch the 90-second demo: [https://youtu.be/-8v0nflAQBk](https://youtu.be/-8v0nflAQBk). Its script and shot list: [docs/video.md](video.md)
 
 ## Why this needed Symfony AI and MCP
 

@@ -10,7 +10,7 @@ what was achieved inside that window, and what comes next. Development continues
   </picture>
 </p>
 
-The 90-second demo video: [on YouTube](https://youtu.be/HVDKah3Jauo).
+The 90-second demo video: [on YouTube](https://youtu.be/-8v0nflAQBk).
 
 ## The plan
 
