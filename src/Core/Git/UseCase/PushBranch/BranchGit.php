@@ -69,22 +69,26 @@ final readonly class BranchGit
         return $this->finished($this->process($repository, $arguments, self::NETWORK), $arguments)->getExitCode() ?? -1;
     }
 
-    // The prefixes the repository's config rewrites (url.<base>.insteadOf and url.<base>.pushInsteadOf, includes followed), because git applies them to a remote URL before it reads or pushes, so the address the caller checked would not be the one git reaches.
+    // The config entries that change where git sends a remote string (url.<base>.insteadOf and url.<base>.pushInsteadOf rewrites, and every remote.<name>.* key, includes followed) as key and value pairs, in one call, because git applies them before it reads or pushes, so the address the caller checked would not be the one git reaches.
     /**
-     * @return list<string>
+     * @return list<array{string, string}>
      *
      * @throws BranchNotPushed
      */
-    public function rewrittenAddresses(string $repository): array
+    public function addressEntries(string $repository): array
     {
-        $arguments = ['config', '--null', '--get-regexp', '^url\..*\.(push)?insteadof$'];
+        $arguments = ['config', '--null', '--get-regexp', '^(url\..*\.(push)?insteadof|remote\..*)$'];
         $process = $this->finished($this->process($repository, $arguments, []), $arguments);
 
-        // Exit code 1 means no rewrite, because git config answers a search that matches no key with it.
+        // Exit code 1 means no such entry, because git config answers a search that matches no key with it.
         return match ($process->getExitCode()) {
-            0 => array_map(static fn (string $entry): string => explode("\n", $entry, 2)[1] ?? '', array_values(array_filter(explode("\0", $process->getOutput()), static fn (string $entry): bool => '' !== $entry))),
+            0 => array_map(static function (string $entry): array {
+                $parts = explode("\n", $entry, 2);
+
+                return [$parts[0], $parts[1] ?? ''];
+            }, array_values(array_filter(explode("\0", $process->getOutput()), static fn (string $entry): bool => '' !== $entry))),
             1 => [],
-            default => throw BranchNotPushed::because('git config could not list the address rewrites of the repository'),
+            default => throw BranchNotPushed::because('git config could not list the address rewrites and remote sections of the repository'),
         };
     }
 

@@ -223,6 +223,32 @@ final class PushBranchTest extends TestCase
         self::assertInstanceOf(PushedBranch::class, $this->scenario->push()->push($this->scenario->request()));
     }
 
+    public function testARemoteNamedLikeARemoteSectionOfTheRepositorysConfigIsNeitherRecordedNorPushedToEitherRepository(): void
+    {
+        $other = $this->scenario->otherRemote();
+        $this->scenario->remoteSectionInTheRepository($this->scenario->remote, 'pushurl', $other);
+
+        try {
+            (void) $this->scenario->push()->push($this->scenario->request());
+            self::fail('A remote named like a remote section must be refused.');
+        } catch (BranchNotPushed $refused) {
+            self::assertStringContainsString('remote section', $refused->getMessage());
+            self::assertStringNotContainsString($this->scenario->remote, $refused->getMessage());
+        }
+
+        self::assertNull($this->scenario->remoteTip($other));
+        self::assertNull($this->scenario->remoteTip());
+        self::assertSame([], $this->scenario->ledger->kinds());
+        self::assertSame(0, $this->scenario->changes->calls);
+    }
+
+    public function testARemoteSectionWhoseNameOnlyStartsWithTheRemoteDoesNotStopThePush(): void
+    {
+        $this->scenario->remoteSectionInTheRepository($this->scenario->remote.'.mirror', 'pushurl', $this->scenario->otherRemote());
+
+        self::assertInstanceOf(PushedBranch::class, $this->scenario->push()->push($this->scenario->request()));
+    }
+
     public function testTheForeignChangeCheckRunsBeforeAnythingIsRecordedOrPushed(): void
     {
         $atTheCheck = null;
