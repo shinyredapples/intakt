@@ -21,10 +21,12 @@ final class HaltLedger implements Ledger
 
     private bool $refusing = false;
 
+    private ?int $limit = null;
+
     #[Override]
     public function append(LedgerEvent $event): AppendResult
     {
-        if ($this->refusing) {
+        if ($this->refusing || (null !== $this->limit && count($this->recorded) >= $this->limit)) {
             return AppendResult::failed('the ledger is down');
         }
 
@@ -58,6 +60,16 @@ final class HaltLedger implements Ledger
     public function refuseAppends(): void
     {
         $this->refusing = true;
+    }
+
+    public function refuseAppendsBeyond(int $events): void
+    {
+        $this->limit = $events;
+    }
+
+    public function takeAppendsAgain(): void
+    {
+        $this->limit = null;
     }
 
     /**

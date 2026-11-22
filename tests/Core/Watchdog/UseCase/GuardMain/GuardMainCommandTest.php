@@ -318,6 +318,30 @@ final class GuardMainCommandTest extends TestCase
         self::assertStringNotContainsString('is not halted', $tester->getDisplay());
     }
 
+    public function testANoticeTheLedgerRefusesAfterTakingAnEarlierOneIsPrintedBeforeTheErrorAndNotGivenAgainOnRetry(): void
+    {
+        $seen = $this->repository->commitEmpty('Seen');
+        $first = $this->repository->commitSignedWith($this->privateKey('owner'), 'First owner change');
+        $second = $this->repository->commitSignedWith($this->privateKey('owner'), 'Second owner change');
+        $this->ledger->refuseAppendsBeyond(1);
+
+        $refused = $this->whenTheGuardRuns($seen, ['--owner-key' => [$this->publicKey('owner')]]);
+
+        self::assertSame(Command::FAILURE, $refused->getStatusCode());
+        $display = $refused->getDisplay();
+        self::assertStringContainsString('notice acme/shop: commit '.$first, $display);
+        self::assertStringNotContainsString('notice acme/shop: commit '.$second, $display);
+        self::assertLessThan(strpos($display, 'The notice for'), strpos($display, 'notice acme/shop: commit '.$first));
+        self::assertSame([LedgerEventKind::OwnerPushNoticed], $this->ledger->kinds());
+
+        $this->ledger->takeAppendsAgain();
+        $retry = $this->whenTheGuardRuns($seen, ['--owner-key' => [$this->publicKey('owner')]]);
+
+        self::assertSame(Command::SUCCESS, $retry->getStatusCode());
+        self::assertSame(sprintf("notice acme/shop: commit %s owner_signed, pushed without the gate\nacme/shop is not halted: no owner card stands\n", $second), $retry->getDisplay());
+        self::assertSame([LedgerEventKind::OwnerPushNoticed, LedgerEventKind::OwnerPushNoticed], $this->ledger->kinds());
+    }
+
     public function testAStandingCardKeepsTheProjectHaltedWhileMainIsCleanAgain(): void
     {
         $seen = $this->repository->commitEmpty('Seen');
