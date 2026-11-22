@@ -744,11 +744,11 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $this->publishedUpdates()->roundChanged($round, new RoundProgress(1, 2, false, [$id.'-correctness' => FinishedState::Verdict]));
 
         $rows = $this->rowsOf($this->replaced($page, $this->publishedStreams()));
-        self::assertSame([['correctness', 'Kimi K3', 'Changes requested']], array_map(static fn (array $row): array => array_slice($row, 0, 3), $rows));
+        self::assertSame([['correctness', 'Kimi K3 (Moonshot AI)', 'Changes requested']], array_map(static fn (array $row): array => array_slice($row, 0, 3), $rows));
         self::assertSame('2', $rows[0][3] ?? '');
     }
 
-    public function testARowALiveUpdatePlacesKeepsTheRawModelIdWithoutItsAiLab(): void
+    public function testARowALiveUpdatePlacesNamesAKnownModelWithItsAiLabAndKeepsTheRawIdInItsTitle(): void
     {
         [$round, $id, $page] = $this->givenAPageLoadedBeforeAnyReviewerStarted();
         $this->ledger->startReviewerOn($id, 'correctness', 'moonshotai/Kimi-K3.1:deepinfra');
@@ -757,7 +757,44 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $this->publishedUpdates()->roundChanged($round, new RoundProgress(1, 2, false, [$id.'-correctness' => FinishedState::Verdict]));
 
         $cell = $this->replaced($page, $this->publishedStreams())->filter('#round-'.$round.'-reviewer-'.$id.'-correctness-model');
-        self::assertSame(['moonshotai/Kimi-K3.1:deepinfra', null], [$cell->text(), $cell->attr('title')]);
+        self::assertSame(['Kimi K3.1 (Moonshot AI)', 'moonshotai/Kimi-K3.1:deepinfra'], [$cell->text(), $cell->attr('title')]);
+    }
+
+    public function testAReviewerPlacedByALiveUpdateIsHeadedWithItsModelAndAiLabInTheCurrentStateAndTheLiveLog(): void
+    {
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeAnyReviewerStarted();
+        $this->ledger->startReviewerOn($id, 'correctness', 'moonshotai/Kimi-K3.1:deepinfra');
+
+        $this->publishedUpdates()->toolCalled($round, $id.'-correctness', 'read_file');
+
+        $updated = $this->replaced($page, $this->publishedStreams());
+        $now = $updated->filter('#round-'.$id.'-now-reviewer-'.$id.'-correctness-model');
+        $heading = $updated->filter('#reviewer-'.$id.'-correctness h3');
+        self::assertSame(['Kimi K3.1 (Moonshot AI)', 'moonshotai/Kimi-K3.1:deepinfra'], [$now->text(), $now->attr('title')]);
+        self::assertSame(['correctness (Kimi K3.1 (Moonshot AI)) live', 'moonshotai/Kimi-K3.1:deepinfra'], [$heading->text(), $heading->attr('title')]);
+    }
+
+    public function testAReviewerOfAnUnknownModelPlacedByALiveUpdateIsNamedByItsIdAlone(): void
+    {
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeAnyReviewerStarted();
+        $this->ledger->startReviewerOn($id, 'correctness', 'acme/robot-7');
+
+        $this->publishedUpdates()->toolCalled($round, $id.'-correctness', 'read_file');
+
+        $updated = $this->replaced($page, $this->publishedStreams());
+        self::assertSame('acme/robot-7', $updated->filter('#round-'.$id.'-now-reviewer-'.$id.'-correctness-model')->text());
+        self::assertSame('correctness (acme/robot-7) live', $updated->filter('#reviewer-'.$id.'-correctness h3')->text());
+    }
+
+    public function testAReviewerWithoutARecordedModelPlacedByALiveUpdateHasNoModelTitle(): void
+    {
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeAnyReviewerStarted();
+        $this->ledger->startReviewer($id, 'correctness');
+
+        $this->publishedUpdates()->toolCalled($round, $id.'-correctness', 'read_file');
+
+        $updated = $this->replaced($page, $this->publishedStreams());
+        self::assertSame([null, null], [$updated->filter('#round-'.$id.'-now-reviewer-'.$id.'-correctness-model')->attr('title'), $updated->filter('#reviewer-'.$id.'-correctness h3')->attr('title')]);
     }
 
     public function testAReviewerStoppedAfterThePageLoadedGetsARowWithItsRoleAndTheStoppedState(): void
@@ -780,7 +817,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $this->publishedUpdates()->reviewerStopped($round, $id.'-correctness');
 
         $rows = $this->rowsOf($this->replaced($page, $this->publishedStreams()));
-        self::assertSame([['correctness', 'Kimi K3', 'stopped']], array_map(static fn (array $row): array => array_slice($row, 0, 3), $rows));
+        self::assertSame([['correctness', 'Kimi K3 (Moonshot AI)', 'stopped']], array_map(static fn (array $row): array => array_slice($row, 0, 3), $rows));
         self::assertSame('1', $rows[0][3] ?? '');
     }
 
@@ -835,7 +872,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $this->publishedUpdates()->roundChanged($round, new RoundProgress(1, 2, false, [$id.'-security' => FinishedState::Failed]));
 
         $rows = $this->rowsOf($this->replaced($page, $this->publishedStreams()));
-        self::assertSame([['security', 'Kimi K3', 'Failed the model did not answer in time']], array_map(static fn (array $row): array => array_slice($row, 0, 3), $rows));
+        self::assertSame([['security', 'Kimi K3 (Moonshot AI)', 'Failed the model did not answer in time']], array_map(static fn (array $row): array => array_slice($row, 0, 3), $rows));
     }
 
     public function testDuringALiveRoundThePageListsEachReviewerByRoleAndModelWithItsState(): void
@@ -848,8 +885,8 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $this->publishedUpdates()->toolCalled($round, $id.'-security', 'read_file');
 
         $updated = $this->replaced($page, $this->publishedStreams());
-        self::assertSame(['correctness (Kimi K3): running', 'security (GLM 5): running'], $updated->filter('.state-block .sb-list li')->each(static fn (Crawler $li): string => $li->text()));
-        self::assertSame(['correctness (Kimi K3) live', 'security (GLM 5) live'], $updated->filter('#round-'.$id.'-live .live h3')->each(static fn (Crawler $h3): string => $h3->text()));
+        self::assertSame(['correctness (Kimi K3 (Moonshot AI)): running', 'security (GLM 5 (Z.ai)): running'], $updated->filter('.state-block .sb-list li')->each(static fn (Crawler $li): string => $li->text()));
+        self::assertSame(['correctness (Kimi K3 (Moonshot AI)) live', 'security (GLM 5 (Z.ai)) live'], $updated->filter('#round-'.$id.'-live .live h3')->each(static fn (Crawler $h3): string => $h3->text()));
         self::assertStringNotContainsString($id.'-correctness (', $updated->html());
     }
 
@@ -973,7 +1010,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
         $this->publishedUpdates()->textStreamed($round, $id.'-correctness', 'Looking');
 
-        self::assertSame(['correctness (Kimi K3): running'], $this->replaced($page, $this->publishedStreams())->filter('.state-block .sb-list li')->each(static fn (Crawler $li): string => $li->text()));
+        self::assertSame(['correctness (Kimi K3 (Moonshot AI)): running'], $this->replaced($page, $this->publishedStreams())->filter('.state-block .sb-list li')->each(static fn (Crawler $li): string => $li->text()));
     }
 
     public function testAReviewerRowPlacedByAStreamShowsExactlyOneCodeReviewerHeadOf24Pixels(): void
@@ -1040,7 +1077,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertSame(['', ''], $images->each(static fn (Crawler $img): ?string => $img->attr('alt')));
         self::assertSame([['24', '24'], ['24', '24']], $images->each(static fn (Crawler $img): array => [$img->attr('width'), $img->attr('height')]));
         self::assertCount(2, $images->filter('img[src*="code_reviewer-"]'));
-        self::assertSame('correctness (Kimi K3) live', $block->filter('.character-row')->text());
+        self::assertSame('correctness (Kimi K3 (Moonshot AI)) live', $block->filter('.character-row')->text());
     }
 
     public function testALiveLogBlockPlacedByAStreamIsTheBlockThePageRendersOnLoad(): void

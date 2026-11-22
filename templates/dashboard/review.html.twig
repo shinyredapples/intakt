@@ -169,7 +169,7 @@
     <p class="muted log-empty">Each reviewer's tool calls and text appear here as it works.</p>
     <div class="live-reviewers" id="round-{{ active.round }}-live">
     {% for outcome in active.outcomes %}
-        {{ include('dashboard/_live_reviewer.html.twig', {reviewer: outcome.id, heading: outcome.role ~ ' (' ~ outcome.modelInWords ~ ')'}) }}
+        {{ include('dashboard/_live_reviewer.html.twig', {reviewer: outcome.id, heading: outcome.role ~ ' (' ~ outcome.modelAndLab ~ ')', model: outcome.model}) }}
     {% endfor %}
     </div>
     </div>
