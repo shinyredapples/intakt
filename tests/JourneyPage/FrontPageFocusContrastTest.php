@@ -43,7 +43,7 @@ final class FrontPageFocusContrastTest extends TestCase
     private function rules(): array
     {
         $page = HTMLDocument::createFromFile(self::FRONT_PAGE.'/index.html');
-        $css = (string) file_get_contents(self::FRONT_PAGE.'/assets/site.css').(string) $page->querySelector('head style')?->textContent;
+        $css = file_get_contents(self::FRONT_PAGE.'/assets/site.css').$page->querySelector('head style')?->textContent;
         preg_match_all('/([^{}]+)\{([^{}]*)\}/', (string) preg_replace('#/\*.*?\*/#s', '', $css), $matches, PREG_SET_ORDER);
 
         return array_map(static fn (array $match): array => [
@@ -64,7 +64,7 @@ final class FrontPageFocusContrastTest extends TestCase
 
     /**
      * @param list<array{selectors: list<string>, declarations: array<string, string>}> $rules
-     * @param list<string>                                                          $selectors
+     * @param list<string>                                                              $selectors
      */
     private function color(array $rules, string $theme, array $selectors, string $property): string
     {
@@ -83,7 +83,7 @@ final class FrontPageFocusContrastTest extends TestCase
 
     /**
      * @param list<array{selectors: list<string>, declarations: array<string, string>}> $rules
-     * @param list<string>                                                          $selectors
+     * @param list<string>                                                              $selectors
      *
      * @return ($property is null ? array<string, string> : string)
      */
