@@ -279,7 +279,7 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
         $this->roundLedger($ledger)->judgeDone($round, JudgedFindings::of(new Judgement([]), [], [$dropped]), []);
 
         self::assertSame(
-            [['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of F1.', 'file' => 'src/A.php', 'line' => 7, 'reason' => 'none of its 1 quoted code fragments is in the change', 'nearest' => []]],
+            [['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of F1.', 'file' => 'src/A.php', 'line' => 7, 'reason' => 'none of its 1 quoted code fragments is in the change', 'nearest' => [], 'gate_gap' => false]],
             $ledger->payloads()[0]['dropped'],
         );
     }
@@ -294,7 +294,7 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
         $payload = $ledger->payloads()[0];
         $done = $this->serializer()->deserialize((string) json_encode($payload), JudgeDone::class, JsonEncoder::FORMAT);
 
-        self::assertSame([['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of F1.', 'file' => 'src/A.php', 'line' => 7, 'reason' => 'none of its 1 quoted code fragments is in the change', 'nearest' => [['quote' => 'dropReason', 'lines' => [['file' => 'src/A.php', 'line' => 3, 'text' => '$reason = 1;']]]]]], $payload['dropped']);
+        self::assertSame([['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of F1.', 'file' => 'src/A.php', 'line' => 7, 'reason' => 'none of its 1 quoted code fragments is in the change', 'nearest' => [['quote' => 'dropReason', 'lines' => [['file' => 'src/A.php', 'line' => 3, 'text' => '$reason = 1;']]]], 'gate_gap' => false]], $payload['dropped']);
         self::assertInstanceOf(JudgeDone::class, $done);
         self::assertEquals([$dropped], $done->dropped);
     }
@@ -313,6 +313,31 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
 
         self::assertInstanceOf(JudgeDone::class, $done);
         self::assertSame([], $done->dropped[0]->nearest);
+    }
+
+    public function testADroppedFindingMarkedAsAGateGapIsWrittenAndReadsBackWithTheMarker(): void
+    {
+        $round = new RoundFixture(self::getContainer())->start(1);
+        $ledger = new InMemoryLedger();
+        $gap = new Finding('F1', Severity::P3, 'src/A.php', 7, null, 'The gate misses `example()`.', FixableBy::Owner, false, 'phpstan', null, gate_gap: true);
+        $dropped = DroppedFinding::of($gap, 'none of its 1 quoted code fragments is in the change');
+
+        $this->roundLedger($ledger)->judgeDone($round, JudgedFindings::of(new Judgement([]), [], [$dropped]), []);
+        $payload = $ledger->payloads()[0];
+        $done = $this->serializer()->deserialize((string) json_encode($payload), JudgeDone::class, JsonEncoder::FORMAT);
+
+        self::assertIsArray($payload['dropped']);
+        self::assertSame([true], array_column($payload['dropped'], 'gate_gap'));
+        self::assertInstanceOf(JudgeDone::class, $done);
+        self::assertTrue($done->dropped[0]->gateGap);
+    }
+
+    public function testADroppedFindingWrittenBeforeTheGateGapMarkerWasRecordedReadsAsNotAGateGap(): void
+    {
+        $done = $this->serializer()->deserialize('{"round":"'.self::ROUND.'","act":[],"follow_ups":[],"findings":[],"dropped":[{"id":"F1","severity":"P3","text":"A gap.","file":"src/A.php","line":7,"reason":"why","nearest":[]}]}', JudgeDone::class, JsonEncoder::FORMAT);
+
+        self::assertInstanceOf(JudgeDone::class, $done);
+        self::assertFalse($done->dropped[0]->gateGap);
     }
 
     public function testAJudgeRowWrittenBeforeDropReasonsWereRecordedReadsWithNoDroppedFindings(): void

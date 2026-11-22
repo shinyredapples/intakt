@@ -19,6 +19,8 @@ final readonly class DroppedFinding
         public string $reason,
         // Empty by default, because a row written before nearest lines were recorded holds none.
         public array $nearest = [],
+        // False by default, because a row written before the gate-gap marker was recorded holds none.
+        public bool $gateGap = false,
     ) {
     }
 
@@ -27,6 +29,6 @@ final readonly class DroppedFinding
      */
     public static function of(Finding $finding, string $reason, array $nearest = []): self
     {
-        return new self($finding->id, $finding->severity, $finding->text, $finding->file, $finding->line, $reason, $nearest);
+        return new self($finding->id, $finding->severity, $finding->text, $finding->file, $finding->line, $reason, $nearest, $finding->gate_gap);
     }
 }
