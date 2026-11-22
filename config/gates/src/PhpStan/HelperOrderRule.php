@@ -13,6 +13,7 @@ use PhpParser\Node\Identifier;
 use PhpParser\Node\Name;
 use PhpParser\Node\Stmt\ClassLike;
 use PhpParser\Node\Stmt\ClassMethod;
+use PhpParser\Node\Stmt\Trait_;
 use PhpParser\NodeFinder;
 use PHPStan\Analyser\Scope;
 use PHPStan\Rules\IdentifierRuleError;
@@ -37,9 +38,25 @@ final readonly class HelperOrderRule implements Rule
      */
     public function processNode(Node $node, Scope $scope): array
     {
+        // because PHPStan visits a class nested in a trait's method once per class using the trait, the trait's own visit checks the nested classes instead
+        if ($scope->isInTrait()) {
+            return [];
+        }
+
+        $classes = $node instanceof Trait_ ? [$node, ...new NodeFinder()->findInstanceOf($node->stmts, ClassLike::class)] : [$node];
+
+        return array_merge(...array_map($this->findingsOf(...), $classes));
+    }
+
+    /**
+     * @return list<IdentifierRuleError>
+     */
+    private function findingsOf(ClassLike $node): array
+    {
         $methods = $node->getMethods();
         $named = array_combine(array_map(static fn (ClassMethod $method): string => $method->name->toLowerString(), $methods), $methods);
-        $calls = $this->callsOf($methods, $this->helpersOf($methods), $node->namespacedName?->toString() ?? '');
+        // because the name resolver leaves namespacedName unset on an anonymous class
+        $calls = $this->callsOf($methods, $this->helpersOf($methods), isset($node->namespacedName) ? $node->namespacedName->toString() : '');
 
         return [
             ...$this->helpersAboveTheirFirstCaller($calls, $named),
@@ -107,7 +124,7 @@ final readonly class HelperOrderRule implements Rule
         $isCall = fn (Node $found): bool => isset($helpers[$this->calledName($found, $class) ?? '']);
         $nested = array_map(spl_object_id(...), $finder->find($finder->findInstanceOf($statements, ClassLike::class), $isCall));
         $calls = array_filter($finder->find($statements, $isCall), static fn (Node $call): bool => !in_array(spl_object_id($call), $nested, true));
-        // a call ends after the calls in its arguments, so ordering by end position puts them first, as PHP calls them (also those in a closure argument, which PHP may call later)
+        // an expression ends after the expressions nested in it, so ordering by end position puts a call in an argument (or in a closure argument) before the call that encloses it
         usort($calls, static fn (Node $one, Node $other): int => $one->getEndFilePos() <=> $other->getEndFilePos());
 
         return array_values(array_unique(array_map(fn (Node $call): string => $this->calledName($call, $class) ?? '', $calls)));

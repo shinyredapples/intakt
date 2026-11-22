@@ -52,14 +52,17 @@ final class HelperOrderRuleTest extends PhpStanRuleTestCase
         );
     }
 
-    public function testHelpersInCallOrderInATraitPassStaticAnalysis(): void
-    {
-        $this->assertRuleAccepts('helpers-in-call-order-in-a-trait');
-    }
-
     public function testAPrivateHelperAboveItsCallerInAnAnonymousClassFailsStaticAnalysis(): void
     {
         $this->assertRuleRejects('helper-above-its-caller-in-an-anonymous-class', 'src/Labels.php:12 intakt.helperOrder Private helper trimmed() sits above render(), its first caller: move it below render().');
+    }
+
+    public function testAPrivateHelperAboveItsCallerInAnAnonymousClassInATraitUsedTwiceIsReportedOnce(): void
+    {
+        self::assertSame(
+            'src/Labels.php:12 intakt.helperOrder Private helper trimmed() sits above render(), its first caller: move it below render(). Helpers sit below the method that first calls them, in the order it first calls them.',
+            $this->ruleFindingsOf('helper-above-its-caller-in-an-anonymous-class-in-a-trait'),
+        );
     }
 
     public function testTwoStaticHelpersInTheReverseOrderOfTheirFirstCallsFailStaticAnalysis(): void
