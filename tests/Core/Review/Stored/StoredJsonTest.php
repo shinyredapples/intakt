@@ -29,8 +29,8 @@ final class StoredJsonTest extends KernelTestCase
 {
     private const string TODAYS_FINDING = '{"id":"a","severity":"P2","file":"src/A.php","line":7,"symbol":null,"text":"Broken.","fixable_by":"builder","repeat":false,"requirement":null,"evidence":{"probe":"php -l","output":"ok"},"regression":true}';
 
-    // Written by the stored serializer on main before the answer document existed, so it pins the stored round JSON.
-    private const string VERDICT_FROM_MAIN = '{"verdict":"changes","findings":[{"id":"a","severity":"P2","file":"src\/A.php","line":7,"symbol":null,"text":"Broken.","fixable_by":"builder","repeat":false,"requirement":null,"evidence":{"probe":"php -l","output":"ok"},"regression":true,"merged":[]}],"resolved":["b"],"follow_ups":["later"]}';
+    // Written by the stored serializer on main before the answer document existed, so it pins the stored round JSON; the gate_gap marker came after it, in its fixed place after regression.
+    private const string VERDICT_FROM_MAIN = '{"verdict":"changes","findings":[{"id":"a","severity":"P2","file":"src\/A.php","line":7,"symbol":null,"text":"Broken.","fixable_by":"builder","repeat":false,"requirement":null,"evidence":{"probe":"php -l","output":"ok"},"regression":true,"gate_gap":false,"merged":[]}],"resolved":["b"],"follow_ups":["later"]}';
 
     public function testAVerdictWrittenThroughTheSerializerReadsBackEqual(): void
     {

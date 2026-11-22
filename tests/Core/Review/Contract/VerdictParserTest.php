@@ -106,14 +106,14 @@ final class VerdictParserTest extends KernelTestCase
     {
         $output = VerdictDocument::fromTheDesign()->withFinding('gate_gap', true)->json();
 
-        self::assertTrue(new VerdictParser()->parse($this->reviewer()->answering($output))->findings[0]->gate_gap);
+        self::assertTrue($this->reviewer()->verdictFor($output)->findings[0]->gate_gap);
     }
 
     public function testAFindingWithoutTheGateGapMarkerMapsAsNotAGateGap(): void
     {
         $output = VerdictDocument::fromTheDesign()->withoutFinding('gate_gap')->json();
 
-        self::assertFalse(new VerdictParser()->parse($this->reviewer()->answering($output))->findings[0]->gate_gap);
+        self::assertFalse($this->reviewer()->verdictFor($output)->findings[0]->gate_gap);
     }
 
     public function testAFindingWithoutPlaceOrRequirementOrEvidenceMaps(): void
