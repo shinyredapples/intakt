@@ -16,7 +16,8 @@ COPY --from=zizmor /usr/bin/zizmor /usr/local/bin/zizmor
 
 # Like the old binary: no file capability (secure-exec drops TMPDIR); uid 1000 owns Caddy's XDG_*_HOME dirs.
 # A fixed list before the copy, so a composer.json edit reuses this layer; pdo_mysql and pdo_pgsql serve persistence.
-# openssh-client: the watchdog verifies main's SSH-signed commits with ssh-keygen, and its tests sign with throwaway keys.
+# openssh-client: the branch push signs Intakt's commits with ssh-keygen and verifies them before it pushes, the
+# watchdog verifies main's SSH-signed commits with it, and their tests sign with throwaway keys.
 RUN set -eu; \
     apt-get update; \
     apt-get install --yes --no-install-recommends git iproute2 jq libicu-dev libpq-dev libzip-dev openssh-client python3 unzip; \

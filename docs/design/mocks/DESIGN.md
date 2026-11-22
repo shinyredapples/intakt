@@ -1,6 +1,6 @@
 # Intakt dashboard design system
 
-Mocks live in this folder. Every page uses `assets/intakt.css` and `assets/intakt.js`. Change tokens there, never per page.
+Mocks live in this folder. Every page uses `assets/intakt.css` and `assets/intakt.js`. Change tokens there, never per page. The one exception is the review page mock in `review-scoreboard/` (#3503), a standalone prototype with its own copy of the tokens; see the Amber audit for where it departs from this spec.
 
 ## Concept
 
@@ -106,6 +106,8 @@ Board columns size to the space (`flex: 1 1 0`, min 184 px, Waiting on you 224 p
 Amber appears only on: the Waiting on you nav count and column count, needs-you cards and the board's Needs you card (amber tint), Waiting items (the amber card edge, no tint), their one action button, the ring on the current step of a Working now path (it marks where the work stands, the one step to look at; UX2 home, #3326), the needs dot, an expired account login (it is a Waiting item) with its Log in button, the "wait on you" counts on Projects, and the logo. Nothing else.
 
 Named exception: the amber props of the characters (the code reviewer's magnifying glass, the verdict step's gavel, the tip of the octopus's baton) are part of the drawings, not a signal. They never stand for "needs you", and the characters stay off every amber-tint surface (see Characters) but one: the waiting octopus on the board's Needs you card, because it conducts the page from there and the board then hides its own octopus, so the page still shows one octopus and the card's words, not the drawing, say what waits.
+
+Named exception, the at-a-glance review page (direction A, "Scoreboard", chosen by the owner on 2026-11-22, #3503; mock in `review-scoreboard/`): while the verdict is changes needed, the verdict card is `--amber-tint` with an amber edge and carries the owl and the reviewer faces, each face's cross sits on an amber dot, and the "Should fix" urgency uses amber (its shape, its bar segments and its highlighted code line). There the verdict is what waits on the owner's next step, and the urgency is always shown by a shape and a word as well, never by the colour alone. Every other rule of this audit and of Characters holds on that page.
 
 ## Characters
 

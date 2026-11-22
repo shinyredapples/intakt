@@ -12,6 +12,17 @@ Plan task T47. `Plugin/WorkSource` is the contract. No implementation of it exis
 
 The `watch` section of a project takes the optional `eligibility_label`: the issue label that makes a task eligible; when the key is left out it is unset, and no code reads it yet (the implementation arrives in part 2 of #1602). `WatchConfiguration` refuses a blank value, including one of only Unicode whitespace such as a no-break space, with the same check as the `repository`, `base` and `task` keys. Test: `tests/Core/Watcher/Infrastructure/WatchConfigurationTest.php`.
 
+## Wait lines (`Domain\IssueReferences`)
+
+`IssueReferences` reads the numbers a body names: `waitsFor()` and `unreadableWaits()` from its `Waits for` lines, `closedBy()` from a pull request's closing keywords (`Closes`, `Fixes`, `Resolves` and their forms, then `#n`).
+
+- **A wait line** is a line of its own that starts with the words `Waits for`, in any case. Before the words it may hold spaces, blockquote markers (`>`, repeated, with spaces or not) and one list marker (`-`, `*`, `+`, `1.` or `1)`, then a space). The words may carry the same `**`, `__`, `*` or `_` on both sides, with the colon inside or outside (`**Waits for:** #9`, `**Waits for** : #9`). Anything but a letter, a digit or `_` may follow the words, so `Waits for#9` and `**Waits for**#9` are wait lines, and `Waits for, #9` is one whose numbers cannot be read. A word joined to the words (`Waits for_example`), emphasis that does not close the way it opened, and prose that mentions a wait (`this waits for #9`) are not wait lines.
+- **The numbers** after the words (and an optional colon) are a list of `#n` joined by commas, `and` or `&` (`#9, #10 and #11`). The `n` is ASCII digits (`0` to `9`): a `#` followed by a digit of another script (`Waits for #9 and #１０`, `Waits for #1２`) makes the whole line unreadable, and no number is taken from it. A note may follow the list but must hold no `#` and no digit of any script, so `Waits for #9 then 10` or `Waits for #9 then １０` names no number a wait could miss.
+- **An unreadable wait** is a wait line whose numbers are not such a list (`Waits for billing#12`, `**Waits for** the base`, `Waits for #9 and 10`, or text that is not UTF-8). `unreadableWaits()` answers the line as written, its markers included and without the spaces around it, and `waitsFor()` takes no number from it; `IntakeRules` holds the task with `unreadable wait: "<line>"`. A line the pattern cannot finish (PCRE gives up) is held as unreadable too, never dropped.
+- **External blocks.** A line inside an `<!-- external -->` ... `<!-- /external -->` block is neither a wait nor an unreadable wait, because the threat model counts copied text as untrusted even in a trusted task. A line holding only `<!-- external -->` (spaces or tabs around it allowed) opens the block, a line holding only `<!-- /external -->` closes it, and a block that is never closed runs to the end of the text. Closing keywords are read from the whole body.
+
+Test: `tests/Plugin/GitHubWorkSource/Domain/IssueReferencesTest.php`.
+
 ## Stored state (`work_source_issue`, `work_source_validator`, `work_source_failure`)
 
 Issue #2906, part 1 of #2666. Three Doctrine entities in `Plugin/GitHubWorkSource/Domain`, mapped as the `GitHubWorkSource` entry of `config/packages/doctrine.yaml`, with migration `Version20261120100000` (and `Version20261120120000` for the sync generation, issue #3063):

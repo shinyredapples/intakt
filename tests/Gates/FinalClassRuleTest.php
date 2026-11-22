@@ -98,6 +98,29 @@ final class FinalClassRuleTest extends PhpStanRuleTestCase
         $this->assertRuleRejects('non-final-class-in-function', 'src/factories.php:9 intakt.finalClass Class Product is not final');
     }
 
+    public function testANonFinalClassInAnExtensionlessBinScriptFailsTheGate(): void
+    {
+        $sandbox = Sandbox::withFixture('non-final-extensionless-script-class');
+        $sandbox->borrowKernel();
+
+        try {
+            $run = $sandbox->check('--only=phpstan');
+        } finally {
+            $sandbox->remove();
+        }
+
+        self::assertStringContainsString('bin/probe:8 intakt.finalClass Class Runner is not final', $run->findingsOf('phpstan'), $run->output());
+    }
+
+    public function testABracedNamespaceFileReportsEachNonFinalClassAndSkipsTheFinalOne(): void
+    {
+        $findings = $this->ruleFindingsOf('non-final-classes-in-braced-namespaces');
+
+        self::assertStringContainsString('src/Pair.php:6 intakt.finalClass Class Open is not final', $findings);
+        self::assertStringContainsString('src/Pair.php:16 intakt.finalClass Class AlsoOpen is not final', $findings);
+        self::assertStringNotContainsString('Closed', $findings);
+    }
+
     public function testTheNestedClassFixturesAreValidPhp(): void
     {
         $fixtures = [__DIR__.'/Fixtures/non-final-class-in-function/src/factories.php.fixture', __DIR__.'/Fixtures/non-final-conditional-class/src/Polyfill.php.fixture'];
