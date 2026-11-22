@@ -23,11 +23,17 @@ if [ "${1-}" = '--dependencies' ]; then
     generate_step="$6"
     shift 6
     # Without the delimiter the lock files and the steps cannot be told apart, so no verdict is better than a pass that ran nothing.
-    case " $* " in
-        *' -- '*) ;;
-        *) printf 'the --dependencies option is not closed by --\n' >&2; exit 1 ;;
-    esac
-    with_dependencies=1
+    # Each argument on its own, because a step or lock file that only holds a -- closes nothing.
+    for argument in "$@"; do
+        if [ "$argument" = '--' ]; then
+            with_dependencies=1
+            break
+        fi
+    done
+    if [ "$with_dependencies" -eq 0 ]; then
+        printf 'the --dependencies option is not closed by --\n' >&2
+        exit 1
+    fi
 fi
 # The lock files stay in the arguments up to the --, because they are compared with the merged tree, which exists only after the merge.
 
@@ -149,14 +155,19 @@ use_dependencies() {
         return 1
     fi
     # Read again in this job, because the probe job resolved the image on its own and a tag that moved since would copy a snapshot made for another platform.
-    # Outside the tree and with an x after it, so no file of the change steers the probe and the bytes compare exactly as the probe job's output did.
-    # Compared as hex through files, because a command substitution drops NUL bytes.
+    # Outside the tree, so no file of the change steers the probe.
+    # Compared as hex through a file, because a command substitution drops NUL bytes.
     probe_output="${TMPDIR:-/work}/platform-probe"
     if ! (cd / && sh -c "$platform_probe" < /dev/null > "$probe_output"); then
         printf 'the platform probe failed in the check, so the check installs its dependencies itself\n'
         return 1
     fi
-    if [ "$(od -An -v -tx1 < "$probe_output")" != "$(printf '%s' "$platform" | od -An -v -tx1)" ]; then
+    # Each od's status is read, because two that fail print nothing and nothing equals nothing.
+    if ! probed=$(od -An -v -tx1 < "$probe_output") || ! expected=$(printf '%s' "$platform" | od -An -v -tx1); then
+        printf 'the platform of the check could not be compared with the one the snapshot was made for, so the check installs its dependencies itself\n'
+        return 1
+    fi
+    if [ "$probed" != "$expected" ]; then
         printf 'the platform of the check is not the one the snapshot was made for, so the check installs its dependencies itself\n'
         return 1
     fi

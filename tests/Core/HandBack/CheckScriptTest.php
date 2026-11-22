@@ -648,21 +648,77 @@ final class CheckScriptTest extends TestCase
         self::assertSame("passed\n", $this->outputFile('check-result'));
     }
 
-    public function testADependencyOptionWithoutItsDelimiterEndsTheCheckWithoutAVerdict(): void
+    /**
+     * @return iterable<string, array{list<string>}>
+     */
+    public static function argumentsWithoutAnArgumentThatIsTheDelimiter(): iterable
+    {
+        yield 'no delimiter at all' => [['touch ran']];
+        yield 'a delimiter inside one argument' => [['touch ran -- ignored']];
+        yield 'a delimiter formed across two arguments' => [['echo --', 'touch ran']];
+        yield 'a delimiter at the start of an argument' => [['-- touch ran']];
+    }
+
+    /**
+     * @param list<string> $arguments
+     */
+    #[DataProvider('argumentsWithoutAnArgumentThatIsTheDelimiter')]
+    public function testADependencyOptionWithoutItsDelimiterEndsTheCheckWithoutAVerdict(array $arguments): void
     {
         $this->history->commitFile('composer.lock', self::LOCK, 'Lock the dependencies');
         $snapshot = $this->readOnlySnapshotHolding(['vendor/installed.json' => "{}\n"]);
 
         $run = new Process(
             ['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-check', $this->history->mirror, $this->history->bundle('main..task'), 'task',
-                '--dependencies', $snapshot, self::PLATFORM, self::PROBE, 'touch installed', 'exit 9', 'composer.lock', $this->blobOf(self::LOCK)],
+                '--dependencies', $snapshot, self::PLATFORM, self::PROBE, 'touch installed', 'exit 9', 'composer.lock', $this->blobOf(self::LOCK), ...$arguments],
             null,
             $this->environment(),
         );
         $run->run();
 
         self::assertSame(1, $run->getExitCode());
+        self::assertStringContainsString('the --dependencies option is not closed by --', $run->getErrorOutput());
         self::assertFileDoesNotExist($this->output.'/check-result');
+        self::assertDirectoryDoesNotExist($this->work.'/clone');
+    }
+
+    public function testAStepAfterTheDelimiterThatHoldsADelimiterItselfStillRuns(): void
+    {
+        $this->history->commitFile('composer.lock', self::LOCK, 'Lock the dependencies');
+        $snapshot = $this->readOnlySnapshotHolding(['vendor/installed.json' => "{}\n"]);
+
+        $run = $this->whenTheCheckRunsWith($this->dependencyOptions($snapshot, self::LOCK), $this->history->bundle('main..task'), 'touch ran -- also');
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
+        self::assertSame("passed\n", $this->outputFile('check-result'));
+        self::assertFileExists($this->work.'/clone/ran');
+    }
+
+    public function testAPlatformComparisonThatFailsCopiesNothingAndTheGatesInstallRuns(): void
+    {
+        $this->history->commitFile('composer.lock', self::LOCK, 'Lock the dependencies');
+        $snapshot = $this->readOnlySnapshotHolding(['vendor/installed.json' => "{}\n"]);
+        // An od in front of the real one that fails without output, so both sides of the comparison come out empty.
+        $shim = $this->history->folder.'/shim';
+        new Filesystem()->dumpFile($shim.'/od', "#!/bin/sh\nexit 1\n");
+        new Filesystem()->chmod($shim.'/od', 0o700);
+        $this->path = $shim.PATH_SEPARATOR.getenv('PATH');
+
+        $run = $this->whenTheCheckRunsWith(
+            ['--dependencies', $snapshot, self::PLATFORM, 'printf 8.4.1', 'touch installed', 'exit 9', 'composer.lock', $this->blobOf(self::LOCK)],
+            $this->history->bundle('main..task'),
+            'touch installed',
+            'test ! -e vendor && test -f installed',
+        );
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
+        self::assertSame("passed\n", $this->outputFile('check-result'));
+        self::assertStringContainsString(
+            'the platform of the check could not be compared with the one the snapshot was made for, so the check installs its dependencies itself',
+            $this->outputFile('check.log'),
+        );
+        self::assertStringNotContainsString('$ copy the dependency snapshot', $this->outputFile('check.log'));
+        self::assertStringNotContainsString('exit 9', $this->outputFile('check.log'));
     }
 
     public function testACopiedSnapshotRunsTheGenerateStepInPlaceOfTheGatesInstall(): void
