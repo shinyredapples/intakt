@@ -110,6 +110,41 @@ final class BoardHeadlineLiveUpdatesTest extends DashboardPageTestCase
         self::assertSame(self::REVIEWING, $updated->filter('.page-head .lead')->text());
     }
 
+    public function testARoundOpenedBeforeItsFirstReviewerStartsIsInTheHeadlineAndOnWorkingNow(): void
+    {
+        $page = $this->browser->request('GET', '/');
+        $this->ledger->startRoundOf('feat/a', self::ROUND, 1);
+
+        $this->roundUpdates()->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(0, 2, false));
+
+        $pushed = $this->lastShellUpdate();
+        self::assertSame(self::REVIEWING, $this->updated($page, $pushed)->filter('#board-headline')->text());
+        self::assertSame(['feat/a'], new Crawler($pushed)->filter('turbo-stream[target="working"] template .wcard-title')->each(static fn (Crawler $title): string => $title->text()));
+    }
+
+    public function testARoundOpenedBeforeItsFirstReviewerStartsIsInTheHeadlineOfAPageLoadedThen(): void
+    {
+        $this->ledger->startRoundOf('feat/a', self::ROUND, 1);
+
+        self::assertSame(self::REVIEWING, $this->browser->request('GET', '/')->filter('#board-headline')->text());
+    }
+
+    // Morphed, so a review that stays in progress keeps its card as the same node, and a card link with the keyboard focus keeps it.
+    public function testAPushWhileAReviewStaysInProgressKeepsItsWorkingNowCardAsTheSameNode(): void
+    {
+        $this->pushedHeadlineAfterAReviewerStarted();
+        $page = $this->browser->request('GET', '/');
+        $card = $page->filter('#working a.wcard')->getNode(0);
+        self::assertNotNull($card);
+
+        $this->ledger->startReviewer(self::ROUND, 'correctness');
+        $this->roundUpdates()->reviewerStarted(Uuid::fromString(self::ROUND), 'correctness');
+
+        $pushed = $this->lastShellUpdate();
+        self::assertCount(1, new Crawler($pushed)->filter('turbo-stream[action="replace"][method="morph"][target="working"]'));
+        self::assertSame($card, $this->replaced($page, $pushed)->filter('#working a.wcard')->getNode(0));
+    }
+
     public function testAJudgedRoundPushedToTheBoardTakesItsReviewersOutOfTheHeadline(): void
     {
         $page = $this->browser->request('GET', '/');

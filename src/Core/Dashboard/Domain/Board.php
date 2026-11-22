@@ -51,7 +51,7 @@ final readonly class Board
         return new WhoIsWorking($this->cards);
     }
 
-    // From the same lanes the page shows, so the line never tells a different story than the board below it.
+    // From the same open rounds Working now shows, so the line never tells a different story than the cards below it.
     public function headline(): Headline
     {
         return new Headline($this->whoIsWorking(), count($this->cards) + count($this->tasks), count($this->tasksInFlight()));

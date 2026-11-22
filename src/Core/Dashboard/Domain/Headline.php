@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\Domain;
 
-// Plain code over the lanes, never a model, so the line a newcomer reads first says only what the board holds.
+// Plain code over the open rounds, never a model, so the line a newcomer reads first says only what the board holds.
 final readonly class Headline
 {
     // Only reviewers are lanes until the build lane lands, so every running change is the Code reviewers' (docs/design/06-decisions.md, decision 23).
@@ -51,10 +51,10 @@ final readonly class Headline
         return 0 === $this->cards;
     }
 
-    // The first lane's round, because the opening names that lane's change first, so the lead opens the review it names (#2207, D1).
+    // The first open round, because the opening names its change first, so the lead opens the review it names (#2207, D1).
     public function runningRound(): ?string
     {
-        return array_first($this->working->lanes())?->roundId;
+        return array_first($this->working->activeRounds())?->round;
     }
 
     private function running(): string
@@ -80,29 +80,29 @@ final readonly class Headline
     {
         $places = [];
 
-        foreach ($this->working->lanes() as $lane) {
-            $places[$this->placeKey($lane)] ??= $this->place($lane);
+        foreach ($this->working->activeRounds() as $round) {
+            $places[$this->placeKey($round)] ??= $this->place($round);
         }
 
         return array_values($places);
     }
 
     // Length-prefixed so that no two names meet in one key, and a string key so that "1" and "01" stay apart.
-    private function placeKey(Lane $lane): string
+    private function placeKey(ReviewedRound $round): string
     {
-        if ('' === $lane->change) {
-            return 'round:'.strlen($lane->roundId).':'.$lane->roundId;
+        if ('' === $round->change) {
+            return 'round:'.strlen($round->round).':'.$round->round;
         }
 
-        return 'change:'.strlen($lane->project).':'.$lane->project.strlen($lane->change).':'.$lane->change;
+        return 'change:'.strlen($round->project).':'.$round->project.strlen($round->change).':'.$round->change;
     }
 
     // A round from before the ledger named its change has no change, so the round names it, as on its board card.
-    private function place(Lane $lane): string
+    private function place(ReviewedRound $round): string
     {
-        $name = '' === $lane->change ? 'round '.$this->short($lane->roundId) : 'change '.$this->short($lane->change);
+        $name = '' === $round->change ? 'round '.$this->short($round->round) : 'change '.$this->short($round->change);
 
-        return $name.' of '.$this->short($lane->project);
+        return $name.' of '.$this->short($round->project);
     }
 
     /**

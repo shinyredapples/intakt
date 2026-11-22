@@ -28,7 +28,7 @@
         {% block action %}<a class="btn quiet sm" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::LIST_REVIEWS')) }}#failing-heads">See the failed pull requests</a>{% endblock %}
     {% endembed %}
 {% endfor %}
-{% if waiting is not empty %}{{ include('dashboard/_board_needs_you.html.twig', {waiting: waiting}, with_context = false) }}{% endif %}
+{% if waiting is not empty %}{{ include('dashboard/_board_needs_you.html.twig', {waiting: waiting, now: now}, with_context = false) }}{% endif %}
 {{ include('dashboard/_board_octopus.html.twig', {board: board}, with_context = false) }}
 {{ include('dashboard/_board_working.html.twig', {board: board}, with_context = false) }}
 <section aria-labelledby="board-h">

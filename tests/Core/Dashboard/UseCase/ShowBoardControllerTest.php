@@ -814,6 +814,7 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
 
     public function testWhileSomethingWaitsNeedsYouCountsItLinksToWaitingOnYouAndConductsWithTheOctopus(): void
     {
+        self::clockAt('2026-11-01T12:00:00+00:00');
         $this->noticesAre(new OutageNotice(new Account(Provider::ClaudeCode, 'main'), new DateTimeImmutable('2026-11-01T08:00:00+00:00'), new DateTimeImmutable('2026-11-01T11:00:00+00:00')));
         $this->ledger->startRoundOf('42', 'round-1', 1);
 
@@ -821,6 +822,14 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
 
         self::assertSame(['/waiting', '1 decision', 'Oldest since 11:00 UTC'], [$card->attr('href'), $card->filter('.decisions')->text(), $card->filter('.meta')->text()]);
         self::assertCount(2, $card->filter('img[src*="octopus-waiting"]'));
+    }
+
+    public function testAWaitFromAnEarlierDayNamesItsDateOnNeedsYou(): void
+    {
+        self::clockAt('2026-11-03T09:00:00+00:00');
+        $this->noticesAre(new OutageNotice(new Account(Provider::ClaudeCode, 'main'), new DateTimeImmutable('2026-11-01T08:00:00+00:00'), new DateTimeImmutable('2026-11-01T11:00:00+00:00')));
+
+        self::assertSame('Oldest since 1 Nov, 11:00 UTC', $this->browser->request('GET', '/?board=1')->filter('a.needs-you .meta')->text());
     }
 
     public function testNothingWaitingShowsNoNeedsYouCard(): void

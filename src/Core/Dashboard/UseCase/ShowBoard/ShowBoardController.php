@@ -17,6 +17,7 @@ use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Watcher\Contract\FailingMain;
 use Intakt\Core\Watcher\Contract\FailingMains;
+use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -37,6 +38,7 @@ final readonly class ShowBoardController
         private SampleChangeSource $sample,
         private UrlGeneratorInterface $urls,
         private OwnerNotices $notices,
+        private ClockInterface $clock,
     ) {
     }
 
@@ -61,6 +63,7 @@ final readonly class ShowBoardController
             'failing' => array_map($this->redacted(...), $this->failingHeads->in($events)),
             'failing_mains' => array_map($this->redactedMain(...), $this->failingMains->in($events)),
             'waiting' => $this->notices->stillRunningOldestFirst(),
+            'now' => $this->clock->now(),
             'columns' => $board->shownColumns(),
             'coming_next' => $board->comingNext(),
         ])));

@@ -61,7 +61,7 @@ Spacing steps 4, 8, 12, 16, 24, 32, 48. Radius by hierarchy: chips 6, buttons an
 - **Session summary** (under the live log): quiet label-sm headings, right-aligned tabular values. Tool calls by kind, cost, tests with result, files read (mono), and findings this round; each finding id links to its entry in the timeline, which highlights with `--selected`. The log scrolls above it; the summary stays pinned at the bottom of the panel.
 - **Phone banner**: below 761 px a banner collapses to one 48 px line (icon, short title, chevron); tapping it shows the full text and its action. Desktop shows the full banner.
 - **Waiting item**: one lead line saying what is wrong, then the meta line, then one line of consequence ("Approving lets Intakt merge this change to how the forge token is stored."; for a floor hit the lead line names the floor and the file, never only "secret handling"), then the one action (a command with Copy, an answer form, or one amber button). Supporting detail sits in a "Why" disclosure: open on desktop, closed on phones. The consequence line is always visible.
-- **Who is working**: a one-line summary (a dot per lane, "4 working, 2 idle", what they are on) that expands to the lane cards.
+- **Working now** (UX2 home): no disclosure. One card per change somebody works on now (a build task in flight, or a review whose latest round is still open), each with its title, project, a state chip (Building or Reviewing) and a five-step path (Plan, Build, Check, Review, Merge): done steps filled in primary, the current step with an amber ring and a bold label and the role doing the work standing on it, later steps outlined. A review card opens its review page. With no card it is one muted line saying who will appear there.
 - **Board edge and stage map**: when the board is wider than the screen, the scrolled-off edge fades and a small map of the nine columns ("Columns 1 to 6 of 9") marks the visible ones in green. The map uses no amber. Clicking a segment scrolls there. Hidden when everything fits and on phones.
 - **Current state block** (task): a tinted block directly under the header for the active round: each reviewer's status, the open findings (linking to the timeline), and a checklist of what merge still needs. Completed rounds in the timeline collapse to one-line summaries (outcome, finding count, time span) that expand; the active round stays open. The live log is secondary, beside or behind a tab.
 - **Setting row state**: right of the control, "Saving…", a green check with "Saved", or red "Not saved, still <active value>. Retry", so the owner knows which value is in force. Page copy says "Most changes save as you make them". Settings that change how you reach the dashboard (port) need an explicit Apply, with the proposed result beside it ("Will move to intakt.local:8471").
@@ -93,7 +93,7 @@ Board columns size to the space (`flex: 1 1 0`, min 184 px, Waiting on you 224 p
 
 - Bottom bar, 68 px: Waiting (first, amber count), Board, Projects, Team, More. More opens a sheet with History and Settings and is shown as current on those pages. The top bar holds the logo, a Search button and the theme toggle.
 - Waiting on you is the phone's home: each item is the lead line, meta, then the one action (a full-width 52 px amber button, or the command with a full-width Copy); the explanation is behind "Why".
-- Board: banners and Who is working are single lines that expand. One column at a time. A sticky segmented switcher lists every column with its count (Waiting on you first); swiping the board snaps column by column and updates the switcher. Backlog and Done are not collapsed on phones.
+- Board: banners are single lines that expand; the Working now cards stack one per row. One column at a time. A sticky segmented switcher lists every column with its count (Waiting on you first); swiping the board snaps column by column and updates the switcher. Backlog and Done are not collapsed on phones.
 - Task: Stop and Continue side by side, Send back full width, then a sticky Timeline / Live log tab switch.
 - Search: a full-screen sheet with a Cancel button and 52 px rows.
 - Setup: progress bars plus "Step 3 of 5: AI account"; the step's buttons stay at the bottom.
@@ -101,26 +101,30 @@ Board columns size to the space (`flex: 1 1 0`, min 184 px, Waiting on you 224 p
 
 ## Amber audit
 
-Amber appears only on: the Waiting on you nav count and column count, needs-you cards and Waiting items (amber tint), their one action button, the needs dot, an expired account login (it is a Waiting item) with its Log in button, the "wait on you" counts on Projects, and the logo. Nothing else.
+Amber appears only on: the Waiting on you nav count and column count, needs-you cards and Waiting items (amber tint), their one action button, the ring on the current step of a Working now path (it marks where the work stands, the one step to look at), the needs dot, an expired account login (it is a Waiting item) with its Log in button, the "wait on you" counts on Projects, and the logo. Nothing else.
 
-Named exception: the amber props of the characters (the code reviewer's magnifying glass, the verdict step's gavel, the tip of the octopus's baton) are part of the drawings, not a signal. They never stand for "needs you", and the characters stay off every amber-tint surface (see Characters).
+Named exception: the amber props of the characters (the code reviewer's magnifying glass, the verdict step's gavel, the tip of the octopus's baton) are part of the drawings, not a signal. They never stand for "needs you", and the characters stay off every amber-tint surface (see Characters) but one: the waiting octopus on the board's Needs you card, because it conducts the page from there and the board then hides its own octopus, so the page still shows one octopus and the card's words, not the drawing, say what waits.
 
 ## Characters
 
-The Code reviewers and their verdict step each have one character, drawn in a light and a dark version (role names as in [the team](../05-architecture/01-overview.md#the-team); the `Character` values keep their code names until the code is renamed):
+The Code reviewers, their verdict step, the developer and the security engineer each have one character, drawn in a light and a dark version (role names as in [the team](../05-architecture/01-overview.md#the-team); the `Character` values keep their code names until the code is renamed):
 
 | Role | `Character` | Drawing |
 |---|---|---|
 | Code reviewer (every reviewer setting of the Code reviewers, whatever its lens) | `CodeReviewer` (`code_reviewer`) | Meerkat with a magnifying glass |
 | The Code reviewers' verdict step (formerly the judge) | `Judge` (`judge`) | Owl with a gavel |
+| Developer (the build) | `Developer` (`developer`) | Beaver with a wrench |
+| Security engineer (a reviewer setting named `security`) | `SecurityEngineer` (`security_engineer`) | Hedgehog with a shield |
+
+The tortoise (maintainer, on Merge), the tech lead (Plan) and the AI engineer (Check) have no drawing in the code yet: no Working now card reaches those steps today.
 
 The octopus has four poses (`MascotPose`): `waiting`, `conducting`, `bowing`, `asleep`, for empty, idle and approved states. The enum value is the file stem: `assets/images/roles/<value>-{light,dark}-{48,96,192}.webp` for a role and `assets/images/mascot/octopus-<value>-{light,dark}-{96,144,192,288}.webp` for a pose, plus `-72` for `bowing`, which sits at 72 px beside an approved newest round (scaled from `octopus-<value>-{light,dark}.webp`). Every place uses the one partial `templates/dashboard/components/character.html.twig` (`character`, `size`); the components page shows each character and pose in both themes.
 
-Places: a reviewer's row and the verdict step's row on the review page, the live log and the round heading (24 or 48 px), the Code reviewer beside the role of each lane of the board's Who is working strip (24 px, one per lane), and an octopus pose on an empty, idle or approved state.
+Places: a reviewer's row and the verdict step's row on the review page, the live log and the round heading (24 or 48 px), the role standing on the current step of each Working now card (48 px: the beaver on Build, the meerkat on Review, the hedgehog beside the meerkat while the security reviewer runs), the waiting octopus on the Needs you card (96 px, larger on wide screens), and an octopus pose on an empty, idle or approved state.
 
-- **Decoration only.** Every image has `alt=""`, no `role`, a fixed `width` and `height` (no layout shift), a 1x/2x `srcset` (24 px: the 48 and 96 files; 48 px: 96 and 192; an octopus at 96 px: 96 and 192; at 144 px: 144 and 288) and `loading="lazy"`. The text beside it names the actor; no text is removed or shortened for a character.
+- **Decoration only.** Every image has `alt=""` (except on a Working now card, where the role standing on the step is the only sign of the step's role, so its alt names role and step, "Code reviewer, now on Review"; the partial takes an optional `alt`), no `role`, a fixed `width` and `height` (no layout shift), a 1x/2x `srcset` (24 px: the 48 and 96 files; 48 px: 96 and 192; an octopus at 96 px: 96 and 192; at 144 px: 144 and 288) and `loading="lazy"`. The text beside it names the actor; no text is removed or shortened for a character.
 - **Theme.** The light and the dark image switch by the nearest `[data-theme]`, like the logo.
-- **Calm.** No animation and no hover effect. One character per row or heading, and one octopus per page (the components page, a catalog for the people who build pages, is the exception).
+- **Calm.** No animation and no hover effect, except that the role on a Working now step fades in once over 0.4 s, and not at all under reduced motion. One character per row or heading, and one octopus per page (the components page, a catalog for the people who build pages, is the exception).
 - **Never** on board cards, table rows, chips, amber-tint surfaces or Waiting on you. The outcome chip and the state dot stay the only carriers of outcome and state.
 - **Contrast.** A character's silhouette is at least 3:1 against `--page`, `--raised` and `--tint` in both themes. The dark drawings carry a light halo of their own; the light ones get a 1 px `--muted` ring from the style sheet (5.2:1 or more on those surfaces), because their own edge falls under 3:1.
 

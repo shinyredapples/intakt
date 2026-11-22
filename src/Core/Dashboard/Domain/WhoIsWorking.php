@@ -10,12 +10,25 @@ final readonly class WhoIsWorking
     /** @var list<Lane> */
     private array $lanes;
 
+    /** @var list<ReviewedRound> */
+    private array $activeRounds;
+
     /**
      * @param list<Review> $reviews
      */
     public function __construct(array $reviews)
     {
         $this->lanes = array_merge(...array_map($this->lanesOf(...), $reviews));
+        $this->activeRounds = array_values(array_filter(array_map(static fn (Review $review): ?ReviewedRound => $review->activeRound(), $reviews)));
+    }
+
+    // Every round still open, also one whose first reviewer has not started yet, because Working now shows it as Reviewing and the headline must say the same (UX2 home, #3326).
+    /**
+     * @return list<ReviewedRound>
+     */
+    public function activeRounds(): array
+    {
+        return $this->activeRounds;
     }
 
     /**

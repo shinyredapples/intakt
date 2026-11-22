@@ -50,6 +50,15 @@ final class HeadlineTest extends TestCase
         self::assertSame('The Code reviewers are reviewing change 3 of sample.', $headline->opening());
     }
 
+    public function testARoundOpenedBeforeItsFirstReviewerStartsIsNamedAndLinked(): void
+    {
+        $opened = new Review([new ReviewedRound(new RoundStart('r-opened', 'sample', 2), new RoundPlace('3', 1), new DateTimeImmutable('2026-11-01T10:00:00+00:00'), null)]);
+
+        $headline = new Headline(new WhoIsWorking([$opened]), 1);
+
+        self::assertSame(['The Code reviewers are reviewing change 3 of sample.', 'r-opened'], [$headline->opening(), $headline->runningRound()]);
+    }
+
     public function testTheReviewersOfOneChangeAreNamedOnce(): void
     {
         $headline = $this->headline([$this->running('sample', '3', 'correctness', 'security')]);
