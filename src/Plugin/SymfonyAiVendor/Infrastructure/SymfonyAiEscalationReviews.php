@@ -85,8 +85,7 @@ final readonly class SymfonyAiEscalationReviews implements EscalationReviews
         return $verdict;
     }
 
-    // Boundary: a ledger that cannot take the row is logged, never thrown, because the provider's error carries the delay the queue retries after.
-    // Only the class is logged, because the exception chain can hold the provider's error, which may echo part of an API key.
+    // Boundary: a ledger that cannot take the row is logged by class only, never thrown, because the provider's error carries the queue's delay and its chain may echo part of a key.
     private function leaveUnsettled(UsageReservation $reservation, Throwable $failure, TierRoutedPlatform $platform): void
     {
         try {
