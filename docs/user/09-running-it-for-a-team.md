@@ -8,9 +8,11 @@ Your team saw the Trends page and wants Intakt on its own repository, with its o
 
 ## Your project and its panel
 
-The demo's sample project was set up for you. Your own project lives in `config/intakt.yaml`.
+The demo's sample project was set up for you. Your own project lives in the project file: the file `INTAKT_CONFIG` names, or `config/intakt.yaml` when that variable is not set. Under `docker compose`, `INTAKT_CONFIG` names `/app/var/data/intakt.yaml` on the data volume, so editing `config/intakt.yaml` in your clone changes nothing there.
 
-1. Copy `config/intakt.example.yaml` to `config/intakt.yaml`.
+This chapter's commands run on an install started from a clone with PHP, not in the demo container: the container sees only its data volume, never a repository on your machine, and Intakt must be able to read the repository it reviews.
+
+1. Copy `config/intakt.example.yaml` to `config/intakt.yaml`, or to the file `INTAKT_CONFIG` names.
 2. Under `projects:`, give your project a name and map its three tiers to models ([chapter 7](07-keys-providers-and-costs.md#tiers-how-a-project-picks-its-models)).
 3. In its `review:` section, list the reviewers: each has a role, a tier, a provider, a prompt and a budget.
 4. Choose the panel's rule with `quorum`:

@@ -32,7 +32,7 @@ A key in `.env.local` or in the secrets always wins over one kept from the setup
 
 ## Two labs, one Hugging Face token
 
-A Hugging Face token (`HF_TOKEN`) is the cheapest way to get two labs. Intakt hands it to `openai_compatible` with the Hugging Face router. The demo then runs `correctness` on Kimi K3.1 Pro and `security` on DeepSeek V4 Pro.
+A Hugging Face token (`HF_TOKEN`) is the cheapest way to get two labs. In the container, Intakt hands it to `openai_compatible` with the Hugging Face router, unless you set that provider's own variables. The demo then runs `correctness` on Kimi K3.1 Pro and `security` on DeepSeek V4 Pro.
 
 Two separate providers are the stronger setup, though. One token is one outage, one rate limit and one bill. With `HF_TOKEN` and an Anthropic key, correctness stays on Anthropic and security moves to Kimi.
 
@@ -44,7 +44,7 @@ A project never names a model per reviewer. It maps three tiers to a provider an
 - **standard,** a mid-range model,
 - **light,** a small model; the owl runs on it.
 
-Each reviewer names a tier. So one changed line moves every reviewer on that tier to a newer model. The tiers live in `config/intakt.yaml`; chapter 9 shows where.
+Each reviewer names a tier. So one changed line moves every reviewer on that tier to a newer model. The tiers live in the project file ([chapter 9](09-running-it-for-a-team.md#your-project-and-its-panel) says which file that is).
 
 ## When a provider says "slow down"
 
@@ -54,7 +54,7 @@ When a provider limits a call, the account that made it cools down until the res
 
 Every review page shows the tokens and the cost of each round. The cost is an estimate: Intakt multiplies the tokens by the prices you set, in US dollars per million tokens.
 
-1. Open `config/intakt.yaml`.
+1. Open the project file ([chapter 9](09-running-it-for-a-team.md#your-project-and-its-panel)).
 2. Under `budget.prices`, add each model with its `input` and `output` price.
 3. Optionally set `budget.price_date`, the day you read the prices, in quotes.
 4. Run `php bin/console cache:clear`.

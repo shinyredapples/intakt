@@ -70,7 +70,7 @@ At the end you get a short report: the verdict, the rounds used, the findings fi
 
 ## On your own project
 
-Outside the demo, the skill fills in the project, branch, base, repository and task from the repository you are in, and asks only for what it cannot find. Starting reviews from an agent is off until you turn it on in `.env.local`: set `MCP_OWNER_ACCESS=mcp_tool_write` and a long random `MCP_OWNER_TOKEN`. The demo sets both for you.
+Outside the demo, the skill fills in the project, branch, base, repository and task from the repository you are in, and asks only for what it cannot find. Intakt must be able to read that repository, so this works with an install started from a clone, not with the demo container ([chapter 9](09-running-it-for-a-team.md#your-project-and-its-panel)). Starting reviews from an agent is off until you turn it on in `.env.local`: set `MCP_OWNER_ACCESS=mcp_tool_write` and a long random `MCP_OWNER_TOKEN`. The demo sets both for you.
 
 The full tool list, the arguments and every error are in [Connecting an agent through MCP](../reference/mcp.md).
 
