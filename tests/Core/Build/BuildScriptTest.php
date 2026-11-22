@@ -739,7 +739,7 @@ final class BuildScriptTest extends TestCase
 
     public function testARelativePathEntryDoesNotLetThePreflightCheckAnotherTimeoutThanTheBundleStepUses(): void
     {
-        // The relative entry names a file in the folder the script starts in and none in the clone, where the bundle step runs.
+        // Because the relative entry names a file in the folder the script starts in and none in the clone, where the bundle step runs.
         $folder = $this->history->folder.'/relative';
         mkdir($folder.'/image-bin', 0o755, true);
         $timeout = (string) new ExecutableFinder()->find('timeout');
