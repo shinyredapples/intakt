@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Budget\Contract\OutageNotice;
+use Intakt\Core\Dashboard\Domain\Character;
 use Intakt\Core\Dashboard\Domain\WaitingChoice;
 use Intakt\Core\Dashboard\Domain\WaitingItem;
 use Intakt\Core\Dashboard\Domain\WaitingItemNeedsOneToFourChoices;
@@ -83,6 +84,29 @@ final class WaitingItemTest extends TestCase
         self::assertSame('See the queue on the board', $item->linkLabel);
     }
 
+    // The line under the link says what the tap shows and that the card goes by itself, because the card offers no button that ends it.
+    #[DataProvider('linkOutcomes')]
+    public function testAnOutageLinkSaysWhatItShowsAndThatTheCardLeavesWhenReadingsReturn(?string $statusPage, string $expected): void
+    {
+        $item = WaitingItem::ofOutage($this->outage(), $statusPage);
+
+        self::assertSame($expected.' This card leaves when readings return.', $item->linkOutcome);
+    }
+
+    /**
+     * @return iterable<string, array{?string, string}>
+     */
+    public static function linkOutcomes(): iterable
+    {
+        yield 'status page' => ['https://status.example', 'Shows whether the provider reports trouble.'];
+        yield 'board' => [null, 'Shows what waits on this account.'];
+    }
+
+    public function testTheMaintainerWaitsOnTheOwnerForAnOutage(): void
+    {
+        self::assertSame(Character::Maintainer, WaitingItem::ofOutage($this->outage(), null)->character);
+    }
+
     public function testAnItemWithNoChoiceIsRefused(): void
     {
         $this->expectException(WaitingItemNeedsOneToFourChoices::class);
@@ -136,7 +160,7 @@ final class WaitingItemTest extends TestCase
      */
     private function itemOf(array $choices): WaitingItem
     {
-        return new WaitingItem('Lead', 'Consequence', 'Why', new DateTimeImmutable('2026-11-02T11:00:00+00:00'), $choices, 'Open the status page', 'https://status.example');
+        return new WaitingItem('Lead', 'Consequence', 'Why', new DateTimeImmutable('2026-11-02T11:00:00+00:00'), $choices, 'Open the status page', 'https://status.example', 'Shows whether the provider reports trouble.', Character::Maintainer);
     }
 
     private function outage(): OutageNotice
