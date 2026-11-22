@@ -186,7 +186,7 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
         self::assertNotSame('', $live->filter('#round-'.$round.'-judged')->text());
         self::assertSame(self::ALL_STARTED, $live->filter('#round-'.$round.'-started')->text());
 
-        foreach (['#review-verdict', '#round-'.$round.'-started','#round-'.$round.'-verdict', '#round-'.$round.'-judged', '#round-'.$round.'-tokens', '#review-summary-tokens', '#review-summary-cost'] as $part) {
+        foreach (['#review-verdict', '#round-'.$round.'-started', '#round-'.$round.'-verdict', '#round-'.$round.'-judged', '#round-'.$round.'-tokens', '#review-summary-tokens', '#review-summary-cost'] as $part) {
             self::assertSame($judged->filter($part)->text(), $live->filter($part)->text(), $part.' on the page that stayed open differs from a fresh load');
         }
 

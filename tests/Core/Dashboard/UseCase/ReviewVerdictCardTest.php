@@ -45,7 +45,7 @@ final class ReviewVerdictCardTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame(['Changes needed', '3 to fix · 0 urgent'],[$crawler->filter('.verdict-card .verdict-words')->text(), $crawler->filter('.verdict-card .verdict-count')->text()]);
+        self::assertSame(['Changes needed', '3 to fix · 0 urgent'], [$crawler->filter('.verdict-card .verdict-words')->text(), $crawler->filter('.verdict-card .verdict-count')->text()]);
         self::assertSame('To fix', $crawler->filter('.to-fix h2')->text());
     }
 

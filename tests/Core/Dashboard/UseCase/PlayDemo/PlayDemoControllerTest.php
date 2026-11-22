@@ -359,7 +359,7 @@ final class PlayDemoControllerTest extends DashboardPageTestCase
         $review = $this->browser->request('GET', (string) $caption->filter('a.tour-review')->attr('href'));
 
         self::assertSame('#review-verdict[data-round="demo-round-1"]', $caption->attr('data-tour-at'));
-        self::assertCount(1, $review->filter((string) $caption->attr('data-tour-at')));
+        self::assertCount(1, $review->filter($caption->attr('data-tour-at')));
     }
 
     public function testAnotherRoundsReviewPageHoldsNoElementTheLastStageMarks(): void

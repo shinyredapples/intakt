@@ -99,7 +99,7 @@ final class DemoTourJourneyTest extends JourneyTestCase
 
         self::assertSame('Step 5 of 5', $page->filter('#tour-caption .tour-dots')->attr('aria-label'));
         self::assertSame('#review-verdict[data-round="'.self::SECOND.'"]', $page->filter('#tour-caption')->attr('data-tour-at'));
-        self::assertSame(['Approved', 1], [$page->filter('#review-verdict .verdict-words')->text(), $page->filter((string) $page->filter('#tour-caption')->attr('data-tour-at'))->count()]);
+        self::assertSame(['Approved', 1], [$page->filter('#review-verdict .verdict-words')->text(), $page->filter($page->filter('#tour-caption')->attr('data-tour-at'))->count()]);
         self::assertSame(TourStage::RoundEnds->sentence(), $page->filter('#tour-caption .tour-line')->text());
     }
 
