@@ -46,7 +46,7 @@ The `phpstan` gate also runs `php` as `PHP_BINARY`: it starts the checked tree's
 
 ## To run Intakt's own CI
 
-`.github/workflows/ci.yml`, `.github/workflows/journeys.yml` and the scripts in `.github/ci/` call these on the runner host, outside the CI image. GitHub's `ubuntu-24.04` runners have them all; a self-hosted runner must provide them and must be ephemeral ([Running Intakt's CI on your own runner](../user/self-hosted-ci.md)).
+`.github/workflows/ci.yml`, `.github/workflows/journeys.yml` and the scripts in `.github/ci/` call these on the runner host, outside the CI image. GitHub's `ubuntu-24.04` runners have them all; a self-hosted runner must provide them and must be ephemeral ([Running Intakt's CI on your own runner](../reference/self-hosted-ci.md)).
 
 | Command | Called by | What for | Needed |
 |---|---|---|---|
