@@ -295,7 +295,7 @@ final class GitHubForgeTest extends TestCase
 
     public function testAFileWhoseAnswerHoldsANulByteIsNamedBinaryByItsSize(): void
     {
-        $forge = $this->forge(self::contentsAnswer(new MockResponse("\x89PNG\r\n\0 logo")));
+        $forge = $this->forge($this->contentsAnswer(new MockResponse("\x89PNG\r\n\0 logo")));
         $change = $forge->change(new ChangeId(self::PULL));
 
         $file = $forge->fileAtHead($change, 'assets/logo.png');
@@ -306,7 +306,7 @@ final class GitHubForgeTest extends TestCase
 
     public function testItRefusesAFileMissingAtHeadAsFileNotFoundAtHead(): void
     {
-        $forge = $this->forge(self::contentsAnswer(new MockResponse(self::fixture('not_found.json'), ['http_code' => 404])));
+        $forge = $this->forge($this->contentsAnswer(new MockResponse(self::fixture('not_found.json'), ['http_code' => 404])));
         $change = $forge->change(new ChangeId(self::PULL));
 
         $this->expectException(FileNotFoundAtHead::class);
@@ -680,7 +680,7 @@ final class GitHubForgeTest extends TestCase
         return is_string($body) ? $body : throw new LogicException('No review was posted.');
     }
 
-    private static function contentsAnswer(ResponseInterface $response): Closure
+    private function contentsAnswer(ResponseInterface $response): Closure
     {
         return static fn (string $url): ?ResponseInterface => str_contains($url, '/contents/') ? $response : null;
     }
