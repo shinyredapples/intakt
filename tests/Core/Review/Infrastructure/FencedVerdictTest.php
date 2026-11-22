@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Review\Infrastructure;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\ResolvedFinding;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Infrastructure\AnswerForm;
 use Intakt\Core\Review\Infrastructure\FenceLine;
@@ -50,7 +51,7 @@ final class FencedVerdictTest extends TestCase
         $verdict = $this->answered($model, "I read the change and found it fine.\n\n```json\n".self::VERDICT."\n```\n\nThat is my verdict.");
 
         self::assertSame(Decision::Changes, $verdict->verdict);
-        self::assertSame(['F1'], $verdict->resolved);
+        self::assertEquals([new ResolvedFinding('F1')], $verdict->resolved);
     }
 
     #[DataProvider('subscriptionModels')]

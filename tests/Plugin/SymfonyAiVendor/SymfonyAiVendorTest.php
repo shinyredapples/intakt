@@ -32,6 +32,8 @@ use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
+use Intakt\Core\Review\Contract\FollowUpNote;
+use Intakt\Core\Review\Contract\ResolvedFinding;
 use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
@@ -230,7 +232,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $verdict = $vendor->review('alpha', Tier::Strong, $this->request())->verdict;
 
         self::assertSame(Decision::Changes, $verdict->verdict);
-        self::assertSame(['F1', 'F2'], $verdict->resolved);
+        self::assertEquals([new ResolvedFinding('F1'), new ResolvedFinding('F2')], $verdict->resolved);
         self::assertCount(1, $verdict->findings);
     }
 
@@ -240,7 +242,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
 
         $verdict = $this->vendor($answer)->review('alpha', Tier::Strong, $this->request())->verdict;
 
-        self::assertSame(['big'], $verdict->follow_ups);
+        self::assertEquals([new FollowUpNote('big')], $verdict->follow_ups);
     }
 
     public function testAnApprovalFromAReviewerThatReadsTheCheckoutCounts(): void
@@ -276,7 +278,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
 
         self::assertSame(Decision::Changes, $correctness->verdict);
         self::assertSame(Decision::Changes, $security->verdict);
-        self::assertSame(['F1', 'F2'], $security->resolved);
+        self::assertEquals([new ResolvedFinding('F1'), new ResolvedFinding('F2')], $security->resolved);
         self::assertSame(['big' => 16000, 'middle' => 8000], $limits);
     }
 
@@ -410,7 +412,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
 
         self::assertSame([], $answers);
         self::assertSame(Decision::Changes, $verdict->verdict);
-        self::assertSame(['F1', 'F2'], $verdict->resolved);
+        self::assertEquals([new ResolvedFinding('F1'), new ResolvedFinding('F2')], $verdict->resolved);
     }
 
     public function testTheRetryAfterAnUnreadableAnswerGetsTwiceTheOutputRoomInANewConversation(): void
@@ -1199,8 +1201,8 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $server->shutdown();
 
         self::assertCount(5, $conversations->load($request->conversation->id));
-        self::assertSame(['big'], $verdict->follow_ups);
-        self::assertSame(['F1', 'F2'], $verdict->resolved);
+        self::assertEquals([new FollowUpNote('big')], $verdict->follow_ups);
+        self::assertEquals([new ResolvedFinding('F1'), new ResolvedFinding('F2')], $verdict->resolved);
         self::assertCount(1, $verdict->findings);
     }
 
