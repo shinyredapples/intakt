@@ -58,7 +58,7 @@ final readonly class RoundFinding
         return null === $this->text ? null : $this->partsOfTheText()[0];
     }
 
-    // The rest of the text after the headline, null when the headline is all of it.
+    // Null when the headline is all of the text, because a card then has no second line to show.
     public function explanation(): ?string
     {
         $rest = null === $this->text ? '' : $this->partsOfTheText()[1];

@@ -118,7 +118,7 @@ final readonly class ReviewedRound
 
     public function finding(string $id): ?RoundFinding
     {
-        return array_find($this->findings, static fn (RoundFinding $finding): bool => $finding->id === $id);
+        return self::findingIn($this, $id);
     }
 
     // The reviewers whose reports the finding holds, merged ones included; null for a round completed before the ledger recorded who reported what, so the page never claims nobody reported it.
@@ -127,13 +127,7 @@ final readonly class ReviewedRound
      */
     public function reportersOf(RoundFinding $finding): ?array
     {
-        if (null === $this->findingsByReviewer) {
-            return null;
-        }
-
-        $reported = fn (ReviewerOutcome $outcome): bool => [] !== array_intersect($finding->ids(), $this->findingsByReviewer[$outcome->id] ?? []);
-
-        return array_values(array_filter($this->outcomes, $reported));
+        return self::reportersIn($this, $finding);
     }
 
     // Null when the round holds no severity from this reviewer for the id, such as a reporter row written before severities were recorded, so a count never guesses one.
@@ -265,6 +259,26 @@ final readonly class ReviewedRound
     }
 
     // Read through a round for the same reason as `isReplayMarked()`: PHPStan keeps the constructor's null for `$this->severitiesByReviewer`.
+    // Read through a parameter like severityIn(), because static analysis reads the constructor's empty values as the only ones a clone holds.
+    private static function findingIn(self $round, string $id): ?RoundFinding
+    {
+        return array_find($round->findings, static fn (RoundFinding $finding): bool => $finding->id === $id);
+    }
+
+    /**
+     * @return list<ReviewerOutcome>|null
+     */
+    private static function reportersIn(self $round, RoundFinding $finding): ?array
+    {
+        $reports = $round->findingsByReviewer;
+
+        if (null === $reports) {
+            return null;
+        }
+
+        return array_values(array_filter($round->outcomes, static fn (ReviewerOutcome $outcome): bool => [] !== array_intersect($finding->ids(), $reports[$outcome->id] ?? [])));
+    }
+
     private function severityIn(self $round, string $reviewer, string $id): ?string
     {
         return $round->severitiesByReviewer[$reviewer][$id] ?? null;
