@@ -1,5 +1,18 @@
 ## AI providers
 
+### In short
+
+This part connects Intakt to AI models through the Symfony AI Bundle. It knows five providers: `anthropic`, `openai`, a generic `openai_compatible` endpoint (which also serves Hugging Face's router), and the subscription CLIs `claude_code` and `codex`. A provider is included only when each of its variables has a value, from the environment, the Symfony secrets vault, or the key typed in the browser. `codex` needs no variable; its credential is a login file. Each provider can have several accounts, tried in order, and an account that is cooling down is skipped.
+
+Worth knowing:
+
+- Providers are chosen when the container is built, so a changed key needs a cache clear.
+- A vault secret that cannot be decrypted counts as missing and never aborts the boot.
+- A left-out provider gets a message in `intakt.ai.disabled_providers` that names the variable to set.
+- When every account is cooling down, the call fails with `EveryAccountCoolingDown` before anything is sent.
+
+The rest of this page is the detailed reference.
+
 `config/packages/ai.php` configures the AI Bundle platforms `anthropic`, `openai` and a generic endpoint named `openai_compatible` (packages `symfony/ai-anthropic-platform`, `symfony/ai-open-ai-platform` and `symfony/ai-generic-platform`, pinned like the other Symfony AI packages). Each provider is a case of the `Intakt\Core\Ai\Contract\Provider` enum, which lists the environment variables it needs (`ANTHROPIC_API_KEY`; `OPENAI_API_KEY`; `OPENAI_COMPATIBLE_BASE_URL` and `OPENAI_COMPATIBLE_API_KEY`; `CLAUDE_CODE_OAUTH_TOKEN`; none for `codex`, whose credential is a login file).
 
 Hugging Face's Inference Providers reach Intakt through `openai_compatible`, with no package of their own: in the image, `docker/entrypoint.sh` sets its two variables from `HF_TOKEN` with the base URL `https://router.huggingface.co` (no `/v1`, because the generic bridge appends `/v1/chat/completions`), a token kept from the first-run page is served as the same two variables (see the kept key below), and the demo seed puts router models on it (see [the demo](demo-with-docker-compose.md)). That URL, the seeded models and their prices with their date live in one data file, `config/sample-project.yaml`, so refreshing the demo is an edit of that file. Three files read it: `src/Core/Review/UseCase/SeedSampleProject/SampleProject.php` (models, the second reviewer's model, prices, price date, and the router URL that `OPENAI_COMPATIBLE_BASE_URL` must equal), `src/Plugin/SymfonyAiVendor/Infrastructure/HuggingFaceDescriptor.php` (the router URL the key check calls) and `docker/entrypoint.sh` (the router URL it exports); the two PHP readers go through `src/Core/Review/Contract/SampleProjectData.php`, the entrypoint reads the `router_url` line with bash. The pinned generic bridge reads only `error.message` from a failed response, while the router writes `message` at the top level, so a refused call shows only the HTTP reason ("Bad Request"); symfony/ai#2849 reads both and arrives with the next Symfony AI release through the normal dependency update.

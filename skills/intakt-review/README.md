@@ -6,4 +6,4 @@ Install it after connecting the MCP server (`claude mcp add --transport http int
 
 For the demo, run the agent in the folder holding Intakt's `compose.yaml` and say "intakt review the demo": the skill uses the sample's values and makes its fixes inside the container, where the sample repository lives.
 
-The agent can start reviews only when the server's token and write access are set ([Connecting an agent through MCP](../../docs/user/mcp.md)). A test pins every tool and argument the skill names to the server's tool list.
+The agent can start reviews only when the server's token and write access are set ([Connecting an agent through MCP](../../docs/reference/mcp.md)). A test pins every tool and argument the skill names to the server's tool list.
