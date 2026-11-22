@@ -265,8 +265,7 @@ final class BuildScriptTest extends TestCase
         if (null === $python) {
             self::markTestSkipped('python3 is not on the PATH, and the thread fixture needs it.');
         }
-        // The leader thread ends on its own, so the kernel shows the leader in state Z while the other thread keeps the session running.
-        // The other thread marks when the leader shows state Z with two threads. A stand-in shell starts the watchdog only then, so its allowance cannot pass while the leader still runs, however slow the start.
+        // The leader thread ends on its own, so the kernel shows the leader in state Z while the other thread keeps the session running. The other thread marks when the leader shows state Z with two threads. A stand-in shell starts the watchdog only then, so its allowance cannot pass while the leader still runs, however slow the start.
         $this->givenTheCli('exec '.escapeshellarg($python).' -I -c '.escapeshellarg(<<<'PY'
             import ctypes, os, threading, time
             def finish():
