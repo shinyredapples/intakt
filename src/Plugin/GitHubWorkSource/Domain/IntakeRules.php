@@ -55,11 +55,10 @@ final readonly class IntakeRules
         $held = [];
         $dependsOn = [];
         foreach (array_filter($items, $this->isEligible(...)) as $task) {
-            $targets = $this->targetsOf($task, $open);
-            $reason = $this->holdReason($task, $targets, $open, $failures);
+            $reason = $this->holdReason($task, $open, $failures);
             if (null === $reason) {
                 $ready[] = $task;
-                $dependsOn[$task->number()] = $targets;
+                $dependsOn[$task->number()] = $this->targetsOf($task, $open);
 
                 continue;
             }
@@ -116,11 +115,10 @@ final readonly class IntakeRules
     }
 
     /**
-     * @param list<int>               $targets
      * @param array<int, QueuedIssue> $open
      * @param array<int, string>      $failures
      */
-    private function holdReason(QueuedIssue $task, array $targets, array $open, array $failures): ?string
+    private function holdReason(QueuedIssue $task, array $open, array $failures): ?string
     {
         if (isset($failures[$task->number()])) {
             return 'failed for good: '.$failures[$task->number()];
@@ -131,6 +129,7 @@ final readonly class IntakeRules
             return 'unreadable wait: '.implode(', ', array_map(static fn (string $line): string => '"'.$line.'"', $task->unreadableWaits()));
         }
 
+        $targets = $this->targetsOf($task, $open);
         $failed = array_find($targets, static fn (int $target): bool => isset($failures[$target]));
         if (null !== $failed) {
             return sprintf('depends on #%d, which failed for good: %s', $failed, $failures[$failed]);
