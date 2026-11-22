@@ -45,6 +45,8 @@ The checks also scan the project's CI workflows for known security mistakes, suc
 
 Sometimes a warning is wrong for this project, for example an image that cannot be pinned yet. It may then be silenced on its own line only, and only with the reason written right after it: `# zizmor: ignore[unpinned-images] tag only until digests come`. The same comment without a reason fails the checks, so every exception explains itself to the next reader. There is no settings file that turns a whole kind of warning off.
 
+The same rule holds for unfinished work. A comment in the code that starts with `TODO`, `FIXME` or `XXX`, a test switched off without a reason, or code that only says "not implemented" fails the checks when the change adds it, so nothing half-done slips in unnoticed. If a piece really has to wait, open an issue for it and write the comment as `TODO(#123): drop once the forge sends the total`: the issue number in brackets, a colon, then the reason. A not-implemented line needs such a comment on the same line. The checks then let it through, because the reader learns where the rest of the work is tracked and why it waits. They check only this form, not whether the issue is still open.
+
 ## Layer 4: several independent reviewers
 
 - The review panel has **reviewers from different AI companies** when you have accounts with more than one, so one model's blind spot doesn't decide. With a single account it runs one reviewer, and adds a second model of the same company for protected, security-relevant and large changes (planned: not built yet).
