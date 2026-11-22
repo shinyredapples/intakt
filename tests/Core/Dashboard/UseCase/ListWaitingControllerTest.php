@@ -48,7 +48,7 @@ final class ListWaitingControllerTest extends DashboardPageTestCase
         self::assertSame('Shows whether the provider reports trouble. This card leaves when readings return.', $item->filter('a.wait-act.primary small')->text());
     }
 
-    // UX2: no disclosure and no command to copy on an overview page.
+    // No disclosure and no command to copy, because an overview page leads to one tap and details live on their own page (UX2).
     public function testAnItemHasNoWhyDisclosureAndNoCommandToCopy(): void
     {
         $this->noticesAre($this->notice('main', new DateTimeImmutable('2026-11-02T08:00:00+00:00'), new DateTimeImmutable('2026-11-02T11:00:00+00:00')));
@@ -60,7 +60,7 @@ final class ListWaitingControllerTest extends DashboardPageTestCase
         self::assertStringNotContainsString('bin/console', $page->filter('main')->text());
     }
 
-    // The octopus conducts once per page, at the top; the cards show roles.
+    // Once per page, because the octopus is the conductor and the cards show the role that waits (UX2).
     public function testTheWaitingOctopusAppearsOnceAboveTheCountOfThingsThatNeedYou(): void
     {
         $this->noticesAre(

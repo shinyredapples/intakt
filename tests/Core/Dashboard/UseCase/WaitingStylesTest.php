@@ -35,7 +35,7 @@ final class WaitingStylesTest extends TestCase
         }
     }
 
-    // One tap is a 44 px target at least, on a phone too.
+    // At least 44 px, because that is the smallest touch target the design allows.
     public function testAReactionIsAtLeast44PxTallAtEveryWidth(): void
     {
         self::assertMatchesRegularExpression('/min-height:\s*56px;/', $this->rulesOf($this->sheet())['.wait-act'] ?? '');
