@@ -8,7 +8,7 @@ use Dom\HTMLDocument;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
 
-// WCAG 2.2 success criterion 1.4.11 asks 3:1 of a focus indicator against what is next to it.
+// The floor of 3:1 is because WCAG 2.2 asks it of a focus indicator: https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast
 #[CoversNothing]
 final class FrontPageFocusContrastTest extends TestCase
 {
@@ -19,29 +19,42 @@ final class FrontPageFocusContrastTest extends TestCase
 
     public function testTheFooterFocusOutlineStandsOutOnTheLightFooter(): void
     {
-        $rules = $this->rules();
+        [$outline, $footer] = $this->footerColors('light');
 
-        $contrast = $this->contrast($this->color($rules, 'light', self::FOOTER_FOCUS['light'], 'outline-color'), $this->color($rules, 'light', ['footer'], 'background'));
+        $contrast = $this->contrast($outline, $footer);
 
         self::assertGreaterThanOrEqual(self::LEAST_CONTRAST, $contrast);
     }
 
     public function testTheFooterFocusOutlineStandsOutOnTheDarkFooter(): void
     {
-        $rules = $this->rules();
+        [$outline, $footer] = $this->footerColors('dark');
 
-        $contrast = $this->contrast($this->color($rules, 'dark', self::FOOTER_FOCUS['dark'], 'outline-color'), $this->color($rules, 'dark', ['footer'], 'background'));
+        $contrast = $this->contrast($outline, $footer);
 
         self::assertGreaterThanOrEqual(self::LEAST_CONTRAST, $contrast);
     }
 
     /**
-     * The page links site.css before its own style element, so later rules win as in the browser.
-     *
+     * @return array{string, string}
+     */
+    private function footerColors(string $theme): array
+    {
+        $rules = $this->rules();
+        $variables = $this->declared($rules, self::THEME_ROOTS[$theme]);
+
+        return [
+            $this->resolved($variables, $this->declared($rules, self::FOOTER_FOCUS[$theme], 'outline-color'), $theme),
+            $this->resolved($variables, $this->declared($rules, ['footer'], 'background'), $theme),
+        ];
+    }
+
+    /**
      * @return list<array{selectors: list<string>, declarations: array<string, string>}>
      */
     private function rules(): array
     {
+        // Because the page links site.css before its own style element, rules read in this order win as in the browser.
         $page = HTMLDocument::createFromFile(self::FRONT_PAGE.'/index.html');
         $css = file_get_contents(self::FRONT_PAGE.'/assets/site.css').$page->querySelector('head style')?->textContent;
         preg_match_all('/([^{}]+)\{([^{}]*)\}/', (string) preg_replace('#/\*.*?\*/#s', '', $css), $matches, PREG_SET_ORDER);
@@ -63,20 +76,16 @@ final class FrontPageFocusContrastTest extends TestCase
     }
 
     /**
-     * @param list<array{selectors: list<string>, declarations: array<string, string>}> $rules
-     * @param list<string>                                                              $selectors
+     * @param array<string, string> $variables
      */
-    private function color(array $rules, string $theme, array $selectors, string $property): string
+    private function resolved(array $variables, string $value, string $theme): string
     {
-        $value = $this->declared($rules, $selectors, $property);
-        $variables = $this->declared($rules, self::THEME_ROOTS[$theme]);
-
         while (1 === preg_match('/^var\((--[\w-]+)\)$/', $value, $name)) {
             self::assertArrayHasKey($name[1], $variables, $theme.' theme defines '.$name[1]);
             $value = $variables[$name[1]];
         }
 
-        self::assertMatchesRegularExpression('/^#[0-9A-Fa-f]{6}$/', $value, $property.' in the '.$theme.' theme is an opaque colour');
+        self::assertMatchesRegularExpression('/^#[0-9A-Fa-f]{6}$/', $value, $value.' in the '.$theme.' theme is an opaque color');
 
         return $value;
     }
