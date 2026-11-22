@@ -99,7 +99,7 @@ It builds the messages with `EscalationPrompt::messagesFor()` and calls `Escalat
 - a strong tier the project maps no model to (`Vendor::mapsAModelTo()`) gives `project "<project>" maps no model to the "strong" tier, which the escalation review needs`, and no model is called;
 - an answer that is no escalation verdict gives `EscalationAgent::UNREADABLE`.
 
-A provider error from the call is thrown unchanged, so the queue tries the escalation again.
+A provider error from the call is thrown unchanged by the agent, as the vendor's typed error (see [Vendor](vendor.md#escalation-review)), so the queue tries the escalation again.
 
 The ledger kinds `escalation_reviewed` and `escalation_failed` exist for these results; nothing appends them yet.
 
