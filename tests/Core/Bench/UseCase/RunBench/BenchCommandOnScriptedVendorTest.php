@@ -33,6 +33,7 @@ use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\FailureInWords;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
+use Intakt\Core\Review\Contract\ModelNames;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\Panels;
@@ -85,6 +86,7 @@ use Symfony\Component\Messenger\Middleware\HandleMessageMiddleware;
 #[UsesClass(BenchReview::class)]
 #[UsesClass(BenchReviewerResult::class)]
 #[UsesClass(ReviewerOutcome::class)]
+#[UsesClass(ModelNames::class)]
 #[UsesClass(RoundLedgerReading::class)]
 #[UsesClass(RunClassifier::class)]
 #[UsesClass(DefectMatcher::class)]

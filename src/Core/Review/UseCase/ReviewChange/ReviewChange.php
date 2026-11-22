@@ -14,6 +14,7 @@ use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\FailureInWords;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\IgnoredProgress;
+use Intakt\Core\Review\Contract\ModelNames;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\PanelVerdict;
@@ -212,7 +213,7 @@ final readonly class ReviewChange implements ChangeReviews
             null === $failure ? null : $this->failures->of($failure),
             $this->ledger->tokensOfReviewer($roundId, $reviewerId),
             $this->ledger->millisecondsOfReviewer($reviewerId),
-            $this->ledger->modelsOfReviewer($roundId, $reviewerId),
+            new ModelNames(...$this->ledger->modelsOfReviewer($roundId, $reviewerId)),
         );
     }
 

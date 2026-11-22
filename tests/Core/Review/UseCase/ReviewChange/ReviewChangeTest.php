@@ -20,6 +20,7 @@ use Intakt\Core\Review\Contract\FailureInWords;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FinishedState;
 use Intakt\Core\Review\Contract\FixableBy;
+use Intakt\Core\Review\Contract\ModelNames;
 use Intakt\Core\Review\Contract\FlagProjectAsReplay;
 use Intakt\Core\Review\Contract\IgnoredProgress;
 use Intakt\Core\Review\Contract\JudgeRequest;
@@ -70,6 +71,7 @@ use Symfony\Component\Serializer\SerializerInterface;
 #[CoversClass(ReviewChange::class)]
 #[CoversClass(RoundLedgerReading::class)]
 #[CoversClass(ChangeReview::class)]
+#[UsesClass(ModelNames::class)]
 #[CoversClass(RoundNotNext::class)]
 #[CoversClass(RoundTierNotMapped::class)]
 #[CoversClass(StoredVerdicts::class)]
