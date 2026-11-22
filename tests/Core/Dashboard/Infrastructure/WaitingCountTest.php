@@ -42,6 +42,23 @@ final class WaitingCountTest extends TestCase
         self::assertSame(0, new WaitingCount($notices, new NullLogger())->now());
     }
 
+    public function testItHandsOverTheNoticesStillInForceOldestFirst(): void
+    {
+        $notice = new OutageNotice(new Account(Provider::ClaudeCode, 'main'), new DateTimeImmutable('2026-11-01T08:00:00+00:00'), new DateTimeImmutable('2026-11-01T11:00:00+00:00'));
+        $notices = self::createStub(OwnerNotices::class);
+        $notices->method('stillRunningOldestFirst')->willReturn([$notice]);
+
+        self::assertSame([$notice], new WaitingCount($notices, new NullLogger())->stillRunningOldestFirst());
+    }
+
+    public function testAnUnreadableNoticeStoreHandsOverNothingWaiting(): void
+    {
+        $notices = self::createStub(OwnerNotices::class);
+        $notices->method('stillRunningOldestFirst')->willThrowException(new RuntimeException('no such table'));
+
+        self::assertSame([], new WaitingCount($notices, new NullLogger())->stillRunningOldestFirst());
+    }
+
     public function testAnUnreadableNoticeStoreLogsAWarning(): void
     {
         $file = tempnam(sys_get_temp_dir(), 'intakt-waiting-count-');

@@ -25,9 +25,9 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
     private const string PROGRESS = '/^\d+ of \d+ reviewers finished\.$/';
     private const string NONE_STARTED = '0 of 2 reviewers started.';
     private const string ALL_STARTED = '2 of 2 reviewers started.';
-    private const string IDLE = 'Nothing is running. Nothing needs you.';
+    private const string IDLE = 'Nothing is running.';
     private const string HEADLINE_TARGET = 'target="board-headline"';
-    private const string REVIEWING = '/^The Code reviewers are reviewing change \S+ of '.SampleProject::NAME.'\. The Code reviewers are reviewing 1 change\. Nothing needs you\.$/';
+    private const string REVIEWING = '/^The Code reviewers are reviewing change \S+ of '.SampleProject::NAME.'\. The Code reviewers are reviewing 1 change\.$/';
 
     private string $directory = '';
 

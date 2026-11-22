@@ -51,10 +51,10 @@ final readonly class Board
         return new WhoIsWorking($this->cards, count($this->tasksInFlight()));
     }
 
-    // From the same lanes and Waiting on you cards the page shows, so the line never tells a different story than the board below it.
+    // From the same open rounds Working now shows, so the line never tells a different story than the cards below it.
     public function headline(): Headline
     {
-        return new Headline($this->whoIsWorking(), $this->cardsIn(BoardColumn::WaitingOnYou), count($this->cards) + count($this->tasks), count($this->tasksInFlight()));
+        return new Headline($this->whoIsWorking(), count($this->cards) + count($this->tasks), count($this->tasksInFlight()));
     }
 
     // The first day is an install with no tasks and no reviews (#1792, D5), so a task the build has recorded ends it, in flight or at rest, before any review has run.
@@ -120,7 +120,25 @@ final readonly class Board
         return [] === $this->cardsIn($column) ? $column->emptyLine() : null;
     }
 
-    // Null while a reviewer runs, because the strip then lists the lanes instead; the words are the first day's, so the board keeps one wording for this line (#2731).
+    // The build's tasks first, then the reviews with a round still running, so the cards read in the path's order (UX2 home, #3326). A judged change is Done and a round that ended without a judge's call has nobody running, so neither is shown as in progress.
+    /**
+     * @return list<WorkingCard>
+     */
+    public function workingNow(): array
+    {
+        return [
+            ...array_map(WorkingCard::ofTask(...), $this->tasksInFlight()),
+            ...array_map(WorkingCard::ofReview(...), array_values(array_filter($this->cardsIn(BoardColumn::InReview), static fn (Review $review): bool => $review->activeRound() instanceof ReviewedRound))),
+        ];
+    }
+
+    // Null while a card works, because Working now then shows the cards instead; the words are the first day's, so the board keeps one wording for this line (#2731). Its own line, not the Status page's, because Working now lists changes and the Status page lists reviewers (#3386).
+    public function nobodyWorkingNowLine(): ?string
+    {
+        return [] === $this->workingNow() ? 'Nobody is working yet: reviewers appear here while they review a change' : null;
+    }
+
+    // Null while a reviewer runs, because the Status page then lists the reviewers instead.
     public function nobodyWorkingLine(): ?string
     {
         return [] === $this->whoIsWorking()->lanes() ? 'No reviewer is working right now: reviewers appear here while they review a change' : null;
