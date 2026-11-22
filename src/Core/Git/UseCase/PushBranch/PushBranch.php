@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Git\UseCase\PushBranch;
 
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Git\Contract\BranchNotPushed;
 use Intakt\Core\Git\Contract\BranchPush;
 use Intakt\Core\Git\Contract\BranchPushRequest;
@@ -100,7 +101,7 @@ final readonly class PushBranch implements BranchPush
     {
         $paths = $this->git->mergeTree($request->repository, $main, $request->accepted->head);
 
-        return null === $paths ? null : new MainConflicts($paths);
+        return null === $paths ? null : new MainConflicts(new Paths(...$paths));
     }
 
     private function pushOnce(BranchPushRequest $request, string $head, ?string $remoteTip): ?RefusedPush

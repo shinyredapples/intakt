@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Build\UseCase\BuildTask;
 
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTaskRequest;
 use Intakt\Core\Build\UseCase\BuildTask\PushStep;
 use Intakt\Core\Git\Contract\BranchNotPushed;
@@ -117,7 +118,7 @@ final class PushStepTest extends TestCase
 
     public function testABranchThatConflictsWithMainGivesTheCountOfPathsAndNoneOfTheirNames(): void
     {
-        $failure = $this->stepOf($this->pushReturning(new MainConflicts(['src/<builder chosen>.php', 'b.txt'])))->failureOf($this->request(), $this->accepted(), $this->text());
+        $failure = $this->stepOf($this->pushReturning(new MainConflicts(new Paths('src/<builder chosen>.php', 'b.txt'))))->failureOf($this->request(), $this->accepted(), $this->text());
 
         self::assertSame('the branch conflicts with main, so nothing was pushed (conflicting paths: 2)', $failure);
     }
