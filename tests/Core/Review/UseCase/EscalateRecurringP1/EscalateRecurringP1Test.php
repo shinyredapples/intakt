@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\EscalateRecurringP1;
 
+use Doctrine\DBAL\Platforms\AbstractMySQLPlatform;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\EscalationFailed;
-use Doctrine\DBAL\Platforms\AbstractMySQLPlatform;
 use Intakt\Core\Review\Contract\EscalationOutcome;
 use Intakt\Core\Review\Contract\EscalationRequest;
 use Intakt\Core\Review\Contract\EscalationReviewed;
