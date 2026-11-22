@@ -120,6 +120,6 @@ final class MirrorChangeTest extends TestCase
 
     private function read(string $head): HeldChange
     {
-        return new MirrorChange(new HardenedGit())->of($this->repository->path.'/.git', $head);
+        return new MirrorChange(new HardenedGit(), new BinaryFiles())->of($this->repository->path.'/.git', $head);
     }
 }
