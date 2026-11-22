@@ -8,6 +8,7 @@ use Intakt\Core\Ledger\Contract\AppendResult;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\Mentions;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Override;
 
@@ -44,21 +45,20 @@ final class RefusingVerdictsFirst implements Ledger
         return $this->inner->readOfKind($kind);
     }
 
+    #[Override]
     public function readOfKindAbout(LedgerEventKind $kind, string $subject): RecordedEvents
     {
         return $this->inner->readOfKindAbout($kind, $subject);
     }
 
+    #[Override]
     public function readOfKindWithoutSubject(LedgerEventKind $kind): RecordedEvents
     {
         return $this->inner->readOfKindWithoutSubject($kind);
     }
 
-    /**
-     * @param list<string> $texts
-     */
     #[Override]
-    public function readMentioning(array $texts): RecordedEvents
+    public function readMentioning(Mentions $texts): RecordedEvents
     {
         return $this->inner->readMentioning($texts);
     }

@@ -15,6 +15,7 @@ use Intakt\Core\Ledger\Contract\AppendResult;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\Mentions;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Intakt\Core\Platform\Contract\Redactor;
@@ -755,8 +756,8 @@ final class BootResultsTest extends KernelTestCase
         $results->ofMain($this->key('a', 'tools-1'), $this->source());
         $ledger = self::createStub(Ledger::class);
         $ledger->method('append')->willReturnCallback($this->ledger->append(...));
-        $ledger->method('readMentioning')->willReturnCallback(function (array $texts) use ($results): RecordedEvents {
-            $before = $this->ledger->readMentioning(array_values(array_filter($texts, is_string(...))));
+        $ledger->method('readMentioning')->willReturnCallback(function (Mentions $texts) use ($results): RecordedEvents {
+            $before = $this->ledger->readMentioning($texts);
             // Run here, because only a hit between this worker's read of the board and its append forces the order of the race.
             $results->ofMain($this->key('b', 'tools-1'), $this->source());
 

@@ -829,6 +829,21 @@ final class PublishVerdictTest extends KernelTestCase
         self::assertSame([[self::STATUS, ['state' => 'error', 'context' => 'intakt/review', 'description' => 'Intakt does not count a replay as a review of this head.']]], $this->github->writes);
     }
 
+    // A replay was never published as a review, so it has nothing to withdraw and keeps the one status every replay gets.
+    public function testAStaleRoundOfAReplayProjectGetsTheReplayErrorStatusAndNoComment(): void
+    {
+        new FlagProjectAsReplayHandler($this->fixture->entities)(new FlagProjectAsReplay('alpha'));
+        $handler = $this->handler(new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']));
+        $roundId = $this->judgedRound(self::PULL, []);
+        $this->markStale($roundId);
+
+        foreach ($this->publicationsOf($roundId) as $publication) {
+            $handler($publication);
+        }
+
+        self::assertSame([[self::STATUS, ['state' => 'error', 'context' => 'intakt/review', 'description' => 'Intakt does not count a replay as a review of this head.']]], array_unique($this->github->writes, SORT_REGULAR));
+    }
+
     public function testALiveProjectsJudgedRoundPublishesNothing(): void
     {
         $this->publishRoundJudgedOn([], new ConfiguredProjectModes([]));

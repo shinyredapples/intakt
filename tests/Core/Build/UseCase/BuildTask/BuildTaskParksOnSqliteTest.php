@@ -32,6 +32,7 @@ use Intakt\Core\Build\UseCase\BuildTask\HandBackCheck;
 use Intakt\Core\Build\UseCase\BuildTask\HandBackFile;
 use Intakt\Core\Build\UseCase\BuildTask\ParkedTasks;
 use Intakt\Core\Build\UseCase\BuildTask\PrePushCheck;
+use Intakt\Core\Build\UseCase\BuildTask\PushRemoteCheck;
 use Intakt\Core\Build\UseCase\BuildTask\PushStep;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
@@ -54,6 +55,7 @@ use Intakt\Core\Ledger\Domain\EventRecord;
 use Intakt\Core\Ledger\Infrastructure\DoctrineLedger;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\PromptCut;
+use Intakt\Plugin\GitHubForge\Contract\ConfiguredRepositories;
 use Intakt\Plugin\GitHubForge\Contract\IssueReads;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
 use Intakt\Tests\Core\Build\ScriptedJobRunner;
@@ -75,6 +77,7 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(BuildTaskInput::class)]
 #[UsesClass(BuildTaskRequest::class)]
 #[UsesClass(ParkedTasks::class)]
+#[UsesClass(PushRemoteCheck::class)]
 #[UsesClass(ParkedTaskRecord::class)]
 #[UsesClass(BuildQuestion::class)]
 #[UsesClass(HandBackCheck::class)]
@@ -185,7 +188,7 @@ final class BuildTaskParksOnSqliteTest extends KernelTestCase
         $parked = self::getContainer()->get(ParkedTasks::class);
         self::assertInstanceOf(ParkedTasks::class, $parked);
 
-        return new BuildTask($reads, $checkout, $routing, $builds, new HandBackCheck($checkout, self::createStub(HandBackChecks::class), $files), new PrePushCheck(self::createStub(CheckJobs::class), $files), new PushStep(self::createStub(BranchPush::class), $checkout), $parked, $this->ledger());
+        return new BuildTask($reads, $checkout, $routing, $builds, new HandBackCheck($checkout, self::createStub(HandBackChecks::class), $files), new PrePushCheck(self::createStub(CheckJobs::class), $files), new PushStep(self::createStub(BranchPush::class), $checkout), $parked, $this->ledger(), new PushRemoteCheck(self::createStub(ConfiguredRepositories::class)));
     }
 
     private function ledger(): Ledger

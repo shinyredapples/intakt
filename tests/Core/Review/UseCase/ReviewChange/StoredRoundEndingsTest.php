@@ -99,21 +99,59 @@ final class StoredRoundEndingsTest extends TestCase
         self::assertNull($ending->endedAt);
     }
 
+    public function testARoundWhoseJudgingFailureIsRecordedReadsTheLedgerOnce(): void
+    {
+        $ledger = $this->createMock(Ledger::class);
+        $ledger->expects(self::once())->method('readOfKind')->with(LedgerEventKind::JudgingFailed)->willReturn($this->judgingFailuresOf(['round-1']));
+
+        $ending = $this->endingsReading($ledger, '2026-10-28T12:00:00+00:00')->ofUnjudged('round-1', 2, new DateTimeImmutable('2026-10-28T12:00:00+00:00'));
+
+        self::assertEquals(new DateTimeImmutable('2026-10-28T12:00:00+00:00'), $ending?->endedAt);
+    }
+
+    public function testARoundWhoseJudgingIsOnlyParkedReadsTheLedgerOnce(): void
+    {
+        $ledger = $this->createMock(Ledger::class);
+        $ledger->expects(self::once())->method('readOfKind')->with(LedgerEventKind::JudgingFailed)->willReturn($this->judgingFailuresOf([]));
+
+        $ending = $this->endingsReading($ledger, '2026-10-28T12:00:00+00:00', [new Envelope(new JudgeRound('round-1'))])->ofUnjudged('round-1', 2, new DateTimeImmutable('2026-10-28T12:00:00+00:00'));
+
+        self::assertInstanceOf(RoundEnding::class, $ending);
+        self::assertSame(RoundEnds::JudgingFailed, $ending->end);
+        self::assertNull($ending->endedAt);
+    }
+
     /**
      * @param list<string>   $recorded
      * @param list<Envelope> $parked
      */
     private function endingsAt(string $now, array $recorded = [], array $parked = []): StoredRoundEndings
     {
+        $ledger = self::createStub(Ledger::class);
+        $ledger->method('readOfKind')->willReturn($this->judgingFailuresOf($recorded));
+
+        return $this->endingsReading($ledger, $now, $parked);
+    }
+
+    /**
+     * @param list<Envelope> $parked
+     */
+    private function endingsReading(Ledger $ledger, string $now, array $parked = []): StoredRoundEndings
+    {
         $transport = self::createStub(ListableReceiverInterface::class);
         $transport->method('all')->willReturn($parked);
 
-        $ledger = self::createStub(Ledger::class);
-        $ledger->method('readOfKind')->willReturn(new RecordedEvents(array_map(
-            static fn (string $round): RecordedEvent => new RecordedEvent(Uuid::v7(), new LedgerEvent(LedgerEventKind::JudgingFailed, json_encode(['round' => $round], JSON_THROW_ON_ERROR)), new DateTimeImmutable('2026-10-28T12:00:00+00:00')),
-            $recorded,
-        )));
-
         return new StoredRoundEndings(new FailedJudgings($transport, $ledger, new LedgerPayloads(StoredSerializerFactory::create())), new MockClock($now), new UpperWait(4, 2));
+    }
+
+    /**
+     * @param list<string> $rounds
+     */
+    private function judgingFailuresOf(array $rounds): RecordedEvents
+    {
+        return new RecordedEvents(array_map(
+            static fn (string $round): RecordedEvent => new RecordedEvent(Uuid::v7(), new LedgerEvent(LedgerEventKind::JudgingFailed, json_encode(['round' => $round], JSON_THROW_ON_ERROR)), new DateTimeImmutable('2026-10-28T12:00:00+00:00')),
+            $rounds,
+        ));
     }
 }

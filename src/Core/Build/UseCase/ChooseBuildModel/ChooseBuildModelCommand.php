@@ -9,6 +9,9 @@ use Intakt\Core\Build\Contract\BuildFacts;
 use Intakt\Core\Build\Contract\BuildRoutingNotConfigured;
 use Intakt\Core\Build\Contract\Setback;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuilderNotOnClaudeCode;
+use Intakt\Core\Review\Contract\ChangeEscalations;
+use Intakt\Core\Review\Contract\EscalationOutcome;
+use Intakt\Core\Review\Contract\EscalationStillPending;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\MapInput;
 use Symfony\Component\Console\Command\Command;
@@ -17,8 +20,10 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 #[AsCommand(name: 'intakt:build:model', description: 'Choose the model of a build by the routing rules and record it as a model event, without calling a model')]
 final readonly class ChooseBuildModelCommand
 {
-    public function __construct(private ChooseBuildModel $chooseBuildModel)
-    {
+    public function __construct(
+        private ChooseBuildModel $chooseBuildModel,
+        private ChangeEscalations $escalations,
+    ) {
     }
 
     public function __invoke(SymfonyStyle $io, #[MapInput] ChooseBuildModelInput $input): int
@@ -42,9 +47,9 @@ final readonly class ChooseBuildModelCommand
         try {
             $chosen = $this->chooseBuildModel->chooseFor(
                 new BuildAttempt($input->project, $input->task, $input->attempt),
-                BuildFacts::fromLabels($input->label, $input->path, $setback),
+                BuildFacts::fromLabels($input->label, $input->path, $setback)->afterEscalation($this->escalationOf($input)),
             );
-        } catch (BuildRoutingNotConfigured|TierResolutionFailure|BuilderNotOnClaudeCode|ModelChoiceNotRecorded $failure) {
+        } catch (BuildRoutingNotConfigured|TierResolutionFailure|BuilderNotOnClaudeCode|ModelChoiceNotRecorded|EscalationStillPending $failure) {
             $io->error($failure->getMessage());
 
             return Command::FAILURE;
@@ -53,5 +58,10 @@ final readonly class ChooseBuildModelCommand
         $io->writeln(sprintf('tier %s, reason %s, provider %s, model %s', $chosen->choice->tier->value, $chosen->choice->reason->value, $chosen->model->provider->value, $chosen->model->model));
 
         return Command::SUCCESS;
+    }
+
+    private function escalationOf(ChooseBuildModelInput $input): ?EscalationOutcome
+    {
+        return null === $input->change ? null : $this->escalations->outcomeAtLatestHead($input->project, $input->change);
     }
 }

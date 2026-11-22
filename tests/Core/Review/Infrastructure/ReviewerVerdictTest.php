@@ -20,6 +20,7 @@ use Intakt\Core\Review\Contract\PromptAssembly;
 use Intakt\Core\Review\Contract\PromptCut;
 use Intakt\Core\Review\Contract\ReadAnswer;
 use Intakt\Core\Review\Contract\ReadFinding;
+use Intakt\Core\Review\Contract\ResolvedFinding;
 use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
@@ -253,7 +254,7 @@ final class ReviewerVerdictTest extends WebTestCase
         $verdict = $this->review('Add a cart.', [new ToolCall('1', 'read_file', ['path' => 'src/Cart.php'])], VerdictDocument::fromTheDesign()->json());
 
         self::assertSame(Decision::Changes, $verdict->verdict);
-        self::assertSame(['F1', 'F2'], $verdict->resolved);
+        self::assertEquals([new ResolvedFinding('F1'), new ResolvedFinding('F2')], $verdict->resolved);
         self::assertPlatformCallCount(2);
         self::assertToolCalled('read_file');
         self::assertToolCallCount(1);

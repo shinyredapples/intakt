@@ -14,6 +14,7 @@ use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\LedgerEventsAreAppendOnly;
+use Intakt\Core\Ledger\Contract\Mentions;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Intakt\Core\Ledger\Domain\EventRecord;
@@ -75,13 +76,10 @@ final readonly class DoctrineLedger implements Ledger
         return $this->recordedEventsOf(['kind' => $kind->value, 'subject' => null]);
     }
 
-    /**
-     * @param list<string> $texts
-     */
-    public function readMentioning(array $texts): RecordedEvents
+    public function readMentioning(Mentions $texts): RecordedEvents
     {
         $records = [];
-        foreach (array_chunk($texts, self::TEXTS_PER_QUERY) as $chunk) {
+        foreach (array_chunk([...$texts], self::TEXTS_PER_QUERY) as $chunk) {
             foreach ($this->recordsMentioningAnyOf($chunk) as $record) {
                 $records[$record->position] = $record;
             }

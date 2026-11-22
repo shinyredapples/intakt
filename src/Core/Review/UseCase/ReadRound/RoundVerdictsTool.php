@@ -30,6 +30,6 @@ final readonly class RoundVerdictsTool
     {
         $round = $this->rounds->forTool($roundId);
 
-        return new RoundVerdicts($round->id()->toRfc4122(), $this->verdicts->of($round), $round->replayMark());
+        return new RoundVerdicts($round->id()->toRfc4122(), array_map(GivenVerdict::of(...), $this->verdicts->of($round)), $round->replayMark());
     }
 }

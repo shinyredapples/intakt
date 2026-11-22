@@ -7,7 +7,7 @@ Intakt is to replace that loop for the owner's own use ([plan](../plan.md#replac
 ## Waits for notes only in the task text
 
 - **The loop:** a `Waits for` note counts in the task text of a trusted author and also in a trusted author's comment (its `test_unblock.py`).
-- **Intakt:** `Waits for` lines are read from the task text only, and only when the task was written and last edited by an account with write access; comments are never read for them. Built in `Plugin/GitHubWorkSource` (`IssueReferences`, `IntakeRules`).
+- **Intakt:** `Waits for` lines are read from the task text only, and only when the task was written and last edited by an account with write access; comments are never read for them. A line may sit in a blockquote or a list and carry emphasis around the words (`> - **Waits for:** #9`); a note after the `#n` list may hold no digit of any script, a line whose list cannot be read (`Waits for #9 then 10`) holds the task as an unreadable wait, and a line inside an `<!-- external -->` block counts for nothing. The rules are listed in [Work intake](work-intake.md#wait-lines-domainissuereferences). Built in `Plugin/GitHubWorkSource` (`IssueReferences`, `IntakeRules`).
 - **Why:** the task text is the one place a wait is written and kept, so what a task waits for is read from one place and changes only when the task is edited.
 
 ## Job containers instead of system users and sandboxes
