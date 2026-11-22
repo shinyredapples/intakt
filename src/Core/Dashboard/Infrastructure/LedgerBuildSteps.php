@@ -54,7 +54,8 @@ final readonly class LedgerBuildSteps
                 continue;
             }
 
-            if (BuildStep::Task->value === $step['step']) {
+            // A repeated step means another run began, because one run ends each step once; this also holds when the other run's task row was dropped as malformed.
+            if (BuildStep::Task->value === $step['step'] || in_array($step['step'], array_column($run, 'step'), true)) {
                 $run = [];
             }
 

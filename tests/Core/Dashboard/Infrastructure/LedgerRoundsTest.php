@@ -47,6 +47,7 @@ use Intakt\Core\Review\Contract\ReviewerStopped;
 use Intakt\Core\Review\Contract\ReviewStarted;
 use Intakt\Core\Review\Contract\RoundCosts;
 use Intakt\Core\Review\Contract\RoundEnding;
+use Intakt\Core\Review\Contract\RoundEndingLookup;
 use Intakt\Core\Review\Contract\RoundEndings;
 use Intakt\Core\Review\Contract\RoundEnds;
 use Intakt\Core\Review\Contract\Severity;
@@ -824,6 +825,20 @@ final class LedgerRoundsTest extends TestCase
         $review = $this->reviewOf('r1', $this->event(LedgerEventKind::ReviewStarted, self::START));
 
         self::assertSame($ending, $review?->rounds[0]->ending);
+    }
+
+    public function testSeveralUnjudgedRoundsOfOneReadTakeOneLookupOfRoundEndings(): void
+    {
+        $lookup = self::createStub(RoundEndingLookup::class);
+        $endings = $this->createMock(RoundEndings::class);
+        $endings->expects(self::once())->method('lookup')->willReturn($lookup);
+        $this->endings = $endings;
+
+        $this->reviewOf('r1',
+            $this->event(LedgerEventKind::ReviewStarted, self::START),
+            $this->event(LedgerEventKind::ReviewStarted, '{"round":"r2","project":"alpha","reviewers":2,"change":"feat/other","number":2}'),
+            $this->event(LedgerEventKind::ReviewStarted, '{"round":"r3","project":"alpha","reviewers":2,"change":"feat/third","number":3}'),
+        );
     }
 
     public function testAJudgedRoundGetsNoEndingEvenWhenTheReviewModuleNamesOne(): void

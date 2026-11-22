@@ -42,7 +42,9 @@ final readonly class FailingMains
         $reason = $this->failureReasonOf($recorded, $payload);
         $booted = LedgerEventKind::BootResultComputed === $recorded->event->kind && 'booted' === ($payload['state'] ?? null);
 
-        if (null === $pair || null === $reason && !$booted) {
+        $computed = LedgerEventKind::BootResultComputed === $recorded->event->kind;
+
+        if (null === $pair || null === $reason && !$computed) {
             return [$failing, $seen];
         }
 
@@ -50,8 +52,8 @@ final readonly class FailingMains
 
         if (null !== $reason) {
             $failing[$project] = new FailingMain($project, $main, $tools, $reason);
-        } elseif ($this->readFromStore($payload) || !isset($seen[$project][$main][$tools])) {
-            // Otherwise only a main commit or tool fingerprint the project has not booted or failed before clears it: a computed booted line of a pair already seen is a worker that lost the store, could not read the cache or finished late, not a recovery.
+        } elseif ($booted && ($this->readFromStore($payload) || !isset($seen[$project][$main][$tools]))) {
+            // Any computed line marks its pair as seen, a failed one too, but only a booted line can clear. Otherwise only a main commit or tool fingerprint the project has not booted or failed before clears it: a computed booted line of a pair already seen is a worker that lost the store, could not read the cache or finished late, not a recovery.
             unset($failing[$project]);
         }
 

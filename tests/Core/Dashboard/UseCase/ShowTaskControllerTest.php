@@ -226,6 +226,35 @@ final class ShowTaskControllerTest extends DashboardPageTestCase
         self::assertStringNotContainsString('failed', $page->filter('main')->text());
     }
 
+    public function testAStepThatRepeatsStartsANewRunSoTheLatestRunShowsEachStepOnce(): void
+    {
+        $this->ledger->passBuildStep('alpha', '42', 'task');
+        $this->ledger->passBuildStep('alpha', '42', 'mirror');
+        $this->ledger->passBuildStep('alpha', '42', 'task');
+        $this->ledger->passBuildStep('alpha', '42', 'clone');
+        $this->ledger->passBuildStep('alpha', '42', 'mirror');
+
+        $page = $this->browser->request('GET', '/tasks/alpha/42');
+
+        self::assertCount(1, $page->filter('#step-mirror'));
+        self::assertSame('Mirror Passed', $page->filter('#step-mirror .round-head')->text());
+    }
+
+    public function testARunWhoseTaskRowWasDroppedAsMalformedDoesNotMixInThePreviousRunsSteps(): void
+    {
+        $this->ledger->passBuildStep('alpha', '42', 'task');
+        $this->ledger->passBuildStep('alpha', '42', 'mirror');
+        $this->ledger->passBuildStep('alpha', '42', 'clone');
+        $this->ledger->recordBuildStep(['project' => 'alpha', 'task' => '42', 'step' => 'pull_request', 'outcome' => 'passed', 'failure' => null]);
+        $this->ledger->failBuildStep('42', 'mirror', 'fetch refused');
+
+        $page = $this->browser->request('GET', '/tasks/alpha/42');
+
+        self::assertCount(1, $page->filter('#step-mirror'));
+        self::assertSame('Clone Not reached', $page->filter('#step-clone .round-head')->text());
+        self::assertSame('Mirror Failed', $page->filter('#step-mirror .round-head')->text());
+    }
+
     public function testAStepRowTheBuildDoesNotWriteIsLeftOut(): void
     {
         $this->ledger->passBuildStep('alpha', '42', 'task');
