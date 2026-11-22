@@ -35,9 +35,10 @@ The command computes everything before it writes, then writes each SVG and last 
 
 ## The Pages site
 
-`bin/pages <folder> [--recorded=<folder>]` writes the Jekyll source of the whole GitHub Pages site into `<folder>` (made when missing). It runs `bin/highlights`, then `bin/journey` with the `--recorded` option passed through unchanged, each as `PHP_BINARY` with its output passed on; when one exits non-zero, `bin/pages` exits 1 without running the next and without writing into `<folder>`. Then it writes:
+`bin/pages <folder> [--recorded=<folder>]` writes the Jekyll source of the whole GitHub Pages site into `<folder>` (made when missing). It runs `bin/highlights`, then `bin/journey` with the `--recorded` option passed through unchanged, each as `PHP_BINARY` with its output passed on; when one exits non-zero, `bin/pages` exits 1 without running the next and without writing into `<folder>`. It reads every source first (`docs/pages/index.html`, each asset, the drawings, `docs/journey.md`, `docs/highlights.md`) and exits 1 with `cannot read <file>` when one cannot be read, and it exits 1 when `<folder>` holds an `index.md` at its root, left from the old layout that the front page replaces (remove it or build into a fresh folder); both happen before it writes anything. Then it writes:
 
-- `index.md`: `docs/highlights.md` with one line after its title that links the journey page relatively (`[the journey](journey/)`).
+- `index.html` and `assets/<name>`: copies of `docs/pages/index.html`, the front page, and of every file in `docs/pages/assets/`.
+- `highlights/index.md`: `docs/highlights.md` with one line after its title that links the journey page relatively (`[the journey](../journey/)`).
 - `journey/index.md`: `docs/journey.md` with every `](journey/` turned into `](`, so the chart images resolve from `/journey/` (correct only because `docs/journey.md` links nothing under `journey/` except the `*.svg` drawings copied beside the page, which `PagesCommandTest` checks on the repository's page), and the Mermaid timeline block (matched by `MermaidTimeline::BLOCK`) replaced with `![Timeline](timeline.svg)`.
 - `journey/<name>.svg`: a copy of every `docs/journey/*.svg`.
 

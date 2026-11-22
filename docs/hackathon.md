@@ -65,7 +65,7 @@ the dates from [the journey's milestones](journey.md#milestones) and, for 2026-1
 - **Upstream reports:** likely bugs in Symfony, Symfony AI and other libraries, each with a minimal reproduction, and
   fixes that are in Symfony 8.2.0-BETA2 ([found and fixed upstream](../upstream/README.md#found-and-fixed-upstream),
   [upstream reproductions](../upstream/README.md), "Found in the beta" on
-  [Highlights](https://shinyredapples.github.io/intakt/)).
+  [Highlights](https://shinyredapples.github.io/intakt/highlights/)).
 - **Built by an AI loop:** the repository itself, in figures and examples ([showcase](showcase/README.md)).
 
 Counted on 2026-11-21 from the repository: 8,046 commits on main (counted), 28 upstream reproductions in `upstream/`
