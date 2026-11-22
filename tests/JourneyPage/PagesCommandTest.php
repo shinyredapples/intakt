@@ -120,6 +120,16 @@ final class PagesCommandTest extends TestCase
         }
     }
 
+    public function testAnAssetInASubfolderArrivesUnchangedAtItsRelativePath(): void
+    {
+        new Filesystem()->dumpFile($this->root.'/docs/pages/assets/icons/logo.svg', "<svg/>\n");
+
+        $run = $this->runPages();
+
+        self::assertSame(0, $run->getExitCode(), $run->getErrorOutput());
+        self::assertSame("<svg/>\n", $this->site('assets/icons/logo.svg'));
+    }
+
     public function testAMissingFrontPageSourceExitsNamingTheFileAndWritesNoIndexHtml(): void
     {
         unlink($this->root.'/docs/pages/index.html');
@@ -128,7 +138,6 @@ final class PagesCommandTest extends TestCase
 
         self::assertSame(1, $run->getExitCode());
         self::assertStringContainsString('cannot read '.$this->root.'/docs/pages/index.html', $run->getErrorOutput());
-        self::assertFileDoesNotExist($this->root.'/site/index.html');
         self::assertSame([], $this->siteFiles());
     }
 

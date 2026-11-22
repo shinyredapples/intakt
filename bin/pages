@@ -74,7 +74,16 @@ $files = [
 ];
 
 // The front page and its assets have no front matter, so Jekyll copies them unchanged and runs no Liquid on them.
-foreach ([$root.'/docs/pages/index.html', ...(glob($root.'/docs/pages/assets/*') ?: [])] as $file) {
+$sources = [$root.'/docs/pages/index.html'];
+
+if (is_dir($root.'/docs/pages/assets')) {
+    // Walks every subfolder of assets/, so each file keeps its relative path under the site's assets/.
+    foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root.'/docs/pages/assets', FilesystemIterator::SKIP_DOTS)) as $asset) {
+        $sources[] = $asset->getPathname();
+    }
+}
+
+foreach ($sources as $file) {
     $files[substr($file, strlen($root.'/docs/pages/'))] = $readSource($file);
 }
 
@@ -94,7 +103,7 @@ if ([] === $changed) {
     exit(0);
 }
 
-foreach (['highlights', 'journey', 'assets'] as $subfolder) {
+foreach (array_unique(array_map(dirname(...), array_keys($changed))) as $subfolder) {
     if (!is_dir($folder.'/'.$subfolder) && !@mkdir($folder.'/'.$subfolder, recursive: true)) {
         fwrite(STDERR, 'cannot make '.$folder.'/'.$subfolder."\n");
         exit(1);
