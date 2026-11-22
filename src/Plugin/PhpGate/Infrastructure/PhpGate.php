@@ -36,6 +36,6 @@ final readonly class PhpGate implements Gate
             return null;
         }
 
-        return new DependencyStep(self::LOCK_FILES, PhpGateSteps::PHP_VERSION_PROBE, PhpGateSteps::LOCKED_INSTALL, PhpGateSteps::GENERATE);
+        return new DependencyStep(self::LOCK_FILES, PhpGateSteps::PHP_VERSION_PROBE, PhpGateSteps::LOCKED_INSTALL, PhpGateSteps::GENERATE, PhpGateSteps::INSTALL);
     }
 }
