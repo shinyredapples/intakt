@@ -318,8 +318,8 @@ final readonly class LocalGitForge implements Forge, AuthorTrust
         }
 
         try {
-            $call = $this->hardened->call($arguments, $this->repository->path);
-            $process = new Process($call->command, $call->directory, $call->environment, timeout: self::TIMEOUT_SECONDS);
+            $call = $this->hardened->call($this->repository->path, ...$arguments);
+            $process = new Process([...$call->command], $call->directory, [...$call->environment], timeout: self::TIMEOUT_SECONDS);
             $process->run();
         } catch (RepositoryAttributesRefused $refused) {
             throw new ForgeReadFailed($refused->getMessage(), $refused->getCode(), previous: $refused);

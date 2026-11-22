@@ -46,8 +46,8 @@ final readonly class KeptSnapshots
     private function failureOfRemoving(string $snapshot): ?string
     {
         try {
-            $call = $this->hardened->call(['worktree', 'remove', '--force', $snapshot], $snapshot);
-            $process = new Process($call->command, $call->directory, $call->environment, timeout: self::TIMEOUT_SECONDS);
+            $call = $this->hardened->call($snapshot, 'worktree', 'remove', '--force', $snapshot);
+            $process = new Process([...$call->command], $call->directory, [...$call->environment], timeout: self::TIMEOUT_SECONDS);
             $process->run();
         } catch (RepositoryAttributesRefused|ExceptionInterface $failure) {
             return $failure->getMessage();

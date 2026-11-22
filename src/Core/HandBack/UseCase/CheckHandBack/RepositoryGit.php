@@ -107,8 +107,8 @@ final readonly class RepositoryGit
      */
     private function run(string $repository, array $arguments, ?string $input): Process
     {
-        $call = $this->hardened->callInBareRepository($arguments, $repository);
-        $process = new Process($call->command, $call->directory, [...$call->environment, ...$this->objects], $input);
+        $call = $this->hardened->callInBareRepository($repository, ...$arguments);
+        $process = new Process([...$call->command], $call->directory, [...$call->environment, ...$this->objects], $input);
         $process->run();
 
         return $process;

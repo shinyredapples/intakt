@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Git\Contract;
 
 use Intakt\Core\Git\Contract\GitCall;
+use Intakt\Core\Git\Contract\GitCommand;
+use Intakt\Core\Git\Contract\GitEnvironment;
 use Intakt\Core\Git\Contract\NetworkGit;
 use Intakt\Core\Git\Contract\NetworkGitFailed;
 use Intakt\Tests\Core\Git\RecordingClock;
@@ -104,7 +106,7 @@ final class NetworkGitTest extends TestCase
     public function testACallKilledByASignalIsRetriedAndThenFailsWithItsReason(): void
     {
         $clock = new RecordingClock();
-        $killed = new GitCall([PHP_BINARY, '-r', 'posix_kill(getmypid(), SIGTERM);'], $this->directory, []);
+        $killed = new GitCall(new GitCommand(PHP_BINARY, '-r', 'posix_kill(getmypid(), SIGTERM);'), $this->directory, new GitEnvironment());
 
         try {
             new NetworkGit($clock, new NullLogger())->run($killed);
@@ -120,7 +122,7 @@ final class NetworkGitTest extends TestCase
         $clock = new RecordingClock();
 
         try {
-            new NetworkGit($clock, new NullLogger())->run(new GitCall(['git', 'version'], $this->directory.'/missing', []));
+            new NetworkGit($clock, new NullLogger())->run(new GitCall(new GitCommand('git', 'version'), $this->directory.'/missing', new GitEnvironment()));
             self::fail('A call that cannot start must fail.');
         } catch (NetworkGitFailed $failed) {
             self::assertSame([10, 30], $clock->sleeps);
@@ -133,7 +135,7 @@ final class NetworkGitTest extends TestCase
         $clock = new RecordingClock();
         $log = new BufferingLogger();
         $credential = 'not-a-real-'.bin2hex(random_bytes(4));
-        $hanging = new GitCall([PHP_BINARY, '-r', 'sleep(30);', 'https://intakt:'.$credential.'@localhost/repo.git'], $this->directory, []);
+        $hanging = new GitCall(new GitCommand(PHP_BINARY, '-r', 'sleep(30);', 'https://intakt:'.$credential.'@localhost/repo.git'), $this->directory, new GitEnvironment());
 
         try {
             new NetworkGit($clock, $log, timeoutSeconds: 0.2)->run($hanging);
@@ -169,12 +171,12 @@ final class NetworkGitTest extends TestCase
 
     private function listRemote(string $remote): GitCall
     {
-        return new GitCall(['git', 'ls-remote', '--', $remote], $this->directory, ['GIT_CONFIG_GLOBAL' => '/dev/null']);
+        return new GitCall(new GitCommand('git', 'ls-remote', '--', $remote), $this->directory, new GitEnvironment(GIT_CONFIG_GLOBAL: '/dev/null'));
     }
 
     private function errorOutputOf(GitCall $call): string
     {
-        $process = new Process($call->command, $call->directory, $call->environment);
+        $process = new Process([...$call->command], $call->directory, [...$call->environment]);
         $process->run();
 
         return trim($process->getErrorOutput());
