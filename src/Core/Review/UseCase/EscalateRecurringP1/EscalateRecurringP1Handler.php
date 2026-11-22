@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\UseCase\EscalateRecurringP1;
 
+use Closure;
 use Intakt\Core\Platform\Contract\AsCommandHandler;
 use Intakt\Core\Review\Contract\EscalationFailed;
 use Intakt\Core\Review\Contract\EscalationReviewer;
@@ -18,8 +19,9 @@ use Intakt\Core\Review\Infrastructure\KeptVerdicts;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
 use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
 use Symfony\Component\Lock\LockFactory;
+use Throwable;
 
-// Queued from the judging's transaction and run after it, so the strong tier's call holds none of the judging's locks; a provider error from the call is not caught, so the queue tries the escalation again.
+// Queued from the judging's transaction and run after it, so the strong tier's call holds none of the judging's locks; a failure of the call goes to the queue, which tries the escalation again, as Intakt's own exception without the provider's message.
 #[AsCommandHandler]
 final readonly class EscalateRecurringP1Handler
 {
@@ -59,32 +61,38 @@ final readonly class EscalateRecurringP1Handler
             return;
         }
 
+        $round = $this->rounds->stored($command->round);
         $kept = $this->verdicts->ofKey($command->key);
 
         if ($kept instanceof KeptVerdict) {
-            $this->reuse($command, $kept);
+            $this->settleOnce($round, $command, function () use ($command, $kept): void {
+                $this->reuse($command, $kept);
+            });
 
             return;
         }
 
-        $this->review($command);
+        $this->review($round, $command);
     }
 
-    private function review(EscalateRecurringP1 $command): void
+    private function review(ReviewRound $round, EscalateRecurringP1 $command): void
     {
-        $round = $this->rounds->stored($command->round);
         $request = $this->requests->of($round, $command->finding);
 
         if (is_string($request)) {
-            $this->failed($command, $request);
+            $this->failed($round, $command, $request);
 
             return;
         }
 
-        $result = $this->reviewer->review($round->project(), $round->id(), $request);
+        try {
+            $result = $this->reviewer->review($round->project(), $round->id(), $request);
+        } catch (Throwable $failure) {
+            throw EscalationCallFailed::of($command->key, $failure);
+        }
 
         if ($result instanceof EscalationFailed) {
-            $this->failed($command, $result->reason);
+            $this->failed($round, $command, $result->reason);
 
             return;
         }
@@ -92,15 +100,30 @@ final readonly class EscalateRecurringP1Handler
         $this->keep($round, $command, $result->verdict);
     }
 
-    private function failed(EscalateRecurringP1 $command, string $reason): void
+    private function failed(ReviewRound $round, EscalateRecurringP1 $command, string $reason): void
     {
-        $this->ledger->escalationFailed(new EscalationReviewFailed($command->round, $command->finding, $command->key, $reason));
+        $this->settleOnce($round, $command, function () use ($command, $reason): void {
+            $this->ledger->escalationFailed(new EscalationReviewFailed($command->round, $command->finding, $command->key, $reason));
+        });
     }
 
-    // Under the round's lock and in one transaction, so a refused event takes the kept verdict back; another writer that kept the key first wins, and this round reuses its verdict.
+    // Asked again under the round's lock, because the key's lock can expire during a long strong-tier call and a redelivery of the same message may then have settled the round and key already.
+    /**
+     * @param Closure(): void $write
+     */
+    private function settleOnce(ReviewRound $round, EscalateRecurringP1 $command, Closure $write): void
+    {
+        $this->rounds->withLockedRound($round->id(), function () use ($command, $write): void {
+            if (null === $this->recorded->recordedFor($command->round, $command->key)) {
+                $write();
+            }
+        });
+    }
+
+    // In one transaction under the round's lock, so a refused event takes the kept verdict back; another writer that kept the key first wins, and this round reuses its verdict.
     private function keep(ReviewRound $round, EscalateRecurringP1 $command, EscalationVerdict $verdict): void
     {
-        $this->rounds->withLockedRound($round->id(), function () use ($command, $verdict): void {
+        $this->settleOnce($round, $command, function () use ($command, $verdict): void {
             try {
                 $this->verdicts->keep($command->key, $verdict, $command->round);
             } catch (VerdictAlreadyKept) {

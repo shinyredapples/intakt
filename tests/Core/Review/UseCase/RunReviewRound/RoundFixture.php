@@ -281,14 +281,14 @@ final readonly class RoundFixture
         return new RecordRecurringP1s($this->recurringP1s($ledger), $this->keptVerdicts(), $this->roundLedger($ledger), $this->escalations);
     }
 
-    // A new handler on every delivery, because a restarted worker has one too and a redelivery must find the kept verdict in the database, not in the handler.
-    public function escalate(EscalateRecurringP1 $message, EscalationReviews $reviews): void
+    // A new handler on every delivery, because a restarted worker has one too and a redelivery must find the kept verdict in the database, not in the handler; other locks stand for a key lock that expired.
+    public function escalate(EscalateRecurringP1 $message, EscalationReviews $reviews, ?LockFactory $locks = null): void
     {
         $agent = new EscalationAgent(new EscalationPrompt(new Fence()), new ScriptedVendor(), $reviews, $this->container->get(Redactor::class));
         $rounds = $this->rounds($this->entities);
         $recorded = new EscalationsOfChange($this->ledger, $this->ledgerPayloads());
 
-        new EscalateRecurringP1Handler($rounds, new EscalationRequests($this->storedFindingsOn($this->entities)), $this->keptVerdicts(), $agent, $this->roundLedger($this->ledger), $recorded, $this->locks)($message);
+        new EscalateRecurringP1Handler($rounds, new EscalationRequests($this->storedFindingsOn($this->entities)), $this->keptVerdicts(), $agent, $this->roundLedger($this->ledger), $recorded, $locks ?? $this->locks)($message);
     }
 
     // The application's queue, because the round's workflow, taken from the container, queues the judging through the application's bus.

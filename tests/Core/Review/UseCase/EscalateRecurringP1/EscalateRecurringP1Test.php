@@ -30,11 +30,13 @@ use Intakt\Core\Review\Infrastructure\KeptVerdicts;
 use Intakt\Core\Review\UseCase\EscalateRecurringP1\EscalateRecurringP1;
 use Intakt\Core\Review\UseCase\EscalateRecurringP1\EscalateRecurringP1Handler;
 use Intakt\Core\Review\UseCase\EscalateRecurringP1\EscalationBusy;
+use Intakt\Core\Review\UseCase\EscalateRecurringP1\EscalationCallFailed;
 use Intakt\Core\Review\UseCase\EscalateRecurringP1\EscalationRequests;
 use Intakt\Core\Review\UseCase\EscalateRecurringP1\EscalationsOfChange;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRound;
 use Intakt\Core\Review\UseCase\JudgeRound\RecordRecurringP1s;
 use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
+use Intakt\Plugin\Vendor\Contract\ProviderRejectedTheKey;
 use Intakt\Tests\Core\Review\UseCase\JudgeRound\ScriptedJudgement;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\VerdictPerRole;
@@ -42,10 +44,18 @@ use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
+use RuntimeException;
 use Symfony\AI\Platform\Message\MessageBag;
 use Symfony\AI\Platform\Message\UserMessage;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Component\Console\Tester\CommandTester;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
+use Symfony\Component\Messenger\Envelope;
+use Symfony\Component\Messenger\Event\WorkerMessageFailedEvent;
+use Symfony\Component\Messenger\Exception\HandlerFailedException;
+use Symfony\Component\Messenger\Stamp\RedeliveryStamp;
+use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
 
 #[Group('persistence')]
 #[CoversClass(EscalateRecurringP1Handler::class)]
@@ -53,6 +63,7 @@ use Symfony\Component\Console\Tester\CommandTester;
 #[CoversClass(EscalationRequests::class)]
 #[CoversClass(EscalationsOfChange::class)]
 #[CoversClass(EscalationBusy::class)]
+#[CoversClass(EscalationCallFailed::class)]
 #[CoversClass(RecordRecurringP1s::class)]
 #[CoversClass(RoundLedger::class)]
 #[CoversClass(EscalationVerdictKept::class)]
@@ -261,6 +272,56 @@ final class EscalateRecurringP1Test extends KernelTestCase
         self::assertSame([$third->round], array_column($this->payloadsOf(LedgerEventKind::EscalationVerdictReused), 'round'));
     }
 
+    public function testARedeliveryThatRunsAfterTheKeyLockExpiredLeavesTheRoundAndKeyOneOutcome(): void
+    {
+        $this->recurredOnASecondHead();
+        $message = $this->fixture->escalations->messages[0];
+        $redelivered = new ScriptedEscalations(new EscalationVerdict(EscalationOutcome::Confirmed, 'Inner answer.'));
+        $outer = new ScriptedEscalations(new EscalationVerdict(EscalationOutcome::Confirmed, 'Outer answer.'), function () use ($message, $redelivered): void {
+            $this->fixture->escalate($message, $redelivered, new LockFactory(new InMemoryStore()));
+        });
+
+        $this->fixture->escalate($message, $outer);
+
+        self::assertSame(['Inner answer.'], array_column($this->payloadsOf(LedgerEventKind::EscalationReviewed), 'reasons'));
+        self::assertSame([[], []], [$this->payloadsOf(LedgerEventKind::EscalationVerdictReused), $this->payloadsOf(LedgerEventKind::EscalationFailed)]);
+    }
+
+    public function testAFailureThatARedeliveryRecordedAfterTheKeyLockExpiredIsRecordedOnce(): void
+    {
+        $this->recurredOnASecondHead();
+        $message = $this->fixture->escalations->messages[0];
+        $outer = new ScriptedEscalations(null, function () use ($message): void {
+            $this->fixture->escalate($message, new ScriptedEscalations(null), new LockFactory(new InMemoryStore()));
+        });
+
+        $this->fixture->escalate($message, $outer);
+
+        self::assertCount(1, $this->payloadsOf(LedgerEventKind::EscalationFailed));
+    }
+
+    public function testAProviderFailureLeavesTheQueueRetryingWithoutTheProvidersMessageInTheFailedMessage(): void
+    {
+        $this->recurredOnASecondHead();
+        $message = $this->fixture->escalations->messages[0];
+        $marker = 'synthetic-private-provider-response';
+        $rejecting = new ScriptedEscalations(null, static function () use ($marker): never {
+            throw new ProviderRejectedTheKey(new RuntimeException($marker));
+        });
+
+        try {
+            $this->fixture->escalate($message, $rejecting);
+            self::fail('The provider failure did not reach the queue.');
+        } catch (EscalationCallFailed $failure) {
+            self::assertSame([null, false], [$failure->getPrevious(), str_contains($failure->getMessage(), $marker)]);
+            self::assertStringContainsString('the provider rejected the key', $failure->getMessage());
+        }
+
+        self::assertSame([], [...$this->payloadsOf(LedgerEventKind::EscalationFailed), ...$this->payloadsOf(LedgerEventKind::EscalationReviewed)]);
+        self::assertStringNotContainsString($marker, serialize($this->parkedAfterTheLastRetry($message, $failure)));
+        self::assertLoggedError('critical', sprintf('Error thrown while handling message %1$s. Removing from transport after 2 retries. Error: "Handling "%1$s" failed: %2$s"', EscalateRecurringP1::class, $failure->getMessage()));
+    }
+
     public function testTheLedgerEventsShowAConfirmedAndARejectedEscalationAndALaterRoundsReuse(): void
     {
         $this->judged($this->completedAt(self::HEAD_A, $this->keyedP1(), $this->otherP1()));
@@ -367,6 +428,22 @@ final class EscalateRecurringP1Test extends KernelTestCase
     private function keptOf(string $finding): ?KeptVerdict
     {
         return $this->fixture->keptVerdicts()->ofKey($this->keyOf($finding));
+    }
+
+    // Through the application's failure listeners, as a worker hands the message on once its retries are used up.
+    private function parkedAfterTheLastRetry(EscalateRecurringP1 $message, EscalationCallFailed $failure): Envelope
+    {
+        $failed = self::getContainer()->get('messenger.transport.failed');
+        self::assertInstanceOf(InMemoryTransport::class, $failed);
+        $failed->reset();
+        $envelope = new Envelope($message, [new RedeliveryStamp(2)]);
+
+        self::getContainer()->get('event_dispatcher')->dispatch(new WorkerMessageFailedEvent($envelope, 'async', new HandlerFailedException($envelope, [EscalateRecurringP1Handler::class => $failure])));
+
+        $parked = $failed->getSent();
+        self::assertCount(1, $parked);
+
+        return $parked[0];
     }
 
     private function ledgerEvents(): string
