@@ -10,6 +10,7 @@ use Intakt\Core\Dashboard\Domain\FailingHead;
 use Intakt\Core\Dashboard\Domain\HeadFault;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\LedgerPayload;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 
 // Payloads are decoded to arrays here, because the Watcher module writes its lines without payload classes, so the card needs nothing from it.

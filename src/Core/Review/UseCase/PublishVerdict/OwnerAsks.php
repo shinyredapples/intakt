@@ -9,13 +9,13 @@ use Intakt\Core\Git\Contract\ProtectedHeads;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\LedgerPayload;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Watcher\Contract\HandedOverChanges;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\HeadStatus;
 use Intakt\Plugin\Forge\Contract\PublishedVerdict;
-use JsonException;
 
 // Asked on the forge and in the ledger, because a protected head of a pull request handed to Intakt merges only with the owner's approval of that head, and the request lists every protected change of it: docs/design/05-architecture/08-merge.md
 final readonly class OwnerAsks
@@ -127,14 +127,8 @@ final readonly class OwnerAsks
     // The change without letter case, as the hand-over is read, because two rounds may name one pull request in two spellings.
     private function names(RecordedEvent $recorded, ReviewRound $round, string $head): bool
     {
-        try {
-            $payload = json_decode($recorded->event->payload, true, 8, JSON_THROW_ON_ERROR);
-        } catch (JsonException) {
-            // Skipped, because a ledger row is never rewritten and one bad row must not stop a publication.
-            return false;
-        }
-
-        $change = is_array($payload) ? ($payload['change'] ?? null) : null;
+        $payload = LedgerPayload::of($recorded);
+        $change = $payload['change'] ?? null;
 
         return is_string($change) && strtolower($change) === strtolower($round->change()) && [$round->project(), $head] === [$payload['project'] ?? null, $payload['head'] ?? null];
     }

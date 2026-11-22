@@ -6,8 +6,8 @@ namespace Intakt\Core\Watcher\Contract;
 
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\LedgerPayload;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
-use JsonException;
 
 // Read from the change_handed_to_intakt lines alone, because the watch tick appends one only after it decided from Intakt's own records and the forge's author: docs/architecture/handed-to-intakt.md
 final readonly class HandedOverChanges
@@ -31,24 +31,9 @@ final readonly class HandedOverChanges
     // The address without letter case, as the tick compares it, because the push names the repository as configured and the listing as the forge spells it.
     private function names(RecordedEvent $recorded, string $project, string $change): bool
     {
-        $payload = $this->payloadOf($recorded);
+        $payload = LedgerPayload::of($recorded);
         $named = $payload['change'] ?? null;
 
         return $project === ($payload['project'] ?? null) && is_string($named) && strtolower($named) === strtolower($change);
-    }
-
-    // An unreadable row decodes to nothing, because a ledger row is never rewritten and one bad row must not stop a publication.
-    /**
-     * @return array<array-key, mixed>
-     */
-    private function payloadOf(RecordedEvent $recorded): array
-    {
-        try {
-            $payload = json_decode($recorded->event->payload, true, 8, JSON_THROW_ON_ERROR);
-        } catch (JsonException) {
-            return [];
-        }
-
-        return is_array($payload) ? $payload : [];
     }
 }

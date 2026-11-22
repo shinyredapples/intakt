@@ -20,4 +20,11 @@ interface Ledger
      * @param list<string> $texts
      */
     public function readMentioning(array $texts): RecordedEvents;
+
+    // Narrowed by kind in the query, because a caller that needs only some kinds of a busy project must not read its other lines; no kind or no text reads nothing.
+    /**
+     * @param list<LedgerEventKind> $kinds
+     * @param list<string>          $texts
+     */
+    public function readOfKindsMentioning(array $kinds, array $texts): RecordedEvents;
 }

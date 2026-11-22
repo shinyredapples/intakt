@@ -431,11 +431,20 @@ final class BootResultsTest extends KernelTestCase
         self::assertLoggedError('error', "Main's boot failure could not be recorded in the ledger as an alert.");
     }
 
+    public function testAFailingMainIsFoundFromTheBootLinesOfTheProjectOnly(): void
+    {
+        $ledger = $this->createMock(Ledger::class);
+        $ledger->expects(self::once())->method('readOfKindsMentioning')->with([LedgerEventKind::BootResultComputed, LedgerEventKind::MainBootFailed], ['"project":"acme"'])->willReturn(new RecordedEvents([]));
+        $ledger->expects(self::never())->method('readMentioning');
+
+        self::assertNotInstanceOf(FailingMain::class, new WatcherLedger($ledger)->failingMainOf('acme'));
+    }
+
     public function testAnAlertTheLedgerRefusedIsRecordedOnceWhenTheLedgerRecovers(): void
     {
         $refusals = 1;
         $ledger = self::createStub(Ledger::class);
-        $ledger->method('readMentioning')->willReturnCallback($this->ledger->readMentioning(...));
+        $ledger->method('readOfKindsMentioning')->willReturnCallback($this->ledger->readOfKindsMentioning(...));
         $ledger->method('append')->willReturnCallback(function (LedgerEvent $event) use (&$refusals): AppendResult {
             return LedgerEventKind::MainBootFailed === $event->kind && $refusals-- > 0 ? AppendResult::failed('The ledger is down.') : $this->ledger->append($event);
         });
@@ -473,7 +482,7 @@ final class BootResultsTest extends KernelTestCase
         self::assertInstanceOf(Ledger::class, $stored);
         $failures = 1;
         $ledger = self::createStub(Ledger::class);
-        $ledger->method('readMentioning')->willReturnCallback($stored->readMentioning(...));
+        $ledger->method('readOfKindsMentioning')->willReturnCallback($stored->readOfKindsMentioning(...));
         $ledger->method('append')->willReturnCallback(static function (LedgerEvent $event) use ($stored, &$failures): AppendResult {
             $appended = $stored->append($event);
 
@@ -510,7 +519,7 @@ final class BootResultsTest extends KernelTestCase
         self::assertInstanceOf(Ledger::class, $stored);
         $failures = 1;
         $ledger = self::createStub(Ledger::class);
-        $ledger->method('readMentioning')->willReturnCallback($stored->readMentioning(...));
+        $ledger->method('readOfKindsMentioning')->willReturnCallback($stored->readOfKindsMentioning(...));
         $ledger->method('append')->willReturnCallback(static function (LedgerEvent $event) use ($stored, &$failures): AppendResult {
             $appended = $stored->append($event);
 
@@ -700,7 +709,7 @@ final class BootResultsTest extends KernelTestCase
     public function testAStoredResultTheLedgerRefusesToRecordIsStillAnsweredAndIsLogged(): void
     {
         $ledger = self::createStub(Ledger::class);
-        $ledger->method('readMentioning')->willReturnCallback($this->ledger->readMentioning(...));
+        $ledger->method('readOfKindsMentioning')->willReturnCallback($this->ledger->readOfKindsMentioning(...));
         $ledger->method('append')->willReturnCallback(fn (LedgerEvent $event): AppendResult => str_contains($event->payload, '"read_from"') ? AppendResult::failed('The ledger is down.') : $this->ledger->append($event));
         $bus = new BootingBus(BootOutcome::failed('A fails.'));
         $results = new BootResults($bus, $this->entities, $this->clock, new WatcherLedger($ledger), $this->redactor(), $this->logger(), $this->registry(), $this->locks);
@@ -755,8 +764,8 @@ final class BootResultsTest extends KernelTestCase
         $results->ofMain($this->key('a', 'tools-1'), $this->source());
         $ledger = self::createStub(Ledger::class);
         $ledger->method('append')->willReturnCallback($this->ledger->append(...));
-        $ledger->method('readMentioning')->willReturnCallback(function (array $texts) use ($results): RecordedEvents {
-            $before = $this->ledger->readMentioning(array_values(array_filter($texts, is_string(...))));
+        $ledger->method('readOfKindsMentioning')->willReturnCallback(function (array $kinds, array $texts) use ($results): RecordedEvents {
+            $before = $this->ledger->readOfKindsMentioning($kinds, array_values(array_filter($texts, is_string(...))));
             // Run here, because only a hit between this worker's read of the board and its append forces the order of the race.
             $results->ofMain($this->key('b', 'tools-1'), $this->source());
 

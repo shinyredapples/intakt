@@ -2,12 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Core\Dashboard\Infrastructure;
+namespace Intakt\Core\Ledger\Contract;
 
-use Intakt\Core\Ledger\Contract\RecordedEvent;
 use JsonException;
 
-// An unreadable payload decodes to nothing, so one bad row does not take a page down.
+// An unreadable payload decodes to nothing, because a ledger row is never rewritten and one bad row must not take a page down or stop a publication.
 final readonly class LedgerPayload
 {
     /**

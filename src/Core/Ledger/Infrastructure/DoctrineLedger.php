@@ -82,18 +82,50 @@ final readonly class DoctrineLedger implements Ledger
     }
 
     /**
-     * @param list<string> $texts
+     * @param list<LedgerEventKind> $kinds
+     * @param list<string>          $texts
+     */
+    public function readOfKindsMentioning(array $kinds, array $texts): RecordedEvents
+    {
+        if ([] === $kinds) {
+            return new RecordedEvents([]);
+        }
+
+        $values = array_map(static fn (LedgerEventKind $kind): string => $kind->value, $kinds);
+        $records = [];
+        foreach (array_chunk($texts, self::TEXTS_PER_QUERY) as $chunk) {
+            foreach ($this->recordsMentioningAnyOf($chunk, $values) as $record) {
+                $records[$record->position] = $record;
+            }
+        }
+
+        ksort($records);
+
+        return $this->eventsOf($records);
+    }
+
+    /**
+     * @param list<string>      $texts
+     * @param list<string>|null $kinds
      *
      * @return list<EventRecord>
      */
-    private function recordsMentioningAnyOf(array $texts): array
+    private function recordsMentioningAnyOf(array $texts, ?array $kinds = null): array
     {
         $manager = $this->registry->getManager();
         assert($manager instanceof EntityManagerInterface);
         $query = $manager->createQueryBuilder()->select('event')->from(EventRecord::class, 'event');
+        $mentions = [];
 
         foreach ($texts as $index => $text) {
-            $query->orWhere("event.payload LIKE :text{$index} ESCAPE '!'")->setParameter('text'.$index, '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $text).'%');
+            $mentions[] = "event.payload LIKE :text{$index} ESCAPE '!'";
+            $query->setParameter('text'.$index, '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $text).'%');
+        }
+
+        $query->where($query->expr()->orX(...$mentions));
+
+        if (null !== $kinds) {
+            $query->andWhere('event.kind IN (:kinds)')->setParameter('kinds', $kinds);
         }
 
         /** @var list<EventRecord> $records */

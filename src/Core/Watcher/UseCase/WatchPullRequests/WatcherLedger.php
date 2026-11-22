@@ -97,7 +97,7 @@ final readonly class WatcherLedger
     // Read with the board's own rule over the project's lines, because a stored result must be compared with what the board shows, not with the last line, which the board may have passed over.
     public function failingMainOf(string $project): ?FailingMain
     {
-        $lines = $this->ledger->readMentioning(['"project":'.json_encode($project, JSON_THROW_ON_ERROR)]);
+        $lines = $this->ledger->readOfKindsMentioning([LedgerEventKind::BootResultComputed, LedgerEventKind::MainBootFailed], ['"project":'.json_encode($project, JSON_THROW_ON_ERROR)]);
 
         return array_find($this->failingMains->in($lines), static fn (FailingMain $failing): bool => $project === $failing->project);
     }

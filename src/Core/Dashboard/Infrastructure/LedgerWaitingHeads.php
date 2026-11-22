@@ -7,6 +7,7 @@ namespace Intakt\Core\Dashboard\Infrastructure;
 use DateTimeImmutable;
 use DateTimeZone;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\LedgerPayload;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 
 // The latest watcher line of a pull request decides, as in LedgerFailingHeads, so a head read again after a failure waits again and a queued round or a closed pull request ends the wait.
