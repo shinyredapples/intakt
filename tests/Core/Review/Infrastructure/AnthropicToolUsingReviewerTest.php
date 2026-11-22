@@ -81,17 +81,6 @@ final class AnthropicToolUsingReviewerTest extends WebTestCase
 
     private ReviewCheckout $fixture;
 
-    protected function setUp(): void
-    {
-        $this->fixture = new ReviewCheckout();
-    }
-
-    protected function tearDown(): void
-    {
-        $this->fixture->remove();
-        parent::tearDown();
-    }
-
     public function testAReviewerOnAnthropicThatReadsAFileBeforeAnsweringHasItsFinalAnswerRecordedAsTheTypedVerdict(): void
     {
         $answer = RecordedAnthropicTurns::answering()->thinking('The cart is read, so the answer follows.')->saying(VerdictDocument::fromTheDesign()->with('resolved', [])->json());
@@ -196,6 +185,17 @@ final class AnthropicToolUsingReviewerTest extends WebTestCase
         $this->expectException(VerdictUnreadable::class);
 
         $this->review([$tool->asServerSentEvents(), $answer->asServerSentEvents()], new ModelCatalog());
+    }
+
+    protected function setUp(): void
+    {
+        $this->fixture = new ReviewCheckout();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->fixture->remove();
+        parent::tearDown();
     }
 
     /**

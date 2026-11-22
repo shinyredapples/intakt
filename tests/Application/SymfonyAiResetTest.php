@@ -229,13 +229,6 @@ final class SymfonyAiResetTest extends TestCase
     /** @var list<KernelInterface> */
     private array $kernels = [];
 
-    protected function tearDown(): void
-    {
-        foreach ($this->kernels as $kernel) {
-            $kernel->shutdown();
-        }
-    }
-
     public function testASecondReviewerRunSeesOnlyItsOwnModelToolsAndConversation(): void
     {
         $kernel = $this->bootedKernel(new AiPlatformKernel('test', true));
@@ -316,10 +309,61 @@ final class SymfonyAiResetTest extends TestCase
         self::assertSame(array_keys(self::MUTABLE_WITHOUT_RESET), AiServiceState::of($kernel)->mutableWithoutReset());
     }
 
-    private function review(KernelInterface $kernel, Agent $reviewer, string $task): void
+    protected function tearDown(): void
     {
-        $conversation = $this->runsOf($kernel)->started(MessageBag::forId(new UuidV7(), Message::ofUser($task)));
-        $reviewer->call($conversation)->asText();
+        foreach ($this->kernels as $kernel) {
+            $kernel->shutdown();
+        }
+    }
+
+    private function setUpConversations(KernelInterface $kernel): void
+    {
+        $conversations = $this->container($kernel)->get(MessageStoreInterface::class);
+        $conversations->setup();
+    }
+
+    // Set before the reviewer's MCP connection is built, because the connection keeps the client it was built with.
+    private function serveReviewToolsFor(KernelInterface $kernel, ClientInterface $http): void
+    {
+        $credential = $this->container($kernel)->get(ReviewCredential::class);
+        $this->container($kernel)->set(ReviewServerHttpClient::class, new ReviewServerHttpClient($credential, $http));
+    }
+
+    private function reviewRound(KernelInterface $kernel, ReviewRound $round, string $model): void
+    {
+        $tools = $this->toolboxesOf($kernel)->create($this->requestFor($round));
+        $this->review($kernel, $this->reviewer($kernel, $tools, $model), 'Review round '.$round->id()->toRfc4122().'.');
+    }
+
+    private function toolboxesOf(KernelInterface $kernel): ReviewerMcpToolboxFactory
+    {
+        return $this->container($kernel)->get(ReviewerMcpToolboxFactory::class);
+    }
+
+    private function requestFor(ReviewRound $round): ReviewRequest
+    {
+        return new ReviewRequest(new Checkout($round->checkoutRoot()), new ReviewBrief(new ChangeUnderReview('alpha', 'Add a cart.', 'diff --git a/a b/a'), [], 1), new ReviewerConversation('You review for correctness.', new UuidV7(), $round->id()));
+    }
+
+    private function bootedKernel(KernelInterface $kernel): KernelInterface
+    {
+        $kernel->boot();
+        $this->kernels[] = $kernel;
+
+        return $kernel;
+    }
+
+    private function emptyDatabase(KernelInterface $kernel): void
+    {
+        EmptyDatabase::in($this->container($kernel));
+        $this->setUpConversations($kernel);
+    }
+
+    private function toolNamed(string $name): ToolboxInterface
+    {
+        $tool = new NamedTool();
+
+        return new Toolbox([$tool], new MemoryToolFactory()->addTool($tool, $name, 'A tool of one run.'));
     }
 
     private function reviewer(KernelInterface $kernel, ToolboxInterface $tools, string $model): Agent
@@ -331,33 +375,15 @@ final class SymfonyAiResetTest extends TestCase
         return $this->runsOf($kernel)->agent($tools, $platform, $model);
     }
 
+    private function review(KernelInterface $kernel, Agent $reviewer, string $task): void
+    {
+        $conversation = $this->runsOf($kernel)->started(MessageBag::forId(new UuidV7(), Message::ofUser($task)));
+        $reviewer->call($conversation)->asText();
+    }
+
     private function runsOf(KernelInterface $kernel): ReviewerRuns
     {
         return $this->container($kernel)->get(ReviewerRuns::class);
-    }
-
-    private function reviewRound(KernelInterface $kernel, ReviewRound $round, string $model): void
-    {
-        $tools = $this->toolboxesOf($kernel)->create($this->requestFor($round));
-        $this->review($kernel, $this->reviewer($kernel, $tools, $model), 'Review round '.$round->id()->toRfc4122().'.');
-    }
-
-    /**
-     * @return list<string>
-     */
-    #[NoDiscard]
-    private function callsOfRound(KernelInterface $kernel, ReviewRound $round, RecordingHttpClient $server): array
-    {
-        $sentBefore = count($server->sent);
-
-        self::assertNotSame([], $this->toolboxesOf($kernel)->create($this->requestFor($round))->getTools());
-
-        return array_map(static function (RequestInterface $request): string {
-            $call = json_decode((string) $request->getBody(), true, flags: JSON_THROW_ON_ERROR);
-            assert(is_array($call) && is_string($call['method']));
-
-            return $call['method'];
-        }, array_slice($server->sent, $sentBefore));
     }
 
     // The kernel runs its services_resetter at the start of the next handle() after a terminate; calling it here is what a new request starts with, because reviewer work is not a request.
@@ -367,11 +393,16 @@ final class SymfonyAiResetTest extends TestCase
         $resetter->reset();
     }
 
-    private function toolNamed(string $name): ToolboxInterface
+    /**
+     * @return list<array<mixed>>
+     */
+    private function providerRequests(KernelInterface $kernel): array
     {
-        $tool = new NamedTool();
+        $container = new RebuiltContainer($this->container($kernel));
+        $answers = $container->get(ProviderAnswers::class);
+        assert($answers instanceof ProviderAnswers);
 
-        return new Toolbox([$tool], new MemoryToolFactory()->addTool($tool, $name, 'A tool of one run.'));
+        return $answers->requests();
     }
 
     /**
@@ -392,26 +423,9 @@ final class SymfonyAiResetTest extends TestCase
         ];
     }
 
-    /**
-     * @return list<array<mixed>>
-     */
-    private function providerRequests(KernelInterface $kernel): array
+    private function container(KernelInterface $kernel): TestContainer
     {
-        $container = new RebuiltContainer($this->container($kernel));
-        $answers = $container->get(ProviderAnswers::class);
-        assert($answers instanceof ProviderAnswers);
-
-        return $answers->requests();
-    }
-
-    private function requestFor(ReviewRound $round): ReviewRequest
-    {
-        return new ReviewRequest(new Checkout($round->checkoutRoot()), new ReviewBrief(new ChangeUnderReview('alpha', 'Add a cart.', 'diff --git a/a b/a'), [], 1), new ReviewerConversation('You review for correctness.', new UuidV7(), $round->id()));
-    }
-
-    private function toolboxesOf(KernelInterface $kernel): ReviewerMcpToolboxFactory
-    {
-        return $this->container($kernel)->get(ReviewerMcpToolboxFactory::class);
+        return $kernel->getContainer()->get('test.service_container');
     }
 
     // A kernel of its own, because the web server runs in a process of its own.
@@ -423,35 +437,21 @@ final class SymfonyAiResetTest extends TestCase
         return $recording;
     }
 
-    // Set before the reviewer's MCP connection is built, because the connection keeps the client it was built with.
-    private function serveReviewToolsFor(KernelInterface $kernel, ClientInterface $http): void
+    /**
+     * @return list<string>
+     */
+    #[NoDiscard]
+    private function callsOfRound(KernelInterface $kernel, ReviewRound $round, RecordingHttpClient $server): array
     {
-        $credential = $this->container($kernel)->get(ReviewCredential::class);
-        $this->container($kernel)->set(ReviewServerHttpClient::class, new ReviewServerHttpClient($credential, $http));
-    }
+        $sentBefore = count($server->sent);
 
-    private function emptyDatabase(KernelInterface $kernel): void
-    {
-        EmptyDatabase::in($this->container($kernel));
-        $this->setUpConversations($kernel);
-    }
+        self::assertNotSame([], $this->toolboxesOf($kernel)->create($this->requestFor($round))->getTools());
 
-    private function setUpConversations(KernelInterface $kernel): void
-    {
-        $conversations = $this->container($kernel)->get(MessageStoreInterface::class);
-        $conversations->setup();
-    }
+        return array_map(static function (RequestInterface $request): string {
+            $call = json_decode((string) $request->getBody(), true, flags: JSON_THROW_ON_ERROR);
+            assert(is_array($call) && is_string($call['method']));
 
-    private function bootedKernel(KernelInterface $kernel): KernelInterface
-    {
-        $kernel->boot();
-        $this->kernels[] = $kernel;
-
-        return $kernel;
-    }
-
-    private function container(KernelInterface $kernel): TestContainer
-    {
-        return $kernel->getContainer()->get('test.service_container');
+            return $call['method'];
+        }, array_slice($server->sent, $sentBefore));
     }
 }

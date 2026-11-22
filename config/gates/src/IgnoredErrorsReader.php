@@ -34,14 +34,6 @@ final readonly class IgnoredErrorsReader
         return $read;
     }
 
-    // Because PHPStan prints the paths it resolved, which pass through any symbolic link in the scratch directory's path.
-    private function resolved(string $folder): string
-    {
-        $real = realpath($folder);
-
-        return false === $real ? $folder : $real;
-    }
-
     // Because PHPStan resolves each entry's path from the list's own folder, a copy at the same place in a scratch tree yields repository paths for any version.
     private function copied(string $folder, RatchetListFile $list): string
     {
@@ -62,6 +54,14 @@ final readonly class IgnoredErrorsReader
     private function dumpCommand(Workspace $workspace, string $wrapper): array
     {
         return [$workspace->tool('phpstan'), 'dump-parameters', '--json', '--level=0', '--no-interaction', '--configuration='.$wrapper];
+    }
+
+    // Because PHPStan prints the paths it resolved, which pass through any symbolic link in the scratch directory's path.
+    private function resolved(string $folder): string
+    {
+        $real = realpath($folder);
+
+        return false === $real ? $folder : $real;
     }
 
     private function ignoredErrorsOf(ProcessResult $result, string $folder): IgnoredErrors

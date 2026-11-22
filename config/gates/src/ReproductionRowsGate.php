@@ -147,14 +147,6 @@ final readonly class ReproductionRowsGate implements Gate
         return $rows;
     }
 
-    private function startsATable(string $header, string $delimiter): bool
-    {
-        return 0 === preg_match(self::INDENTED_CODE, $header)
-            && $this->isATableRow($header)
-            && 1 === preg_match(self::CELL_BORDER, $delimiter)
-            && 1 === preg_match(self::DELIMITER_ROW, $delimiter);
-    }
-
     private function isATableRow(string $line): bool
     {
         return 1 === preg_match(self::CELL_BORDER, $line) && 0 === preg_match(self::BLOCK_START, $line);
@@ -168,5 +160,13 @@ final readonly class ReproductionRowsGate implements Gate
         $cells = preg_split(self::CELL_BORDER, preg_replace(self::OUTER_BORDERS, '', $row) ?? '');
 
         return false === $cells ? [] : $cells;
+    }
+
+    private function startsATable(string $header, string $delimiter): bool
+    {
+        return 0 === preg_match(self::INDENTED_CODE, $header)
+            && $this->isATableRow($header)
+            && 1 === preg_match(self::CELL_BORDER, $delimiter)
+            && 1 === preg_match(self::DELIMITER_ROW, $delimiter);
     }
 }

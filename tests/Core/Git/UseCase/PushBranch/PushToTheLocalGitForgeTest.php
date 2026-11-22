@@ -78,17 +78,6 @@ final class PushToTheLocalGitForgeTest extends TestCase
     private PushScenario $scenario;
     private string $forge;
 
-    protected function setUp(): void
-    {
-        $this->scenario = new PushScenario();
-        $this->forge = $this->scenario->localGitForge();
-    }
-
-    protected function tearDown(): void
-    {
-        $this->scenario->remove();
-    }
-
     public function testABranchThatPassesIsPushedToTheLocalGitForgeWithEveryCommitSigned(): void
     {
         $pushed = $this->scenario->push()->push($this->request());
@@ -167,6 +156,17 @@ final class PushToTheLocalGitForgeTest extends TestCase
         } catch (BranchNotPushed $refused) {
             self::assertStringContainsString('push_refused', $refused->getMessage());
         }
+    }
+
+    protected function setUp(): void
+    {
+        $this->scenario = new PushScenario();
+        $this->forge = $this->scenario->localGitForge();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->scenario->remove();
     }
 
     private function request(): BranchPushRequest

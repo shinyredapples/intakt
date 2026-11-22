@@ -18,21 +18,6 @@ final class OwnCgroupTest extends TestCase
      */
     private array $written = [];
 
-    protected function setUp(): void
-    {
-        $this->tree = sys_get_temp_dir().'/intakt-cgroup-'.bin2hex(random_bytes(6));
-        mkdir($this->tree.'/root/a/b', recursive: true);
-    }
-
-    protected function tearDown(): void
-    {
-        array_map(unlink(...), $this->written);
-
-        foreach (['root/a/b', 'root/a', 'root', ''] as $directory) {
-            rmdir($this->tree.'/'.$directory);
-        }
-    }
-
     // Because in a private cgroup namespace the process sits at the root, whose limits are the container's own.
     public function testTheLimitsOfACgroupNamespaceRootAreRead(): void
     {
@@ -61,6 +46,21 @@ final class OwnCgroupTest extends TestCase
         $this->given('4:memory:/a/b', ['root/a/b/memory.max' => 'own']);
 
         self::assertSame([], $this->cgroup()->fileAndAncestors('memory.max'));
+    }
+
+    protected function setUp(): void
+    {
+        $this->tree = sys_get_temp_dir().'/intakt-cgroup-'.bin2hex(random_bytes(6));
+        mkdir($this->tree.'/root/a/b', recursive: true);
+    }
+
+    protected function tearDown(): void
+    {
+        array_map(unlink(...), $this->written);
+
+        foreach (['root/a/b', 'root/a', 'root', ''] as $directory) {
+            rmdir($this->tree.'/'.$directory);
+        }
     }
 
     /**

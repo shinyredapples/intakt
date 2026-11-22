@@ -118,13 +118,6 @@ final class CrossProviderSubstituteTest extends KernelTestCase
      */
     private array $sent = [];
 
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-        $this->limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
-        $this->cooldowns = new AccountCooldownWindows(new ReadingsInMemory(new NativeClock()), new ArrayAdapter(), new LockFactory(new InMemoryStore()), new NativeClock(), $this->fixture->ledger(), new NullLogger(), StoredSerializerFactory::create(), [Provider::Anthropic->value => [Account::DEFAULT], Provider::OpenAi->value => [Account::DEFAULT], Provider::ClaudeCode->value => [Account::DEFAULT]]);
-    }
-
     public function testARoundWithOneProvidersKeyRevokedIsReviewedByTheSubstituteAndOwesACatchUp(): void
     {
         $round = $this->fixture->start(1);
@@ -232,45 +225,11 @@ final class CrossProviderSubstituteTest extends KernelTestCase
         self::assertSame(ProviderRejectedTheKey::class, $stored->reviewers()[0]->failure());
     }
 
-    // Delivered again as Messenger does after each recoverable move, so the reviewer stays only when a verdict or a block ends it.
-    private function deliverUntilItStays(ReviewWithReviewer $message, Vendor $vendor, int $moves = 1): void
+    protected function setUp(): void
     {
-        for ($move = 0; $move < $moves; ++$move) {
-            try {
-                $this->fixture->deliver($message, $vendor);
-
-                return;
-            } catch (ReviewerMovesToAnotherAccount) {
-            }
-        }
-
-        $this->fixture->deliver($message, $vendor);
-    }
-
-    // Null maps the tier without substitutes, so the same stack shows what part 1's single provider does when nothing may take over.
-    private function vendor(PlatformInterface $own, PlatformInterface $substitute, ?Provider $substituteProvider = Provider::OpenAi): Vendor
-    {
-        $substitutes = $substituteProvider instanceof Provider ? [['provider' => $substituteProvider->value, 'model' => RoundFixture::SUBSTITUTE_MODEL]] : [];
-        $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['standard' => ['provider' => 'anthropic', 'model' => RoundFixture::MODEL, 'substitutes' => $substitutes]]]], []);
-        $accounts = static fn (Provider $provider, PlatformInterface $platform, AccountCooldownWindows $cooldowns): PlatformInterface => new AccountFailoverPlatform($provider, [Account::DEFAULT => $platform], $cooldowns, new NativeClock(), new NullLogger(), new NoPinnedProviderCooldowns());
-        $platforms = new ServiceLocator([
-            Provider::Anthropic->value => fn (): PlatformInterface => $accounts(Provider::Anthropic, $this->recording(Provider::Anthropic, $own), $this->cooldowns),
-            ($substituteProvider ?? Provider::OpenAi)->value => fn (): PlatformInterface => $accounts($substituteProvider ?? Provider::OpenAi, $this->recording($substituteProvider ?? Provider::OpenAi, $substitute), $this->cooldowns),
-        ]);
-        $tiers = new TierPlatform($resolver, $platforms, $this->cooldowns, new NullLogger());
-        $reviewer = new ReviewerAgent(new ReviewerPrompt(new Fence(), new PromptCut(new Fence()), new VerdictParser()), new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates()), new ReviewerStopping(new StopRequests(new InMemoryLedger(), new LedgerPayloads(StoredSerializerFactory::create())))));
-        $servers = self::createStub(ReviewServerAccesses::class);
-        $servers->method('forRound')->willReturn(new ReviewServerAccess('intakt-review', 'http://localhost:7780/mcp/review', 'round-credential', ['read_file']));
-        $vendor = new SymfonyAiVendor($tiers, $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($this->fixture->ledger(), $this->fixture->clock, new NullLogger(), StoredSerializerFactory::create()), $this->limit, $this->fixture->clock, $servers);
-
-        return new AccountLimitedVendor($vendor, $resolver, $this->cooldowns);
-    }
-
-    private function recording(Provider $provider, PlatformInterface $platform): PlatformInterface
-    {
-        return new RecordingCalls($platform, function () use ($provider): void {
-            $this->sent[] = $provider->value;
-        });
+        $this->fixture = new RoundFixture(self::getContainer());
+        $this->limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
+        $this->cooldowns = new AccountCooldownWindows(new ReadingsInMemory(new NativeClock()), new ArrayAdapter(), new LockFactory(new InMemoryStore()), new NativeClock(), $this->fixture->ledger(), new NullLogger(), StoredSerializerFactory::create(), [Provider::Anthropic->value => [Account::DEFAULT], Provider::OpenAi->value => [Account::DEFAULT], Provider::ClaudeCode->value => [Account::DEFAULT]]);
     }
 
     // The first round asks for a file and the second is refused for a limit as it is sent, so the limit comes halfway through the review.
@@ -300,6 +259,47 @@ final class CrossProviderSubstituteTest extends KernelTestCase
 
             return $answer;
         }, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
+    }
+
+    // Null maps the tier without substitutes, so the same stack shows what part 1's single provider does when nothing may take over.
+    private function vendor(PlatformInterface $own, PlatformInterface $substitute, ?Provider $substituteProvider = Provider::OpenAi): Vendor
+    {
+        $substitutes = $substituteProvider instanceof Provider ? [['provider' => $substituteProvider->value, 'model' => RoundFixture::SUBSTITUTE_MODEL]] : [];
+        $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['standard' => ['provider' => 'anthropic', 'model' => RoundFixture::MODEL, 'substitutes' => $substitutes]]]], []);
+        $accounts = static fn (Provider $provider, PlatformInterface $platform, AccountCooldownWindows $cooldowns): PlatformInterface => new AccountFailoverPlatform($provider, [Account::DEFAULT => $platform], $cooldowns, new NativeClock(), new NullLogger(), new NoPinnedProviderCooldowns());
+        $platforms = new ServiceLocator([
+            Provider::Anthropic->value => fn (): PlatformInterface => $accounts(Provider::Anthropic, $this->recording(Provider::Anthropic, $own), $this->cooldowns),
+            ($substituteProvider ?? Provider::OpenAi)->value => fn (): PlatformInterface => $accounts($substituteProvider ?? Provider::OpenAi, $this->recording($substituteProvider ?? Provider::OpenAi, $substitute), $this->cooldowns),
+        ]);
+        $tiers = new TierPlatform($resolver, $platforms, $this->cooldowns, new NullLogger());
+        $reviewer = new ReviewerAgent(new ReviewerPrompt(new Fence(), new PromptCut(new Fence()), new VerdictParser()), new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates()), new ReviewerStopping(new StopRequests(new InMemoryLedger(), new LedgerPayloads(StoredSerializerFactory::create())))));
+        $servers = self::createStub(ReviewServerAccesses::class);
+        $servers->method('forRound')->willReturn(new ReviewServerAccess('intakt-review', 'http://localhost:7780/mcp/review', 'round-credential', ['read_file']));
+        $vendor = new SymfonyAiVendor($tiers, $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($this->fixture->ledger(), $this->fixture->clock, new NullLogger(), StoredSerializerFactory::create()), $this->limit, $this->fixture->clock, $servers);
+
+        return new AccountLimitedVendor($vendor, $resolver, $this->cooldowns);
+    }
+
+    // Delivered again as Messenger does after each recoverable move, so the reviewer stays only when a verdict or a block ends it.
+    private function deliverUntilItStays(ReviewWithReviewer $message, Vendor $vendor, int $moves = 1): void
+    {
+        for ($move = 0; $move < $moves; ++$move) {
+            try {
+                $this->fixture->deliver($message, $vendor);
+
+                return;
+            } catch (ReviewerMovesToAnotherAccount) {
+            }
+        }
+
+        $this->fixture->deliver($message, $vendor);
+    }
+
+    private function recording(Provider $provider, PlatformInterface $platform): PlatformInterface
+    {
+        return new RecordingCalls($platform, function () use ($provider): void {
+            $this->sent[] = $provider->value;
+        });
     }
 
     /**

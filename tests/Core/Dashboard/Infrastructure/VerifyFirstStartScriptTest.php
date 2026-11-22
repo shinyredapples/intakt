@@ -26,20 +26,6 @@ final class VerifyFirstStartScriptTest extends TestCase
 
     private string $directory;
 
-    protected function setUp(): void
-    {
-        $this->directory = sys_get_temp_dir().'/intakt-first-start-'.bin2hex(random_bytes(6));
-        new Filesystem()->dumpFile($this->directory.'/docker', self::FAKE_DOCKER);
-        new Filesystem()->dumpFile($this->directory.'/openssl', self::FAKE_OPENSSL);
-        chmod($this->directory.'/docker', 0o755);
-        chmod($this->directory.'/openssl', 0o755);
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->directory);
-    }
-
     public function testWithoutAnImageTheScriptPrintsItsUsageAndExitsWithTwo(): void
     {
         $process = $this->verifyFirstStart();
@@ -62,6 +48,20 @@ final class VerifyFirstStartScriptTest extends TestCase
         $this->verifyFirstStart('intakt:ci');
 
         self::assertStringContainsString("exec intakt-first-start-check php bin/console intakt:review:panel sample\n", $this->dockerCalls());
+    }
+
+    protected function setUp(): void
+    {
+        $this->directory = sys_get_temp_dir().'/intakt-first-start-'.bin2hex(random_bytes(6));
+        new Filesystem()->dumpFile($this->directory.'/docker', self::FAKE_DOCKER);
+        new Filesystem()->dumpFile($this->directory.'/openssl', self::FAKE_OPENSSL);
+        chmod($this->directory.'/docker', 0o755);
+        chmod($this->directory.'/openssl', 0o755);
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->directory);
     }
 
     private function verifyFirstStart(string ...$arguments): Process

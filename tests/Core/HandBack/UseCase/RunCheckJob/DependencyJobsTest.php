@@ -69,25 +69,6 @@ final class DependencyJobsTest extends TestCase
 
     private bool $firstFilesStayed = false;
 
-    protected function setUp(): void
-    {
-        $this->folder = sys_get_temp_dir().'/intakt-dependency-jobs-'.bin2hex(random_bytes(6));
-        $this->checks = new CheckJobsFor($this->folder);
-        $this->inputs = new LockInputs(['composer.json' => "{}\n", 'composer.lock' => "{\"packages\": []}\n"], self::PLATFORM);
-        $step = new PhpGate()->dependencyStep(null);
-        self::assertNotNull($step);
-        $this->step = $step;
-    }
-
-    protected function tearDown(): void
-    {
-        if (is_dir($this->folder)) {
-            new Filesystem()->chmod($this->folder, 0o700, 0o000, true);
-        }
-
-        new Filesystem()->remove($this->folder);
-    }
-
     public function testASecondInstallOfTheSameKeyWhileTheFirstRunsLeavesTheFirstInstallWholeAndSaved(): void
     {
         $first = $this->jobsWith($this->runnerThatStartsASecondInstallOfTheSameKeyInside());
@@ -187,6 +168,25 @@ final class DependencyJobsTest extends TestCase
 
         self::assertFalse($this->jobsWith($runner)->installed($this->inputs, $this->step, 'image'));
         self::assertDirectoryDoesNotExist($this->checks->snapshotsFolder().'/'.$this->inputs->key()->value);
+    }
+
+    protected function setUp(): void
+    {
+        $this->folder = sys_get_temp_dir().'/intakt-dependency-jobs-'.bin2hex(random_bytes(6));
+        $this->checks = new CheckJobsFor($this->folder);
+        $this->inputs = new LockInputs(['composer.json' => "{}\n", 'composer.lock' => "{\"packages\": []}\n"], self::PLATFORM);
+        $step = new PhpGate()->dependencyStep(null);
+        self::assertNotNull($step);
+        $this->step = $step;
+    }
+
+    protected function tearDown(): void
+    {
+        if (is_dir($this->folder)) {
+            new Filesystem()->chmod($this->folder, 0o700, 0o000, true);
+        }
+
+        new Filesystem()->remove($this->folder);
     }
 
     private function runnerThatStartsASecondInstallOfTheSameKeyInside(): JobRunner

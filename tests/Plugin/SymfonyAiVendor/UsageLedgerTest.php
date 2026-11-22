@@ -187,37 +187,9 @@ final class UsageLedgerTest extends TestCase
         self::assertSame(['unsettled', LogicException::class, [100, 300]], [$ledger->payloads()[0]['phase'], $ledger->payloads()[0]['failure'], $this->promptTokensOf($ledger)]);
     }
 
-    private function settle(InMemoryLedger $ledger, DeferredResult $round): void
-    {
-        $this->usageLedger($ledger)->settle(new UsageReservation('a call'), $round);
-    }
-
     private function usageLedger(InMemoryLedger $ledger): UsageLedger
     {
         return new UsageLedger($ledger, new MockClock('2026-01-01T00:00:00+00:00'), new NullLogger(), StoredSerializerFactory::create());
-    }
-
-    /**
-     * @return list<int>
-     */
-    private function promptTokensOf(InMemoryLedger $ledger): array
-    {
-        /** @var list<array<string, int>> $usages */
-        $usages = $ledger->payloads()[0]['usages'];
-
-        return array_column($usages, 'prompt');
-    }
-
-    private function textWithUsage(int $promptTokens): TextResult
-    {
-        $text = new TextResult('{}');
-        $text->getMetadata()->add('token_usage', new TokenUsage(
-            promptTokens: $promptTokens,
-            completionTokens: 20,
-            totalTokens: $promptTokens + 20,
-        ));
-
-        return $text;
     }
 
     private function roundFailingWith(Throwable $failure): DeferredResult
@@ -244,6 +216,18 @@ final class UsageLedgerTest extends TestCase
         return new DeferredResult($converter, new InMemoryRawResult());
     }
 
+    private function textWithUsage(int $promptTokens): TextResult
+    {
+        $text = new TextResult('{}');
+        $text->getMetadata()->add('token_usage', new TokenUsage(
+            promptTokens: $promptTokens,
+            completionTokens: 20,
+            totalTokens: $promptTokens + 20,
+        ));
+
+        return $text;
+    }
+
     private function extractorReading(TokenUsage $usage): TokenUsageExtractorInterface
     {
         $extractor = self::createStub(TokenUsageExtractorInterface::class);
@@ -252,12 +236,15 @@ final class UsageLedgerTest extends TestCase
         return $extractor;
     }
 
-    private function roundAnswering(ResultInterface $answer): DeferredResult
+    /**
+     * @return list<int>
+     */
+    private function promptTokensOf(InMemoryLedger $ledger): array
     {
-        $converter = self::createStub(ResultConverterInterface::class);
-        $converter->method('convert')->willReturn($answer);
+        /** @var list<array<string, int>> $usages */
+        $usages = $ledger->payloads()[0]['usages'];
 
-        return new DeferredResult($converter, new InMemoryRawResult());
+        return array_column($usages, 'prompt');
     }
 
     // Followed by Symfony AI's usage listener, because a platform adds it after the converter's listeners.
@@ -274,5 +261,18 @@ final class UsageLedgerTest extends TestCase
         })();
 
         return new StreamResult($deltas, [new FinalStreamedUsage(), new StreamListener()]);
+    }
+
+    private function roundAnswering(ResultInterface $answer): DeferredResult
+    {
+        $converter = self::createStub(ResultConverterInterface::class);
+        $converter->method('convert')->willReturn($answer);
+
+        return new DeferredResult($converter, new InMemoryRawResult());
+    }
+
+    private function settle(InMemoryLedger $ledger, DeferredResult $round): void
+    {
+        $this->usageLedger($ledger)->settle(new UsageReservation('a call'), $round);
     }
 }

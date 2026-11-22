@@ -30,11 +30,6 @@ final class ShowServerErrorTest extends WebTestCase
 
     private KernelBrowser $browser;
 
-    protected function setUp(): void
-    {
-        $this->browser = self::createClient(server: ['HTTP_HOST' => 'localhost:7780']);
-    }
-
     public function testAServerErrorShowsTheShellAndAReferenceTheLogCarriesToo(): void
     {
         $this->readsFailOnce();
@@ -109,6 +104,11 @@ final class ShowServerErrorTest extends WebTestCase
 
         self::assertResponseStatusCodeSame(404);
         self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "No route found for "GET http://attacker.example:7780/does-not-exist""', NotFoundHttpException::class));
+    }
+
+    protected function setUp(): void
+    {
+        $this->browser = self::createClient(server: ['HTTP_HOST' => 'localhost:7780']);
     }
 
     private function readsFailOnce(): void

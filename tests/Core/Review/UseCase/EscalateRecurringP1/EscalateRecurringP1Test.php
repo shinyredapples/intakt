@@ -123,11 +123,6 @@ final class EscalateRecurringP1Test extends KernelTestCase
 
     private RoundFixture $fixture;
 
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-    }
-
     public function testARecurringP1WithoutAKeptVerdictQueuesOneEscalationReviewForThatFindingAlone(): void
     {
         $second = $this->recurredOnASecondHead();
@@ -625,6 +620,11 @@ final class EscalateRecurringP1Test extends KernelTestCase
         self::assertNull($this->fixture->escalationsOfChange()->outcomeAtLatestHead('alpha', self::PULL));
     }
 
+    protected function setUp(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer());
+    }
+
     // Moved after the confirmation, because only an older install stored a round under another spelling, and migration Version20261122100000 left such a spelling apart.
     private function confirmedUnder(string $address): void
     {
@@ -673,32 +673,6 @@ final class EscalateRecurringP1Test extends KernelTestCase
         });
     }
 
-    // With the received stamp, because only a received envelope is handled at once instead of being sent to the async transport again.
-    private function received(StampInterface ...$stamps): Envelope
-    {
-        return $this->fixture->escalations->envelopes[0]->with(new ReceivedStamp('async'), ...$stamps);
-    }
-
-    // Through the application's bus, middleware and failure listeners, because they decide whether a worker retries or parks the message.
-    private function failedDelivery(Envelope $received): WorkerMessageFailedEvent
-    {
-        try {
-            $this->commands()->dispatch($received);
-        } catch (HandlerFailedException $failed) {
-            $event = new WorkerMessageFailedEvent($failed->getEnvelope(), 'async', $failed);
-            self::getContainer()->get('event_dispatcher')->dispatch($event);
-
-            return $event;
-        }
-
-        self::fail('The escalation did not fail.');
-    }
-
-    private function retryDelay(): ?int
-    {
-        return array_last($this->asyncQueue()->getSent())?->last(DelayStamp::class)?->getDelay();
-    }
-
     // A worker's steps without its wait, because the in-memory transport holds a delayed retry back until its delay has passed; each retry is received again at once, then the queued record of the failure.
     /**
      * @return list<int>
@@ -732,14 +706,6 @@ final class EscalateRecurringP1Test extends KernelTestCase
         return $bus;
     }
 
-    private function asyncQueue(): InMemoryTransport
-    {
-        $queue = self::getContainer()->get('messenger.transport.async');
-        self::assertInstanceOf(InMemoryTransport::class, $queue);
-
-        return $queue;
-    }
-
     // The async queue emptied too, because the rounds the fixture started queued their judgings there.
     private function withStrongTier(EscalationReviews $reviews): void
     {
@@ -749,9 +715,38 @@ final class EscalateRecurringP1Test extends KernelTestCase
         $this->asyncQueue()->reset();
     }
 
-    private function completedAt(string $head, Finding ...$findings): string
+    // With the received stamp, because only a received envelope is handled at once instead of being sent to the async transport again.
+    private function received(StampInterface ...$stamps): Envelope
     {
-        return $this->completedWithDiffAt($head, self::DIFF, ...$findings);
+        return $this->fixture->escalations->envelopes[0]->with(new ReceivedStamp('async'), ...$stamps);
+    }
+
+    // Through the application's bus, middleware and failure listeners, because they decide whether a worker retries or parks the message.
+    private function failedDelivery(Envelope $received): WorkerMessageFailedEvent
+    {
+        try {
+            $this->commands()->dispatch($received);
+        } catch (HandlerFailedException $failed) {
+            $event = new WorkerMessageFailedEvent($failed->getEnvelope(), 'async', $failed);
+            self::getContainer()->get('event_dispatcher')->dispatch($event);
+
+            return $event;
+        }
+
+        self::fail('The escalation did not fail.');
+    }
+
+    private function retryDelay(): ?int
+    {
+        return array_last($this->asyncQueue()->getSent())?->last(DelayStamp::class)?->getDelay();
+    }
+
+    private function asyncQueue(): InMemoryTransport
+    {
+        $queue = self::getContainer()->get('messenger.transport.async');
+        self::assertInstanceOf(InMemoryTransport::class, $queue);
+
+        return $queue;
     }
 
     private function completedWithDiffAt(string $head, string $diff, Finding ...$findings): string
@@ -769,18 +764,23 @@ final class EscalateRecurringP1Test extends KernelTestCase
         return $round;
     }
 
+    // Names a file of the fixture's checkout, so it gets a key; tied to a requirement, so the goalpost rule keeps it a P1 in later rounds.
+    private function keyedP1(): Finding
+    {
+        return new Finding('A', Severity::P1, 'RecordingBus.php', 3, null, 'The bus loses a message.', FixableBy::Builder, false, 'Every message is delivered.', null);
+    }
+
+    private function completedAt(string $head, Finding ...$findings): string
+    {
+        return $this->completedWithDiffAt($head, self::DIFF, ...$findings);
+    }
+
     // An empty answer, so the fallback puts every P1 on the act list whatever ids the round gave it.
     private function judged(string $round): string
     {
         $this->fixture->judge(new ScriptedJudgement(new Judgement([])))(new JudgeRound($round));
 
         return $round;
-    }
-
-    // Names a file of the fixture's checkout, so it gets a key; tied to a requirement, so the goalpost rule keeps it a P1 in later rounds.
-    private function keyedP1(): Finding
-    {
-        return new Finding('A', Severity::P1, 'RecordingBus.php', 3, null, 'The bus loses a message.', FixableBy::Builder, false, 'Every message is delivered.', null);
     }
 
     private function otherP1(): Finding
@@ -809,11 +809,6 @@ final class EscalateRecurringP1Test extends KernelTestCase
         self::assertIsString($key);
 
         return $key;
-    }
-
-    private function keptOf(string $finding): ?KeptVerdict
-    {
-        return $this->fixture->keptVerdicts()->ofKey($this->keyOf($finding));
     }
 
     // A real worker on a Doctrine queue in SQLite, because the evidence must come from the application's own handler as messenger:consume runs it; only the strong tier is scripted, since no test may reach a provider.
@@ -872,5 +867,10 @@ final class EscalateRecurringP1Test extends KernelTestCase
 
             return $payload;
         }, iterator_to_array($this->fixture->ledger()->readOfKind($kind))));
+    }
+
+    private function keptOf(string $finding): ?KeptVerdict
+    {
+        return $this->fixture->keptVerdicts()->ofKey($this->keyOf($finding));
     }
 }

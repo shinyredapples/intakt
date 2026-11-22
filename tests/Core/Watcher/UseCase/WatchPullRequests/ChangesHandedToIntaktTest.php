@@ -56,20 +56,6 @@ final class ChangesHandedToIntaktTest extends KernelTestCase
     private RecordingLogger $logger;
     private RecordingCommandBus $commands;
 
-    protected function setUp(): void
-    {
-        $registry = self::getContainer()->get('doctrine');
-        self::assertInstanceOf(ManagerRegistry::class, $registry);
-        $entities = $registry->getManager();
-        self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
-        $this->ledger = new DoctrineLedger($registry, new MockClock('2026-11-20T10:00:00+00:00'));
-        $this->authorship = self::createStub(ChangeAuthorship::class);
-        $this->logger = new RecordingLogger();
-        $this->commands = new RecordingCommandBus();
-    }
-
     public function testAPullRequestIntaktOpenedIsRecordedAsHandedToIntakt(): void
     {
         $this->record(LedgerEventKind::ChangeOpened, ['project' => 'alpha', 'branch' => 'feat/7', 'head' => str_repeat('a', 40), 'change' => self::PULL, 'opening' => 'created']);
@@ -525,6 +511,20 @@ final class ChangesHandedToIntaktTest extends KernelTestCase
         $recognizer->recognizeAmong('alpha', [$this->change(self::PULL)]);
     }
 
+    protected function setUp(): void
+    {
+        $registry = self::getContainer()->get('doctrine');
+        self::assertInstanceOf(ManagerRegistry::class, $registry);
+        $entities = $registry->getManager();
+        self::assertInstanceOf(EntityManagerInterface::class, $entities);
+        EmptyDatabase::in(self::getContainer());
+        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        $this->ledger = new DoctrineLedger($registry, new MockClock('2026-11-20T10:00:00+00:00'));
+        $this->authorship = self::createStub(ChangeAuthorship::class);
+        $this->logger = new RecordingLogger();
+        $this->commands = new RecordingCommandBus();
+    }
+
     /**
      * @param array<string, string> $payload
      */
@@ -533,14 +533,14 @@ final class ChangesHandedToIntaktTest extends KernelTestCase
         self::assertTrue($this->ledger->append(new LedgerEvent($kind, json_encode($payload, JSON_THROW_ON_ERROR)))->succeeded());
     }
 
-    private function recognize(string $project, OpenChange ...$changed): void
-    {
-        new ChangesHandedToIntakt($this->ledger, new WatcherLedger($this->ledger), $this->authorship, $this->logger, $this->commands)->recognizeAmong($project, array_values($changed));
-    }
-
     private function change(string $id, string $head = 'a'): OpenChange
     {
         return RecordedForge::change($id, $head, '2026-11-20T09:00:00Z');
+    }
+
+    private function recognize(string $project, OpenChange ...$changed): void
+    {
+        new ChangesHandedToIntakt($this->ledger, new WatcherLedger($this->ledger), $this->authorship, $this->logger, $this->commands)->recognizeAmong($project, array_values($changed));
     }
 
     /**

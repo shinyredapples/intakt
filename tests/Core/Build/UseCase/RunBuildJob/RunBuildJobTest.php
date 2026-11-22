@@ -81,18 +81,6 @@ final class RunBuildJobTest extends TestCase
 
     private mixed $toolTimeLimit = 1500;
 
-    protected function setUp(): void
-    {
-        $this->gatesAtOnce = new GatesAtOnce(12, 1);
-        $this->folder = sys_get_temp_dir().'/intakt-build-'.bin2hex(random_bytes(6));
-        new Filesystem()->mkdir($this->folder.'/clone');
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->folder);
-    }
-
     public function testAJobThatLeavesABundleAndTheTextIsBuilt(): void
     {
         $outcome = $this->runBuilds(new JobOutput(['handback.bundle' => 'BUNDLE', 'pull-request.md' => "feat: x\n", 'build.log' => "log\n"]))->run($this->job());
@@ -337,9 +325,16 @@ final class RunBuildJobTest extends TestCase
         self::assertSame(BuildVerdict::NoResult, $outcome->verdict);
     }
 
-    private function job(Tier $tier = Tier::Standard): BuildJob
+    protected function setUp(): void
     {
-        return new BuildJob('demo', $this->folder.'/clone', 'task', new BuildBrief('PLANT-task', [], null), $tier, 'intakt-job-demo:1');
+        $this->gatesAtOnce = new GatesAtOnce(12, 1);
+        $this->folder = sys_get_temp_dir().'/intakt-build-'.bin2hex(random_bytes(6));
+        new Filesystem()->mkdir($this->folder.'/clone');
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->folder);
     }
 
     private function runBuilds(JobOutput $output, ?ResolvedModel $model = null, JobEnd $end = new JobEnd(JobCause::Exited, 0)): RunBuildJob
@@ -353,6 +348,11 @@ final class RunBuildJobTest extends TestCase
         });
 
         return $this->useCase($runner, $model ?? new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'));
+    }
+
+    private function job(Tier $tier = Tier::Standard): BuildJob
+    {
+        return new BuildJob('demo', $this->folder.'/clone', 'task', new BuildBrief('PLANT-task', [], null), $tier, 'intakt-job-demo:1');
     }
 
     private function useCase(JobRunner $runner, ResolvedModel $model): RunBuildJob

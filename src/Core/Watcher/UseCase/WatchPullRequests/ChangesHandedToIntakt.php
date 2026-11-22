@@ -59,11 +59,29 @@ final readonly class ChangesHandedToIntakt
         }
     }
 
-    // Published once it is handed over, because a round judged before this tick found it the loop's and published nothing; queued in the tick's transaction, so a worker looks for the round only after the line it reads has committed, and recorded, so a later tick queues it no second time.
-    private function queuePublicationOf(string $project, OpenChange $change): void
+    /**
+     * @param list<OpenChange> $open
+     *
+     * @return array{list<OpenChange>, list<OpenChange>}
+     */
+    private function authorsAmong(string $project, array $open): array
     {
-        $this->records->handOverPublicationQueued($project, $change);
-        $this->commands->dispatch(new PublishHandedOverChange($project, $change->id->value, $change->head->hash));
+        $openings = $this->openingsOf($project);
+        $notHanded = $this->addressesOf($project, LedgerEventKind::ChangeNotHandedToIntakt);
+        $created = [];
+        $undecided = [];
+
+        foreach ($this->unhandedAmong($project, $open) as $change) {
+            match ($this->decidedBy($change, $openings, $notHanded)) {
+                true => $created[] = $change,
+                null => $undecided[] = $change,
+                false => null,
+            };
+        }
+
+        [$createdAsked, $notCreated] = $this->answersAmong($project, $undecided);
+
+        return [[...$created, ...$createdAsked], $notCreated];
     }
 
     /**
@@ -88,29 +106,47 @@ final readonly class ChangesHandedToIntakt
         return array_values($unqueued);
     }
 
-    /**
-     * @param list<OpenChange> $open
-     *
-     * @return array{list<OpenChange>, list<OpenChange>}
-     */
-    private function authorsAmong(string $project, array $open): array
+    // Published once it is handed over, because a round judged before this tick found it the loop's and published nothing; queued in the tick's transaction, so a worker looks for the round only after the line it reads has committed, and recorded, so a later tick queues it no second time.
+    private function queuePublicationOf(string $project, OpenChange $change): void
     {
-        $openings = $this->openingsOf($project);
-        $notHanded = $this->addressesOf($project, LedgerEventKind::ChangeNotHandedToIntakt);
-        $created = [];
-        $undecided = [];
+        $this->records->handOverPublicationQueued($project, $change);
+        $this->commands->dispatch(new PublishHandedOverChange($project, $change->id->value, $change->head->hash));
+    }
 
-        foreach ($this->unhandedAmong($project, $open) as $change) {
-            match ($this->decidedBy($change, $openings, $notHanded)) {
-                true => $created[] = $change,
-                null => $undecided[] = $change,
-                false => null,
-            };
+    /**
+     * @return array<string, list<mixed>>
+     */
+    private function openingsOf(string $project): array
+    {
+        $openings = [];
+
+        foreach ($this->payloadsOf($project, LedgerEventKind::ChangeOpened) as $payload) {
+            $change = $payload['change'] ?? null;
+
+            if (is_string($change)) {
+                $openings[$this->addressOf($change)][] = $payload['opening'] ?? null;
+            }
         }
 
-        [$createdAsked, $notCreated] = $this->answersAmong($project, $undecided);
+        return $openings;
+    }
 
-        return [[...$created, ...$createdAsked], $notCreated];
+    /**
+     * @return array<string, true>
+     */
+    private function addressesOf(string $project, LedgerEventKind $kind): array
+    {
+        $addresses = [];
+
+        foreach ($this->payloadsOf($project, $kind) as $payload) {
+            $change = $payload['change'] ?? null;
+
+            if (is_string($change)) {
+                $addresses[$this->addressOf($change)] = true;
+            }
+        }
+
+        return $addresses;
     }
 
     /**
@@ -179,42 +215,6 @@ final readonly class ChangesHandedToIntakt
         }
 
         return [$created, $notCreated];
-    }
-
-    /**
-     * @return array<string, list<mixed>>
-     */
-    private function openingsOf(string $project): array
-    {
-        $openings = [];
-
-        foreach ($this->payloadsOf($project, LedgerEventKind::ChangeOpened) as $payload) {
-            $change = $payload['change'] ?? null;
-
-            if (is_string($change)) {
-                $openings[$this->addressOf($change)][] = $payload['opening'] ?? null;
-            }
-        }
-
-        return $openings;
-    }
-
-    /**
-     * @return array<string, true>
-     */
-    private function addressesOf(string $project, LedgerEventKind $kind): array
-    {
-        $addresses = [];
-
-        foreach ($this->payloadsOf($project, $kind) as $payload) {
-            $change = $payload['change'] ?? null;
-
-            if (is_string($change)) {
-                $addresses[$this->addressOf($change)] = true;
-            }
-        }
-
-        return $addresses;
     }
 
     /**

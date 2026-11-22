@@ -118,17 +118,6 @@ final readonly class GitHubChangeOpener implements ChangeOpening
         return count($listed) < self::PAGE_SIZE ? $listed : throw new ForgeWriteFailed(sprintf('GitHub listed %d open pull requests of the branch, a full page that may not be all of them, so the branch is left alone.', self::PAGE_SIZE));
     }
 
-    /**
-     * @return list<mixed>
-     */
-    private function listOf(string $body): array
-    {
-        $listed = $this->decoded($body);
-
-        // `{}` decodes to the same empty array as `[]`, so only the answer's first character tells an empty object from an empty list.
-        return array_is_list($listed) && str_starts_with(ltrim($body), '[') ? $listed : throw new ForgeWriteFailed('GitHub answered the pull request look-up with something other than a list.');
-    }
-
     // A listed entry whose branch cannot be read, or is empty, is refused, because the listing is of this branch and the entry may be another account's pull request of it.
     /**
      * @param array<mixed> $pull
@@ -178,16 +167,6 @@ final readonly class GitHubChangeOpener implements ChangeOpening
     }
 
     /**
-     * @param array<mixed> $pull
-     */
-    private function numberOf(array $pull): int
-    {
-        $number = $pull['number'] ?? null;
-
-        return is_int($number) && $number > 0 ? $number : throw new ForgeWriteFailed('GitHub answered a pull request without a number.');
-    }
-
-    /**
      * @param array<string, mixed> $payload
      *
      * @return array<mixed>
@@ -195,6 +174,16 @@ final readonly class GitHubChangeOpener implements ChangeOpening
     private function send(string $method, string $path, array $payload): array
     {
         return $this->decoded($this->request($method, $path, ['json' => $payload, 'max_retries' => 0]));
+    }
+
+    /**
+     * @param array<mixed> $pull
+     */
+    private function numberOf(array $pull): int
+    {
+        $number = $pull['number'] ?? null;
+
+        return is_int($number) && $number > 0 ? $number : throw new ForgeWriteFailed('GitHub answered a pull request without a number.');
     }
 
     /**
@@ -222,10 +211,15 @@ final readonly class GitHubChangeOpener implements ChangeOpening
         return $body;
     }
 
-    // Not chained, because the trace of a failed call holds the bearer token.
-    private function unreachable(string $failure): ForgeWriteFailed
+    /**
+     * @return list<mixed>
+     */
+    private function listOf(string $body): array
     {
-        return new ForgeWriteFailed(sprintf('GitHub could not be reached for a pull request call (%s).', $failure));
+        $listed = $this->decoded($body);
+
+        // `{}` decodes to the same empty array as `[]`, so only the answer's first character tells an empty object from an empty list.
+        return array_is_list($listed) && str_starts_with(ltrim($body), '[') ? $listed : throw new ForgeWriteFailed('GitHub answered the pull request look-up with something other than a list.');
     }
 
     /**
@@ -251,5 +245,11 @@ final readonly class GitHubChangeOpener implements ChangeOpening
         } catch (InstallationNotReadBack|InstallationDoesNotMatchConfiguration $refused) {
             throw new ForgeWriteFailed('No GitHub write before the installation is confirmed: '.$refused->getMessage(), $refused->getCode(), previous: $refused);
         }
+    }
+
+    // Not chained, because the trace of a failed call holds the bearer token.
+    private function unreachable(string $failure): ForgeWriteFailed
+    {
+        return new ForgeWriteFailed(sprintf('GitHub could not be reached for a pull request call (%s).', $failure));
     }
 }

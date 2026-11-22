@@ -44,26 +44,6 @@ final class IsolatedCodexCliTest extends TestCase
 
     private string $path;
 
-    protected function setUp(): void
-    {
-        $this->root = sys_get_temp_dir().'/intakt-codex-cli-'.bin2hex(random_bytes(6));
-        new Filesystem()->dumpFile($this->root.'/bin/codex', self::FAKE_CLI);
-        chmod($this->root.'/bin/codex', 0o700);
-        new Filesystem()->dumpFile($this->root.'/codex/logins/team/auth.json', CodexLoginTest::json('2026-11-01T00:00:00Z'));
-        $this->path = (string) getenv('PATH');
-        putenv('PATH='.$this->root.'/bin:'.$this->path);
-        putenv(self::INHERITED.'=inherited');
-        $_ENV[self::INHERITED] = 'inherited';
-    }
-
-    protected function tearDown(): void
-    {
-        putenv('PATH='.$this->path);
-        putenv(self::INHERITED);
-        unset($_ENV[self::INHERITED]);
-        new Filesystem()->remove($this->root);
-    }
-
     public function testTheCliRunsInTheAccountsCallHomeWithAReadOnlyLogin(): void
     {
         $seen = $this->runOf($this->cli());
@@ -126,6 +106,26 @@ final class IsolatedCodexCliTest extends TestCase
 
         self::assertNotContains('--add-dir', $arguments);
         self::assertSame("[System]\nBe brief.\n\n[User]\nAnswer with OK.", array_last($arguments));
+    }
+
+    protected function setUp(): void
+    {
+        $this->root = sys_get_temp_dir().'/intakt-codex-cli-'.bin2hex(random_bytes(6));
+        new Filesystem()->dumpFile($this->root.'/bin/codex', self::FAKE_CLI);
+        chmod($this->root.'/bin/codex', 0o700);
+        new Filesystem()->dumpFile($this->root.'/codex/logins/team/auth.json', CodexLoginTest::json('2026-11-01T00:00:00Z'));
+        $this->path = (string) getenv('PATH');
+        putenv('PATH='.$this->root.'/bin:'.$this->path);
+        putenv(self::INHERITED.'=inherited');
+        $_ENV[self::INHERITED] = 'inherited';
+    }
+
+    protected function tearDown(): void
+    {
+        putenv('PATH='.$this->path);
+        putenv(self::INHERITED);
+        unset($_ENV[self::INHERITED]);
+        new Filesystem()->remove($this->root);
     }
 
     /**

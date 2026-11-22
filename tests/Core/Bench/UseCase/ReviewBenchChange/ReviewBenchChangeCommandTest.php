@@ -103,21 +103,6 @@ final class ReviewBenchChangeCommandTest extends TestCase
 
     private string|false $temporary;
 
-    // The temporary folder is pointed at an empty one, because the command builds its checkout there and the test must see what it leaves.
-    protected function setUp(): void
-    {
-        $this->temporary = getenv('TMPDIR');
-        $this->workspace = sys_get_temp_dir().'/intakt-bench-command-'.bin2hex(random_bytes(4));
-        new Filesystem()->mkdir($this->workspace);
-        putenv('TMPDIR='.$this->workspace);
-    }
-
-    protected function tearDown(): void
-    {
-        putenv(false === $this->temporary ? 'TMPDIR' : 'TMPDIR='.$this->temporary);
-        new Filesystem()->remove($this->workspace);
-    }
-
     public function testTheCommandPrintsTheProvenanceAndEachReviewersFigures(): void
     {
         $tester = $this->runCommand(['change' => 'free-shipping', '--project' => 'alpha']);
@@ -153,6 +138,21 @@ final class ReviewBenchChangeCommandTest extends TestCase
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringContainsString('There is no bench change named "no-such-change".', $tester->getDisplay());
         self::assertSame([], glob($this->workspace.'/*'));
+    }
+
+    // The temporary folder is pointed at an empty one, because the command builds its checkout there and the test must see what it leaves.
+    protected function setUp(): void
+    {
+        $this->temporary = getenv('TMPDIR');
+        $this->workspace = sys_get_temp_dir().'/intakt-bench-command-'.bin2hex(random_bytes(4));
+        new Filesystem()->mkdir($this->workspace);
+        putenv('TMPDIR='.$this->workspace);
+    }
+
+    protected function tearDown(): void
+    {
+        putenv(false === $this->temporary ? 'TMPDIR' : 'TMPDIR='.$this->temporary);
+        new Filesystem()->remove($this->workspace);
     }
 
     /**
