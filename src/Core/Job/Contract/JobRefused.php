@@ -20,7 +20,12 @@ final class JobRefused extends InvalidArgumentException
 
     public static function forInput(string $hostPath, string $containerPath): self
     {
-        return new self(sprintf('An input maps an absolute host path to an absolute container path outside %s and %s; "%s" to "%s" does not.', JobSpec::WORK_AREA, JobSpec::OUTPUT_DIRECTORY, $hostPath, $containerPath));
+        return new self(sprintf('An input maps an absolute host path to an absolute container path outside %s, %s and %s; "%s" to "%s" does not.', JobSpec::WORK_AREA, JobSpec::OUTPUT_DIRECTORY, JobSpec::KEPT_FOLDER, $hostPath, $containerPath));
+    }
+
+    public static function forKeptFolder(string $hostPath): self
+    {
+        return new self(sprintf('A kept folder is an absolute host path; "%s" is not.', $hostPath));
     }
 
     /**

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Review\Contract;
 
 use Intakt\Core\Review\Contract\Verdict;
+use Intakt\Core\Review\Contract\VerdictParser;
+use Intakt\Core\Review\Infrastructure\ReviewerAnswer\Verdict as ReviewerAnswer;
 use Symfony\AI\Platform\Result\DeferredResult;
 use Symfony\AI\Platform\Result\ResultInterface;
 use Symfony\AI\Platform\StructuredOutput\PlatformSubscriber;
@@ -27,6 +29,14 @@ final readonly class ScriptedReviewer
     public function answering(string|ResultInterface $output): DeferredResult
     {
         return MockPlatformFactory::createPlatform(static fn (): string|ResultInterface => $output, eventDispatcher: $this->dispatcher)
-            ->invoke('reviewer', 'Review the change.', [PlatformSubscriber::RESPONSE_FORMAT => Verdict::class]);
+            ->invoke('reviewer', 'Review the change.', [PlatformSubscriber::RESPONSE_FORMAT => ReviewerAnswer::class]);
+    }
+
+    // Mapped and parsed as ReviewerPrompt::verdictIn() does, because the contract parser cannot name the answer document.
+    public function verdictFor(string|ResultInterface $output): Verdict
+    {
+        $result = $this->answering($output);
+
+        return new VerdictParser()->parseWith(static fn (): Verdict => $result->asObject(ReviewerAnswer::class)->toVerdict());
     }
 }

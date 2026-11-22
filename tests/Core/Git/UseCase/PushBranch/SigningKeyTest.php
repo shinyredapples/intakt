@@ -40,7 +40,7 @@ final class SigningKeyTest extends TestCase
 
     public function testASignatureOfTheKeyIsMadeAndVerifiesWithinTheLimit(): void
     {
-        $key = new SigningKey($this->key, new Filesystem());
+        $key = new SigningKey($this->key, new Filesystem(), new GuardedRun());
 
         self::assertTrue($key->signed(self::PAYLOAD, $key->sign(self::PAYLOAD)));
     }
@@ -49,7 +49,7 @@ final class SigningKeyTest extends TestCase
     {
         $this->programs->killOn('ssh-keygen', 'sign');
 
-        $stopped = $this->stopped(fn (): string => new SigningKey($this->key, new Filesystem())->sign(self::PAYLOAD));
+        $stopped = $this->stopped(fn (): string => new SigningKey($this->key, new Filesystem(), new GuardedRun())->sign(self::PAYLOAD));
 
         self::assertSame('The branch was not pushed: ssh-keygen was killed by signal 15', $stopped->getMessage());
         self::assertNull($stopped->getPrevious());
@@ -57,7 +57,7 @@ final class SigningKeyTest extends TestCase
 
     public function testACheckOfASignatureKilledByASignalStopsThePushInsteadOfCallingTheSignatureBad(): void
     {
-        $key = new SigningKey($this->key, new Filesystem());
+        $key = new SigningKey($this->key, new Filesystem(), new GuardedRun());
         $signature = $key->sign(self::PAYLOAD);
         $this->programs->killOn('ssh-keygen', 'verify');
 
@@ -71,7 +71,7 @@ final class SigningKeyTest extends TestCase
     {
         $this->programs->hangOn('ssh-keygen', '-y');
 
-        $stopped = $this->stopped(fn (): string => new SigningKey($this->key, new Filesystem(), 0.2)->sign(self::PAYLOAD));
+        $stopped = $this->stopped(fn (): string => new SigningKey($this->key, new Filesystem(), new GuardedRun(), 0.2)->sign(self::PAYLOAD));
 
         self::assertSame('The branch was not pushed: ssh-keygen timed out after 0.2 seconds', $stopped->getMessage());
         self::assertNull($stopped->getPrevious());
@@ -79,10 +79,10 @@ final class SigningKeyTest extends TestCase
 
     public function testACheckOfASignatureThatHangsPastTheLimitStopsThePush(): void
     {
-        $signature = new SigningKey($this->key, new Filesystem())->sign(self::PAYLOAD);
+        $signature = new SigningKey($this->key, new Filesystem(), new GuardedRun())->sign(self::PAYLOAD);
         $this->programs->hangOn('ssh-keygen', 'verify');
 
-        $stopped = $this->stopped(fn (): bool => new SigningKey($this->key, new Filesystem(), 0.2)->signed(self::PAYLOAD, $signature));
+        $stopped = $this->stopped(fn (): bool => new SigningKey($this->key, new Filesystem(), new GuardedRun(), 0.2)->signed(self::PAYLOAD, $signature));
 
         self::assertSame('The branch was not pushed: ssh-keygen timed out after 0.2 seconds', $stopped->getMessage());
         self::assertNull($stopped->getPrevious());
@@ -92,7 +92,7 @@ final class SigningKeyTest extends TestCase
     {
         $this->programs->hideEveryOtherProgram();
 
-        $stopped = $this->stopped(fn (): string => new SigningKey($this->key, new Filesystem())->sign(self::PAYLOAD));
+        $stopped = $this->stopped(fn (): string => new SigningKey($this->key, new Filesystem(), new GuardedRun())->sign(self::PAYLOAD));
 
         self::assertSame('The branch was not pushed: the signing key cannot be read', $stopped->getMessage());
         self::assertNull($stopped->getPrevious());

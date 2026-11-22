@@ -54,7 +54,6 @@ use Intakt\Core\Ledger\Domain\EventRecord;
 use Intakt\Core\Ledger\Infrastructure\DoctrineLedger;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\PromptCut;
-use Intakt\Plugin\GitHubForge\Contract\IssueListing;
 use Intakt\Plugin\GitHubForge\Contract\IssueReads;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
 use Intakt\Tests\Core\Build\ScriptedJobRunner;
@@ -84,7 +83,6 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(PushStep::class)]
 #[UsesClass(DoctrineLedger::class)]
 #[UsesClass(EventRecord::class)]
-#[UsesClass(IssueListing::class)]
 #[UsesClass(Issues::class)]
 #[UsesClass(ScriptedJobRunner::class)]
 #[UsesClass(RunBuildJob::class)]
@@ -176,7 +174,7 @@ final class BuildTaskParksOnSqliteTest extends KernelTestCase
     private function buildTask(): BuildTask
     {
         $reads = self::createStub(IssueReads::class);
-        $reads->method('listOpen')->willReturn(IssueListing::listed([Issues::task(7)], null));
+        $reads->method('readOpen')->willReturn(Issues::task(7));
         $checkout = self::createStub(BuildCheckout::class);
         $routing = self::createStub(BuildRouting::class);
         $routing->method('tierFor')->willReturn(new TierChoice(Tier::Standard, TierReason::Default));

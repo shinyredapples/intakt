@@ -69,6 +69,12 @@ So when a reviewer looks bad, read the causes first: many harness failures call 
 
 The report starts with what went wrong and why: every missed mistake (the reviewer missed it, or the bench's own expectation cannot hold), every false alarm, and every run where a reviewer failed. Then come the figures for each run, whether the repeats of a change agreed, and the totals for each reviewer and model: mistakes found out of those planted, false alarms, and tokens.
 
+Each of those problems names one of three causes, so you know what to fix:
+
+- **reviewer**: the reviewer missed a planted mistake, or raised a false alarm. This is what the bench measures.
+- **bench**: the bench's own record of where a mistake sits cannot hold, so the miss points at the bench, not at the reviewer.
+- **harness failure**: the run itself failed (the AI company or a tool did not answer), so it says nothing about the reviewer. Such a run is left out of the mistakes, false alarms and agreement, though its tokens still count.
+
 The **result file** is one file under `var/bench/` in the install, named after the moment of the run, and the command prints where it is. It holds everything the report is made from: the Intakt version, fingerprints of the review instructions and of the bench changes (so you can tell whether two runs measured the same thing), and for every change and run the decision, the judge's list of what to fix and, per reviewer, its model, what it caught and missed, its false alarms and other findings, any failure, and its tokens and time. With docker compose the file sits inside the container, so copy it out before you remove the container ([how](../reference/user-manual.md#the-review-bench)).
 
 Intakt prints no price for a bench run. Multiplying the reported tokens by your AI company's prices estimates only what the reviewers cost: the report counts reviewer tokens, not the judge's, so the judge's calls cost extra. Your AI company's usage page shows the whole bill.

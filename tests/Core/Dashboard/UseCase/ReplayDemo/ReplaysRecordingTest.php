@@ -160,7 +160,7 @@ final class ReplaysRecordingTest extends TestCase
         $again = new ClockedLiveUpdates($this->clock, $this->ledger);
 
         try {
-            new ReplaysRecording($this->ledger, $again, $this->clock, new LockFactory($this->locks), $this->marks(), TourCaptionsOn::captions($again, TourCaptionsOn::tour($this->ledger, $this->marks(), '')))->replay($this->recordedRun(), 1.0);
+            new ReplaysRecording($this->ledger, $again, $this->clock, new LockFactory($this->locks), $this->marks(), TourCaptionsOn::captions($again, TourCaptionsOn::tour($this->ledger, $this->marks(), '')), TourCaptionsOn::judged($this->ledger, $this->marks()))->replay($this->recordedRun(), 1.0);
         } catch (ReplayIsRefused) {
         }
 
@@ -418,7 +418,7 @@ final class ReplaysRecordingTest extends TestCase
 
     private function replays(): ReplaysRecording
     {
-        return new ReplaysRecording($this->ledger, $this->updates, $this->clock, new LockFactory($this->locks), $this->marks(), TourCaptionsOn::captions($this->updates, TourCaptionsOn::tour($this->ledger, $this->marks(), '')));
+        return new ReplaysRecording($this->ledger, $this->updates, $this->clock, new LockFactory($this->locks), $this->marks(), TourCaptionsOn::captions($this->updates, TourCaptionsOn::tour($this->ledger, $this->marks(), '')), TourCaptionsOn::judged($this->ledger, $this->marks()));
     }
 
     private function marks(): ReplayMarks

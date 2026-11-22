@@ -56,4 +56,5 @@ enum LedgerEventKind: string
     case HandOverPublicationQueued = 'hand_over_publication_queued';
     case MainHalted = 'main_halted';
     case HaltCleared = 'halt_cleared';
+    case OwnerPushNoticed = 'owner_push_noticed';
 }

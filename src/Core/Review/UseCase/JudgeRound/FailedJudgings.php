@@ -17,6 +17,9 @@ use Symfony\Component\Messenger\Transport\Receiver\ReceiverInterface;
 // Both places are read, because the failure message records the failure in the ledger, and Messenger parks the judging only when that message could not be dispatched.
 final readonly class FailedJudgings
 {
+    // A bound on the poll of one round only, because every poll of a complete round lists the transport and parked publications pile up there; a parked judging past it leaves that round to the upper wait, which ends the poll as no outcome in time.
+    public const int PARKED_MESSAGES_READ = 500;
+
     public function __construct(
         #[Autowire(service: 'messenger.transport.failed')]
         private ReceiverInterface $failed,
@@ -48,13 +51,13 @@ final readonly class FailedJudgings
         return null;
     }
 
-    // Every round whose judging failed, recorded or parked, read once from each place, because a caller deciding many rounds under a lock should not list the failure transport once per round.
+    // Every round whose judging failed, recorded or parked, read once from each place, because a caller deciding many rounds under a lock should not list the failure transport once per round; the whole transport, because recurrence settlement has no upper wait, so a parked judging it missed would hold back every later round of its change.
     /**
      * @return array<string, true>
      */
     public function failedRounds(): array
     {
-        $failed = $this->parkedRounds();
+        $failed = $this->parkedRounds(null);
 
         foreach ($this->ledger->readOfKind(LedgerEventKind::JudgingFailed) as $recorded) {
             $round = $this->payloads->of($recorded, JudgingFailed::class)?->round;
@@ -70,14 +73,14 @@ final readonly class FailedJudgings
     // The failure transport alone, so a caller that already read the ledger record does not read the ledger a second time.
     public function isParked(string $roundId): bool
     {
-        return isset($this->parkedRounds()[$roundId]);
+        return isset($this->parkedRounds(self::PARKED_MESSAGES_READ)[$roundId]);
     }
 
     // A transport that cannot be listed shows no failure, because reading it with get() would hand its messages out.
     /**
      * @return array<string, true>
      */
-    private function parkedRounds(): array
+    private function parkedRounds(?int $limit): array
     {
         if (!$this->failed instanceof ListableReceiverInterface) {
             return [];
@@ -85,7 +88,8 @@ final readonly class FailedJudgings
 
         $parked = [];
 
-        foreach ($this->failed->all() as $envelope) {
+        // Bounded rather than filtered by class, because the transport's serializer stores no message type a query could select on; the Doctrine transport reads a bounded list in no set order.
+        foreach ($this->failed->all($limit) as $envelope) {
             $message = $envelope->getMessage();
 
             // A message that deserialized without its round id names no round, and one such message must not stop the judging of other changes.
