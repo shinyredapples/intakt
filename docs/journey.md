@@ -20,6 +20,8 @@ behind it are on [Highlights](https://shinyredapples.github.io/intakt/).
 Counted: from the pull requests and issues the GitHub API lists. Measured: the providers' usage answers, summed per day from the `tokens` field of `docs/journey/usage.jsonl`. Estimated: the reservations of steps that were killed before they reported usage, from the `reserved` field of `docs/journey/usage.jsonl` and never added to the measured tokens.
 <!-- journey:end glance -->
 
+The token figures run to 2026-11-21, the last full day of the usage export; the merge counts run to the recording of 2026-11-22, so the figure per merge is slightly low.
+
 
 Merged pull requests per day, counted from the GitHub API:
 
@@ -181,10 +183,11 @@ Measured: the day's tokens from the providers' usage answers, summed per day fro
 
 ## Issues created and closed
 
-1,055 counted issues were filed from 10-27 to 11-13 and 773 counted were closed (761 done, 12 dropped). Most new issues come from the work
-itself: plan tasks split into parts, review follow-ups and design findings. Closing kept pace in the first days; from
-10-31, when the switch plan added M6 to M8, more were filed than closed almost every day, and 11-12 was the first day
-since 10-30 that closed more than it filed.
+In the snapshot of 2026-11-13, 1,055 counted issues were filed from 10-27 to 11-13 and 773 counted were closed (761
+done, 12 dropped); the table below is read from the GitHub API when the page is built, so its counts for the same days
+differ. Most new issues come from the work itself: plan tasks split into parts, review follow-ups and design findings.
+Closing kept pace in the first days; from 10-31, when the switch plan added M6 to M8, more were filed than closed almost
+every day, and 11-12 was the first day since 10-30 that closed more than it filed.
 
 <!-- journey:begin issues-per-day -->
 ![Issues created and closed per day (counted)](journey/issues-per-day.svg)
@@ -226,7 +229,7 @@ Counted: from the issues the GitHub API lists.
 </details>
 <!-- journey:end issues-per-day -->
 
-Open issues at the end of each day:
+Open issues at the end of each day (11-22: at the time of the recording, not the end of the day):
 
 <!-- journey:begin open-issues -->
 ![Open issues per day (counted)](journey/open-issues.svg)
