@@ -363,6 +363,16 @@ final class GitHubIssueReadsTest extends TestCase
         self::assertCount(100, $this->listedWithNextLink('<https://api.github.com/repositories/1/issues?page=%d>; ANCHOR=#other; rel=next'));
     }
 
+    public function testANextRelationWithAnEmptyAnchorBelongsToTheCurrentPageAndReadsTheNextPage(): void
+    {
+        self::assertCount(101, $this->listedWithNextLink('<https://api.github.com/repositories/1/issues?page=%d>; rel=next; anchor=""'));
+    }
+
+    public function testAnAnchorTextInsideAnotherParameterValueDoesNotDropTheNextRelation(): void
+    {
+        self::assertCount(101, $this->listedWithNextLink('<https://api.github.com/repositories/1/issues?page=%d>; title="x; anchor=y"; rel=next'));
+    }
+
     public function testANextRelationNextToAnAnchoredLinkStillReadsTheNextPage(): void
     {
         self::assertCount(101, $this->listedWithNextLink('<https://api.github.com/repositories/2/issues>; rel="next"; anchor="#other", <https://api.github.com/repositories/1/issues?page=%d>; rel="next"'));

@@ -51,8 +51,8 @@ final readonly class NextLinks
             throw $this->unreadable();
         }
 
-        // Any `anchor` counts as another resource, because its relations then describe that resource and not the page GitHub served (RFC 8288 section 3.2).
-        if (array_any($found, static fn (array $parameter): bool => 'anchor' === strtolower($parameter[1]))) {
+        // An `anchor` other than the empty reference is another resource, because its relations then describe that resource and not the page GitHub served (RFC 8288 section 3.2).
+        if (array_any($found, static fn (array $parameter): bool => 'anchor' === strtolower($parameter[1]) && '""' !== $parameter[2])) {
             return [];
         }
 
