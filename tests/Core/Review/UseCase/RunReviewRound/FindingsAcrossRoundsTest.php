@@ -11,6 +11,7 @@ use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\PanelVerdict;
+use Intakt\Core\Review\Contract\ResolvedFinding;
 use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
@@ -388,7 +389,7 @@ final class FindingsAcrossRoundsTest extends KernelTestCase
      */
     private function changes(array $resolved, array $findings): Verdict
     {
-        return new Verdict(Decision::Changes, $findings, $resolved, []);
+        return new Verdict(Decision::Changes, $findings, array_map(static fn (string $id): ResolvedFinding => new ResolvedFinding($id), $resolved), []);
     }
 
     /**

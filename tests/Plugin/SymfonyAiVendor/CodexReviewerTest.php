@@ -41,6 +41,7 @@ use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
+use Intakt\Core\Review\Contract\ResolvedFinding;
 use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
@@ -181,7 +182,7 @@ final class CodexReviewerTest extends KernelTestCase
         $verdict = $this->review()->verdict;
 
         self::assertSame(Decision::Changes, $verdict->verdict);
-        self::assertSame(['F1', 'F2'], $verdict->resolved);
+        self::assertEquals([new ResolvedFinding('F1'), new ResolvedFinding('F2')], $verdict->resolved);
         self::assertSame(['F3', Severity::P1], [$verdict->findings[0]->id, $verdict->findings[0]->severity]);
     }
 

@@ -9,6 +9,7 @@ use Intakt\Core\Review\Contract\ChangeDecision;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\PanelVerdict;
 use Intakt\Core\Review\Contract\QuorumPolicy;
+use Intakt\Core\Review\Contract\ResolvedFinding;
 use Intakt\Core\Review\Contract\Verdict;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -62,7 +63,7 @@ final class ChangeDecisionTest extends TestCase
 
     private function legacyVote(): PanelVerdict
     {
-        $legacy = new Verdict(Decision::Changes, Verdict::noTools()->findings, ['F1'], []);
+        $legacy = new Verdict(Decision::Changes, Verdict::noTools()->findings, [new ResolvedFinding('F1')], []);
         self::assertTrue($legacy->isFailedReview(), 'The stored verdict does not read as a failed review.');
 
         return new PanelVerdict(Tier::Strong, $legacy);

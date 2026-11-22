@@ -5,14 +5,16 @@ declare(strict_types=1);
 namespace Intakt\Tests\Application;
 
 use Doctrine\Bundle\DoctrineBundle\DataCollector\DoctrineDataCollector;
-use Doctrine\DBAL\Connection;
-use Doctrine\Persistence\ManagerRegistry;
+use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Core\Server\Infrastructure\ProfileOnlyRequestMeasuresPass;
 use Intakt\Kernel;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use Symfony\Bridge\Doctrine\Middleware\Debug\DebugDataHolder;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
+use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Profiler\Profile;
@@ -52,19 +54,22 @@ final class ProfilerAllowListTest extends TestCase
         self::assertSame(['db', 'memory', 'messenger', 'time'], $collectors);
     }
 
-    public function testAnOptedInTestProfileWithoutDebugCountsTheQueriesOfItsRequest(): void
+    public function testAnOptedInTestProfileWithoutDebugCountsAQueryRunDuringItsRequest(): void
     {
         $kernel = new Kernel('test', false);
+        $this->kernel = $kernel;
         $kernel->boot();
-        $doctrine = $kernel->getContainer()->get('doctrine');
-        self::assertInstanceOf(ManagerRegistry::class, $doctrine);
-        $connection = $doctrine->getConnection();
-        self::assertInstanceOf(Connection::class, $connection);
-        $connection->executeQuery('SELECT 1');
+        $this->createSchemaUncounted($kernel);
+        $client = new KernelBrowser($kernel);
+        $client->enableProfiler();
 
-        $collector = $this->optedInTestProfile($kernel)->getCollector('db');
+        $client->request('GET', '/status', server: ['HTTP_HOST' => 'localhost:7780']);
 
+        $profile = $client->getProfile();
+        self::assertInstanceOf(Profile::class, $profile);
+        $collector = $profile->getCollector('db');
         self::assertInstanceOf(DoctrineDataCollector::class, $collector);
+        self::assertSame(200, $client->getResponse()->getStatusCode());
         self::assertGreaterThan(0, $collector->getQueryCount());
     }
 
@@ -93,6 +98,19 @@ final class ProfilerAllowListTest extends TestCase
             $_SERVER['APP_CACHE_DIR'] = $this->sharedCache;
         }
         new Filesystem()->remove($this->cache);
+    }
+
+    // The holder is reset after the schema is created, because otherwise its statements would count as the request's queries.
+    private function createSchemaUncounted(Kernel $kernel): void
+    {
+        $container = $kernel->getContainer()->get('test.service_container');
+        self::assertInstanceOf(ContainerInterface::class, $container);
+        $manager = $container->get('doctrine.orm.entity_manager');
+        self::assertInstanceOf(EntityManagerInterface::class, $manager);
+        new SchemaTool($manager)->createSchema($manager->getMetadataFactory()->getAllMetadata());
+        $holder = $container->get('doctrine.debug_data_holder');
+        self::assertInstanceOf(DebugDataHolder::class, $holder);
+        $holder->reset();
     }
 
     private function optedInTestProfile(Kernel $kernel): Profile
