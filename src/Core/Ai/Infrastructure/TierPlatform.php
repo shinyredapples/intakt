@@ -49,9 +49,9 @@ final readonly class TierPlatform implements TierInvoker
         $own = $this->resolver->configured($project, $tier);
         $outages = [];
 
-        foreach ([$own, ...$this->resolver->substitutes($project, $tier)] as $model) {
+        foreach ($this->inOrderOfPreference($own, $this->resolver->substitutes($project, $tier)) as $model) {
             $key = $model->provider->value;
-            if (array_key_exists($key, $outages) && !$this->isFallbackOnTheOwnProvider($own, $model)) {
+            if (array_key_exists($key, $outages) && $model->provider !== $own->provider) {
                 continue;
             }
 
@@ -62,7 +62,7 @@ final readonly class TierPlatform implements TierInvoker
                 return $model;
             }
 
-            $outages[$key] ??= $outage;
+            $outages[$key] = $this->shorter($outages[$key] ?? null, $outage);
         }
 
         /** @var non-empty-list<ProviderOutage> $out */
@@ -71,10 +71,39 @@ final readonly class TierPlatform implements TierInvoker
         throw new EveryProviderOut($out);
     }
 
-    // The tier's own provider is judged per model, so a substitute there that names another router provider (a pinned fallback) answers while the first one's pin cools (issue #2825); it is the same provider, so it owes no catch-up and the ledger records no substitute. Every other provider is judged once, by the first model listed on it, so the substitute model the ledger records for it (RoundLedger, the first substitute on it) is always the one that answers; an outage lists each provider once, by the reason of its first model.
-    private function isFallbackOnTheOwnProvider(ResolvedModel $own, ResolvedModel $model): bool
+    // The own model first, then its pinned fallbacks (same model on the own provider, another router provider), then every other substitute in the order listed, because a fallback that serves the same model owes no catch-up and a free one beats a substitute listed earlier.
+    /**
+     * @param list<ResolvedModel> $substitutes
+     *
+     * @return list<ResolvedModel>
+     */
+    private function inOrderOfPreference(ResolvedModel $own, array $substitutes): array
     {
-        return $model !== $own && $model->provider === $own->provider;
+        $fallbacks = array_values(array_filter($substitutes, fn (ResolvedModel $model): bool => $this->isFallbackOfTheOwnModel($own, $model)));
+        $others = array_values(array_filter($substitutes, static fn (ResolvedModel $model): bool => !in_array($model, $fallbacks, true)));
+
+        return [$own, ...$fallbacks, ...$others];
+    }
+
+    // Same provider and the same model (the part before the colon, where a router names its pinned provider); another model on the own provider is a substitute. A provider is judged once by its first model, except the own provider, which is judged per model because each pin has its own window.
+    private function isFallbackOfTheOwnModel(ResolvedModel $own, ResolvedModel $model): bool
+    {
+        return $model !== $own && $model->provider === $own->provider && $this->modelPart($model) === $this->modelPart($own);
+    }
+
+    private function modelPart(ResolvedModel $model): string
+    {
+        return explode(':', $model->model, 2)[0];
+    }
+
+    // The shortest wait, because the call may go on as soon as any one of the provider's pins frees.
+    private function shorter(?ProviderOutage $kept, ProviderOutage $outage): ProviderOutage
+    {
+        if (!$kept instanceof ProviderOutage || null === $kept->secondsUntilFree || null === $outage->secondsUntilFree) {
+            return $kept ?? $outage;
+        }
+
+        return $outage->secondsUntilFree < $kept->secondsUntilFree ? $outage : $kept;
     }
 
     // Invoked on the provider's own bundle platform because its catalog-based model router and model_catalog already know the configured model.
@@ -146,12 +175,12 @@ final readonly class TierPlatform implements TierInvoker
             return;
         }
 
-        if ($answering->provider === $own->provider) {
+        if ($this->isFallbackOfTheOwnModel($own, $answering)) {
             $this->logger->info('Model {own} cannot be served right now, so the review goes to {fallback} on the same provider.', ['own' => $own->model, 'fallback' => $answering->model]);
 
             return;
         }
 
-        $this->logger->info('Provider {own} is out, so the review goes to the substitute {substitute}.', ['own' => $own->provider->value, 'substitute' => $answering->provider->value]);
+        $this->logger->info('Provider {own} is out, so the review goes to the substitute {substitute}.', ['own' => $own->provider->value, 'substitute' => $answering->provider === $own->provider ? $answering->model : $answering->provider->value]);
     }
 }

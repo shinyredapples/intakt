@@ -25,6 +25,8 @@ use Intakt\Core\Ai\Infrastructure\TypedRejectionConverter;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\AbstractLogger;
+use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Symfony\AI\Platform\Exception\RateLimitExceededException;
 use Symfony\AI\Platform\Model;
@@ -35,6 +37,7 @@ use Symfony\Component\Clock\MockClock;
 use Symfony\Component\DependencyInjection\ServiceLocator;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
+use Stringable;
 use Throwable;
 
 // Tier selection reads a model's wait through its provider's own platform, so a pin that outlasts the account window keeps the model out; the clock is mocked and every order is forced, nothing sleeps.
@@ -64,6 +67,8 @@ final class TierPlatformPinnedProviderTest extends TestCase
     private const array SUBSTITUTE = ['provider' => Provider::Anthropic->value, 'model' => 'other'];
 
     private const array FALLBACK = ['provider' => Provider::OpenAiCompatible->value, 'model' => 'owner/model:other-router'];
+
+    private const array OTHER_MODEL = ['provider' => Provider::OpenAiCompatible->value, 'model' => 'owner/other:free-router'];
 
     private MockClock $clock;
 
@@ -161,7 +166,46 @@ final class TierPlatformPinnedProviderTest extends TestCase
         $out = $this->failureOf(fn (): object => $this->tiers($this->router(MockPlatformFactory::createPlatform('first')), [self::FALLBACK])->answering('demo', Tier::Strong));
 
         self::assertInstanceOf(EveryProviderOut::class, $out);
-        self::assertSame('Every provider of the tier is out: openai_compatible for 120 s.', $out->getMessage());
+        self::assertSame('Every provider of the tier is out: openai_compatible for 30 s.', $out->getMessage());
+    }
+
+    public function testAFreeFallbackOnTheOwnProviderWinsOverAnEarlierSubstituteOnAnotherProvider(): void
+    {
+        $this->pins->coolDown($this->pin(), 120);
+
+        $answering = $this->tiers($this->router(MockPlatformFactory::createPlatform('first')), [self::SUBSTITUTE, self::FALLBACK])->answering('demo', Tier::Strong);
+
+        self::assertSame([self::ROUTER, self::FALLBACK['model']], [$answering->provider, $answering->model]);
+    }
+
+    public function testAnotherModelOnTheOwnProviderIsRecordedAsASubstituteAndNotAsAFallback(): void
+    {
+        $this->pins->coolDown($this->pin(), 120);
+        $logger = new class extends AbstractLogger {
+            /** @var list<string> */
+            public array $messages = [];
+
+            public function log(mixed $level, string|Stringable $message, array $context = []): void
+            {
+                $this->messages[] = (string) $message;
+            }
+        };
+
+        $answering = $this->tiers($this->router(MockPlatformFactory::createPlatform('first')), [self::OTHER_MODEL], logger: $logger)->answering('demo', Tier::Strong);
+
+        self::assertSame(['owner/other:free-router', ['Provider {own} is out, so the review goes to the substitute {substitute}.']], [$answering->model, $logger->messages]);
+    }
+
+    public function testWhenEveryPinCoolsTheReportedWaitIsTheShortestOne(): void
+    {
+        $this->pins->coolDown($this->pin(), 120);
+        $this->pins->coolDown(new PinnedProvider(new Account(self::ROUTER, Account::DEFAULT), 'other-router'), 30);
+        $this->pins->coolDown(new PinnedProvider(new Account(self::ROUTER, Account::DEFAULT), 'free-router'), 120);
+
+        $out = $this->failureOf(fn (): object => $this->tiers($this->router(MockPlatformFactory::createPlatform('first')), [self::OTHER_MODEL, self::FALLBACK])->answering('demo', Tier::Strong));
+
+        self::assertInstanceOf(EveryProviderOut::class, $out);
+        self::assertSame(30, $out->outages[0]->secondsUntilFree);
     }
 
     // The whole call, because selection alone does not show that the account still serves the fallback after the pinned 429 (issue #2825).
@@ -193,7 +237,7 @@ final class TierPlatformPinnedProviderTest extends TestCase
      * @param list<array{provider: string, model: non-empty-string}> $substitutes
      * @param (Closure(): PlatformInterface)|null                    $built
      */
-    private function tiers(AccountFailoverPlatform $router, array $substitutes, ?Closure $built = null): TierPlatform
+    private function tiers(AccountFailoverPlatform $router, array $substitutes, ?Closure $built = null, ?LoggerInterface $logger = null): TierPlatform
     {
         $strong = ['provider' => self::ROUTER->value, 'model' => self::PINNED];
         if ([] !== $substitutes) {
@@ -206,7 +250,7 @@ final class TierPlatformPinnedProviderTest extends TestCase
             Provider::Anthropic->value => static fn (): PlatformInterface => $substitute,
         ]);
 
-        return new TierPlatform(new ConfiguredTierResolver(['demo' => ['tiers' => ['strong' => $strong]]], []), $platforms, $this->accounts, new NullLogger());
+        return new TierPlatform(new ConfiguredTierResolver(['demo' => ['tiers' => ['strong' => $strong]]], []), $platforms, $this->accounts, $logger ?? new NullLogger());
     }
 
     private function pin(): PinnedProvider
