@@ -25,10 +25,13 @@ use Intakt\Plugin\Forge\Contract\Change;
 use Intakt\Plugin\Forge\Contract\ChangedFile;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\CommitId;
+use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\LocalGitForge\Contract\LocalRepository;
 use Intakt\Plugin\LocalGitForge\Contract\RepositoryNotFound;
 use Intakt\Plugin\LocalGitForge\Infrastructure\LocalGitForge;
 use Intakt\Plugin\LocalGitForge\Infrastructure\NameStatusParser;
+use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 use Throwable;
 
 // Lives in the forge plugin because it reads the change from a local repository, which the core review module may not reach; the command and the MCP tool share it.
@@ -38,6 +41,7 @@ final readonly class LocalChangeReview
         private Panels $panels,
         private ChangeReviews $reviews,
         private CleanupOnStop $onStop = new CleanupOnStop(),
+        private LoggerInterface $logger = new NullLogger(),
     ) {
     }
 
@@ -63,7 +67,7 @@ final readonly class LocalChangeReview
             throw $busy;
         } finally {
             if (!$roundGoesOn) {
-                $forge->removeSnapshot($snapshot);
+                $this->removeKeptSnapshotOf($forge, $snapshot);
             }
         }
     }
@@ -93,6 +97,17 @@ final readonly class LocalChangeReview
     public function stop(): void
     {
         $this->onStop->stop();
+    }
+
+    // Logged, never thrown, because RemoveKeptSnapshot removes the same snapshot once the round is judged and the two git runs may overlap; a throw here would replace the review's own result or failure.
+    private function removeKeptSnapshotOf(LocalGitForge $forge, string $snapshot): void
+    {
+        try {
+            $forge->removeSnapshot($snapshot);
+            // Boundary: the review is settled already, and RemoveKeptSnapshot removes what is left.
+        } catch (ForgeReadFailed $failure) {
+            $this->logger->warning('The kept snapshot of a review could not be removed; delete it and run "git worktree prune" in its repository.', ['snapshot' => $snapshot, 'failure' => $failure->getMessage()]);
+        }
     }
 
     private function forgeFor(ReviewChangeInput $input): LocalGitForge
