@@ -14,7 +14,7 @@ Your coding agent says it is done. Intakt tells you whether to believe it.
 
 AI code review by a panel from different AI labs. A finding whose quoted code is not in the change is dropped, and a judge makes one list to fix. Start a review from the dashboard, or let your own agent run the loop over MCP until the verdict is clean.
 
-<!-- VIDEO THUMBNAIL: put the linked thumbnail of the demo video here once it is uploaded (#3142). -->
+[![Watch the 90-second demo of Intakt on YouTube](docs/assets/video-cover.jpg)](https://youtu.be/HVDKah3Jauo)
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/dashboard-review-dark.png">
