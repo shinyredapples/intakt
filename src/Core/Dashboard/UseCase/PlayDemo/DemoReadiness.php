@@ -23,8 +23,7 @@ enum DemoReadiness: string
         };
     }
 
-    // The first-run page's line under its title, in plain words: no variable, file or command, because a visitor there has no terminal.
-    // It points to the key form only while the provider step shows one, so it never names a form that is not on the page.
+    // Plain words because a visitor there has no terminal; it names the key form only while the page shows it.
     public function firstRunLine(ProviderStep $providers): string
     {
         return match ($this) {
