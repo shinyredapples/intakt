@@ -74,13 +74,6 @@ main { padding: var(--s16) var(--s16) calc(var(--bar) + var(--s24)); max-width: 
 .char-lg { width: 112px; height: 112px; flex: none; }
 .char-sm { width: 44px; height: 44px; flex: none; }
 
-/* Hero: the answer */
-.hero { display: flex; align-items: center; gap: var(--s16); padding: var(--s16); border-radius: var(--r-overlay); background: var(--raised); border: 1px solid var(--hairline); }
-.hero .kicker { font-size: var(--t13); color: var(--muted); text-transform: uppercase; letter-spacing: .06em; font-weight: 700; }
-.hero h1 { margin: 2px 0 4px; }
-.hero.amber { background: var(--amber-tint); border-color: color-mix(in srgb, var(--amber) 45%, transparent); }
-.hero.good { background: var(--tint); }
-
 /* State chip: never colour alone, always icon + word */
 .state { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px 2px 8px; border-radius: var(--r-round); font: 700 var(--t13)/1.6 var(--f-body); background: var(--tint-2); color: var(--ink); white-space: nowrap; }
 .state svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
@@ -133,13 +126,10 @@ details[open] > summary::after { content: "\2212"; }
 .newdata { display: inline-block; font: 700 11px/1.6 var(--f-body); letter-spacing: .04em; text-transform: uppercase; color: var(--muted); border: 1px dashed var(--muted); border-radius: var(--r-chip); padding: 0 6px; vertical-align: middle; }
 .figure { font: 700 40px/1 var(--f-head); }
 .grid2 { display: grid; gap: var(--s16); }
-@media (min-width: 1024px) { .grid2 { grid-template-columns: 1.35fr 1fr; align-items: start; } .hero { padding: var(--s24); } .char-lg { width: 144px; height: 144px; } }
+@media (min-width: 1024px) { .grid2 { grid-template-columns: 1.35fr 1fr; align-items: start; } .char-lg { width: 144px; height: 144px; } }
 
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 main { width: 100%; }
-.fix details { border-top: 0; }
-.fix details > summary { min-height: 44px; font-size: var(--t15); }
-@media (min-width: 1024px) { .review-grid { display: grid; grid-template-columns: 1.5fr 1fr; gap: var(--s32); align-items: start; } .review-grid > aside { position: sticky; top: 80px; } .review-grid > aside .section:first-child { margin-top: 0; } }
 /* Feedback 2: the role character stands on the current step; no avatar column, no octopus on lines */
 .path { padding-top: 60px; }
 .path li.now .who { position: absolute; left: 50%; bottom: calc(100% - 4px); transform: translateX(-50%); display: flex; animation: hop .6s ease-out 1; }
@@ -159,11 +149,8 @@ main { width: 100%; }
 .theme { width: 44px; height: 44px; display: grid; place-items: center; border: 1px solid var(--hairline); border-radius: var(--r-btn); background: var(--raised); color: var(--ink); cursor: pointer; }
 .theme svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 2; }
 .top .live { margin-right: var(--s4); }
-.status { display: flex; align-items: center; gap: var(--s8); min-height: 44px; margin-top: var(--s12); padding: 0 var(--s12); border-radius: var(--r-btn); color: var(--muted); text-decoration: none; font-size: var(--t15); }
-.status svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2.2; flex: none; }
-.status.ok svg:first-child { color: var(--primary); }
 .card.alert { border-color: color-mix(in srgb, var(--amber) 60%, transparent); }
 .more { display: flex; align-items: center; gap: var(--s12); min-height: 56px; padding: var(--s8) var(--s16); border: 1px solid var(--hairline); border-radius: var(--r-card); background: var(--raised); color: var(--ink); text-decoration: none; }
 .more small { display: block; color: var(--muted); font-size: var(--t13); }
-.more svg, .fix > .row > svg:last-child { width: 20px; height: 20px; stroke: var(--muted); fill: none; stroke-width: 2; flex: none; align-self: center; }
+.more svg { width: 20px; height: 20px; stroke: var(--muted); fill: none; stroke-width: 2; flex: none; align-self: center; }
 a.card:hover, .more:hover { border-color: var(--primary); }

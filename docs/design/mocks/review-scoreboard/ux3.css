@@ -1,4 +1,4 @@
-/* ux3 review prototypes: page CSS on top of ../../proto/proto.css (tokens from assets/styles/tokens.css). */
+/* Review page, direction A (Scoreboard): page CSS on top of proto.css in this folder (tokens from assets/styles/tokens.css). */
 code { font-family: var(--f-mono); font-size: .9em; background: var(--tint); padding: 0 4px; border-radius: 4px; }
 .crumb { margin-bottom: var(--s12); }
 .crumb a { color: var(--link); }
@@ -80,7 +80,7 @@ body:has(.detail:target) .overview { display: none; }
 .dir-a .frow { flex-wrap: wrap; row-gap: 0; }
 .dir-a .fp { order: 4; flex-basis: 100%; padding-left: 44px; font-size: var(--t13); font-family: var(--f-mono); }
 .dir-a .frow .chev { order: 3; }
-.dir-a .more, .dir-b .more { margin-top: var(--s24); }
+.dir-a .more { margin-top: var(--s24); }
 
 @media (min-width: 1024px) {
   .board { grid-template-columns: auto 1fr auto; padding: var(--s24) var(--s32); gap: var(--s32); }
@@ -95,50 +95,8 @@ body:has(.detail:target) .overview { display: none; }
   .dir-a .frow { flex-wrap: wrap; }
 }
 
-/* ---------- Direction B: File map ---------- */
-.strip { display: flex; align-items: center; gap: var(--s16); flex-wrap: wrap; padding: var(--s12) 0; }
-.strip .owl { width: 72px; height: 72px; flex: none; }
-.s-main { flex: 1; min-width: 200px; }
-.s-main h1 { font-size: var(--t28); }
-.s-sum { font-size: var(--t21); margin: 2px 0 var(--s4); font-family: var(--f-head); }
-.dir-b .revs { flex-direction: row; align-items: center; }
-.dir-b .rev-says { max-width: 9em; font-size: var(--t13); color: var(--muted); }
-.dir-b .rev-says b { color: var(--ink); }
-.s-next .path { margin: 0 0 var(--s8); }
-.where { margin: var(--s24) 0 var(--s12); }
-.files { display: grid; gap: var(--s16); }
-.file { background: var(--raised); border: 1px solid var(--hairline); border-radius: var(--r-card); padding: var(--s12) var(--s12) var(--s4); }
-.file h3 { font-size: var(--t15); font-weight: 700; padding: 0 var(--s4) var(--s8); }
-.minimap { display: grid; gap: 3px; padding: var(--s8) var(--s4); margin-bottom: var(--s8); border-radius: var(--r-btn); background: var(--tint); }
-.mline { position: relative; display: flex; align-items: center; height: 14px; }
-.mln { width: 2.2ch; flex: none; font: 400 11px/1 var(--f-mono); color: var(--muted); text-align: right; margin-right: 10px; }
-.mbar { height: 6px; border-radius: 3px; background: color-mix(in srgb, var(--muted) 40%, transparent); margin-left: calc(var(--in) * 4px); width: calc(var(--len) * 4px); max-width: calc(100% - 60px); }
-.mline.hit .mbar { height: 10px; }
-.mline.hit.urgent .mbar { background: var(--red); }
-.mline.hit.should .mbar { background: var(--amber); }
-.mline.hit.nice .mbar { background: transparent; box-shadow: inset 0 0 0 2px var(--muted); }
-.mline.hit { height: 18px; }
-.pin { margin-left: var(--s8); display: grid; place-items: center; }
-.pin .shape { width: 14px; height: 14px; }
-.dir-b .frow { padding: var(--s8); gap: var(--s8); }
-.dir-b .fl { font-size: var(--t13); }
-.dir-b .frow:has(.shape.urgent) .kbox { background: color-mix(in srgb, var(--red) 14%, var(--raised)); color: var(--red); }
-.file:has(.frow:hover) .minimap, .file:has(.frow:focus-visible) .minimap { background: var(--tint-2); }
-
-@media (min-width: 1024px) {
-  .topgrid { display: grid; grid-template-columns: 1fr 360px; gap: var(--s32); align-items: end; }
-  .strip .owl { width: 112px; height: 112px; }
-  .s-main h1 { font-size: 40px; }
-  .files { grid-template-columns: repeat(3, 1fr); align-items: start; }
-}
 .d-tags .state.urgent { color: color-mix(in srgb, var(--red) 78%, var(--ink)); }
 [data-theme="dark"] .d-tags .state.urgent { color: var(--red); }
 [data-theme="dark"] .rail a[aria-current] { color: var(--ink); }
 .more .grow { flex: 1; }
-.s-main { flex: 1 0 auto; }
-.s-main h1 { white-space: nowrap; }
-.dir-b .rev-says { max-width: 12em; }
-.s-main { flex: 1 1 0; min-width: 0; }
-@media (max-width: 1023px) { .strip .owl { width: 64px; height: 64px; align-self: flex-start; } }
-@media (min-width: 1024px) { .s-main { flex: 1 0 auto; } }
 .detail { scroll-margin-top: 72px; } .code { white-space: normal; }

@@ -4,6 +4,7 @@
 <link rel="stylesheet" href="proto.css"><link rel="stylesheet" href="ux3.css"></head>
 <body class="dir-a">
 <header class="top"><a class="brand" href="../index.html"><span>intakt</span></a><span class="spacer"></span><span class="live oct"><img class=" ch-l" src="img/octopus-conducting-light-192.webp" alt="Intakt, conducting"><img class=" ch-d" src="img/octopus-conducting-dark-192.webp" alt="Intakt, conducting">Live</span><button type="button" class="theme" aria-label="Dark mode" onclick="const r=document.documentElement;r.dataset.theme=r.dataset.theme==='dark'?'light':'dark';this.setAttribute('aria-pressed',r.dataset.theme==='dark');try{localStorage.setItem('ux2-theme',r.dataset.theme)}catch{}"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 019.5 4 8 8 0 1020 14.5z"/></svg></button></header>
+<script>document.querySelector('.top .theme').setAttribute('aria-pressed',document.documentElement.dataset.theme==='dark')</script>
 <div class="layout"><nav class="rail" aria-label="Main"><a href="#"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg><span>Now</span></a><a href="#"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg><span>You</span></a><a href="#" aria-current="page"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h7l2 2h9v10H3z"/></svg><span>Projects</span></a></nav>
 <main>
 <div class="overview" id="top">
