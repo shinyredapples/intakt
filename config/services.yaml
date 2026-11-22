@@ -18,9 +18,9 @@ parameters:
     !php/const Intakt\Core\Job\Contract\JobServices::DOCKER_SOCKET: /var/run/docker.sock
     # Built from docker/egress-proxy on the engine's host, because it is the per-job proxy every job with an allowlist goes through.
     !php/const Intakt\Core\Job\Contract\JobServices::EGRESS_PROXY_IMAGE: intakt-egress-proxy
-    # The build slots that run at once on this host (at least 1); with more than one slot, max(2, processors / slots), at most 8, is a ceiling for the gates each builder's bin/check runs at once, handed over only when it is below what bin/check picks from the job's limits, which today's limits never allow (docs/user/README.md#running-a-build).
+    # The build slots that run at once on this host (at least 1); with more than one slot, max(2, processors / slots), at most 8, is a ceiling for the gates each builder's bin/check runs at once, handed over only when it is below what bin/check picks from the job's limits, which today's limits never allow (docs/reference/user-manual.md#running-a-build).
     !php/const Intakt\Core\Build\Contract\BuildServices::SLOTS: 1
-    # The seconds one tool call of the builder's session may run (at least 1, below the session's 3000-second allowance), above the slowest bin/check --fast, because checks of 7 to 9 minutes on a shared host ran past the CLI's 10-minute default and went to the background (docs/user/README.md#running-a-build).
+    # The seconds one tool call of the builder's session may run (at least 1, below the session's 3000-second allowance), above the slowest bin/check --fast, because checks of 7 to 9 minutes on a shared host ran past the CLI's 10-minute default and went to the background (docs/reference/user-manual.md#running-a-build).
     !php/const Intakt\Core\Build\Contract\BuildServices::TOOL_TIME_LIMIT: 1500
     # Trusted dependency installs live here, written only by the orchestrator's own process and never mounted into a build job (docs/architecture/check-job.md#the-dependency-snapshot-store).
     !php/const Intakt\Core\HandBack\Contract\HandBackServices::DEPENDENCY_SNAPSHOTS_DIRECTORY: '%kernel.project_dir%/var/dependency-snapshots'

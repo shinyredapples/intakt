@@ -1,6 +1,6 @@
 # For judges: Intakt in a few minutes
 
-Your coding agent says it is done. Intakt tells you whether to believe it: a panel of reviewers on models from different AI labs reviews the change, and a judge marks every finding against the task, so every P1 and P2 finding whose quote checks out reaches the act list.
+Your coding agent says it is done. Intakt tells you whether to believe it: a panel of reviewers on models from different AI labs reviews the change, every finding must quote the code it is about, and a judge makes one list to fix.
 
 The video's script and shot list: [docs/video.md](video.md)
 
@@ -15,18 +15,18 @@ The video's script and shot list: [docs/video.md](video.md)
 
 1. `git clone https://github.com/shinyredapples/intakt.git && cd intakt`
 2. `docker compose up -d --wait`: it returns once the container is healthy.
-3. Open http://localhost:7781. You see the first-run page, titled **See a real review**, with **Play the demo run** as its one main button and, below, **Use your own project** with three cards: "1. Add a key here", "2. Add a project" and "3. First review".
-4. Open http://localhost:7781/demo and press **Play the demo run**. You see "The demo run is starting: the caption at the bottom of each page names the stage it is in." The caption shows one progress dot per stage (five in all) and a short line; the last one reads "Checked: To fix lists what still needs changing." As soon as the first stage shows, the page takes you to the review, and eight seconds after the last stage the caption closes by itself.
-5. The review of `sample-change` in `demo-replay` carries the **Replay** mark; its reviewers ran on models from two AI labs, Claude (`opus`) and GPT (`gpt-6.2-sol`). Round 1 reads "Changes requested": `correctness` (`opus`) and `security` (`gpt-6.2-sol`) each asked for changes with 4 findings. Under "Findings and the judge's call", F1 (P1, `src/discount.js:3`, also reported as F6), F2 (P1, `src/report.js:4`, also reported as F5, F7), F3 (P2), F4 (P2) and F8 (P3) read **Fix now**.
+3. Open http://localhost:7781. You see the first-run page, titled **See a real review**, with "1 minute · no key" and **Play the demo run** as its one main button. Below it are three steps (Read, Check, To fix) and **Use your own project** with three cards: "1. Add a key here", "2. Add a project" and "3. First review".
+4. Press **Play the demo run** (http://localhost:7781/demo has the same button). The demo page opens. You see "The demo run is starting: the caption at the bottom of each page names the stage it is in." The caption shows one progress dot per stage (five in all) and a short line; the last one reads "Checked: To fix lists what still needs changing." As soon as the first stage shows, the page takes you to the review, and eight seconds after the last stage the caption closes by itself.
+5. The review of `sample-change` in `demo-replay` carries the **Replay** mark. The owl's verdict card reads **Changes needed**, with the number to fix, and below it one To fix card per finding gives its priority, file and line. The reviewers ran on models from two AI labs, Claude (`opus`) and GPT (`gpt-6.2-sol`). Press **Full record**: round 1 reads "Changes requested": `correctness` (`opus`) and `security` (`gpt-6.2-sol`) each asked for changes with 4 findings. Under "Findings and the judge's call", F1 (P1, `src/discount.js:3`, also reported as F6), F2 (P1, `src/report.js:4`, also reported as F5, F7), F3 (P2), F4 (P2) and F8 (P3) read **Fix now**.
 
 ## b. One Hugging Face token or provider key, about 5 minutes
 
 First clone and start Intakt as in steps 1 and 2 of path a.
 
-1. Open http://localhost:7781/setup, the first-run page (once path a has played, http://localhost:7781 opens the board instead in a desktop browser, and a phone opens the newest review, since the board is then at rest; `/?board=1` is the board on any device). Paste the key or token in card 1 ("A key or token for Anthropic, OpenAI or Hugging Face") and press **Keep the key**. Calls are billed to the key's owner.
-2. `docker compose restart intakt`, so the sample project gets its reviewers. Wait until `docker compose ps` shows the container as healthy.
+1. Open http://localhost:7781/setup, the first-run page (once path a has played, http://localhost:7781 opens the board instead in a desktop browser, and a phone opens the newest review, since the board is then at rest; `/?board=1` is the board on any device). Paste the key or token in card 1 ("A key or token for Anthropic, OpenAI or Hugging Face") and press **Keep the key**. Intakt asks the provider once; the page then reads "The ... key ending in ... is kept. Restart Intakt to use it." Calls are billed to the key's owner.
+2. Restart as the page says: `docker compose restart intakt`, so the sample project gets its reviewers. Wait until `docker compose ps` shows the container as healthy.
 3. Reload http://localhost:7781/setup: card 2 now reads "1 project is configured." and lists the `sample` project. Then start the live review:
-   - **If you skipped path a:** press **Start the first review** in card 3. Its live review page opens: each reviewer's row fills in as it answers, then the round shows its outcome (`approve`, `changes` or `blocked`) and "Findings and the judge's call" lists the act list, each entry marked **Fix now**.
+   - **If you skipped path a:** press **Start the first review** in card 3. Its live review page opens: each reviewer's row fills in as it answers, then the owl's verdict card gives the outcome and the To fix cards list what to fix.
    - **If you played path a:** card 3 shows **Open the review** for the recorded run and no start button. Run `docker compose exec intakt php bin/console intakt:demo` instead. It runs the same live review and prints the verdict, each reviewer, the act list and an "Open the review:" line with the address of its review page.
 
 ## c. With your agent over MCP
@@ -63,4 +63,4 @@ Every Symfony and Symfony AI feature in use, with its status: [Highlights](https
 - What was planned, achieved and what comes next: [the hackathon page](hackathon.md).
 - [The review bench](bench.md#review-bench): how well the panel finds planted defects, measured.
 - [Upstream reproductions](architecture/upstream-reproductions.md): library bugs found while building Intakt.
-- [Connecting an agent through MCP](user/mcp.md).
+- [Connecting an agent through MCP](reference/mcp.md).
