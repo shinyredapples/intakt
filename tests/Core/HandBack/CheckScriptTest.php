@@ -17,6 +17,12 @@ final class CheckScriptTest extends TestCase
 {
     private const string SCRIPT = __DIR__.'/../../../docker/job/check.sh';
 
+    private const string LOCK = "{\"packages\": [], \"packages-dev\": []}\n";
+
+    private const string PLATFORM = '8.5.12';
+
+    private const string PROBE = 'printf 8.5.12';
+
     private BuildHistory $history;
     private string $output = '';
     private string $work = '';
@@ -38,6 +44,7 @@ final class CheckScriptTest extends TestCase
 
     protected function tearDown(): void
     {
+        new Process(['chmod', '-R', 'u+w', $this->history->folder])->run();
         $this->history->remove();
     }
 
@@ -503,6 +510,287 @@ final class CheckScriptTest extends TestCase
         self::assertSame("conflicts-with-main\n", $this->outputFile('check-result'), $this->outputFile('check.log'));
         self::assertStringContainsString('CONFLICT (', $this->outputFile('check.log'));
         self::assertFileDoesNotExist($this->work.'/clone/ran');
+    }
+
+    public function testAMountedSnapshotIsCopiedWritableIntoTheCloneBeforeTheFirstStep(): void
+    {
+        $this->history->commitFile('composer.lock', self::LOCK, 'Lock the dependencies');
+        $snapshot = $this->readOnlySnapshotHolding(['vendor/composer/installed.json' => "{\"packages\": []}\n", '.hidden/kept.txt' => "kept\n"]);
+
+        $run = $this->whenTheCheckRunsWith(
+            $this->dependencyOptions($snapshot, self::LOCK),
+            $this->history->bundle('main..task'),
+            'test -f vendor/composer/installed.json',
+            'test -f .hidden/kept.txt',
+            'touch vendor/composer/autoload_real.php',
+        );
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
+        self::assertSame("passed\n", $this->outputFile('check-result'));
+        self::assertStringStartsWith('$ copy the dependency snapshot '.$snapshot."\n\$ test -f", $this->outputFile('check.log'));
+        self::assertFileExists($snapshot.'/vendor/composer/installed.json');
+    }
+
+    public function testATreeThatAlreadyHoldsAFolderOfTheSnapshotGetsNoneOfItAndInstallsItself(): void
+    {
+        $this->history->commitFile('composer.lock', self::LOCK, 'Lock the dependencies');
+        $this->history->commitFile('vendor/committed.txt', "committed\n", 'Commit a vendor folder');
+        $snapshot = $this->readOnlySnapshotHolding(['vendor/composer/installed.json' => "{\"packages\": []}\n"]);
+
+        $run = $this->whenTheCheckRunsWith($this->dependencyOptions($snapshot, self::LOCK), $this->history->bundle('main..task'), 'test ! -e vendor/composer/installed.json', 'test -f vendor/committed.txt');
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
+        self::assertStringContainsString("the tree already holds vendor, so the check installs its dependencies itself\n", $this->outputFile('check.log'));
+    }
+
+    public function testASnapshotEntryNamedWithALineBreakDoesNotReplaceTheCommittedFileOfThatName(): void
+    {
+        $this->history->commitFile('composer.lock', self::LOCK, 'Lock the dependencies');
+        $this->history->commitFile("two\nlines", "checked tree\n", 'Add a file with a line break in its name');
+        $snapshot = $this->readOnlySnapshotHolding(["two\nlines" => "snapshot\n"]);
+
+        $run = $this->whenTheCheckRunsWith($this->dependencyOptions($snapshot, self::LOCK), $this->history->bundle('main..task'), 'true');
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
+        self::assertSame("checked tree\n", file_get_contents($this->work."/clone/two\nlines"));
+        self::assertStringContainsString("the tree already holds two\nlines, so the check installs", $this->outputFile('check.log'));
+    }
+
+    public function testEveryEntryOfACopiedSnapshotIsMadeWritableAlsoWhenItsNameHoldsALineBreak(): void
+    {
+        $this->history->commitFile('composer.lock', self::LOCK, 'Lock the dependencies');
+        $snapshot = $this->readOnlySnapshotHolding(["two\nlines/kept.txt" => "kept\n"]);
+
+        $run = $this->whenTheCheckRunsWith($this->dependencyOptions($snapshot, self::LOCK), $this->history->bundle('main..task'), "test -w 'two\nlines/kept.txt'");
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
+        self::assertSame("passed\n", $this->outputFile('check-result'));
+    }
+
+    public function testASnapshotMadeForALockFileMainChangedSinceIsNotCopiedIntoTheMergedTree(): void
+    {
+        $this->history->checkout('main');
+        $this->history->commitFile('composer.lock', self::LOCK, 'Lock the dependencies');
+        $this->history->push('main');
+        $this->history->startBranch('task', 'main');
+        $this->history->commit('Build work');
+        $bundle = $this->history->bundle('main..task');
+        $snapshot = $this->readOnlySnapshotHolding(['vendor/from-the-old-install' => "old\n"]);
+        $this->mainMovesWith('composer.lock', "{\"packages\": [{\"name\": \"psr/log\"}]}\n");
+
+        $run = $this->whenTheCheckRunsWith($this->dependencyOptions($snapshot, self::LOCK), $bundle, 'test ! -e vendor');
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
+        self::assertStringContainsString("the merged tree does not hold the lock files the snapshot was made for, so the check installs its dependencies itself\n", $this->outputFile('check.log'));
+    }
+
+    public function testALockFileWhoseBlobIsMissingCopiesNothing(): void
+    {
+        $this->history->commitFile('composer.lock', self::LOCK, 'Lock the dependencies');
+        $snapshot = $this->readOnlySnapshotHolding(['vendor/installed.json' => "{}\n"]);
+
+        $run = $this->whenTheCheckRunsWith(['--dependencies', $snapshot, self::PLATFORM, self::PROBE, 'install', 'generate', 'composer.lock'], $this->history->bundle('main..task'), 'test ! -e vendor');
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
+    }
+
+    public function testASnapshotWithoutAnyLockFileToCompareIsNotCopied(): void
+    {
+        $this->history->commit('Build work');
+        $snapshot = $this->readOnlySnapshotHolding(['vendor/installed.json' => "{}\n"]);
+
+        $run = $this->whenTheCheckRunsWith(['--dependencies', $snapshot, self::PLATFORM, self::PROBE, 'install', 'generate'], $this->history->bundle('main..task'), 'test ! -e vendor');
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
+    }
+
+    public function testACopiedSnapshotRunsTheGenerateStepInPlaceOfTheGatesInstall(): void
+    {
+        $this->history->commitFile('composer.lock', self::LOCK, 'Lock the dependencies');
+        $snapshot = $this->readOnlySnapshotHolding(['vendor/installed.json' => "{}\n"]);
+
+        $run = $this->whenTheCheckRunsWith(
+            ['--dependencies', $snapshot, self::PLATFORM, self::PROBE, 'exit 9', 'touch generated', 'composer.lock', $this->blobOf(self::LOCK)],
+            $this->history->bundle('main..task'),
+            'exit 9',
+            'test -f generated',
+        );
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
+        self::assertStringContainsString("\$ touch generated\n\$ test -f generated\n", $this->outputFile('check.log'));
+    }
+
+    public function testACheckThatCouldNotCopyTheSnapshotRunsTheGatesInstallAndNotTheGenerateStep(): void
+    {
+        $this->history->commitFile('composer.lock', self::LOCK, 'Lock the dependencies');
+        $this->history->commitFile('vendor/committed.txt', "committed\n", 'Commit a vendor folder');
+        $snapshot = $this->readOnlySnapshotHolding(['vendor/installed.json' => "{}\n"]);
+
+        $run = $this->whenTheCheckRunsWith(
+            ['--dependencies', $snapshot, self::PLATFORM, self::PROBE, 'touch installed', 'exit 9', 'composer.lock', $this->blobOf(self::LOCK)],
+            $this->history->bundle('main..task'),
+            'touch installed',
+            'test -f installed',
+        );
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
+        self::assertStringNotContainsString('exit 9', $this->outputFile('check.log'));
+    }
+
+    public function testAPartialCopyThatIsRemovedLeavesTheGatesInstallToRunOnATreeWithoutIt(): void
+    {
+        $this->history->commitFile('composer.lock', self::LOCK, 'Lock the dependencies');
+        $snapshot = $this->readOnlySnapshotHolding(['vendor/installed.json' => "{}\n"]);
+        $this->givenACopyThatStopsHalfway();
+
+        $run = $this->whenTheCheckRunsWith(
+            ['--dependencies', $snapshot, self::PLATFORM, self::PROBE, 'touch installed', 'exit 9', 'composer.lock', $this->blobOf(self::LOCK)],
+            $this->history->bundle('main..task'),
+            'touch installed',
+            'test ! -e vendor',
+        );
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
+        self::assertSame("passed\n", $this->outputFile('check-result'));
+        self::assertStringContainsString(
+            "the dependency snapshot could not be copied\nthe partial copy of the dependency snapshot was removed, so the check installs its dependencies itself\n",
+            $this->outputFile('check.log'),
+        );
+    }
+
+    public function testAPartialCopyThatCannotBeRemovedStopsTheCheckBeforeAnyStepAndLeavesNoResult(): void
+    {
+        $this->history->commitFile('composer.lock', self::LOCK, 'Lock the dependencies');
+        $snapshot = $this->readOnlySnapshotHolding(['vendor/installed.json' => "{}\n"]);
+        $shim = $this->givenACopyThatStopsHalfway();
+        new Filesystem()->dumpFile($shim.'/rm', "#!/bin/sh\nexit 1\n");
+        new Filesystem()->chmod($shim.'/rm', 0o700);
+
+        $run = $this->whenTheCheckRunsWith(
+            ['--dependencies', $snapshot, self::PLATFORM, self::PROBE, 'touch installed', 'exit 9', 'composer.lock', $this->blobOf(self::LOCK)],
+            $this->history->bundle('main..task'),
+            'touch installed',
+        );
+
+        self::assertSame(1, $run->getExitCode(), $this->outputFile('check.log'));
+        self::assertFileExists($this->work.'/clone/vendor/installed.json');
+        self::assertFileDoesNotExist($this->work.'/clone/installed');
+        self::assertFileDoesNotExist($this->output.'/check-result');
+        self::assertStringContainsString(
+            "the partial copy of the dependency snapshot could not be removed, so the check stops without a result\n",
+            $this->outputFile('check.log'),
+        );
+        self::assertStringNotContainsString('$ touch installed', $this->outputFile('check.log'));
+        self::assertStringNotContainsString('installs its dependencies itself', $this->outputFile('check.log'));
+    }
+
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function probesThatDoNotConfirmThePlatform(): iterable
+    {
+        yield 'another platform' => ['printf 8.4.1', 'the platform of the check is not the one the snapshot was made for'];
+        yield 'the platform with a line break after it' => ["printf '8.5.12\\n'", 'the platform of the check is not the one the snapshot was made for'];
+        yield 'a probe that fails' => ['printf 8.5.12; exit 3', 'the platform probe failed in the check'];
+    }
+
+    #[DataProvider('probesThatDoNotConfirmThePlatform')]
+    public function testASnapshotWhosePlatformTheCheckDoesNotConfirmIsNotCopiedAndTheGatesInstallRuns(string $probe, string $mention): void
+    {
+        $this->history->commitFile('composer.lock', self::LOCK, 'Lock the dependencies');
+        $snapshot = $this->readOnlySnapshotHolding(['vendor/installed.json' => "{}\n"]);
+
+        $run = $this->whenTheCheckRunsWith(
+            ['--dependencies', $snapshot, self::PLATFORM, $probe, 'touch installed', 'exit 9', 'composer.lock', $this->blobOf(self::LOCK)],
+            $this->history->bundle('main..task'),
+            'touch installed',
+            'test ! -e vendor && test -f installed',
+        );
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
+        self::assertStringContainsString($mention.', so the check installs its dependencies itself', $this->outputFile('check.log'));
+        self::assertStringNotContainsString('$ copy the dependency snapshot', $this->outputFile('check.log'));
+        self::assertStringNotContainsString('exit 9', $this->outputFile('check.log'));
+    }
+
+    public function testThePlatformProbeRunsOutsideTheTreeOfTheChange(): void
+    {
+        $this->history->commitFile('composer.lock', self::LOCK, 'Lock the dependencies');
+        $snapshot = $this->readOnlySnapshotHolding(['vendor/installed.json' => "{}\n"]);
+
+        $run = $this->whenTheCheckRunsWith(
+            ['--dependencies', $snapshot, '/', 'pwd | tr -d "\n"', 'exit 9', 'true', 'composer.lock', $this->blobOf(self::LOCK)],
+            $this->history->bundle('main..task'),
+            'test -f vendor/installed.json',
+        );
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
+    }
+
+    private function givenACopyThatStopsHalfway(): string
+    {
+        // A cp in front of the real one that leaves one file of the snapshot in the clone and fails, because a test cannot make a real copy stop halfway.
+        $shim = $this->history->folder.'/shim';
+        $partial = $this->work.'/clone/vendor';
+        new Filesystem()->dumpFile($shim.'/cp', "#!/bin/sh\nmkdir -p '$partial'\ntouch '$partial/installed.json'\nexit 1\n");
+        new Filesystem()->chmod($shim.'/cp', 0o700);
+        $this->path = $shim.PATH_SEPARATOR.getenv('PATH');
+
+        return $shim;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function dependencyOptions(string $snapshot, string $lock): array
+    {
+        return ['--dependencies', $snapshot, self::PLATFORM, self::PROBE, 'composer install', 'composer install', 'composer.lock', $this->blobOf($lock)];
+    }
+
+    private function blobOf(string $content): string
+    {
+        return sha1('blob '.strlen($content)."\0".$content);
+    }
+
+    public function testACheckWithoutASnapshotRunsItsStepsWithoutAVendorFolder(): void
+    {
+        $this->history->commit('Build work');
+
+        $run = $this->whenTheCheckRunsWith([], $this->history->bundle('main..task'), 'test ! -e vendor');
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
+        self::assertStringNotContainsString('dependency snapshot', $this->outputFile('check.log'));
+    }
+
+    /**
+     * @param array<string, string> $files
+     */
+    private function readOnlySnapshotHolding(array $files): string
+    {
+        $snapshot = $this->history->folder.'/snapshot';
+
+        foreach ($files as $path => $content) {
+            new Filesystem()->dumpFile($snapshot.'/'.$path, $content);
+        }
+
+        new Process(['chmod', '-R', 'a-w', $snapshot])->mustRun();
+
+        return $snapshot;
+    }
+
+    /**
+     * @param list<string> $options
+     */
+    private function whenTheCheckRunsWith(array $options, string $bundle, string ...$steps): Process
+    {
+        $run = new Process(
+            ['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-check', $this->history->mirror, $bundle, 'task', ...$options, '--', ...array_values($steps)],
+            null,
+            $this->environment(),
+        );
+        $run->run();
+
+        return $run;
     }
 
     private function mainMovesWith(string $path, string $content): string
