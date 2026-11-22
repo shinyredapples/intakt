@@ -36,6 +36,15 @@ final readonly class Board
         return array_values(array_filter($this->cards, static fn (Review $card): bool => $card->column() === $column));
     }
 
+    // Longest running first, because that is the order of "Meanwhile" in docs/design/mocks/waiting.html.
+    /**
+     * @return list<Review>
+     */
+    public function runningReviews(): array
+    {
+        return array_reverse(array_values(array_filter($this->cards, static fn (Review $card): bool => $card->activeRound() instanceof ReviewedRound)));
+    }
+
     // From the cards in their order, so the newest review's reviewers come first.
     public function whoIsWorking(): WhoIsWorking
     {
