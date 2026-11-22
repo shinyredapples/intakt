@@ -4,10 +4,10 @@ The script and shot list of Intakt's hackathon video. Every shot is the real pro
 
 | Time | Shot | Voice-over |
 |---|---|---|
-| 0:00 to 0:05.5 | Cold open on the README's review bench table: the bench plants 5 defects and runs each change 3 times: Claude `opus` alone missed one of them (the `price-list` error path) in every run, 12 of 15; the panel on Claude and GPT found all 5 in every run, 15 of 15 (measured, 2026-11-21). | One reviewer alone missed a planted defect. Together they caught all five. |
+| 0:00 to 0:05.5 | Cold open: a coding agent's "Done", then Intakt's verdict card "Changes needed" on the same change. | Your coding agent says it's done. Should you believe it? |
 | 0:05.5 to 0:07.6 | The octopus conductor lifts its baton; the logo. | This is Intakt. |
 | 0:07.6 to 0:13.56 | A terminal, sped up: `git clone`, `docker compose up -d --wait`; then the first-run page and **Play the demo run** on `/demo`. | Clone it, start it, and watch a real recorded review. |
-| 0:13.56 to 0:23.55 | The demo's live review page: `correctness` on Claude (`opus`) and `security` on GPT (`gpt-6.2-sol`), findings F1 to F8 arriving on the beat. | Reviewers on Claude and GPT read the change, live. |
+| 0:13.56 to 0:23.55 | The demo's live review page: `correctness` on Claude (`opus`) and `security` on GPT (`gpt-6.2-sol`), findings F1 to F8 arriving on the beat. | Two reviewers, Claude and GPT, read the change. Two AI labs catch what one misses. |
 | 0:23.55 to 0:31.55 | A scripted terminal shot of the quote check: F2's quotes (`customerName`, `execSync`) are found in the change, and a finding whose only quote is not in the change is dropped. The shipped recording drops no finding, so this shot is not taken from it. | Made-up findings never reach your list. Each one must point to real code. |
 | 0:31.55 to 0:37.55 | The judge merges the duplicates (F5 and F7 into F2, F6 into F1); the verdict card "Changes needed: 5 things to fix". | The judge merges what both reviewers found into one list to fix. |
 | 0:37.55 to 0:51.5 | A real Claude Code session drives the loop over MCP: the dashboard full frame, a small card with the agent's current step (start a review, read what to fix, fix, start the next pass). | Or hand it to your agent, over MCP. Claude Code starts a review, reads what to fix, fixes it, and runs the next pass until it is clean. |
