@@ -144,8 +144,8 @@ services:
 
 when@dev:
     services:
-        # Messenger defines its collector only with APP_DEBUG=1; the same definition here keeps messenger in a saved development profile also with APP_DEBUG=0.
-        data_collector.messenger:
+        # Messenger defines its collector only with APP_DEBUG=1; this definition, shared with when@test through its anchor so the two cannot drift, keeps messenger in a saved development profile and an opted-in test profile also with APP_DEBUG=0.
+        data_collector.messenger: &messenger_data_collector
             class: Symfony\Component\Messenger\DataCollector\MessengerDataCollector
             tags:
                 - { name: data_collector, id: messenger, template: '@WebProfiler/Collector/messenger.html.twig', priority: 100 }
@@ -171,11 +171,8 @@ when@test:
         # The pinned provider cooldowns under a public test name, so their test proves the store the container builds even when no provider is enabled to take it.
         - { resource: '../tests/Core/Ai/services.yaml', ignore_errors: not_found }
     services:
-        # Messenger defines its collector only with APP_DEBUG=1; the same definition here keeps messenger in an opted-in test profile also with APP_DEBUG=0.
-        data_collector.messenger:
-            class: Symfony\Component\Messenger\DataCollector\MessengerDataCollector
-            tags:
-                - { name: data_collector, id: messenger, template: '@WebProfiler/Collector/messenger.html.twig', priority: 100 }
+        # The development definition above, through its anchor, so an opted-in test profile keeps messenger also with APP_DEBUG=0.
+        data_collector.messenger: *messenger_data_collector
         # In the worker's own cache directory, because the tests gate runs workers side by side and a lock one worker holds would skip another's notice.
         Symfony\Component\Lock\Store\FlockStore:
             arguments: ['%kernel.cache_dir%/locks']
