@@ -1006,9 +1006,9 @@ final class BuildTaskTest extends TestCase
     // Records in the run's own ledger, as the container wires it, so the push's events sit between the steps' events.
     private function branchPush(InMemoryLedger $ledger): PushBranch
     {
-        $branches = new BranchGit(new HardenedGit());
+        $branches = new BranchGit(new HardenedGit(), new GuardedRun());
         $file = $this->mirrors.'-key';
-        $key = new SigningKey(is_file($file) ? $file : PushScenario::generateKey($file), new Filesystem());
+        $key = new SigningKey(is_file($file) ? $file : PushScenario::generateKey($file), new Filesystem(), new GuardedRun());
 
         return new PushBranch($branches, new SignedCommits($branches, $key), new PushRecords($ledger), $this->changes, new LockFactory(new InMemoryStore()));
     }
