@@ -61,9 +61,9 @@ final class InstanceBootTest extends TestCase
         file_put_contents('php://fd/3', '{"status":"ready"}'."\n");
         PHP;
 
-    // Not shaped like a real token, so the secret scan has nothing to find, while the plugin's report still cannot hold it by chance.
     private const string FAILING_COMPOSER = "#!/bin/sh\necho 'the lock file does not match' >&2\nexit 1\n";
 
+    // Not shaped like a real token, so the secret scan has nothing to find, while the plugin's report still cannot hold it by chance.
     private const string PROBE_TOKEN = 'probe-token-of-the-booting-install';
 
     private TemporaryRepository $repository;
