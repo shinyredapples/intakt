@@ -12,6 +12,7 @@ use Symfony\Component\Uid\Uuid;
 #[ORM\Entity]
 #[ORM\Table(name: 'ledger_event')]
 #[ORM\UniqueConstraint(name: 'ledger_event_id', columns: ['id'])]
+#[ORM\Index(name: 'ledger_event_kind', columns: ['kind', 'position'])]
 final class EventRecord
 {
     // The database counts appends, because ids from a clock that steps back or from two processes in one millisecond do not sort in append order.

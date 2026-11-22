@@ -64,6 +64,18 @@ final class DoctrineLedgerTest extends KernelTestCase
         self::assertSame('{"kind":"review_started"}', $events[0]->event->payload);
     }
 
+    public function testAReadOfOneKindIsServedByTheKindIndexInsteadOfAScanOfTheLedger(): void
+    {
+        $manager = $this->registry->getManager();
+        self::assertInstanceOf(EntityManagerInterface::class, $manager);
+
+        $steps = $manager->getConnection()->fetchAllAssociative('EXPLAIN QUERY PLAN SELECT * FROM ledger_event WHERE kind = ? ORDER BY position', [LedgerEventKind::ReviewerStarted->value]);
+        $plan = implode(', ', array_column($steps, 'detail'));
+
+        self::assertStringContainsString('USING INDEX ledger_event_kind', $plan);
+        self::assertStringNotContainsString('SCAN', $plan);
+    }
+
     public function testAReadOfOneKindReturnsOnlyTheEventsOfThatKindInTheOrderTheyWereAppended(): void
     {
         $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');

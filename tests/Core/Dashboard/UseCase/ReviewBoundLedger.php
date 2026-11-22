@@ -31,7 +31,7 @@ final readonly class ReviewBoundLedger implements Ledger
 
     public function readOfKind(LedgerEventKind $kind): RecordedEvents
     {
-        if (LedgerEventKind::ReviewStarted !== $kind) {
+        if (!in_array($kind, [LedgerEventKind::ReviewStarted, LedgerEventKind::ReviewerStarted], true)) {
             throw new LogicException('Every '.$kind->value.' row was read.');
         }
 
