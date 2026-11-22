@@ -8,7 +8,6 @@ use Closure;
 use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
 use Intakt\Core\Ai\Contract\EveryKeyRejected;
 use Intakt\Core\Ai\Contract\EveryProviderOut;
-use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\ReviewServerAccess;
 use Intakt\Core\Ai\Contract\ReviewServerReads;
