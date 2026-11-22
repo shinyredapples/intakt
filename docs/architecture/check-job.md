@@ -1,5 +1,18 @@
 # Check job
 
+## In short
+
+The check job is the pre-push check. It runs the project's check command on what a build handed back, in a job container of its own, because the builder's own run of the checks is never trusted. It first repeats the hand-back checks. Then it stops without a job when a file lost most of its content and the plan does not name that file. The job clones the repository, applies the bundle, reads main from the mirror's HEAD, merges the branch into current main (main as the first parent) when the branch lacks main, and runs the gate's steps. The verdict comes only from the `check-result` file in the job's output directory, never from the exit code or the log.
+
+Worth knowing:
+
+- `intakt:build:task` calls it through `CheckJobs`; the push does not call it yet.
+- The job gets 4 GiB of memory, 2 CPUs and 1800 seconds, and no network beyond the gate's registry hosts.
+- A second check of the same head while one runs is refused as already running.
+- The code under test runs in the same job and can rewrite its result file, and such a result is believed. A result it cannot rewrite is plan task T78.
+
+The rest of this page is the detailed reference.
+
 The pre-push check (plan task T51, first part) runs the project's check command on what a build handed back, in a [job container](job-containers.md) of its own, after the [hand-back checks](hand-back.md) and before anything is pushed. The builder's own run of the checks is never trusted. The rule of the pull request text check (every Evidence item referenced, the body cap) is built ([The pull request text check](#the-pull-request-text-check)); its send-back once on its own count, the second miss going to the reviewers, its ledger event and its call from the build step are the second part of T51 and are not built.
 
 `php bin/console intakt:check:run <repository> <branch> <bundle> <image> [--check-command=<command>] [--rewritten=<path> ...] [--merge-main]` (`RunCheckJobCommand`) calls `UseCase/RunCheckJob/RunCheckJob::run(CheckJob)` (marked `#[NoDiscard]`) in `Core/HandBack`. `RunCheckJob` implements `Contract/CheckJobs`, the entry point for other modules, which the container aliases as its only implementation; `CheckJob`, `CheckJobOutcome` and `CheckVerdict` live in `Contract/` beside it. [`intakt:build:task`](build-task.md) calls it through `CheckJobs` as its pre-push check step; the push (T53) does not call it yet.
