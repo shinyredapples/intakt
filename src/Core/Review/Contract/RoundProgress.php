@@ -10,9 +10,10 @@ use Symfony\Component\DependencyInjection\Attribute\Exclude;
 #[Exclude]
 final readonly class RoundProgress
 {
-    // $finished holds each finished reviewer's state by reviewer id, so the page can stop showing it running.
+    // $finished holds each finished reviewer's state by reviewer id, so the page can stop showing it running; $awaited lists the reviewers not finished yet, in panel order, so the demo can say what it waits on.
     /**
      * @param array<string, FinishedState> $finished
+     * @param list<AwaitedReviewer>        $awaited
      */
     public function __construct(
         public int $reviewersFinished,
@@ -20,6 +21,7 @@ final readonly class RoundProgress
         public bool $judged,
         public array $finished = [],
         public int $reviewersStarted = 0,
+        public array $awaited = [],
     ) {
     }
 

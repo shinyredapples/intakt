@@ -40,6 +40,12 @@ final readonly class SampleProjectData
         return $this->text('second_lab');
     }
 
+    // Null when the file lists none, because an AI lab's own model has no router provider to swap.
+    public function fallbackOf(string $model): ?string
+    {
+        return null === $this->value('fallbacks', $model) ? null : $this->text('fallbacks', $model);
+    }
+
     /**
      * @return array<string, int|float>
      */

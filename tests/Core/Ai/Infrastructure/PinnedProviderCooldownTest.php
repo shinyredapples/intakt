@@ -30,6 +30,7 @@ use Psr\Cache\CacheItemInterface;
 use Psr\Log\NullLogger;
 use RuntimeException;
 use Symfony\AI\Platform\Exception\RateLimitExceededException;
+use Symfony\AI\Platform\Model;
 use Symfony\AI\Platform\PlatformInterface;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
 use Symfony\Component\Cache\Adapter\ArrayAdapter;
@@ -56,6 +57,10 @@ final class PinnedProviderCooldownTest extends TestCase
 {
     private const string PINNED = 'moonshotai/Kimi-K3.1-Pro:deepinfra';
 
+    private const string FALLBACK = 'moonshotai/Kimi-K3.1-Pro:together';
+
+    private const string UNPINNED = 'moonshotai/Kimi-K3.1-Pro';
+
     private MockClock $clock;
 
     private PinnedProviderCooldownWindows $pins;
@@ -73,6 +78,29 @@ final class PinnedProviderCooldownTest extends TestCase
         self::assertSame('second', $answer->asText());
         self::assertSame(120, $this->pins->secondsUntilFree($this->deepinfra(Account::DEFAULT)));
         self::assertSame(0, $this->pins->secondsUntilFree($this->deepinfra('team')));
+    }
+
+    // Issue #2861: the 429 cools the pin and ends the call after its one request, with the pin's wait; the account is not cooled, so another router provider on it is called at once, while the pin gets no request until its window ends.
+    public function testAPinned429EndsTheCallAfterOneRequestAndLeavesTheAccountFreeForAnotherRouterProvider(): void
+    {
+        $requests = [];
+        $router = $this->answering(static function (string|Model $model) use (&$requests): string {
+            $name = $model instanceof Model ? $model->getName() : $model;
+            $requests[] = $name;
+
+            return self::PINNED === $name ? throw new RateLimitExceededException(60) : 'fallback';
+        });
+        $accounts = new AccountWindowsOnAClock($this->clock, [Provider::OpenAiCompatible->value => [Account::DEFAULT]]);
+        $platform = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $router], $accounts, $this->clock, new NullLogger(), $this->pins);
+
+        $limited = $this->failureOf(static fn (): object => $platform->invoke(self::PINNED, 'Review.'));
+        $whileCooling = $this->failureOf(static fn (): object => $platform->invoke(self::PINNED, 'Review.'));
+        $fallback = $platform->invoke(self::FALLBACK, 'Review.')->asText();
+
+        self::assertInstanceOf(EveryAccountCoolingDown::class, $limited);
+        self::assertInstanceOf(EveryAccountCoolingDown::class, $whileCooling);
+        self::assertSame([60, 0, 'fallback'], [$limited->secondsUntilAnAccountIsFree, $accounts->secondsUntilFree(new Account(Provider::OpenAiCompatible, Account::DEFAULT)), $fallback]);
+        self::assertSame([self::PINNED, self::FALLBACK], $requests);
     }
 
     public function testA429WithoutARetryAfterCoolsThePinForTheDefaultMinute(): void
@@ -261,8 +289,8 @@ final class PinnedProviderCooldownTest extends TestCase
         yield 'a fine-tune id' => ['ft:gpt-4o-mini:org:custom:id', ['id']];
     }
 
-    // Forced order: the pin store's cache fails while saving, so the pin is not saved; the account still cools for the 429's wait and the call reports that wait instead of the store's error.
-    public function testAPinStoreThatFailsWhileSavingCostsTheAccountNeitherItsCooldownNorThe429(): void
+    // Forced order: the pin store's cache fails while saving, so the pin is not saved; the account cools for the 429's wait instead, so the provider is not called again at once, and the call reports that wait instead of the store's error.
+    public function testAPinStoreThatFailsWhileSavingCoolsTheAccountInsteadAndKeepsThe429(): void
     {
         $pool = new class extends ArrayAdapter {
             #[Override]
@@ -285,8 +313,8 @@ final class PinnedProviderCooldownTest extends TestCase
         self::assertSame([120, 120, 0], [$out->secondsUntilAnAccountIsFree, $accounts->secondsUntilFree(new Account(Provider::OpenAiCompatible, Account::DEFAULT)), $pins->secondsUntilFree($this->deepinfra(Account::DEFAULT))]);
     }
 
-    // Forced order: the account store throws while saving its window, so only the pin can cool; it still cools for the 429's wait and the caller gets the provider's own 429, not the store's error.
-    public function testAnAccountStoreThatThrowsWhileSavingCostsThePinNeitherItsCooldownNorTheCallerThe429(): void
+    // Forced order: the account store throws on any write; a pinned 429 never writes it (issue #2861), so the pin cools for the 429's wait and the caller gets the provider's own 429.
+    public function testAPinned429LeavesTheAccountStoreAloneAndTheCallerGetsThe429(): void
     {
         $accounts = self::createStub(AccountCooldowns::class);
         $accounts->method('coolDown')->willThrowException(new RuntimeException('The disk is full.'));
@@ -299,11 +327,11 @@ final class PinnedProviderCooldownTest extends TestCase
 
         self::assertSame($limited, $out);
         self::assertSame(120, $this->pins->secondsUntilFree($this->deepinfra(Account::DEFAULT)));
-        self::assertContains('The cooldown of account {account} could not be saved.', array_column($logger->cleanLogs(), 1));
+        self::assertNotContains('The cooldown of account {account} could not be saved.', array_column($logger->cleanLogs(), 1));
     }
 
-    // Forced order: the account store's cache refuses the window's save without throwing, so the account stays free; the refusal is logged instead of recorded as a cooldown, the pin still cools and the caller gets the provider's own 429.
-    public function testAnAccountWindowTheCacheRefusesIsLoggedAndRecordsNoCooldownWhileThePinCools(): void
+    // Forced order: the account store's cache refuses the window's save without throwing, so the account stays free; the refusal is logged instead of recorded as a cooldown and the caller gets the provider's own 429. A pinned 429 never writes the account window (issue #2861), so a model that pins nothing drives the write.
+    public function testAnAccountWindowTheCacheRefusesIsLoggedAndRecordsNoCooldown(): void
     {
         $pool = new class extends ArrayAdapter {
             #[Override]
@@ -319,12 +347,12 @@ final class PinnedProviderCooldownTest extends TestCase
         $accounts = new AccountCooldownWindows(new ReadingsInMemory($clock), $pool, new LockFactory(new InMemoryStore()), $clock, $ledger, $logger, StoredSerializerFactory::create(), [$provider->value => [Account::DEFAULT]]);
         $limited = new RateLimitExceededException(120);
         $platform = new AccountFailoverPlatform($provider, [Account::DEFAULT => new FailingWhenRead($limited)], $accounts, $this->clock, $logger, $this->pins);
-        $answer = $platform->invoke(self::PINNED, 'Review.');
+        $answer = $platform->invoke(self::UNPINNED, 'Review.');
 
         $out = $this->failureOf(static fn (): string => $answer->asText());
 
         self::assertSame($limited, $out);
-        self::assertSame(120, $this->pins->secondsUntilFree($this->deepinfra(Account::DEFAULT)));
+        self::assertSame(0, $this->pins->secondsUntilFree($this->deepinfra(Account::DEFAULT)));
         self::assertSame(0, $accounts->secondsUntilFree(new Account($provider, Account::DEFAULT)));
         self::assertNotContains(LedgerEventKind::AccountCooledDown, $ledger->kinds());
         self::assertContains('The cooldown of account {account} could not be saved.', array_column($logger->cleanLogs(), 1));

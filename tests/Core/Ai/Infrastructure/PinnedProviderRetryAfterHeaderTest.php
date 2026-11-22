@@ -65,7 +65,7 @@ final class PinnedProviderRetryAfterHeaderTest extends TestCase
     }
 
     #[DataProvider('retryAfterHeaders')]
-    public function testARouter429CoolsThePinAndTheAccountForTheRetryAfterHeaderAndTheNextCallIsSkippedWithoutARequest(string $header, int $seconds, ?string $now = null): void
+    public function testARouter429CoolsThePinButNotTheAccountForTheRetryAfterHeaderAndTheNextCallIsSkippedWithoutARequest(string $header, int $seconds, ?string $now = null): void
     {
         if (null !== $now) {
             $this->clock->modify($now);
@@ -78,7 +78,7 @@ final class PinnedProviderRetryAfterHeaderTest extends TestCase
         $next = $this->failureOf(fn (): object => $platform->invoke(self::PINNED, $this->messages()));
 
         self::assertInstanceOf(EveryAccountCoolingDown::class, $next);
-        self::assertSame([$seconds, $seconds, $seconds, 1], [$this->pins->secondsUntilFree($this->pin()), $this->accounts->secondsUntilFree($this->account()), $next->secondsUntilAnAccountIsFree, $http->getRequestsCount()]);
+        self::assertSame([$seconds, 0, $seconds, 1], [$this->pins->secondsUntilFree($this->pin()), $this->accounts->secondsUntilFree($this->account()), $next->secondsUntilAnAccountIsFree, $http->getRequestsCount()]);
     }
 
     /**

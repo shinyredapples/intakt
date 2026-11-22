@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\LocalGitForge\UseCase\ReviewChange;
 
+use Intakt\Core\Ai\Contract\TierInvoker;
 use Intakt\Core\Dashboard\Contract\DashboardRoutes;
 use Intakt\Core\Mcp\Contract\OwnerClientLine;
 use Intakt\Core\Mcp\Contract\OwnerToken;
 use Intakt\Core\Platform\Contract\ReportableFailure;
 use Intakt\Core\Review\Contract\ChangeReview;
 use Intakt\Core\Review\Contract\SampleChange;
+use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Command\SignalableCommandInterface;
@@ -34,6 +36,8 @@ final readonly class DemoReviewCommand implements SignalableCommandInterface
         #[Autowire(env: 'REVIEW_MCP_BASE_URL')]
         private string $mcpBaseUrl,
         private OwnerToken $ownerToken,
+        private TierInvoker $tiers,
+        private ClockInterface $clock,
     ) {
     }
 
@@ -46,7 +50,8 @@ final readonly class DemoReviewCommand implements SignalableCommandInterface
         }
 
         try {
-            $review = $this->review->of($this->inputForSample($this->repository));
+            // On the error output, so the report stays the only standard output.
+            $review = $this->review->of($this->inputForSample($this->repository), new DemoProgress($io->getErrorStyle(), $this->tiers, $this->clock));
         } catch (ReportableFailure $failure) {
             $io->error($failure->getMessage());
 

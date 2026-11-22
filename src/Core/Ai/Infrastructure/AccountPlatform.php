@@ -121,7 +121,7 @@ final readonly class AccountPlatform implements PlatformInterface
         $this->recordFailure($failure, $answer);
     }
 
-    // True when the failure itself is an account error, also one already recorded, because the send path logs every other failure itself; the raw answer is known only once the call was sent, so a failure while sending has none.
+    // True when the failure itself is an account error, also one already recorded, because the send path logs every other failure itself. The raw answer is known only once the call was sent, so a failure while sending has none.
     private function recordFailure(Throwable $failure, ?RawResultInterface $answer = null): bool
     {
         // Once the answer has started, StreamedAnswer wraps the provider's exception, so the cooldown looks through to it.
@@ -160,8 +160,18 @@ final readonly class AccountPlatform implements PlatformInterface
         };
     }
 
-    // A spent plan's limit comes without a reset (CodexAccountFailure), so only it waits for the plan's measured reset. The account cools before the pin, and a failing write of either is logged and costs neither the other its window nor the caller the provider's 429.
+    // A pinned router provider's 429 cools only the pin, so the account's other router providers and models, a pinned fallback among them, stay free (issue #2861); the account cools instead only when the pin could not be saved, so a 429 is never followed by a call at once. A failing write is logged and never costs the caller the provider's 429.
     private function coolDownLimited(?int $retryAfter): void
+    {
+        if ($this->coolDownPinned($retryAfter)) {
+            return;
+        }
+
+        $this->coolDownAccount($retryAfter);
+    }
+
+    // A spent plan's limit comes without a reset (CodexAccountFailure), so only it waits for the plan's measured reset.
+    private function coolDownAccount(?int $retryAfter): void
     {
         try {
             if (null === $retryAfter && $this->account->provider->spendsAPlan()) {
@@ -169,12 +179,10 @@ final readonly class AccountPlatform implements PlatformInterface
             } else {
                 $this->cooldowns->coolDown($this->account, $retryAfter);
             }
-            // Boundary: any failure of the account store is logged, because the provider's 429 must still reach the caller and the pin must still cool.
+            // Boundary: any failure of the account store is logged, because the provider's 429 must still reach the caller.
         } catch (Throwable $notSaved) {
             $this->logger->warning('The cooldown of account {account} could not be saved.', ['account' => $this->account->key(), 'exception' => $notSaved]);
         }
-
-        $this->coolDownPinned($retryAfter);
     }
 
     // Symfony AI's generic bridge throws its 429 without the response's Retry-After (symfony/ai#2913, reproduced in upstream/ai-failover-platform-deferred-rate-limit), so the header is read from the raw answer as RFC 9110 defines it: delta-seconds of any length, or an HTTP date judged against the clock, from visible ASCII and spaces only, capped at a day and at least a second; null when there is none or it does not parse, so the default minute applies.
@@ -225,17 +233,21 @@ final readonly class AccountPlatform implements PlatformInterface
         return null;
     }
 
-    // The pinned provider keeps its own window, which alone says how long the call waits for it (AccountFailoverPlatform); logged instead of thrown, because the provider's 429 must still reach the caller.
-    private function coolDownPinned(?int $retryAfter): void
+    // The pinned provider keeps its own window, which alone says how long the call waits for it (AccountFailoverPlatform); false when the model pins nothing or the window could not be saved, logged instead of thrown, because the provider's 429 must still reach the caller.
+    private function coolDownPinned(?int $retryAfter): bool
     {
         if (!$this->pinned instanceof PinnedProvider) {
-            return;
+            return false;
         }
 
         try {
             $this->pinnedCooldowns->coolDown($this->pinned, $retryAfter ?? AccountCooldowns::SECONDS_WITHOUT_RESET);
         } catch (PinnedProviderCooldownNotSaved $notSaved) {
             $this->logger->warning('The cooldown of pinned provider {pinned} could not be saved.', ['pinned' => $this->pinned->key(), 'exception' => $notSaved]);
+
+            return false;
         }
+
+        return true;
     }
 }
