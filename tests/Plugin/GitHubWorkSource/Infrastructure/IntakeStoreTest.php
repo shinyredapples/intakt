@@ -379,6 +379,82 @@ final class IntakeStoreTest extends KernelTestCase
         }
     }
 
+    #[TestWith(['pdo_sqlite'])]
+    #[TestWith(['sqlite3'])]
+    public function testAPickReadWhoseCommitAReaderRefusedLeavesNoTransactionOpenAndTheNextOneReads(string $driver): void
+    {
+        $this->withAStoreAndAReaderOnOneFile($driver, function (IntakeStore $store, Connection $own, Connection $reader): void {
+            $reader->beginTransaction();
+            $reader->fetchOne('SELECT COUNT(*) FROM work_source_validator');
+            $held = null;
+            try {
+                $store->failuresUnderTheListingLock('alpha');
+            } catch (ProjectHeldByAnotherWriter $held) {
+            }
+
+            $reader->rollBack();
+
+            self::assertInstanceOf(ProjectHeldByAnotherWriter::class, $held);
+            self::assertInstanceOf(RetryableException::class, $held->getPrevious());
+            self::assertSame(0, $own->getTransactionNestingLevel());
+            self::assertSame([], $store->failuresUnderTheListingLock('alpha'));
+            $store->failForGood('alpha', 7, 'recorded afterwards');
+            self::assertSame([7 => 'recorded afterwards'], $store->failuresUnderTheListingLock('alpha'));
+        });
+    }
+
+    #[TestWith(['pdo_sqlite'])]
+    #[TestWith(['sqlite3'])]
+    public function testAFailureWhoseCommitAReaderRefusedIsNotReadBackAndCanBeRecordedAgain(string $driver): void
+    {
+        $this->withAStoreAndAReaderOnOneFile($driver, function (IntakeStore $store, Connection $own, Connection $reader): void {
+            $reader->beginTransaction();
+            $reader->fetchOne('SELECT COUNT(*) FROM work_source_validator');
+            $refused = null;
+            try {
+                $store->failForGood('alpha', 7, 'uncommitted');
+            } catch (RetryableException $refused) {
+            }
+
+            $reader->rollBack();
+
+            self::assertInstanceOf(RetryableException::class, $refused);
+            self::assertSame([], $store->failuresOf('alpha'));
+            self::assertSame(0, $own->getTransactionNestingLevel());
+            $store->failForGood('alpha', 7, 'recorded afterwards');
+            self::assertSame([7 => 'recorded afterwards'], $store->failuresOf('alpha'));
+        });
+    }
+
+    // The journal mode is left at SQLite's default, because only there a reader's shared lock lets a write through and refuses its COMMIT.
+    /**
+     * @param callable(IntakeStore, Connection, Connection): void $scenario
+     */
+    private function withAStoreAndAReaderOnOneFile(string $driver, callable $scenario): void
+    {
+        if ('sqlite3' === $driver && !extension_loaded('sqlite3')) {
+            self::markTestSkipped('The sqlite3 extension is not loaded.');
+        }
+
+        $file = (string) tempnam(sys_get_temp_dir(), 'intake');
+        $options = ['driver' => 'sqlite3' === $driver ? 'sqlite3' : 'pdo_sqlite', 'path' => $file];
+        $own = DriverManager::getConnection($options);
+        $reader = DriverManager::getConnection($options);
+        try {
+            $own->executeStatement('PRAGMA busy_timeout=0');
+            $manager = new EntityManager($own, $this->entities->getConfiguration(), new EventManager());
+            new SchemaTool($manager)->createSchema([$manager->getClassMetadata(IntakeValidator::class), $manager->getClassMetadata(StoredIssue::class), $manager->getClassMetadata(TaskFailure::class)]);
+            $store = new IntakeStore($manager);
+            self::assertTrue($store->recordIfStill('alpha', $store->syncStateOf('alpha'), new ListingRows([$this->stored(Issues::task(7))], null)));
+
+            $scenario($store, $own, $reader);
+        } finally {
+            $reader->close();
+            $own->close();
+            unlink($file);
+        }
+    }
+
     public function testAWriteRefusedWhileAnotherWorkersCommitWaitsForThisOneIsNamedAsHeld(): void
     {
         $file = (string) tempnam(sys_get_temp_dir(), 'intake');

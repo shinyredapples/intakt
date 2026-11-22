@@ -132,6 +132,13 @@ final class IntakeRulesTest extends TestCase
         self::assertSame([1], $this->readyOf([$waiting, $pullRequest]));
     }
 
+    public function testAReadyTaskWaitingOnAPullRequestDependsOnTheTasksThePullRequestCloses(): void
+    {
+        $plan = $this->plan([$this->row(Issues::task(1, ['intakt'], with: ['body' => 'Waits for #50, #4'])), $this->row(Issues::pullRequest(50, 'Closes #3'))]);
+
+        self::assertSame([1 => [3, 4]], $plan->dependsOn);
+    }
+
     public function testAWaitOnAPullRequestWhoseTaskFailedForGoodIsHeldWithTheReason(): void
     {
         $plan = $this->plan([$this->row(Issues::task(1, ['intakt'], with: ['body' => 'Waits for #50'])), $this->row(Issues::pullRequest(50, 'Closes #3'))], [3 => 'cannot build']);

@@ -53,10 +53,12 @@ final readonly class IntakeRules
 
         $ready = [];
         $held = [];
+        $dependsOn = [];
         foreach (array_filter($items, $this->isEligible(...)) as $task) {
             $reason = $this->holdReason($task, $open, $failures);
             if (null === $reason) {
                 $ready[] = $task;
+                $dependsOn[$task->number()] = $this->targetsOf($task, $open);
 
                 continue;
             }
@@ -66,7 +68,7 @@ final readonly class IntakeRules
 
         usort($ready, fn (QueuedIssue $a, QueuedIssue $b): int => $this->key($a, $pullRequests) <=> $this->key($b, $pullRequests));
 
-        return new IntakePlan($ready, $held, $pullRequests);
+        return new IntakePlan($ready, $held, $pullRequests, $dependsOn);
     }
 
     /**
