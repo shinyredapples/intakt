@@ -40,7 +40,7 @@ final readonly class CheckMain
         $live = $this->historyFor($repository, $main, $ownerKeys);
         $head = $live->head();
         // Classified at one pinned head and read again after, because a card must name the head its violations were found on; a main that keeps moving fails the read instead of passing.
-        for ($read = 1; ; ++$read) {
+        for ($read = 1;; ++$read) {
             $classification = new CommitClassifier($this->historyFor($repository, $main, $ownerKeys, $head))->classify($main);
             $now = $live->head();
             if ($now === $head) {
