@@ -1,8 +1,13 @@
 {#- A round's state. An outcome (ReviewOutcome) is the headline as its chip; the process state (in progress, judged) is secondary: plain muted text on the review page, a chip without an icon on the reviews list, because the check mark is Approved's alone. -#}
 {%- if outcome is defined and outcome is not null -%}
-{{ include('dashboard/components/outcome_chip.html.twig', {outcome: outcome, on_page: true}, with_context = false) }}
+{{ include('dashboard/components/outcome_chip.html.twig', {outcome: outcome, on_page: true, plain: plain|default(false)}, with_context = false) }}
 {%- elseif plain is defined and plain -%}
-<span class="muted small state-{{ state.name == 'Judged' ? 'judged' : 'running' }}">{{ state.value|capitalize }}</span>
+{#- The review page says Checked for judged, and the state's own word stays in the tooltip (#3183). -#}
+{%- if state.name == 'Judged' -%}
+<span class="muted small state-judged" title="{{ state.value|capitalize }}">Checked</span>
+{%- else -%}
+<span class="muted small state-running">{{ state.value|capitalize }}</span>
+{%- endif -%}
 {%- else -%}
 {{ include('dashboard/components/chip.html.twig', state.name == 'Judged'
     ? {label: state.value|capitalize, on_page: true, extra: 'state-judged'}

@@ -13,6 +13,7 @@ use Intakt\Core\Review\Contract\ChangeReviews;
 use Intakt\Core\Review\Contract\ChangeSource;
 use Intakt\Core\Review\Contract\HeadIdentity;
 use Intakt\Core\Review\Contract\IgnoredProgress;
+use Intakt\Core\Review\Contract\Labels;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\Panels;
 use Intakt\Core\Review\Contract\QueuedRound;
@@ -149,6 +150,6 @@ final readonly class LocalChangeReview
     {
         $paths = array_map(static fn (ChangedFile $file): string => $file->path, [...$change->diff->files]);
 
-        return new ChangeDescription($change->diff->addedLines() + $change->diff->removedLines(), new Paths(...$paths), []);
+        return new ChangeDescription($change->diff->addedLines() + $change->diff->removedLines(), new Paths(...$paths), new Labels());
     }
 }
