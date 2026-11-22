@@ -16,7 +16,10 @@ use Intakt\Plugin\Forge\Contract\ChangeOpening;
 use Intakt\Plugin\Forge\Contract\ProposedChange;
 use NoDiscard;
 use Override;
+use Symfony\Component\Lock\Exception\ExceptionInterface;
 use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\LockInterface;
+use Throwable;
 
 final readonly class PushBranch implements BranchPush
 {
@@ -36,17 +39,64 @@ final readonly class PushBranch implements BranchPush
     #[NoDiscard('a merge-main outcome has to go back to the builder, and a refused push to its caller')]
     public function push(BranchPushRequest $request): PushedBranch|MainConflicts|RefusedPush
     {
-        // Without waiting, because a push that meets another push of the same branch has nothing to add; its caller tries again later.
-        $lock = $this->locks->createLock('push:'.hash('sha256', json_encode([$request->project, $request->branch], JSON_THROW_ON_ERROR)));
-
-        if (!$lock->acquire(false)) {
-            throw BranchNotPushed::because('another push of this branch is running');
-        }
+        $lock = $this->lockedBranch($request);
 
         try {
-            return $this->pushed($request);
-        } finally {
+            $outcome = $this->pushed($request);
+        } catch (Throwable $failure) {
+            $this->releaseAfter($lock);
+
+            throw $failure;
+        }
+
+        $this->release($lock);
+
+        return $outcome;
+    }
+
+    // A store failure becomes the contract's own failure, because a caller of BranchPush must not know which lock store the Git module uses.
+    private function lockedBranch(BranchPushRequest $request): LockInterface
+    {
+        // Released here only, never on destruct: Symfony's destructor would release a lock whose release failed once more and throw past BranchNotPushed.
+        $lock = $this->locks->createLock('push:'.hash('sha256', json_encode([$request->project, $request->branch], JSON_THROW_ON_ERROR)), autoRelease: false);
+
+        try {
+            // Without waiting, because a push that meets another push of the same branch has nothing to add; its caller tries again later.
+            $acquired = $lock->acquire(false);
+        } catch (ExceptionInterface $failure) {
+            throw BranchNotPushed::because('the lock store failed: '.$failure->getMessage(), $failure);
+        }
+
+        return $acquired ? $lock : throw BranchNotPushed::because('another push of this branch is running');
+    }
+
+    // Reported as not pushed even after a push, because the next call finds the recorded push at the remote tip and reports the branch pushed without pushing again.
+    private function release(LockInterface $lock): void
+    {
+        try {
             $lock->release();
+        } catch (ExceptionInterface) {
+            // Once more, so a store back after a short outage frees the branch now instead of at the lock's expiry.
+            $this->releaseOnce($lock);
+        }
+    }
+
+    private function releaseOnce(LockInterface $lock): void
+    {
+        try {
+            $lock->release();
+        } catch (ExceptionInterface $failure) {
+            throw BranchNotPushed::because('the lock store failed: '.$failure->getMessage(), $failure);
+        }
+    }
+
+    // The failure of the push is what its caller needs, and a lock left held expires with its time to live.
+    private function releaseAfter(LockInterface $lock): void
+    {
+        try {
+            $this->release($lock);
+        } catch (BranchNotPushed) {
+            return;
         }
     }
 

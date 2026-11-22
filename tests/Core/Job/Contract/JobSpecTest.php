@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Job\Contract;
 
 use Intakt\Core\Job\Contract\JobId;
 use Intakt\Core\Job\Contract\JobInput;
+use Intakt\Core\Job\Contract\JobKeptFolder;
 use Intakt\Core\Job\Contract\JobLimits;
 use Intakt\Core\Job\Contract\JobOutput;
 use Intakt\Core\Job\Contract\JobOutputFile;
@@ -16,6 +17,7 @@ use PHPUnit\Framework\TestCase;
 
 #[CoversClass(JobId::class)]
 #[CoversClass(JobInput::class)]
+#[CoversClass(JobKeptFolder::class)]
 #[CoversClass(JobLimits::class)]
 #[CoversClass(JobOutput::class)]
 #[CoversClass(JobRefused::class)]
@@ -71,6 +73,20 @@ final class JobSpecTest extends TestCase
         yield 'inside the work area' => ['/srv/mirror', '/work/repository'];
         yield 'the output directory' => ['/srv/mirror', '/output'];
         yield 'inside the output directory through dots' => ['/srv/mirror', '/input/../output/bundle'];
+        yield 'the kept folder' => ['/srv/mirror', '/kept'];
+        yield 'inside the kept folder' => ['/srv/mirror', '/kept/vendor'];
+    }
+
+    public function testAnAbsoluteKeptFolderIsAccepted(): void
+    {
+        self::assertSame('/srv/installs/1', new JobKeptFolder('/srv/installs/1')->hostPath);
+    }
+
+    public function testARelativeKeptFolderIsRefused(): void
+    {
+        $this->expectExceptionObject(JobRefused::forKeptFolder('installs/1'));
+
+        new JobKeptFolder('installs/1');
     }
 
     #[DataProvider('refusedInputs')]
