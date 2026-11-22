@@ -63,4 +63,4 @@ Every Symfony and Symfony AI feature in use, with its status: [Highlights](https
 - What was planned, achieved and what comes next: [the hackathon page](hackathon.md).
 - [The review bench](bench.md#review-bench): how well the panel finds planted defects, measured.
 - [Upstream reproductions](architecture/upstream-reproductions.md): library bugs found while building Intakt.
-- [Connecting an agent through MCP](user/mcp.md).
+- [Connecting an agent through MCP](reference/mcp.md).
