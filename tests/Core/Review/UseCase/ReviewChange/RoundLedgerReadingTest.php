@@ -326,31 +326,36 @@ final class RoundLedgerReadingTest extends KernelTestCase
             $this->append(LedgerEventKind::UsageRecorded, ['call' => $call]);
         }
 
-        $firstUsage = null;
-        $serializer = $this->createStub(SerializerInterface::class);
+        $held = [];
+        $reading = new RoundLedgerReading($this->ledger, new LedgerPayloads($this->unrelatedUsageSerializer($held)), new ConfiguredPrices([]));
+
+        self::assertSame(0, $reading->tokensOf(self::ROUND)->calls);
+    }
+
+    /**
+     * @param list<WeakReference<TokenUsageRow>> $held
+     */
+    private function unrelatedUsageSerializer(array &$held): SerializerInterface
+    {
+        $serializer = self::createStub(SerializerInterface::class);
         $serializer->method('deserialize')->willReturnCallback(
-            static function (string $json, string $class) use (&$firstUsage): ?UsageSettled {
+            static function (string $json, string $class) use (&$held): ?UsageSettled {
                 if (UsageSettled::class !== $class) {
                     return null;
                 }
 
-                $call = json_decode($json, true, flags: JSON_THROW_ON_ERROR)['call'];
-                if ('unrelated-three' === $call) {
-                    self::assertNull($firstUsage?->get(), 'The usage of an unrelated call is still retained.');
-                }
+                $decoded = json_decode($json, true, flags: JSON_THROW_ON_ERROR);
+                $call = is_array($decoded) && is_string($decoded['call'] ?? null) ? $decoded['call'] : '';
+                self::assertFalse('unrelated-three' === $call && ($held[0] ?? null)?->get() instanceof TokenUsageRow, 'The usage of an unrelated call is still retained.');
 
                 $usage = new TokenUsageRow(null, null, 42, null, null, null, null, null, null, null, null, null, null);
-                if ('unrelated-one' === $call) {
-                    $firstUsage = WeakReference::create($usage);
-                }
+                $held[0] ??= WeakReference::create($usage);
 
                 return new UsageSettled($call, 'settled', [$usage]);
             },
         );
 
-        $reading = new RoundLedgerReading($this->ledger, new LedgerPayloads($serializer), new ConfiguredPrices([]));
-
-        self::assertSame(0, $reading->tokensOf(self::ROUND)->calls);
+        return $serializer;
     }
 
     public function testReadingTheFiguresOfARoundsReviewersReadsTheLedgerTwiceHoweverManyReviewersItHas(): void
