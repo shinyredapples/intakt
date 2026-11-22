@@ -66,12 +66,11 @@ final readonly class BuildTask
             throw PushRemoteRefused::because($refusal);
         }
 
-        // One id for every step row of this run, because two runs of the same task can overlap and the task page shows the steps of one run only.
-        $run = bin2hex(random_bytes(16));
+        $run = BuildRun::startedFor($request);
         $task = $this->readTask($request);
 
         if (!$task instanceof ListedIssue) {
-            $this->record($request, $run, BuildStep::Task, $task);
+            $this->record($run, BuildStep::Task, $task);
 
             return new BuildTaskOutcome(BuildStep::Task, $task, null);
         }
@@ -91,29 +90,20 @@ final readonly class BuildTask
         return $issue ?? sprintf('project "%s" has no open issue %d', $request->project, $request->issue);
     }
 
-    private function record(BuildTaskRequest $request, string $run, BuildStep $step, ?string $failure): void
+    private function record(BuildRun $run, BuildStep $step, ?string $failure): void
     {
-        // Because the title and body are untrusted text, the payload names the task by its number only.
-        $payload = json_encode([
-            'project' => $request->project,
-            'task' => (string) $request->issue,
-            'run' => $run,
-            'step' => $step->value,
-            'outcome' => (null === $failure ? BuildStepOutcome::Passed : BuildStepOutcome::Failed)->value,
-            'failure' => $failure,
-        ], JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE);
-
+        $payload = $run->stepPayload($step, null === $failure ? BuildStepOutcome::Passed : BuildStepOutcome::Failed, $failure);
         $result = $this->ledger->append(new LedgerEvent(LedgerEventKind::BuildStepEnded, $payload));
 
         if (!$result->succeeded()) {
-            throw BuildStepNotRecorded::for($request, $step, (string) $result->failure);
+            throw BuildStepNotRecorded::for($run, $step, (string) $result->failure);
         }
     }
 
     /**
      * @throws BuildStepNotRecorded
      */
-    private function runSteps(BuildTaskRequest $request, string $run, ListedIssue $task): BuildTaskOutcome
+    private function runSteps(BuildTaskRequest $request, BuildRun $run, ListedIssue $task): BuildTaskOutcome
     {
         $results = [];
 
@@ -134,12 +124,12 @@ final readonly class BuildTask
             $results[$step->value] = $result;
 
             if ($result instanceof BuildJobOutcome && $result->question instanceof BuildQuestion) {
-                return $this->park($request, $run, $task, $result->question);
+                return $this->park($run, $task, $result->question);
             }
 
             $failure = $this->failureIn($result);
 
-            $this->record($request, $run, $step, $failure);
+            $this->record($run, $step, $failure);
 
             if (null !== $failure) {
                 return new BuildTaskOutcome($step, $failure, $task);
@@ -222,12 +212,12 @@ final readonly class BuildTask
     }
 
     // The run ends at the build job without recording its step, because park() records it as asked in the transaction that stores the question.
-    private function park(BuildTaskRequest $request, string $run, ListedIssue $task, BuildQuestion $question): BuildTaskOutcome
+    private function park(BuildRun $run, ListedIssue $task, BuildQuestion $question): BuildTaskOutcome
     {
         try {
-            $this->parkedTasks->park($request->project, $request->issue, $run, $question);
+            $this->parkedTasks->park($run, $question);
         } catch (TaskNotParked $notParked) {
-            $this->record($request, $run, BuildStep::BuildJob, $notParked->getMessage());
+            $this->record($run, BuildStep::BuildJob, $notParked->getMessage());
 
             return new BuildTaskOutcome(BuildStep::BuildJob, $notParked->getMessage(), $task);
         }

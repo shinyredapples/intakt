@@ -31,6 +31,7 @@ use Intakt\Core\Build\UseCase\BuildTask\BuildTaskOutcome;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTaskRequest;
 use Intakt\Core\Build\UseCase\BuildTask\HandBackCheck;
 use Intakt\Core\Build\UseCase\BuildTask\HandBackFile;
+use Intakt\Core\Build\UseCase\BuildTask\BuildRun;
 use Intakt\Core\Build\UseCase\BuildTask\ParkedTasks;
 use Intakt\Core\Build\UseCase\BuildTask\PrePushCheck;
 use Intakt\Core\Build\UseCase\BuildTask\PushRemoteCheck;
@@ -135,6 +136,7 @@ use Symfony\Component\Process\Process;
 #[CoversClass(BuildTask::class)]
 #[CoversClass(BuildTaskOutcome::class)]
 #[CoversClass(BuildTaskRequest::class)]
+#[CoversClass(BuildRun::class)]
 #[CoversClass(BuildStepNotRecorded::class)]
 #[CoversClass(GitBuildCheckout::class)]
 #[CoversClass(BuildCheckoutFailed::class)]
@@ -832,11 +834,10 @@ final class BuildTaskTest extends TestCase
 
         (void) $this->taskOf($ledger, [Issues::task(8)])->run($this->request(7, $this->remote->path));
 
-        $runs = array_column($ledger->payloads(), 'run');
+        $runs = array_values(array_filter(array_column($ledger->payloads(), 'run'), is_string(...)));
         self::assertCount(7, $runs);
         self::assertCount(1, array_unique(array_slice($runs, 0, 6)));
         self::assertNotSame($runs[0], $runs[6]);
-        self::assertIsString($runs[6]);
         self::assertMatchesRegularExpression('/^[0-9a-f]{32}$/', $runs[6]);
     }
 

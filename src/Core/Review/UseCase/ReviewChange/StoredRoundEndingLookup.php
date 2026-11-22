@@ -10,8 +10,10 @@ use Intakt\Core\Review\Contract\RoundEndingLookup;
 use Intakt\Core\Review\Contract\RoundEnds;
 use Intakt\Core\Review\UseCase\JudgeRound\FailedJudgings;
 use Symfony\Component\Clock\ClockInterface;
+use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
-// Not readonly, because it keeps the transport's listing once a round needed it; it lives for one ledger read only.
+// Not readonly, because it keeps the transport's listing once a round needed it; never a service, because StoredRoundEndings builds one for each ledger read.
+#[Exclude]
 final class StoredRoundEndingLookup implements RoundEndingLookup
 {
     /** @var array<string, true>|null */

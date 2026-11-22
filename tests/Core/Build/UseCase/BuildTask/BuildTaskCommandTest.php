@@ -26,6 +26,7 @@ use Intakt\Core\Build\UseCase\BuildTask\BuildTaskOutcome;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTaskRequest;
 use Intakt\Core\Build\UseCase\BuildTask\HandBackCheck;
 use Intakt\Core\Build\UseCase\BuildTask\HandBackFile;
+use Intakt\Core\Build\UseCase\BuildTask\BuildRun;
 use Intakt\Core\Build\UseCase\BuildTask\ParkedTasks;
 use Intakt\Core\Build\UseCase\BuildTask\PrePushCheck;
 use Intakt\Core\Build\UseCase\BuildTask\PushRemoteCheck;
@@ -86,6 +87,7 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(BuildTask::class)]
 #[UsesClass(BuildTaskOutcome::class)]
 #[UsesClass(BuildTaskRequest::class)]
+#[UsesClass(BuildRun::class)]
 #[UsesClass(BuildStepNotRecorded::class)]
 #[UsesClass(BuildCheckoutFailed::class)]
 #[UsesClass(HandBackCheck::class)]

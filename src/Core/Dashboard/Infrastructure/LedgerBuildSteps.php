@@ -50,58 +50,68 @@ final readonly class LedgerBuildSteps
      */
     public function latestRunOf(RecordedEvents $events, string $project, string $task): array
     {
+        // Keys are added in the order the runs started and never again, so the last key is the run started last.
         /** @var array<string, list<array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string}>> $runs */
         $runs = [];
-        $latest = null;
-        $unnamed = null;
+
+        foreach ($this->rowsOf($events, $project, $task) as [$run, $step]) {
+            $runs = $this->withStep($runs, $run ?? $this->unnamedRunOf($runs, $step['step']), $step);
+        }
+
+        return array_last($runs) ?? [];
+    }
+
+    /**
+     * @return list<array{?string, array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string}}>
+     */
+    private function rowsOf(RecordedEvents $events, string $project, string $task): array
+    {
+        $rows = [];
 
         foreach ($events as $recorded) {
             $step = LedgerEventKind::BuildStepEnded === $recorded->event->kind ? $this->stepOf($recorded) : null;
+            $run = LedgerPayload::of($recorded)['run'] ?? null;
 
-            if (null === $step || $project !== $step['project'] || $task !== $step['task']) {
+            // A run that is not a non-empty string is left out, because the build never writes one, so the row's run cannot be told.
+            if (null === $step || $project !== $step['project'] || $task !== $step['task'] || null !== $run && (!is_string($run) || '' === $run)) {
                 continue;
             }
 
-            $key = $this->runKeyOf($recorded, $runs, $unnamed, $step['step']);
-
-            // Left out, because one run ends each step once, so a second row of a step in the same run is not one the build writes.
-            if (null === $key || in_array($step['step'], array_column($runs[$key] ?? [], 'step'), true)) {
-                continue;
-            }
-
-            if (!isset($runs[$key])) {
-                $runs[$key] = [];
-                $latest = $key;
-            }
-
-            $unnamed = str_starts_with($key, self::UNNAMED) ? $key : $unnamed;
-            $runs[$key][] = $step;
+            $rows[] = [null === $run ? null : self::NAMED.$run, $step];
         }
 
-        return null === $latest ? [] : $runs[$latest];
+        return $rows;
     }
 
-    // A row the build wrote names its run, so overlapping runs stay apart and the run started last is the latest. A row written before runs were named belongs to the unnamed run before it, unless it is a task row or repeats a step of that run, because both mean another run began.
+    // A row written before runs were named belongs to the unnamed run before it, unless it is a task row or repeats a step of that run, because both mean another run began.
     /**
      * @param array<string, list<array{step: string}>> $runs
      */
-    private function runKeyOf(RecordedEvent $recorded, array $runs, ?string $unnamed, string $step): ?string
+    private function unnamedRunOf(array $runs, string $step): string
     {
-        $run = LedgerPayload::of($recorded)['run'] ?? null;
-
-        if (is_string($run) && '' !== $run) {
-            return self::NAMED.$run;
-        }
-
-        if (null !== $run) {
-            return null;
-        }
+        $unnamed = array_last(array_values(array_filter(array_keys($runs), static fn (string $key): bool => str_starts_with($key, self::UNNAMED))));
 
         if (null === $unnamed || BuildStep::Task->value === $step || in_array($step, array_column($runs[$unnamed], 'step'), true)) {
             return self::UNNAMED.count($runs);
         }
 
         return $unnamed;
+    }
+
+    // A second row of a step in the same run is left out, because one run ends each step once, so it is not one the build writes.
+    /**
+     * @param array<string, list<array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string}>> $runs
+     * @param array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string}                       $step
+     *
+     * @return array<string, list<array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string}>>
+     */
+    private function withStep(array $runs, string $run, array $step): array
+    {
+        if (!in_array($step['step'], array_column($runs[$run] ?? [], 'step'), true)) {
+            $runs[$run][] = $step;
+        }
+
+        return $runs;
     }
 
     // A row whose step, outcome or failure is not one the build writes is left out, so a malformed row cannot reach the status as it was stored.
