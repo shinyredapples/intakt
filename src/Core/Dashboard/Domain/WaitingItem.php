@@ -12,10 +12,6 @@ use Symfony\Component\DependencyInjection\Attribute\Exclude;
 #[Exclude]
 final readonly class WaitingItem
 {
-    private const int MINUTE = 60;
-    private const int HOUR = 3600;
-    private const int DAY = 86400;
-
     public function __construct(
         public string $lead,
         public string $consequence,
@@ -43,16 +39,8 @@ final readonly class WaitingItem
         );
     }
 
-    // Whole units, rounded down, because an item must never read as older than it is.
     public function waitingFor(DateTimeImmutable $now): string
     {
-        $seconds = max(0, $now->getTimestamp() - $this->since->getTimestamp());
-
-        return match (true) {
-            $seconds < self::MINUTE => 'Waiting less than a minute',
-            $seconds < self::HOUR => 'Waiting '.intdiv($seconds, self::MINUTE).' min',
-            $seconds < self::DAY => 'Waiting '.intdiv($seconds, self::HOUR).' h '.intdiv($seconds % self::HOUR, self::MINUTE).' min',
-            default => 'Waiting '.intdiv($seconds, self::DAY).' d '.intdiv($seconds % self::DAY, self::HOUR).' h',
-        };
+        return 'Waiting '.new Elapsed($this->since, $now)->inWords();
     }
 }
