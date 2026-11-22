@@ -48,15 +48,24 @@ final readonly class BuildTask
         private PushStep $pushes,
         private ParkedTasks $parkedTasks,
         private Ledger $ledger,
+        private PushRemoteCheck $remoteCheck,
     ) {
     }
 
     /**
      * @throws BuildStepNotRecorded
+     * @throws PushRemoteRefused
      */
     #[NoDiscard('the outcome says which step the run stopped at')]
     public function run(BuildTaskRequest $request): BuildTaskOutcome
     {
+        // Before anything is read, recorded or pushed, because a remote outside the configured repository makes every later step act on two repositories.
+        $refusal = $this->remoteCheck->failureOf($request);
+
+        if (null !== $refusal) {
+            throw PushRemoteRefused::because($refusal);
+        }
+
         $task = $this->readTask($request);
 
         if (!$task instanceof ListedIssue) {
@@ -131,19 +140,12 @@ final readonly class BuildTask
     private function readTask(BuildTaskRequest $request): ListedIssue|string
     {
         try {
-            $listing = $this->issues->listOpen($request->project, null);
+            $issue = $this->issues->readOpen($request->project, $request->issue);
         } catch (ForgeReadFailed|ForgeRateLimited $failure) {
             return $failure->getMessage();
         }
 
-        foreach ($listing->issues() as $issue) {
-            // Because GitHub lists pull requests among the issues, and a pull request is no task.
-            if ($issue->number === $request->issue && !$issue->isPullRequest) {
-                return $issue;
-            }
-        }
-
-        return sprintf('project "%s" has no open issue %d', $request->project, $request->issue);
+        return $issue ?? sprintf('project "%s" has no open issue %d', $request->project, $request->issue);
     }
 
     private function updateMirror(BuildTaskRequest $request): ?string

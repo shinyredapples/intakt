@@ -11,11 +11,7 @@ final readonly class HeaderSpans
     // Quote, bracket and separator vary because headers appear in logs, JSON, shell and dumps; spaces are possessive so none is redacted for a value.
     private const string HEADER_HEAD = '(?<![\w-])(?:'.self::HEADER_NAMES.')[\\\\"\'\]]*\s*+(?:=>|:|=)\s*+';
 
-    // Next to the lists, the end of each list whose following text is kept comes back by its start, because the value pass must skip only that list's own part.
-    /**
-     * @return array{RedactedSpans, array<int, int>}
-     */
-    public function lists(string $text): array
+    public function lists(string $text): ListedHeaders
     {
         // The print_r form is told apart because it alone breaks the line before its parenthesis; a marker already in the text opens no list, so the value after it is still redacted.
         $pattern = '~'.self::HEADER_HEAD.'(?<open>(?<printR>array\R[ \t]*\()|array\s*\(|(?!'.preg_quote(Redaction::MARKER, '~').')\[)~i';
@@ -41,20 +37,17 @@ final readonly class HeaderSpans
             if ($this->isValueOfQuotedKey($text, $matchStart)
                 && !$this->followsUnquotedHeaderOnItsLine($before)
                 && $this->isListShaped($text, $afterOpen, $end)) {
-                $keptTails[$listStart] = $end;
+                $keptTails[] = new KeptTail($listStart, $end);
             }
             $spans->add($listStart, $end);
             $before .= str_repeat(Redaction::MASK, $end - $listStart);
             $offset = $end;
         }
 
-        return [$spans, $keptTails];
+        return new ListedHeaders($spans, ...$keptTails);
     }
 
-    /**
-     * @param array<int, int> $keptTails
-     */
-    public function values(string $text, array $keptTails): ?RedactedSpans
+    public function values(string $text, ListedHeaders $listed): ?RedactedSpans
     {
         // A quoted value takes a backslash run and a quote as part of itself, so an escaped quote does not end it, and the other quote character is plain text in it.
         $quoted = '(?<open>\\\\*["\'])(?:(?!\k<open>)(?:\\\\+["\']|[^\\\\]|\\\\))*+(?:(?<close>\k<open>)|\z)';
@@ -67,8 +60,9 @@ final readonly class HeaderSpans
         while (1 === preg_match($pattern, $text, $match, PREG_OFFSET_CAPTURE, $offset)) {
             $valueStart = $match['head'][1] + strlen($match['head'][0]);
             // Only a list's own part is skipped, so the text after the list stays, while a value that merely holds a list opening is redacted whole.
-            if (isset($keptTails[$valueStart])) {
-                $offset = $keptTails[$valueStart];
+            $keptTail = $listed->tailKeptFrom($valueStart);
+            if (null !== $keptTail) {
+                $offset = $keptTail;
 
                 continue;
             }

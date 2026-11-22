@@ -25,4 +25,7 @@ final class ShowBuildTierInput
     /** @var list<string> */
     #[Option('A path the build touches, repeatable')]
     public array $path = [];
+
+    #[Option('The change the build continues, a branch or a pull-request address (https://github.com/<owner>/<repo>/pull/<n>), whose latest review round may have confirmed an escalation')]
+    public ?string $change = null;
 }

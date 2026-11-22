@@ -11,7 +11,7 @@ The words used across Intakt's guides and dashboard, in plain terms. Each entry 
 | **Approval on the spot** | Intakt approving a change to the rules itself, at once, when no hard limit is touched, a mechanical check proves the change harmless, the Security engineer's security review agrees and its penetration test fails to get around the change; otherwise you are asked (planned) | [safety](why-the-ai-cant-wreck-your-project.md#when-intakt-asks-you-and-why) |
 | **Back-off** | a short wait after a failure before trying again | [engine room](the-engine-room.md#budgets-windows-and-pace) |
 | **Blocking reviewer** | a reviewer that must approve before a merge | [how it works](how-intakt-works.md#which-reviewers-look-at-a-change) |
-| **Boot check** | starting the changed application to see that it still runs | [journey](the-journey-of-a-task.md#3-checking) |
+| **Boot check** | starting the changed application to see that it still runs; Intakt does this only for a pull request by someone it trusts (a person with write access, Intakt's own GitHub App or the maintainer), and reviews anyone else's pull request without starting it | [journey](the-journey-of-a-task.md#3-checking) |
 | **Briefing** | the short summary of project memory every job starts with | [project memory](project-memory.md) |
 | **Build slot** | a bench where one Developer works on one task | [engine room](the-engine-room.md#lanes-and-slots-the-workbenches) |
 | **Bundle** | the sealed package of commits a Developer hands back | [journey](the-journey-of-a-task.md#2-building) |
@@ -45,7 +45,9 @@ The words used across Intakt's guides and dashboard, in plain terms. Each entry 
 | **Job** | one build, one check or one review, in its own container | [containers](containers-and-services.md) |
 | **Journey check** | a run that starts a fresh copy of Intakt and walks one path a person takes, to prove the whole product still works | [checking the whole product](checking-the-whole-product.md) |
 | **Judge step** | the Code reviewers' last step, a quick call that sorts the findings: a serious one (P1 or P2) is always fixed now, with the judge's doubt written beside it, and a small one (P3) is fixed now, later, or not at all | [journey](the-journey-of-a-task.md#5-reviewing) |
+| **Judge's note** | the judge's one-sentence reason, kept beside a serious finding (P1 or P2) it doubts, on the list of things to fix; the finding stays on the list either way | [assistant](using-intakt-from-your-assistant.md#the-judges-note-on-the-act-list) |
 | **Lane** | a line of work: the build slots and the review lane | [engine room](the-engine-room.md#lanes-and-slots-the-workbenches) |
+| **Ledger** | Intakt's permanent record of what it did, one line per event, which is only ever added to (removing the demo project also removes the events it replayed) | [running one task](running-one-task.md#finding-the-steps-in-the-ledger) |
 | **Lock** | a "one at a time" sign on something two jobs must not use together | [engine room](the-engine-room.md#locks-one-at-a-time) |
 | **Log** | Intakt's own record of its warnings and errors, one line each, with the secrets Intakt knows about written as `[redacted]` | [why isn't anything happening](why-isnt-anything-happening.md#reading-intakts-log) |
 | **Main** | the official version of your project | |
@@ -74,6 +76,7 @@ The words used across Intakt's guides and dashboard, in plain terms. Each entry 
 | **Review lane** | the bench where finished work is reviewed, then handed to the landing step | [engine room](the-engine-room.md#lanes-and-slots-the-workbenches) |
 | **Review server** | the read-only server through which a reviewer reads the head under review | [safety](why-the-ai-cant-wreck-your-project.md#the-review-server) |
 | **Reviewer-for-loop mode** | a project setting: Intakt reviews the changes of a build loop, such as the build loop that developed Intakt, in place of one of its reviewers, its verdicts count, and the only thing it writes to the forge is its verdict on each head (a status and a comment) | [costs](accounts-and-costs.md#reviewer-for-the-loop-intakts-review-takes-a-reviewers-place) |
+| **Router provider** | the company behind a router (such as Hugging Face) that actually runs a model, named after a colon in the model's name (`:deepinfra`); a rate limit from it pauses it on that account only | [engine room](the-engine-room.md#router-providers-and-their-pause) |
 | **Scheduler** | machinery: the part that runs timed jobs, today the regular look for pull requests to review | [how it works](how-intakt-works.md) |
 | **Security engineer** (planned, optional) | the AI agent that reviews security in the code, the pages and the containers, and acts as the penetration tester (formerly the gatekeeper's security reviewer and attacker) | [safety](why-the-ai-cant-wreck-your-project.md#checking-the-security-of-what-is-built) |
 | **Shadow mode** | a former project setting, no longer available: a configuration that still sets it stops Intakt from starting | [costs](accounts-and-costs.md#the-former-shadow-mode) |

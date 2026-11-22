@@ -8,10 +8,13 @@ use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
+use Intakt\Core\Review\Contract\FollowUpNote;
+use Intakt\Core\Review\Contract\ResolvedFinding;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictParser;
 use Intakt\Core\Review\Contract\VerdictUnreadable;
+use Intakt\Core\Review\Infrastructure\ReviewerAnswer\Verdict as ReviewerAnswer;
 use Intakt\Core\Review\Infrastructure\StrictVerdictConverter;
 use Intakt\Core\Review\Infrastructure\StrictVerdictSubscriber;
 use Intakt\Kernel;
@@ -28,12 +31,17 @@ use Symfony\AI\Platform\Result\TextResult;
 use Symfony\AI\Platform\Result\ToolCall;
 use Symfony\AI\Platform\Result\ToolCallResult;
 use Symfony\AI\Platform\ResultConverterInterface;
+use Symfony\Component\Serializer\Encoder\JsonDecode;
+use Symfony\Component\Serializer\Encoder\JsonEncoder;
+use Symfony\Component\Serializer\Exception\ExceptionInterface;
+use Symfony\Component\Serializer\Normalizer\AbstractNormalizer;
 
 #[CoversClass(VerdictParser::class)]
 #[CoversClass(VerdictUnreadable::class)]
 #[CoversClass(Verdict::class)]
 #[CoversClass(StrictVerdictSubscriber::class)]
 #[CoversClass(StrictVerdictConverter::class)]
+#[CoversClass(ReviewerAnswer::class)]
 #[UsesClass(Kernel::class)]
 #[UsesClass(Finding::class)]
 #[UsesClass(Evidence::class)]
@@ -43,7 +51,7 @@ final class VerdictParserTest extends KernelTestCase
     {
         $output = VerdictDocument::fromTheDesign()->json();
 
-        $verdict = new VerdictParser()->parse($this->reviewer()->answering($output));
+        $verdict = $this->reviewer()->verdictFor($output);
 
         $finding = new Finding(
             id: 'F3',
@@ -57,7 +65,7 @@ final class VerdictParserTest extends KernelTestCase
             requirement: '...',
             evidence: new Evidence('...', '...'),
         );
-        self::assertEquals(new Verdict(Decision::Changes, [$finding], ['F1', 'F2'], ['...']), $verdict);
+        self::assertEquals(new Verdict(Decision::Changes, [$finding], [new ResolvedFinding('F1'), new ResolvedFinding('F2')], [new FollowUpNote('...')]), $verdict);
     }
 
     public function testEveryDecisionMaps(): void
@@ -65,7 +73,7 @@ final class VerdictParserTest extends KernelTestCase
         foreach (Decision::cases() as $decision) {
             $output = VerdictDocument::fromTheDesign()->with('verdict', $decision->value)->json();
 
-            self::assertSame($decision, new VerdictParser()->parse($this->reviewer()->answering($output))->verdict);
+            self::assertSame($decision, $this->reviewer()->verdictFor($output)->verdict);
         }
     }
 
@@ -74,7 +82,7 @@ final class VerdictParserTest extends KernelTestCase
         foreach (Severity::cases() as $severity) {
             $output = VerdictDocument::fromTheDesign()->withFinding('severity', $severity->value)->json();
 
-            self::assertSame($severity, new VerdictParser()->parse($this->reviewer()->answering($output))->findings[0]->severity);
+            self::assertSame($severity, $this->reviewer()->verdictFor($output)->findings[0]->severity);
         }
     }
 
@@ -83,7 +91,7 @@ final class VerdictParserTest extends KernelTestCase
         foreach (FixableBy::cases() as $fixableBy) {
             $output = VerdictDocument::fromTheDesign()->withFinding('fixable_by', $fixableBy->value)->json();
 
-            self::assertSame($fixableBy, new VerdictParser()->parse($this->reviewer()->answering($output))->findings[0]->fixable_by);
+            self::assertSame($fixableBy, $this->reviewer()->verdictFor($output)->findings[0]->fixable_by);
         }
     }
 
@@ -91,7 +99,7 @@ final class VerdictParserTest extends KernelTestCase
     {
         $output = VerdictDocument::fromTheDesign()->withFinding('repeat', true)->json();
 
-        self::assertTrue(new VerdictParser()->parse($this->reviewer()->answering($output))->findings[0]->repeat);
+        self::assertTrue($this->reviewer()->verdictFor($output)->findings[0]->repeat);
     }
 
     public function testAFindingTheReviewerMarksAsAGateGapMapsWithTheMarker(): void
@@ -118,7 +126,7 @@ final class VerdictParserTest extends KernelTestCase
             ->withFinding('evidence', null)
             ->json();
 
-        $finding = new VerdictParser()->parse($this->reviewer()->answering($output))->findings[0];
+        $finding = $this->reviewer()->verdictFor($output)->findings[0];
 
         self::assertEquals([null, null, null, null, null], [$finding->file, $finding->line, $finding->symbol, $finding->requirement, $finding->evidence]);
     }
@@ -127,7 +135,7 @@ final class VerdictParserTest extends KernelTestCase
     {
         $output = '{"verdict": "approve", "findings": [], "resolved": [], "follow_ups": []}';
 
-        $verdict = new VerdictParser()->parse($this->reviewer()->answering($output));
+        $verdict = $this->reviewer()->verdictFor($output);
 
         self::assertEquals(new Verdict(Decision::Approve, [], [], []), $verdict);
     }
@@ -140,7 +148,27 @@ final class VerdictParserTest extends KernelTestCase
         $this->expectException(VerdictUnreadable::class);
         $this->expectExceptionMessageMatches('/'.implode('|', $wordings).'/');
 
-        $_ = new VerdictParser()->parse($this->reviewer()->answering($output));
+        $this->reviewer()->verdictFor($output);
+    }
+
+    public function testAWrongTypeIsRefusedWithTheContractVerdictNamedInItsText(): void
+    {
+        $output = '{"verdict":"approve","findings":[],"resolved":false,"follow_ups":[]}';
+        $before = '';
+        try {
+            self::getContainer()->get('serializer')->deserialize($output, ReviewerAnswer::class, JsonEncoder::FORMAT, [
+                AbstractNormalizer::ALLOW_EXTRA_ATTRIBUTES => false,
+                AbstractNormalizer::REQUIRE_ALL_PROPERTIES => true,
+                JsonDecode::ASSOCIATIVE => false,
+            ]);
+        } catch (ExceptionInterface $refused) {
+            $before = sprintf('Cannot deserialize the content into the "%s" class. %s', Verdict::class, strtr($refused->getMessage(), [ReviewerAnswer::class => Verdict::class]));
+        }
+
+        $this->expectException(VerdictUnreadable::class);
+        $this->expectExceptionMessageMatches('/'.preg_quote($before, '/').'$/');
+
+        $this->reviewer()->verdictFor($output);
     }
 
     public function testAWholeFloatLineIsRefusedAsUnreadable(): void
@@ -150,7 +178,7 @@ final class VerdictParserTest extends KernelTestCase
         $this->expectException(VerdictUnreadable::class);
         $this->expectExceptionMessageMatches('/"line" attribute/');
 
-        $_ = new VerdictParser()->parse($this->reviewer()->answering($output));
+        $this->reviewer()->verdictFor($output);
     }
 
     #[DataProvider('outputsThatDoNotMap')]
@@ -159,7 +187,7 @@ final class VerdictParserTest extends KernelTestCase
         $this->expectException(VerdictUnreadable::class);
         $this->expectExceptionMessageMatches('/Syntax error$/');
 
-        $_ = new VerdictParser()->parse($this->reviewer()->answering($output));
+        $this->reviewer()->verdictFor($output);
     }
 
     /**
@@ -181,7 +209,7 @@ final class VerdictParserTest extends KernelTestCase
     #[DataProviderExternal(AcceptedVerdicts::class, 'cases')]
     public function testAnAcceptedVerdictMapsWithoutAnInvalidOutputFinding(string $output): void
     {
-        $verdict = new VerdictParser()->parse($this->reviewer()->answering($output));
+        $verdict = $this->reviewer()->verdictFor($output);
 
         self::assertNotContains(Verdict::INVALID_OUTPUT, array_map(static fn (Finding $finding): string => $finding->id, $verdict->findings));
     }
@@ -190,7 +218,7 @@ final class VerdictParserTest extends KernelTestCase
     {
         $this->expectException(VerdictUnreadable::class);
 
-        $_ = new VerdictParser()->parse($this->reviewer()->answering(new ToolCallResult([new ToolCall('call-1', 'read_file')])));
+        $this->reviewer()->verdictFor(new ToolCallResult([new ToolCall('call-1', 'read_file')]));
     }
 
     public function testAReplyInSeveralPartsIsRefusedAsUnreadable(): void
@@ -199,7 +227,7 @@ final class VerdictParserTest extends KernelTestCase
 
         $this->expectException(VerdictUnreadable::class);
 
-        $_ = new VerdictParser()->parse($this->reviewer()->answering(new MultiPartResult([new TextResult($answer), new TextResult($answer)])));
+        $this->reviewer()->verdictFor(new MultiPartResult([new TextResult($answer), new TextResult($answer)]));
     }
 
     public function testAFailedCallStaysAnError(): void
@@ -209,7 +237,9 @@ final class VerdictParserTest extends KernelTestCase
 
         $this->expectException(RateLimitExceededException::class);
 
-        $_ = new VerdictParser()->parse(new DeferredResult($converter, new InMemoryRawResult()));
+        $result = new DeferredResult($converter, new InMemoryRawResult());
+
+        $_ = new VerdictParser()->parseWith(static fn (): Verdict => $result->asObject(ReviewerAnswer::class)->toVerdict());
     }
 
     public function testABrokenConstraintGivesItsPathAndIntaktsMessageAsAKeySafeReason(): void
@@ -241,13 +271,13 @@ final class VerdictParserTest extends KernelTestCase
         $this->expectException(VerdictUnreadable::class);
         $this->expectExceptionMessageMatches('/^The reviewer\'s answer could not be read as a verdict: /');
 
-        $_ = new VerdictParser()->parse($this->reviewer()->answering('approve'));
+        $this->reviewer()->verdictFor('approve');
     }
 
     private function refusalOf(string $output): VerdictUnreadable
     {
         try {
-            $_ = new VerdictParser()->parse($this->reviewer()->answering($output));
+            $_ = $this->reviewer()->verdictFor($output);
         } catch (VerdictUnreadable $unreadable) {
             return $unreadable;
         }
