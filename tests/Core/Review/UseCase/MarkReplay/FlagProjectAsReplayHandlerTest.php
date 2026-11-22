@@ -30,10 +30,8 @@ final class FlagProjectAsReplayHandlerTest extends KernelTestCase
     {
         $container = self::getContainer();
         EmptyDatabase::in($container);
-        $entities = $container->get('doctrine.orm.entity_manager');
-        assert($entities instanceof EntityManagerInterface);
-        $this->entities = $entities;
-        new SchemaTool($entities)->createSchema([$entities->getClassMetadata(ReplayProject::class)]);
+        $this->entities = $container->get('doctrine.orm.entity_manager');
+        new SchemaTool($this->entities)->createSchema([$this->entities->getClassMetadata(ReplayProject::class)]);
     }
 
     public function testFlaggingAProjectNotFlaggedYetStoresItAsAReplay(): void
