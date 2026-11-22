@@ -36,7 +36,9 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Lock\Exception\ExceptionInterface;
 use Symfony\Component\Lock\Exception\LockStorageException;
+use Symfony\Component\Lock\Key;
 use Symfony\Component\Lock\PersistingStoreInterface;
+use Symfony\Component\Lock\Store\InMemoryStore;
 
 #[CoversClass(PushBranch::class)]
 #[CoversClass(PushRecords::class)]
@@ -725,6 +727,64 @@ final class PushBranchTest extends TestCase
         }
     }
 
+    public function testALockStoreThatFailsToReleaseAndStillHoldsTheLockIsReportedAsNotPushed(): void
+    {
+        $store = self::createStub(PersistingStoreInterface::class);
+        $store->method('delete')->willThrowException(new LockStorageException('the lock database is down'));
+        $store->method('exists')->willReturn(true);
+
+        $this->assertReportedAsALockStoreFailure($store);
+    }
+
+    public function testALockStoreThatFailsToReleaseAndToTellWhetherTheLockIsHeldIsReportedAsNotPushed(): void
+    {
+        $store = self::createStub(PersistingStoreInterface::class);
+        $store->method('delete')->willThrowException(new LockStorageException('the lock database is down'));
+        $store->method('exists')->willThrowException(new LockStorageException('the lock database is down'));
+
+        $this->assertReportedAsALockStoreFailure($store);
+    }
+
+    public function testALockStoreWhoseReleaseFailsOnceReleasesTheBranchSoTheNextCallReadsThePush(): void
+    {
+        $locks = new InMemoryStore();
+        $failures = 1;
+        $store = self::createStub(PersistingStoreInterface::class);
+        $store->method('save')->willReturnCallback($locks->save(...));
+        $store->method('exists')->willReturnCallback($locks->exists(...));
+        $store->method('delete')->willReturnCallback(static function (Key $key) use ($locks, &$failures): void {
+            if ($failures-- > 0) {
+                throw new LockStorageException('a short outage of the lock database');
+            }
+
+            $locks->delete($key);
+        });
+        $push = $this->scenario->pushWithLockStore($store);
+
+        $first = $push->push($this->scenario->request());
+        $again = $push->push($this->scenario->request());
+
+        self::assertInstanceOf(PushedBranch::class, $first);
+        self::assertInstanceOf(PushedBranch::class, $again);
+        self::assertSame($first->head, $again->head);
+        self::assertSame(1, $this->scenario->changes->calls);
+    }
+
+    public function testAFailureDuringThePushIsReportedInsteadOfAFailedLockRelease(): void
+    {
+        $store = self::createStub(PersistingStoreInterface::class);
+        $store->method('delete')->willThrowException(new LockStorageException('the lock database is down'));
+        $push = $this->scenario->pushWithLockStore($store, $this->scenario->signingKey($this->scenario->key.'.missing'));
+
+        try {
+            (void) $push->push($this->scenario->request());
+            self::fail('A missing key cannot sign.');
+        } catch (BranchNotPushed $failed) {
+            self::assertStringNotContainsString('the lock store failed', $failed->getMessage());
+            self::assertNull($this->scenario->remoteTip());
+        }
+    }
+
     public function testAPushWhoseLockReleaseFailedIsReportedPushedByTheNextCallWithoutPushingAgain(): void
     {
         $store = self::createStub(PersistingStoreInterface::class);
@@ -858,5 +918,18 @@ final class PushBranchTest extends TestCase
     private function discardTheOutcome(Closure $push, BranchPushRequest $request): void
     {
         $push($request);
+    }
+
+    // Caught at the top, because an exception Symfony's lock throws on destruct would replace BranchNotPushed and keep it only as a previous one.
+    private function assertReportedAsALockStoreFailure(PersistingStoreInterface $store): void
+    {
+        try {
+            (void) $this->scenario->pushWithLockStore($store)->push($this->scenario->request());
+            self::fail('A lock store that cannot release must be reported.');
+        } catch (ExceptionInterface $escaped) {
+            self::fail('The lock store failure left the contract as '.$escaped::class);
+        } catch (BranchNotPushed $failed) {
+            self::assertStringStartsWith('The branch was not pushed: the lock store failed: ', $failed->getMessage());
+        }
     }
 }

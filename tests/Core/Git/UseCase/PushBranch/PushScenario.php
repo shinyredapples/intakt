@@ -103,11 +103,11 @@ final readonly class PushScenario
     }
 
     // Through another lock store than the in-memory one, because a store can fail where memory cannot.
-    public function pushWithLockStore(PersistingStoreInterface $store): PushBranch
+    public function pushWithLockStore(PersistingStoreInterface $store, ?SigningKey $key = null): PushBranch
     {
         $git = new BranchGit(new HardenedGit());
 
-        return new PushBranch($git, new SignedCommits($git, $this->signingKey($this->key)), new PushRecords($this->ledger), $this->changes, new LockFactory($store));
+        return new PushBranch($git, new SignedCommits($git, $key ?? $this->signingKey($this->key)),new PushRecords($this->ledger), $this->changes, new LockFactory($store));
     }
 
     // Through another forge than the recording one, because a test of the real opener must see what it lets through.

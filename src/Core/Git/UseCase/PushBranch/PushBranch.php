@@ -18,6 +18,7 @@ use Override;
 use Symfony\Component\Lock\Exception\ExceptionInterface;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\LockInterface;
+use Throwable;
 
 final readonly class PushBranch implements BranchPush
 {
@@ -40,16 +41,23 @@ final readonly class PushBranch implements BranchPush
         $lock = $this->lockedBranch($request);
 
         try {
-            return $this->pushed($request);
-        } finally {
-            $this->release($lock);
+            $outcome = $this->pushed($request);
+        } catch (Throwable $failure) {
+            $this->releaseAfter($lock);
+
+            throw $failure;
         }
+
+        $this->release($lock);
+
+        return $outcome;
     }
 
     // A store failure becomes the contract's own failure, because a caller of BranchPush must not know which lock store the Git module uses.
     private function lockedBranch(BranchPushRequest $request): LockInterface
     {
-        $lock = $this->locks->createLock('push:'.hash('sha256', json_encode([$request->project, $request->branch], JSON_THROW_ON_ERROR)));
+        // Released here only, never on destruct: Symfony's destructor would release a lock whose release failed once more and throw past BranchNotPushed.
+        $lock = $this->locks->createLock('push:'.hash('sha256', json_encode([$request->project, $request->branch], JSON_THROW_ON_ERROR)), autoRelease: false);
 
         try {
             // Without waiting, because a push that meets another push of the same branch has nothing to add; its caller tries again later.
@@ -66,8 +74,28 @@ final readonly class PushBranch implements BranchPush
     {
         try {
             $lock->release();
+        } catch (ExceptionInterface) {
+            // Once more, so a store back after a short outage frees the branch now instead of at the lock's expiry.
+            $this->releaseOnce($lock);
+        }
+    }
+
+    private function releaseOnce(LockInterface $lock): void
+    {
+        try {
+            $lock->release();
         } catch (ExceptionInterface $failure) {
             throw BranchNotPushed::because('the lock store failed: '.$failure->getMessage(), $failure);
+        }
+    }
+
+    // The failure of the push is what its caller needs, and a lock left held expires with its time to live.
+    private function releaseAfter(LockInterface $lock): void
+    {
+        try {
+            $this->release($lock);
+        } catch (BranchNotPushed) {
+            return;
         }
     }
 
