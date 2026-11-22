@@ -426,9 +426,8 @@ final class IntakeStoreTest extends KernelTestCase
         });
     }
 
-    // On SQLite's default journal, with task 7 stored: there a reader's shared lock lets a write through and refuses only its COMMIT.
+    // The journal mode is left at SQLite's default, because only there a reader's shared lock lets a write through and refuses its COMMIT.
     /**
-     * @param 'pdo_sqlite'|'sqlite3'                              $driver
      * @param callable(IntakeStore, Connection, Connection): void $scenario
      */
     private function withAStoreAndAReaderOnOneFile(string $driver, callable $scenario): void
@@ -438,8 +437,9 @@ final class IntakeStoreTest extends KernelTestCase
         }
 
         $file = (string) tempnam(sys_get_temp_dir(), 'intake');
-        $own = DriverManager::getConnection(['driver' => $driver, 'path' => $file]);
-        $reader = DriverManager::getConnection(['driver' => $driver, 'path' => $file]);
+        $options = ['driver' => 'sqlite3' === $driver ? 'sqlite3' : 'pdo_sqlite', 'path' => $file];
+        $own = DriverManager::getConnection($options);
+        $reader = DriverManager::getConnection($options);
         try {
             $own->executeStatement('PRAGMA busy_timeout=0');
             $manager = new EntityManager($own, $this->entities->getConfiguration(), new EventManager());
