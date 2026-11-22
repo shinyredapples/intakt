@@ -27,6 +27,7 @@ $kernel->boot();
 $services = $kernel->getContainer()->get('test.service_container');
 $now = $services->get(ClockInterface::class)->now();
 
+$appended = [];
 $mode = $argv[1] ?? '';
 
 if ('page' === $mode) {
@@ -41,7 +42,7 @@ if ('page' === $mode) {
         [LedgerEventKind::ReviewStarted, ['round' => '0195f3a0-0000-7000-8000-000000000001', 'project' => 'alpha', 'reviewers' => 2, 'change' => '42', 'number' => 2]],
         [LedgerEventKind::ReviewStarted, ['round' => '0195f3a0-0000-7000-8000-000000000002', 'project' => 'beta', 'reviewers' => 2, 'change' => '7', 'number' => 1]],
     ] as [$kind, $payload]) {
-        (void) $ledger->append(new LedgerEvent($kind, json_encode($payload, JSON_THROW_ON_ERROR)));
+        $appended[] = $ledger->append(new LedgerEvent($kind, json_encode($payload, JSON_THROW_ON_ERROR)));
     }
     $mode = 'end';
 }
@@ -53,4 +54,4 @@ if ($ending instanceof Account) {
     $services->get(MeasuredUse::class)->record(new WindowReading($ending, UsageWindow::FiveHour, new Usage(12.0, $now->modify('+3 hours'))));
 }
 
-echo 'seeded '.$mode."\n";
+echo 'seeded '.$mode.' ('.count($appended)." ledger events)\n";
