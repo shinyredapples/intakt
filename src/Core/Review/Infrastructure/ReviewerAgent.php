@@ -92,7 +92,7 @@ final readonly class ReviewerAgent implements Reviewer
     // Refused like unreadable output, because a counted vote under a reserved id would send the head back with findings the ledger drops; key-safe, because only Intakt's own ids are named.
     private function refuseClaimedFailureIds(Verdict $verdict): void
     {
-        $claimed = $verdict->claimedFailureIds();
+        $claimed = [...$verdict->claimedFailureIds()];
 
         if ([] !== $claimed) {
             throw VerdictUnreadable::becauseKeySafe(sprintf('the verdict names finding ids reserved for failed reviews: %s.', implode(', ', $claimed)));

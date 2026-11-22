@@ -409,12 +409,12 @@ final class PlayDemoControllerTest extends DashboardPageTestCase
         self::assertNotSame('', $page->filter('form.play-demo input[name=_token]')->attr('value'));
     }
 
-    public function testWithoutTheChoicesTheFirstRunPageShowsTheNoKeyNeededChipBesidePlay(): void
+    public function testTheFirstRunPageSaysPlayNeedsNoKeyAndWhatItShows(): void
     {
         $page = $this->browser->request('GET', '/setup');
 
-        self::assertSame('No key needed', $page->filter('.play-demo-offer .chip')->text());
-        self::assertCount(0, $page->filter('.play-demo-offer p'));
+        self::assertSame('1 minute · no key', $page->filter('#see-review .fr-when')->text());
+        self::assertSame('Two AI labs read a change, then the owl decides what to fix.', $page->filter('#see-review .next')->text());
     }
 
     public function testTheFirstRunPageOffersNoDemoRunOnceItIsInTheLedger(): void

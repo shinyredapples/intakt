@@ -1,0 +1,16 @@
+/* The review page's own rules (UX2); only this page links it, so the shared layout stays in base.css and components.css. */
+/* The pass path: done steps filled, the current one ringed in amber with its role standing on it, later ones outlined. */
+.review-path { list-style: none; margin: var(--s8) 0 var(--s12); padding: 60px 0 0; display: grid; grid-template-columns: repeat(var(--n, 4), minmax(0, 1fr)); }
+.review-path li { position: relative; padding-top: 22px; text-align: center; font-size: var(--t13); color: var(--muted); overflow-wrap: anywhere; }
+.review-path li::before { content: ""; position: absolute; top: 5px; left: -50%; right: 50%; height: 3px; background: var(--hairline); }
+.review-path li:first-child::before { display: none; }
+.review-path li::after { content: ""; position: absolute; top: 0; left: calc(50% - 7px); width: 14px; height: 14px; box-sizing: border-box; border-radius: 50%; background: var(--raised); border: 3px solid var(--hairline); }
+.review-path li.done::before, .review-path li.now::before { background: var(--primary); }
+.review-path li.done { color: var(--ink); }
+.review-path li.done::after { background: var(--primary); border-color: var(--primary); }
+.review-path li.now { color: var(--ink); font-weight: 700; }
+.review-path li.now::after { top: -2px; left: calc(50% - 9px); width: 18px; height: 18px; border-color: var(--amber); box-shadow: 0 0 0 2px color-mix(in srgb, var(--amber) 30%, transparent); }
+.review-path .who { position: absolute; left: 50%; bottom: calc(100% - 4px); transform: translateX(-50%); }
+.review-path .who .role-image { width: 56px; height: 56px; }
+@media (prefers-reduced-motion: no-preference) { .review-path .who { animation: path-hop .6s ease-out 1; } }
+@keyframes path-hop { from { transform: translate(-50%, 8px); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }

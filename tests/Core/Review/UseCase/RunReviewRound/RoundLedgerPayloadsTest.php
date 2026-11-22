@@ -15,6 +15,8 @@ use Intakt\Core\Review\Contract\CatchUpOwed;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\DroppedFinding;
 use Intakt\Core\Review\Contract\EscalationOutcome;
+use Intakt\Core\Review\Contract\EscalationReviewFailed;
+use Intakt\Core\Review\Contract\EscalationVerdictKept;
 use Intakt\Core\Review\Contract\EscalationVerdictReused;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FindingIds;
@@ -67,6 +69,8 @@ use Symfony\Component\Serializer\SerializerInterface;
 #[CoversClass(RoundLedger::class)]
 #[CoversClass(RecurringP1Found::class)]
 #[CoversClass(EscalationVerdictReused::class)]
+#[CoversClass(EscalationVerdictKept::class)]
+#[CoversClass(EscalationReviewFailed::class)]
 #[UsesClass(OnePerPlace::class)]
 #[UsesClass(FindingKeys::class)]
 #[UsesClass(FindingKey::class)]
@@ -397,6 +401,16 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
     public function testAnEscalationVerdictReusedIsWrittenWithItsRoundFindingKeyOutcomeAndVerdictRound(): void
     {
         self::assertSame('{"round":"'.self::ROUND.'","finding":"F1","key":"abc","outcome":"confirmed","verdict_round":"r1"}', $this->written(new EscalationVerdictReused(self::ROUND, 'F1', 'abc', EscalationOutcome::Confirmed, 'r1')));
+    }
+
+    public function testAnEscalationVerdictKeptIsWrittenWithItsRoundFindingKeyOutcomeAndReasons(): void
+    {
+        self::assertSame('{"round":"'.self::ROUND.'","finding":"F1","key":"abc","outcome":"rejected","reasons":"The retry delivers it."}', $this->written(new EscalationVerdictKept(self::ROUND, 'F1', 'abc', EscalationOutcome::Rejected, 'The retry delivers it.')));
+    }
+
+    public function testAnEscalationReviewFailedIsWrittenWithItsRoundFindingKeyAndReason(): void
+    {
+        self::assertSame('{"round":"'.self::ROUND.'","finding":"F1","key":"abc","reason":"the answer could not be read as an escalation verdict"}', $this->written(new EscalationReviewFailed(self::ROUND, 'F1', 'abc', 'the answer could not be read as an escalation verdict')));
     }
 
     public function testADoneJudgeWithoutFollowUpsStillWritesTheKey(): void
