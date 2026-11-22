@@ -156,7 +156,7 @@ final class PlayDemoRunHandlerTest extends TestCase
     private function handler(string $recording, string $composeService = 'intakt'): PlayDemoRunHandler
     {
         $marks = new ReplayMarks(new ReplayMarkBus([CreateDemoProjectCommand::NAME]));
-        $replays = new ReplaysRecording($this->ledger, $this->updates, $this->clock, new LockFactory(new InMemoryStore()), $marks, TourCaptionsOn::captions($this->updates, TourCaptionsOn::tour($this->ledger, $marks, $composeService)));
+        $replays = new ReplaysRecording($this->ledger, $this->updates, $this->clock, new LockFactory(new InMemoryStore()), $marks, TourCaptionsOn::captions($this->updates, TourCaptionsOn::tour($this->ledger, $marks, $composeService)), TourCaptionsOn::judged($this->ledger, $marks));
 
         return new PlayDemoRunHandler($replays, $this->format(), new Filesystem(), new RecordingLogger(LogRecords::ofThisRun() ?? self::fail('No log records.')), $recording, $composeService);
     }

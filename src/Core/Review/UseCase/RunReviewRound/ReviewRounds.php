@@ -179,6 +179,26 @@ final readonly class ReviewRounds
             && $round->identity()->commits->head->hash === $head);
     }
 
+    // Newest first: the canonical sequence by number, then the rounds migration Version20261122100000 left under another spelling, which predate it and among which the highest number decides, as judgedUnderAnOldSpelling() orders them. Matched by the canonical form, because the caller may name the change as the forge lists it.
+    /**
+     * @return list<ReviewRound>
+     */
+    public function ofEverySpelling(string $project, string $change): array
+    {
+        $canonical = ChangeAddress::canonical($change);
+
+        /** @var list<ReviewRound> $rounds */
+        $rounds = $this->entities->createQuery(sprintf('SELECT r FROM %s r WHERE r.subject.project = :project ORDER BY r.change.number DESC', ReviewRound::class))
+            ->setParameter('project', $project)
+            ->getResult();
+        $ofChange = array_values(array_filter($rounds, static fn (ReviewRound $round): bool => ChangeAddress::canonical($round->change()) === $canonical));
+
+        return [
+            ...array_filter($ofChange, static fn (ReviewRound $round): bool => $round->change() === $canonical),
+            ...array_filter($ofChange, static fn (ReviewRound $round): bool => $round->change() !== $canonical),
+        ];
+    }
+
     // Compared as stored, as judgedAfter() compares them, so the rounds come as one numbered sequence.
     /**
      * @return list<ReviewRound>

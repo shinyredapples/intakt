@@ -13,6 +13,7 @@ use Intakt\Plugin\GitHubForge\Infrastructure\EntityTags;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubCalls;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubIssueReads;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubMoments;
+use Intakt\Plugin\GitHubForge\Infrastructure\IssueFields;
 use Intakt\Plugin\GitHubForge\Infrastructure\NextLinks;
 use Intakt\Plugin\GitHubForge\Infrastructure\RepositoryAddress;
 use Intakt\Plugin\GitHubForge\Infrastructure\WatchedRepositories;
@@ -24,6 +25,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(ChangedWhileServed::class)]
 #[CoversClass(EntityTags::class)]
 #[CoversClass(NextLinks::class)]
+#[CoversClass(IssueFields::class)]
 #[CoversClass(IssueListing::class)]
 #[CoversClass(ListedIssue::class)]
 #[UsesClass(RepositoryAddress::class)]
@@ -388,6 +390,16 @@ final class GitHubIssueReadsTest extends TestCase
         self::assertSame('GitHub answered a Link header this forge cannot read.', $this->failureOf($api)->getMessage());
     }
 
+    public function testALinkHeaderWithAnEmptyListElementFailsTheListing(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->page(1, 100), 2 => $this->page(101, 1)];
+        $api->namingNext = [1];
+        $api->nextLink = '<https://api.github.com/repositories/1/issues?page=%d>; rel="next", , <https://api.github.com/repositories/1/issues?page=1>; rel="first"';
+
+        self::assertSame('GitHub answered a Link header this forge cannot read.', $this->failureOf($api)->getMessage());
+    }
+
     public function testARateLimitedLaterPageFailsTheListingAsRateLimited(): void
     {
         $api = new RecordedIssueApi();
@@ -447,6 +459,143 @@ final class GitHubIssueReadsTest extends TestCase
         $api->stable = true;
 
         self::assertCount(1000, $api->reads()->listOpen('alpha', null)->issues());
+    }
+
+    public function testAnOpenIssueIsReadWithOneRequestAndCarriesWhatAListingWouldCarry(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->single([])];
+
+        $issue = $api->reads()->readOpen('alpha', 12);
+
+        self::assertSame(['GET https://api.github.com/repos/acme/widgets/issues/12'], $api->requests);
+        self::assertSame(12, $issue?->number);
+        self::assertSame('Add the export', $issue->title);
+        self::assertSame("Export the report.\n\nWaits for #9 and #10\n", $issue->body);
+        self::assertSame(['intakt', 'priority:high'], $issue->labels);
+        self::assertSame('2026-12-01T08:00:00+00:00', $issue->milestoneDue?->format('c'));
+    }
+
+    public function testAClosedIssueReadsAsNoOpenIssue(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->single(['state' => 'closed'])];
+
+        self::assertNull($api->reads()->readOpen('alpha', 12));
+    }
+
+    public function testAPullRequestReadsAsNoOpenIssue(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->single(['pull_request' => ['url' => 'https://api.github.com/repos/acme/widgets/pulls/12']])];
+
+        self::assertNull($api->reads()->readOpen('alpha', 12));
+    }
+
+    public function testAnIssueGitHubAnswers404ForReadsAsNoOpenIssue(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => '404'];
+
+        self::assertNull($api->reads()->readOpen('alpha', 12));
+    }
+
+    public function testARateLimitedSingleReadFailsAsRateLimited(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => '429'];
+
+        $this->expectException(ForgeRateLimited::class);
+
+        $api->reads()->readOpen('alpha', 12);
+    }
+
+    public function testASingleReadAnsweredWithAnotherFailureFailsTheRead(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => '500'];
+
+        $this->expectExceptionObject(new ForgeReadFailed('GitHub answered 500 to a read.'));
+
+        $api->reads()->readOpen('alpha', 12);
+    }
+
+    public function testASingleReadAnsweredWithNotModifiedFailsTheRead(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->notModified = true;
+
+        $this->expectExceptionObject(new ForgeReadFailed('GitHub answered 304 to a read.'));
+
+        $api->reads()->readOpen('alpha', 12);
+    }
+
+    public function testAnIssueTransferredToAnotherRepositoryReadsAsNoOpenIssue(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => '301'];
+
+        self::assertNull($api->reads()->readOpen('alpha', 12));
+    }
+
+    public function testAnAnswerForAnotherNumberReadsAsNoOpenIssue(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->single(['number' => 99])];
+
+        self::assertNull($api->reads()->readOpen('alpha', 12));
+    }
+
+    public function testAnAnswerForTheNextNumberReadsAsNoOpenIssue(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->single([])];
+
+        self::assertNull($api->reads()->readOpen('alpha', 13));
+    }
+
+    public function testAnIssueWithAStateThisForgeDoesNotKnowFailsTheRead(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->single(['state' => 'unexpected'])];
+
+        $this->expectExceptionObject(new ForgeReadFailed('GitHub answered an issue whose state is neither open nor closed.'));
+
+        $api->reads()->readOpen('alpha', 12);
+    }
+
+    public function testAnIssueWithoutAStateFailsTheRead(): void
+    {
+        $listed = json_decode(RecordedIssueApi::fixture('issues_open.json'), true, flags: JSON_THROW_ON_ERROR);
+        self::assertIsArray($listed);
+        self::assertIsArray($listed[0]);
+        unset($listed[0]['state']);
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => json_encode($listed[0], JSON_THROW_ON_ERROR)];
+
+        $this->expectExceptionObject(new ForgeReadFailed('GitHub answered an issue whose state is neither open nor closed.'));
+
+        $api->reads()->readOpen('alpha', 12);
+    }
+
+    public function testASingleReadAnsweredWithAListFailsTheRead(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => '[]'];
+
+        $this->expectExceptionObject(new ForgeReadFailed('GitHub answered an issue that is not an object.'));
+
+        $api->reads()->readOpen('alpha', 12);
+    }
+
+    /**
+     * @param array<string, mixed> $overrides
+     */
+    private function single(array $overrides): string
+    {
+        $listed = json_decode(RecordedIssueApi::fixture('issues_open.json'), true, flags: JSON_THROW_ON_ERROR);
+
+        return json_encode([...(is_array($listed) && is_array($listed[0]) ? $listed[0] : []), ...$overrides], JSON_THROW_ON_ERROR);
     }
 
     /**

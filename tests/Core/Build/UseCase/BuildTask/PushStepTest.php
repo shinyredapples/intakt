@@ -40,6 +40,8 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
+use Symfony\Component\Lock\Exception\LockStorageException;
+use Symfony\Component\Lock\PersistingStoreInterface;
 use Throwable;
 
 #[CoversClass(PushStep::class)]
@@ -152,6 +154,17 @@ final class PushStepTest extends TestCase
 
         self::assertSame('the project name is no folder name', $failure);
         self::assertSame([], $this->scenario->ledger->kinds());
+    }
+
+    public function testALockStoreFailureDuringThePushGivesItsMessageAsTheFailure(): void
+    {
+        $store = self::createStub(PersistingStoreInterface::class);
+        $store->method('save')->willThrowException(new LockStorageException('the lock database is down'));
+
+        $failure = $this->stepOf($this->scenario->pushWithLockStore($store))->failureOf($this->request(), $this->accepted(), $this->text());
+
+        self::assertStringStartsWith('The branch was not pushed: the lock store failed: ', (string) $failure);
+        self::assertNull($this->scenario->remoteTip($this->forge));
     }
 
     private function stepOf(BranchPush $branches): PushStep

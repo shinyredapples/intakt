@@ -13,9 +13,22 @@ python3 -m http.server 8000
 
 Then open `http://localhost:8000/projects.html`. The setup and add-project pages take `?step=2` to `?step=5`.
 
-Every page uses `assets/intakt.css` and `assets/intakt.js`.
+Every page in this folder uses `assets/intakt.css` and `assets/intakt.js`, except the review page below.
 
-The mocks load their fonts from Google Fonts, so opening them or running `tools/screenshots.js` needs the network; without it the browser falls back to other fonts and the screenshots differ from the approved set. The mocks are design documents, not shipped code: the dashboard serves its fonts itself.
+## The review page (Scoreboard)
+
+`review-scoreboard/index.html` is the owner-approved mock of the at-a-glance review page (direction A, "Scoreboard", #3503): the verdict card, the reviewer faces, the pass path and the findings grouped by urgency, with real demo data, light and dark, phone and desktop. A finding's row opens its own view (`#f1` and so on). It is a standalone prototype: it carries its own copy of the tokens (`review-scoreboard/proto.css`, page styles in `review-scoreboard/ux3.css`) and does not use `assets/intakt.css` or `assets/intakt.js`. It loads its fonts from `docs/pages/assets/`, which a server rooted in this folder cannot reach, so serve it from `docs/` instead. From `docs/`, run one of:
+
+```sh
+php -S localhost:8000
+python3 -m http.server 8000
+```
+
+Then open `http://localhost:8000/design/mocks/review-scoreboard/index.html`. Its fonts come from the repository, so it needs no network.
+
+## Fonts
+
+The other mocks load their fonts from Google Fonts, so opening them or running `tools/screenshots.js` needs the network; without it the browser falls back to other fonts and the screenshots differ from the approved set. The mocks are design documents, not shipped code: the dashboard serves its fonts itself.
 
 ## Screenshots
 

@@ -6,7 +6,7 @@ namespace Intakt\Core\Review\Infrastructure;
 
 use Closure;
 use Intakt\Core\Review\Contract\StreamCutBy;
-use Intakt\Core\Review\Contract\Verdict;
+use Intakt\Core\Review\Infrastructure\ReviewerAnswer\Verdict;
 use Override;
 use Symfony\AI\Platform\Result\Stream\AbstractStreamListener;
 use Symfony\AI\Platform\Result\Stream\CompleteEvent;

@@ -10,7 +10,6 @@ use NoDiscard;
 use Symfony\AI\Platform\Exception\RuntimeException;
 use Symfony\AI\Platform\Exception\UnexpectedResultTypeException;
 use Symfony\AI\Platform\Exception\ValidationException;
-use Symfony\AI\Platform\Result\DeferredResult;
 use Symfony\Component\Serializer\Exception\ExceptionInterface;
 use Symfony\Component\Validator\ConstraintViolationInterface;
 use Symfony\Component\Validator\ConstraintViolationListInterface;
@@ -18,15 +17,6 @@ use Symfony\Component\Validator\ConstraintViolationListInterface;
 final readonly class VerdictParser
 {
     private const string PROPERTY_PATH = '/^[a-z_]\w*(\[\d+\])*(\.[a-z_]\w*(\[\d+\])*)*$/i';
-
-    /**
-     * @throws VerdictUnreadable
-     */
-    #[NoDiscard('a verdict that is not read approves nothing')]
-    public function parse(DeferredResult $result): Verdict
-    {
-        return $this->parseWith(static fn (): Verdict => $result->asObject(Verdict::class));
-    }
 
     /**
      * @param Closure(): Verdict $read

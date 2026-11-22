@@ -21,6 +21,7 @@ use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
 use Intakt\Plugin\GitHubForge\Contract\SteeringAccounts;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubIssueHistories;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubIssueReads;
+use Intakt\Plugin\GitHubForge\Infrastructure\IssueFields;
 use Intakt\Plugin\GitHubWorkSource\Domain\HeldIssue;
 use Intakt\Plugin\GitHubWorkSource\Domain\IntakePlan;
 use Intakt\Plugin\GitHubWorkSource\Domain\IntakeRules;
@@ -55,6 +56,7 @@ use Symfony\Component\ErrorHandler\BufferingLogger;
 #[CoversClass(StoredIssue::class)]
 #[CoversClass(IntakeStore::class)]
 #[UsesClass(GitHubIssueReads::class)]
+#[UsesClass(IssueFields::class)]
 #[UsesClass(GitHubIssueHistories::class)]
 #[UsesClass(IssueListing::class)]
 #[UsesClass(IntakeRules::class)]
