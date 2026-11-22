@@ -48,6 +48,10 @@ When Intakt builds a task, these inputs decide its tier, the first that applies 
 
 One thing to know about booting: Intakt can start a change in a scratch copy to see that it boots. A change that takes too long to install or to start counts as a failed boot, not as a fault of Intakt, so when main boots fine, the change can be sent back. Details are in the [complete reference](../reference/user-manual.md).
 
-Looking for a setting, a command option or an exact rule? The [complete reference](../reference/user-manual.md) keeps every detail. The [plain-words guides](../guide/README.md) explain how Intakt works inside.
+Looking for a setting, a command option or an exact rule? The [complete reference](../reference/user-manual.md) keeps every detail.
+
+One rule to know before your first build: for a project with a `github` entry, the `--remote` of `intakt:build:task` must be that configured GitHub repository's `https://github.com/<owner>/<name>` address, or the command refuses before it does anything ([the `intakt:build:task` options](../reference/user-manual.md#building-one-task)).
+
+The [plain-words guides](../guide/README.md) explain how Intakt works inside.
 
 Next: [Meet Intakt](01-meet-intakt.md)
