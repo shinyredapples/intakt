@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Git\UseCase\PushBranch;
 
-use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Git\Contract\BranchNotPushed;
 use Intakt\Core\Git\Contract\BranchPush;
 use Intakt\Core\Git\Contract\BranchPushRequest;
 use Intakt\Core\Git\Contract\MainConflicts;
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Git\Contract\PushedBranch;
 use Intakt\Core\Git\Contract\RefusedPush;
 use Intakt\Plugin\Forge\Contract\ChangeId;

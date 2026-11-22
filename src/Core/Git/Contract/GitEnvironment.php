@@ -19,7 +19,6 @@ final readonly class GitEnvironment implements IteratorAggregate
 
     public function __construct(string|false ...$variables)
     {
-        /** @var array<string, string|false> $variables */
         $this->variables = $variables;
     }
 

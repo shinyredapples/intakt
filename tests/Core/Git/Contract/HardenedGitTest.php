@@ -443,7 +443,7 @@ final class HardenedGitTest extends TestCase
     }
 
     /**
-     * @param iterable<int, string>                $command
+     * @param iterable<int, string>          $command
      * @param iterable<string, string|false> $environment
      */
     private function runGit(iterable $command, iterable $environment, ?string $directory = null): string
@@ -456,7 +456,7 @@ final class HardenedGitTest extends TestCase
     }
 
     /**
-     * @param iterable<int, string>                $command
+     * @param iterable<int, string>          $command
      * @param iterable<string, string|false> $environment
      */
     private function start(iterable $command, iterable $environment, string $directory): Process

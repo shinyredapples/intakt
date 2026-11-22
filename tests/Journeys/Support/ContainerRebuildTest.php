@@ -169,7 +169,7 @@ final class ContainerRebuildTest extends TestCase
      */
     private function withoutKeys(): array
     {
-        $variables = [SampleProject::HUGGING_FACE_TOKEN, ...array_merge(...array_map(static fn (Provider $provider): array => [...$provider->variables()],Provider::cases()))];
+        $variables = [SampleProject::HUGGING_FACE_TOKEN, ...array_merge(...array_map(static fn (Provider $provider): array => [...$provider->variables()], Provider::cases()))];
 
         return array_fill_keys($variables, false);
     }

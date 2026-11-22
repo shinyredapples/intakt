@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Build\UseCase\BuildTask;
 
-use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTaskRequest;
 use Intakt\Core\Build\UseCase\BuildTask\PushStep;
 use Intakt\Core\Git\Contract\BranchNotPushed;
@@ -15,6 +14,7 @@ use Intakt\Core\Git\Contract\BuildCheckoutFailed;
 use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\MainConflicts;
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Git\Contract\PushedBranch;
 use Intakt\Core\Git\Contract\RefusedPush;
 use Intakt\Core\Git\Contract\UnsignedCommitRefused;

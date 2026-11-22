@@ -13,7 +13,10 @@ final class GitEnvironmentTest extends TestCase
 {
     public function testAVariableAddedLaterReplacesOneOfTheSameName(): void
     {
-        $environment = new GitEnvironment(GIT_ALLOW_PROTOCOL: '', HOME: '/nonexistent')->with(GIT_ALLOW_PROTOCOL: 'file');
+        $environment = new GitEnvironment(
+            GIT_ALLOW_PROTOCOL: '',
+            HOME: '/nonexistent',
+        )->with(GIT_ALLOW_PROTOCOL: 'file');
 
         self::assertSame(['GIT_ALLOW_PROTOCOL' => 'file', 'HOME' => '/nonexistent'], [...$environment]);
     }

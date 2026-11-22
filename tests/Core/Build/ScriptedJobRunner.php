@@ -6,10 +6,10 @@ namespace Intakt\Tests\Core\Build;
 
 use Intakt\Core\Job\Contract\JobCause;
 use Intakt\Core\Job\Contract\JobEnd;
-use Intakt\Tests\Core\Job\OutputFiles;
 use Intakt\Core\Job\Contract\JobResult;
 use Intakt\Core\Job\Contract\JobRunner;
 use Intakt\Core\Job\Contract\JobSpec;
+use Intakt\Tests\Core\Job\OutputFiles;
 use LogicException;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Finder\Finder;

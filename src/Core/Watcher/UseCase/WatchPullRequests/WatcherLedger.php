@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Watcher\UseCase\WatchPullRequests;
 
-use Intakt\Core\Ledger\Contract\Mentions;
 use DateTimeImmutable;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\Mentions;
 use Intakt\Core\Review\Contract\BootOutcome;
 use Intakt\Core\Watcher\Contract\FailingMain;
 use Intakt\Core\Watcher\Contract\FailingMains;

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\Infrastructure;
 
-use Intakt\Core\Ledger\Contract\Mentions;
 use Intakt\Core\Build\Contract\BuildStep;
 use Intakt\Core\Build\Contract\BuildStepOutcome;
 use Intakt\Core\Dashboard\Domain\Board;
@@ -14,6 +13,7 @@ use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\ReviewerOutcome;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\Mentions;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Intakt\Core\Review\Contract\ChangeDecision;
 use Intakt\Core\Review\Contract\CountedQuotes;

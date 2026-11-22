@@ -317,7 +317,7 @@ final readonly class MainHistory implements CommitHistory
 
         // Options go right after the program, because git reads its global options only before the command.
         $command = [...$call->command];
-        $process = new Process([$command[0], ...$options, ...array_slice($command, 1)],$call->directory, [...$call->environment, ...$overrides], null, self::TIMEOUT_SECONDS);
+        $process = new Process([$command[0], ...$options, ...array_slice($command, 1)], $call->directory, [...$call->environment, ...$overrides], null, self::TIMEOUT_SECONDS);
         $process->run();
 
         return $process;

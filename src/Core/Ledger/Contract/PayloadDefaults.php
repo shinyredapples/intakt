@@ -19,7 +19,6 @@ final readonly class PayloadDefaults implements IteratorAggregate
 
     public function __construct(mixed ...$values)
     {
-        /** @var array<string, mixed> $values */
         $this->values = $values;
     }
 

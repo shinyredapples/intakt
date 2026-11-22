@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\PublishVerdict;
 
-use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Budget\Infrastructure\ConfiguredPrices;
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Git\Contract\ProtectedChanges;
 use Intakt\Core\Git\Contract\ProtectedHeads;
 use Intakt\Core\Ledger\Contract\Ledger;

@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Infrastructure;
 
-use Intakt\Core\Ai\Contract\ReviewTools;
 use Intakt\Core\Ai\Contract\ReviewServerAccess;
+use Intakt\Core\Ai\Contract\ReviewTools;
 use Intakt\Core\Review\Contract\NoReviewServerAccess;
 use Intakt\Core\Review\Contract\ReviewServerAccesses;
 use Intakt\Core\Review\Contract\ReviewServices;

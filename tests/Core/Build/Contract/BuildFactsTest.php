@@ -6,9 +6,9 @@ namespace Intakt\Tests\Core\Build\Contract;
 
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Build\Contract\BuildFacts;
+use Intakt\Core\Build\Contract\Setback;
 use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Review\Contract\Labels;
-use Intakt\Core\Build\Contract\Setback;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;

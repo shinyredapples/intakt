@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\HandBack;
 
-use Intakt\Core\Ledger\Contract\Mentions;
 use Closure;
 use DateTimeImmutable;
 use Intakt\Core\Ledger\Contract\AppendResult;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\Mentions;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 use LogicException;

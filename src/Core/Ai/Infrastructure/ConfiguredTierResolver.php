@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Ai\Infrastructure;
 
-use Intakt\Core\Ai\Contract\ProjectNames;
 use Intakt\Core\Ai\Contract\AiServices;
+use Intakt\Core\Ai\Contract\ProjectNames;
 use Intakt\Core\Ai\Contract\ProjectNotConfigured;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;

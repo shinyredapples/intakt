@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\UseCase\PublishVerdict;
 
-use Intakt\Core\Ledger\Contract\Mentions;
 use Intakt\Core\Git\Contract\ProtectedChanges;
 use Intakt\Core\Git\Contract\ProtectedHeads;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\Mentions;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Watcher\Contract\HandedOverChanges;
