@@ -138,7 +138,7 @@ A task can stall for a reason the Developer can't fix, for example it needs anot
 
 ```mermaid
 flowchart LR
-  w[Work can't continue] --> h[On hold]
+  w[Work can't continue] -- "another outside reason" --> h[On hold]
   w -- "it needs the newest project" --> left{A try left?}
   left -- yes --> rebuild
   left -- no --> m
