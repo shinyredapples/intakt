@@ -109,6 +109,16 @@ final class RoundFindingTest extends TestCase
         ]);
     }
 
+    public function testWhatFollowsTheHeadlineIsTheRestOfTheTextWithoutTheHeadline(): void
+    {
+        self::assertSame('It drops the last item.', new RoundFinding('F1', 'P1', 'The total in src/A.php is off by 1.5.  It drops the last item.')->afterHeadline());
+    }
+
+    public function testNothingFollowsTheHeadlineOfOneSentenceOrOfNoText(): void
+    {
+        self::assertSame([null, null], [new RoundFinding('F1', 'P2', 'Keep `Ready? yes` as the prompt.')->afterHeadline(), new RoundFinding('F1', 'P2', null)->afterHeadline()]);
+    }
+
     public function testAFindingsUrgencyReadsItsSeverityAsHowSoonToFixIt(): void
     {
         self::assertSame(['Urgent', 'Should fix', 'Nice to have', null, null], array_map(static fn (?string $severity): ?string => new RoundFinding('F1', $severity, 'A.')->urgency()?->words(), ['P1', 'P2', 'P3', 'P9', null]));

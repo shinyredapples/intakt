@@ -142,14 +142,14 @@ final class ReviewVerdictCardTest extends DashboardPageTestCase
         self::assertSame('1 to fix · 1 urgent', $crawler->filter('.verdict-card .verdict-count')->text());
     }
 
-    public function testACardShowsTheHeadlineAsItsTitleAndTheWholeTextAsItsExplanation(): void
+    public function testACardShowsTheHeadlineAsItsTitleAndTheRestOfTheTextAsItsExplanation(): void
     {
         $this->givenAChangesRound();
         $this->ledger->judgeToFixAtLine7OfA('round-1', 'The total is off by one. It drops the last item.');
 
         $card = $this->browser->request('GET', '/reviews/round-1')->filter('.fix-card');
 
-        self::assertSame(['The total is off by one.', 'The total is off by one. It drops the last item.'], [$card->filter('.fix-title')->text(), $card->filter('.fix-more')->text()]);
+        self::assertSame(['The total is off by one.', 'It drops the last item.'], [$card->filter('.fix-title')->text(), $card->filter('.fix-more')->text()]);
     }
 
     public function testACardOfOneSentenceHasNoExplanationLine(): void
