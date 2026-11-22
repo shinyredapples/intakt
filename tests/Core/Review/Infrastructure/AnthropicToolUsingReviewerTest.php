@@ -9,6 +9,7 @@ use Intakt\Core\Review\Contract\ChangeUnderReview;
 use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Fence;
+use Intakt\Core\Review\Contract\FollowUpNote;
 use Intakt\Core\Review\Contract\PromptCut;
 use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\ReviewerConversation;
@@ -106,7 +107,7 @@ final class AnthropicToolUsingReviewerTest extends WebTestCase
         $verdict = $this->review($this->unstreamed(RecordedAnthropicTurns::answering()->thinking('Nothing is wrong.')->saying(self::APPROVE)));
 
         self::assertSame(Decision::Approve, $verdict->verdict, json_encode($verdict->findings, JSON_THROW_ON_ERROR));
-        self::assertSame(['Cover the empty cart.'], $verdict->follow_ups);
+        self::assertEquals([new FollowUpNote('Cover the empty cart.')], $verdict->follow_ups);
     }
 
     public function testAnAnswerAfterAToolCallThatMissesAVerdictFieldIsRefusedAsUnreadable(): void
@@ -166,7 +167,7 @@ final class AnthropicToolUsingReviewerTest extends WebTestCase
         $verdict = $this->review([$tool->asServerSentEvents(), $answer->asServerSentEvents()], new ModelCatalog());
 
         self::assertSame(Decision::Approve, $verdict->verdict, json_encode($verdict->findings, JSON_THROW_ON_ERROR));
-        self::assertSame(['Cover the empty cart.'], $verdict->follow_ups);
+        self::assertEquals([new FollowUpNote('Cover the empty cart.')], $verdict->follow_ups);
     }
 
     public function testTheTextAStreamedModelNarratesBeforeAToolCallIsNotTakenForTheAnswer(): void
@@ -177,7 +178,7 @@ final class AnthropicToolUsingReviewerTest extends WebTestCase
         $verdict = $this->review([$tool->asServerSentEvents(), $answer->asServerSentEvents()], new ModelCatalog());
 
         self::assertSame(Decision::Approve, $verdict->verdict, json_encode($verdict->findings, JSON_THROW_ON_ERROR));
-        self::assertSame(['Cover the empty cart.'], $verdict->follow_ups);
+        self::assertEquals([new FollowUpNote('Cover the empty cart.')], $verdict->follow_ups);
     }
 
     public function testAnAnswerInTwoTextBlocksBesideItsThinkingIsRefusedAsUnreadable(): void

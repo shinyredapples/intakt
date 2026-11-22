@@ -80,6 +80,20 @@ final class ShowComponentsControllerTest extends DashboardPageTestCase
         }
     }
 
+    public function testTheSampleApprovalCardNamesTheSecretsFloorAndTheChangedFile(): void
+    {
+        $page = $this->browser->request('GET', '/components');
+
+        self::assertSame(['Approve this version: secrets limit, ForgeTokenStore.php changed'], $page->filter('#c-cards .spec[data-theme="light"] a.card.needs:not(.is-hover) .title + p.blocker')->each(static fn (Crawler $ask): string => $ask->text()));
+    }
+
+    public function testTheEmptyColumnSampleSaysWhatTheColumnWillHold(): void
+    {
+        $page = $this->browser->request('GET', '/components');
+
+        self::assertSame(['Tasks appear here when Intakt takes in an issue'], $page->filter('.spec[data-theme="light"] .col-empty')->each(static fn (Crawler $empty): string => $empty->text()));
+    }
+
     public function testTheComponentsPageShowsTheFourOutcomeChipsInBothThemes(): void
     {
         $page = $this->browser->request('GET', '/components');
