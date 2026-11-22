@@ -10,6 +10,7 @@ use Intakt\Core\Review\Domain\KeptVerdict;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Infrastructure\KeptVerdicts;
 use Intakt\Core\Review\UseCase\EscalateRecurringP1\EscalateRecurringP1;
+use Intakt\Core\Review\UseCase\EscalateRecurringP1\RecordFailedEscalation;
 use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
 use Symfony\Component\Messenger\MessageBusInterface;
 
@@ -43,6 +44,14 @@ final readonly class RecordRecurringP1s
             return;
         }
 
-        $this->commands->dispatch(new EscalateRecurringP1($found->round, $found->finding, $found->key));
+        $this->escalate($found);
+    }
+
+    // With the record of its failure as its failure stamp, so an escalation parked for good ends in escalation_failed and its change is no longer pending.
+    private function escalate(RecurringP1Found $found): void
+    {
+        $escalation = new EscalateRecurringP1($found->round, $found->finding, $found->key);
+
+        $this->commands->dispatch($escalation, [RecordFailedEscalation::onFailureOf($escalation)]);
     }
 }

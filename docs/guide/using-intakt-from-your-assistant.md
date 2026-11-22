@@ -39,7 +39,7 @@ Your assistant can also read one thing that is not a tool: the **round findings*
 
 How it stays safe:
 - **Every tool is labeled** with what it does ("only reads", "changes something"), so your assistant knows before it calls.
-- **Starting a review needs a token** you set in Intakt's config, and writing must be switched on there too. Without both, your assistant can read but not start anything ([how to set it up](../user/mcp.md)).
+- **Starting a review needs a token** you set in Intakt's config, and writing must be switched on there too. Without both, your assistant can read but not start anything ([how to set it up](../reference/mcp.md)).
 - **Intakt decides, not the model:** whether a tool may write is decided by Intakt's own rules, never by what the assistant asks for.
 - **Approvals are not tools:** no MCP tool can approve a merge or a protected change. That stays your click or comment on the forge.
 

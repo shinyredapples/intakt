@@ -9,6 +9,7 @@ use Intakt\Core\Dashboard\Contract\DashboardRoutes;
 use Intakt\Core\Dashboard\Contract\LiveUpdates;
 use Intakt\Core\Dashboard\Infrastructure\DemoTour;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
+use Intakt\Core\Dashboard\Infrastructure\ReplayedJudgedState;
 use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Dashboard\Infrastructure\RoundPayloads;
 use Intakt\Core\Dashboard\Infrastructure\TourCaptionUpdates;
@@ -16,7 +17,9 @@ use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Review\Contract\ChangeDecision;
 use Intakt\Core\Review\Contract\FailureInWords;
+use Intakt\Core\Review\Contract\RoundUpdates;
 use Intakt\Core\Review\UseCase\ReviewChange\RoundLedgerReading;
+use Intakt\Tests\Core\Review\RecordedRoundUpdates;
 use Intakt\Tests\Support\FixedRoundEndings;
 use Intakt\Tests\Support\StoredSerializerFactory;
 use Symfony\Bridge\Twig\Extension\RoutingExtension;
@@ -37,10 +40,20 @@ final class TourCaptionsOn
 
     public static function tour(Ledger $ledger, ReplayMarks $marks, string $composeService): DemoTour
     {
-        $payloads = new LedgerPayloads(StoredSerializerFactory::create());
-        $pages = new LedgerReviewPages($ledger, new RoundPayloads($payloads), new RoundLedgerReading($ledger, $payloads, new ConfiguredPrices([])), new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), $marks);
+        return new DemoTour(self::pages($ledger, $marks), $composeService);
+    }
 
-        return new DemoTour($pages, $composeService);
+    // Recorded by default, because most replay tests check the recorded updates alone.
+    public static function judged(Ledger $ledger, ReplayMarks $marks, RoundUpdates $rounds = new RecordedRoundUpdates()): ReplayedJudgedState
+    {
+        return new ReplayedJudgedState(self::pages($ledger, $marks), $rounds);
+    }
+
+    private static function pages(Ledger $ledger, ReplayMarks $marks): LedgerReviewPages
+    {
+        $payloads = new LedgerPayloads(StoredSerializerFactory::create());
+
+        return new LedgerReviewPages($ledger, new RoundPayloads($payloads), new RoundLedgerReading($ledger, $payloads, new ConfiguredPrices([])), new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), $marks);
     }
 
     // The shipped templates with the one route the caption links, so the stream is the text a page receives.

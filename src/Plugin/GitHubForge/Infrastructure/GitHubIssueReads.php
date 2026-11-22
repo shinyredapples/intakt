@@ -16,21 +16,23 @@ use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
 use JsonException;
 use Symfony\Contracts\HttpClient\Exception\ExceptionInterface;
 
-// Apart from the pull request reads, because intake lists issues, pull requests among them, and must read every page of them.
+// Apart from the pull request reads, because intake lists issues, pull requests among them, and must read every page of them, while a build reads its one task alone.
 final readonly class GitHubIssueReads implements IssueReads
 {
     private const int PAGE_SIZE = 100;
     // A listing of more pages than this fails, because reading on has no end a tick could wait for.
     private const int MAX_PAGES = 10;
     private const int OK = 200;
+    private const int MOVED_PERMANENTLY = 301;
     private const int NOT_MODIFIED = 304;
     private const int UNAUTHORIZED = 401;
+    private const int NOT_FOUND = 404;
 
     public function __construct(
         private GitHubCalls $calls,
         private CheckedInstallationTokens $tokens,
         private WatchedRepositories $repositories,
-        private GitHubMoments $moments,
+        private IssueFields $fields,
         private BudgetReserve $reserve,
         private ChangedWhileServed $changedWhileServed,
         private EntityTags $entityTags,
@@ -54,6 +56,51 @@ final readonly class GitHubIssueReads implements IssueReads
         return IssueListing::listed($issues['issues'], 1 === $issues['pages'] ? $first['etag'] : null);
     }
 
+    // No listing slot, because the budget reserve paces the watcher's routine listings and a build reads its one task once.
+    public function readOpen(string $project, int $number): ?ListedIssue
+    {
+        // Redirects are not followed, because GitHub answers an issue transferred to another repository with a 301 to it, and that issue is no task of this project.
+        $answer = $this->answerTo('GET', $this->repositories->addressOf($project)->path().'/issues/'.$number, ['max_redirects' => 0]);
+        if (in_array($answer['status'], [self::MOVED_PERMANENTLY, self::NOT_FOUND], true)) {
+            return null;
+        }
+
+        if (self::OK !== $answer['status']) {
+            throw $this->refused($answer['status']);
+        }
+
+        $data = $this->issueOf($answer['body']);
+        $issue = $this->fields->listedIssueOf($data);
+
+        return $issue->isPullRequest || $issue->number !== $number || !$this->isOpen($data) ? null : $issue;
+    }
+
+    /**
+     * @param array<mixed> $issue
+     */
+    private function isOpen(array $issue): bool
+    {
+        return match ($issue['state'] ?? null) {
+            'open' => true,
+            'closed' => false,
+            default => throw new ForgeReadFailed('GitHub answered an issue whose state is neither open nor closed.'),
+        };
+    }
+
+    /**
+     * @return array<mixed>
+     */
+    private function issueOf(string $body): array
+    {
+        $issue = $this->decode($body);
+        // `[]` decodes to the same empty array as `{}`, so only the answer's first character tells a list from an object.
+        if (!str_starts_with(ltrim($body), '{')) {
+            throw new ForgeReadFailed('GitHub answered an issue that is not an object.');
+        }
+
+        return $issue;
+    }
+
     /**
      * @param array{status: int, body: string, etag: ?string, next: bool, date: ?string} $first
      *
@@ -65,7 +112,7 @@ final readonly class GitHubIssueReads implements IssueReads
         $validators = [];
         $answer = $first;
         for ($page = 1;; ++$page) {
-            $listed = array_map($this->listed(...), $this->issuesOf($answer['body']));
+            $listed = array_map($this->fields->listedIssueOf(...), $this->issuesOf($answer['body']));
             // Only a missing next link ends the listing, so a short page that still names one means issues went unread.
             if ($answer['next'] && count($listed) < self::PAGE_SIZE) {
                 throw new ForgeReadFailed(sprintf('GitHub answered a short page %d of open issues but names a next page.', $page));
@@ -127,68 +174,6 @@ final readonly class GitHubIssueReads implements IssueReads
     }
 
     /**
-     * @param array<mixed> $issue
-     */
-    private function listed(array $issue): ListedIssue
-    {
-        $number = $issue['number'] ?? null;
-        $body = $issue['body'] ?? '';
-        $due = $this->at($issue, 'milestone', 'due_on');
-        if (!is_int($number) || $number < 1 || !is_string($body)) {
-            throw new ForgeReadFailed('GitHub listed an issue this forge cannot read.');
-        }
-
-        return new ListedIssue(
-            $number,
-            $this->text($issue, 'title'),
-            $body,
-            $this->labelsOf($issue),
-            $this->text($issue, 'user', 'login'),
-            $this->moments->parse($this->text($issue, 'updated_at')),
-            is_string($due) ? $this->moments->parse($due) : null,
-            array_key_exists('pull_request', $issue),
-        );
-    }
-
-    /**
-     * @param array<mixed> $issue
-     *
-     * @return list<string>
-     */
-    private function labelsOf(array $issue): array
-    {
-        $labels = $issue['labels'] ?? [];
-        if (!is_array($labels)) {
-            throw new ForgeReadFailed('GitHub listed an issue with labels this forge cannot read.');
-        }
-
-        return array_values(array_map(fn (mixed $label): string => is_array($label) ? $this->text($label, 'name') : throw new ForgeReadFailed('GitHub listed a label that is not an object.'), $labels));
-    }
-
-    /**
-     * @param array<mixed> $data
-     */
-    private function at(array $data, string ...$keys): mixed
-    {
-        $value = $data;
-        foreach ($keys as $key) {
-            $value = is_array($value) ? ($value[$key] ?? null) : null;
-        }
-
-        return $value;
-    }
-
-    /**
-     * @param array<mixed> $data
-     */
-    private function text(array $data, string ...$keys): string
-    {
-        $value = $this->at($data, ...$keys);
-
-        return is_string($value) && '' !== $value ? $value : throw new ForgeReadFailed(sprintf('GitHub answered without "%s".', implode('.', $keys)));
-    }
-
-    /**
      * @return array<mixed>
      */
     private function decode(string $body): array
@@ -228,6 +213,32 @@ final readonly class GitHubIssueReads implements IssueReads
      */
     private function send(string $method, string $path, array $options): array
     {
+        $answer = $this->answerTo($method, $path, $options);
+        $status = $answer['status'];
+        $headers = $answer['headers'];
+
+        // Only a whole page counts, because another 2xx such as `206 Partial Content` would list part of a page as all of it.
+        if (self::OK !== $status && self::NOT_MODIFIED !== $status) {
+            throw $this->refused($status);
+        }
+
+        return ['status' => $status, 'body' => $answer['body'], 'etag' => $this->entityTags->checked($headers['etag'][0] ?? null), 'next' => $this->nextLinks->namesNext($headers['link'] ?? []), 'date' => $headers['date'][0] ?? null];
+    }
+
+    private function refused(int $status): ForgeReadFailed
+    {
+        return new ForgeReadFailed(sprintf('GitHub answered %d to a read.', $status), previous: self::UNAUTHORIZED === $status ? new ForgeCredentialsRefused() : null);
+    }
+
+    /**
+     * @param array<string, mixed> $options
+     *
+     * @return array{status: int, body: string, headers: array<string, list<string>>}
+     *
+     * @throws ForgeRateLimited
+     */
+    private function answerTo(string $method, string $path, array $options): array
+    {
         $options['auth_bearer'] = $this->bearer();
         $options['headers'] = ['Accept' => 'application/vnd.github+json', ...(is_array($options['headers'] ?? null) ? $options['headers'] : [])];
 
@@ -240,12 +251,7 @@ final readonly class GitHubIssueReads implements IssueReads
             throw $this->unreachable($failure::class);
         }
 
-        // Only a whole page counts, because another 2xx such as `206 Partial Content` would list part of a page as all of it.
-        if (self::OK !== $status && self::NOT_MODIFIED !== $status) {
-            throw new ForgeReadFailed(sprintf('GitHub answered %d to a read.', $status), previous: self::UNAUTHORIZED === $status ? new ForgeCredentialsRefused() : null);
-        }
-
-        return ['status' => $status, 'body' => $body, 'etag' => $this->entityTags->checked($headers['etag'][0] ?? null), 'next' => $this->nextLinks->namesNext($headers['link'] ?? []), 'date' => $headers['date'][0] ?? null];
+        return ['status' => $status, 'body' => $body, 'headers' => $headers];
     }
 
     // Not chained to the client's exception, because its trace holds the request options with the bearer token.

@@ -104,7 +104,6 @@ use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\JobCredentials;
 use Intakt\Plugin\Forge\Contract\OpenedChange;
 use Intakt\Plugin\Forge\Contract\ProposedChange;
-use Intakt\Plugin\GitHubForge\Contract\IssueListing;
 use Intakt\Plugin\GitHubForge\Contract\IssueReads;
 use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
@@ -191,7 +190,6 @@ use Symfony\Component\Process\Process;
 #[UsesClass(HardenedGit::class)]
 #[UsesClass(NetworkGit::class)]
 #[UsesClass(GitCall::class)]
-#[UsesClass(IssueListing::class)]
 #[UsesClass(Issues::class)]
 #[UsesClass(ScriptedJobRunner::class)]
 #[UsesClass(RunBuildJob::class)]
@@ -812,18 +810,21 @@ final class BuildTaskTest extends TestCase
         self::assertDirectoryDoesNotExist($this->mirrors);
     }
 
-    public function testAPullRequestOfTheSameNumberIsNoTask(): void
+    public function testTheTaskIsReadThroughTheSingleIssueReadNeverTheListing(): void
     {
-        $outcome = $this->taskOf(new InMemoryLedger(), [Issues::pullRequest(7, '')])->run($this->request(7, $this->remote->path));
+        $reads = $this->createMock(IssueReads::class);
+        $reads->expects(self::once())->method('readOpen')->with('alpha', 7)->willReturn(null);
+        $reads->expects(self::never())->method('listOpen');
 
-        self::assertSame(BuildStep::Task, $outcome->last);
-        self::assertTrue($outcome->failed());
+        $outcome = $this->buildTask($reads, $this->checkout(), new InMemoryLedger())->run($this->request(7, $this->remote->path));
+
+        self::assertSame('project "alpha" has no open issue 7', $outcome->failure);
     }
 
     public function testAForgeThatCannotBeReadEndsAtTheTaskStepWithItsMessage(): void
     {
         $reads = self::createStub(IssueReads::class);
-        $reads->method('listOpen')->willThrowException(new ForgeReadFailed('GitHub answered 500'));
+        $reads->method('readOpen')->willThrowException(new ForgeReadFailed('GitHub answered 500'));
         $ledger = new InMemoryLedger();
 
         $outcome = $this->buildTask($reads, $this->checkout(), $ledger)->run($this->request(7, $this->remote->path));
@@ -1006,9 +1007,9 @@ final class BuildTaskTest extends TestCase
     // Records in the run's own ledger, as the container wires it, so the push's events sit between the steps' events.
     private function branchPush(InMemoryLedger $ledger): PushBranch
     {
-        $branches = new BranchGit(new HardenedGit());
+        $branches = new BranchGit(new HardenedGit(), new GuardedRun());
         $file = $this->mirrors.'-key';
-        $key = new SigningKey(is_file($file) ? $file : PushScenario::generateKey($file), new Filesystem());
+        $key = new SigningKey(is_file($file) ? $file : PushScenario::generateKey($file), new Filesystem(), new GuardedRun());
 
         return new PushBranch($branches, new SignedCommits($branches, $key), new PushRecords($ledger), $this->changes, new LockFactory(new InMemoryStore()));
     }
@@ -1145,7 +1146,7 @@ final class BuildTaskTest extends TestCase
     private function listing(array $issues): IssueReads
     {
         $reads = self::createStub(IssueReads::class);
-        $reads->method('listOpen')->willReturn(IssueListing::listed($issues, null));
+        $reads->method('readOpen')->willReturnCallback(static fn (string $project, int $number): ?ListedIssue => array_find($issues, static fn (ListedIssue $issue): bool => $issue->number === $number));
 
         return $reads;
     }

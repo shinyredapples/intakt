@@ -15,12 +15,15 @@ final class QueuedEscalations implements MessageBusInterface
     /** @var list<EscalateRecurringP1> */
     public array $messages = [];
 
+    /** @var list<Envelope> */
+    public array $envelopes = [];
+
     #[Override]
     public function dispatch(object $message, array $stamps = []): Envelope
     {
         assert($message instanceof EscalateRecurringP1);
         $this->messages[] = $message;
 
-        return new Envelope($message, $stamps);
+        return $this->envelopes[] = new Envelope($message, $stamps);
     }
 }
