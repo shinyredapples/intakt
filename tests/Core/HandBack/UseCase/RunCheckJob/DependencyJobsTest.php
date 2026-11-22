@@ -145,6 +145,23 @@ final class DependencyJobsTest extends TestCase
         self::assertTrue($this->jobsWith($runner)->installed($this->inputs, $this->step, 'image'));
     }
 
+    public function testAnInstallFolderThatCannotBeRemovedLeavesTheCheckToInstallItselfTheKeyFreeAndTheSnapshotSaved(): void
+    {
+        $runner = self::createStub(JobRunner::class);
+        $runner->method('run')->willReturnCallback(function (JobSpec $spec): JobResult {
+            $result = $this->installedInto($spec);
+            new Filesystem()->chmod($spec->inputs[0]->hostPath, 0o500);
+
+            return $result;
+        });
+
+        $installed = $this->jobsWith($runner)->installed($this->inputs, $this->step, 'image');
+
+        self::assertFalse($installed);
+        self::assertTrue($this->checks->locks()->createLock('intakt-dependency-install-'.$this->inputs->key()->value, ttl: null)->acquire());
+        self::assertFileExists($this->checks->snapshotsFolder().'/'.$this->inputs->key()->value.'/vendor/composer/installed.json');
+    }
+
     public function testAnInstallTheJobRefusedSavesNothing(): void
     {
         $runner = self::createStub(JobRunner::class);

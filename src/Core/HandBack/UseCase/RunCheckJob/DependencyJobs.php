@@ -118,26 +118,31 @@ final readonly class DependencyJobs
     private function installedIn(LockInputs $inputs, DependencyStep $step, string $image): bool
     {
         $folder = $this->installs.'/'.$inputs->key()->value;
+        $installed = false;
 
         try {
             $this->prepare($folder, $inputs);
             $result = $this->ranInstall($this->installSpec($folder, $step, $image));
-
-            return $result instanceof JobResult && $this->keptFor($result, $inputs->platform) && $this->saved($inputs, $folder.'/kept');
+            $installed = $result instanceof JobResult && $this->keptFor($result, $inputs->platform) && $this->saved($inputs, $folder.'/kept');
         } catch (IOException) {
             // An install folder that cannot be made or read only costs the reuse, so the check installs its dependencies itself.
-            return false;
         } finally {
-            $this->removed($folder);
+            $removed = $this->removed($folder);
         }
+
+        // A saved snapshot stays in the store for the next check, but this one installs itself, because an install folder it could not remove is a folder error like any other.
+        return $installed && $removed;
     }
 
-    private function removed(string $folder): void
+    private function removed(string $folder): bool
     {
         try {
             $this->filesystem->remove($folder);
+
+            return true;
         } catch (IOException) {
-            // Left for the next install of the key, whose prepare removes it first, because the check's own install does not need it gone.
+            // Left for the next install of the key, whose prepare removes it first.
+            return false;
         }
     }
 
