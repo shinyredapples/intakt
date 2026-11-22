@@ -428,7 +428,7 @@ final class IntakeStoreTest extends KernelTestCase
 
     // On SQLite's default journal, with task 7 stored: there a reader's shared lock lets a write through and refuses only its COMMIT.
     /**
-     * @param 'pdo_sqlite'|'sqlite3'                        $driver
+     * @param 'pdo_sqlite'|'sqlite3'                              $driver
      * @param callable(IntakeStore, Connection, Connection): void $scenario
      */
     private function withAStoreAndAReaderOnOneFile(string $driver, callable $scenario): void
