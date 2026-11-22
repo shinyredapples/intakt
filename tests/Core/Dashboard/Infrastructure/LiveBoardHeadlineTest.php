@@ -24,9 +24,9 @@ use Intakt\Tests\Support\KernelTestCase;
 use Intakt\Tests\Support\ReplayMarkBus;
 use Intakt\Tests\Support\StoredSerializerFactory;
 use Intakt\Tests\Support\UnpricedRoundCosts;
+use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
-use InvalidArgumentException;
 use Psr\Cache\CacheItemPoolInterface;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
@@ -138,30 +138,6 @@ final class LiveBoardHeadlineTest extends KernelTestCase
         self::assertSame(BoardColumn::Done->emptyLine(), $done->filter('.col-empty')->text());
     }
 
-    private function pushedDoneColumnOf(int $judged): Crawler
-    {
-        $ledger = new DashboardLedger();
-        $this->judgeRoundsOf($ledger, $judged);
-
-        return $this->pushedDoneColumnFrom($ledger);
-    }
-
-    private function judgeRoundsOf(DashboardLedger $ledger, int $judged): void
-    {
-        foreach (range(1, $judged) as $number) {
-            $ledger->startRoundOf('change-'.$number, 'r'.$number, 1);
-            $ledger->judgeRound('r'.$number);
-        }
-    }
-
-    private function pushedDoneColumnFrom(DashboardLedger $ledger): Crawler
-    {
-        $live = new PublishedLiveEvents();
-        $this->headlineOn($ledger, $live)->publishLatest(Uuid::v7());
-
-        return new Crawler($live->events[0]->turboStream)->filter('turbo-stream[target="col-done"] section#col-done');
-    }
-
     public function testAnUnchangedBoardIsNotPushedAgain(): void
     {
         $ledger = new DashboardLedger();
@@ -222,6 +198,30 @@ final class LiveBoardHeadlineTest extends KernelTestCase
 
         self::assertSame([], $live->events);
         self::assertSame(['warning', 'The board headline was not published.'], array_slice($log->cleanLogs()[0], 0, 2));
+    }
+
+    private function pushedDoneColumnOf(int $judged): Crawler
+    {
+        $ledger = new DashboardLedger();
+        $this->judgeRoundsOf($ledger, $judged);
+
+        return $this->pushedDoneColumnFrom($ledger);
+    }
+
+    private function judgeRoundsOf(DashboardLedger $ledger, int $judged): void
+    {
+        foreach (range(1, $judged) as $number) {
+            $ledger->startRoundOf('change-'.$number, 'r'.$number, 1);
+            $ledger->judgeRound('r'.$number);
+        }
+    }
+
+    private function pushedDoneColumnFrom(DashboardLedger $ledger): Crawler
+    {
+        $live = new PublishedLiveEvents();
+        $this->headlineOn($ledger, $live)->publishLatest(Uuid::v7());
+
+        return new Crawler($live->events[0]->turboStream)->filter('turbo-stream[target="col-done"] section#col-done');
     }
 
     private function headlineOn(DashboardLedger $ledger, PublishedLiveEvents $live, CacheItemPoolInterface $lastPushed = new ArrayAdapter(), LoggerInterface $logger = new NullLogger()): LiveBoardHeadline
