@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
-use ArrayObject;
+use Closure;
 use DateTimeImmutable;
 use DOMNode;
 use Intakt\Core\Budget\Contract\Cost;
@@ -1279,12 +1279,12 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
     // One text node in one nowrap button, so neither the markup nor the button's own style can put "F" and "1" on two lines; review-finding-id.browser.mjs measures it in a narrow viewport.
     public function testAFindingIdPushedToAPageOpenedWithAnEmptyLiveSummaryAppearsOnlyAfterThePushInOneNowrapButton(): void
     {
-        $holder = new ArrayObject(['summary' => new SessionSummary([], Cost::inUsd(0.1), [], [], [], [], false)]);
-        [$round, $id, $page] = $this->givenAPageLoadedBeforeTheRoundStartsWithTheSummary($holder['summary'], $holder);
+        $summary = new SessionSummary([], Cost::inUsd(0.1), [], [], [], [], false);
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeTheRoundStartsWithTheSummary(function () use (&$summary): SessionSummary { return $summary; });
         self::assertCount(0, $page->filter('#round-'.$id.'-summary-findings .linkbtn'));
         self::assertStringNotContainsString('F1', $page->filter('#round-'.$id.'-summary-findings')->text());
 
-        $holder['summary'] = new SessionSummary([], Cost::inUsd(0.1), [], [], [$this->longFinding()], [], false);
+        $summary = new SessionSummary([], Cost::inUsd(0.1), [], [], [$this->longFinding()], [], false);
         $this->publishedUpdates()->summaryChanged($round);
 
         $updated = $this->replaced($page, $this->publishedStreams());
@@ -1299,17 +1299,17 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
     // review-finding-id.browser.mjs applies these files with the pinned Turbo, so they must stay what the page renders and pushes.
     public function testTheBrowserChecksFindingsPartIsTheOneOfAPageWithAnEmptyLiveSummary(): void
     {
-        $holder = new ArrayObject(['summary' => new SessionSummary([], Cost::inUsd(0.1), [], [], [], [], false)]);
-        [, $id, $page] = $this->givenAPageLoadedBeforeTheRoundStartsWithTheSummary($holder['summary'], $holder);
+        $summary = new SessionSummary([], Cost::inUsd(0.1), [], [], [], [], false);
+        [, $id, $page] = $this->givenAPageLoadedBeforeTheRoundStartsWithTheSummary(function () use (&$summary): SessionSummary { return $summary; });
 
         self::assertSame($this->findingIdFixture('before.html'), $this->normalized(str_replace($id, 'ROUND', $page->filter('#round-'.$id.'-summary-findings')->outerHtml())));
     }
 
     public function testTheBrowserChecksStreamIsTheOnePushedForALongFinding(): void
     {
-        $holder = new ArrayObject(['summary' => new SessionSummary([], Cost::inUsd(0.1), [], [], [], [], false)]);
-        [$round, $id] = $this->givenAPageLoadedBeforeTheRoundStartsWithTheSummary($holder['summary'], $holder);
-        $holder['summary'] = new SessionSummary([], Cost::inUsd(0.1), [], [], [$this->longFinding()], [], false);
+        $summary = new SessionSummary([], Cost::inUsd(0.1), [], [], [], [], false);
+        [$round, $id] = $this->givenAPageLoadedBeforeTheRoundStartsWithTheSummary(function () use (&$summary): SessionSummary { return $summary; });
+        $summary = new SessionSummary([], Cost::inUsd(0.1), [], [], [$this->longFinding()], [], false);
 
         $this->publishedUpdates()->summaryChanged($round);
 
@@ -1569,11 +1569,11 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
     /**
      * @return array{Uuid, string, Crawler}
      */
-    private function givenAPageLoadedBeforeTheRoundStartsWithTheSummary(SessionSummary $summary, ?ArrayObject $holder = null): array
+    private function givenAPageLoadedBeforeTheRoundStartsWithTheSummary(SessionSummary|Closure $summary): array
     {
         $this->browser->disableReboot();
         $summaries = self::createStub(SessionSummaries::class);
-        $summaries->method('ofRound')->willReturnCallback(static fn (): SessionSummary => $holder instanceof ArrayObject ? $holder['summary'] : $summary);
+        $summaries->method('ofRound')->willReturnCallback($summary instanceof Closure ? $summary : static fn (): SessionSummary => $summary);
         self::getContainer()->set(SessionSummaries::class, $summaries);
         $this->givenTheHubRecordsWhatIsPublished();
         $round = Uuid::v7();
