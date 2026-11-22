@@ -1,6 +1,6 @@
 # Checking a provider key
 
-Intakt needs a key from an AI company (a provider) before its reviewers can work. On a new install you can paste one on the **Set up Intakt** page (`/setup`) instead of editing a file, and Intakt checks it before it keeps it.
+Intakt needs a key from an AI company (a provider) before its reviewers can work. On a new install you can paste one on the **See a real review** page (`/setup`, which the board's **Set up Intakt** button opens) instead of editing a file, and Intakt checks it before it keeps it.
 
 ## Where the field is
 

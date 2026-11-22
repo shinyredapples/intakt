@@ -34,7 +34,7 @@ Architecture:
 Dashboard mocks (static pages in [`mocks/`](mocks/), with made-up projects):
 
 - [Board](mocks/index.html)
-- [Waiting on you](mocks/waiting.html)
+- [Waiting on you](mocks/waiting.html) (before UX2, #3327: it still shows Copy and Why controls; the current page follows the Waiting rules in [DESIGN.md](mocks/DESIGN.md))
 - [Task](mocks/task.html)
 - [Settings](mocks/settings.html)
 - [Components](mocks/components.html)

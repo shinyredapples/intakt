@@ -6,26 +6,17 @@
 <div class="wait-list">
 {% for item in items %}
 <article class="wait-item needs" aria-labelledby="wait-{{ loop.index }}">
-    <h2 class="wait-lead" id="wait-{{ loop.index }}"><span class="dot needs"></span>{{ item.lead }}</h2>
+    {{ include('dashboard/components/character.html.twig', {character: item.character, size: 48}, with_context = false) }}
+    <h2 class="wait-lead" id="wait-{{ loop.index }}">{{ item.lead }}</h2>
     {{ include('dashboard/components/meta.html.twig', {facts: [
+        {text: item.character.label},
         {text: 'All projects'},
         {icon: 'clock', text: item.waitingFor(now)},
     ]}, with_context = false) }}
     <p class="conseq">{{ item.consequence }}</p>
-    {# Before the choices, so Tab reaches it before Copy and the link (D6). #}
-    <details class="why"><summary>Why</summary>
-        <p>{{ item.why }}</p>
-    </details>
-    <ul class="act" aria-label="Your choices">
-    {% for choice in item.choices %}
-        <li>
-            {% if choice.recommended %}<span class="recommended">Recommended</span>{% endif %}
-            {% if choice.command is not null %}{{ include('dashboard/components/copy.html.twig', {text: choice.command}, with_context = false) }}{% endif %}
-            <span class="outcome">{{ choice.outcome }}</span>
-        </li>
-    {% endfor %}
-        <li><a class="btn secondary sm" href="{{ item.link ?? path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_BOARD'), {board: 1}) }}">{{ item.linkLabel }}</a></li>
-    </ul>
+    <div class="wait-acts">
+        <a class="wait-act primary" href="{{ item.link ?? path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_BOARD'), {board: 1}) }}">{{ include('dashboard/components/icon.html.twig', {name: item.link is null ? 'board' : 'link'}, with_context = false) }}<span><b>{{ item.linkLabel }}</b><small>{{ item.linkOutcome }}</small></span></a>
+    </div>
 </article>
 {% endfor %}
 </div>
