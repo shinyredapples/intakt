@@ -24,33 +24,6 @@ final class PagesCommandTest extends TestCase
 
     private string $root = '';
 
-    protected function setUp(): void
-    {
-        $this->root = sys_get_temp_dir().'/intakt-pages-'.bin2hex(random_bytes(6));
-        $files = new Filesystem();
-        $files->mkdir([$this->root.'/docs/journey', $this->root.'/docs/highlights.d']);
-
-        foreach (['pages', 'highlights', 'journey'] as $command) {
-            $files->copy(self::BIN.'/'.$command, $this->root.'/bin/'.$command);
-        }
-
-        $files->symlink((string) realpath(__DIR__.'/../../vendor'), $this->root.'/vendor');
-
-        foreach (self::FRONT_PAGE as $path => $content) {
-            $files->dumpFile($this->root.'/docs/pages/'.$path, $content);
-        }
-
-        $files->copy(self::FIXTURES.'/journey.md', $this->root.'/docs/journey.md');
-        $files->copy(self::FIXTURES.'/usage.jsonl', $this->root.'/docs/journey/usage.jsonl');
-        $files->dumpFile($this->root.'/docs/highlights.d/layout.md', "# Highlights\n\n## Tooling\n\n| Feature | Status |\n|---|---|\n");
-        $files->dumpFile($this->root.'/docs/highlights.d/1-clock.md', "## Tooling\n| Clock | done |\n");
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->root);
-    }
-
     public function testThePagesCommandIsExecutable(): void
     {
         self::assertTrue(is_executable(self::BIN.'/pages'));
@@ -201,6 +174,33 @@ final class PagesCommandTest extends TestCase
 
         self::assertSame(2, $run->getExitCode());
         self::assertSame("usage: bin/pages <folder> [--recorded=<folder with the recorded API answers>]\n", $run->getErrorOutput());
+    }
+
+    protected function setUp(): void
+    {
+        $this->root = sys_get_temp_dir().'/intakt-pages-'.bin2hex(random_bytes(6));
+        $files = new Filesystem();
+        $files->mkdir([$this->root.'/docs/journey', $this->root.'/docs/highlights.d']);
+
+        foreach (['pages', 'highlights', 'journey'] as $command) {
+            $files->copy(self::BIN.'/'.$command, $this->root.'/bin/'.$command);
+        }
+
+        $files->symlink((string) realpath(__DIR__.'/../../vendor'), $this->root.'/vendor');
+
+        foreach (self::FRONT_PAGE as $path => $content) {
+            $files->dumpFile($this->root.'/docs/pages/'.$path, $content);
+        }
+
+        $files->copy(self::FIXTURES.'/journey.md', $this->root.'/docs/journey.md');
+        $files->copy(self::FIXTURES.'/usage.jsonl', $this->root.'/docs/journey/usage.jsonl');
+        $files->dumpFile($this->root.'/docs/highlights.d/layout.md', "# Highlights\n\n## Tooling\n\n| Feature | Status |\n|---|---|\n");
+        $files->dumpFile($this->root.'/docs/highlights.d/1-clock.md', "## Tooling\n| Clock | done |\n");
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->root);
     }
 
     private function runPages(string $recorded = self::FIXTURES.'/api'): Process

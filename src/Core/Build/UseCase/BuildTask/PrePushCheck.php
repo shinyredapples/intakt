@@ -50,15 +50,6 @@ final readonly class PrePushCheck
         return $outcome instanceof RefusedHandBack ? $outcome->reason() : $this->failureOfJob($outcome);
     }
 
-    private function failureOfJob(CheckJobOutcome $outcome): ?string
-    {
-        if ($outcome->passed()) {
-            return null;
-        }
-
-        return null === $outcome->exitCode ? $outcome->verdict->reason() : sprintf('%s (exit code %d)', $outcome->verdict->reason(), $outcome->exitCode);
-    }
-
     private function stoppedBy(ExceptionInterface $stopped): string
     {
         return match (true) {
@@ -66,5 +57,14 @@ final readonly class PrePushCheck
             $stopped instanceof ProcessSignaledException => sprintf('the pre-push check was killed by signal %d', $stopped->getSignal()),
             default => 'the pre-push check could not run',
         };
+    }
+
+    private function failureOfJob(CheckJobOutcome $outcome): ?string
+    {
+        if ($outcome->passed()) {
+            return null;
+        }
+
+        return null === $outcome->exitCode ? $outcome->verdict->reason() : sprintf('%s (exit code %d)', $outcome->verdict->reason(), $outcome->exitCode);
     }
 }

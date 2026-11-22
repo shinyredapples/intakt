@@ -146,16 +146,6 @@ final readonly class RunBuildJob
         return $file;
     }
 
-    private function ranJob(JobSpec $spec): ?JobResult
-    {
-        try {
-            return $this->jobs->run($spec);
-        } catch (JobOutputRefused) {
-            // No result, because the job wrote what the runner refuses to read.
-            return null;
-        }
-    }
-
     /**
      * @param list<JobInput> $inputs
      */
@@ -169,6 +159,16 @@ final readonly class RunBuildJob
             new JobLimits(self::MEMORY_BYTES, self::CPUS, self::SECONDS),
             JobEgress::to([self::VENDOR_HOST, ...$this->gate->registryHosts()]),
         );
+    }
+
+    private function ranJob(JobSpec $spec): ?JobResult
+    {
+        try {
+            return $this->jobs->run($spec);
+        } catch (JobOutputRefused) {
+            // No result, because the job wrote what the runner refuses to read.
+            return null;
+        }
     }
 
     // Length-prefixed, so no project and branch pair names another pair's job; one id per pair, so the runner refuses a second build of a branch while one runs.

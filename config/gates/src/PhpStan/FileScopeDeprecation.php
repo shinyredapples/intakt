@@ -40,6 +40,16 @@ final readonly class FileScopeDeprecation
     }
 
     /**
+     * @param array<Node> $nodes
+     *
+     * @return array<int>
+     */
+    private function triggersIn(array $nodes): array
+    {
+        return array_map(spl_object_id(...), new NodeFinder()->find($nodes, $this->isTrigger(...)));
+    }
+
+    /**
      * @param array<Node> $statements
      *
      * @return array<Node>
@@ -48,16 +58,6 @@ final readonly class FileScopeDeprecation
     {
         // a call inside a function, closure or class runs only when someone calls it, so it deprecates nothing at load time
         return new NodeFinder()->find($statements, static fn (Node $node): bool => $node instanceof FunctionLike || $node instanceof ClassLike);
-    }
-
-    /**
-     * @param array<Node> $nodes
-     *
-     * @return array<int>
-     */
-    private function triggersIn(array $nodes): array
-    {
-        return array_map(spl_object_id(...), new NodeFinder()->find($nodes, $this->isTrigger(...)));
     }
 
     private function isTrigger(Node $node): bool

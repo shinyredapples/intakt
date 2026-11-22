@@ -68,15 +68,6 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
 {
     private EntityManagerInterface $entities;
 
-    protected function setUp(): void
-    {
-        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
-        self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        $this->entities = $entities;
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
-    }
-
     public function testOutageNoticesAreListedOldestFirst(): void
     {
         $this->store('later', new DateTimeImmutable('2026-11-02T12:00:00+00:00'));
@@ -750,6 +741,15 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
         self::assertSame([[], []], $this->namesOf($this->notices()->waitingAndEndedOnTheDayOf(new DateTimeImmutable('2026-11-02T20:00:00+00:00'))));
     }
 
+    protected function setUp(): void
+    {
+        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
+        self::assertInstanceOf(EntityManagerInterface::class, $entities);
+        $this->entities = $entities;
+        EmptyDatabase::in(self::getContainer());
+        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+    }
+
     /**
      * @return array{list<string>, list<string>}
      */
@@ -766,6 +766,14 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
         self::assertSame(ReadingOutcome::Recorded, $this->measuredUseAt($at)->record($this->readingOf($account)));
     }
 
+    // Its own connection, because the failure is wired into the driver it connects through.
+    private function measuredUseWhoseFirstEndFails(ClockInterface $clock, EventDispatcher $events): DoctrineMeasuredUse
+    {
+        $connection = DriverManager::getConnection($this->entities->getConnection()->getParams(), new Configuration()->setMiddlewares([new FirstOutageEndFails()]));
+
+        return new DoctrineMeasuredUse(new EntityManager($connection, $this->entities->getConfiguration()), $clock, $events);
+    }
+
     private function recordWhileTheEndFails(DoctrineMeasuredUse $worker): void
     {
         try {
@@ -779,14 +787,6 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
     private function measuredUseAt(string $at, EventDispatcher $events = new EventDispatcher()): DoctrineMeasuredUse
     {
         return new DoctrineMeasuredUse($this->entities, new MockClock($at.' UTC'), $events);
-    }
-
-    // Its own connection, because the failure is wired into the driver it connects through.
-    private function measuredUseWhoseFirstEndFails(ClockInterface $clock, EventDispatcher $events): DoctrineMeasuredUse
-    {
-        $connection = DriverManager::getConnection($this->entities->getConnection()->getParams(), new Configuration()->setMiddlewares([new FirstOutageEndFails()]));
-
-        return new DoctrineMeasuredUse(new EntityManager($connection, $this->entities->getConfiguration()), $clock, $events);
     }
 
     private function readingOf(string $account): WindowReading
@@ -807,11 +807,6 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
         return array_map(static fn (EndedOutageNotice $notice): string => $notice->account->name, $this->notices()->endedOnTheDayOf($moment));
     }
 
-    private function notices(): DoctrineOwnerNotices
-    {
-        return new DoctrineOwnerNotices($this->entities);
-    }
-
     private function read(string $account, DateTimeImmutable $takenAt, Provider $provider = Provider::ClaudeCode): void
     {
         $this->entities->persist(new WindowReadingRecord(new WindowReading(new Account($provider, $account), UsageWindow::FiveHour, new Usage(10.0, null)), $takenAt));
@@ -822,5 +817,10 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
     {
         $this->entities->persist(new OutageNoticeRecord(new Account(Provider::ClaudeCode, $account), $lastReadingAt, $noticedAt));
         $this->entities->flush();
+    }
+
+    private function notices(): DoctrineOwnerNotices
+    {
+        return new DoctrineOwnerNotices($this->entities);
     }
 }

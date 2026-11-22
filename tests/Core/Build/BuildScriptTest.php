@@ -41,24 +41,6 @@ final class BuildScriptTest extends TestCase
     private ?string $pathHead = null;
     private ?string $source = null;
 
-    protected function setUp(): void
-    {
-        $this->history = new BuildHistory();
-        $this->output = $this->history->folder.'/output';
-        $this->work = $this->history->folder.'/job';
-        $this->bin = $this->history->folder.'/bin';
-        $this->prompt = $this->history->folder.'/prompt.md';
-        new Filesystem()->mkdir([$this->output, $this->work, $this->bin]);
-        file_put_contents($this->prompt, "Build the task.\n");
-    }
-
-    protected function tearDown(): void
-    {
-        // A scripted CLI may take the output's permissions away, which would stop the removal.
-        new Filesystem()->chmod($this->output, 0o700);
-        $this->history->remove();
-    }
-
     public function testACliThatCommitsAndWritesThePullRequestTextLeavesABundleOfTheBranchAndTheText(): void
     {
         $this->givenTheCli(<<<'SH'
@@ -1243,6 +1225,24 @@ final class BuildScriptTest extends TestCase
         self::assertFileDoesNotExist($this->history->folder.'/ran');
     }
 
+    protected function setUp(): void
+    {
+        $this->history = new BuildHistory();
+        $this->output = $this->history->folder.'/output';
+        $this->work = $this->history->folder.'/job';
+        $this->bin = $this->history->folder.'/bin';
+        $this->prompt = $this->history->folder.'/prompt.md';
+        new Filesystem()->mkdir([$this->output, $this->work, $this->bin]);
+        file_put_contents($this->prompt, "Build the task.\n");
+    }
+
+    protected function tearDown(): void
+    {
+        // A scripted CLI may take the output's permissions away, which would stop the removal.
+        new Filesystem()->chmod($this->output, 0o700);
+        $this->history->remove();
+    }
+
     private function givenTheCli(string $script): void
     {
         file_put_contents($this->bin.'/claude', "#!/bin/sh\n".$script."\n");
@@ -1437,13 +1437,6 @@ final class BuildScriptTest extends TestCase
         return $environment;
     }
 
-    private function fileAtTheBundlesHead(string $branch, string $path): string
-    {
-        $this->history->inMirror('fetch', '--quiet', $this->output.'/handback.bundle', 'refs/heads/'.$branch.':refs/heads/fetched');
-
-        return $this->history->inMirror('show', 'refs/heads/fetched:'.$path)."\n";
-    }
-
     private function settingsArgument(): mixed
     {
         $arguments = explode("\n", trim((string) file_get_contents($this->history->folder.'/arguments')));
@@ -1456,5 +1449,12 @@ final class BuildScriptTest extends TestCase
     private function outputFile(string $name): string
     {
         return (string) file_get_contents($this->output.'/'.$name);
+    }
+
+    private function fileAtTheBundlesHead(string $branch, string $path): string
+    {
+        $this->history->inMirror('fetch', '--quiet', $this->output.'/handback.bundle', 'refs/heads/'.$branch.':refs/heads/fetched');
+
+        return $this->history->inMirror('show', 'refs/heads/fetched:'.$path)."\n";
     }
 }

@@ -31,18 +31,6 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
 
     private string $directory = '';
 
-    protected function tearDown(): void
-    {
-        if ('' !== $this->directory) {
-            new Filesystem()->remove($this->directory);
-        }
-    }
-
-    protected function journey(): string
-    {
-        return 'live review progress on the dashboard';
-    }
-
     public function testTheDashboardShowsAReviewRoundsProgressLiveUntilTheJudgeHasRuled(): void
     {
         $this->step('create the database', $this->createTheDatabase(...));
@@ -56,6 +44,18 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
         $judged = $this->step('open the judged round', fn (): Crawler => $this->openTheJudgedRound($round));
         $this->step('read the judged content without a reload', fn () => $this->readTheJudgedContentWithoutAReload($round, new StreamedPage()->after($round, $updates, $running), $judged));
         $this->step('read the board headline after the judge', $this->readTheBoardHeadline(...));
+    }
+
+    protected function tearDown(): void
+    {
+        if ('' !== $this->directory) {
+            new Filesystem()->remove($this->directory);
+        }
+    }
+
+    protected function journey(): string
+    {
+        return 'live review progress on the dashboard';
     }
 
     private function createTheDatabase(): void
@@ -80,36 +80,6 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
         self::assertNotSame('', $round);
 
         return $round;
-    }
-
-    // Read from the hub, because a reviewer starts and answers within one worker step, so no page load between steps finds it running; its link is the address the step "open the running round" opened; past the idle lines, because the progress published at the round's start pushes the headline before any reviewer started.
-    private function readThePushedHeadline(string $round): void
-    {
-        $lines = $this->pushedHeadlines();
-        $first = array_find($lines, static fn (Crawler $line): bool => self::IDLE !== $line->text());
-
-        self::assertNotNull($first);
-        self::assertMatchesRegularExpression(self::REVIEWING, $first->text());
-        self::assertSame(['/reviews/'.$round], $first->filter('a')->each(static fn (Crawler $a): ?string => $a->attr('href')));
-    }
-
-    // Compared with the last pushed line too, because a page that missed no update must end where a new load starts.
-    private function readTheBoardHeadline(): void
-    {
-        $line = $this->visit('/')->filter('#board-headline')->text();
-
-        self::assertSame(self::IDLE, $line);
-        self::assertSame($line, array_last($this->pushedHeadlines())?->text());
-    }
-
-    /**
-     * @return list<Crawler>
-     */
-    private function pushedHeadlines(): array
-    {
-        $headlines = array_filter($this->publishedUpdates(), static fn (Update $update): bool => in_array(DashboardTopics::SHELL, $update->getTopics(), true) && str_contains($update->getData(), self::HEADLINE_TARGET));
-
-        return array_values(array_map(static fn (Update $update): Crawler => new Crawler($update->getData())->filter('turbo-stream[target="board-headline"] template'), $headlines));
     }
 
     private function openTheRunningRound(string $round): Crawler
@@ -166,6 +136,27 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
         self::assertSame(array_values(array_unique(array_column($now, 1))), array_values(array_unique(array_column($table, 1))));
     }
 
+    // Read from the hub, because a reviewer starts and answers within one worker step, so no page load between steps finds it running; its link is the address the step "open the running round" opened; past the idle lines, because the progress published at the round's start pushes the headline before any reviewer started.
+    private function readThePushedHeadline(string $round): void
+    {
+        $lines = $this->pushedHeadlines();
+        $first = array_find($lines, static fn (Crawler $line): bool => self::IDLE !== $line->text());
+
+        self::assertNotNull($first);
+        self::assertMatchesRegularExpression(self::REVIEWING, $first->text());
+        self::assertSame(['/reviews/'.$round], $first->filter('a')->each(static fn (Crawler $a): ?string => $a->attr('href')));
+    }
+
+    /**
+     * @return list<Crawler>
+     */
+    private function pushedHeadlines(): array
+    {
+        $headlines = array_filter($this->publishedUpdates(), static fn (Update $update): bool => in_array(DashboardTopics::SHELL, $update->getTopics(), true) && str_contains($update->getData(), self::HEADLINE_TARGET));
+
+        return array_values(array_map(static fn (Update $update): Crawler => new Crawler($update->getData())->filter('turbo-stream[target="board-headline"] template'), $headlines));
+    }
+
     private function openTheJudgedRound(string $round): Crawler
     {
         $page = $this->bothViews($round);
@@ -193,6 +184,15 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
         // Read from the shown text only, because a script's own comments are no text the reader sees.
         $shown = implode(' ', $live->filterXPath('//body//text()[not(ancestor::script) and not(ancestor::style) and not(ancestor::template)]')->each(static fn (Crawler $text): string => $text->text('')));
         self::assertStringNotContainsStringIgnoringCase('reload', $shown);
+    }
+
+    // Compared with the last pushed line too, because a page that missed no update must end where a new load starts.
+    private function readTheBoardHeadline(): void
+    {
+        $line = $this->visit('/')->filter('#board-headline')->text();
+
+        self::assertSame(self::IDLE, $line);
+        self::assertSame($line, array_last($this->pushedHeadlines())?->text());
     }
 
     /**

@@ -75,11 +75,6 @@ final readonly class ReSpelledNameRule implements Rule
             && !str_starts_with($file, $this->root.self::UNCHECKED);
     }
 
-    private function isLiteral(Node $node): bool
-    {
-        return $node instanceof String_ || $node instanceof InterpolatedString;
-    }
-
     /**
      * @param array<Node> $nodes
      *
@@ -102,6 +97,11 @@ final readonly class ReSpelledNameRule implements Rule
         }
 
         return $owners;
+    }
+
+    private function isLiteral(Node $node): bool
+    {
+        return $node instanceof String_ || $node instanceof InterpolatedString;
     }
 
     private function messageFor(Node $literal, ?ClassLike $owner): ?string
@@ -139,14 +139,14 @@ final readonly class ReSpelledNameRule implements Rule
         return $owner instanceof Class_ && str_contains($name, '\\Contract\\') && str_ends_with($name, 'Services');
     }
 
-    private function nameOf(?ClassLike $owner): string
-    {
-        return $owner?->namespacedName?->toString() ?? '';
-    }
-
     private function isProviderValue(string $value): bool
     {
         return in_array($value, $this->providerValues(), true);
+    }
+
+    private function nameOf(?ClassLike $owner): string
+    {
+        return $owner?->namespacedName?->toString() ?? '';
     }
 
     /**

@@ -44,19 +44,6 @@ final class StartReviewHandlerTest extends TestCase
 {
     private TemporaryRepository $repository;
 
-    protected function setUp(): void
-    {
-        $this->repository = new TemporaryRepository();
-        $this->repository->commitFile('README.md', "base\n");
-        $this->repository->checkoutNewBranch('sample');
-        $this->repository->commitFile('src/Feature.php', "<?php\n");
-    }
-
-    protected function tearDown(): void
-    {
-        $this->repository->remove();
-    }
-
     public function testStartingAReviewQueuesARoundAndReturnsItsIdWithoutWaitingForTheJudge(): void
     {
         $seen = null;
@@ -161,9 +148,22 @@ final class StartReviewHandlerTest extends TestCase
         }
     }
 
-    private function removeSnapshot(string $snapshot): void
+    protected function setUp(): void
     {
-        new LocalGitForge(LocalRepository::existingAt($this->repository->path, 'main'), new NameStatusParser())->removeSnapshot($snapshot);
+        $this->repository = new TemporaryRepository();
+        $this->repository->commitFile('README.md', "base\n");
+        $this->repository->checkoutNewBranch('sample');
+        $this->repository->commitFile('src/Feature.php', "<?php\n");
+    }
+
+    protected function tearDown(): void
+    {
+        $this->repository->remove();
+    }
+
+    private function handler(ChangeReviews $reviews): StartReviewHandler
+    {
+        return new StartReviewHandler($this->review($reviews));
     }
 
     private function startOf(?int $number): StartReview
@@ -171,9 +171,9 @@ final class StartReviewHandlerTest extends TestCase
         return new StartReview('alpha', 'Add the thing.', new RequestedRound('sample', $number, new ChangeSource($this->repository->path, 'main')));
     }
 
-    private function handler(ChangeReviews $reviews): StartReviewHandler
+    private function removeSnapshot(string $snapshot): void
     {
-        return new StartReviewHandler($this->review($reviews));
+        new LocalGitForge(LocalRepository::existingAt($this->repository->path, 'main'), new NameStatusParser())->removeSnapshot($snapshot);
     }
 
     private function review(ChangeReviews $reviews): LocalChangeReview

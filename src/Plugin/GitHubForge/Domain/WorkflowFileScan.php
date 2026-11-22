@@ -73,13 +73,6 @@ final readonly class WorkflowFileScan
         return array_values(array_filter($findings));
     }
 
-    private function listedTrigger(WorkflowScalar|WorkflowMapping|WorkflowSequence $event): ?WorkflowFinding
-    {
-        return $event instanceof WorkflowScalar
-            ? $this->trigger($event->text, $event->line)
-            : new WorkflowFinding(WorkflowRisk::Unreadable, $event->line, 'a trigger that is not a single name');
-    }
-
     private function trigger(string $event, int $line): ?WorkflowFinding
     {
         return match (true) {
@@ -87,6 +80,13 @@ final readonly class WorkflowFileScan
             null === ContainedTrigger::tryFrom($event) => new WorkflowFinding(WorkflowRisk::Trigger, $line, sprintf('the trigger %s may run with the base repository\'s rights', $event)),
             default => null,
         };
+    }
+
+    private function listedTrigger(WorkflowScalar|WorkflowMapping|WorkflowSequence $event): ?WorkflowFinding
+    {
+        return $event instanceof WorkflowScalar
+            ? $this->trigger($event->text, $event->line)
+            : new WorkflowFinding(WorkflowRisk::Unreadable, $event->line, 'a trigger that is not a single name');
     }
 
     /**
@@ -152,6 +152,20 @@ final readonly class WorkflowFileScan
         return array_values(array_filter($findings));
     }
 
+    // A group or label is still read from a variable when it sits in a mapping, so an expression anywhere in it is a failed read too.
+    /**
+     * @return list<WorkflowFinding>
+     */
+    private function expressions(string $job, WorkflowScalar|WorkflowMapping|WorkflowSequence $value): array
+    {
+        return match (true) {
+            $value instanceof WorkflowMapping => array_merge([], ...array_map(fn (WorkflowEntry $entry): array => $this->expressions($job, $entry->value), $value->entries)),
+            $value instanceof WorkflowSequence => array_merge([], ...array_map(fn (WorkflowScalar|WorkflowMapping|WorkflowSequence $item): array => $this->expressions($job, $item), $value->items)),
+            str_contains($value->text, '${{') => [new WorkflowFinding(WorkflowRisk::Unreadable, $value->line, sprintf('the job %s takes its runner from an expression the scan does not read, whose value can change without a commit', $job))],
+            default => [],
+        };
+    }
+
     private function label(string $job, WorkflowScalar|WorkflowMapping|WorkflowSequence $label): ?WorkflowFinding
     {
         return match (true) {
@@ -167,19 +181,5 @@ final readonly class WorkflowFileScan
     private function oneLine(string $label): string
     {
         return str_replace("\n", '\n', trim($label));
-    }
-
-    // A group or label is still read from a variable when it sits in a mapping, so an expression anywhere in it is a failed read too.
-    /**
-     * @return list<WorkflowFinding>
-     */
-    private function expressions(string $job, WorkflowScalar|WorkflowMapping|WorkflowSequence $value): array
-    {
-        return match (true) {
-            $value instanceof WorkflowMapping => array_merge([], ...array_map(fn (WorkflowEntry $entry): array => $this->expressions($job, $entry->value), $value->entries)),
-            $value instanceof WorkflowSequence => array_merge([], ...array_map(fn (WorkflowScalar|WorkflowMapping|WorkflowSequence $item): array => $this->expressions($job, $item), $value->items)),
-            str_contains($value->text, '${{') => [new WorkflowFinding(WorkflowRisk::Unreadable, $value->line, sprintf('the job %s takes its runner from an expression the scan does not read, whose value can change without a commit', $job))],
-            default => [],
-        };
     }
 }

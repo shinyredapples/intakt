@@ -42,7 +42,7 @@
     <div class="cards-row">
         {{ include(c ~ 'card.html.twig', {href: '#', number: 612, project: 'intakt', title: 'Command overlay for tasks and settings', meta: [{icon: 'clock', text: '42 min'}, {text: 'Slot 1, Model L'}, {text: 'Size M'}, {text: '$3.18'}]}) }}
         {{ include(c ~ 'card.html.twig', {href: '#', number: 612, project: 'intakt', title: 'Hover', forced: 'hover', meta: [{icon: 'clock', text: '42 min'}, {text: 'Size M'}]}) }}
-        {{ include(c ~ 'card.html.twig', {href: '#', number: 589, project: 'intakt', title: 'Rotate the forge token without a restart', ask: 'Approve this version: it touches secret handling', meta: [{icon: 'clock', text: '1 h 05 min'}, {text: 'Round 2'}]}) }}
+        {{ include(c ~ 'card.html.twig', {href: '#', number: 589, project: 'intakt', title: 'Rotate the forge token without a restart', ask: 'Approve this version: secrets limit, ForgeTokenStore.php changed', meta: [{icon: 'clock', text: '1 h 05 min'}, {text: 'Round 2'}]}) }}
         {{ include(c ~ 'card.html.twig', {href: '#', number: 626, project: 'intakt', title: 'Search settings by their label', forced: 'focus', emphasis: {icon: 'link', text: 'Needs #612 merged first'}, meta: [{icon: 'clock', text: '9 h'}, {text: 'Size S'}]}) }}
         {{ include(c ~ 'card.html.twig', {href: '#', number: 205, project: 'acme-shop', title: 'Refund emails include the order number', emphasis: {icon: 'broken', text: 'Waiting for CI: image build failing', broken: true}, meta: [{icon: 'clock', text: '1 h 50 min'}]}) }}
         {{ include(c ~ 'card.html.twig', {href: '#', number: 74, project: 'field-notes', title: 'Strip photo location data before upload', emphasis: {icon: 'pause', text: 'Project paused'}, meta: [{icon: 'clock', text: '2 d'}]}) }}
@@ -139,7 +139,7 @@
 <section class="comp-sec" id="c-empty"><h2>Empty, loading, error</h2><p>Empty states say what happens next. Loading uses static skeletons in place of content, never a whole-page spinner. Errors say what failed and what still holds.</p>
 <div class="spec-cols">{% for theme in themes %}<div class="spec" data-theme="{{ theme }}"><h3>{{ theme|capitalize }}</h3>
     {{ include(c ~ 'empty.html.twig', {title: 'Nothing needs you', text: 'Intakt keeps building. When it needs a decision, it shows up here and on your phone.'}) }}
-    <div class="cards-row">{{ include(c ~ 'skeleton.html.twig') }}{{ include(c ~ 'column_empty.html.twig') }}</div>
+    <div class="cards-row">{{ include(c ~ 'skeleton.html.twig') }}{{ include(c ~ 'column_empty.html.twig', {text: 'Tasks appear here when Intakt takes in an issue'}) }}</div>
     {{ include(c ~ 'error_line.html.twig', {failed: "Couldn't connect.", text: 'The vendor said the key is not valid. Nothing was saved.'}) }}
 </div>{% endfor %}</div></section>
 

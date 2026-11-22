@@ -190,11 +190,6 @@ final readonly class Workspace
         return $this->runner->runConcurrently($commands, $this->root);
     }
 
-    private function changesWhatEveryPhpFileDependsOn(string $mergeBase): bool
-    {
-        return $this->changesAnyOf($mergeBase, [...self::GATE_DEFINITIONS, ...self::CONTAINER_CONFIGURATION]) || $this->changesImportedServices($mergeBase);
-    }
-
     /**
      * @return non-empty-list<string>
      */
@@ -207,6 +202,23 @@ final readonly class Workspace
         }
 
         return $files;
+    }
+
+    private function changesWhatEveryPhpFileDependsOn(string $mergeBase): bool
+    {
+        return $this->changesAnyOf($mergeBase, [...self::GATE_DEFINITIONS, ...self::CONTAINER_CONFIGURATION]) || $this->changesImportedServices($mergeBase);
+    }
+
+    private function changesImportedServices(string $mergeBase): bool
+    {
+        return array_any($this->scope->changedPaths($mergeBase), static fn (string $path): bool => str_starts_with($path, 'tests/') && str_ends_with($path, self::IMPORTED_SERVICES));
+    }
+
+    private function isHead(string $commit): bool
+    {
+        $head = $this->git(['rev-parse', '--verify', '--quiet', 'HEAD^{commit}']);
+
+        return $head->succeeded() && trim($head->output) === $commit;
     }
 
     /**
@@ -223,18 +235,6 @@ final readonly class Workspace
         }
 
         return false;
-    }
-
-    private function changesImportedServices(string $mergeBase): bool
-    {
-        return array_any($this->scope->changedPaths($mergeBase), static fn (string $path): bool => str_starts_with($path, 'tests/') && str_ends_with($path, self::IMPORTED_SERVICES));
-    }
-
-    private function isHead(string $commit): bool
-    {
-        $head = $this->git(['rev-parse', '--verify', '--quiet', 'HEAD^{commit}']);
-
-        return $head->succeeded() && trim($head->output) === $commit;
     }
 
     /**

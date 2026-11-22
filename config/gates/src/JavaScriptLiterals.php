@@ -102,18 +102,6 @@ final readonly class JavaScriptLiterals
         return 1 === preg_match('/\A(?:'.self::BYTE_ORDER_MARK.')?#!/', $this->source) ? $this->lineCommentEnd(0) : 0;
     }
 
-    // Because a pattern over a long run of spaces can exhaust the pattern engine and then read none of them, the run is read with plain string functions.
-    private function afterSpaces(int $offset): int
-    {
-        do {
-            $offset += strspn($this->source, self::WHITESPACE, $offset);
-            $space = $this->multibyteSpaceLengthAt($offset);
-            $offset += $space;
-        } while (0 < $space);
-
-        return $offset;
-    }
-
     public function afterNumber(int $offset): int
     {
         if ('0' === $this->source[$offset] && in_array($this->source[$offset + 1] ?? '', self::RADIX_PREFIXES, true)) {
@@ -191,6 +179,18 @@ final readonly class JavaScriptLiterals
         return min($offset + $length, $this->length);
     }
 
+    // Because a pattern over a long run of spaces can exhaust the pattern engine and then read none of them, the run is read with plain string functions.
+    private function afterSpaces(int $offset): int
+    {
+        do {
+            $offset += strspn($this->source, self::WHITESPACE, $offset);
+            $space = $this->multibyteSpaceLengthAt($offset);
+            $offset += $space;
+        } while (0 < $space);
+
+        return $offset;
+    }
+
     // Because a braced escape such as `\u{61}` is part of an identifier, its braces do not end the word.
     private function wordContinuationLengthAt(int $start, int $offset): int
     {
@@ -210,6 +210,11 @@ final readonly class JavaScriptLiterals
         return '' !== $char && str_contains(self::SPACE_LEADS, $char) && 0 === $this->multibyteSpaceLengthAt($offset);
     }
 
+    private function afterBigIntSuffix(int $offset): int
+    {
+        return $offset + strspn($this->source, self::BIGINT_SUFFIX, $offset, 1);
+    }
+
     private function exponentLength(int $offset): int
     {
         if (!in_array($this->source[$offset] ?? '', self::EXPONENTS, true)) {
@@ -222,9 +227,10 @@ final readonly class JavaScriptLiterals
         return 0 === $digits ? 0 : 1 + $sign + $digits;
     }
 
-    private function afterBigIntSuffix(int $offset): int
+    // Because a backslash cannot escape a line end in a pattern, an unclosed pattern still ends at that line end.
+    private function afterPatternEscape(int $offset): int
     {
-        return $offset + strspn($this->source, self::BIGINT_SUFFIX, $offset, 1);
+        return $this->lineEndsAt($offset + 1) ? $offset + 1 : min($offset + 2, $this->length);
     }
 
     private function afterCharacterClass(int $offset): int
@@ -242,11 +248,5 @@ final readonly class JavaScriptLiterals
         }
 
         return $this->length;
-    }
-
-    // Because a backslash cannot escape a line end in a pattern, an unclosed pattern still ends at that line end.
-    private function afterPatternEscape(int $offset): int
-    {
-        return $this->lineEndsAt($offset + 1) ? $offset + 1 : min($offset + 2, $this->length);
     }
 }

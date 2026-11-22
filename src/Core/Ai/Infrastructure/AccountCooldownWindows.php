@@ -163,12 +163,6 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
         $this->record($account, $until);
     }
 
-    // No token, so reading the window never starts or saves one.
-    private function window(Account $account): RateLimit
-    {
-        return $this->windowsEndingAt($this->clock->now(), $this->pool)->create($account->key())->consume(0);
-    }
-
     // Anchored at the end so the fixed window closes at the vendor's reset; one month because it is the shortest interval the RateLimiter anchors.
     private function windowsEndingAt(DateTimeImmutable $end, CacheItemPoolInterface $pool): RateLimiterFactory
     {
@@ -183,10 +177,10 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
         return self::LIMITER.'-rejected-'.$account->key();
     }
 
-    // Kept without an expiry, unlike the rejection, so an error that outlasts its cooldown is not reported again on each retry; only an answer clears it.
-    private function reportKey(Account $account): string
+    // No token, so reading the window never starts or saves one.
+    private function window(Account $account): RateLimit
     {
-        return self::LIMITER.'-reported-'.$account->key();
+        return $this->windowsEndingAt($this->clock->now(), $this->pool)->create($account->key())->consume(0);
     }
 
     // Strictly before, because an answer to a call sent before the report or at its moment may have been read after the error that came later.
@@ -195,6 +189,12 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
         $reportedAt = $this->pool->getItem($this->reportKey($account))->get();
 
         return $reportedAt instanceof DateTimeImmutable && $reportedAt < $sentAt;
+    }
+
+    // Kept without an expiry, unlike the rejection, so an error that outlasts its cooldown is not reported again on each retry; only an answer clears it.
+    private function reportKey(Account $account): string
+    {
+        return self::LIMITER.'-reported-'.$account->key();
     }
 
     // Asked again under the report's lock, because another worker may have reported a newer error since, and that report must stay.

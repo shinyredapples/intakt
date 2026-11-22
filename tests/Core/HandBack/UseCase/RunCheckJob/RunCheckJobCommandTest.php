@@ -100,16 +100,6 @@ final class RunCheckJobCommandTest extends TestCase
 
     private BuildHistory $history;
 
-    protected function setUp(): void
-    {
-        $this->history = new BuildHistory();
-    }
-
-    protected function tearDown(): void
-    {
-        $this->history->remove();
-    }
-
     public function testAGreenCheckPrintsTheEndOfItsLogAndPassed(): void
     {
         $this->history->commit('Build work');
@@ -235,6 +225,16 @@ final class RunCheckJobCommandTest extends TestCase
         $this->expectExceptionObject(new InvalidArgumentException('a bug in the runner'));
 
         $this->executed($runner, []);
+    }
+
+    protected function setUp(): void
+    {
+        $this->history = new BuildHistory();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->history->remove();
     }
 
     /**

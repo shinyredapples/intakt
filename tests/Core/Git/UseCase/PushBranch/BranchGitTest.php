@@ -29,21 +29,6 @@ final class BranchGitTest extends TestCase
     private string $credential;
     private string $remote;
 
-    protected function setUp(): void
-    {
-        $this->repository = new TemporaryRepository();
-        $this->repository->commitFile('a.txt', "one\n");
-        $this->programs = new ProgramOnPath();
-        $this->credential = 'not-a-real-'.bin2hex(random_bytes(4));
-        $this->remote = 'https://intakt:'.$this->credential.'@localhost/repo.git';
-    }
-
-    protected function tearDown(): void
-    {
-        $this->programs->remove();
-        $this->repository->remove();
-    }
-
     /**
      * @return iterable<string, array{string, list<string>}>
      */
@@ -134,6 +119,21 @@ final class BranchGitTest extends TestCase
         $stopped = $this->stopped(fn (): string => new BranchGit(new HardenedGit(), new GuardedRun())->outputFromRemote($this->gitDirectory(), ['ls-remote', '--', $this->repository->path.'/no-remote', 'refs/heads/task']));
 
         self::assertSame('The branch was not pushed: git ls-remote failed with exit code 128', $stopped->getMessage());
+    }
+
+    protected function setUp(): void
+    {
+        $this->repository = new TemporaryRepository();
+        $this->repository->commitFile('a.txt', "one\n");
+        $this->programs = new ProgramOnPath();
+        $this->credential = 'not-a-real-'.bin2hex(random_bytes(4));
+        $this->remote = 'https://intakt:'.$this->credential.'@localhost/repo.git';
+    }
+
+    protected function tearDown(): void
+    {
+        $this->programs->remove();
+        $this->repository->remove();
     }
 
     private function gitDirectory(): string

@@ -102,6 +102,11 @@ final class DockerEngineBuildTest extends TestCase
         yield 'a list line after the image id' => ['{"aux":{"ID":"'.self::IMAGE.'"}}'."\n".'[]'."\n"];
     }
 
+    private function engineAnswering(MockResponse $response): DockerEngine
+    {
+        return new DockerEngine(new MockHttpClient($response), FakeDockerEngine::SOCKET);
+    }
+
     /**
      * @return Closure(int): string
      */
@@ -113,10 +118,5 @@ final class DockerEngineBuildTest extends TestCase
 
             return $chunk;
         };
-    }
-
-    private function engineAnswering(MockResponse $response): DockerEngine
-    {
-        return new DockerEngine(new MockHttpClient($response), FakeDockerEngine::SOCKET);
     }
 }

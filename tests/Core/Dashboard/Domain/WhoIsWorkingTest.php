@@ -163,14 +163,6 @@ final class WhoIsWorkingTest extends TestCase
     /**
      * @param list<ReviewerOutcome> $outcomes
      */
-    private function review(string $change, int $number, array $outcomes): Review
-    {
-        return new Review([$this->round($change, $number, $outcomes)]);
-    }
-
-    /**
-     * @param list<ReviewerOutcome> $outcomes
-     */
     private function round(string $change, int $number, array $outcomes): ReviewedRound
     {
         return new ReviewedRound(new RoundStart('r'.$number.$change, 'alpha', 2), new RoundPlace($change, $number), $this->since(), null)->withOutcomes($outcomes);
@@ -179,6 +171,14 @@ final class WhoIsWorkingTest extends TestCase
     private function running(string $id): ReviewerOutcome
     {
         return new ReviewerOutcome($id, 'correctness', 'standard', $this->since());
+    }
+
+    /**
+     * @param list<ReviewerOutcome> $outcomes
+     */
+    private function review(string $change, int $number, array $outcomes): Review
+    {
+        return new Review([$this->round($change, $number, $outcomes)]);
     }
 
     private function since(): DateTimeImmutable

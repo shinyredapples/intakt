@@ -179,16 +179,16 @@ final class ChooseBuildModelTest extends TestCase
         self::assertSame(['a', 'é'], [$attempt->project, $attempt->task]);
     }
 
-    private function attemptNumber(int $number): BuildAttempt
-    {
-        return new BuildAttempt('alpha', 'T60', $number);
-    }
-
     private function use(InMemoryLedger $ledger, ?TierResolver $tiers = null): ChooseBuildModel
     {
         $routing = new ConfiguredBuildRouting(['alpha' => ['tier' => Tier::Standard->value, 'sensitive_paths' => ['src/**/Security/**'], 'escalate_on' => ['failed-attempt', 'blocking-finding', 'stall']]], new ModelRouting());
 
         return new ChooseBuildModel($routing, $tiers ?? $this->claudeCodeTiers(), $ledger);
+    }
+
+    private function attemptNumber(int $number): BuildAttempt
+    {
+        return new BuildAttempt('alpha', 'T60', $number);
     }
 
     private function claudeCodeTiers(): TierResolver

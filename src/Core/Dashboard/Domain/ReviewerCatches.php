@@ -63,12 +63,6 @@ final readonly class ReviewerCatches
         return sprintf('The %s reviewer found the most P1 findings, %d, and %d of them no other reviewer found.', $top[0]->role, $most, $top[0]->alone(Severity::P1));
     }
 
-    // Each tied reviewer keeps its own count of the P1s no other reviewer found, because equal totals can hide different exclusive catches (D3 of #2934).
-    private function aloneInWords(ReviewerCatch $reviewer): string
-    {
-        return sprintf('the %s reviewer alone found %d', $reviewer->role, $reviewer->alone(Severity::P1));
-    }
-
     /**
      * @param list<string> $parts
      */
@@ -77,6 +71,12 @@ final readonly class ReviewerCatches
         $last = array_pop($parts);
 
         return [] === $parts ? (string) $last : implode(', ', $parts).' and '.$last;
+    }
+
+    // Each tied reviewer keeps its own count of the P1s no other reviewer found, because equal totals can hide different exclusive catches (D3 of #2934).
+    private function aloneInWords(ReviewerCatch $reviewer): string
+    {
+        return sprintf('the %s reviewer alone found %d', $reviewer->role, $reviewer->alone(Severity::P1));
     }
 
     // A reported severity that is not a `Severity` leaves the round out like a missing one, because the bars count only P1, P2 and P3 and would show that finding as none.

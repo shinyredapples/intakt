@@ -47,6 +47,13 @@ final readonly class RatchetListsGate implements Gate
         return [] === $findings ? GateResult::passed($this->name()) : GateResult::withFindings($this->name(), $findings);
     }
 
+    private function workingTreeFile(Workspace $workspace, string $path): ?string
+    {
+        $file = $workspace->root.'/'.$path;
+
+        return is_file($file) ? (string) file_get_contents($file) : null;
+    }
+
     /**
      * @param list<string> $paths
      *
@@ -68,6 +75,13 @@ final readonly class RatchetListsGate implements Gate
         }
 
         return [...$findings, ...$this->shrinkFindings($this->ignoredErrors($workspace, $lists), $paths)];
+    }
+
+    private function fileAt(Workspace $workspace, string $commit, string $path): ?string
+    {
+        $shown = $workspace->git(['show', $commit.':'.$path]);
+
+        return $shown->succeeded() ? $shown->output : null;
     }
 
     /**
@@ -180,19 +194,5 @@ final readonly class RatchetListsGate implements Gate
         }
 
         return $findings;
-    }
-
-    private function workingTreeFile(Workspace $workspace, string $path): ?string
-    {
-        $file = $workspace->root.'/'.$path;
-
-        return is_file($file) ? (string) file_get_contents($file) : null;
-    }
-
-    private function fileAt(Workspace $workspace, string $commit, string $path): ?string
-    {
-        $shown = $workspace->git(['show', $commit.':'.$path]);
-
-        return $shown->succeeded() ? $shown->output : null;
     }
 }

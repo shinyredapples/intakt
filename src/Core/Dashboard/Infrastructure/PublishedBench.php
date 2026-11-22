@@ -45,21 +45,6 @@ final readonly class PublishedBench
         return new BenchHeadline($panel[0], $panel[1], $panel[2], $ranOn, $this->runs($section));
     }
 
-    /**
-     * @param list<string> $section
-     */
-    private function runs(array $section): ?int
-    {
-        $repeats = array_merge(...array_map(
-            static fn (string $line): array => false === preg_match_all(self::REPEAT, $line, $matches) ? [] : $matches[1],
-            $section,
-        ));
-
-        $runs = 1 === count($repeats) ? $this->countOf($repeats[0]) : null;
-
-        return 0 === $runs ? null : $runs;
-    }
-
     private function text(): string
     {
         return is_file($this->readme) && is_readable($this->readme) ? (string) file_get_contents($this->readme) : '';
@@ -96,14 +81,6 @@ final readonly class PublishedBench
         return [$defects, $planted, $falseAlarms];
     }
 
-    // A count beyond the integer range or zero-padded (02) is refused rather than read, so the tile never shows a figure the bench page does not hold as written.
-    private function countOf(string $digits): ?int
-    {
-        $count = filter_var($digits, FILTER_VALIDATE_INT, ['options' => ['min_range' => 0]]);
-
-        return is_int($count) ? $count : null;
-    }
-
     /**
      * @param list<string> $section
      */
@@ -120,5 +97,28 @@ final readonly class PublishedBench
         [, $date, $year, $month, $day] = $dates[0];
 
         return checkdate((int) $month, (int) $day, (int) $year) ? $date : null;
+    }
+
+    /**
+     * @param list<string> $section
+     */
+    private function runs(array $section): ?int
+    {
+        $repeats = array_merge(...array_map(
+            static fn (string $line): array => false === preg_match_all(self::REPEAT, $line, $matches) ? [] : $matches[1],
+            $section,
+        ));
+
+        $runs = 1 === count($repeats) ? $this->countOf($repeats[0]) : null;
+
+        return 0 === $runs ? null : $runs;
+    }
+
+    // A count beyond the integer range or zero-padded (02) is refused rather than read, so the tile never shows a figure the bench page does not hold as written.
+    private function countOf(string $digits): ?int
+    {
+        $count = filter_var($digits, FILTER_VALIDATE_INT, ['options' => ['min_range' => 0]]);
+
+        return is_int($count) ? $count : null;
     }
 }

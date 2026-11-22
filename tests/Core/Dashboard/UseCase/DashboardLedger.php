@@ -9,6 +9,7 @@ use Intakt\Core\Ledger\Contract\AppendResult;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\Mentions;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Symfony\Component\Uid\Uuid;
@@ -35,12 +36,9 @@ final class DashboardLedger implements Ledger
         return new RecordedEvents(array_values(array_filter($this->recorded, static fn (RecordedEvent $recorded): bool => $kind === $recorded->event->kind)));
     }
 
-    /**
-     * @param list<string> $texts
-     */
-    public function readMentioning(array $texts): RecordedEvents
+    public function readMentioning(Mentions $texts): RecordedEvents
     {
-        return new RecordedEvents(array_values(array_filter($this->recorded, static fn (RecordedEvent $recorded): bool => array_any($texts, static fn (string $text): bool => str_contains($recorded->event->payload, $text)))));
+        return new RecordedEvents(array_values(array_filter($this->recorded, static fn (RecordedEvent $recorded): bool => array_any([...$texts], static fn (string $text): bool => str_contains($recorded->event->payload, $text)))));
     }
 
     public function startRound(string $round, string $project): void
@@ -185,14 +183,6 @@ final class DashboardLedger implements Ledger
             ],
             'same_cause' => ['F4' => 'F1'],
         ]);
-    }
-
-    /**
-     * @return array<string, int|string>
-     */
-    private function inDiscount(string $id, string $severity, int $line): array
-    {
-        return ['id' => $id, 'severity' => $severity, 'text' => 'Text of '.$id.'.', 'file' => 'src/discount.js', 'line' => $line];
     }
 
     public function judgeToFixAtLine7OfA(string $round, string $text): void
@@ -363,6 +353,14 @@ final class DashboardLedger implements Ledger
     public function recordBuildStep(array $payload): void
     {
         $this->add(LedgerEventKind::BuildStepEnded, $payload);
+    }
+
+    /**
+     * @return array<string, int|string>
+     */
+    private function inDiscount(string $id, string $severity, int $line): array
+    {
+        return ['id' => $id, 'severity' => $severity, 'text' => 'Text of '.$id.'.', 'file' => 'src/discount.js', 'line' => $line];
     }
 
     /**

@@ -27,11 +27,6 @@ final class PublishedBenchTest extends TestCase
     /** @var list<string> */
     private array $files = [];
 
-    protected function tearDown(): void
-    {
-        array_map(unlink(...), $this->files);
-    }
-
     public function testTheReadmeTableGivesThePanelsResultAndTheDateOfItsRun(): void
     {
         $headline = $this->headlineOf($this->section());
@@ -333,6 +328,11 @@ final class PublishedBenchTest extends TestCase
         self::assertMatchesRegularExpression('/^\d+ of \d+$/', $headline->reading());
         self::assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2}$/', $headline->ranOn);
         self::assertSame(3, $headline->runs);
+    }
+
+    protected function tearDown(): void
+    {
+        array_map(unlink(...), $this->files);
     }
 
     private function section(string $header = self::HEADER, string $panel = self::PANEL, string $date = self::DATE): string

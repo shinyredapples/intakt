@@ -121,14 +121,6 @@ final class PublishVerdictTest extends KernelTestCase
 
     private ProtectedChanges $protectedChanges;
 
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer(), new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']));
-        $this->github = new ScriptedGitHub();
-        $this->locks = new LockFactory(new InMemoryStore());
-        $this->protectedChanges = ProtectedChanges::touching([]);
-    }
-
     public function testAPullRequestHandedToIntaktInALiveProjectGetsTheReviewPostedWithTheRoundsToken(): void
     {
         $this->handOver('alpha', self::PULL);
@@ -829,6 +821,21 @@ final class PublishVerdictTest extends KernelTestCase
         self::assertSame([[self::STATUS, ['state' => 'error', 'context' => 'intakt/review', 'description' => 'Intakt does not count a replay as a review of this head.']]], $this->github->writes);
     }
 
+    // A replay was never published as a review, so it has nothing to withdraw and keeps the one status every replay gets.
+    public function testAStaleRoundOfAReplayProjectGetsTheReplayErrorStatusAndNoComment(): void
+    {
+        new FlagProjectAsReplayHandler($this->fixture->entities)(new FlagProjectAsReplay('alpha'));
+        $handler = $this->handler(new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']));
+        $roundId = $this->judgedRound(self::PULL, []);
+        $this->markStale($roundId);
+
+        foreach ($this->publicationsOf($roundId) as $publication) {
+            $handler($publication);
+        }
+
+        self::assertSame([[self::STATUS, ['state' => 'error', 'context' => 'intakt/review', 'description' => 'Intakt does not count a replay as a review of this head.']]], array_unique($this->github->writes, SORT_REGULAR));
+    }
+
     public function testALiveProjectsJudgedRoundPublishesNothing(): void
     {
         $this->publishRoundJudgedOn([], new ConfiguredProjectModes([]));
@@ -884,36 +891,12 @@ final class PublishVerdictTest extends KernelTestCase
         $this->handler(new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']))(new PublishVerdict($roundId));
     }
 
-    /**
-     * @param array<string, Verdict> $verdicts
-     */
-    private function publishRoundJudgedOn(array $verdicts, ?ConfiguredProjectModes $modes = null): string
+    protected function setUp(): void
     {
-        $handler = $this->handler($modes ?? new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']));
-        $roundId = $this->judgedRound(self::PULL, $verdicts);
-
-        foreach ($this->publicationsOf($roundId) as $publication) {
-            $handler($publication);
-        }
-
-        return $roundId;
-    }
-
-    /**
-     * @param array<string, Verdict> $verdicts
-     */
-    private function publishRoundDeferringEveryP3On(array $verdicts): string
-    {
-        $roundId = $this->reviewedRound(self::PULL, $verdicts);
-        foreach ($this->fixture->judgings() as $judging) {
-            $this->fixture->judge(new DeferringJudge(new VerdictPerRole($verdicts)))($judging);
-        }
-
-        foreach ($this->publicationsOf($roundId) as $publication) {
-            $this->handler(new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']))($publication);
-        }
-
-        return $roundId;
+        $this->fixture = new RoundFixture(self::getContainer(), new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']));
+        $this->github = new ScriptedGitHub();
+        $this->locks = new LockFactory(new InMemoryStore());
+        $this->protectedChanges = ProtectedChanges::touching([]);
     }
 
     // The application's command bus, so the publication the mark queues lands on the application's queue.
@@ -994,23 +977,6 @@ final class PublishVerdictTest extends KernelTestCase
         return array_column($statuses, 1);
     }
 
-    private function marker(string $roundId): string
-    {
-        return '<!-- intakt-verdict: '.$roundId.' -->';
-    }
-
-    private function commentBody(): string
-    {
-        $body = $this->github->writes[0][1]['body'] ?? null;
-
-        return is_string($body) ? $body : self::fail('No comment was posted.');
-    }
-
-    private function loopReadingOfTheComment(): LoopVerdict
-    {
-        return new LoopReviewReader()->read('intakt', SampleIdentity::HEAD, [new PullRequestComment('intakt', SampleIdentity::HEAD, $this->commentBody())])->reviews[0]->verdict;
-    }
-
     /**
      * @param array<string, Verdict> $verdicts
      */
@@ -1037,19 +1003,6 @@ final class PublishVerdictTest extends KernelTestCase
         }
 
         return $roundId;
-    }
-
-    // The application's queue, because the judge transition of the application's workflow queues the publication.
-    /**
-     * @return list<PublishVerdict>
-     */
-    private function publicationsOf(string $roundId): array
-    {
-        $queue = self::getContainer()->get('messenger.transport.async');
-        assert($queue instanceof InMemoryTransport);
-        $sent = array_map(static fn (Envelope $envelope): object => $envelope->getMessage(), $queue->getSent());
-
-        return array_values(array_filter($sent, static fn (object $message): bool => $message instanceof PublishVerdict && $roundId === $message->roundId));
     }
 
     private function handler(ConfiguredProjectModes $modes, ?Ledger $askLedger = null): PublishVerdictHandler
@@ -1079,6 +1032,26 @@ final class PublishVerdictTest extends KernelTestCase
     }
 
     /**
+     * @param array<string, Verdict> $verdicts
+     */
+    private function publishRoundJudgedOn(array $verdicts, ?ConfiguredProjectModes $modes = null): string
+    {
+        $handler = $this->handler($modes ?? new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']));
+        $roundId = $this->judgedRound(self::PULL, $verdicts);
+
+        foreach ($this->publicationsOf($roundId) as $publication) {
+            $handler($publication);
+        }
+
+        return $roundId;
+    }
+
+    private function marker(string $roundId): string
+    {
+        return '<!-- intakt-verdict: '.$roundId.' -->';
+    }
+
+    /**
      * @return list<array<mixed>>
      */
     private function ownerAsks(): array
@@ -1091,14 +1064,6 @@ final class PublishVerdictTest extends KernelTestCase
     private function ask(string ...$lines): string
     {
         return implode("\n", ['**Waiting for the owner** (head '.SampleIdentity::HEAD.')', '', 'This head touches protected paths, so it merges only once the owner has approved this head.', '', ...$lines]);
-    }
-
-    /**
-     * @return non-empty-string
-     */
-    private function askMarker(string $roundId, int $part, string ...$asks): string
-    {
-        return '<!-- intakt-owner-ask: '.$roundId.' '.hash('sha256', json_encode($asks, JSON_THROW_ON_ERROR)).' part '.$part.' -->';
     }
 
     /**
@@ -1149,6 +1114,27 @@ final class PublishVerdictTest extends KernelTestCase
         }
     }
 
+    // The application's queue, because the judge transition of the application's workflow queues the publication.
+    /**
+     * @return list<PublishVerdict>
+     */
+    private function publicationsOf(string $roundId): array
+    {
+        $queue = self::getContainer()->get('messenger.transport.async');
+        assert($queue instanceof InMemoryTransport);
+        $sent = array_map(static fn (Envelope $envelope): object => $envelope->getMessage(), $queue->getSent());
+
+        return array_values(array_filter($sent, static fn (object $message): bool => $message instanceof PublishVerdict && $roundId === $message->roundId));
+    }
+
+    private function recognizer(): ChangesHandedToIntakt
+    {
+        $commands = self::getContainer()->get('command.bus');
+        self::assertInstanceOf(MessageBusInterface::class, $commands);
+
+        return new ChangesHandedToIntakt($this->fixture->ledger(), new WatcherLedger($this->fixture->ledger()), self::createStub(ChangeAuthorship::class), $this->fixture->log, $commands);
+    }
+
     /**
      * @return list<PublishHandedOverChange>
      */
@@ -1161,17 +1147,17 @@ final class PublishVerdictTest extends KernelTestCase
         return array_values(array_filter($sent, static fn (object $message): bool => $message instanceof PublishHandedOverChange));
     }
 
-    private function recognizer(): ChangesHandedToIntakt
-    {
-        $commands = self::getContainer()->get('command.bus');
-        self::assertInstanceOf(MessageBusInterface::class, $commands);
-
-        return new ChangesHandedToIntakt($this->fixture->ledger(), new WatcherLedger($this->fixture->ledger()), self::createStub(ChangeAuthorship::class), $this->fixture->log, $commands);
-    }
-
     private function approvedComment(string $roundId): string
     {
         return self::HEADING."\n\n```json\n".'{"verdict":"approve","head":"'.SampleIdentity::HEAD.'","summary":"2 of 2 reviewers approve; findings to act on: 0."}'."\n```\n\n".$this->marker($roundId);
+    }
+
+    /**
+     * @return non-empty-string
+     */
+    private function askMarker(string $roundId, int $part, string ...$asks): string
+    {
+        return '<!-- intakt-owner-ask: '.$roundId.' '.hash('sha256', json_encode($asks, JSON_THROW_ON_ERROR)).' part '.$part.' -->';
     }
 
     private function verdicts(): VerdictForTheLoop
@@ -1181,14 +1167,14 @@ final class PublishVerdictTest extends KernelTestCase
         return new VerdictForTheLoop(new StoredVerdicts(self::getContainer()->get('serializer.stored')), $this->fixture->findingStore(), $ledger, new ChangeDecision());
     }
 
-    private function changes(Finding ...$findings): Verdict
-    {
-        return new Verdict(Decision::Changes, array_values($findings), [], []);
-    }
-
     private function approval(Finding ...$findings): Verdict
     {
         return new Verdict(Decision::Approve, array_values($findings), [], []);
+    }
+
+    private function loopReadingOfTheComment(): LoopVerdict
+    {
+        return new LoopReviewReader()->read('intakt', SampleIdentity::HEAD, [new PullRequestComment('intakt', SampleIdentity::HEAD, $this->commentBody())])->reviews[0]->verdict;
     }
 
     private function placed(string $id, Severity $severity, string $text): Finding
@@ -1196,8 +1182,37 @@ final class PublishVerdictTest extends KernelTestCase
         return new Finding($id, $severity, 'src/Thing.php', 3, null, $text, FixableBy::Builder, false, null, null);
     }
 
+    private function changes(Finding ...$findings): Verdict
+    {
+        return new Verdict(Decision::Changes, array_values($findings), [], []);
+    }
+
+    private function commentBody(): string
+    {
+        $body = $this->github->writes[0][1]['body'] ?? null;
+
+        return is_string($body) ? $body : self::fail('No comment was posted.');
+    }
+
     private function unplaced(string $id, Severity $severity, string $text): Finding
     {
         return new Finding($id, $severity, null, null, null, $text, FixableBy::Builder, false, null, null);
+    }
+
+    /**
+     * @param array<string, Verdict> $verdicts
+     */
+    private function publishRoundDeferringEveryP3On(array $verdicts): string
+    {
+        $roundId = $this->reviewedRound(self::PULL, $verdicts);
+        foreach ($this->fixture->judgings() as $judging) {
+            $this->fixture->judge(new DeferringJudge(new VerdictPerRole($verdicts)))($judging);
+        }
+
+        foreach ($this->publicationsOf($roundId) as $publication) {
+            $this->handler(new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']))($publication);
+        }
+
+        return $roundId;
     }
 }

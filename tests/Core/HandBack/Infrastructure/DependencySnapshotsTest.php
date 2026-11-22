@@ -69,22 +69,6 @@ namespace Intakt\Tests\Core\HandBack\Infrastructure {
 
         private string $store;
 
-        protected function setUp(): void
-        {
-            $this->folder = sys_get_temp_dir().'/'.uniqid('intakt-snapshots-', true);
-            $this->store = $this->folder.'/store';
-            new Filesystem()->mkdir($this->folder.'/locks');
-        }
-
-        protected function tearDown(): void
-        {
-            foreach ($this->foldersUnder($this->folder) as $folder) {
-                self::changedForReal($folder, 0o700);
-            }
-
-            new Filesystem()->remove($this->folder);
-        }
-
         public function testASavedSnapshotIsLeasedFromTheFolderOfItsKey(): void
         {
             $store = $this->storeKeeping(10);
@@ -587,6 +571,22 @@ namespace Intakt\Tests\Core\HandBack\Infrastructure {
         public static function changedForReal(string $path, int $mode): bool
         {
             return chmod($path, $mode);
+        }
+
+        protected function setUp(): void
+        {
+            $this->folder = sys_get_temp_dir().'/'.uniqid('intakt-snapshots-', true);
+            $this->store = $this->folder.'/store';
+            new Filesystem()->mkdir($this->folder.'/locks');
+        }
+
+        protected function tearDown(): void
+        {
+            foreach ($this->foldersUnder($this->folder) as $folder) {
+                self::changedForReal($folder, 0o700);
+            }
+
+            new Filesystem()->remove($this->folder);
         }
 
         private function storeKeeping(int $count): DependencySnapshots

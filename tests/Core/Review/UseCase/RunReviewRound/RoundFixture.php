@@ -276,19 +276,18 @@ final readonly class RoundFixture
         return new KeptVerdicts($this->entities, new MockClock('2026-11-21 10:00:00'));
     }
 
-    private function recordRecurringP1s(Ledger $ledger): RecordRecurringP1s
-    {
-        return new RecordRecurringP1s($this->recurringP1s($ledger), $this->keptVerdicts(), $this->roundLedger($ledger), $this->escalations);
-    }
-
     // A new handler on every delivery, because a restarted worker has one too and a redelivery must find the kept verdict in the database, not in the handler; other locks stand for a key lock that expired.
     public function escalate(EscalateRecurringP1 $message, EscalationReviews $reviews, ?LockFactory $locks = null): void
     {
         $agent = new EscalationAgent(new EscalationPrompt(new Fence()), new ScriptedVendor(), $reviews, $this->container->get(Redactor::class));
         $rounds = $this->rounds($this->entities);
-        $recorded = new EscalationsOfChange($this->ledger, $this->ledgerPayloads());
 
-        new EscalateRecurringP1Handler($rounds, new EscalationRequests($this->storedFindingsOn($this->entities)), $this->keptVerdicts(), $agent, $this->roundLedger($this->ledger), $recorded, $locks ?? $this->locks)($message);
+        new EscalateRecurringP1Handler($rounds, new EscalationRequests($this->storedFindingsOn($this->entities)), $this->keptVerdicts(), $agent, $this->roundLedger($this->ledger), $this->escalationsOfChange(), $locks ?? $this->locks)($message);
+    }
+
+    public function escalationsOfChange(?Ledger $ledger = null): EscalationsOfChange
+    {
+        return new EscalationsOfChange($this->rounds($this->entities), $ledger ?? $this->ledger, $this->ledgerPayloads());
     }
 
     // The application's queue, because the round's workflow, taken from the container, queues the judging through the application's bus.
@@ -434,11 +433,6 @@ final readonly class RoundFixture
         return new ReviewerLeases($entities, $moves, $this->clock);
     }
 
-    private function roundLedger(Ledger $ledger): RoundLedger
-    {
-        return new RoundLedger($ledger, $this->modes, $this->serializer, new ConfiguredTierResolver(['alpha' => ['tiers' => ['standard' => ['provider' => 'anthropic', 'model' => self::MODEL, 'substitutes' => [['provider' => 'openai', 'model' => self::SUBSTITUTE_MODEL]]]]]], []), $this->container->get(Redactor::class), new FindingKeys());
-    }
-
     private function startWith(RunReviewRound $command, MessageBusInterface $queue): string
     {
         return $this->startHandlerOn($queue)($command);
@@ -459,9 +453,19 @@ final readonly class RoundFixture
         return new ReviewRounds($entities, $this->clock, $this->storedFindingsOn($entities), $this->roundLedger($ledger ?? $this->ledger));
     }
 
+    private function roundLedger(Ledger $ledger): RoundLedger
+    {
+        return new RoundLedger($ledger, $this->modes, $this->serializer, new ConfiguredTierResolver(['alpha' => ['tiers' => ['standard' => ['provider' => 'anthropic', 'model' => self::MODEL, 'substitutes' => [['provider' => 'openai', 'model' => self::SUBSTITUTE_MODEL]]]]]], []), $this->container->get(Redactor::class), new FindingKeys());
+    }
+
     private function storedFindingsOn(EntityManagerInterface $entities): StoredFindings
     {
         return new StoredFindings($entities, $this->serializer, $this->machine('state_machine.review_round'));
+    }
+
+    private function recordRecurringP1s(Ledger $ledger): RecordRecurringP1s
+    {
+        return new RecordRecurringP1s($this->recurringP1s($ledger), $this->keptVerdicts(), $this->roundLedger($ledger), $this->escalations);
     }
 
     private function panelOf(int $reviewers): Panel

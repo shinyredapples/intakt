@@ -50,16 +50,6 @@ final class CheckHandBackSecretsTest extends TestCase
 
     private BuildHistory $history;
 
-    protected function setUp(): void
-    {
-        $this->history = new BuildHistory();
-    }
-
-    protected function tearDown(): void
-    {
-        $this->history->remove();
-    }
-
     public function testATokenInACommitMessageIsRefused(): void
     {
         $this->history->commit('Use the key '.$this->fakeKey());
@@ -242,6 +232,16 @@ final class CheckHandBackSecretsTest extends TestCase
         $result = $this->check($this->history->bundle('main..task'), $this->mountedCredential());
 
         self::assertEquals(new AcceptedHandBack(null, $head, 0), $result);
+    }
+
+    protected function setUp(): void
+    {
+        $this->history = new BuildHistory();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->history->remove();
     }
 
     // Built at run time and random, so neither this file nor the repository's history holds a key the secrets gates would find.

@@ -89,24 +89,6 @@ final class SymfonyMinorTest extends TestCase
     }
 
     /**
-     * @param array<string, string> $components
-     *
-     * @return list<string>
-     */
-    private function behind(array $components): array
-    {
-        $behind = [];
-        foreach ($components as $name => $version) {
-            $floor = in_array($name, self::WITHOUT_TAKEN_RELEASE, true) ? self::FIRST_RELEASE : self::TAKEN_RELEASE;
-            if (!str_starts_with($version, 'v'.self::MINOR.'.') || Comparator::lessThan($this->normalized($version), $this->normalized($floor))) {
-                $behind[] = $name.' '.$version;
-            }
-        }
-
-        return $behind;
-    }
-
-    /**
      * @return array<string, string>
      */
     private function lockedComponents(): array
@@ -126,6 +108,24 @@ final class SymfonyMinorTest extends TestCase
         }
 
         return $components;
+    }
+
+    /**
+     * @param array<string, string> $components
+     *
+     * @return list<string>
+     */
+    private function behind(array $components): array
+    {
+        $behind = [];
+        foreach ($components as $name => $version) {
+            $floor = in_array($name, self::WITHOUT_TAKEN_RELEASE, true) ? self::FIRST_RELEASE : self::TAKEN_RELEASE;
+            if (!str_starts_with($version, 'v'.self::MINOR.'.') || Comparator::lessThan($this->normalized($version), $this->normalized($floor))) {
+                $behind[] = $name.' '.$version;
+            }
+        }
+
+        return $behind;
     }
 
     private function normalized(string $version): string

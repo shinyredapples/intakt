@@ -47,13 +47,6 @@ final class AccountCooldownWindowsTest extends TestCase
     private InMemoryLedger $ledger;
     private ReadingsInMemory $readings;
 
-    protected function setUp(): void
-    {
-        $this->pool = new ArrayAdapter();
-        $this->ledger = new InMemoryLedger();
-        $this->readings = new ReadingsInMemory(new NativeClock());
-    }
-
     public function testAnAccountThatWasNeverLimitedIsFree(): void
     {
         $cooldowns = $this->cooldowns();
@@ -544,6 +537,13 @@ final class AccountCooldownWindowsTest extends TestCase
     public function testAProviderWithoutAccountsHasNothingToWaitFor(): void
     {
         self::assertSame(0, $this->cooldowns()->secondsUntilAnAccountIsFree(Provider::ClaudeCode));
+    }
+
+    protected function setUp(): void
+    {
+        $this->pool = new ArrayAdapter();
+        $this->ledger = new InMemoryLedger();
+        $this->readings = new ReadingsInMemory(new NativeClock());
     }
 
     private function measured(UsageWindow $window, float $usedPercent, int $resetInSeconds): void
