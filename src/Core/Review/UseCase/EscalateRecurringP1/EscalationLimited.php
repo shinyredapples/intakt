@@ -28,6 +28,10 @@ final class EscalationLimited extends RecoverableMessageHandlingException
     // A transient failure still within its own retries, forced so the forced retries before it do not use them up.
     public static function retriedIn(int $milliseconds): self
     {
-        return new self('The provider failed the escalation review\'s call; it is tried again.', retryDelay: $milliseconds, forceRetry: true);
+        return new self(
+            'The provider failed the escalation review\'s call; it is tried again.',
+            retryDelay: $milliseconds,
+            forceRetry: true,
+        );
     }
 }
