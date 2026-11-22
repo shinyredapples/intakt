@@ -82,11 +82,10 @@ final readonly class UsageLedger
      */
     public function settle(UsageReservation $reservation, DeferredResult ...$rounds): void
     {
-        try {
-            $usages = $this->usagesOfRounds(...$rounds);
-            // Boundary: the catch below records the call as unsettled with the failure, because unreadable usage must not lose the call from the ledger.
-        } catch (Throwable $unreadable) {
-            $this->leaveUnreadableUnsettled($reservation, $unreadable, ...$rounds);
+        ['usages' => $usages, 'unreadable' => $unreadable] = $this->readRounds($reservation, ...$rounds);
+        if ($unreadable instanceof Throwable) {
+            // Unsettled, not failed, because the answer arrived and its verdict stands; the vendor's usage settles the call later (docs/design/05-architecture/06-budget-and-model-planner.md).
+            $this->record(new UsageUnsettled($reservation->call, 'unsettled', $unreadable::class, $usages), $unreadable);
 
             return;
         }
@@ -99,47 +98,29 @@ final readonly class UsageLedger
      */
     public function leaveUnsettled(UsageReservation $reservation, Throwable $failure, DeferredResult ...$rounds): void
     {
-        $usages = $this->usagesBeforeFailure($reservation, array_values($rounds));
+        $usages = $this->readRounds($reservation, ...$rounds)['usages'];
         $this->record(new UsageUnsettled($reservation->call, 'unsettled', $failure::class, $usages), $failure);
     }
 
     /**
-     * @param list<DeferredResult> $rounds
-     *
-     * @return list<TokenUsageRow>
+     * @return array{usages: list<TokenUsageRow>, unreadable: ?Throwable}
      */
-    // The rounds that answered spent their tokens, so the row keeps them; a round that cannot be read is logged and left out on its own, so it neither hides the others nor replaces the call's failure.
-    private function usagesBeforeFailure(UsageReservation $reservation, array $rounds): array
+    // Each round is read once, because reading can run the provider's extractor again; the rounds that answered spent their tokens, so the row keeps them, and a round that cannot be read is logged and left out on its own, so it does not hide the others.
+    private function readRounds(UsageReservation $reservation, DeferredResult ...$rounds): array
     {
         $usages = [];
-        foreach ($rounds as $index => $round) {
+        $firstUnreadable = null;
+        foreach (array_values($rounds) as $index => $round) {
             try {
                 $usages[] = $this->usagesOf($round);
-                // Boundary: the catch below logs the unreadable round and goes on with the others, because the call already failed and its own failure must not be replaced.
+                // Boundary: the catch below logs the unreadable round and goes on with the others, because unreadable usage must not lose the call or its other rounds from the ledger.
             } catch (Throwable $unreadable) {
                 $this->logger->warning('Token usage of a round could not be read.', ['call' => $reservation->call, 'round' => $index, 'exception' => $unreadable]);
+                $firstUnreadable ??= $unreadable;
             }
         }
 
-        return array_merge(...$usages);
-    }
-
-    /**
-     * @throws UsageNotRecorded
-     */
-    private function leaveUnreadableUnsettled(UsageReservation $reservation, Throwable $unreadable, DeferredResult ...$rounds): void
-    {
-        // Unsettled, not failed, because the answer arrived and its verdict stands; the vendor's usage settles the call later (docs/design/05-architecture/06-budget-and-model-planner.md).
-        $this->logger->warning('Token usage of an answered call could not be read.', ['call' => $reservation->call, 'exception' => $unreadable]);
-        $this->leaveUnsettled($reservation, $unreadable, ...$rounds);
-    }
-
-    /**
-     * @return list<TokenUsageRow>
-     */
-    private function usagesOfRounds(DeferredResult ...$rounds): array
-    {
-        return array_merge(...array_map($this->usagesOf(...), $rounds));
+        return ['usages' => array_merge(...$usages), 'unreadable' => $firstUnreadable];
     }
 
     /**
