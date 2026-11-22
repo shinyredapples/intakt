@@ -11,10 +11,10 @@ use PHPUnit\Framework\TestCase;
 #[CoversNothing]
 final class WhoIsWorkingStylesTest extends TestCase
 {
-    public function testTheSummaryIsAtLeast44PxTallAndAtLeast48OnAPhone(): void
+    public function testTheStatusLineIsAtLeast44PxTallAndAtLeast48OnAPhone(): void
     {
-        self::assertMatchesRegularExpression('/min-height:\s*44px/', $this->rule('.working summary', $this->sheet()));
-        self::assertMatchesRegularExpression('/min-height:\s*48px/', $this->rule('.working summary', $this->phoneBlock()));
+        self::assertMatchesRegularExpression('/min-height:\s*44px/', $this->rule('.status-line', $this->sheet()));
+        self::assertMatchesRegularExpression('/min-height:\s*48px/', $this->rule('.status-line', $this->phoneBlock()));
     }
 
     public function testTheLaneTextUsesTheFifteenPixelTokenAtLeast(): void
@@ -28,13 +28,24 @@ final class WhoIsWorkingStylesTest extends TestCase
         self::assertMatchesRegularExpression('/grid-template-columns:\s*minmax\(0, 1fr\);/', $this->rule('.lanes', $this->phoneBlock()));
     }
 
+    public function testALaneKeepsItsRoleLineInsideItsColumnAboveThePhoneBreakpoint(): void
+    {
+        $who = $this->rule('.lane .who', $this->sheet());
+
+        self::assertMatchesRegularExpression('/flex-wrap:\s*wrap/', $who);
+        self::assertMatchesRegularExpression('/min-width:\s*0/', $who);
+        self::assertMatchesRegularExpression('/overflow-wrap:\s*anywhere/', $who);
+        self::assertMatchesRegularExpression('/grid-template-columns:\s*minmax\(0, 1fr\)/', $this->rule('.lane', $this->sheet()));
+        self::assertMatchesRegularExpression('/overflow-wrap:\s*anywhere/', $this->rule('.lane .meta span', $this->sheet()));
+    }
+
     public function testTheChevronTurnsWhenTheSummaryIsOpen(): void
     {
         self::assertMatchesRegularExpression('/rotate\(180deg\)/', $this->rule('details[open] > summary .chev', $this->sheet()));
     }
 
-    // A tinted line with a hover would look like the strip that opens, which it is not.
-    public function testTheNobodyIsWorkingLineIsMutedWithoutTintAtTheSummarysHeight(): void
+    // It is the Status page's plain line, not a lane card or the board's status line, so it takes neither's tint nor hover.
+    public function testTheNobodyIsWorkingLineIsMutedWithoutTintAtTheStatusLinesHeight(): void
     {
         $rule = $this->rule('.working-none', $this->sheet());
 

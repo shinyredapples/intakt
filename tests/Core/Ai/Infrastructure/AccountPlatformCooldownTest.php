@@ -14,6 +14,7 @@ use Intakt\Core\Budget\Contract\MeasuredUse;
 use Intakt\Core\Budget\Contract\Usage;
 use Intakt\Core\Budget\Contract\UsageWindow;
 use Intakt\Core\Budget\Contract\WindowReading;
+use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Tests\Core\Budget\ReadingsInMemory;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use Intakt\Tests\Support\StoredSerializerFactory;
@@ -94,11 +95,31 @@ final class AccountPlatformCooldownTest extends TestCase
         self::assertContains('The measured readings of account {account} could not be read.', array_column($logger->cleanLogs(), 1));
     }
 
+    // Forced order (decision 77 of #2860): the cache throws on its first read after the window was kept, which a cooldown no longer makes, so the caller still gets the provider's own retryable error.
+    public function testACacheReadThatFailsRightAfterTheCooldownWasSavedLeavesTheCallerTheProvidersError(): void
+    {
+        $clock = new NativeClock();
+        $ledger = new InMemoryLedger();
+        $cooldowns = new AccountCooldownWindows(new ReadingsInMemory($clock), new FailingAReadAfterASave(), new LockFactory(new InMemoryStore()), $clock, $ledger, new NullLogger(), StoredSerializerFactory::create(), [Provider::Codex->value => [Account::DEFAULT]]);
+        $failure = new ServerException(503);
+        $platform = new AccountPlatform($this->account(), new FailingWhenRead($failure), $cooldowns, $clock, new NullLogger(), new SendFailures(), new NoPinnedProviderCooldowns(), null);
+        $answer = $platform->invoke('model', 'review');
+
+        try {
+            $answer->asText();
+            self::fail('The answer was expected to fail.');
+        } catch (ServerException $out) {
+            self::assertSame($failure, $out);
+        }
+
+        self::assertSame([LedgerEventKind::AccountCooledDown], $ledger->kinds());
+    }
+
     private function failedCall(AccountCooldownWindows $cooldowns, Throwable $thrown, ?Account $account = null): Throwable
     {
         $platform = self::createStub(PlatformInterface::class);
         $platform->method('invoke')->willThrowException($thrown);
-        $wrapped = new AccountPlatform($account ?? $this->account(), $platform, $cooldowns, new NativeClock(), new NullLogger(), new SendFailures());
+        $wrapped = new AccountPlatform($account ?? $this->account(), $platform, $cooldowns, new NativeClock(), new NullLogger(), new SendFailures(), new NoPinnedProviderCooldowns(), null);
 
         try {
             $wrapped->invoke('model', 'review');

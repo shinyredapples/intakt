@@ -35,15 +35,17 @@ final class GitHubAppSetting
     /**
      * @param Closure(): void $call
      */
-    public function whenConfigured(Closure $call): void
+    public function whenConfigured(Closure $call): bool
     {
         if ($this->isMissing()) {
             $this->reportMissingAppOnce();
 
-            return;
+            return false;
         }
 
         $call();
+
+        return true;
     }
 
     private function isMissing(): bool

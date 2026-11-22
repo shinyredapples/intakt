@@ -14,6 +14,7 @@ use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Infrastructure\AccountCooldownWindows;
 use Intakt\Core\Ai\Infrastructure\AccountFailoverPlatform;
 use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
+use Intakt\Core\Ai\Infrastructure\ModelWaits;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Review\Contract\ChangesWithoutFindings;
@@ -48,6 +49,7 @@ use Intakt\Plugin\SymfonyAiVendor\Infrastructure\VendorAccountLimit;
 use Intakt\Plugin\Vendor\Contract\ProviderFailedTransiently;
 use Intakt\Plugin\Vendor\Contract\VendorReview;
 use Intakt\Tests\Core\Ai\Infrastructure\NoCooldowns;
+use Intakt\Tests\Core\Ai\Infrastructure\NoPinnedProviderCooldowns;
 use Intakt\Tests\Core\Budget\ReadingsInMemory;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\Contract\VerdictDocument;
@@ -93,6 +95,7 @@ use Throwable;
 #[UsesClass(VendorAccountLimit::class)]
 #[UsesClass(ProviderFailedTransiently::class)]
 #[UsesClass(AccountFailoverPlatform::class)]
+#[UsesClass(ModelWaits::class)]
 #[UsesClass(AccountCooldownWindows::class)]
 final class CutStreamRetryVendorTest extends KernelTestCase
 {
@@ -238,7 +241,7 @@ final class CutStreamRetryVendorTest extends KernelTestCase
     {
         $cooldowns = new AccountCooldownWindows(new ReadingsInMemory(new MockClock(self::NOW)), new ArrayAdapter(), new LockFactory(new InMemoryStore()), new MockClock(self::NOW), new InMemoryLedger(), new NullLogger(), StoredSerializerFactory::create(), ['anthropic' => [Account::DEFAULT]]);
         $outage = $this->cutThen(static fn (): TextResult => new TextResult(VerdictDocument::fromTheDesign()->json()), new ServerException(503));
-        $onlyAccount = static fn (PlatformInterface $platform): PlatformInterface => new AccountFailoverPlatform(Provider::Anthropic, [Account::DEFAULT => $platform], $cooldowns, new MockClock(self::NOW), new NullLogger());
+        $onlyAccount = static fn (PlatformInterface $platform): PlatformInterface => new AccountFailoverPlatform(Provider::Anthropic, [Account::DEFAULT => $platform], $cooldowns, new MockClock(self::NOW), new NullLogger(), new NoPinnedProviderCooldowns());
 
         $verdict = $this->vendor($outage, $onlyAccount, $cooldowns)->review('alpha', Tier::Strong, $this->request())->verdict;
 

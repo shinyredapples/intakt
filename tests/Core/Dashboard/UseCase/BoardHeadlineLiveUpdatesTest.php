@@ -50,7 +50,7 @@ final class BoardHeadlineLiveUpdatesTest extends DashboardPageTestCase
 
     private const string FIRST_REVIEW = 'Nothing is running yet. Start the first review.';
 
-    private const string REVIEWING = 'The Code reviewers are reviewing change feat/a of alpha. The Code reviewers are reviewing 1 change. Nothing needs you.';
+    private const string REVIEWING = 'The Code reviewers are reviewing change feat/a of alpha. The Code reviewers are reviewing 1 change.';
 
     private ?string $secretBefore = null;
 
@@ -110,6 +110,79 @@ final class BoardHeadlineLiveUpdatesTest extends DashboardPageTestCase
         self::assertSame(self::REVIEWING, $updated->filter('.page-head .lead')->text());
     }
 
+    public function testAReviewerStartedAfterThePageLoadedChangesTheStatusLineThroughThePushedUpdate(): void
+    {
+        $page = $this->browser->request('GET', '/');
+        self::assertSame('Quiet · nobody working', trim($page->filter('#status-line')->text()));
+
+        $pushed = new Crawler($this->pushedHeadlineAfterAReviewerStarted())->filter('turbo-stream[action="replace"][target="status-line"] template');
+
+        self::assertCount(1, $pushed);
+        self::assertSame('Running smoothly · 1 reviewer working', trim($pushed->filter('#status-line')->text()));
+        $loaded = $this->browser->request('GET', '/');
+        self::assertSame(trim($loaded->filter('#status-line')->outerHtml()), trim($pushed->html()));
+    }
+
+    public function testThePushedBoardReplacesNothingOnTheStatusPageThatListensToTheSameTopic(): void
+    {
+        $this->ledger->startRoundOf('feat/b', '0190d1a2-7b3c-7def-8123-456789abcdef', 1);
+        $this->ledger->startReviewer('0190d1a2-7b3c-7def-8123-456789abcdef', 'correctness');
+        $page = $this->browser->request('GET', '/lanes');
+        self::assertCount(1, $page->filter('.working .lane'));
+
+        $targets = new Crawler($this->pushedHeadlineAfterAReviewerStarted())->filter('turbo-stream')
+            ->each(static fn (Crawler $stream): string => (string) $stream->attr('target'));
+
+        self::assertNotSame([], $targets);
+        self::assertSame([], array_values(array_filter($targets, static fn (string $target): bool => 0 < $page->filter('#'.$target)->count())));
+    }
+
+    public function testARoundOpenedBeforeItsFirstReviewerStartsIsInTheHeadlineAndOnWorkingNow(): void
+    {
+        $page = $this->browser->request('GET', '/');
+        $this->ledger->startRoundOf('feat/a', self::ROUND, 1);
+
+        $this->roundUpdates()->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(0, 2, false));
+
+        $pushed = $this->lastShellUpdate();
+        self::assertSame(self::REVIEWING, $this->updated($page, $pushed)->filter('#board-headline')->text());
+        self::assertSame(['feat/a'], new Crawler($pushed)->filter('turbo-stream[target="working-now"] template .wcard-title')->each(static fn (Crawler $title): string => $title->text()));
+    }
+
+    public function testARoundOpenedBeforeItsFirstReviewerStartsIsInTheHeadlineAndOnWorkingNowOfAPageLoadedThen(): void
+    {
+        $this->ledger->startRoundOf('feat/a', self::ROUND, 1);
+
+        $page = $this->browser->request('GET', '/');
+
+        self::assertSame(self::REVIEWING, $page->filter('#board-headline')->text());
+        self::assertSame(['feat/a'], $page->filter('#working-now a.wcard .wcard-title')->each(static fn (Crawler $title): string => $title->text()));
+        self::assertSame('Reviewing', trim($page->filter('#working-now a.wcard .wcard-head .chip')->text()));
+    }
+
+    public function testTheStatusPageHoldsNoElementWithTheIdThePushedBoardGivesWorkingNow(): void
+    {
+        $target = new Crawler($this->pushedHeadlineAfterAReviewerStarted())->filter('turbo-stream template .w-cards')->closest('turbo-stream')?->attr('target');
+
+        self::assertSame('working-now', $target);
+        self::assertCount(0, $this->browser->request('GET', '/lanes')->filter('#'.$target));
+    }
+
+    // Morphed with the card the page shows, because then a focused card link keeps the focus, which only the browser check shows the pinned Turbo does.
+    public function testAPushWhileAReviewStaysInProgressMorphsTheWorkingNowCardThePageShows(): void
+    {
+        $this->pushedHeadlineAfterAReviewerStarted();
+        $card = $this->browser->request('GET', '/')->filter('#working-now a.wcard');
+        self::assertCount(1, $card);
+
+        $this->ledger->startReviewer(self::ROUND, 'correctness');
+        $this->roundUpdates()->reviewerStarted(Uuid::fromString(self::ROUND), 'correctness');
+
+        $stream = new Crawler($this->lastShellUpdate())->filter('turbo-stream[action="replace"][method="morph"][target="working-now"]');
+        self::assertCount(1, $stream);
+        self::assertSame($card->outerHtml(), new Crawler($stream->filter('template')->html())->filter('#working-now a.wcard')->outerHtml());
+    }
+
     public function testAJudgedRoundPushedToTheBoardTakesItsReviewersOutOfTheHeadline(): void
     {
         $page = $this->browser->request('GET', '/');
@@ -119,7 +192,7 @@ final class BoardHeadlineLiveUpdatesTest extends DashboardPageTestCase
         $this->roundUpdates()->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(1, 1, true));
 
         $updated = $this->updated($page, $started.$this->lastShellUpdate());
-        self::assertSame('Nothing is running. Nothing needs you.', $updated->filter('#board-headline')->text());
+        self::assertSame('Nothing is running.', $updated->filter('#board-headline')->text());
     }
 
     public function testAStartedRoundsPushPutsItsCardInTheInReviewColumn(): void
@@ -160,6 +233,38 @@ final class BoardHeadlineLiveUpdatesTest extends DashboardPageTestCase
         $done = new Crawler($this->lastShellUpdate())->filter('turbo-stream[target="col-done"] template');
         self::assertCount(1, $done->filter('button.col-fold[aria-controls="cards-done"]'));
         self::assertCount(1, $done->filter('.col-head button.col-hide'));
+    }
+
+    public function testAStartedRoundsPushReplacesWorkingNowWithItsCard(): void
+    {
+        $this->browser->request('GET', '/');
+
+        $working = new Crawler($this->pushedHeadlineAfterAReviewerStarted())->filter('turbo-stream[action="replace"][target="working-now"]');
+
+        self::assertCount(1, $working);
+        self::assertSame(['feat/a'], $working->filter('template .wcard-title')->each(static fn (Crawler $title): string => $title->text()));
+    }
+
+    public function testAJudgedRoundsPushTakesItsCardOutOfWorkingNow(): void
+    {
+        $this->pushedHeadlineAfterAReviewerStarted();
+        $this->ledger->judgeRound(self::ROUND);
+
+        $this->roundUpdates()->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(1, 1, true));
+
+        $working = new Crawler($this->lastShellUpdate())->filter('turbo-stream[action="replace"][target="working-now"] template');
+        self::assertCount(0, $working->filter('.wcard'));
+        self::assertCount(1, $working->filter('p#working-now.working-none'));
+    }
+
+    public function testThePushedWorkingNowIsTheSameMarkupAsTheSectionOfAPageLoadedAfterIt(): void
+    {
+        $streams = new Crawler($this->pushedHeadlineAfterAReviewerStarted());
+
+        $page = $this->browser->request('GET', '/');
+
+        $pushed = $streams->filter('turbo-stream[target="working-now"] template')->first();
+        self::assertSame($page->filter('#working-now')->outerHtml(), trim($pushed->html()));
     }
 
     public function testThePushedColumnIsTheSameMarkupAsTheColumnOfAPageLoadedAfterIt(): void
@@ -273,16 +378,21 @@ final class BoardHeadlineLiveUpdatesTest extends DashboardPageTestCase
         self::assertCount(0, $streams->filter('turbo-stream[action="update"][target="board-headline"]:not([method="morph"])'));
     }
 
-    public function testABoardPushedEmptyToAnEmptyBoardLeavesTheSetUpLinkInPlaceSoItKeepsTheKeyboardFocus(): void
+    // board-push-focus.browser.mjs applies these files with the pinned Turbo, so they must stay what the board renders and pushes.
+    public function testTheBrowserChecksPageHeadIsTheHeadOfAnEmptyBoard(): void
     {
         $page = $this->browser->request('GET', '/');
-        $link = $page->filter('.page-head .actions a#board-setup[href="/setup"]')->getNode(0);
-        self::assertNotNull($link);
+
+        self::assertSame($this->browserFixture('head.html'), $page->filter('.page-head')->outerHtml());
+    }
+
+    public function testTheBrowserChecksStreamsAreTheMorphsPushedToAnEmptyBoard(): void
+    {
         $this->roundUpdates()->reviewerStarted(Uuid::fromString(self::ROUND), 'security');
 
-        $updated = $this->replaced($page, $this->lastShellUpdate());
+        $morphs = new Crawler($this->lastShellUpdate())->filter('turbo-stream[method="morph"]')->each(static fn (Crawler $stream): string => $stream->outerHtml());
 
-        self::assertSame($link, $updated->filter('.page-head .actions a#board-setup[href="/setup"]')->getNode(0));
+        self::assertSame($this->browserFixture('streams.html'), implode("\n", $morphs));
     }
 
     public function testThePushedBoardLeavesTheReviewListLinkInPlaceSoItKeepsTheKeyboardFocus(): void
@@ -401,18 +511,22 @@ final class BoardHeadlineLiveUpdatesTest extends DashboardPageTestCase
         return $page;
     }
 
-    // Like Turbo's replace: the template's nodes take the target's place, so an empty template takes the target away.
+    private function browserFixture(string $name): string
+    {
+        $contents = file_get_contents(__DIR__.'/board-push-focus/'.$name);
+        self::assertIsString($contents);
+
+        return rtrim($contents, "\n");
+    }
+
+    // Like Turbo's replace, a morph too, because only board-push-focus.browser.mjs shows whether the pinned Turbo keeps a morphed node and its focus.
     private function replaced(Crawler $page, string $streams): Crawler
     {
         foreach (new Crawler($streams)->filter('turbo-stream[action="replace"]')->each(static fn (Crawler $stream): Crawler => $stream) as $stream) {
             $template = $stream->filter('template')->getNode(0);
             self::assertNotNull($template);
 
-            // Turbo morphs a `method="morph"` stream into the shown element, so an element pushed with the markup it already has stays the same node.
-            $shownAlready = 'morph' === $stream->attr('method') ? trim($stream->filter('template')->html()) : null;
-            $targets = $page->filter('[id="'.$stream->attr('target').'"]')->reduce(static fn (Crawler $old): bool => $old->outerHtml() !== $shownAlready);
-
-            foreach ($targets->each(static fn (Crawler $old): ?DOMNode => $old->getNode(0)) as $target) {
+            foreach ($page->filter('[id="'.$stream->attr('target').'"]')->each(static fn (Crawler $old): ?DOMNode => $old->getNode(0)) as $target) {
                 self::assertNotNull($target);
                 $parent = $target->parentNode;
                 $document = $target->ownerDocument;

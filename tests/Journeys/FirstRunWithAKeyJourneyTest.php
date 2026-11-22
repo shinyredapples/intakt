@@ -15,7 +15,7 @@ final class FirstRunWithAKeyJourneyTest extends JourneyTestCase
 {
     // Built from parts, so no key-shaped literal sits in the repository; the test environment's key check accepts it without a call.
     private const string TOKEN_BODY = 'journeyplaceholder';
-    private const string ENDED_TEXT = 'Judged.';
+    private const string ENDED_TEXT = 'Checked.';
     private const string OUTCOME = '/^Outcome: \S+, decided by the quorum policy \S+ over all 2 reviewers\./';
 
     private string $directory = '';
@@ -93,7 +93,7 @@ final class FirstRunWithAKeyJourneyTest extends JourneyTestCase
 
     private function openTheLiveReviewPage(): void
     {
-        $page = $this->visit($this->review);
+        $page = $this->visit($this->review.'/record');
 
         self::assertCount(1, $page->filter('#round-'.$this->round().'-state'));
         self::assertStringContainsString('sample-change', $page->filter('h1')->text());
@@ -107,10 +107,10 @@ final class FirstRunWithAKeyJourneyTest extends JourneyTestCase
     private function readTheVerdict(): void
     {
         $round = $this->round();
-        $page = $this->visit($this->review);
+        $page = $this->visit($this->review.'/record');
 
         self::assertStringContainsString(self::ENDED_TEXT, $page->filter('#round-'.$round.'-state')->text());
-        self::assertSame('judged', mb_strtolower($page->filter('.state-judged')->text()));
+        self::assertSame('checked', mb_strtolower($page->filter('.state-judged')->text()));
         self::assertMatchesRegularExpression(self::OUTCOME, $page->filter('#round-'.$round.'-outcome')->text());
     }
 

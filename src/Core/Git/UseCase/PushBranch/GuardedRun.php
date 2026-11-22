@@ -16,7 +16,7 @@ final readonly class GuardedRun
     /**
      * @throws BranchNotPushed
      */
-    public static function of(Process $process, string $program): Process
+    public function run(Process $process, string $program): Process
     {
         try {
             $process->run();

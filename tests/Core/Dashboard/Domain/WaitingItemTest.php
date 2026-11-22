@@ -8,65 +8,18 @@ use DateTimeImmutable;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Budget\Contract\OutageNotice;
-use Intakt\Core\Dashboard\Domain\WaitingChoice;
+use Intakt\Core\Dashboard\Domain\Character;
 use Intakt\Core\Dashboard\Domain\WaitingItem;
-use Intakt\Core\Dashboard\Domain\WaitingItemNeedsOneToFourChoices;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(WaitingItem::class)]
-#[CoversClass(WaitingItemNeedsOneToFourChoices::class)]
-#[UsesClass(WaitingChoice::class)]
 #[UsesClass(OutageNotice::class)]
 #[UsesClass(Account::class)]
 final class WaitingItemTest extends TestCase
 {
-    public function testAnOutageNoticeBecomesAnItemWhoseRecommendedChoiceComesFirst(): void
-    {
-        $item = WaitingItem::ofOutage($this->outage(), null);
-
-        self::assertStringContainsString('claude_code.main', $item->lead);
-        self::assertStringContainsString('08:00 UTC', $item->why);
-        self::assertTrue($item->choices[0]->recommended);
-    }
-
-    public function testTheRecommendedChoiceForAnOutageRunsNoPaidCall(): void
-    {
-        $item = WaitingItem::ofOutage($this->outage(), null);
-
-        self::assertNull($item->choices[0]->command);
-        self::assertSame('php bin/console intakt:vendor:probe', $item->choices[1]->command);
-        self::assertStringContainsString('paid call', $item->choices[1]->outcome);
-    }
-
-    // The budget guard refuses even the first call while the last reading is at its ceiling, so no line may promise that builds go on.
-    public function testAnOutageItemPromisesNoRunningBuildsWhileTheLastReadingIsAtItsLimit(): void
-    {
-        $item = WaitingItem::ofOutage($this->outage(), null);
-
-        self::assertStringNotContainsString('keep running', $item->consequence.' '.$item->choices[0]->outcome);
-        self::assertStringContainsString('none while any of its five-hour or weekly windows that has not reset yet stands at its limit', $item->consequence);
-        self::assertStringContainsString('none while any of its five-hour or weekly windows that has not reset yet stands at its limit', $item->choices[0]->outcome);
-    }
-
-    // An older weekly reading at its ceiling still blocks starts after the newest reading's window resets, so no line may tie the block to that one window.
-    public function testAnOutageItemDoesNotTieTheLimitToTheWindowOfTheNewestReading(): void
-    {
-        $item = WaitingItem::ofOutage($this->outage(), null);
-
-        self::assertStringNotContainsString('until that window resets', $item->consequence.' '.$item->choices[0]->outcome);
-        self::assertStringNotContainsString('its last reading', $item->consequence.' '.$item->choices[0]->outcome);
-    }
-
-    public function testTheProbeChoiceSaysItMayNotReachThisAccountsProvider(): void
-    {
-        $item = WaitingItem::ofOutage($this->outage(), null);
-
-        self::assertStringContainsString('one paid call per provider in your projects\' tiers; it may not include this account\'s provider', $item->choices[1]->outcome);
-    }
-
     public function testAnOutageItemLinksToTheStatusPageItIsGiven(): void
     {
         $item = WaitingItem::ofOutage($this->outage(), 'https://status.example');
@@ -83,38 +36,43 @@ final class WaitingItemTest extends TestCase
         self::assertSame('See the queue on the board', $item->linkLabel);
     }
 
-    public function testAnItemWithNoChoiceIsRefused(): void
+    // The line under the link says what the tap shows and that the card goes by itself, because the card offers no button that ends it.
+    #[DataProvider('linkOutcomes')]
+    public function testAnOutageLinkSaysWhatItShowsAndThatTheCardLeavesWhenReadingsReturn(?string $statusPage, string $expected): void
     {
-        $this->expectException(WaitingItemNeedsOneToFourChoices::class);
+        $item = WaitingItem::ofOutage($this->outage(), $statusPage);
 
-        $this->itemOf([]);
+        self::assertSame($expected.' This card leaves when readings return.', $item->linkOutcome);
     }
 
-    public function testAnItemWithFiveChoicesIsRefused(): void
+    /**
+     * @return iterable<string, array{?string, string}>
+     */
+    public static function linkOutcomes(): iterable
     {
-        $this->expectException(WaitingItemNeedsOneToFourChoices::class);
-
-        $this->itemOf([$this->choice(true), ...array_fill(0, 4, $this->choice(false))]);
+        yield 'status page' => ['https://status.example', 'Shows whether the provider reports trouble.'];
+        yield 'board' => [null, 'Shows the build queue on the board.'];
     }
 
-    public function testAnItemWithFourChoicesIsAllowed(): void
+    public function testTheMaintainerWaitsOnTheOwnerForAnOutage(): void
     {
-        $item = $this->itemOf([$this->choice(true), ...array_fill(0, 3, $this->choice(false))]);
-
-        self::assertCount(4, $item->choices);
+        self::assertSame(Character::Maintainer, WaitingItem::ofOutage($this->outage(), null)->character);
     }
 
-    public function testAnItemWhoseFirstChoiceIsNotRecommendedIsRefused(): void
+    public function testAnOutageItemNamesTheAccountAndPromisesNoRunningBuilds(): void
     {
-        $this->expectException(WaitingItemNeedsOneToFourChoices::class);
+        $item = WaitingItem::ofOutage($this->outage(), null);
 
-        $this->itemOf([$this->choice(false)]);
+        self::assertStringContainsString('claude_code.main', $item->lead);
+        self::assertStringContainsString('08:00 UTC', $item->lead);
+        self::assertStringNotContainsString('keep running', $item->consequence);
+        self::assertStringContainsString('none while any of its five-hour or weekly windows that has not reset yet stands at its limit', $item->consequence);
     }
 
     #[DataProvider('waits')]
     public function testTheWaitIsTheWholeUnitsSinceTheItemAppeared(DateTimeImmutable $now, string $expected): void
     {
-        $item = $this->itemOf([$this->choice(true)]);
+        $item = $this->itemOf();
 
         self::assertSame($expected, $item->waitingFor($now));
     }
@@ -131,25 +89,13 @@ final class WaitingItemTest extends TestCase
         yield 'days and hours' => [new DateTimeImmutable('2026-11-04T14:30:00+00:00'), 'Waiting 2 d 3 h'];
     }
 
-    /**
-     * @param list<WaitingChoice> $choices
-     */
-    private function itemOf(array $choices): WaitingItem
+    private function itemOf(): WaitingItem
     {
-        return new WaitingItem('Lead', 'Consequence', 'Why', new DateTimeImmutable('2026-11-02T11:00:00+00:00'), $choices, 'Open the status page', 'https://status.example');
+        return new WaitingItem('Lead', 'Consequence', new DateTimeImmutable('2026-11-02T11:00:00+00:00'), 'Open the status page', 'https://status.example', 'Shows whether the provider reports trouble.', Character::Maintainer);
     }
 
     private function outage(): OutageNotice
     {
         return new OutageNotice(new Account(Provider::ClaudeCode, 'main'), new DateTimeImmutable('2026-11-02T08:00:00+00:00'), new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
-    }
-
-    private function choice(bool $recommended): WaitingChoice
-    {
-        return new WaitingChoice(
-            outcome: 'Does a thing.',
-            command: null,
-            recommended: $recommended,
-        );
     }
 }

@@ -15,7 +15,10 @@ use Intakt\Plugin\Forge\Contract\ChangeOpening;
 use Intakt\Plugin\Forge\Contract\ProposedChange;
 use NoDiscard;
 use Override;
+use Symfony\Component\Lock\Exception\ExceptionInterface;
 use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\LockInterface;
+use Throwable;
 
 final readonly class PushBranch implements BranchPush
 {
@@ -35,22 +38,70 @@ final readonly class PushBranch implements BranchPush
     #[NoDiscard('a merge-main outcome has to go back to the builder, and a refused push to its caller')]
     public function push(BranchPushRequest $request): PushedBranch|MainConflicts|RefusedPush
     {
-        // Without waiting, because a push that meets another push of the same branch has nothing to add; its caller tries again later.
-        $lock = $this->locks->createLock('push:'.hash('sha256', json_encode([$request->project, $request->branch], JSON_THROW_ON_ERROR)));
-
-        if (!$lock->acquire(false)) {
-            throw BranchNotPushed::because('another push of this branch is running');
-        }
+        $lock = $this->lockedBranch($request);
 
         try {
-            return $this->pushed($request);
-        } finally {
+            $outcome = $this->pushed($request);
+        } catch (Throwable $failure) {
+            $this->releaseAfter($lock);
+
+            throw $failure;
+        }
+
+        $this->release($lock);
+
+        return $outcome;
+    }
+
+    // A store failure becomes the contract's own failure, because a caller of BranchPush must not know which lock store the Git module uses.
+    private function lockedBranch(BranchPushRequest $request): LockInterface
+    {
+        // Released here only, never on destruct: Symfony's destructor would release a lock whose release failed once more and throw past BranchNotPushed.
+        $lock = $this->locks->createLock('push:'.hash('sha256', json_encode([$request->project, $request->branch], JSON_THROW_ON_ERROR)), autoRelease: false);
+
+        try {
+            // Without waiting, because a push that meets another push of the same branch has nothing to add; its caller tries again later.
+            $acquired = $lock->acquire(false);
+        } catch (ExceptionInterface $failure) {
+            throw BranchNotPushed::because('the lock store failed: '.$failure->getMessage(), $failure);
+        }
+
+        return $acquired ? $lock : throw BranchNotPushed::because('another push of this branch is running');
+    }
+
+    // Reported as not pushed even after a push, because the next call finds the recorded push at the remote tip and reports the branch pushed without pushing again.
+    private function release(LockInterface $lock): void
+    {
+        try {
             $lock->release();
+        } catch (ExceptionInterface) {
+            // Once more, so a store back after a short outage frees the branch now instead of at the lock's expiry.
+            $this->releaseOnce($lock);
+        }
+    }
+
+    private function releaseOnce(LockInterface $lock): void
+    {
+        try {
+            $lock->release();
+        } catch (ExceptionInterface $failure) {
+            throw BranchNotPushed::because('the lock store failed: '.$failure->getMessage(), $failure);
+        }
+    }
+
+    // The failure of the push is what its caller needs, and a lock left held expires with its time to live.
+    private function releaseAfter(LockInterface $lock): void
+    {
+        try {
+            $this->release($lock);
+        } catch (BranchNotPushed) {
+            return;
         }
     }
 
     private function pushed(BranchPushRequest $request): PushedBranch|MainConflicts|RefusedPush
     {
+        $this->refuseRewrittenRemote($request);
         $main = $this->mainOf($request->repository);
         $head = $this->signed->of($request->repository, $request->accepted, $main);
         $this->signed->verify($request->repository, $head, $main);
@@ -82,7 +133,27 @@ final readonly class PushBranch implements BranchPush
             return $conflicts;
         }
 
+        // Before push_intended and git push, because a push moves the head of every open pull request of the branch, also of one another account opened.
+        $this->changes->refuseForeignChange($this->proposedChange($request, $main));
+
         return $this->pushOnce($request, $head, $remoteTip);
+    }
+
+    // Checked by the push itself and not once when the task starts, because git reads the repository's config at the push, and a rewrite can have been written since. An empty prefix matches every remote, as git applies it to every URL. The remote is not named, because it can hold a credential.
+    private function refuseRewrittenRemote(BranchPushRequest $request): void
+    {
+        $section = 'remote.'.$request->remote.'.';
+
+        foreach ($this->git->addressEntries($request->repository) as [$key, $value]) {
+            // A remote section named exactly like the remote string, because git push takes the string as that remote's name and pushes to its url or pushurl. Git keeps the section's name as written and the key after it has no dot, so a longer name that only starts with the remote is another section.
+            if (str_starts_with($key, $section) && !str_contains(substr($key, strlen($section)), '.')) {
+                throw BranchNotPushed::because('the repository\'s config has a remote section named like the remote, so git would push to that section\'s address instead of the one the forge checks');
+            }
+
+            if (str_starts_with($key, 'url.') && str_starts_with($request->remote, $value)) {
+                throw BranchNotPushed::because('the repository\'s config rewrites the remote\'s address (url.<base>.insteadOf or pushInsteadOf), so git would read and push another repository than the one the forge checks');
+            }
+        }
     }
 
     private function mainOf(string $repository): string
@@ -162,9 +233,14 @@ final readonly class PushBranch implements BranchPush
         $this->records->intendChange($request, $head);
 
         // The forge looks for an open pull request of the branch first, so a crash after the pull request was opened and before it was recorded opens no second one, and a corrected text of the same commits updates the open one.
-        $opened = $this->changes->openOrUpdate(new ProposedChange($request->project, $request->branch, substr($main, strlen(self::BRANCHES)), $request->text));
+        $opened = $this->changes->openOrUpdate($this->proposedChange($request, $main));
         $this->records->open($request, $head, $opened);
 
         return $opened->id;
+    }
+
+    private function proposedChange(BranchPushRequest $request, string $main): ProposedChange
+    {
+        return new ProposedChange($request->project, $request->branch, substr($main, strlen(self::BRANCHES)), $request->text);
     }
 }

@@ -85,12 +85,12 @@ final class PlayDemoRunHandlerTest extends TestCase
         self::assertStringContainsString('"project":"'.CreateDemoProjectCommand::NAME.'"', $this->rows()[0]->event->payload);
     }
 
-    public function testThePlayedRunGoesAtFourTimesTheRecordedPace(): void
+    public function testThePlayedRunGoesAtOneAndAHalfTimesTheRecordedPace(): void
     {
         $this->handler($this->recordingFile())();
 
-        self::assertStringContainsString('"replay_factor":4.0', $this->rows()[0]->event->payload);
-        self::assertEquals(new DateTimeImmutable('2026-11-16T08:00:00+00:00')->modify('+30 seconds'), $this->clock->now());
+        self::assertStringContainsString('"replay_factor":1.5', $this->rows()[0]->event->payload);
+        self::assertEquals(new DateTimeImmutable('2026-11-16T08:00:00+00:00')->modify('+80 seconds'), $this->clock->now());
     }
 
     public function testEachReplayedRowPublishesTheCaptionOfItsStageOnTheShellTopic(): void
@@ -156,7 +156,7 @@ final class PlayDemoRunHandlerTest extends TestCase
     private function handler(string $recording, string $composeService = 'intakt'): PlayDemoRunHandler
     {
         $marks = new ReplayMarks(new ReplayMarkBus([CreateDemoProjectCommand::NAME]));
-        $replays = new ReplaysRecording($this->ledger, $this->updates, $this->clock, new LockFactory(new InMemoryStore()), $marks, TourCaptionsOn::captions($this->updates, TourCaptionsOn::tour($this->ledger, $marks, $composeService)));
+        $replays = new ReplaysRecording($this->ledger, $this->updates, $this->clock, new LockFactory(new InMemoryStore()), $marks, TourCaptionsOn::captions($this->updates, TourCaptionsOn::tour($this->ledger, $marks, $composeService)), TourCaptionsOn::judged($this->ledger, $marks));
 
         return new PlayDemoRunHandler($replays, $this->format(), new Filesystem(), new RecordingLogger(LogRecords::ofThisRun() ?? self::fail('No log records.')), $recording, $composeService);
     }

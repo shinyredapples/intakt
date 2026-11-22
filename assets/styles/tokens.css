@@ -11,6 +11,7 @@
   --s4: 4px; --s8: 8px; --s12: 12px; --s16: 16px; --s24: 24px; --s32: 32px; --s48: 48px;
   --r-chip: 6px; --r-btn: 8px; --r-card: 12px; --r-overlay: 18px; --r-round: 999px;
   --rail: 240px; --rail-c: 64px; --top: 64px; --bar: 68px;
+  --tab-h: 44px; --seg-pad: 3px; --ttabs-pad: var(--s8);
   color-scheme: light;
 }
 

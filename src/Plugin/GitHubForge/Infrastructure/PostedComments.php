@@ -36,6 +36,24 @@ final readonly class PostedComments
         return [] === $comments || $this->holdsMarker($address, $marker) ? [] : $comments;
     }
 
+    // Each marker read before the first post, which the caller's verdict lock allows, because no other delivery of the round posts meanwhile.
+    /**
+     * @param array<string, list<string>> $byMarker
+     *
+     * @return list<string>
+     */
+    public function bodiesNotYetPosted(PullRequestAddress $address, array $byMarker): array
+    {
+        $bodies = [];
+        foreach ($byMarker as $marker => $comments) {
+            foreach ($this->notYetPosted($address, $marker, $comments) as $comment) {
+                $bodies[] = $comment."\n\n".$marker;
+            }
+        }
+
+        return $bodies;
+    }
+
     private function holdsMarker(PullRequestAddress $address, string $marker): bool
     {
         for ($page = 1; $page <= self::MAX_PAGES; ++$page) {

@@ -123,6 +123,36 @@ final class DemoTourTest extends TestCase
         self::assertSame(TourStage::FindingsArrive, $this->caption()->stage);
     }
 
+    public function testWhileTheReviewersReadTheCaptionHoldsTheReviewersOfTheLatestRound(): void
+    {
+        $this->startRound('r1', 1);
+        $this->startReviewer('r1', 'correctness');
+        $this->startReviewer('r1', 'security');
+
+        self::assertSame(['correctness', 'security'], array_map(static fn (ReviewerOutcome $outcome): string => $outcome->role, $this->caption()->reviewers));
+    }
+
+    public function testWhileFindingsArriveTheCaptionStillHoldsTheReviewers(): void
+    {
+        $this->startRound('r1', 1);
+        $this->startReviewer('r1', 'correctness');
+        $this->startReviewer('r1', 'security');
+        $this->answer('r1', 'correctness', 2);
+
+        self::assertCount(2, $this->caption()->reviewers);
+    }
+
+    public function testOnceEveryReviewerAnsweredTheCaptionNamesNoReviewer(): void
+    {
+        $this->startRound('r1', 1);
+        $this->startReviewer('r1', 'correctness');
+        $this->startReviewer('r1', 'security');
+        $this->answer('r1', 'correctness', 2);
+        $this->answer('r1', 'security', 0);
+
+        self::assertSame([], $this->caption()->reviewers);
+    }
+
     public function testEveryReviewerAnsweredIsTheJudgesStage(): void
     {
         $this->startRound('r1', 1);
@@ -142,14 +172,23 @@ final class DemoTourTest extends TestCase
         self::assertSame(TourStage::RoundEnds, $this->caption()->stage);
     }
 
-    public function testASecondRoundInProgressIsTheNextRoundStage(): void
+    public function testALaterRoundStartsAgainAtTheChangeArrivesStage(): void
+    {
+        $this->startRound('r1', 1);
+        $this->judge('r1', ['f1']);
+        $this->startRound('r2', 2);
+
+        self::assertSame(TourStage::ChangeArrives, $this->caption()->stage);
+    }
+
+    public function testASecondRoundInProgressPassesTheReviewersStagesAgain(): void
     {
         $this->startRound('r1', 1);
         $this->judge('r1', ['f1']);
         $this->startRound('r2', 2);
         $this->startReviewer('r2', 'correctness');
 
-        self::assertSame(TourStage::NextRound, $this->caption()->stage);
+        self::assertSame(TourStage::ReviewersRead, $this->caption()->stage);
     }
 
     public function testAJudgedSecondRoundWithNothingToFixIsTheLastStage(): void
@@ -159,8 +198,8 @@ final class DemoTourTest extends TestCase
         $this->startRound('r2', 2);
         $this->judge('r2', []);
 
-        self::assertSame(TourStage::FindingsClosed, $this->caption()->stage);
-        self::assertSame(7, TourStage::FindingsClosed->number());
+        self::assertSame(TourStage::RoundEnds, $this->caption()->stage);
+        self::assertSame(5, TourStage::RoundEnds->number());
     }
 
     public function testAJudgedSecondRoundThatStillHasFindingsToFixIsTheActListStageAgain(): void
@@ -175,8 +214,8 @@ final class DemoTourTest extends TestCase
 
     public function testTheStagesAreCountedInTheOrderARunPassesThem(): void
     {
-        self::assertSame([1, 2, 3, 4, 5, 6, 7], array_map(static fn (TourStage $stage): int => $stage->number(), TourStage::cases()));
-        self::assertSame(7, TourStage::count());
+        self::assertSame([1, 2, 3, 4, 5], array_map(static fn (TourStage $stage): int => $stage->number(), TourStage::cases()));
+        self::assertSame(5, TourStage::count());
     }
 
     public function testEveryStageHasOneShortSentence(): void
@@ -184,6 +223,18 @@ final class DemoTourTest extends TestCase
         foreach (TourStage::cases() as $stage) {
             self::assertMatchesRegularExpression('/^[A-Z][^.]*[.]$/', $stage->sentence());
             self::assertLessThanOrEqual(100, strlen($stage->sentence()));
+        }
+    }
+
+    public function testTheLastStageSaysTheRoundIsCheckedInTheReviewPagesPlainWords(): void
+    {
+        self::assertSame('Checked: To fix lists what still needs changing.', TourStage::RoundEnds->sentence());
+    }
+
+    public function testEveryStageSentenceIsAtMostNineWords(): void
+    {
+        foreach (TourStage::cases() as $stage) {
+            self::assertLessThanOrEqual(9, substr_count($stage->sentence(), ' ') + 1, $stage->value);
         }
     }
 

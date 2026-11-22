@@ -44,7 +44,7 @@ final readonly class ReviewWithReviewerHandler
 
             try {
                 $this->review($reviewer);
-                // Boundary: republishes the stored round and rethrows, because a review that throws handed its reviewer back to the queue and the started count dropped.
+                // Boundary: republishes the stored round and rethrows, because a review that throws may have handed its reviewer back and lowered the started count, or failed while storing its verdict and left the reviewer running.
             } catch (Throwable $handedBack) {
                 $this->progress->publishLatest($roundId);
 

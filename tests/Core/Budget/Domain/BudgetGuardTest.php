@@ -17,8 +17,12 @@ use Intakt\Core\Budget\Domain\BudgetGuard;
 use Intakt\Core\Budget\Domain\CeilingStartGuard;
 use Intakt\Core\Budget\Domain\OutageWatch;
 use Intakt\Core\Budget\Domain\UsageReadingsStayedAway;
+use Intakt\Core\Watchdog\Contract\CommitName;
+use Intakt\Core\Watchdog\Contract\MainViolation;
+use Intakt\Core\Watchdog\Contract\OwnerCard;
 use Intakt\Tests\Core\Budget\HoldsInMemory;
 use Intakt\Tests\Core\Budget\ReadingsInMemory;
+use Intakt\Tests\Core\Watchdog\HaltsInMemory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -36,11 +40,15 @@ use Symfony\Component\EventDispatcher\EventDispatcher;
 #[UsesClass(UsageWindow::class)]
 #[UsesClass(WindowReading::class)]
 #[UsesClass(WindowUse::class)]
+#[UsesClass(OwnerCard::class)]
+#[UsesClass(MainViolation::class)]
+#[UsesClass(CommitName::class)]
 final class BudgetGuardTest extends TestCase
 {
     private MockClock $clock;
     private ReadingsInMemory $readings;
     private HoldsInMemory $holds;
+    private HaltsInMemory $halts;
     private BudgetGuard $guard;
 
     /** @var list<string> */
@@ -56,7 +64,8 @@ final class BudgetGuardTest extends TestCase
             $this->outages[] = $outage->account->key();
         });
         $ceilings = new CeilingStartGuard($this->readings, $this->clock, ['five-hour' => 90.0, 'weekly' => 90.0]);
-        $this->guard = new BudgetGuard($this->holds, $ceilings, new OutageWatch($this->readings, $this->clock, $events));
+        $this->halts = new HaltsInMemory();
+        $this->guard = new BudgetGuard($this->holds, $ceilings, new OutageWatch($this->readings, $this->clock, $events), $this->halts);
         foreach ([$this->claude('main'), $this->claude('team'), new Account(Provider::Anthropic, 'main')] as $account) {
             $this->readLow($account);
         }
@@ -167,6 +176,32 @@ final class BudgetGuardTest extends TestCase
 
         self::assertSame(StartDecision::Draining, $this->guard->decide($this->claude('main'), 0));
         self::assertSame(StartDecision::Draining, $this->guard->decideMerge());
+    }
+
+    public function testAStandingWatchdogHaltAdmitsNoStartAndNoMerge(): void
+    {
+        $this->halts->halt('acme/shop');
+
+        self::assertSame(StartDecision::Halted, $this->guard->decide($this->claude('main'), 0));
+        self::assertSame(StartDecision::Halted, $this->guard->decideMerge());
+    }
+
+    public function testAWatchdogHaltWinsOverADrain(): void
+    {
+        $this->hold(SharedHold::Drain, '+15 minutes');
+        $this->halts->halt('acme/shop');
+
+        self::assertSame(StartDecision::Halted, $this->guard->decide($this->claude('main'), 0));
+        self::assertSame(StartDecision::Halted, $this->guard->decideMerge());
+    }
+
+    public function testOnceEveryCardIsClearedStartsAndMergesAreAdmittedAgain(): void
+    {
+        $this->halts->halt('acme/shop');
+        $this->halts->clearAll();
+
+        self::assertSame(StartDecision::Start, $this->guard->decide($this->claude('main'), 0));
+        self::assertSame(StartDecision::Start, $this->guard->decideMerge());
     }
 
     public function testASharedHoldWinsOverAnAccountsCooldown(): void

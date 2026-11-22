@@ -15,6 +15,8 @@ use Intakt\Core\Review\Contract\CatchUpOwed;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\DroppedFinding;
 use Intakt\Core\Review\Contract\EscalationOutcome;
+use Intakt\Core\Review\Contract\EscalationReviewFailed;
+use Intakt\Core\Review\Contract\EscalationVerdictKept;
 use Intakt\Core\Review\Contract\EscalationVerdictReused;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FindingIds;
@@ -25,7 +27,9 @@ use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\JudgeDoneFinding;
 use Intakt\Core\Review\Contract\Judgement;
 use Intakt\Core\Review\Contract\Mark;
+use Intakt\Core\Review\Contract\NearLine;
 use Intakt\Core\Review\Contract\QuorumPolicy;
+use Intakt\Core\Review\Contract\QuoteNearLines;
 use Intakt\Core\Review\Contract\RecurringP1Found;
 use Intakt\Core\Review\Contract\ReviewerBlocked;
 use Intakt\Core\Review\Contract\ReviewerFailed;
@@ -60,9 +64,13 @@ use Symfony\Component\Serializer\SerializerInterface;
 #[CoversClass(JudgeDone::class)]
 #[CoversClass(JudgeDoneFinding::class)]
 #[CoversClass(DroppedFinding::class)]
+#[CoversClass(QuoteNearLines::class)]
+#[CoversClass(NearLine::class)]
 #[CoversClass(RoundLedger::class)]
 #[CoversClass(RecurringP1Found::class)]
 #[CoversClass(EscalationVerdictReused::class)]
+#[CoversClass(EscalationVerdictKept::class)]
+#[CoversClass(EscalationReviewFailed::class)]
 #[UsesClass(OnePerPlace::class)]
 #[UsesClass(FindingKeys::class)]
 #[UsesClass(FindingKey::class)]
@@ -275,9 +283,24 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
         $this->roundLedger($ledger)->judgeDone($round, JudgedFindings::of(new Judgement([]), [], [$dropped]), []);
 
         self::assertSame(
-            [['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of F1.', 'file' => 'src/A.php', 'line' => 7, 'reason' => 'none of its 1 quoted code fragments is in the change']],
+            [['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of F1.', 'file' => 'src/A.php', 'line' => 7, 'reason' => 'none of its 1 quoted code fragments is in the change', 'nearest' => []]],
             $ledger->payloads()[0]['dropped'],
         );
+    }
+
+    public function testADroppedFindingWithNearestLinesIsWrittenAndReadsBackWithThem(): void
+    {
+        $round = new RoundFixture(self::getContainer())->start(1);
+        $ledger = new InMemoryLedger();
+        $dropped = DroppedFinding::of($this->findingAt('F1', Severity::P1, 7), 'none of its 1 quoted code fragments is in the change', [new QuoteNearLines('dropReason', [new NearLine('src/A.php', 3, '$reason = 1;')])]);
+
+        $this->roundLedger($ledger)->judgeDone($round, JudgedFindings::of(new Judgement([]), [], [$dropped]), []);
+        $payload = $ledger->payloads()[0];
+        $done = $this->serializer()->deserialize((string) json_encode($payload), JudgeDone::class, JsonEncoder::FORMAT);
+
+        self::assertSame([['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of F1.', 'file' => 'src/A.php', 'line' => 7, 'reason' => 'none of its 1 quoted code fragments is in the change', 'nearest' => [['quote' => 'dropReason', 'lines' => [['file' => 'src/A.php', 'line' => 3, 'text' => '$reason = 1;']]]]]], $payload['dropped']);
+        self::assertInstanceOf(JudgeDone::class, $done);
+        self::assertEquals([$dropped], $done->dropped);
     }
 
     public function testAJudgeRowWithADroppedFindingReadsBackWithItsReason(): void
@@ -286,6 +309,14 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
 
         self::assertInstanceOf(JudgeDone::class, $done);
         self::assertEquals([new DroppedFinding('F1', Severity::P1, 'A bug.', 'src/A.php', 7, 'none of its 1 quoted code fragments is in the change')], $done->dropped);
+    }
+
+    public function testADroppedFindingWrittenBeforeNearestLinesWereRecordedReadsWithNone(): void
+    {
+        $done = $this->serializer()->deserialize('{"round":"'.self::ROUND.'","act":[],"follow_ups":[],"findings":[],"dropped":[{"id":"F1","severity":"P1","text":"A bug.","file":"src/A.php","line":7,"reason":"why"}]}', JudgeDone::class, JsonEncoder::FORMAT);
+
+        self::assertInstanceOf(JudgeDone::class, $done);
+        self::assertSame([], $done->dropped[0]->nearest);
     }
 
     public function testAJudgeRowWrittenBeforeDropReasonsWereRecordedReadsWithNoDroppedFindings(): void
@@ -358,6 +389,16 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
     public function testAnEscalationVerdictReusedIsWrittenWithItsRoundFindingKeyOutcomeAndVerdictRound(): void
     {
         self::assertSame('{"round":"'.self::ROUND.'","finding":"F1","key":"abc","outcome":"confirmed","verdict_round":"r1"}', $this->written(new EscalationVerdictReused(self::ROUND, 'F1', 'abc', EscalationOutcome::Confirmed, 'r1')));
+    }
+
+    public function testAnEscalationVerdictKeptIsWrittenWithItsRoundFindingKeyOutcomeAndReasons(): void
+    {
+        self::assertSame('{"round":"'.self::ROUND.'","finding":"F1","key":"abc","outcome":"rejected","reasons":"The retry delivers it."}', $this->written(new EscalationVerdictKept(self::ROUND, 'F1', 'abc', EscalationOutcome::Rejected, 'The retry delivers it.')));
+    }
+
+    public function testAnEscalationReviewFailedIsWrittenWithItsRoundFindingKeyAndReason(): void
+    {
+        self::assertSame('{"round":"'.self::ROUND.'","finding":"F1","key":"abc","reason":"the answer could not be read as an escalation verdict"}', $this->written(new EscalationReviewFailed(self::ROUND, 'F1', 'abc', 'the answer could not be read as an escalation verdict')));
     }
 
     public function testADoneJudgeWithoutFollowUpsStillWritesTheKey(): void

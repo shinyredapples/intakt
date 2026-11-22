@@ -51,7 +51,7 @@ final class StopReviewControllerTest extends DashboardPageTestCase
     {
         $this->runningReviewer();
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertSame('/reviews/round-1/reviewers/round-1-security/stop', $crawler->filter('form.stop-reviewer')->attr('action'));
         self::assertNotSame('', $crawler->filter('form.stop-reviewer input[name=_token]')->attr('value'));
@@ -62,7 +62,7 @@ final class StopReviewControllerTest extends DashboardPageTestCase
     {
         $this->runningReviewer();
 
-        $button = $this->browser->request('GET', '/reviews/round-1')->filter('form.stop-reviewer button[type=submit]');
+        $button = $this->browser->request('GET', '/reviews/round-1/record')->filter('form.stop-reviewer button[type=submit]');
 
         self::assertSame('btn danger sm', $button->attr('class'));
         self::assertSame('Click again to stop', $button->attr('data-arm-confirm'));
@@ -307,6 +307,6 @@ final class StopReviewControllerTest extends DashboardPageTestCase
         $this->ledger->startRecordedRoundOf('feat/token-page', 'token-page', 1);
         $this->ledger->startReviewer('token-page', 'security');
 
-        return $this->browser->request('GET', '/reviews/token-page')->filter('form.stop-reviewer input[name=_token]')->attr('value') ?? '';
+        return $this->browser->request('GET', '/reviews/token-page/record')->filter('form.stop-reviewer input[name=_token]')->attr('value') ?? '';
     }
 }

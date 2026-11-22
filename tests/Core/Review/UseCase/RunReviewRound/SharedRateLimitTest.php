@@ -9,6 +9,7 @@ use Intakt\Core\Ai\Contract\EveryProviderOut;
 use Intakt\Core\Ai\Infrastructure\AccountCooldownWindows;
 use Intakt\Core\Ai\Infrastructure\AccountFailoverPlatform;
 use Intakt\Core\Ai\Infrastructure\AccountPlatform;
+use Intakt\Core\Ai\Infrastructure\ModelWaits;
 use Intakt\Core\Ai\Infrastructure\SendFailures;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
 use Intakt\Core\Ai\Infrastructure\TypedRejectionConverter;
@@ -54,6 +55,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[UsesClass(SendFailures::class)]
 #[UsesClass(TypedRejectionConverter::class)]
 #[UsesClass(AccountFailoverPlatform::class)]
+#[UsesClass(ModelWaits::class)]
 #[UsesClass(AccountPlatform::class)]
 #[UsesClass(Account::class)]
 #[UsesClass(ChangeDecision::class)]
@@ -155,7 +157,7 @@ final class SharedRateLimitTest extends KernelTestCase
      */
     private function rolesNamedIn(ChangeReview $review): array
     {
-        $roles = array_map(static fn (string $reason): string => explode(' ', $reason)[0], $review->reasons);
+        $roles = array_map(static fn (string $reason): string => explode(' ', $reason)[0], [...$review->reasons]);
         sort($roles);
 
         return $roles;

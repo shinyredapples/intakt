@@ -14,11 +14,13 @@ use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\FencedText;
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\FindingIds;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\PromptAssembly;
 use Intakt\Core\Review\Contract\PromptCut;
 use Intakt\Core\Review\Contract\ReadAnswer;
 use Intakt\Core\Review\Contract\ReadFinding;
+use Intakt\Core\Review\Contract\ResolvedFinding;
 use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
@@ -103,6 +105,7 @@ use Symfony\Component\Uid\UuidV7;
 #[UsesClass(ChangeUnderReview::class)]
 #[UsesClass(Checkout::class)]
 #[UsesClass(Verdict::class)]
+#[UsesClass(FindingIds::class)]
 #[UsesClass(Finding::class)]
 #[UsesClass(ReadAnswer::class)]
 #[UsesClass(ReadFinding::class)]
@@ -251,7 +254,7 @@ final class ReviewerVerdictTest extends WebTestCase
         $verdict = $this->review('Add a cart.', [new ToolCall('1', 'read_file', ['path' => 'src/Cart.php'])], VerdictDocument::fromTheDesign()->json());
 
         self::assertSame(Decision::Changes, $verdict->verdict);
-        self::assertSame(['F1', 'F2'], $verdict->resolved);
+        self::assertEquals([new ResolvedFinding('F1'), new ResolvedFinding('F2')], $verdict->resolved);
         self::assertPlatformCallCount(2);
         self::assertToolCalled('read_file');
         self::assertToolCallCount(1);

@@ -12,17 +12,16 @@ final readonly class ChangeDescription
 
     /**
      * @param non-negative-int $lines
-     * @param list<string>     $labels
      */
     public function __construct(
         public int $lines,
         public Paths $paths,
-        public array $labels,
+        public Labels $labels,
     ) {
     }
 
     public function wantsFullReview(): bool
     {
-        return in_array(self::FULL_REVIEW_LABEL, $this->labels, true);
+        return $this->labels->contains(self::FULL_REVIEW_LABEL);
     }
 }

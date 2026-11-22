@@ -50,9 +50,17 @@ final readonly class QuotesInChange
      */
     public function countedQuotes(string $findingText): array
     {
+        return array_column($this->countedQuotesWithNames($findingText), 0);
+    }
+
+    /**
+     * @return list<array{string, non-empty-list<string>}>
+     */
+    public function countedQuotesWithNames(string $findingText): array
+    {
         $text = $this->withoutFencedBlocks($findingText);
 
-        return array_column($this->countedIn($text, $this->withoutSureQuotes($text)), 0);
+        return $this->countedIn($text, $this->withoutSureQuotes($text));
     }
 
     private function withoutFencedBlocks(string $text): string

@@ -19,7 +19,7 @@ final class DashboardSecondStartJourneyTest extends JourneyTestCase
     // Not a credential, because the seed only checks that a key is present, and no step calls a provider.
     private const string PLACEHOLDER_KEY = 'journey-placeholder';
     private const string FIRST_RUN = '/setup';
-    private const string ENDED_TEXT = 'Judged.';
+    private const string ENDED_TEXT = 'Checked.';
     private const string STARTED = 'Started round 2.';
     private const string REFUSED = 'Round 2 was asked for, but the next round of this change is round 3.';
     // Anchored at both ends, because the ids of a round's parts go on after the round id and only the round's own block counts as a round.
@@ -86,7 +86,7 @@ final class DashboardSecondStartJourneyTest extends JourneyTestCase
         $round = substr($review, strlen('/reviews/'));
         $this->liveRoundDriver()->stepUntilEnded($round);
 
-        self::assertStringContainsString(self::ENDED_TEXT, $this->visit($review)->filter('#round-'.$round.'-state')->text());
+        self::assertStringContainsString(self::ENDED_TEXT, $this->visit($review.'/record')->filter('#round-'.$round.'-state')->text());
     }
 
     private function pressTheStartOfRoundTwo(KernelBrowser $dashboard, string $review): Form
@@ -131,10 +131,10 @@ final class DashboardSecondStartJourneyTest extends JourneyTestCase
         self::assertSame('Start round 3', $page->filter('form.start-review button')->text());
     }
 
-    // Counted on the instance's own server, so the rounds are the ones its database holds.
+    // Counted on the instance's own server, so the rounds are the ones its database holds; in the Full record, which lists every pass.
     private function roundsOn(string $review): int
     {
-        $ids = $this->visit($review)->filter('[id^="round-"]')->each(static fn (Crawler $part): string => (string) $part->attr('id'));
+        $ids = $this->visit($review.'/record')->filter('[id^="round-"]')->each(static fn (Crawler $part): string => (string) $part->attr('id'));
 
         return count(array_filter($ids, static fn (string $id): bool => 1 === preg_match(self::ROUND_BLOCK, $id)));
     }

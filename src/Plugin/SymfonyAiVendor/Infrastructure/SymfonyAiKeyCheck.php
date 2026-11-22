@@ -10,6 +10,7 @@ use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierResolutionFailure;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Review\Contract\PromptAssembly;
+use Intakt\Core\Review\Contract\SampleProjectData;
 use Intakt\Plugin\Vendor\Contract\KeyCheck;
 use Intakt\Plugin\Vendor\Contract\KeyCheckOutcome;
 use Psr\Log\LoggerInterface;
@@ -30,17 +31,18 @@ final readonly class SymfonyAiKeyCheck implements KeyCheck
         private TierResolver $tiers,
         private LoggerInterface $logger,
         private PromptAssembly $assembly = new PromptAssembly(),
+        private SampleProjectData $sample = new SampleProjectData(),
     ) {
     }
 
     public function check(ProviderKey $key): KeyCheckOutcome
     {
         $provider = $this->providers->descriptor($key->provider());
-        $model = $provider instanceof SymfonyAiProvider ? $this->checkModelOf($provider) : null;
-
-        if (!$provider instanceof SymfonyAiProvider || null === $model) {
+        if (!$provider instanceof SymfonyAiProvider) {
             return KeyCheckOutcome::NotChecked;
         }
+
+        $model = $this->checkModelOf($provider);
 
         try {
             $provider->platform($key->secret(), $model, $this->http)
@@ -60,11 +62,11 @@ final readonly class SymfonyAiKeyCheck implements KeyCheck
     }
 
     /**
-     * @return non-empty-string|null
+     * @return non-empty-string
      */
-    private function checkModelOf(SymfonyAiProvider $provider): ?string
+    private function checkModelOf(SymfonyAiProvider $provider): string
     {
-        return $provider->checkModel() ?? $this->lightModelOn($provider->tierProvider());
+        return $provider->checkModel() ?? $this->lightModelOn($provider->tierProvider()) ?? $this->sampleLightModelOn($provider->tierProvider());
     }
 
     /**
@@ -86,5 +88,14 @@ final readonly class SymfonyAiKeyCheck implements KeyCheck
         }
 
         return null;
+    }
+
+    /**
+     * @return non-empty-string
+     */
+    // The light model a fresh project gets, because a fresh install has no project until a key is kept, and the check must still ask a model.
+    private function sampleLightModelOn(Provider $provider): string
+    {
+        return $this->sample->model($provider, Tier::Light);
     }
 }

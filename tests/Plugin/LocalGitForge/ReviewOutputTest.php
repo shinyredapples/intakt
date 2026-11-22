@@ -6,6 +6,7 @@ namespace Intakt\Tests\Plugin\LocalGitForge;
 
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Budget\Contract\Cost;
+use Intakt\Core\Review\Contract\BlockReasons;
 use Intakt\Core\Review\Contract\ChangeReview;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Evidence;
@@ -28,6 +29,7 @@ use Symfony\Component\Serializer\Normalizer\AbstractNormalizer;
 
 #[CoversClass(ReviewOutput::class)]
 #[CoversClass(ReviewOutputVerdict::class)]
+#[UsesClass(BlockReasons::class)]
 #[UsesClass(ReviewExit::class)]
 #[UsesClass(Cost::class)]
 #[UsesClass(FindingIds::class)]
@@ -79,7 +81,7 @@ final class ReviewOutputTest extends TestCase
             new PanelVerdict(Tier::Strong, new Verdict(Decision::Changes, [$finding], [], [])),
             new PanelVerdict(Tier::Standard, new Verdict(Decision::Approve, [], [], [])),
         ];
-        $review = new ChangeReview('round-1', 2, Decision::Changes, $verdicts, [$finding], new RoundTokens(2, 100, 60, 30, 5, 20, 120), Cost::inUsd(0.045895), ['a reason']);
+        $review = new ChangeReview('round-1', 2, Decision::Changes, $verdicts, [$finding], new RoundTokens(2, 100, 60, 30, 5, 20, 120), Cost::inUsd(0.045895), new BlockReasons('a reason'));
 
         $json = StoredSerializerFactory::create()->serialize(ReviewOutput::of($review), JsonEncoder::FORMAT, [AbstractNormalizer::ATTRIBUTES => ReviewOutput::FIELDS]);
         $output = json_decode($json, true, flags: JSON_THROW_ON_ERROR);

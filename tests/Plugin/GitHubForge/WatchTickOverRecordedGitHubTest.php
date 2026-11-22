@@ -50,9 +50,12 @@ use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchPullRequests;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchPullRequestsHandler;
 use Intakt\Plugin\Forge\Contract\AuthorTrust;
 use Intakt\Plugin\Forge\Contract\ChangeAuthorship;
+use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\ChangeText;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\CommitRange;
+use Intakt\Plugin\Forge\Contract\OpenedChange;
+use Intakt\Plugin\Forge\Contract\Opening;
 use Intakt\Plugin\Forge\Contract\ProposedChange;
 use Intakt\Plugin\GitHubForge\Domain\ExpectedInstallation;
 use Intakt\Plugin\GitHubForge\Infrastructure\AppJwt;
@@ -143,13 +146,13 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         $github->createdNumber = 7;
         $opener = $github->opener('alpha', 'Acme/Widgets');
         $records->open($this->pushOf('feature/7', '1'), str_repeat('1', 40), $opener->openOrUpdate(new ProposedChange('alpha', 'feature/7', 'main', new ChangeText('Seven', 'E1'))));
-        $github->openPulls = [['number' => 8, 'head' => ['ref' => 'feature/8'], 'user' => ['login' => 'loop[bot]', 'type' => 'Bot']]];
-        $records->open($this->pushOf('feature/8', '2'), self::GREEN, $opener->openOrUpdate(new ProposedChange('alpha', 'feature/8', 'main', new ChangeText('Eight', 'E1'))));
+        // Seeded as an older line, because the opener now refuses the loop's #8 instead of updating it, and the ledger still holds such lines from before.
+        $records->open($this->pushOf('feature/8', '2'), self::GREEN, new OpenedChange(new ChangeId('https://github.com/Acme/Widgets/pull/8'), Opening::Updated));
 
         $this->handler(new RecordingCommandBus())(new WatchPullRequests('alpha'));
 
         $events = $this->recordedEvents();
-        self::assertSame(['POST', 'PATCH'], array_map(static fn (array $write): string => explode(' ', $write[0])[0], $github->writes));
+        self::assertSame(['POST'], array_map(static fn (array $write): string => explode(' ', $write[0])[0], $github->writes));
         self::assertSame(1, preg_match_all('/ change_handed_to_intakt /', $events));
         self::assertSame(1, preg_match_all('/ change_handed_to_intakt \{[^}]*pull\\\\\/7/', $events));
     }
@@ -185,7 +188,7 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         $push = $this->pushOf('feature/7', '1');
         $records->intendChange($push, str_repeat('1', 40));
         $opener->openOrUpdate($proposal);
-        $github->openPulls = [['number' => 7, 'head' => ['ref' => 'feature/7'], 'user' => ['login' => 'intakt[bot]', 'type' => 'Bot']]];
+        $github->openPulls = [['number' => 7, 'head' => ['ref' => 'feature/7'], 'base' => ['ref' => 'main'], 'user' => ['login' => 'intakt[bot]', 'type' => 'Bot']]];
         $records->intendChange($push, str_repeat('1', 40));
         $records->open($push, str_repeat('1', 40), $opener->openOrUpdate($proposal));
 
@@ -238,7 +241,7 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         $settle = new SettleHeads(new SettleHead($gate, new StaleVerdicts($queries, $commands, $rounds, $ledger), new HeadsWithoutRound($ledger, $pending), $starts), $starts, $backOff);
         $projects = new WatchedProjects(['alpha' => ['repository' => 'repo', 'base' => 'main', 'task' => 'Review it.', 'github' => 'acme/widgets']]);
 
-        return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $ledger, $this->entities->getConnection(), new ChangesHandedToIntakt($ledgerStore, $ledger, self::createStub(ChangeAuthorship::class), $logger)), new LookAtHeads(new HeadLocks($pending, $locks, $installWide, $logger), $decisions, $settle));
+        return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $ledger, $this->entities->getConnection(), new ChangesHandedToIntakt($ledgerStore, $ledger, self::createStub(ChangeAuthorship::class), $logger, $commands)), new LookAtHeads(new HeadLocks($pending, $locks, $installWide, $logger), $decisions, $settle));
     }
 
     private function reads(MockClock $clock): GitHubWatchReads

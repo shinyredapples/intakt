@@ -16,6 +16,8 @@ use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Review\Contract\CatchUpOwed;
 use Intakt\Core\Review\Contract\ChangeSource;
 use Intakt\Core\Review\Contract\Decision;
+use Intakt\Core\Review\Contract\EscalationReviewFailed;
+use Intakt\Core\Review\Contract\EscalationVerdictKept;
 use Intakt\Core\Review\Contract\EscalationVerdictReused;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FindingIds;
@@ -166,6 +168,16 @@ final readonly class RoundLedger
         $this->append(LedgerEventKind::EscalationVerdictReused, $reused);
     }
 
+    public function escalationReviewed(EscalationVerdictKept $reviewed): void
+    {
+        $this->append(LedgerEventKind::EscalationReviewed, $reviewed);
+    }
+
+    public function escalationFailed(EscalationReviewFailed $failed): void
+    {
+        $this->append(LedgerEventKind::EscalationFailed, $failed);
+    }
+
     // Keyed at the head the round judged, because only the reviewed checkout holds the files a P1 named as the reviewers saw them.
     /**
      * @return array<string, ?string>
@@ -199,7 +211,7 @@ final readonly class RoundLedger
 
         $shown = array_map(static fn (Finding $finding): Finding => $entries[$finding->id] ?? $finding, $findings);
 
-        return array_map(fn (Finding $finding): JudgeDoneFinding => new JudgeDoneFinding($finding->id, $finding->severity, $finding->text, $finding->merged, $finding->file, $finding->line, $this->storedNote($judged->notes[$finding->id] ?? null)), $shown);
+        return array_map(fn (Finding $finding): JudgeDoneFinding => new JudgeDoneFinding($finding->id, $finding->severity, $finding->text, $finding->merged, $finding->file, $finding->line, $this->storedNote($judged->notes->noteOf($finding->id))), $shown);
     }
 
     // Redacted and then trimmed, because the note is model text that may quote a held credential, and a credential held with edge whitespace leaves that whitespace behind.
@@ -244,7 +256,7 @@ final readonly class RoundLedger
         return ['round' => $reviewer->round()->id()->toRfc4122(), 'reviewer' => $reviewer->id()->toRfc4122(), 'role' => $reviewer->roleName(), 'tier' => $reviewer->tier()];
     }
 
-    private function append(LedgerEventKind $kind, ReviewStarted|ReviewerStarted|VerdictReceived|CatchUpOwed|ReviewerFailed|ReviewerBlocked|ReviewerStopped|JudgeDone|JudgingFailed|ReviewerFindingsRecorded|RecurringP1Found|EscalationVerdictReused $payload): void
+    private function append(LedgerEventKind $kind, ReviewStarted|ReviewerStarted|VerdictReceived|CatchUpOwed|ReviewerFailed|ReviewerBlocked|ReviewerStopped|JudgeDone|JudgingFailed|ReviewerFindingsRecorded|RecurringP1Found|EscalationVerdictReused|EscalationVerdictKept|EscalationReviewFailed $payload): void
     {
         $result = $this->ledger->append(new LedgerEvent($kind, $this->serializer->serialize($payload, JsonEncoder::FORMAT)));
 

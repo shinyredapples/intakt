@@ -25,13 +25,20 @@ use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\ChangeText;
+use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
 use Intakt\Plugin\Forge\Contract\OpenedChange;
 use Intakt\Plugin\Forge\Contract\Opening;
+use Intakt\Plugin\Forge\Contract\ProposedChange;
 use Intakt\Tests\Core\Git\TemporaryRepository;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Lock\Exception\ExceptionInterface;
+use Symfony\Component\Lock\Exception\LockStorageException;
+use Symfony\Component\Lock\Key;
+use Symfony\Component\Lock\PersistingStoreInterface;
+use Symfony\Component\Lock\Store\InMemoryStore;
 
 #[CoversClass(PushBranch::class)]
 #[CoversClass(PushRecords::class)]
@@ -49,6 +56,8 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(ChangeText::class)]
 #[UsesClass(ChangeId::class)]
 #[UsesClass(OpenedChange::class)]
+#[UsesClass(ProposedChange::class)]
+#[UsesClass(ForgeWriteFailed::class)]
 #[UsesClass(LedgerEvent::class)]
 #[UsesClass(AppendResult::class)]
 #[UsesClass(RecordedEvent::class)]
@@ -169,6 +178,116 @@ final class PushBranchTest extends TestCase
         $this->expectException(BranchNotPushed::class);
 
         (void) $this->scenario->push()->push($this->scenario->request($this->scenario->repository->objectAt('main')));
+    }
+
+    #[DataProvider('rewritesOfTheRemote')]
+    public function testARemoteTheRepositorysConfigRewritesToAnotherRepositoryIsNeitherReadNorRecordedNorPushed(string $kind, string $part): void
+    {
+        $other = $this->scenario->otherRemote();
+        $remote = $this->scenario->remote;
+        $prefix = match ($part) {
+            'whole' => $remote,
+            'prefix' => substr($remote, 0, -strlen('remote.git')),
+            default => '',
+        };
+        $this->scenario->rewriteInTheRepository($kind, $prefix, $other);
+
+        try {
+            (void) $this->scenario->push()->push($this->scenario->request());
+            self::fail('A rewritten remote must be refused.');
+        } catch (BranchNotPushed $refused) {
+            self::assertStringContainsString('rewrites the remote\'s address', $refused->getMessage());
+        }
+
+        self::assertNull($this->scenario->remoteTip($other));
+        self::assertNull($this->scenario->remoteTip());
+        self::assertSame([], $this->scenario->ledger->kinds());
+        self::assertSame(0, $this->scenario->changes->calls);
+    }
+
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function rewritesOfTheRemote(): iterable
+    {
+        yield 'insteadOf the whole remote' => ['insteadOf', 'whole'];
+        yield 'pushInsteadOf the whole remote' => ['pushInsteadOf', 'whole'];
+        yield 'insteadOf a prefix of the remote' => ['insteadOf', 'prefix'];
+        yield 'an empty insteadOf' => ['insteadOf', 'empty'];
+    }
+
+    public function testARewriteOfAnotherAddressDoesNotStopThePush(): void
+    {
+        $this->scenario->rewriteInTheRepository('insteadOf', 'https://example.com/elsewhere/', $this->scenario->otherRemote());
+
+        self::assertInstanceOf(PushedBranch::class, $this->scenario->push()->push($this->scenario->request()));
+    }
+
+    public function testARemoteNamedLikeARemoteSectionOfTheRepositorysConfigIsNeitherRecordedNorPushedToEitherRepository(): void
+    {
+        $other = $this->scenario->otherRemote();
+        $this->scenario->remoteSectionInTheRepository($this->scenario->remote, 'pushurl', $other);
+
+        try {
+            (void) $this->scenario->push()->push($this->scenario->request());
+            self::fail('A remote named like a remote section must be refused.');
+        } catch (BranchNotPushed $refused) {
+            self::assertStringContainsString('remote section', $refused->getMessage());
+            self::assertStringNotContainsString($this->scenario->remote, $refused->getMessage());
+        }
+
+        self::assertNull($this->scenario->remoteTip($other));
+        self::assertNull($this->scenario->remoteTip());
+        self::assertSame([], $this->scenario->ledger->kinds());
+        self::assertSame(0, $this->scenario->changes->calls);
+    }
+
+    public function testARemoteSectionWhoseNameOnlyStartsWithTheRemoteDoesNotStopThePush(): void
+    {
+        $this->scenario->remoteSectionInTheRepository($this->scenario->remote.'.mirror', 'pushurl', $this->scenario->otherRemote());
+
+        self::assertInstanceOf(PushedBranch::class, $this->scenario->push()->push($this->scenario->request()));
+    }
+
+    public function testTheForeignChangeCheckRunsBeforeAnythingIsRecordedOrPushed(): void
+    {
+        $atTheCheck = null;
+        $this->scenario->changes->checking = function () use (&$atTheCheck): void {
+            $atTheCheck = [$this->scenario->ledger->kinds(), $this->scenario->remoteTip()];
+        };
+
+        (void) $this->scenario->push()->push($this->scenario->request());
+
+        self::assertSame([[], null], $atTheCheck);
+    }
+
+    public function testABranchWithAForeignOpenPullRequestIsNeitherRecordedNorPushed(): void
+    {
+        $this->scenario->changes->checking = static function (): never {
+            throw new ForgeWriteFailed('The branch has an open pull request that another account opened.');
+        };
+
+        try {
+            (void) $this->scenario->push()->push($this->scenario->request());
+            self::fail('A branch with a foreign open pull request must not be pushed.');
+        } catch (ForgeWriteFailed) {
+        }
+
+        self::assertSame([], $this->scenario->ledger->kinds());
+        self::assertNull($this->scenario->remoteTip());
+        self::assertSame(0, $this->scenario->changes->calls);
+    }
+
+    public function testTheForeignChangeCheckNamesTheProjectBranchAndMain(): void
+    {
+        $checked = null;
+        $this->scenario->changes->checking = static function (ProposedChange $change) use (&$checked): void {
+            $checked = [$change->project, $change->branch, $change->base];
+        };
+
+        (void) $this->scenario->push()->push($this->scenario->request());
+
+        self::assertSame(['widgets', PushScenario::BRANCH, 'main'], $checked);
     }
 
     public function testTheIntendedIdIsRecordedBeforeThePushAndIsTheOneThePushProduces(): void
@@ -647,6 +766,113 @@ final class PushBranchTest extends TestCase
         self::assertStringContainsString('another push of this branch is running', (string) $inner);
     }
 
+    public function testALockStoreThatFailsToSaveIsReportedAsNotPushedAndNothingIsPushedOrRecorded(): void
+    {
+        $store = self::createStub(PersistingStoreInterface::class);
+        $store->method('save')->willThrowException(new LockStorageException('the lock database is down'));
+
+        try {
+            (void) $this->scenario->pushWithLockStore($store)->push($this->scenario->request());
+            self::fail('A lock store that cannot save must stop the push.');
+        } catch (BranchNotPushed $failed) {
+            self::assertStringStartsWith('The branch was not pushed: the lock store failed: ', $failed->getMessage());
+            self::assertInstanceOf(ExceptionInterface::class, $failed->getPrevious());
+            self::assertNull($this->scenario->remoteTip());
+            self::assertSame([], $this->scenario->ledger->kinds());
+        }
+    }
+
+    public function testALockStoreThatFailsToReleaseAfterThePushIsReportedAsNotPushed(): void
+    {
+        $store = self::createStub(PersistingStoreInterface::class);
+        $store->method('delete')->willThrowException(new LockStorageException('the lock database is down'));
+
+        try {
+            (void) $this->scenario->pushWithLockStore($store)->push($this->scenario->request());
+            self::fail('A lock store that cannot release must be reported.');
+        } catch (BranchNotPushed $failed) {
+            self::assertStringStartsWith('The branch was not pushed: the lock store failed: ', $failed->getMessage());
+            self::assertInstanceOf(ExceptionInterface::class, $failed->getPrevious());
+        }
+    }
+
+    public function testALockStoreThatFailsToReleaseAndStillHoldsTheLockIsReportedAsNotPushed(): void
+    {
+        $store = self::createStub(PersistingStoreInterface::class);
+        $store->method('delete')->willThrowException(new LockStorageException('the lock database is down'));
+        $store->method('exists')->willReturn(true);
+
+        $this->assertReportedAsALockStoreFailure($store);
+    }
+
+    public function testALockStoreThatFailsToReleaseAndToTellWhetherTheLockIsHeldIsReportedAsNotPushed(): void
+    {
+        $store = self::createStub(PersistingStoreInterface::class);
+        $store->method('delete')->willThrowException(new LockStorageException('the lock database is down'));
+        $store->method('exists')->willThrowException(new LockStorageException('the lock database is down'));
+
+        $this->assertReportedAsALockStoreFailure($store);
+    }
+
+    public function testALockStoreWhoseReleaseFailsOnceReleasesTheBranchSoTheNextCallReadsThePush(): void
+    {
+        $locks = new InMemoryStore();
+        $failures = 1;
+        $store = self::createStub(PersistingStoreInterface::class);
+        $store->method('save')->willReturnCallback($locks->save(...));
+        $store->method('exists')->willReturnCallback($locks->exists(...));
+        $store->method('delete')->willReturnCallback(static function (Key $key) use ($locks, &$failures): void {
+            if ($failures-- > 0) {
+                throw new LockStorageException('a short outage of the lock database');
+            }
+
+            $locks->delete($key);
+        });
+        $push = $this->scenario->pushWithLockStore($store);
+
+        $first = $push->push($this->scenario->request());
+        $again = $push->push($this->scenario->request());
+
+        self::assertInstanceOf(PushedBranch::class, $first);
+        self::assertInstanceOf(PushedBranch::class, $again);
+        self::assertSame($first->head, $again->head);
+        self::assertSame(1, $this->scenario->changes->calls);
+    }
+
+    public function testAFailureDuringThePushIsReportedInsteadOfAFailedLockRelease(): void
+    {
+        $store = self::createStub(PersistingStoreInterface::class);
+        $store->method('delete')->willThrowException(new LockStorageException('the lock database is down'));
+        $push = $this->scenario->pushWithLockStore($store, $this->scenario->signingKey($this->scenario->key.'.missing'));
+
+        try {
+            (void) $push->push($this->scenario->request());
+            self::fail('A missing key cannot sign.');
+        } catch (BranchNotPushed $failed) {
+            self::assertStringNotContainsString('the lock store failed', $failed->getMessage());
+            self::assertNull($this->scenario->remoteTip());
+        }
+    }
+
+    public function testAPushWhoseLockReleaseFailedIsReportedPushedByTheNextCallWithoutPushingAgain(): void
+    {
+        $store = self::createStub(PersistingStoreInterface::class);
+        $store->method('delete')->willThrowException(new LockStorageException('the lock database is down'));
+
+        try {
+            (void) $this->scenario->pushWithLockStore($store)->push($this->scenario->request());
+        } catch (BranchNotPushed) {
+        }
+
+        $tipAfterTheFailure = $this->scenario->remoteTip();
+        $pushed = $this->scenario->push()->push($this->scenario->request());
+
+        self::assertInstanceOf(PushedBranch::class, $pushed);
+        self::assertSame($tipAfterTheFailure, $pushed->head);
+        self::assertSame([LedgerEventKind::PushIntended, LedgerEventKind::BranchPushed, LedgerEventKind::ChangeIntended, LedgerEventKind::ChangeOpened], $this->scenario->ledger->kinds());
+        self::assertSame(1, $this->scenario->changes->calls);
+    }
+
     public function testNothingIsPushedWhenTheSigningKeyCannotSign(): void
     {
         $push = $this->scenario->push($this->scenario->signingKey($this->scenario->key.'.missing'));
@@ -761,5 +987,18 @@ final class PushBranchTest extends TestCase
     private function discardTheOutcome(Closure $push, BranchPushRequest $request): void
     {
         $push($request);
+    }
+
+    // Caught at the top, because an exception Symfony's lock throws on destruct would replace BranchNotPushed and keep it only as a previous one.
+    private function assertReportedAsALockStoreFailure(PersistingStoreInterface $store): void
+    {
+        try {
+            (void) $this->scenario->pushWithLockStore($store)->push($this->scenario->request());
+            self::fail('A lock store that cannot release must be reported.');
+        } catch (ExceptionInterface $escaped) {
+            self::fail('The lock store failure left the contract as '.$escaped::class);
+        } catch (BranchNotPushed $failed) {
+            self::assertStringStartsWith('The branch was not pushed: the lock store failed: ', $failed->getMessage());
+        }
     }
 }

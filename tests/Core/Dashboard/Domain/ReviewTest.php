@@ -12,6 +12,7 @@ use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\RoundFinding;
 use Intakt\Core\Dashboard\Domain\RoundPlace;
 use Intakt\Core\Dashboard\Domain\RoundStart;
+use Intakt\Core\Dashboard\Domain\Timeline;
 use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Core\Review\Contract\RoundEnding;
 use Intakt\Core\Review\Contract\RoundEnds;
@@ -136,6 +137,16 @@ final class ReviewTest extends TestCase
     public function testTheFirstRoundIsTheLowestNumberedOneWhateverItsId(): void
     {
         self::assertSame('round-z', new Review([$this->round('round-a', 2), $this->round('round-z', 1)])->firstRound());
+    }
+
+    public function testAReviewOffersTheRoundAfterItsLatest(): void
+    {
+        self::assertSame(3, new Review([$this->round('round-a', 1), $this->round('round-b', 2)])->nextNumber());
+    }
+
+    public function testAHistoryOnlyReviewOffersNoNextRound(): void
+    {
+        self::assertNull(new Review([$this->round('round-a', 1), $this->round('round-b', 2)], Timeline::HistoryOnly)->nextNumber());
     }
 
     private function judged(string $id, int $number): ReviewedRound

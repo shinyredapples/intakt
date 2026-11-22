@@ -7,7 +7,7 @@ namespace Intakt\Core\Review\Contract;
 use Symfony\Component\Serializer\Attribute\Ignore;
 use Symfony\Component\Validator\Constraints\Valid;
 
-// Property names are the JSON field names because Symfony AI's structured output ignores serializer name mapping.
+// Stored through Infrastructure\ReviewerAnswer\Verdict, which owns the reviewer's answer format and the stored round JSON, so the typed resolved and follow_ups lists are written as lists of strings.
 final readonly class Verdict
 {
     // Kept although no verdict is given it any more, because rounds recorded before still hold it and must stay failed reviews.
@@ -20,9 +20,9 @@ final readonly class Verdict
     private const array FAILED_REVIEWS = [self::INVALID_OUTPUT, self::INCOMPLETE_STREAM, self::UNREAD_APPROVAL, self::NO_TOOLS, self::CUT_APPROVAL, self::REVIEWER_STOPPED];
 
     /**
-     * @param list<Finding> $findings
-     * @param list<string>  $resolved
-     * @param list<string>  $follow_ups
+     * @param list<Finding>         $findings
+     * @param list<ResolvedFinding> $resolved
+     * @param list<FollowUpNote>    $follow_ups
      */
     public function __construct(
         public Decision $verdict,
@@ -52,19 +52,16 @@ final readonly class Verdict
     }
 
     // Only a reviewer's answer can claim one, because Intakt's failure verdicts carry these ids by right and a claimed one would make a counted vote whose findings the ledger drops.
-    /**
-     * @return list<string>
-     */
     #[Ignore]
-    public function claimedFailureIds(): array
+    public function claimedFailureIds(): FindingIds
     {
         if (VerdictOrigin::Intakt === $this->origin) {
-            return [];
+            return new FindingIds();
         }
 
         $ids = array_map(static fn (Finding $finding): string => $finding->id, $this->findings);
 
-        return array_values(array_unique(array_intersect($ids, self::FAILED_REVIEWS)));
+        return new FindingIds(...array_unique(array_intersect($ids, self::FAILED_REVIEWS)));
     }
 
     // A reviewer's own blocked that names findings asks for changes, because every view and the quorum read the stored decision; Intakt's failure verdicts stay blocked. Apply it only to a fresh verdict, never to a stored one, because a stored verdict reads back with origin Reviewer and a stored failure verdict would turn into changes.

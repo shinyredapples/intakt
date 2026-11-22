@@ -63,7 +63,7 @@ projects:
         # Optional: the image a review job of this project runs in, as `intakt:job:build-image --kind=review` tagged it; no review uses review jobs yet.
         review_job: { image: intakt-job/alpha:review }
     beta:
-        # Optional: reviewer-for-loop reviews the existing loop's heads, its verdicts count and it only publishes its verdict on each head
+        # Optional: reviewer-for-loop reviews the heads of a build loop such as the one that developed Intakt, its verdicts count and it only publishes its verdict on each head
         # (a commit status and a comment); live is the default.
         mode: reviewer-for-loop
         tiers:
