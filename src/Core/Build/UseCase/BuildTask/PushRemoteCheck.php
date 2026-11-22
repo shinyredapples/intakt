@@ -29,7 +29,7 @@ final readonly class PushRemoteCheck
             return null;
         }
 
-        return sprintf('the remote %s is not the configured GitHub repository "%s" of project "%s"; pass its https://github.com/%s URL without credentials', $this->shown($request->remote), $configured, $request->project, $configured);
+        return sprintf('the remote %s is not the configured GitHub repository "%s" of project "%s"; pass its https://github.com/%s URL', $this->shown($request->remote), $configured, $request->project, $configured);
     }
 
     // Without the user info, query and fragment, because a remote can carry a token there and the refusal reaches the terminal and the logs. A remote without a host is shown only when it holds no "@" or ":", because an ssh address such as "user:token@host:path" parses as a scheme and a path that would show the token.
@@ -51,7 +51,7 @@ final readonly class PushRemoteCheck
         return sprintf('"%s"%s', $shown, $hidden ? ' (credentials, query or fragment not shown)' : '');
     }
 
-    // Only the https form is read, because that is the address the forge side names; any other form cannot be tied to it, so it reads as no repository.
+    // Only the https form is read, because that is the address the forge side names; any other form cannot be tied to it, so it reads as no repository. The scheme must be written in lower case, because git matches it case-sensitively against its protocol allowlist and refuses "HTTPS" only after the task started. User info is allowed, because Intakt supplies no git credentials of its own and git sends them to github.com only.
     private function repositoryOf(string $remote): ?string
     {
         try {
@@ -60,7 +60,7 @@ final readonly class PushRemoteCheck
             return null;
         }
 
-        if ('https' !== strtolower((string) $uri->getScheme()) || 'github.com' !== strtolower((string) $uri->getHost()) || null !== $uri->getUserInfo() || null !== $uri->getPort() || null !== $uri->getQuery() || null !== $uri->getFragment()) {
+        if ('https' !== $uri->getRawScheme() || 'github.com' !== strtolower((string) $uri->getHost()) || null !== $uri->getPort() || null !== $uri->getQuery() || null !== $uri->getFragment()) {
             return null;
         }
 

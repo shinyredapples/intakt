@@ -35,7 +35,9 @@ final class PushRemoteCheckTest extends TestCase
     {
         yield 'plain' => ['https://github.com/acme/alpha'];
         yield 'git suffix' => ['https://github.com/acme/alpha.git'];
-        yield 'letter case' => ['HTTPS://GitHub.com/ACME/Alpha'];
+        yield 'letter case' => ['https://GitHub.com/ACME/Alpha'];
+        yield 'a user and a token' => ['https://user:probe-token@github.com/acme/alpha.git'];
+        yield 'a user' => ['https://user@github.com/acme/alpha'];
         yield 'trailing slash' => ['https://github.com/acme/alpha/'];
         yield 'a dot segment' => ['https://github.com/acme/./alpha'];
         yield 'a percent-encoded letter' => ['https://github.com/acme/alph%61'];
@@ -53,7 +55,7 @@ final class PushRemoteCheckTest extends TestCase
 
     public function testTheRefusalNamesTheRemoteItRefuses(): void
     {
-        self::assertSame('the remote "https://github.com/acme/beta.git" is not the configured GitHub repository "acme/alpha" of project "alpha"; pass its https://github.com/acme/alpha URL without credentials', $this->check('acme/alpha')->failureOf($this->request('https://github.com/acme/beta.git')));
+        self::assertSame('the remote "https://github.com/acme/beta.git" is not the configured GitHub repository "acme/alpha" of project "alpha"; pass its https://github.com/acme/alpha URL',$this->check('acme/alpha')->failureOf($this->request('https://github.com/acme/beta.git')));
     }
 
     public function testTheRefusalShowsTheRemoteWithoutItsCredentialsQueryOrFragment(): void
@@ -103,7 +105,8 @@ final class PushRemoteCheckTest extends TestCase
         yield 'a path' => ['/remotes/alpha.git'];
         yield 'ssh' => ['git@github.com:acme/alpha.git'];
         yield 'a deeper path' => ['https://github.com/acme/alpha/tree/main'];
-        yield 'credentials' => ['https://user@github.com/acme/alpha'];
+        yield 'an upper-case scheme git does not allow' => ['HTTPS://github.com/acme/alpha.git'];
+        yield 'credentials and a query' => ['https://user:token@github.com/acme/alpha?x=1'];
         yield 'no repository' => ['https://github.com/acme'];
         yield 'empty' => [''];
     }

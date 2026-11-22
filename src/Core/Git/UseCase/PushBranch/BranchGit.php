@@ -69,6 +69,25 @@ final readonly class BranchGit
         return $this->finished($this->process($repository, $arguments, self::NETWORK), $arguments)->getExitCode() ?? -1;
     }
 
+    // The prefixes the repository's config rewrites (url.<base>.insteadOf and url.<base>.pushInsteadOf, includes followed), because git applies them to a remote URL before it reads or pushes, so the address the caller checked would not be the one git reaches.
+    /**
+     * @return list<string>
+     *
+     * @throws BranchNotPushed
+     */
+    public function rewrittenAddresses(string $repository): array
+    {
+        $arguments = ['config', '--null', '--get-regexp', '^url\..*\.(push)?insteadof$'];
+        $process = $this->finished($this->process($repository, $arguments, []), $arguments);
+
+        // Exit code 1 is git config's answer for no matching key.
+        return match ($process->getExitCode()) {
+            0 => array_map(static fn (string $entry): string => explode("\n", $entry, 2)[1] ?? '', array_values(array_filter(explode("\0", $process->getOutput()), static fn (string $entry): bool => '' !== $entry))),
+            1 => [],
+            default => throw BranchNotPushed::because('git config could not list the address rewrites of the repository'),
+        };
+    }
+
     // Null when the two merge cleanly, else the paths that conflict, because the caller needs both; the merge writes objects only, never a ref or a work tree.
     /**
      * @return list<string>|null

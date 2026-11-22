@@ -51,6 +51,7 @@ final readonly class PushBranch implements BranchPush
 
     private function pushed(BranchPushRequest $request): PushedBranch|MainConflicts|RefusedPush
     {
+        $this->refuseRewrittenRemote($request);
         $main = $this->mainOf($request->repository);
         $head = $this->signed->of($request->repository, $request->accepted, $main);
         $this->signed->verify($request->repository, $head, $main);
@@ -86,6 +87,16 @@ final readonly class PushBranch implements BranchPush
         $this->changes->refuseForeignChange($this->proposedChange($request, $main));
 
         return $this->pushOnce($request, $head, $remoteTip);
+    }
+
+    // Checked by the push itself and not once when the task starts, because git reads the repository's config at the push, and a rewrite can have been written since. An empty prefix matches every remote, as git applies it to every URL. The remote is not named, because it can hold a credential.
+    private function refuseRewrittenRemote(BranchPushRequest $request): void
+    {
+        foreach ($this->git->rewrittenAddresses($request->repository) as $prefix) {
+            if (str_starts_with($request->remote, $prefix)) {
+                throw BranchNotPushed::because('the repository\'s config rewrites the remote\'s address (url.<base>.insteadOf or pushInsteadOf), so git would read and push another repository than the one the forge checks');
+            }
+        }
     }
 
     private function mainOf(string $repository): string

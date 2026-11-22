@@ -29,6 +29,8 @@ flowchart LR
 
 The command stops at the first step that fails. It prints the steps that passed, then the step that failed and why, and runs nothing after it. Nothing is retried: fix the cause and run the command again.
 
+One check comes before every step: when the project has a `github` entry, `--remote` must be that GitHub repository's `https://github.com/<owner>/<name>` address. If it names anything else, the command stops before the first step: it prints why, reports no step, writes nothing to the ledger and exits with an error. Later, the push step also fails, with nothing pushed, when the mirror's git settings would send that address somewhere else (a `url.<base>.insteadOf` or `pushInsteadOf` rewrite).
+
 - A step fails when, for example, GitHub cannot list the issues, the issue is not open, the Developer made no commit, the hand-back check refuses what came back, the checks fail, or the branch conflicts with main (then nothing is pushed).
 - When the Developer ends with a question instead of a change, the task stops at the build job: Intakt stores the question, runs no later step and the command still ends without an error.
 - When every step passes, the pull request is open and the command ends after the push.
