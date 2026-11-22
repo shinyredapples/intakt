@@ -88,17 +88,22 @@ setsid claude -p --model "$model" --max-turns "$turns" --output-format json --da
 session=$!
 # The allowance ends the session only, never this script, so a cut session still reaches the bundle below; the watchdog is in a session of its own too, so its sleep goes with it.
 # It reports the cut by its exit status, not by a file, because the builder can write anywhere a file could be and so stop the kill or fake a cut.
-setsid sh -c 'sleep "$1" && kill -s KILL -- "-$2"' watchdog "$allowance" "$session" > /dev/null 2>&1 &
+# A TERM ends it without a cut only before it sends the kill: it then ends its own group, its sleep and itself, with a status that is no cut;
+# it ignores TERM from before it sends the kill, so a watchdog that has cut still reports the cut when the TERM below reaches it.
+# Its sleep runs in the background, because the shell runs a trap only once a command in the foreground has ended.
+setsid sh -c 'trap '\''kill -s KILL 0'\'' TERM; sleep "$1" & wait "$!" && trap '\'''\'' TERM && kill -s KILL -- "-$2"' watchdog "$allowance" "$session" > /dev/null 2>&1 &
 watchdog=$!
 wait "$session"
 status=$?
-# A session ended by SIGKILL may be the watchdog's cut, which ending the watchdog now would hide; waiting for it ends at the allowance at the latest.
 if [ "$status" -ne 137 ]; then
-    # Its group exists only once setsid has run, which a session that ends at once can beat, so the kill is tried again.
+    # Only the watchdog's kill ends the session with 137, so it did not cut; its group exists only once setsid has run, which a session that ends at once can beat, so the kill is tried again.
     for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
         kill -s KILL -- "-$watchdog" 2>/dev/null && break
         sleep 0.1
     done
+else
+    # A SIGKILL from elsewhere (such as the out-of-memory killer) ends the session with 137 too, so the watchdog is asked to stop instead of waited out for the rest of the allowance.
+    kill -s TERM "$watchdog" 2>/dev/null
 fi
 wait "$watchdog" 2>/dev/null
 cut=$?

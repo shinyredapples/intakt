@@ -232,6 +232,39 @@ final class BuildScriptTest extends TestCase
         self::assertStringNotContainsString('cut after', $this->outputFile('build.log'));
     }
 
+    public function testASessionKilledBySigkillLongBeforeItsAllowanceIsBundledWithoutWaitingForTheAllowance(): void
+    {
+        // The run's limit sits far below the allowance, so a script that waits out the allowance fails here by timing out.
+        $this->givenTheCli(<<<'SH'
+            echo 'built' > built.txt
+            git add built.txt
+            git commit --quiet -m 'feat: build the task'
+            kill -s KILL $$
+            SH);
+        $this->timeout = 15;
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5', 120);
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertSame("built\n", $this->fileAtTheBundlesHead('task', 'built.txt'));
+        self::assertStringContainsString("claude exited with 137\n", $this->outputFile('build.log'));
+        self::assertStringNotContainsString('cut after', $this->outputFile('build.log'));
+    }
+
+    public function testASessionKilledBySigkillBeforeItsAllowanceLeavesNoWatchdogBehind(): void
+    {
+        $this->givenTheCli('until [ -s "$RECORD/sleeps" ]; do :; done; kill -s KILL $$');
+        $this->givenSleepRecordsItsProcess();
+        $this->timeout = 15;
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5', 120);
+
+        self::assertSame(0, $run->getExitCode());
+        $sleeps = $this->recordedSleeps();
+        self::assertNotSame([], $sleeps);
+        self::assertSame([], $this->stillRunningAfter($sleeps, self::WATCHDOG_DEADLINE));
+    }
+
     public function testASessionThatEndsByItsTurnLimitKeepsItsCommitsAndIsNotLoggedAsCut(): void
     {
         $this->givenTheCli(<<<'SH'
