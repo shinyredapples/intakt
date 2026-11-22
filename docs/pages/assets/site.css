@@ -1,4 +1,4 @@
-/* The front page's base: the dashboard's tokens (assets/styles/tokens.css), self-hosted fonts (OFL, licenses beside them), theme switching. */
+/* The tokens are copied from the dashboard and the fonts self-hosted so the published page needs no other file or network. */
 @font-face { font-family: "Outfit"; src: url(outfit-latin-wght-normal.woff2) format("woff2"); font-weight: 100 900; font-display: swap; }
 @font-face { font-family: "Atkinson Hyperlegible Next"; src: url(atkinson-hyperlegible-next-latin-wght-normal.woff2) format("woff2"); font-weight: 200 800; font-display: swap; }
 @font-face { font-family: "JetBrains Mono"; src: url(jetbrains-mono-latin-wght-normal.woff2) format("woff2"); font-weight: 100 800; font-display: swap; }
