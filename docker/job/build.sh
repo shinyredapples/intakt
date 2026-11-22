@@ -98,6 +98,10 @@ fi
 # The builder can write to the output folder too, and take its permissions away, so its access is restored before the log is written again.
 # chmod follows a link, so a link the builder left is removed below without being touched.
 chmod u+rwx -- "$output"
+# A named pipe or a link in the log's place would make the first append wait or write elsewhere, so the log is started again, without what the builder replaced.
+if [ ! -f "$log" ] || [ -L "$log" ]; then
+    rm -f -- "$log"
+fi
 printf 'claude exited with %d\n' "$status" >> "$log"
 if [ "$cut" -eq 0 ]; then
     printf 'claude cut after %d seconds, its commits are kept\n' "$allowance" >> "$log"
@@ -189,9 +193,9 @@ fi
 # Bounded because the builder can leave state git waits on that is not a setting, such as a named pipe at a ref or at packed-refs, which would hold the slot until the job is timed out;
 # a bundle of the branch's new commits takes seconds, and the limit stays far below the 600 seconds the job keeps for this script after the allowance.
 bundle_time_limit=30
-# The kill follows the TERM, so a git that does not end on TERM is still ended.
+# The kill follows the TERM, so a git that does not end on TERM is still ended; the short option, because a project's image may carry a timeout (such as BusyBox's) that has no long one.
 # The branch by its full name, so a branch the builder checked out instead is never what is handed back; git refuses an empty bundle.
-timeout --kill-after=5 "$bundle_time_limit" git bundle create --quiet "$output/handback.bundle" "refs/heads/$branch" "^$base" >> "$log" 2>&1
+timeout -k 5 "$bundle_time_limit" git bundle create --quiet "$output/handback.bundle" "refs/heads/$branch" "^$base" >> "$log" 2>&1
 bundled=$?
 # 124 is timeout's status for a cut, 137 its status once the kill was needed.
 if [ "$bundled" -eq 124 ] || [ "$bundled" -eq 137 ]; then

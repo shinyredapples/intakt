@@ -635,6 +635,68 @@ final class BuildScriptTest extends TestCase
         $this->thenTheBundleWasCut($run);
     }
 
+    public function testAShallowFileTheCliTurnsIntoAPipeEndsTheJobWithinTheBundleLimitWithNoBundleAndTheLoggedReason(): void
+    {
+        $this->givenTheCli(<<<'SH'
+            echo 'built' > built.txt
+            git add built.txt
+            git commit --quiet -m 'feat: build the task'
+            rm -f .git/shallow
+            mkfifo .git/shallow
+            SH);
+        $this->timeout = self::BUNDLE_TIME_LIMIT + 15;
+
+        try {
+            $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+        } finally {
+            $this->releaseThePipe($this->work.'/clone/.git/shallow');
+        }
+
+        $this->thenTheBundleWasCut($run);
+    }
+
+    public function testABuildLogTheCliTurnsIntoAPipeStillHandsTheBundleBackWithinTheLimit(): void
+    {
+        // The first append after the session would wait on a pipe nobody reads, so the job would hold its slot.
+        $this->givenTheCli(<<<'SH'
+            echo 'built' > built.txt
+            git add built.txt
+            git commit --quiet -m 'feat: build the task'
+            rm -f "$INTAKT_JOB_OUTPUT/build.log"
+            mkfifo "$INTAKT_JOB_OUTPUT/build.log"
+            SH);
+        $this->timeout = 20;
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertSame(0, $run->getExitCode());
+        self::assertFileExists($this->output.'/handback.bundle');
+        self::assertStringContainsString('claude exited with', $this->outputFile('build.log'));
+    }
+
+    public function testATimeoutWithoutLongOptionsStillHandsTheBundleBack(): void
+    {
+        $timeout = (string) new ExecutableFinder()->find('timeout');
+        file_put_contents($this->bin.'/timeout', <<<SH
+            #!/bin/sh
+            case "\$1" in
+                --*) echo 'timeout: unrecognized option' >&2; exit 1 ;;
+            esac
+            exec '{$timeout}' "\$@"
+            SH);
+        chmod($this->bin.'/timeout', 0o755);
+        $this->givenTheCli(<<<'SH'
+            echo 'built' > built.txt
+            git add built.txt
+            git commit --quiet -m 'feat: build the task'
+            SH);
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertSame("built\n", $this->fileAtTheBundlesHead('task', 'built.txt'));
+    }
+
     public function testObjectsTheCliMovedOutOfTheCloneAndNamedInAlternatesHandNoBundleBack(): void
     {
         $this->givenTheCli(<<<'SH'
