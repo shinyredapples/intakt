@@ -260,6 +260,6 @@ final class CheckDependenciesTest extends TestCase
      */
     private function ranKinds(): array
     {
-        return array_map(static fn (JobSpec $spec): string => strstr($spec->id->value, '-', true) ?: '', $this->ran);
+        return array_map(static fn (JobSpec $spec): string => explode('-', $spec->id->value)[0], $this->ran);
     }
 }
