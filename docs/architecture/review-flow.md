@@ -7,7 +7,7 @@ A review starts from one of three doors: the `intakt:review` command, the MCP `s
 Worth knowing:
 
 - A round is refused before it opens when a tier it needs is not mapped.
-- A finding is dropped before judging when none of its quoted code fragments is in the change (the quote check).
+- A finding that quotes code is dropped before judging when none of its quoted code fragments is in the change (the quote check). A finding without a checkable quote, or with at least one quote that is in the change, is kept.
 - Every kept P1 and P2 reaches the act list, whatever the judge marked it.
 - A P1 that recurs on another head gets an escalation review, and its verdict is kept and reused.
 
@@ -30,7 +30,7 @@ flowchart TD
     verdicts --> complete{"Every reviewer in?"}
     complete -->|no| wait["The round stays collecting"]
     complete -->|yes| collected["Round complete: findings join the change's finding list"]
-    collected --> judge["JudgeRound: the quote check drops findings quoting code not in the change, the judge marks the rest act, defer or reject (a P3 that is a local edit in a touched file is act); every P1 and P2 it was given reaches the act list whatever its mark; a P1 or P2 marked defer or reject keeps the judge's note, if it gave one; an act list entry that merged findings keeps its own note, or else the first note of a finding it merged"]
+    collected --> judge["JudgeRound: the quote check drops findings with a checkable quote when none of their quoted fragments is in the change, the judge marks the rest act, defer or reject (a P3 that is a local edit in a touched file is act); every P1 and P2 it was given reaches the act list whatever its mark; a P1 or P2 marked defer or reject keeps the judge's note, if it gave one; an act list entry that merged findings keeps its own note, or else the first note of a finding it merged"]
     judge --> act["Act list (every kept P1 and P2, and the P3s marked act), follow-ups (the P3s marked defer), the quote check's dropped findings, of any severity, with their reasons and the changed lines nearest to each quote, each reviewer's counted vote and a key for each P1 in judge_done"]
     act --> recurring["recurring_p1_found for each round on another head than the first that flagged the same P1 key"]
     recurring --> ledger

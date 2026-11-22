@@ -9,7 +9,7 @@ Intakt reviews code changes with a panel of AI models and can build changes from
 ### The parts
 
 - **Review panel:** the reviewers of a change, each a model on a capability tier. Each reviewer reads the change with read-only tools and returns a verdict: `approve`, `changes` or `blocked`, with findings rated P1 to P3.
-- **Judge:** one more model call that sorts the panel's findings into the act list (what to fix now) and follow-ups. Before it runs, plain code drops a finding when none of its quoted code fragments is in the change.
+- **Judge:** one more model call that sorts the panel's findings into the act list (what to fix now) and follow-ups. Before it runs, plain code drops a finding that quotes code when none of its quoted code fragments is in the change; a finding without a checkable quote goes to the judge.
 - **Rounds and passes:** a round is one review of one head of a change. A change can have several rounds, for example one for each new head. The dashboard calls a round a "Review pass".
 - **Quorum policy:** decides the outcome from the votes: `all`, `majority` or `one-strong-plus-one`.
 - **Dashboard:** server-rendered web pages that show the board, each review, what waits on you, and Trends. Running reviews update the open page live.
@@ -25,7 +25,7 @@ Intakt reviews code changes with a panel of AI models and can build changes from
 3. It opens a round and queues one job per reviewer, so the reviewers work in parallel.
 4. Each reviewer reads the change and returns a verdict with its findings.
 5. When every reviewer is in, the round is complete and its findings join the change's finding list.
-6. The quote check drops a finding when none of its quoted code fragments is in the change. The judge marks the rest act, defer or reject.
+6. The quote check drops a finding that quotes code when none of its quoted code fragments is in the change. A finding without a checkable quote is kept. The judge marks the rest act, defer or reject.
 7. The quorum policy decides the outcome, and the act list holds every kept P1 and P2 plus the P3s marked act.
 8. `intakt:review` prints the outcome and the act list. The dashboard shows the same review. A round in reviewer-for-loop mode, or of a pull request handed to Intakt, also publishes its status and a comment on GitHub, when a GitHub App is set.
 
