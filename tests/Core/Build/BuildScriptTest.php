@@ -242,9 +242,7 @@ final class BuildScriptTest extends TestCase
 
     public function testASessionLeaderKilledFromElsewhereAndNotYetReapedIsNotTakenForACutWhenItsChildOutlivesIt(): void
     {
-        // The CLI stops the build script so it cannot reap the leader, and then kills the leader.
-        // A helper resumes the script only once the leader and the watchdog are both zombies, because then the watchdog has decided, which forces the zombie order however late it runs.
-        // The helper finds the script's children in the kernel's proc children file (/proc/<pid>/task/<pid>/children), so the test relies on a kernel that provides it.
+        // The CLI stops the build script so it cannot reap the leader, and then kills the leader. A helper resumes the script only once the leader and the watchdog are both zombies, because then the watchdog has decided, which forces the zombie order however late it runs. The helper finds them in the kernel's proc children file (/proc/<pid>/task/<pid>/children), so the test needs a kernel that provides it.
         $this->givenTheCli(<<<'SH'
             parent=$PPID
             sleep 30 &
