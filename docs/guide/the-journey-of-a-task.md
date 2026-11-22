@@ -92,7 +92,7 @@ The Developer never pushes anything itself; it has no access to GitHub at all. I
 
 Git itself can check Intakt's signatures, but GitHub does not show these commits as "Verified": it checks such a signature only against a key on a person's account, and Intakt's GitHub App has none.
 
-If the branch conflicts with main, nothing is pushed. Today the run stops there and says how many files conflict (never their names). Sending the branch back to the Developer to merge main first, so that only a branch without conflicts is pushed, is planned.
+If the branch conflicts with main, nothing is pushed. Today the run stops there; when the push step itself finds the conflict, it says how many files conflict (never their names), and a conflict caught earlier by the check before the push stops the run without a count. Sending the branch back to the Developer to merge main first, so that only a branch without conflicts is pushed, is planned.
 
 One special case: if the change edits the **CI setup itself** and the new setup could reach more than a throwaway machine with read-only access, Intakt holds the push and asks you first, because GitHub runs a pushed CI setup straight away.
 

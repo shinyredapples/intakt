@@ -43,4 +43,4 @@ php bin/console intakt:ledger:events
 
 Each line shows when it was written, its id, its kind and its details; the step lines are the ones of kind `build_step_ended`. The push writes a few lines of its own just before its step line (`push_intended`, `branch_pushed` or `push_refused`, `change_intended`, `change_opened`).
 
-You don't have to read the ledger to see where a task is: `php bin/console intakt:status` shows the last step of each task, and the dashboard's page for the task (`/tasks/<project>/<issue number>`) shows every step of its latest run ([a tour of the dashboard](a-tour-of-the-dashboard.md)).
+You don't have to read the ledger to see where a task is: `php bin/console intakt:status` shows the last step of each task (for a task parked on a question it shows the previous step that passed, because it skips the `asked` line), and the dashboard's page for the task (`/tasks/<project>/<issue number>`) shows every step of its latest run ([a tour of the dashboard](a-tour-of-the-dashboard.md)).
