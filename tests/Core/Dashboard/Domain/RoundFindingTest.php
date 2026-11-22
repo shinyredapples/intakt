@@ -16,6 +16,26 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(QuoteNearLines::class)]
 final class RoundFindingTest extends TestCase
 {
+    public function testAFindingsHeadlineIsItsFirstSentence(): void
+    {
+        self::assertSame('The total in src/A.php is off by 1.5.', new RoundFinding('F1', 'P1', 'The total in src/A.php is off by 1.5. It drops the last item.')->headline());
+    }
+
+    public function testAFindingsHeadlineNeverEndsInsideAnInlineCodeSpan(): void
+    {
+        self::assertSame('Keep `Ready? yes` as the prompt.', new RoundFinding('F1', 'P2', 'Keep `Ready? yes` as the prompt. The answer is required.')->headline());
+    }
+
+    public function testAFindingsHeadlineEndsAtItsFirstLine(): void
+    {
+        self::assertSame('No test covers Cart::total', new RoundFinding('F1', 'P2', "No test covers Cart::total\nAdd one for an empty cart.")->headline());
+    }
+
+    public function testAFindingWithoutTextOrWithOnlyWhiteSpaceHasNoHeadline(): void
+    {
+        self::assertSame([null, null], [new RoundFinding('F1', null, null)->headline(), new RoundFinding('F1', 'P2', " \n\t ")->headline()]);
+    }
+
     public function testAFindingsPlaceReadsFileColonLine(): void
     {
         self::assertSame('src/A.php:7', new RoundFinding('F1', 'P1', 'A.', [], 'src/A.php', 7)->place());

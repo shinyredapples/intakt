@@ -1,0 +1,15 @@
+{#- Every pass and fix so far, the current step and what follows; the role of the current step stands on it. The judged round's live update replaces it by its id, so an outcome that names no next step keeps an empty, hidden holder. -#}
+{%- if steps is not empty -%}
+{%- set at = 0 -%}
+{%- for step in steps %}{% if step.state.value == 'now' %}{% set at = loop.index %}{% endif %}{% endfor -%}
+<ol class="review-path" id="review-path" style="--n:{{ steps|length }}" aria-label="Progress: {{ steps[at - 1].label }}, step {{ at }} of {{ steps|length }}">
+    {%- for step in steps %}
+    <li class="{{ step.state.value }}">
+        {%- if step.who is not null %}<span class="who">{{ include('dashboard/_role_image.html.twig', {stem: step.who.value, alt: step.who.label ~ ', now on ' ~ step.label, size: 56}, with_context = false) }}</span>{% endif -%}
+        {{ step.label }}{% if step.state.value != 'now' %}<span class="sr-only"> ({{ step.state.value }})</span>{% endif -%}
+    </li>
+    {%- endfor %}
+</ol>
+{%- else -%}
+<div id="review-path" hidden></div>
+{%- endif -%}

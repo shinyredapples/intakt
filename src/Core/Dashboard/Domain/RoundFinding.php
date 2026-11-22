@@ -47,6 +47,18 @@ final readonly class RoundFinding
         return [$this->id, ...$this->merged];
     }
 
+    // The first sentence of its first line, because a finding has no title of its own and a card shows one short line; null when no text is recorded, white space included.
+    public function headline(): ?string
+    {
+        $line = trim(preg_replace('/\R.*/su', '', trim((string) $this->text)) ?? '');
+        if ('' === $line) {
+            return null;
+        }
+
+        // A sentence ends at a mark followed by a space outside an inline code span, so a dot in a name (src/A.php, 1.5) or a question in `Ready? yes` never ends it.
+        return 1 === preg_match('/^(?:`[^`]*`|[^`]|`)*?[.!?](?=\s)/u', $line, $sentence) ? $sentence[0] : $line;
+    }
+
     public function place(): ?string
     {
         if (null === $this->file) {

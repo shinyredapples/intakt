@@ -8,6 +8,8 @@
 {% set rail_section = 'projects' %}
 
 {% block body %}
+{# The page's own stylesheet, linked here because the shared layout belongs to the frame. #}
+<link rel="stylesheet" href="{{ asset('styles/review.css') }}">
 {{ include('dashboard/components/breadcrumb.html.twig', {crumbs: [
     {label: 'Projects', href: path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::LIST_PROJECTS'))},
     {label: review.project, href: path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::LIST_REVIEWS'), {project: review.project})},
@@ -38,6 +40,7 @@
         {% else %}
         <p class="task-sentence muted">Task not recorded.</p>
         {% endif %}
+        {{ include('dashboard/_review_path.html.twig', {steps: review.path}, with_context = false) }}
         {# One kind label in this line, on the cost, because it is the one estimate among the facts (decision D5 of #2206). #}
         {{ include('dashboard/components/meta.html.twig', {facts: [
             {text: review.project},
