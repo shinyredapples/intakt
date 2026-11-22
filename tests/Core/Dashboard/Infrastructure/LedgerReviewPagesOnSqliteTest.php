@@ -37,26 +37,6 @@ final class LedgerReviewPagesOnSqliteTest extends KernelTestCase
 
     private DoctrineLedger $ledger;
 
-    protected function setUp(): void
-    {
-        $this->selects = new LedgerSelects();
-        $configuration = new Configuration();
-        $configuration->setMiddlewares([new Middleware($this->selects)]);
-        $this->connection = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'memory' => true], $configuration);
-
-        $original = self::getContainer()->get('doctrine');
-        self::assertInstanceOf(ManagerRegistry::class, $original);
-        $defaultManager = $original->getManager();
-        self::assertInstanceOf(EntityManagerInterface::class, $defaultManager);
-        $manager = new EntityManager($this->connection, $defaultManager->getConfiguration());
-        new SchemaTool($manager)->createSchema($manager->getMetadataFactory()->getAllMetadata());
-
-        $registry = self::createStub(ManagerRegistry::class);
-        $registry->method('getManager')->willReturn($manager);
-        $this->ledger = new DoctrineLedger($registry, new MockClock('2026-11-22 12:00:00'));
-        self::getContainer()->set(Ledger::class, $this->ledger);
-    }
-
     public function testTheLiveLookupReadsOnlyTheStartsOfTheRequestedRound(): void
     {
         $this->startReviewer('r1', 'first');
@@ -130,6 +110,26 @@ final class LedgerReviewPagesOnSqliteTest extends KernelTestCase
             self::assertStringContainsString('USING INDEX ledger_event_subject', $plan);
             self::assertStringNotContainsString('SCAN', $plan);
         }
+    }
+
+    protected function setUp(): void
+    {
+        $this->selects = new LedgerSelects();
+        $configuration = new Configuration();
+        $configuration->setMiddlewares([new Middleware($this->selects)]);
+        $this->connection = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'memory' => true], $configuration);
+
+        $original = self::getContainer()->get('doctrine');
+        self::assertInstanceOf(ManagerRegistry::class, $original);
+        $defaultManager = $original->getManager();
+        self::assertInstanceOf(EntityManagerInterface::class, $defaultManager);
+        $manager = new EntityManager($this->connection, $defaultManager->getConfiguration());
+        new SchemaTool($manager)->createSchema($manager->getMetadataFactory()->getAllMetadata());
+
+        $registry = self::createStub(ManagerRegistry::class);
+        $registry->method('getManager')->willReturn($manager);
+        $this->ledger = new DoctrineLedger($registry, new MockClock('2026-11-22 12:00:00'));
+        self::getContainer()->set(Ledger::class, $this->ledger);
     }
 
     private function startReviewer(string $round, string $model, bool $withSubject = true): void

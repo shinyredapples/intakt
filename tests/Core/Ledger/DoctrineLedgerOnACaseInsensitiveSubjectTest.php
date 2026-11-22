@@ -35,17 +35,6 @@ final class DoctrineLedgerOnACaseInsensitiveSubjectTest extends KernelTestCase
 {
     private DoctrineLedger $ledger;
 
-    protected function setUp(): void
-    {
-        $connection = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'memory' => true]);
-        $connection->executeStatement('CREATE TABLE ledger_event (position INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, id CHAR(36) NOT NULL, kind VARCHAR(32) NOT NULL, payload CLOB NOT NULL, recorded_at DATETIME NOT NULL, subject VARCHAR(255) DEFAULT NULL COLLATE NOCASE)');
-        $connection->executeStatement('CREATE INDEX ledger_event_subject ON ledger_event (kind, subject, position)');
-
-        $registry = self::createStub(ManagerRegistry::class);
-        $registry->method('getManager')->willReturn($this->managerOn($connection));
-        $this->ledger = new DoctrineLedger($registry, new MockClock('2026-11-22 12:00:00'));
-    }
-
     public function testAReadAboutASubjectThatDiffersOnlyInCaseReadsNothing(): void
     {
         self::assertTrue($this->ledger->append(new LedgerEvent(LedgerEventKind::ReviewerStarted, 'first', 'r1'))->succeeded());
@@ -58,6 +47,17 @@ final class DoctrineLedgerOnACaseInsensitiveSubjectTest extends KernelTestCase
         self::assertTrue($this->ledger->append(new LedgerEvent(LedgerEventKind::ReviewerStarted, 'first', 'r1'))->succeeded());
 
         self::assertSame(['first'], array_map(static fn (RecordedEvent $event): string => $event->event->payload, iterator_to_array($this->ledger->readOfKindAbout(LedgerEventKind::ReviewerStarted, 'r1'))));
+    }
+
+    protected function setUp(): void
+    {
+        $connection = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'memory' => true]);
+        $connection->executeStatement('CREATE TABLE ledger_event (position INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, id CHAR(36) NOT NULL, kind VARCHAR(32) NOT NULL, payload CLOB NOT NULL, recorded_at DATETIME NOT NULL, subject VARCHAR(255) DEFAULT NULL COLLATE NOCASE)');
+        $connection->executeStatement('CREATE INDEX ledger_event_subject ON ledger_event (kind, subject, position)');
+
+        $registry = self::createStub(ManagerRegistry::class);
+        $registry->method('getManager')->willReturn($this->managerOn($connection));
+        $this->ledger = new DoctrineLedger($registry, new MockClock('2026-11-22 12:00:00'));
     }
 
     private function managerOn(Connection $connection): EntityManagerInterface

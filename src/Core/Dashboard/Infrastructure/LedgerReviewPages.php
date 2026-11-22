@@ -90,21 +90,6 @@ final readonly class LedgerReviewPages
             ?? $this->latestStartIn($this->ledger->readOfKindWithoutSubject(LedgerEventKind::ReviewerStarted), $round, $reviewer);
     }
 
-    private function latestStartIn(RecordedEvents $starts, string $round, string $reviewer): ?ReviewerOutcome
-    {
-        $started = null;
-
-        foreach ($starts as $recorded) {
-            $row = $this->payloads->reviewerRowOf($recorded);
-
-            if ($row instanceof ReviewerStarted && $row->round === $round && $row->reviewer === $reviewer) {
-                $started = new ReviewerOutcome($row->reviewer, $row->role, $row->tier->value, $recorded->recordedAt, $row->model);
-            }
-        }
-
-        return $started;
-    }
-
     /**
      * @return list<string>
      */
@@ -121,6 +106,21 @@ final readonly class LedgerReviewPages
     public function boardOf(RecordedEvents $events): Board
     {
         return new Board($this->rounds($events)->reviews(), $this->tasks($events));
+    }
+
+    private function latestStartIn(RecordedEvents $starts, string $round, string $reviewer): ?ReviewerOutcome
+    {
+        $started = null;
+
+        foreach ($starts as $recorded) {
+            $row = $this->payloads->reviewerRowOf($recorded);
+
+            if ($row instanceof ReviewerStarted && $row->round === $round && $row->reviewer === $reviewer) {
+                $started = new ReviewerOutcome($row->reviewer, $row->role, $row->tier->value, $recorded->recordedAt, $row->model);
+            }
+        }
+
+        return $started;
     }
 
     // A task is in flight while its latest step passed short of the push, because a build run stops at its first failed step and ends with its push, so either leaves the task at rest (#2732).
