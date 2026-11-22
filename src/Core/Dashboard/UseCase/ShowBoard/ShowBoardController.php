@@ -17,6 +17,7 @@ use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Watcher\Contract\FailingMain;
 use Intakt\Core\Watcher\Contract\FailingMains;
+use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -37,6 +38,7 @@ final readonly class ShowBoardController
         private SampleChangeSource $sample,
         private UrlGeneratorInterface $urls,
         private OwnerNotices $notices,
+        private ClockInterface $clock,
     ) {
     }
 
@@ -61,6 +63,8 @@ final readonly class ShowBoardController
             'failing' => array_map($this->redacted(...), $this->failingHeads->in($events)),
             'failing_mains' => array_map($this->redactedMain(...), $this->failingMains->in($events)),
             'working' => $board->whoIsWorking(),
+            'waiting' =>$this->notices->stillRunningOldestFirst(),
+            'now' => $this->clock->now(),
             'columns' => $board->shownColumns(),
             'coming_next' => $board->comingNext(),
         ])));
@@ -77,7 +81,7 @@ final readonly class ShowBoardController
             || str_contains($request->headers->get('User-Agent') ?? '', 'Mobi');
     }
 
-    // A quiet install (nothing waits on the owner, nothing runs) opens its newest review on a phone, because an empty Waiting on you shows nothing of the product (#3142); the notices are read last, so a busy board never asks the database.
+    // A quiet install (nothing waits on the owner, nothing runs) opens its newest review on a phone, because an empty Waiting on you shows nothing of the product (#3142); the notices are read last, so a busy phone is not sent to the database twice.
     private function quietRoundOf(Board $board): ?RedirectResponse
     {
         $newest = $board->newestReviewAtRest();

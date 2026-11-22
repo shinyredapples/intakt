@@ -4,30 +4,26 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\Domain;
 
-// Plain code over the lanes and Waiting on you, never a model, so the line a newcomer reads first says only what the board holds.
+// Plain code over the open rounds, never a model, so the line a newcomer reads first says only what the board holds.
 final readonly class Headline
 {
     // Only reviewers are lanes until the build lane lands, so every running change is the Code reviewers' (docs/design/06-decisions.md, decision 23).
     private const string REVIEWERS = 'Code reviewers';
 
-    // Two, because the headline holds at most two clauses and the waiting count (#1942); the rest is counted.
+    // Two, because the headline holds at most two clauses (#1942); the rest is counted.
     private const int NAMED = 2;
 
     // Cut because a long name would stretch the line over several lines on a wide screen too; the lanes and cards show it whole.
     private const int NAME_WIDTH = 32;
 
-    /**
-     * @param list<Review> $waiting
-     */
     public function __construct(
         private WhoIsWorking $working,
-        private array $waiting,
         private int $cards,
         private int $builds = 0,
     ) {
     }
 
-    // The sentence before the waiting count, apart so the page can mark the count with the needs-you style.
+    // What the board runs; nothing of what waits, because the Needs you card says that (UX2 home, #3326).
     public function opening(): string
     {
         if (0 === $this->cards) {
@@ -55,35 +51,10 @@ final readonly class Headline
         return 0 === $this->cards;
     }
 
-    // The first lane's round, because the opening names that lane's change first, so the lead opens the review it names (#2207, D1).
+    // The first open round, because the opening names its change first, so the lead opens the review it names (#2207, D1).
     public function runningRound(): ?string
     {
-        return array_first($this->working->lanes())?->roundId;
-    }
-
-    public function waitingCount(): int
-    {
-        return count($this->waiting);
-    }
-
-    // Without the number, because the page prints the number as the needs-you count; empty on a fresh install, whose opening says it all.
-    public function waitingWords(): string
-    {
-        if (0 === $this->cards) {
-            return '';
-        }
-
-        return match ($this->waitingCount()) {
-            0 => 'Nothing needs you.',
-            1 => 'needs you:',
-            default => 'need you:',
-        };
-    }
-
-    // The first card of Waiting on you, because the headline names it and the Waiting on you page lists only owner notices so far.
-    public function firstWaiting(): ?Review
-    {
-        return array_first($this->waiting);
+        return array_first($this->working->activeRounds())?->round;
     }
 
     private function running(): string
@@ -109,29 +80,29 @@ final readonly class Headline
     {
         $places = [];
 
-        foreach ($this->working->lanes() as $lane) {
-            $places[$this->placeKey($lane)] ??= $this->place($lane);
+        foreach ($this->working->activeRounds() as $round) {
+            $places[$this->placeKey($round)] ??= $this->place($round);
         }
 
         return array_values($places);
     }
 
     // Length-prefixed so that no two names meet in one key, and a string key so that "1" and "01" stay apart.
-    private function placeKey(Lane $lane): string
+    private function placeKey(ReviewedRound $round): string
     {
-        if ('' === $lane->change) {
-            return 'round:'.strlen($lane->roundId).':'.$lane->roundId;
+        if ('' === $round->change) {
+            return 'round:'.strlen($round->round).':'.$round->round;
         }
 
-        return 'change:'.strlen($lane->project).':'.$lane->project.strlen($lane->change).':'.$lane->change;
+        return 'change:'.strlen($round->project).':'.$round->project.strlen($round->change).':'.$round->change;
     }
 
     // A round from before the ledger named its change has no change, so the round names it, as on its board card.
-    private function place(Lane $lane): string
+    private function place(ReviewedRound $round): string
     {
-        $name = '' === $lane->change ? 'round '.$this->short($lane->roundId) : 'change '.$this->short($lane->change);
+        $name = '' === $round->change ? 'round '.$this->short($round->round) : 'change '.$this->short($round->change);
 
-        return $name.' of '.$this->short($lane->project);
+        return $name.' of '.$this->short($round->project);
     }
 
     /**
