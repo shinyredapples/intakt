@@ -71,8 +71,9 @@ final readonly class GitHubChangeOpener implements ChangeOpening
     }
 
     // Every listed match is checked, never only the first, because the branch can have open pull requests to several bases and a push moves the head of each.
+    // The answer maps the number of each of this App's own open pull requests of the branch to its unread `base`, read only by the pick, so that every match's author is checked first.
     /**
-     * @return array<int, mixed> the base ref of each of this App's own open pull requests of the branch, by number
+     * @return array<int, mixed>
      */
     private function ownPullRequestsOf(RepositoryAddress $repository, string $branch): array
     {
@@ -82,7 +83,7 @@ final readonly class GitHubChangeOpener implements ChangeOpening
             $pull = is_array($entry) ? $entry : [];
 
             if ($this->isOfBranch($pull, $branch)) {
-                $own[$this->ownNumberOf($pull)] = is_array($pull['base'] ?? null) ? ($pull['base']['ref'] ?? null) : null;
+                $own[$this->ownNumberOf($pull)] = $pull['base'] ?? null;
             }
         }
 
@@ -95,17 +96,14 @@ final readonly class GitHubChangeOpener implements ChangeOpening
      */
     private function ownNumberToBase(array $own, string $base): ?int
     {
-        foreach ($own as $number => $ref) {
-            if (!is_string($ref) || '' === $ref) {
-                throw new ForgeWriteFailed('GitHub listed this App\'s open pull request of the branch without its base, so the branch is left alone.');
-            }
+        return array_find_key($own, fn (mixed $listedBase): bool => $this->refOf($listedBase) === $base);
+    }
 
-            if ($ref === $base) {
-                return $number;
-            }
-        }
+    private function refOf(mixed $listedBase): string
+    {
+        $ref = is_array($listedBase) ? ($listedBase['ref'] ?? null) : null;
 
-        return null;
+        return is_string($ref) && '' !== $ref ? $ref : throw new ForgeWriteFailed('GitHub listed this App\'s open pull request of the branch without its base, so the branch is left alone.');
     }
 
     // One page only, because offset pages read one after the other can shift and skip a pull request that stays open throughout; one answer is one listing, and only one that is not full shows it holds them all.
