@@ -20,6 +20,17 @@ five minutes: a live review with one provider key or Hugging Face token, or, wit
 back. The larger aim comes after it: you give Intakt a spec, and Intakt turns it into small tasks, builds each
 one and merges what passes review.
 
+## The first release: the review loop
+
+What the first release does, as built for the hackathon (deadline 2026-11-22, [spec](spec.md)):
+
+- Point Intakt at a change, a branch of a local repository. A configurable panel of reviewers, each a provider, a model tier and a prompt through Symfony AI's Platform, returns structured JSON verdicts.
+- Findings keep their ids across rounds, enforced in code, so reviewers cannot move the goalposts. A judge step tells the builder what to act on, and only a P3 finding can be deferred or rejected. The outcome and the act list agree: a round sent back as `changes` always names a finding to act on, and a reviewer whose findings are all P3s the judge deferred or rejected counts as approving, with follow-ups.
+- Agents start reviews and read findings through an MCP server.
+- A small live dashboard shows each round as it streams.
+- Every figure says what kind it is: token counts the provider reported are `measured`, rounds and findings from the ledger are `counted`, and a cost from your price list is `estimated`, with the date of the prices. Figures of different kinds are never added into one total.
+- `docker compose up` with a sample repository and your API keys (or a Hugging Face token) runs it in five minutes.
+
 ## The timeline
 
 The repository's first commit with content is from 2026-10-26, the first day of the hackathon; the commit of
@@ -40,19 +51,19 @@ the dates from [the journey's milestones](journey.md#milestones) and, for 2026-1
 - **The five-minute start and the keyless demo:** clone, `docker compose up`, and a live review of the sample change,
   which needs one provider key or Hugging Face token; without one, the demo plays a recorded real review of the sample
   change instead, calling no model ([five-minute start](../README.md#five-minute-start),
-  [timed run](../README.md#timed-run)).
+  [timed run](bench.md#timed-run)).
 - **The review page:** every round with its reviewers, their verdicts, the findings and the judge's call on each
   ([reading a verdict](user/README.md#reading-a-verdict), [a tour of the dashboard](guide/a-tour-of-the-dashboard.md)).
 - **Trends:** figures about the reviews of every project as tiles ([the Trends page](user/README.md#the-trends-page)).
 - **The review bench:** a panel on Claude and GPT caught all 5 planted defects in each of 3 runs (15 of 15, measured 2026-11-21, 3 false alarms); on open models the panel caught 11 of 15 (2026-11-16) with 2 false alarms
-  ([review bench](../README.md#review-bench)).
+  ([review bench](bench.md#review-bench)).
 - **MCP tools and the agent skill:** your agent starts reviews, reads the findings and loops until the verdict is clean
   ([MCP](user/mcp.md), [the skill](../skills/intakt-review/README.md)).
 - **The quality gates:** CI runs `bin/check`, and the journeys separately with `bin/check --journeys`, on pull requests
   from this repository and on pushes to main; every CI job skips pull requests from forks
   ([quality gates](architecture/quality-gates.md)).
 - **Upstream reports:** likely bugs in Symfony, Symfony AI and other libraries, each with a minimal reproduction, and
-  fixes that are in Symfony 8.2.0-BETA2 ([found and fixed upstream](../README.md#found-and-fixed-upstream),
+  fixes that are in Symfony 8.2.0-BETA2 ([found and fixed upstream](../upstream/README.md#found-and-fixed-upstream),
   [upstream reproductions](../upstream/README.md), "Found in the beta" on
   [Highlights](https://shinyredapples.github.io/intakt/)).
 - **Built by an AI loop:** the repository itself, in figures and examples ([showcase](showcase/README.md)).
