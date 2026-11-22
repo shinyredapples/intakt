@@ -30,6 +30,7 @@ namespace Intakt\Tests\Core\HandBack\Infrastructure {
     use Intakt\Core\HandBack\Domain\DependencySnapshotKey;
     use Intakt\Core\HandBack\Infrastructure\DependencySnapshotCountRefused;
     use Intakt\Core\HandBack\Infrastructure\DependencySnapshotLease;
+    use Intakt\Core\HandBack\Infrastructure\DependencySnapshotLinks;
     use Intakt\Core\HandBack\Infrastructure\DependencySnapshots;
     use Intakt\Core\HandBack\Infrastructure\DependencySnapshotUses;
     use PHPUnit\Framework\Attributes\CoversClass;
@@ -48,6 +49,7 @@ namespace Intakt\Tests\Core\HandBack\Infrastructure {
     #[CoversClass(DependencySnapshotLease::class)]
     #[CoversClass(DependencySnapshotCountRefused::class)]
     #[CoversClass(DependencySnapshotUses::class)]
+    #[CoversClass(DependencySnapshotLinks::class)]
     #[UsesClass(DependencySnapshotKey::class)]
     final class DependencySnapshotsTest extends TestCase
     {
@@ -351,7 +353,7 @@ namespace Intakt\Tests\Core\HandBack\Infrastructure {
 
         private function storeKeeping(int $count): DependencySnapshots
         {
-            return new DependencySnapshots($this->store, $count, new LockFactory(new FlockStore($this->folder.'/locks')), new Filesystem(), new DependencySnapshotUses(new Filesystem()));
+            return new DependencySnapshots($this->store, $count, new LockFactory(new FlockStore($this->folder.'/locks')), new Filesystem(), new DependencySnapshotUses(new Filesystem()), new DependencySnapshotLinks(new Filesystem()));
         }
 
         private function key(string $lock): DependencySnapshotKey

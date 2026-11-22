@@ -37,6 +37,7 @@ final readonly class DependencySnapshots
         private LockFactory $locks,
         private Filesystem $filesystem,
         private DependencySnapshotUses $uses,
+        private DependencySnapshotLinks $links,
     ) {
         if ($count < 1) {
             throw DependencySnapshotCountRefused::belowOne($count);
@@ -114,99 +115,12 @@ final readonly class DependencySnapshots
     {
         $incoming = $this->directory.'/'.self::INCOMING;
         $this->filesystem->mirror($install, $incoming);
-        $this->keepLinksInside($incoming, $install);
+        $this->links->keepInside($incoming, $install);
         $this->makeReadOnly($incoming);
 
         if (!@rename($incoming, $this->directory.'/'.$key->value)) {
             throw new IOException(sprintf('the snapshot %s could not be published from %s', $key->value, self::INCOMING), path: $incoming);
         }
-    }
-
-    // A link into the install is rebased to a relative one, so it still works when the install is gone; a link out of it cannot be kept and refuses the save.
-    private function keepLinksInside(string $copy, string $install): void
-    {
-        $roots = array_values(array_unique(array_filter([rtrim($install, '/'), realpath($install)])));
-
-        foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($copy, FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::SELF_FIRST) as $entry) {
-            assert($entry instanceof SplFileInfo);
-
-            if (!$entry->isLink()) {
-                continue;
-            }
-
-            $target = $entry->getLinkTarget();
-            $own = substr($entry->getPathname(), strlen($copy) + 1);
-            $inside = $this->insideTheInstall($target, dirname($own), $roots);
-
-            if (null === $inside) {
-                throw new IOException(sprintf('the link %s points outside the install and cannot be kept in a snapshot', $own), path: $entry->getPathname());
-            }
-
-            if (str_starts_with($target, '/')) {
-                $this->filesystem->remove($entry->getPathname());
-                $this->filesystem->symlink($this->relativeFrom(dirname($own), $inside), $entry->getPathname());
-            }
-        }
-    }
-
-    /**
-     * @param list<string> $roots
-     *
-     * @return ?string the target's path within the install, null when it lies outside
-     */
-    private function insideTheInstall(string $target, string $folder, array $roots): ?string
-    {
-        if (str_starts_with($target, '/')) {
-            foreach ($roots as $root) {
-                if (str_starts_with($target, $root.'/')) {
-                    $target = substr($target, strlen($root) + 1);
-
-                    return $this->normalized($target);
-                }
-            }
-
-            return null;
-        }
-
-        return $this->normalized('.' === $folder ? $target : $folder.'/'.$target);
-    }
-
-    private function normalized(string $path): ?string
-    {
-        $parts = [];
-
-        foreach (explode('/', $path) as $part) {
-            if ('' === $part || '.' === $part) {
-                continue;
-            }
-
-            if ('..' === $part) {
-                if ([] === $parts) {
-                    return null;
-                }
-
-                array_pop($parts);
-
-                continue;
-            }
-
-            $parts[] = $part;
-        }
-
-        return implode('/', $parts);
-    }
-
-    private function relativeFrom(string $folder, string $path): string
-    {
-        $from = '.' === $folder ? [] : explode('/', $folder);
-        $to = explode('/', $path);
-
-        while ([] !== $from && [] !== $to && $from[0] === $to[0] && count($to) > 1) {
-            array_shift($from);
-            array_shift($to);
-        }
-
-        return implode('/', [...array_fill(0, count($from), '..'), ...$to]);
     }
 
     private function makeReadOnly(string $folder): void
