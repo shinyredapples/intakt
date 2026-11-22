@@ -114,9 +114,8 @@ final class LiveWaitingPageTest extends KernelTestCase
 
         $this->pageOn($failing)->publishTheWaitingPage();
 
-        $logs = $this->log->cleanLogs();
-        self::assertCount(1, $logs);
-        self::assertSame(['warning', 'The Waiting on you page was not published.'], [$logs[0][0], $logs[0][1]]);
+        $logs = array_map(static fn (mixed $record): array => is_array($record) ? [$record[0] ?? null, $record[1] ?? null] : [], $this->log->cleanLogs());
+        self::assertSame([['warning', 'The Waiting on you page was not published.']], $logs);
     }
 
     public function testAWorkerThatFindsThePageLockTakenLeavesThePageToItsHolder(): void

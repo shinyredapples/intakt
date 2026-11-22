@@ -205,7 +205,7 @@ final class WaitingPageLiveUpdatesTest extends DashboardPageTestCase
         $page = $this->browser->request('GET', '/waiting');
 
         self::assertResponseIsSuccessful();
-        self::assertSame(['A live dashboard update was not published.'], array_map(static fn (array $record): mixed => $record[1], $this->hubLog->cleanLogs()));
+        self::assertSame(['A live dashboard update was not published.'], array_map(static fn (mixed $record): mixed => is_array($record) ? $record[1] ?? null : null, $this->hubLog->cleanLogs()));
         self::assertSame([], $this->published);
         self::assertCount(1, $page->filter('#waiting-list .wait-item'));
     }
