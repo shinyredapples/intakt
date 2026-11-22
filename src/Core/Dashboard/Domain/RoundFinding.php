@@ -79,6 +79,11 @@ final readonly class RoundFinding
         return null !== $headline && $headline !== $this->trimmedText();
     }
 
+    public function urgency(): ?FindingUrgency
+    {
+        return FindingUrgency::of($this->severity);
+    }
+
     public function place(): ?string
     {
         if (null === $this->file) {

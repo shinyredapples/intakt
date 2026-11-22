@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\Domain;
 
+use Intakt\Core\Dashboard\Domain\FindingUrgency;
 use Intakt\Core\Dashboard\Domain\RoundFinding;
 use Intakt\Core\Review\Contract\NearLine;
 use Intakt\Core\Review\Contract\QuoteNearLines;
@@ -12,6 +13,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(RoundFinding::class)]
+#[CoversClass(FindingUrgency::class)]
 #[UsesClass(NearLine::class)]
 #[UsesClass(QuoteNearLines::class)]
 final class RoundFindingTest extends TestCase
@@ -105,6 +107,11 @@ final class RoundFindingTest extends TestCase
             new RoundFinding('F1', 'P2', "\u{00A0}")->goesOnAfterItsHeadline(),
             new RoundFinding('F1', 'P2', null)->goesOnAfterItsHeadline(),
         ]);
+    }
+
+    public function testAFindingsUrgencyReadsItsSeverityAsHowSoonToFixIt(): void
+    {
+        self::assertSame(['Urgent', 'Should fix', 'Nice to have', null, null], array_map(static fn (?string $severity): ?string => new RoundFinding('F1', $severity, 'A.')->urgency()?->words(), ['P1', 'P2', 'P3', 'P9', null]));
     }
 
     public function testAFindingsPlaceReadsFileColonLine(): void
