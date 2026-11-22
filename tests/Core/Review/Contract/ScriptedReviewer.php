@@ -32,7 +32,7 @@ final readonly class ScriptedReviewer
             ->invoke('reviewer', 'Review the change.', [PlatformSubscriber::RESPONSE_FORMAT => ReviewerAnswer::class]);
     }
 
-    // Read as the reviewer agent reads an answer: the answer document mapped to the contract verdict, failures turned into VerdictUnreadable.
+    // Mapped and parsed as ReviewerPrompt::verdictIn() does, because the contract parser cannot name the answer document.
     public function verdictFor(string|ResultInterface $output): Verdict
     {
         $result = $this->answering($output);

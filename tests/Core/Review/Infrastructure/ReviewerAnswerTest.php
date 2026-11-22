@@ -22,7 +22,7 @@ use Symfony\AI\Platform\StructuredOutput\ResponseFormatFactory;
 #[UsesClass(Evidence::class)]
 final class ReviewerAnswerTest extends TestCase
 {
-    // Taken from main before the answer document existed, when the contract Verdict was the structured-output class.
+    // Taken from main before the answer document existed, because the schema the reviewers get must not change with it.
     private const string SCHEMA_FROM_MAIN = __DIR__.'/fixtures/verdict-schema.json';
 
     public function testTheVerdictJsonSchemaMatchesTheOneTakenFromMain(): void

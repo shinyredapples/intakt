@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\Contract;
 
-use Intakt\Core\Review\Infrastructure\ReviewerAnswer\Verdict as ReviewerAnswer;
+use Intakt\Core\Review\Infrastructure\ReviewerAnswer\Verdict;
 use JsonSchema\Validator;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\DataProviderExternal;
@@ -19,7 +19,7 @@ final class VerdictSchemaTest extends TestCase
 
     public function testTheSchemaFileIsTheSchemaStructuredOutputSendsForTheVerdictClass(): void
     {
-        $sent = new ResponseFormatFactory()->create(ReviewerAnswer::class)['json_schema']['schema'];
+        $sent = new ResponseFormatFactory()->create(Verdict::class)['json_schema']['schema'];
 
         self::assertSame(json_decode((string) file_get_contents(self::SCHEMA), true, flags: JSON_THROW_ON_ERROR), $sent);
     }
