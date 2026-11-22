@@ -8,6 +8,7 @@ use Intakt\Core\Review\Contract\PanelVerdict;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundReviewer;
+use Intakt\Core\Review\Infrastructure\ReviewerAnswer\Verdict as ReviewerAnswer;
 use Symfony\Component\DependencyInjection\Attribute\Target;
 use Symfony\Component\Serializer\Encoder\JsonEncoder;
 use Symfony\Component\Serializer\SerializerInterface;
@@ -42,6 +43,7 @@ final readonly class StoredVerdicts
     {
         $json = $reviewer->verdictJson();
 
-        return null === $json ? null : $this->serializer->deserialize($json, Verdict::class, JsonEncoder::FORMAT);
+        // Read as the reviewer's answer format, because a stored round holds the JSON that format defines.
+        return null === $json ? null : $this->serializer->deserialize($json, ReviewerAnswer::class, JsonEncoder::FORMAT)->toVerdict();
     }
 }
