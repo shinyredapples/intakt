@@ -27,6 +27,7 @@ const PAGES = [
   { name: 'reviews', path: '/reviews' },
   { name: 'search', path: '/reviews', search: true },
   { name: 'setup', path: '/setup' },
+  { name: 'status', path: '/lanes' },
   { name: 'trends', path: '/trends' },
   { name: 'waiting', path: '/waiting' },
 ];

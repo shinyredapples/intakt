@@ -1,0 +1,32 @@
+{% extends 'dashboard/base.html.twig' %}
+
+{% block title %}Status - Intakt{% endblock %}
+
+{% block body %}
+{{ include('dashboard/components/breadcrumb.html.twig', {crumbs: [
+    {label: 'Now', href: path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_BOARD'), {board: 1})},
+    {label: 'Status'},
+]}, with_context = false) }}
+<div class="page-head">
+    <div>
+        <h1>Status</h1>
+        <p class="lead">{{ working.statusLine }}</p>
+    </div>
+</div>
+{# Reviewers are the only lanes with a source today, so the page lists them; slots, runners and budgets join once they have one. #}
+{% if working.lanes is empty %}
+<p class="working-none" id="working">{{ nobody_working }}</p>
+{% else %}
+<section class="working" id="working" aria-label="Who is working">
+    <div class="lanes">
+    {% for lane in working.lanes %}
+        <a class="lane" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_REVIEW'), {round: lane.roundId}) }}" data-project="{{ lane.project }}">
+            <div class="who"><span class="dot ok"></span>{{ include('dashboard/components/character.html.twig', {character: constant('Intakt\\Core\\Dashboard\\Domain\\Character::CodeReviewer'), size: 24}, with_context = false) }}{{ lane.role }}, {{ lane.tier }}<span class="elapsed">since <time datetime="{{ lane.since|date('c', 'UTC') }}">{{ lane.since|date('H:i', 'UTC') }} UTC</time></span></div>
+            <div class="what">{{ lane.change }}</div>
+            <p class="meta"><span>{{ lane.project }}</span>{% if lane.round is not null %}<span>Round {{ lane.round }}</span>{% endif %}</p>
+        </a>
+    {% endfor %}
+    </div>
+</section>
+{% endif %}
+{% endblock %}

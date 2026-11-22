@@ -11,10 +11,10 @@ use PHPUnit\Framework\TestCase;
 #[CoversNothing]
 final class WhoIsWorkingStylesTest extends TestCase
 {
-    public function testTheSummaryIsAtLeast44PxTallAndAtLeast48OnAPhone(): void
+    public function testTheStatusLineIsAtLeast44PxTallAndAtLeast48OnAPhone(): void
     {
-        self::assertMatchesRegularExpression('/min-height:\s*44px/', $this->rule('.working summary', $this->sheet()));
-        self::assertMatchesRegularExpression('/min-height:\s*48px/', $this->rule('.working summary', $this->phoneBlock()));
+        self::assertMatchesRegularExpression('/min-height:\s*44px/', $this->rule('.status-line', $this->sheet()));
+        self::assertMatchesRegularExpression('/min-height:\s*48px/', $this->rule('.status-line', $this->phoneBlock()));
     }
 
     public function testTheLaneTextUsesTheFifteenPixelTokenAtLeast(): void
@@ -44,8 +44,8 @@ final class WhoIsWorkingStylesTest extends TestCase
         self::assertMatchesRegularExpression('/rotate\(180deg\)/', $this->rule('details[open] > summary .chev', $this->sheet()));
     }
 
-    // A tinted line with a hover would look like the strip that opens, which it is not.
-    public function testTheNobodyIsWorkingLineIsMutedWithoutTintAtTheSummarysHeight(): void
+    // A tinted line with a hover would look like a link, which it is not.
+    public function testTheNobodyIsWorkingLineIsMutedWithoutTintAtTheStatusLinesHeight(): void
     {
         $rule = $this->rule('.working-none', $this->sheet());
 

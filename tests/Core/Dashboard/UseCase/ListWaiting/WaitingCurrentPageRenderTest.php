@@ -31,7 +31,7 @@ final class WaitingCurrentPageRenderTest extends DashboardPageTestCase
 
         $page = $this->browser->request('GET', '/waiting?project=sample');
 
-        self::assertSame(['Waiting on you'], $page->filter('nav [aria-current="page"]')
+        self::assertSame(['You'], $page->filter('nav [aria-current="page"]')
             ->each(static fn (Crawler $entry): string => trim($entry->text())));
     }
 }

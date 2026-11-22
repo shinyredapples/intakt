@@ -31,6 +31,16 @@ final readonly class WhoIsWorking
         return count($this->lanes);
     }
 
+    // The quiet line of the shell: reviewers are the only lanes with a source today, so it counts them and names no total.
+    public function statusLine(): string
+    {
+        return match ($this->working()) {
+            0 => 'Quiet · nobody working',
+            1 => 'Running smoothly · 1 reviewer working',
+            default => sprintf('Running smoothly · %d reviewers working', $this->working()),
+        };
+    }
+
     /**
      * @return list<Lane>
      */
