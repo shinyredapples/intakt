@@ -149,9 +149,7 @@ final readonly class LocalGitForge implements Forge, AuthorTrust
 
     public function fileAt(CommitId $commit, string $path): FileContent
     {
-        $bytes = $this->blob($this->blobAt($commit, $path));
-
-        return $this->binaryFiles->isBinary($bytes) ? FileContent::binary($path, $commit, strlen($bytes)) : new FileContent($path, $commit, $bytes);
+        return FileContent::ofBytes($path, $commit, $this->blob($this->blobAt($commit, $path)));
     }
 
     public function baseCommit(): CommitId

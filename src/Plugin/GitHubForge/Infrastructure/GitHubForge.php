@@ -108,12 +108,7 @@ final readonly class GitHubForge implements Forge, ForgeWrites
         $segments = array_map(rawurlencode(...), explode('/', $path));
         $content = $this->get($address->repositoryPath().'/contents/'.implode('/', $segments), self::RAW, ['ref' => $head->hash]);
 
-        if (null === $content) {
-            throw FileNotFoundAtHead::at($path, $head);
-        }
-
-        // Named by its size like the local forge does, so every forge keeps one meaning of a binary file.
-        return str_contains($content, "\0") ? FileContent::binary($path, $head, strlen($content)) : new FileContent($path, $head, $content);
+        return null === $content ? throw FileNotFoundAtHead::at($path, $head) : FileContent::ofBytes($path, $head, $content);
     }
 
     public function postReview(string $project, Change $change, ReviewComment $comment): void
