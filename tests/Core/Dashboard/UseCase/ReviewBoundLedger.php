@@ -43,6 +43,11 @@ final readonly class ReviewBoundLedger implements Ledger
         return $this->ledger->readOfKindAbout($kind, $subject);
     }
 
+    public function readOfKindWithoutSubject(LedgerEventKind $kind): RecordedEvents
+    {
+        return $this->ledger->readOfKindWithoutSubject($kind);
+    }
+
     /**
      * @param list<string> $texts
      */

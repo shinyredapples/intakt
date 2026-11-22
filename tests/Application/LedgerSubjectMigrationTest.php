@@ -8,12 +8,19 @@ use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\DriverManager;
 use Doctrine\DBAL\Schema\Schema;
 use Doctrine\Migrations\AbstractMigration;
+use Doctrine\ORM\EntityManager;
+use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\Persistence\ManagerRegistry;
 use DoctrineMigrations\Version20261028120000;
 use DoctrineMigrations\Version20261122110000;
+use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
+use Intakt\Core\Ledger\Contract\Ledger;
+use Intakt\Core\Ledger\Infrastructure\DoctrineLedger;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Group;
 use Psr\Log\NullLogger;
+use Symfony\Component\Clock\MockClock;
 
 // Covers nothing because the migrations bundle loads migrations by path, so their classes do not exist when PHPUnit reads the attributes.
 #[Group('persistence')]
@@ -32,6 +39,18 @@ final class LedgerSubjectMigrationTest extends KernelTestCase
         self::assertSame([null], $connection->fetchFirstColumn('SELECT subject FROM ledger_event'));
         self::assertSame(self::TRIGGERS, $this->triggersOf($connection));
         self::assertContains('ledger_event_subject', $this->indexesOf($connection));
+    }
+
+    public function testAReviewerStartStoredBeforeTheMigrationIsStillTheStartedReviewerAfterIt(): void
+    {
+        $connection = $this->ledgerOnSqlite();
+        $connection->executeStatement("INSERT INTO ledger_event (id, kind, payload, recorded_at) VALUES ('0190f000-0000-7000-8000-000000000001', 'reviewer_started', '{\"round\":\"r1\",\"reviewer\":\"reviewer\",\"role\":\"correctness\",\"tier\":\"standard\",\"model\":\"stored before\"}', '2026-11-22 12:00:00')");
+
+        $this->up(new Version20261122110000($connection, new NullLogger()), $connection);
+
+        $started = $this->pagesOn($connection)->startedReviewerOf('r1', 'reviewer');
+        self::assertSame('stored before', $started?->model);
+        self::assertSame('correctness', $started->role);
     }
 
     public function testTheWayBackDropsTheSubjectAndItsIndexAndKeepsTheAppendOnlyTriggers(): void
@@ -63,6 +82,22 @@ final class LedgerSubjectMigrationTest extends KernelTestCase
         $this->up(new Version20261028120000($connection, new NullLogger()), $connection);
 
         return $connection;
+    }
+
+    private function pagesOn(Connection $connection): LedgerReviewPages
+    {
+        $original = self::getContainer()->get('doctrine');
+        self::assertInstanceOf(ManagerRegistry::class, $original);
+        $defaultManager = $original->getManager();
+        self::assertInstanceOf(EntityManagerInterface::class, $defaultManager);
+        $registry = self::createStub(ManagerRegistry::class);
+        $registry->method('getManager')->willReturn(new EntityManager($connection, $defaultManager->getConfiguration()));
+        self::getContainer()->set(Ledger::class, new DoctrineLedger($registry, new MockClock('2026-11-22 12:00:00')));
+
+        $pages = self::getContainer()->get(LedgerReviewPages::class);
+        self::assertInstanceOf(LedgerReviewPages::class, $pages);
+
+        return $pages;
     }
 
     /**

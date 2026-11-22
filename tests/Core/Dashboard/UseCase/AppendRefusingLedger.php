@@ -36,6 +36,11 @@ final readonly class AppendRefusingLedger implements Ledger
         return $this->reads->readOfKindAbout($kind, $subject);
     }
 
+    public function readOfKindWithoutSubject(LedgerEventKind $kind): RecordedEvents
+    {
+        return $this->reads->readOfKindWithoutSubject($kind);
+    }
+
     /**
      * @param list<string> $texts
      */

@@ -84,9 +84,16 @@ final readonly class LedgerReviewPages
     // Read from the round's own reviewer starts (the subject index), because a live update goes out for each streamed text and must not read the starts of every other round; the latest start wins, as on the page, and null means the reviewer has not started in that round.
     public function startedReviewerOf(string $round, string $reviewer): ?ReviewerOutcome
     {
+        return $this->latestStartIn($this->ledger->readOfKindAbout(LedgerEventKind::ReviewerStarted, $round), $round, $reviewer)
+            // Only starts stored before the ledger had a subject lack one, so this set stops growing at the upgrade and a reviewer running across it keeps its heading.
+            ?? $this->latestStartIn($this->ledger->readOfKindWithoutSubject(LedgerEventKind::ReviewerStarted), $round, $reviewer);
+    }
+
+    private function latestStartIn(RecordedEvents $starts, string $round, string $reviewer): ?ReviewerOutcome
+    {
         $started = null;
 
-        foreach ($this->ledger->readOfKindAbout(LedgerEventKind::ReviewerStarted, $round) as $recorded) {
+        foreach ($starts as $recorded) {
             $row = $this->payloads->reviewerRowOf($recorded);
 
             if ($row instanceof ReviewerStarted && $row->round === $round && $row->reviewer === $reviewer) {

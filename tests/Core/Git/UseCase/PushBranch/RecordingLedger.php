@@ -52,6 +52,11 @@ final class RecordingLedger implements Ledger
         return $this->recorded(array_values(array_filter($this->events, static fn (LedgerEvent $event): bool => $event->kind === $kind && $event->subject === $subject)));
     }
 
+    public function readOfKindWithoutSubject(LedgerEventKind $kind): RecordedEvents
+    {
+        return $this->recorded(array_values(array_filter($this->events, static fn (LedgerEvent $event): bool => $event->kind === $kind && null === $event->subject)));
+    }
+
     /**
      * @param list<string> $texts
      */

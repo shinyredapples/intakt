@@ -55,6 +55,11 @@ final class BeforeTheClear implements Ledger
         return $this->inner->readOfKindAbout($kind, $subject);
     }
 
+    public function readOfKindWithoutSubject(LedgerEventKind $kind): RecordedEvents
+    {
+        return $this->inner->readOfKindWithoutSubject($kind);
+    }
+
     /**
      * @param list<string> $texts
      */

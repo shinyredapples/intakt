@@ -86,6 +86,19 @@ final class DoctrineLedgerTest extends KernelTestCase
         self::assertSame([], iterator_to_array($ledger->readOfKindAbout(LedgerEventKind::ReviewerStarted, 'r')));
     }
 
+    public function testAReadWithoutSubjectReturnsOnlyTheEventsOfThatKindAppendedWithoutOneInTheOrderTheyWereAppended(): void
+    {
+        $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');
+
+        foreach ([[LedgerEventKind::ReviewerStarted, 'first', null], [LedgerEventKind::ReviewerStarted, 'with subject', 'r1'], [LedgerEventKind::VerdictReceived, 'other kind', null], [LedgerEventKind::ReviewerStarted, 'second', null]] as [$kind, $payload, $subject]) {
+            self::assertTrue($ledger->append(new LedgerEvent($kind, $payload, $subject))->succeeded());
+        }
+
+        $payloads = array_map(static fn (RecordedEvent $event): string => $event->event->payload, iterator_to_array($ledger->readOfKindWithoutSubject(LedgerEventKind::ReviewerStarted)));
+
+        self::assertSame(['first', 'second'], $payloads);
+    }
+
     public function testAReadOfOneKindReturnsOnlyTheEventsOfThatKindInTheOrderTheyWereAppended(): void
     {
         $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');

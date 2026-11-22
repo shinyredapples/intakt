@@ -51,6 +51,11 @@ final class InMemoryLedger implements Ledger
         return new RecordedEvents([]);
     }
 
+    public function readOfKindWithoutSubject(LedgerEventKind $kind): RecordedEvents
+    {
+        return new RecordedEvents([]);
+    }
+
     /**
      * @param list<string> $texts
      */

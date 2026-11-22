@@ -96,11 +96,47 @@ final class LedgerReviewPagesOnSqliteTest extends KernelTestCase
         self::assertNull($this->pages()->startedReviewerOf('r', 'reviewer'));
     }
 
-    private function startReviewer(string $round, string $model): void
+    public function testAStartStoredWithoutASubjectIsStillTheStartedReviewer(): void
+    {
+        $this->startReviewer('r1', 'before the upgrade', withSubject: false);
+        $this->startReviewer('r10', 'other');
+
+        $started = $this->pages()->startedReviewerOf('r1', 'reviewer');
+
+        self::assertSame('before the upgrade', $started?->model);
+        self::assertSame('correctness', $started->role);
+    }
+
+    public function testAStartWithASubjectWinsOverALaterStartWithoutOne(): void
+    {
+        $this->startReviewer('r1', 'with subject');
+        $this->startReviewer('r1', 'without subject', withSubject: false);
+
+        self::assertSame('with subject', $this->pages()->startedReviewerOf('r1', 'reviewer')?->model);
+    }
+
+    public function testTheLookupOfStartsWithoutASubjectSearchesTheSubjectIndexInsteadOfScanningTheLedger(): void
+    {
+        $this->startReviewer('r1', 'before the upgrade', withSubject: false);
+        $this->startReviewer('r10', 'other');
+        $this->selects->clear();
+
+        self::assertSame('before the upgrade', $this->pages()->startedReviewerOf('r1', 'reviewer')?->model);
+
+        self::assertCount(2, $this->selects->queries());
+        foreach ($this->selects->queries() as [$sql, $params]) {
+            $plan = implode(', ', array_map(static fn (mixed $detail): string => is_string($detail) ? $detail : '', array_column($this->connection->fetchAllAssociative('EXPLAIN QUERY PLAN '.$sql, $params), 'detail')));
+
+            self::assertStringContainsString('USING INDEX ledger_event_subject', $plan);
+            self::assertStringNotContainsString('SCAN', $plan);
+        }
+    }
+
+    private function startReviewer(string $round, string $model, bool $withSubject = true): void
     {
         $payload = json_encode(['round' => $round, 'reviewer' => 'reviewer', 'role' => 'correctness', 'tier' => 'standard', 'model' => $model], JSON_THROW_ON_ERROR);
 
-        self::assertTrue($this->ledger->append(new LedgerEvent(LedgerEventKind::ReviewerStarted, $payload, $round))->succeeded());
+        self::assertTrue($this->ledger->append(new LedgerEvent(LedgerEventKind::ReviewerStarted, $payload, $withSubject ? $round : null))->succeeded());
     }
 
     private function pages(): LedgerReviewPages

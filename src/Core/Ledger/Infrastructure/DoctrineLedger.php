@@ -64,9 +64,15 @@ final readonly class DoctrineLedger implements Ledger
         return $this->recordedEventsOf(['kind' => $kind->value]);
     }
 
+    // The index finds the rows, and the comparison here keeps only the exact subject, because a database collation may ignore case (MySQL's default does).
     public function readOfKindAbout(LedgerEventKind $kind, string $subject): RecordedEvents
     {
-        return $this->recordedEventsOf(['kind' => $kind->value, 'subject' => $subject]);
+        return $this->eventsOf(array_filter($this->recordsOf(['kind' => $kind->value, 'subject' => $subject]), static fn (EventRecord $record): bool => $record->subject() === $subject));
+    }
+
+    public function readOfKindWithoutSubject(LedgerEventKind $kind): RecordedEvents
+    {
+        return $this->recordedEventsOf(['kind' => $kind->value, 'subject' => null]);
     }
 
     /**
@@ -108,11 +114,21 @@ final readonly class DoctrineLedger implements Ledger
     }
 
     /**
-     * @param array<string, string> $criteria
+     * @param array<string, string|null> $criteria
      */
     private function recordedEventsOf(array $criteria): RecordedEvents
     {
-        return $this->eventsOf($this->registry->getManager()->getRepository(EventRecord::class)->findBy($criteria, ['position' => 'ASC']));
+        return $this->eventsOf($this->recordsOf($criteria));
+    }
+
+    /**
+     * @param array<string, string|null> $criteria
+     *
+     * @return list<EventRecord>
+     */
+    private function recordsOf(array $criteria): array
+    {
+        return array_values($this->registry->getManager()->getRepository(EventRecord::class)->findBy($criteria, ['position' => 'ASC']));
     }
 
     /**
