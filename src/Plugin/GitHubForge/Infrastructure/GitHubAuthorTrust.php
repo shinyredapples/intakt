@@ -55,12 +55,12 @@ final readonly class GitHubAuthorTrust implements AuthorTrust
         return is_string($login) ? $login : throw TrustNotChecked::becauseTheAnswerIsInvalid();
     }
 
-    // A fork's owner can push new heads under the author's name, so only a head in the base repository counts; a deleted fork has no repository and counts as foreign.
     /**
      * @param array<mixed> $answer
      */
     private function isFromTheBaseRepository(array $answer, PullRequestAddress $pull): bool
     {
+        // A fork's owner can push new heads under the author's name, so only a head in the base repository counts; a deleted fork has no repository and counts as foreign.
         $head = $answer['head'] ?? null;
 
         if (!is_array($head) || !array_key_exists('repo', $head)) {

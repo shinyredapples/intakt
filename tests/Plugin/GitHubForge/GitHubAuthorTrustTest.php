@@ -137,6 +137,7 @@ final class GitHubAuthorTrustTest extends TestCase
     {
         self::assertFalse($this->isTrusted(RecordedTrust::PULL_FROM_DELETED_FORK));
         self::assertSame([], $this->logger->lines);
+        self::assertSame([], array_filter($this->github->requested, static fn (string $url): bool => str_contains($url, '/collaborators/')));
     }
 
     public function testAPullRequestAnswerWithoutAHeadRepositoryIsNotTrustedAndLogged(): void
