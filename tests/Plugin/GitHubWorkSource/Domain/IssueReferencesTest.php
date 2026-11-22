@@ -50,7 +50,7 @@ final class IssueReferencesTest extends TestCase
         yield 'inside an external block that never closes' => ["Do it.\n  <!-- external -->  \nWaits for #9", []];
         yield 'after an external block' => ["<!-- external -->\r\nWaits for #8\r\n<!-- /external -->\r\nWaits for #9", [9]];
         yield 'a marker inside a line opens no block' => ["See <!-- external --> here\nWaits for #9", [9]];
-        yield 'prose that mentions an issue' =>['This task waits for #9 to land in its own time.', []];
+        yield 'prose that mentions an issue' => ['This task waits for #9 to land in its own time.', []];
         yield 'a bold label before prose that mentions an issue' => ['**Note:** this waits for #9', []];
         yield 'a plain reference' => ['See #9', []];
         yield 'nothing' => ['', []];
