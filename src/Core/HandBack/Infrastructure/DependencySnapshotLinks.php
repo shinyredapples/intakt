@@ -65,7 +65,7 @@ final readonly class DependencySnapshotLinks
         return null;
     }
 
-    // Null when the path climbs above where it starts.
+    // Null because a path that climbs above where it starts leaves the install, which the caller must refuse.
     private function normalized(string $path): ?string
     {
         $parts = [];
