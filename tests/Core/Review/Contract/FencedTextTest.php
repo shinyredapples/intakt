@@ -30,6 +30,13 @@ final class FencedTextTest extends TestCase
         self::assertSame($fenced->rendered()."\n\nIntakt cut this text: 1 of 3 bytes are shown and the rest is left out. Read what you need with your tools; an approval of a review with a cut text is refused.", $rendered);
     }
 
+    public function testAnOmittedFencedTextRendersANoteWithoutPointingToTools(): void
+    {
+        $fenced = new FencedText(UntrustedSource::Diff, 'a');
+
+        self::assertSame($fenced->rendered()."\n\nIntakt cut this text: 1 of 3 bytes are shown and the rest is left out.", $fenced->omitted(1, 3)->rendered());
+    }
+
     public function testCuttingAFencedTextLeavesTheOriginalWithoutANote(): void
     {
         $fenced = new FencedText(UntrustedSource::Diff, 'a');

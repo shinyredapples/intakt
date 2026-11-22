@@ -82,7 +82,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         self::assertResponseIsSuccessful();
         self::assertSelectorTextContains('h1', 'Review of feat/thing in alpha');
-        self::assertSame(['Round 1', 'Round 2'], $crawler->filter('section.round h2')->each(static fn (Crawler $title): string => $title->text()));
+        self::assertSame(['Review pass 1', 'Review pass 2'], $crawler->filter('section.round h2')->each(static fn (Crawler $title): string => $title->text()));
     }
 
     public function testTheReviewPageOfAProjectFlaggedAsReplayShowsTheReplayMark(): void
@@ -179,7 +179,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
         self::assertSame(
-            [['correctness', 'standard tier, model not recorded', 'Changes requested', '2'], ['security', 'standard tier, model not recorded', 'Failed The provider is down.', 'no answer']],
+            [['correctness', 'standard tier, model not recorded', 'Changes needed', '2'], ['security', 'standard tier, model not recorded', 'Failed The provider is down.', 'no answer']],
             $this->rowsOf($crawler->filter('#round-round-1 table.reviewers tbody tr')),
         );
         self::assertSame(
@@ -199,7 +199,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame([['correctness', 'Kimi K3 (Moonshot AI)', 'Changes requested', '2'], ['security', 'model-b', 'Approved', '0']], $this->rowsOf($crawler->filter('table.reviewers tbody tr')));
+        self::assertSame([['correctness', 'Kimi K3 (Moonshot AI)', 'Changes needed', '2'], ['security', 'model-b', 'Approved', '0']], $this->rowsOf($crawler->filter('table.reviewers tbody tr')));
     }
 
     public function testAReviewersModelCellKeepsTheRawModelIdInItsTitle(): void
@@ -289,7 +289,8 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame('Changes requested', $crawler->filter('#round-round-1-reviewer-round-1-correctness-state .chip')->text());
+        self::assertSame('Changes needed', $crawler->filter('#round-round-1-reviewer-round-1-correctness-state .chip')->text());
+        self::assertSame('Changes requested', $crawler->filter('#round-round-1-reviewer-round-1-correctness-state .chip')->attr('title'));
         self::assertCount(0, $crawler->filter('#round-round-1-reviewer-round-1-correctness-state .chip.approved'));
     }
 
@@ -299,7 +300,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame(['Changes requested', 'Failed'], $crawler->filter('#round-round-1 table.reviewers .chip')->each(static fn (Crawler $chip): string => $chip->text()));
+        self::assertSame(['Changes needed', 'Failed'], $crawler->filter('#round-round-1 table.reviewers .chip')->each(static fn (Crawler $chip): string => $chip->text()));
         self::assertSame(['The provider is down.'], $crawler->filter('#round-round-1 table.reviewers .reviewer-outcome .muted')->each(static fn (Crawler $cause): string => $cause->text()));
     }
 
@@ -507,7 +508,8 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-2');
 
-        self::assertSame(['Judged', 'Judged'], $crawler->filter('section.round summary .muted.state-judged')->each(static fn (Crawler $state): string => $state->text()));
+        self::assertSame(['Checked', 'Checked'], $crawler->filter('section.round summary .muted.state-judged')->each(static fn (Crawler $state): string => $state->text()));
+        self::assertSame(['Judged', 'Judged'], $crawler->filter('section.round summary .muted.state-judged')->each(static fn (Crawler $state): string => (string) $state->attr('title')));
         self::assertCount(0, $crawler->filter('section.round summary .chip.state-judged'));
     }
 
@@ -685,7 +687,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-2');
 
-        self::assertSame(['Round (number not recorded)'], $crawler->filter('section.round h2')->each(static fn (Crawler $title): string => $title->text()));
+        self::assertSame(['Review pass (number not recorded)'], $crawler->filter('section.round h2')->each(static fn (Crawler $title): string => $title->text()));
         self::assertSelectorTextContains('h1', 'Review of round round-2 in alpha');
     }
 
@@ -744,8 +746,8 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-2');
 
-        self::assertSame(['Round 1', 'Judged', 'outcome not recorded, 3 findings', '12:00 to 12:00 UTC', ''], $this->partsOf($crawler->filter('#round-round-1 details.ev > summary')));
-        self::assertSame(['Round 2', 'Judged', 'outcome not recorded, 0 findings', '12:00 to 12:00 UTC', ''], $this->partsOf($crawler->filter('#round-round-2 details.ev > summary')));
+        self::assertSame(['Review pass 1', 'Checked', 'outcome not recorded, 3 findings', '12:00 to 12:00 UTC', ''], $this->partsOf($crawler->filter('#round-round-1 details.ev > summary')));
+        self::assertSame(['Review pass 2', 'Checked', 'outcome not recorded, 0 findings', '12:00 to 12:00 UTC', ''], $this->partsOf($crawler->filter('#round-round-2 details.ev > summary')));
         self::assertSelectorNotExists('#round-round-1 details[open]');
     }
 
@@ -785,7 +787,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame(['Round 1', 'Changes requested', 'Judged', '1 finding', '12:00 to 12:00 UTC', ''], $this->partsOf($crawler->filter('#round-round-1 details.ev > summary')));
+        self::assertSame(['Review pass 1', 'Changes needed', 'Checked', '1 finding', '12:00 to 12:00 UTC', ''], $this->partsOf($crawler->filter('#round-round-1 details.ev > summary')));
     }
 
     public function testTheChangesRequestedChipCarriesItsOwnIcon(): void
@@ -868,7 +870,8 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-2');
 
-        self::assertSelectorTextContains('.state-block h2', 'Now: round 2 in review');
+        self::assertSelectorTextContains('.state-block h2 .term[data-term="pass"]', 'Review pass 2?');
+        self::assertSelectorTextContains('.state-block h2', 'in review');
         self::assertSame(['correctness (standard tier, model not recorded): Approved', 'security (standard tier, model not recorded): running'], $crawler->filter('.state-block .sb-list li')->each(static fn (Crawler $item): string => $item->text()));
         self::assertSelectorTextContains('.state-block', 'The judge has not judged this round yet.');
     }
@@ -880,8 +883,8 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame(['correctness (Kimi K3): running'], $crawler->filter('.state-block .sb-list li')->each(static fn (Crawler $item): string => $item->text()));
-        self::assertSame(['correctness (Kimi K3) live'], $crawler->filter('.log-pane .live h3')->each(static fn (Crawler $heading): string => $heading->text()));
+        self::assertSame(['correctness (Kimi K3 (Moonshot AI)): running'], $crawler->filter('.state-block .sb-list li')->each(static fn (Crawler $item): string => $item->text()));
+        self::assertSame([['correctness (Kimi K3 (Moonshot AI)) live', 'Kimi K3']], $crawler->filter('.log-pane .live h3')->each(static fn (Crawler $heading): array => [$heading->text(), $heading->attr('title')]));
     }
 
     public function testAnOpenFindingLinksToItsRowInTheTimeline(): void
@@ -927,7 +930,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews/round-2');
 
         self::assertCount(2, $crawler->filter('.task-grid > .tl-pane .round'));
-        self::assertSame('Live log of round 2', $crawler->filter('.task-grid > aside.log-pane h2')->text());
+        self::assertSame('Live log of review pass 2', $crawler->filter('.task-grid > aside.log-pane h2')->text());
         self::assertSame(['correctness (standard tier, model not recorded) live', 'security (standard tier, model not recorded) live'], $crawler->filter('.log-pane #round-round-2-live .live h3')->each(static fn (Crawler $heading): string => $heading->text()));
         self::assertCount(0, $crawler->filter('.tl-pane .live'));
     }
@@ -965,7 +968,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         self::assertCount(1, $crawler->filter('.log-pane'));
         self::assertCount(1, $crawler->filter('#round-round-2-live'));
         self::assertCount(0, $crawler->filter('#round-round-1-live'));
-        self::assertSame('Live log of round 2', $crawler->filter('.log-pane h2')->text());
+        self::assertSame('Live log of review pass 2', $crawler->filter('.log-pane h2')->text());
     }
 
     public function testALongChangeNameIsShownWhole(): void

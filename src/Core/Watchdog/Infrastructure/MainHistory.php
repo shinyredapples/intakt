@@ -52,6 +52,8 @@ final readonly class MainHistory implements CommitHistory
         private string $repository,
         array $ownerKeys,
         private Filesystem $filesystem,
+        // Main's head read once for a whole check, because every read of one check must see the same main.
+        private ?string $pinnedTip = null,
     ) {
         $this->ownerKeys = array_map(static fn (string $line, int $index): string => OwnerKey::fromLine($line, $index + 1)->typeAndKey, $ownerKeys, array_keys($ownerKeys));
     }
@@ -129,6 +131,17 @@ final readonly class MainHistory implements CommitHistory
         }
 
         return $this->ownerSigned(...$signed) ? SignatureStatus::OwnerSigned : SignatureStatus::UnknownKey;
+    }
+
+    /**
+     * @throws MainNotRead
+     * @throws RuntimeException
+     */
+    public function head(): string
+    {
+        $this->mustBeReadable();
+
+        return $this->tip();
     }
 
     /**
@@ -245,7 +258,7 @@ final readonly class MainHistory implements CommitHistory
     private function tip(): string
     {
         // show-ref --verify takes the exact ref only, because rev-parse would fall back to a tag named refs/heads/main once the branch is gone.
-        return trim($this->read(['show-ref', '--verify', '--hash', self::MAIN]));
+        return $this->pinnedTip ?? trim($this->read(['show-ref', '--verify', '--hash', self::MAIN]));
     }
 
     /**

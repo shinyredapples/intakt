@@ -8,6 +8,7 @@ use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Platform\Contract\FigureKind;
 use Intakt\Core\Platform\Contract\Figures;
+use Intakt\Core\Review\Contract\BlockReasons;
 use Intakt\Core\Review\Contract\ChangeReview;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
@@ -36,6 +37,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(ReviewOutput::class)]
 #[UsesClass(ReviewOutputVerdict::class)]
 #[UsesClass(RoundTokens::class)]
+#[UsesClass(BlockReasons::class)]
 #[UsesClass(Cost::class)]
 #[UsesClass(Figures::class)]
 #[UsesClass(FigureKind::class)]
@@ -277,7 +279,7 @@ final class ReviewReportTest extends TestCase
         ];
         $tokens ??= RoundTokens::of(2, new TokenFigures(100, 0, 0, 0, 20));
 
-        return new ChangeReview('0192a000-0000-7000-8000-000000000000', 1, $decision, $verdicts, [$finding], $tokens, $cost ?? Cost::inUsd(0.00014), Decision::Blocked === $decision ? ['correctness: provider refused the key'] : []);
+        return new ChangeReview('0192a000-0000-7000-8000-000000000000', 1, $decision, $verdicts, [$finding], $tokens, $cost ?? Cost::inUsd(0.00014), Decision::Blocked === $decision ? new BlockReasons('correctness: provider refused the key') : new BlockReasons());
     }
 
     private function noted(string $note): Finding

@@ -20,6 +20,7 @@
 {% set open = review.openFindings %}
 {% set can_start = review.source is not null and review.nextNumber is not null %}
 {% set chip = 'dashboard/components/chip.html.twig' %}
+{% set term_tpl = 'dashboard/components/term.html.twig' %}
 {# Each round carries its own mark, because a replay round can follow a live round of the same change. #}
 {% set replay_chip = {label: 'Replay', on_page: true, extra: 'replay-mark'} %}
 <div class="page-head">
@@ -76,7 +77,7 @@
 {% if active is not null %}
 <section class="state-block" aria-labelledby="state-block-title">
     <div class="sb-head">
-        <h2 id="state-block-title">Now: round {{ active.number ?? '(number not recorded)' }} <span id="round-{{ active.round }}-now-phase">in review</span></h2>{% if active.isReplay %}{{ include(chip, replay_chip, with_context = false) }}{% endif %}    </div>
+        <h2 id="state-block-title">Now: {{ include(term_tpl, {term: 'pass', words: 'Review pass ' ~ (active.number ?? '(number not recorded)'), ask: true}, with_context = false) }} <span id="round-{{ active.round }}-now-phase">in review</span></h2>{% if active.isReplay %}{{ include(chip, replay_chip, with_context = false) }}{% endif %}    </div>
     <div class="sb-grid">
         <div>
             <h3>Reviewers</h3>
@@ -90,7 +91,7 @@
             </ul>
         </div>
         <div>
-            <h3>Open findings</h3>
+            <h3>{{ include(term_tpl, {term: 'fix', words: 'To fix', ask: true}, with_context = false) }}</h3>
             {# Its own partial, because the judged round's live update replaces it with that round's findings to fix. #}
             {{ include('dashboard/_now_findings.html.twig', {round: active.round, open: open, judged: judged.round ?? null}, with_context = false) }}
         </div>
@@ -119,13 +120,14 @@
     {# Only the newest round opens on arrival, because its verdict is what the reader came for and older rounds would push it down. A judged round followed by a round still in review stays closed, because only the newest round opens. #}
     <details class="ev"{% if loop.last %} open{% endif %}>
         <summary class="ev-head">
-            <h2>Round {{ reviewed.number ?? '(number not recorded)' }}</h2>
+            {# No "?" in a summary, because a focusable term would nest a control in the disclosure's own control; the round body explains the words. #}
+            <h2>Review pass {{ reviewed.number ?? '(number not recorded)' }}</h2>
             {% if reviewed.isReplay %}{{ include(chip, replay_chip, with_context = false) }}{% endif %}
             {% if reviewed.speedFactor is not null %}<span class="muted small replay-factor">Played {{ reviewed.speedFactor|number_format(6, '.', '')|trim('0', 'right')|trim('.', 'right') }} times as fast as recorded</span>{% endif %}
             {% set outcome = reviewed.reviewOutcome %}
-            {% if outcome is not null %}{{ include('dashboard/components/outcome_chip.html.twig', {outcome: outcome, on_page: true}, with_context = false) }}{% endif %}
+            {% if outcome is not null %}{{ include('dashboard/components/outcome_chip.html.twig', {outcome: outcome, on_page: true, plain: true}, with_context = false) }}{% endif %}
             {# Plain muted text, because the outcome is the headline and the process state only says where the round stands. #}
-            <span class="muted small state-judged">{{ reviewed.state.value|capitalize }}</span>
+            <span class="muted small state-judged" title="Judged">Checked</span>
             {# A round judged before Intakt kept the findings holds only the judge's marks, so a count would pass them off as the reviewers' findings. #}
             <span class="muted small">{% if outcome is null %}outcome not recorded, {% endif %}{% if reviewed.findingTextRecorded %}{{ reviewed.findings|length }} {{ reviewed.findings|length == 1 ? 'finding' : 'findings' }}{% else %}findings not recorded{% if reviewed.findings is not empty %}, {{ reviewed.findings|length }} marked by the judge{% endif %}{% endif %}</span>
             {% set spanFormat = reviewed.startedAt|date('Y-m-d', 'UTC') == reviewed.judgedAt|date('Y-m-d', 'UTC') ? 'H:i' : 'Y-m-d H:i' %}
@@ -139,7 +141,7 @@
 {% else %}
 <section class="section round" id="round-{{ reviewed.round }}">
     <div class="round-head">
-        <h2>Round {{ reviewed.number ?? '(number not recorded)' }}</h2>
+        <h2>Review pass {{ reviewed.number ?? '(number not recorded)' }}</h2>
         {% if reviewed.isReplay %}{{ include(chip, replay_chip, with_context = false) }}{% endif %}
         {% if reviewed.speedFactor is not null %}<span class="muted small replay-factor">Played {{ reviewed.speedFactor|number_format(6, '.', '')|trim('0', 'right')|trim('.', 'right') }} times as fast as recorded</span>{% endif %}
         <span id="round-{{ reviewed.round }}-head-state">{{ include('dashboard/_round_state.html.twig', {state: reviewed.state, outcome: reviewed.reviewOutcome, plain: true}, with_context = false) }}</span>
@@ -154,13 +156,13 @@
 </section>
 {% if active is not null %}
 <aside class="log log-pane" id="live-log-pane" role="tabpanel" aria-labelledby="live-log-tab" tabindex="0" data-heading="live-log-title">
-    <h2 id="live-log-title">Live log of round {{ active.number ?? '(number not recorded)' }}</h2>
+    <h2 id="live-log-title">Live log of review pass {{ active.number ?? '(number not recorded)' }}</h2>
     <div class="log-main">
     {# Outside the streams' container, so a reviewer's first update cannot remove it; the stylesheet hides it once a reviewer is placed. #}
     <p class="muted log-empty">Each reviewer's tool calls and text appear here as it works.</p>
     <div class="live-reviewers" id="round-{{ active.round }}-live">
     {% for outcome in active.outcomes %}
-        {{ include('dashboard/_live_reviewer.html.twig', {reviewer: outcome.id, heading: outcome.role ~ ' (' ~ outcome.modelInWords ~ ')'}) }}
+        {{ include('dashboard/_live_reviewer.html.twig', {reviewer: outcome.id, heading: outcome.role ~ ' (' ~ outcome.modelAndLab ~ ')', model: outcome.model}) }}
     {% endfor %}
     </div>
     </div>

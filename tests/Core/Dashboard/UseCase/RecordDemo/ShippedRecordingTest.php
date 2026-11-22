@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase\RecordDemo;
 
+use Intakt\Core\Dashboard\Domain\AiLab;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\CapturedUpdate;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\RecordedLedgerEvent;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\Recording;
@@ -20,6 +21,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(Recording::class)]
 #[UsesClass(RecordedLedgerEvent::class)]
 #[UsesClass(CapturedUpdate::class)]
+#[UsesClass(AiLab::class)]
 final class ShippedRecordingTest extends TestCase
 {
     private const string SHIPPED = '/fixtures/demo/sample-change-review.json';
@@ -220,6 +222,40 @@ final class ShippedRecordingTest extends TestCase
         }
 
         return $strings;
+    }
+
+    public function testTheShippedRecordingHeadsEachLiveReviewerWithItsAiLabAndKeepsTheIdInTheTitle(): void
+    {
+        $headings = [];
+
+        foreach ($this->shipped()->updates as $update) {
+            preg_match_all('~<h3 title="([^"]+)">[^<(]+ \((.+)\) live</h3>~', $update->data, $found, PREG_SET_ORDER);
+            $headings = [...$headings, ...$found];
+        }
+
+        self::assertNotEmpty($headings);
+
+        foreach ($headings as [, $id, $name]) {
+            self::assertSame(AiLab::modelName($id).' ('.AiLab::of($id)?->value.')', $name);
+        }
+    }
+
+    public function testTheShippedRecordingNamesEveryReviewerModelCellWithItsAiLabAndKeepsTheIdInTheTitle(): void
+    {
+        $cells = [];
+
+        foreach ($this->shipped()->updates as $update) {
+            preg_match_all('~<td id="[^"]*-model"([^>]*)>([^<]*)</td>~', $update->data, $found, PREG_SET_ORDER);
+            $cells = [...$cells, ...$found];
+        }
+
+        self::assertNotEmpty($cells);
+
+        foreach ($cells as [, $attributes, $text]) {
+            $id = preg_replace('~^ title="([^"]+)"$~', '$1', $attributes);
+            self::assertNotSame($attributes, $id, 'model cell without a title');
+            self::assertSame(AiLab::modelName((string) $id).' ('.AiLab::of((string) $id)?->value.')', $text);
+        }
     }
 
     private function shippedWith(string $field, string $value): string

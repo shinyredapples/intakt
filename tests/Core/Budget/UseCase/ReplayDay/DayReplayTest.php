@@ -19,6 +19,7 @@ use Intakt\Core\Budget\UseCase\ReplayDay\ScriptedStep;
 use Intakt\Core\Budget\UseCase\ReplayDay\ScriptLineNotUnderstood;
 use Intakt\Tests\Core\Budget\HoldsInMemory;
 use Intakt\Tests\Core\Budget\ReadingsInMemory;
+use Intakt\Tests\Core\Watchdog\HaltsInMemory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -48,7 +49,7 @@ final class DayReplayTest extends TestCase
         $clock = new MockClock('2026-11-02 08:00:00 UTC');
         $readings = new ReadingsInMemory($clock);
         $holds = new HoldsInMemory($clock);
-        $guard = new BudgetGuard($holds, new CeilingStartGuard($readings, $clock, ['five-hour' => 90.0, 'weekly' => 90.0]), new OutageWatch($readings, $clock, new EventDispatcher()));
+        $guard = new BudgetGuard($holds, new CeilingStartGuard($readings, $clock, ['five-hour' => 90.0, 'weekly' => 90.0]), new OutageWatch($readings, $clock, new EventDispatcher()), new HaltsInMemory());
         $this->replay = new DayReplay($readings, $holds, $guard);
     }
 

@@ -52,7 +52,7 @@ final class UnreadableAnswerTest extends KernelTestCase
         $review = $this->reviewedBy(1, 1, 'approve');
 
         self::assertSame(Decision::Approve, $review->decision);
-        self::assertSame([], $review->reasons);
+        self::assertSame([], [...$review->reasons]);
     }
 
     public function testTheUnreadableAnswerAndItsRetryAreEachSettledOnce(): void
@@ -67,7 +67,7 @@ final class UnreadableAnswerTest extends KernelTestCase
         $review = $this->reviewedBy(1, 2, 'approve');
 
         self::assertSame(Decision::Blocked, $review->decision);
-        self::assertSame([self::FAILED], $review->reasons);
+        self::assertSame([self::FAILED], [...$review->reasons]);
         self::assertSame([], $review->verdicts);
         self::assertSame([], $review->actList);
     }
@@ -85,7 +85,7 @@ final class UnreadableAnswerTest extends KernelTestCase
         $review = $this->reviewedBy(2, 2, 'approve');
 
         self::assertSame(Decision::Blocked, $review->decision);
-        self::assertSame([self::FAILED], $review->reasons);
+        self::assertSame([self::FAILED], [...$review->reasons]);
         self::assertCount(1, $review->verdicts);
     }
 
@@ -94,7 +94,7 @@ final class UnreadableAnswerTest extends KernelTestCase
         $review = $this->reviewedBy(2, 2, 'changes');
 
         self::assertSame(Decision::Changes, $review->decision);
-        self::assertSame([self::FAILED], $review->reasons);
+        self::assertSame([self::FAILED], [...$review->reasons]);
         self::assertCount(1, $review->verdicts);
     }
 
