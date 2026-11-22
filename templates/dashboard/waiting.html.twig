@@ -20,7 +20,7 @@
 {{ include('dashboard/components/empty.html.twig', {title: 'Nothing needs you', text: 'Intakt keeps building and reviewing. When it needs a decision, it shows up here.', pose: enum('Intakt\\Core\\Dashboard\\Domain\\MascotPose').Waiting}, with_context = false) }}
 {% else %}
 {# The octopus conducts once, at the top; each card shows the role who waits on the owner. No Why and no command to copy: the card says what needs you and what one tap does. #}
-<div class="wait-hero">
+<div class="wait-hero needs">
     {{ include('dashboard/components/character.html.twig', {character: enum('Intakt\\Core\\Dashboard\\Domain\\MascotPose').Waiting, size: 96}, with_context = false) }}
     <div>
         <p class="wait-kicker">Waiting on you</p>

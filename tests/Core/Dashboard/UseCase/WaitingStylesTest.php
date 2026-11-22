@@ -27,7 +27,7 @@ final class WaitingStylesTest extends TestCase
     {
         $sheet = (string) preg_replace('~/\*.*?\*/~s', '', $this->sheet());
         preg_match_all('/@media \(([^)]+)\) \{(.*?)\n\}/s', $sheet, $blocks, PREG_SET_ORDER);
-        $queries = array_values(array_column(array_filter($blocks, fn (array $block): bool => 1 === preg_match(self::BESIDE, $this->rulesOf($block[2])['.wait-item'] ?? '')), 1));
+        $queries = array_column(array_filter($blocks, fn (array $block): bool => 1 === preg_match(self::BESIDE, $this->rulesOf($block[2])['.wait-item'] ?? '')), 1);
         self::assertSame([self::WIDE], $queries);
 
         foreach ([761.0, 1099.0, 1099.5, 1099.99, 1100.0, 1440.0] as $width) {
@@ -66,7 +66,7 @@ final class WaitingStylesTest extends TestCase
     {
         $rules = $this->rulesOf($this->sheet());
 
-        self::assertStringContainsString('background: var(--amber-tint);', $rules['.wait-hero'] ?? '');
+        self::assertStringContainsString('background: var(--amber-tint);', $rules['.wait-hero.needs'] ?? '');
         self::assertMatchesRegularExpression('/^\s*border-color:\s*color-mix\(in srgb, var\(--amber\) 60%, transparent\);\s*$/', $rules['.wait-item.needs'] ?? '');
         self::assertStringNotContainsString('--amber', $rules['.wait-item'] ?? '');
     }
