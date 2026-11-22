@@ -51,7 +51,7 @@ final readonly class StoreProjectMemory implements ProjectMemory
      */
     private function settledAbout(string $project, Paths $files): Generator
     {
-        // The store only ranks; which findings count, and whether their code is unchanged, is decided by SettledMemory.
+        // SettledMemory decides which findings count and whether their code is unchanged, because the store only ranks.
         foreach ($this->retriever->retrieve($this->searchText($files), ['filter' => $this->documents->settledOfProject($project)]) as $document) {
             yield $this->documents->toSettledFinding($document);
         }

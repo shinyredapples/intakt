@@ -33,7 +33,7 @@ final readonly class SettledMemory
             $current = $query->currentCodeOf($finding);
 
             // Not asked about: its code is not under review, so it is neither settled nor stale here.
-            if (null === $current) {
+            if (!$current instanceof CodeSnapshot) {
                 continue;
             }
 

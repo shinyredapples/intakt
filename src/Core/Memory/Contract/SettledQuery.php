@@ -13,9 +13,7 @@ final readonly class SettledQuery
      */
     public array $current;
 
-    /**
-     * The code as it is on main now, one snapshot per file and symbol the caller asks about.
-     */
+    // The current snapshots are the code as it is on main now, because only the caller knows it; one per file and symbol it asks about.
     public function __construct(
         public string $project,
         CodeSnapshot ...$current,
