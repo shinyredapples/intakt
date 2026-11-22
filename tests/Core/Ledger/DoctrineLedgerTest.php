@@ -70,7 +70,7 @@ final class DoctrineLedgerTest extends KernelTestCase
         self::assertInstanceOf(EntityManagerInterface::class, $manager);
 
         $steps = $manager->getConnection()->fetchAllAssociative('EXPLAIN QUERY PLAN SELECT * FROM ledger_event WHERE kind = ? ORDER BY position', [LedgerEventKind::ReviewerStarted->value]);
-        $plan = implode(', ', array_column($steps, 'detail'));
+        $plan = implode(', ', array_map(static fn (array $step): string => is_string($step['detail'] ?? null) ? $step['detail'] : '', $steps));
 
         self::assertStringContainsString('USING INDEX ledger_event_kind', $plan);
         self::assertStringNotContainsString('SCAN', $plan);
