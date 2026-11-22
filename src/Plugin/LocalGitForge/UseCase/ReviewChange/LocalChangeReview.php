@@ -40,17 +40,31 @@ final readonly class LocalChangeReview
     ) {
     }
 
-    // Reviewed in a snapshot of the head rather than in the checkout, because the checkout may be switched or edited while the round runs, and a verdict counts only for what it reviewed.
+    // Reviewed in a snapshot of the head rather than in the checkout, kept as a start keeps one so a round that outlives the command can finish, because the checkout may be switched or edited while the round runs, and a verdict counts only for what it reviewed.
     public function of(ReviewChangeInput $input, ReviewProgress $progress = new IgnoredProgress()): ChangeReview
     {
         $forge = $this->forgeFor($input);
         $change = $forge->change(new ChangeId($input->change));
         $request = $this->requestFor($input, $change);
 
-        return $forge->withSnapshotOf($change->commits->head, fn (string $snapshot): ChangeReview => $this->onStop->during(
-            static fn () => $forge->removeSnapshot($snapshot),
-            fn (): ChangeReview => $this->reviews->review($request($snapshot), $progress),
-        ));
+        $snapshot = $forge->keepSnapshotOf($change->commits->head);
+        $roundGoesOn = false;
+
+        try {
+            return $this->onStop->during(
+                static fn () => $forge->removeSnapshot($snapshot),
+                fn (): ChangeReview => $this->reviews->review($request($snapshot), $progress),
+            );
+            // Boundary: a demo that stops waiting leaves the queued round running in the worker, which still reads the snapshot; RemoveKeptSnapshot removes it once the round is judged.
+        } catch (DemoProviderBusy $busy) {
+            $roundGoesOn = true;
+
+            throw $busy;
+        } finally {
+            if (!$roundGoesOn) {
+                $forge->removeSnapshot($snapshot);
+            }
+        }
     }
 
     public function startOf(ReviewChangeInput $input): string

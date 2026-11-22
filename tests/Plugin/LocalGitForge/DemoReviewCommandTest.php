@@ -76,6 +76,7 @@ use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
 use Symfony\Component\DependencyInjection\ServiceLocator;
+use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Routing\Generator\UrlGenerator;
@@ -281,6 +282,46 @@ final class DemoReviewCommandTest extends TestCase
         self::assertStringContainsString('The correctness reviewer cannot get an answer: openai_compatible is rate-limited for 60 s and no fallback is free.', preg_replace('~\s+~', ' ', $tester->getDisplay()) ?? '');
         self::assertStringNotContainsString('Open the review', $tester->getDisplay());
         self::assertEquals(new DateTimeImmutable('2026-11-20T12:00:00+00:00'), $this->clock->now());
+    }
+
+    // The queued round goes on in the worker after the command exits and reads the checkout, so the exit must not remove it; the judged round does (RemoveKeptSnapshot).
+    public function testTheRateLimitExitKeepsTheCheckoutForTheRoundThatGoesOn(): void
+    {
+        $checkout = null;
+        $reviews = self::createStub(ChangeReviews::class);
+        $tiers = $this->rateLimitedRouter($this->clock);
+        $reviews->method('review')->willReturnCallback(function (ChangeReviewRequest $request, ReviewProgress $progress) use (&$checkout, $tiers): ChangeReview {
+            $checkout = $request->checkoutRoot;
+            try {
+                $tiers->invoke($tiers->answering(SampleChange::PROJECT, Tier::Strong), new TierRequest('Review.'))->asText();
+            } catch (EveryAccountCoolingDown) {
+            }
+
+            $progress->reached($this->waitingOnCorrectness());
+
+            return $this->outcome(Decision::Approve);
+        });
+        $this->tiers = $tiers;
+
+        $this->whenTheDemoRuns($reviews);
+
+        self::assertDirectoryExists((string) $checkout);
+        new Filesystem()->remove((string) $checkout);
+    }
+
+    public function testAFinishedDemoRemovesItsCheckout(): void
+    {
+        $checkout = null;
+        $reviews = self::createStub(ChangeReviews::class);
+        $reviews->method('review')->willReturnCallback(function (ChangeReviewRequest $request) use (&$checkout): ChangeReview {
+            $checkout = $request->checkoutRoot;
+
+            return $this->outcome(Decision::Approve);
+        });
+
+        $this->whenTheDemoRuns($reviews);
+
+        self::assertDirectoryDoesNotExist((string) $checkout);
     }
 
     private function rateLimitedRouter(MockClock $clock): TierPlatform
