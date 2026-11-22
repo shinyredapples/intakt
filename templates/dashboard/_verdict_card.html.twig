@@ -25,7 +25,7 @@
     </h2>
     {#- The plain words of the review page, each with a "?" whose explanation names the technical term the docs use (#3183). -#}
     {%- set term = 'dashboard/components/term.html.twig' %}
-    <p class="verdict-pass muted">{{ include(term, {term: 'round', words: 'Review pass ' ~ (latest.number ?? '(number not recorded)'), ask: true}, with_context = false) }}{% if latest.isJudged %}, {{ include(term, {term: 'checked', words: 'Checked', ask: true}, with_context = false) }}{% endif %}</p>
+    <p class="verdict-pass muted">{{ include(term, {term: 'pass', words: 'Review pass ' ~ (latest.number ?? '(number not recorded)'), ask: true}, with_context = false) }}{% if latest.isJudged %}, {{ include(term, {term: 'checked', words: 'Checked', ask: true}, with_context = false) }}{% endif %}</p>
     {% if open is not empty %}
     <h3 class="verdict-to-fix">{{ include(term, {term: 'fix', words: 'To fix', ask: true}, with_context = false) }}</h3>
     <ul class="verdict-findings">

@@ -9,6 +9,7 @@ use DOMNode;
 use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Domain\Character;
+use Intakt\Core\Dashboard\Domain\GlossaryTerm;
 use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\ReviewerOutcome;
@@ -87,6 +88,7 @@ use Twig\Environment;
 #[UsesClass(ReadFinding::class)]
 #[UsesClass(ReadAnswer::class)]
 #[UsesClass(Character::class)]
+#[UsesClass(GlossaryTerm::class)]
 final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 {
     use DownloadedScriptStandIns;
@@ -221,7 +223,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
             .$this->stream('round_judged', ['round' => 'round-1', 'progress' => new RoundProgress(2, 2, true, ['round-1-correctness' => FinishedState::Stopped])]));
 
         self::assertSame('stopped', $updated->filter('#round-round-1-now-reviewer-round-1-correctness-state')->text());
-        self::assertSame('Now: Review pass 1? checked', $this->stateBlockTitleOf($updated));
+        self::assertSame('Now: Review pass 1? checked?', $this->stateBlockTitleOf($updated));
     }
 
     public function testAJudgedRoundPushedToThePageTurnsTheCurrentStateBlockToJudged(): void
@@ -231,7 +233,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
         $updated = $this->replaced($page, $this->stream('round_judged', ['round' => 'round-1', 'progress' => new RoundProgress(2, 2, true)]));
 
-        self::assertSame('Now: Review pass 1? checked', $this->stateBlockTitleOf($updated));
+        self::assertSame('Now: Review pass 1? checked?', $this->stateBlockTitleOf($updated));
         self::assertStringStartsWith('The judge has judged this round.', $updated->filter('#round-round-1-now-judge')->text());
     }
 
@@ -246,8 +248,19 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertSame('Checked', $updated->filter('#round-round-1-head-state .muted.state-judged')->text());
         self::assertCount(0, $updated->filter('#round-round-1-head-state .chip'));
         self::assertCount(0, $updated->filter('.round-head .state-running'));
-        self::assertSame('checked', $updated->filter('#round-round-1-now-phase')->text());
+        self::assertStringStartsWith('checked?', $updated->filter('#round-round-1-now-phase')->text());
         self::assertSame('Checked.', $updated->filter('#round-round-1-state')->text());
+    }
+
+    public function testAJudgedRoundPushedToThePageExplainsCheckedWithItsQuestionMark(): void
+    {
+        $this->givenARunningRound();
+        $page = $this->browser->request('GET', '/reviews/round-1');
+
+        $updated = $this->replaced($page, $this->stream('round_judged', ['round' => 'round-1', 'progress' => new RoundProgress(2, 2, true)]));
+
+        self::assertCount(1, $updated->filter('#round-round-1-now-phase .term[data-term="checked"] .term-q'));
+        self::assertSame(GlossaryTerm::Checked->explanation(), $updated->filter('#round-round-1-now-phase [role="tooltip"]')->text());
     }
 
     public function testAJudgedRoundPushedToThePageTakesAwayTheStopOfTheRound(): void
@@ -351,6 +364,16 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
         $updated = $this->replaced($page, $this->publishedStreams());
         self::assertSame('Changes needed', $updated->filter('#round-'.$id.'-now-judge .now-outcome')->text());
+    }
+
+    public function testThePushedCallOfTheJudgeKeepsTheOutcomesOwnWordsInItsTooltip(): void
+    {
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeTheRoundOfQuorumStarted();
+
+        $this->givenTheRoundIsJudgedWith($round, ['F1' => 'act', 'F2' => 'defer']);
+
+        $updated = $this->replaced($page, $this->publishedStreams());
+        self::assertSame(ReviewOutcome::ChangesRequested->value, $updated->filter('#round-'.$id.'-now-judge .now-outcome')->attr('title'));
     }
 
     public function testAPageOpenedBeforeTheRoundStartsCountsTheFindingsToFixInTheNowBoxOnceTheRoundIsJudged(): void
@@ -1612,7 +1635,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
     {
         $title = $page->filter('#state-block-title');
 
-        return str_replace($title->filter('.term-tip')->text(), '', $title->text());
+        return str_replace($title->filter('.term-tip')->each(static fn (Crawler $tip): string => $tip->text()), '', $title->text());
     }
 
     // Done by hand on the parsed page, because no browser runs Turbo in the tests; like Turbo, a stream whose target is absent changes nothing.

@@ -77,7 +77,7 @@
 {% if active is not null %}
 <section class="state-block" aria-labelledby="state-block-title">
     <div class="sb-head">
-        <h2 id="state-block-title">Now: {{ include(term_tpl, {term: 'round', words: 'Review pass ' ~ (active.number ?? '(number not recorded)'), ask: true}, with_context = false) }} <span id="round-{{ active.round }}-now-phase">in review</span></h2>{% if active.isReplay %}{{ include(chip, replay_chip, with_context = false) }}{% endif %}    </div>
+        <h2 id="state-block-title">Now: {{ include(term_tpl, {term: 'pass', words: 'Review pass ' ~ (active.number ?? '(number not recorded)'), ask: true}, with_context = false) }} <span id="round-{{ active.round }}-now-phase">in review</span></h2>{% if active.isReplay %}{{ include(chip, replay_chip, with_context = false) }}{% endif %}    </div>
     <div class="sb-grid">
         <div>
             <h3>Reviewers</h3>

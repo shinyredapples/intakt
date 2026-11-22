@@ -55,10 +55,10 @@ final class ReviewVerdictCardTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame(['round', 'checked'], $crawler->filter('.verdict-card .verdict-pass .term')->each(static fn (Crawler $term): string => (string) $term->attr('data-term')));
-        self::assertSame([GlossaryTerm::Round->explanation(), GlossaryTerm::Checked->explanation()], $crawler->filter('.verdict-card .verdict-pass [role="tooltip"]')->each(static fn (Crawler $tip): string => $tip->text()));
+        self::assertSame(['pass', 'checked'], $crawler->filter('.verdict-card .verdict-pass .term')->each(static fn (Crawler $term): string => (string) $term->attr('data-term')));
+        self::assertSame([GlossaryTerm::ReviewPass->explanation(), GlossaryTerm::Checked->explanation()], $crawler->filter('.verdict-card .verdict-pass [role="tooltip"]')->each(static fn (Crawler $tip): string => $tip->text()));
         self::assertStringStartsWith('Review pass 1?', $crawler->filter('.verdict-card .verdict-pass')->text());
-        self::assertStringContainsString(GlossaryTerm::Round->explanation().', Checked?', $crawler->filter('.verdict-card .verdict-pass')->text(null, false));
+        self::assertStringContainsString(GlossaryTerm::ReviewPass->explanation().', Checked?', $crawler->filter('.verdict-card .verdict-pass')->text(null, false));
     }
 
     public function testAChangesRoundReadsChangesNeededWithTheOutcomesOwnWordsInTheTooltip(): void

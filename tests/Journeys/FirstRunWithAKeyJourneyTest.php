@@ -110,7 +110,7 @@ final class FirstRunWithAKeyJourneyTest extends JourneyTestCase
         $page = $this->visit($this->review);
 
         self::assertStringContainsString(self::ENDED_TEXT, $page->filter('#round-'.$round.'-state')->text());
-        self::assertSame('judged', mb_strtolower($page->filter('.state-judged')->text()));
+        self::assertSame('checked', mb_strtolower($page->filter('.state-judged')->text()));
         self::assertMatchesRegularExpression(self::OUTCOME, $page->filter('#round-'.$round.'-outcome')->text());
     }
 

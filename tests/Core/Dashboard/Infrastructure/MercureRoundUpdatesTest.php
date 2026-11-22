@@ -11,6 +11,7 @@ use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Infrastructure\ComponentOptions;
 use Intakt\Core\Dashboard\Infrastructure\FindingSpans;
+use Intakt\Core\Dashboard\Infrastructure\GlossaryExplanations;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\MercureLiveUpdates;
@@ -211,7 +212,7 @@ final class MercureRoundUpdatesTest extends TestCase
         $this->updates()->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(2, 2, true));
 
         self::assertStringContainsString('target="round-'.self::ROUND.'-head-state"', $this->published[0]->getData());
-        self::assertStringContainsString('<span id="round-'.self::ROUND.'-now-phase">checked</span>', $this->published[0]->getData());
+        self::assertStringContainsString('<span id="round-'.self::ROUND.'-now-phase"><span class="term term-ask" tabindex="0" data-term="checked"', $this->published[0]->getData());
     }
 
     public function testARoundInProgressLeavesItsRoundHeadAndNowPhaseAlone(): void
@@ -750,6 +751,8 @@ final class MercureRoundUpdatesTest extends TestCase
         // Registered because a judged finding's text shows its backtick spans as code.
         $twig->addFunction(new TwigFunction('finding_spans', new FindingSpans()->of(...)));
         $twig->addFunction(new TwigFunction('finding_title_spans', new FindingSpans()->ofATitle(...)));
+        // Registered because the judged stream explains "checked" with its glossary term.
+        $twig->addFunction(new TwigFunction('glossary_explanation', new GlossaryExplanations()->of(...)));
 
         return new MercureRoundUpdates(
             $this->live($publisher),

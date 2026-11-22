@@ -870,7 +870,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-2');
 
-        self::assertSelectorTextContains('.state-block h2 .term[data-term="round"]', 'Review pass 2?');
+        self::assertSelectorTextContains('.state-block h2 .term[data-term="pass"]', 'Review pass 2?');
         self::assertSelectorTextContains('.state-block h2', 'in review');
         self::assertSame(['correctness (standard tier, model not recorded): Approved', 'security (standard tier, model not recorded): running'], $crawler->filter('.state-block .sb-list li')->each(static fn (Crawler $item): string => $item->text()));
         self::assertSelectorTextContains('.state-block', 'The judge has not judged this round yet.');
