@@ -79,11 +79,11 @@ final class ReviewPathTest extends TestCase
     /**
      * @return list<string>
      */
-    private function pathOf(ReviewedRound ...$rounds): array
+    private function pathOf(ReviewedRound $first, ReviewedRound ...$later): array
     {
         return array_map(
             static fn (PathStep $step): string => trim($step->label.' '.$step->state->value.' '.$step->who?->value),
-            new Review(array_values($rounds))->path(),
+            new Review([$first, ...array_values($later)])->path(),
         );
     }
 
