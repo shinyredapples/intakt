@@ -37,6 +37,8 @@ framework:
             Intakt\Core\Review\UseCase\IndexResolvedFindings\IndexResolvedFindings: async
             Intakt\Core\Review\UseCase\PublishVerdict\PublishVerdict: async
             Intakt\Core\Review\Contract\RoundOpened: async
+            # Queued in the judging's transaction on the Doctrine queue, so it commits with the recurrence and its strong-tier call runs outside the judging's locks.
+            Intakt\Core\Review\UseCase\EscalateRecurringP1\EscalateRecurringP1: async
             # Queued in the watch tick's transaction, so the worker's lookup of the judged round runs only after the hand-over line has committed.
             Intakt\Core\Review\Contract\PublishHandedOverChange: async
             # A replay sleeps at the recorded pace for minutes, so it runs in a queue worker and never in a web worker.

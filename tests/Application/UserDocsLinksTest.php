@@ -11,15 +11,15 @@ use PHPUnit\Framework\TestCase;
 #[CoversNothing]
 final class UserDocsLinksTest extends TestCase
 {
-    public function testTheTimedRunLinkInTheUserDocsPointsAtAnExistingFile(): void
+    public function testTheTimedRunLinkInTheUserManualPointsAtAnExistingFile(): void
     {
         $root = dirname(__DIR__, 2);
-        $text = (string) file_get_contents($root.'/docs/user/README.md');
+        $text = (string) file_get_contents($root.'/docs/reference/user-manual.md');
 
         $found = preg_match('/\[timed run\]\(([^#)]+)#timed-run\)/', $text, $match);
 
         self::assertSame(1, $found);
         self::assertArrayHasKey(1, $match);
-        self::assertFileExists($root.'/docs/user/'.$match[1]);
+        self::assertFileExists($root.'/docs/reference/'.$match[1]);
     }
 }
