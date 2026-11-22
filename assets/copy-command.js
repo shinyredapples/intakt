@@ -17,7 +17,7 @@ export function copyCommands(page, view) {
             copy(button, view);
         }
     });
-    // A page Turbo keeps for going back must come back saying Copy, with no timer left and no write still pending that could change it,.
+    // A page Turbo keeps for going back must come back saying Copy, with no timer left and no write still pending that could change it.
     page.addEventListener('turbo:before-cache', () => {
         page.querySelectorAll(COPY_BUTTON).forEach((button) => {
             clicks.delete(button);
