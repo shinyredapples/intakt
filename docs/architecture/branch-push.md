@@ -17,7 +17,7 @@ The orchestrator signs the commits of an accepted hand-back with its own key, pu
 
 ## A call that does not finish
 
-Every `git` call of the push goes through one step of `BranchGit`, and both `ssh-keygen` calls of `SigningKey` through the same `GuardedRun::of()`. A `git` call is limited to 600 seconds and an `ssh-keygen` call to 60 (each constructor's `timeoutSeconds`, which the tests lower). Symfony Process throws for a call that hits its limit, is killed by a signal or cannot start; each becomes `BranchNotPushed` with one of three fixed reasons, where `<program>` is `git <command>` (`git push`, `git ls-remote`, `git merge-tree` and so on) or `ssh-keygen`:
+Every `git` call of the push goes through one step of `BranchGit`, and both `ssh-keygen` calls of `SigningKey` through the same `run()` of `GuardedRun`, a stateless service injected into both. A `git` call is limited to 600 seconds and an `ssh-keygen` call to 60 (each constructor's `timeoutSeconds`, which the tests lower). Symfony Process throws for a call that hits its limit, is killed by a signal or cannot start; each becomes `BranchNotPushed` with one of three fixed reasons, where `<program>` is `git <command>` (`git push`, `git ls-remote`, `git merge-tree` and so on) or `ssh-keygen`:
 
 - `<program> timed out after <n> seconds`
 - `<program> was killed by signal <n>`
