@@ -258,7 +258,7 @@ final readonly class ReviewedRound
         return ReplayMark::Replay === $round->mark;
     }
 
-    // Read through a round for the same reason as `isReplayMarked()`.
+    // Read through a round, because PHPStan keeps the constructor's empty findings for `$this` (upstream/phpstan-clone-with-readonly-constructor-type).
     private function findingIn(self $round, string $id): ?RoundFinding
     {
         return array_find($round->findings, static fn (RoundFinding $finding): bool => $finding->id === $id);
