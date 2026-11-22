@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\Infrastructure;
 
-use Intakt\Core\Review\Contract\ResolvedFinding;
 use Doctrine\DBAL\Types\Types;
 use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Review\Contract\Decision;
@@ -13,6 +12,7 @@ use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\JudgedFinding;
 use Intakt\Core\Review\Contract\Judgement;
 use Intakt\Core\Review\Contract\Mark;
+use Intakt\Core\Review\Contract\ResolvedFinding;
 use Intakt\Core\Review\Contract\RoundCosts;
 use Intakt\Core\Review\Contract\RoundUpdates;
 use Intakt\Core\Review\Contract\SessionSummary;

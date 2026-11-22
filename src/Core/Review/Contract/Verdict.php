@@ -20,7 +20,7 @@ final readonly class Verdict
     private const array FAILED_REVIEWS = [self::INVALID_OUTPUT, self::INCOMPLETE_STREAM, self::UNREAD_APPROVAL, self::NO_TOOLS, self::CUT_APPROVAL, self::REVIEWER_STOPPED];
 
     /**
-     * @param list<Finding> $findings
+     * @param list<Finding>         $findings
      * @param list<ResolvedFinding> $resolved
      * @param list<FollowUpNote>    $follow_ups
      */

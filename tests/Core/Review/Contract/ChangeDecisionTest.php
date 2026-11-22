@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\Contract;
 
-use Intakt\Core\Review\Contract\ResolvedFinding;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Review\Contract\ChangeDecision;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\PanelVerdict;
 use Intakt\Core\Review\Contract\QuorumPolicy;
+use Intakt\Core\Review\Contract\ResolvedFinding;
 use Intakt\Core\Review\Contract\Verdict;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
