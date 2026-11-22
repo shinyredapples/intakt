@@ -49,10 +49,24 @@ class FakeStreamSource extends FakeElement {
     }
 }
 
+// The notes a held action placed after itself, which the page lists as the shell's querySelectorAll would.
+let notes = [];
+
+class FakeNote extends FakeElement {
+    remove() {
+        notes = notes.filter((note) => note !== this);
+    }
+}
+
 class FakeButton extends FakeElement {
     constructor(disabled = false) {
         super();
         this.disabled = disabled;
+    }
+
+    after(note) {
+        this.note = note;
+        notes.push(note);
     }
 }
 
@@ -65,6 +79,7 @@ function hiddenElapsedTime() {
 
 async function connectedShell(t, sources = [new FakeStreamSource()], page = {}) {
     t.mock.timers.enable({ apis: ['setInterval', 'Date'], now: DROPPED_AT });
+    notes = [];
 
     return shellOn(sources, page);
 }
@@ -73,9 +88,10 @@ async function connectedShell(t, sources = [new FakeStreamSource()], page = {}) 
 async function shellOn(sources, { actions = [], elapsed = [] } = {}) {
     globalThis.EventSource = FakeEventSource;
     globalThis.customElements = { whenDefined: async () => undefined };
+    globalThis.document = { createElement: () => new FakeNote() };
     const shell = new ConnectionController();
-    const found = { 'turbo-mercure-stream-source': sources, 'form[method="post"] button[type="submit"]': actions };
-    shell.element = { baseURI: 'http://localhost:7780/reviews/round-1', querySelectorAll: (selector) => found[selector] };
+    const found = { 'turbo-mercure-stream-source': () => sources, 'form[method="post"] button[type="submit"]': () => actions, '[data-connection-note]': () => notes };
+    shell.element = { baseURI: 'http://localhost:7781/reviews/round-1', querySelectorAll: (selector) => found[selector]() };
     shell.frozenTargets = elapsed;
     shell.lineTarget = new FakeElement();
     shell.lineTarget.hidden = true;
@@ -323,11 +339,12 @@ test('Try now leaves a try still under way to finish', async (t) => {
 
 test('a shell that leaves the page before Turbo is ready watches nothing', async (t) => {
     t.mock.timers.enable({ apis: ['setInterval', 'Date'], now: DROPPED_AT });
+    notes = [];
     let ready;
     globalThis.customElements = { whenDefined: () => new Promise((resolve) => { ready = resolve; }) };
     const source = new FakeStreamSource();
     const shell = new ConnectionController();
-    shell.element = { baseURI: 'http://localhost:7780/reviews/round-1', querySelectorAll: () => [source] };
+    shell.element = { baseURI: 'http://localhost:7781/reviews/round-1', querySelectorAll: (selector) => (selector === 'turbo-mercure-stream-source' ? [source] : []) };
     shell.frozenTargets = [];
     const connecting = shell.connect();
 
@@ -345,6 +362,57 @@ test('a drop disables every action of the page', async (t) => {
     source.es.emit('error');
 
     assert.deepEqual(actions.map((action) => action.disabled), [true, true]);
+});
+
+test('a held action says it is connecting to live updates', async (t) => {
+    const action = new FakeButton();
+    const { source } = await connectedShell(t, undefined, { actions: [action] });
+
+    source.es.emit('error');
+
+    assert.equal(action.note.textContent, 'Connecting to live updates…');
+    assert.equal(action.note.getAttribute('role'), 'status');
+    assert.equal(action.note.className, 'held-note');
+});
+
+test('a held action still says it is connecting just before the first try ends', async (t) => {
+    const action = new FakeButton();
+    const { source } = await connectedShell(t, undefined, { actions: [action] });
+    source.es.emit('error');
+
+    t.mock.timers.tick(4000);
+
+    assert.equal(action.note.textContent, 'Connecting to live updates…');
+});
+
+test('a held action says why it waits and what to do after five seconds without a connection', async (t) => {
+    const action = new FakeButton();
+    const { source } = await connectedShell(t, undefined, { actions: [action] });
+    source.es.emit('error');
+
+    t.mock.timers.tick(5000);
+
+    assert.equal(action.note.textContent, 'No live connection, so this waits. Open http://localhost:7781 on the machine running Intakt, or reach it from another device through an SSH tunnel.');
+});
+
+test('a connection that opens again removes the line beside each held action', async (t) => {
+    const actions = [new FakeButton(), new FakeButton()];
+    const { source } = await connectedShell(t, undefined, { actions });
+    source.es.emit('error');
+    t.mock.timers.tick(5000);
+
+    source.es.emit('open');
+
+    assert.deepEqual(notes, []);
+});
+
+test('an action the page showed disabled gets no connecting line', async (t) => {
+    const unavailable = new FakeButton(true);
+    const { source } = await connectedShell(t, undefined, { actions: [unavailable] });
+
+    source.es.emit('error');
+
+    assert.equal(unavailable.note, undefined);
 });
 
 test('a connection that opens again enables the actions it disabled', async (t) => {

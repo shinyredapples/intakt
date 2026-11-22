@@ -28,6 +28,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Event\RequestEvent;
 use Symfony\Component\HttpKernel\HttpKernelInterface;
+use Twig\Environment;
 
 #[CoversClass(RefuseForeignHost::class)]
 #[UsesClass(DashboardHost::class)]
@@ -83,6 +84,16 @@ final class RefuseForeignHostTest extends DashboardPageTestCase
         self::assertStringNotContainsString('private-project', (string) $this->browser->getResponse()->getContent());
     }
 
+    public function testTheRefusalNamesTheAddressTheDashboardAnswersAndHowToReachItFromAnotherDevice(): void
+    {
+        $page = $this->browser->request('GET', '/projects', server: ['HTTP_HOST' => '192.0.2.10:7780']);
+
+        self::assertResponseStatusCodeSame(400);
+        self::assertSame('Open the dashboard on localhost', $page->filter('h1')->text());
+        self::assertStringContainsString('Intakt answers only http://localhost:7780, on the machine it runs on.', $page->filter('.lead')->text());
+        self::assertSame('ssh -L 7780:localhost:7780 you@your-server', $page->filter('pre code')->text());
+    }
+
     #[DataProvider('loopbackHosts')]
     public function testADashboardPageAnswersALoopbackNameWithTheConfiguredPort(string $page, string $host): void
     {
@@ -100,7 +111,7 @@ final class RefuseForeignHostTest extends DashboardPageTestCase
         $request->attributes->set('_route', 'mcp_list_tools');
         $event = new RequestEvent(self::createStub(HttpKernelInterface::class), $request, HttpKernelInterface::MAIN_REQUEST);
 
-        new RefuseForeignHost(new DashboardHost(7780))($event);
+        new RefuseForeignHost(new DashboardHost(7780), self::createStub(Environment::class))($event);
 
         self::assertFalse($event->hasResponse());
     }

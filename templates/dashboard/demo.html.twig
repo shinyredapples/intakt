@@ -4,12 +4,14 @@
 
 {% block body %}
 <div class="demo">
-    {#- Only Play sets this flash type, and only the request its redirect names reads it, so only that page tells assets/tour-caption.js to follow the run to the review. -#}
+    {#- Only Play sets this flash type, and only the request its redirect names reads it, so only that page tells assets/tour-caption.js to follow the run to the review. A refusal from the worker replaces the line (stream/demo_refused). -#}
+    <div id="demo-play-status">
     {%- if started_flash %}
     {%- for line in app.flashes(started_flash) %}
     <p class="flash flash-success" data-tour-follow>{{ line }}</p>
     {%- endfor %}
     {%- endif %}
+    </div>
     <div class="page-head">
         {{ include('dashboard/components/character.html.twig', {character: constant('Intakt\\Core\\Dashboard\\Domain\\MascotPose::Conducting'), size: 144}, with_context = false) }}
         <div>

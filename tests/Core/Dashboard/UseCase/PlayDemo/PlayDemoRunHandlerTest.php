@@ -63,6 +63,8 @@ final class PlayDemoRunHandlerTest extends TestCase
 
     private MockClock $clock;
 
+    private ReplayMarkBus $marks;
+
     protected function setUp(): void
     {
         $this->directory = sys_get_temp_dir().'/intakt-play-demo-'.bin2hex(random_bytes(6));
@@ -70,6 +72,7 @@ final class PlayDemoRunHandlerTest extends TestCase
         $this->ledger = new DashboardLedger();
         $this->updates = new PublishedLiveEvents();
         $this->clock = new MockClock(self::START);
+        $this->marks = new ReplayMarkBus([CreateDemoProjectCommand::NAME]);
     }
 
     protected function tearDown(): void
@@ -83,6 +86,29 @@ final class PlayDemoRunHandlerTest extends TestCase
 
         self::assertSame([LedgerEventKind::ReviewStarted, LedgerEventKind::ReviewerStarted, LedgerEventKind::VerdictReceived, LedgerEventKind::JudgeDone], array_map(static fn (RecordedEvent $row): LedgerEventKind => $row->event->kind, $this->rows()));
         self::assertStringContainsString('"project":"'.CreateDemoProjectCommand::NAME.'"', $this->rows()[0]->event->payload);
+    }
+
+    public function testAPlayAfterTheDemoProjectWasRemovedCreatesItAgainAndPlaysTheRun(): void
+    {
+        $this->marks = new ReplayMarkBus();
+
+        $this->handler($this->recordingFile())();
+
+        self::assertSame([CreateDemoProjectCommand::NAME], $this->marks->replays());
+        self::assertCount(4, $this->rows());
+        self::assertStringContainsString('"project":"'.CreateDemoProjectCommand::NAME.'"', $this->rows()[0]->event->payload);
+    }
+
+    public function testARefusedPlayShowsItsReasonOnTheDemoPage(): void
+    {
+        $handler = $this->handler($this->recordingFile());
+        $handler();
+        $played = count($this->shellStreams());
+
+        $handler();
+
+        self::assertSame(['<turbo-stream action="update" target="demo-play-status"><template><p class="flash flash-error" role="alert">The demo run did not play. The ledger already holds review round round-1 of this recording, so it is not replayed again.</p></template></turbo-stream>'], array_map(trim(...), array_slice($this->shellStreams(), $played)));
+        self::assertLoggedError('error', 'The demo run was not played.');
     }
 
     public function testThePlayedRunGoesAtOneAndAHalfTimesTheRecordedPace(): void
@@ -155,10 +181,19 @@ final class PlayDemoRunHandlerTest extends TestCase
 
     private function handler(string $recording, string $composeService = 'intakt'): PlayDemoRunHandler
     {
-        $marks = new ReplayMarks(new ReplayMarkBus([CreateDemoProjectCommand::NAME]));
-        $replays = new ReplaysRecording($this->ledger, $this->updates, $this->clock, new LockFactory(new InMemoryStore()), $marks, TourCaptionsOn::captions($this->updates, TourCaptionsOn::tour($this->ledger, $marks, $composeService)), TourCaptionsOn::judged($this->ledger, $marks));
+        $marks = new ReplayMarks($this->marks);
+        $captions = TourCaptionsOn::captions($this->updates, TourCaptionsOn::tour($this->ledger, $marks, $composeService));
+        $replays = new ReplaysRecording($this->ledger, $this->updates, $this->clock, new LockFactory(new InMemoryStore()), $marks, $captions, TourCaptionsOn::judged($this->ledger, $marks));
 
-        return new PlayDemoRunHandler($replays, $this->format(), new Filesystem(), new RecordingLogger(LogRecords::ofThisRun() ?? self::fail('No log records.')), $recording, $composeService);
+        return new PlayDemoRunHandler($replays, $this->format(), new Filesystem(), new RecordingLogger(LogRecords::ofThisRun() ?? self::fail('No log records.')), $marks, $this->marks, $captions, $recording, $composeService);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function shellStreams(): array
+    {
+        return array_values(array_map(static fn (LiveEvent $event): string => $event->turboStream, array_filter($this->updates->events, static fn (LiveEvent $event): bool => DashboardTopics::SHELL === $event->topic)));
     }
 
     private function recordingFile(): string

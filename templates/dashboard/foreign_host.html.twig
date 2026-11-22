@@ -1,0 +1,22 @@
+{#- Stands alone, without the shell, because a refused request must read nothing of the ledger; `address` is the one the dashboard answers. -#}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Open the dashboard on localhost - Intakt</title>
+    <script>document.documentElement.dataset.theme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';</script>
+    <link rel="stylesheet" href="{{ asset('styles/fonts.css') }}">
+    <link rel="stylesheet" href="{{ asset('styles/tokens.css') }}">
+    <link rel="stylesheet" href="{{ asset('styles/base.css') }}">
+    <link rel="stylesheet" href="{{ asset('styles/components.css') }}">
+</head>
+<body>
+<main class="content foreign-host">
+    <h1>Open the dashboard on localhost</h1>
+    <p class="lead">Intakt answers only <code>http://{{ address }}</code>, on the machine it runs on. The dashboard has no login, so any other address could let a web page you visit act for you.</p>
+    <p>From another device, open an SSH tunnel to that machine, then open <code>http://{{ address }}</code> on this device:</p>
+    <pre><code>ssh -L {{ port }}:localhost:{{ port }} you@your-server</code></pre>
+</main>
+</body>
+</html>

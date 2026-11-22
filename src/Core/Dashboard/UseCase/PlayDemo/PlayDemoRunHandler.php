@@ -4,16 +4,23 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\UseCase\PlayDemo;
 
+use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
+use Intakt\Core\Dashboard\Infrastructure\TourCaptionUpdates;
+use Intakt\Core\Dashboard\UseCase\CreateDemoProject\CreateDemoProjectCommand;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\RecordingFormat;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\RecordingIsMalformed;
 use Intakt\Core\Dashboard\UseCase\ReplayDemo\ReplayIsRefused;
 use Intakt\Core\Dashboard\UseCase\ReplayDemo\ReplaysRecording;
 use Intakt\Core\Dashboard\UseCase\ReplayDemo\ReplayStopped;
 use Intakt\Core\Platform\Contract\AsCommandHandler;
+use Intakt\Core\Review\Contract\FlagProjectAsReplay;
+use Intakt\Core\Review\Contract\ReplayMark;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Messenger\MessageBusInterface;
+use Throwable;
 
 #[AsCommandHandler(handles: PlayDemoRun::class)]
 final readonly class PlayDemoRunHandler
@@ -26,6 +33,9 @@ final readonly class PlayDemoRunHandler
         private RecordingFormat $format,
         private Filesystem $filesystem,
         private LoggerInterface $logger,
+        private ReplayMarks $marks,
+        private MessageBusInterface $commands,
+        private TourCaptionUpdates $captions,
         #[Autowire(env: 'INTAKT_DEMO_RECORDING')]
         private string $recording,
         #[Autowire(env: 'INTAKT_COMPOSE_SERVICE')]
@@ -50,10 +60,25 @@ final readonly class PlayDemoRunHandler
         }
 
         try {
+            $this->recreateAMissingDemoProject();
             $this->replays->replay($this->format->read($this->filesystem->readFile($this->recording)), self::FACTOR);
         } catch (IOException|RecordingIsMalformed|ReplayIsRefused|ReplayStopped $failure) {
-            // Logged and not thrown, because a retry would meet the same file and the same ledger and refuse again.
-            $this->logger->error('The demo run was not played.', ['recording' => $this->recording, 'exception' => $failure]);
+            $this->refuse($failure);
         }
+    }
+
+    // Play stands for the whole demo, so a demo project removed with intakt:demo:remove comes back instead of refusing the run.
+    private function recreateAMissingDemoProject(): void
+    {
+        if (ReplayMark::Replay !== $this->marks->ofProject(CreateDemoProjectCommand::NAME)) {
+            $this->commands->dispatch(new FlagProjectAsReplay(CreateDemoProjectCommand::NAME));
+        }
+    }
+
+    // Logged and not thrown, because a retry would meet the same file and the same ledger and refuse again; shown on the open pages, because the person who pressed Play reads no log.
+    private function refuse(Throwable $failure): void
+    {
+        $this->logger->error('The demo run was not played.', ['recording' => $this->recording, 'exception' => $failure]);
+        $this->captions->publishTheRefusal($failure->getMessage());
     }
 }
