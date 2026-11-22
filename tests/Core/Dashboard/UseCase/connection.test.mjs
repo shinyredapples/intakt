@@ -85,13 +85,13 @@ async function connectedShell(t, sources = [new FakeStreamSource()], page = {}) 
 }
 
 // A shell that Stimulus connects to a page, as when Turbo renders it or restores it from its cache.
-async function shellOn(sources, { actions = [], elapsed = [] } = {}) {
+async function shellOn(sources, { actions = [], elapsed = [], address = 'http://localhost:7781/reviews/round-1' } = {}) {
     globalThis.EventSource = FakeEventSource;
     globalThis.customElements = { whenDefined: async () => undefined };
     globalThis.document = { createElement: () => new FakeNote() };
     const shell = new ConnectionController();
     const found = { 'turbo-mercure-stream-source': () => sources, 'form[method="post"] button[type="submit"]': () => actions, '[data-connection-note]': () => notes };
-    shell.element = { baseURI: 'http://localhost:7781/reviews/round-1', querySelectorAll: (selector) => found[selector]() };
+    shell.element = { baseURI: address, querySelectorAll: (selector) => found[selector]() };
     shell.frozenTargets = elapsed;
     shell.lineTarget = new FakeElement();
     shell.lineTarget.hidden = true;
@@ -393,6 +393,16 @@ test('a held action says why it waits and what to do after five seconds without 
     t.mock.timers.tick(5000);
 
     assert.equal(action.note.textContent, 'No live connection, so this waits. Open http://localhost:7781 on the machine running Intakt, or reach it from another device through an SSH tunnel.');
+});
+
+test('a page on the default port names the address without a port', async (t) => {
+    const action = new FakeButton();
+    const { source } = await connectedShell(t, undefined, { actions: [action], address: 'http://localhost/reviews/round-1' });
+    source.es.emit('error');
+
+    t.mock.timers.tick(5000);
+
+    assert.match(action.note.textContent, /Open http:\/\/localhost on the machine/);
 });
 
 test('a connection that opens again removes the line beside each held action', async (t) => {

@@ -1042,7 +1042,7 @@ The dashboard's `/demo` page (`http://localhost:7781/demo`) plays a recording wi
 
 - On an install that is not the compose demo: `The demo run plays only on the compose demo, and INTAKT_COMPOSE_SERVICE is empty on this install.`
 - With `INTAKT_DEMO_RECORDING` empty or naming no file: `No demo recording is installed: set INTAKT_DEMO_RECORDING to a file written by intakt:demo:record.`
-- Once a demo run is in the ledger: `The demo run is in the ledger. To play it again, remove it with intakt:demo:remove and start the compose demo again.`
+- Once a demo run is in the ledger: `The demo run is in the ledger. To play it again, remove it with intakt:demo:remove, then press Play: it creates the demo project again.`
 - Otherwise it offers **Play the demo run**. The first-run page (`/setup`) offers the same button under its title **See a real review** while the run can be played.
 
 The button plays the recording at one and a half times the recorded pace, as `intakt:demo:replay --factor=1.5` would, in a queue worker, so the page answers at once with `The demo run is starting: the caption at the bottom of each page names the stage it is in.` A recording that cannot be read or is refused (see the replay's refusals above) plays nothing, and the worker logs `The demo run was not played.` with the reason. The worker checks the compose demo again before it plays, so a press queued before the install stopped being the compose demo plays nothing either. Two quick presses can queue the run twice: the first plays it and the second is refused as a second playback, so that log line after a double click is harmless.

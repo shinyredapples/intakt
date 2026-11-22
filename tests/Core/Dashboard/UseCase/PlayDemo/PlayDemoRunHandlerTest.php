@@ -99,7 +99,7 @@ final class PlayDemoRunHandlerTest extends TestCase
         self::assertStringContainsString('"project":"'.CreateDemoProjectCommand::NAME.'"', $this->rows()[0]->event->payload);
     }
 
-    public function testARefusedPlayShowsItsReasonOnTheDemoPage(): void
+    public function testASecondPlayRefusedBecauseTheFirstIsInTheLedgerKeepsItsReasonOffThePages(): void
     {
         $handler = $this->handler($this->recordingFile());
         $handler();
@@ -107,7 +107,19 @@ final class PlayDemoRunHandlerTest extends TestCase
 
         $handler();
 
-        self::assertSame(['<turbo-stream action="update" target="demo-play-status"><template><p class="flash flash-error" role="alert">The demo run did not play. The ledger already holds review round round-1 of this recording, so it is not replayed again.</p></template></turbo-stream>'], array_map(trim(...), array_slice($this->shellStreams(), $played)));
+        self::assertSame([], array_slice($this->shellStreams(), $played));
+        self::assertLoggedError('error', 'The demo run was not played.');
+    }
+
+    public function testARefusedPlayShowsItsReasonOnTheDemoPage(): void
+    {
+        new Filesystem()->dumpFile($this->directory.'/broken.json', '{"events": "no"}');
+
+        $this->handler($this->directory.'/broken.json')();
+
+        $streams = $this->shellStreams();
+        self::assertCount(1, $streams);
+        self::assertStringStartsWith('<turbo-stream action="update" target="demo-play-status"><template><p class="flash flash-error" role="alert">The demo run did not play. ', trim($streams[0]));
         self::assertLoggedError('error', 'The demo run was not played.');
     }
 

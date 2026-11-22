@@ -84,7 +84,7 @@ You set Intakt up on a small server in the hall and type its address into the la
 ## The demo run did not play
 
 - **What you see:** "The demo run did not play." with a reason, below the Play button.
-- **Why:** the reason says it, most often that the demo run is in the ledger already.
+- **Why:** the reason says it, for example a demo recording that cannot be read.
 - **What to do:** run `docker compose exec intakt php bin/console intakt:demo:remove`, then press Play again. Play creates the demo project again by itself.
 
 More cases, and the exact wording of every reason, are in the [complete reference](../reference/user-manual.md).

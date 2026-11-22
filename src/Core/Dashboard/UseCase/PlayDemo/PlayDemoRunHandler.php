@@ -79,6 +79,12 @@ final readonly class PlayDemoRunHandler
     private function refuse(Throwable $failure): void
     {
         $this->logger->error('The demo run was not played.', ['recording' => $this->recording, 'exception' => $failure]);
+
+        // Kept off the pages when an earlier Play is the reason, because the stream reaches every page and would replace that run's start line while it plays.
+        if ($failure instanceof ReplayIsRefused && $failure->meansAnotherPlayCameFirst()) {
+            return;
+        }
+
         $this->captions->publishTheRefusal($failure->getMessage());
     }
 }

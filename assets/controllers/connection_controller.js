@@ -116,10 +116,10 @@ export default class extends Controller {
         this.element.querySelectorAll(`[${NOTE}]`).forEach((note) => note.remove());
     }
 
-    // Only a page the dashboard's own address serves gets this far, so its port is the one to open on the machine running Intakt.
+    // Only a page the dashboard's own address serves gets this far, so its host and port (none on a default port) are the ones to open on the machine running Intakt.
     explainHeldActions() {
-        const port = new URL(this.element.baseURI).port;
-        this.element.querySelectorAll(`[${NOTE}]`).forEach((note) => (note.textContent = explained(port)));
+        const host = new URL(this.element.baseURI).host;
+        this.element.querySelectorAll(`[${NOTE}]`).forEach((note) => (note.textContent = explained(host)));
     }
 
     // The server renders elapsed times and nothing counts them on, so the time of the drop tells how old they are.
@@ -178,8 +178,8 @@ export default class extends Controller {
     }
 }
 
-function explained(port) {
-    return `No live connection, so this waits. Open http://localhost:${port} on the machine running Intakt, or reach it from another device through an SSH tunnel.`;
+function explained(host) {
+    return `No live connection, so this waits. Open http://${host} on the machine running Intakt, or reach it from another device through an SSH tunnel.`;
 }
 
 function clockTime(moment) {
