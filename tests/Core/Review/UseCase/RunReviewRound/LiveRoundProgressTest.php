@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\RunReviewRound;
 
+use Intakt\Core\Review\Contract\AwaitedReviewer;
 use Intakt\Core\Review\Contract\FinishedState;
 use Intakt\Core\Review\Contract\RoundOpened;
 use Intakt\Core\Review\Contract\RoundProgress;
@@ -30,6 +31,7 @@ use RuntimeException;
 #[UsesClass(PublishJudgedRound::class)]
 #[UsesClass(ReviewRounds::class)]
 #[UsesClass(ReviewRound::class)]
+#[UsesClass(AwaitedReviewer::class)]
 #[UsesClass(ReviewerRateLimited::class)]
 #[UsesClass(ProviderRateLimited::class)]
 final class LiveRoundProgressTest extends KernelTestCase
@@ -89,6 +91,13 @@ final class LiveRoundProgressTest extends KernelTestCase
         $this->fixture->deliver($this->fixture->bus->messages[0], new VerdictPerRole([]));
 
         self::assertSame([true, false], array_map(static fn (RoundProgress $progress): bool => $progress->findingsToJudge, $this->fixture->updates->progress));
+    }
+
+    public function testAStoredRoundListsTheReviewersItAwaitsInPanelOrder(): void
+    {
+        $round = $this->fixture->start(5);
+
+        self::assertSame(['role-1', 'role-2', 'role-3', 'role-4', 'role-5'], array_map(static fn (AwaitedReviewer $awaited): string => $awaited->role, $round->progress()->awaited));
     }
 
     public function testAReviewerAWorkerTakesIsPublishedAsStarted(): void

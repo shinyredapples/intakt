@@ -25,7 +25,9 @@ final class ReviewRound implements HasPlace
 {
     // The properties are not readonly because the lazy proxy a reviewer holds for its round sets them again when it loads.
     /** @var Collection<int, RoundReviewer> */
+    // Loaded by id, because the ids are time-ordered and made in panel order, and a database returns rows without an ORDER BY in any order it likes.
     #[ORM\OneToMany(targetEntity: RoundReviewer::class, mappedBy: 'round', cascade: ['persist'])]
+    #[ORM\OrderBy(['id' => 'ASC'])]
     private Collection $reviewers;
 
     #[ORM\Column(length: 16, enumType: RoundState::class)]
