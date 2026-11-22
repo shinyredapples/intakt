@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\UseCase\ShowBoard;
 
-use Intakt\Core\Budget\Contract\OwnerNotices;
 use Intakt\Core\Dashboard\Contract\DashboardRoutes;
 use Intakt\Core\Dashboard\Domain\Board;
 use Intakt\Core\Dashboard\Domain\FailingHead;
@@ -13,6 +12,7 @@ use Intakt\Core\Dashboard\Infrastructure\LedgerFailingHeads;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LivePageRendering;
 use Intakt\Core\Dashboard\Infrastructure\SampleChangeSource;
+use Intakt\Core\Dashboard\Infrastructure\WaitingCount;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Watcher\Contract\FailingMain;
@@ -37,7 +37,7 @@ final readonly class ShowBoardController
         private LivePageRendering $pages,
         private SampleChangeSource $sample,
         private UrlGeneratorInterface $urls,
-        private OwnerNotices $notices,
+        private WaitingCount $waiting,
         private ClockInterface $clock,
     ) {
     }
@@ -58,12 +58,16 @@ final readonly class ShowBoardController
             return $this->variesByDevice($this->quietRoundOf($board) ?? $this->redirectTo(DashboardRoutes::LIST_WAITING));
         }
 
+        // One reading for the Needs you card and the You badge, so a notice that clears meanwhile cannot show one without the other.
+        $waiting = $this->waiting->stillRunningOldestFirst();
+
         return $this->variesByDevice(new Response($this->pages->render($request, 'dashboard/board.html.twig', [
             'board' => $board,
             'failing' => array_map($this->redacted(...), $this->failingHeads->in($events)),
             'failing_mains' => array_map($this->redactedMain(...), $this->failingMains->in($events)),
             'working' => $board->whoIsWorking(),
-            'waiting' => $this->notices->stillRunningOldestFirst(),
+            'waiting' => $waiting,
+            'waiting_listed' => count($waiting),
             'now' => $this->clock->now(),
             'columns' => $board->shownColumns(),
             'coming_next' => $board->comingNext(),
@@ -85,7 +89,7 @@ final readonly class ShowBoardController
     private function quietRoundOf(Board $board): ?RedirectResponse
     {
         $newest = $board->newestReviewAtRest();
-        if (!$newest instanceof Review || [] !== $this->notices->stillRunningOldestFirst()) {
+        if (!$newest instanceof Review || [] !== $this->waiting->stillRunningOldestFirst()) {
             return null;
         }
 

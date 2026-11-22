@@ -37,7 +37,7 @@
 <body>
 {# The connection controller runs only on a page that loads the import map, which is also the only kind of page with a live connection. #}
 <div class="shell" data-controller="connection">
-{# Now, You and Trends, the three places of the UX2 frame; Projects goes under More, which a phone shows instead of it. You counts what its page lists; the You page passes its own count, so one response never reads the notices twice. #}
+{# Now, You and Trends, the three places of the UX2 frame; Projects goes under More, which a phone shows instead of it. You counts what its page lists; the You page and the board pass the count of the list they show, so one response never reads the notices twice. #}
 {{ include('dashboard/_rail.html.twig', {
     rail_items: [
         {key: 'board', label: 'Now', icon: 'home', route: constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_BOARD'), params: {board: 1}},

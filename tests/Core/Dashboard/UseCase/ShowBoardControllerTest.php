@@ -32,12 +32,14 @@ use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\RefuseForeignHost;
 use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Dashboard\Infrastructure\SampleChangeSource;
+use Intakt\Core\Dashboard\Infrastructure\WaitingCount;
 use Intakt\Core\Dashboard\UseCase\ShowBoard\ShowBoardController;
 use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Core\Watcher\Contract\FailingMain;
 use Intakt\Core\Watcher\Contract\FailingMains;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
+use RuntimeException;
 use Symfony\Component\Asset\Packages;
 use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\HttpFoundation\Response;
@@ -66,6 +68,7 @@ use Symfony\Component\HttpFoundation\Response;
 #[UsesClass(HeadFault::class)]
 #[UsesClass(ReplayMarks::class)]
 #[UsesClass(SampleChangeSource::class)]
+#[UsesClass(WaitingCount::class)]
 final class ShowBoardControllerTest extends DashboardPageTestCase
 {
     /**
@@ -73,12 +76,21 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
      */
     private array $notices = [];
 
+    /**
+     * @var list<list<OutageNotice>|RuntimeException>
+     */
+    private array $readings = [];
+
     // Nothing waits unless a test says so, because the board reads the owner notices for its Needs you card on every load and a page test creates no schema.
     protected function setUp(): void
     {
         parent::setUp();
         $stub = self::createStub(OwnerNotices::class);
-        $stub->method('stillRunningOldestFirst')->willReturnCallback(fn (): array => $this->notices);
+        $stub->method('stillRunningOldestFirst')->willReturnCallback(function (): array {
+            $reading = array_shift($this->readings) ?? $this->notices;
+
+            return $reading instanceof RuntimeException ? throw $reading : $reading;
+        });
         self::getContainer()->set(OwnerNotices::class, $stub);
     }
 
@@ -876,6 +888,27 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         $this->ledger->startRoundOf('42', 'round-1', 1);
 
         self::assertCount(0, $this->browser->request('GET', '/?board=1')->filter('.needs-you'));
+    }
+
+    public function testTheBoardStaysAvailableWithoutNeedsYouWhenTheOwnerNoticesCannotBeRead(): void
+    {
+        $this->readings = [new RuntimeException('notice store unavailable'), new RuntimeException('notice store unavailable')];
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+
+        $page = $this->browser->request('GET', '/?board=1');
+
+        self::assertResponseIsSuccessful();
+        self::assertCount(0, $page->filter('.needs-you'));
+    }
+
+    public function testNeedsYouAndTheYouBadgeShowTheSameReadingWhenANoticeClearsMeanwhile(): void
+    {
+        $notice = new OutageNotice(new Account(Provider::ClaudeCode, 'main'), new DateTimeImmutable('2026-11-01T08:00:00+00:00'), new DateTimeImmutable('2026-11-01T11:00:00+00:00'));
+        $this->readings = [[$notice], []];
+
+        $page = $this->browser->request('GET', '/?board=1');
+
+        self::assertSame(['1 decision', '1'], [$page->filter('.needs-you .decisions')->text(), $page->filter('a[href="/waiting"]:not(.needs-you) .count')->first()->text('missing')]);
     }
 
     public function testTheBoardLinksToTheReviewListBehindIt(): void
