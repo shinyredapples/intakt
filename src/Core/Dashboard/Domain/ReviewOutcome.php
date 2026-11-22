@@ -60,6 +60,12 @@ enum ReviewOutcome: string
         };
     }
 
+    // The review page speaks plain words while the CLI, MCP and the docs keep the value, so the page shows the value only in a tooltip (#3183).
+    public function plainWords(): string
+    {
+        return self::ChangesRequested === $this ? 'Changes needed' : $this->value;
+    }
+
     // A judged ending carries no outcome of its own, so the round falls back to its reviewers and quorum.
     private static function ofEnding(RoundEnding $ending): ?self
     {

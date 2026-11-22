@@ -94,7 +94,7 @@ final class RoundStreamCheckTest extends TestCase
     {
         $this->expectFailure('update 1 is not a <turbo-stream>');
 
-        $this->check(['<p id="round-round-1-state">Judged.</p>']);
+        $this->check(['<p id="round-round-1-state">Checked.</p>']);
     }
 
     public function testAnUpdateWithAStreamBesideOtherMarkupFails(): void
@@ -115,14 +115,14 @@ final class RoundStreamCheckTest extends TestCase
     {
         $this->expectFailure('update 1 has a <turbo-stream> without an action');
 
-        $this->check(['<turbo-stream target="round-round-1-state"><template><p>Judged.</p></template></turbo-stream>']);
+        $this->check(['<turbo-stream target="round-round-1-state"><template><p>Checked.</p></template></turbo-stream>']);
     }
 
     public function testAStreamWithoutATargetOrTargetsFails(): void
     {
         $this->expectFailure('update 1 has a <turbo-stream> without a target or targets');
 
-        $this->check(['<turbo-stream action="replace"><template><p>Judged.</p></template></turbo-stream>']);
+        $this->check(['<turbo-stream action="replace"><template><p>Checked.</p></template></turbo-stream>']);
     }
 
     public function testATargetThatNamesNoElementOnThePageFails(): void
@@ -170,21 +170,21 @@ final class RoundStreamCheckTest extends TestCase
 
     public function testARoundStateThatIsNeitherProgressNorJudgedFails(): void
     {
-        $this->expectFailure('update 1 shows the round state "Almost done.", which is neither progress nor "Judged."');
+        $this->expectFailure('update 1 shows the round state "Almost done.", which is neither progress nor "Checked."');
 
         $this->check([$this->state('Almost done.')]);
     }
 
     public function testARecordingWhoseLastUpdateIsNotJudgedFails(): void
     {
-        $this->expectFailure('update 2, the last, does not carry "Judged."');
+        $this->expectFailure('update 2, the last, does not carry "Checked."');
 
         $this->check([$this->progress(1), $this->progress(2)]);
     }
 
     public function testAnUpdateAfterTheJudgedOneFails(): void
     {
-        $this->expectFailure('update 3 follows update 2, which carries "Judged."');
+        $this->expectFailure('update 3 follows update 2, which carries "Checked."');
 
         $this->check([$this->progress(2), $this->judged(), $this->progress(2)]);
     }
@@ -222,7 +222,7 @@ final class RoundStreamCheckTest extends TestCase
 
     private function judged(): string
     {
-        return $this->state('Judged.');
+        return $this->state('Checked.');
     }
 
     private function state(string $text): string

@@ -71,6 +71,8 @@ The pages answer only an address on the computer itself: `localhost`, `127.0.0.1
 
 On a review page, "Start round N" and "Stop this reviewer" share one lock per review, whichever of the review's round pages you press them on, so two of these presses for one review never run at the same time. A press that arrives while another one for the same review is still being handled does nothing and returns with the line "Another press for this review is still running, so nothing was started." (or "... nothing was stopped."); press again. The round-wide **Stop** button does not take this lock.
 
+The review page uses plain words, while the CLI, the MCP tools and these docs keep the technical terms: **Review pass** is a round (so "Now: round 2 in review" reads "Now: Review pass 2 in review"), **To fix** is the act list (the open findings), **Checked** means judged, and **Changes needed** is the outcome Changes requested. Pointing at one of these words, or at its "?", shows the technical term.
+
 ### The Trends page
 
 `/trends` (**Trends** in the menu, after Projects) shows how the reviews went, read from the ledger's review rounds of every project, whatever the project filter shows. The page opens with tiles, three per row on a phone, each giving one figure above a short label; point at a label or reach it with the Tab key and a tooltip says what the figure counts. A tile shows only when there is a figure for it, so a page with few reviews shows fewer tiles:
