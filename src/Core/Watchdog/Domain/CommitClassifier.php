@@ -28,7 +28,7 @@ final readonly class CommitClassifier
         }
 
         try {
-            return new Classification($this->violationsOnTheWalk($main));
+            return $this->classifiedWalk($main);
         } catch (MainHistoryRewritten) {
             // The same outcome as above, because a force push between the two reads rewrote main just the same.
             return $this->rewritten($main);
@@ -40,23 +40,24 @@ final readonly class CommitClassifier
         return new Classification([new MainViolation($main->lastSeenHead, Violation::HistoryRewritten)]);
     }
 
-    /**
-     * @return list<MainViolation>
-     */
-    private function violationsOnTheWalk(WatchedMain $main): array
+    private function classifiedWalk(WatchedMain $main): Classification
     {
         $walk = $this->history->firstParentsSince($main->lastSeenHead);
         $covered = [] === $walk ? [] : $this->broughtInByRecordedMerges($main->recordedMerges);
 
         $violations = [];
+        $ownerPushes = [];
         foreach ($walk as $commit) {
-            $violation = $this->judge($main, $covered, $commit);
-            if ($violation instanceof Violation) {
-                $violations[] = new MainViolation($commit, $violation);
+            $status = $this->judge($main, $covered, $commit);
+            if ($status instanceof Violation) {
+                $violations[] = new MainViolation($commit, $status);
+            }
+            if (SignatureStatus::OwnerSigned === $status) {
+                $ownerPushes[] = $commit;
             }
         }
 
-        return $violations;
+        return new Classification($violations, $ownerPushes);
     }
 
     /**
@@ -80,14 +81,14 @@ final readonly class CommitClassifier
     /**
      * @param array<string, true> $covered
      */
-    private function judge(WatchedMain $main, array $covered, string $commit): ?Violation
+    private function judge(WatchedMain $main, array $covered, string $commit): Violation|SignatureStatus|null
     {
         if ($main->isRecordedHead($commit) || isset($covered[$commit])) {
             return null;
         }
 
         return match ($this->history->signatureOf($commit)) {
-            SignatureStatus::OwnerSigned => null,
+            SignatureStatus::OwnerSigned => SignatureStatus::OwnerSigned,
             SignatureStatus::Unsigned => Violation::Unsigned,
             SignatureStatus::UnknownKey => Violation::UnknownKey,
         };

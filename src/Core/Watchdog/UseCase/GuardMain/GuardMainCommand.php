@@ -9,6 +9,7 @@ use Intakt\Core\Watchdog\Contract\MainNotRead;
 use Intakt\Core\Watchdog\Contract\OwnerCard;
 use Intakt\Core\Watchdog\Infrastructure\ConsoleReport;
 use Intakt\Core\Watchdog\Infrastructure\HaltNotRecorded;
+use Intakt\Core\Watchdog\Infrastructure\NoticeNotRecorded;
 use Intakt\Core\Watchdog\Infrastructure\OwnerKeyRefused;
 use Intakt\Core\Watchdog\UseCase\CheckMain\RecordedMergeNotARange;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -30,12 +31,12 @@ final readonly class GuardMainCommand
     public function __invoke(SymfonyStyle $io, #[MapInput] GuardMainInput $input): int
     {
         try {
-            $cards = $this->guard->standingCardsAfterChecking($input);
+            $guarded = $this->guard->guarded($input);
         } catch (AHaltNamesItsProject|CommitNameNotFull|RecordedMergeNotARange|OwnerKeyRefused $refused) {
             $io->error(ConsoleReport::printable($refused->getMessage()));
 
             return Command::INVALID;
-        } catch (MainNotRead|HaltNotRecorded $failed) {
+        } catch (MainNotRead|HaltNotRecorded|NoticeNotRecorded $failed) {
             $io->error(ConsoleReport::printable($failed->getMessage()));
 
             return Command::FAILURE;
@@ -45,7 +46,11 @@ final readonly class GuardMainCommand
             return Command::FAILURE;
         }
 
-        return $this->reported($io, $input->project, $cards);
+        foreach ($guarded->noticedOwnerPushes as $commit) {
+            $io->writeln(ConsoleReport::noticeLine($input->project, $commit));
+        }
+
+        return $this->reported($io, $input->project, $guarded->standingCards);
     }
 
     /**

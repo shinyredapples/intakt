@@ -6,10 +6,11 @@ namespace Intakt\Core\Watchdog\UseCase\GuardMain;
 
 use Intakt\Core\Watchdog\Contract\CommitNameNotFull;
 use Intakt\Core\Watchdog\Contract\MainNotRead;
-use Intakt\Core\Watchdog\Contract\OwnerCard;
 use Intakt\Core\Watchdog\Domain\CheckedMain;
 use Intakt\Core\Watchdog\Infrastructure\HaltNotRecorded;
 use Intakt\Core\Watchdog\Infrastructure\LedgerHalts;
+use Intakt\Core\Watchdog\Infrastructure\LedgerOwnerPushNotices;
+use Intakt\Core\Watchdog\Infrastructure\NoticeNotRecorded;
 use Intakt\Core\Watchdog\Infrastructure\OwnerKeyRefused;
 use Intakt\Core\Watchdog\UseCase\CheckMain\CheckMain;
 use Intakt\Core\Watchdog\UseCase\CheckMain\RecordedMergeNotARange;
@@ -18,19 +19,18 @@ use Symfony\Component\Process\Exception\ProcessFailedException;
 
 final readonly class GuardMain
 {
-    // One lock for every project's halts, so two guards that read main at once raise one card per violation.
+    // One lock for every project's halts and notices, so two guards that read main at once, from one clone or two, raise one card per violation and give one notice per owner push.
     private const string LOCK = 'watchdog-halts';
 
     public function __construct(
         private CheckMain $check,
         private LedgerHalts $halts,
+        private LedgerOwnerPushNotices $notices,
         private LockFactory $locks,
     ) {
     }
 
     /**
-     * @return list<OwnerCard>
-     *
      * @throws AHaltNamesItsProject
      * @throws CommitNameNotFull
      * @throws RecordedMergeNotARange
@@ -38,13 +38,14 @@ final readonly class GuardMain
      * @throws MainNotRead
      * @throws ProcessFailedException
      * @throws HaltNotRecorded
+     * @throws NoticeNotRecorded
      */
-    public function standingCardsAfterChecking(GuardMainInput $input): array
+    public function guarded(GuardMainInput $input): GuardedMain
     {
         $this->mustNameAProject($input->project);
-        $this->raiseCardsFor($input->project, $this->check->checked($input->repository, $input->watchedMain(), $input->ownerKey));
+        $noticed = $this->recordedFor($input->project, $this->check->checked($input->repository, $input->watchedMain(), $input->ownerKey));
 
-        return $this->halts->standingOf($input->project);
+        return new GuardedMain($this->halts->standingOf($input->project), $noticed);
     }
 
     private function mustNameAProject(string $project): void
@@ -54,22 +55,50 @@ final readonly class GuardMain
         }
     }
 
-    private function raiseCardsFor(string $project, CheckedMain $checked): void
+    /**
+     * @return list<string>
+     */
+    private function recordedFor(string $project, CheckedMain $checked): array
     {
-        if ($checked->classification->isClean()) {
-            return;
+        if ($checked->classification->isClean() && [] === $checked->classification->ownerPushes) {
+            return [];
         }
 
         $lock = $this->locks->createLock(self::LOCK);
         $lock->acquire(true);
         try {
-            foreach ($checked->classification->violations as $violation) {
-                if (!$this->halts->wasRaised($project, $violation, $checked->head)) {
-                    $this->halts->raise($project, $violation, $checked->head);
-                }
-            }
+            $this->raiseCardsFor($project, $checked);
+
+            return $this->noticesGivenFor($project, $checked->classification->ownerPushes);
         } finally {
             $lock->release();
         }
+    }
+
+    private function raiseCardsFor(string $project, CheckedMain $checked): void
+    {
+        foreach ($checked->classification->violations as $violation) {
+            if (!$this->halts->wasRaised($project, $violation, $checked->head)) {
+                $this->halts->raise($project, $violation, $checked->head);
+            }
+        }
+    }
+
+    /**
+     * @param list<string> $ownerPushes
+     *
+     * @return list<string>
+     */
+    private function noticesGivenFor(string $project, array $ownerPushes): array
+    {
+        $given = [];
+        foreach ($ownerPushes as $commit) {
+            if (!$this->notices->wasNoticed($project, $commit)) {
+                $this->notices->notice($project, $commit);
+                $given[] = $commit;
+            }
+        }
+
+        return $given;
     }
 }

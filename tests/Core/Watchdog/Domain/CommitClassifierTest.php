@@ -89,6 +89,40 @@ final class CommitClassifierTest extends TestCase
         self::assertTrue($classification->isClean());
     }
 
+    public function testAnOwnerSignedCommitIsNamedAsAnOwnerPushAndIsNoViolation(): void
+    {
+        $history = $this->history([self::OTHER => SignatureStatus::OwnerSigned, self::BASE => SignatureStatus::Unsigned]);
+
+        $classification = $this->classify($history, $this->mainWithRecordedMerge());
+
+        self::assertSame([self::OTHER], $classification->ownerPushes);
+        self::assertEquals([new MainViolation(self::BASE, Violation::Unsigned)], $classification->violations);
+    }
+
+    public function testAnOwnerSignedRecordedHeadOrCommitItsMergeBroughtInIsNoOwnerPush(): void
+    {
+        $history = self::createStub(CommitHistory::class);
+        $history->method('contains')->willReturn(true);
+        $history->method('firstParentsSince')->willReturn([self::OTHER, self::MERGE]);
+        $history->method('broughtInBy')->willReturn([self::MERGE, self::OTHER]);
+        $history->method('signatureOf')->willReturn(SignatureStatus::OwnerSigned);
+
+        $classification = $this->classify($history, $this->mainWithRecordedMerge());
+
+        self::assertSame([], $classification->ownerPushes);
+    }
+
+    public function testAHistoryRewriteNamesNoOwnerPush(): void
+    {
+        $history = self::createStub(CommitHistory::class);
+        $history->method('contains')->willReturn(false);
+        $history->method('signatureOf')->willReturn(SignatureStatus::OwnerSigned);
+
+        $classification = $this->classify($history, $this->mainWithRecordedMerge());
+
+        self::assertSame([], $classification->ownerPushes);
+    }
+
     public function testAnUnsignedCommitIsAViolation(): void
     {
         $history = $this->history([self::OTHER => SignatureStatus::Unsigned]);
