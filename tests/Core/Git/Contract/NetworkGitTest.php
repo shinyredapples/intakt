@@ -106,7 +106,7 @@ final class NetworkGitTest extends TestCase
     public function testACallKilledByASignalIsRetriedAndThenFailsWithItsReason(): void
     {
         $clock = new RecordingClock();
-        $killed = new GitCall(new GitCommand(PHP_BINARY, '-r', 'posix_kill(getmypid(), SIGTERM);'), $this->directory, new GitEnvironment());
+        $killed = new GitCall(new GitCommand(PHP_BINARY, '-r', 'posix_kill(getmypid(), SIGTERM);'), $this->directory, GitEnvironment::of());
 
         try {
             new NetworkGit($clock, new NullLogger())->run($killed);
@@ -122,7 +122,7 @@ final class NetworkGitTest extends TestCase
         $clock = new RecordingClock();
 
         try {
-            new NetworkGit($clock, new NullLogger())->run(new GitCall(new GitCommand('git', 'version'), $this->directory.'/missing', new GitEnvironment()));
+            new NetworkGit($clock, new NullLogger())->run(new GitCall(new GitCommand('git', 'version'), $this->directory.'/missing', GitEnvironment::of()));
             self::fail('A call that cannot start must fail.');
         } catch (NetworkGitFailed $failed) {
             self::assertSame([10, 30], $clock->sleeps);
@@ -135,7 +135,7 @@ final class NetworkGitTest extends TestCase
         $clock = new RecordingClock();
         $log = new BufferingLogger();
         $credential = 'not-a-real-'.bin2hex(random_bytes(4));
-        $hanging = new GitCall(new GitCommand(PHP_BINARY, '-r', 'sleep(30);', 'https://intakt:'.$credential.'@localhost/repo.git'), $this->directory, new GitEnvironment());
+        $hanging = new GitCall(new GitCommand(PHP_BINARY, '-r', 'sleep(30);', 'https://intakt:'.$credential.'@localhost/repo.git'), $this->directory, GitEnvironment::of());
 
         try {
             new NetworkGit($clock, $log, timeoutSeconds: 0.2)->run($hanging);
@@ -171,7 +171,7 @@ final class NetworkGitTest extends TestCase
 
     private function listRemote(string $remote): GitCall
     {
-        return new GitCall(new GitCommand('git', 'ls-remote', '--', $remote), $this->directory, new GitEnvironment(GIT_CONFIG_GLOBAL: '/dev/null'));
+        return new GitCall(new GitCommand('git', 'ls-remote', '--', $remote), $this->directory, GitEnvironment::of(GIT_CONFIG_GLOBAL: '/dev/null'));
     }
 
     private function errorOutputOf(GitCall $call): string

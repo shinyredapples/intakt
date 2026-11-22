@@ -11,9 +11,9 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(GitEnvironment::class)]
 final class GitEnvironmentTest extends TestCase
 {
-    public function testAVariableAddedLaterReplacesOneOfTheSameName(): void
+    public function testAVariableAddedLaterReplacesOneOfTheSameNameInItsPlace(): void
     {
-        $environment = new GitEnvironment(
+        $environment = GitEnvironment::of(
             GIT_ALLOW_PROTOCOL: '',
             HOME: '/nonexistent',
         )->with(GIT_ALLOW_PROTOCOL: 'file');
@@ -21,16 +21,19 @@ final class GitEnvironmentTest extends TestCase
         self::assertSame(['GIT_ALLOW_PROTOCOL' => 'file', 'HOME' => '/nonexistent'], [...$environment]);
     }
 
-    public function testAVariableSetToFalseIsKeptSoTheProcessUnsetsIt(): void
+    public function testAnUnsetVariableIsKeptAsFalseSoTheProcessDropsTheInheritedOne(): void
     {
-        $environment = new GitEnvironment(GIT_ATTR_SOURCE: 'tree')->with(GIT_ATTR_SOURCE: false);
+        $environment = GitEnvironment::of(
+            GIT_ATTR_SOURCE: 'tree',
+            HOME: '/nonexistent',
+        )->unsetting('GIT_ATTR_SOURCE', 'GIT_DIR');
 
-        self::assertSame(['GIT_ATTR_SOURCE' => false], [...$environment]);
+        self::assertSame(['GIT_ATTR_SOURCE' => false, 'HOME' => '/nonexistent', 'GIT_DIR' => false], [...$environment]);
     }
 
     public function testAddingAVariableLeavesTheOriginalAsItWas(): void
     {
-        $original = new GitEnvironment(HOME: '/nonexistent');
+        $original = GitEnvironment::of(HOME: '/nonexistent');
 
         $original->with(HOME: '/elsewhere');
 

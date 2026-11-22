@@ -67,7 +67,7 @@ final readonly class HardenedGit
         $options = ['--literal-pathspecs', '--git-dir='.$repository, '--bare'];
         $emptyTree = $this->bareEmptyTree($options, $repository);
 
-        return new GitCall(new GitCommand(...$this->command($options, array_values($arguments), $emptyTree)), $repository, new GitEnvironment(...$this->variables(null, $emptyTree)));
+        return new GitCall(new GitCommand(...$this->command($options, array_values($arguments), $emptyTree)), $repository, $this->environmentOf($this->variables(null, $emptyTree)));
     }
 
     /**
@@ -78,7 +78,7 @@ final readonly class HardenedGit
     {
         $directory = $this->absolute($directory);
 
-        return new GitEnvironment(...$this->variables($directory, $this->emptyTree($directory)));
+        return $this->environmentOf($this->variables($directory, $this->emptyTree($directory)));
     }
 
     /**
@@ -93,7 +93,20 @@ final readonly class HardenedGit
         $directory = $this->absolute($directory);
         $emptyTree = $this->emptyTree($directory);
 
-        return new GitCall(new GitCommand(...$this->command($options, $arguments, $emptyTree)), $directory, new GitEnvironment(...$this->variables($directory, $emptyTree)));
+        return new GitCall(new GitCommand(...$this->command($options, $arguments, $emptyTree)), $directory, $this->environmentOf($this->variables($directory, $emptyTree)));
+    }
+
+    /**
+     * @param array<string, string|false> $variables
+     */
+    private function environmentOf(array $variables): GitEnvironment
+    {
+        $environment = GitEnvironment::of();
+        foreach ($variables as $name => $value) {
+            $environment = false === $value ? $environment->unsetting($name) : $environment->with(...[$name => $value]);
+        }
+
+        return $environment;
     }
 
     /**

@@ -123,7 +123,7 @@ final readonly class UpdateMirror
         // Because the clone runs in the mirrors folder, where HardenedGit names SHA-1's empty tree, and a "file://" remote hands that on to its upload-pack, which refuses it in a SHA-256 repository; a bare mirror clone checks out nothing and reads no attributes, and the attributes file and system settings stay off.
         $command = array_filter([...$call->command], static fn (string $part): bool => !str_starts_with($part, '--attr-source='));
 
-        return new GitCall(new GitCommand(...$command), $call->directory, $call->environment->with(GIT_ATTR_SOURCE: false));
+        return new GitCall(new GitCommand(...$command), $call->directory, $call->environment->unsetting('GIT_ATTR_SOURCE'));
     }
 
     private function stagingPath(string $project): string

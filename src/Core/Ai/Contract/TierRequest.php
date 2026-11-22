@@ -26,7 +26,6 @@ final readonly class TierRequest
         return new self($input, []);
     }
 
-    // Symfony AI's list form of an input, such as several texts in one call.
     public static function ofList(mixed ...$parts): self
     {
         return new self($parts, []);
@@ -35,9 +34,15 @@ final readonly class TierRequest
     // An option already set wins, so a caller's own value is kept over a default added later.
     public function withDefaults(mixed ...$options): self
     {
-        return clone ($this, ['options' => $this->options + $options]);
+        /** @var array<string, mixed> $named */
+        $named = $options;
+
+        return clone ($this, ['options' => $this->options + $named]);
     }
 
+    /**
+     * @param non-empty-string $model
+     */
     #[NoDiscard('the answer is only in the result')]
     public function invokeOn(PlatformInterface $platform, string $model): DeferredResult
     {

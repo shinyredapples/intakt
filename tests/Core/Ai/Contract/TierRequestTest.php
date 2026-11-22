@@ -53,7 +53,7 @@ final class TierRequestTest extends TestCase
             $sent['input'] = $input;
             $sent['options'] = $options;
 
-            return $inner->invoke($model, 'review');
+            return $inner->invoke('model', 'review');
         });
 
         $request->invokeOn($platform, 'model')->asText();

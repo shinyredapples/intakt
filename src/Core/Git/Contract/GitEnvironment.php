@@ -8,24 +8,36 @@ use ArrayIterator;
 use IteratorAggregate;
 use Traversable;
 
-// The variables of one git call by name, where false unsets an inherited one, as Symfony Process reads them.
+// An unset variable is held as false, because Symfony Process drops an inherited variable only where its value is false.
 /**
  * @implements IteratorAggregate<string, string|false>
  */
 final readonly class GitEnvironment implements IteratorAggregate
 {
-    /** @var array<string, string|false> */
-    private array $variables;
-
-    public function __construct(string|false ...$variables)
+    /**
+     * @param array<string, string|false> $variables
+     */
+    private function __construct(private array $variables)
     {
-        $this->variables = $variables;
     }
 
-    // A variable given here replaces one of the same name.
-    public function with(string|false ...$variables): self
+    public static function of(string ...$variables): self
     {
-        return new self(...[...$this->variables, ...$variables]);
+        return new self([])->with(...$variables);
+    }
+
+    // In place where the name is already there, because the process gets the variables in this order.
+    public function with(string ...$variables): self
+    {
+        /** @var array<string, string> $named */
+        $named = $variables;
+
+        return new self([...$this->variables, ...$named]);
+    }
+
+    public function unsetting(string ...$names): self
+    {
+        return new self([...$this->variables, ...array_fill_keys($names, false)]);
     }
 
     /**

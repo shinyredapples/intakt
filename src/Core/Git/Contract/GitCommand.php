@@ -8,7 +8,6 @@ use ArrayIterator;
 use IteratorAggregate;
 use Traversable;
 
-// The program and every argument of one git call, in the order they are passed.
 /**
  * @implements IteratorAggregate<int, string>
  */

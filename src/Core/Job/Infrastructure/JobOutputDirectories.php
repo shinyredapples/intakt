@@ -72,7 +72,7 @@ final readonly class JobOutputDirectories
         ksort($files, SORT_STRING);
 
         // A name of digits became an integer key above, so each name is turned back into text.
-        return new JobOutput(...array_map(static fn (int|string $name, string $contents): JobOutputFile => new JobOutputFile((string) $name, $contents), array_keys($files), $files));
+        return new JobOutput(...array_map(static fn (string $name, string $contents): JobOutputFile => new JobOutputFile($name, $contents), array_map(strval(...), array_keys($files)), $files));
     }
 
     public function remove(JobId $job): void
