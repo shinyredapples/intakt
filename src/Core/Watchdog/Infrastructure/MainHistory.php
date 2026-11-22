@@ -44,7 +44,6 @@ final readonly class MainHistory implements CommitHistory
 
     /**
      * @param list<string> $ownerKeys
-     * @param string|null  $pinnedTip main's head read once for a whole check, so every read of the check sees the same main
      *
      * @throws OwnerKeyRefused
      */
@@ -53,6 +52,7 @@ final readonly class MainHistory implements CommitHistory
         private string $repository,
         array $ownerKeys,
         private Filesystem $filesystem,
+        // Main's head read once for a whole check, because every read of one check must see the same main.
         private ?string $pinnedTip = null,
     ) {
         $this->ownerKeys = array_map(static fn (string $line, int $index): string => OwnerKey::fromLine($line, $index + 1)->typeAndKey, $ownerKeys, array_keys($ownerKeys));
