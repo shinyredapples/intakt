@@ -113,11 +113,12 @@ final readonly class PublishedBench
      */
     private function runs(array $section): ?int
     {
-        $repeats = array_values(array_filter(array_map(
-            static fn (string $line): ?string => 1 === preg_match(self::REPEAT, $line, $repeat) ? $repeat[1] : null,
-            $section,
-        )));
-        $runs = 1 === count($repeats) ? $this->countOf($repeats[0]) : null;
+        $repeats = array_values(array_filter($section, static fn (string $line): bool => 1 === preg_match(self::REPEAT, $line)));
+        if (1 !== count($repeats) || 1 !== preg_match(self::REPEAT, $repeats[0], $repeat)) {
+            return null;
+        }
+
+        $runs = $this->countOf($repeat[1]);
 
         return 0 === $runs ? null : $runs;
     }

@@ -32,7 +32,7 @@ final readonly class BenchHeadline
         return intdiv($this->planted, $this->runs);
     }
 
-    // The big figure of the headline: "All 5" when every run found every planted defect, else the finds over every run.
+    // "All 5" only when every run found every planted defect, because "15 of 15" alone does not say that the 15 are 5 defects found 3 times.
     public function figure(): string
     {
         $perRun = $this->plantedPerRun();
@@ -40,7 +40,7 @@ final readonly class BenchHeadline
         return null !== $perRun && $this->found === $this->planted ? 'All '.$perRun : $this->reading();
     }
 
-    // The words after the figure, which make the headline one sentence: "All 5 planted defects found in each of 3 runs".
+    // A partial result names the finds over all runs, because a per-run count cannot be told from the total.
     public function words(): string
     {
         $perRun = $this->plantedPerRun();

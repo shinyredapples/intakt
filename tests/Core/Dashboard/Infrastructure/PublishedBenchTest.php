@@ -291,7 +291,8 @@ final class PublishedBenchTest extends TestCase
 
         self::assertNotNull($headline);
         self::assertMatchesRegularExpression('/^\d+ of \d+$/', $headline->reading());
-        self::assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2}$/', $headline->ranOn);        self::assertNotNull($headline->plantedPerRun(), 'The README no longer says how often each change ran.');
+        self::assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2}$/', $headline->ranOn);
+        self::assertNotNull($headline->plantedPerRun(), 'The README no longer says how often each change ran.');
     }
 
     private function section(string $header = self::HEADER, string $panel = self::PANEL, string $date = self::DATE): string
