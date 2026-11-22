@@ -31,7 +31,7 @@ enum TourStage: string
             self::ReviewersRead => 'The reviewers read the change.',
             self::FindingsArrive => 'Findings arrive as each reviewer answers.',
             self::JudgeWeighs => 'The judge checks every finding against the change.',
-            self::RoundEnds => 'Done: To fix lists what still needs changing.',
+            self::RoundEnds => 'Checked: To fix lists what still needs changing.',
         };
     }
 

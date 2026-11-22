@@ -70,7 +70,7 @@ Part 2 of the escalation of a recurring P1 (issue #1767). `Domain\KeptVerdict` i
 
 ## The escalation prompt
 
-Part 2a of the escalation of a recurring P1 (issue #3300). Nothing calls it yet: the escalation review's model call and its handler come with later parts of T61.
+Part 2a of the escalation of a recurring P1 (issue #3300). `EscalationAgent` calls it (see [The escalation call](#the-escalation-call)).
 
 `Infrastructure\EscalationPrompt::messagesFor()` builds the messages for one `Contract\EscalationRequest` (one `Finding` and the round's diff) through `PromptAssembly`: the fixed instructions (one finding alone, an outcome `confirmed` or `rejected` with reasons, no tools), the finding fenced as `escalated finding` (`Finding::listEntry()`), and the diff fenced as `diff`.
 
@@ -83,6 +83,27 @@ The cited sections are always shown whole; the other sections follow and are cut
 When no section matches, or the cited sections alone are over the ceiling, it throws `CitedCodeNotShown` with Intakt's own reason, and no prompt is built.
 
 Tests: `tests/Core/Review/Infrastructure/EscalationPromptTest.php` (the `file` field's section first, a path cited in the text, a bare name, the rest cut while the cited sections stay whole, no cut under the ceiling, cited sections right at the ceiling shown whole, no cited file in the diff, cited sections over the ceiling, both inputs fenced, the instructions and the three messages, the names `citedIn()` gives).
+
+## The escalation call
+
+Issue #3301. Nothing calls it yet: the handler that queues it and keeps its verdict comes with a later part of T61.
+
+`Infrastructure\EscalationAgent` is the `Contract\EscalationReviewer`: `review(project, round, EscalationRequest)` returns `EscalationReviewed` or `EscalationFailed`.
+
+It builds the messages with `EscalationPrompt::messagesFor()` and calls `EscalationReviews::escalate()` on the strong tier (see [Vendor](vendor.md#escalation-review)), with no tools.
+
+`EscalationReviewed` holds the `EscalationVerdict` with its reasons passed through `trim()` of the `Platform` `Redactor`'s redaction, so a held credential quoted in them reads `[redacted]`.
+
+`EscalationFailed` holds Intakt's own reason, never the model's text, and no verdict:
+- a `CitedCodeNotShown` from the prompt gives its message, and no model is called;
+- a strong tier the project maps no model to (`Vendor::mapsAModelTo()`) gives `project "<project>" maps no model to the "strong" tier, which the escalation review needs`, and no model is called;
+- an answer that is no escalation verdict gives `EscalationAgent::UNREADABLE`.
+
+A provider error from the call is thrown unchanged by the agent, as the vendor's typed error (see [Vendor](vendor.md#escalation-review)), so the queue tries the escalation again.
+
+The ledger kinds `escalation_reviewed` and `escalation_failed` exist for these results; nothing appends them yet.
+
+Tests: `tests/Core/Review/Infrastructure/EscalationAgentTest.php` (a confirmed answer, redacted and trimmed reasons, an unreadable answer, an unmapped strong tier and cited code not in the diff without a call, the strong tier, the round and the prompt of the call, a provider error thrown unchanged).
 
 ## One address per pull request
 
