@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\IndexResolvedFindings;
 
+use Intakt\Core\Review\Contract\ResolvedFinding;
 use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Memory\Contract\MemoryEntry;
 use Intakt\Core\Memory\Contract\MemoryIndex;
@@ -139,7 +140,7 @@ final class IndexResolvedFindingsTest extends KernelTestCase
     public function testAFailedReviewsResolvedIdsAreNotIndexed(): void
     {
         $this->roundReporting([$this->finding('a')]);
-        $failed = new Verdict(Decision::Changes, [new Finding(Verdict::INVALID_OUTPUT, Severity::P1, null, null, null, 'Broken.', FixableBy::Builder, false, null, null)], ['F1'], []);
+        $failed = new Verdict(Decision::Changes, [new Finding(Verdict::INVALID_OUTPUT, Severity::P1, null, null, null, 'Broken.', FixableBy::Builder, false, null, null)], [new ResolvedFinding('F1')], []);
         $second = $this->deliveredRound([self::FIRST => $failed]);
 
         $this->fixture->indexing($this->index)(new IndexResolvedFindings($second));
@@ -151,7 +152,7 @@ final class IndexResolvedFindingsTest extends KernelTestCase
     {
         $this->roundReporting([$this->finding('a')]);
         $second = $this->deliveredRound([
-            self::FIRST => new Verdict(Decision::Changes, [], ['F1'], []),
+            self::FIRST => new Verdict(Decision::Changes, [], [new ResolvedFinding('F1')], []),
             self::SECOND => new Verdict(Decision::Changes, [$this->finding('F1', true)], [], []),
         ]);
 
@@ -177,7 +178,7 @@ final class IndexResolvedFindingsTest extends KernelTestCase
         $queue = new RecordingBus();
         $older = $this->fixture->startFor(self::CHANGE, $queue, 2);
         $this->roundReporting([$this->finding('F1', true)]);
-        $this->deliverAll($queue, [self::FIRST => new Verdict(Decision::Approve, [], ['F1'], [])]);
+        $this->deliverAll($queue, [self::FIRST => new Verdict(Decision::Approve, [], [new ResolvedFinding('F1')], [])]);
 
         $this->fixture->indexing($this->index)(new IndexResolvedFindings($older));
 
@@ -249,7 +250,7 @@ final class IndexResolvedFindingsTest extends KernelTestCase
      */
     private function roundResolving(array $resolved): string
     {
-        return $this->deliveredRound([self::FIRST => new Verdict(Decision::Changes, [], $resolved, [])]);
+        return $this->deliveredRound([self::FIRST => new Verdict(Decision::Changes, [], array_map(static fn (string $id): ResolvedFinding => new ResolvedFinding($id), $resolved), [])]);
     }
 
     /**

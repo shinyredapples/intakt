@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\SymfonyAiVendor;
 
+use Intakt\Core\Review\Contract\ResolvedFinding;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
@@ -199,7 +200,7 @@ final class CodexReviewerTest extends KernelTestCase
         $verdict = $this->review()->verdict;
 
         self::assertSame(Decision::Changes, $verdict->verdict);
-        self::assertSame(['F1', 'F2'], $verdict->resolved);
+        self::assertEquals([new ResolvedFinding('F1'), new ResolvedFinding('F2')], $verdict->resolved);
         self::assertSame(['F3', Severity::P1], [$verdict->findings[0]->id, $verdict->findings[0]->severity]);
     }
 

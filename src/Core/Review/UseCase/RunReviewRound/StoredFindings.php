@@ -12,6 +12,7 @@ use Intakt\Core\Review\Contract\ChangeAddress;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\JudgeDoneFinding;
+use Intakt\Core\Review\Contract\ResolvedFinding;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\ChangeFindings;
 use Intakt\Core\Review\Domain\ChangeRound;
@@ -191,7 +192,7 @@ final readonly class StoredFindings
      */
     private function resolvedIn(ReviewRound $round, FindingLedger $ledger): array
     {
-        $claimed = array_merge([], ...array_map(static fn (Verdict $verdict): array => $verdict->isFailedReview() ? [] : $verdict->resolved, $this->verdictsOf($round)));
+        $claimed = array_merge([], ...array_map(static fn (Verdict $verdict): array => $verdict->isFailedReview() ? [] : array_map(static fn (ResolvedFinding $resolved): string => $resolved->id, $verdict->resolved), $this->verdictsOf($round)));
 
         // The ledger decides, because a claim the ledger refused (a finding reported again in the same round) leaves the finding open.
         return array_values(array_filter($ledger->all(), static fn (TrackedFinding $tracked): bool => !$tracked->isOpen() && in_array($tracked->id, $claimed, true)));

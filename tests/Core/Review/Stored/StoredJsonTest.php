@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\Stored;
 
+use Intakt\Core\Review\Contract\FollowUpNote;
+use Intakt\Core\Review\Contract\ResolvedFinding;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Contract\Finding;
@@ -32,16 +34,16 @@ final class StoredJsonTest extends KernelTestCase
 
     public function testAVerdictWrittenThroughTheSerializerReadsBackEqual(): void
     {
-        $verdict = new Verdict(Decision::Changes, [$this->finding()], ['b'], ['later']);
+        $verdict = new Verdict(Decision::Changes, [$this->finding()], [new ResolvedFinding('b')], [new FollowUpNote('later')]);
 
-        $read = $this->serializer()->deserialize($this->serializer()->serialize($verdict, JsonEncoder::FORMAT), Verdict::class, JsonEncoder::FORMAT);
+        $read = $this->serializer()->deserialize($this->serializer()->serialize(ReviewerAnswer::fromVerdict($verdict), JsonEncoder::FORMAT), ReviewerAnswer::class, JsonEncoder::FORMAT)->toVerdict();
 
         self::assertEquals($verdict, $read);
     }
 
     public function testAStoredVerdictKeepsTheSnakeCaseKeysOfTheWireFormat(): void
     {
-        $json = $this->serializer()->serialize(new Verdict(Decision::Changes, [$this->finding()], [], ['later']), JsonEncoder::FORMAT);
+        $json = $this->serializer()->serialize(ReviewerAnswer::fromVerdict(new Verdict(Decision::Changes, [$this->finding()], [], [new FollowUpNote('later')])), JsonEncoder::FORMAT);
 
         /** @var array<string, mixed> $stored */
         $stored = json_decode($json, true, flags: JSON_THROW_ON_ERROR);
@@ -86,21 +88,21 @@ final class StoredJsonTest extends KernelTestCase
     {
         $row = '{"verdict":"changes","findings":['.self::TODAYS_FINDING.'],"resolved":["b"],"follow_ups":["later"]}';
 
-        $read = $this->serializer()->deserialize($row, Verdict::class, JsonEncoder::FORMAT);
+        $read = $this->serializer()->deserialize($row, ReviewerAnswer::class, JsonEncoder::FORMAT)->toVerdict();
 
-        self::assertEquals(new Verdict(Decision::Changes, [$this->finding()], ['b'], ['later']), $read);
+        self::assertEquals(new Verdict(Decision::Changes, [$this->finding()], [new ResolvedFinding('b')], [new FollowUpNote('later')]), $read);
     }
 
     public function testARoundStoredBeforeTheAnswerDocumentStillDecodesToTheSameVerdict(): void
     {
         $read = $this->serializer()->deserialize(self::VERDICT_FROM_MAIN, ReviewerAnswer::class, JsonEncoder::FORMAT);
 
-        self::assertEquals(new Verdict(Decision::Changes, [$this->finding()], ['b'], ['later']), $read->toVerdict());
+        self::assertEquals(new Verdict(Decision::Changes, [$this->finding()], [new ResolvedFinding('b')], [new FollowUpNote('later')]), $read->toVerdict());
     }
 
     public function testEncodingAVerdictGivesTheSameJsonAsBeforeTheAnswerDocument(): void
     {
-        $json = $this->serializer()->serialize(new Verdict(Decision::Changes, [$this->finding()], ['b'], ['later']), JsonEncoder::FORMAT);
+        $json = $this->serializer()->serialize(ReviewerAnswer::fromVerdict(new Verdict(Decision::Changes, [$this->finding()], [new ResolvedFinding('b')], [new FollowUpNote('later')])), JsonEncoder::FORMAT);
 
         self::assertSame(self::VERDICT_FROM_MAIN, $json);
     }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\RunReviewRound;
 
+use Intakt\Core\Review\Contract\ResolvedFinding;
 use Doctrine\DBAL\Driver\PDO\Exception;
 use Doctrine\DBAL\Exception\LockWaitTimeoutException;
 use Intakt\Core\Review\Contract\ChangeUnderReview;
@@ -391,7 +392,7 @@ final class FindingsAcrossRoundsTest extends KernelTestCase
      */
     private function changes(array $resolved, array $findings): Verdict
     {
-        return new Verdict(Decision::Changes, $findings, $resolved, []);
+        return new Verdict(Decision::Changes, $findings, array_map(static fn (string $id): ResolvedFinding => new ResolvedFinding($id), $resolved), []);
     }
 
     private function finding(string $id, bool $repeat = false, Severity $severity = Severity::P2): Finding

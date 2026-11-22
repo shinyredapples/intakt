@@ -7,7 +7,7 @@ namespace Intakt\Core\Review\Contract;
 use Symfony\Component\Serializer\Attribute\Ignore;
 use Symfony\Component\Validator\Constraints\Valid;
 
-// Written to the stored rounds under these property names, because the stored round JSON keeps the reviewer's answer format, which Infrastructure\ReviewerAnswer\Verdict owns.
+// Stored through Infrastructure\ReviewerAnswer\Verdict, which owns the reviewer's answer format and the stored round JSON, so the typed resolved and follow_ups lists are written as lists of strings.
 final readonly class Verdict
 {
     // Kept although no verdict is given it any more, because rounds recorded before still hold it and must stay failed reviews.
@@ -21,8 +21,8 @@ final readonly class Verdict
 
     /**
      * @param list<Finding> $findings
-     * @param list<string>  $resolved
-     * @param list<string>  $follow_ups
+     * @param list<ResolvedFinding> $resolved
+     * @param list<FollowUpNote>    $follow_ups
      */
     public function __construct(
         public Decision $verdict,

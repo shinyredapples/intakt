@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\Infrastructure;
 
+use Intakt\Core\Review\Contract\FollowUpNote;
+use Intakt\Core\Review\Contract\ResolvedFinding;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Contract\Finding;
@@ -38,7 +40,7 @@ final class ReviewerAnswerTest extends TestCase
 
         $verdict = new ReviewerAnswer(Decision::Changes, [$finding], ['b'], ['later'])->toVerdict();
 
-        self::assertEquals(new Verdict(Decision::Changes, [$finding], ['b'], ['later']), $verdict);
+        self::assertEquals(new Verdict(Decision::Changes, [$finding], [new ResolvedFinding('b')], [new FollowUpNote('later')]), $verdict);
     }
 
     public function testAnAnswerNamingAFailureIdStillClaimsItOnceMapped(): void

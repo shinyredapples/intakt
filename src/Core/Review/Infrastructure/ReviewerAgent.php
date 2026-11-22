@@ -11,6 +11,7 @@ use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\Reviewer;
 use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
+use Intakt\Core\Review\Contract\ResolvedFinding;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictUnreadable;
 use Intakt\Core\Review\Domain\GoalpostRule;
@@ -111,14 +112,15 @@ final readonly class ReviewerAgent implements Reviewer
     {
         $open = array_map(static fn (Finding $finding): string => $finding->id, $brief->open);
         $repeated = array_map(static fn (Finding $finding): string => $finding->id, array_filter($verdict->findings, static fn (Finding $finding): bool => $finding->repeat));
-        $unknown = array_unique([...array_diff($verdict->resolved, $open), ...array_diff($repeated, $open)]);
+        $resolved = array_map(static fn (ResolvedFinding $resolved): string => $resolved->id, $verdict->resolved);
+        $unknown = array_unique([...array_diff($resolved, $open), ...array_diff($repeated, $open)]);
 
         if ([] !== $unknown) {
             throw $this->unknownIds($unknown);
         }
 
         // Refused, because the ledger cannot tell which of the two the reviewer meant; key-safe, because every id named here is an open one the ledger gave.
-        $contradicted = array_unique(array_intersect($verdict->resolved, $repeated));
+        $contradicted = array_unique(array_intersect($resolved, $repeated));
 
         return [] === $contradicted ? $verdict : throw VerdictUnreadable::becauseKeySafe(sprintf('the verdict marks ids both resolved and repeat: %s.', implode(', ', $contradicted)));
     }

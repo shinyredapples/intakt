@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\Infrastructure;
 
+use Intakt\Core\Review\Contract\ResolvedFinding;
 use Doctrine\DBAL\Types\Types;
 use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Review\Contract\Decision;
@@ -202,7 +203,7 @@ final class StoredSessionSummariesTest extends KernelTestCase
     public function testOnceTheRoundCompletesItListsWhatItReportedAndWhatItResolved(): void
     {
         $this->completedRound(new Verdict(Decision::Changes, [$this->finding('a')], [], []));
-        $round = $this->completedRound(new Verdict(Decision::Changes, [$this->finding('b')], ['F1'], []));
+        $round = $this->completedRound(new Verdict(Decision::Changes, [$this->finding('b')], [new ResolvedFinding('F1')], []));
 
         $summary = $this->summaryOf($round);
 
@@ -214,7 +215,7 @@ final class StoredSessionSummariesTest extends KernelTestCase
     public function testAnOpenFindingTheRoundLeftUnresolvedIsNotListedAsResolved(): void
     {
         $this->completedRound(new Verdict(Decision::Changes, [$this->finding('a'), $this->finding('b')], [], []));
-        $round = $this->completedRound(new Verdict(Decision::Changes, [], ['F2'], []));
+        $round = $this->completedRound(new Verdict(Decision::Changes, [], [new ResolvedFinding('F2')], []));
 
         $summary = $this->summaryOf($round);
 
@@ -225,7 +226,7 @@ final class StoredSessionSummariesTest extends KernelTestCase
     public function testOnlyTheResolvedOfTwoOpenFindingsThatReadAlikeIsListedAsResolved(): void
     {
         $this->completedRound(new Verdict(Decision::Changes, [$this->finding('a', 'Same text'), $this->finding('b', 'Same text')], [], []));
-        $round = $this->completedRound(new Verdict(Decision::Changes, [], ['F1'], []));
+        $round = $this->completedRound(new Verdict(Decision::Changes, [], [new ResolvedFinding('F1')], []));
 
         $summary = $this->summaryOf($round);
 
@@ -236,7 +237,7 @@ final class StoredSessionSummariesTest extends KernelTestCase
     public function testALegacyRoundThatResolvedOneOfTwoFindingsThatReadAlikeUnderAReviewerIdNamingTheOtherListsNoneAsResolved(): void
     {
         $this->completedRound(new Verdict(Decision::Changes, [$this->finding('a', 'Same text'), $this->finding('b', 'Same text')], [], []));
-        $round = $this->completedRound(new Verdict(Decision::Changes, [], ['F1'], []));
+        $round = $this->completedRound(new Verdict(Decision::Changes, [], [new ResolvedFinding('F1')], []));
         $this->completedBeforeLedgerIds($round, $this->finding('F2', 'Same text'));
 
         $summary = $this->summaryOf($round);
@@ -248,7 +249,7 @@ final class StoredSessionSummariesTest extends KernelTestCase
     public function testALegacyRoundThatResolvedOneOfTwoFindingsThatReadDifferentlyUnderAReviewerIdNamingTheOtherListsNoneAsResolved(): void
     {
         $this->completedRound(new Verdict(Decision::Changes, [$this->finding('a', 'First'), $this->finding('b', 'Second')], [], []));
-        $round = $this->completedRound(new Verdict(Decision::Changes, [], ['F1'], []));
+        $round = $this->completedRound(new Verdict(Decision::Changes, [], [new ResolvedFinding('F1')], []));
         $this->completedBeforeLedgerIds($round, $this->finding('F2', 'First'));
 
         $summary = $this->summaryOf($round);
@@ -264,7 +265,7 @@ final class StoredSessionSummariesTest extends KernelTestCase
         $later = $this->startedRound();
 
         $this->finish($earlier, new Verdict(Decision::Changes, [new Finding('F1', Severity::P2, 'src/A.php', 3, null, 'New text', FixableBy::Builder, true, null, null)], [], []));
-        $this->finish($later, new Verdict(Decision::Changes, [], ['F1'], []));
+        $this->finish($later, new Verdict(Decision::Changes, [], [new ResolvedFinding('F1')], []));
 
         $resolved = $this->summaryOf($later['round'])->resolved;
         self::assertSame(['F1'], $this->ids($resolved));
@@ -278,7 +279,7 @@ final class StoredSessionSummariesTest extends KernelTestCase
         $later = $this->startedRound();
 
         $this->finish($later, new Verdict(Decision::Changes, [], [], []));
-        $this->finish($earlier, new Verdict(Decision::Changes, [], ['F1'], []));
+        $this->finish($earlier, new Verdict(Decision::Changes, [], [new ResolvedFinding('F1')], []));
 
         self::assertSame([], $this->summaryOf($earlier['round'])->resolved);
     }

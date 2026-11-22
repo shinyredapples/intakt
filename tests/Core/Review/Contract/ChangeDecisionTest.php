@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\Contract;
 
+use Intakt\Core\Review\Contract\ResolvedFinding;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Review\Contract\ChangeDecision;
 use Intakt\Core\Review\Contract\Decision;
@@ -62,7 +63,7 @@ final class ChangeDecisionTest extends TestCase
 
     private function legacyVote(): PanelVerdict
     {
-        $legacy = new Verdict(Decision::Changes, Verdict::noTools()->findings, ['F1'], []);
+        $legacy = new Verdict(Decision::Changes, Verdict::noTools()->findings, [new ResolvedFinding('F1')], []);
         self::assertTrue($legacy->isFailedReview(), 'The stored verdict does not read as a failed review.');
 
         return new PanelVerdict(Tier::Strong, $legacy);

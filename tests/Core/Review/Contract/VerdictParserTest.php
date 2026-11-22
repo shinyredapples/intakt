@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\Contract;
 
+use Intakt\Core\Review\Contract\FollowUpNote;
+use Intakt\Core\Review\Contract\ResolvedFinding;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Contract\Finding;
@@ -63,7 +65,7 @@ final class VerdictParserTest extends KernelTestCase
             requirement: '...',
             evidence: new Evidence('...', '...'),
         );
-        self::assertEquals(new Verdict(Decision::Changes, [$finding], ['F1', 'F2'], ['...']), $verdict);
+        self::assertEquals(new Verdict(Decision::Changes, [$finding], [new ResolvedFinding('F1'), new ResolvedFinding('F2')], [new FollowUpNote('...')]), $verdict);
     }
 
     public function testEveryDecisionMaps(): void
@@ -135,18 +137,18 @@ final class VerdictParserTest extends KernelTestCase
         $this->reviewer()->verdictFor($output);
     }
 
-    public function testAWrongTypeIsRefusedWithTheSameTextAsWhenTheContractVerdictWasTheTarget(): void
+    public function testAWrongTypeIsRefusedWithTheContractVerdictNamedInItsText(): void
     {
         $output = '{"verdict":"approve","findings":[],"resolved":false,"follow_ups":[]}';
         $before = '';
         try {
-            self::getContainer()->get('serializer')->deserialize($output, Verdict::class, JsonEncoder::FORMAT, [
+            self::getContainer()->get('serializer')->deserialize($output, ReviewerAnswer::class, JsonEncoder::FORMAT, [
                 AbstractNormalizer::ALLOW_EXTRA_ATTRIBUTES => false,
                 AbstractNormalizer::REQUIRE_ALL_PROPERTIES => true,
                 JsonDecode::ASSOCIATIVE => false,
             ]);
         } catch (ExceptionInterface $refused) {
-            $before = sprintf('Cannot deserialize the content into the "%s" class. %s', Verdict::class, $refused->getMessage());
+            $before = sprintf('Cannot deserialize the content into the "%s" class. %s', Verdict::class, strtr($refused->getMessage(), [ReviewerAnswer::class => Verdict::class]));
         }
 
         $this->expectException(VerdictUnreadable::class);

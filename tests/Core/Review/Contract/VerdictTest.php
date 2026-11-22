@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\Contract;
 
+use Intakt\Core\Review\Contract\FollowUpNote;
+use Intakt\Core\Review\Contract\ResolvedFinding;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Contract\Finding;
@@ -13,6 +15,7 @@ use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictOrigin;
 use Intakt\Tests\Support\StoredSerializerFactory;
+use Intakt\Core\Review\Infrastructure\ReviewerAnswer\Verdict as ReviewerAnswer;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -77,14 +80,14 @@ final class VerdictTest extends TestCase
 
     public function testAReviewersBlockedVerdictWithFindingsIsRecordedAsChanges(): void
     {
-        $verdict = new Verdict(Decision::Blocked, [$this->finding()], ['F0'], ['a follow-up']);
+        $verdict = new Verdict(Decision::Blocked, [$this->finding()], [new ResolvedFinding('F0')], [new FollowUpNote('a follow-up')]);
 
         $recorded = $verdict->asRecorded();
 
         self::assertSame(Decision::Changes, $recorded->verdict);
         self::assertEquals([$this->finding()], $recorded->findings);
-        self::assertSame(['F0'], $recorded->resolved);
-        self::assertSame(['a follow-up'], $recorded->follow_ups);
+        self::assertEquals([new ResolvedFinding('F0')], $recorded->resolved);
+        self::assertEquals([new FollowUpNote('a follow-up')], $recorded->follow_ups);
     }
 
     public function testABlockedVerdictWithoutFindingsStaysBlocked(): void
@@ -120,7 +123,7 @@ final class VerdictTest extends TestCase
             ->with('resolved', [])
             ->withFinding('id', $failureId)
             ->withFinding('file', 'src/Thing.php');
-        $verdict = StoredSerializerFactory::create()->deserialize($answer->json(), Verdict::class, JsonEncoder::FORMAT);
+        $verdict = StoredSerializerFactory::create()->deserialize($answer->json(), ReviewerAnswer::class, JsonEncoder::FORMAT)->toVerdict();
 
         self::assertSame(Decision::Changes, $verdict->asRecorded()->verdict);
     }
@@ -142,7 +145,7 @@ final class VerdictTest extends TestCase
             ->with('verdict', 'changes')
             ->with('resolved', [])
             ->withFinding('id', $failureId);
-        $verdict = StoredSerializerFactory::create()->deserialize($answer->json(), Verdict::class, JsonEncoder::FORMAT);
+        $verdict = StoredSerializerFactory::create()->deserialize($answer->json(), ReviewerAnswer::class, JsonEncoder::FORMAT)->toVerdict();
 
         self::assertSame([$failureId], [...$verdict->claimedFailureIds()]);
     }

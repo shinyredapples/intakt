@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\Domain;
 
+use Intakt\Core\Review\Contract\ResolvedFinding;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Contract\Finding;
@@ -421,7 +422,7 @@ final class FindingLedgerTest extends TestCase
      */
     private function verdict(array $resolved, array $findings): Verdict
     {
-        return new Verdict(Decision::Changes, $findings, $resolved, []);
+        return new Verdict(Decision::Changes, $findings, array_map(static fn (string $id): ResolvedFinding => new ResolvedFinding($id), $resolved), []);
     }
 
     private function finding(string $id, bool $repeat = false, Severity $severity = Severity::P2): Finding
