@@ -59,7 +59,7 @@ Every review page shows the tokens and the cost of each round. The cost is an es
 3. Optionally set `budget.price_date`, the day you read the prices, in quotes.
 4. Run `php bin/console cache:clear`.
 
-The page then shows a figure, an **estimated** label and the price date. A model without a price makes the cost read "unknown, no price for" that model, never a partial sum. The demo brings its own list prices, dated 2026-11-18.
+The page then shows a figure, an **estimated** label and the price date. A model without a price makes the cost read "unknown, no price for" that model, never a partial sum. The demo brings its own list prices, dated 2026-11-13, the earliest day any of them was read.
 
 ## Running on a subscription
 

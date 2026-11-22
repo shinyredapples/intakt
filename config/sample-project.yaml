@@ -6,7 +6,7 @@
 router_url: https://router.huggingface.co
 
 # The date of the price table below, written into the seeded file as budget.price_date.
-price_date: '2026-11-18'
+price_date: '2026-11-13'
 
 # The router models name their router provider, because the router's default provider may refuse tools together with structured output.
 models:
