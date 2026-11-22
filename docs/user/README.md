@@ -857,7 +857,11 @@ A queue worker runs the escalation review after the round is judged.
 It asks the project's strong tier, with no tools, whether the one finding is real (`confirmed`) or not (`rejected`), and why.
 The reasons are redacted, so a secret the model quotes is not kept.
 It fails with Intakt's own reason, and gives no verdict, when the project maps no model to the strong tier, when the finding's code would be cut from the prompt, or when the answer cannot be read: anything but `confirmed` or `rejected`, reasons that are empty or only spaces, or a field the answer must not have.
-A provider error (a rate limit, a rejected key, an outage) is not a failed escalation: it stays an error, so the call can be tried again.
+A provider error (a rate limit, a rejected key, an outage) is not a failed escalation at first: it stays an error, so the call can be tried again.
+A busy account or a rate limit is waited out, as long as it lasts.
+A passing provider failure is tried again twice, however long the escalation waited for the account before.
+Any other error is tried again twice as well.
+When the escalation's message is parked after its retries, for any error, `escalation_failed` follows for that round and finding, so the escalation is never left pending.
 The worker's log and a parked message then name the failure in Intakt's words, never in the provider's, because a provider's message can repeat a key.
 Intakt keeps the verdict for the finding's key and records an `escalation_reviewed` event with the round, the finding id, the key, the outcome and the redacted reasons, which `bin/console intakt:ledger:events` prints.
 A later round with the same P1 on unchanged files reuses the kept verdict (`escalation_verdict_reused`) and asks no model.
