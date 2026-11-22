@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Dashboard\Infrastructure;
 
 use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Infrastructure\ComponentOptions;
+use Intakt\Core\Dashboard\Infrastructure\GlossaryExplanations;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\MercureLiveUpdates;
@@ -91,6 +92,8 @@ final class MercureHubTest extends TestCase
         // Registered because the judged stream renders a component, which asks for its options through this function.
         $twig = new Environment(new FilesystemLoader(dirname(__DIR__, 4).'/templates'));
         $twig->addFunction(new TwigFunction('component_option', new ComponentOptions()->of(...)));
+        // Registered because the judged stream explains "checked" with its glossary term.
+        $twig->addFunction(new TwigFunction('glossary_explanation', new GlossaryExplanations()->of(...)));
         $this->updates = new MercureRoundUpdates(
             new MercureLiveUpdates(new Hub($this->url, new StaticTokenProvider($this->token(new Grant([Grant::ACTION_PUBLISH], ['*']))), httpClient: $this->client), $logger),
             $twig,
@@ -117,7 +120,7 @@ final class MercureHubTest extends TestCase
 
         $this->publishThree();
 
-        self::assertSame(['1 of 2 reviewers finished.', '2 of 2 reviewers finished.', 'Judged.'], $this->roundStatesIn($this->read($stream, 3)));
+        self::assertSame(['1 of 2 reviewers finished.', '2 of 2 reviewers finished.', 'Checked.'], $this->roundStatesIn($this->read($stream, 3)));
     }
 
     public function testAClientThatReconnectsWithLastEventIdReceivesTheEventsItMissed(): void
@@ -131,7 +134,7 @@ final class MercureHubTest extends TestCase
         $this->updates->roundChanged(Uuid::fromString($this->round), new RoundProgress(2, 2, true));
         $second = $this->subscribe($seen[0]['id']);
 
-        self::assertSame(['2 of 2 reviewers finished.', 'Judged.'], $this->roundStatesIn($this->read($second, 2)));
+        self::assertSame(['2 of 2 reviewers finished.', 'Checked.'], $this->roundStatesIn($this->read($second, 2)));
     }
 
     // The dashboard's connection controller reconnects with a new EventSource, which cannot set the Last-Event-ID header.
@@ -151,7 +154,7 @@ final class MercureHubTest extends TestCase
             'timeout' => self::SECONDS_TO_WAIT,
         ]);
 
-        self::assertSame(['2 of 2 reviewers finished.', 'Judged.'], $this->roundStatesIn($this->read($second, 2)));
+        self::assertSame(['2 of 2 reviewers finished.', 'Checked.'], $this->roundStatesIn($this->read($second, 2)));
     }
 
     public function testAClientWithoutASubscriberTokenReceivesNothing(): void

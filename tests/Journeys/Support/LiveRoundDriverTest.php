@@ -81,14 +81,14 @@ final class LiveRoundDriverTest extends TestCase
         }, function () use (&$reads): array {
             $progress = $this->updateFor(self::ROUND, '1 of 2 reviewers finished.');
 
-            return 3 === ++$reads ? [$progress, $this->updateFor(self::ROUND, 'Judged.')] : [$progress];
+            return 3 === ++$reads ? [$progress, $this->updateFor(self::ROUND, 'Checked.')] : [$progress];
         }, $clock);
 
         $published = $driver->stepUntilEnded(self::ROUND);
 
         self::assertSame(3, $steps);
         self::assertCount(2, $published);
-        self::assertStringContainsString('Judged.', $published[1]->getData());
+        self::assertStringContainsString('Checked.', $published[1]->getData());
     }
 
     public function testARoundThatNeverEndsFailsNamingTheRoundAndTheLastUpdate(): void
@@ -124,7 +124,7 @@ final class LiveRoundDriverTest extends TestCase
     public function testUpdatesPublishedForAnotherRoundDoNotEndTheDrivenRound(): void
     {
         $clock = new MockClock();
-        $driver = new LiveRoundDriver(self::createStub(MessageBusInterface::class), $this->waitingWorker($clock), fn (): array => [$this->updateFor(self::OTHER_ROUND, 'Judged.')], $clock);
+        $driver = new LiveRoundDriver(self::createStub(MessageBusInterface::class), $this->waitingWorker($clock), fn (): array => [$this->updateFor(self::OTHER_ROUND, 'Checked.')], $clock);
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessageMatches('/the last update was none/');
