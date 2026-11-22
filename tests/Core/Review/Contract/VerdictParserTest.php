@@ -128,7 +128,7 @@ final class VerdictParserTest extends KernelTestCase
         $this->expectException(VerdictUnreadable::class);
         $this->expectExceptionMessageMatches('/'.implode('|', $wordings).'/');
 
-        $_ = $this->reviewer()->verdictFor($output);
+        $this->reviewer()->verdictFor($output);
     }
 
     public function testAWholeFloatLineIsRefusedAsUnreadable(): void
@@ -138,7 +138,7 @@ final class VerdictParserTest extends KernelTestCase
         $this->expectException(VerdictUnreadable::class);
         $this->expectExceptionMessageMatches('/"line" attribute/');
 
-        $_ = $this->reviewer()->verdictFor($output);
+        $this->reviewer()->verdictFor($output);
     }
 
     #[DataProvider('outputsThatDoNotMap')]
@@ -147,7 +147,7 @@ final class VerdictParserTest extends KernelTestCase
         $this->expectException(VerdictUnreadable::class);
         $this->expectExceptionMessageMatches('/Syntax error$/');
 
-        $_ = $this->reviewer()->verdictFor($output);
+        $this->reviewer()->verdictFor($output);
     }
 
     /**
@@ -178,7 +178,7 @@ final class VerdictParserTest extends KernelTestCase
     {
         $this->expectException(VerdictUnreadable::class);
 
-        $_ = $this->reviewer()->verdictFor(new ToolCallResult([new ToolCall('call-1', 'read_file')]));
+        $this->reviewer()->verdictFor(new ToolCallResult([new ToolCall('call-1', 'read_file')]));
     }
 
     public function testAReplyInSeveralPartsIsRefusedAsUnreadable(): void
@@ -187,7 +187,7 @@ final class VerdictParserTest extends KernelTestCase
 
         $this->expectException(VerdictUnreadable::class);
 
-        $_ = $this->reviewer()->verdictFor(new MultiPartResult([new TextResult($answer), new TextResult($answer)]));
+        $this->reviewer()->verdictFor(new MultiPartResult([new TextResult($answer), new TextResult($answer)]));
     }
 
     public function testAFailedCallStaysAnError(): void
@@ -231,7 +231,7 @@ final class VerdictParserTest extends KernelTestCase
         $this->expectException(VerdictUnreadable::class);
         $this->expectExceptionMessageMatches('/^The reviewer\'s answer could not be read as a verdict: /');
 
-        $_ = $this->reviewer()->verdictFor('approve');
+        $this->reviewer()->verdictFor('approve');
     }
 
     private function refusalOf(string $output): VerdictUnreadable
