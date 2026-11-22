@@ -206,8 +206,9 @@ final class ListWaitingControllerTest extends DashboardPageTestCase
 
         $page = $this->browser->request('GET', '/waiting');
 
-        $lines = $page->filter('aside.side[aria-label="Meanwhile"] section[aria-labelledby="meanwhile-h"] li');
+        $lines = $page->filter('aside.side section[aria-labelledby="meanwhile-h"] li');
         self::assertSame(['/reviews/round-old', '/reviews/round-new'], $lines->filter('a')->each(static fn (Crawler $link): ?string => $link->attr('href')));
+        self::assertSame(['alpha', 'alpha'], $lines->each(static fn (Crawler $line): ?string => $line->attr('data-project')));
         self::assertSame(['42 min', '11 min'], $lines->filter('.when')->each(static fn (Crawler $when): string => $when->text()));
     }
 

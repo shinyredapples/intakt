@@ -1,5 +1,5 @@
 {#- What the loop does while the items wait, and what no longer waits today (D4), beside the list from 1500 px and under it below. -#}
-<aside class="side" id="waiting-side" aria-label="Meanwhile">
+<aside class="side" id="waiting-side" aria-label="Meanwhile and what you handled today">
     <section class="block" aria-labelledby="meanwhile-h">
         <h2 id="meanwhile-h">Meanwhile</h2>
         {% if page.meanwhile is empty %}
@@ -7,7 +7,7 @@
         {% else %}
         <ul>
         {% for line in page.meanwhile %}
-            <li><span class="dot ok"></span><a href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_REVIEW'), {round: line.round}) }}">{{ line.text }}</a><span class="when">{{ line.runningFor(now) }}</span></li>
+            <li data-project="{{ line.project }}"><span class="dot ok"></span><a href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_REVIEW'), {round: line.round}) }}">{{ line.text }}</a><span class="when">{{ line.runningFor(now) }}</span></li>
         {% endfor %}
         </ul>
         {% endif %}

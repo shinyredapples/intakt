@@ -37,17 +37,16 @@ if ('page' === $mode) {
     $entities->flush();
 
     $ledger = $services->get(Ledger::class);
-    $appended = [];
     foreach ([
         [LedgerEventKind::ReviewStarted, ['round' => '0195f3a0-0000-7000-8000-000000000001', 'project' => 'alpha', 'reviewers' => 2, 'change' => '42', 'number' => 2]],
         [LedgerEventKind::ReviewStarted, ['round' => '0195f3a0-0000-7000-8000-000000000002', 'project' => 'beta', 'reviewers' => 2, 'change' => '7', 'number' => 1]],
     ] as [$kind, $payload]) {
-        $appended[] = $ledger->append(new LedgerEvent($kind, json_encode($payload, JSON_THROW_ON_ERROR)));
+        $ledger->append(new LedgerEvent($kind, json_encode($payload, JSON_THROW_ON_ERROR)));
     }
     $mode = 'end';
 }
 
-// `end-main` ends the other waiting outage on its own, so a page already open shows the push of its notice event.
+// `end-main` ends the other waiting outage on its own, so the page lists it among the notices handled today.
 $ending = ['end' => new Account(Provider::Codex, 'spare'), 'end-main' => new Account(Provider::Anthropic, 'main')][$mode] ?? null;
 if ($ending instanceof Account) {
     // Through the real reading path, so the reading that ends the outage keeps its moment on the notice.

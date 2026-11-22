@@ -12,6 +12,7 @@ final readonly class MeanwhileLine
     public function __construct(
         public string $text,
         public string $round,
+        public string $project,
         private DateTimeImmutable $since,
     ) {
     }
@@ -22,7 +23,7 @@ final readonly class MeanwhileLine
         $latest = $review->latest();
         $change = '' === $review->change ? 'A change' : $review->change;
 
-        return new self($change.' of '.$review->project.' is in review, round '.($latest->number ?? count($review->rounds)), $latest->round, $latest->startedAt);
+        return new self($change.' of '.$review->project.' is in review, round '.($latest->number ?? count($review->rounds)), $latest->round, $review->project, $latest->startedAt);
     }
 
     public function runningFor(DateTimeImmutable $now): string
