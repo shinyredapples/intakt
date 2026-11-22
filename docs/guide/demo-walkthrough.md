@@ -38,9 +38,9 @@ Its reviews never count. The reviewers in a recording judged some change at anot
 
 A recording is made from a live review, in three steps:
 
-1. Before the review, set `INTAKT_LIVE_CAPTURE` to the name of a file. While the review runs, every live update the dashboard shows is also written to that file. Set it empty again once you have recorded, because the file keeps growing while it is set; the compose demo needs `docker compose up -d` to pick up the change ([details](../user/README.md#recording-a-review-for-the-demo)).
-2. After the review, `docker compose exec intakt php bin/console intakt:demo:record <project> <change> <recording>` reads that file and the project's ledger and writes one recording file holding the review's events and its live updates.
-3. Play the recording back as described above, with `intakt:demo:replay` or the `/demo` page.
+1. Before the first round of the change, set `INTAKT_LIVE_CAPTURE` to the name of a file, for example `INTAKT_LIVE_CAPTURE=/app/var/data/live-updates.jsonl` in `.env.local`, and run `docker compose up -d` so the container picks it up. While the review runs, every live update the dashboard shows is also written to that file. Start it before the first round: the recording takes every round of the change, and it is refused when one of them has no captured update. Set it empty again once you have recorded, because the file keeps growing while it is set ([details](../user/README.md#recording-a-review-for-the-demo)).
+2. After the review, `docker compose exec intakt php bin/console intakt:demo:record <project> <change> /app/var/data/<recording>.json` reads that file and the project's ledger and writes one recording file holding the review's events and its live updates. Write it under `/app/var/data`, the data volume, so it survives when Compose makes the container again, and copy it out to your own folder: `docker compose cp intakt:/app/var/data/<recording>.json .`.
+3. Play it back on a separate compose demo with a fresh ledger, not on the install that recorded it: that ledger already holds the recording's rounds, so both ways of playing it back refuse it there. In the same folder, stop the recording install with `docker compose down` (without `-v`, so its data stays), set `INTAKT_LIVE_CAPTURE` empty in `.env.local` (both installs read that file, so otherwise the playback install appends to a capture file too) and start a second one under its own project name, which gives it its own data volume: `docker compose -p intakt-playback up -d --wait`. Copy the file in with `docker compose -p intakt-playback cp <recording>.json intakt:/app/var/data/<recording>.json`, then play it with `docker compose -p intakt-playback exec intakt php bin/console intakt:demo:replay /app/var/data/<recording>.json --factor=10`, or set `INTAKT_DEMO_RECORDING=/app/var/data/<recording>.json` in `.env.local`, run `docker compose -p intakt-playback up -d` again and use the `/demo` page.
 
 ```mermaid
 flowchart LR
@@ -48,10 +48,12 @@ flowchart LR
   a --> c[Ledger]
   b --> d[intakt:demo:record]
   c --> d
-  d --> e[Recording file]
-  e --> f[intakt:demo:replay]
-  f --> g[demo-replay project]
-  g --> h[Dashboard, labeled Replay]
+  d --> e[Recording file in /app/var/data]
+  e --> f[Copy out of the container]
+  f --> g[Fresh compose demo, own ledger]
+  g --> h[intakt:demo:replay or /demo]
+  h --> i[demo-replay project]
+  i --> j[Dashboard, labeled Replay]
 ```
 
 ## What to point out in a demo

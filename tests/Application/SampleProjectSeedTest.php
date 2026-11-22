@@ -10,6 +10,7 @@ use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Budget\Contract\Prices;
 use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Review\Contract\ChangeDescription;
+use Intakt\Core\Review\Contract\Labels;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\Panels;
 use Intakt\Core\Review\Contract\SampleProjectData;
@@ -144,7 +145,7 @@ final class SampleProjectSeedTest extends KernelTestCase
         $panels = $this->bootSeeded()->get(Panels::class);
         self::assertInstanceOf(Panels::class, $panels);
 
-        $panel = $panels->panelForChange('sample', new ChangeDescription(1, new Paths(), []));
+        $panel = $panels->panelForChange('sample', new ChangeDescription(1, new Paths(), new Labels()));
 
         return array_map(static fn (PanelReviewer $reviewer): Provider => $reviewer->model->provider, $panel->reviewers);
     }
