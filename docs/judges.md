@@ -1,8 +1,10 @@
 # For judges: Intakt in a few minutes
 
+The tested submission is release [v0.4.1](https://github.com/shinyredapples/intakt/releases/tag/v0.4.1), tested on path a (the keyless demo) and path b (a run with a key); step 1 below clones it. Main is welcome too, with what we built after the deadline, but it is not the tested submission.
+
 Your coding agent says it is done. Intakt tells you whether to believe it: a panel of reviewers on models from different AI labs reviews the change, every finding must quote the code it is about, and a judge makes one list to fix.
 
-The video's script and shot list: [docs/video.md](video.md)
+Watch the 90-second demo: [https://youtu.be/HVDKah3Jauo](https://youtu.be/HVDKah3Jauo). Its script and shot list: [docs/video.md](video.md)
 
 ## Why this needed Symfony AI and MCP
 
@@ -13,7 +15,7 @@ The video's script and shot list: [docs/video.md](video.md)
 
 ## a. No key, about 2 minutes
 
-1. `git clone https://github.com/shinyredapples/intakt.git && cd intakt`
+1. `git clone --branch v0.4.1 https://github.com/shinyredapples/intakt.git && cd intakt`
 2. `docker compose up -d --wait`: it returns once the container is healthy.
 3. Open http://localhost:7781. You see the first-run page, titled **See a real review**, with "1 minute · no key" and **Play the demo run** as its one main button. Below it are three steps (Read, Check, To fix) and **Use your own project** with three cards: "1. Add a key here", "2. Add a project" and "3. First review".
 4. Press **Play the demo run** (http://localhost:7781/demo has the same button). The demo page opens. You see "The demo run is starting: the caption at the bottom of each page names the stage it is in." The caption shows one progress dot per stage (five in all) and a short line; the last one reads "Checked: To fix lists what still needs changing." As soon as the first stage shows, the page takes you to the review, and eight seconds after the last stage the caption closes by itself.
@@ -56,7 +58,7 @@ This path runs a live review, so first do steps 1 and 2 of path b (keep a key, r
 - **AI Bundle**: configures the provider platforms (`config/packages/ai.php`).
 - **MCP Bundle**: two servers. The owner server at `/mcp/owner` has five tools (`list_projects`, `review_status`, `review_verdicts`, `review_act_list`, `start_review`), one resource template (`intakt://rounds/{roundId}/findings`) and progress notifications while `start_review` waits. The review server at `/mcp/review` gives reviewers `read_file`, `list_directory` and `search_files`, which also sends progress. Both `start_review` and `search_files` send progress only when the client supplies a progress token. Neither server has prompts.
 
-Every Symfony and Symfony AI feature in use, with its status: [Highlights](https://shinyredapples.github.io/intakt/).
+Every Symfony and Symfony AI feature in use, with its status: [Highlights](https://shinyredapples.github.io/intakt/highlights/).
 
 ## More
 
