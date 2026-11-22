@@ -53,8 +53,9 @@ final readonly class NearestChangedLines
             $closest = $this->closestTo($this->partsOf(implode(' ', $names)), $partsOfLines);
             $lines = array_map(fn (int $index): NearLine => new NearLine($changedLines[$index][0], $changedLines[$index][1], $this->cut($changedLines[$index][2])), array_slice($closest, 0, self::MAX_LINES_PER_QUOTE));
 
+            // The quote is kept whole, because it is the key the dashboard finds the lines by and a cut one would equal another quote's key.
             if ([] !== $lines) {
-                $recorded[] = new QuoteNearLines($this->cut(($this->redact)($quote)), $lines);
+                $recorded[] = new QuoteNearLines(mb_scrub(($this->redact)($quote), 'UTF-8'), $lines);
             }
         }
 

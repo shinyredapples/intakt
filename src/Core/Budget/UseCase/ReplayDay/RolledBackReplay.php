@@ -14,6 +14,7 @@ use Intakt\Core\Budget\Domain\UsageReadingsStayedAway;
 use Intakt\Core\Budget\Infrastructure\DoctrineHolds;
 use Intakt\Core\Budget\Infrastructure\DoctrineMeasuredUse;
 use Intakt\Core\Budget\Infrastructure\DoctrineOutageNotices;
+use Intakt\Core\Watchdog\Contract\Halts;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
@@ -31,6 +32,7 @@ final readonly class RolledBackReplay
         private LockFactory $locks,
         #[Autowire(param: BudgetServices::CEILINGS)]
         private array $ceilings,
+        private Halts $halts,
     ) {
     }
 
@@ -60,11 +62,11 @@ final readonly class RolledBackReplay
 
     private function dayReplayOn(MockClock $clock, LoggerInterface $logger): DayReplay
     {
-        $measured = new DoctrineMeasuredUse($this->entities, $clock);
-        $holds = new DoctrineHolds($this->entities, $clock);
         $events = new EventDispatcher();
+        $measured = new DoctrineMeasuredUse($this->entities, $clock, $events);
+        $holds = new DoctrineHolds($this->entities, $clock);
         $events->addListener(UsageReadingsStayedAway::class, new DoctrineOutageNotices($this->entities, $this->locks, $logger)->noticeOnce(...));
-        $guard = new BudgetGuard($holds, new CeilingStartGuard($measured, $clock, $this->ceilings), new OutageWatch($measured, $clock, $events));
+        $guard = new BudgetGuard($holds, new CeilingStartGuard($measured, $clock, $this->ceilings), new OutageWatch($measured, $clock, $events), $this->halts);
 
         return new DayReplay($measured, $holds, $guard);
     }

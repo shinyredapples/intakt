@@ -300,6 +300,26 @@ final class PlayDemoControllerTest extends DashboardPageTestCase
         self::assertCount(1, $caption->filter('button[data-tour-close]'));
     }
 
+    public function testWhileTheReviewersReadTheCaptionNamesAKnownReviewerAsModelAndAiLabWithItsIdInTheTitle(): void
+    {
+        $this->demoRunAt(1);
+        $this->startReviewerOf('correctness', 'moonshotai/Kimi-K3.1:deepinfra');
+
+        $reviewer = $this->demoPage()->filter('aside#tour-caption .tour-reviewers span');
+
+        self::assertSame(['Kimi K3.1 (Moonshot AI)', 'moonshotai/Kimi-K3.1:deepinfra'], [$reviewer->text(), $reviewer->attr('title')]);
+        self::assertSame(TourStage::ReviewersRead->sentence().' Reviewers: Kimi K3.1 (Moonshot AI).', $this->demoPage()->filter('aside#tour-caption .tour-line')->text());
+    }
+
+    public function testTheCaptionNamesAReviewerOfAnUnknownModelByItsIdAlone(): void
+    {
+        $this->demoRunAt(1);
+        $this->startReviewerOf('correctness', 'acme/robot-7');
+        $this->startReviewerOf('security', 'glm-5');
+
+        self::assertSame(['acme/robot-7', 'GLM 5 (Z.ai)'], $this->demoPage()->filter('aside#tour-caption .tour-reviewers span')->each(static fn (Crawler $name): string => $name->text()));
+    }
+
     public function testTheCaptionSitsAfterThePageContentAndNotInIt(): void
     {
         $this->demoRunAt(1);
@@ -439,6 +459,11 @@ final class PlayDemoControllerTest extends DashboardPageTestCase
     {
         $this->flagAsReplay(CreateDemoProjectCommand::NAME);
         $this->ledger->append(new LedgerEvent(LedgerEventKind::ReviewStarted, sprintf('{"round":"demo-round-%d","project":"%s","reviewers":2,"change":"sample-change","number":%d,"replay_factor":4.0}', $number, CreateDemoProjectCommand::NAME, $number)));
+    }
+
+    private function startReviewerOf(string $role, string $model): void
+    {
+        $this->ledger->append(new LedgerEvent(LedgerEventKind::ReviewerStarted, sprintf('{"round":"demo-round-1","reviewer":"demo-round-1-%1$s","role":"%1$s","tier":"standard","model":"%2$s"}', $role, $model)));
     }
 
     /**
