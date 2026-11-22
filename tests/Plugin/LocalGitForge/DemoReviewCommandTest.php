@@ -68,6 +68,13 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 use Symfony\AI\Platform\Exception\RateLimitExceededException;
+use Symfony\AI\Platform\Bridge\Generic\Factory;
+use Symfony\AI\Platform\Message\Message;
+use Symfony\AI\Platform\Message\MessageBag;
+use Symfony\AI\Platform\ModelCatalog\InMemoryModelCatalog;
+use Symfony\Component\HttpClient\MockHttpClient;
+use Symfony\Component\HttpClient\Response\MockResponse;
+use Intakt\Core\Ai\Infrastructure\ProjectModelCatalog;
 use Symfony\AI\Platform\PlatformInterface;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
 use Symfony\Component\Cache\Adapter\ArrayAdapter;
@@ -121,6 +128,8 @@ final class DemoReviewCommandTest extends TestCase
     private const string ROUND = '0192a000-0000-7000-8000-000000000000';
 
     private const string KIMI = 'moonshotai/Kimi-K3.1-Pro:deepinfra';
+
+    private const string KIMI_TOGETHER = 'moonshotai/Kimi-K3.1-Pro:together';
 
     private TemporaryRepository $sample;
 
@@ -281,6 +290,49 @@ final class DemoReviewCommandTest extends TestCase
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringContainsString('The correctness reviewer cannot get an answer: openai_compatible is rate-limited for 60 s and no fallback is free.', preg_replace('~\s+~', ' ', $tester->getDisplay()) ?? '');
         self::assertStringNotContainsString('Open the review', $tester->getDisplay());
+        self::assertEquals(new DateTimeImmutable('2026-11-20T12:00:00+00:00'), $this->clock->now());
+    }
+
+    // Through Symfony AI's generic bridge over a scripted HTTP client, so the 429 is a real response: the pinned provider answers it, the pin cools, and the next call goes to the pinned fallback and completes the demo (issues #2861 and #2816).
+    public function testADemoVerdictSucceedsThroughTheScriptedHttpRouterAfterThePrimaryAnswers429(): void
+    {
+        $models = [];
+        $http = new MockHttpClient(static function (string $method, string $url, array $options) use (&$models): MockResponse {
+            $request = json_decode($options['body'], true, flags: JSON_THROW_ON_ERROR);
+            $models[] = $request['model'];
+
+            if (self::KIMI === $request['model']) {
+                return new MockResponse('{"error":{"message":"rate limited"}}', ['http_code' => 429, 'response_headers' => ['content-type: application/json', 'retry-after: 300']]);
+            }
+
+            return new MockResponse(json_encode(['choices' => [['index' => 0, 'message' => ['role' => 'assistant', 'content' => 'reviewed'], 'finish_reason' => 'stop']]], JSON_THROW_ON_ERROR), ['response_headers' => ['content-type: application/json']]);
+        });
+        $config = [SampleChange::PROJECT => ['tiers' => ['strong' => ['provider' => Provider::OpenAiCompatible->value, 'model' => self::KIMI, 'substitutes' => [['provider' => Provider::OpenAiCompatible->value, 'model' => self::KIMI_TOGETHER]]]]]];
+        $bridge = Factory::createPlatform('https://router.example', 'test', httpClient: $http, modelCatalog: new InMemoryModelCatalog(new ProjectModelCatalog($config)->models(Provider::OpenAiCompatible)));
+        $pins = new PinnedProviderCooldownWindows(new ArrayAdapter(), $this->clock, new LockFactory(new InMemoryStore()));
+        $accounts = new AccountWindowsOnAClock($this->clock, [Provider::OpenAiCompatible->value => [Account::DEFAULT]]);
+        $platform = new AccountFailoverPlatform(Provider::OpenAiCompatible, [Account::DEFAULT => $bridge], $accounts, $this->clock, new NullLogger(), $pins);
+        $tiers = new TierPlatform(new ConfiguredTierResolver($config, []), new ServiceLocator([Provider::OpenAiCompatible->value => static fn (): PlatformInterface => $platform]), $accounts, new NullLogger());
+        $reviews = self::createStub(ChangeReviews::class);
+        $reviews->method('review')->willReturnCallback(function (ChangeReviewRequest $request, ReviewProgress $progress) use ($tiers): ChangeReview {
+            foreach ([1, 2] as $attempt) {
+                $progress->reached($this->waitingOnCorrectness());
+
+                try {
+                    $tiers->invoke($tiers->answering(SampleChange::PROJECT, Tier::Strong), new TierRequest(new MessageBag(Message::ofUser('Review.'))))->asText();
+                } catch (RateLimitExceededException) {
+                }
+            }
+
+            return $this->outcome(Decision::Approve);
+        });
+        $this->tiers = $tiers;
+
+        $tester = $this->whenTheDemoRuns($reviews);
+
+        self::assertSame([Command::SUCCESS, [self::KIMI, self::KIMI_TOGETHER]], [$tester->getStatusCode(), $models]);
+        self::assertStringContainsString('Waiting on the correctness reviewer ('.self::KIMI_TOGETHER.').', $tester->getErrorOutput());
+        self::assertStringStartsWith('approve (', $this->lines($tester)[0]);
         self::assertEquals(new DateTimeImmutable('2026-11-20T12:00:00+00:00'), $this->clock->now());
     }
 
