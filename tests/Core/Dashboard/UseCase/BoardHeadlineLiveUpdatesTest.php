@@ -168,20 +168,20 @@ final class BoardHeadlineLiveUpdatesTest extends DashboardPageTestCase
         self::assertCount(0, $this->browser->request('GET', '/lanes')->filter('#'.$target));
     }
 
-    // Morphed, so a review that stays in progress keeps its card as the same node, and a card link with the keyboard focus keeps it.
-    public function testAPushWhileAReviewStaysInProgressKeepsItsWorkingNowCardAsTheSameNode(): void
+    // Morphed with the card the page shows, so the pinned Turbo keeps that card as the same node and a focused card link keeps the focus;
+    // whether Turbo keeps a morphed node is left to the browser check, as for the first-day links.
+    public function testAPushWhileAReviewStaysInProgressMorphsTheWorkingNowCardThePageShows(): void
     {
         $this->pushedHeadlineAfterAReviewerStarted();
-        $page = $this->browser->request('GET', '/');
-        $card = $page->filter('#working-now a.wcard')->getNode(0);
-        self::assertNotNull($card);
+        $card = $this->browser->request('GET', '/')->filter('#working-now a.wcard');
+        self::assertCount(1, $card);
 
         $this->ledger->startReviewer(self::ROUND, 'correctness');
         $this->roundUpdates()->reviewerStarted(Uuid::fromString(self::ROUND), 'correctness');
 
-        $pushed = $this->lastShellUpdate();
-        self::assertCount(1, new Crawler($pushed)->filter('turbo-stream[action="replace"][method="morph"][target="working-now"]'));
-        self::assertSame($card, $this->replaced($page, $pushed)->filter('#working-now a.wcard')->getNode(0));
+        $stream = new Crawler($this->lastShellUpdate())->filter('turbo-stream[action="replace"][method="morph"][target="working-now"]');
+        self::assertCount(1, $stream);
+        self::assertSame($card->outerHtml(), new Crawler($stream->filter('template')->html())->filter('#working-now a.wcard')->outerHtml());
     }
 
     public function testAJudgedRoundPushedToTheBoardTakesItsReviewersOutOfTheHeadline(): void
