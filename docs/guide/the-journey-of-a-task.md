@@ -31,6 +31,8 @@ flowchart TD
 
 Planned: Intakt does not yet take tasks from the queue on its own, so the order in the last box and the rules below are designed, not running. Milestones due on the same day, or with no due date, share one turn, and priority decides between their tasks.
 
+What runs today: you start one task yourself with the console command `intakt:build:task`, naming the project and the issue number. It does steps 2 to 4 below for that one issue, in order: it reads the issue, updates Intakt's copy of the project, makes a fresh copy to build in, runs the Developer there, checks what the Developer handed back, runs the project's checks on it, and then signs and pushes the branch and opens or updates its pull request. It stops at the first step that fails and says why, and the dashboard's task page shows each step. Everything in this first step (picking on its own, the queue and its order) is planned, and so are the parts of the later steps marked planned ([the exact command](../user/README.md#building-one-task)).
+
 Planned: within one priority and milestone, a task that other tasks wait on (directly or further down the chain) goes before an older one, so the work that frees the most tasks starts first. It never jumps ahead of a higher priority or a milestone due earlier.
 
 Planned: before that, within one priority and milestone, the first task of the longest chain of waiting work that still has to finish before the milestone is due goes first, but never ahead of a more important kind of work (core before features, features before tooling). A task the milestone waits on counts on that chain even when it belongs to a later milestone or to none, and it is built with the milestone that needs it.

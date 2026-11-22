@@ -1,5 +1,18 @@
 # Requirements and external commands
 
+## In short
+
+Intakt and its checks call programs outside PHP, such as `git`, `composer`, `gitleaks` and the `claude` and `codex` CLIs. This page lists each one, who calls it, what for, and whether you need it. To run Intakt you need only Docker or Podman, because the container image ships the rest. To work on Intakt and run `bin/check`, you need more tools on your machine, and `bin/check` names any that are missing before it runs a gate.
+
+Worth knowing:
+
+- The full `bin/check` needs Linux tools such as `unshare` and `setsid`; on another system, run it in the development container.
+- Calls through Symfony Process use an argument list, never a shell string, and always have a time limit.
+- Every `git` call is hardened, so the repository's own config and attributes cannot run code.
+- A change that adds a new external command adds it to this page in the same change.
+
+The rest of this page is the detailed reference.
+
 Every program outside PHP's own code that Intakt or its checks call, who calls it, and whether you need it. A change that adds a new external command adds it here in the same change.
 
 ## To run Intakt
@@ -46,7 +59,7 @@ The `phpstan` gate also runs `php` as `PHP_BINARY`: it starts the checked tree's
 
 ## To run Intakt's own CI
 
-`.github/workflows/ci.yml`, `.github/workflows/journeys.yml` and the scripts in `.github/ci/` call these on the runner host, outside the CI image. GitHub's `ubuntu-24.04` runners have them all; a self-hosted runner must provide them and must be ephemeral ([Running Intakt's CI on your own runner](../user/self-hosted-ci.md)).
+`.github/workflows/ci.yml`, `.github/workflows/journeys.yml` and the scripts in `.github/ci/` call these on the runner host, outside the CI image. GitHub's `ubuntu-24.04` runners have them all; a self-hosted runner must provide them and must be ephemeral ([Running Intakt's CI on your own runner](../reference/self-hosted-ci.md)).
 
 | Command | Called by | What for | Needed |
 |---|---|---|---|

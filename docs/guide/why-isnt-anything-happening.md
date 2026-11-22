@@ -65,7 +65,7 @@ If the dashboard is slow or does not answer, ask the web server how it is doing.
 
 ## What is Intakt doing right now?
 
-Run `php bin/console intakt:status --format=json`. It prints one line of JSON: for each project, the reviews in progress, the tasks `intakt:build:task` worked on with the last step each reached (and why it failed, if it did; a step recorded as `asked` is left out, so a task parked on a question shows the step before it), the pull requests the watcher holds back and why, the ones handed over to you and the last results, plus any pause or drain in effect and how many messages wait in each background queue. It reads only Intakt's database, so it answers even when no background worker runs; a growing count in the `async` queue then tells you the workers are stopped. It never shows a secret. The dashboard gives the same JSON at `http://localhost:7780/status`, for a script or another dashboard on the same computer. The fields are described in the [user documentation](../user/README.md#the-status-document).
+Run `php bin/console intakt:status --format=json`. It prints one line of JSON: for each project, the reviews in progress, the tasks `intakt:build:task` worked on with the last step each reached (and why it failed, if it did; a step recorded as `asked` is left out, so a task parked on a question shows the step before it), the pull requests the watcher holds back and why, the ones handed over to you and the last results, plus any pause or drain in effect and how many messages wait in each background queue. It reads only Intakt's database, so it answers even when no background worker runs; a growing count in the `async` queue then tells you the workers are stopped. It never shows a secret. The dashboard gives the same JSON at `http://localhost:7780/status`, for a script or another dashboard on the same computer. The fields are described in the [user documentation](../reference/user-manual.md#the-status-document).
 
 ## Reading Intakt's log
 
@@ -73,7 +73,7 @@ This is the service log, not the live job log on a task's card (described under 
 
 Intakt writes its warnings and errors to the service output: the journal when it runs as a service, or `docker logs` when it runs in a container. Each line is one record in JSON. It holds the time, the level (such as warning or error), the message, and the item it belongs to, such as the reviewer, the round or the account. For a failure it also holds the kind of error and the place in the code where it happened.
 
-Intakt hides the secrets it knows about. The credentials Intakt holds, the user and password in a web address, the values of authorization and cookie headers, and anything shaped like a secret all appear as `[redacted]`. The [technical description of the log](../user/README.md#the-log) lists the fields and the credentials by name.
+Intakt hides the secrets it knows about. The credentials Intakt holds, the user and password in a web address, the values of authorization and cookie headers, and anything shaped like a secret all appear as `[redacted]`. The [technical description of the log](../reference/user-manual.md#the-log) lists the fields and the credentials by name.
 
 ## Still stuck?
 
