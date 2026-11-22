@@ -572,7 +572,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         self::assertSame('Review of feat/thing in alpha', $crawler->filter('.page-head h1')->text());
         self::assertCount(1, $crawler->filter('.page-head p.task-sentence'));
-        self::assertCount(1, $crawler->filter('.page-head p.meta'));
+        self::assertCount(1, $crawler->filter('.page-head > div > p.meta'));
     }
 
     public function testThePageHeadShowsTheTaskSentenceOfTheLatestRoundUnderTheTitle(): void
@@ -602,6 +602,35 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         self::assertSame(['rounds', 'tokens', 'wallet', 'clock'], $crawler->filter('.page-head p.meta > span svg.i')->each($this->iconName(...)));
     }
 
+    public function testTheDetailsDisclosureHoldsTokensCostLatestStartAndRoundIdAndIsRenderedClosed(): void
+    {
+        $this->givenACompletedTwoRoundReview();
+
+        $crawler = $this->browser->request('GET', '/reviews/round-2');
+
+        $details = $crawler->filter('.page-head details.review-details');
+        self::assertSame(['Details', null], [$details->filter('summary')->text(), $details->attr('open')]);
+        self::assertSame(['2,800 tokens', 'Cost: unknown, no price for model-a', 'Latest round started 2026-10-28 12:00:00 UTC', 'Round round-2'], $details->filter('p.meta > span')->each(static fn (Crawler $fact): string => self::wordsOf($fact)));
+    }
+
+    public function testTheDetailsDisclosureKeepsTheTotalsIdsTheJudgedRoundsUpdateReplaces(): void
+    {
+        $this->givenACompletedTwoRoundReview();
+
+        $crawler = $this->browser->request('GET', '/reviews/round-2');
+
+        self::assertSame([1, 1], [$crawler->filter('details.review-details #review-summary-tokens')->count(), $crawler->filter('details.review-details #review-summary-cost')->count()]);
+    }
+
+    public function testTheCostLabelIsAWordOfItsOwnBesideTheFigure(): void
+    {
+        $this->givenACompletedTwoRoundReview();
+
+        $crawler = $this->browser->request('GET', '/reviews/round-2');
+
+        self::assertSame('Cost:', $crawler->filter('.review-details p.meta > span > span.fact-label')->text());
+    }
+
     public function testEachRoundNamesItsIdAndStartOnItsMetaLine(): void
     {
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
@@ -619,7 +648,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         self::assertSame([['1500', '0', '0', '0', '500', '2000', 'unknown, no price for model-a']], $this->rowsOf($crawler->filter('#round-round-1 table.tokens tbody tr')));
         self::assertSame([['700', '0', '0', '0', '100', '800', 'unknown, no price for model-a']], $this->rowsOf($crawler->filter('#round-round-2 table.tokens tbody tr')));
-        self::assertSame('alphafeat/thing 2 rounds 2,800 tokens Cost: unknown, no price for model-a Latest round started 2026-10-28 12:00:00 UTC', self::wordsOf($crawler->filter('.page-head p.meta')));
+        self::assertSame('2,800 tokens Cost: unknown, no price for model-a Latest round started 2026-10-28 12:00:00 UTCRound round-1', self::wordsOf($crawler->filter('.review-details p.meta')));
     }
 
     public function testEachRoundShowsItsCostAtTheConfiguredPriceAndTheReviewTheSumOfThem(): void
@@ -631,7 +660,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         self::assertSame('0.0080 USD, price date unknown', $this->rowsOf($crawler->filter('#round-round-1 table.tokens tbody tr'))[0][6]);
         self::assertSame('0.0024 USD, price date unknown', $this->rowsOf($crawler->filter('#round-round-2 table.tokens tbody tr'))[0][6]);
-        self::assertStringContainsString('Cost: 0.0104 USD estimated, price date unknown', self::wordsOf($crawler->filter('.page-head p.meta')));
+        self::assertStringContainsString('Cost: 0.0104 USD estimated, price date unknown', self::wordsOf($crawler->filter('.review-details p.meta')));
     }
 
     public function testAnUnknownCostNamesTheModelEscapedAndIsNeverZero(): void
@@ -657,7 +686,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
         self::assertSame('0.0050 USD, price date unknown', $this->rowsOf($crawler->filter('#round-round-1 table.tokens tbody tr'))[0][6]);
-        self::assertSelectorTextContains('.page-head p.meta', 'Cost: unknown, no price for model-b');
+        self::assertSelectorTextContains('.review-details p.meta', 'Cost: unknown, no price for model-b');
     }
 
     public function testAnAnthropicRoundShowsItsCacheReadsAndWritesWithinThePromptAndTheirSumAsTotal(): void
@@ -731,13 +760,13 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         self::assertSame('/reviews/round-1', $crawler->filter('.review-row a.review-link')->attr('href'));
     }
 
-    public function testTheHeaderShowsTheMetaLineWithProjectChangeAndLatestStart(): void
+    public function testTheHeaderShowsTheMetaLineWithProjectChangeAndRoundCount(): void
     {
         $this->givenACompletedTwoRoundReview();
 
         $crawler = $this->browser->request('GET', '/reviews/round-2');
 
-        self::assertSame(['alpha', 'feat/thing', '2 rounds', '2,800 tokens', 'Latest round started 2026-10-28 12:00:00 UTC'], array_values(array_filter($crawler->filter('.page-head p.meta > span')->each(static fn (Crawler $fact): string => self::wordsOf($fact)), static fn (string $fact): bool => !str_starts_with($fact, 'Cost:'))));
+        self::assertSame(['alpha', 'feat/thing', '2 rounds'], $crawler->filter('.page-head > div > p.meta > span')->each(static fn (Crawler $fact): string => self::wordsOf($fact)));
     }
 
     public function testACompletedRoundFoldsToOneLineWithOutcomeFindingCountAndTimeSpan(): void

@@ -494,6 +494,12 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
 /* DESIGN.md, Long titles: a title or a change name without spaces wraps rather than run off a phone, never clipped. */
 .page-head > div:first-child { min-width: 0; overflow-wrap: anywhere; }
 .page-head .meta span { white-space: normal; overflow-wrap: anywhere; }
+/* A shrinking label broke into letters beside a long cost (one naming model ids) on a phone, so the label keeps its width and the figure wraps instead. */
+.page-head .meta .fact-label { flex: none; white-space: nowrap; overflow-wrap: normal; }
+.page-head .meta .fact-label + span { min-width: 0; }
+.review-details { margin-top: var(--s8); }
+.review-details > summary { display: inline-flex; align-items: center; gap: var(--s4); cursor: pointer; color: var(--link); font: 500 var(--t13)/1 var(--f-head); padding: var(--s4) 0; }
+.review-details > .meta { margin-top: var(--s4); }
 /* The octopus stays beside the title on a phone: the head does not wrap and the title column takes the rest of the width. */
 .setup .page-head { align-items: center; flex-wrap: nowrap; }
 .setup .page-head > div { flex: 1 1 0; min-width: 0; overflow-wrap: anywhere; }
@@ -656,7 +662,7 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
 .fc-quotes > p + p { margin-top: var(--s4); }
 @media (max-width: 760px) {
   .sb-finding { min-height: 44px; }
-  .fc-quotes > summary { min-height: 44px; }
+  .fc-quotes > summary, .review-details > summary { min-height: 44px; }
   /* On a phone the place takes its own line under the text, because beside it the place left the text about 15 characters, too few to say what to fix; the text gets the row and at most two lines. */
   .verdict-findings a { flex-wrap: wrap; row-gap: 0; }
   .verdict-findings .vf-title { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; white-space: normal; overflow-wrap: anywhere; }

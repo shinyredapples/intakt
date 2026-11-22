@@ -38,15 +38,22 @@
         {% else %}
         <p class="task-sentence muted">Task not recorded.</p>
         {% endif %}
-        {# One kind label in this line, on the cost, because it is the one estimate among the facts (decision D5 of #2206). #}
         {{ include('dashboard/components/meta.html.twig', {facts: [
             {text: review.project},
             {text: review.change ?: 'round ' ~ round, mono: true},
             {icon: 'rounds', text: review.rounds|length ~ (review.rounds|length == 1 ? ' round' : ' rounds')},
-            {icon: 'tokens', markup: totals.tokens(review)},
-            {icon: 'wallet', text: 'Cost: ', markup: totals.cost(review)},
-            {icon: 'clock', text: 'Latest round started ' ~ latest.startedAt|date('Y-m-d H:i:s', 'UTC') ~ ' UTC'},
         ]}, with_context = false) }}
+        {# Rendered closed, because a phone shows the answer first; assets/review-details.js opens it on a wide screen, where the facts fit beside the answer. #}
+        <details class="review-details">
+            <summary>Details {{ include('dashboard/components/icon.html.twig', {name: 'chevron', small: true, extra: 'chev'}, with_context = false) }}</summary>
+            {# One kind label in this line, on the cost, because it is the one estimate among the facts (decision D5 of #2206). #}
+            {{ include('dashboard/components/meta.html.twig', {facts: [
+                {icon: 'tokens', markup: totals.tokens(review)},
+                {icon: 'wallet', label: 'Cost:', markup: totals.cost(review)},
+                {icon: 'clock', text: 'Latest round started ' ~ latest.startedAt|date('Y-m-d H:i:s', 'UTC') ~ ' UTC'},
+                {text: 'Round ' ~ round, mono: true},
+            ]}, with_context = false) }}
+        </details>
         {% if not can_start %}
         <p class="no-start muted">No button here: the latest round was started before Intakt recorded the repository, base and task it needs to start the next one.</p>
         {% endif %}

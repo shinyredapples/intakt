@@ -59,7 +59,7 @@ final class ReviewPageFigureKindsTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame('alphafeat/thing 1 round 1,300 tokens', $this->wordsOf($crawler->filter('.page-head p.meta'), before: ' Cost:'));
+        self::assertSame(['alphafeat/thing 1 round', '1,300 tokens'], [$this->wordsOf($crawler->filter('.page-head > div > p.meta')), $this->wordsOf($crawler->filter('.review-details p.meta'), before: ' Cost:')]);
     }
 
     public function testTheSummaryCarriesOneLabelTheEstimateOfTheReviewsCost(): void
@@ -89,7 +89,7 @@ final class ReviewPageFigureKindsTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame('Cost: 0.0050 USD estimated, prices of 2026-11-13', $this->wordsOf($crawler->filter('.page-head p.meta > span:nth-child(5)')));
+        self::assertSame('Cost: 0.0050 USD estimated, prices of 2026-11-13', $this->wordsOf($crawler->filter('.review-details p.meta > span:nth-child(2)')));
     }
 
     public function testARoundsCostKeepsTheDayOfItsPricesAndLeavesItsLabelToTheColumnHead(): void
@@ -120,7 +120,7 @@ final class ReviewPageFigureKindsTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
         self::assertSame('unknown, no price for model-a', $crawler->filter('#round-round-1 table.tokens tbody td:last-child')->text());
-        self::assertSame('Cost: unknown, no price for model-a', $this->wordsOf($crawler->filter('.page-head p.meta > span:nth-child(5)')));
+        self::assertSame('Cost: unknown, no price for model-a', $this->wordsOf($crawler->filter('.review-details p.meta > span:nth-child(2)')));
     }
 
     public function testATokensTableWhoseCostIsUnknownLeavesItsCostHeadUnlabeled(): void

@@ -61,7 +61,7 @@ final class DashboardCostMatchesConsoleTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews/'.self::ROUND);
 
         self::assertSame('0.0050 USD estimated, prices of 2026-11-13', $console);
-        self::assertSame('Cost: '.$console, $this->wordsOf($crawler->filter('.page-head p.meta > span:nth-child(5)')));
+        self::assertSame('Cost: '.$console, $this->wordsOf($crawler->filter('.review-details p.meta > span:nth-child(2)')));
         // The table's cost leaves its estimated label to the column head, so the figure and its price date match without it.
         self::assertSame(str_replace(' estimated,', ',', $console), $this->wordsOf($crawler->filter('table.tokens tbody td:last-child')));
     }
@@ -74,7 +74,7 @@ final class DashboardCostMatchesConsoleTest extends DashboardPageTestCase
         $this->browser->request('GET', '/reviews/'.self::ROUND);
 
         self::assertSame('unknown, no price for model-a', $console);
-        self::assertSelectorTextContains('.page-head p.meta', 'Cost: '.$console);
+        self::assertSelectorTextContains('.review-details p.meta', 'Cost: '.$console);
         self::assertSelectorTextContains('table.tokens tbody td:last-child', $console);
     }
 

@@ -59,6 +59,15 @@ final class DemoTourTest extends TestCase
         self::assertNull($this->tour('')->caption());
     }
 
+    public function testEveryStageSaysOneShortSentenceOfAtMostFifteenWords(): void
+    {
+        foreach (TourStage::cases() as $stage) {
+            $sentence = $stage->sentence();
+
+            self::assertSame([1, true], [preg_match_all('/[.!?](\s|$)/', $sentence), str_word_count($sentence) <= 15], $sentence);
+        }
+    }
+
     public function testOnTheComposeDemoBeforeADemoRunTheCaptionHasNoStage(): void
     {
         self::assertEquals(TourCaption::beforeTheRun(), $this->tour()->caption());
