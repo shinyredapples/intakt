@@ -96,13 +96,13 @@ watchdog=$!
 wait "$session"
 status=$?
 if [ "$status" -ne 137 ]; then
-    # Only the watchdog's kill ends the session with 137, so it did not cut; its group exists only once setsid has run, which a session that ends at once can beat, so the kill is tried again.
+    # The watchdog's kill always ends the session with 137, so any other status rules out a cut; its group exists only once setsid has run, which a session that ends at once can beat, so the kill is tried again.
     for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
         kill -s KILL -- "-$watchdog" 2>/dev/null && break
         sleep 0.1
     done
 else
-    # A SIGKILL from elsewhere (such as the out-of-memory killer) ends the session with 137 too, so the watchdog is asked to stop instead of waited out for the rest of the allowance.
+    # Status 137 does not rule out a cut (the watchdog's own kill gives it), but a SIGKILL from elsewhere (such as the out-of-memory killer) gives it too, so the watchdog is asked to stop instead of waited out for the rest of the allowance; one that has already cut ignores the TERM.
     kill -s TERM "$watchdog" 2>/dev/null
 fi
 wait "$watchdog" 2>/dev/null

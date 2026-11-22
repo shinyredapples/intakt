@@ -195,6 +195,33 @@ final class BuildScriptTest extends TestCase
         self::assertStringContainsString("claude cut after 3 seconds, its commits are kept\n", $this->outputFile('build.log'));
     }
 
+    public function testATermReachingTheWatchdogAfterItsKillWasSentStillCountsAsACut(): void
+    {
+        // The stand-in shell holds the watchdog for 2 seconds after its kill, so the build's TERM arrives inside the window between the kill and the exit.
+        $sh = escapeshellarg((string) new ExecutableFinder()->find('sh'));
+        file_put_contents($this->bin.'/sh', <<<SH
+            #!/bin/sh
+            if [ "\$1" = -c ]; then
+                script="\$2"
+                shift 2
+                exec {$sh} -c "\$script; s=\\\$?; sleep 2; exit \\\$s" "\$@"
+            fi
+            exec {$sh} "\$@"
+            SH);
+        chmod($this->bin.'/sh', 0o755);
+        $this->givenTheCli(<<<'SH'
+            echo 'built' > built.txt
+            git add built.txt
+            git commit --quiet -m 'feat: build the task'
+            sleep 30
+            SH);
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5', 3);
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertStringContainsString("claude cut after 3 seconds, its commits are kept\n", $this->outputFile('build.log'));
+    }
+
     public function testASessionThatPutsAFolderWhereACutMarkerCouldBeIsStillCutAtItsAllowance(): void
     {
         $this->givenTheCli(<<<'SH'
