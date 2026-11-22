@@ -102,4 +102,12 @@ final readonly class Review
     {
         return array_reduce($this->rounds, static fn (Cost $sum, ReviewedRound $round): Cost => $sum->plus($round->cost), Cost::none());
     }
+
+    /**
+     * @return list<PathStep>
+     */
+    public function path(): array
+    {
+        return ReviewPath::of($this);
+    }
 }
