@@ -198,14 +198,15 @@ final class BuildScriptTest extends TestCase
 
     public function testATermReachingTheWatchdogAfterItsKillWasSentStillCountsAsACut(): void
     {
-        // The stand-in shell holds the watchdog for 2 seconds after its kill, so the build's TERM arrives inside the window between the kill and the exit.
+        // The stand-in shell holds the watchdog after its kill until the build has sent its TERM, so the TERM always arrives inside the window between the kill and the exit.
+        $this->preamble = 'rm -f "$TMPDIR/termsent"; kill() { command kill "$@"; if [ "$2" = TERM ]; then : > "$TMPDIR/termsent"; fi; }';
         $sh = escapeshellarg((string) new ExecutableFinder()->find('sh'));
         file_put_contents($this->bin.'/sh', <<<SH
             #!/bin/sh
             if [ "\$1" = -c ]; then
                 script="\$2"
                 shift 2
-                exec {$sh} -c "\$script; s=\\\$?; sleep 2; exit \\\$s" "\$@"
+                exec {$sh} -c "\$script; s=\\\$?; while [ ! -e \\\$TMPDIR/termsent ]; do sleep 0.05; done; sleep 0.3; exit \\\$s" "\$@"
             fi
             exec {$sh} "\$@"
             SH);
@@ -229,6 +230,25 @@ final class BuildScriptTest extends TestCase
         $this->preamble = 'kill() { if [ "$2" = TERM ]; then sleep 3; fi; command kill "$@"; }';
         $this->givenTheCli(<<<'SH'
             sleep 30 &
+            kill -s KILL $$
+            SH);
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5', 1);
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertStringContainsString("claude exited with 137\n", $this->outputFile('build.log'));
+        self::assertStringNotContainsString('cut after', $this->outputFile('build.log'));
+    }
+
+    public function testASessionLeaderKilledFromElsewhereAndNotYetReapedIsNotTakenForACutWhenItsChildOutlivesIt(): void
+    {
+        // The CLI stops the build script so it cannot reap the leader, kills the leader, and a helper in a session of its own resumes the script after the allowance, which forces the zombie order.
+        $this->givenTheCli(<<<'SH'
+            parent=$PPID
+            sleep 30 &
+            setsid sh -c 'sleep 3; kill -s CONT "$1"' helper "$parent" > /dev/null 2>&1 &
+            kill -s STOP "$parent"
+            until grep -q '^State:.T' "/proc/$parent/status"; do sleep 0.01; done
             kill -s KILL $$
             SH);
 

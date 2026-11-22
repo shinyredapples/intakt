@@ -91,9 +91,9 @@ session=$!
 # A TERM ends it without a cut only before it sends the kill: it then ends its own group, its sleep and itself, with a status that is no cut;
 # it ignores TERM from before it sends the kill, so a watchdog that has cut still reports the cut when the TERM below reaches it.
 # Its sleep runs in the background, because the shell runs a trap only once a command in the foreground has ended.
-# It cuts only a session whose leader is still there: a leader killed from elsewhere is reaped by the wait below, so a watchdog that wakes before this script has sent its TERM
-# does not take a surviving child of that session for a cut.
-setsid sh -c 'trap '\''kill -s KILL 0'\'' TERM; sleep "$1" & wait "$!" && trap '\'''\'' TERM && kill -0 "$2" && kill -s KILL -- "-$2"' watchdog "$allowance" "$session" > /dev/null 2>&1 &
+# It cuts only a session whose leader is alive and not a zombie (state Z in /proc, which kill -0 does not tell apart): a leader killed from elsewhere stays a zombie until the wait below reaps it,
+# so a watchdog that wakes in between does not take a surviving child of that session for a cut. Without /proc the state cannot be read and the leader counts as alive.
+setsid sh -c 'trap '\''kill -s KILL 0'\'' TERM; sleep "$1" & wait "$!" && trap "" TERM && kill -0 "$2" && ! { read -r state < "/proc/$2/stat" && case "${state##*) }" in Z*) true;; *) false;; esac; } && kill -s KILL -- "-$2"' watchdog "$allowance" "$session" > /dev/null 2>&1 &
 watchdog=$!
 wait "$session"
 status=$?
