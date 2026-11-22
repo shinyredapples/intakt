@@ -4,8 +4,12 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Gates;
 
+use Intakt\Gates\PhpStan\TestMethodCollector;
 use Intakt\Gates\PhpStan\TestMethodNameRule;
 use Intakt\Gates\StaticAnalysisGate;
+use Override;
+use PhpParser\Node;
+use PHPStan\Collectors\Collector;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 
@@ -13,6 +17,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
  * @extends PhpStanRuleTestCase<TestMethodNameRule>
  */
 #[CoversClass(TestMethodNameRule::class)]
+#[CoversClass(TestMethodCollector::class)]
 #[UsesClass(StaticAnalysisGate::class)]
 final class TestMethodNameRuleTest extends PhpStanRuleTestCase
 {
@@ -61,9 +66,50 @@ final class TestMethodNameRuleTest extends PhpStanRuleTestCase
         $this->assertRuleRejects('test-attribute-method', 'tests/MailerTest.php:12 intakt.testName Test method works()');
     }
 
-    public function testAMethodMarkedAsTestThatReadsAsASentencePassesStaticAnalysis(): void
+    public function testAMethodMarkedAsTestWithoutThePrefixFailsEvenWithThreeWords(): void
     {
-        $this->assertRuleAccepts('sentence-test-attribute-method');
+        $this->assertRuleRejects('sentence-test-attribute-method', 'tests/MailerTest.php:12 intakt.testName Test method aStaleLockIsReleased()');
+    }
+
+    public function testAMethodMarkedAsTestWithThePrefixAndThreeWordsPassesStaticAnalysis(): void
+    {
+        $this->assertRuleAccepts('prefixed-test-attribute-method');
+    }
+
+    public function testALowercaseLetterAfterThePrefixFailsStaticAnalysis(): void
+    {
+        $this->assertRuleRejects('lowercase-after-prefix-test-method', 'tests/MailerTest.php:9 intakt.testName Test method testitSendsNow()');
+    }
+
+    public function testAnAttributeOfAnotherNamespaceNamedDataProviderExemptsNothing(): void
+    {
+        self::assertStringStartsWith('tests/MailerTest.php:25 intakt.testName Test method testShort()', $this->ruleFindingsOf('lookalike-data-provider'));
+    }
+
+    public function testAProviderOfAnotherClassNamedByDataProviderExternalIsNotJudgedAndItsNeighborIs(): void
+    {
+        $findings = $this->ruleFindingsOf('external-data-provider');
+
+        self::assertStringStartsWith('tests/MailerTest.php:17 intakt.testName Test method testOthers()', $findings);
+        self::assertStringNotContainsString('testCases', $findings);
+    }
+
+    public function testAProviderNamedByNamedArgumentsThroughAnImportAliasIsNotJudged(): void
+    {
+        $this->assertRuleAccepts('named-argument-data-provider');
+    }
+
+    public function testAProviderDeclaredByAParentClassOrAnImportedTraitIsNotJudged(): void
+    {
+        $this->assertRuleAccepts('inherited-and-trait-data-provider');
+    }
+
+    public function testATestMethodImportedFromATraitIsJudgedOnceAtItsDeclaration(): void
+    {
+        $findings = $this->ruleFindingsOf('trait-test-method');
+
+        self::assertStringStartsWith('tests/MailerTest.php:11 intakt.testName Test method testShort()', $findings);
+        self::assertSame(1, substr_count($findings, 'intakt.testName'));
     }
 
     public function testAMethodNamedTestOutsideTheTestsFolderIsNotJudged(): void
@@ -74,5 +120,14 @@ final class TestMethodNameRuleTest extends PhpStanRuleTestCase
     protected function ruleFor(string $root): TestMethodNameRule
     {
         return new TestMethodNameRule($root);
+    }
+
+    /**
+     * @return array<Collector<Node, mixed>>
+     */
+    #[Override]
+    protected function getCollectors(): array
+    {
+        return [new TestMethodCollector()];
     }
 }

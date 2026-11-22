@@ -5,25 +5,17 @@ declare(strict_types=1);
 namespace Intakt\Gates\PhpStan;
 
 use PhpParser\Node;
-use PhpParser\Node\Attribute;
-use PhpParser\Node\Stmt\ClassMethod;
 use PHPStan\Analyser\Scope;
-use PHPStan\Node\InClassNode;
+use PHPStan\Node\CollectedDataNode;
 use PHPStan\Rules\IdentifierRuleError;
 use PHPStan\Rules\Rule;
 use PHPStan\Rules\RuleErrorBuilder;
-use PHPStan\Type\Constant\ConstantStringType;
-use PHPUnit\Framework\Attributes\Test;
 
 /**
- * @implements Rule<InClassNode>
+ * @implements Rule<CollectedDataNode>
  */
 final readonly class TestMethodNameRule implements Rule
 {
-    private const string PREFIX = 'test';
-
-    private const string TEST_ATTRIBUTE = Test::class;
-
     private const int MINIMUM_WORDS = 3;
 
     // because an acronym reads as one word (testMCPToolWorks has three) and a lone digit is no word (testItSends2 has two)
@@ -35,7 +27,7 @@ final readonly class TestMethodNameRule implements Rule
 
     public function getNodeType(): string
     {
-        return InClassNode::class;
+        return CollectedDataNode::class;
     }
 
     /**
@@ -43,88 +35,40 @@ final readonly class TestMethodNameRule implements Rule
      */
     public function processNode(Node $node, Scope $scope): array
     {
-        if (!str_starts_with($scope->getFile(), $this->root.'/tests/')) {
-            return [];
-        }
-
-        $methods = $node->getOriginalNode()->getMethods();
-        $providers = $this->providersOf($methods, $scope);
-        $judged = array_filter($methods, fn (ClassMethod $method): bool => $this->isJudged($method, $providers));
-        $misnamed = array_filter($judged, fn (ClassMethod $method): bool => !$this->readsAsSentence($method->name->toString()));
-
-        return array_values(array_map($this->notASentence(...), $misnamed));
-    }
-
-    /**
-     * @param list<ClassMethod> $methods
-     *
-     * @return list<string>
-     */
-    private function providersOf(array $methods, Scope $scope): array
-    {
-        $names = [];
+        $methods = array_merge(...array_values($node->get(TestMethodCollector::class)));
+        $providers = array_merge(...array_column($methods, 'provides'));
+        $findings = [];
 
         foreach ($methods as $method) {
-            foreach ($method->attrGroups as $group) {
-                foreach ($group->attrs as $attribute) {
-                    array_push($names, ...$this->providersNamedBy($attribute, $scope));
-                }
+            if ($this->isJudged($method, $providers) && !$this->readsAsSentence($method['name'])) {
+                // keyed by the declaration because a trait's method is collected once for each class that imports it
+                $findings[$method['file'].':'.$method['line']] = $this->notASentence($method['name'], $method['file'], $method['line']);
             }
         }
 
-        return $names;
+        return array_values($findings);
     }
 
     /**
-     * @param list<string> $providers
+     * @param array{file: string, method: string, runnable: bool} $method
+     * @param list<string>                                        $providers
      */
-    private function isJudged(ClassMethod $method, array $providers): bool
+    private function isJudged(array $method, array $providers): bool
     {
-        $name = $method->name->toString();
-        $runnable = str_starts_with($name, self::PREFIX) || $this->isMarkedAsTest($method);
-
-        return $method->isPublic() && $runnable && !in_array($name, $providers, true);
+        return $method['runnable'] && str_starts_with($method['file'], $this->root.'/tests/') && !in_array($method['method'], $providers, true);
     }
 
     private function readsAsSentence(string $name): bool
     {
-        $words = ucfirst(str_starts_with($name, self::PREFIX) ? substr($name, strlen(self::PREFIX)) : $name);
+        $prefixed = 1 === preg_match('/^'.TestMethodCollector::PREFIX.'((?:'.self::WORD.')+)$/', $name, $found);
 
-        return 1 === preg_match('/^(?:'.self::WORD.')+$/', $words) && preg_match_all('/'.self::WORD.'/', $words) >= self::MINIMUM_WORDS;
+        return $prefixed && preg_match_all('/'.self::WORD.'/', $found[1]) >= self::MINIMUM_WORDS;
     }
 
-    private function notASentence(ClassMethod $method): IdentifierRuleError
+    private function notASentence(string $name, string $file, int $line): IdentifierRuleError
     {
-        $name = $method->name->toString();
-        $message = sprintf('Test method %s() does not read as a sentence: name it test followed by at least three words in camel case, for example testAStaleLockIsReleased() (a #[Test] method without the prefix needs the three words alone); a data provider named by #[DataProvider] is exempt.', $name);
+        $message = sprintf('Test method %s() does not read as a sentence: name it test followed by at least three words in camel case, for example testAStaleLockIsReleased() (the prefix is required, also on a #[Test] method, and the first word starts with a capital); a data provider named by PHPUnit\'s #[DataProvider] or #[DataProviderExternal] is exempt.', $name);
 
-        return RuleErrorBuilder::message($message)->identifier('intakt.testName')->line($method->name->getStartLine())->build();
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function providersNamedBy(Attribute $attribute, Scope $scope): array
-    {
-        $first = $attribute->args[0]->value ?? null;
-
-        if ('DataProvider' !== $attribute->name->getLast() || null === $first) {
-            return [];
-        }
-
-        return array_map(static fn (ConstantStringType $name): string => $name->getValue(), $scope->getType($first)->getConstantStrings());
-    }
-
-    private function isMarkedAsTest(ClassMethod $method): bool
-    {
-        foreach ($method->attrGroups as $group) {
-            foreach ($group->attrs as $attribute) {
-                if (self::TEST_ATTRIBUTE === $attribute->name->toString()) {
-                    return true;
-                }
-            }
-        }
-
-        return false;
+        return RuleErrorBuilder::message($message)->identifier('intakt.testName')->file($file)->line($line)->build();
     }
 }

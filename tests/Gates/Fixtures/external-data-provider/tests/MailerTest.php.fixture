@@ -1,0 +1,29 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Tests\Sample;
+
+use PHPUnit\Framework\Attributes\DataProviderExternal;
+use PHPUnit\Framework\TestCase;
+
+final class MailerCases
+{
+    public static function testCases(): iterable
+    {
+        yield 'one' => [1];
+    }
+
+    public static function testOthers(): iterable
+    {
+        yield 'two' => [2];
+    }
+}
+
+final class MailerTest extends TestCase
+{
+    #[DataProviderExternal(MailerCases::class, 'testCases')]
+    public function testAnExternalCaseIsSentOnce(int $case): void
+    {
+    }
+}

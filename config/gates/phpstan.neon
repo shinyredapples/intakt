@@ -148,3 +148,7 @@ services:
         class: Intakt\Gates\PhpStan\AbstractTraitSetterUseCollector
         tags:
             - phpstan.collector
+    -
+        class: Intakt\Gates\PhpStan\TestMethodCollector
+        tags:
+            - phpstan.collector

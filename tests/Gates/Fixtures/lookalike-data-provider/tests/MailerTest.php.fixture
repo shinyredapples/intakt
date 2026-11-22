@@ -1,0 +1,28 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Tests\Sample;
+
+use Attribute;
+use PHPUnit\Framework\TestCase;
+
+#[Attribute]
+final class DataProvider
+{
+    public function __construct(public string $name)
+    {
+    }
+}
+
+final class MailerTest extends TestCase
+{
+    #[DataProvider('testShort')]
+    public function testTheLookalikeIsIgnored(): void
+    {
+    }
+
+    public function testShort(): void
+    {
+    }
+}
