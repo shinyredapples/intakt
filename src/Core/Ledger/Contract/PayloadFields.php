@@ -6,8 +6,7 @@ namespace Intakt\Core\Ledger\Contract;
 
 use JsonException;
 
-// An unreadable payload reads as one without fields, because a ledger row is never rewritten and one bad row must not take a page down or stop a publication.
-// Only typed fields leave the Ledger module, so a reader in another module never holds the decoded map and checks no types of its own.
+// Only typed fields leave the module, so no reader elsewhere holds the decoded map, and an unreadable payload has no fields, because a ledger row is never rewritten and one bad row must not take a page down.
 final readonly class PayloadFields
 {
     /**

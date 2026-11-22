@@ -64,7 +64,7 @@ final readonly class LedgerFailingHeads
             // Keyed by project, then pull request, so no name either side sends can make two keys meet.
             unset($failing[$project][$change]);
             $handedOver[$project][$change] = $this->handedOverHead($kind, $payload->text('head'), $handedOver[$project][$change] ?? null);
-            $failing[$project] = ($failing[$project] ?? []) + $this->readableFailure($kind, $project, $change, $payload);
+            $failing[$project] = ($failing[$project] ?? []) + $this->readableFailure($kind, $project, $payload);
         }
 
         return $this->markHandedOver($failing, $handedOver);
@@ -85,13 +85,14 @@ final readonly class LedgerFailingHeads
     /**
      * @return array<string, FailingHead>
      */
-    private function readableFailure(LedgerEventKind $kind, string $project, string $change, PayloadFields $payload): array
+    private function readableFailure(LedgerEventKind $kind, string $project, PayloadFields $payload): array
     {
+        $change = $payload->text('change');
         $cause = $payload->text('cause');
         $failures = $payload->number('failures');
         $retryAt = $this->momentOf($payload->text('retry_at'));
 
-        if (!in_array($kind, self::FAILED, true) || null === $cause || null === $failures || !$retryAt instanceof DateTimeImmutable) {
+        if (!in_array($kind, self::FAILED, true) || null === $change || null === $cause || null === $failures || !$retryAt instanceof DateTimeImmutable) {
             return [];
         }
 
