@@ -4,7 +4,7 @@
     ]}, with_context = false) }}
 
     {% set unfinished = reviewed.state.name != 'Judged' %}
-    <p id="round-{{ reviewed.round }}-state">{% if not unfinished %}Judged.{% else %}{{ reviewed.outcomes|filter(o => o.progress.name != 'Running')|length }} of {{ reviewed.reviewers }} reviewers finished.{% endif %}</p>
+    <p id="round-{{ reviewed.round }}-state">{% if not unfinished %}Checked.{% else %}{{ reviewed.outcomes|filter(o => o.progress.name != 'Running')|length }} of {{ reviewed.reviewers }} reviewers finished.{% endif %}</p>
     {% set running = unfinished and not reviewed.hasEnded %}
     {# Its own partial and always rendered, because the judged round's live update replaces it and a page opened before the judging needs the element. #}
     {{ include('dashboard/_round_verdict.html.twig', {reviewed: reviewed, newest: labeled}, with_context = false) }}

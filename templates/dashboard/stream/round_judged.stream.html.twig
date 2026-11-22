@@ -1,7 +1,7 @@
 {# The state of the round first, so the finished count, the reviewer rows and the stop already read as judged; the judged parts follow. #}
 {{ include('dashboard/stream/round_changed.stream.html.twig') }}
 <turbo-stream action="replace" target="round-{{ round }}-head-state"><template><span id="round-{{ round }}-head-state">{{ include('dashboard/_round_state.html.twig', {state: constant('Intakt\\Core\\Dashboard\\Domain\\ReviewState::Judged'), outcome: (reviewed ?? null)?.reviewOutcome, plain: true}, with_context = false) }}</span></template></turbo-stream>
-<turbo-stream action="replace" target="round-{{ round }}-now-phase"><template><span id="round-{{ round }}-now-phase">judged</span></template></turbo-stream>
+<turbo-stream action="replace" target="round-{{ round }}-now-phase"><template><span id="round-{{ round }}-now-phase">{{ include('dashboard/components/term.html.twig', {term: 'checked', words: 'checked', ask: true}, with_context = false) }}</span></template></turbo-stream>
 {% if (reviewed ?? null) is not null %}
 <turbo-stream action="replace" target="round-{{ round }}-verdict"><template>{{ include('dashboard/_round_verdict.html.twig', {reviewed: reviewed, newest: (review ?? null) is not null and (review.rounds|last).round == reviewed.round}, with_context = false) }}</template></turbo-stream>
 <turbo-stream action="replace" target="round-{{ round }}-judged"><template>{{ include('dashboard/_judged_round.html.twig', {reviewed: reviewed}, with_context = false) }}</template></turbo-stream>
