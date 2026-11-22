@@ -50,6 +50,7 @@ use Symfony\Component\Semaphore\SemaphoreFactory;
 use Symfony\Component\Semaphore\Store\LockStore;
 use Symfony\Component\Serializer\SerializerInterface;
 use Symfony\Component\Uid\Uuid;
+use Throwable;
 
 #[CoversClass(SymfonyAiEscalationReviews::class)]
 #[UsesClass(EscalationVerdict::class)]
@@ -105,6 +106,8 @@ final class SymfonyAiEscalationReviewsTest extends KernelTestCase
         yield 'an unknown outcome' => ['{"outcome":"maybe","reasons":"Unsure."}'];
         yield 'blank reasons' => ['{"outcome":"confirmed","reasons":"  "}'];
         yield 'reasons of form feeds and Unicode spaces' => ['{"outcome":"confirmed","reasons":"\f  ​"}'];
+        yield 'reasons of a grapheme joiner and a variation selector' => ['{"outcome":"confirmed","reasons":"͏️"}'];
+        yield 'reasons of fillers that render blank' => ['{"outcome":"confirmed","reasons":"ㅤ⠀ᅟ"}'];
         yield 'a property the schema forbids' => ['{"outcome":"confirmed","reasons":"Real.","unexpected":true}'];
         yield 'no reasons' => ['{"outcome":"confirmed"}'];
         yield 'prose' => ['I confirm the finding.'];
@@ -162,6 +165,21 @@ final class SymfonyAiEscalationReviewsTest extends KernelTestCase
             self::fail('The provider error must reach the queue.');
         } catch (ProviderRateLimited $limited) {
             self::assertSame([30, ['The failed escalation call could not be left unsettled.']], [$limited->retryAfterSeconds, array_column($log->cleanLogs(), 1)]);
+        }
+    }
+
+    public function testTheLogOfALedgerThatCannotLeaveTheCallUnsettledNamesTheFailureClassWithoutItsExceptionChain(): void
+    {
+        $log = new BufferingLogger();
+
+        try {
+            $_ = $this->reviews(static fn (): never => throw new AuthenticationException('Invalid key sk-ant-abc...xyz.'), new InMemoryLedger(accepted: 1), log: $log)->escalate('alpha', Uuid::fromString(self::ROUND), $this->messages());
+            self::fail('The provider error must reach the queue.');
+        } catch (ProviderRejectedTheKey) {
+            $context = $log->cleanLogs()[0][2];
+            self::assertSame([['call', 'failure'], []], [array_keys($context), array_filter($context, static fn (mixed $value): bool => $value instanceof Throwable)]);
+            self::assertIsString($context['failure']);
+            self::assertTrue(class_exists($context['failure']));
         }
     }
 
