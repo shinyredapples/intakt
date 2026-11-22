@@ -110,6 +110,14 @@ final readonly class ScriptDirectory
         return false === $files ? [] : $files;
     }
 
+    private function record(int $call): string
+    {
+        $pid = (int) getmypid();
+        $start = new ProcParents()->startOf($pid) ?? throw new RecordNotPublished($this->path.'/'.$call);
+
+        return json_encode(['call' => $call, 'pid' => $pid, 'start' => $start, 'at' => (float) $this->clock->now()->format('U.u')], JSON_THROW_ON_ERROR);
+    }
+
     // False only when the name was taken; any other failure throws, because retrying it would never end.
     private function published(string $name, string $record): bool
     {
@@ -156,14 +164,6 @@ final readonly class ScriptDirectory
                 new Filesystem()->remove($this->path.'/'.$name);
             }
         }
-    }
-
-    private function record(int $call): string
-    {
-        $pid = (int) getmypid();
-        $start = new ProcParents()->startOf($pid) ?? throw new RecordNotPublished($this->path.'/'.$call);
-
-        return json_encode(['call' => $call, 'pid' => $pid, 'start' => $start, 'at' => (float) $this->clock->now()->format('U.u')], JSON_THROW_ON_ERROR);
     }
 
     /**

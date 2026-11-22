@@ -29,6 +29,19 @@ final readonly class WorkflowInlineValue
             : new WorkflowScalar($number, $this->scalar($text, $number));
     }
 
+    private function flow(string $text, int $number): WorkflowMapping|WorkflowSequence
+    {
+        if (1 !== preg_match('/^([\[{])([^\[\]{}#]*)([\]}])(?:\s+#.*)?$/', $text, $match) || ('[' === $match[1]) !== (']' === $match[3])) {
+            throw new WorkflowFormNotRead($number, 'a flow value that is nested, holds a comment or goes on over the next line');
+        }
+
+        $items = '' === trim($match[2]) ? [] : array_map(trim(...), explode(',', $match[2]));
+
+        return '[' === $match[1]
+            ? new WorkflowSequence($number, array_map(fn (string $item): WorkflowScalar => new WorkflowScalar($number, $this->flowScalar($item, $number)), $items))
+            : new WorkflowMapping($number, $this->flowEntries($items, $number));
+    }
+
     private function scalar(string $text, int $number): string
     {
         return match (true) {
@@ -65,19 +78,6 @@ final readonly class WorkflowInlineValue
         }
 
         return $value;
-    }
-
-    private function flow(string $text, int $number): WorkflowMapping|WorkflowSequence
-    {
-        if (1 !== preg_match('/^([\[{])([^\[\]{}#]*)([\]}])(?:\s+#.*)?$/', $text, $match) || ('[' === $match[1]) !== (']' === $match[3])) {
-            throw new WorkflowFormNotRead($number, 'a flow value that is nested, holds a comment or goes on over the next line');
-        }
-
-        $items = '' === trim($match[2]) ? [] : array_map(trim(...), explode(',', $match[2]));
-
-        return '[' === $match[1]
-            ? new WorkflowSequence($number, array_map(fn (string $item): WorkflowScalar => new WorkflowScalar($number, $this->flowScalar($item, $number)), $items))
-            : new WorkflowMapping($number, $this->flowEntries($items, $number));
     }
 
     private function flowScalar(string $item, int $number): string

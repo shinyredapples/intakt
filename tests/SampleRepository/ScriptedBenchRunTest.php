@@ -78,6 +78,14 @@ final class ScriptedBenchRunTest extends KernelTestCase
     }
 
     /**
+     * @return list<Finding>
+     */
+    private function findingsOn(Expectations $expectations): array
+    {
+        return $this->scripted(array_map(static fn (PlantedDefect $defect): array => [$defect->file, $defect->from], $expectations->defects));
+    }
+
+    /**
      * @param callable(Expectations): RunOutcome $review
      */
     private function reviewBench(callable $review): BenchFigures
@@ -102,14 +110,6 @@ final class ScriptedBenchRunTest extends KernelTestCase
         }
 
         return new ChangeFiles($lineCounts);
-    }
-
-    /**
-     * @return list<Finding>
-     */
-    private function findingsOn(Expectations $expectations): array
-    {
-        return $this->scripted(array_map(static fn (PlantedDefect $defect): array => [$defect->file, $defect->from], $expectations->defects));
     }
 
     /**

@@ -37,11 +37,6 @@ final class DuplicateDeliveryTest extends KernelTestCase
 {
     private RoundFixture $fixture;
 
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-    }
-
     public function testASecondDeliveryDuringALiveVendorCallLeavesTheReviewerToItsWorker(): void
     {
         $round = $this->fixture->start(1);
@@ -115,5 +110,10 @@ final class DuplicateDeliveryTest extends KernelTestCase
         } catch (ReviewerRateLimited) {
             self::assertSame(ReviewerState::Running, $this->fixture->reviewer($message->reviewerId)->state());
         }
+    }
+
+    protected function setUp(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer());
     }
 }

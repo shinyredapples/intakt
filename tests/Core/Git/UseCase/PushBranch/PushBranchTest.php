@@ -67,16 +67,6 @@ final class PushBranchTest extends TestCase
 {
     private PushScenario $scenario;
 
-    protected function setUp(): void
-    {
-        $this->scenario = new PushScenario();
-    }
-
-    protected function tearDown(): void
-    {
-        $this->scenario->remove();
-    }
-
     public function testEveryPushedCommitVerifiesAgainstTheOrchestratorsKey(): void
     {
         $pushed = $this->scenario->push()->push($this->scenario->request());
@@ -932,6 +922,16 @@ final class PushBranchTest extends TestCase
 
         self::assertInstanceOf(PushedBranch::class, $pushed);
         self::assertSame($mainTip, $this->scenario->repository->objectAt($pushed->head.'^2'));
+    }
+
+    protected function setUp(): void
+    {
+        $this->scenario = new PushScenario();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->scenario->remove();
     }
 
     // On top of the first build's signed head, because a retry of the first head then meets a branch that moved past it.

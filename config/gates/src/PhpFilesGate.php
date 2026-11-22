@@ -6,8 +6,6 @@ namespace Intakt\Gates;
 
 abstract readonly class PhpFilesGate implements Gate
 {
-    abstract protected function check(Workspace $workspace, PhpFileSelection $selection): GateResult;
-
     final public function run(Workspace $workspace): GateResult
     {
         try {
@@ -22,4 +20,6 @@ abstract readonly class PhpFilesGate implements Gate
 
         return $this->check($workspace, $selection);
     }
+
+    abstract protected function check(Workspace $workspace, PhpFileSelection $selection): GateResult;
 }

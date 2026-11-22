@@ -262,32 +262,6 @@ final class BuildTaskTest extends TestCase
 
     private RecordingChangeOpening $changes;
 
-    protected function setUp(): void
-    {
-        $this->handBackFiles = new Filesystem();
-        $this->changes = new RecordingChangeOpening();
-        $this->mirrors = sys_get_temp_dir().'/intakt-build-task-'.bin2hex(random_bytes(6));
-        $this->clone = $this->mirrors.'-clone';
-        $this->output = $this->mirrors.'-output';
-        $this->routing = new ConfiguredBuildRouting(['alpha' => ['tier' => 'standard', 'sensitive_paths' => [], 'escalate_on' => []]], new ModelRouting());
-        $tiers = self::createStub(TierResolver::class);
-        $tiers->method('resolve')->willReturn(new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'));
-        $this->tiers = $tiers;
-        $this->runner = new ScriptedJobRunner($this->output);
-        $this->checkRunner = $this->checkLeaving([RunCheckJob::RESULT => "passed\n", RunCheckJob::LOG => "ok\n"]);
-        new Filesystem()->dumpFile($this->output.'/'.RunBuildJob::BUNDLE, 'BUNDLE');
-        new Filesystem()->dumpFile($this->output.'/'.RunBuildJob::PULL_REQUEST_TEXT, "feat: task 7\n");
-        $this->remote = new TemporaryRepository();
-        $this->remote->commitFile('a.txt', 'one');
-    }
-
-    protected function tearDown(): void
-    {
-        $this->programs?->remove();
-        new Filesystem()->remove([$this->mirrors, $this->clone, $this->clone.'-job', $this->output, $this->mirrors.'-prompts', $this->mirrors.'-hand-backs', $this->mirrors.'-key', $this->mirrors.'-key.pub']);
-        $this->remote->remove();
-    }
-
     public function testARemoteNamingAnotherGitHubRepositoryThanTheConfiguredOneIsRefusedBeforeAnythingIsRecordedPushedOrAskedOfTheForge(): void
     {
         $this->configuredRepository = 'acme/alpha';
@@ -1021,6 +995,32 @@ final class BuildTaskTest extends TestCase
         self::assertDirectoryDoesNotExist($this->clone);
     }
 
+    protected function setUp(): void
+    {
+        $this->handBackFiles = new Filesystem();
+        $this->changes = new RecordingChangeOpening();
+        $this->mirrors = sys_get_temp_dir().'/intakt-build-task-'.bin2hex(random_bytes(6));
+        $this->clone = $this->mirrors.'-clone';
+        $this->output = $this->mirrors.'-output';
+        $this->routing = new ConfiguredBuildRouting(['alpha' => ['tier' => 'standard', 'sensitive_paths' => [], 'escalate_on' => []]], new ModelRouting());
+        $tiers = self::createStub(TierResolver::class);
+        $tiers->method('resolve')->willReturn(new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'));
+        $this->tiers = $tiers;
+        $this->runner = new ScriptedJobRunner($this->output);
+        $this->checkRunner = $this->checkLeaving([RunCheckJob::RESULT => "passed\n", RunCheckJob::LOG => "ok\n"]);
+        new Filesystem()->dumpFile($this->output.'/'.RunBuildJob::BUNDLE, 'BUNDLE');
+        new Filesystem()->dumpFile($this->output.'/'.RunBuildJob::PULL_REQUEST_TEXT, "feat: task 7\n");
+        $this->remote = new TemporaryRepository();
+        $this->remote->commitFile('a.txt', 'one');
+    }
+
+    protected function tearDown(): void
+    {
+        $this->programs?->remove();
+        new Filesystem()->remove([$this->mirrors, $this->clone, $this->clone.'-job', $this->output, $this->mirrors.'-prompts', $this->mirrors.'-hand-backs', $this->mirrors.'-key', $this->mirrors.'-key.pub']);
+        $this->remote->remove();
+    }
+
     /**
      * @param list<ListedIssue> $issues
      */
@@ -1029,45 +1029,12 @@ final class BuildTaskTest extends TestCase
         return $this->buildTask($this->listing($issues), $this->checkout(), $ledger);
     }
 
-    private function buildTask(IssueReads $issues, GitBuildCheckout $checkout, InMemoryLedger $ledger): BuildTask
-    {
-        $configured = self::createStub(ConfiguredRepositories::class);
-        $configured->method('nameOf')->willReturn($this->configuredRepository);
-        $builds = new RunBuildJob($this->tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $this->runner, new PhpGate(), new GatesAtOnce(12, 1), 1500, new Filesystem(), self::SCRIPT, $this->mirrors.'-prompts');
-        $git = new RepositoryGit(new HardenedGit());
-        $checks = new CheckHandBack($git, new BundleFile(), new StrippedCommits(), new IncomingObjects(), new BundleSecretScan($this->scanner));
-        $files = new HandBackFile($checkout, $this->handBackFiles, $this->mirrors.'-hand-backs');
-        $checkJobs = new RunCheckJob($checks, new LostContentCheck($git), $this->checkRunner, new PhpGate(), new Filesystem(), self::CHECK_SCRIPT);
-
-        // On a database that cannot be opened, because a parking that works is proven on the install's own database in BuildTaskParksOnSqliteTest.
-        $parked = new ParkedTasks(DriverManager::getConnection(['driver' => 'pdo_sqlite', 'path' => $this->mirrors.'-missing/data.db']), $ledger, self::createStub(ManagerRegistry::class), new MockClock());
-
-        return new BuildTask($issues, $checkout, $this->routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files), new PushStep($this->branchPush($ledger), $checkout), $parked, $ledger, new PushRemoteCheck($configured));
-    }
-
-    // Records in the run's own ledger, as the container wires it, so the push's events sit between the steps' events.
-    private function branchPush(InMemoryLedger $ledger): PushBranch
-    {
-        $branches = new BranchGit(new HardenedGit(), new GuardedRun());
-        $file = $this->mirrors.'-key';
-        $key = new SigningKey(is_file($file) ? $file : PushScenario::generateKey($file), new Filesystem(), new GuardedRun());
-
-        return new PushBranch($branches, new SignedCommits($branches, $key), new PushRecords($ledger), $this->changes, new LockFactory(new InMemoryStore()));
-    }
-
     /**
      * @return list<array<string, mixed>>
      */
     private function stepsIn(InMemoryLedger $ledger): array
     {
         return array_values(array_filter($ledger->payloads(), static fn (array $payload): bool => isset($payload['step'])));
-    }
-
-    private function remoteTip(): ?string
-    {
-        $process = new Process(['git', 'rev-parse', '--verify', '--quiet', 'refs/heads/feat/task'], $this->remote->path);
-
-        return 0 === $process->run() ? trim($process->getOutput()) : null;
     }
 
     /**
@@ -1197,6 +1164,32 @@ final class BuildTaskTest extends TestCase
         return $this->checkoutIn($this->mirrors);
     }
 
+    private function buildTask(IssueReads $issues, GitBuildCheckout $checkout, InMemoryLedger $ledger): BuildTask
+    {
+        $configured = self::createStub(ConfiguredRepositories::class);
+        $configured->method('nameOf')->willReturn($this->configuredRepository);
+        $builds = new RunBuildJob($this->tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $this->runner, new PhpGate(), new GatesAtOnce(12, 1), 1500, new Filesystem(), self::SCRIPT, $this->mirrors.'-prompts');
+        $git = new RepositoryGit(new HardenedGit());
+        $checks = new CheckHandBack($git, new BundleFile(), new StrippedCommits(), new IncomingObjects(), new BundleSecretScan($this->scanner));
+        $files = new HandBackFile($checkout, $this->handBackFiles, $this->mirrors.'-hand-backs');
+        $checkJobs = new RunCheckJob($checks, new LostContentCheck($git), $this->checkRunner, new PhpGate(), new Filesystem(), self::CHECK_SCRIPT);
+
+        // On a database that cannot be opened, because a parking that works is proven on the install's own database in BuildTaskParksOnSqliteTest.
+        $parked = new ParkedTasks(DriverManager::getConnection(['driver' => 'pdo_sqlite', 'path' => $this->mirrors.'-missing/data.db']), $ledger, self::createStub(ManagerRegistry::class), new MockClock());
+
+        return new BuildTask($issues, $checkout, $this->routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files), new PushStep($this->branchPush($ledger), $checkout), $parked, $ledger, new PushRemoteCheck($configured));
+    }
+
+    // Records in the run's own ledger, as the container wires it, so the push's events sit between the steps' events.
+    private function branchPush(InMemoryLedger $ledger): PushBranch
+    {
+        $branches = new BranchGit(new HardenedGit(), new GuardedRun());
+        $file = $this->mirrors.'-key';
+        $key = new SigningKey(is_file($file) ? $file : PushScenario::generateKey($file), new Filesystem(), new GuardedRun());
+
+        return new PushBranch($branches, new SignedCommits($branches, $key), new PushRecords($ledger), $this->changes, new LockFactory(new InMemoryStore()));
+    }
+
     private function checkoutIn(string $directory): GitBuildCheckout
     {
         return $this->checkoutWith(new Mirrors($directory), new InMemoryStore());
@@ -1217,5 +1210,12 @@ final class BuildTaskTest extends TestCase
     private function request(int $issue, string $remote): BuildTaskRequest
     {
         return new BuildTaskRequest('alpha', $issue, $remote, 'feat/task', $this->clone, self::IMAGE);
+    }
+
+    private function remoteTip(): ?string
+    {
+        $process = new Process(['git', 'rev-parse', '--verify', '--quiet', 'refs/heads/feat/task'], $this->remote->path);
+
+        return 0 === $process->run() ? trim($process->getOutput()) : null;
     }
 }

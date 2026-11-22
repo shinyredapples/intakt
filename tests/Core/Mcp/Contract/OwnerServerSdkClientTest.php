@@ -53,28 +53,6 @@ final class OwnerServerSdkClientTest extends KernelTestCase
 
     private KernelHttpClient $kernelClient;
 
-    protected function setUp(): void
-    {
-        $this->ownerToken = bin2hex(random_bytes(16));
-        $this->repository = new TemporaryRepository();
-        $this->repository->commitFile('README.md', "base\n");
-        $this->repository->checkoutNewBranch('sample');
-        $this->repository->commitFile('src/Feature.php', "<?php\n");
-    }
-
-    protected function tearDown(): void
-    {
-        $this->repository->remove();
-
-        // Put back what .env set, because later tests of the process resolve the same variables.
-        foreach ($this->previous as $name => $value) {
-            $_ENV[$name] = $_SERVER[$name] = $value;
-            putenv($name.'='.$value);
-        }
-
-        parent::tearDown();
-    }
-
     public function testEveryToolIsListedAndTheStartToolIsAWriteThatMayDestroy(): void
     {
         $tools = $this->tools($this->connected(withWrites: true));
@@ -205,6 +183,28 @@ final class OwnerServerSdkClientTest extends KernelTestCase
         self::assertStringNotContainsString('#0', $this->text($result));
     }
 
+    protected function setUp(): void
+    {
+        $this->ownerToken = bin2hex(random_bytes(16));
+        $this->repository = new TemporaryRepository();
+        $this->repository->commitFile('README.md', "base\n");
+        $this->repository->checkoutNewBranch('sample');
+        $this->repository->commitFile('src/Feature.php', "<?php\n");
+    }
+
+    protected function tearDown(): void
+    {
+        $this->repository->remove();
+
+        // Put back what .env set, because later tests of the process resolve the same variables.
+        foreach ($this->previous as $name => $value) {
+            $_ENV[$name] = $_SERVER[$name] = $value;
+            putenv($name.'='.$value);
+        }
+
+        parent::tearDown();
+    }
+
     private function connected(bool $withWrites, ?string $bearer = null, bool $connect = true): Client
     {
         $this->setEnvironment($withWrites ? 'mcp_tool_write' : 'mcp_tool_read');
@@ -223,13 +223,6 @@ final class OwnerServerSdkClientTest extends KernelTestCase
         return $client;
     }
 
-    private function useTestReviews(): void
-    {
-        $container = self::getContainer();
-        $container->set(ChangeReviews::class, $container->get('intakt.test.mcp.review_change'));
-        $container->set(Panels::class, $container->get(OnePanel::class));
-    }
-
     private function transport(): HttpTransport
     {
         $headers = null === $this->bearer ? [] : ['Authorization' => 'Bearer '.$this->bearer];
@@ -245,6 +238,13 @@ final class OwnerServerSdkClientTest extends KernelTestCase
             $_ENV[$name] = $_SERVER[$name] = $value;
             putenv($name.'='.$value);
         }
+    }
+
+    private function useTestReviews(): void
+    {
+        $container = self::getContainer();
+        $container->set(ChangeReviews::class, $container->get('intakt.test.mcp.review_change'));
+        $container->set(Panels::class, $container->get(OnePanel::class));
     }
 
     private function seedRound(): void
@@ -306,18 +306,6 @@ final class OwnerServerSdkClientTest extends KernelTestCase
         return $result->structuredContent;
     }
 
-    /**
-     * @param array<mixed> $answer
-     *
-     * @return list<mixed>
-     */
-    private function actIds(array $answer): array
-    {
-        self::assertIsArray($answer['act']);
-
-        return array_column($answer['act'], 'id');
-    }
-
     private function annotations(Tool $tool): ToolAnnotations
     {
         return $tool->annotations ?? self::fail($tool->name.' has no annotations.');
@@ -336,6 +324,18 @@ final class OwnerServerSdkClientTest extends KernelTestCase
         self::assertIsArray($verdict);
 
         return $verdict['verdict'];
+    }
+
+    /**
+     * @param array<mixed> $answer
+     *
+     * @return list<mixed>
+     */
+    private function actIds(array $answer): array
+    {
+        self::assertIsArray($answer['act']);
+
+        return array_column($answer['act'], 'id');
     }
 
     private function text(CallToolResult $result): string

@@ -1,0 +1,30 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+final readonly class Names
+{
+    /**
+     * @param list<string> $names
+     *
+     * @return list<string>
+     */
+    public function cleaned(array $names): array
+    {
+        $formatted = array_map($this->format(...), $names);
+
+        return array_map(fn (string $name): string => $this->shorten($name), $formatted);
+    }
+
+    private function shorten(string $name): string
+    {
+        return substr($name, 0, 20);
+    }
+
+    private function format(string $name): string
+    {
+        return ucfirst($name);
+    }
+}

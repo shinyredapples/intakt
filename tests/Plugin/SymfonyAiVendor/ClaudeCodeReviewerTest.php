@@ -501,21 +501,11 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
         self::assertSame(IncompleteStreamException::class, $ledger->payloads()[1]['failure']);
     }
 
-    private function request(): ReviewRequest
-    {
-        return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$this->openFinding('F1'), $this->openFinding('F2')], 1), new ReviewerConversation('You review for correctness.', new UuidV7(), new UuidV7()));
-    }
-
     private function requestWithoutRound(): ReviewRequest
     {
         $request = $this->request();
 
         return new ReviewRequest($request->checkout, $request->brief, new ReviewerConversation('You review for correctness.', new UuidV7()));
-    }
-
-    private function openFinding(string $id): Finding
-    {
-        return new Finding($id, Severity::P2, null, null, null, 'Earlier.', FixableBy::Builder, false, null, null);
     }
 
     /**
@@ -580,6 +570,16 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
     private function vendor(ModelClientInterface $cli, InMemoryLedger $ledger = new InMemoryLedger(), ?ReviewServerAccesses $servers = null): SymfonyAiVendor
     {
         return $this->vendorOn($this->claudeCodePlatform($cli), $ledger, $servers);
+    }
+
+    private function request(): ReviewRequest
+    {
+        return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$this->openFinding('F1'), $this->openFinding('F2')], 1), new ReviewerConversation('You review for correctness.', new UuidV7(), new UuidV7()));
+    }
+
+    private function openFinding(string $id): Finding
+    {
+        return new Finding($id, Severity::P2, null, null, null, 'Earlier.', FixableBy::Builder, false, null, null);
     }
 
     private function vendorOn(PlatformInterface $platform, InMemoryLedger $ledger = new InMemoryLedger(), ?ReviewServerAccesses $servers = null): SymfonyAiVendor

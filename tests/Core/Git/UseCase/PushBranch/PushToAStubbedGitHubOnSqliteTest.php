@@ -26,25 +26,6 @@ final class PushToAStubbedGitHubOnSqliteTest extends KernelTestCase
     private ScriptedGitHub $github;
     private Ledger $ledger;
 
-    protected function setUp(): void
-    {
-        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
-        self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
-        $ledger = self::getContainer()->get(Ledger::class);
-        self::assertInstanceOf(Ledger::class, $ledger);
-        $this->ledger = $ledger;
-        $this->scenario = new PushScenario();
-        $this->github = new ScriptedGitHub();
-    }
-
-    protected function tearDown(): void
-    {
-        $this->scenario->remove();
-        parent::tearDown();
-    }
-
     public function testAPushForABranchWithAForeignOpenPullRequestRecordsAndPushesNothingOnSqlite(): void
     {
         $this->github->openPulls = [
@@ -77,6 +58,25 @@ final class PushToAStubbedGitHubOnSqliteTest extends KernelTestCase
         self::assertSame(1, preg_match_all('/ push_intended /', $events));
         self::assertSame(1, preg_match_all('/ branch_pushed /', $events));
         self::assertSame(1, preg_match_all('/ change_opened \{[^}]*pull\\\\\/7/', $events));
+    }
+
+    protected function setUp(): void
+    {
+        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
+        self::assertInstanceOf(EntityManagerInterface::class, $entities);
+        EmptyDatabase::in(self::getContainer());
+        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        $ledger = self::getContainer()->get(Ledger::class);
+        self::assertInstanceOf(Ledger::class, $ledger);
+        $this->ledger = $ledger;
+        $this->scenario = new PushScenario();
+        $this->github = new ScriptedGitHub();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->scenario->remove();
+        parent::tearDown();
     }
 
     private function recordedEvents(): string

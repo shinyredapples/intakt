@@ -106,22 +106,6 @@ final readonly class NarrowCatchRule implements Rule
     }
 
     /**
-     * @return list<string>
-     */
-    private function genericTypesOf(Catch_ $catch): array
-    {
-        $names = array_map(static fn (Name $type): string => ltrim($type->toString(), '\\'), $catch->types);
-
-        return array_values(array_filter($names, $this->isGeneric(...)));
-    }
-
-    // in any case, because PHP resolves class names case-insensitively and \runtimeexception catches the same class
-    private function isGeneric(string $name): bool
-    {
-        return in_array(strtolower($name), array_map(strtolower(...), [Throwable::class, ...self::ROOTS]), true);
-    }
-
-    /**
      * @param array<Stmt> $before
      */
     private function throwableProblem(Catch_ $catch, array $before, string $source): ?string
@@ -135,6 +119,22 @@ final readonly class NarrowCatchRule implements Rule
         }
 
         return null;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function genericTypesOf(Catch_ $catch): array
+    {
+        $names = array_map(static fn (Name $type): string => ltrim($type->toString(), '\\'), $catch->types);
+
+        return array_values(array_filter($names, $this->isGeneric(...)));
+    }
+
+    // in any case, because PHP resolves class names case-insensitively and \runtimeexception catches the same class
+    private function isGeneric(string $name): bool
+    {
+        return in_array(strtolower($name), array_map(strtolower(...), [Throwable::class, ...self::ROOTS]), true);
     }
 
     private function finding(Catch_ $catch, string $message): IdentifierRuleError

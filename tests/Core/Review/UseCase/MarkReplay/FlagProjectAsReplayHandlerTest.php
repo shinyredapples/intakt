@@ -23,14 +23,6 @@ final class FlagProjectAsReplayHandlerTest extends KernelTestCase
 {
     private EntityManagerInterface $entities;
 
-    protected function setUp(): void
-    {
-        $container = self::getContainer();
-        EmptyDatabase::in($container);
-        $this->entities = $container->get('doctrine.orm.entity_manager');
-        new SchemaTool($this->entities)->createSchema([$this->entities->getClassMetadata(ReplayProject::class)]);
-    }
-
     public function testFlaggingAProjectNotFlaggedYetStoresItAsAReplay(): void
     {
         new FlagProjectAsReplayHandler($this->entities)(new FlagProjectAsReplay('alpha'));
@@ -69,6 +61,14 @@ final class FlagProjectAsReplayHandlerTest extends KernelTestCase
         new FlagProjectAsReplayHandler($this->entities)(new FlagProjectAsReplay('alpha'));
 
         self::assertEqualsCanonicalizing(['alpha', 'beta'], $this->flaggedProjects());
+    }
+
+    protected function setUp(): void
+    {
+        $container = self::getContainer();
+        EmptyDatabase::in($container);
+        $this->entities = $container->get('doctrine.orm.entity_manager');
+        new SchemaTool($this->entities)->createSchema([$this->entities->getClassMetadata(ReplayProject::class)]);
     }
 
     private function storeFlagOfAnotherWorker(string $project): void

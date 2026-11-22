@@ -53,17 +53,6 @@ namespace Intakt\Tests\Core\Review\Infrastructure {
 
         private TemporaryRepository $repository;
 
-        protected function setUp(): void
-        {
-            $this->repository = new TemporaryRepository();
-            file_put_contents($this->repository->path.'/untouched.txt', self::PRIVATE_TEXT);
-        }
-
-        protected function tearDown(): void
-        {
-            $this->repository->remove();
-        }
-
         public function testAFileSwappedForALinkAfterItWasResolvedGivesNoTextOfTheLinksTarget(): void
         {
             $this->prepareSwap('resolved-then-swapped.txt');
@@ -111,6 +100,17 @@ namespace Intakt\Tests\Core\Review\Infrastructure {
         public static function openedForReal(string $filename, string $mode)
         {
             return fopen($filename, $mode);
+        }
+
+        protected function setUp(): void
+        {
+            $this->repository = new TemporaryRepository();
+            file_put_contents($this->repository->path.'/untouched.txt', self::PRIVATE_TEXT);
+        }
+
+        protected function tearDown(): void
+        {
+            $this->repository->remove();
         }
 
         private function prepareSwap(string $name): void

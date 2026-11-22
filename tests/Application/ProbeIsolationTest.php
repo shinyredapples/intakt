@@ -28,17 +28,6 @@ final class ProbeIsolationTest extends TestCase
 
     private string $scratch;
 
-    protected function setUp(): void
-    {
-        $this->scratch = sys_get_temp_dir().'/intakt-probe-isolation-'.bin2hex(random_bytes(6));
-        new Filesystem()->mkdir($this->scratch);
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->scratch);
-    }
-
     public function testWithoutTheVariableTheInstanceStartsInsideUnshare(): void
     {
         $decision = $this->decide(false, ['lo'], self::LOOPBACK_UP);
@@ -108,6 +97,17 @@ final class ProbeIsolationTest extends TestCase
         $refusal = $this->decideOn('1', $this->scratch.'/dev', self::LOOPBACK_UP)['refusal'];
 
         self::assertStringContainsString('the network interfaces cannot be read', (string) $refusal);
+    }
+
+    protected function setUp(): void
+    {
+        $this->scratch = sys_get_temp_dir().'/intakt-probe-isolation-'.bin2hex(random_bytes(6));
+        new Filesystem()->mkdir($this->scratch);
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->scratch);
     }
 
     /**

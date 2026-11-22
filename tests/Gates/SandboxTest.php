@@ -22,19 +22,6 @@ final class SandboxTest extends TestCase
 
     private string $outside;
 
-    protected function setUp(): void
-    {
-        $this->sandbox = Sandbox::ownedBy(self::class);
-        $this->outside = sys_get_temp_dir().'/intakt-sandbox-target-'.bin2hex(random_bytes(6));
-        new Filesystem()->dumpFile($this->outside.'/console', '#!/usr/bin/env php');
-    }
-
-    protected function tearDown(): void
-    {
-        $this->sandbox->remove();
-        new Filesystem()->remove($this->outside);
-    }
-
     public function testTheSameOwnerGetsTheSameFolderInOneProcess(): void
     {
         self::assertSame($this->sandbox->root, Sandbox::ownedBy(self::class)->root);
@@ -133,5 +120,18 @@ final class SandboxTest extends TestCase
 
         self::assertCount(12, $result->findings);
         self::assertSame('2', $this->sandbox->runGate(new LongDashesGate())->omittedOf('dashes'));
+    }
+
+    protected function setUp(): void
+    {
+        $this->sandbox = Sandbox::ownedBy(self::class);
+        $this->outside = sys_get_temp_dir().'/intakt-sandbox-target-'.bin2hex(random_bytes(6));
+        new Filesystem()->dumpFile($this->outside.'/console', '#!/usr/bin/env php');
+    }
+
+    protected function tearDown(): void
+    {
+        $this->sandbox->remove();
+        new Filesystem()->remove($this->outside);
     }
 }

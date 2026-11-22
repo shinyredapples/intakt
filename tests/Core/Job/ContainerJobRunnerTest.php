@@ -101,21 +101,6 @@ final class ContainerJobRunnerTest extends TestCase
     private InMemoryLedger $ledger;
     private InMemoryStore $locks;
 
-    protected function setUp(): void
-    {
-        $this->root = sys_get_temp_dir().'/intakt-jobs-'.bin2hex(random_bytes(4));
-        $this->engine = new FakeDockerEngine();
-        $this->ledger = new InMemoryLedger();
-        $this->locks = new InMemoryStore();
-    }
-
-    // Permissions are restored first, because a failing or interrupted test can leave a folder without any, and the next build could not empty its temporary folder.
-    protected function tearDown(): void
-    {
-        $this->restoreOwnerAccess($this->root);
-        new Filesystem()->remove($this->root);
-    }
-
     public function testAJobRunsWithAReadOnlyRootAndAWorkAreaOnTmpfs(): void
     {
         $this->whenJobRuns($this->spec('build-1'));
@@ -939,6 +924,21 @@ final class ContainerJobRunnerTest extends TestCase
 
         self::assertSame([], $this->engine->networkNames());
         self::assertSame([LedgerEventKind::JobNetworkRemoved, LedgerEventKind::JobEnded], $this->ledger->kinds());
+    }
+
+    protected function setUp(): void
+    {
+        $this->root = sys_get_temp_dir().'/intakt-jobs-'.bin2hex(random_bytes(4));
+        $this->engine = new FakeDockerEngine();
+        $this->ledger = new InMemoryLedger();
+        $this->locks = new InMemoryStore();
+    }
+
+    // Permissions are restored first, because a failing or interrupted test can leave a folder without any, and the next build could not empty its temporary folder.
+    protected function tearDown(): void
+    {
+        $this->restoreOwnerAccess($this->root);
+        new Filesystem()->remove($this->root);
     }
 
     /**

@@ -76,20 +76,6 @@ final class DemoReviewCommandTest extends TestCase
 
     private TemporaryRepository $sample;
 
-    protected function setUp(): void
-    {
-        $this->sample = new TemporaryRepository();
-        $this->sample->commitFile('README.md', "base\n");
-        $this->sample->checkoutNewBranch(SampleChange::CHANGE);
-        $this->sample->commitFile('src/Shipping.php', "<?php\n");
-        $this->sample->checkout(SampleChange::BASE);
-    }
-
-    protected function tearDown(): void
-    {
-        $this->sample->remove();
-    }
-
     /**
      * @return iterable<string, array{Decision, int}>
      */
@@ -189,6 +175,20 @@ final class DemoReviewCommandTest extends TestCase
         self::assertStringNotContainsString('Open the review', $tester->getDisplay());
     }
 
+    protected function setUp(): void
+    {
+        $this->sample = new TemporaryRepository();
+        $this->sample->commitFile('README.md', "base\n");
+        $this->sample->checkoutNewBranch(SampleChange::CHANGE);
+        $this->sample->commitFile('src/Shipping.php', "<?php\n");
+        $this->sample->checkout(SampleChange::BASE);
+    }
+
+    protected function tearDown(): void
+    {
+        $this->sample->remove();
+    }
+
     private function reviewing(Decision $decision): ChangeReviews
     {
         $reviews = self::createStub(ChangeReviews::class);
@@ -215,6 +215,28 @@ final class DemoReviewCommandTest extends TestCase
         return $this->whenTheDemoIsRun($this->demo($repository, new LocalChangeReview($this->onePanel(), $this->reviewing(Decision::Approve)), 'demo-token'));
     }
 
+    private function report(): ReviewReport
+    {
+        return new ReviewReport(StoredSerializerFactory::create());
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function lines(CommandTester $tester): array
+    {
+        return explode("\n", rtrim($tester->getDisplay(), "\n"));
+    }
+
+    private function onePanel(): Panels
+    {
+        $reviewer = new PanelReviewer(new ReviewerRole('correctness', 'Review the change.'), new ReviewerModel(Tier::Strong, Provider::Anthropic), 10);
+        $panels = self::createStub(Panels::class);
+        $panels->method('panelForChange')->willReturn(new Panel([$reviewer], QuorumPolicy::All));
+
+        return $panels;
+    }
+
     private function demo(?string $repository, LocalChangeReview $review, string $ownerToken): DemoReviewCommand
     {
         $routes = new RouteCollection();
@@ -232,27 +254,5 @@ final class DemoReviewCommandTest extends TestCase
         $tester->execute([]);
 
         return $tester;
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function lines(CommandTester $tester): array
-    {
-        return explode("\n", rtrim($tester->getDisplay(), "\n"));
-    }
-
-    private function report(): ReviewReport
-    {
-        return new ReviewReport(StoredSerializerFactory::create());
-    }
-
-    private function onePanel(): Panels
-    {
-        $reviewer = new PanelReviewer(new ReviewerRole('correctness', 'Review the change.'), new ReviewerModel(Tier::Strong, Provider::Anthropic), 10);
-        $panels = self::createStub(Panels::class);
-        $panels->method('panelForChange')->willReturn(new Panel([$reviewer], QuorumPolicy::All));
-
-        return $panels;
     }
 }

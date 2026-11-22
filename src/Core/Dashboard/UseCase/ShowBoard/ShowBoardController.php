@@ -74,6 +74,20 @@ final readonly class ShowBoardController
         ])));
     }
 
+    /**
+     * @param array<string, string> $parameters
+     */
+    private function redirectTo(string $route, array $parameters = []): RedirectResponse
+    {
+        return new RedirectResponse($this->urls->generate($route, $parameters), Response::HTTP_SEE_OTHER);
+    }
+
+    // Every answer of the root address varies by device, so a shared cache never hands a desktop's board to a phone or a phone's redirect to a desktop.
+    private function variesByDevice(Response $response): Response
+    {
+        return $response->setVary('Sec-CH-UA-Mobile, User-Agent');
+    }
+
     // A phone opens on what only the owner can act on, or on its newest review while the install is quiet; the Board flag of the dashboard's own Board links skips it, so a tap on Board still shows the board.
     private function landsOnWaiting(Request $request): bool
     {
@@ -96,28 +110,14 @@ final readonly class ShowBoardController
         return $this->redirectTo(DashboardRoutes::SHOW_REVIEW, ['round' => $newest->latest()->round]);
     }
 
-    /**
-     * @param array<string, string> $parameters
-     */
-    private function redirectTo(string $route, array $parameters = []): RedirectResponse
+    // Redacted because the cause quotes an exception, which can carry a credential, as the status report does.
+    private function redacted(FailingHead $head): FailingHead
     {
-        return new RedirectResponse($this->urls->generate($route, $parameters), Response::HTTP_SEE_OTHER);
-    }
-
-    // Every answer of the root address varies by device, so a shared cache never hands a desktop's board to a phone or a phone's redirect to a desktop.
-    private function variesByDevice(Response $response): Response
-    {
-        return $response->setVary('Sec-CH-UA-Mobile, User-Agent');
+        return $head->withCause($this->redactor->redact($head->fault->cause));
     }
 
     private function redactedMain(FailingMain $main): FailingMain
     {
         return new FailingMain($main->project, $main->main, $main->toolFingerprint, $this->redactor->redact($main->reason));
-    }
-
-    // Redacted because the cause quotes an exception, which can carry a credential, as the status report does.
-    private function redacted(FailingHead $head): FailingHead
-    {
-        return $head->withCause($this->redactor->redact($head->fault->cause));
     }
 }

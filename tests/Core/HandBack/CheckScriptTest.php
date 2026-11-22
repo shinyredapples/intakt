@@ -34,20 +34,6 @@ final class CheckScriptTest extends TestCase
     /** @var array<string, string> */
     private array $jobVariables = [];
 
-    protected function setUp(): void
-    {
-        $this->history = new BuildHistory();
-        $this->output = $this->history->folder.'/output';
-        $this->work = $this->history->folder.'/job';
-        new Filesystem()->mkdir([$this->output, $this->work]);
-    }
-
-    protected function tearDown(): void
-    {
-        new Process(['chmod', '-R', 'u+w', $this->history->folder])->run();
-        $this->history->remove();
-    }
-
     /**
      * @return iterable<string, array{array<string, string>}>
      */
@@ -481,37 +467,6 @@ final class CheckScriptTest extends TestCase
         self::assertSame("passed\n", $this->outputFile('check-result'));
     }
 
-    private function thenACleanMergeEndsPassedOnItsMergeCommit(): void
-    {
-        $head = $this->history->commitFile('made.txt', "made by the build\n", 'Make a file');
-        $main = $this->mainMovesWith('added-on-main.txt', "main moved\n");
-
-        $run = $this->whenTheCheckRuns(
-            $this->history->bundle('main..task'),
-            'task',
-            'test -f made.txt',
-            'test -f added-on-main.txt',
-            'test "$(git rev-parse HEAD^1)" = '.$main,
-            'test "$(git rev-parse HEAD^2)" = '.$head,
-        );
-
-        self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
-        self::assertSame("passed\n", $this->outputFile('check-result'), $this->outputFile('check.log'));
-    }
-
-    private function thenAConflictingBranchEndsConflictsWithMain(): void
-    {
-        $this->history->commitFile('shared.txt', "the branch's line\n", 'Write the shared file');
-        $this->mainMovesWith('shared.txt', "main's line\n");
-
-        $run = $this->whenTheCheckRuns($this->history->bundle('main..task'), 'task', 'touch ran');
-
-        self::assertSame(1, $run->getExitCode(), $this->outputFile('check.log'));
-        self::assertSame("conflicts-with-main\n", $this->outputFile('check-result'), $this->outputFile('check.log'));
-        self::assertStringContainsString('CONFLICT (', $this->outputFile('check.log'));
-        self::assertFileDoesNotExist($this->work.'/clone/ran');
-    }
-
     public function testAMountedSnapshotIsCopiedWritableIntoTheCloneBeforeTheFirstStep(): void
     {
         $this->history->commitFile('composer.lock', self::LOCK, 'Lock the dependencies');
@@ -846,6 +801,51 @@ final class CheckScriptTest extends TestCase
         self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
     }
 
+    protected function setUp(): void
+    {
+        $this->history = new BuildHistory();
+        $this->output = $this->history->folder.'/output';
+        $this->work = $this->history->folder.'/job';
+        new Filesystem()->mkdir([$this->output, $this->work]);
+    }
+
+    protected function tearDown(): void
+    {
+        new Process(['chmod', '-R', 'u+w', $this->history->folder])->run();
+        $this->history->remove();
+    }
+
+    private function thenACleanMergeEndsPassedOnItsMergeCommit(): void
+    {
+        $head = $this->history->commitFile('made.txt', "made by the build\n", 'Make a file');
+        $main = $this->mainMovesWith('added-on-main.txt', "main moved\n");
+
+        $run = $this->whenTheCheckRuns(
+            $this->history->bundle('main..task'),
+            'task',
+            'test -f made.txt',
+            'test -f added-on-main.txt',
+            'test "$(git rev-parse HEAD^1)" = '.$main,
+            'test "$(git rev-parse HEAD^2)" = '.$head,
+        );
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
+        self::assertSame("passed\n", $this->outputFile('check-result'), $this->outputFile('check.log'));
+    }
+
+    private function thenAConflictingBranchEndsConflictsWithMain(): void
+    {
+        $this->history->commitFile('shared.txt', "the branch's line\n", 'Write the shared file');
+        $this->mainMovesWith('shared.txt', "main's line\n");
+
+        $run = $this->whenTheCheckRuns($this->history->bundle('main..task'), 'task', 'touch ran');
+
+        self::assertSame(1, $run->getExitCode(), $this->outputFile('check.log'));
+        self::assertSame("conflicts-with-main\n", $this->outputFile('check-result'), $this->outputFile('check.log'));
+        self::assertStringContainsString('CONFLICT (', $this->outputFile('check.log'));
+        self::assertFileDoesNotExist($this->work.'/clone/ran');
+    }
+
     private function givenACopyThatStopsHalfway(): string
     {
         // A cp in front of the real one that leaves one file of the snapshot in the clone and fails, because a test cannot make a real copy stop halfway.
@@ -856,14 +856,6 @@ final class CheckScriptTest extends TestCase
         $this->path = $shim.PATH_SEPARATOR.getenv('PATH');
 
         return $shim;
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function dependencyOptions(string $snapshot, string $lock): array
-    {
-        return ['--dependencies', $snapshot, self::PLATFORM, self::PROBE, 'composer install', 'composer install', 'composer.lock', $this->blobOf($lock)];
     }
 
     private function blobOf(string $content): string
@@ -885,6 +877,14 @@ final class CheckScriptTest extends TestCase
         new Process(['chmod', '-R', 'a-w', $snapshot])->mustRun();
 
         return $snapshot;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function dependencyOptions(string $snapshot, string $lock): array
+    {
+        return ['--dependencies', $snapshot, self::PLATFORM, self::PROBE, 'composer install', 'composer install', 'composer.lock', $this->blobOf($lock)];
     }
 
     /**

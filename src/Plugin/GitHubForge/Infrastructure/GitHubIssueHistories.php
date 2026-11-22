@@ -120,12 +120,6 @@ final readonly class GitHubIssueHistories implements IssueHistories
         return is_array($data) ? $data : throw new ForgeReadFailed('GitHub answered JSON that is not an object.');
     }
 
-    // Not chained to the client's exception, because its trace holds the request options with the bearer token.
-    private function unreachable(string $failure): ForgeReadFailed
-    {
-        return new ForgeReadFailed(sprintf('GitHub could not be reached (%s).', $failure));
-    }
-
     /**
      * @param array<mixed> $answer
      *
@@ -141,6 +135,16 @@ final readonly class GitHubIssueHistories implements IssueHistories
         $issue = $this->at($answer, 'data', 'repository', 'issueOrPullRequest');
 
         return is_array($issue) ? $issue : throw new ForgeReadFailed('GitHub answered a history read without the issue or pull request.');
+    }
+
+    /**
+     * @param array<mixed> $data
+     */
+    private function text(array $data, string ...$keys): string
+    {
+        $value = $this->at($data, ...$keys);
+
+        return is_string($value) && '' !== $value ? $value : throw new ForgeReadFailed(sprintf('GitHub answered without "%s".', implode('.', $keys)));
     }
 
     /**
@@ -250,16 +254,6 @@ final readonly class GitHubIssueHistories implements IssueHistories
     /**
      * @param array<mixed> $data
      */
-    private function text(array $data, string ...$keys): string
-    {
-        $value = $this->at($data, ...$keys);
-
-        return is_string($value) && '' !== $value ? $value : throw new ForgeReadFailed(sprintf('GitHub answered without "%s".', implode('.', $keys)));
-    }
-
-    /**
-     * @param array<mixed> $data
-     */
     private function at(array $data, string ...$keys): mixed
     {
         $value = $data;
@@ -279,5 +273,11 @@ final readonly class GitHubIssueHistories implements IssueHistories
         } catch (InstallationNotReadBack|InstallationDoesNotMatchConfiguration $refused) {
             throw new ForgeReadFailed('No GitHub read before the installation is confirmed: '.$refused->getMessage(), $refused->getCode(), previous: $refused);
         }
+    }
+
+    // Not chained to the client's exception, because its trace holds the request options with the bearer token.
+    private function unreachable(string $failure): ForgeReadFailed
+    {
+        return new ForgeReadFailed(sprintf('GitHub could not be reached (%s).', $failure));
     }
 }

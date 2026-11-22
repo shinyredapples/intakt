@@ -38,11 +38,6 @@ final readonly class ModelRouting
         return new TierChoice($rules->defaultTier, TierReason::Default);
     }
 
-    private function escalates(RoutingRules $rules, BuildFacts $facts): bool
-    {
-        return $facts->setback instanceof Setback && in_array($facts->setback, $rules->escalateOn, true);
-    }
-
     private function touchesSensitivePath(RoutingRules $rules, BuildFacts $facts): bool
     {
         foreach ($rules->sensitivePaths as $glob) {
@@ -54,5 +49,10 @@ final readonly class ModelRouting
         }
 
         return false;
+    }
+
+    private function escalates(RoutingRules $rules, BuildFacts $facts): bool
+    {
+        return $facts->setback instanceof Setback && in_array($facts->setback, $rules->escalateOn, true);
     }
 }

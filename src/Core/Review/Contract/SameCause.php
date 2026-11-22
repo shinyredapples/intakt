@@ -49,14 +49,6 @@ final readonly class SameCause implements IteratorAggregate
         return $this->put($finding, $cause);
     }
 
-    private function put(string $finding, string $cause): self
-    {
-        $causes = $this->causes;
-        $causes[$finding] = $cause;
-
-        return clone ($this, ['causes' => $causes]);
-    }
-
     public function causeOf(string $finding): ?string
     {
         return $this->causes[$finding] ?? null;
@@ -71,5 +63,13 @@ final readonly class SameCause implements IteratorAggregate
         foreach ($this->causes as $finding => $cause) {
             yield (string) $finding => $cause;
         }
+    }
+
+    private function put(string $finding, string $cause): self
+    {
+        $causes = $this->causes;
+        $causes[$finding] = $cause;
+
+        return clone ($this, ['causes' => $causes]);
     }
 }

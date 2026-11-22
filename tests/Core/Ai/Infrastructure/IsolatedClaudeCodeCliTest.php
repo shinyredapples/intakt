@@ -37,26 +37,6 @@ final class IsolatedClaudeCodeCliTest extends TestCase
 
     private string $path;
 
-    protected function setUp(): void
-    {
-        $this->root = sys_get_temp_dir().'/intakt-claude-code-'.bin2hex(random_bytes(6));
-        new Filesystem()->dumpFile($this->root.'/bin/claude', self::FAKE_CLI);
-        chmod($this->root.'/bin/claude', 0o700);
-        $this->path = (string) getenv('PATH');
-        putenv('PATH='.$this->root.'/bin:'.$this->path);
-        putenv(self::INHERITED.'=inherited');
-        $_ENV[self::INHERITED] = 'inherited';
-    }
-
-    protected function tearDown(): void
-    {
-        putenv('PATH='.$this->path);
-        putenv(self::INHERITED);
-        putenv(self::LATE);
-        unset($_ENV[self::INHERITED], $_ENV[self::LATE]);
-        new Filesystem()->remove($this->root);
-    }
-
     public function testTheCliRunsInItsOwnDirectoryAndNeverInIntaktsOrACheckout(): void
     {
         $seen = $this->runOf(new IsolatedClaudeCodeCli($this->root.'/home', 'login'));
@@ -141,6 +121,26 @@ final class IsolatedClaudeCodeCliTest extends TestCase
         $seen = $this->runOf(new IsolatedClaudeCodeCli($this->root.'/home', 'login'));
 
         self::assertNull($seen['configuration']);
+    }
+
+    protected function setUp(): void
+    {
+        $this->root = sys_get_temp_dir().'/intakt-claude-code-'.bin2hex(random_bytes(6));
+        new Filesystem()->dumpFile($this->root.'/bin/claude', self::FAKE_CLI);
+        chmod($this->root.'/bin/claude', 0o700);
+        $this->path = (string) getenv('PATH');
+        putenv('PATH='.$this->root.'/bin:'.$this->path);
+        putenv(self::INHERITED.'=inherited');
+        $_ENV[self::INHERITED] = 'inherited';
+    }
+
+    protected function tearDown(): void
+    {
+        putenv('PATH='.$this->path);
+        putenv(self::INHERITED);
+        putenv(self::LATE);
+        unset($_ENV[self::INHERITED], $_ENV[self::LATE]);
+        new Filesystem()->remove($this->root);
     }
 
     private function access(): ReviewServerAccess
