@@ -773,8 +773,8 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
 
     private function publishedBench(): BenchHeadline
     {
-        $bench = new PublishedBench($this->projectDir().'/README.md')->headline();
-        self::assertNotNull($bench, 'The README has no readable review bench table.');
+        $bench = new PublishedBench($this->projectDir().'/docs/bench.md')->headline();
+        self::assertNotNull($bench, 'The bench page has no readable review bench table.');
 
         return $bench;
     }
