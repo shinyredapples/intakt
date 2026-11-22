@@ -3,6 +3,13 @@
 Intakt was built for the Symfony AI & MCP Hackathon, from 2026-10-26 to 2026-11-22. This page says what was planned,
 what was achieved inside that window, and what comes next. Development continues after the hackathon.
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/roadmap-dark.svg" width="600" height="350">
+    <img src="assets/roadmap-light.svg" alt="Intakt roadmap: started 24 Oct by a custom build loop; done: M0 Unblock, M1 Review core, M2 Panel and rounds, M3 Agents and memory, M4 Live dashboard; we are here, with the octopus: M5 Demo, the hackathon release, 22 Nov; next: M6 Runs alongside (beside the build loop), M7 Builder half (Intakt builds as well as reviews), M8 Switch (Intakt builds itself)" width="600" height="350" loading="lazy">
+  </picture>
+</p>
+
 ## The plan
 
 The first release is the review loop ([spec](spec.md), [plan](plan.md)): a panel of reviewers on models from different
@@ -37,7 +44,7 @@ the dates from [the journey's milestones](journey.md#milestones) and, for 2026-1
 - **The review page:** every round with its reviewers, their verdicts, the findings and the judge's call on each
   ([reading a verdict](user/README.md#reading-a-verdict), [a tour of the dashboard](guide/a-tour-of-the-dashboard.md)).
 - **Trends:** figures about the reviews of every project as tiles ([the Trends page](user/README.md#the-trends-page)).
-- **The review bench:** a panel on Claude and GPT caught all 15 planted defects (measured, 2026-11-21, 3 false alarms); on open models the panel caught 11 of 15 (2026-11-16) with 2 false alarms
+- **The review bench:** a panel on Claude and GPT caught all 5 planted defects in each of 3 runs (15 of 15, measured 2026-11-21, 3 false alarms); on open models the panel caught 11 of 15 (2026-11-16) with 2 false alarms
   ([review bench](../README.md#review-bench)).
 - **MCP tools and the agent skill:** your agent starts reviews, reads the findings and loops until the verdict is clean
   ([MCP](user/mcp.md), [the skill](../skills/intakt-review/README.md)).
@@ -70,7 +77,8 @@ to 2026-11-13, as listed in [the journey](journey.md): 773 closed issues (counte
 Development continues. The next milestones, from [the plan](plan.md) and the
 [GitHub milestones](https://github.com/shinyredapples/intakt/milestones):
 
-- **M6 Shadow:** Intakt reviews pull requests on GitHub and posts the result.
+- **M6 Runs alongside (the shadow phase):** Intakt runs beside the build loop that developed it, takes the place of
+  one of its reviewers on pull requests on GitHub, and its verdict counts.
 - **M7 Builder half:** Intakt builds a task from an issue to a pull request.
 - **M8 Switch:** Intakt runs its own loop.
 

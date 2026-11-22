@@ -9,7 +9,7 @@
 
 Your coding agent says it is done. Intakt tells you whether to believe it.
 
-Reviewers on models from different AI labs review the change, and a judge marks every finding against the task. Start a review from the dashboard, or let your own agent run the loop over MCP until the verdict is clean. On the [review bench](#review-bench), a panel on Claude and GPT caught all 15 planted defects (measured, 2026-11-21); on low-cost open models it caught 11.
+Reviewers on models from different AI labs review the change, and a judge marks every finding against the task. Start a review from the dashboard, or let your own agent run the loop over MCP until the verdict is clean. On the [review bench](#review-bench), a panel on Claude and GPT caught all 5 planted defects in each of 3 runs (15 of 15, measured 2026-11-21); on low-cost open models it caught 11 of 15.
 
 Along the way, building Intakt led to [12 fixes (11 pull requests) merged upstream](#found-and-fixed-upstream) in Symfony, Symfony AI and Doctrine.
 
@@ -137,6 +137,13 @@ Built for the [Symfony AI & MCP Hackathon](docs/spec.md) (deadline 2026-11-22):
 Development continues after the hackathon: [the hackathon page](docs/hackathon.md) says what was planned, what was achieved and what comes next.
 
 ## Status
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/roadmap-dark.svg" width="420" height="245">
+    <img src="docs/assets/roadmap-light.svg" alt="Intakt roadmap: started 24 Oct by a custom build loop; done: M0 Unblock, M1 Review core, M2 Panel and rounds, M3 Agents and memory, M4 Live dashboard; we are here, with the octopus: M5 Demo, the hackathon release, 22 Nov; next: M6 Runs alongside (beside the build loop), M7 Builder half (Intakt builds as well as reviews), M8 Switch (Intakt builds itself)" width="420" height="245" loading="lazy">
+  </picture>
+</p>
 
 **Works today:** the review loop and its foundation. A reviewer panel of any size, at least one reviewer (`config/intakt.yaml`) reviews a branch of a local repository (`intakt:review`, the dashboard button or the MCP tool `start_review`), a judge sorts the findings into the act list, and the dashboard shows each round live; the demo runs it on a sample repository with `docker compose up`. Under it, a Symfony 8.2 (8.2.0-BETA2, a beta until 8.2.0 is released) app on PHP 8.5.12 or later with SQLite, Symfony AI 1.0.0-BETA1 (Platform, Agent, Store, AI Bundle) and the MCP Bundle installed, the module layout with plugin contracts, the Anthropic, OpenAI and OpenAI-compatible providers with keys from the environment or Symfony secrets (a provider without its key is switched off with a message), and `bin/check`, which runs every quality gate CI runs: coding standards, PHPStan at max (with the service ids and parameter types of the compiled container), Rector, module boundaries, PHPUnit 13, `composer audit`, gitleaks on files and history, commit subjects, long dashes, the `docs/highlights.md` table lint, a row there for every `upstream/` reproduction and the service container lint.
 

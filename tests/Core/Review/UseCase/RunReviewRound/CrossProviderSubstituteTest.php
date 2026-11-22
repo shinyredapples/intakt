@@ -12,6 +12,7 @@ use Intakt\Core\Ai\Infrastructure\AccountCooldownWindows;
 use Intakt\Core\Ai\Infrastructure\AccountFailoverPlatform;
 use Intakt\Core\Ai\Infrastructure\AccountPlatform;
 use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
+use Intakt\Core\Ai\Infrastructure\ModelWaits;
 use Intakt\Core\Ai\Infrastructure\SendFailures;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
 use Intakt\Core\Ai\Infrastructure\TypedRejectionConverter;
@@ -51,6 +52,7 @@ use Intakt\Plugin\Vendor\Contract\Vendor;
 use Intakt\Plugin\Vendor\Contract\VendorAccountOut;
 use Intakt\Plugin\Vendor\Contract\VendorReview;
 use Intakt\Tests\Core\Ai\Infrastructure\FailingWhenRead;
+use Intakt\Tests\Core\Ai\Infrastructure\NoPinnedProviderCooldowns;
 use Intakt\Tests\Core\Ai\Infrastructure\RecordingCalls;
 use Intakt\Tests\Core\Budget\ReadingsInMemory;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
@@ -101,6 +103,7 @@ use Symfony\Component\Semaphore\Store\LockStore;
 #[UsesClass(ReviewerRateLimited::class)]
 #[UsesClass(EveryProviderOut::class)]
 #[UsesClass(AccountFailoverPlatform::class)]
+#[UsesClass(ModelWaits::class)]
 #[UsesClass(AccountPlatform::class)]
 #[UsesClass(AccountCooldownWindows::class)]
 #[UsesClass(Account::class)]
@@ -249,7 +252,7 @@ final class CrossProviderSubstituteTest extends KernelTestCase
     {
         $substitutes = $substituteProvider instanceof Provider ? [['provider' => $substituteProvider->value, 'model' => RoundFixture::SUBSTITUTE_MODEL]] : [];
         $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['standard' => ['provider' => 'anthropic', 'model' => RoundFixture::MODEL, 'substitutes' => $substitutes]]]], []);
-        $accounts = static fn (Provider $provider, PlatformInterface $platform, AccountCooldownWindows $cooldowns): PlatformInterface => new AccountFailoverPlatform($provider, [Account::DEFAULT => $platform], $cooldowns, new NativeClock(), new NullLogger());
+        $accounts = static fn (Provider $provider, PlatformInterface $platform, AccountCooldownWindows $cooldowns): PlatformInterface => new AccountFailoverPlatform($provider, [Account::DEFAULT => $platform], $cooldowns, new NativeClock(), new NullLogger(), new NoPinnedProviderCooldowns());
         $platforms = new ServiceLocator([
             Provider::Anthropic->value => fn (): PlatformInterface => $accounts(Provider::Anthropic, $this->recording(Provider::Anthropic, $own), $this->cooldowns),
             ($substituteProvider ?? Provider::OpenAi)->value => fn (): PlatformInterface => $accounts($substituteProvider ?? Provider::OpenAi, $this->recording($substituteProvider ?? Provider::OpenAi, $substitute), $this->cooldowns),
