@@ -19,6 +19,7 @@ use Intakt\Tests\Core\Git\TemporaryRepository;
 use RuntimeException;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\PersistingStoreInterface;
 use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Process\Process;
 
@@ -99,6 +100,14 @@ final readonly class PushScenario
         $git = new BranchGit(new HardenedGit());
 
         return new PushBranch($git, new SignedCommits($git, $key ?? $this->signingKey($this->key)), new PushRecords($this->ledger), $this->changes, new LockFactory(new InMemoryStore()));
+    }
+
+    // Through another lock store than the in-memory one, because a store can fail where memory cannot.
+    public function pushWithLockStore(PersistingStoreInterface $store): PushBranch
+    {
+        $git = new BranchGit(new HardenedGit());
+
+        return new PushBranch($git, new SignedCommits($git, $this->signingKey($this->key)), new PushRecords($this->ledger), $this->changes, new LockFactory($store));
     }
 
     // Through another forge than the recording one, because a test of the real opener must see what it lets through.

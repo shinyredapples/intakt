@@ -34,6 +34,9 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Lock\Exception\ExceptionInterface;
+use Symfony\Component\Lock\Exception\LockStorageException;
+use Symfony\Component\Lock\PersistingStoreInterface;
 
 #[CoversClass(PushBranch::class)]
 #[CoversClass(PushRecords::class)]
@@ -690,6 +693,55 @@ final class PushBranchTest extends TestCase
 
         self::assertInstanceOf(PushedBranch::class, $push->push($this->scenario->request()));
         self::assertStringContainsString('another push of this branch is running', (string) $inner);
+    }
+
+    public function testALockStoreThatFailsToSaveIsReportedAsNotPushedAndNothingIsPushedOrRecorded(): void
+    {
+        $store = self::createStub(PersistingStoreInterface::class);
+        $store->method('save')->willThrowException(new LockStorageException('the lock database is down'));
+
+        try {
+            (void) $this->scenario->pushWithLockStore($store)->push($this->scenario->request());
+            self::fail('A lock store that cannot save must stop the push.');
+        } catch (BranchNotPushed $failed) {
+            self::assertStringStartsWith('The branch was not pushed: the lock store failed: ', $failed->getMessage());
+            self::assertInstanceOf(ExceptionInterface::class, $failed->getPrevious());
+            self::assertNull($this->scenario->remoteTip());
+            self::assertSame([], $this->scenario->ledger->kinds());
+        }
+    }
+
+    public function testALockStoreThatFailsToReleaseAfterThePushIsReportedAsNotPushed(): void
+    {
+        $store = self::createStub(PersistingStoreInterface::class);
+        $store->method('delete')->willThrowException(new LockStorageException('the lock database is down'));
+
+        try {
+            (void) $this->scenario->pushWithLockStore($store)->push($this->scenario->request());
+            self::fail('A lock store that cannot release must be reported.');
+        } catch (BranchNotPushed $failed) {
+            self::assertStringStartsWith('The branch was not pushed: the lock store failed: ', $failed->getMessage());
+            self::assertInstanceOf(ExceptionInterface::class, $failed->getPrevious());
+        }
+    }
+
+    public function testAPushWhoseLockReleaseFailedIsReportedPushedByTheNextCallWithoutPushingAgain(): void
+    {
+        $store = self::createStub(PersistingStoreInterface::class);
+        $store->method('delete')->willThrowException(new LockStorageException('the lock database is down'));
+
+        try {
+            (void) $this->scenario->pushWithLockStore($store)->push($this->scenario->request());
+        } catch (BranchNotPushed) {
+        }
+
+        $tipAfterTheFailure = $this->scenario->remoteTip();
+        $pushed = $this->scenario->push()->push($this->scenario->request());
+
+        self::assertInstanceOf(PushedBranch::class, $pushed);
+        self::assertSame($tipAfterTheFailure, $pushed->head);
+        self::assertSame([LedgerEventKind::PushIntended, LedgerEventKind::BranchPushed, LedgerEventKind::ChangeIntended, LedgerEventKind::ChangeOpened], $this->scenario->ledger->kinds());
+        self::assertSame(1, $this->scenario->changes->calls);
     }
 
     public function testNothingIsPushedWhenTheSigningKeyCannotSign(): void
