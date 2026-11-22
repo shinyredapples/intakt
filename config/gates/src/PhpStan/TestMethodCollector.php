@@ -53,6 +53,27 @@ final readonly class TestMethodCollector implements Collector
     }
 
     /**
+     * @param class-string $attributeClass
+     *
+     * @return list<Attribute>
+     */
+    private function attributesOf(ClassMethod $method, Scope $scope, string $attributeClass): array
+    {
+        $found = [];
+
+        foreach ($method->attrGroups as $group) {
+            foreach ($group->attrs as $attribute) {
+                // resolved against the file's imports, so an attribute of another namespace with the same short name is not taken for PHPUnit's
+                if (strtolower($attributeClass) === strtolower($scope->resolveName($attribute->name))) {
+                    $found[] = $attribute;
+                }
+            }
+        }
+
+        return $found;
+    }
+
+    /**
      * @return list<string>
      */
     private function providersNamedOn(ClassMethod $method, Scope $scope, ClassReflection $class): array
@@ -72,28 +93,6 @@ final readonly class TestMethodCollector implements Collector
         return $provides;
     }
 
-    /**
-     * The name is resolved against the file's imports, so an attribute of another namespace with the same short name is not taken for PHPUnit's.
-     *
-     * @param class-string $attributeClass
-     *
-     * @return list<Attribute>
-     */
-    private function attributesOf(ClassMethod $method, Scope $scope, string $attributeClass): array
-    {
-        $found = [];
-
-        foreach ($method->attrGroups as $group) {
-            foreach ($group->attrs as $attribute) {
-                if (strtolower($attributeClass) === strtolower($scope->resolveName($attribute->name))) {
-                    $found[] = $attribute;
-                }
-            }
-        }
-
-        return $found;
-    }
-
     private function argument(Attribute $attribute, int $position, string $name): ?Expr
     {
         foreach ($attribute->args as $index => $argument) {
@@ -106,8 +105,6 @@ final readonly class TestMethodCollector implements Collector
     }
 
     /**
-     * The provider is named by the class that declares it, the way a judged method is, so a provider a parent class or an imported trait declares is found.
-     *
      * @param array<ClassReflection> $classes
      *
      * @return list<string>
@@ -121,6 +118,7 @@ final readonly class TestMethodCollector implements Collector
             foreach ($names as $name) {
                 if ($class->hasNativeMethod($name)) {
                     $method = $class->getNativeMethod($name);
+                    // named by the class that declares it, the way a judged method is, so a provider a parent class or an imported trait declares is found
                     $methods[] = $method->getDeclaringClass()->getName().'::'.$method->getName();
                 }
             }
