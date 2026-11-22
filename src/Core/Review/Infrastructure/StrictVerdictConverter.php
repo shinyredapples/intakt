@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\Infrastructure;
 
 use Intakt\Core\Review\Contract\Verdict;
+use Intakt\Core\Review\Infrastructure\ReviewerAnswer\Verdict as ReviewerAnswer;
 use Symfony\AI\Platform\Exception\RuntimeException;
 use Symfony\AI\Platform\Exception\UnexpectedResultTypeException;
 use Symfony\AI\Platform\Exception\ValidationException;
@@ -118,7 +119,7 @@ final readonly class StrictVerdictConverter implements ResultConverterInterface
     }
 
     // Checked here because Symfony AI's Validator subscriber checks only an object result, never one among parts.
-    private function validated(Verdict $verdict): Verdict
+    private function validated(ReviewerAnswer $verdict): ReviewerAnswer
     {
         $violations = $this->validator->validate($verdict);
 
@@ -137,11 +138,12 @@ final readonly class StrictVerdictConverter implements ResultConverterInterface
         return $rebuilt;
     }
 
-    private function verdictFrom(string $content): Verdict
+    private function verdictFrom(string $content): ReviewerAnswer
     {
         try {
             return $this->deserialized(AnswerForm::ProseAroundBlock === $this->form ? $this->fencedBlockOf($content) : $content);
         } catch (ExceptionInterface $exception) {
+            // Named after the contract Verdict, because this message reaches VerdictUnreadable and the reviewers' failure texts must not change.
             throw new RuntimeException(sprintf('Cannot deserialize the content into the "%s" class.', Verdict::class), $exception->getCode(), previous: $exception);
         }
     }
@@ -186,10 +188,10 @@ final readonly class StrictVerdictConverter implements ResultConverterInterface
     /**
      * @throws ExceptionInterface
      */
-    private function deserialized(string $content): Verdict
+    private function deserialized(string $content): ReviewerAnswer
     {
         try {
-            return $this->serializer->deserialize($content, Verdict::class, JsonEncoder::FORMAT, self::STRICT);
+            return $this->serializer->deserialize($content, ReviewerAnswer::class, JsonEncoder::FORMAT, self::STRICT);
         } catch (TypeError $error) {
             // Kept so a constructor's type error still fails the mapping, because serializers before 8.2.0-BETA2 passed an object on as a list of findings: upstream/serializer-object-collection-accepts-any-object
             throw new UnexpectedValueException($error->getMessage(), $error->getCode(), $error);

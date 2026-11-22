@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Infrastructure;
 
-use Intakt\Core\Review\Contract\Verdict;
+use Intakt\Core\Review\Infrastructure\ReviewerAnswer\Verdict as ReviewerAnswer;
 use Symfony\AI\Platform\Bridge\ClaudeCode\ClaudeCode;
 use Symfony\AI\Platform\Bridge\Codex\Codex;
 use Symfony\AI\Platform\Event\ResultEvent;
@@ -52,6 +52,6 @@ final readonly class StrictVerdictSubscriber implements EventSubscriberInterface
      */
     private function asksForAVerdict(array $options): bool
     {
-        return ($options[PlatformSubscriber::RESPONSE_FORMAT] ?? null) === $this->responseFormats->create(Verdict::class);
+        return ($options[PlatformSubscriber::RESPONSE_FORMAT] ?? null) === $this->responseFormats->create(ReviewerAnswer::class);
     }
 }

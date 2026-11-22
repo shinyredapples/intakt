@@ -6,7 +6,7 @@ namespace Intakt\Core\Review\Infrastructure;
 
 use Closure;
 use Intakt\Core\Review\Contract\StreamCutBy;
-use Intakt\Core\Review\Contract\Verdict;
+use Intakt\Core\Review\Infrastructure\ReviewerAnswer\Verdict as ReviewerAnswer;
 use Override;
 use Symfony\AI\Platform\Result\Stream\AbstractStreamListener;
 use Symfony\AI\Platform\Result\Stream\CompleteEvent;
@@ -25,7 +25,7 @@ final class StrictVerdictStreamListener extends AbstractStreamListener
     private bool $askedForTools = false;
 
     /**
-     * @param Closure(string): Verdict $verdictFrom
+     * @param Closure(string): ReviewerAnswer $verdictFrom
      */
     public function __construct(
         private readonly Closure $verdictFrom,

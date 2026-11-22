@@ -12,6 +12,7 @@ use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\UntrustedSource;
 use Intakt\Core\Review\Contract\Verdict;
+use Intakt\Core\Review\Infrastructure\ReviewerAnswer\Verdict as ReviewerAnswer;
 use Intakt\Core\Review\Contract\VerdictParser;
 use Symfony\AI\Agent\Execution\ExecutionInterface;
 use Symfony\AI\Agent\Toolbox\ToolboxInterface;
@@ -119,7 +120,8 @@ final readonly class ReviewerPrompt
             $result = $execution->getResult();
             $answer = $result instanceof MultiPartResult ? self::verdictPartOf($result) : $result->getContent();
 
-            return $answer instanceof Verdict ? $answer : throw new UnexpectedResultTypeException(Verdict::class, get_debug_type($answer));
+            // The contract class in the refusal, because its message reaches VerdictUnreadable and must stay the same.
+            return $answer instanceof ReviewerAnswer ? $answer->toVerdict() : throw new UnexpectedResultTypeException(Verdict::class, get_debug_type($answer));
         });
     }
 
