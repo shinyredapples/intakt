@@ -185,6 +185,26 @@ final class InstanceBootTest extends TestCase
         self::assertSame('composer install failed: the lock file does not match', $outcome->reason);
     }
 
+    public function testAHarnessThatHangsPastItsTimeLimitIsReportedAsFailedWithTheLimit(): void
+    {
+        $harness = $this->repository->commitFile('bin/instance', "<?php\nsleep(30);\n");
+
+        $outcome = new InstanceBoot(bootSeconds: 1)->of($this->at($harness), new CommitId($harness));
+
+        self::assertSame(BootState::Failed, $outcome->state, $outcome->reason);
+        self::assertSame('bin/instance passed its time limit of 1 seconds.', $outcome->reason);
+    }
+
+    public function testAComposerInstallThatHangsPastItsTimeLimitIsReportedAsFailedWithTheLimit(): void
+    {
+        $head = $this->repository->commitFile('src/Feature.php', "<?php\n");
+
+        $outcome = $this->bootWithoutComposerAnd($head, ['composer' => 0o755], "#!/bin/sh\nexec sleep 30\n", new InstanceBoot(installSeconds: 1));
+
+        self::assertSame(BootState::Failed, $outcome->state, $outcome->reason);
+        self::assertSame('composer install passed its time limit of 1 seconds.', $outcome->reason);
+    }
+
     public function testAComposerPluginOfTheHeadDoesNotSeeASecretOfTheBootingInstall(): void
     {
         $seen = $this->repository->path.'-plugin-saw';
@@ -412,7 +432,7 @@ final class InstanceBootTest extends TestCase
     /**
      * @param array<string, int> $stubs
      */
-    private function bootWithoutComposerAnd(string $head, array $stubs): BootOutcome
+    private function bootWithoutComposerAnd(string $head, array $stubs, string $stubBody = "#!/bin/sh\necho 'the lock file does not match' >&2\nexit 1\n", ?InstanceBoot $boot = null): BootOutcome
     {
         $tools = $this->repository->path.'-tools';
         mkdir($tools);
@@ -420,14 +440,14 @@ final class InstanceBootTest extends TestCase
         $this->linkCommandsExceptComposer((string) $path, $tools);
 
         foreach ($stubs as $stub => $mode) {
-            file_put_contents($tools.'/'.$stub, "#!/bin/sh\necho 'the lock file does not match' >&2\nexit 1\n");
+            file_put_contents($tools.'/'.$stub, $stubBody);
             chmod($tools.'/'.$stub, $mode);
         }
 
         putenv('PATH='.$tools);
 
         try {
-            return $this->bootWithMainsHarness($head);
+            return ($boot ?? new InstanceBoot())->of($this->at($head), $this->main);
         } finally {
             putenv(false === $path ? 'PATH' : 'PATH='.$path);
             new Filesystem()->remove($tools);

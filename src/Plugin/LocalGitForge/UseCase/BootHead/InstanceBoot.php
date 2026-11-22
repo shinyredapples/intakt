@@ -14,6 +14,7 @@ use Intakt\Plugin\LocalGitForge\Contract\LocalRepository;
 use Intakt\Plugin\LocalGitForge\Infrastructure\LocalGitForge;
 use Intakt\Plugin\LocalGitForge\Infrastructure\NameStatusParser;
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Process\Exception\ProcessTimedOutException;
 use Symfony\Component\Process\Process;
 use Throwable;
 
@@ -25,8 +26,6 @@ final readonly class InstanceBoot
     private const array INSTALL = ['composer', 'install', '--no-interaction', '--no-progress', '--no-scripts'];
     // The shell's codes for a command it cannot execute (126) or cannot find (127), because a missing or broken composer is the boot step's fault, never the commit's.
     private const array COULD_NOT_RUN = [126, 127];
-    private const int INSTALL_SECONDS = 600;
-    private const int BOOT_SECONDS = 180;
 
     // bin/instance writes its status on descriptor 3 only; moved to stdout and its log to stderr, so no log line can pass for the status.
     private const array STATUS_ON_STDOUT = ['sh', '-c', 'exec "$@" 3>&1 1>&2', 'sh'];
@@ -41,6 +40,12 @@ final readonly class InstanceBoot
     ];
 
     private const string SCRATCH_HOME_SUFFIX = '-home';
+
+    public function __construct(
+        private int $installSeconds = 600,
+        private int $bootSeconds = 180,
+    ) {
+    }
 
     // Every failure of the step itself is a crash outcome, because a boot step that throws would stop the review it only gates.
     public function of(BootAt $target, CommitId $harness): BootOutcome
@@ -93,7 +98,11 @@ final readonly class InstanceBoot
     // The harness is placed after the install, so nothing the install writes into bin can replace it.
     private function bootIn(string $snapshot, FileContent $harness): BootOutcome
     {
-        $install = $this->run(self::INSTALL, $snapshot, self::INSTALL_SECONDS);
+        $install = $this->run(self::INSTALL, $snapshot, $this->installSeconds);
+
+        if (null === $install) {
+            return BootOutcome::failed(sprintf('composer install passed its time limit of %d seconds.', $this->installSeconds));
+        }
 
         if (in_array($install->getExitCode(), self::COULD_NOT_RUN, true)) {
             return BootOutcome::crashed('composer could not run: '.trim($install->getErrorOutput()));
@@ -109,7 +118,13 @@ final readonly class InstanceBoot
 
         $this->placeHarness($snapshot, $harness);
 
-        return $this->outcomeOf($this->run([...self::STATUS_ON_STDOUT, PHP_BINARY, self::HARNESS], $snapshot, self::BOOT_SECONDS));
+        $boot = $this->run([...self::STATUS_ON_STDOUT, PHP_BINARY, self::HARNESS], $snapshot, $this->bootSeconds);
+
+        if (null === $boot) {
+            return BootOutcome::failed(sprintf('%s passed its time limit of %d seconds.', self::HARNESS, $this->bootSeconds));
+        }
+
+        return $this->outcomeOf($boot);
     }
 
     // A link is refused, because writing the harness through it would change a file outside the snapshot.
@@ -131,10 +146,16 @@ final readonly class InstanceBoot
     /**
      * @param list<string> $command
      */
-    private function run(array $command, string $snapshot, int $seconds): Process
+    private function run(array $command, string $snapshot, int $seconds): ?Process
     {
         $process = new Process($command, $snapshot, $this->environment($this->homeOf($snapshot)), timeout: $seconds);
-        $process->run();
+
+        // Boundary: a commit's own process that passes its limit is the head's failure (null), so a head that hangs cannot switch the gate off with a crash.
+        try {
+            $process->run();
+        } catch (ProcessTimedOutException) {
+            return null;
+        }
 
         return $process;
     }
