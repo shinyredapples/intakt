@@ -87,7 +87,7 @@ final readonly class FinishedProcessResult implements RawResultInterface, Review
 
     private function readThroughTools(ReviewServerAccess $access): bool
     {
-        $toolNames = $access->mcpToolNames();
+        $toolNames = [...$access->mcpToolNames()];
         $calls = array_filter($this->contentBlocks('assistant', 'tool_use'), static fn (array $use): bool => in_array($use['name'] ?? null, $toolNames, true));
         $ids = array_column($calls, 'id');
 

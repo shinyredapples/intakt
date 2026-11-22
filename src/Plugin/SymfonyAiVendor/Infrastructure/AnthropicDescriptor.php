@@ -28,7 +28,7 @@ final readonly class AnthropicDescriptor implements SymfonyAiProvider
     // Read from the enum, because its accounts still build their variables from it until its match arms move into descriptors.
     public function variables(): array
     {
-        return Provider::Anthropic->variables();
+        return [...Provider::Anthropic->variables()];
     }
 
     public function keyPattern(): string

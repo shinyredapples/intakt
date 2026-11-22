@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Ai\Infrastructure;
 
+use Intakt\Core\Ai\Contract\ProjectNames;
 use Intakt\Core\Ai\Contract\AiServices;
 use Intakt\Core\Ai\Contract\ProjectNotConfigured;
 use Intakt\Core\Ai\Contract\Provider;
@@ -28,9 +29,9 @@ final readonly class ConfiguredTierResolver implements TierResolver
     ) {
     }
 
-    public function projects(): array
+    public function projects(): ProjectNames
     {
-        return array_map(strval(...), array_keys($this->projects));
+        return new ProjectNames(...array_map(strval(...), array_keys($this->projects)));
     }
 
     public function resolve(string $project, Tier $tier): ResolvedModel

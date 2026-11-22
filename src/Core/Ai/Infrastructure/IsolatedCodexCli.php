@@ -93,7 +93,7 @@ final readonly class IsolatedCodexCli implements ModelClientInterface
         return [
             $key.'url='.$this->toml($access->url),
             $key.'bearer_token_env_var='.$this->toml(self::BEARER),
-            $key.'enabled_tools='.$this->toml($access->tools),
+            $key.'enabled_tools='.$this->toml([...$access->tools]),
             $key.'required=true',
         ];
     }

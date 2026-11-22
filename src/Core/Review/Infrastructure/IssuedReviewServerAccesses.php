@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Infrastructure;
 
+use Intakt\Core\Ai\Contract\ReviewTools;
 use Intakt\Core\Ai\Contract\ReviewServerAccess;
 use Intakt\Core\Review\Contract\NoReviewServerAccess;
 use Intakt\Core\Review\Contract\ReviewServerAccesses;
@@ -38,7 +39,7 @@ final readonly class IssuedReviewServerAccesses implements ReviewServerAccesses
     #[Override]
     public function forRound(Uuid $round): ReviewServerAccess
     {
-        return new ReviewServerAccess('intakt-review', $this->url, $this->bearerFor($round), array_map($this->nameOf(...), self::TOOLS));
+        return new ReviewServerAccess('intakt-review', $this->url, $this->bearerFor($round), new ReviewTools(...array_map($this->nameOf(...), self::TOOLS)));
     }
 
     // Typed, because an empty APP_SECRET is a state of the install the vendor turns into a blocked review, not a programming error.

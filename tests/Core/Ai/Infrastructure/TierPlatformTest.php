@@ -215,7 +215,7 @@ final class TierPlatformTest extends TestCase
         $sent = new ArrayObject();
         $platform = $this->limitedPlatform($sent);
 
-        $platform->invoke($platform->answering('limited', Tier::Strong), new TierRequest('review', [PlatformOptions::MAX_OUTPUT_TOKENS => 99]))->asText();
+        $platform->invoke($platform->answering('limited', Tier::Strong), new TierRequest('review')->withDefaults(...[PlatformOptions::MAX_OUTPUT_TOKENS => 99]))->asText();
 
         self::assertSame(99, $sent['big'][PlatformOptions::MAX_OUTPUT_TOKENS] ?? null);
     }

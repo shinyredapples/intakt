@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\AccountCooldowns;
 use Intakt\Core\Ai\Contract\AiServices;
+use Intakt\Core\Ai\Contract\EnvironmentVariables;
 use Intakt\Core\Ai\Contract\PinnedProviderCooldowns;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
@@ -238,7 +239,7 @@ return static function (ContainerConfigurator $container): void {
 
     // Each account gets a platform of its own, with the credentials of its own variables; the default account keeps the bundle's own platform and ids.
     $accountPlatform = static function (Account $account) use ($env, $modelCatalog, $bridgePlatform, $claudeCodePlatform, $codexPlatform): array {
-        $variables = array_map($env, $account->variables());
+        $variables = array_map($env, [...$account->variables()]);
         $default = Account::DEFAULT === $account->name;
         $generic = Provider::OpenAiCompatible->value.($default ? '' : '_'.$account->name);
         $events = new Reference('event_dispatcher');
@@ -282,9 +283,9 @@ return static function (ContainerConfigurator $container): void {
 
         foreach ($configuration['accounts'][$provider->value] as $name) {
             $account = new Account($provider, $name);
-            $missing = array_values(array_filter($account->variables(), static fn (string $variable): bool => !$isSet($variable)));
+            $missing = new EnvironmentVariables(...array_filter([...$account->variables()], static fn (string $variable): bool => !$isSet($variable)));
 
-            if ([] === $missing) {
+            if ($missing->isEmpty()) {
                 $enabled[$name] = $account;
 
                 continue;
@@ -295,7 +296,7 @@ return static function (ContainerConfigurator $container): void {
 
         // Disabled only when none of its accounts is set, so one missing key never switches off a provider that has another; the message names the first account's variables.
         if ([] === $enabled) {
-            $disabled[$provider->value] = $provider->disabledMessage(array_first($missingOf) ?? []);
+            $disabled[$provider->value] = $provider->disabledMessage(array_first($missingOf) ?? new EnvironmentVariables());
 
             continue;
         }
@@ -346,7 +347,7 @@ return static function (ContainerConfigurator $container): void {
     $container->parameters()->set(AiServices::ACCOUNTS, $enabledAccounts);
     // The base URL variable of each enabled OpenAI-compatible account, read when the container runs, so the connectivity check probes the owner's own endpoints.
     $container->parameters()->set(AiServices::COMPATIBLE_BASE_URLS, array_map(
-        static fn (string $name): string => $env(new Account(Provider::OpenAiCompatible, $name)->variables()[0]),
+        static fn (string $name): string => $env([...new Account(Provider::OpenAiCompatible, $name)->variables()][0]),
         $enabledAccounts[Provider::OpenAiCompatible->value] ?? [],
     ));
     $container->parameters()->set(AiServices::PROJECTS, $projects);

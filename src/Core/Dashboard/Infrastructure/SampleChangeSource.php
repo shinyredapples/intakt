@@ -23,7 +23,7 @@ final readonly class SampleChangeSource
     // Null unless the seed's repository variable is set and the project file still holds the sample project.
     public function source(): ?ChangeSource
     {
-        if (!$this->hasRepository() || !in_array(SampleChange::PROJECT, $this->tiers->projects(), true)) {
+        if (!$this->hasRepository() || !$this->tiers->projects()->contains(SampleChange::PROJECT)) {
             return null;
         }
 
