@@ -423,6 +423,18 @@ final class EscalateRecurringP1Test extends KernelTestCase
         self::assertLoggedError('error', sprintf('The escalation review of finding F1 in round %s failed for good; no verdict was kept.', $second));
     }
 
+    public function testAnEscalationQueuedBeforeTheFailureStampExistedStillRecordsItsFailureWhenParked(): void
+    {
+        $this->recurredOnASecondHead();
+        $unstamped = $this->fixture->escalations->envelopes[0]->withoutAll(DispatchOnFailureStamp::class);
+
+        $this->deliveredUntilParked($unstamped, $this->throwing(new ProviderFailedTransiently(new RuntimeException('overloaded'))));
+
+        self::assertCount(1, $this->payloadsOf(LedgerEventKind::EscalationFailed));
+        self::assertLoggedError('critical', sprintf('Error thrown while handling message %1$s. Removing from transport after 2 retries. Error: "Handling "%1$s" failed: The provider failed the escalation review\'s call 3 times; the escalation is parked."', EscalateRecurringP1::class));
+        self::assertLoggedError('error', sprintf('The escalation review of finding F1 in round %s failed for good; no verdict was kept.', $this->fixture->escalations->messages[0]->round));
+    }
+
     public function testAnEscalationParkedAfterItsRetriesForAnyOtherErrorRecordsOneFailedEscalation(): void
     {
         $second = $this->recurredOnASecondHead();
