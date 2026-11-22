@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace Intakt\Tests\Plugin\SymfonyAiVendor;
 
 use Closure;
+use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Ai\Contract\TierInvoker;
 use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
 use Intakt\Core\Ledger\Contract\AppendResult;
@@ -17,9 +19,12 @@ use Intakt\Core\Review\Contract\EscalationOutcome;
 use Intakt\Core\Review\Contract\EscalationVerdict;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiEscalationReviews;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\TierRoutedPlatform;
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\TypedProviderFailure;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageLedger;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageReservation;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\VendorAccountLimit;
+use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
+use Intakt\Plugin\Vendor\Contract\ProviderRejectedTheKey;
 use Intakt\Tests\Core\Ai\Infrastructure\NoCooldowns;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Support\KernelTestCase;
@@ -27,7 +32,9 @@ use Intakt\Tests\Support\StoredSerializerFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
+use Symfony\AI\Platform\Exception\AuthenticationException;
 use Symfony\AI\Platform\Exception\RateLimitExceededException;
 use Symfony\AI\Platform\Message\Message;
 use Symfony\AI\Platform\Message\MessageBag;
@@ -36,10 +43,12 @@ use Symfony\AI\Platform\PlatformInterface;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\DependencyInjection\ServiceLocator;
+use Symfony\Component\ErrorHandler\BufferingLogger;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Semaphore\SemaphoreFactory;
 use Symfony\Component\Semaphore\Store\LockStore;
+use Symfony\Component\Serializer\SerializerInterface;
 use Symfony\Component\Uid\Uuid;
 
 #[CoversClass(SymfonyAiEscalationReviews::class)]
@@ -48,6 +57,7 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(ResolvedModel::class)]
 #[UsesClass(TierPlatform::class)]
 #[UsesClass(TierRoutedPlatform::class)]
+#[UsesClass(TypedProviderFailure::class)]
 #[UsesClass(UsageLedger::class)]
 #[UsesClass(UsageReservation::class)]
 #[UsesClass(VendorAccountLimit::class)]
@@ -94,21 +104,65 @@ final class SymfonyAiEscalationReviewsTest extends KernelTestCase
     {
         yield 'an unknown outcome' => ['{"outcome":"maybe","reasons":"Unsure."}'];
         yield 'blank reasons' => ['{"outcome":"confirmed","reasons":"  "}'];
+        yield 'reasons of form feeds and Unicode spaces' => ['{"outcome":"confirmed","reasons":"\f  ​"}'];
+        yield 'a property the schema forbids' => ['{"outcome":"confirmed","reasons":"Real.","unexpected":true}'];
+        yield 'no reasons' => ['{"outcome":"confirmed"}'];
         yield 'prose' => ['I confirm the finding.'];
     }
 
-    public function testAFailedCallIsThrownUnchangedAndLeftUnsettled(): void
+    public function testReasonsWithAVisibleCharacterAmongUnicodeSpacesAreAVerdict(): void
+    {
+        $verdict = $this->reviews(static fn (): string => '{"outcome":"rejected","reasons":" Fine. "}')->escalate('alpha', Uuid::fromString(self::ROUND), $this->messages());
+
+        self::assertSame(EscalationOutcome::Rejected, $verdict?->outcome);
+    }
+
+    public function testARateLimitedCallIsThrownAsTheVendorsRateLimitWithItsDelayAndLeftUnsettled(): void
     {
         $ledger = new InMemoryLedger();
+        $limit = new RateLimitExceededException(30);
 
         try {
-            $_ = $this->reviews(static fn (): never => throw new RateLimitExceededException(30), $ledger)->escalate('alpha', Uuid::fromString(self::ROUND), $this->messages());
+            $_ = $this->reviews(static fn (): never => throw $limit, $ledger)->escalate('alpha', Uuid::fromString(self::ROUND), $this->messages());
             self::fail('A failed escalation call must stay an error, never a verdict.');
-        } catch (RateLimitExceededException $limited) {
-            self::assertSame(30, $limited->getRetryAfter());
+        } catch (ProviderRateLimited $limited) {
+            self::assertSame([30, $limit], [$limited->retryAfterSeconds, $limited->getPrevious()]);
         }
 
         self::assertSame(['started', 'unsettled'], array_column($ledger->payloads(), 'phase'));
+    }
+
+    public function testARejectedKeyIsThrownAsTheVendorsRejectedKey(): void
+    {
+        $this->expectException(ProviderRejectedTheKey::class);
+
+        $_ = $this->reviews(static fn (): never => throw new AuthenticationException('Invalid key.'))->escalate('alpha', Uuid::fromString(self::ROUND), $this->messages());
+    }
+
+    public function testEveryAccountCoolingDownBeforeTheCallIsThrownAsTheVendorsRateLimitAndReservesNothing(): void
+    {
+        $ledger = new InMemoryLedger();
+        $tiers = self::createStub(TierInvoker::class);
+        $tiers->method('answering')->willThrowException(new EveryAccountCoolingDown(Provider::Anthropic, 45));
+
+        try {
+            $_ = $this->reviews(static fn (): string => '{}', $ledger, $tiers)->escalate('alpha', Uuid::fromString(self::ROUND), $this->messages());
+            self::fail('No account may answer while every account cools down.');
+        } catch (ProviderRateLimited $limited) {
+            self::assertSame([45, 0], [$limited->retryAfterSeconds, $ledger->count()]);
+        }
+    }
+
+    public function testTheProvidersRateLimitSurvivesALedgerThatCannotLeaveTheCallUnsettled(): void
+    {
+        $log = new BufferingLogger();
+
+        try {
+            $_ = $this->reviews(static fn (): never => throw new RateLimitExceededException(30), new InMemoryLedger(accepted: 1), log: $log)->escalate('alpha', Uuid::fromString(self::ROUND), $this->messages());
+            self::fail('The provider error must reach the queue.');
+        } catch (ProviderRateLimited $limited) {
+            self::assertSame([30, ['The failed escalation call could not be left unsettled.']], [$limited->retryAfterSeconds, array_column($log->cleanLogs(), 1)]);
+        }
     }
 
     private function messages(): MessageBag
@@ -116,7 +170,7 @@ final class SymfonyAiEscalationReviewsTest extends KernelTestCase
         return new MessageBag(Message::forSystem('Judge the finding.'), Message::ofUser('The finding.'));
     }
 
-    private function reviews(Closure $answer, InMemoryLedger $ledger = new InMemoryLedger()): SymfonyAiEscalationReviews
+    private function reviews(Closure $answer, InMemoryLedger $ledger = new InMemoryLedger(), ?TierInvoker $tiers = null, LoggerInterface $log = new NullLogger()): SymfonyAiEscalationReviews
     {
         $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => [
             'strong' => ['provider' => 'anthropic', 'model' => 'big'],
@@ -127,6 +181,9 @@ final class SymfonyAiEscalationReviewsTest extends KernelTestCase
         $usage = new UsageLedger($ledger, new MockClock('2026-11-21 12:00:00 UTC'), new NullLogger(), StoredSerializerFactory::create());
         $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
 
-        return new SymfonyAiEscalationReviews(new TierPlatform($resolver, $platforms, new NoCooldowns(), new NullLogger()), $usage, $limit);
+        $serializer = self::getContainer()->get(SerializerInterface::class);
+        self::assertInstanceOf(SerializerInterface::class, $serializer);
+
+        return new SymfonyAiEscalationReviews($tiers ?? new TierPlatform($resolver, $platforms, new NoCooldowns(), new NullLogger()), $usage, $limit, $serializer, $log);
     }
 }
