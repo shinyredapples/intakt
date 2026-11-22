@@ -7,7 +7,6 @@ namespace Intakt\Tests\Journeys;
 use Intakt\Tests\Journeys\Support\JourneyTestCase;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Group;
-use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\Filesystem\Filesystem;
 
 #[CoversNothing]
@@ -28,12 +27,12 @@ final class FirstRunWithoutAKeyJourneyTest extends JourneyTestCase
         return 'first run without a key';
     }
 
-    public function testADemoInstallWithoutAKeyOpensOnTheFirstRunPageWithItsTwoChoices(): void
+    public function testADemoInstallWithoutAKeyOpensOnTheFirstRunPageWithTheRecordedReviewOffer(): void
     {
         $this->step('create the database', $this->createTheDatabase(...));
         $this->step('start the demo without a key', $this->startTheDemoWithoutAKey(...));
         $this->step('open the dashboard on the first-run page', $this->openTheDashboard(...));
-        $this->step('read the two choices', $this->readTheTwoChoices(...));
+        $this->step('read the recorded review offer', $this->readTheRecordedReviewOffer(...));
     }
 
     private function createTheDatabase(): void
@@ -61,19 +60,13 @@ final class FirstRunWithoutAKeyJourneyTest extends JourneyTestCase
         self::assertSame('/setup', $this->redirectOf('/'));
     }
 
-    private function readTheTwoChoices(): void
+    private function readTheRecordedReviewOffer(): void
     {
         $page = $this->visit('/setup');
 
-        self::assertSame(
-            ['Watch a recorded review', 'Run it live with your key'],
-            $page->filter('#demo-choices h3')->each(static fn (Crawler $title): string => $title->text()),
-        );
-        self::assertSame('The demo run plays only on the compose demo, and INTAKT_COMPOSE_SERVICE is empty on this install.', $page->filter('#choice-recorded .recorded-when')->text());
-        self::assertSame(
-            'Paste the key or token in step 1, restart Intakt, then press "Start the first review" in step 3: it starts the demo review and opens its live page.',
-            $page->filter('#choice-live .next')->text(),
-        );
+        self::assertSame('See a real review', $page->filter('#see-review h1')->text());
+        self::assertSame('This install has no recorded review. Add a key below to run one live.', $page->filter('#see-review .next')->text());
+        self::assertSame('missing', $page->filter('#step-providers')->attr('data-state'));
         self::assertCount(1, $page->filter('form.keep-provider-key'));
         self::assertCount(0, $page->filter('form.start-first-review'));
     }

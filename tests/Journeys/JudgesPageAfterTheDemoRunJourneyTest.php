@@ -71,9 +71,9 @@ final class JudgesPageAfterTheDemoRunJourneyTest extends JourneyTestCase
 
         self::assertStringContainsString('1. Open '.self::SETUP_ADDRESS, $liveReview);
         self::assertStringContainsString('3. Reload '.self::SETUP_ADDRESS, $liveReview);
-        self::assertStringContainsString('**If you played path a:** step 3 shows **Open the review**', $liveReview);
+        self::assertStringContainsString('**If you played path a:** card 3 shows **Open the review**', $liveReview);
         self::assertStringContainsString('Run '.self::DEMO_COMMAND.' instead.', $liveReview);
-        self::assertStringContainsString('first-run page at '.self::SETUP_ADDRESS, $agent);
+        self::assertStringContainsString('(the first-run page shows no address or command)', $agent);
     }
 
     private function between(string $page, string $from, string $to): string
