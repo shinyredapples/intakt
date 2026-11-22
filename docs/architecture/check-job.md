@@ -2,7 +2,16 @@
 
 ## In short
 
-`intakt:check:run` and the build's pre-push check run the project's checks on what a build handed back, in a job container of their own, never trusting the builder's run. After the hand-back checks and the lost-content check, the orchestrator looks for a trusted dependency snapshot of the tree's lock inputs and platform. On a miss it installs them in a separate job that sees only the lock files, and saves the result. The check job clones the mirror, applies the bundle, merges current main, and copies the snapshot only when the merged tree holds the same lock files and its own probe reads the same platform. It then runs the gate's steps, and the verdict comes from `check-result` alone.
+The check job is the pre-push check: it runs the project's checks on what a build handed back, in a job container of its own, because the builder's own run is never trusted. It repeats the hand-back checks and stops without a job when a file lost most of its content and the plan does not name that file. It then looks for a trusted dependency snapshot of the tree's lock files and platform; on a miss, a separate job that sees only the lock files installs them and the result is saved. The check job clones the repository, applies the bundle, merges current main when the branch lacks it, copies the snapshot only when the merged tree has the same lock files and its own probe reads the same platform, and runs the gate's steps. The verdict comes only from the `check-result` file.
+
+Worth knowing:
+
+- `intakt:build:task` calls it through `CheckJobs`; the push does not call it yet.
+- The job gets 4 GiB of memory, 2 CPUs and 1800 seconds, and no network beyond the gate's registry hosts.
+- A second check of the same head while one runs is refused as already running.
+- The code under test runs in the same job and can rewrite its result file, and such a result is believed. A result it cannot rewrite is plan task T78.
+
+The rest of this page is the detailed reference.
 
 ## Overview
 

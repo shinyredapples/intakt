@@ -63,7 +63,7 @@ final class FailedReviewerPageTest extends WebTestCase
     {
         $review = $this->reviewedWith(new StoppingAtTheLimitForRole('Look at part 1.'));
 
-        $page = $this->browser->request('GET', '/reviews/'.$review->roundId);
+        $page = $this->browser->request('GET', '/reviews/'.$review->roundId.'/record');
 
         self::assertResponseIsSuccessful();
         self::assertSame([['role-1', 'standard-model', 'Failed stopped at its output limit'], ['role-2', 'standard-model', 'Approved']], $this->reviewerRows($page));
