@@ -8,6 +8,7 @@ use Intakt\Core\Dashboard\Domain\JudgeCall;
 use Intakt\Core\Dashboard\Domain\RoundFinding;
 use Intakt\Core\Dashboard\Infrastructure\LedgerPayload;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
+use Intakt\Core\Dashboard\UseCase\ShowReview\ReviewPage;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
 use Intakt\Core\Review\Contract\CountedQuotes;
 use Intakt\Core\Review\Contract\NearLine;
@@ -19,6 +20,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\DomCrawler\Crawler;
 
 #[CoversClass(ShowReviewController::class)]
+#[CoversClass(ReviewPage::class)]
 #[CoversClass(RoundFinding::class)]
 #[UsesClass(LedgerRounds::class)]
 #[UsesClass(LedgerPayload::class)]

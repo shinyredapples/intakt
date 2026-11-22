@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Dashboard\UseCase;
 use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LivePageRendering;
+use Intakt\Core\Dashboard\UseCase\ShowReview\ReviewPage;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
@@ -27,6 +28,7 @@ use Twig\Environment;
 
 // The test environment has no hub key (MERCURE_JWT_SECRET is empty), so no listener can be authorized, as when the hub is not set up.
 #[CoversClass(ShowReviewController::class)]
+#[CoversClass(ReviewPage::class)]
 #[UsesClass(LedgerReviewPages::class)]
 #[UsesClass(LivePageRendering::class)]
 #[UsesClass(SessionSummary::class)]
@@ -224,6 +226,6 @@ final class ReviewPageWithoutHubTest extends DashboardPageTestCase
         self::assertInstanceOf(LedgerReviewPages::class, $reviews);
         self::assertInstanceOf(Environment::class, $twig);
 
-        return new ShowReviewController($reviews, new LivePageRendering($twig, $log), self::createStub(SessionSummaries::class));
+        return new ShowReviewController(new ReviewPage($reviews, new LivePageRendering($twig, $log), self::createStub(SessionSummaries::class)));
     }
 }

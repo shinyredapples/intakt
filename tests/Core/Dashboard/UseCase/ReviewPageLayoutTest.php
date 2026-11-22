@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
 use Intakt\Core\Dashboard\Domain\Character;
+use Intakt\Core\Dashboard\UseCase\ShowReview\ReviewPage;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -12,6 +13,7 @@ use Symfony\Component\DomCrawler\Crawler;
 
 // Only the markup is checked here, because the widths are rules of the sheet, which TaskDetailStylesTest reads.
 #[CoversClass(ShowReviewController::class)]
+#[CoversClass(ReviewPage::class)]
 #[UsesClass(Character::class)]
 final class ReviewPageLayoutTest extends DashboardPageTestCase
 {

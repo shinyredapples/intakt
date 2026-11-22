@@ -9,6 +9,7 @@ use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\ReviewOutcome;
 use Intakt\Core\Dashboard\Domain\RoundFinding;
+use Intakt\Core\Dashboard\UseCase\ShowReview\ReviewPage;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
 use Intakt\Core\Review\Contract\RoundEnding;
 use Intakt\Core\Review\Contract\RoundEndings;
@@ -21,6 +22,7 @@ use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\DomCrawler\Crawler;
 
 #[CoversClass(ShowReviewController::class)]
+#[CoversClass(ReviewPage::class)]
 #[UsesClass(Review::class)]
 #[UsesClass(ReviewedRound::class)]
 #[UsesClass(ReviewOutcome::class)]

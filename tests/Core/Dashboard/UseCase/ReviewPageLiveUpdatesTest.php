@@ -22,6 +22,7 @@ use Intakt\Core\Dashboard\Infrastructure\LedgerTokens;
 use Intakt\Core\Dashboard\Infrastructure\LivePageRendering;
 use Intakt\Core\Dashboard\Infrastructure\MercureLiveUpdates;
 use Intakt\Core\Dashboard\Infrastructure\MercureRoundUpdates;
+use Intakt\Core\Dashboard\UseCase\ShowReview\ReviewPage;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
@@ -65,6 +66,7 @@ use Symfony\Component\Uid\Uuid;
 use Twig\Environment;
 
 #[CoversClass(ShowReviewController::class)]
+#[CoversClass(ReviewPage::class)]
 #[UsesClass(LedgerReviewPages::class)]
 #[UsesClass(LivePageRendering::class)]
 #[UsesClass(LedgerRounds::class)]

@@ -10,6 +10,7 @@ use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\ReviewOutcome;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
+use Intakt\Core\Dashboard\UseCase\ShowReview\ReviewPage;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
 use Intakt\Core\Review\Contract\RoundProgress;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -18,6 +19,7 @@ use Symfony\Component\DomCrawler\Crawler;
 use Twig\Environment;
 
 #[CoversClass(ShowReviewController::class)]
+#[CoversClass(ReviewPage::class)]
 #[UsesClass(LedgerReviewPages::class)]
 #[UsesClass(Review::class)]
 #[UsesClass(ReviewedRound::class)]

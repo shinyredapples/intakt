@@ -9,6 +9,7 @@ use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Budget\Infrastructure\ConfiguredPrices;
 use Intakt\Core\Dashboard\Domain\RoundFinding;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
+use Intakt\Core\Dashboard\UseCase\ShowReview\ReviewPage;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
 use Intakt\Core\Review\Contract\ChangeDecision;
 use Intakt\Core\Review\Contract\ChangeReview;
@@ -57,6 +58,7 @@ use Symfony\Component\Serializer\SerializerInterface;
 // The round runs through the console's own use case, so the page is compared with what the console and its JSON print and nothing is seeded by hand.
 #[Group('persistence')]
 #[CoversClass(ShowReviewController::class)]
+#[CoversClass(ReviewPage::class)]
 #[CoversClass(ReviewReport::class)]
 #[CoversClass(RoundLedger::class)]
 #[CoversClass(StoredFindings::class)]

@@ -8,6 +8,7 @@ use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Budget\Infrastructure\ConfiguredPrices;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
+use Intakt\Core\Dashboard\UseCase\ShowReview\ReviewPage;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
 use Intakt\Core\Review\Contract\ChangeDecision;
 use Intakt\Core\Review\Contract\ChangeReview;
@@ -42,6 +43,7 @@ use Symfony\Component\Messenger\Middleware\HandleMessageMiddleware;
 // The round runs through the console's own use case with a vendor that stops at the limit, so the page is compared with the outcome the console reports and nothing is seeded by hand.
 #[Group('persistence')]
 #[CoversClass(ShowReviewController::class)]
+#[CoversClass(ReviewPage::class)]
 #[UsesClass(LedgerRounds::class)]
 #[UsesClass(ChangeDecision::class)]
 #[UsesClass(FailureInWords::class)]

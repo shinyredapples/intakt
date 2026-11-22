@@ -8,14 +8,18 @@ use Intakt\Core\Dashboard\Domain\FindingUrgency;
 use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\RoundFinding;
+use Intakt\Core\Dashboard\UseCase\ShowReview\ReviewPage;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
+use Intakt\Core\Dashboard\UseCase\ShowReviewRecord\ShowReviewRecordController;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\DomCrawler\Crawler;
 
 // The owner decision for #3360: the main view keeps one message, and the timeline, reviewers, tokens and cost move to the Full record, so the findings never show twice on one screen.
+#[CoversClass(ShowReviewRecordController::class)]
 #[CoversClass(ShowReviewController::class)]
+#[CoversClass(ReviewPage::class)]
 #[UsesClass(Review::class)]
 #[UsesClass(ReviewedRound::class)]
 #[UsesClass(RoundFinding::class)]

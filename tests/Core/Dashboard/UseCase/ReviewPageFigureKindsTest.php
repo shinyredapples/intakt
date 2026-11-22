@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Dashboard\UseCase;
 use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Budget\Contract\Prices;
 use Intakt\Core\Budget\Infrastructure\ConfiguredPrices;
+use Intakt\Core\Dashboard\UseCase\ShowReview\ReviewPage;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
 use Intakt\Core\Platform\Contract\FigureKind;
 use Intakt\Core\Review\Contract\SessionSummaries;
@@ -17,6 +18,7 @@ use Symfony\Component\DomCrawler\Crawler;
 use Twig\Environment;
 
 #[CoversClass(ShowReviewController::class)]
+#[CoversClass(ReviewPage::class)]
 #[UsesClass(FigureKind::class)]
 #[UsesClass(Cost::class)]
 #[UsesClass(ConfiguredPrices::class)]

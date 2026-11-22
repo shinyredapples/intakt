@@ -25,6 +25,7 @@ use Intakt\Core\Dashboard\Infrastructure\LedgerTokens;
 use Intakt\Core\Dashboard\Infrastructure\ReplayedStart;
 use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Dashboard\UseCase\ListReviews\ListReviewsController;
+use Intakt\Core\Dashboard\UseCase\ShowReview\ReviewPage;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
 use Intakt\Core\Review\Contract\ChangesWithoutFindings;
 use Intakt\Core\Review\Contract\ReplayMark;
@@ -46,6 +47,7 @@ use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 #[CoversClass(ShowReviewController::class)]
+#[CoversClass(ReviewPage::class)]
 #[CoversClass(LedgerReviewPages::class)]
 #[CoversClass(LedgerRounds::class)]
 #[CoversClass(LedgerTokens::class)]
