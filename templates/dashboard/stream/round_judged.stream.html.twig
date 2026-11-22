@@ -6,9 +6,13 @@
 <turbo-stream action="replace" target="round-{{ round }}-verdict"><template>{{ include('dashboard/_round_verdict.html.twig', {reviewed: reviewed, newest: (review ?? null) is not null and (review.rounds|last).round == reviewed.round}, with_context = false) }}</template></turbo-stream>
 {# The path moves on with the call (Fix, Merge or none), so it never shows the pass in review beside the start of the next one. #}
 {% if (review ?? null) is not null %}<turbo-stream action="replace" target="review-path"><template>{{ include('dashboard/_review_path.html.twig', {steps: review.path}, with_context = false) }}</template></turbo-stream>{% endif %}
+{# The newest pass's call leaves the main view as a reload does: the owl's card comes in, the state block goes and the To fix cards take its place. #}
+{% if (review ?? null) is not null and (review.rounds|last).round == reviewed.round %}
+<turbo-stream action="replace" target="review-verdict"><template>{{ include('dashboard/_verdict_card.html.twig', {latest: reviewed, open: reviewed.actFindings}, with_context = false) }}</template></turbo-stream>
+<turbo-stream action="remove" target="review-state-block"></turbo-stream>
+{% if reviewed.actFindings is not empty %}<turbo-stream action="replace" target="review-to-fix"><template>{{ include('dashboard/_to_fix.html.twig', {open: reviewed.actFindings, judged: reviewed.round}, with_context = false) }}</template></turbo-stream>{% endif %}
+{% endif %}
 <turbo-stream action="replace" target="round-{{ round }}-judged"><template>{{ include('dashboard/_judged_round.html.twig', {reviewed: reviewed}, with_context = false) }}</template></turbo-stream>
-<turbo-stream action="replace" target="round-{{ round }}-now-findings"><template>{{ include('dashboard/_now_findings.html.twig', {round: round, open: reviewed.actFindings, judged: reviewed.round}, with_context = false) }}</template></turbo-stream>
-<turbo-stream action="replace" target="round-{{ round }}-now-judge"><template>{{ include('dashboard/_now_judge.html.twig', {reviewed: reviewed}, with_context = false) }}</template></turbo-stream>
 {# The judge's own tokens and cost are settled now, so the round's table, the header's totals and the summary's review-wide cost move with it. #}
 {% import 'dashboard/_review_summary.html.twig' as totals %}
 {% import 'dashboard/_session_summary_parts.html.twig' as part %}

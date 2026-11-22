@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Git\UseCase\PushBranch;
 use Intakt\Core\Git\Contract\BranchPushRequest;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\UseCase\PushBranch\BranchGit;
+use Intakt\Core\Git\UseCase\PushBranch\GuardedRun;
 use Intakt\Core\Git\UseCase\PushBranch\PushBranch;
 use Intakt\Core\Git\UseCase\PushBranch\PushRecords;
 use Intakt\Core\Git\UseCase\PushBranch\SignedCommits;
@@ -97,7 +98,7 @@ final readonly class PushScenario
 
     public function push(?SigningKey $key = null): PushBranch
     {
-        $git = new BranchGit(new HardenedGit());
+        $git = new BranchGit(new HardenedGit(), new GuardedRun());
 
         return new PushBranch($git, new SignedCommits($git, $key ?? $this->signingKey($this->key)), new PushRecords($this->ledger), $this->changes, new LockFactory(new InMemoryStore()));
     }
@@ -113,19 +114,19 @@ final readonly class PushScenario
     // Through another forge than the recording one, because a test of the real opener must see what it lets through.
     public function pushThrough(ChangeOpening $changes, ?Ledger $ledger = null): PushBranch
     {
-        $git = new BranchGit(new HardenedGit());
+        $git = new BranchGit(new HardenedGit(), new GuardedRun());
 
         return new PushBranch($git, new SignedCommits($git, $this->signingKey($this->key)), new PushRecords($ledger ?? $this->ledger), $changes, new LockFactory(new InMemoryStore()));
     }
 
     public function signingKey(string $file): SigningKey
     {
-        return new SigningKey($file, new Filesystem());
+        return new SigningKey($file, new Filesystem(), new GuardedRun());
     }
 
     public function signedCommits(?string $key = null): SignedCommits
     {
-        return new SignedCommits(new BranchGit(new HardenedGit()), $this->signingKey($key ?? $this->key));
+        return new SignedCommits(new BranchGit(new HardenedGit(), new GuardedRun()), $this->signingKey($key ?? $this->key));
     }
 
     public function remoteTip(?string $remote = null): ?string

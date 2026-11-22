@@ -61,7 +61,7 @@ final class BranchGitTest extends TestCase
     {
         $this->programs->killOn('git', $command);
 
-        $stopped = $this->stopped(fn (): string => new BranchGit(new HardenedGit())->outputFromRemote($this->gitDirectory(), $this->toTheRemote($arguments)));
+        $stopped = $this->stopped(fn (): string => new BranchGit(new HardenedGit(), new GuardedRun())->outputFromRemote($this->gitDirectory(), $this->toTheRemote($arguments)));
 
         self::assertSame(sprintf('The branch was not pushed: git %s was killed by signal 15', $command), $stopped->getMessage());
         self::assertNull($stopped->getPrevious());
@@ -75,7 +75,7 @@ final class BranchGitTest extends TestCase
     {
         $this->programs->hangOn('git', $command);
 
-        $stopped = $this->stopped(fn (): string => new BranchGit(new HardenedGit(), 0.2)->outputFromRemote($this->gitDirectory(), $this->toTheRemote($arguments)));
+        $stopped = $this->stopped(fn (): string => new BranchGit(new HardenedGit(), new GuardedRun(), 0.2)->outputFromRemote($this->gitDirectory(), $this->toTheRemote($arguments)));
 
         self::assertSame(sprintf('The branch was not pushed: git %s timed out after 0.2 seconds', $command), $stopped->getMessage());
         self::assertStringNotContainsString($this->credential, $stopped->getMessage());
@@ -86,7 +86,7 @@ final class BranchGitTest extends TestCase
     {
         $this->programs->killOn('git', 'cat-file');
 
-        $stopped = $this->stopped(fn (): string => new BranchGit(new HardenedGit())->output($this->gitDirectory(), ['cat-file', 'commit', 'HEAD']));
+        $stopped = $this->stopped(fn (): string => new BranchGit(new HardenedGit(), new GuardedRun())->output($this->gitDirectory(), ['cat-file', 'commit', 'HEAD']));
 
         self::assertSame('The branch was not pushed: git cat-file was killed by signal 15', $stopped->getMessage());
         self::assertNull($stopped->getPrevious());
@@ -96,7 +96,7 @@ final class BranchGitTest extends TestCase
     {
         $this->programs->killOn('git', 'merge-tree');
 
-        $stopped = $this->stopped(fn (): ?array => new BranchGit(new HardenedGit())->mergeTree($this->gitDirectory(), 'HEAD', 'HEAD'));
+        $stopped = $this->stopped(fn (): ?array => new BranchGit(new HardenedGit(), new GuardedRun())->mergeTree($this->gitDirectory(), 'HEAD', 'HEAD'));
 
         self::assertSame('The branch was not pushed: git merge-tree was killed by signal 15', $stopped->getMessage());
         self::assertNull($stopped->getPrevious());
@@ -106,7 +106,7 @@ final class BranchGitTest extends TestCase
     {
         $gone = $this->repository->path.'/gone';
 
-        $stopped = $this->stopped(static fn (): string => new BranchGit(new HardenedGit())->lines($gone, ['symbolic-ref', '--quiet', 'HEAD']));
+        $stopped = $this->stopped(static fn (): string => new BranchGit(new HardenedGit(), new GuardedRun())->lines($gone, ['symbolic-ref', '--quiet', 'HEAD']));
 
         self::assertSame('The branch was not pushed: git symbolic-ref could not start', $stopped->getMessage());
         self::assertNull($stopped->getPrevious());
@@ -116,7 +116,7 @@ final class BranchGitTest extends TestCase
     {
         $this->programs->killOn('git', 'rev-parse');
 
-        $stopped = $this->stopped(fn (): string => new BranchGit(new HardenedGit())->lines($this->gitDirectory(), ['symbolic-ref', '--quiet', 'HEAD']));
+        $stopped = $this->stopped(fn (): string => new BranchGit(new HardenedGit(), new GuardedRun())->lines($this->gitDirectory(), ['symbolic-ref', '--quiet', 'HEAD']));
 
         self::assertSame('The branch was not pushed: git symbolic-ref could not be prepared, because the look at its repository was stopped or found no bare repository', $stopped->getMessage());
         self::assertNull($stopped->getPrevious());
@@ -126,12 +126,12 @@ final class BranchGitTest extends TestCase
     {
         $this->programs->hangOn('git', 'push');
 
-        self::assertSame('refs/heads/main', new BranchGit(new HardenedGit(), 30)->lines($this->gitDirectory(), ['symbolic-ref', '--quiet', 'HEAD']));
+        self::assertSame('refs/heads/main', new BranchGit(new HardenedGit(), new GuardedRun(), 30)->lines($this->gitDirectory(), ['symbolic-ref', '--quiet', 'HEAD']));
     }
 
     public function testACallThatGitRefusesKeepsItsOwnReason(): void
     {
-        $stopped = $this->stopped(fn (): string => new BranchGit(new HardenedGit())->outputFromRemote($this->gitDirectory(), ['ls-remote', '--', $this->repository->path.'/no-remote', 'refs/heads/task']));
+        $stopped = $this->stopped(fn (): string => new BranchGit(new HardenedGit(), new GuardedRun())->outputFromRemote($this->gitDirectory(), ['ls-remote', '--', $this->repository->path.'/no-remote', 'refs/heads/task']));
 
         self::assertSame('The branch was not pushed: git ls-remote failed with exit code 128', $stopped->getMessage());
     }
