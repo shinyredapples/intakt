@@ -2,19 +2,20 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Tests\Core\Watchdog\UseCase\CheckMain;
+namespace Intakt\Tests\Core\Watchdog\Infrastructure;
 
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Watchdog\Contract\CommitName;
 use Intakt\Core\Watchdog\Contract\MainNotRead;
 use Intakt\Core\Watchdog\Contract\WatchedMain;
+use Intakt\Core\Watchdog\Infrastructure\ExitInvalidOnRefusedUsage;
 use Intakt\Core\Watchdog\Infrastructure\MainHistory;
 use Intakt\Core\Watchdog\Infrastructure\OwnerKey;
 use Intakt\Core\Watchdog\Infrastructure\OwnerKeyRefused;
 use Intakt\Core\Watchdog\UseCase\CheckMain\CheckMain;
 use Intakt\Core\Watchdog\UseCase\CheckMain\CheckMainCommand;
 use Intakt\Core\Watchdog\UseCase\CheckMain\CheckMainInput;
-use Intakt\Core\Watchdog\UseCase\CheckMain\ExitInvalidOnRefusedUsage;
+use Intakt\Core\Watchdog\UseCase\GuardMain\GuardMainCommand;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -80,6 +81,15 @@ final class ExitInvalidOnRefusedUsageTest extends TestCase
         new ExitInvalidOnRefusedUsage()($event);
 
         self::assertSame(1, $event->getExitCode());
+    }
+
+    public function testUsageTheConsoleRefusesForTheWatchdogGuardExitsWithTwo(): void
+    {
+        $event = new ConsoleErrorEvent(new ArrayInput([]), new NullOutput(), new InvalidOptionException('refused'), new Command(GuardMainCommand::NAME));
+
+        new ExitInvalidOnRefusedUsage()($event);
+
+        self::assertSame(Command::INVALID, $event->getExitCode());
     }
 
     public function testAnErrorThatIsNotRefusedUsageKeepsItsExitCode(): void
