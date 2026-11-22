@@ -47,6 +47,19 @@ final readonly class FindingKeys
         return null === $files || [] === $files ? null : FindingKey::of($this->normalized($finding->text), $files);
     }
 
+    // Read like the key reads them but without the checkout, because the escalation prompt matches them against the diff, where a candidate that names no file simply matches nothing.
+    /**
+     * @return list<string>
+     */
+    public function citedIn(Finding $finding): array
+    {
+        // A plain word counts only when it has an extension or a directory, so "check" in a sentence never matches bin/check.
+        $words = array_filter($this->wordsOf($finding->text), fn (string $word): bool => str_contains($word, '/') || 1 === preg_match(self::FILE_EXTENSION, $word));
+        $citations = array_filter([...$this->codeSpansOf($finding->text), ...$words], $this->mayNameAFile(...));
+
+        return array_values(array_unique(null === $finding->file ? $citations : [$finding->file, ...$citations]));
+    }
+
     /**
      * @return list<array{string, string}>|null
      */

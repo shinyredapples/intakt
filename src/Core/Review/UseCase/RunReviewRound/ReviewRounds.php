@@ -8,6 +8,7 @@ use Closure;
 use Doctrine\DBAL\Exception\RetryableException;
 use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
+use Intakt\Core\Review\Contract\ChangeAddress;
 use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\ReplayMark;
@@ -124,22 +125,58 @@ final readonly class ReviewRounds
 
         $head = $round->identity()->commits->head;
 
-        return array_any($later, static fn (ReviewRound $other): bool => $other->identity()->commits->head->hash === $head->hash);
+        return array_any($later, static fn (ReviewRound $other): bool => $other->identity()->commits->head->hash === $head->hash)
+            || $this->canonicalRoundJudgedAt($round, $head->hash);
     }
 
-    // Without letter case, because the watcher names the pull request as the forge lists it and the round as the push or the request named it.
-    public function latestJudgedAt(string $project, string $change, string $head): ?ReviewRound
+    // A round left under an old spelling predates every round of the canonical sequence, whose numbers do not compare with its own, so any judged canonical round of the same head supersedes it.
+    private function canonicalRoundJudgedAt(ReviewRound $round, string $head): bool
     {
+        $canonical = ChangeAddress::canonical($round->change());
+
+        if ($canonical === $round->change()) {
+            return false;
+        }
+
         /** @var list<ReviewRound> $rounds */
-        $rounds = $this->entities->createQuery(sprintf('SELECT r FROM %s r WHERE r.subject.project = :project AND LOWER(r.change.change) = :change AND r.state = :judged ORDER BY r.change.number DESC, r.id DESC', ReviewRound::class))
-            ->setParameter('project', $project)
-            ->setParameter('change', strtolower($change))
+        $rounds = $this->entities->createQuery(sprintf('SELECT r FROM %s r WHERE r.subject.project = :project AND r.change.change = :change AND r.state = :judged', ReviewRound::class))
+            ->setParameter('project', $round->project())
+            ->setParameter('change', $canonical)
             ->setParameter('judged', RoundState::Judged->value)
             ->getResult();
 
-        $atHead = array_filter($rounds, static fn (ReviewRound $round): bool => $round->identity()->commits->head->hash === $head);
+        return array_any($rounds, static fn (ReviewRound $other): bool => $other->identity()->commits->head->hash === $head);
+    }
 
-        return $this->newestAcrossSpellings($this->highestNumberedPerSpelling($atHead));
+    // In canonical form, because the watcher names the pull request as the forge lists it and a round stores it canonically (StoredFindings::openRound()). By round number as judgedAfter() orders them, not by id, because an id follows a clock that can go back and would pick a round the publication then drops as superseded.
+    public function latestJudgedAt(string $project, string $change, string $head): ?ReviewRound
+    {
+        /** @var list<ReviewRound> $rounds */
+        $rounds = $this->entities->createQuery(sprintf('SELECT r FROM %s r WHERE r.subject.project = :project AND r.change.change = :change AND r.state = :judged ORDER BY r.change.number DESC', ReviewRound::class))
+            ->setParameter('project', $project)
+            ->setParameter('change', ChangeAddress::canonical($change))
+            ->setParameter('judged', RoundState::Judged->value)
+            ->getResult();
+
+        return array_find($rounds, static fn (ReviewRound $round): bool => $round->identity()->commits->head->hash === $head)
+            ?? $this->judgedUnderAnOldSpelling($project, $change, $head);
+    }
+
+    // Only when the canonical sequence never judged this head, because a round that migration Version20261122100000 left under another spelling is the only verdict the head has; numbers of those sequences do not compare with each other, so the highest number decides among them and an id never does.
+    private function judgedUnderAnOldSpelling(string $project, string $change, string $head): ?ReviewRound
+    {
+        $canonical = ChangeAddress::canonical($change);
+
+        /** @var list<ReviewRound> $rounds */
+        $rounds = $this->entities->createQuery(sprintf('SELECT r FROM %s r WHERE r.subject.project = :project AND r.change.change != :change AND r.state = :judged ORDER BY r.change.number DESC', ReviewRound::class))
+            ->setParameter('project', $project)
+            ->setParameter('change', $canonical)
+            ->setParameter('judged', RoundState::Judged->value)
+            ->getResult();
+
+        // Matched by the canonical form of the stored address, as the migration grouped them, so an alias with a suffix is found and a local branch that differs only in case is not; the address is compared first so an unrelated round with a malformed historical identity is never read.
+        return array_find($rounds, static fn (ReviewRound $round): bool => ChangeAddress::canonical($round->change()) === $canonical
+            && $round->identity()->commits->head->hash === $head);
     }
 
     // Compared as stored, as judgedAfter() compares them, so the rounds come as one numbered sequence.
@@ -257,40 +294,6 @@ final readonly class ReviewRounds
         if ($this->entities->find(ReplayProject::class, $round->project()) instanceof ReplayProject) {
             $round->markAsReplay();
         }
-    }
-
-    // Within one spelling by round number as judgedAfter() orders them, because an id follows a clock that can go back and would pick a round the publication then drops as superseded; the rounds come highest number first.
-    /**
-     * @param array<ReviewRound> $rounds
-     *
-     * @return array<string, ReviewRound>
-     */
-    private function highestNumberedPerSpelling(array $rounds): array
-    {
-        $highest = [];
-
-        foreach ($rounds as $round) {
-            $highest[$round->change()] ??= $round;
-        }
-
-        return $highest;
-    }
-
-    // Across spellings by id, because each spelling numbers its rounds from one, so a number says nothing about which spelling reviewed last.
-    /**
-     * @param array<string, ReviewRound> $rounds
-     */
-    private function newestAcrossSpellings(array $rounds): ?ReviewRound
-    {
-        $newest = null;
-
-        foreach ($rounds as $round) {
-            if (null === $newest || $round->id()->compare($newest->id()) > 0) {
-                $newest = $round;
-            }
-        }
-
-        return $newest;
     }
 
     private function newId(): UuidV7

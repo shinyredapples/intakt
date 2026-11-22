@@ -1,2 +1,2 @@
-<span id="round-{{ round }}-now-reviewer-{{ reviewer }}-model">{{ outcome.modelInWords }}</span>
-{#- Its own partial, because a round update replaces this text with the same markup a reload renders once a substitute's model replaces the start's; trimmed after, because it sits inside parentheses. -#}
+<span id="round-{{ round }}-now-reviewer-{{ reviewer }}-model"{% if outcome.model is not null and outcome.model is not same as('') %} title="{{ outcome.model }}"{% endif %}>{{ outcome.modelAndLab }}</span>
+{#- Its own partial, because a round update replaces this text with the same markup a reload renders once a substitute's model replaces the start's; trimmed after, because it sits inside parentheses. The raw id in the title, because the docs, the CLI and MCP name reviewers by it. -#}
