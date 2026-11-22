@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\MarkReplay;
 
-use Doctrine\DBAL\LockMode;
-use Doctrine\ORM\Decorator\EntityManagerDecorator;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Core\Review\Contract\FlagProjectAsReplay;
@@ -13,7 +11,6 @@ use Intakt\Core\Review\Domain\ReplayProject;
 use Intakt\Core\Review\UseCase\MarkReplay\FlagProjectAsReplayHandler;
 use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Support\KernelTestCase;
-use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -51,22 +48,18 @@ final class FlagProjectAsReplayHandlerTest extends KernelTestCase
         self::assertTrue($this->entities->isOpen());
     }
 
-    // Forces the order of two flags at the same moment: the other worker's row commits after this flag could have looked for it, so a lookup finds nothing and only the write meets the row.
-    public function testAFlagWhoseTwinStoredTheRowAfterAnyLookupKeepsOneRowAndAnOpenEntityManager(): void
+    public function testADuplicateFlagInsideAnOuterTransactionLeavesThatTransactionToCommitItsOtherWrites(): void
     {
         $this->storeFlagOfAnotherWorker('alpha');
-        $lookupBeforeTheTwin = new class($this->entities) extends EntityManagerDecorator {
-            #[Override]
-            public function find(string $className, mixed $id, LockMode|int|null $lockMode = LockMode::NONE, ?int $lockVersion = null): ?object
-            {
-                return null;
-            }
-        };
+        $connection = $this->entities->getConnection();
 
-        new FlagProjectAsReplayHandler($lookupBeforeTheTwin)(new FlagProjectAsReplay('alpha'));
+        $connection->transactional(function () use ($connection): void {
+            new FlagProjectAsReplayHandler($this->entities)(new FlagProjectAsReplay('alpha'));
+            $connection->insert('review_replay_project', ['project' => 'beta']);
+        });
 
-        self::assertSame(['alpha'], $this->flaggedProjects());
-        self::assertTrue($this->entities->isOpen());
+        self::assertEqualsCanonicalizing(['alpha', 'beta'], $this->flaggedProjects());
+        self::assertFalse($connection->isTransactionActive());
     }
 
     public function testFlaggingOneProjectLeavesTheFlagOfAnotherInPlace(): void

@@ -146,12 +146,41 @@ final class FailedJudgingsTest extends KernelTestCase
         self::assertSame([], $this->judgings($unlisted)->failedRounds());
     }
 
-    public function testTheFailureTransportIsReadUpToTheBoundAtMost(): void
+    public function testThePollOfOneRoundReadsTheFailureTransportUpToTheBoundAtMost(): void
     {
         $failed = $this->createMock(ListableReceiverInterface::class);
         $failed->expects($this->once())->method('all')->with(FailedJudgings::PARKED_MESSAGES_READ)->willReturn([]);
 
-        $this->judgings($failed)->failedRounds();
+        $this->judgings($failed)->hasFailed(self::ROUND);
+    }
+
+    public function testThePollOfOneRoundOnABacklogPastTheBoundReadsAndLeavesEveryMessageParked(): void
+    {
+        $this->parkPublications(FailedJudgings::PARKED_MESSAGES_READ);
+        $this->failed->send(new Envelope(new JudgeRound(self::ROUND)));
+        $listed = 0;
+        $counting = $this->createStub(ListableReceiverInterface::class);
+        $counting->method('all')->willReturnCallback(function (?int $limit) use (&$listed): iterable {
+            foreach ($this->failed->all($limit) as $envelope) {
+                ++$listed;
+
+                yield $envelope;
+            }
+        });
+
+        $this->judgings($counting)->hasFailed(self::ROUND);
+
+        self::assertSame(FailedJudgings::PARKED_MESSAGES_READ, $listed);
+        self::assertSame(FailedJudgings::PARKED_MESSAGES_READ + 1, $this->failed->getMessageCount());
+    }
+
+    public function testABacklogPastTheBoundDoesNotHideAParkedJudgingFromTheFailedRounds(): void
+    {
+        $this->parkPublications(FailedJudgings::PARKED_MESSAGES_READ);
+        $this->failed->send(new Envelope(new JudgeRound(self::ROUND)));
+
+        self::assertArrayHasKey(self::ROUND, $this->judgings($this->failed)->failedRounds());
+        self::assertSame(FailedJudgings::PARKED_MESSAGES_READ + 1, $this->failed->getMessageCount());
     }
 
     public function testAParkedJudgingWithoutARoundIdIsLeftOutOfTheFailedRoundsAndStaysParked(): void
@@ -161,6 +190,13 @@ final class FailedJudgingsTest extends KernelTestCase
 
         self::assertSame([self::ROUND => true], $this->judgings($this->failed)->failedRounds());
         self::assertSame(2, $this->failed->getMessageCount());
+    }
+
+    private function parkPublications(int $count): void
+    {
+        for ($parked = 0; $parked < $count; ++$parked) {
+            $this->failed->send(new Envelope(new PublishVerdict('0192a000-0000-7000-8000-000000000003')));
+        }
     }
 
     private function judgings(ReceiverInterface $failed): FailedJudgings
