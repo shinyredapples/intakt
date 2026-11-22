@@ -557,7 +557,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $page = $this->browser->request('GET', '/reviews/'.$id);
         self::assertCount(1, $page->filter('ol#review-path'));
 
-        self::getContainer()->get(Ledger::class)->append(new LedgerEvent(LedgerEventKind::JudgingFailed, json_encode(['round' => $id], JSON_THROW_ON_ERROR)));
+        self::assertTrue(self::getContainer()->get(Ledger::class)->append(new LedgerEvent(LedgerEventKind::JudgingFailed, json_encode(['round' => $id], JSON_THROW_ON_ERROR)))->succeeded());
         $this->publishedUpdates()->roundChanged($round, new RoundProgress(2, 2, false));
 
         $updated = $this->replaced($page, $this->publishedStreams());
