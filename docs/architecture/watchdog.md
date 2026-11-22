@@ -44,7 +44,7 @@ A violation halts the project with an owner card. The halt lives only in the led
 | an owner push this run noticed (see [below](#the-owners-own-push)), next to any other outcome | first, one line per noticed commit, oldest first: `notice <project>: commit <commit> owner_signed, pushed without the gate`, then the lines of the other outcome | that of the other outcome |
 | no standing card of the project (main clean, or its only violations cleared already) | `<project> is not halted: no owner card stands` | 0 |
 | standing cards, new or older | one line per card, oldest first: `card <id> halts <project>: commit <commit> <violation>, raised <moment>`, or `card <id> halts every project: its halt record is unreadable, raised <moment>` | 1 |
-| main not read, a card the ledger refused (`HaltNotRecorded`) or a notice the ledger refused (`NoticeNotRecorded`) | an error naming the reason, escaped as for the check | 1 |
+| main not read, a card the ledger refused (`HaltNotRecorded`) or a notice the ledger refused (`NoticeNotRecorded`) | an error naming the reason, escaped as for the check; the notices the ledger took before it refused one (`NoticeNotRecorded::$givenBefore`) are printed first, so a retry never hides a notice the owner did not see | 1 |
 | refused input: an empty project, and everything the check refuses with 2 | an error naming the rule | 2 (`ExitInvalidOnRefusedUsage` covers this command too) |
 
 A main that cannot be read raises no card, and it is never reported as not halted. The project name is printed with its control characters spelled out (`ConsoleReport::printable()`, which the check uses as well), in the card lines, the notice lines (`ConsoleReport::noticeLine()`) and the "not halted" line.
