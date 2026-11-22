@@ -73,10 +73,40 @@ final class InstallScriptTest extends TestCase
 
     public function testTheInstallRunsOnACopyOfTheLockFilesAndNotOnTheMountedFolder(): void
     {
-        $run = $this->whenTheInstallRuns(self::PROBE, 'test "$(pwd)" = "$TMPDIR/install" && test -f composer.lock && echo changed > composer.json');
+        $run = $this->whenTheInstallRuns(self::PROBE, 'test "$(pwd)" = "$TMPDIR/install" && test -f composer.lock && echo changed > composer.json && mkdir vendor');
 
         self::assertSame(0, $run->getExitCode(), $this->outputFile('install.log'));
         self::assertSame("{}\n", (string) file_get_contents($this->folder.'/lock/composer.json'));
+    }
+
+    public function testAnInstallThatLeavesNothingButTheLockFilesIsNotKept(): void
+    {
+        $run = $this->whenTheInstallRuns(self::PROBE, 'mkdir -p ../elsewhere/vendor');
+
+        self::assertSame(1, $run->getExitCode());
+        self::assertSame("not-kept\n", $this->outputFile('install-result'));
+        self::assertSame([], array_values(array_diff((array) scandir($this->folder.'/kept'), ['.', '..'])));
+    }
+
+    public function testAnInstallWhoseKeptFolderCannotBeWrittenIsNotKept(): void
+    {
+        new Filesystem()->chmod($this->folder.'/kept', 0o500);
+
+        $run = $this->whenTheInstallRuns(self::PROBE, 'mkdir vendor');
+
+        self::assertSame(1, $run->getExitCode());
+        self::assertSame("not-kept\n", $this->outputFile('install-result'));
+    }
+
+    public function testLockFilesThatCannotBeCopiedLeaveNotPreparedAndRunNoInstall(): void
+    {
+        new Filesystem()->remove($this->folder.'/lock');
+
+        $run = $this->whenTheInstallRuns(self::PROBE, 'touch "$INTAKT_JOB_KEPT/ran"');
+
+        self::assertSame(1, $run->getExitCode());
+        self::assertSame("not-prepared\n", $this->outputFile('install-result'));
+        self::assertFileDoesNotExist($this->folder.'/kept/ran');
     }
 
     private function whenTheInstallRuns(string $probe, string $install): Process

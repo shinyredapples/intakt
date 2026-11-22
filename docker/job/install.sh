@@ -43,6 +43,12 @@ for file in "$@"; do
     rm -f -- "$work/$file"
 done
 
+# Nothing left means the install went elsewhere, so an empty folder is never saved as the install of these lock files.
+if [ -z "$(ls -A .)" ]; then
+    result 'not-kept'
+    exit 1
+fi
+
 # Owner-writable before the copy, because an archive can hold a folder without permissions, which would stop the orchestrator's save and its cleanup.
 if ! chmod -R u+rwX . || ! cp -R ./. "$kept/"; then
     result 'not-kept'
