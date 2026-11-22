@@ -22,7 +22,7 @@ final readonly class BugReport
         foreach (preg_split('/\R/', $body) ?: [] as $line) {
             $part = self::partStartedBy($line, $rest);
 
-            if (null !== $part) {
+            if ($part instanceof BugPart) {
                 $current = $part->value;
                 $texts[$current] = ($texts[$current] ?? '').$rest."\n";
 

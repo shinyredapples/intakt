@@ -30,7 +30,7 @@ final readonly class BuilderPrompt
 
     private const string BUG_TEST_FIRST = 'This task is a bug. Its first acceptance criterion is a regression test that fails today: write that test first, run it and watch it fail for the reason the task gives under "Today", commit it on its own, and only then fix the bug, so that the same test passes on your last commit. Keep what the task lists under "Must keep working" unchanged.';
 
-    private const string REWORK ='This build is a rework of a published pull request: its commits are on the branch. Fix what the act list and the CI log below name, then edit the published pull request text: change only the lines this build changes, and write the result to PR.md in the checkout root.';
+    private const string REWORK = 'This build is a rework of a published pull request: its commits are on the branch. Fix what the act list and the CI log below name, then edit the published pull request text: change only the lines this build changes, and write the result to PR.md in the checkout root.';
 
     private const string QUESTION = 'If you need a decision the task does not cover, do not guess and write no PR.md: write the file %s in the checkout root instead, a JSON object with "question" (text), "choices" (a list of one or more texts) and "recommendation" (one of the choices), and stop.';
 
