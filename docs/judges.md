@@ -56,7 +56,7 @@ This path runs a live review, so first do steps 1 and 2 of path b (keep a key, r
 - **AI Bundle**: configures the provider platforms (`config/packages/ai.php`).
 - **MCP Bundle**: two servers. The owner server at `/mcp/owner` has five tools (`list_projects`, `review_status`, `review_verdicts`, `review_act_list`, `start_review`), one resource template (`intakt://rounds/{roundId}/findings`) and progress notifications while `start_review` waits. The review server at `/mcp/review` gives reviewers `read_file`, `list_directory` and `search_files`, which also sends progress. Both `start_review` and `search_files` send progress only when the client supplies a progress token. Neither server has prompts.
 
-Every Symfony and Symfony AI feature in use, with its status: [Highlights](https://shinyredapples.github.io/intakt/highlights/).
+Every Symfony and Symfony AI feature in use, with its status: [Highlights](https://shinyredapples.github.io/intakt/).
 
 ## More
 
