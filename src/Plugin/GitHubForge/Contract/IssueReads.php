@@ -15,4 +15,11 @@ interface IssueReads
      * @throws ForgeRateLimited
      */
     public function listOpen(string $project, ?string $validator): IssueListing;
+
+    // Null for an issue that is closed, missing or a pull request, because none of them is a task; any other failure throws, so a failed read never passes for a missing issue.
+    /**
+     * @throws ForgeReadFailed
+     * @throws ForgeRateLimited
+     */
+    public function readOpen(string $project, int $number): ?ListedIssue;
 }

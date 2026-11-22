@@ -1,37 +1,30 @@
-{#- The answer of the latest round in plain words, because an older round's verdict was given on an older head; the findings to fix are the act list of the last judged round, as the state block shows them, each linking to its full card further down. -#}
+{#- The answer of the latest pass in plain words, with the owl that judged it (its 48 px images shown at 96 px by the stylesheet, from their double), because an older pass's verdict was given on an older head; the count is of the last judged pass's findings to fix, which the To fix cards below show one card each. The judged round's live update replaces it by its id. -#}
 {%- set outcomes = enum('Intakt\\Core\\Dashboard\\Domain\\ReviewOutcome') -%}
 {%- set outcome = latest.reviewOutcome -%}
 {%- set needs = outcome is same as(outcomes.ChangesRequested) -%}
-<section class="card verdict-card{% if needs %} needs{% endif %}" aria-labelledby="verdict-title">
-    {% if outcome is not null or latest.isReplay %}
-    <div class="top">
-        {%- if outcome is not null %}{{ include('dashboard/components/outcome_chip.html.twig', {outcome: outcome, on_page: true, plain: true}, with_context = false) }}{% endif -%}
-        {#- Its own class and not replay-mark, because the page's replay line keeps that one and a card is no second line. -#}
-        {%- if latest.isReplay %}{{ include('dashboard/components/chip.html.twig', {label: 'Replay', on_page: true, extra: 'verdict-replay'}, with_context = false) }}{% endif -%}
+{%- set urgent = open|filter(f => f.urgency is same as(enum('Intakt\\Core\\Dashboard\\Domain\\FindingUrgency').Urgent))|length -%}
+<section class="verdict-card{% if needs %} needs{% elseif outcome is same as(outcomes.Approved) %} good{% endif %}" id="review-verdict" data-round="{{ latest.round }}" aria-labelledby="verdict-title">
+    {{ include('dashboard/components/character.html.twig', {character: constant('Intakt\\Core\\Dashboard\\Domain\\Character::Judge'), size: 48}, with_context = false) }}
+    <div class="verdict-text">
+        <p class="kicker">{{ latest.number is null ? 'Pass' : 'Pass ' ~ latest.number }}{% if latest.isJudged %} · Checked{% endif %}
+            {%- if latest.isReplay %} {{ include('dashboard/components/chip.html.twig', {label: 'Replay', on_page: true, extra: 'verdict-replay'}, with_context = false) }}{% endif -%}
+        </p>
+        <h2 class="verdict-words" id="verdict-title">
+            {%- if outcome is same as(outcomes.Approved) -%}
+            Approved
+            {%- elseif needs -%}
+            Changes needed
+            {%- elseif outcome is same as(outcomes.Blocked) -%}
+            Blocked: {{ latest.ending.reason ?? 'the reviewers could not give a verdict on this change' }}
+            {%- elseif outcome is same as(outcomes.Failed) -%}
+            Failed: {{ latest.ending.reason ?? 'every reviewer failed, so nobody checked this change' }}
+            {%- else -%}
+            Checked, but the outcome was not recorded
+            {%- endif -%}
+        </h2>
+        {#- Both numbers on every judged pass, zeros included, so an Approved pass reads 0 to fix; a pass that ended without a verdict has no count to give. #}
+        {% if latest.isJudged %}
+        <p class="verdict-count"><span class="figure">{{ open|length }} to fix</span> · {{ urgent }} urgent</p>
+        {% endif %}
     </div>
-    {% endif %}
-    <h2 class="verdict-words" id="verdict-title">
-        {%- if outcome is same as(outcomes.Approved) -%}
-        Approved
-        {%- elseif needs -%}
-        Changes needed{% if open is not empty %}: {{ open|length }} {{ open|length == 1 ? 'thing' : 'things' }} to fix{% endif %}
-        {%- elseif outcome is same as(outcomes.Blocked) -%}
-        Blocked: {{ latest.ending.reason ?? 'the reviewers could not give a verdict on this change' }}
-        {%- elseif outcome is same as(outcomes.Failed) -%}
-        Failed: {{ latest.ending.reason ?? 'every reviewer failed, so nobody checked this change' }}
-        {%- else -%}
-        Checked, but the outcome was not recorded
-        {%- endif -%}
-    </h2>
-    {#- The plain words of the review page, each with a "?" whose explanation names the technical term the docs use (#3183). -#}
-    {%- set term = 'dashboard/components/term.html.twig' %}
-    <p class="verdict-pass muted">{{ include(term, {term: 'pass', words: 'Review pass ' ~ (latest.number ?? '(number not recorded)'), ask: true}, with_context = false) }}{% if latest.isJudged %}, {{ include(term, {term: 'checked', words: 'Checked', ask: true}, with_context = false) }}{% endif %}</p>
-    {% if open is not empty %}
-    <h3 class="verdict-to-fix">{{ include(term, {term: 'fix', words: 'To fix', ask: true}, with_context = false) }}</h3>
-    <ul class="verdict-findings">
-        {% for finding in open %}
-        <li><a href="#round-{{ judged }}-finding-{{ finding.id }}"><span class="sev">{{ finding.severity ?? '?' }}</span><span class="vf-title">{{ include('dashboard/_finding_text.html.twig', {finding: finding, missing: 'Text not recorded.'}, with_context = false) }}</span>{% if finding.file is not null %}{{ include('dashboard/_verdict_place.html.twig', {file: finding.file, line: finding.line}, with_context = false) }}{% endif %}</a></li>
-        {% endfor %}
-    </ul>
-    {% endif %}
 </section>

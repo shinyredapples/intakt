@@ -18,6 +18,7 @@ use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReadBack;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReader;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokenMinter;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokens;
+use Intakt\Plugin\GitHubForge\Infrastructure\IssueFields;
 use Intakt\Plugin\GitHubForge\Infrastructure\NextLinks;
 use Intakt\Plugin\GitHubForge\Infrastructure\WatchedRepositories;
 use LogicException;
@@ -58,7 +59,7 @@ final class RecordedIssueApi
     {
         [$calls, $checked] = $this->wiring();
 
-        return new GitHubIssueReads($calls, $checked, new WatchedRepositories(['alpha' => ['github' => 'acme/widgets'], 'beta' => []]), new GitHubMoments(), $this->reserve, new ChangedWhileServed(new GitHubMoments()), new EntityTags(), new NextLinks());
+        return new GitHubIssueReads($calls, $checked, new WatchedRepositories(['alpha' => ['github' => 'acme/widgets'], 'beta' => []]), new IssueFields(new GitHubMoments()), $this->reserve, new ChangedWhileServed(new GitHubMoments()), new EntityTags(), new NextLinks());
     }
 
     public function histories(): GitHubIssueHistories

@@ -4,7 +4,7 @@ Intakt was started on 2026-10-24 for the Symfony AI & MCP Hackathon (deadline 20
 build loop that developed Intakt, an AI runner Intakt is designed to replace: sessions wrote the design and the plan, the loop built the
 issues, and a panel of AI reviewers approved or sent back every pull request. This page follows that path milestone by
 milestone: what was planned, what happened, what changed, and what we learned. The Symfony and Symfony AI features
-behind it are on [Highlights](https://shinyredapples.github.io/intakt/).
+behind it are on [Highlights](https://shinyredapples.github.io/intakt/highlights/).
 
 ## At a glance
 
