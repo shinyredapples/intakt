@@ -1,6 +1,5 @@
 const TAB = '.ttabs [data-pane]';
 const FINDING_BUTTON = '[data-highlight-finding]';
-const FINDING_LINK = 'a.sb-finding';
 const TIMELINE_ENTRY = 'li[data-finding]';
 const ROUND = 'details.ev';
 // The width below which the stylesheet shows the tabs and only one pane.
@@ -65,19 +64,14 @@ function tabFor(page, tab, event) {
     }
 }
 
-// A finding of a round still running has no timeline entry until the judge marks it, and hiding the live log would then show nothing in its place.
+// A finding of a round still running has no timeline entry until the judge marks it, and hiding the live log would then show nothing in its place. The state block's finding links open the Full record, another page, so only the session summary's finding ids count here.
 function hasTimelineEntry(page, target) {
-    const button = target?.closest?.(FINDING_BUTTON);
-    const link = button ? null : target?.closest?.(FINDING_LINK);
-    const finding = button?.getAttribute?.('data-highlight-finding');
-    const anchor = link?.getAttribute?.('href')?.replace(/^#/, '');
-    if (!finding && !anchor) {
+    const finding = target?.closest?.(FINDING_BUTTON)?.getAttribute?.('data-highlight-finding');
+    if (!finding) {
         return false;
     }
 
-    return [...page.querySelectorAll(TIMELINE_ENTRY)].some((cell) => finding
-        ? cell.getAttribute('data-finding').split(' ').includes(finding)
-        : cell.getAttribute('id') === anchor);
+    return [...page.querySelectorAll(TIMELINE_ENTRY)].some((cell) => cell.getAttribute('data-finding').split(' ').includes(finding));
 }
 
 // Escape closes the round the reader opened, and focus goes back to its head so the next Tab goes on from there instead of from a hidden element.

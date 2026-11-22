@@ -1,5 +1,18 @@
 # Requirements and external commands
 
+## In short
+
+Intakt and its checks call programs outside PHP, such as `git`, `composer`, `gitleaks` and the `claude` and `codex` CLIs. This page lists each one, who calls it, what for, and whether you need it. To run Intakt you need only Docker or Podman, because the container image ships the rest. To work on Intakt and run `bin/check`, you need more tools on your machine, and `bin/check` names any that are missing before it runs a gate.
+
+Worth knowing:
+
+- The full `bin/check` needs Linux tools such as `unshare` and `setsid`; on another system, run it in the development container.
+- Calls through Symfony Process use an argument list, never a shell string, and always have a time limit.
+- Every `git` call is hardened, so the repository's own config and attributes cannot run code.
+- A change that adds a new external command adds it to this page in the same change.
+
+The rest of this page is the detailed reference.
+
 Every program outside PHP's own code that Intakt or its checks call, who calls it, and whether you need it. A change that adds a new external command adds it here in the same change.
 
 ## To run Intakt
@@ -32,7 +45,7 @@ Only **Docker or Podman**. The container image (`Dockerfile`, plan task T22) shi
 | `gh` | `docs/showcase/figures.sh` (the test puts a fake one first on `PATH`); `.github/workflows/release-labels.yml` on GitHub's runner; `bin/journey-alarm` (`tests/Journeys/Support/JourneyAlarmTest.php` puts a fake one first on `PATH`); `bin/journey` (`tests/JourneyPage/` reads recorded answers instead); `bin/journey-record` (`tests/JourneyPage/JourneyRecordCommandTest.php` puts a fake one first on `PATH`) | reading pull requests and comments from the GitHub API; labeling a pull request; reading every page of open issues (`gh api --paginate --slurp`), creating the journey alarm task (`gh issue create --label`), replacing its body (`gh issue edit --body-file -`) and closing a duplicate (`gh issue close --comment`); reading every page of milestones, issues and pull requests for the journey page, or recording them in files for `bin/journey --recorded` (`gh api --paginate --slurp`) | only for the showcase figures, the journey alarm and the journey page | 2.48 or later for the journey alarm and the journey page (`--slurp`), any otherwise | no |
 | `tar` | the tests gate (`tests/Core/Job/UseCase/BuildJobImage/BuildJobImageCommandTest.php`) | `tar -tvf` lists the sent build context with its modes, `tar -tf` lists its entries in archive order (PharData keeps only one of two entries with the same name) | for `bin/check` | any (GNU tar) | yes (base image) |
 | `sh`, `mkdir`, `mktemp`, `mv`, `rm` (coreutils) | `bin/journey-record` (POSIX `sh`), so also `tests/JourneyPage/JourneyRecordCommandTest.php` | running the script, making the output folder, a hidden draft folder in it (`mktemp -d`) for the three answers, moving them into place once all three arrived, removing the draft folder (`rm -rf`) | for `bin/check` and to record the journey page's answers | any | development only |
-| `sh`, `sed` | the `build` job of `highlights.yml`, inside the CI image, so also `tests/Gates/HighlightsWorkflowTest.php` (the tests gate) on the host | escaping each `{{` and `{%` for Liquid in place (`sed -i`) in both pages `bin/pages` writes, the highlights page and the journey page | for `bin/check` and to publish the highlights and journey pages | POSIX `sh`; GNU `sed`, for `-i` without a backup suffix (the Debian-based CI image ships it) | development only |
+| `sh`, `sed` | the `build` job of `highlights.yml`, inside the CI image, so also `tests/Gates/HighlightsWorkflowTest.php` (the tests gate) on the host | escaping each `{{` and `{%` for Liquid in place (`sed -i`) in the two Markdown pages `bin/pages` writes, `highlights/index.md` and `journey/index.md`; the front page is copied unchanged | for `bin/check` and to publish the highlights and journey pages | POSIX `sh`; GNU `sed`, for `-i` without a backup suffix (the Debian-based CI image ships it) | development only |
 | `ip` (iproute2) | `bin/probe` | bringing loopback up inside a fresh network namespace | for probes | any | development only |
 | `rm` (coreutils) | the image's `docker/entrypoint.sh` | `rm -rf` of the kernel's cache folder (`var/cache/<environment>`, or the one `APP_CACHE_DIR` names) and of `$APP_BUILD_DIR/<environment>` when `APP_BUILD_DIR` is set (the environment and both folders as `bin/console` sees them, in the environment or in a dotenv file, which an inline `php -r` reads through Symfony Runtime), before each rebuild of the container: around the seed of the sample, and on every other start | in the image | any | yes (base image) |
 | `node` | `node --test tests/Core/Dashboard/UseCase/*.test.mjs` and `bin/ui-check`, both run by hand (`bin/check` calls neither) | executing the dashboard's theme script, its danger button script (`assets/arm.js`), its search overlay script (`assets/search.js`), its finding highlight script (`assets/finding-highlight.js`), its board column fold script (`assets/column-fold.js`), its Show more script (`assets/column-more.js`), its banner toggle script (`assets/banner-toggle.js`), its copy command script (`assets/copy-command.js`), its demo caption script (`assets/tour-caption.js`), its review page pane switch (`assets/task-panes.js`), its Stimulus controllers (theme, toast, connection, chart) and the UI check's measurements against a simulated browser; running the UI check of the dashboard pages | only to run those tests or the UI check | 22 or later | no (neither the CI image nor the `Dockerfile`'s image) |
@@ -46,7 +59,7 @@ The `phpstan` gate also runs `php` as `PHP_BINARY`: it starts the checked tree's
 
 ## To run Intakt's own CI
 
-`.github/workflows/ci.yml`, `.github/workflows/journeys.yml` and the scripts in `.github/ci/` call these on the runner host, outside the CI image. GitHub's `ubuntu-24.04` runners have them all; a self-hosted runner must provide them and must be ephemeral ([Running Intakt's CI on your own runner](../user/self-hosted-ci.md)).
+`.github/workflows/ci.yml`, `.github/workflows/journeys.yml` and the scripts in `.github/ci/` call these on the runner host, outside the CI image. GitHub's `ubuntu-24.04` runners have them all; a self-hosted runner must provide them and must be ephemeral ([Running Intakt's CI on your own runner](../reference/self-hosted-ci.md)).
 
 | Command | Called by | What for | Needed |
 |---|---|---|---|
