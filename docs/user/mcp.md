@@ -1,5 +1,13 @@
 # Connecting an agent through MCP
 
+## In short
+
+- Intakt's MCP server for your own agent is at `/mcp/owner`; it answers only on `localhost`, `127.0.0.1` and `[::1]`.
+- Four tools only read (`list_projects`, `review_status`, `review_verdicts`, `review_act_list`) and need no token.
+- `start_review` starts a review and waits for the judge. It needs `MCP_OWNER_ACCESS=mcp_tool_write` and the token `MCP_OWNER_TOKEN` in `.env.local`; the Docker Compose demo sets up both on its first start.
+- The `intakt-review` skill lets Claude Code or Codex run the loop: review, fix what the list names, review again.
+- Reviewers read the change through a second, read-only server at `/mcp/review`.
+
 Intakt runs an MCP server for your own agents (Claude Code or another MCP client). It has four read-only tools: `list_projects`, `review_status`, `review_verdicts` and `review_act_list`, one resource for a round's findings, and one tool that starts a review, `start_review`. Starting a review needs a token that you set.
 
 ## Reaching the server

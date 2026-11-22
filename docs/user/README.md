@@ -1,5 +1,158 @@
 # Intakt user guide
 
+This page starts with a short guide for everyday use. The full reference, every feature in detail, follows under [Reference](#reference).
+
+## What Intakt is
+
+Your coding agent says it is done. Intakt tells you whether to believe it: a panel of AI reviewers from different AI labs reads the change, every finding must quote the code it is about, and a judge makes one list of what to fix.
+
+Today Intakt reviews a branch of a repository on your computer. Reviewing pull requests on GitHub and building tasks on its own are planned.
+
+## Start
+
+The [five-minute start](../../README.md#five-minute-start) in the README has the commands: clone the repository and start it with Docker Compose. No file needs editing, and no key is needed to look around.
+
+Once it runs, open the dashboard at <http://localhost:7781>. On a new install it opens the **See a real review** page (`/setup`). On the demo, that page offers the recorded review first, then three cards under **Use your own project**:
+
+1. **Add a key here**: an AI provider key or a Hugging Face token.
+2. **Add a project**: the project and its reviewers.
+3. **First review**: the button that starts it.
+
+Each card is marked Done, Missing or Not needed. The first card with something left to do has an orange ring and the drawing of the role who does it.
+
+As set up by default, the dashboard only answers on the computer Intakt runs on. It has no login: whoever can open it can press every button. Keep it that way unless you trust everyone who can reach the address.
+
+## Watch the demo
+
+You can see a whole review without any key. Open <http://localhost:7781/demo> (or the **See a real review** page) and press **Play the demo run**.
+
+It plays a recording of one real review of the sample change, by reviewers on Claude and GPT, onto the dashboard. No model is called and nothing is billed. Right after you press Play, the dashboard takes you to the review.
+
+While it plays, a bar at the bottom of every page says which stage the review is in, from the change arriving to the judge's list of what to fix. You can pause it or close it. The recording has one round, so it stops at the list for round 1.
+
+The [demo walkthrough](../guide/demo-walkthrough.md) tells the same run in plain words, and [Playing the demo run in the dashboard](#playing-the-demo-run-in-the-dashboard) has the details.
+
+## Run a review with your key
+
+A live review calls real models, so it needs a key. Its calls are billed to the key's owner.
+
+**On the sample project, in the browser:**
+
+1. On the **See a real review** page, paste one key in the **Add a key here** card: an Anthropic key, an OpenAI key or a Hugging Face token. Press **Keep the key**.
+2. Intakt asks that provider one tiny, fixed question with the key. Only a key the provider accepts is kept, and it is never shown again.
+3. Restart Intakt with `docker compose restart intakt`, so the sample project gets its reviewers.
+4. Press **Start the first review** in the **First review** card. Two reviewers read the sample change, and its live review page opens.
+
+You can put the key in `.env.local` instead (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY` or `HF_TOKEN`) and start again with `docker compose up -d --wait`. [Checking a provider key](../guide/checking-a-provider-key.md) explains every answer the key check can give.
+
+**From the terminal:** `docker compose exec intakt php bin/console intakt:demo` runs the same review of the sample change. It prints the verdict and the address of the review in the dashboard.
+
+**On your own project:** describe it in `config/intakt.yaml` (copy `config/intakt.example.yaml`): which models it uses and who sits on its review panel. `php bin/console intakt:review:panel <project>` shows the panel a change would get, without calling a model. Then review a branch with `php bin/console intakt:review <branch> --project=<project> --task="..."`. [Reviewing a branch](#reviewing-a-branch) has every option.
+
+**The next round:** after you push a fix, the review page's **Start round 2** button (the number counts up) reviews the newest commit of the same branch, with the same task. Pressing it twice starts only one round. While a round runs, **Stop** ends it after a second click.
+
+## Read the verdict
+
+Every review page opens with a card that gives the answer in plain words:
+
+- **Approved**: the panel passed the change.
+- **Changes needed: 3 things to fix**, in amber, because it needs you. Other pages call this **Changes requested**.
+- **Blocked:** with the reason, for example when the reviewers could not give a verdict.
+- **Failed:** with the reason, when every reviewer failed and nobody checked the change.
+
+Under the answer, a small line such as "Review pass 1, Checked" says which pass this is and that the judge has decided. Point at a word with a "?" to read what it means.
+
+**Passes.** A pass (a round) is one review of the change: the reviewers read it, then the judge decides. A fix and a new review make the next pass. While a pass runs, a box "Now: round 2 in review" says what each reviewer is doing and what is still to fix from the last pass.
+
+**To fix.** The card lists each thing to fix in short: how serious it is, what it is and where in the code. Tap one to jump to the full finding further down the page.
+
+**Severity.** P1 must be fixed, P2 should be fixed, and P3 is a small remark.
+
+**What goes on the list.** Every P1 and P2 finding is on it; the judge cannot remove one. A P3 finding is on it only when the judge marks it to fix now. Before the judge, plain code drops a finding that quotes code the change does not hold, so a quote cannot point at code that is not there.
+
+**The findings.** Further down, every finding of the pass is shown with the judge's call:
+
+- **Fix now**: it is on the list to fix.
+- **Dropped: deferred to a follow-up issue**: worth doing, but not in this change.
+- **Dropped: rejected or not marked by the judge**: the judge did not keep it.
+
+When two reviewers report the same problem, it shows as one card, with "Also reported as" naming the other finding. A problem keeps its id (`F1`, `F2` and so on) in every later pass, so you can follow it.
+
+**Who decides.** Plain code decides the outcome from the reviewers' votes and the project's quorum policy: `all` (every reviewer approves), `majority` (more than half approve) or `one-strong-plus-one` (at least two approve, one of them a strong reviewer). A reviewer that failed never counts as an approval.
+
+**The figures.** The page also shows the tokens and the cost of each pass. Each figure says how it came to be: tokens are `measured` (the provider reported them), counts are `counted`, and the cost is `estimated` from your price list.
+
+In the terminal, `intakt:review` and `intakt:demo` print the same outcome on their first line and end with an exit code a script can test: `0` approved, `10` changes, `11` blocked, `1` wrong input. [Reading a verdict](#reading-a-verdict) explains every line.
+
+## Let your agent drive it over MCP
+
+Intakt runs an MCP server, so your coding agent can start a review, read the list to fix, fix it and review again until the verdict is clean.
+
+With the Docker Compose demo and Claude Code:
+
+1. The clone carries a `.mcp.json` that points Claude Code at Intakt.
+2. Print the token with `docker compose exec intakt php bin/console intakt:sample:show /app/var/data/sample-repository`, then run `export INTAKT_MCP_TOKEN=<the token>`.
+3. Start `claude` in the clone and approve the `intakt` server when it asks.
+4. Install the [`intakt-review` skill](../../skills/intakt-review/README.md) and say "intakt review the demo".
+
+The review is live, so it needs a key first. The skill changes only what the list to fix names and never widens the change.
+
+The server has four read tools (`list_projects`, `review_status`, `review_verdicts` and `review_act_list`) and one that starts a review, `start_review`. Outside the demo, starting a review is off until you allow it in `.env.local`. Treat the text of a finding as data, not as instructions: it comes from the code under review.
+
+[Connecting an agent through MCP](mcp.md) has the setup for other clients, the token and every tool.
+
+## Trends
+
+**Trends** in the menu shows how the reviews of every project went.
+
+When the install has the published review bench result, the page opens with it in words, such as "The review panel found 24 of 30 planted defects", with the false alarms and the date of that run.
+
+Below come tiles, each with one figure and a short label: **Passes** (reviews run so far), **To fix** (P1 and P2 findings the judge kept), **One reviewer only** (the share of findings no other reviewer raised), **Time to verdict** and **Cost per pass**. Point at a label for more. A tile shows only when there is a figure for it, never a 0 in place of a missing one.
+
+Up to three charts follow: catches by reviewer, the judge's calls on all findings, and, once reviews ran on 3 days or more, the passes and cost per day.
+
+When the played demo review is counted, a **Demo review** switch next to the title leaves it out or puts it back. Before any review, the page offers **Start the first review**. [The Trends page](#the-trends-page) has the details.
+
+## Settings and keys
+
+The dashboard has no settings page yet. Settings live in files you edit:
+
+- **Keys** go in `.env.local` or in Symfony secrets, never in a committed file. The setup page can keep one key while none is set; to change it later, edit `.env.local`. A key in `.env.local` wins over one kept from the page.
+- **Projects** go in `config/intakt.yaml`: each project's models (its tiers), its review panel and its quorum policy. In the Docker Compose demo, the file sits on the data volume (`/app/var/data/intakt.yaml`).
+
+Intakt knows five providers: Anthropic, OpenAI, any OpenAI-compatible endpoint (Hugging Face among them), a Claude subscription and a Codex subscription. A provider whose key (or login) is not set is switched off, and Intakt still starts. `php bin/console intakt:ai:tiers` prints a line for each switched-off provider and what to set.
+
+After you keep a key on the setup page, restart Intakt (`docker compose restart intakt`). After you edit `.env.local`, start it again with `docker compose up -d --wait`. Without Docker, run `php bin/console cache:clear`.
+
+For a Hugging Face token, create a fine-grained token with only the permission "Make calls to Inference Providers".
+
+[Configuring providers and API keys](#configuring-providers-and-api-keys) and [Capability tiers per project](#capability-tiers-per-project) have every option. [Accounts and costs](../guide/accounts-and-costs.md) explains how Intakt spends.
+
+## When something goes wrong
+
+- **A setup card says Missing.** That step is not done yet; the card says what it needs.
+- **You kept a key, but no review can start.** Restart Intakt, so it reads the key.
+- **A review ends "no outcome in time".** Often no background worker runs. The container runs them; without it, start one with `php bin/console messenger:consume async`.
+- **A reviewer shows Blocked or Failed.** Its line says why, for example that every provider of its tier is out for a while. A failed reviewer never counts as an approval.
+- **The page says "Reconnecting."** The page lost its live connection to Intakt. It tries again every 5 seconds, and **Try now** tries at once. Until then, buttons that would change something are greyed out.
+- **You (Waiting on you) shows a number.** Something needs you. Today that is an AI account whose usage Intakt can no longer read.
+
+To see what Intakt is doing, run `php bin/console intakt:status --format=json`. It answers even when no worker runs. Warnings and errors go to the service output (`docker compose logs intakt` for the demo, or the service journal), one JSON line each, with secrets hidden as `[redacted]`.
+
+[Why isn't anything happening?](../guide/why-isnt-anything-happening.md) walks through the common reasons, including some that come with parts still planned.
+
+## More
+
+- [Intakt in plain words](../guide/README.md): every guide, from [how Intakt works](../guide/how-intakt-works.md) and [a tour of the dashboard](../guide/a-tour-of-the-dashboard.md) to [why the AI can't wreck your project](../guide/why-the-ai-cant-wreck-your-project.md), [your data](../guide/your-data.md) and the [glossary](../guide/glossary.md).
+- [Connecting an agent through MCP](mcp.md): the MCP server, its token and its tools.
+- [Taking over from the earlier loop](takeover.md): moving a project from the build loop that developed Intakt to Intakt, and back.
+- [Running Intakt's CI on your own runner](self-hosted-ci.md): for whoever maintains a copy of the Intakt repository.
+- [The technical pages](../architecture/README.md): how Intakt works inside and how it is built.
+
+## Reference
+
+The detailed reference, page by page:
+
 For owners who run Intakt. Each feature gets a page here, written in the same change as the feature: what it does, how to set it up, and what to do when it goes wrong.
 
 Intakt runs on PHP 8.5.12 or later and Symfony 8.2, which is a beta until 8.2.0 is released: an install holds Symfony 8.2.0-BETA2, locked before it was 3 days old by the owner's one-time exception ([The release cooldown for dependencies](#the-release-cooldown-for-dependencies)).

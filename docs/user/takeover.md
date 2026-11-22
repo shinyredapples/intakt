@@ -1,5 +1,9 @@
 # Taking over from the build loop that developed Intakt
 
+## In short
+
+This runbook moves a project from the build loop that developed Intakt over to Intakt, and back. It cannot be run on the current code yet: it needs Intakt to take tasks from issues and build them on its own, which is planned. In order, the takeover drains and stops both, settles every open pull request, switches Intakt to the loop's GitHub Apps and label, starts Intakt and removes the co-existence Apps. The rollback reverses it from the state the loop kept.
+
 This runbook moves a project from that loop to Intakt (the last stage of [Replacing the earlier loop](../plan.md#replacing-the-earlier-loop), plan task T74), and back again. Each direction is a short list of steps; the steps on the loop's side happen outside this repository and are described in words, because Intakt has no command for them.
 
 Until the takeover, two sets of GitHub Apps run side by side: the earlier loop's own Apps, and the co-existence Apps that serve Intakt while both run (owner decision 3 of 2026-10-31). At the takeover Intakt switches to the loop's Apps and the co-existence Apps are removed. Nothing keeps both identities for Intakt afterwards.
