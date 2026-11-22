@@ -518,6 +518,24 @@ namespace Intakt\Tests\Core\HandBack\Infrastructure {
             }
         }
 
+        public function testAFailedEvictionRenameStillRemovesOrphanPinsAndUseOrderLeftovers(): void
+        {
+            $store = $this->storeKeeping(1);
+            $store->save($this->key('a'), $this->install('a'));
+            mkdir($this->store.'/.pins/orphan', recursive: true);
+            file_put_contents($this->store.'/.usesInterrupted', '[');
+            touch($this->store.'/'.self::REFUSE_EVICTION);
+
+            try {
+                $store->save($this->key('b'), $this->install('b'));
+                self::fail('the eviction was not refused');
+            } catch (IOException) {
+            }
+
+            self::assertDirectoryDoesNotExist($this->store.'/.pins/orphan');
+            self::assertFileDoesNotExist($this->store.'/.usesInterrupted');
+        }
+
         #[RunInSeparateProcess]
         public function testAnInterruptedEvictionLeavesNoPartialSnapshotUnderItsKey(): void
         {

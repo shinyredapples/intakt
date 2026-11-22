@@ -175,9 +175,9 @@ final readonly class DependencySnapshots
     private function trimAllBut(DependencySnapshotKey $kept): void
     {
         $this->removeTheLeftoverEvictions();
-        $this->evictTheLeastRecentlyUsedPastTheCount($kept);
         $this->pins->removeTheOrphansIn($this->directory);
         $this->uses->removeTheLeftoversIn($this->directory);
+        $this->evictTheLeastRecentlyUsedPastTheCount($kept);
     }
 
     private function removeTheLeftoverEvictions(): void

@@ -58,7 +58,7 @@ final readonly class DependencySnapshotUses
         }
     }
 
-    // Needed because a crash before a rename leaves the file written beside the use order, since Filesystem::dumpFile() and record() both write one first.
+    // Needed because a crash before the rename inside Filesystem::dumpFile() leaves its temporary file, and record() leaves its own file when its rename fails.
     public function removeTheLeftoversIn(string $store): void
     {
         foreach (new FilesystemIterator($store, FilesystemIterator::SKIP_DOTS) as $entry) {
