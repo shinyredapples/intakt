@@ -102,7 +102,7 @@ final readonly class BuildTask
             // A local of this run, never a property, because a worker keeps the service between runs.
             $results[$step->value] = $result;
 
-            $question = $result instanceof BuildJobOutcome ? $result->question : $result;
+            $question = $this->questionIn($result);
 
             if ($question instanceof BuildQuestion) {
                 return $this->park($request, $task, $question);
@@ -144,6 +144,11 @@ final readonly class BuildTask
         }
 
         return new BuildTaskOutcome(BuildStep::BuildJob, null, $task);
+    }
+
+    private function questionIn(BuildJobOutcome|BuildQuestion|AcceptedHandBack|string|null $result): ?BuildQuestion
+    {
+        return $result instanceof BuildJobOutcome ? $result->question : ($result instanceof BuildQuestion ? $result : null);
     }
 
     // A job that built and a hand-back the check accepted give their result instead of a failure, so their step passed.
