@@ -86,11 +86,10 @@ final class FlagProjectAsReplayHandlerTest extends KernelTestCase
     }
 
     /**
-     * @return list<string>
+     * @return list<mixed>
      */
     private function flaggedProjects(): array
     {
-        /** @var list<string> */
         return $this->entities->getConnection()->fetchFirstColumn('SELECT project FROM review_replay_project');
     }
 }
