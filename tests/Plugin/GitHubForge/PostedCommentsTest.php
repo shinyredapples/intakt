@@ -126,11 +126,11 @@ final class PostedCommentsTest extends TestCase
     }
 
     /**
-     * @return list<string>
+     * @return list<array<string, string>>
      */
-    private function toPost(PostedComments $comments): array
+    private function others(int $count): array
     {
-        return $comments->notYetPosted($this->address(), self::MARKER, [self::COMMENT]);
+        return array_fill(0, $count, ['body' => 'Another reviewer\'s comment.']);
     }
 
     /**
@@ -154,14 +154,6 @@ final class PostedCommentsTest extends TestCase
         };
     }
 
-    /**
-     * @return list<array<string, string>>
-     */
-    private function others(int $count): array
-    {
-        return array_fill(0, $count, ['body' => 'Another reviewer\'s comment.']);
-    }
-
     private function address(): PullRequestAddress
     {
         return PullRequestAddress::of(new ChangeId('https://github.com/acme/widget/pull/7'));
@@ -178,5 +170,13 @@ final class PostedCommentsTest extends TestCase
         $readBack = new InstallationReadBack(new InstallationReader($jwt, $tokens, new GitHubCalls($identity, $readings, $tokens)), $expected, new NullLogger());
 
         return new PostedComments(new GitHubCalls(new MockHttpClient($answer, 'https://api.github.com'), $readings, $tokens), new CheckedInstallationTokens($readBack, $tokens), (string) self::APP_ID);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function toPost(PostedComments $comments): array
+    {
+        return $comments->notYetPosted($this->address(), self::MARKER, [self::COMMENT]);
     }
 }

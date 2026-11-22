@@ -32,21 +32,6 @@ final class JourneyContainerTest extends JourneyTestCase
 {
     private ?Kernel $kernel = null;
 
-    protected function tearDown(): void
-    {
-        $directory = $this->kernel?->getShareDir();
-        $this->kernel?->shutdown();
-
-        if (null !== $directory) {
-            new Filesystem()->remove($directory.'/'.RecordingHub::FILE);
-        }
-    }
-
-    protected function journey(): string
-    {
-        return 'journey support';
-    }
-
     public function testTheTestContainerReviewsWithTheScriptedJourneyVendor(): void
     {
         self::assertInstanceOf(ScriptedJourneyVendor::class, $this->container()->get(Vendor::class));
@@ -158,6 +143,21 @@ final class JourneyContainerTest extends JourneyTestCase
         } finally {
             $_ENV = $before;
         }
+    }
+
+    protected function tearDown(): void
+    {
+        $directory = $this->kernel?->getShareDir();
+        $this->kernel?->shutdown();
+
+        if (null !== $directory) {
+            new Filesystem()->remove($directory.'/'.RecordingHub::FILE);
+        }
+    }
+
+    protected function journey(): string
+    {
+        return 'journey support';
     }
 
     private function container(): TestContainer

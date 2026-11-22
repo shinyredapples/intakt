@@ -114,11 +114,6 @@ final class RunClassifierTest extends KernelTestCase
         self::assertSame(['d1' => FailureCause::Harness], $verdict->missed);
     }
 
-    private function classify(string $json, RunOutcome $outcome, ?ChangeFiles $change = null): RunVerdict
-    {
-        return new RunClassifier(new DefectMatcher())->classify(Expectations::fromJson($json), $change ?? new ChangeFiles(['src/a.js' => 10]), $outcome);
-    }
-
     /**
      * @param list<array{string, int}> $places
      *
@@ -135,5 +130,10 @@ final class RunClassifierTest extends KernelTestCase
         $json = json_encode(['verdict' => 'changes', 'findings' => $findings, 'resolved' => [], 'follow_ups' => []], JSON_THROW_ON_ERROR);
 
         return ScriptedReviewer::in(self::getContainer())->verdictFor($json)->findings;
+    }
+
+    private function classify(string $json, RunOutcome $outcome, ?ChangeFiles $change = null): RunVerdict
+    {
+        return new RunClassifier(new DefectMatcher())->classify(Expectations::fromJson($json), $change ?? new ChangeFiles(['src/a.js' => 10]), $outcome);
     }
 }

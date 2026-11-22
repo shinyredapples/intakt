@@ -142,45 +142,6 @@ final class FirstRunControllerTest extends WebTestCase
         parent::tearDownAfterClass();
     }
 
-    protected function setUp(): void
-    {
-        $this->containers = self::compiledContainers();
-
-        foreach (self::VARIABLES as $name) {
-            $this->saved[$name] = ['server' => $_SERVER[$name] ?? null, 'env' => $_ENV[$name] ?? null, 'process' => getenv($name)];
-            $this->unsetVariable($name);
-        }
-
-        $this->file = sys_get_temp_dir().'/intakt-first-run-'.bin2hex(random_bytes(4)).'.yaml';
-        $_SERVER['INTAKT_CONFIG'] = $this->file;
-        $_SERVER['MCP_OWNER_ACCESS'] = 'mcp_tool_write';
-        $_SERVER['INTAKT_COMPOSE_SERVICE'] = '';
-        $_SERVER['MCP_OWNER_TOKEN'] = '';
-        $_SERVER['INTAKT_SAMPLE_REPOSITORY'] = '';
-        $_SERVER['INTAKT_DEMO_RECORDING'] = '';
-        $this->ledger = new DashboardLedger();
-    }
-
-    protected function tearDown(): void
-    {
-        foreach ($this->saved as $name => $before) {
-            $this->unsetVariable($name);
-            if (null !== $before['server']) {
-                $_SERVER[$name] = $before['server'];
-            }
-            if (null !== $before['env']) {
-                $_ENV[$name] = $before['env'];
-            }
-            if (false !== $before['process']) {
-                putenv($name.'='.$before['process']);
-            }
-        }
-
-        parent::tearDown();
-        $this->containers->restoreTheSharedCache();
-        new Filesystem()->remove([$this->file, $this->keptDirectory]);
-    }
-
     public function testWithOneKeyTheProviderStepIsDoneAndNamesTheProviderThatHasIt(): void
     {
         $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
@@ -833,6 +794,45 @@ final class FirstRunControllerTest extends WebTestCase
         self::assertSame('<b>bold</b>', $page->filter('#step-project .list .t')->text());
     }
 
+    protected function setUp(): void
+    {
+        $this->containers = self::compiledContainers();
+
+        foreach (self::VARIABLES as $name) {
+            $this->saved[$name] = ['server' => $_SERVER[$name] ?? null, 'env' => $_ENV[$name] ?? null, 'process' => getenv($name)];
+            $this->unsetVariable($name);
+        }
+
+        $this->file = sys_get_temp_dir().'/intakt-first-run-'.bin2hex(random_bytes(4)).'.yaml';
+        $_SERVER['INTAKT_CONFIG'] = $this->file;
+        $_SERVER['MCP_OWNER_ACCESS'] = 'mcp_tool_write';
+        $_SERVER['INTAKT_COMPOSE_SERVICE'] = '';
+        $_SERVER['MCP_OWNER_TOKEN'] = '';
+        $_SERVER['INTAKT_SAMPLE_REPOSITORY'] = '';
+        $_SERVER['INTAKT_DEMO_RECORDING'] = '';
+        $this->ledger = new DashboardLedger();
+    }
+
+    protected function tearDown(): void
+    {
+        foreach ($this->saved as $name => $before) {
+            $this->unsetVariable($name);
+            if (null !== $before['server']) {
+                $_SERVER[$name] = $before['server'];
+            }
+            if (null !== $before['env']) {
+                $_ENV[$name] = $before['env'];
+            }
+            if (false !== $before['process']) {
+                putenv($name.'='.$before['process']);
+            }
+        }
+
+        parent::tearDown();
+        $this->containers->restoreTheSharedCache();
+        new Filesystem()->remove([$this->file, $this->keptDirectory]);
+    }
+
     /**
      * @param list<string> $keys
      */
@@ -865,12 +865,6 @@ final class FirstRunControllerTest extends WebTestCase
         return $page;
     }
 
-    // Read from the page's form, because the token belongs to the browser's session.
-    private function tokenFromThePage(): string
-    {
-        return $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY'])->filter('form.start-first-review input[name=_token]')->attr('value') ?? '';
-    }
-
     // Set by the next page, because the page's own services take the bus when they are built.
     private function commandBus(): MessageBusInterface&MockObject
     {
@@ -880,12 +874,10 @@ final class FirstRunControllerTest extends WebTestCase
         return $commands;
     }
 
-    private function browser(): KernelBrowser
+    // Read from the page's form, because the token belongs to the browser's session.
+    private function tokenFromThePage(): string
     {
-        $browser = self::getClient();
-        self::assertInstanceOf(KernelBrowser::class, $browser);
-
-        return $browser;
+        return $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY'])->filter('form.start-first-review input[name=_token]')->attr('value') ?? '';
     }
 
     private static function compiledContainers(): CompiledContainers
@@ -898,6 +890,14 @@ final class FirstRunControllerTest extends WebTestCase
         $this->keptDirectory = sys_get_temp_dir().'/'.uniqid('first-run-kept-', true);
 
         return $this->keptDirectory;
+    }
+
+    private function browser(): KernelBrowser
+    {
+        $browser = self::getClient();
+        self::assertInstanceOf(KernelBrowser::class, $browser);
+
+        return $browser;
     }
 
     private function unsetVariable(string $name): void

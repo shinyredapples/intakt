@@ -23,18 +23,6 @@ final class ScriptedHttpClientTest extends TestCase
 {
     private string $path;
 
-    protected function setUp(): void
-    {
-        $this->path = new Filesystem()->tempnam(sys_get_temp_dir(), 'scripts-');
-        new Filesystem()->remove($this->path);
-        new Filesystem()->mkdir($this->path);
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->path);
-    }
-
     public function testWithoutAScriptDirectoryEveryCallGoesToTheRealClient(): void
     {
         $client = new ScriptedHttpClient(new MockHttpClient(new MockResponse('real')), new MockClock(), '');
@@ -159,5 +147,17 @@ final class ScriptedHttpClientTest extends TestCase
         }
 
         self::assertSame("data: one\n\n", $chunks);
+    }
+
+    protected function setUp(): void
+    {
+        $this->path = new Filesystem()->tempnam(sys_get_temp_dir(), 'scripts-');
+        new Filesystem()->remove($this->path);
+        new Filesystem()->mkdir($this->path);
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->path);
     }
 }

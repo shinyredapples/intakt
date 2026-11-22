@@ -33,16 +33,6 @@ final class AddedLinesInCheckoutTest extends TestCase
 
     private TemporaryRepository $repository;
 
-    protected function setUp(): void
-    {
-        $this->repository = new TemporaryRepository();
-    }
-
-    protected function tearDown(): void
-    {
-        $this->repository->remove();
-    }
-
     public function testAnAddedLineCarriesItsTextAsItStandsInTheCheckedOutFile(): void
     {
         $this->repository->commitFile('src/A.php', "keep\n\$reason = 1;\n");
@@ -136,17 +126,27 @@ final class AddedLinesInCheckoutTest extends TestCase
         self::assertSame([['src/A.php', 1, '$customer = "[redacted]";']], $this->linesOf($this->diffAdding('src/A.php', 1, 1)));
     }
 
+    protected function setUp(): void
+    {
+        $this->repository = new TemporaryRepository();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->repository->remove();
+    }
+
+    private function diffAdding(string $path, int $first, int $count): string
+    {
+        return sprintf("diff --git a/%s b/%s\n@@ -0,0 +%d,%d @@\n", $path, $path, $first, $count).str_repeat("+added\n", $count);
+    }
+
     /**
      * @return list<array{string, int, string}>
      */
     private function linesOf(string $diff): array
     {
         return new AddedLinesInCheckout(new DiffAddedLines(new DiffPaths()), $this->redactor())->of($diff, $this->repository->path);
-    }
-
-    private function diffAdding(string $path, int $first, int $count): string
-    {
-        return sprintf("diff --git a/%s b/%s\n@@ -0,0 +%d,%d @@\n", $path, $path, $first, $count).str_repeat("+added\n", $count);
     }
 
     private function redactor(): Redactor

@@ -85,10 +85,32 @@ final readonly class ReviewerAgent implements Reviewer
         return $this->checkedAgainst($request->brief, $counted);
     }
 
-    // Lowered here as the round lowers it before storing, because the cut-input guard below and the vendor's read guard refuse what can count as approval, and a P2 the goalpost rule turns into a P3 can.
-    private function asTheRoundCounts(ReviewBrief $brief, Verdict $verdict): Verdict
+    // Read from the model's catalog entry, never from model text, so the choice to stream is made by plain code.
+    /**
+     * @param non-empty-string $model
+     */
+    private function canStream(PlatformInterface $platform, string $model): bool
     {
-        return new GoalpostRule()->applyToVerdict($brief->round, $verdict, $brief->open);
+        return $platform->getModelCatalog()->getModel($model)->supports(Capability::OUTPUT_STREAMING);
+    }
+
+    // Retried unstreamed only when the request is refused before the provider accepted a stream, because a provider reports that before its first delta, so no text was published and no usage was spent; a later refusal or a stream cut off mid-answer is never retried.
+    private function answeredStreaming(Agent $agent, MessageBag $conversation, ReviewerConversation $reviewer): Verdict
+    {
+        $stream = new StreamAcceptance();
+
+        try {
+            return $this->answerOf($this->runs->reporting($stream->watching($agent->call($conversation, self::STREAMED)), $reviewer), $reviewer);
+        } catch (BadRequestException|InvalidRequestException $refused) {
+            $this->fellBackUnlessAccepted($stream, $refused, $reviewer);
+        }
+
+        return $this->answeredUnstreamed($agent, $conversation, $reviewer);
+    }
+
+    private function answeredUnstreamed(Agent $agent, MessageBag $conversation, ReviewerConversation $reviewer): Verdict
+    {
+        return $this->answerOf($this->runs->reporting($agent->call($conversation, self::UNSTREAMED), $reviewer), $reviewer);
     }
 
     // Refused like unreadable output, because a counted vote under a reserved id would send the head back with findings the ledger drops; key-safe, because only Intakt's own ids are named.
@@ -99,6 +121,12 @@ final readonly class ReviewerAgent implements Reviewer
         if ([] !== $claimed) {
             throw VerdictUnreadable::becauseKeySafe(sprintf('the verdict names finding ids reserved for failed reviews: %s.', implode(', ', $claimed)));
         }
+    }
+
+    // Lowered here as the round lowers it before storing, because the cut-input guard below and the vendor's read guard refuse what can count as approval, and a P2 the goalpost rule turns into a P3 can.
+    private function asTheRoundCounts(ReviewBrief $brief, Verdict $verdict): Verdict
+    {
+        return new GoalpostRule()->applyToVerdict($brief->round, $verdict, $brief->open);
     }
 
     // Plain code refuses it, because the note asking the reviewer to read the rest is only prompt text, and a steered or lazy reviewer could approve code it never saw.
@@ -136,43 +164,6 @@ final readonly class ReviewerAgent implements Reviewer
         return [] === preg_grep(self::LEDGER_ID, $unknown, PREG_GREP_INVERT) ? VerdictUnreadable::becauseKeySafe($reason) : VerdictUnreadable::because($reason);
     }
 
-    // Read from the model's catalog entry, never from model text, so the choice to stream is made by plain code.
-    /**
-     * @param non-empty-string $model
-     */
-    private function canStream(PlatformInterface $platform, string $model): bool
-    {
-        return $platform->getModelCatalog()->getModel($model)->supports(Capability::OUTPUT_STREAMING);
-    }
-
-    // Retried unstreamed only when the request is refused before the provider accepted a stream, because a provider reports that before its first delta, so no text was published and no usage was spent; a later refusal or a stream cut off mid-answer is never retried.
-    private function answeredStreaming(Agent $agent, MessageBag $conversation, ReviewerConversation $reviewer): Verdict
-    {
-        $stream = new StreamAcceptance();
-
-        try {
-            return $this->answerOf($this->runs->reporting($stream->watching($agent->call($conversation, self::STREAMED)), $reviewer), $reviewer);
-        } catch (BadRequestException|InvalidRequestException $refused) {
-            $this->fellBackUnlessAccepted($stream, $refused, $reviewer);
-        }
-
-        return $this->answeredUnstreamed($agent, $conversation, $reviewer);
-    }
-
-    private function fellBackUnlessAccepted(StreamAcceptance $stream, BadRequestException|InvalidRequestException $refused, ReviewerConversation $reviewer): void
-    {
-        if ($stream->accepted()) {
-            throw $refused;
-        }
-
-        $this->runs->fellBackToUnstreamed($reviewer);
-    }
-
-    private function answeredUnstreamed(Agent $agent, MessageBag $conversation, ReviewerConversation $reviewer): Verdict
-    {
-        return $this->answerOf($this->runs->reporting($agent->call($conversation, self::UNSTREAMED), $reviewer), $reviewer);
-    }
-
     private function answerOf(ExecutionInterface $execution, ReviewerConversation $reviewer): Verdict
     {
         try {
@@ -190,6 +181,15 @@ final readonly class ReviewerAgent implements Reviewer
             // Read from the execution, never from the message, so only a run ReviewerStopping cancelled ends as stopped and any other failure stays an error.
             return ExecutionStatus::Cancelled === $execution->getStatus() ? Verdict::reviewerStopped() : throw $failure;
         }
+    }
+
+    private function fellBackUnlessAccepted(StreamAcceptance $stream, BadRequestException|InvalidRequestException $refused, ReviewerConversation $reviewer): void
+    {
+        if ($stream->accepted()) {
+            throw $refused;
+        }
+
+        $this->runs->fellBackToUnstreamed($reviewer);
     }
 
     private function reportedAsRead(Verdict $verdict, ReviewerConversation $reviewer): Verdict

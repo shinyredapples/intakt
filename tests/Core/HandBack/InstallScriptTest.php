@@ -19,20 +19,6 @@ final class InstallScriptTest extends TestCase
 
     private string $folder = '';
 
-    protected function setUp(): void
-    {
-        $this->folder = sys_get_temp_dir().'/intakt-install-script-'.bin2hex(random_bytes(6));
-        new Filesystem()->dumpFile($this->folder.'/lock/composer.json', "{}\n");
-        new Filesystem()->dumpFile($this->folder.'/lock/composer.lock', "{\"packages\": []}\n");
-        new Filesystem()->mkdir([$this->folder.'/output', $this->folder.'/kept', $this->folder.'/work']);
-    }
-
-    protected function tearDown(): void
-    {
-        new Process(['chmod', '-R', 'u+rwx', $this->folder])->run();
-        new Filesystem()->remove($this->folder);
-    }
-
     public function testAnInstallThatSucceedsLeavesTheInstallWithoutTheLockFilesInTheKeptFolder(): void
     {
         $run = $this->whenTheInstallRuns(self::PROBE, 'mkdir -p vendor/composer && cp composer.lock vendor/composer/installed.json');
@@ -116,6 +102,20 @@ final class InstallScriptTest extends TestCase
         self::assertSame(1, $run->getExitCode());
         self::assertSame("not-prepared\n", $this->outputFile('install-result'));
         self::assertFileDoesNotExist($this->folder.'/kept/ran');
+    }
+
+    protected function setUp(): void
+    {
+        $this->folder = sys_get_temp_dir().'/intakt-install-script-'.bin2hex(random_bytes(6));
+        new Filesystem()->dumpFile($this->folder.'/lock/composer.json', "{}\n");
+        new Filesystem()->dumpFile($this->folder.'/lock/composer.lock', "{\"packages\": []}\n");
+        new Filesystem()->mkdir([$this->folder.'/output', $this->folder.'/kept', $this->folder.'/work']);
+    }
+
+    protected function tearDown(): void
+    {
+        new Process(['chmod', '-R', 'u+rwx', $this->folder])->run();
+        new Filesystem()->remove($this->folder);
     }
 
     private function whenTheInstallRuns(string $probe, string $install): Process

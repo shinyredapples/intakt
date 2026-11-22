@@ -40,15 +40,6 @@ final class BudgetReserveTest extends TestCase
     private LockFactory $locks;
     private RateLimitReadings $readings;
 
-    protected function setUp(): void
-    {
-        $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
-        // The pool expires slots by the test clock, so the seconds a slot lives are the seconds the clock moves.
-        $this->pool = new ArrayAdapter(clock: $this->clock);
-        $this->locks = new LockFactory(new InMemoryStore());
-        $this->readings = new RateLimitReadings(new ArrayAdapter(), $this->clock, new LockFactory(new InMemoryStore()));
-    }
-
     public function testWithoutAReadingEveryListingIsAdmitted(): void
     {
         $reserve = $this->reserve();
@@ -297,6 +288,15 @@ final class BudgetReserveTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
 
         $this->reserve(percent: $percent);
+    }
+
+    protected function setUp(): void
+    {
+        $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
+        // The pool expires slots by the test clock, so the seconds a slot lives are the seconds the clock moves.
+        $this->pool = new ArrayAdapter(clock: $this->clock);
+        $this->locks = new LockFactory(new InMemoryStore());
+        $this->readings = new RateLimitReadings(new ArrayAdapter(), $this->clock, new LockFactory(new InMemoryStore()));
     }
 
     private function read(int $remaining): void

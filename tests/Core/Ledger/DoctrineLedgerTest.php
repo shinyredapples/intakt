@@ -43,15 +43,6 @@ final class DoctrineLedgerTest extends KernelTestCase
 {
     private ManagerRegistry $registry;
 
-    protected function setUp(): void
-    {
-        $registry = self::getContainer()->get('doctrine');
-        self::assertInstanceOf(ManagerRegistry::class, $registry);
-        $this->registry = $registry;
-
-        $this->createSchema();
-    }
-
     public function testEventsAreReadBackInTheOrderTheyWereAppended(): void
     {
         $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');
@@ -378,6 +369,15 @@ final class DoctrineLedgerTest extends KernelTestCase
         self::assertStringContainsString('a failed append is only reported through the result', $warnings[0]);
     }
 
+    protected function setUp(): void
+    {
+        $registry = self::getContainer()->get('doctrine');
+        self::assertInstanceOf(ManagerRegistry::class, $registry);
+        $this->registry = $registry;
+
+        $this->createSchema();
+    }
+
     // Takes a plain Closure because static analysis refuses a discarded call it can see, and the engine still checks this one.
     private function discardTheResult(Closure $append, LedgerEvent $event): void
     {
@@ -405,6 +405,14 @@ final class DoctrineLedgerTest extends KernelTestCase
         $this->entityManager()->close();
     }
 
+    private function entityManager(): EntityManagerInterface
+    {
+        $manager = $this->registry->getManager();
+        self::assertInstanceOf(EntityManagerInterface::class, $manager);
+
+        return $manager;
+    }
+
     private function storedEvent(): EventRecord
     {
         $record = new EventRecord(new UuidV7(), LedgerEventKind::ReviewStarted->value, '{}', new DateTimeImmutable('2026-10-27 12:00:00'));
@@ -423,14 +431,6 @@ final class DoctrineLedgerTest extends KernelTestCase
         }
 
         self::fail('the flush was not refused');
-    }
-
-    private function entityManager(): EntityManagerInterface
-    {
-        $manager = $this->registry->getManager();
-        self::assertInstanceOf(EntityManagerInterface::class, $manager);
-
-        return $manager;
     }
 
     private function dropTable(): void

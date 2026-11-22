@@ -210,15 +210,6 @@ final class GateChildrenTest extends SandboxTestCase
         self::assertSame(1, $child->exitCode);
     }
 
-    // Because each report gets a fresh random name, the lines compare equal only with that name replaced.
-    /**
-     * @return list<string>
-     */
-    private function linesNamingAnyReport(CheckRun $run): array
-    {
-        return array_map(static fn (string $line): string => (string) preg_replace('~report-[0-9a-f]{16}\.json~', 'report-<name>.json', $line), $run->lines());
-    }
-
     private function checkWithFakeGates(string ...$arguments): CheckRun
     {
         return new CheckRun($this->runWithFakeGates(...$arguments));
@@ -230,6 +221,15 @@ final class GateChildrenTest extends SandboxTestCase
     private function checkWithFakeGatesIn(array $environment, string ...$arguments): CheckRun
     {
         return new CheckRun($this->runWithFakeGatesIn($environment, ...$arguments));
+    }
+
+    // Because each report gets a fresh random name, the lines compare equal only with that name replaced.
+    /**
+     * @return list<string>
+     */
+    private function linesNamingAnyReport(CheckRun $run): array
+    {
+        return array_map(static fn (string $line): string => (string) preg_replace('~report-[0-9a-f]{16}\.json~', 'report-<name>.json', $line), $run->lines());
     }
 
     private function runWithFakeGates(string ...$arguments): ProcessResult
@@ -259,6 +259,23 @@ final class GateChildrenTest extends SandboxTestCase
         return $home;
     }
 
+    /**
+     * @param list<string> $gates
+     *
+     * @return list<int>
+     */
+    private function pidsOnceWritten(string $directory, array $gates): array
+    {
+        $files = array_map(static fn (string $gate): string => $directory.'/'.$gate.'.pid', $gates);
+        $until = hrtime(true) + self::SAFETY_LIMIT_NANOSECONDS;
+
+        while ([] !== array_filter($files, static fn (string $file): bool => '' === (string) @file_get_contents($file)) && hrtime(true) < $until) {
+            usleep(10000);
+        }
+
+        return array_map(static fn (string $file): int => (int) @file_get_contents($file), $files);
+    }
+
     // Because a stopped child whose parent died stays a zombie until it is reaped, which takes a moment on a busy machine; the limit only ends a hang.
     private function runsOnAfterAWhile(int $pid): bool
     {
@@ -277,22 +294,5 @@ final class GateChildrenTest extends SandboxTestCase
         $end = strrpos($status, ')');
 
         return false !== $end && 'Z' !== substr($status, $end + 2, 1);
-    }
-
-    /**
-     * @param list<string> $gates
-     *
-     * @return list<int>
-     */
-    private function pidsOnceWritten(string $directory, array $gates): array
-    {
-        $files = array_map(static fn (string $gate): string => $directory.'/'.$gate.'.pid', $gates);
-        $until = hrtime(true) + self::SAFETY_LIMIT_NANOSECONDS;
-
-        while ([] !== array_filter($files, static fn (string $file): bool => '' === (string) @file_get_contents($file)) && hrtime(true) < $until) {
-            usleep(10000);
-        }
-
-        return array_map(static fn (string $file): int => (int) @file_get_contents($file), $files);
     }
 }

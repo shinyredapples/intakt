@@ -33,6 +33,24 @@ final class HistorySecretsGate extends GitleaksGate
         return $this->scanWithConfigurationFrom($workspace, $mergeBase);
     }
 
+    protected function bypassesIn(Workspace $workspace): array
+    {
+        $range = ($workspace->mergeBase() ?? 'HEAD').'..HEAD';
+
+        return [
+            ...$this->ignoreFileFindings($workspace),
+            ...$this->commitsWith($workspace->git(['log', '--format=%h', ...self::FULL_DIFF_OPTIONS, '-G', self::INLINE_ALLOW, $range]), 'carries an inline allow directive that hides findings from the scan'),
+            ...$this->commitsWith($workspace->gitWithPathspecMagic(['log', '--format=%h', ...self::FULL_DIFF_OPTIONS, $range, '--', ...self::UNSCANNED_FOLDERS]), 'adds files in a folder the scanner skips'),
+        ];
+    }
+
+    private function hasCommits(Workspace $workspace, string $mergeBase): bool
+    {
+        $result = $workspace->git(['rev-list', '--count', $mergeBase.'..HEAD']);
+
+        return !$result->succeeded() || '0' !== trim($result->output);
+    }
+
     private function scanWithConfigurationFrom(Workspace $workspace, string $mergeBase): GateResult
     {
         $source = $this->configurationSource($workspace);
@@ -94,24 +112,6 @@ final class HistorySecretsGate extends GitleaksGate
         }
 
         return $path;
-    }
-
-    private function hasCommits(Workspace $workspace, string $mergeBase): bool
-    {
-        $result = $workspace->git(['rev-list', '--count', $mergeBase.'..HEAD']);
-
-        return !$result->succeeded() || '0' !== trim($result->output);
-    }
-
-    protected function bypassesIn(Workspace $workspace): array
-    {
-        $range = ($workspace->mergeBase() ?? 'HEAD').'..HEAD';
-
-        return [
-            ...$this->ignoreFileFindings($workspace),
-            ...$this->commitsWith($workspace->git(['log', '--format=%h', ...self::FULL_DIFF_OPTIONS, '-G', self::INLINE_ALLOW, $range]), 'carries an inline allow directive that hides findings from the scan'),
-            ...$this->commitsWith($workspace->gitWithPathspecMagic(['log', '--format=%h', ...self::FULL_DIFF_OPTIONS, $range, '--', ...self::UNSCANNED_FOLDERS]), 'adds files in a folder the scanner skips'),
-        ];
     }
 
     /**

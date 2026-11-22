@@ -54,23 +54,6 @@ final class BudgetGuardTest extends TestCase
     /** @var list<string> */
     private array $outages = [];
 
-    protected function setUp(): void
-    {
-        $this->clock = new MockClock('2026-11-02 08:00:00 UTC');
-        $this->readings = new ReadingsInMemory($this->clock);
-        $this->holds = new HoldsInMemory($this->clock);
-        $events = new EventDispatcher();
-        $events->addListener(UsageReadingsStayedAway::class, function (UsageReadingsStayedAway $outage): void {
-            $this->outages[] = $outage->account->key();
-        });
-        $ceilings = new CeilingStartGuard($this->readings, $this->clock, ['five-hour' => 90.0, 'weekly' => 90.0]);
-        $this->halts = new HaltsInMemory();
-        $this->guard = new BudgetGuard($this->holds, $ceilings, new OutageWatch($this->readings, $this->clock, $events), $this->halts);
-        foreach ([$this->claude('main'), $this->claude('team'), new Account(Provider::Anthropic, 'main')] as $account) {
-            $this->readLow($account);
-        }
-    }
-
     public function testAUsageLimitCoolsItsAccountDownUntilTheReset(): void
     {
         $this->coolDown($this->claude('main'), '+2 hours');
@@ -244,15 +227,27 @@ final class BudgetGuardTest extends TestCase
         self::assertSame([], $this->outages);
     }
 
+    protected function setUp(): void
+    {
+        $this->clock = new MockClock('2026-11-02 08:00:00 UTC');
+        $this->readings = new ReadingsInMemory($this->clock);
+        $this->holds = new HoldsInMemory($this->clock);
+        $events = new EventDispatcher();
+        $events->addListener(UsageReadingsStayedAway::class, function (UsageReadingsStayedAway $outage): void {
+            $this->outages[] = $outage->account->key();
+        });
+        $ceilings = new CeilingStartGuard($this->readings, $this->clock, ['five-hour' => 90.0, 'weekly' => 90.0]);
+        $this->halts = new HaltsInMemory();
+        $this->guard = new BudgetGuard($this->holds, $ceilings, new OutageWatch($this->readings, $this->clock, $events), $this->halts);
+        foreach ([$this->claude('main'), $this->claude('team'), new Account(Provider::Anthropic, 'main')] as $account) {
+            $this->readLow($account);
+        }
+    }
+
     private function readLow(Account $account): void
     {
         $this->readings->record(new WindowReading($account, UsageWindow::FiveHour, new Usage(10.0, $this->clock->now()->modify('+4 hours'))));
         $this->readings->record(new WindowReading($account, UsageWindow::Weekly, new Usage(5.0, $this->clock->now()->modify('+6 days'))));
-    }
-
-    private function coolDown(Account $account, string $resetIn): void
-    {
-        $this->holds->coolDown($account, $this->later($resetIn));
     }
 
     private function hold(SharedHold $hold, string $until): void
@@ -260,13 +255,18 @@ final class BudgetGuardTest extends TestCase
         $this->holds->hold($hold, $this->later($until));
     }
 
-    private function later(string $modifier): DateTimeImmutable
-    {
-        return $this->clock->now()->modify($modifier);
-    }
-
     private function claude(string $name): Account
     {
         return new Account(Provider::ClaudeCode, $name);
+    }
+
+    private function coolDown(Account $account, string $resetIn): void
+    {
+        $this->holds->coolDown($account, $this->later($resetIn));
+    }
+
+    private function later(string $modifier): DateTimeImmutable
+    {
+        return $this->clock->now()->modify($modifier);
     }
 }

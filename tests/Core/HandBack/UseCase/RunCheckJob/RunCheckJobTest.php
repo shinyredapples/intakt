@@ -88,16 +88,6 @@ final class RunCheckJobTest extends TestCase
 
     private ?JobSpec $ran = null;
 
-    protected function setUp(): void
-    {
-        $this->history = new BuildHistory();
-    }
-
-    protected function tearDown(): void
-    {
-        $this->history->remove();
-    }
-
     public function testAJobWhoseOutputSaysPassedPassesTheCheck(): void
     {
         $this->history->commitFile('feature.txt', "new\n", 'Add a feature');
@@ -467,12 +457,14 @@ final class RunCheckJobTest extends TestCase
         self::assertSame([['important.txt', 120, 0]], $this->lostIn($outcome));
     }
 
-    private function givenMainHolds(string $path, string $content): void
+    protected function setUp(): void
     {
-        $this->history->checkout('main');
-        $this->history->commitFile($path, $content, 'Add '.$path);
-        $this->history->push('main');
-        $this->history->startBranch('task', 'main');
+        $this->history = new BuildHistory();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->history->remove();
     }
 
     /**
@@ -526,16 +518,24 @@ final class RunCheckJobTest extends TestCase
         return $this->ran;
     }
 
+    private function lines(int $count): string
+    {
+        return implode('', array_map(static fn (int $line): string => sprintf("line %03d of the file\n", $line), range(1, $count)));
+    }
+
+    private function givenMainHolds(string $path, string $content): void
+    {
+        $this->history->checkout('main');
+        $this->history->commitFile($path, $content, 'Add '.$path);
+        $this->history->push('main');
+        $this->history->startBranch('task', 'main');
+    }
+
     /**
      * @return list<array{string, int, int}>
      */
     private function lostIn(CheckJobOutcome $outcome): array
     {
         return array_map(static fn (LostContent $lost): array => [$lost->path, $lost->linesBefore, $lost->linesAfter], $outcome->lostContent);
-    }
-
-    private function lines(int $count): string
-    {
-        return implode('', array_map(static fn (int $line): string => sprintf("line %03d of the file\n", $line), range(1, $count)));
     }
 }

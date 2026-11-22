@@ -83,13 +83,6 @@ final readonly class ReviewedRepository
         return $answer;
     }
 
-    // Announced after the record, because the summary is computed from what is stored and would lag one call behind if it were announced before.
-    private function recordedRead(ReviewRound $round, string $path): void
-    {
-        $this->calls->read($round, ReadFileTool::NAME, $path);
-        $this->updates->summaryChanged($round->id());
-    }
-
     private function recordedCall(ReviewRound $round, string $tool): void
     {
         $this->calls->called($round, $tool);
@@ -126,15 +119,6 @@ final readonly class ReviewedRepository
         return $reviewer->getUserIdentifier();
     }
 
-    // Fenced here and not only by the reviewer's toolbox, because a subscription CLI calls this server itself and puts the answer into its prompt as it comes; a refusal too, since it echoes the path the reviewed code chose.
-    /**
-     * @param Closure(): string $read
-     */
-    private function answer(ReviewRound $round, string $tool, Closure $read): string
-    {
-        return $this->refusedAsCall($round, $tool, fn (): string => $this->assembly->toolAnswer($this->fence->wrap(UntrustedSource::ToolResult, $read())));
-    }
-
     // A refusal is still recorded as a call, because the reviewer made it.
     /**
      * @param Closure(): string $step
@@ -148,5 +132,21 @@ final readonly class ReviewedRepository
 
             throw new ToolCallException($this->assembly->toolAnswer($this->fence->wrap(UntrustedSource::ToolResult, $refused->getMessage())), $refused->getCode(), previous: $refused);
         }
+    }
+
+    // Fenced here and not only by the reviewer's toolbox, because a subscription CLI calls this server itself and puts the answer into its prompt as it comes; a refusal too, since it echoes the path the reviewed code chose.
+    /**
+     * @param Closure(): string $read
+     */
+    private function answer(ReviewRound $round, string $tool, Closure $read): string
+    {
+        return $this->refusedAsCall($round, $tool, fn (): string => $this->assembly->toolAnswer($this->fence->wrap(UntrustedSource::ToolResult, $read())));
+    }
+
+    // Announced after the record, because the summary is computed from what is stored and would lag one call behind if it were announced before.
+    private function recordedRead(ReviewRound $round, string $path): void
+    {
+        $this->calls->read($round, ReadFileTool::NAME, $path);
+        $this->updates->summaryChanged($round->id());
     }
 }

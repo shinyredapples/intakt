@@ -24,20 +24,6 @@ final class SigningKeyTest extends TestCase
     private string $key;
     private ProgramOnPath $programs;
 
-    protected function setUp(): void
-    {
-        $this->folder = sys_get_temp_dir().'/intakt-signing-'.bin2hex(random_bytes(6));
-        mkdir($this->folder);
-        $this->key = PushScenario::generateKey($this->folder.'/orchestrator');
-        $this->programs = new ProgramOnPath();
-    }
-
-    protected function tearDown(): void
-    {
-        $this->programs->remove();
-        new Filesystem()->remove($this->folder);
-    }
-
     public function testASignatureOfTheKeyIsMadeAndVerifiesWithinTheLimit(): void
     {
         $key = new SigningKey($this->key, new Filesystem(), new GuardedRun());
@@ -96,6 +82,20 @@ final class SigningKeyTest extends TestCase
 
         self::assertSame('The branch was not pushed: the signing key cannot be read', $stopped->getMessage());
         self::assertNull($stopped->getPrevious());
+    }
+
+    protected function setUp(): void
+    {
+        $this->folder = sys_get_temp_dir().'/intakt-signing-'.bin2hex(random_bytes(6));
+        mkdir($this->folder);
+        $this->key = PushScenario::generateKey($this->folder.'/orchestrator');
+        $this->programs = new ProgramOnPath();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->programs->remove();
+        new Filesystem()->remove($this->folder);
     }
 
     /**

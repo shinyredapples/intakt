@@ -25,17 +25,6 @@ final class SampleProjectDataTest extends TestCase
 {
     private string $directory;
 
-    protected function setUp(): void
-    {
-        $this->directory = sys_get_temp_dir().'/intakt-sample-data-'.bin2hex(random_bytes(6));
-        new Filesystem()->mkdir($this->directory);
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->directory);
-    }
-
     public function testTheShippedFileNamesAModelAndAPriceForEveryProviderAndTier(): void
     {
         $data = new SampleProjectData();
@@ -142,6 +131,17 @@ final class SampleProjectDataTest extends TestCase
         $this->expectException(ParseException::class);
 
         new SampleProjectData($this->file())->routerUrl();
+    }
+
+    protected function setUp(): void
+    {
+        $this->directory = sys_get_temp_dir().'/intakt-sample-data-'.bin2hex(random_bytes(6));
+        new Filesystem()->mkdir($this->directory);
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->directory);
     }
 
     /**

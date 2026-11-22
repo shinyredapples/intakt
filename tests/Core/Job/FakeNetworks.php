@@ -82,6 +82,14 @@ final class FakeNetworks
         return $this->json(['Id' => 'feed'.$network['Name']], 201);
     }
 
+    /**
+     * @param array<mixed> $body
+     */
+    private function json(array $body, int $status = 200): MockResponse
+    {
+        return new MockResponse(json_encode($body, JSON_THROW_ON_ERROR), ['http_code' => $status, 'response_headers' => ['content-type' => 'application/json']]);
+    }
+
     // Refused while a container is still on it, because the real engine refuses that too.
     private function remove(string $name): MockResponse
     {
@@ -96,13 +104,5 @@ final class FakeNetworks
         unset($this->networks[$name]);
 
         return new MockResponse('', ['http_code' => 204]);
-    }
-
-    /**
-     * @param array<mixed> $body
-     */
-    private function json(array $body, int $status = 200): MockResponse
-    {
-        return new MockResponse(json_encode($body, JSON_THROW_ON_ERROR), ['http_code' => $status, 'response_headers' => ['content-type' => 'application/json']]);
     }
 }
