@@ -633,6 +633,63 @@ final class CheckScriptTest extends TestCase
         self::assertStringNotContainsString('exit 9', $this->outputFile('check.log'));
     }
 
+    public function testAPartialCopyThatIsRemovedLeavesTheGatesInstallToRunOnATreeWithoutIt(): void
+    {
+        $this->history->commitFile('composer.lock', self::LOCK, 'Lock the dependencies');
+        $snapshot = $this->readOnlySnapshotHolding(['vendor/installed.json' => "{}\n"]);
+        $this->givenACopyThatStopsHalfway();
+
+        $run = $this->whenTheCheckRunsWith(
+            ['--dependencies', $snapshot, 'touch installed', 'exit 9', 'composer.lock', $this->blobOf(self::LOCK)],
+            $this->history->bundle('main..task'),
+            'touch installed',
+            'test ! -e vendor',
+        );
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
+        self::assertSame("passed\n", $this->outputFile('check-result'));
+        self::assertStringContainsString('the dependency snapshot could not be copied', $this->outputFile('check.log'));
+    }
+
+    public function testAPartialCopyThatCannotBeRemovedStopsTheCheckBeforeAnyStepAndLeavesNoResult(): void
+    {
+        $this->history->commitFile('composer.lock', self::LOCK, 'Lock the dependencies');
+        $snapshot = $this->readOnlySnapshotHolding(['vendor/installed.json' => "{}\n"]);
+        $shim = $this->givenACopyThatStopsHalfway();
+        new Filesystem()->dumpFile($shim.'/rm', "#!/bin/sh\nexit 1\n");
+        new Filesystem()->chmod($shim.'/rm', 0o700);
+
+        $run = $this->whenTheCheckRunsWith(
+            ['--dependencies', $snapshot, 'touch installed', 'exit 9', 'composer.lock', $this->blobOf(self::LOCK)],
+            $this->history->bundle('main..task'),
+            'touch installed',
+        );
+
+        self::assertSame(1, $run->getExitCode(), $this->outputFile('check.log'));
+        self::assertFileExists($this->work.'/clone/vendor/installed.json');
+        self::assertFileDoesNotExist($this->work.'/clone/installed');
+        self::assertFileDoesNotExist($this->output.'/check-result');
+        self::assertStringContainsString(
+            "the partial copy of the dependency snapshot could not be removed, so the check stops without a result\n",
+            $this->outputFile('check.log'),
+        );
+        self::assertStringNotContainsString('$ touch installed', $this->outputFile('check.log'));
+    }
+
+    /**
+     * A cp in front of the real one that leaves one file of the snapshot in the clone and fails, because a test cannot make a real copy stop halfway.
+     */
+    private function givenACopyThatStopsHalfway(): string
+    {
+        $shim = $this->history->folder.'/shim';
+        $partial = $this->work.'/clone/vendor';
+        new Filesystem()->dumpFile($shim.'/cp', "#!/bin/sh\nmkdir -p '$partial'\ntouch '$partial/installed.json'\nexit 1\n");
+        new Filesystem()->chmod($shim.'/cp', 0o700);
+        $this->path = $shim.PATH_SEPARATOR.getenv('PATH');
+
+        return $shim;
+    }
+
     /**
      * @return list<string>
      */

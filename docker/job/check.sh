@@ -109,8 +109,9 @@ writable() {
 
 remove_copy() {
     chmod -R u+w "$clone/$1" 2> /dev/null
-    rm -rf -- "${clone:?}/$1"
-    return 0
+    rm -rf -- "${clone:?}/$1" || return 1
+    # Looked at again, because only an entry that is gone cannot mislead the install that follows.
+    [ ! -e "$clone/$1" ] && [ ! -L "$clone/$1" ]
 }
 
 # The bytes of each lock file in the merged tree, unfiltered, must be the blob the snapshot's key was made of, because main can move after the snapshot was chosen and change what the install depends on (Composer's vendor-dir among it).
@@ -142,7 +143,10 @@ use_dependencies() {
     fi
     # A partial copy could name packages as installed that are not there, so nothing of it is kept.
     printf 'the dependency snapshot could not be copied, so the check installs its dependencies itself\n'
-    each_entry remove_copy
+    if ! each_entry remove_copy; then
+        printf 'the partial copy of the dependency snapshot could not be removed, so the check stops without a result\n'
+        return 2
+    fi
     return 1
 }
 
@@ -164,9 +168,12 @@ if ! merge_main >> "$log" 2>&1; then
 fi
 
 if [ -n "$dependencies" ]; then
-    if use_dependencies "$@" >> "$log" 2>&1; then
-        copied=1
-    fi
+    use_dependencies "$@" >> "$log" 2>&1
+    case "$?" in
+        0) copied=1 ;;
+        # No step and no result, because an install on top of leftover package metadata could pass or fail for what the tree does not hold.
+        2) exit 1 ;;
+    esac
     while [ "$#" -gt 0 ] && [ "$1" != '--' ]; do
         shift
     done
