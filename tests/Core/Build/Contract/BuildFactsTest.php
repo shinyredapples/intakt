@@ -46,6 +46,6 @@ final class BuildFactsTest extends TestCase
     {
         $fields = array_map(static fn ($property): string => $property->getName(), new ReflectionClass(BuildFacts::class)->getProperties());
 
-        self::assertSame(['labelledTier', 'paths', 'setback'], $fields);
+        self::assertSame(['labelledTier', 'paths', 'setback', 'escalation'], $fields);
     }
 }

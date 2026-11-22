@@ -28,7 +28,7 @@ final readonly class Redaction
     #[NoDiscard]
     public function redact(string $text, #[SensitiveParameter] string ...$heldCredentials): string
     {
-        $spans = new HeldCredentialSpans()->in($text, array_values($heldCredentials));
+        $spans = new HeldCredentialSpans()->in($text, ...$heldCredentials);
         // A failed match would leave the rest unredacted, so nothing of the text goes out.
         if (!$spans instanceof RedactedSpans) {
             return self::MARKER;
@@ -49,8 +49,9 @@ final readonly class Redaction
     private function structuredSpans(string $text): ?RedactedSpans
     {
         $headers = new HeaderSpans();
-        [$spans, $keptTails] = $headers->lists($text);
-        $values = $headers->values($spans->maskedIn($text), $keptTails);
+        $listed = $headers->lists($text);
+        $spans = $listed->spans;
+        $values = $headers->values($spans->maskedIn($text), $listed);
         if (!$values instanceof RedactedSpans) {
             return null;
         }

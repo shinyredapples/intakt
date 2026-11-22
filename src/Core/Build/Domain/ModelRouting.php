@@ -9,6 +9,7 @@ use Intakt\Core\Build\Contract\BuildFacts;
 use Intakt\Core\Build\Contract\Setback;
 use Intakt\Core\Build\Contract\TierChoice;
 use Intakt\Core\Build\Contract\TierReason;
+use Intakt\Core\Review\Contract\EscalationOutcome;
 use Intakt\Core\Review\Contract\PathGlob;
 
 final readonly class ModelRouting
@@ -18,6 +19,11 @@ final readonly class ModelRouting
         // A sensitive path comes first because a safety rule must hold whatever the label says; the label then beats the default.
         if ($this->touchesSensitivePath($rules, $facts)) {
             return new TierChoice(Tier::Strong, TierReason::SensitivePath);
+        }
+
+        // Not one of the setbacks escalate_on lists, because the escalation review's confirmation is the design's rule for a recurring P1, never a project's choice; only a sensitive path outranks it, so a strong label does not hide why the build is strong.
+        if (EscalationOutcome::Confirmed === $facts->escalation) {
+            return new TierChoice(Tier::Strong, TierReason::ConfirmedEscalation);
         }
 
         // A setback only raises the tier: a label that already names strong keeps its reason, a cheaper label is overridden.

@@ -16,6 +16,7 @@ use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\LedgerEventsAreAppendOnly;
+use Intakt\Core\Ledger\Contract\Mentions;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Intakt\Core\Ledger\Domain\EventRecord;
@@ -66,19 +67,12 @@ final readonly class DoctrineLedger implements Ledger
         return $this->recordedEventsOf(['kind' => $kind->value]);
     }
 
-    /**
-     * @param list<string> $texts
-     */
-    public function readMentioning(array $texts): RecordedEvents
+    public function readMentioning(Mentions $texts): RecordedEvents
     {
         return $this->eventsMentioning($texts, static fn (QueryBuilder $query): QueryBuilder => $query);
     }
 
-    /**
-     * @param list<LedgerEventKind> $kinds
-     * @param list<string>          $texts
-     */
-    public function readOfKindsMentioning(array $kinds, array $texts): RecordedEvents
+    public function readOfKindsMentioning(Mentions $texts, LedgerEventKind ...$kinds): RecordedEvents
     {
         if ([] === $kinds) {
             return new RecordedEvents([]);
@@ -91,13 +85,12 @@ final readonly class DoctrineLedger implements Ledger
 
     // Both mention reads share the chunking and the append order, so an event named in two chunks is kept once and the reads cannot drift apart.
     /**
-     * @param list<string>                        $texts
      * @param Closure(QueryBuilder): QueryBuilder $narrowed
      */
-    private function eventsMentioning(array $texts, Closure $narrowed): RecordedEvents
+    private function eventsMentioning(Mentions $texts, Closure $narrowed): RecordedEvents
     {
         $records = [];
-        foreach (array_chunk($texts, self::TEXTS_PER_QUERY) as $chunk) {
+        foreach (array_chunk([...$texts], self::TEXTS_PER_QUERY) as $chunk) {
             /** @var list<EventRecord> $found */
             $found = $narrowed($this->queryMentioningAnyOf($chunk))->getQuery()->getResult();
 

@@ -34,14 +34,14 @@ final readonly class VerdictForTheLoop
 
     public function of(ReviewRound $round): PublishedVerdict
     {
+        // Before any vote is read, because a replay plays a recorded review back, so its votes were never given on this head and must never reach the forge as a verdict; before the stale mark too, because a replay was never published as a review, so it has nothing to withdraw.
+        if (ReplayMark::Replay === $round->replayMark()) {
+            return new PublishedVerdict($round->identity()->commits->head, HeadStatus::Error, 'Intakt does not count a replay as a review of this head.', null, $this->tokenOf($round));
+        }
+
         // Before any vote is read, because the head was refused after the round started (it no longer boots), so an approval queued earlier must never reach the forge as a success.
         if ($round->hasStaleVerdicts()) {
             return new PublishedVerdict($round->identity()->commits->head, HeadStatus::Failure, 'Intakt withdrew its review: this head does not boot.', null, $this->tokenOf($round));
-        }
-
-        // Before any vote is read, because a replay plays a recorded review back, so its votes were never given on this head and must never reach the forge as a verdict.
-        if (ReplayMark::Replay === $round->replayMark()) {
-            return new PublishedVerdict($round->identity()->commits->head, HeadStatus::Error, 'Intakt does not count a replay as a review of this head.', null, $this->tokenOf($round));
         }
 
         // Not reviewed, because only a judging that failed for good publishes a round before its judge transition, so the round has no act list.

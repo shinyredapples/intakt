@@ -16,6 +16,7 @@ use Intakt\Core\Ledger\Contract\AppendResult;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\Mentions;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Intakt\Core\Platform\Contract\Redactor;
@@ -436,7 +437,7 @@ final class BootResultsTest extends KernelTestCase
     public function testAFailingMainIsFoundFromTheBootLinesOfTheProjectOnly(): void
     {
         $ledger = $this->createMock(Ledger::class);
-        $ledger->expects(self::once())->method('readOfKindsMentioning')->with([LedgerEventKind::BootResultComputed, LedgerEventKind::MainBootFailed], ['"project":"acme"'])->willReturn(new RecordedEvents([
+        $ledger->expects(self::once())->method('readOfKindsMentioning')->with(new Mentions('"project":"acme"'), LedgerEventKind::BootResultComputed, LedgerEventKind::MainBootFailed)->willReturn(new RecordedEvents([
             new RecordedEvent(new UuidV7(), new LedgerEvent(LedgerEventKind::MainBootFailed, '{"project":"acme","main":"abc","tool_fingerprint":"tools-1","reason":"No status."}'), new DateTimeImmutable('2026-10-27 12:00:00')),
         ]));
         $ledger->expects(self::never())->method('readMentioning');
@@ -768,8 +769,8 @@ final class BootResultsTest extends KernelTestCase
         $results->ofMain($this->key('a', 'tools-1'), $this->source());
         $ledger = self::createStub(Ledger::class);
         $ledger->method('append')->willReturnCallback($this->ledger->append(...));
-        $ledger->method('readOfKindsMentioning')->willReturnCallback(function (array $kinds, array $texts) use ($results): RecordedEvents {
-            $before = $this->ledger->readOfKindsMentioning(array_values(array_filter($kinds, static fn (mixed $kind): bool => $kind instanceof LedgerEventKind)), array_values(array_filter($texts, is_string(...))));
+        $ledger->method('readOfKindsMentioning')->willReturnCallback(function (Mentions $texts, LedgerEventKind ...$kinds) use ($results): RecordedEvents {
+            $before = $this->ledger->readOfKindsMentioning($texts, ...$kinds);
             // Run here, because only a hit between this worker's read of the board and its append forces the order of the race.
             $results->ofMain($this->key('b', 'tools-1'), $this->source());
 

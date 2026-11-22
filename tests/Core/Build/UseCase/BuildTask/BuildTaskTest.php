@@ -33,6 +33,8 @@ use Intakt\Core\Build\UseCase\BuildTask\HandBackCheck;
 use Intakt\Core\Build\UseCase\BuildTask\HandBackFile;
 use Intakt\Core\Build\UseCase\BuildTask\ParkedTasks;
 use Intakt\Core\Build\UseCase\BuildTask\PrePushCheck;
+use Intakt\Core\Build\UseCase\BuildTask\PushRemoteCheck;
+use Intakt\Core\Build\UseCase\BuildTask\PushRemoteRefused;
 use Intakt\Core\Build\UseCase\BuildTask\PushStep;
 use Intakt\Core\Build\UseCase\BuildTask\TaskNotParked;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
@@ -104,6 +106,7 @@ use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\JobCredentials;
 use Intakt\Plugin\Forge\Contract\OpenedChange;
 use Intakt\Plugin\Forge\Contract\ProposedChange;
+use Intakt\Plugin\GitHubForge\Contract\ConfiguredRepositories;
 use Intakt\Plugin\GitHubForge\Contract\IssueReads;
 use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
@@ -140,6 +143,8 @@ use Symfony\Component\Process\Process;
 #[CoversClass(PrePushCheck::class)]
 #[CoversClass(PushStep::class)]
 #[UsesClass(ParkedTasks::class)]
+#[UsesClass(PushRemoteCheck::class)]
+#[UsesClass(PushRemoteRefused::class)]
 #[UsesClass(ParkedTaskRecord::class)]
 #[UsesClass(TaskNotParked::class)]
 #[UsesClass(BuildQuestion::class)]
@@ -239,6 +244,7 @@ final class BuildTaskTest extends TestCase
     private string $output;
 
     private TemporaryRepository $remote;
+    private ?string $configuredRepository = null;
 
     private ?ProgramOnPath $programs = null;
 
@@ -280,6 +286,39 @@ final class BuildTaskTest extends TestCase
         $this->programs?->remove();
         new Filesystem()->remove([$this->mirrors, $this->clone, $this->clone.'-job', $this->output, $this->mirrors.'-prompts', $this->mirrors.'-hand-backs', $this->mirrors.'-key', $this->mirrors.'-key.pub']);
         $this->remote->remove();
+    }
+
+    public function testARemoteNamingAnotherGitHubRepositoryThanTheConfiguredOneIsRefusedBeforeAnythingIsRecordedPushedOrAskedOfTheForge(): void
+    {
+        $this->configuredRepository = 'acme/alpha';
+        $ledger = new InMemoryLedger();
+        $issues = $this->createMock(IssueReads::class);
+        $issues->expects(self::never())->method('readOpen');
+        $issues->expects(self::never())->method('listOpen');
+        $this->changes->checking = static fn () => self::fail('the forge was asked about the change');
+
+        try {
+            (void) $this->buildTask($issues, $this->checkout(), $ledger)->run($this->request(7, 'https://github.com/acme/beta.git'));
+            self::fail('the remote was not refused');
+        } catch (PushRemoteRefused $refused) {
+            self::assertStringContainsString('"https://github.com/acme/beta.git"', $refused->getMessage());
+            self::assertStringContainsString('"acme/alpha"', $refused->getMessage());
+        }
+
+        self::assertSame([], $ledger->payloads());
+        self::assertSame(0, $this->changes->calls);
+        self::assertNull($this->remoteTip());
+    }
+
+    public function testARemoteNamingTheConfiguredRepositoryWithAGitSuffixAndOtherLetterCaseIsAccepted(): void
+    {
+        $this->configuredRepository = 'acme/alpha';
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [])->run($this->request(7, 'https://GitHub.com/ACME/Alpha.git'));
+
+        self::assertSame('project "alpha" has no open issue 7', $outcome->failure);
+        self::assertSame(['task'], array_column($this->stepsIn($ledger), 'step'));
     }
 
     public function testATaskWhoseStepsAllPassEndsWithTheBranchPushedSignedFromTheCheckedHead(): void
@@ -992,6 +1031,8 @@ final class BuildTaskTest extends TestCase
 
     private function buildTask(IssueReads $issues, GitBuildCheckout $checkout, InMemoryLedger $ledger): BuildTask
     {
+        $configured = self::createStub(ConfiguredRepositories::class);
+        $configured->method('nameOf')->willReturn($this->configuredRepository);
         $builds = new RunBuildJob($this->tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $this->runner, new PhpGate(), new GatesAtOnce(12, 1), 1500, new Filesystem(), self::SCRIPT, $this->mirrors.'-prompts');
         $git = new RepositoryGit(new HardenedGit());
         $checks = new CheckHandBack($git, new BundleFile(), new StrippedCommits(), new IncomingObjects(), new BundleSecretScan($this->scanner));
@@ -1001,7 +1042,7 @@ final class BuildTaskTest extends TestCase
         // On a database that cannot be opened, because a parking that works is proven on the install's own database in BuildTaskParksOnSqliteTest.
         $parked = new ParkedTasks(DriverManager::getConnection(['driver' => 'pdo_sqlite', 'path' => $this->mirrors.'-missing/data.db']), $ledger, self::createStub(ManagerRegistry::class), new MockClock());
 
-        return new BuildTask($issues, $checkout, $this->routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files), new PushStep($this->branchPush($ledger), $checkout), $parked, $ledger);
+        return new BuildTask($issues, $checkout, $this->routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files), new PushStep($this->branchPush($ledger), $checkout), $parked, $ledger, new PushRemoteCheck($configured));
     }
 
     // Records in the run's own ledger, as the container wires it, so the push's events sit between the steps' events.
