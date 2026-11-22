@@ -304,6 +304,16 @@ final class PublishedBenchTest extends TestCase
         self::assertNull($this->headlineOf($this->section(date: self::DATE."\n\nEach change ran 03 times."))?->runs);
     }
 
+    public function testAMalformedSecondRepeatSentenceGivesNoRunCountButKeepsTheTotals(): void
+    {
+        foreach (['03', '0'] as $other) {
+            $headline = $this->headlineOf($this->section(date: self::DATE."\n\nEach change ran 3 times. Each change ran {$other} times."));
+
+            self::assertNotNull($headline);
+            self::assertNull($headline->runs);
+        }
+    }
+
     public function testOneRunAndARunCountBeyondTheIntegerRange(): void
     {
         self::assertSame(1, $this->headlineOf($this->section(date: self::DATE."\n\nEach change ran 1 times."))?->runs);

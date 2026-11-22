@@ -18,8 +18,8 @@ final readonly class PublishedBench
     private const string FOUND_CELL = '/^(\d+) of (\d+)$/';
     private const string COUNT_CELL = '/^\d+$/';
     private const string RUN_DATE = '/^Date of the run: ((\d{4})-(\d{2})-(\d{2}))\./';
-    // Not anchored to the line start, so a second sentence later on the same line is counted and makes the count ambiguous.
-    private const string REPEAT = '/\bEach change ran ([1-9]\d*) times\./';
+    // Every occurrence is counted, whatever its digits, so two sentences make the count ambiguous.
+    private const string REPEAT = '/\bEach change ran (\d+) times\./';
 
     public function __construct(
         #[Autowire('%kernel.project_dir%/README.md')]
@@ -55,7 +55,9 @@ final readonly class PublishedBench
             $section,
         ));
 
-        return 1 === count($repeats) ? $this->countOf($repeats[0]) : null;
+        $runs = 1 === count($repeats) ? $this->countOf($repeats[0]) : null;
+
+        return 0 === $runs ? null : $runs;
     }
 
     private function text(): string
