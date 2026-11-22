@@ -6,10 +6,10 @@ namespace Intakt\Plugin\GitHubWorkSource\Domain;
 
 final readonly class IssueReferences
 {
-    // Any line that starts with the words, in a list or not, because a wait that goes unseen lets a task be built before its base.
-    private const string WAITS_LINE = '/^[ \t]*((?:[-*+][ \t]+)?Waits[ \t]+for\b[ \t]*:?[ \t]*(.*?))[ \t\r]*$/im';
-    // A note may follow the numbers but must name no other number, because a number Intakt skipped would be a wait it misses.
-    private const string NUMBERS = '/^(#\d+(?:[ \t]*(?:,[ \t]*(?:and[ \t]+|&[ \t]*)?|and[ \t]+|&[ \t]*)#\d+)*)(?![ \t]*(?:[,&\d]|and\b))[^#]*$/i';
+    // Any line that starts with the words, after blockquote markers and a list marker or not, with `**`, `__`, `*` or `_` around the words and the colon inside or outside, because a wait that goes unseen lets a task be built before its base.
+    private const string WAITS_LINE = '/^[ \t]*((?:>[ \t]*)*(?:[-*+][ \t]+)?(?:\*\*|__|\*|_)?Waits[ \t]+for(?![^\W_]):?(?:\*\*|__|\*|_)?[ \t]*:?[ \t]*(.*?))[ \t\r]*$/im';
+    // A note may follow the numbers but must hold no digit, because a number Intakt skipped would be a wait it misses.
+    private const string NUMBERS = '/^(#\d+(?:[ \t]*(?:,[ \t]*(?:and[ \t]+|&[ \t]*)?|and[ \t]+|&[ \t]*)#\d+)*)(?![ \t]*(?:[,&]|and\b))[^#\d]*$/i';
     private const string CLOSING = '/\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*:?\s+#(\d+)\b/i';
 
     /**
