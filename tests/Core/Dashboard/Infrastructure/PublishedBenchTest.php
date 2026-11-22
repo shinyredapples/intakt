@@ -40,6 +40,32 @@ final class PublishedBenchTest extends TestCase
         self::assertSame(['11 of 15', 2, '2026-11-16'], [$headline->reading(), $headline->falseAlarms, $headline->ranOn]);
     }
 
+    public function testWithoutARepeatSentenceTheRunCountIsUnknown(): void
+    {
+        self::assertNull($this->headlineOf($this->section())?->runs);
+    }
+
+    public function testTheRepeatSentenceGivesTheRunCount(): void
+    {
+        self::assertSame(3, $this->headlineOf($this->section(date: "Each change ran 3 times, so 15 counts.\n\n".self::DATE))?->runs);
+    }
+
+    // Because the command's --repeat sits in a code block, which is no part of the section a parser reads.
+    public function testARepeatCountOnlyInTheCommandIsNotRead(): void
+    {
+        self::assertNull($this->headlineOf(str_replace('intakt:bench', 'intakt:bench --repeat=3', $this->section()))?->runs);
+    }
+
+    public function testTwoRepeatSentencesGiveNoRunCount(): void
+    {
+        self::assertNull($this->headlineOf($this->section(date: "Each change ran 3 times.\n\nEach change ran 5 times.\n\n".self::DATE))?->runs);
+    }
+
+    public function testARepeatCountOfZeroGivesNoRunCount(): void
+    {
+        self::assertNull($this->headlineOf($this->section(date: "Each change ran 0 times.\n\n".self::DATE))?->runs);
+    }
+
     public function testAReadmeWithoutTheTableGivesNoHeadline(): void
     {
         self::assertNull($this->headlineOf("# Intakt\n"));
@@ -265,7 +291,7 @@ final class PublishedBenchTest extends TestCase
 
         self::assertNotNull($headline);
         self::assertMatchesRegularExpression('/^\d+ of \d+$/', $headline->reading());
-        self::assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2}$/', $headline->ranOn);
+        self::assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2}$/', $headline->ranOn);        self::assertNotNull($headline->plantedPerRun(), 'The README no longer says how often each change ran.');
     }
 
     private function section(string $header = self::HEADER, string $panel = self::PANEL, string $date = self::DATE): string

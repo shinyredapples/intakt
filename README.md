@@ -65,6 +65,8 @@ The review bench reviews eight small changes of the sample shop, five with one p
 docker compose exec intakt php bin/console intakt:bench --project=sample --repeat=3
 ```
 
+Each change ran 3 times, so the five planted defects count 15 times: 15 of 15 means every planted defect was found in each run.
+
 | Reviewer | Defects found (measured) | False alarms (measured) | Tokens per change (measured) |
 | --- | --- | --- | --- |
 | Panel on Claude and GPT (`correctness` on Claude `opus`, `security` on GPT `gpt-6.2-sol`), 2026-11-21 | 15 of 15 | 3 | about 75,600 |

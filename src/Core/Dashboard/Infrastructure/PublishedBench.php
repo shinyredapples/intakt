@@ -18,6 +18,8 @@ final readonly class PublishedBench
     private const string FOUND_CELL = '/^(\d+) of (\d+)$/';
     private const string COUNT_CELL = '/^\d+$/';
     private const string RUN_DATE = '/^Date of the run: ((\d{4})-(\d{2})-(\d{2}))\./';
+    // A code block is no part of a section, so the repeat count is read from the sentence that states it, not from the command.
+    private const string REPEAT = '/^Each change ran (\d+) times\b/';
 
     public function __construct(
         #[Autowire('%kernel.project_dir%/README.md')]
@@ -40,7 +42,7 @@ final readonly class PublishedBench
             return null;
         }
 
-        return new BenchHeadline($panel[0], $panel[1], $panel[2], $ranOn);
+        return new BenchHeadline($panel[0], $panel[1], $panel[2], $ranOn, $this->runs($section));
     }
 
     private function text(): string
@@ -103,5 +105,20 @@ final readonly class PublishedBench
         [, $date, $year, $month, $day] = $dates[0];
 
         return checkdate((int) $month, (int) $day, (int) $year) ? $date : null;
+    }
+
+    // Null unless the section states the repeat count exactly once, so two differing counts never pick one.
+    /**
+     * @param list<string> $section
+     */
+    private function runs(array $section): ?int
+    {
+        $repeats = array_values(array_filter(array_map(
+            static fn (string $line): ?string => 1 === preg_match(self::REPEAT, $line, $repeat) ? $repeat[1] : null,
+            $section,
+        )));
+        $runs = 1 === count($repeats) ? $this->countOf($repeats[0]) : null;
+
+        return 0 === $runs ? null : $runs;
     }
 }

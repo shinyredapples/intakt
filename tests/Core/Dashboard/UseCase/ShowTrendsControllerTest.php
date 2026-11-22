@@ -54,38 +54,52 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
         self::assertSame('No reviews yet', $page->filter('main .empty h2')->text());
         self::assertSame(1, preg_match('~octopus-waiting-light[^"]*\.webp$~', $page->filter('main .empty img.character')->attr('src') ?? ''));
         self::assertSame([], $this->tiles($page));
-        self::assertSame(['bench'], $page->filter('.tiles .tile')->each(static fn (Crawler $tile): string => (string) $tile->attr('data-tile')));
+        self::assertSelectorExists('.page-head #trends-bench h1');
+        self::assertSame(1, $page->filter('main img.character-light[src*="octopus-"]')->count());
     }
 
-    public function testTheFirstTileIsThePublishedBenchResultMarkedMeasuredWithTheDateOfItsRunAsVisibleText(): void
+    // Answer first (UX2, issue 3329): the shipped run planted 5 defects and ran each change 3 times, so its "15 of 15" reads as every defect found in each run.
+    public function testTheHeadlineIsThePublishedBenchResultInWordsMarkedMeasuredWithTheDateOfItsRun(): void
     {
         $bench = $this->publishedBench();
         $this->ledger->startRound('r-1', 'alpha');
 
-        $tile = $this->browser->request('GET', '/trends')->filter('.tiles .tile')->first();
+        $hero = $this->browser->request('GET', '/trends')->filter('.page-head #trends-bench');
 
-        self::assertSame(['bench', $bench->reading()], [$tile->attr('data-tile'), $tile->filter('dd')->getNode(0)?->firstChild?->textContent]);
-        self::assertSame('measured', $tile->filter('.figure-kind')->attr('data-kind'));
-        self::assertSame([$bench->ranOn, 'Run of '.$bench->ranOn], [$tile->filter('dd time.tile-date')->attr('datetime'), $tile->filter('dd time.tile-date')->text()]);
+        self::assertSame('All 5 planted defects found in each of 3 runs', $hero->filter('h1')->text());
+        self::assertSame('All 5', $hero->filter('h1 .trends-figure')->text());
+        self::assertSame('measured', $hero->filter('.figure-kind')->attr('data-kind'));
+        self::assertSame([$bench->ranOn, 'Run of '.$bench->ranOn], [$hero->filter('time')->attr('datetime'), $hero->filter('time')->text()]);
+        self::assertSame($bench->falseAlarms.' false alarms in all', $hero->filter('h1 + p')->text());
     }
 
-    public function testTheBenchTilesFocusableLabelCarriesItsFalseAlarms(): void
+    public function testThePageWithReviewsShowsTheOctopusOnceBesideTheHeadline(): void
     {
-        $bench = $this->publishedBench();
+        $this->ledger->startRound('r-1', 'alpha');
 
-        $label = $this->browser->request('GET', '/trends')->filter('[data-tile="bench"] dt .term');
+        $page = $this->browser->request('GET', '/trends');
 
-        self::assertSame('0', $label->attr('tabindex'));
-        self::assertStringEndsWith('; '.$bench->falseAlarms.' false alarms.', $label->filter('.term-tip')->text());
+        self::assertSame(1, preg_match('~octopus-bowing-light[^"]*\.webp$~', $page->filter('#trends-bench img.character-light')->attr('src') ?? ''));
+        self::assertSame(1, $page->filter('main img.character-light[src*="octopus-"]')->count());
     }
 
-    public function testABenchRunWithOneFalseAlarmNamesItInTheSingular(): void
+    public function testEachTileCarriesItsRoleCharacterAndAShortLine(): void
+    {
+        $this->ledger->startRound('r-1', 'alpha');
+
+        $tile = $this->browser->request('GET', '/trends')->filter('[data-tile="passes"]');
+
+        self::assertSame(1, preg_match('~images/characters/code_reviewer-light[^"]*\.webp$~', $tile->filter('dt img.character-light')->attr('src') ?? ''));
+        self::assertSame(['', 'all time'], [$tile->filter('dt img')->attr('alt'), $tile->filter('dt .tile-meta')->text()]);
+    }
+
+    public function testABenchRunWithoutARepeatCountKeepsItsFigureAndNamesOneFalseAlarmInTheSingular(): void
     {
         self::getContainer()->set(PublishedBench::class, new PublishedBench(__DIR__.'/ShowTrends/a-bench-run-with-one-false-alarm.md'));
 
-        $tip = $this->browser->request('GET', '/trends')->filter('[data-tile="bench"] dt .term-tip');
+        $hero = $this->browser->request('GET', '/trends')->filter('#trends-bench');
 
-        self::assertStringEndsWith('; 1 false alarm.', $tip->text());
+        self::assertSame(['4 of 5 planted defects found', '1 false alarm in all'], [$hero->filter('h1')->text(), $hero->filter('h1 + p')->text()]);
     }
 
     public function testThePassesTileExplainsAStandaloneReviewPassWithoutCallingItABuild(): void
@@ -106,6 +120,7 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
         $page = $this->browser->request('GET', '/trends');
 
         self::assertSame(['passes'], $page->filter('.tiles .tile')->each(static fn (Crawler $tile): string => (string) $tile->attr('data-tile')));
+        self::assertSame(['Trends', 0], [$page->filter('.page-head h1')->text(), $page->filter('#trends-bench')->count()]);
     }
 
     public function testTheTilesComeBeforeTheFirstChart(): void
@@ -323,7 +338,8 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
 
         $page = $this->browser->request('GET', '/trends');
 
-        self::assertSame('Show as table', $page->filter('#chart-catches details.c-table summary')->text());
+        self::assertSame(0, $page->filter('main details')->count());
+        self::assertSame('sr-only', $page->filter('#chart-catches table')->attr('class'));
         self::assertSame(
             $page->filter('#chart-catches .c-label')->each(static fn (Crawler $label): string => $label->text()),
             $page->filter('#chart-catches tbody tr')->each(static fn (Crawler $row): string => sprintf('%s (%s alone)', $row->filter('td')->eq(2)->text(), $row->filter('td')->eq(3)->text())),
@@ -697,7 +713,7 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
     {
         $tiles = [];
 
-        foreach ($page->filter('.tiles .tile:not([data-tile="bench"])') as $tile) {
+        foreach ($page->filter('.tiles .tile') as $tile) {
             $crawler = new Crawler($tile);
             $label = $crawler->filter('dt .term')->getNode(0)?->firstChild->textContent ?? '';
             $tiles[trim($label)] = $crawler->filter('dd')->text();
