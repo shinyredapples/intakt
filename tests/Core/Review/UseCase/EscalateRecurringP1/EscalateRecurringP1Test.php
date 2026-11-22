@@ -166,7 +166,9 @@ final class EscalateRecurringP1Test extends KernelTestCase
         $this->escalateQueued($escalations);
 
         self::assertSame([[], null], [$escalations->calls, $this->keptOf('F1')]);
-        self::assertStringStartsWith('The diff of the files the finding cites holds', $this->payloadsOf(LedgerEventKind::EscalationFailed)[0]['reason'] ?? '');
+        $reason = $this->payloadsOf(LedgerEventKind::EscalationFailed)[0]['reason'] ?? null;
+        self::assertIsString($reason);
+        self::assertStringStartsWith('The diff of the files the finding cites holds', $reason);
     }
 
     public function testAnEscalationOfAKeyAnotherRoundHasEscalatedSinceReusesThatVerdictWithoutAskingAModel(): void

@@ -11,7 +11,7 @@ use Intakt\Core\Review\Contract\EscalationReviewFailed;
 use Intakt\Core\Review\Contract\EscalationVerdictKept;
 use Intakt\Core\Review\Contract\EscalationVerdictReused;
 
-// Read from the ledger by plain code, a reused verdict counting as the review it stands in for.
+// Read from the ledger, because the ledger is what a redelivered message must find to settle its round and key, and a reused verdict counts as the review it stands in for.
 final readonly class EscalationsOfChange
 {
     private const array KINDS = [
