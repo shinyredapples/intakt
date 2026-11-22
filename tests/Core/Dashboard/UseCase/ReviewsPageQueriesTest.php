@@ -34,7 +34,7 @@ final class ReviewsPageQueriesTest extends WebTestCase
         $this->fixture = new RoundFixture(self::getContainer());
     }
 
-    // The sixteenth is the shell's You count of owner notices, one per page whatever the rounds.
+    // Sixteen, because the shell reads the owner notices once for the You count, whatever the rounds.
     public function testTheReviewsPageWithThreeRoundsRunsSixteenQueries(): void
     {
         $this->givenRounds(3);

@@ -97,8 +97,7 @@ final readonly class ShowErrorController
     private function render(int $status, string $message, ?string $reference): string
     {
         try {
-            // No You count, because the notice store may be the very thing that failed.
-            return $this->twig->render('dashboard/error.html.twig', ['status' => $status, 'message' => $message, 'reference' => $reference, 'project_names' => $this->projectNames(), 'waiting_count' => 0]);
+            return $this->twig->render('dashboard/error.html.twig', ['status' => $status, 'message' => $message, 'reference' => $reference, 'project_names' => $this->projectNames()]);
             // Boundary: logs a failed shell and answers with the plain page, because the error page itself must never fail.
         } catch (Throwable $failure) {
             $this->logger->warning('The error page was shown without the dashboard shell.', ['exception' => $failure]);

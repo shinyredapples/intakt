@@ -12,7 +12,7 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 
-// The Status page behind the board's status line; /status stays the JSON report intakt:status matches.
+// The Status page has an address of its own, because /status is the JSON report intakt:status matches byte for byte.
 final readonly class ShowLanesController
 {
     public function __construct(
