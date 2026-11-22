@@ -16,7 +16,7 @@ AI code review by a panel from different AI labs. A finding whose quoted code is
 <!-- HERO: replaced by a capture from the video tag after 11:00 -->
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/dashboard-review-dark.png">
-  <img src="docs/assets/dashboard-review.png" alt="The dashboard's review page for the sample change: the verdict card first, Changes requested with three things to fix, each with its priority and file and line, then what the change does and the tokens it took" width="760" height="475">
+  <img src="docs/assets/dashboard-review.png" alt="An earlier version of the dashboard's review page for the sample change: the verdict card first, Changes requested with three things to fix, each with its priority and file and line, then what the change does and the tokens it took" width="760" height="475">
 </picture>
 
 ## Five-minute start
