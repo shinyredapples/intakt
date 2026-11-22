@@ -9,6 +9,7 @@ use DOMNode;
 use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Domain\Character;
+use Intakt\Core\Dashboard\Domain\GlossaryTerm;
 use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\ReviewerOutcome;
@@ -50,6 +51,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\NullLogger;
+use Symfony\AI\Platform\Result\ToolCall;
 use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
@@ -87,6 +89,7 @@ use Twig\Environment;
 #[UsesClass(ReadFinding::class)]
 #[UsesClass(ReadAnswer::class)]
 #[UsesClass(Character::class)]
+#[UsesClass(GlossaryTerm::class)]
 final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 {
     use DownloadedScriptStandIns;
@@ -142,7 +145,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
         self::assertStringNotContainsString('review%2Frounds', (string) $crawler->filter('turbo-mercure-stream-source')->attr('src'));
-        self::assertSame('Judged.', $crawler->filter('#round-round-1-state')->text());
+        self::assertSame('Checked.', $crawler->filter('#round-round-1-state')->text());
     }
 
     public function testThePageHoldsTheElementsTheStreamsReplaceAndAppendTo(): void
@@ -195,7 +198,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $updated = $this->replaced($page, $this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(1, 2, false)]));
 
         self::assertSame('1 of 2 reviewers finished.', $updated->filter('#round-round-1-now-progress')->text());
-        self::assertSame('Now: round 1 in review', $updated->filter('#state-block-title')->text());
+        self::assertSame('Now: Review pass 1? in review', $this->stateBlockTitleOf($updated));
     }
 
     public function testAVerdictPushedToThePageStopsShowingTheReviewerRunning(): void
@@ -221,7 +224,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
             .$this->stream('round_judged', ['round' => 'round-1', 'progress' => new RoundProgress(2, 2, true, ['round-1-correctness' => FinishedState::Stopped])]));
 
         self::assertSame('stopped', $updated->filter('#round-round-1-now-reviewer-round-1-correctness-state')->text());
-        self::assertSame('Now: round 1 judged', $updated->filter('#state-block-title')->text());
+        self::assertSame('Now: Review pass 1? checked?', $this->stateBlockTitleOf($updated));
     }
 
     public function testAJudgedRoundPushedToThePageTurnsTheCurrentStateBlockToJudged(): void
@@ -231,7 +234,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
         $updated = $this->replaced($page, $this->stream('round_judged', ['round' => 'round-1', 'progress' => new RoundProgress(2, 2, true)]));
 
-        self::assertSame('Now: round 1 judged', $updated->filter('#state-block-title')->text());
+        self::assertSame('Now: Review pass 1? checked?', $this->stateBlockTitleOf($updated));
         self::assertStringStartsWith('The judge has judged this round.', $updated->filter('#round-round-1-now-judge')->text());
     }
 
@@ -243,11 +246,22 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
         $updated = $this->replaced($page, $this->stream('round_judged', ['round' => 'round-1', 'progress' => new RoundProgress(2, 2, true)]));
 
-        self::assertSame('Judged', $updated->filter('#round-round-1-head-state .muted.state-judged')->text());
+        self::assertSame('Checked', $updated->filter('#round-round-1-head-state .muted.state-judged')->text());
         self::assertCount(0, $updated->filter('#round-round-1-head-state .chip'));
         self::assertCount(0, $updated->filter('.round-head .state-running'));
-        self::assertSame('judged', $updated->filter('#round-round-1-now-phase')->text());
-        self::assertSame('Judged.', $updated->filter('#round-round-1-state')->text());
+        self::assertStringStartsWith('checked?', $updated->filter('#round-round-1-now-phase')->text());
+        self::assertSame('Checked.', $updated->filter('#round-round-1-state')->text());
+    }
+
+    public function testAJudgedRoundPushedToThePageExplainsCheckedWithItsQuestionMark(): void
+    {
+        $this->givenARunningRound();
+        $page = $this->browser->request('GET', '/reviews/round-1');
+
+        $updated = $this->replaced($page, $this->stream('round_judged', ['round' => 'round-1', 'progress' => new RoundProgress(2, 2, true)]));
+
+        self::assertCount(1, $updated->filter('#round-round-1-now-phase .term[data-term="checked"] .term-q'));
+        self::assertSame(GlossaryTerm::Checked->explanation(), $updated->filter('#round-round-1-now-phase [role="tooltip"]')->text());
     }
 
     public function testAJudgedRoundPushedToThePageTakesAwayTheStopOfTheRound(): void
@@ -340,7 +354,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $this->givenTheRoundIsJudgedWith($round, ['F1' => 'act', 'F2' => 'defer', 'F3' => 'act']);
 
         $updated = $this->replaced($page, $this->publishedStreams());
-        self::assertSame(ReviewOutcome::ChangesRequested->value.', 2 findings to fix.', $updated->filter('#round-'.$id.'-now-judge p')->first()->text());
+        self::assertSame('Changes needed, 2 findings to fix.', $updated->filter('#round-'.$id.'-now-judge p')->first()->text());
     }
 
     public function testAPageOpenedBeforeTheRoundStartsStatesTheJudgesCallInTheNowBoxOnceTheRoundIsJudged(): void
@@ -350,7 +364,17 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $this->givenTheRoundIsJudgedWith($round, ['F1' => 'act', 'F2' => 'defer']);
 
         $updated = $this->replaced($page, $this->publishedStreams());
-        self::assertSame(ReviewOutcome::ChangesRequested->value, $updated->filter('#round-'.$id.'-now-judge .now-outcome')->text());
+        self::assertSame('Changes needed', $updated->filter('#round-'.$id.'-now-judge .now-outcome')->text());
+    }
+
+    public function testThePushedCallOfTheJudgeKeepsTheOutcomesOwnWordsInItsTooltip(): void
+    {
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeTheRoundOfQuorumStarted();
+
+        $this->givenTheRoundIsJudgedWith($round, ['F1' => 'act', 'F2' => 'defer']);
+
+        $updated = $this->replaced($page, $this->publishedStreams());
+        self::assertSame(ReviewOutcome::ChangesRequested->value, $updated->filter('#round-'.$id.'-now-judge .now-outcome')->attr('title'));
     }
 
     public function testAPageOpenedBeforeTheRoundStartsCountsTheFindingsToFixInTheNowBoxOnceTheRoundIsJudged(): void
@@ -497,8 +521,9 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertSame(['#round-'.$id.'-finding-F1'], $updated->filter('#round-'.$id.'-now-findings a.sb-finding')->each(static fn (Crawler $link): string => (string) $link->attr('href')));
         self::assertSame('P2F1 Text of F1.', $updated->filter('#round-'.$id.'-now-findings a.sb-finding')->text());
         self::assertSame('Outcome: Changes requested, decided by the quorum policy all over all 2 reviewers.', $updated->filter('#round-'.$id.'-outcome')->text());
-        self::assertSame('Judged.', $updated->filter('#round-'.$id.'-state')->text());
-        self::assertSame('Changes requested', $updated->filter('#round-'.$id.'-head-state .chip')->text());
+        self::assertSame('Checked.', $updated->filter('#round-'.$id.'-state')->text());
+        self::assertSame('Changes needed', $updated->filter('#round-'.$id.'-head-state .chip')->text());
+        self::assertSame('Changes requested', $updated->filter('#round-'.$id.'-head-state .chip')->attr('title'));
         $reloaded = $this->browser->request('GET', '/reviews/'.$id);
         self::assertSame($reloaded->filter('#round-'.$id.'-verdict')->text(), $updated->filter('#round-'.$id.'-verdict')->text());
     }
@@ -547,7 +572,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
         $updated = $this->replaced($page, $this->publishedStreams());
         self::assertSame(
-            ['2 of 2 reviewers started.', '2 of 2 reviewers finished.', 'Judged.'],
+            ['2 of 2 reviewers started.', '2 of 2 reviewers finished.', 'Checked.'],
             [$updated->filter('#round-'.$id.'-started')->text(), $updated->filter('#round-'.$id.'-now-progress')->text(), $updated->filter('#round-'.$id.'-state')->text()],
         );
         self::assertSame($this->browser->request('GET', '/reviews/'.$id)->filter('#round-'.$id.'-started')->text(), $updated->filter('#round-'.$id.'-started')->text());
@@ -719,8 +744,8 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
         $updated = $this->replaced($page, implode('', array_map(static fn (Update $update): string => $update->getData(), $this->published)));
 
-        self::assertSame('Changes requested', $updated->filter('#round-'.$id.'-reviewer-'.$id.'-correctness-state .chip')->text());
-        self::assertSame('Changes requested', $updated->filter('#round-'.$id.'-now-reviewer-'.$id.'-correctness-state .chip')->text());
+        self::assertSame('Changes needed', $updated->filter('#round-'.$id.'-reviewer-'.$id.'-correctness-state .chip')->text());
+        self::assertSame('Changes needed', $updated->filter('#round-'.$id.'-now-reviewer-'.$id.'-correctness-state .chip')->text());
         self::assertStringNotContainsString('verdict', $updated->filter('#round-'.$id.'-reviewers')->text());
     }
 
@@ -744,11 +769,11 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $this->publishedUpdates()->roundChanged($round, new RoundProgress(1, 2, false, [$id.'-correctness' => FinishedState::Verdict]));
 
         $rows = $this->rowsOf($this->replaced($page, $this->publishedStreams()));
-        self::assertSame([['correctness', 'Kimi K3', 'Changes requested']], array_map(static fn (array $row): array => array_slice($row, 0, 3), $rows));
+        self::assertSame([['correctness', 'Kimi K3 (Moonshot AI)', 'Changes needed']], array_map(static fn (array $row): array => array_slice($row, 0, 3), $rows));
         self::assertSame('2', $rows[0][3] ?? '');
     }
 
-    public function testARowALiveUpdatePlacesKeepsTheRawModelIdWithoutItsAiLab(): void
+    public function testARowALiveUpdatePlacesNamesAKnownModelWithItsAiLabAndKeepsTheRawIdInItsTitle(): void
     {
         [$round, $id, $page] = $this->givenAPageLoadedBeforeAnyReviewerStarted();
         $this->ledger->startReviewerOn($id, 'correctness', 'moonshotai/Kimi-K3.1:deepinfra');
@@ -757,7 +782,44 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $this->publishedUpdates()->roundChanged($round, new RoundProgress(1, 2, false, [$id.'-correctness' => FinishedState::Verdict]));
 
         $cell = $this->replaced($page, $this->publishedStreams())->filter('#round-'.$round.'-reviewer-'.$id.'-correctness-model');
-        self::assertSame(['moonshotai/Kimi-K3.1:deepinfra', null], [$cell->text(), $cell->attr('title')]);
+        self::assertSame(['Kimi K3.1 (Moonshot AI)', 'moonshotai/Kimi-K3.1:deepinfra'], [$cell->text(), $cell->attr('title')]);
+    }
+
+    public function testAReviewerPlacedByALiveUpdateIsHeadedWithItsModelAndAiLabInTheCurrentStateAndTheLiveLog(): void
+    {
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeAnyReviewerStarted();
+        $this->ledger->startReviewerOn($id, 'correctness', 'moonshotai/Kimi-K3.1:deepinfra');
+
+        $this->publishedUpdates()->toolCalled($round, $id.'-correctness', 'read_file');
+
+        $updated = $this->replaced($page, $this->publishedStreams());
+        $now = $updated->filter('#round-'.$id.'-now-reviewer-'.$id.'-correctness-model');
+        $heading = $updated->filter('#reviewer-'.$id.'-correctness h3');
+        self::assertSame(['Kimi K3.1 (Moonshot AI)', 'moonshotai/Kimi-K3.1:deepinfra'], [$now->text(), $now->attr('title')]);
+        self::assertSame(['correctness (Kimi K3.1 (Moonshot AI)) live', 'moonshotai/Kimi-K3.1:deepinfra'], [$heading->text(), $heading->attr('title')]);
+    }
+
+    public function testAReviewerOfAnUnknownModelPlacedByALiveUpdateIsNamedByItsIdAlone(): void
+    {
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeAnyReviewerStarted();
+        $this->ledger->startReviewerOn($id, 'correctness', 'acme/robot-7');
+
+        $this->publishedUpdates()->toolCalled($round, $id.'-correctness', 'read_file');
+
+        $updated = $this->replaced($page, $this->publishedStreams());
+        self::assertSame('acme/robot-7', $updated->filter('#round-'.$id.'-now-reviewer-'.$id.'-correctness-model')->text());
+        self::assertSame('correctness (acme/robot-7) live', $updated->filter('#reviewer-'.$id.'-correctness h3')->text());
+    }
+
+    public function testAReviewerWithoutARecordedModelPlacedByALiveUpdateHasNoModelTitle(): void
+    {
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeAnyReviewerStarted();
+        $this->ledger->startReviewer($id, 'correctness');
+
+        $this->publishedUpdates()->toolCalled($round, $id.'-correctness', 'read_file');
+
+        $updated = $this->replaced($page, $this->publishedStreams());
+        self::assertSame([null, null], [$updated->filter('#round-'.$id.'-now-reviewer-'.$id.'-correctness-model')->attr('title'), $updated->filter('#reviewer-'.$id.'-correctness h3')->attr('title')]);
     }
 
     public function testAReviewerStoppedAfterThePageLoadedGetsARowWithItsRoleAndTheStoppedState(): void
@@ -780,7 +842,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $this->publishedUpdates()->reviewerStopped($round, $id.'-correctness');
 
         $rows = $this->rowsOf($this->replaced($page, $this->publishedStreams()));
-        self::assertSame([['correctness', 'Kimi K3', 'stopped']], array_map(static fn (array $row): array => array_slice($row, 0, 3), $rows));
+        self::assertSame([['correctness', 'Kimi K3 (Moonshot AI)', 'stopped']], array_map(static fn (array $row): array => array_slice($row, 0, 3), $rows));
         self::assertSame('1', $rows[0][3] ?? '');
     }
 
@@ -835,7 +897,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $this->publishedUpdates()->roundChanged($round, new RoundProgress(1, 2, false, [$id.'-security' => FinishedState::Failed]));
 
         $rows = $this->rowsOf($this->replaced($page, $this->publishedStreams()));
-        self::assertSame([['security', 'Kimi K3', 'Failed the model did not answer in time']], array_map(static fn (array $row): array => array_slice($row, 0, 3), $rows));
+        self::assertSame([['security', 'Kimi K3 (Moonshot AI)', 'Failed the model did not answer in time']], array_map(static fn (array $row): array => array_slice($row, 0, 3), $rows));
     }
 
     public function testDuringALiveRoundThePageListsEachReviewerByRoleAndModelWithItsState(): void
@@ -848,8 +910,8 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $this->publishedUpdates()->toolCalled($round, $id.'-security', 'read_file');
 
         $updated = $this->replaced($page, $this->publishedStreams());
-        self::assertSame(['correctness (Kimi K3): running', 'security (GLM 5): running'], $updated->filter('.state-block .sb-list li')->each(static fn (Crawler $li): string => $li->text()));
-        self::assertSame(['correctness (Kimi K3) live', 'security (GLM 5) live'], $updated->filter('#round-'.$id.'-live .live h3')->each(static fn (Crawler $h3): string => $h3->text()));
+        self::assertSame(['correctness (Kimi K3 (Moonshot AI)): running', 'security (GLM 5 (Z.ai)): running'], $updated->filter('.state-block .sb-list li')->each(static fn (Crawler $li): string => $li->text()));
+        self::assertSame(['correctness (Kimi K3 (Moonshot AI)) live', 'security (GLM 5 (Z.ai)) live'], $updated->filter('#round-'.$id.'-live .live h3')->each(static fn (Crawler $h3): string => $h3->text()));
         self::assertStringNotContainsString($id.'-correctness (', $updated->html());
     }
 
@@ -973,7 +1035,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
         $this->publishedUpdates()->textStreamed($round, $id.'-correctness', 'Looking');
 
-        self::assertSame(['correctness (Kimi K3): running'], $this->replaced($page, $this->publishedStreams())->filter('.state-block .sb-list li')->each(static fn (Crawler $li): string => $li->text()));
+        self::assertSame(['correctness (Kimi K3 (Moonshot AI)): running'], $this->replaced($page, $this->publishedStreams())->filter('.state-block .sb-list li')->each(static fn (Crawler $li): string => $li->text()));
     }
 
     public function testAReviewerRowPlacedByAStreamShowsExactlyOneCodeReviewerHeadOf24Pixels(): void
@@ -1040,7 +1102,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertSame(['', ''], $images->each(static fn (Crawler $img): ?string => $img->attr('alt')));
         self::assertSame([['24', '24'], ['24', '24']], $images->each(static fn (Crawler $img): array => [$img->attr('width'), $img->attr('height')]));
         self::assertCount(2, $images->filter('img[src*="code_reviewer-"]'));
-        self::assertSame('correctness (Kimi K3) live', $block->filter('.character-row')->text());
+        self::assertSame('correctness (Kimi K3 (Moonshot AI)) live', $block->filter('.character-row')->text());
     }
 
     public function testALiveLogBlockPlacedByAStreamIsTheBlockThePageRendersOnLoad(): void
@@ -1186,8 +1248,8 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         [$round, $id, $page] = $this->givenAPageLoadedBeforeAnyReviewerStarted();
         $this->ledger->startReviewer($id, 'security');
 
-        $this->publishedUpdates()->toolCalled($round, $id.'-security', ReviewTool::ReadFile->callInWords(['path' => 'src/discount.js']));
-        $this->publishedUpdates()->toolCalled($round, $id.'-security', ReviewTool::SearchFiles->callInWords(['text' => 'discount', 'path' => 'src']));
+        $this->publishedUpdates()->toolCalled($round, $id.'-security', ReviewTool::ReadFile->callInWords(new ToolCall('call-1', 'read_file', ['path' => 'src/discount.js'])));
+        $this->publishedUpdates()->toolCalled($round, $id.'-security', ReviewTool::SearchFiles->callInWords(new ToolCall('call-2', 'search_files', ['text' => 'discount', 'path' => 'src'])));
 
         $updated = $this->replaced($page, $this->publishedStreams());
         self::assertSame(['read src/discount.js', 'searched for "discount" in src'], $updated->filter('#reviewer-'.$id.'-security-activity li')->each(static fn (Crawler $call): string => $call->text()));
@@ -1567,6 +1629,14 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         }
 
         return new Crawler($document);
+    }
+
+    // Without the explanation, because the tooltip's text is part of the heading's text.
+    private function stateBlockTitleOf(Crawler $page): string
+    {
+        $title = $page->filter('#state-block-title');
+
+        return str_replace($title->filter('.term-tip')->each(static fn (Crawler $tip): string => $tip->text()), '', $title->text());
     }
 
     // Done by hand on the parsed page, because no browser runs Turbo in the tests; like Turbo, a stream whose target is absent changes nothing.

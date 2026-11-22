@@ -18,6 +18,8 @@ final readonly class PublishedBench
     private const string FOUND_CELL = '/^(\d+) of (\d+)$/';
     private const string COUNT_CELL = '/^\d+$/';
     private const string RUN_DATE = '/^Date of the run: ((\d{4})-(\d{2})-(\d{2}))\./';
+    // Every occurrence is counted, whatever its digits, so two sentences make the count ambiguous.
+    private const string REPEAT = '/\bEach change ran (\d+) times\./';
 
     public function __construct(
         #[Autowire('%kernel.project_dir%/README.md')]
@@ -40,7 +42,22 @@ final readonly class PublishedBench
             return null;
         }
 
-        return new BenchHeadline($panel[0], $panel[1], $panel[2], $ranOn);
+        return new BenchHeadline($panel[0], $panel[1], $panel[2], $ranOn, $this->runs($section));
+    }
+
+    /**
+     * @param list<string> $section
+     */
+    private function runs(array $section): ?int
+    {
+        $repeats = array_merge(...array_map(
+            static fn (string $line): array => false === preg_match_all(self::REPEAT, $line, $matches) ? [] : $matches[1],
+            $section,
+        ));
+
+        $runs = 1 === count($repeats) ? $this->countOf($repeats[0]) : null;
+
+        return 0 === $runs ? null : $runs;
     }
 
     private function text(): string

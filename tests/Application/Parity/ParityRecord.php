@@ -7,8 +7,8 @@ namespace Intakt\Tests\Application\Parity;
 // Because a done parity item counts toward the takeover only when the Intakt tests it names exist.
 final readonly class ParityRecord
 {
-    // Because these sections have their Intakt tests recorded, every item in them is judged, open or done (#3102).
-    public const array JUDGED_SECTIONS = ['Intake and shaping', 'Build and hand-back', 'CI'];
+    // Because every section has its Intakt tests recorded, every item in it is judged, open or done (#3102, #3103); the test checks that each heading of the record is listed here.
+    public const array JUDGED_SECTIONS = ['Intake and shaping', 'Build and hand-back', 'CI', 'Reviews', 'Planning and budget', 'Merge and protection', 'Operations'];
 
     // GitHub renders `[X]` as checked too, so a capital X must not escape the check.
     private const string DONE_ITEM = '/^\s*- \[[xX]\] /';
@@ -84,6 +84,22 @@ final readonly class ParityRecord
         }
 
         return $items;
+    }
+
+    // Because the first heading is the page title and no section, it is left out.
+    /**
+     * @return list<string>
+     */
+    public function sectionHeadings(string $record): array
+    {
+        $headings = [];
+        foreach (explode("\n", $record) as $line) {
+            if (1 === preg_match(self::SECTION_HEADING, $line, $heading)) {
+                $headings[] = trim($heading[1] ?? '');
+            }
+        }
+
+        return array_slice($headings, 1);
     }
 
     /**

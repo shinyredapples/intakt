@@ -111,6 +111,7 @@ The Tech lead's tool-less call (formerly triage and the sizer) that checks a tas
 
 ### Escalation
 - **Reads and can:** a stronger model rebuilding a recurring finding is a Developer; an escalation review is a reviewer on a stronger tier; a job's upgrade request is model output.
+- **Escalation review prompt (#3300):** it reads the one finding, fenced as `escalated finding`, and the round's diff with the files the finding cites first, fenced as `diff`; it has no tools. Plain code refuses to build the prompt when none of the cited files is in the diff or their sections alone are over 100000 bytes, so the model never judges a finding without its code.
 - **Checks:** a job never picks its own model; the model planner escalates on structured signals (the same check failing twice, a P1, a stall, a request with its reason) within the owner's routing and budget caps ([Budget and model planner](06-budget-and-model-planner.md)).
 
 <a id="maintainer-agent"></a>

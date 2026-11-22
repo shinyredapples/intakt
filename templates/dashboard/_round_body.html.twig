@@ -4,7 +4,7 @@
     ]}, with_context = false) }}
 
     {% set unfinished = reviewed.state.name != 'Judged' %}
-    <p id="round-{{ reviewed.round }}-state">{% if not unfinished %}Judged.{% else %}{{ reviewed.outcomes|filter(o => o.progress.name != 'Running')|length }} of {{ reviewed.reviewers }} reviewers finished.{% endif %}</p>
+    <p id="round-{{ reviewed.round }}-state">{% if not unfinished %}Checked.{% else %}{{ reviewed.outcomes|filter(o => o.progress.name != 'Running')|length }} of {{ reviewed.reviewers }} reviewers finished.{% endif %}</p>
     {% set running = unfinished and not reviewed.hasEnded %}
     {# Its own partial and always rendered, because the judged round's live update replaces it and a page opened before the judging needs the element. #}
     {{ include('dashboard/_round_verdict.html.twig', {reviewed: reviewed, newest: labeled}, with_context = false) }}
@@ -23,7 +23,7 @@
         {% for outcome in reviewed.outcomes %}
             {% set progress = outcome.progress.name %}
             <tr>
-                {{ include('dashboard/_reviewer_cells.html.twig', {round: reviewed.round, outcome: outcome, with_lab: true}, with_context = false) }}
+                {{ include('dashboard/_reviewer_cells.html.twig', {round: reviewed.round, outcome: outcome}, with_context = false) }}
                 {% if stoppable %}
                 <td id="round-{{ reviewed.round }}-reviewer-{{ outcome.id }}-stop">{% if progress == 'Running' %}<form method="post" action="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::STOP_REVIEW'), {round: reviewed.round, reviewer: outcome.id}) }}" class="stop-reviewer">
                     <input type="hidden" name="_token" value="{{ csrf_token(constant('Intakt\\Core\\Dashboard\\UseCase\\StopReview\\StopReviewController::TOKEN_ID')) }}">

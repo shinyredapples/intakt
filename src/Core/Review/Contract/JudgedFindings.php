@@ -11,12 +11,11 @@ use Symfony\Component\DependencyInjection\Attribute\Exclude;
 final readonly class JudgedFindings
 {
     /**
-     * @param list<Finding>         $findings
-     * @param list<Finding>         $actList
-     * @param list<FollowUp>        $followUps
-     * @param list<DroppedFinding>  $dropped
-     * @param list<Finding>         $rejected
-     * @param array<string, string> $notes
+     * @param list<Finding>        $findings
+     * @param list<Finding>        $actList
+     * @param list<FollowUp>       $followUps
+     * @param list<DroppedFinding> $dropped
+     * @param list<Finding>        $rejected
      */
     private function __construct(
         public array $findings,
@@ -26,7 +25,7 @@ final readonly class JudgedFindings
         public SameCause $sameCause,
         // The P3 findings the judge marked reject, apart from the ones it gave no mark, because only a judge's own mark lets a changes verdict count as approval.
         public array $rejected,
-        public array $notes,
+        public JudgeNotes $notes,
         // True when the fallback for an answer that cannot be read stands in for the judge, taken from the judgement that chose it, because the marks cannot tell: a fallback over P1 and P2 findings alone marks every one.
         public bool $fallback,
     ) {
@@ -60,17 +59,15 @@ final readonly class JudgedFindings
     // Only a P1 or P2 marked defer or reject keeps a note, because plain code does not apply that mark (the finding stays on the act list), so the note takes the place of the mark.
     /**
      * @param list<Finding> $findings
-     *
-     * @return array<string, string>
      */
-    private static function notesOf(Judgement $judgement, array $findings): array
+    private static function notesOf(Judgement $judgement, array $findings): JudgeNotes
     {
         $blocking = array_map(static fn (Finding $finding): string => $finding->id, array_filter($findings, static fn (Finding $finding): bool => Severity::P3 !== $finding->severity));
-        $notes = [];
+        $notes = new JudgeNotes();
 
         foreach ($judgement->marks as $judged) {
             if (null !== $judged->note && Mark::Act !== $judged->mark && in_array($judged->id, $blocking, true)) {
-                $notes[$judged->id] = $judged->note;
+                $notes = $notes->with($judged->id, $judged->note);
             }
         }
 
