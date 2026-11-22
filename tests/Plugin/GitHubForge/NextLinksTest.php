@@ -30,13 +30,13 @@ final class NextLinksTest extends TestCase
     #[DataProvider('anchors')]
     public function testAnAnchorCountsOnlyWhenItNamesTheRequestedPage(string $anchor, bool $expected): void
     {
-        self::assertSame($expected, (new NextLinks())->namesNext(['<?page=2>; rel=next; anchor='.$anchor], '/repos/a/b/issues?page=1'));
+        self::assertSame($expected, new NextLinks()->namesNext(['<?page=2>; rel=next; anchor='.$anchor], '/repos/a/b/issues?page=1'));
     }
 
     public function testAnAnchorWithoutAValueFailsAsAnUnreadableLink(): void
     {
         $this->expectException(ForgeReadFailed::class);
 
-        (new NextLinks())->namesNext(['<?page=2>; rel=next; anchor'], '/repos/a/b/issues?page=1');
+        new NextLinks()->namesNext(['<?page=2>; rel=next; anchor'], '/repos/a/b/issues?page=1');
     }
 }
