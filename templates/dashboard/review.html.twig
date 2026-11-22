@@ -8,6 +8,8 @@
 {% set rail_section = 'projects' %}
 
 {% block body %}
+{# The page's own stylesheet, linked here because the shared layout belongs to the frame. #}
+<link rel="stylesheet" href="{{ asset('styles/review.css') }}">
 {{ include('dashboard/components/breadcrumb.html.twig', {crumbs: [
     {label: 'Projects', href: path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::LIST_PROJECTS'))},
     {label: review.project, href: path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::LIST_REVIEWS'), {project: review.project})},
@@ -25,17 +27,20 @@
 <div class="page-head">
     <div>
         <h1>Review of {{ review.change ?: 'round ' ~ round }} in {{ review.project }}</h1>
-        {# Only once the latest round is judged or ended, because a round in review has no answer yet and the state block below says where it stands. #}
-        {% if latest.isJudged or latest.hasEnded %}
-        {{ include('dashboard/_verdict_card.html.twig', {latest: latest, open: open, judged: judged.round ?? null}, with_context = false) }}
-        {% endif %}
-        {% if review.everyRoundIsAReplay %}
-        <p class="replay-mark">{{ include(chip, {label: 'Replay', on_page: true}, with_context = false) }} A recording played back: its verdicts were never given on this change and never count as one.</p>
-        {% endif %}
         {% if review.source is not null %}
         <p class="task-sentence">{{ review.source.task }}</p>
         {% else %}
         <p class="task-sentence muted">Task not recorded.</p>
+        {% endif %}
+        {# Only once the latest round is judged or ended, because a round in review has no answer yet and the state block below says where it stands. #}
+        {% if latest.isJudged or latest.hasEnded %}
+        {{ include('dashboard/_verdict_card.html.twig', {latest: latest, open: open}, with_context = false) }}
+        {% endif %}
+        {% if review.path is not empty %}
+        {{ include('dashboard/_review_path.html.twig', {steps: review.path}, with_context = false) }}
+        {% endif %}
+        {% if review.everyRoundIsAReplay %}
+        <p class="replay-mark">{{ include(chip, {label: 'Replay', on_page: true}, with_context = false) }} A recording played back: its verdicts were never given on this change and never count as one.</p>
         {% endif %}
         {# One kind label in this line, on the cost, because it is the one estimate among the facts (decision D5 of #2206). #}
         {{ include('dashboard/components/meta.html.twig', {facts: [
@@ -67,12 +72,16 @@
         <form method="post" action="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::START_REVIEW'), {round: round}) }}" class="start-review">
             <input type="hidden" name="_token" value="{{ csrf_token(constant('Intakt\\Core\\Dashboard\\UseCase\\StartReview\\StartReviewController::TOKEN_ID')) }}">
             <input type="hidden" name="number" value="{{ review.nextNumber }}">
-            {{ include('dashboard/components/button.html.twig', {kind: 'primary', type: 'submit', label: 'Start round ' ~ review.nextNumber}, with_context = false) }}
+            {{ include('dashboard/components/button.html.twig', {kind: 'primary', type: 'submit', label: 'Start pass ' ~ review.nextNumber}, with_context = false) }}
+            <p class="next-step">The reviewers read the change again.</p>
         </form>
         {% endif %}
     </div>
     {% endif %}
 </div>
+{% if active is null and open is not empty %}
+{{ include('dashboard/_to_fix.html.twig', {open: open, judged: judged.round}, with_context = false) }}
+{% endif %}
 {% if active is not null %}
 <section class="state-block" aria-labelledby="state-block-title">
     <div class="sb-head">

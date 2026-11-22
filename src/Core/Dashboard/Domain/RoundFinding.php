@@ -47,6 +47,25 @@ final readonly class RoundFinding
         return [$this->id, ...$this->merged];
     }
 
+    public function urgency(): ?FindingUrgency
+    {
+        return FindingUrgency::of($this->severity);
+    }
+
+    // The first sentence of its first line, because a finding has no title of its own (as ReadFinding reads it) and a card shows one short line; null with no recorded text.
+    public function headline(): ?string
+    {
+        return null === $this->text ? null : $this->partsOfTheText()[0];
+    }
+
+    // The rest of the text after the headline, null when the headline is all of it.
+    public function explanation(): ?string
+    {
+        $rest = null === $this->text ? '' : $this->partsOfTheText()[1];
+
+        return '' === $rest ? null : $rest;
+    }
+
     public function place(): ?string
     {
         if (null === $this->file) {
@@ -64,5 +83,17 @@ final readonly class RoundFinding
     public function calledBy(JudgeCall $call): self
     {
         return clone ($this, ['call' => $call]);
+    }
+
+    /**
+     * @return array{string, string}
+     */
+    private function partsOfTheText(): array
+    {
+        $text = trim((string) $this->text);
+        // Split on the line endings by name and a sentence end before a space, so a dot inside a name (src/A.php, 1.5) never ends the headline.
+        $parts = preg_split('/\r\n|\r|\n|(?<=[.!?])\s+(?=\S)/u', $text, 2);
+
+        return false === $parts ? [$text, ''] : [trim($parts[0]), trim($parts[1] ?? '')];
     }
 }

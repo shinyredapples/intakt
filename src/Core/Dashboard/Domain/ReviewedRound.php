@@ -116,6 +116,26 @@ final readonly class ReviewedRound
         return [...array_filter($this->findings, static fn (RoundFinding $finding): bool => JudgeCall::Act === $finding->call)];
     }
 
+    public function finding(string $id): ?RoundFinding
+    {
+        return array_find($this->findings, static fn (RoundFinding $finding): bool => $finding->id === $id);
+    }
+
+    // The reviewers whose reports the finding holds, merged ones included; null for a round completed before the ledger recorded who reported what, so the page never claims nobody reported it.
+    /**
+     * @return list<ReviewerOutcome>|null
+     */
+    public function reportersOf(RoundFinding $finding): ?array
+    {
+        if (null === $this->findingsByReviewer) {
+            return null;
+        }
+
+        $reported = fn (ReviewerOutcome $outcome): bool => [] !== array_intersect($finding->ids(), $this->findingsByReviewer[$outcome->id] ?? []);
+
+        return array_values(array_filter($this->outcomes, $reported));
+    }
+
     // Null when the round holds no severity from this reviewer for the id, such as a reporter row written before severities were recorded, so a count never guesses one.
     public function severityReportedBy(string $reviewer, string $id): ?string
     {

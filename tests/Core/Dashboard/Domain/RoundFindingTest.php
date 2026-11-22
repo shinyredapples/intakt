@@ -31,6 +31,30 @@ final class RoundFindingTest extends TestCase
         self::assertNull(new RoundFinding('F1', 'P1', 'A.', line: 7)->place());
     }
 
+    public function testAFindingsHeadlineIsTheFirstSentenceAndTheRestExplainsIt(): void
+    {
+        $finding = new RoundFinding('F1', 'P1', 'The total in src/A.php is off by 1.5. It drops the last item.');
+
+        self::assertSame(['The total in src/A.php is off by 1.5.', 'It drops the last item.'], [$finding->headline(), $finding->explanation()]);
+    }
+
+    public function testAFindingsHeadlineEndsAtItsFirstLine(): void
+    {
+        $finding = new RoundFinding('F1', 'P2', "No test covers Cart::total\nAdd one for an empty cart.");
+
+        self::assertSame(['No test covers Cart::total', 'Add one for an empty cart.'], [$finding->headline(), $finding->explanation()]);
+    }
+
+    public function testAOneSentenceFindingHasNoExplanation(): void
+    {
+        self::assertNull(new RoundFinding('F1', 'P2', 'The total is off by one.')->explanation());
+    }
+
+    public function testAFindingWithoutTextHasNoHeadline(): void
+    {
+        self::assertSame([null, null], [new RoundFinding('F1', null, null)->headline(), new RoundFinding('F1', null, null)->explanation()]);
+    }
+
     public function testAQuoteWithARecordedEntryHasThatEntrysNearLines(): void
     {
         $line = new NearLine('src/A.php', 2, 'hostName();');

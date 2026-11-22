@@ -309,7 +309,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
         self::assertCount(0, $updated->filter('.now-runs'));
         self::assertCount(0, $updated->filter('form.stop-round'));
-        self::assertSame('Start round 2', trim($updated->filter('.task-actions > form.start-review button')->text()));
+        self::assertSame('Start pass 2', trim($updated->filter('.task-actions > form.start-review button')->text()));
     }
 
     public function testAPageOpenedBeforeTheRoundIsJudgedShowsTheJudgesCallAndTheFindingsOnceTheRoundIsJudged(): void

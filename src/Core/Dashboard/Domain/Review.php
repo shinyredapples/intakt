@@ -102,4 +102,18 @@ final readonly class Review
     {
         return array_reduce($this->rounds, static fn (Cost $sum, ReviewedRound $round): Cost => $sum->plus($round->cost), Cost::none());
     }
+
+    /**
+     * @return list<PathStep>
+     */
+    public function path(): array
+    {
+        return ReviewPath::of($this);
+    }
+
+    // Null when the round belongs to another review or is not judged yet, so a finding's page never shows a stranger's finding or one without the judge's call.
+    public function judgedRound(string $round): ?ReviewedRound
+    {
+        return array_find($this->rounds, static fn (ReviewedRound $candidate): bool => $candidate->round === $round && $candidate->isJudged());
+    }
 }

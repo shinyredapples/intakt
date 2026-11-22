@@ -1,0 +1,12 @@
+{#- The steps from the pass to the merge; the role of the current step stands on it, so no avatar sits beside the line. -#}
+{%- set now = steps|filter(s => s.state.value == 'now')|first -%}
+{%- set at = 0 -%}
+{%- for step in steps %}{% if step.state.value == 'now' %}{% set at = loop.index %}{% endif %}{% endfor -%}
+<ol class="review-path" style="--n:{{ steps|length }}" aria-label="Progress: {{ now.label }}, step {{ at }} of {{ steps|length }}">
+    {%- for step in steps %}
+    <li class="{{ step.state.value }}">
+        {%- if step.who is not null %}<span class="who">{{ include('dashboard/_role_image.html.twig', {stem: step.who.value, alt: step.who.label ~ ', now on ' ~ step.label, size: 56}, with_context = false) }}</span>{% endif -%}
+        {{ step.label }}{% if step.state.value != 'now' %}<span class="sr-only"> ({{ step.state.value }})</span>{% endif -%}
+    </li>
+    {%- endfor %}
+</ol>

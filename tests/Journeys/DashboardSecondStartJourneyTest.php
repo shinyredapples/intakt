@@ -128,7 +128,7 @@ final class DashboardSecondStartJourneyTest extends JourneyTestCase
         $page = $this->visit($review);
 
         self::assertSame('3', $page->filter('form.start-review input[name="number"]')->attr('value'));
-        self::assertSame('Start round 3', $page->filter('form.start-review button')->text());
+        self::assertSame('Start pass 3', $page->filter('form.start-review button')->text());
     }
 
     // Counted on the instance's own server, so the rounds are the ones its database holds.
