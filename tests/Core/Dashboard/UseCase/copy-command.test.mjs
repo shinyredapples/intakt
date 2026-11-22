@@ -18,45 +18,9 @@ class FakeCopyButton extends FakeElement {
     }
 }
 
-class FakeSummary extends FakeElement {
-    focused = false;
-
-    closest() {
-        return null;
-    }
-
-    focus() {
-        this.focused = true;
-    }
-}
-
-class FakeWhy extends FakeElement {
-    constructor(open) {
-        super();
-        this.open = open;
-        this.summary = new FakeSummary('Why');
-    }
-
-    querySelector(selector) {
-        return selector === 'summary' ? this.summary : null;
-    }
-}
-
-class FakeInsideWhy extends FakeElement {
-    constructor(why) {
-        super();
-        this.why = why;
-    }
-
-    closest(selector) {
-        return selector === 'details.why' ? this.why : null;
-    }
-}
-
 class FakePage {
     listeners = new Map();
     buttons = [];
-    whys = [];
 
     addEventListener(type, listener) {
         assert.equal(this.listeners.has(type), false);
@@ -64,15 +28,9 @@ class FakePage {
     }
 
     querySelectorAll(selector) {
-        if (selector === 'button[data-copy]') {
-            return this.buttons;
-        }
-        if (selector === 'details.why') {
-            return this.whys;
-        }
-        assert.equal(selector, 'details.why[open]');
+        assert.equal(selector, 'button[data-copy]');
 
-        return this.whys.filter((why) => why.open);
+        return this.buttons;
     }
 
     dispatch(type, event = {}) {
@@ -138,45 +96,19 @@ class FakeSlowClipboard {
     }
 }
 
-// One list for the phone query, as a browser keeps it, so a resize across 760 px tells every listener.
-class FakeMediaQueryList {
-    listeners = [];
-
-    constructor(matches) {
-        this.matches = matches;
-    }
-
-    addEventListener(type, listener) {
-        assert.equal(type, 'change');
-        this.listeners.push(listener);
-    }
-
-    cross(matches) {
-        this.matches = matches;
-        this.listeners.forEach((listener) => listener({ matches }));
-    }
-}
-
-function pageWithACommand({ clipboard = new FakeClipboard(), phone = false, whys = [] } = {}) {
+function pageWithACommand({ clipboard = new FakeClipboard() } = {}) {
     const page = new FakePage();
-    page.whys.push(...whys);
     const timers = new FakeTimers();
-    const media = new FakeMediaQueryList(phone);
     const view = {
         navigator: clipboard === null ? {} : { clipboard },
         setTimeout: (callback, delay) => timers.setTimeout(callback, delay),
         clearTimeout: (id) => timers.clearTimeout(id),
-        matchMedia: (query) => {
-            assert.equal(query, '(max-width: 760px)');
-
-            return media;
-        },
     };
     copyCommands(page, view);
     const button = new FakeCopyButton();
     page.buttons.push(button);
 
-    return { page, timers, clipboard, button, media };
+    return { page, timers, clipboard, button };
 }
 
 // The clipboard answers with a promise, so its outcome shows only once the pending reactions ran.
@@ -328,125 +260,4 @@ test('a click outside a Copy button copies nothing', async () => {
     assert.deepEqual(clipboard.written, []);
     assert.equal(button.textContent, 'Copy');
     assert.equal(timers.pending.size, 0);
-});
-
-test('Escape on a phone closes the open Why and gives the focus back to its summary', () => {
-    const { page } = pageWithACommand({ phone: true });
-    const why = new FakeWhy(true);
-    page.whys.push(why);
-
-    page.dispatch('keydown', { key: 'Escape', target: new FakeInsideWhy(why) });
-
-    assert.equal(why.open, false);
-    assert.equal(why.summary.focused, true);
-});
-
-test('Escape on a phone closes the open Why after the focus moved to a control outside it, and leaves the focus there', () => {
-    const { page, button } = pageWithACommand({ phone: true });
-    const why = new FakeWhy(true);
-    page.whys.push(why);
-
-    page.dispatch('keydown', { key: 'Escape', target: button });
-
-    assert.equal(why.open, false);
-    assert.equal(why.summary.focused, false);
-});
-
-test('Escape on a wide screen leaves the Why open, because every Why shows there', () => {
-    const { page } = pageWithACommand();
-    const why = new FakeWhy(true);
-    page.whys.push(why);
-
-    page.dispatch('keydown', { key: 'Escape', target: new FakeInsideWhy(why) });
-
-    assert.equal(why.open, true);
-    assert.equal(why.summary.focused, false);
-});
-
-test('another key or a closed Why changes nothing', () => {
-    const { page } = pageWithACommand({ phone: true });
-    const open = new FakeWhy(true);
-    page.whys.push(open);
-
-    page.dispatch('keydown', { key: 'Enter', target: new FakeInsideWhy(open) });
-
-    assert.equal(open.open, true);
-    assert.equal(open.summary.focused, false);
-});
-
-test('on a phone every Why the page renders stays closed', () => {
-    const why = new FakeWhy(false);
-
-    pageWithACommand({ phone: true, whys: [why] });
-
-    assert.equal(why.open, false);
-});
-
-test('on a wide screen every Why the page renders is opened', () => {
-    const whys = [new FakeWhy(false), new FakeWhy(false)];
-
-    pageWithACommand({ whys });
-
-    assert.deepEqual(whys.map((why) => why.open), [true, true]);
-});
-
-test('a Turbo visit on a wide screen opens every Why of the new page', () => {
-    const { page } = pageWithACommand();
-    const why = new FakeWhy(false);
-    page.whys.push(why);
-
-    page.dispatch('turbo:load');
-
-    assert.equal(why.open, true);
-});
-
-test('a Turbo visit on a phone leaves every Why of the new page closed', () => {
-    const { page } = pageWithACommand({ phone: true });
-    const why = new FakeWhy(false);
-    page.whys.push(why);
-
-    page.dispatch('turbo:load');
-
-    assert.equal(why.open, false);
-});
-
-test('narrowing a wide window to phone width closes every Why', () => {
-    const whys = [new FakeWhy(false), new FakeWhy(false)];
-    const { media } = pageWithACommand({ whys });
-
-    media.cross(true);
-
-    assert.deepEqual(whys.map((why) => why.open), [false, false]);
-});
-
-test('widening a phone window past 760 px opens every Why', () => {
-    const whys = [new FakeWhy(false), new FakeWhy(false)];
-    const { media } = pageWithACommand({ phone: true, whys });
-
-    media.cross(false);
-
-    assert.deepEqual(whys.map((why) => why.open), [true, true]);
-});
-
-test('a page Turbo caches keeps every Why closed and moves no focus', () => {
-    const why = new FakeWhy(false);
-    const { page } = pageWithACommand({ whys: [why] });
-    assert.equal(why.open, true);
-
-    page.dispatch('turbo:before-cache');
-
-    assert.equal(why.open, false);
-    assert.equal(why.summary.focused, false);
-});
-
-test('Escape on a phone with every Why closed moves no focus', () => {
-    const { page } = pageWithACommand({ phone: true });
-    const closed = new FakeWhy(false);
-    page.whys.push(closed);
-
-    page.dispatch('keydown', { key: 'Escape', target: new FakeInsideWhy(closed) });
-    page.dispatch('keydown', { key: 'Escape', target: null });
-
-    assert.equal(closed.open, false);
-    assert.equal(closed.summary.focused, false);
 });
