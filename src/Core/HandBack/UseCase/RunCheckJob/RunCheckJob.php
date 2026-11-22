@@ -133,8 +133,8 @@ final readonly class RunCheckJob implements CheckJobs
 
         if ($dependencies instanceof CheckSnapshot) {
             $inputs[] = new JobInput($dependencies->lease->folder, self::DEPENDENCIES);
-            // The script swaps the install for the generate step only once it copied the snapshot, so a check that cannot use it still installs.
-            $options = ['--dependencies', self::DEPENDENCIES, $dependencies->step->checkInstall, $dependencies->step->generate, ...$dependencies->lockFileArguments()];
+            // The script swaps the install for the generate step only once it copied the snapshot, so a check that cannot use it still installs; it probes the platform again, because the probe job resolved the image on its own.
+            $options = ['--dependencies', self::DEPENDENCIES, $dependencies->platform, $dependencies->step->platformProbe, $dependencies->step->checkInstall, $dependencies->step->generate, ...$dependencies->lockFileArguments()];
         }
 
         return new JobSpec(

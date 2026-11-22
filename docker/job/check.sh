@@ -1,6 +1,6 @@
 #!/bin/sh
 # The check job's command, so the builder's own run of the checks is never what lets a change through.
-# Usage: check.sh <mirror> <bundle> <branch> [--dependencies <snapshot> <install step> <generate step> <lock file> <blob> [<lock file> <blob> ...]] -- <step> [step ...]
+# Usage: check.sh <mirror> <bundle> <branch> [--dependencies <snapshot> <platform> <platform probe> <install step> <generate step> <lock file> <blob> [<lock file> <blob> ...]] -- <step> [step ...]
 # The result goes to files in INTAKT_JOB_OUTPUT, the job's only way to hand its result back.
 set -u
 
@@ -9,14 +9,18 @@ bundle="$2"
 branch="$3"
 shift 3
 dependencies=''
+platform=''
+platform_probe=''
 install_step=''
 generate_step=''
 copied=0
 if [ "${1-}" = '--dependencies' ]; then
     dependencies="$2"
-    install_step="$3"
-    generate_step="$4"
-    shift 4
+    platform="$3"
+    platform_probe="$4"
+    install_step="$5"
+    generate_step="$6"
+    shift 6
 fi
 # The lock files stay in the arguments up to the --, because they are compared with the merged tree, which exists only after the merge.
 
@@ -133,6 +137,16 @@ use_dependencies() {
         printf 'the merged tree does not hold the lock files the snapshot was made for, so the check installs its dependencies itself\n'
         return 1
     fi
+    # Read again in this job, because the probe job resolved the image on its own and a tag that moved since would copy a snapshot made for another platform.
+    # Outside the tree and with an x after it, so no file of the change steers the probe and the bytes compare exactly as the probe job's output did.
+    if ! found=$(cd / && sh -c "$platform_probe" < /dev/null && printf x); then
+        printf 'the platform probe failed in the check, so the check installs its dependencies itself\n'
+        return 1
+    fi
+    if [ "$found" != "${platform}x" ]; then
+        printf 'the platform of the check is not the one the snapshot was made for, so the check installs its dependencies itself\n'
+        return 1
+    fi
     if ! each_entry not_in_tree; then
         printf 'the tree already holds %s, so the check installs its dependencies itself\n' "$held"
         return 1
@@ -142,11 +156,12 @@ use_dependencies() {
         return 0
     fi
     # A partial copy could name packages as installed that are not there, so nothing of it is kept.
-    printf 'the dependency snapshot could not be copied, so the check installs its dependencies itself\n'
+    printf 'the dependency snapshot could not be copied\n'
     if ! each_entry remove_copy; then
         printf 'the partial copy of the dependency snapshot could not be removed, so the check stops without a result\n'
         return 2
     fi
+    printf 'the partial copy of the dependency snapshot was removed, so the check installs its dependencies itself\n'
     return 1
 }
 

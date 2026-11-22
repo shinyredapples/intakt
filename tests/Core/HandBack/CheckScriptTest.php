@@ -19,6 +19,10 @@ final class CheckScriptTest extends TestCase
 
     private const string LOCK = "{\"packages\": [], \"packages-dev\": []}\n";
 
+    private const string PLATFORM = '8.5.12';
+
+    private const string PROBE = 'printf 8.5.12';
+
     private BuildHistory $history;
     private string $output = '';
     private string $work = '';
@@ -585,7 +589,7 @@ final class CheckScriptTest extends TestCase
         $this->history->commitFile('composer.lock', self::LOCK, 'Lock the dependencies');
         $snapshot = $this->readOnlySnapshotHolding(['vendor/installed.json' => "{}\n"]);
 
-        $run = $this->whenTheCheckRunsWith(['--dependencies', $snapshot, 'install', 'generate', 'composer.lock'], $this->history->bundle('main..task'), 'test ! -e vendor');
+        $run = $this->whenTheCheckRunsWith(['--dependencies', $snapshot, self::PLATFORM, self::PROBE,'install', 'generate', 'composer.lock'], $this->history->bundle('main..task'), 'test ! -e vendor');
 
         self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
     }
@@ -595,7 +599,7 @@ final class CheckScriptTest extends TestCase
         $this->history->commit('Build work');
         $snapshot = $this->readOnlySnapshotHolding(['vendor/installed.json' => "{}\n"]);
 
-        $run = $this->whenTheCheckRunsWith(['--dependencies', $snapshot, 'install', 'generate'], $this->history->bundle('main..task'), 'test ! -e vendor');
+        $run = $this->whenTheCheckRunsWith(['--dependencies', $snapshot, self::PLATFORM, self::PROBE,'install', 'generate'], $this->history->bundle('main..task'), 'test ! -e vendor');
 
         self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
     }
@@ -606,7 +610,7 @@ final class CheckScriptTest extends TestCase
         $snapshot = $this->readOnlySnapshotHolding(['vendor/installed.json' => "{}\n"]);
 
         $run = $this->whenTheCheckRunsWith(
-            ['--dependencies', $snapshot, 'exit 9', 'touch generated', 'composer.lock', $this->blobOf(self::LOCK)],
+            ['--dependencies', $snapshot, self::PLATFORM, self::PROBE,'exit 9', 'touch generated', 'composer.lock', $this->blobOf(self::LOCK)],
             $this->history->bundle('main..task'),
             'exit 9',
             'test -f generated',
@@ -623,7 +627,7 @@ final class CheckScriptTest extends TestCase
         $snapshot = $this->readOnlySnapshotHolding(['vendor/installed.json' => "{}\n"]);
 
         $run = $this->whenTheCheckRunsWith(
-            ['--dependencies', $snapshot, 'touch installed', 'exit 9', 'composer.lock', $this->blobOf(self::LOCK)],
+            ['--dependencies', $snapshot, self::PLATFORM, self::PROBE,'touch installed', 'exit 9', 'composer.lock', $this->blobOf(self::LOCK)],
             $this->history->bundle('main..task'),
             'touch installed',
             'test -f installed',
@@ -640,7 +644,7 @@ final class CheckScriptTest extends TestCase
         $this->givenACopyThatStopsHalfway();
 
         $run = $this->whenTheCheckRunsWith(
-            ['--dependencies', $snapshot, 'touch installed', 'exit 9', 'composer.lock', $this->blobOf(self::LOCK)],
+            ['--dependencies', $snapshot, self::PLATFORM, self::PROBE,'touch installed', 'exit 9', 'composer.lock', $this->blobOf(self::LOCK)],
             $this->history->bundle('main..task'),
             'touch installed',
             'test ! -e vendor',
@@ -648,7 +652,10 @@ final class CheckScriptTest extends TestCase
 
         self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
         self::assertSame("passed\n", $this->outputFile('check-result'));
-        self::assertStringContainsString('the dependency snapshot could not be copied', $this->outputFile('check.log'));
+        self::assertStringContainsString(
+            "the dependency snapshot could not be copied\nthe partial copy of the dependency snapshot was removed, so the check installs its dependencies itself\n",
+            $this->outputFile('check.log'),
+        );
     }
 
     public function testAPartialCopyThatCannotBeRemovedStopsTheCheckBeforeAnyStepAndLeavesNoResult(): void
@@ -660,7 +667,7 @@ final class CheckScriptTest extends TestCase
         new Filesystem()->chmod($shim.'/rm', 0o700);
 
         $run = $this->whenTheCheckRunsWith(
-            ['--dependencies', $snapshot, 'touch installed', 'exit 9', 'composer.lock', $this->blobOf(self::LOCK)],
+            ['--dependencies', $snapshot, self::PLATFORM, self::PROBE,'touch installed', 'exit 9', 'composer.lock', $this->blobOf(self::LOCK)],
             $this->history->bundle('main..task'),
             'touch installed',
         );
@@ -674,6 +681,50 @@ final class CheckScriptTest extends TestCase
             $this->outputFile('check.log'),
         );
         self::assertStringNotContainsString('$ touch installed', $this->outputFile('check.log'));
+        self::assertStringNotContainsString('installs its dependencies itself', $this->outputFile('check.log'));
+    }
+
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function probesThatDoNotConfirmThePlatform(): iterable
+    {
+        yield 'another platform' => ['printf 8.4.1', 'the platform of the check is not the one the snapshot was made for'];
+        yield 'the platform with a line break after it' => ["printf '8.5.12\\n'", 'the platform of the check is not the one the snapshot was made for'];
+        yield 'a probe that fails' => ['printf 8.5.12; exit 3', 'the platform probe failed in the check'];
+    }
+
+    #[DataProvider('probesThatDoNotConfirmThePlatform')]
+    public function testASnapshotWhosePlatformTheCheckDoesNotConfirmIsNotCopiedAndTheGatesInstallRuns(string $probe, string $mention): void
+    {
+        $this->history->commitFile('composer.lock', self::LOCK, 'Lock the dependencies');
+        $snapshot = $this->readOnlySnapshotHolding(['vendor/installed.json' => "{}\n"]);
+
+        $run = $this->whenTheCheckRunsWith(
+            ['--dependencies', $snapshot, self::PLATFORM, $probe, 'touch installed', 'exit 9', 'composer.lock', $this->blobOf(self::LOCK)],
+            $this->history->bundle('main..task'),
+            'touch installed',
+            'test ! -e vendor && test -f installed',
+        );
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
+        self::assertStringContainsString($mention.', so the check installs its dependencies itself', $this->outputFile('check.log'));
+        self::assertStringNotContainsString('$ copy the dependency snapshot', $this->outputFile('check.log'));
+        self::assertStringNotContainsString('exit 9', $this->outputFile('check.log'));
+    }
+
+    public function testThePlatformProbeRunsOutsideTheTreeOfTheChange(): void
+    {
+        $this->history->commitFile('composer.lock', self::LOCK, 'Lock the dependencies');
+        $snapshot = $this->readOnlySnapshotHolding(['vendor/installed.json' => "{}\n"]);
+
+        $run = $this->whenTheCheckRunsWith(
+            ['--dependencies', $snapshot, '/', 'pwd | tr -d "\n"', 'exit 9', 'true', 'composer.lock', $this->blobOf(self::LOCK)],
+            $this->history->bundle('main..task'),
+            'test -f vendor/installed.json',
+        );
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
     }
 
     private function givenACopyThatStopsHalfway(): string
@@ -693,7 +744,7 @@ final class CheckScriptTest extends TestCase
      */
     private function dependencyOptions(string $snapshot, string $lock): array
     {
-        return ['--dependencies', $snapshot, 'composer install', 'composer install', 'composer.lock', $this->blobOf($lock)];
+        return ['--dependencies', $snapshot, self::PLATFORM, self::PROBE,'composer install', 'composer install', 'composer.lock', $this->blobOf($lock)];
     }
 
     private function blobOf(string $content): string

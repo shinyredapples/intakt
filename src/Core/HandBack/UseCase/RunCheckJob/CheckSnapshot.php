@@ -7,7 +7,7 @@ namespace Intakt\Core\HandBack\UseCase\RunCheckJob;
 use Intakt\Core\HandBack\Infrastructure\DependencySnapshotLease;
 use Intakt\Plugin\Gate\Contract\DependencyStep;
 
-// A leased snapshot with what the check job needs to use it: the lock files it was made for, checked again in the merged tree, and the step that replaces the install.
+// A leased snapshot with what the check job needs to use it: the lock files and the platform it was made for, both checked again in the check job, and the step that replaces the install.
 final readonly class CheckSnapshot
 {
     /**
@@ -17,6 +17,7 @@ final readonly class CheckSnapshot
         public DependencySnapshotLease $lease,
         public DependencyStep $step,
         public array $lockFiles,
+        public string $platform,
     ) {
     }
 

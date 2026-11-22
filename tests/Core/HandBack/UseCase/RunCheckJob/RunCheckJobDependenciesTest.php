@@ -180,7 +180,7 @@ final class RunCheckJobDependenciesTest extends TestCase
         $check = $this->checkSpec();
         self::assertEquals(new JobInput($this->checks->snapshotsFolder().'/'.$this->key(self::LOCK)->value, '/input/dependencies'), array_last($check->inputs));
         self::assertSame(
-            ['task', '--dependencies', '/input/dependencies', PhpGateSteps::INSTALL, PhpGateSteps::GENERATE, 'composer.json', $this->blobOf(self::MANIFEST), 'composer.lock', $this->blobOf(self::LOCK), '--', PhpGateSteps::INSTALL, PhpGateSteps::CHECK],
+            ['task', '--dependencies', '/input/dependencies', self::PLATFORM, PhpGateSteps::PHP_VERSION_PROBE, PhpGateSteps::INSTALL, PhpGateSteps::GENERATE, 'composer.json', $this->blobOf(self::MANIFEST), 'composer.lock', $this->blobOf(self::LOCK), '--', PhpGateSteps::INSTALL, PhpGateSteps::CHECK],
             array_slice($check->command, 6),
         );
     }
@@ -201,7 +201,7 @@ final class RunCheckJobDependenciesTest extends TestCase
 
         self::assertSame(['probe', 'install', 'check'], $this->jobsThatRan());
         self::assertSame(
-            ['task', '--dependencies', '/input/dependencies', 'npm ci', 'npm rebuild', 'package-lock.json', $this->blobOf("{}\n"), '--', 'npm ci', 'npm test'],
+            ['task', '--dependencies', '/input/dependencies', self::PLATFORM, 'node --version', 'npm ci', 'npm rebuild', 'package-lock.json', $this->blobOf("{}\n"), '--', 'npm ci', 'npm test'],
             array_slice($this->checkSpec()->command, 6),
         );
     }

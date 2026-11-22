@@ -56,7 +56,7 @@ final readonly class CheckDependencies
         $inputs = new LockInputs(array_map(static fn (CheckedLockFile $file): string => $file->bytes, $files), $platform);
         $lease = $this->snapshots->lease($inputs->key()) ?? $this->leaseOfANewInstall($inputs, $step, $job->image);
 
-        return $lease instanceof DependencySnapshotLease ? new CheckSnapshot($lease, $step, $files) : null;
+        return $lease instanceof DependencySnapshotLease ? new CheckSnapshot($lease, $step, $files, $platform) : null;
     }
 
     private function leaseOfANewInstall(LockInputs $inputs, DependencyStep $step, string $image): ?DependencySnapshotLease
