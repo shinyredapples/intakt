@@ -676,11 +676,9 @@ final class CheckScriptTest extends TestCase
         self::assertStringNotContainsString('$ touch installed', $this->outputFile('check.log'));
     }
 
-    /**
-     * A cp in front of the real one that leaves one file of the snapshot in the clone and fails, because a test cannot make a real copy stop halfway.
-     */
     private function givenACopyThatStopsHalfway(): string
     {
+        // A cp in front of the real one that leaves one file of the snapshot in the clone and fails, because a test cannot make a real copy stop halfway.
         $shim = $this->history->folder.'/shim';
         $partial = $this->work.'/clone/vendor';
         new Filesystem()->dumpFile($shim.'/cp', "#!/bin/sh\nmkdir -p '$partial'\ntouch '$partial/installed.json'\nexit 1\n");
