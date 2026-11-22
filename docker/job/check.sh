@@ -14,6 +14,7 @@ platform_probe=''
 install_step=''
 generate_step=''
 copied=0
+with_dependencies=0
 if [ "${1-}" = '--dependencies' ]; then
     dependencies="$2"
     platform="$3"
@@ -21,6 +22,12 @@ if [ "${1-}" = '--dependencies' ]; then
     install_step="$5"
     generate_step="$6"
     shift 6
+    # Without the delimiter the lock files and the steps cannot be told apart, so no verdict is better than a pass that ran nothing.
+    case " $* " in
+        *' -- '*) ;;
+        *) printf 'the --dependencies option is not closed by --\n' >&2; exit 1 ;;
+    esac
+    with_dependencies=1
 fi
 # The lock files stay in the arguments up to the --, because they are compared with the merged tree, which exists only after the merge.
 
@@ -100,6 +107,10 @@ each_entry() {
     done
 }
 
+seen_entry() {
+    seen=1
+}
+
 not_in_tree() {
     if [ -e "$clone/$1" ] || [ -L "$clone/$1" ]; then
         held="$1"
@@ -139,12 +150,25 @@ use_dependencies() {
     fi
     # Read again in this job, because the probe job resolved the image on its own and a tag that moved since would copy a snapshot made for another platform.
     # Outside the tree and with an x after it, so no file of the change steers the probe and the bytes compare exactly as the probe job's output did.
-    if ! found=$(cd / && sh -c "$platform_probe" < /dev/null && printf x); then
+    # Compared as hex through files, because a command substitution drops NUL bytes.
+    probe_output="${TMPDIR:-/work}/platform-probe"
+    if ! (cd / && sh -c "$platform_probe" < /dev/null > "$probe_output"); then
         printf 'the platform probe failed in the check, so the check installs its dependencies itself\n'
         return 1
     fi
-    if [ "$found" != "${platform}x" ]; then
+    if [ "$(od -An -v -tx1 < "$probe_output")" != "$(printf '%s' "$platform" | od -An -v -tx1)" ]; then
         printf 'the platform of the check is not the one the snapshot was made for, so the check installs its dependencies itself\n'
+        return 1
+    fi
+    # A snapshot argument that is empty would make the entry glob read the root of the image.
+    if [ -z "$dependencies" ] || [ ! -d "$dependencies" ]; then
+        printf 'there is no dependency snapshot folder, so the check installs its dependencies itself\n'
+        return 1
+    fi
+    seen=0
+    each_entry seen_entry
+    if [ "$seen" -eq 0 ]; then
+        printf 'the dependency snapshot holds nothing, so the check installs its dependencies itself\n'
         return 1
     fi
     if ! each_entry not_in_tree; then
@@ -182,7 +206,7 @@ if ! merge_main >> "$log" 2>&1; then
     exit 1
 fi
 
-if [ -n "$dependencies" ]; then
+if [ "$with_dependencies" -eq 1 ]; then
     use_dependencies "$@" >> "$log" 2>&1
     case "$?" in
         0) copied=1 ;;

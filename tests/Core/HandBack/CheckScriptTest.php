@@ -592,6 +592,7 @@ final class CheckScriptTest extends TestCase
         $run = $this->whenTheCheckRunsWith(['--dependencies', $snapshot, self::PLATFORM, self::PROBE, 'install', 'generate', 'composer.lock'], $this->history->bundle('main..task'), 'test ! -e vendor');
 
         self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
+        self::assertStringContainsString('the merged tree does not hold the lock files the snapshot was made for', $this->outputFile('check.log'));
     }
 
     public function testASnapshotWithoutAnyLockFileToCompareIsNotCopied(): void
@@ -602,6 +603,66 @@ final class CheckScriptTest extends TestCase
         $run = $this->whenTheCheckRunsWith(['--dependencies', $snapshot, self::PLATFORM, self::PROBE, 'install', 'generate'], $this->history->bundle('main..task'), 'test ! -e vendor');
 
         self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
+        self::assertStringContainsString('the merged tree does not hold the lock files the snapshot was made for', $this->outputFile('check.log'));
+    }
+
+    public function testACheckWithoutASnapshotRunsItsStepsWithoutAVendorFolder(): void
+    {
+        $this->history->commit('Build work');
+
+        $run = $this->whenTheCheckRunsWith([], $this->history->bundle('main..task'), 'test ! -e vendor');
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
+        self::assertStringNotContainsString('dependency snapshot', $this->outputFile('check.log'));
+    }
+
+    public function testAnEmptySnapshotFolderCopiesNothingAndTheGatesInstallRuns(): void
+    {
+        $this->history->commitFile('composer.lock', self::LOCK, 'Lock the dependencies');
+        $snapshot = $this->history->folder.'/snapshot';
+        mkdir($snapshot);
+
+        $run = $this->whenTheCheckRunsWith(
+            ['--dependencies', $snapshot, self::PLATFORM, self::PROBE, 'touch installed', 'exit 9', 'composer.lock', $this->blobOf(self::LOCK)],
+            $this->history->bundle('main..task'),
+            'touch installed',
+            'test -f installed',
+        );
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
+        self::assertStringContainsString('the dependency snapshot holds nothing, so the check installs its dependencies itself', $this->outputFile('check.log'));
+        self::assertStringNotContainsString('exit 9', $this->outputFile('check.log'));
+    }
+
+    public function testAnEmptySnapshotArgumentDoesNotTurnTheLockFilesIntoSteps(): void
+    {
+        $this->history->commitFile('composer.lock', self::LOCK, 'Lock the dependencies');
+
+        $run = $this->whenTheCheckRunsWith(
+            ['--dependencies', '', self::PLATFORM, self::PROBE, 'touch installed', 'exit 9', 'composer.lock', $this->blobOf(self::LOCK)],
+            $this->history->bundle('main..task'),
+            'touch installed',
+        );
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
+        self::assertSame("passed\n", $this->outputFile('check-result'));
+    }
+
+    public function testADependencyOptionWithoutItsDelimiterEndsTheCheckWithoutAVerdict(): void
+    {
+        $this->history->commitFile('composer.lock', self::LOCK, 'Lock the dependencies');
+        $snapshot = $this->readOnlySnapshotHolding(['vendor/installed.json' => "{}\n"]);
+
+        $run = new Process(
+            ['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-check', $this->history->mirror, $this->history->bundle('main..task'), 'task',
+                '--dependencies', $snapshot, self::PLATFORM, self::PROBE, 'touch installed', 'exit 9', 'composer.lock', $this->blobOf(self::LOCK)],
+            null,
+            $this->environment(),
+        );
+        $run->run();
+
+        self::assertSame(1, $run->getExitCode());
+        self::assertFileDoesNotExist($this->output.'/check-result');
     }
 
     public function testACopiedSnapshotRunsTheGenerateStepInPlaceOfTheGatesInstall(): void
@@ -691,6 +752,8 @@ final class CheckScriptTest extends TestCase
     {
         yield 'another platform' => ['printf 8.4.1', 'the platform of the check is not the one the snapshot was made for'];
         yield 'the platform with a line break after it' => ["printf '8.5.12\\n'", 'the platform of the check is not the one the snapshot was made for'];
+        yield 'the platform with a NUL byte inside' => ["printf '8.5\\0.12'", 'the platform of the check is not the one the snapshot was made for'];
+        yield 'the platform with a NUL byte after it' => ["printf '8.5.12\\0'", 'the platform of the check is not the one the snapshot was made for'];
         yield 'a probe that fails' => ['printf 8.5.12; exit 3', 'the platform probe failed in the check'];
     }
 
@@ -750,16 +813,6 @@ final class CheckScriptTest extends TestCase
     private function blobOf(string $content): string
     {
         return sha1('blob '.strlen($content)."\0".$content);
-    }
-
-    public function testACheckWithoutASnapshotRunsItsStepsWithoutAVendorFolder(): void
-    {
-        $this->history->commit('Build work');
-
-        $run = $this->whenTheCheckRunsWith([], $this->history->bundle('main..task'), 'test ! -e vendor');
-
-        self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
-        self::assertStringNotContainsString('dependency snapshot', $this->outputFile('check.log'));
     }
 
     /**
