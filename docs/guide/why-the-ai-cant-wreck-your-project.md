@@ -81,7 +81,7 @@ If one was started without that server, or read nothing through it, it **cannot 
 - if it answers **approve**, Intakt turns that into **blocked** (held for a person, not passed);
 - if it answers **changes**, that stays **changes**.
 
-So such a reviewer can ask for more work, but it can never pass a change on its own. The exact rules are in the user docs ([Claude](../user/README.md#a-reviewer-on-a-claude-subscription), [Codex](../user/README.md#a-reviewer-on-a-codex-subscription)) and the [threat model](../design/05-architecture/14-threat-model.md).
+So such a reviewer can ask for more work, but it can never pass a change on its own. The exact rules are in the user docs ([Claude](../reference/user-manual.md#a-reviewer-on-a-claude-subscription), [Codex](../reference/user-manual.md#a-reviewer-on-a-codex-subscription)) and the [threat model](../design/05-architecture/14-threat-model.md).
 
 ## Layer 5: the rules protect themselves
 

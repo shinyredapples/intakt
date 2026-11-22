@@ -1,5 +1,18 @@
 ## Journeys
 
+### In short
+
+A journey is an end-to-end test of one path a user takes through a freshly booted install, such as the first install, the first run with or without a provider key, the demo tour or a live review. It drives the dashboard pages and the console and asserts what the user sees. This catches breaks that no single change's evidence shows. The journeys in `tests/Journeys/` run only through `bin/check --journeys`, each in its own instance with its own database. Test stand-ins take the place of the vendor and record what the hub publishes, so no model provider or forge is called.
+
+Worth knowing:
+
+- The `tests` gate and `bin/check --fast` skip `tests/Journeys/`, except the harness tests in `tests/Journeys/Support/`.
+- Each journey gets up to 240 seconds, and a failing one is one finding that names its step.
+- `JourneyTestCase` is the base class: `visit()` for pages, `console()` for commands, `publishedUpdates()` for what the hub recorded.
+- `bin/journey-alarm` turns a red run on main into one task.
+
+The rest of this page is the detailed reference.
+
 A journey walks one path a user takes through a freshly booted install and asserts what the user sees, so a break that no single change's evidence shows is caught. They live in `tests/Journeys/`, in the PHPUnit group `journeys`; the `application` suite of `phpunit.dist.xml` excludes that folder, so neither the `tests` gate nor `bin/check --fast` runs them, while its `journey harness` suite still runs the harness tests in `tests/Journeys/Support/`. A test in the group elsewhere under `tests/` runs in the `tests` gate like any other. Nothing here calls a model provider or a forge.
 
 - **Run:** `bin/check --journeys` runs the `journeys` gate alone (it refuses `--fast`, `--only`, `--skip`, `--base` and `--test-merge`, and is not a gate that `--only` can name). For each `tests/Journeys/*JourneyTest.php` it starts `bin/instance` with PHPUnit as the command (`--no-configuration --group=journeys`, failing on skipped, risky, warning, notice, PHPUnit notice, deprecation and PHPUnit deprecation, as the `tests` gate does), so every journey gets its own instance and database, up to 240 seconds each (`INTAKT_INSTANCE_COMMAND_SECONDS`, set through `env`). Each run is contained like the gate runner's other contained runs (`ProcessRunner::runWithin()`: its own session, and a PID namespace where `unshare` allows one), so a process a journey leaves behind is killed with its run, and the whole tree is killed after 300 seconds; in process-group mode a process still running after the journey ends makes the run time out. A tree without a journey fails. A failing journey is one finding: its file and the line `journey "<name>" failed at step "<step>": <reason>` (the first line of the reason, the whole finding cut at 300 characters).

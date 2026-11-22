@@ -53,12 +53,12 @@ the dates from [the journey's milestones](journey.md#milestones) and, for 2026-1
   change instead, calling no model ([five-minute start](../README.md#five-minute-start),
   [timed run](bench.md#timed-run)).
 - **The review page:** every round with its reviewers, their verdicts, the findings and the judge's call on each
-  ([reading a verdict](user/README.md#reading-a-verdict), [a tour of the dashboard](guide/a-tour-of-the-dashboard.md)).
-- **Trends:** figures about the reviews of every project as tiles ([the Trends page](user/README.md#the-trends-page)).
+  ([reading a verdict](reference/user-manual.md#reading-a-verdict), [a tour of the dashboard](guide/a-tour-of-the-dashboard.md)).
+- **Trends:** figures about the reviews of every project as tiles ([the Trends page](reference/user-manual.md#the-trends-page)).
 - **The review bench:** a panel on Claude and GPT caught all 5 planted defects in each of 3 runs (15 of 15, measured 2026-11-21, 3 false alarms); on open models the panel caught 11 of 15 (2026-11-16) with 2 false alarms
   ([review bench](bench.md#review-bench)).
 - **MCP tools and the agent skill:** your agent starts reviews, reads the findings and loops until the verdict is clean
-  ([MCP](user/mcp.md), [the skill](../skills/intakt-review/README.md)).
+  ([MCP](reference/mcp.md), [the skill](../skills/intakt-review/README.md)).
 - **The quality gates:** CI runs `bin/check`, and the journeys separately with `bin/check --journeys`, on pull requests
   from this repository and on pushes to main; every CI job skips pull requests from forks
   ([quality gates](architecture/quality-gates.md)).
