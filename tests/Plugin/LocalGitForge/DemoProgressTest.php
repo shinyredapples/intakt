@@ -16,6 +16,7 @@ use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Core\Review\Contract\SampleChange;
 use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\DemoProgress;
 use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\DemoProviderBusy;
+use Intakt\Plugin\Vendor\Contract\Vendor;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -85,6 +86,21 @@ final class DemoProgressTest extends TestCase
         ], $this->lines());
     }
 
+    // The judge completes a round without findings without a model call, so a rate limit on its tier is no reason to stop.
+    public function testAPanelThatFinishedWithoutFindingsReportsNothingForTheJudge(): void
+    {
+        $this->progress($this->judgeLimited(new EveryAccountCoolingDown(Provider::OpenAiCompatible, 60)))->reached(new RoundProgress(2, 2, false, [], 2, [], false));
+
+        self::assertSame([], $this->lines());
+    }
+
+    public function testAPanelThatFinishedWithFindingsStopsTheDemoWhenTheJudgeIsRateLimited(): void
+    {
+        $busy = $this->failureOf(fn () => $this->progress($this->judgeLimited(new EveryAccountCoolingDown(Provider::OpenAiCompatible, 60)))->reached(new RoundProgress(2, 2, false)));
+
+        self::assertInstanceOf(DemoProviderBusy::class, $busy);
+    }
+
     public function testAModelThatMovedToItsFallbackIsNamedAgain(): void
     {
         $tiers = self::createStub(TierInvoker::class);
@@ -142,6 +158,14 @@ final class DemoProgressTest extends TestCase
     {
         $tiers = self::createStub(TierInvoker::class);
         $tiers->method('answering')->willReturnCallback(static fn (string $project, Tier $tier): ResolvedModel => Tier::Strong === $tier ? throw $out : new ResolvedModel(Provider::OpenAiCompatible, self::DEEPSEEK));
+
+        return $tiers;
+    }
+
+    private function judgeLimited(Throwable $out): TierInvoker
+    {
+        $tiers = self::createStub(TierInvoker::class);
+        $tiers->method('answering')->willReturnCallback(static fn (string $project, Tier $tier): ResolvedModel => Vendor::JUDGE_TIER === $tier ? throw $out : new ResolvedModel(Provider::OpenAiCompatible, self::DEEPSEEK));
 
         return $tiers;
     }

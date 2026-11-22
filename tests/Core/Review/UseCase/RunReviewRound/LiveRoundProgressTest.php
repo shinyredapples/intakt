@@ -82,6 +82,15 @@ final class LiveRoundProgressTest extends KernelTestCase
         self::assertSame([$this->state($round, '0/2'), $this->state($round, '1/2')], $this->fixture->updates->seen);
     }
 
+    public function testAPanelThatReportedNoFindingsLeavesNothingToJudge(): void
+    {
+        $this->fixture->start(1);
+
+        $this->fixture->deliver($this->fixture->bus->messages[0], new VerdictPerRole([]));
+
+        self::assertSame([true, false], array_map(static fn (RoundProgress $progress): bool => $progress->findingsToJudge, $this->fixture->updates->progress));
+    }
+
     public function testAReviewerAWorkerTakesIsPublishedAsStarted(): void
     {
         $this->fixture->start(2);

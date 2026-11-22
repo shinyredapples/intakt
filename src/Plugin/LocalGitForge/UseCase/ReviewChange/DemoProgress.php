@@ -42,7 +42,7 @@ final class DemoProgress implements ReviewProgress
 
     public function reached(RoundProgress $progress): void
     {
-        if ($progress->judged) {
+        if ($progress->judged || ([] === $progress->awaited && !$progress->findingsToJudge)) {
             return;
         }
 

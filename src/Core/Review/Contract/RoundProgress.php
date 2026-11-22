@@ -10,7 +10,7 @@ use Symfony\Component\DependencyInjection\Attribute\Exclude;
 #[Exclude]
 final readonly class RoundProgress
 {
-    // $finished holds each finished reviewer's state by reviewer id, so the page can stop showing it running; $awaited lists the reviewers not finished yet, in panel order, so the demo can say what it waits on.
+    // $finished holds each finished reviewer's state by reviewer id, so the page can stop showing it running; $awaited lists the reviewers not finished yet, in panel order, so the demo can say what it waits on; $findingsToJudge is false once the panel reported none, because the judge then completes the round without a model call.
     /**
      * @param array<string, FinishedState> $finished
      * @param list<AwaitedReviewer>        $awaited
@@ -22,6 +22,7 @@ final readonly class RoundProgress
         public array $finished = [],
         public int $reviewersStarted = 0,
         public array $awaited = [],
+        public bool $findingsToJudge = true,
     ) {
     }
 
