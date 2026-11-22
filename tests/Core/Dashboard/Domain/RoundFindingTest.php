@@ -76,6 +76,37 @@ final class RoundFindingTest extends TestCase
         self::assertSame([null, null], [new RoundFinding('F1', null, null)->headline(), new RoundFinding('F1', 'P2', " \n\t ")->headline()]);
     }
 
+    public function testACodeSpanThatCrossesALineStaysWhole(): void
+    {
+        self::assertSame("Keep `Ready? yes\ncontinue` as the prompt.", new RoundFinding('F1', 'P2', "Keep `Ready? yes\ncontinue` as the prompt. More.")->headline());
+    }
+
+    public function testAHeadlineCutAtALineBreakDropsTheWhiteSpaceBeforeIt(): void
+    {
+        self::assertSame('Keep `a` as is', new RoundFinding('F1', 'P2', "Keep `a` as is \u{00A0}\nnext")->headline());
+    }
+
+    public function testAVeryLongFirstSentenceStillEndsAtItsMark(): void
+    {
+        $sentence = str_repeat('word `a` and ', 2000).'end.';
+
+        self::assertSame($sentence, new RoundFinding('F1', 'P2', $sentence.' More.')->headline());
+    }
+
+    public function testAFindingWithASecondSentenceGoesOnAfterItsHeadline(): void
+    {
+        self::assertTrue(new RoundFinding('F1', 'P2', 'Keep `Ready? yes` as the prompt. More.')->goesOnAfterItsHeadline());
+    }
+
+    public function testAFindingOfOneSentenceOrWithoutTextDoesNotGoOnAfterItsHeadline(): void
+    {
+        self::assertSame([false, false, false], [
+            new RoundFinding('F1', 'P2', " Keep `Ready? yes` as the prompt.\u{2003}")->goesOnAfterItsHeadline(),
+            new RoundFinding('F1', 'P2', "\u{00A0}")->goesOnAfterItsHeadline(),
+            new RoundFinding('F1', 'P2', null)->goesOnAfterItsHeadline(),
+        ]);
+    }
+
     public function testAFindingsPlaceReadsFileColonLine(): void
     {
         self::assertSame('src/A.php:7', new RoundFinding('F1', 'P1', 'A.', [], 'src/A.php', 7)->place());
