@@ -47,7 +47,7 @@ A violation halts the project with an owner card. The halt lives only in the led
 | main not read, a card the ledger refused (`HaltNotRecorded`) or a notice the ledger refused (`NoticeNotRecorded`) | an error naming the reason, escaped as for the check | 1 |
 | refused input: an empty project, and everything the check refuses with 2 | an error naming the rule | 2 (`ExitInvalidOnRefusedUsage` covers this command too) |
 
-A main that cannot be read raises no card, and it is never reported as not halted. The project name is printed with its control characters spelled out (`ConsoleReport::printable()`, which the check uses as well).
+A main that cannot be read raises no card, and it is never reported as not halted. The project name is printed with its control characters spelled out (`ConsoleReport::printable()`, which the check uses as well), in the card lines, the notice lines (`ConsoleReport::noticeLine()`) and the "not halted" line.
 
 ### The owner's own push
 
