@@ -68,6 +68,20 @@ use Symfony\Component\HttpFoundation\Response;
 #[UsesClass(SampleChangeSource::class)]
 final class ShowBoardControllerTest extends DashboardPageTestCase
 {
+    /**
+     * @var list<OutageNotice>
+     */
+    private array $notices = [];
+
+    // Nothing waits unless a test says so, because the board reads the owner notices for its Needs you card on every load and a page test creates no schema.
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $stub = self::createStub(OwnerNotices::class);
+        $stub->method('stillRunningOldestFirst')->willReturnCallback(fn (): array => $this->notices);
+        self::getContainer()->set(OwnerNotices::class, $stub);
+    }
+
     public function testTheRootAddressShowsTheBoard(): void
     {
         $page = $this->browser->request('GET', '/');
@@ -166,7 +180,7 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
     {
         $this->ledger->passBuildStep('alpha', 'task-7', 'task');
 
-        self::assertSame('A build is running. Nothing needs you.', $this->browser->request('GET', '/')->filter('.page-head .lead')->text());
+        self::assertSame('A build is running.', $this->browser->request('GET', '/')->filter('.page-head .lead')->text());
     }
 
     public function testATaskWhoseLatestStepFailedWithNoCardShowsTheAsleepOctopus(): void
@@ -192,7 +206,7 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         $page = $this->browser->request('GET', '/');
 
         self::assertSame([0, 0], [$page->filter('.firstday')->count(), $page->filter('#board-setup:not([hidden])')->count()]);
-        self::assertSame('Nothing is running. Nothing needs you.', $page->filter('.page-head .lead')->text());
+        self::assertSame('Nothing is running.', $page->filter('.page-head .lead')->text());
         self::assertSame(2, $page->filter('#board-octopus img[src*="octopus-asleep-"]')->count());
     }
 
@@ -250,7 +264,7 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
 
         $lead = $this->browser->request('GET', '/')->filter('.page-head .lead');
 
-        self::assertSame('The Code reviewers are reviewing change 42 of alpha. The Code reviewers are reviewing 1 change. Nothing needs you.', $lead->text());
+        self::assertSame('The Code reviewers are reviewing change 42 of alpha. The Code reviewers are reviewing 1 change.', $lead->text());
         self::assertSame(['/reviews/round-1'], $lead->filter('a')->each(static fn (Crawler $a): ?string => $a->attr('href')));
     }
 
@@ -308,7 +322,7 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
 
         $page = $this->browser->request('GET', '/');
 
-        self::assertSame('Nothing is running. Nothing needs you.', $page->filter('.page-head .lead')->text());
+        self::assertSame('Nothing is running.', $page->filter('.page-head .lead')->text());
     }
 
     public function testMarkupInAProjectNameIsShownAsTextInTheHeadline(): void
@@ -1037,8 +1051,6 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
 
     private function noticesAre(OutageNotice ...$notices): void
     {
-        $stub = self::createStub(OwnerNotices::class);
-        $stub->method('stillRunningOldestFirst')->willReturn(array_values($notices));
-        self::getContainer()->set(OwnerNotices::class, $stub);
+        $this->notices = array_values($notices);
     }
 }
