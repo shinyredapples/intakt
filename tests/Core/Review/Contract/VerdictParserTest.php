@@ -29,6 +29,9 @@ use Symfony\AI\Platform\Result\TextResult;
 use Symfony\AI\Platform\Result\ToolCall;
 use Symfony\AI\Platform\Result\ToolCallResult;
 use Symfony\AI\Platform\ResultConverterInterface;
+use Symfony\Component\Serializer\Encoder\JsonDecode;
+use Symfony\Component\Serializer\Exception\ExceptionInterface;
+use Symfony\Component\Serializer\Normalizer\AbstractNormalizer;
 
 #[CoversClass(VerdictParser::class)]
 #[CoversClass(VerdictUnreadable::class)]
@@ -127,6 +130,26 @@ final class VerdictParserTest extends KernelTestCase
 
         $this->expectException(VerdictUnreadable::class);
         $this->expectExceptionMessageMatches('/'.implode('|', $wordings).'/');
+
+        $this->reviewer()->verdictFor($output);
+    }
+
+    public function testAWrongTypeIsRefusedWithTheSameTextAsWhenTheContractVerdictWasTheTarget(): void
+    {
+        $output = '{"verdict":"approve","findings":[],"resolved":false,"follow_ups":[]}';
+        $before = '';
+        try {
+            self::getContainer()->get('serializer')->deserialize($output, Verdict::class, 'json', [
+                AbstractNormalizer::ALLOW_EXTRA_ATTRIBUTES => false,
+                AbstractNormalizer::REQUIRE_ALL_PROPERTIES => true,
+                JsonDecode::ASSOCIATIVE => false,
+            ]);
+        } catch (ExceptionInterface $refused) {
+            $before = sprintf('Cannot deserialize the content into the "%s" class. %s', Verdict::class, $refused->getMessage());
+        }
+
+        $this->expectException(VerdictUnreadable::class);
+        $this->expectExceptionMessage($before);
 
         $this->reviewer()->verdictFor($output);
     }

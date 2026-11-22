@@ -143,8 +143,10 @@ final readonly class StrictVerdictConverter implements ResultConverterInterface
         try {
             return $this->deserialized(AnswerForm::ProseAroundBlock === $this->form ? $this->fencedBlockOf($content) : $content);
         } catch (ExceptionInterface $exception) {
-            // Named after the contract Verdict, because this message reaches VerdictUnreadable and the reviewers' failure texts must not change.
-            throw new RuntimeException(sprintf('Cannot deserialize the content into the "%s" class.', Verdict::class), $exception->getCode(), previous: $exception);
+            // Named after the contract Verdict, the serializer's detail too, because both reach VerdictUnreadable and the reviewers' failure texts must not change.
+            $detail = new UnexpectedValueException(strtr($exception->getMessage(), [ReviewerAnswer::class => Verdict::class]), $exception->getCode(), $exception);
+
+            throw new RuntimeException(sprintf('Cannot deserialize the content into the "%s" class.', Verdict::class), $exception->getCode(), previous: $detail);
         }
     }
 
