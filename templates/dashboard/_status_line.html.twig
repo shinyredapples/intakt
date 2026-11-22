@@ -1,0 +1,2 @@
+{# The quiet line in place of the lanes strip: one sentence and a link to the Status page, which lists the lanes. #}
+<a class="status-line" id="status-line" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_LANES')) }}">{{ include('dashboard/components/icon.html.twig', {name: 'check'}, with_context = false) }}<span class="grow">{{ working.statusLine }}</span>{{ include('dashboard/components/icon.html.twig', {name: 'chevron', small: true, extra: 'go'}, with_context = false) }}</a>

@@ -83,6 +83,7 @@ final class BoardComingNextTemplateTest extends DashboardPageTestCase
             'failing' => [],
             'failing_mains' => [],
             'working' => $board->whoIsWorking(),
+            'waiting' => [],
             'columns' => $columns,
             'coming_next' => $comingNext,
         ]);

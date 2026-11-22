@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
+use Intakt\Core\Dashboard\Domain\Character;
 use Intakt\Core\Dashboard\UseCase\ShowComponents\ShowComponentsController;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -101,11 +102,11 @@ final class ShowComponentsControllerTest extends DashboardPageTestCase
         foreach (['light', 'dark'] as $theme) {
             $section = $page->filter('#c-characters .spec[data-theme="'.$theme.'"]');
             self::assertSame(
-                ['Code reviewer: Meerkat with a magnifying glass', 'Judge: Owl with a gavel', 'Waiting', 'Conducting', 'Bowing', 'Asleep'],
+                ['Code reviewer: Meerkat with a magnifying glass', 'Judge: Owl with a gavel', 'Maintainer: Tortoise with a toolbox', 'Developer: Beaver with a wrench', 'Security engineer: Hedgehog with a shield', 'Waiting', 'Conducting', 'Bowing', 'Asleep'],
                 $section->filter('.character-row')->each(static fn (Crawler $row): string => $row->text()),
                 $theme,
             );
-            self::assertCount(2 * (2 * 2 + 4), $section->filter('img.character[alt=""]'), $theme);
+            self::assertCount(2 * (count(Character::cases()) * 2 + 4), $section->filter('img.character[alt=""]'), $theme);
         }
     }
 

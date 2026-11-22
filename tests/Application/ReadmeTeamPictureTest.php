@@ -74,7 +74,7 @@ final class ReadmeTeamPictureTest extends TestCase
         $screenshot = strpos($readme, 'src="docs/assets/dashboard-review.png"');
         self::assertIsInt($screenshot, 'The README shows the review page on its first screen.');
         $picture = (int) strpos($readme, '<picture>', $screenshot);
-        $release = (int) strpos($readme, '## The first release');
+        $release = (int) strpos($readme, '## Status');
         $line = 'Tech lead, Developer, Code reviewer, Judge, Security engineer, Designer, AI engineer and Maintainer';
 
         self::assertGreaterThan($screenshot, $picture);

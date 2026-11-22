@@ -11,6 +11,7 @@ use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Review\Contract\Decision;
+use Intakt\Core\Review\Contract\ModelPrice;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\PanelVerdict;
@@ -53,6 +54,7 @@ use Symfony\Component\Yaml\Yaml;
 #[UsesClass(Verdict::class)]
 #[UsesClass(Decision::class)]
 #[UsesClass(SampleProjectData::class)]
+#[UsesClass(ModelPrice::class)]
 final class SeedSampleProjectCommandTest extends TestCase
 {
     private const string FIXTURES = __DIR__.'/../../../../../fixtures/sample-repository';
