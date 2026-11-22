@@ -258,8 +258,7 @@ final readonly class ReviewedRound
         return ReplayMark::Replay === $round->mark;
     }
 
-    // Read through a round for the same reason as `isReplayMarked()`: PHPStan keeps the constructor's null for `$this->severitiesByReviewer`.
-    // Read through a parameter, as severityIn() is, so static analysis sees a clone's values.
+    // Read through a round for the same reason as `isReplayMarked()`.
     private function findingIn(self $round, string $id): ?RoundFinding
     {
         return array_find($round->findings, static fn (RoundFinding $finding): bool => $finding->id === $id);
@@ -279,6 +278,7 @@ final readonly class ReviewedRound
         return array_values(array_filter($round->outcomes, static fn (ReviewerOutcome $outcome): bool => [] !== array_intersect($finding->ids(), $reports[$outcome->id] ?? [])));
     }
 
+    // Read through a round for the same reason as `isReplayMarked()`: PHPStan keeps the constructor's null for `$this->severitiesByReviewer`.
     private function severityIn(self $round, string $reviewer, string $id): ?string
     {
         return $round->severitiesByReviewer[$reviewer][$id] ?? null;
