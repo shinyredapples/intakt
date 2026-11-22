@@ -155,6 +155,18 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
         self::assertSame(['round', 'reviewer', 'role', 'tier'], array_keys($ledger->payloads()[0]));
     }
 
+    public function testAReviewersStartIsAppendedWithItsRoundAsTheSubjectAndAVerdictWithoutOne(): void
+    {
+        $reviewer = new RoundFixture(self::getContainer())->start(1)->reviewers()[0];
+        $ledger = new InMemoryLedger();
+        $rounds = $this->roundLedger($ledger);
+
+        $rounds->reviewerStarted($reviewer);
+        $rounds->verdictReceived($reviewer, Verdict::noTools());
+
+        self::assertSame([$reviewer->round()->id()->toRfc4122(), null], $ledger->subjects());
+    }
+
     public function testOnlyTheStartOfAReviewerCarriesItsModel(): void
     {
         $reviewer = new RoundFixture(self::getContainer())->start(1)->reviewers()[0];

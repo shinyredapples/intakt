@@ -58,6 +58,11 @@ final class BeforeFirstAppendOf implements Ledger
         return $this->inner->readOfKind($kind);
     }
 
+    public function readOfKindAbout(LedgerEventKind $kind, string $subject): RecordedEvents
+    {
+        return $this->inner->readOfKindAbout($kind, $subject);
+    }
+
     /**
      * @param list<string> $texts
      */

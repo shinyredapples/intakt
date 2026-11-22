@@ -30,6 +30,11 @@ final class LedgerWrittenAfterRead implements Ledger
         return $this->ledger->readOfKind($kind);
     }
 
+    public function readOfKindAbout(LedgerEventKind $kind, string $subject): RecordedEvents
+    {
+        return $this->ledger->readOfKindAbout($kind, $subject);
+    }
+
     /**
      * @param list<string> $texts
      */
