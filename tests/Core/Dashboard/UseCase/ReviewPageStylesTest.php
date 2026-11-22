@@ -11,7 +11,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversNothing]
 final class ReviewPageStylesTest extends TestCase
 {
-    // DESIGN.md defines a list row as a title and one line of explanation.
+    // Because DESIGN.md defines a list row as a title and one line of explanation.
     public function testAToFixCardsExplanationIsCutToOneLine(): void
     {
         $rules = $this->rulesOf($this->sheet('review.css'));
