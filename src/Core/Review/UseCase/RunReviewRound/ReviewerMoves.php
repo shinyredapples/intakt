@@ -10,6 +10,7 @@ use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\ReviewerTransition;
 use Intakt\Core\Review\Domain\RoundReviewer;
 use Intakt\Core\Review\Infrastructure\StopRequests;
+use Intakt\Plugin\Vendor\Contract\VendorReview;
 use NoDiscard;
 use Symfony\Component\DependencyInjection\Attribute\Target;
 use Symfony\Component\Serializer\Encoder\JsonEncoder;
@@ -38,15 +39,16 @@ final readonly class ReviewerMoves
 
     // Says whether it answered a stop request, because only this decision may show the reviewer as stopped: the ledger read again later can hold a newer request or an older run's stop.
     #[NoDiscard]
-    public function receive(RoundReviewer $reviewer, Verdict $verdict, ?Provider $substitute, ?string $substituteModel = null): bool
+    public function receive(RoundReviewer $reviewer, VendorReview $review): bool
     {
-        $reviewer->recordVerdict($this->serializer->serialize($verdict, JsonEncoder::FORMAT), $substitute);
+        $verdict = $review->verdict;
+        $reviewer->recordVerdict($this->serializer->serialize($verdict, JsonEncoder::FORMAT), $review->substitute);
         $this->machine->apply($reviewer, ReviewerTransition::Receive->value);
         $this->ledger->verdictReceived($reviewer, $verdict);
         $stopped = $this->answerStopRequest($reviewer, $verdict);
 
-        if ($substitute instanceof Provider) {
-            $this->ledger->catchUpOwed($reviewer, $substitute, $substituteModel);
+        if ($review->substitute instanceof Provider) {
+            $this->ledger->catchUpOwed($reviewer, $review->substitute, $review->substituteModel);
         }
 
         return $stopped;

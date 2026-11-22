@@ -265,9 +265,7 @@ final class LocalGitForgeTest extends TestCase
     {
         $forge = $this->forge();
         $snapshot = $forge->keepSnapshotOf(new CommitId($this->repository->objectAt('main')));
-        IsDirThatLetsAnotherRemoverIn::define(static function (string $path): void {
-            new KeptSnapshots(new NullLogger())->remove('judged-round', $path);
-        });
+        IsDirThatLetsAnotherRemoverIn::define();
 
         $forge->removeSnapshot($snapshot);
 
