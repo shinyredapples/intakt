@@ -160,7 +160,7 @@ final class ContainerJobRunnerTest extends TestCase
 
     public function testAKeptFolderIsMountedWritableAfterTheOutputDirectoryAndNamedInTheEnvironment(): void
     {
-        $this->whenJobRuns(new JobSpec(new JobId('install-1'), 'sample:latest', ['true'], [], new JobLimits(self::MEMORY, 1.0, 60), JobEgress::none(), new JobKeptFolder('/srv/installs/1')));
+        $this->whenJobRuns(new JobSpec(new JobId('install-1'), 'sample:latest', new JobCommand('true'), [], new JobLimits(self::MEMORY, 1.0, 60), JobEgress::none(), new JobKeptFolder('/srv/installs/1')));
 
         self::assertSame(
             ['Type' => 'bind', 'Source' => '/srv/installs/1', 'Target' => '/kept', 'ReadOnly' => false],
