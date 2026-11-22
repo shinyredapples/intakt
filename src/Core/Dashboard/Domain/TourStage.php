@@ -35,6 +35,12 @@ enum TourStage: string
         };
     }
 
+    // Only while the reviewers work, because the caption then names them by model and AI lab and the other stages talk about the change or the judge.
+    public function isAboutTheReviewers(): bool
+    {
+        return self::ReviewersRead === $this || self::FindingsArrive === $this;
+    }
+
     public function number(): int
     {
         return (int) array_search($this, self::cases(), true) + 1;
