@@ -11,7 +11,7 @@ The words used across Intakt's guides and dashboard, in plain terms. Each entry 
 | **Approval on the spot** | Intakt approving a change to the rules itself, at once, when no hard limit is touched, a mechanical check proves the change harmless, the Security engineer's security review agrees and its penetration test fails to get around the change; otherwise you are asked (planned) | [safety](why-the-ai-cant-wreck-your-project.md#when-intakt-asks-you-and-why) |
 | **Back-off** | a short wait after a failure before trying again | [engine room](the-engine-room.md#budgets-windows-and-pace) |
 | **Blocking reviewer** | a reviewer that must approve before a merge | [how it works](how-intakt-works.md#which-reviewers-look-at-a-change) |
-| **Boot check** | starting the changed application to see that it still runs | [journey](the-journey-of-a-task.md#3-checking) |
+| **Boot check** | starting the changed application to see that it still runs; Intakt does this only for a pull request by someone it trusts (a person with write access, Intakt's own GitHub App or the maintainer), and reviews anyone else's pull request without starting it | [journey](the-journey-of-a-task.md#3-checking) |
 | **Briefing** | the short summary of project memory every job starts with | [project memory](project-memory.md) |
 | **Build slot** | a bench where one Developer works on one task | [engine room](the-engine-room.md#lanes-and-slots-the-workbenches) |
 | **Bundle** | the sealed package of commits a Developer hands back | [journey](the-journey-of-a-task.md#2-building) |
@@ -46,6 +46,7 @@ The words used across Intakt's guides and dashboard, in plain terms. Each entry 
 | **Journey check** | a run that starts a fresh copy of Intakt and walks one path a person takes, to prove the whole product still works | [checking the whole product](checking-the-whole-product.md) |
 | **Judge step** | the Code reviewers' last step, a quick call that sorts the findings: a serious one (P1 or P2) is always fixed now, with the judge's doubt written beside it, and a small one (P3) is fixed now, later, or not at all | [journey](the-journey-of-a-task.md#5-reviewing) |
 | **Lane** | a line of work: the build slots and the review lane | [engine room](the-engine-room.md#lanes-and-slots-the-workbenches) |
+| **Ledger** | Intakt's permanent record of what it did, one line per event, which is only ever added to | [running one task](running-one-task.md#finding-the-steps-in-the-ledger) |
 | **Lock** | a "one at a time" sign on something two jobs must not use together | [engine room](the-engine-room.md#locks-one-at-a-time) |
 | **Log** | Intakt's own record of its warnings and errors, one line each, with the secrets Intakt knows about written as `[redacted]` | [why isn't anything happening](why-isnt-anything-happening.md#reading-intakts-log) |
 | **Main** | the official version of your project | |
