@@ -944,9 +944,6 @@ final class ContainerJobRunnerTest extends TestCase
     }
 
     /**
-     * @return array<string, mixed>
-     */
-    /**
      * @return list<string>
      */
     private function namesOf(JobOutput $output): array
@@ -954,6 +951,9 @@ final class ContainerJobRunnerTest extends TestCase
         return array_map(static fn (JobOutputFile $file): string => $file->name, $output->files());
     }
 
+    /**
+     * @return array<string, mixed>
+     */
     private function hostConfigOf(string $job): array
     {
         /** @var array<string, mixed> $host */
