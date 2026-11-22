@@ -144,7 +144,7 @@ A brand-new release of a package is the one most likely to be broken or, rarely,
 - **The dashboard's JavaScript packages:** the import map (the list in `importmap.php` that tells the browser where each JavaScript module of the dashboard lives) follows the same rule: while the newest release is less than 3 days old, `bin/console importmap:update` holds it back and can move the pin to an older release that is old enough.
 - **A fingerprint on every module:** the import map the browser receives pins each module by its **integrity hash** (sha384), a fingerprint of the exact file Intakt serves. If the file's bytes change after the fingerprint was taken, the browser refuses to run it.
 
-Both are set in `config/packages/asset_mapper.yaml`; the exact rules are in [the user guide](../user/README.md#the-release-cooldown-for-dependencies).
+Both are set in `config/packages/asset_mapper.yaml`; the exact rules are in [the user guide](../reference/user-manual.md#the-release-cooldown-for-dependencies).
 
 ## Finding bugs in the beta
 

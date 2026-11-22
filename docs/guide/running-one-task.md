@@ -6,7 +6,7 @@ Until Intakt picks tasks by itself (the build lane is planned), you can hand it 
 php bin/console intakt:build:task <project> <issue number> --remote=<remote> --branch=<branch> --directory=<folder> --image=<image>
 ```
 
-`<remote>` is where the project's code lives, `<branch>` the branch the work goes on, `<folder>` a new folder for the work (it must not exist yet) and `<image>` the project's job image, the container the Developer works in. The exact rules for each are in the [user guide](../user/README.md#building-one-task).
+`<remote>` is where the project's code lives, `<branch>` the branch the work goes on, `<folder>` a new folder for the work (it must not exist yet) and `<image>` the project's job image, the container the Developer works in. The exact rules for each are in the [user guide](../reference/user-manual.md#building-one-task).
 
 ## The steps
 
