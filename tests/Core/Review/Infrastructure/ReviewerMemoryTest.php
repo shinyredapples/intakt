@@ -77,7 +77,7 @@ final class ReviewerMemoryTest extends TestCase
         $vectorizer = new Vectorizer($platform, 'embedder');
         $documents = new MemoryDocuments();
 
-        $this->index = new StoreMemoryIndex(new DocumentIndexer(new DocumentProcessor($vectorizer, $store)), $documents);
+        $this->index = new StoreMemoryIndex(new DocumentIndexer(new DocumentProcessor($vectorizer, $store)), $store, $documents);
         $this->memory = new ReviewerMemory(new StoreProjectMemory(new Retriever($store, $vectorizer), $documents), new Fence(), new DiffPaths());
     }
 

@@ -5,9 +5,13 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Memory\Infrastructure;
 
 use Intakt\Core\Git\Contract\Paths;
+use Intakt\Core\Memory\Contract\CodeSnapshot;
 use Intakt\Core\Memory\Contract\MemoryEntry;
 use Intakt\Core\Memory\Contract\MemoryQuery;
 use Intakt\Core\Memory\Contract\RelevantMemory;
+use Intakt\Core\Memory\Contract\SettledFinding;
+use Intakt\Core\Memory\Contract\SettledMemory;
+use Intakt\Core\Memory\Contract\SettledQuery;
 use Intakt\Core\Memory\Infrastructure\MemoryDocuments;
 use Intakt\Core\Memory\Infrastructure\StoreMemoryIndex;
 use Intakt\Core\Memory\Infrastructure\StoreProjectMemory;
@@ -30,6 +34,10 @@ use Symfony\AI\Store\Retriever;
 #[UsesClass(MemoryEntry::class)]
 #[UsesClass(MemoryQuery::class)]
 #[UsesClass(RelevantMemory::class)]
+#[UsesClass(SettledFinding::class)]
+#[UsesClass(SettledMemory::class)]
+#[UsesClass(SettledQuery::class)]
+#[UsesClass(CodeSnapshot::class)]
 #[UsesClass(Paths::class)]
 final class StoreProjectMemoryTest extends TestCase
 {
@@ -46,7 +54,7 @@ final class StoreProjectMemoryTest extends TestCase
         $vectorizer = new Vectorizer($platform, 'embedder');
         $documents = new MemoryDocuments();
 
-        $this->index = new StoreMemoryIndex(new DocumentIndexer(new DocumentProcessor($vectorizer, $store)), $documents);
+        $this->index = new StoreMemoryIndex(new DocumentIndexer(new DocumentProcessor($vectorizer, $store)), $store, $documents);
         $this->memory = new StoreProjectMemory(new Retriever($store, $vectorizer), $documents);
     }
 
@@ -131,5 +139,98 @@ final class StoreProjectMemoryTest extends TestCase
         $found = $this->memory->relevantTo(new MemoryQuery('alpha', new Paths('a.php'), 1000));
 
         self::assertCount(1, $found->entries);
+    }
+
+    public function testASettledFindingIsStoredWithItsReasonAndCodeHash(): void
+    {
+        $finding = $this->settled('alpha', 'hash-1');
+        $this->index->settle($finding);
+
+        $found = $this->memory->settledOn(new SettledQuery('alpha', new CodeSnapshot('src/Db.php', 'migrate', 'hash-1')));
+
+        self::assertEquals([$finding], $found->settled);
+        self::assertSame('Intentional: the lock is taken by the caller.', $found->settled[0]->reason);
+        self::assertSame('hash-1', $found->settled[0]->code->hash);
+    }
+
+    public function testASettledFindingIsNoLongerReturnedAsSettledAfterMainChangesItsCode(): void
+    {
+        $finding = $this->settled('alpha', 'hash-1');
+        $this->index->settle($finding);
+
+        $found = $this->memory->settledOn(new SettledQuery('alpha', new CodeSnapshot('src/Db.php', 'migrate', 'hash-2')));
+
+        self::assertSame([], $found->settled);
+        self::assertEquals([$finding], $found->stale);
+    }
+
+    public function testASettledFindingAboutOtherCodeIsNeitherSettledNorStale(): void
+    {
+        $this->index->settle($this->settled('alpha', 'hash-1'));
+
+        $found = $this->memory->settledOn(new SettledQuery('alpha', new CodeSnapshot('src/Db.php', 'other', 'hash-1')));
+
+        self::assertEquals(SettledMemory::none(), $found);
+    }
+
+    public function testASettledFindingSettledAgainWithTheNewHashIsSettledAgain(): void
+    {
+        $this->index->settle($this->settled('alpha', 'hash-1'));
+        $this->index->settle($this->settled('alpha', 'hash-2'));
+
+        $found = $this->memory->settledOn(new SettledQuery('alpha', new CodeSnapshot('src/Db.php', 'migrate', 'hash-2')));
+
+        self::assertCount(1, $found->settled);
+        self::assertSame([], $found->stale);
+    }
+
+    public function testADeletedSettledFindingIsNotReturned(): void
+    {
+        $finding = $this->settled('alpha', 'hash-1');
+        $this->index->settle($finding);
+        $this->index->forget($finding);
+
+        $found = $this->memory->settledOn(new SettledQuery('alpha', new CodeSnapshot('src/Db.php', 'migrate', 'hash-1')));
+
+        self::assertEquals(SettledMemory::none(), $found);
+    }
+
+    public function testASettledFindingOfAnotherProjectIsNeverReturned(): void
+    {
+        $this->index->settle($this->settled('beta', 'hash-1'));
+
+        $found = $this->memory->settledOn(new SettledQuery('alpha', new CodeSnapshot('src/Db.php', 'migrate', 'hash-1')));
+
+        self::assertEquals(SettledMemory::none(), $found);
+    }
+
+    public function testASettledFindingIsNotReturnedAsResolvedMemory(): void
+    {
+        $this->index->settle($this->settled('alpha', 'hash-1'));
+
+        $found = $this->memory->relevantTo(new MemoryQuery('alpha', new Paths('src/Db.php'), 1000));
+
+        self::assertSame([], $found->entries);
+    }
+
+    public function testAResolvedEntryIsNotReturnedAsSettled(): void
+    {
+        $this->index->index(new MemoryEntry('alpha', 'Run the migration first.', new Paths('src/Db.php')));
+
+        $found = $this->memory->settledOn(new SettledQuery('alpha', new CodeSnapshot('src/Db.php', 'migrate', 'hash-1')));
+
+        self::assertEquals(SettledMemory::none(), $found);
+    }
+
+    public function testNoCodeUnderReviewReturnsNoSettledFindings(): void
+    {
+        $this->index->settle($this->settled('alpha', 'hash-1'));
+
+        self::assertEquals(SettledMemory::none(), $this->memory->settledOn(new SettledQuery('alpha')));
+    }
+
+    private function settled(string $project, string $hash): SettledFinding
+    {
+        return new SettledFinding($project, 'migrate() takes no lock.', 'Intentional: the lock is taken by the caller.', new CodeSnapshot('src/Db.php', 'migrate', $hash));
     }
 }

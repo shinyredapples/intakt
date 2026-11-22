@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Memory\Infrastructure;
 
 use Intakt\Core\Git\Contract\Paths;
+use Intakt\Core\Memory\Contract\CodeSnapshot;
 use Intakt\Core\Memory\Contract\MemoryEntry;
 use Intakt\Core\Memory\Contract\MemoryQuery;
+use Intakt\Core\Memory\Contract\SettledFinding;
+use Intakt\Core\Memory\Contract\SettledQuery;
 use Intakt\Core\Memory\Infrastructure\MemoryDocuments;
 use Intakt\Core\Memory\Infrastructure\StoreMemoryIndex;
 use Intakt\Core\Memory\Infrastructure\StoreProjectMemory;
@@ -41,7 +44,7 @@ final class SqliteMemoryStoreTest extends TestCase
         $vectorizer = new Vectorizer($platform, 'embedder');
         $documents = new MemoryDocuments();
 
-        $this->index = new StoreMemoryIndex(new DocumentIndexer(new DocumentProcessor($vectorizer, $store)), $documents);
+        $this->index = new StoreMemoryIndex(new DocumentIndexer(new DocumentProcessor($vectorizer, $store)), $store, $documents);
         $this->memory = new StoreProjectMemory(new Retriever($store, $vectorizer), $documents);
     }
 
@@ -71,5 +74,18 @@ final class SqliteMemoryStoreTest extends TestCase
         $found = $this->memory->relevantTo(new MemoryQuery('alpha', new Paths('a b.php'), 1000));
 
         self::assertEquals([new MemoryEntry('alpha', 'Same note.', new Paths('a b.php'))], $found->entries);
+    }
+
+    public function testASettledFindingStoredOnSqliteTurnsStaleWhenItsHashChangesAndIsGoneOnceDeleted(): void
+    {
+        $finding = new SettledFinding('alpha', 'migrate() takes no lock.', 'Intentional.', new CodeSnapshot('src/Db.php', 'migrate', 'hash-1'));
+        $this->index->settle($finding);
+
+        $unchanged = $this->memory->settledOn(new SettledQuery('alpha', new CodeSnapshot('src/Db.php', 'migrate', 'hash-1')));
+        $changed = $this->memory->settledOn(new SettledQuery('alpha', new CodeSnapshot('src/Db.php', 'migrate', 'hash-2')));
+        $this->index->forget($finding);
+        $deleted = $this->memory->settledOn(new SettledQuery('alpha', new CodeSnapshot('src/Db.php', 'migrate', 'hash-1')));
+
+        self::assertSame([1, 0, 0, 1, 0, 0], [count($unchanged->settled), count($unchanged->stale), count($changed->settled), count($changed->stale), count($deleted->settled), count($deleted->stale)]);
     }
 }

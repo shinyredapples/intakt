@@ -94,6 +94,9 @@ services:
     # Memory is written by the orchestrator only; the indexer is the AI bundle's, over the SQLite store in config/packages/ai.php.
     Intakt\Core\Memory\Contract\MemoryIndex: '@Intakt\Core\Memory\Infrastructure\StoreMemoryIndex'
     Symfony\AI\Store\Indexer\DocumentIndexer: '@ai.indexer.memory'
+    Intakt\Core\Memory\Infrastructure\StoreMemoryIndex:
+        arguments:
+            $store: '@ai.store.sqlite.memory'
     # Reviewers get the read side only; the Retriever is the AI bundle's, over the same store.
     Intakt\Core\Review\Infrastructure\OptionalProjectMemory:
         arguments:
