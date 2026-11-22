@@ -589,7 +589,7 @@ final class CheckScriptTest extends TestCase
         $this->history->commitFile('composer.lock', self::LOCK, 'Lock the dependencies');
         $snapshot = $this->readOnlySnapshotHolding(['vendor/installed.json' => "{}\n"]);
 
-        $run = $this->whenTheCheckRunsWith(['--dependencies', $snapshot, self::PLATFORM, self::PROBE,'install', 'generate', 'composer.lock'], $this->history->bundle('main..task'), 'test ! -e vendor');
+        $run = $this->whenTheCheckRunsWith(['--dependencies', $snapshot, self::PLATFORM, self::PROBE, 'install', 'generate', 'composer.lock'], $this->history->bundle('main..task'), 'test ! -e vendor');
 
         self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
     }
@@ -599,7 +599,7 @@ final class CheckScriptTest extends TestCase
         $this->history->commit('Build work');
         $snapshot = $this->readOnlySnapshotHolding(['vendor/installed.json' => "{}\n"]);
 
-        $run = $this->whenTheCheckRunsWith(['--dependencies', $snapshot, self::PLATFORM, self::PROBE,'install', 'generate'], $this->history->bundle('main..task'), 'test ! -e vendor');
+        $run = $this->whenTheCheckRunsWith(['--dependencies', $snapshot, self::PLATFORM, self::PROBE, 'install', 'generate'], $this->history->bundle('main..task'), 'test ! -e vendor');
 
         self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
     }
@@ -610,7 +610,7 @@ final class CheckScriptTest extends TestCase
         $snapshot = $this->readOnlySnapshotHolding(['vendor/installed.json' => "{}\n"]);
 
         $run = $this->whenTheCheckRunsWith(
-            ['--dependencies', $snapshot, self::PLATFORM, self::PROBE,'exit 9', 'touch generated', 'composer.lock', $this->blobOf(self::LOCK)],
+            ['--dependencies', $snapshot, self::PLATFORM, self::PROBE, 'exit 9', 'touch generated', 'composer.lock', $this->blobOf(self::LOCK)],
             $this->history->bundle('main..task'),
             'exit 9',
             'test -f generated',
@@ -627,7 +627,7 @@ final class CheckScriptTest extends TestCase
         $snapshot = $this->readOnlySnapshotHolding(['vendor/installed.json' => "{}\n"]);
 
         $run = $this->whenTheCheckRunsWith(
-            ['--dependencies', $snapshot, self::PLATFORM, self::PROBE,'touch installed', 'exit 9', 'composer.lock', $this->blobOf(self::LOCK)],
+            ['--dependencies', $snapshot, self::PLATFORM, self::PROBE, 'touch installed', 'exit 9', 'composer.lock', $this->blobOf(self::LOCK)],
             $this->history->bundle('main..task'),
             'touch installed',
             'test -f installed',
@@ -644,7 +644,7 @@ final class CheckScriptTest extends TestCase
         $this->givenACopyThatStopsHalfway();
 
         $run = $this->whenTheCheckRunsWith(
-            ['--dependencies', $snapshot, self::PLATFORM, self::PROBE,'touch installed', 'exit 9', 'composer.lock', $this->blobOf(self::LOCK)],
+            ['--dependencies', $snapshot, self::PLATFORM, self::PROBE, 'touch installed', 'exit 9', 'composer.lock', $this->blobOf(self::LOCK)],
             $this->history->bundle('main..task'),
             'touch installed',
             'test ! -e vendor',
@@ -667,7 +667,7 @@ final class CheckScriptTest extends TestCase
         new Filesystem()->chmod($shim.'/rm', 0o700);
 
         $run = $this->whenTheCheckRunsWith(
-            ['--dependencies', $snapshot, self::PLATFORM, self::PROBE,'touch installed', 'exit 9', 'composer.lock', $this->blobOf(self::LOCK)],
+            ['--dependencies', $snapshot, self::PLATFORM, self::PROBE, 'touch installed', 'exit 9', 'composer.lock', $this->blobOf(self::LOCK)],
             $this->history->bundle('main..task'),
             'touch installed',
         );
@@ -744,7 +744,7 @@ final class CheckScriptTest extends TestCase
      */
     private function dependencyOptions(string $snapshot, string $lock): array
     {
-        return ['--dependencies', $snapshot, self::PLATFORM, self::PROBE,'composer install', 'composer install', 'composer.lock', $this->blobOf($lock)];
+        return ['--dependencies', $snapshot, self::PLATFORM, self::PROBE, 'composer install', 'composer install', 'composer.lock', $this->blobOf($lock)];
     }
 
     private function blobOf(string $content): string
