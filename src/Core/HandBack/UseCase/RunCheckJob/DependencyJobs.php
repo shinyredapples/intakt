@@ -141,7 +141,7 @@ final readonly class DependencyJobs
 
             return true;
         } catch (IOException) {
-            // Left for the next install of the key, whose prepare removes it first.
+            // Not thrown, because the next install of the key removes the leftover in its prepare and this check only loses the reuse.
             return false;
         }
     }
