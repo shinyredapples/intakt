@@ -14,6 +14,7 @@ use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictUnreadable;
 use Intakt\Core\Review\Domain\GoalpostRule;
+use Intakt\Core\Review\Infrastructure\ReviewerAnswer\Verdict as ReviewerAnswer;
 use Override;
 use Symfony\AI\Agent\Agent;
 use Symfony\AI\Agent\Exception\MaxIterationsExceededException;
@@ -32,7 +33,7 @@ use Symfony\Component\DependencyInjection\Attribute\AutowireCallable;
 
 final readonly class ReviewerAgent implements Reviewer
 {
-    private const array UNSTREAMED = [PlatformSubscriber::RESPONSE_FORMAT => Verdict::class];
+    private const array UNSTREAMED = [PlatformSubscriber::RESPONSE_FORMAT => ReviewerAnswer::class];
 
     private const array STREAMED = self::UNSTREAMED + ['stream' => true];
 

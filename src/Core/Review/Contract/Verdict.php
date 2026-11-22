@@ -7,7 +7,7 @@ namespace Intakt\Core\Review\Contract;
 use Symfony\Component\Serializer\Attribute\Ignore;
 use Symfony\Component\Validator\Constraints\Valid;
 
-// Property names are the JSON field names because Symfony AI's structured output ignores serializer name mapping.
+// Written to the stored rounds under these property names, because the stored round JSON keeps the reviewer's answer format, which Infrastructure\ReviewerAnswer\Verdict owns.
 final readonly class Verdict
 {
     // Kept although no verdict is given it any more, because rounds recorded before still hold it and must stay failed reviews.
