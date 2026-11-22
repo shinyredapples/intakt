@@ -35,6 +35,7 @@ namespace Intakt\Tests\Core\HandBack\Infrastructure {
     use Intakt\Core\HandBack\Infrastructure\DependencySnapshotCountRefused;
     use Intakt\Core\HandBack\Infrastructure\DependencySnapshotLease;
     use Intakt\Core\HandBack\Infrastructure\DependencySnapshotLinks;
+    use Intakt\Core\HandBack\Infrastructure\DependencySnapshotPins;
     use Intakt\Core\HandBack\Infrastructure\DependencySnapshots;
     use Intakt\Core\HandBack\Infrastructure\DependencySnapshotUses;
     use PHPUnit\Framework\Attributes\CoversClass;
@@ -54,6 +55,7 @@ namespace Intakt\Tests\Core\HandBack\Infrastructure {
     #[CoversClass(DependencySnapshotCountRefused::class)]
     #[CoversClass(DependencySnapshotUses::class)]
     #[CoversClass(DependencySnapshotLinks::class)]
+    #[CoversClass(DependencySnapshotPins::class)]
     #[UsesClass(DependencySnapshotKey::class)]
     final class DependencySnapshotsTest extends TestCase
     {
@@ -462,7 +464,8 @@ namespace Intakt\Tests\Core\HandBack\Infrastructure {
                 $store->lease($this->key($lock))?->release();
             }
 
-            self::assertLessThanOrEqual(2, count(glob($this->store.'/'.DependencySnapshots::PINS.'/*', GLOB_ONLYDIR) ?: []));
+            self::assertCount(1, $this->snapshots());
+            self::assertLessThanOrEqual(2, count($this->foldersUnder($this->store.'/'.DependencySnapshots::PINS)));
         }
 
         public function testAHalfRemovedSnapshotUnderTheEvictionNameIsNeverLeased(): void
@@ -570,7 +573,7 @@ namespace Intakt\Tests\Core\HandBack\Infrastructure {
 
         private function storeKeeping(int $count): DependencySnapshots
         {
-            return new DependencySnapshots($this->store, $count, new LockFactory(new FlockStore($this->folder.'/locks')), new Filesystem(), new DependencySnapshotUses(new Filesystem()), new DependencySnapshotLinks(new Filesystem()));
+            return new DependencySnapshots($this->store, $count, new LockFactory(new FlockStore($this->folder.'/locks')), new Filesystem(), new DependencySnapshotUses(new Filesystem()), new DependencySnapshotLinks(new Filesystem()), new DependencySnapshotPins(new Filesystem()));
         }
 
         private function key(string $lock): DependencySnapshotKey
@@ -600,7 +603,7 @@ namespace Intakt\Tests\Core\HandBack\Infrastructure {
             return $this->store.'/'.DependencySnapshots::EVICTING.$this->key($lock)->value;
         }
 
-        // As an eviction stopped half-way leaves it: read-only, under the eviction name, with one file already gone.
+        // Read-only, under the eviction name and with one file gone, because that is what an eviction stopped half-way leaves.
         private function plantAHalfRemovedSnapshotOf(string $lock): void
         {
             $folder = $this->evictingFolderOf($lock);
@@ -610,7 +613,7 @@ namespace Intakt\Tests\Core\HandBack\Infrastructure {
             self::changedForReal($folder, 0o555);
         }
 
-        // As a crash before the rename of Filesystem::dumpFile() leaves it beside the use order.
+        // Named as the use order plus random characters, because a crash before the rename of Filesystem::dumpFile() leaves such a file beside it.
         private function plantALeftoverUseOrderFile(): void
         {
             $filesystem = new Filesystem();
@@ -623,8 +626,11 @@ namespace Intakt\Tests\Core\HandBack\Infrastructure {
          */
         private function useOrderFiles(): array
         {
+            $names = scandir($this->store);
+            self::assertIsArray($names);
+
             return array_values(array_filter(
-                scandir($this->store) ?: [],
+                $names,
                 static fn (string $name): bool => str_starts_with($name, DependencySnapshotUses::FILE),
             ));
         }

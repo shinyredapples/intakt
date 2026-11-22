@@ -15,8 +15,6 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Lock\LockFactory;
-use Symfony\Component\Lock\SharedLockInterface;
-use Symfony\Component\Lock\Store\FlockStore;
 
 // Only the orchestrator's own process writes here, because a later check trusts what it holds: build jobs get no mount of it, and a check gets one snapshot's folder as a read-only bind.
 final readonly class DependencySnapshots
@@ -30,8 +28,6 @@ final readonly class DependencySnapshots
 
     private const string STORE_LOCK = 'intakt-dependency-snapshots';
 
-    private const string PIN = 'pin';
-
     public function __construct(
         #[Autowire(param: HandBackServices::DEPENDENCY_SNAPSHOTS_DIRECTORY)]
         private string $directory,
@@ -41,6 +37,7 @@ final readonly class DependencySnapshots
         private Filesystem $filesystem,
         private DependencySnapshotUses $uses,
         private DependencySnapshotLinks $links,
+        private DependencySnapshotPins $pins,
     ) {
         if ($count < 1) {
             throw DependencySnapshotCountRefused::belowOne($count);
@@ -164,7 +161,7 @@ final readonly class DependencySnapshots
             return null;
         }
 
-        $pin = $this->pinOf($key->value);
+        $pin = $this->pins->of($this->directory, $key->value);
 
         // Tried without waiting, because only an eviction holds a pin exclusively, and that snapshot is on its way out.
         if (!$pin->acquireRead(false)) {
@@ -179,32 +176,19 @@ final readonly class DependencySnapshots
     {
         $this->removeTheLeftoverEvictions();
         $this->evictTheLeastRecentlyUsedPastTheCount($kept);
-        $this->removeTheOrphanPins();
-        $this->removeTheLeftoverUseOrders();
+        $this->pins->removeTheOrphansIn($this->directory);
+        $this->uses->removeTheLeftoversIn($this->directory);
     }
 
     private function removeTheLeftoverEvictions(): void
     {
-        foreach ($this->entriesOf($this->directory) as $entry) {
+        foreach (new FilesystemIterator($this->directory, FilesystemIterator::SKIP_DOTS) as $entry) {
+            assert($entry instanceof SplFileInfo);
+
             if (str_starts_with($entry->getFilename(), self::EVICTING)) {
                 $this->removeSnapshotFolder($entry->getPathname());
             }
         }
-    }
-
-    /**
-     * @return list<SplFileInfo>
-     */
-    private function entriesOf(string $folder): array
-    {
-        $entries = [];
-
-        foreach (new FilesystemIterator($folder, FilesystemIterator::SKIP_DOTS) as $entry) {
-            assert($entry instanceof SplFileInfo);
-            $entries[] = $entry;
-        }
-
-        return $entries;
     }
 
     // Allows more than the count while snapshots are leased, because a leased snapshot is mounted and the one being saved or leased is kept.
@@ -249,7 +233,7 @@ final readonly class DependencySnapshots
     // An eviction must take the pin exclusively, which fails while any check holds its shared pin.
     private function evicted(string $name): bool
     {
-        $pin = $this->pinOf($name);
+        $pin = $this->pins->of($this->directory, $name);
 
         if (!$pin->acquire(false)) {
             return false;
@@ -257,7 +241,7 @@ final readonly class DependencySnapshots
 
         try {
             $this->removeSnapshotFolder($this->movedAside($name));
-            $this->filesystem->remove($this->directory.'/'.self::PINS.'/'.$name);
+            $this->pins->removeTheFolderOf($this->directory, $name);
         } finally {
             $pin->release();
         }
@@ -293,56 +277,6 @@ final readonly class DependencySnapshots
         }
 
         $this->filesystem->remove($folder);
-    }
-
-    // Safe without a lease check, because a lease exists only for a snapshot folder that is present; a pin held anyway is skipped.
-    private function removeTheOrphanPins(): void
-    {
-        $pins = $this->directory.'/'.self::PINS;
-
-        if (!is_dir($pins) || is_link($pins)) {
-            return;
-        }
-
-        foreach ($this->entriesOf($pins) as $entry) {
-            $name = $entry->getFilename();
-
-            if ($entry->isDir() && !$entry->isLink() && !$this->holds($name)) {
-                $this->removeTheFreePin($name);
-            }
-        }
-    }
-
-    private function removeTheFreePin(string $name): void
-    {
-        $pin = $this->pinOf($name);
-
-        if (!$pin->acquire(false)) {
-            return;
-        }
-
-        try {
-            $this->filesystem->remove($this->directory.'/'.self::PINS.'/'.$name);
-        } finally {
-            $pin->release();
-        }
-    }
-
-    // Filesystem::dumpFile() writes the use order to a temporary file beside it before its rename, which a crash leaves behind.
-    private function removeTheLeftoverUseOrders(): void
-    {
-        foreach ($this->entriesOf($this->directory) as $entry) {
-            $name = $entry->getFilename();
-
-            if (DependencySnapshotUses::FILE !== $name && str_starts_with($name, DependencySnapshotUses::FILE) && $entry->isFile() && !$entry->isLink()) {
-                $this->filesystem->remove($entry->getPathname());
-            }
-        }
-    }
-
-    private function pinOf(string $name): SharedLockInterface
-    {
-        return new LockFactory(new FlockStore($this->directory.'/'.self::PINS.'/'.$name))->createLock(self::PIN, ttl: null);
     }
 
     private function markUsed(DependencySnapshotKey $key): void

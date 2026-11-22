@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Intakt\Core\HandBack\Infrastructure;
 
+use FilesystemIterator;
 use JsonException;
+use SplFileInfo;
 use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
 
@@ -53,6 +55,19 @@ final readonly class DependencySnapshotUses
 
         if (!@rename($written, $store.'/'.self::FILE)) {
             throw new IOException(sprintf('the use order %s could not be replaced', self::FILE), path: $written);
+        }
+    }
+
+    // Needed because a crash before a rename leaves the file written beside the use order, since Filesystem::dumpFile() and record() both write one first.
+    public function removeTheLeftoversIn(string $store): void
+    {
+        foreach (new FilesystemIterator($store, FilesystemIterator::SKIP_DOTS) as $entry) {
+            assert($entry instanceof SplFileInfo);
+            $name = $entry->getFilename();
+
+            if (self::FILE !== $name && str_starts_with($name, self::FILE) && $entry->isFile() && !$entry->isLink()) {
+                $this->filesystem->remove($entry->getPathname());
+            }
         }
     }
 }
