@@ -414,8 +414,7 @@ final class BoardHeadlineLiveUpdatesTest extends DashboardPageTestCase
         return rtrim($contents, "\n");
     }
 
-    // Like Turbo's replace: the template's nodes take the target's place, so an empty template takes the target away.
-    // A morph is replaced here too: whether the pinned Turbo keeps a morphed node, and its focus, only board-push-focus.browser.mjs shows.
+    // Like Turbo's replace, a morph too, because only board-push-focus.browser.mjs shows whether the pinned Turbo keeps a morphed node and its focus.
     private function replaced(Crawler $page, string $streams): Crawler
     {
         foreach (new Crawler($streams)->filter('turbo-stream[action="replace"]')->each(static fn (Crawler $stream): Crawler => $stream) as $stream) {
