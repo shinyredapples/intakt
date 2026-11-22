@@ -1,5 +1,7 @@
 # For judges: Intakt in a few minutes
 
+The tested submission is release [v0.4.1](https://github.com/shinyredapples/intakt/releases/tag/v0.4.1): `git clone --branch v0.4.1 https://github.com/shinyredapples/intakt`. Main is welcome too, with what we built after the deadline.
+
 Your coding agent says it is done. Intakt tells you whether to believe it: a panel of reviewers on models from different AI labs reviews the change, every finding must quote the code it is about, and a judge makes one list to fix.
 
 The video's script and shot list: [docs/video.md](video.md)
