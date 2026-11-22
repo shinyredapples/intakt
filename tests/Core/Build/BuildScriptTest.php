@@ -30,6 +30,7 @@ final class BuildScriptTest extends TestCase
     private string $bin = '';
     private string $prompt = '';
     private string $gates = '4';
+    private string $preamble = '';
     // False removes the variable, so a value the test run itself was started with never reaches the script.
     private string|false $inherited = false;
     // False for the same reason, because the test run itself may run inside a CLI session that sets both.
@@ -220,6 +221,22 @@ final class BuildScriptTest extends TestCase
 
         self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
         self::assertStringContainsString("claude cut after 3 seconds, its commits are kept\n", $this->outputFile('build.log'));
+    }
+
+    public function testASessionKilledFromElsewhereWhoseChildOutlivesItIsNotCutWhenTheTermIsLate(): void
+    {
+        // The test-only function delays the build's TERM until the watchdog's allowance has passed, which forces the order without repeated runs.
+        $this->preamble = 'kill() { if [ "$2" = TERM ]; then sleep 3; fi; command kill "$@"; }';
+        $this->givenTheCli(<<<'SH'
+            sleep 30 &
+            kill -s KILL $$
+            SH);
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5', 1);
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertStringContainsString("claude exited with 137\n", $this->outputFile('build.log'));
+        self::assertStringNotContainsString('cut after', $this->outputFile('build.log'));
     }
 
     public function testASessionThatPutsAFolderWhereACutMarkerCouldBeIsStillCutAtItsAllowance(): void
@@ -1309,7 +1326,7 @@ final class BuildScriptTest extends TestCase
     private function whenTheBuildRuns(string $branch, string $model, int $allowance = 600): Process
     {
         $run = new Process(
-            ['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-build', $this->source ?? $this->history->work, $this->prompt, $branch, $model, '7', (string) $allowance, $this->gates, '1800'],
+            ['/bin/sh', '-c', $this->preamble."\n".(string) file_get_contents(self::SCRIPT), 'intakt-build', $this->source ?? $this->history->work, $this->prompt, $branch, $model, '7', (string) $allowance, $this->gates, '1800'],
             $this->startFolder,
             $this->environment(),
             timeout: $this->timeout,
