@@ -159,7 +159,7 @@ final class FailedJudgingsTest extends KernelTestCase
         $this->parkPublications(FailedJudgings::PARKED_MESSAGES_READ);
         $this->failed->send(new Envelope(new JudgeRound(self::ROUND)));
         $listed = 0;
-        $counting = $this->createStub(ListableReceiverInterface::class);
+        $counting = self::createStub(ListableReceiverInterface::class);
         $counting->method('all')->willReturnCallback(function (?int $limit) use (&$listed): iterable {
             foreach ($this->failed->all($limit) as $envelope) {
                 ++$listed;
