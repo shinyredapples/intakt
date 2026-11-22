@@ -15,8 +15,6 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Lock\LockFactory;
-use Symfony\Component\Lock\SharedLockInterface;
-use Symfony\Component\Lock\Store\FlockStore;
 
 // Only the orchestrator's own process writes here, because a later check trusts what it holds: build jobs get no mount of it, and a check gets one snapshot's folder as a read-only bind.
 final readonly class DependencySnapshots
@@ -25,9 +23,10 @@ final readonly class DependencySnapshots
 
     public const string PINS = '.pins';
 
-    private const string STORE_LOCK = 'intakt-dependency-snapshots';
+    // Starts with a dot, so no folder under this name is ever a valid key that a lease would mount.
+    public const string EVICTING = '.evicting-';
 
-    private const string PIN = 'pin';
+    private const string STORE_LOCK = 'intakt-dependency-snapshots';
 
     public function __construct(
         #[Autowire(param: HandBackServices::DEPENDENCY_SNAPSHOTS_DIRECTORY)]
@@ -38,6 +37,7 @@ final readonly class DependencySnapshots
         private Filesystem $filesystem,
         private DependencySnapshotUses $uses,
         private DependencySnapshotLinks $links,
+        private DependencySnapshotPins $pins,
     ) {
         if ($count < 1) {
             throw DependencySnapshotCountRefused::belowOne($count);
@@ -161,7 +161,7 @@ final readonly class DependencySnapshots
             return null;
         }
 
-        $pin = $this->pinOf($key->value);
+        $pin = $this->pins->of($this->directory, $key->value);
 
         // Tried without waiting, because only an eviction holds a pin exclusively, and that snapshot is on its way out.
         if (!$pin->acquireRead(false)) {
@@ -171,8 +171,28 @@ final readonly class DependencySnapshots
         return new DependencySnapshotLease($this->directory.'/'.$key->value, $pin);
     }
 
-    // Allows more than the count while snapshots are leased, because a leased snapshot is mounted and the one being saved or leased is kept.
+    // Also repairs what an interrupted eviction or use-order write left, because nothing else ever reclaims it.
     private function trimAllBut(DependencySnapshotKey $kept): void
+    {
+        $this->removeTheLeftoverEvictions();
+        $this->pins->removeTheOrphansIn($this->directory);
+        $this->uses->removeTheLeftoversIn($this->directory);
+        $this->evictTheLeastRecentlyUsedPastTheCount($kept);
+    }
+
+    private function removeTheLeftoverEvictions(): void
+    {
+        foreach (new FilesystemIterator($this->directory, FilesystemIterator::SKIP_DOTS) as $entry) {
+            assert($entry instanceof SplFileInfo);
+
+            if (str_starts_with($entry->getFilename(), self::EVICTING)) {
+                $this->removeSnapshotFolder($entry->getPathname());
+            }
+        }
+    }
+
+    // Allows more than the count while snapshots are leased, because a leased snapshot is mounted and the one being saved or leased is kept.
+    private function evictTheLeastRecentlyUsedPastTheCount(DependencySnapshotKey $kept): void
     {
         $snapshots = $this->snapshotsLeastRecentFirst();
         $over = count($snapshots) - $this->count;
@@ -213,20 +233,32 @@ final readonly class DependencySnapshots
     // An eviction must take the pin exclusively, which fails while any check holds its shared pin.
     private function evicted(string $name): bool
     {
-        $pin = $this->pinOf($name);
+        $pin = $this->pins->of($this->directory, $name);
 
         if (!$pin->acquire(false)) {
             return false;
         }
 
         try {
-            $this->removeSnapshotFolder($this->directory.'/'.$name);
-            $this->filesystem->remove($this->directory.'/'.self::PINS.'/'.$name);
+            $this->removeSnapshotFolder($this->movedAside($name));
+            $this->pins->removeTheFolderOf($this->directory, $name);
         } finally {
             $pin->release();
         }
 
         return true;
+    }
+
+    // Moved from under its key by one rename before any file goes, so a removal stopped half-way leaves no partial snapshot that a lease would mount.
+    private function movedAside(string $name): string
+    {
+        $evicting = $this->directory.'/'.self::EVICTING.$name;
+
+        if (!@rename($this->directory.'/'.$name, $evicting)) {
+            throw new IOException(sprintf('the snapshot %s could not be moved aside for its eviction', $name), path: $this->directory.'/'.$name);
+        }
+
+        return $evicting;
     }
 
     private function removeSnapshotFolder(string $folder): void
@@ -245,11 +277,6 @@ final readonly class DependencySnapshots
         }
 
         $this->filesystem->remove($folder);
-    }
-
-    private function pinOf(string $name): SharedLockInterface
-    {
-        return new LockFactory(new FlockStore($this->directory.'/'.self::PINS.'/'.$name))->createLock(self::PIN, ttl: null);
     }
 
     private function markUsed(DependencySnapshotKey $key): void

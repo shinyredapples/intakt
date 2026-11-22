@@ -13,13 +13,13 @@ The script and shot list of Intakt's hackathon video. Every shot is the real pro
 | 0:37.55 to 0:51.5 | A real Claude Code session drives the loop over MCP: the dashboard full frame, a small card with the agent's current step (start a review, read what to fix, fix, start the next pass). | Or hand it to your agent, over MCP. Claude Code starts a review, reads what to fix, fixes it, and runs the next pass until it is clean. |
 | 0:51.5 to 0:53.6 | The stop: that session's second pass running, the baton held high. | |
 | 0:53.6 to 1:01.55 | That session's second pass lands: the same finding ids as the first pass, shown closed or still open as they really are. | Pass two checks the same findings again. No moving goalposts. |
-| 1:01.55 to 1:09.55 | The README's review bench table. | Five planted defects, each change tested three times. Claude plus GPT caught all five, every run. |
+| 1:01.55 to 1:09.55 | The review bench table (in the README when the video was made, now on the [bench page](bench.md#review-bench)). | Five planted defects, each change tested three times. Claude plus GPT caught all five, every run. |
 | 1:09.55 to 1:19.55 | The Symfony AI packages and the MCP Bundle in `composer.json`; the upstream reports. | Built on Symfony AI and the MCP Bundle. Every bug we hit building Intakt for the Symfony hackathon was reported upstream, with fixes where we could. |
 | 1:19.55 to 1:30 | Logo and repository URL; the octopus bows. | Try Intakt. Clone it, start it, and watch a real review. |
 
 The keyless demo ends after its first round ([the demo walkthrough](guide/demo-walkthrough.md): the shipped review has one round); the second pass is not part of it and comes only from the real Claude Code session, which needs a model key.
 
-The figures in the voice-over at 1:01.55 come from the README's [review bench](../README.md#review-bench): Claude `opus` alone found 12 of 15 (5 planted defects, 3 runs each), the panel on Claude and GPT 15 of 15 (measured, 2026-11-21).
+The figures in the voice-over at 1:01.55 come from the [review bench](bench.md#review-bench): Claude `opus` alone found 12 of 15 (5 planted defects, 3 runs each), the panel on Claude and GPT 15 of 15 (measured, 2026-11-21).
 
 Notes on the precise behavior behind some lines of the voice-over:
 

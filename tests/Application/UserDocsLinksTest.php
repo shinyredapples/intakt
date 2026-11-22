@@ -16,7 +16,7 @@ final class UserDocsLinksTest extends TestCase
         $root = dirname(__DIR__, 2);
         $text = (string) file_get_contents($root.'/docs/user/README.md');
 
-        $found = preg_match('/\[README\]\(([^#)]+)#timed-run\)/', $text, $match);
+        $found = preg_match('/\[timed run\]\(([^#)]+)#timed-run\)/', $text, $match);
 
         self::assertSame(1, $found);
         self::assertArrayHasKey(1, $match);
