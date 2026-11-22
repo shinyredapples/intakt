@@ -28,7 +28,6 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Event\RequestEvent;
 use Symfony\Component\HttpKernel\HttpKernelInterface;
-use Twig\Environment;
 
 #[CoversClass(RefuseForeignHost::class)]
 #[UsesClass(DashboardHost::class)]
@@ -111,7 +110,7 @@ final class RefuseForeignHostTest extends DashboardPageTestCase
         $request->attributes->set('_route', 'mcp_list_tools');
         $event = new RequestEvent(self::createStub(HttpKernelInterface::class), $request, HttpKernelInterface::MAIN_REQUEST);
 
-        new RefuseForeignHost(new DashboardHost(7780), self::createStub(Environment::class))($event);
+        new RefuseForeignHost(new DashboardHost(7780))($event);
 
         self::assertFalse($event->hasResponse());
     }
