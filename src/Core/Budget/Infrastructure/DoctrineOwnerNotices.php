@@ -139,7 +139,7 @@ final readonly class DoctrineOwnerNotices implements OwnerNotices
         }
         usort($ended, static fn (array $first, array $second): int => [$second['endedAt'], $second['position']] <=> [$first['endedAt'], $first['position']]);
 
-        return array_map($this->endedNotice(...), $ended);
+        return array_map(fn (array $row): EndedOutageNotice => $this->endedNotice(['provider' => $row['provider'], 'account' => $row['account'], 'endedAt' => $row['endedAt']]), $ended);
     }
 
     /**
