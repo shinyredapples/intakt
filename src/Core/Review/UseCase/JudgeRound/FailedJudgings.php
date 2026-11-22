@@ -17,6 +17,9 @@ use Symfony\Component\Messenger\Transport\Receiver\ReceiverInterface;
 // Both places are read, because the failure message records the failure in the ledger, and Messenger parks the judging only when that message could not be dispatched.
 final readonly class FailedJudgings
 {
+    // A bound, because every poll of a complete round lists the transport and parked publications pile up there; the ledger record is the main signal, so a parked judging past it only leaves its round to the upper wait.
+    public const int PARKED_MESSAGES_READ = 500;
+
     public function __construct(
         #[Autowire(service: 'messenger.transport.failed')]
         private ReceiverInterface $failed,
@@ -84,7 +87,8 @@ final readonly class FailedJudgings
 
         $parked = [];
 
-        foreach ($this->failed->all() as $envelope) {
+        // Bounded rather than filtered by class, because the transport's serializer stores no message type a query could select on; the Doctrine transport reads a bounded list in no set order.
+        foreach ($this->failed->all(self::PARKED_MESSAGES_READ) as $envelope) {
             $message = $envelope->getMessage();
 
             // A message that deserialized without its round id names no round, and one such message must not stop the judging of other changes.

@@ -22,6 +22,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use ReflectionClass;
 use Symfony\Component\Messenger\Bridge\Doctrine\Transport\DoctrineTransport;
 use Symfony\Component\Messenger\Envelope;
+use Symfony\Component\Messenger\Transport\Receiver\ListableReceiverInterface;
 use Symfony\Component\Messenger\Transport\Receiver\ReceiverInterface;
 use Symfony\Component\Serializer\SerializerInterface;
 use Symfony\Component\Uid\Uuid;
@@ -143,6 +144,14 @@ final class FailedJudgingsTest extends KernelTestCase
         $unlisted->expects($this->never())->method('get');
 
         self::assertSame([], $this->judgings($unlisted)->failedRounds());
+    }
+
+    public function testTheFailureTransportIsReadUpToTheBoundAtMost(): void
+    {
+        $failed = $this->createMock(ListableReceiverInterface::class);
+        $failed->expects($this->once())->method('all')->with(FailedJudgings::PARKED_MESSAGES_READ)->willReturn([]);
+
+        $this->judgings($failed)->failedRounds();
     }
 
     public function testAParkedJudgingWithoutARoundIdIsLeftOutOfTheFailedRoundsAndStaysParked(): void
