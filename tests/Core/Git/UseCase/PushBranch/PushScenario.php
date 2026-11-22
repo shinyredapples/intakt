@@ -107,7 +107,7 @@ final readonly class PushScenario
     {
         $git = new BranchGit(new HardenedGit());
 
-        return new PushBranch($git, new SignedCommits($git, $key ?? $this->signingKey($this->key)),new PushRecords($this->ledger), $this->changes, new LockFactory($store));
+        return new PushBranch($git, new SignedCommits($git, $key ?? $this->signingKey($this->key)), new PushRecords($this->ledger), $this->changes, new LockFactory($store));
     }
 
     // Through another forge than the recording one, because a test of the real opener must see what it lets through.
