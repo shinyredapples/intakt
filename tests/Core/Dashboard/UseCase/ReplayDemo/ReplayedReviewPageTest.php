@@ -13,6 +13,7 @@ use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Dashboard\UseCase\CreateDemoProject\CreateDemoProjectCommand;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\Recording;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\RecordingFormat;
+use Intakt\Core\Dashboard\UseCase\ReplayDemo\JudgedRoundEnds;
 use Intakt\Core\Dashboard\UseCase\ReplayDemo\ReplaysRecording;
 use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Core\Review\Contract\SessionSummaries;
@@ -33,6 +34,7 @@ use Twig\Environment;
 // The keyless demo is what a juror without a key plays, so the review page open while the shipped recording plays must end in the main view a reload shows (#3470).
 #[CoversClass(ReplaysRecording::class)]
 #[CoversClass(ReplayedJudgedState::class)]
+#[CoversClass(JudgedRoundEnds::class)]
 #[UsesClass(MercureRoundUpdates::class)]
 #[UsesClass(RecordingFormat::class)]
 #[UsesClass(Recording::class)]
@@ -101,7 +103,9 @@ final class ReplayedReviewPageTest extends DashboardPageTestCase
         $topic = MercureRoundUpdates::topicOf($round);
         $ofRound = array_values(array_filter($this->updates->events, static fn (LiveEvent $event): bool => $topic === $event->topic));
 
-        self::assertStringContainsString('target="review-verdict"', end($ofRound)->turboStream);
+        $last = array_last($ofRound);
+        self::assertInstanceOf(LiveEvent::class, $last);
+        self::assertStringContainsString('target="review-verdict"', $last->turboStream);
         self::assertCount(1, array_filter($ofRound, static fn (LiveEvent $event): bool => str_contains($event->turboStream, 'target="review-verdict"')));
     }
 
@@ -111,12 +115,14 @@ final class ReplayedReviewPageTest extends DashboardPageTestCase
     private function aPageOpenedOnceTheReplayStarted(): array
     {
         $shipped = $this->shipped();
-        $start = new Recording($shipped->reviewedAt, $shipped->intaktVersion, $shipped->models, $shipped->project, $shipped->change, [$shipped->events[0]], []);
+        $first = new Recording($shipped->reviewedAt, $shipped->intaktVersion, $shipped->models, $shipped->project, $shipped->change, [$shipped->events[0]], []);
         $rest = new Recording($shipped->reviewedAt, $shipped->intaktVersion, $shipped->models, $shipped->project, $shipped->change, array_slice($shipped->events, 1), $shipped->updates);
-        $round = json_decode($shipped->events[0]->payload, true)['round'] ?? self::fail('The shipped recording starts no round.');
+        $start = json_decode($shipped->events[0]->payload, true);
+        self::assertIsArray($start);
+        $round = $start['round'] ?? null;
         self::assertIsString($round);
 
-        $this->replays()->replay($start, 1000.0);
+        $this->replays()->replay($first, 1000.0);
         $page = $this->bothViews('/reviews/'.$round);
         $this->replays()->replay($rest, 1000.0);
 
@@ -169,7 +175,7 @@ final class ReplayedReviewPageTest extends DashboardPageTestCase
             foreach (new Crawler($event->turboStream)->filter('turbo-stream')->each(static fn (Crawler $stream): Crawler => $stream) as $stream) {
                 $selector = $stream->attr('targets') ?? '#'.$stream->attr('target');
                 foreach ($page->filter($selector)->each(static fn (Crawler $target): Crawler => $target) as $target) {
-                    self::applied($stream, $target);
+                    $this->applied($stream, $target);
                 }
             }
         }
@@ -177,7 +183,7 @@ final class ReplayedReviewPageTest extends DashboardPageTestCase
         return $page;
     }
 
-    private static function applied(Crawler $stream, Crawler $target): void
+    private function applied(Crawler $stream, Crawler $target): void
     {
         $node = $target->getNode(0);
         self::assertNotNull($node);
