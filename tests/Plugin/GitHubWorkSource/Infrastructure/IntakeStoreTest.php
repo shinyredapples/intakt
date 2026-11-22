@@ -110,6 +110,22 @@ final class IntakeStoreTest extends KernelTestCase
         self::assertFalse($queued->hasVouchedLabel('intakt'));
     }
 
+    public function testAnItemVouchedForByAnAccountWithoutWriteAccessIsReadBackUntrustedWithNoVouchedLabel(): void
+    {
+        $issue = $this->stored(Issues::task(7, ['intakt']));
+        $issue->vouch(Vouching::of('mallory', new IssueHistory('mallory', [new LabelApplication('intakt', 'mallory')], '', ['intakt']), static fn (string $account): bool => in_array($account, self::WRITERS, true)));
+        $this->record('alpha', [$issue], null);
+        $this->entities->clear();
+
+        $stored = array_first($this->store->issuesOf('alpha'));
+        $queued = $stored?->queued();
+
+        self::assertInstanceOf(QueuedIssue::class, $queued);
+        self::assertTrue($stored?->isVouched());
+        self::assertFalse($queued->isTrusted());
+        self::assertFalse($queued->hasVouchedLabel('intakt'));
+    }
+
     public function testAPullRequestIsReadBackWithTheTasksItCloses(): void
     {
         $this->record('alpha', [$this->stored(Issues::pullRequest(12, 'Closes #7'))], null);

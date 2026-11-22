@@ -389,7 +389,7 @@ final class PushApprovalCommandTest extends TestCase
         $reader = new WorkflowReader(new WorkflowInlineValue(), new WorkflowBlockValue());
         $scan = new CiScan(new WorkflowFileScan($reader, new TokenPermissions(), new SecretReferences()), new CiDefinition($reader));
         $gate = new PushGate(
-            new MirrorChange(new HardenedGit()),
+            new MirrorChange(new HardenedGit(), new BinaryFiles()),
             new MirrorWorkflows(new HardenedGit()),
             $scan,
             $this->issue->comments(),

@@ -154,7 +154,7 @@ final class StopRoundControllerTest extends DashboardPageTestCase
     public function testATokenOfTheReviewersStopRecordsNothing(): void
     {
         $this->runningRound();
-        $token = $this->browser->request('GET', '/reviews/round-1')->filter('form.stop-reviewer input[name=_token]')->attr('value') ?? '';
+        $token = $this->browser->request('GET', '/reviews/round-1/record')->filter('form.stop-reviewer input[name=_token]')->attr('value') ?? '';
 
         $this->browser->request('POST', '/reviews/round-1/stop', ['_token' => $token]);
 
