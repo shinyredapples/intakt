@@ -13,4 +13,8 @@ final class MailerTest
     public function testMCPToolWorks(): void
     {
     }
+
+    public function testAnHttp2RequestIsSent(): void
+    {
+    }
 }

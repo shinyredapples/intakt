@@ -1,0 +1,15 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Tests\Sample;
+
+use PHPUnit\Framework\Attributes\Test;
+
+final class MailerTest
+{
+    #[Test]
+    public function aStaleLockIsReleased(): void
+    {
+    }
+}

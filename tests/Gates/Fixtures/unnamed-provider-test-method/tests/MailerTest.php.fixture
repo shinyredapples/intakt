@@ -1,0 +1,13 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Tests\Sample;
+
+final class MailerTest
+{
+    public static function testCases(): iterable
+    {
+        yield 'one' => [1];
+    }
+}

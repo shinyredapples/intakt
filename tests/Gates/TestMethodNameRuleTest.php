@@ -31,9 +31,39 @@ final class TestMethodNameRuleTest extends PhpStanRuleTestCase
         $this->assertRuleRejects('acronym-test-method', 'tests/MailerTest.php:9 intakt.testName Test method testMCPWorks()');
     }
 
+    public function testAnUnderscoreBetweenTheWordsFailsStaticAnalysis(): void
+    {
+        $this->assertRuleRejects('underscore-test-method', 'tests/MailerTest.php:9 intakt.testName Test method testIt_Sends_Now()');
+    }
+
+    public function testADigitCountsAsPartOfItsWordSoTwoWordsFail(): void
+    {
+        $this->assertRuleRejects('digit-word-test-method', 'tests/MailerTest.php:9 intakt.testName Test method testItSends2()');
+    }
+
     public function testADataProviderAndAHelperWithoutThePrefixAreNotJudged(): void
     {
         $this->assertRuleAccepts('data-provider-and-helper');
+    }
+
+    public function testADataProviderNamedByAClassConstantIsNotJudged(): void
+    {
+        $this->assertRuleAccepts('constant-data-provider');
+    }
+
+    public function testAProviderLikeMethodThatNoDataProviderNamesIsJudged(): void
+    {
+        $this->assertRuleRejects('unnamed-provider-test-method', 'tests/MailerTest.php:9 intakt.testName Test method testCases()');
+    }
+
+    public function testAMethodMarkedAsTestWithoutThePrefixIsJudged(): void
+    {
+        $this->assertRuleRejects('test-attribute-method', 'tests/MailerTest.php:12 intakt.testName Test method works()');
+    }
+
+    public function testAMethodMarkedAsTestThatReadsAsASentencePassesStaticAnalysis(): void
+    {
+        $this->assertRuleAccepts('sentence-test-attribute-method');
     }
 
     public function testAMethodNamedTestOutsideTheTestsFolderIsNotJudged(): void

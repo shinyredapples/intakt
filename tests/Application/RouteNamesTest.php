@@ -34,9 +34,33 @@ final class RouteNamesTest extends KernelTestCase
         $routes->add('dashboard_start_first_review', new Route('/setup', ['_controller' => StartReviewController::class]));
 
         self::assertSame(
-            ['dashboard_start_first_review: name it dashboard_start_review (<module>_<use_case>, or that name followed by _<action> for a second route of the use case), after the module Dashboard and the folder UseCase/StartReview/'],
+            ['dashboard_start_first_review: name it dashboard_start_review (<module>_<use_case>, followed by _<action> only for a route on an action method of the controller other than __invoke), after the module Dashboard and the folder UseCase/StartReview/'],
             $this->misnamedRoutesIn($routes),
         );
+    }
+
+    public function testASuffixOnARouteOfAnInvokableControllerIsRejected(): void
+    {
+        $routes = new RouteCollection();
+        $routes->add('dashboard_start_review_first', new Route('/a', ['_controller' => StartReviewController::class]));
+
+        self::assertCount(1, $this->misnamedRoutesIn($routes));
+    }
+
+    public function testASuffixOnARouteOfTheInvokeMethodIsRejected(): void
+    {
+        $routes = new RouteCollection();
+        $routes->add('dashboard_start_review_invoke', new Route('/a', ['_controller' => StartReviewController::class.'::__invoke']));
+
+        self::assertCount(1, $this->misnamedRoutesIn($routes));
+    }
+
+    public function testASuffixOtherThanTheActionMethodIsRejected(): void
+    {
+        $routes = new RouteCollection();
+        $routes->add('dashboard_show_review_other', new Route('/a', ['_controller' => ShowReviewController::class.'::record']));
+
+        self::assertCount(1, $this->misnamedRoutesIn($routes));
     }
 
     public function testARouteNamedAfterItsModuleAndUseCaseIsAllowed(): void
@@ -90,7 +114,7 @@ final class RouteNamesTest extends KernelTestCase
             $found = $this->moduleAndUseCaseOf($route);
 
             if ([] !== $found && !$this->isNamedAfter($name, $found)) {
-                $problems[] = sprintf('%s: name it %s (<module>_<use_case>, or that name followed by _<action> for a second route of the use case), after the module %s and the folder UseCase/%s/', $name, $this->expectedName($found), $found[1], $found[2]);
+                $problems[] = sprintf('%s: name it %s (<module>_<use_case>, followed by _<action> only for a route on an action method of the controller other than __invoke), after the module %s and the folder UseCase/%s/', $name, $this->expectedName($found), $found[1], $found[2]);
             }
         }
 
@@ -103,7 +127,7 @@ final class RouteNamesTest extends KernelTestCase
     private function moduleAndUseCaseOf(Route $route): array
     {
         $controller = $route->getDefault('_controller');
-        $matched = preg_match('/^Intakt\\\\(?:Core|Plugin)\\\\(.+?)\\\\UseCase\\\\([^\\\\]+)\\\\/', is_string($controller) ? $controller : '', $found);
+        $matched = preg_match('/^Intakt\\\\(?:Core|Plugin)\\\\(.+?)\\\\UseCase\\\\([^\\\\]+)\\\\[^:]+(?:::(\w+))?$/', is_string($controller) ? $controller : '', $found);
 
         return 1 === $matched ? $found : [];
     }
@@ -114,8 +138,9 @@ final class RouteNamesTest extends KernelTestCase
     private function isNamedAfter(string $name, array $found): bool
     {
         $expected = $this->expectedName($found);
+        $action = $found[3] ?? '__invoke';
 
-        return $name === $expected || str_starts_with($name, $expected.'_');
+        return $name === $expected || ('__invoke' !== $action && $name === $expected.'_'.$this->snake($action));
     }
 
     /**
