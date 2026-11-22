@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Job;
 
 use Intakt\Core\Job\Contract\DockerEngineFailed;
+use Intakt\Core\Job\Contract\EgressHosts;
+use Intakt\Core\Job\Contract\ImageVolumes;
 use Intakt\Core\Job\Contract\JobCause;
+use Intakt\Core\Job\Contract\JobCommand;
 use Intakt\Core\Job\Contract\JobEgress;
 use Intakt\Core\Job\Contract\JobEnd;
 use Intakt\Core\Job\Contract\JobEventNotRecorded;
@@ -169,7 +172,7 @@ final class ContainerJobRunnerTest extends TestCase
 
     public function testMemoryAndCpuLimitsAreSetOnTheJobsOwnContainer(): void
     {
-        $this->whenJobRuns(new JobSpec(new JobId('build-1'), 'sample:latest', ['true'], [], new JobLimits(self::MEMORY, 1.5, 60), JobEgress::none()));
+        $this->whenJobRuns(new JobSpec(new JobId('build-1'), 'sample:latest', new JobCommand('true'), [], new JobLimits(self::MEMORY, 1.5, 60), JobEgress::none()));
 
         $host = $this->engine->definitionOf('build-1')['HostConfig'];
         self::assertIsArray($host);
@@ -314,7 +317,7 @@ final class ContainerJobRunnerTest extends TestCase
     {
         $this->engine->declareVolumes('sample:latest', ['/var/cache', '/data']);
 
-        $this->expectExceptionObject(JobRefused::forImageVolumes('sample:latest', ['/var/cache', '/data']));
+        $this->expectExceptionObject(JobRefused::forImageVolumes('sample:latest', new ImageVolumes('/var/cache', '/data')));
 
         try {
             $this->whenJobRuns($this->spec('build-1'));
@@ -596,7 +599,7 @@ final class ContainerJobRunnerTest extends TestCase
             return [0, false];
         });
 
-        $this->whenJobRuns($this->spec('build-1', egress: JobEgress::to(['api.vendor.example'])));
+        $this->whenJobRuns($this->spec('build-1', egress: JobEgress::to(new EgressHosts('api.vendor.example'))));
 
         $definition = $this->engine->definitionOf('build-1');
         self::assertFalse($definition['NetworkDisabled']);
@@ -631,7 +634,7 @@ final class ContainerJobRunnerTest extends TestCase
 
     public function testAJobWithAnAllowlistIsToldWhichHostsTheStartCheckTries(): void
     {
-        $this->whenJobRuns($this->spec('build-1', egress: JobEgress::to(['api.vendor.example', 'repo.packagist.example'])));
+        $this->whenJobRuns($this->spec('build-1', egress: JobEgress::to(new EgressHosts('api.vendor.example', 'repo.packagist.example'))));
 
         $definition = $this->engine->definitionOf('build-1');
         self::assertIsArray($definition['Env']);
@@ -727,7 +730,7 @@ final class ContainerJobRunnerTest extends TestCase
 
     public function testTheProxyIsOnTheJobsNetworkAndTheBridgeAndAllowsOnlyTheJobsHosts(): void
     {
-        $this->whenJobRuns($this->spec('build-1', egress: JobEgress::to(['api.vendor.example', 'repo.packagist.org'])));
+        $this->whenJobRuns($this->spec('build-1', egress: JobEgress::to(new EgressHosts('api.vendor.example', 'repo.packagist.org'))));
 
         $proxy = $this->engine->proxyDefinitionOf('build-1');
         self::assertSame('intakt-egress-proxy', $proxy['Image']);
@@ -747,7 +750,7 @@ final class ContainerJobRunnerTest extends TestCase
             return [0, false];
         });
 
-        $result = $this->whenJobRuns($this->spec('build-1', egress: JobEgress::to(['api.vendor.example'])));
+        $result = $this->whenJobRuns($this->spec('build-1', egress: JobEgress::to(new EgressHosts('api.vendor.example'))));
 
         self::assertEquals(new JobEnd(JobCause::Exited, 0), $result->end);
     }
@@ -757,7 +760,7 @@ final class ContainerJobRunnerTest extends TestCase
         $this->engine->proxyHealth('build-1', 'starting', 'exited');
 
         try {
-            $this->whenJobRuns($this->spec('build-1', egress: JobEgress::to(['api.vendor.example'])));
+            $this->whenJobRuns($this->spec('build-1', egress: JobEgress::to(new EgressHosts('api.vendor.example'))));
             self::fail('A proxy that stopped must fail the run.');
         } catch (DockerEngineFailed $failure) {
             self::assertSame(DockerEngineFailed::proxyNotReady('intakt-egress-build-1', 'it stopped')->getMessage(), $failure->getMessage());
@@ -773,7 +776,7 @@ final class ContainerJobRunnerTest extends TestCase
         $this->engine->proxyHealth('build-1', 'unhealthy');
 
         try {
-            $this->whenJobRuns($this->spec('build-1', egress: JobEgress::to(['api.vendor.example'])));
+            $this->whenJobRuns($this->spec('build-1', egress: JobEgress::to(new EgressHosts('api.vendor.example'))));
             self::fail('An unhealthy proxy must fail the run.');
         } catch (DockerEngineFailed $failure) {
             self::assertSame(DockerEngineFailed::proxyNotReady('intakt-egress-build-1', 'it is unhealthy')->getMessage(), $failure->getMessage());
@@ -788,7 +791,7 @@ final class ContainerJobRunnerTest extends TestCase
         $started = $this->engine->clock->now();
 
         try {
-            $this->whenJobRuns($this->spec('build-1', egress: JobEgress::to(['api.vendor.example'])));
+            $this->whenJobRuns($this->spec('build-1', egress: JobEgress::to(new EgressHosts('api.vendor.example'))));
             self::fail('A proxy that never gets healthy must fail the run.');
         } catch (DockerEngineFailed $failure) {
             self::assertSame(DockerEngineFailed::proxyNotReady('intakt-egress-build-1', 'it was still starting after 30 seconds')->getMessage(), $failure->getMessage());
@@ -804,7 +807,7 @@ final class ContainerJobRunnerTest extends TestCase
         $this->engine->proxyHealth('build-1', 'none');
 
         try {
-            $this->whenJobRuns($this->spec('build-1', egress: JobEgress::to(['api.vendor.example'])));
+            $this->whenJobRuns($this->spec('build-1', egress: JobEgress::to(new EgressHosts('api.vendor.example'))));
             self::fail('A proxy without a health check status must fail the run.');
         } catch (DockerEngineFailed $failure) {
             self::assertSame(DockerEngineFailed::unexpected('containers/json')->getMessage(), $failure->getMessage());
@@ -818,7 +821,7 @@ final class ContainerJobRunnerTest extends TestCase
         $this->engine->proxyHealth('build-1', 'stopped');
 
         try {
-            $this->whenJobRuns($this->spec('build-1', egress: JobEgress::to(['api.vendor.example'])));
+            $this->whenJobRuns($this->spec('build-1', egress: JobEgress::to(new EgressHosts('api.vendor.example'))));
             self::fail('A health status the engine does not report must fail the run.');
         } catch (DockerEngineFailed $failure) {
             self::assertSame(DockerEngineFailed::unexpected('containers/json')->getMessage(), $failure->getMessage());
@@ -830,7 +833,7 @@ final class ContainerJobRunnerTest extends TestCase
     {
         $this->engine->proxyHealth('build-1', ...[...array_fill(0, 120, 'starting'), 'healthy']);
 
-        $result = $this->whenJobRuns($this->spec('build-1', egress: JobEgress::to(['api.vendor.example'])));
+        $result = $this->whenJobRuns($this->spec('build-1', egress: JobEgress::to(new EgressHosts('api.vendor.example'))));
 
         self::assertEquals(new JobEnd(JobCause::Exited, 0), $result->end);
     }
@@ -839,7 +842,7 @@ final class ContainerJobRunnerTest extends TestCase
     {
         $this->engine->proxyLogs('build-1', self::REFUSED_TUNNEL);
 
-        $this->whenJobRuns($this->spec('build-1', egress: JobEgress::to(['api.vendor.example'])));
+        $this->whenJobRuns($this->spec('build-1', egress: JobEgress::to(new EgressHosts('api.vendor.example'))));
 
         self::assertSame([LedgerEventKind::JobEgressRefused, LedgerEventKind::JobEnded], $this->ledger->kinds());
         self::assertSame(['job' => 'build-1', 'method' => 'CONNECT', 'target' => 'outside.example:443'], $this->ledger->payloads()[0]);
@@ -847,7 +850,7 @@ final class ContainerJobRunnerTest extends TestCase
 
     public function testTheProxyAndTheNetworkAreRemovedAfterTheJob(): void
     {
-        $this->whenJobRuns($this->spec('build-1', egress: JobEgress::to(['api.vendor.example'])));
+        $this->whenJobRuns($this->spec('build-1', egress: JobEgress::to(new EgressHosts('api.vendor.example'))));
 
         self::assertTrue($this->engine->hasCreatedProxy('build-1'));
         self::assertSame([], $this->engine->containerIds());
@@ -859,7 +862,7 @@ final class ContainerJobRunnerTest extends TestCase
         $this->engine->garbleState();
 
         try {
-            $this->whenJobRuns($this->spec('build-1', egress: JobEgress::to(['api.vendor.example'])));
+            $this->whenJobRuns($this->spec('build-1', egress: JobEgress::to(new EgressHosts('api.vendor.example'))));
             self::fail('A garbled state must fail the job.');
         } catch (DockerEngineFailed) {
             self::assertSame([], $this->engine->containerIds());
@@ -873,7 +876,7 @@ final class ContainerJobRunnerTest extends TestCase
         $this->engine->breakLogFrames('build-1');
 
         try {
-            $this->whenJobRuns($this->spec('build-1', egress: JobEgress::to(['api.vendor.example'])));
+            $this->whenJobRuns($this->spec('build-1', egress: JobEgress::to(new EgressHosts('api.vendor.example'))));
             self::fail('A broken log frame must fail the job.');
         } catch (DockerEngineFailed $failure) {
             self::assertSame(DockerEngineFailed::unexpected('containers/intakt-egress-build-1/logs')->getMessage(), $failure->getMessage());
@@ -887,7 +890,7 @@ final class ContainerJobRunnerTest extends TestCase
         $proxy = $this->engine->leaveRunning('build-1', 'intakt-egress-');
         $this->engine->leaveNetwork('build-1');
 
-        $result = $this->whenJobRuns($this->spec('build-1', egress: JobEgress::to(['api.vendor.example'])));
+        $result = $this->whenJobRuns($this->spec('build-1', egress: JobEgress::to(new EgressHosts('api.vendor.example'))));
 
         self::assertEquals(new JobEnd(JobCause::Exited, 0), $result->end);
         self::assertSame([LedgerEventKind::JobContainerRemoved, LedgerEventKind::JobNetworkRemoved, LedgerEventKind::JobEnded], $this->ledger->kinds());
@@ -922,7 +925,7 @@ final class ContainerJobRunnerTest extends TestCase
      */
     private function spec(string $job, array $inputs = [], ?JobEgress $egress = null): JobSpec
     {
-        return new JobSpec(new JobId($job), 'sample:latest', ['composer', 'test'], $inputs, new JobLimits(self::MEMORY, 1.0, 60), $egress ?? JobEgress::none());
+        return new JobSpec(new JobId($job), 'sample:latest', new JobCommand('composer', 'test'), $inputs, new JobLimits(self::MEMORY, 1.0, 60), $egress ?? JobEgress::none());
     }
 
     /**

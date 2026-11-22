@@ -89,6 +89,6 @@ final class ToolTimeLimitConfigTest extends KernelTestCase
         }
 
         self::assertInstanceOf(JobSpec::class, $ran);
-        self::assertSame((string) ToolTimeLimitKernel::LIMIT, $ran->command[11]);
+        self::assertSame((string) ToolTimeLimitKernel::LIMIT, [...$ran->command][11]);
     }
 }

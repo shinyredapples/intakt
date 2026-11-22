@@ -363,7 +363,7 @@ final class BuildTaskTest extends TestCase
         self::assertSame(self::IMAGE, $this->checked->image);
         self::assertSame([realpath(new Mirrors($this->mirrors)->pathOf('alpha')), RunCheckJob::MIRROR], [$this->checked->inputs[0]->hostPath, $this->checked->inputs[0]->containerPath]);
         self::assertSame(RunCheckJob::BUNDLE, $this->checked->inputs[1]->containerPath);
-        self::assertSame(['feat/task', '--', ...new PhpGate()->checkSteps(null)], array_slice($this->checked->command, 6));
+        self::assertSame(['feat/task', '--', ...new PhpGate()->checkSteps(null)], array_slice([...$this->checked->command], 6));
     }
 
     public function testAFailureAtThePrePushCheckEndsThereWithItsExitCodeRecordedNothingOfItsLogAndNoPush(): void
@@ -769,7 +769,7 @@ final class BuildTaskTest extends TestCase
         self::assertInstanceOf(JobSpec::class, $ran);
         self::assertSame([realpath($this->clone), RunBuildJob::CLONE], [$ran->inputs[0]->hostPath, $ran->inputs[0]->containerPath]);
         self::assertSame(self::IMAGE, $ran->image);
-        self::assertSame('feat/task', $ran->command[6]);
+        self::assertSame('feat/task', [...$ran->command][6]);
         self::assertStringContainsString(new Fence()->wrap(UntrustedSource::Task, "Task 7\n\nPLANT-body")->rendered(), $prompt);
     }
 

@@ -16,6 +16,8 @@ use Intakt\Core\HandBack\Contract\RefusedHandBack;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\CheckHandBack;
 use Intakt\Core\Job\Contract\DockerEngineFailed;
 use Intakt\Core\Job\Contract\JobCause;
+use Intakt\Core\Job\Contract\EgressHosts;
+use Intakt\Core\Job\Contract\JobCommand;
 use Intakt\Core\Job\Contract\JobEgress;
 use Intakt\Core\Job\Contract\JobEventNotRecorded;
 use Intakt\Core\Job\Contract\JobId;
@@ -122,7 +124,7 @@ final readonly class RunCheckJob implements CheckJobs
         return new JobSpec(
             new JobId('check-'.substr($accepted->head, 0, 40)),
             $job->image,
-            ['/bin/sh', '-c', $script, 'intakt-check', self::MIRROR, self::BUNDLE, $job->handBack->branch, '--', ...$steps],
+            new JobCommand('/bin/sh', '-c', $script, 'intakt-check', self::MIRROR, self::BUNDLE, $job->handBack->branch, '--', ...$steps),
             [new JobInput($repository, self::MIRROR), new JobInput($this->absolute($job->handBack->bundle), self::BUNDLE)],
             new JobLimits(self::MEMORY_BYTES, self::CPUS, self::SECONDS),
             $this->egress(),
@@ -133,7 +135,7 @@ final readonly class RunCheckJob implements CheckJobs
     {
         $hosts = $this->gate->registryHosts();
 
-        return [] === $hosts ? JobEgress::none() : JobEgress::to($hosts);
+        return [] === $hosts ? JobEgress::none() : JobEgress::to(new EgressHosts(...$hosts));
     }
 
     private function outcomeOf(?JobResult $result): CheckJobOutcome

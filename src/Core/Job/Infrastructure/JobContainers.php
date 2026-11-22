@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use Intakt\Core\Job\Contract\DockerEngineFailed;
 use Intakt\Core\Job\Contract\JobCause;
 use Intakt\Core\Job\Contract\JobEnd;
+use Intakt\Core\Job\Contract\ImageVolumes;
 use Intakt\Core\Job\Contract\JobRefused;
 use Intakt\Core\Job\Contract\JobSpec;
 use Symfony\Component\Clock\ClockInterface;
@@ -65,7 +66,7 @@ final readonly class JobContainers
         $volumes = $this->engine->imageVolumes($spec->image);
 
         if ([] !== $volumes) {
-            throw JobRefused::forImageVolumes($spec->image, $volumes);
+            throw JobRefused::forImageVolumes($spec->image, new ImageVolumes(...$volumes));
         }
     }
 

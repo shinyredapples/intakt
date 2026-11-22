@@ -123,7 +123,7 @@ final class RunBuildJobCommandTest extends TestCase
     {
         $this->executed(new JobOutput([]), ['--tier' => 'strong']);
 
-        self::assertSame('claude-strong', ($this->ran->command ?? [])[7] ?? null);
+        self::assertSame('claude-strong', [...$this->ran?->command ?? []][7] ?? null);
     }
 
     public function testAJobThatIsNotBuiltPrintsTheReasonAndWritesNoBundle(): void

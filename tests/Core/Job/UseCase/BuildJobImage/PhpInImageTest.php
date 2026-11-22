@@ -47,7 +47,7 @@ final class PhpInImageTest extends TestCase
     {
         $runner = $this->createMock(JobRunner::class);
         $runner->expects($this->once())->method('run')
-            ->with(self::callback(static fn (JobSpec $spec): bool => self::IMAGE === $spec->image && $spec->egress->isNone() && [] === $spec->inputs && 'php' === $spec->command[0]))
+            ->with(self::callback(static fn (JobSpec $spec): bool => self::IMAGE === $spec->image && $spec->egress->isNone() && [] === $spec->inputs && 'php' === [...$spec->command][0]))
             ->willReturn($this->resultWith('{"version": "8.5.12", "extensions": ["intl", "pdo_sqlite"]}'));
 
         new PhpInImage($runner)->verify('intakt-job/demo:main', self::IMAGE, PhpProfile::fromComposerJson(self::COMPOSER_JSON));

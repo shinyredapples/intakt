@@ -11,13 +11,12 @@ final readonly class JobSpec
     public const string OUTPUT_DIRECTORY = '/output';
 
     /**
-     * @param list<string>   $command
      * @param list<JobInput> $inputs
      */
     public function __construct(
         public JobId $id,
         public string $image,
-        public array $command,
+        public JobCommand $command,
         public array $inputs,
         public JobLimits $limits,
         public JobEgress $egress,

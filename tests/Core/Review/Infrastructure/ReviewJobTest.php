@@ -92,7 +92,7 @@ final class ReviewJobTest extends TestCase
         self::assertNotNull($this->ran);
         self::assertSame(
             ['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-review', ReviewJob::CHECKOUT, self::HEAD, ReviewJob::PROMPT, 'claude_code', 'claude-sonnet-5-5'],
-            $this->ran->command,
+            [...$this->ran->command],
         );
     }
 
@@ -137,7 +137,7 @@ final class ReviewJobTest extends TestCase
         (void) $this->reviews($this->answered(self::CLAUDE_ANSWER))->run($this->request());
 
         self::assertNotNull($this->ran);
-        self::assertSame(['api.anthropic.com'], $this->ran->egress->hosts);
+        self::assertSame(['api.anthropic.com'], [...$this->ran->egress->hosts]);
     }
 
     public function testACodexReviewerMayReachTheChatGptBackendOnly(): void
@@ -147,7 +147,7 @@ final class ReviewJobTest extends TestCase
         (void) $this->reviews($this->answered($answer, 'codex'))->run($this->request(new ResolvedModel(Provider::Codex, 'gpt-5.3-codex')));
 
         self::assertNotNull($this->ran);
-        self::assertSame(['chatgpt.com'], $this->ran->egress->hosts);
+        self::assertSame(['chatgpt.com'], [...$this->ran->egress->hosts]);
     }
 
     public function testAReviewerOnAnApiProviderIsRefusedBeforeAnyJobStarts(): void

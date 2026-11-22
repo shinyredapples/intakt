@@ -111,7 +111,7 @@ final class RunBuildJobTest extends TestCase
         self::assertNotNull($this->ran);
         self::assertSame(
             ['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-build', RunBuildJob::CLONE, RunBuildJob::PROMPT, 'task', 'claude-opus-5-5', '100', '3000', '', '1500'],
-            $this->ran->command,
+            [...$this->ran->command],
         );
     }
 
@@ -125,7 +125,7 @@ final class RunBuildJobTest extends TestCase
         (void) $this->runBuilds(new JobOutput([]))->run($this->job());
 
         self::assertNotNull($this->ran);
-        self::assertSame((string) $seconds, $this->ran->command[11]);
+        self::assertSame((string) $seconds, [...$this->ran->command][11]);
     }
 
     #[TestWith([3000])]
@@ -172,7 +172,7 @@ final class RunBuildJobTest extends TestCase
         (void) $this->runBuilds(new JobOutput([]))->run($this->job());
 
         self::assertNotNull($this->ran);
-        self::assertSame('', $this->ran->command[10]);
+        self::assertSame('', [...$this->ran->command][10]);
         self::assertSame(1, new GatesByDefault($processors, $this->ran->limits->cpus, $this->ran->limits->memoryBytes)->count);
     }
 
@@ -181,7 +181,7 @@ final class RunBuildJobTest extends TestCase
         (void) $this->runBuilds(new JobOutput([]))->run($this->job());
 
         self::assertNotNull($this->ran);
-        self::assertGreaterThan((int) $this->ran->command[9], $this->ran->limits->seconds);
+        self::assertGreaterThan((int) [...$this->ran->command][9], $this->ran->limits->seconds);
     }
 
     public function testTheBuildClonedAndThePromptAreTheJobsOnlyInputs(): void
@@ -227,7 +227,7 @@ final class RunBuildJobTest extends TestCase
         (void) $this->runBuilds(new JobOutput([]))->run($this->job());
 
         self::assertNotNull($this->ran);
-        self::assertSame(['api.anthropic.com', ...new PhpGate()->registryHosts()], $this->ran->egress->hosts);
+        self::assertSame(['api.anthropic.com', ...new PhpGate()->registryHosts()], [...$this->ran->egress->hosts]);
     }
 
     public function testTheJobIdNamesTheProjectAndBranchSoASecondBuildOfThemIsRefusedWhileOneRuns(): void

@@ -121,7 +121,7 @@ final class RunCheckJobTest extends TestCase
             [new JobInput((string) realpath($this->history->mirror), '/input/mirror'), new JobInput((string) realpath($bundle), '/input/handback.bundle')],
             $spec->inputs,
         );
-        self::assertSame(['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-check', '/input/mirror', '/input/handback.bundle', 'task', '--'], array_slice($spec->command, 0, 8));
+        self::assertSame(['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-check', '/input/mirror', '/input/handback.bundle', 'task', '--'], array_slice([...$spec->command], 0, 8));
         self::assertSame('job-image', $spec->image);
     }
 
@@ -132,8 +132,8 @@ final class RunCheckJobTest extends TestCase
         $this->whenTheJobLeaves(['check-result' => "passed\n"]);
 
         $spec = $this->ranSpec();
-        self::assertSame(['composer install --no-interaction --no-progress', 'bin/check --fast'], array_slice($spec->command, 8));
-        self::assertSame(['repo.packagist.org', 'api.github.com', 'codeload.github.com'], $spec->egress->hosts);
+        self::assertSame(['composer install --no-interaction --no-progress', 'bin/check --fast'], array_slice([...$spec->command], 8));
+        self::assertSame(['repo.packagist.org', 'api.github.com', 'codeload.github.com'], [...$spec->egress->hosts]);
     }
 
     public function testAConfiguredCommandReplacesTheGatesOwnSteps(): void
@@ -142,7 +142,7 @@ final class RunCheckJobTest extends TestCase
 
         $this->whenTheJobLeaves(['check-result' => "passed\n"], $this->job($this->history->bundle('main..task'), 'make check', []));
 
-        self::assertSame(['make check'], array_slice($this->ranSpec()->command, 8));
+        self::assertSame(['make check'], array_slice([...$this->ranSpec()->command], 8));
     }
 
     public function testAGateWithoutRegistriesGetsNoNetwork(): void

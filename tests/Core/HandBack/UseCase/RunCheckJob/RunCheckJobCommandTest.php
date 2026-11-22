@@ -174,7 +174,7 @@ final class RunCheckJobCommandTest extends TestCase
         $this->history->commit('Build work');
         $runner = $this->createMock(JobRunner::class);
         $runner->expects(self::once())->method('run')
-            ->with(self::callback(static fn (JobSpec $spec): bool => ['make check'] === array_slice($spec->command, 8)))
+            ->with(self::callback(static fn (JobSpec $spec): bool => ['make check'] === array_slice([...$spec->command], 8)))
             ->willReturn(new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput(['check-result' => "passed\n"])));
 
         $tester = $this->executed($runner, ['--check-command' => 'make check']);
