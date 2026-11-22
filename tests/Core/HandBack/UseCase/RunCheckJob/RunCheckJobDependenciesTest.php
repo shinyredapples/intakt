@@ -31,7 +31,9 @@ use Intakt\Core\HandBack\UseCase\CheckHandBack\RepositoryGit;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\StrippedCommits;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\ChangedFile;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\CheckDependencies;
+use Intakt\Core\HandBack\UseCase\RunCheckJob\CheckedLockFile;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\CheckedLockFiles;
+use Intakt\Core\HandBack\UseCase\RunCheckJob\CheckSnapshot;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\DependencyJobs;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\LockInputs;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\LostContentCheck;
@@ -50,6 +52,7 @@ use Intakt\Core\Job\Contract\JobRunner;
 use Intakt\Core\Job\Contract\JobSpec;
 use Intakt\Plugin\Forge\Contract\JobCredentials;
 use Intakt\Plugin\Gate\Contract\DependencyStep;
+use Intakt\Plugin\Gate\Contract\Gate;
 use Intakt\Plugin\PhpGate\Contract\PhpGateSteps;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
 use Intakt\Tests\Core\HandBack\BuildHistory;
@@ -64,6 +67,8 @@ use Symfony\Component\Filesystem\Filesystem;
 #[CoversClass(CheckedLockFiles::class)]
 #[CoversClass(DependencyJobs::class)]
 #[CoversClass(LockInputs::class)]
+#[CoversClass(CheckSnapshot::class)]
+#[CoversClass(CheckedLockFile::class)]
 #[UsesClass(DependencySnapshots::class)]
 #[UsesClass(DependencySnapshotKey::class)]
 #[UsesClass(DependencySnapshotLease::class)]
@@ -174,7 +179,31 @@ final class RunCheckJobDependenciesTest extends TestCase
 
         $check = $this->checkSpec();
         self::assertEquals(new JobInput($this->checks->snapshotsFolder().'/'.$this->key(self::LOCK)->value, '/input/dependencies'), array_last($check->inputs));
-        self::assertSame(['task', '--dependencies', '/input/dependencies', '--', PhpGateSteps::INSTALL, PhpGateSteps::CHECK], array_slice($check->command, 6));
+        self::assertSame(
+            ['task', '--dependencies', '/input/dependencies', PhpGateSteps::INSTALL, PhpGateSteps::GENERATE, 'composer.json', self::blobOf(self::MANIFEST), 'composer.lock', self::blobOf(self::LOCK), '--', PhpGateSteps::INSTALL, PhpGateSteps::CHECK],
+            array_slice($check->command, 6),
+        );
+    }
+
+    public function testACheckOnASnapshotOfAGateWhoseGenerateStepDiffersFromItsInstallNamesBothForTheScriptToSwap(): void
+    {
+        $this->history->checkout('main');
+        $this->history->commitFile('package-lock.json', "{}\n", 'Lock the packages');
+        $this->history->push('main');
+        $this->history->startBranch('task', 'main');
+        $this->history->commit('Build work');
+        $gate = self::createStub(Gate::class);
+        $gate->method('checkSteps')->willReturn(['npm ci', 'npm test']);
+        $gate->method('registryHosts')->willReturn([]);
+        $gate->method('dependencyStep')->willReturn(new DependencyStep(['package-lock.json'], 'node --version', 'npm ci --ignore-scripts', 'npm rebuild', 'npm ci'));
+
+        $this->whenTheCheckRuns(gate: $gate);
+
+        self::assertSame(['probe', 'install', 'check'], $this->jobsThatRan());
+        self::assertSame(
+            ['task', '--dependencies', '/input/dependencies', 'npm ci', 'npm rebuild', 'package-lock.json', self::blobOf("{}\n"), '--', 'npm ci', 'npm test'],
+            array_slice($this->checkSpec()->command, 6),
+        );
     }
 
     public function testACheckWhoseLockInputsHaveASnapshotMountsItAndRunsNoInstallJob(): void
@@ -346,11 +375,16 @@ final class RunCheckJobDependenciesTest extends TestCase
         $this->history->startBranch('task', 'main');
     }
 
-    private function whenTheCheckRuns(?string $command = null): CheckJobOutcome|RefusedHandBack
+    private function whenTheCheckRuns(?string $command = null, ?Gate $gate = null): CheckJobOutcome|RefusedHandBack
     {
         $job = new CheckJob(new HandBack($this->history->mirror, 'task', $this->history->bundle('main..task'), false, new JobCredentials()), 'job-image', $command, new Paths());
 
-        return $this->checks->runCheckJob($this->runner())->run($job);
+        return $this->checks->runCheckJob($this->runner(), $gate)->run($job);
+    }
+
+    private static function blobOf(string $content): string
+    {
+        return sha1('blob '.strlen($content)."\0".$content);
     }
 
     private function runner(): JobRunner
@@ -377,7 +411,13 @@ final class RunCheckJobDependenciesTest extends TestCase
     private function installed(JobSpec $spec): JobResult
     {
         $lock = $spec->inputs[0]->hostPath;
-        $this->lockFilesTheInstallSaw = ['composer.json' => (string) file_get_contents($lock.'/composer.json'), 'composer.lock' => (string) file_get_contents($lock.'/composer.lock')];
+        $this->lockFilesTheInstallSaw = [];
+
+        foreach (array_diff((array) scandir($lock), ['.', '..']) as $name) {
+            $this->lockFilesTheInstallSaw[(string) $name] = (string) file_get_contents($lock.'/'.$name);
+        }
+
+        ksort($this->lockFilesTheInstallSaw);
         self::assertInstanceOf(JobKeptFolder::class, $spec->kept);
         new Filesystem()->dumpFile($spec->kept->hostPath.'/vendor/composer/installed.json', "{\"packages\": []}\n");
 

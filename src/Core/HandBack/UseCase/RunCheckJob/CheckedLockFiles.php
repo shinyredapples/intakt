@@ -18,7 +18,7 @@ final readonly class CheckedLockFiles
     /**
      * @param non-empty-list<string> $paths
      *
-     * @return ?non-empty-array<string, string>
+     * @return ?non-empty-array<string, CheckedLockFile>
      *
      * @throws HandBackNotChecked
      */
@@ -36,7 +36,7 @@ final readonly class CheckedLockFiles
                 return null;
             }
 
-            $files[$path] = $this->git->exactOutput($repository, ['cat-file', 'blob', $blob]);
+            $files[$path] = new CheckedLockFile($blob, $this->git->exactOutput($repository, ['cat-file', 'blob', $blob]));
         }
 
         return $files;

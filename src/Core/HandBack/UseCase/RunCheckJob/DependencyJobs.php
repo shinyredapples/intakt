@@ -23,6 +23,7 @@ use Intakt\Plugin\Gate\Contract\Gate;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Lock\LockFactory;
 
 // The two jobs around a reused install; neither runs a file of the checked tree other than its lock files, so what is saved holds only what the locked install wrote.
 final readonly class DependencyJobs
@@ -37,6 +38,8 @@ final readonly class DependencyJobs
 
     // Printable and short, because the version becomes part of the key and the job's output is data.
     private const string WELL_FORMED_PLATFORM = '/\A[\x21-\x7e]{1,64}\z/D';
+
+    private const string INSTALL_LOCK = 'intakt-dependency-install-';
 
     private const int PROBE_MEMORY_BYTES = 256 * 1024 ** 2;
 
@@ -54,6 +57,7 @@ final readonly class DependencyJobs
         private Gate $gate,
         private DependencySnapshots $snapshots,
         private Filesystem $filesystem,
+        private LockFactory $locks,
         #[Autowire('%kernel.project_dir%/docker/job/install.sh')]
         private string $installScript,
         #[Autowire('%kernel.project_dir%/var/dependency-installs')]
@@ -91,15 +95,24 @@ final readonly class DependencyJobs
     public function installed(LockInputs $inputs, DependencyStep $step, string $image): bool
     {
         $key = $inputs->key();
+        // Held from the folder's first touch to its removal, because a second check of the same key would otherwise remove the folders the running install fills and saves.
+        $lock = $this->locks->createLock(self::INSTALL_LOCK.$key->value, ttl: null);
+
+        if (!$lock->acquire()) {
+            // Busy: another check installs the same key and saves it, so this one installs itself.
+            return false;
+        }
+
         $folder = $this->installs.'/'.$key->value;
-        $this->prepare($folder, $inputs);
 
         try {
+            $this->prepare($folder, $inputs);
             $result = $this->ranInstall($this->installSpec($folder, $step, $image));
 
             return $result instanceof JobResult && $this->keptFor($result, $inputs->platform) && $this->saved($inputs, $folder.'/kept');
         } finally {
             $this->filesystem->remove($folder);
+            $lock->release();
         }
     }
 
@@ -114,7 +127,7 @@ final readonly class DependencyJobs
         return $platform;
     }
 
-    // A leftover of a crashed run under the same key is removed first, so the install starts empty.
+    // A leftover of a crashed run under the same key is removed first, so the install starts empty; the key's lock makes it no running install's folder.
     private function prepare(string $folder, LockInputs $inputs): void
     {
         $this->filesystem->remove($folder);
@@ -145,7 +158,7 @@ final readonly class DependencyJobs
         try {
             return $this->jobs->run($spec);
         } catch (JobOutputRefused|JobRefused) {
-            // Refused as already running too, because another check installs the same key and saves it.
+            // Refused as already running too, because an orchestrator without the shared lock store could still install the same key.
             return null;
         }
     }

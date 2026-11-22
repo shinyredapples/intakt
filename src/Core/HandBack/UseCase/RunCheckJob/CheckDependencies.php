@@ -33,7 +33,7 @@ final readonly class CheckDependencies
      * @throws JobEventNotRecorded
      */
     #[NoDiscard('the lease pins the snapshot and must be released')]
-    public function leaseFor(CheckJob $job, string $repository, string $head): ?DependencySnapshotLease
+    public function leaseFor(CheckJob $job, string $repository, string $head): ?CheckSnapshot
     {
         $step = $this->gate->dependencyStep($job->configuredCommand);
 
@@ -53,9 +53,10 @@ final readonly class CheckDependencies
             return null;
         }
 
-        $inputs = new LockInputs($files, $platform);
+        $inputs = new LockInputs(array_map(static fn (CheckedLockFile $file): string => $file->bytes, $files), $platform);
+        $lease = $this->snapshots->lease($inputs->key()) ?? $this->leaseOfANewInstall($inputs, $step, $job->image);
 
-        return $this->snapshots->lease($inputs->key()) ?? $this->leaseOfANewInstall($inputs, $step, $job->image);
+        return $lease instanceof DependencySnapshotLease ? new CheckSnapshot($lease, $step, $files) : null;
     }
 
     private function leaseOfANewInstall(LockInputs $inputs, DependencyStep $step, string $image): ?DependencySnapshotLease

@@ -1,6 +1,6 @@
 #!/bin/sh
 # The check job's command, so the builder's own run of the checks is never what lets a change through.
-# Usage: check.sh <mirror> <bundle> <branch> [--dependencies <snapshot>] -- <step> [step ...]
+# Usage: check.sh <mirror> <bundle> <branch> [--dependencies <snapshot> <install step> <generate step> <lock file> <blob> [<lock file> <blob> ...]] -- <step> [step ...]
 # The result goes to files in INTAKT_JOB_OUTPUT, the job's only way to hand its result back.
 set -u
 
@@ -9,13 +9,16 @@ bundle="$2"
 branch="$3"
 shift 3
 dependencies=''
+install_step=''
+generate_step=''
+copied=0
 if [ "${1-}" = '--dependencies' ]; then
     dependencies="$2"
-    shift 2
+    install_step="$3"
+    generate_step="$4"
+    shift 4
 fi
-if [ "${1-}" = '--' ]; then
-    shift
-fi
+# The lock files stay in the arguments up to the --, because they are compared with the merged tree, which exists only after the merge.
 
 output="${INTAKT_JOB_OUTPUT:-/output}"
 clone="${TMPDIR:-/work}/clone"
@@ -83,46 +86,65 @@ result() {
     printf '%s\n' "$1" > "$output/check-result"
 }
 
-# Each top-level entry of the snapshot, hidden ones included, without the glob patterns that matched nothing.
-snapshot_entries() {
+# Runs its command on the name of each top-level entry of the snapshot, hidden ones included, and stops at the first that fails.
+# Straight from the glob, never through a list split on line breaks, so a name holding one stays one name.
+each_entry() {
     for entry in "$dependencies"/* "$dependencies"/.[!.]* "$dependencies"/..?*; do
         if [ -e "$entry" ] || [ -L "$entry" ]; then
-            printf '%s\n' "${entry##*/}"
+            "$@" "${entry##*/}" || return 1
         fi
     done
 }
 
-# Copied writable into the clone, so the gate's own install finds the locked packages in place and makes only the files that depend on this tree.
-# A subshell, so the split on line breaks alone and the glob switched off stay inside it.
-use_dependencies() (
-    entries=$(snapshot_entries)
-    IFS='
-'
-    set -f
-    for name in $entries; do
-        if [ -e "$clone/$name" ] || [ -L "$clone/$name" ]; then
-            printf 'the tree already holds %s, so the check installs its dependencies itself\n' "$name"
-            return 0
-        fi
-    done
-    printf '$ copy the dependency snapshot %s\n' "$dependencies"
-    copied=0
-    if cp -R "$dependencies/." "$clone/"; then
-        copied=1
-        for name in $entries; do
-            chmod -R u+w "$clone/$name" || copied=0
-        done
+not_in_tree() {
+    if [ -e "$clone/$1" ] || [ -L "$clone/$1" ]; then
+        held="$1"
+        return 1
     fi
-    if [ "$copied" -eq 1 ]; then
+}
+
+writable() {
+    chmod -R u+w "$clone/$1"
+}
+
+remove_copy() {
+    chmod -R u+w "$clone/$1" 2> /dev/null
+    rm -rf -- "${clone:?}/$1"
+    return 0
+}
+
+# The bytes of each lock file in the merged tree, unfiltered, must be the blob the snapshot's key was made of, because main can move after the snapshot was chosen and change what the install depends on (Composer's vendor-dir among it).
+lock_files_match() {
+    if [ "$#" -eq 0 ] || [ "$1" = '--' ]; then
+        return 1
+    fi
+    while [ "$#" -gt 0 ] && [ "$1" != '--' ]; do
+        if [ "$#" -lt 2 ] || [ ! -f "$1" ] || [ -L "$1" ] || [ "$(own_git hash-object --no-filters -- "$1")" != "$2" ]; then
+            return 1
+        fi
+        shift 2
+    done
+}
+
+# Copied writable into the clone, so the gate's generate step finds the locked packages in place and makes only the files that depend on this tree.
+use_dependencies() {
+    if ! lock_files_match "$@"; then
+        printf 'the merged tree does not hold the lock files the snapshot was made for, so the check installs its dependencies itself\n'
+        return 1
+    fi
+    if ! each_entry not_in_tree; then
+        printf 'the tree already holds %s, so the check installs its dependencies itself\n' "$held"
+        return 1
+    fi
+    printf '$ copy the dependency snapshot %s\n' "$dependencies"
+    if cp -R "$dependencies/." "$clone/" && each_entry writable; then
         return 0
     fi
     # A partial copy could name packages as installed that are not there, so nothing of it is kept.
     printf 'the dependency snapshot could not be copied, so the check installs its dependencies itself\n'
-    for name in $entries; do
-        chmod -R u+w "$clone/$name" 2> /dev/null
-        rm -rf -- "${clone:?}/$name"
-    done
-)
+    each_entry remove_copy
+    return 1
+}
 
 if ! apply > "$log" 2>&1; then
     result 'not-applied'
@@ -142,10 +164,22 @@ if ! merge_main >> "$log" 2>&1; then
 fi
 
 if [ -n "$dependencies" ]; then
-    use_dependencies >> "$log" 2>&1
+    if use_dependencies "$@" >> "$log" 2>&1; then
+        copied=1
+    fi
+    while [ "$#" -gt 0 ] && [ "$1" != '--' ]; do
+        shift
+    done
+fi
+if [ "${1-}" = '--' ]; then
+    shift
 fi
 
 for step in "$@"; do
+    # The gate's own install only, because the copied snapshot already holds what it installs and the generate step makes the files that depend on this tree.
+    if [ "$copied" -eq 1 ] && [ "$step" = "$install_step" ]; then
+        step="$generate_step"
+    fi
     printf '$ %s\n' "$step" >> "$log"
     sh -c "$step" >> "$log" 2>&1 < /dev/null
     status=$?

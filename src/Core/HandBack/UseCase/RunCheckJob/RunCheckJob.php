@@ -13,7 +13,6 @@ use Intakt\Core\HandBack\Contract\CheckVerdict;
 use Intakt\Core\HandBack\Contract\HandBackBranchRefused;
 use Intakt\Core\HandBack\Contract\HandBackNotChecked;
 use Intakt\Core\HandBack\Contract\RefusedHandBack;
-use Intakt\Core\HandBack\Infrastructure\DependencySnapshotLease;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\CheckHandBack;
 use Intakt\Core\Job\Contract\DockerEngineFailed;
 use Intakt\Core\Job\Contract\JobCause;
@@ -125,16 +124,17 @@ final readonly class RunCheckJob implements CheckJobs
         }
     }
 
-    private function specOf(CheckJob $job, AcceptedHandBack $accepted, ?DependencySnapshotLease $dependencies): JobSpec
+    private function specOf(CheckJob $job, AcceptedHandBack $accepted, ?CheckSnapshot $dependencies): JobSpec
     {
         $script = $this->filesystem->readFile($this->checkScript);
         $steps = $this->gate->checkSteps($job->configuredCommand);
         $inputs = [new JobInput($this->absolute($job->handBack->repository), self::MIRROR), new JobInput($this->absolute($job->handBack->bundle), self::BUNDLE)];
         $options = [];
 
-        if ($dependencies instanceof DependencySnapshotLease) {
-            $inputs[] = new JobInput($dependencies->folder, self::DEPENDENCIES);
-            $options = ['--dependencies', self::DEPENDENCIES];
+        if ($dependencies instanceof CheckSnapshot) {
+            $inputs[] = new JobInput($dependencies->lease->folder, self::DEPENDENCIES);
+            // The script swaps the install for the generate step only once it copied the snapshot, so a check that cannot use it still installs.
+            $options = ['--dependencies', self::DEPENDENCIES, $dependencies->step->checkInstall, $dependencies->step->generate, ...$dependencies->lockFileArguments()];
         }
 
         return new JobSpec(

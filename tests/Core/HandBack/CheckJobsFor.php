@@ -57,7 +57,7 @@ final readonly class CheckJobsFor
     public function dependencies(JobRunner $runner, Gate $gate): CheckDependencies
     {
         $snapshots = $this->snapshots();
-        $installs = new DependencyJobs($runner, $gate, $snapshots, new Filesystem(), self::INSTALL_SCRIPT, $this->folder.'/dependency-installs');
+        $installs = new DependencyJobs($runner, $gate, $snapshots, new Filesystem(), $this->locks(), self::INSTALL_SCRIPT, $this->folder.'/dependency-installs');
 
         return new CheckDependencies($gate, new CheckedLockFiles(new RepositoryGit(new HardenedGit())), $installs, $snapshots);
     }
@@ -67,12 +67,18 @@ final readonly class CheckJobsFor
         return new DependencySnapshots(
             $this->folder.'/dependency-snapshots',
             10,
-            new LockFactory(new FlockStore($this->folder.'/locks')),
+            $this->locks(),
             new Filesystem(),
             new DependencySnapshotUses(new Filesystem()),
             new DependencySnapshotLinks(new Filesystem()),
             new DependencySnapshotPins(new Filesystem()),
         );
+    }
+
+    // A new factory on the same folder each time, as two orchestrator processes share one lock folder.
+    public function locks(): LockFactory
+    {
+        return new LockFactory(new FlockStore($this->folder.'/locks'));
     }
 
     public function snapshotsFolder(): string
