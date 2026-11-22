@@ -103,16 +103,41 @@ final readonly class DependencyJobs
             return false;
         }
 
-        $folder = $this->installs.'/'.$key->value;
+        // Released on its own, so a folder that cannot be removed never keeps the key locked.
+        try {
+            return $this->installedIn($inputs, $step, $image);
+        } finally {
+            $lock->release();
+        }
+    }
+
+    /**
+     * @throws DockerEngineFailed
+     * @throws JobEventNotRecorded
+     */
+    private function installedIn(LockInputs $inputs, DependencyStep $step, string $image): bool
+    {
+        $folder = $this->installs.'/'.$inputs->key()->value;
 
         try {
             $this->prepare($folder, $inputs);
             $result = $this->ranInstall($this->installSpec($folder, $step, $image));
 
             return $result instanceof JobResult && $this->keptFor($result, $inputs->platform) && $this->saved($inputs, $folder.'/kept');
+        } catch (IOException) {
+            // An install folder that cannot be made or read only costs the reuse, so the check installs its dependencies itself.
+            return false;
         } finally {
+            $this->removed($folder);
+        }
+    }
+
+    private function removed(string $folder): void
+    {
+        try {
             $this->filesystem->remove($folder);
-            $lock->release();
+        } catch (IOException) {
+            // Left for the next install of the key, whose prepare removes it first, because the check's own install does not need it gone.
         }
     }
 

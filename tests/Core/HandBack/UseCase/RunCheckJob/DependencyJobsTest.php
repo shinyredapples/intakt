@@ -133,6 +133,18 @@ final class DependencyJobsTest extends TestCase
         self::assertDirectoryDoesNotExist($this->folder.'/dependency-installs/'.$this->inputs->key()->value);
     }
 
+    public function testAnInstallFolderThatCannotBeMadeLeavesTheCheckToInstallItselfAndTheKeyFreeForTheNextInstall(): void
+    {
+        new Filesystem()->dumpFile($this->folder.'/dependency-installs', "a file where the install folders go\n");
+        $runner = $this->runnerThatInstalls();
+
+        $installed = $this->jobsWith($runner)->installed($this->inputs, $this->step, 'image');
+        new Filesystem()->remove($this->folder.'/dependency-installs');
+
+        self::assertFalse($installed);
+        self::assertTrue($this->jobsWith($runner)->installed($this->inputs, $this->step, 'image'));
+    }
+
     private function runnerThatStartsASecondInstallOfTheSameKeyInside(): JobRunner
     {
         $runner = self::createStub(JobRunner::class);
