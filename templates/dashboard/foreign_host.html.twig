@@ -5,14 +5,17 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Open the dashboard on localhost - Intakt</title>
-    <script>document.documentElement.dataset.theme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';</script>
-    <link rel="stylesheet" href="{{ asset('styles/fonts.css') }}">
-    <link rel="stylesheet" href="{{ asset('styles/tokens.css') }}">
-    <link rel="stylesheet" href="{{ asset('styles/base.css') }}">
-    <link rel="stylesheet" href="{{ asset('styles/components.css') }}">
+    {#- Styled inline with the light and dark tokens of assets/styles/tokens.css, because the refusal must render even where the asset paths cannot be resolved. -#}
+    <style>
+        :root { color-scheme: light dark; --page: #F7FAF9; --ink: #0A2B23; --tint: #EEF5F2; }
+        @media (prefers-color-scheme: dark) { :root { --page: #121816; --ink: #E6ECEA; --tint: #1E2826; } }
+        body { margin: 0; padding: 32px; background: var(--page); color: var(--ink); font: 17px/1.5 system-ui, sans-serif; }
+        main { max-width: 640px; }
+        pre { padding: 12px 16px; border-radius: 12px; background: var(--tint); overflow-x: auto; }
+    </style>
 </head>
 <body>
-<main class="content foreign-host">
+<main>
     <h1>Open the dashboard on localhost</h1>
     <p class="lead">Intakt answers only <code>http://{{ address }}</code>, on the machine it runs on. The dashboard has no login, so any other address could let a web page you visit act for you.</p>
     <p>From another device, open an SSH tunnel to that machine, then open <code>http://{{ address }}</code> on this device:</p>
