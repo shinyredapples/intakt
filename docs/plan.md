@@ -225,7 +225,7 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 ### T23 `docker compose up` with a sample repository
 - **Description:** `compose.yaml` starts Intakt with a sample repository holding a base and a pull request branch with deliberate, findable issues. `.env.dist` lists the provider keys, all optional; the first start makes empty secrets, seeds the sample project and its panel, and the compose health check is green only once the dashboard answers and the sample is seeded (#2229).
 - **Acceptance:** from a clean clone, `docker compose up` with one key reaches a reviewable sample change; with two keys the default panel uses two providers.
-- **Evidence:** the timed run from `git clone` to the first verdict, recorded in the README.
+- **Evidence:** the timed run to the first verdict, recorded on [the bench page](bench.md#timed-run): measured runs each start from a fresh `git archive` of main; the step-for-step run from a fresh `git clone` is D3 of #2164.
 - **Waits for:** T22. **Size:** M. **Labels:** `class:feature`, `priority:urgent`.
 
 ### T24 The five-minute path in the docs
