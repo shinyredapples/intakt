@@ -9,7 +9,8 @@ use Symfony\Component\Process\Process;
 const LOCALE = 'zu_ZA';
 
 $directory = sys_get_temp_dir().'/debug-config-stale-'.bin2hex(random_bytes(6));
-mkdir($directory.'/config', 0o777, true);
+// Owner-only: the child executes the config written here, so another local user must not be able to swap it.
+mkdir($directory.'/config', 0o700, true);
 $config = $directory.'/config/framework.php';
 file_put_contents($config, <<<'PHP'
     <?php
