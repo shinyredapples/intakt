@@ -495,6 +495,54 @@ final class GitHubIssueReadsTest extends TestCase
         $api->reads()->readOpen('alpha', 12);
     }
 
+    public function testAnIssueTransferredToAnotherRepositoryReadsAsNoOpenIssue(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => '301'];
+
+        self::assertNull($api->reads()->readOpen('alpha', 12));
+    }
+
+    public function testAnAnswerForAnotherNumberReadsAsNoOpenIssue(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->single(['number' => 99])];
+
+        self::assertNull($api->reads()->readOpen('alpha', 12));
+    }
+
+    public function testAnAnswerForTheNextNumberReadsAsNoOpenIssue(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->single([])];
+
+        self::assertNull($api->reads()->readOpen('alpha', 13));
+    }
+
+    public function testAnIssueWithAStateThisForgeDoesNotKnowFailsTheRead(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->single(['state' => 'unexpected'])];
+
+        $this->expectExceptionObject(new ForgeReadFailed('GitHub answered an issue whose state is neither open nor closed.'));
+
+        $api->reads()->readOpen('alpha', 12);
+    }
+
+    public function testAnIssueWithoutAStateFailsTheRead(): void
+    {
+        $listed = json_decode(RecordedIssueApi::fixture('issues_open.json'), true, flags: JSON_THROW_ON_ERROR);
+        self::assertIsArray($listed);
+        self::assertIsArray($listed[0]);
+        unset($listed[0]['state']);
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => json_encode($listed[0], JSON_THROW_ON_ERROR)];
+
+        $this->expectExceptionObject(new ForgeReadFailed('GitHub answered an issue whose state is neither open nor closed.'));
+
+        $api->reads()->readOpen('alpha', 12);
+    }
+
     public function testASingleReadAnsweredWithAListFailsTheRead(): void
     {
         $api = new RecordedIssueApi();

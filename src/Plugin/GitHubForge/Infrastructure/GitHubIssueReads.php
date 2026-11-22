@@ -23,6 +23,7 @@ final readonly class GitHubIssueReads implements IssueReads
     // A listing of more pages than this fails, because reading on has no end a tick could wait for.
     private const int MAX_PAGES = 10;
     private const int OK = 200;
+    private const int MOVED_PERMANENTLY = 301;
     private const int NOT_MODIFIED = 304;
     private const int UNAUTHORIZED = 401;
     private const int NOT_FOUND = 404;
@@ -58,8 +59,9 @@ final readonly class GitHubIssueReads implements IssueReads
     // No listing slot, because the budget reserve paces the watcher's routine listings and a build reads its one task once.
     public function readOpen(string $project, int $number): ?ListedIssue
     {
-        $answer = $this->answerTo('GET', $this->repositories->addressOf($project)->path().'/issues/'.$number, []);
-        if (self::NOT_FOUND === $answer['status']) {
+        // Redirects are not followed, because GitHub answers an issue transferred to another repository with a 301 to it, and that issue is no task of this project.
+        $answer = $this->answerTo('GET', $this->repositories->addressOf($project)->path().'/issues/'.$number, ['max_redirects' => 0]);
+        if (in_array($answer['status'], [self::MOVED_PERMANENTLY, self::NOT_FOUND], true)) {
             return null;
         }
 
@@ -70,7 +72,19 @@ final readonly class GitHubIssueReads implements IssueReads
         $data = $this->issueOf($answer['body']);
         $issue = $this->fields->listedIssueOf($data);
 
-        return $issue->isPullRequest || 'open' !== ($data['state'] ?? null) ? null : $issue;
+        return $issue->isPullRequest || $issue->number !== $number || !$this->isOpen($data) ? null : $issue;
+    }
+
+    /**
+     * @param array<mixed> $issue
+     */
+    private function isOpen(array $issue): bool
+    {
+        return match ($issue['state'] ?? null) {
+            'open' => true,
+            'closed' => false,
+            default => throw new ForgeReadFailed('GitHub answered an issue whose state is neither open nor closed.'),
+        };
     }
 
     /**
