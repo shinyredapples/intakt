@@ -7,13 +7,14 @@ namespace Intakt\Core\Platform\Contract;
 // The redacted header lists with where the text after each kept list resumes, because the value pass must skip only that list's own part.
 final readonly class ListedHeaders
 {
-    /**
-     * @param array<int, int> $keptTails the end of each list whose following text is kept, by the list's start
-     */
+    /** @var array<int, int> */
+    private array $keptTails;
+
     public function __construct(
         public RedactedSpans $spans,
-        private array $keptTails,
+        KeptTail ...$keptTails,
     ) {
+        $this->keptTails = array_column(array_map(static fn (KeptTail $tail): array => [$tail->listStart, $tail->end], $keptTails), 1, 0);
     }
 
     public function tailKeptFrom(int $listStart): ?int

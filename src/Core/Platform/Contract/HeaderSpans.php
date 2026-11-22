@@ -37,14 +37,14 @@ final readonly class HeaderSpans
             if ($this->isValueOfQuotedKey($text, $matchStart)
                 && !$this->followsUnquotedHeaderOnItsLine($before)
                 && $this->isListShaped($text, $afterOpen, $end)) {
-                $keptTails[$listStart] = $end;
+                $keptTails[] = new KeptTail($listStart, $end);
             }
             $spans->add($listStart, $end);
             $before .= str_repeat(Redaction::MASK, $end - $listStart);
             $offset = $end;
         }
 
-        return new ListedHeaders($spans, $keptTails);
+        return new ListedHeaders($spans, ...$keptTails);
     }
 
     public function values(string $text, ListedHeaders $listed): ?RedactedSpans
