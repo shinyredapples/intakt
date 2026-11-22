@@ -14,7 +14,7 @@ final class DemoProviderBusy extends RuntimeException implements ReportableFailu
     public static function for(string $waitedOn, Provider $provider, int $seconds): self
     {
         return new self(sprintf(
-            'The %s cannot get an answer: %s is rate-limited for %d s and no fallback is free. Run intakt:demo again in a few minutes, or review with a key of another AI lab (%s or %s, see "Running the demo" in docs/user/README.md).',
+            'The %s cannot get an answer: %s is rate-limited for %d s and no fallback is free. Run intakt:demo again in a few minutes, or review with a key of another AI lab (%s or %s, see "The demo with docker compose" in docs/reference/user-manual.md).',
             $waitedOn,
             $provider->value,
             $seconds,

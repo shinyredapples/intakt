@@ -123,6 +123,13 @@ final class DemoProgressTest extends TestCase
         self::assertStringStartsWith('The correctness reviewer cannot get an answer: openai_compatible is rate-limited for 60 s and no fallback is free. Run intakt:demo again in a few minutes', $busy->getMessage());
     }
 
+    public function testTheRateLimitMessagePointsAtTheDemoSectionOfTheReferenceManual(): void
+    {
+        $busy = $this->failureOf(fn () => $this->progress($this->limited(new EveryAccountCoolingDown(Provider::OpenAiCompatible, 60)))->reached($this->waitingOnBoth()));
+
+        self::assertStringEndsWith('see "The demo with docker compose" in docs/reference/user-manual.md).', $busy->getMessage());
+    }
+
     public function testAReviewerWhoseModelAndFallbackAreRateLimitedStopsTheDemo(): void
     {
         $out = new EveryProviderOut([ProviderOutage::coolingDown(Provider::OpenAiCompatible, 42)]);
