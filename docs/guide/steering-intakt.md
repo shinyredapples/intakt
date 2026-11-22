@@ -43,7 +43,7 @@ Every issue or pull request has one driver: Intakt or you. Two labels switch it 
 
 Until `take-over` is built, outside work is handled this way ([contributor guide](../../CONTRIBUTING.md#how-your-issue-or-pull-request-is-handled)):
 - An issue from someone without write access is not built as it stands. A maintainer opens a task of their own from it, with the issue's text copied between `<!-- external -->` and `<!-- /external -->`.
-- A pull request from someone without write access, in a repository Intakt watches, is reviewed once CI on its head is green, with no label needed. CI jobs skip on a fork's pull request and count as green, so the review follows the approved run. The review only reads it (its code is never started), and a maintainer merges it by hand.
+- A pull request from someone without write access, in a repository Intakt watches, is reviewed once CI on its head is green, with no label needed. When that repository's CI skips its jobs on a fork's pull request, as Intakt's own CI does, the skipped jobs count as green, so the review follows the approved run. The review only reads it (its code is never started), and a maintainer merges it by hand.
 
 Until a dashboard button exists, the labels are the control.
 
