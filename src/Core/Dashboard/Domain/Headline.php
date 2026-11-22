@@ -13,7 +13,7 @@ final readonly class Headline
     // Two, because the headline holds at most two clauses (#1942); the rest is counted.
     private const int NAMED = 2;
 
-    // Cut because a long name would stretch the line over several lines on a wide screen too; the lanes and cards show it whole.
+    // Cut because a long name would stretch the line over several lines on a wide screen too; the Working now cards and the board's cards show it whole.
     private const int NAME_WIDTH = 32;
 
     public function __construct(
