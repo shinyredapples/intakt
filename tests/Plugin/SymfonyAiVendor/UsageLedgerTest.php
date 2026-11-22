@@ -109,14 +109,33 @@ final class UsageLedgerTest extends TestCase
         self::assertSame(['settled', [7]], [$ledger->payloads()[0]['phase'], $this->promptTokensOf($ledger)]);
     }
 
-    public function testARoundWhoseUsageExtractionFailsIsReadOnceAndALaterRoundKeepsItsUsage(): void
+    public function testARoundWhoseUsageExtractionFailsLeavesTheCallUnsettledWithItsFailureClass(): void
     {
         $ledger = new InMemoryLedger();
         $reads = 0;
 
         $this->usageLedger($ledger)->settle(new UsageReservation('a call'), $this->roundWithUnreadableUsage($reads), $this->roundAnswering($this->textWithUsage(42)));
 
-        self::assertSame(['unsettled', JsonException::class, [42], 1], [$ledger->payloads()[0]['phase'], $ledger->payloads()[0]['failure'], $this->promptTokensOf($ledger), $reads]);
+        self::assertSame(['unsettled', JsonException::class], [$ledger->payloads()[0]['phase'], $ledger->payloads()[0]['failure']]);
+    }
+
+    public function testALaterRoundKeepsItsUsageWhenAnEarlierRoundIsUnreadable(): void
+    {
+        $ledger = new InMemoryLedger();
+        $reads = 0;
+
+        $this->usageLedger($ledger)->settle(new UsageReservation('a call'), $this->roundWithUnreadableUsage($reads), $this->roundAnswering($this->textWithUsage(42)));
+
+        self::assertSame([42], $this->promptTokensOf($ledger));
+    }
+
+    public function testARoundWhoseUsageExtractionFailsIsReadOnce(): void
+    {
+        $reads = 0;
+
+        $this->usageLedger(new InMemoryLedger())->settle(new UsageReservation('a call'), $this->roundWithUnreadableUsage($reads), $this->roundAnswering($this->textWithUsage(42)));
+
+        self::assertSame(1, $reads);
     }
 
     public function testAnUnreadableRoundLogsOneWarningWhenTheCallIsSettled(): void
