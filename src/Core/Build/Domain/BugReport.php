@@ -8,7 +8,7 @@ namespace Intakt\Core\Build\Domain;
 final readonly class BugReport
 {
     /**
-     * @param array<string, string> $texts the text of each part found, by part value
+     * @param array<string, string> $texts
      */
     private function __construct(private array $texts)
     {
@@ -16,23 +16,21 @@ final readonly class BugReport
 
     public static function fromBody(string $body): self
     {
-        $texts = [];
+        $texts = array_fill_keys(array_column(BugPart::cases(), 'value'), '');
         $current = null;
 
-        foreach (preg_split('/\R/', $body) ?: [] as $line) {
-            $part = self::partStartedBy($line, $rest);
+        foreach (explode("\n", str_replace(["\r\n", "\r"], "\n", $body)) as $line) {
+            $start = self::startOf($line);
 
-            if ($part instanceof BugPart) {
-                $current = $part->value;
-                $texts[$current] = ($texts[$current] ?? '').$rest."\n";
+            if (null !== $start) {
+                $current = $start[0]->value;
+                $texts[$current] .= $start[1]."\n";
 
                 continue;
             }
 
             // A heading of another section ends the part, so its text never counts as the part's.
-            if (1 === preg_match('/^\s*#{1,6}\s/', $line)) {
-                $current = null;
-            }
+            $current = 1 === preg_match('/^\s*#{1,6}\s/', $line) ? null : $current;
 
             if (null !== $current) {
                 $texts[$current] .= $line."\n";
@@ -47,12 +45,15 @@ final readonly class BugReport
      */
     public function missingParts(): array
     {
-        return array_values(array_filter(BugPart::cases(), fn (BugPart $part): bool => '' === trim($this->texts[$part->value] ?? '')));
+        return array_values(array_filter(BugPart::cases(), fn (BugPart $part): bool => '' === trim($this->texts[$part->value])));
     }
 
-    // A label counts as a heading, as a bold label or as a label with a colon, because a sentence that only starts with "When" must not.
-    private static function partStartedBy(string $line, ?string &$rest): ?BugPart
+    /**
+     * @return ?array{BugPart, string}
+     */
+    private static function startOf(string $line): ?array
     {
+        // A label counts as a heading, as a bold label or as a label with a colon, because a sentence that only starts with "When" must not.
         $labels = '(?:'.implode('|', array_map(static fn (BugPart $part): string => preg_quote($part->value, '/'), BugPart::cases())).')(?!\w)';
         $pattern = sprintf(
             '/^\s*(?:#{1,6}\s+(?<h>%1$s)\s*:?\s*|(?:[-*]\s+)?(?:\*\*|__)(?<b>%1$s)\s*:?(?:\*\*|__)\s*:?\s*|(?:[-*]\s+)?(?<c>%1$s)\s*:\s*)(?<rest>.*)$/i',
@@ -63,12 +64,11 @@ final readonly class BugReport
             return null;
         }
 
-        $rest = $found['rest'];
         $label = '' !== $found['h'] ? $found['h'] : ('' !== $found['b'] ? $found['b'] : $found['c']);
 
         foreach (BugPart::cases() as $part) {
             if (0 === strcasecmp($part->value, $label)) {
-                return $part;
+                return [$part, $found['rest']];
             }
         }
 

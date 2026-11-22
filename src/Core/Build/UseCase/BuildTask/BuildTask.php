@@ -87,12 +87,6 @@ final readonly class BuildTask
         $results = [];
 
         foreach (BuildStep::cases() as $step) {
-            $incomplete = BuildStep::BuildJob === $step ? $this->incompleteBugQuestion($task) : null;
-
-            if ($incomplete instanceof BuildQuestion) {
-                return $this->park($request, $task, $incomplete);
-            }
-
             $result = match ($step) {
                 // Read before the other steps, because they need the task it returns.
                 BuildStep::Task => null,
@@ -108,8 +102,10 @@ final readonly class BuildTask
             // A local of this run, never a property, because a worker keeps the service between runs.
             $results[$step->value] = $result;
 
-            if ($result instanceof BuildJobOutcome && $result->question instanceof BuildQuestion) {
-                return $this->park($request, $task, $result->question);
+            $question = $result instanceof BuildJobOutcome ? $result->question : $result;
+
+            if ($question instanceof BuildQuestion) {
+                return $this->park($request, $task, $question);
             }
 
             $failure = $this->failureIn($result);
@@ -151,7 +147,7 @@ final readonly class BuildTask
     }
 
     // A job that built and a hand-back the check accepted give their result instead of a failure, so their step passed.
-    private function failureIn(BuildJobOutcome|AcceptedHandBack|string|null $result): ?string
+    private function failureIn(BuildJobOutcome|BuildQuestion|AcceptedHandBack|string|null $result): ?string
     {
         return is_string($result) ? $result : null;
     }
@@ -191,8 +187,14 @@ final readonly class BuildTask
     }
 
     // The outcome of a job that built, for the hand-back check, or of one that asked an accepted question, for the parking; otherwise the failure's text.
-    private function runBuildJob(BuildTaskRequest $request, ListedIssue $task): BuildJobOutcome|string
+    private function runBuildJob(BuildTaskRequest $request, ListedIssue $task): BuildJobOutcome|BuildQuestion|string
     {
+        $incomplete = $this->incompleteBugQuestion($task);
+
+        if ($incomplete instanceof BuildQuestion) {
+            return $incomplete;
+        }
+
         try {
             $outcome = $this->builds->run($this->jobOf($request, $task));
         } catch (BuildRoutingNotConfigured|TierResolutionFailure|BuilderNotOnClaudeCode|BuildCloneIsNoFolder|InvalidArgumentException|DockerEngineFailed|JobEventNotRecorded|IOException $failure) {
@@ -204,7 +206,7 @@ final readonly class BuildTask
     }
 
     /**
-     * @param array<string, BuildJobOutcome|AcceptedHandBack|string|null> $results
+     * @param array<string, BuildJobOutcome|BuildQuestion|AcceptedHandBack|string|null> $results
      */
     private function bundleIn(array $results): string
     {
@@ -213,7 +215,7 @@ final readonly class BuildTask
     }
 
     /**
-     * @param array<string, BuildJobOutcome|AcceptedHandBack|string|null> $results
+     * @param array<string, BuildJobOutcome|BuildQuestion|AcceptedHandBack|string|null> $results
      */
     private function builtIn(array $results): BuildJobOutcome
     {
@@ -223,7 +225,7 @@ final readonly class BuildTask
     }
 
     /**
-     * @param array<string, BuildJobOutcome|AcceptedHandBack|string|null> $results
+     * @param array<string, BuildJobOutcome|BuildQuestion|AcceptedHandBack|string|null> $results
      */
     private function push(BuildTaskRequest $request, array $results): ?string
     {

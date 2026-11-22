@@ -189,7 +189,7 @@ final class BuildTaskParksOnSqliteTest extends KernelTestCase
 
         self::assertSame([BuildStep::BuildJob, null, true], [$outcome->last, $outcome->failure, $outcome->parked()]);
         // The scripted job would have asked another question, so this one proves the job never ran.
-        self::assertStringContainsString('missing: Must keep working.', (string) $this->connection()->fetchOne('SELECT question FROM build_parked_task'));
+        self::assertStringContainsString('missing: Must keep working.', $this->question());
         self::assertSame('{"project":"alpha","task":"7","step":"build_job","outcome":"asked","failure":null}', $this->connection()->fetchOne('SELECT payload FROM ledger_event ORDER BY position DESC LIMIT 1'));
     }
 
@@ -200,7 +200,7 @@ final class BuildTaskParksOnSqliteTest extends KernelTestCase
         $outcome = $this->buildTask($task)->run(new BuildTaskRequest('alpha', 7, 'remote', 'feat/task', $this->folder.'/clone', 'intakt-job-alpha:1'));
 
         self::assertTrue($outcome->parked());
-        self::assertStringContainsString('PLANT-question', (string) $this->connection()->fetchOne('SELECT question FROM build_parked_task'));
+        self::assertStringContainsString('PLANT-question', $this->question());
     }
 
     public function testATaskWithoutTheBugLabelIsNotCheckedForTheFourParts(): void
@@ -208,7 +208,7 @@ final class BuildTaskParksOnSqliteTest extends KernelTestCase
         $outcome = $this->buildTask(Issues::task(7, ['intakt'], ['body' => 'no parts at all']))->run(new BuildTaskRequest('alpha', 7, 'remote', 'feat/task', $this->folder.'/clone', 'intakt-job-alpha:1'));
 
         self::assertTrue($outcome->parked());
-        self::assertStringContainsString('PLANT-question', (string) $this->connection()->fetchOne('SELECT question FROM build_parked_task'));
+        self::assertStringContainsString('PLANT-question', $this->question());
     }
 
     private function buildTask(?ListedIssue $task = null): BuildTask
@@ -226,6 +226,14 @@ final class BuildTaskParksOnSqliteTest extends KernelTestCase
         self::assertInstanceOf(ParkedTasks::class, $parked);
 
         return new BuildTask($reads, $checkout, $routing, $builds, new HandBackCheck($checkout, self::createStub(HandBackChecks::class), $files), new PrePushCheck(self::createStub(CheckJobs::class), $files), new PushStep(self::createStub(BranchPush::class), $checkout), $parked, $this->ledger(), new PushRemoteCheck(self::createStub(ConfiguredRepositories::class)));
+    }
+
+    private function question(): string
+    {
+        $question = $this->connection()->fetchOne('SELECT question FROM build_parked_task');
+        self::assertIsString($question);
+
+        return $question;
     }
 
     private function ledger(): Ledger
