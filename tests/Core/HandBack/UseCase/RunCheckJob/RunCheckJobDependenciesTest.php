@@ -12,6 +12,7 @@ use Intakt\Core\HandBack\Contract\CheckJob;
 use Intakt\Core\HandBack\Contract\CheckJobOutcome;
 use Intakt\Core\HandBack\Contract\CheckVerdict;
 use Intakt\Core\HandBack\Contract\HandBack;
+use Intakt\Core\HandBack\Contract\RefusedHandBack;
 use Intakt\Core\HandBack\Domain\AttributionLines;
 use Intakt\Core\HandBack\Domain\BundleHeader;
 use Intakt\Core\HandBack\Domain\DependencySnapshotKey;
@@ -169,7 +170,7 @@ final class RunCheckJobDependenciesTest extends TestCase
         $this->givenMainLocks(self::LOCK);
         $this->history->commit('Build work');
 
-        (void) $this->whenTheCheckRuns();
+        $this->whenTheCheckRuns();
 
         $check = $this->checkSpec();
         self::assertEquals(new JobInput($this->checks->snapshotsFolder().'/'.$this->key(self::LOCK)->value, '/input/dependencies'), array_last($check->inputs));
@@ -180,7 +181,7 @@ final class RunCheckJobDependenciesTest extends TestCase
     {
         $this->givenMainLocks(self::LOCK);
         $this->history->commit('Build work');
-        (void) $this->whenTheCheckRuns();
+        $this->whenTheCheckRuns();
         $this->ran = [];
         $this->history->commitFile('feature.txt', "more\n", 'More build work');
 
@@ -195,12 +196,12 @@ final class RunCheckJobDependenciesTest extends TestCase
     {
         $this->givenMainLocks(self::LOCK);
         $this->history->commit('Build work');
-        (void) $this->whenTheCheckRuns();
+        $this->whenTheCheckRuns();
         $this->ran = [];
         $changed = "{\"packages\": [{\"name\": \"psr/log\"}, {\"name\": \"psr/clock\"}], \"packages-dev\": []}\n";
         $this->history->commitFile('composer.lock', $changed, 'Lock another package');
 
-        (void) $this->whenTheCheckRuns();
+        $this->whenTheCheckRuns();
 
         self::assertSame(['probe', 'install', 'check'], $this->jobsThatRan());
         self::assertSame($changed, $this->lockFilesTheInstallSaw['composer.lock']);
@@ -213,7 +214,7 @@ final class RunCheckJobDependenciesTest extends TestCase
         $this->history->commit('Build work');
         $this->installResult = "failed 78\n";
 
-        (void) $this->whenTheCheckRuns();
+        $this->whenTheCheckRuns();
 
         self::assertSame(['probe', 'install', 'check'], $this->jobsThatRan());
         self::assertNotContains('--dependencies', $this->checkSpec()->command);
@@ -226,7 +227,7 @@ final class RunCheckJobDependenciesTest extends TestCase
         $this->history->commit('Build work');
         $this->installPlatform = '8.4.0';
 
-        (void) $this->whenTheCheckRuns();
+        $this->whenTheCheckRuns();
 
         self::assertNotContains('--dependencies', $this->checkSpec()->command);
         self::assertNull($this->checks->snapshots()->lease($this->key(self::LOCK)));
@@ -255,7 +256,7 @@ final class RunCheckJobDependenciesTest extends TestCase
             $this->ran = [];
             $this->probedPlatform = $platform;
 
-            (void) $this->whenTheCheckRuns();
+            $this->whenTheCheckRuns();
 
             self::assertSame(['probe', 'check'], $this->jobsThatRan(), (string) $platform);
         }
@@ -266,7 +267,7 @@ final class RunCheckJobDependenciesTest extends TestCase
         $this->givenMainLocks(self::LOCK);
         $this->history->commit('Build work');
 
-        (void) $this->whenTheCheckRuns('make check');
+        $this->whenTheCheckRuns('make check');
 
         self::assertSame(['check'], $this->jobsThatRan());
         self::assertSame(['task', '--', 'make check'], array_slice($this->checkSpec()->command, 6));
@@ -276,7 +277,7 @@ final class RunCheckJobDependenciesTest extends TestCase
     {
         $this->history->commitFile('composer.json', self::MANIFEST, 'Add a manifest alone');
 
-        (void) $this->whenTheCheckRuns();
+        $this->whenTheCheckRuns();
 
         self::assertSame(['check'], $this->jobsThatRan());
     }
@@ -290,7 +291,7 @@ final class RunCheckJobDependenciesTest extends TestCase
         $this->history->push('main');
         $this->history->checkout('task');
 
-        (void) $this->whenTheCheckRuns();
+        $this->whenTheCheckRuns();
 
         self::assertSame(['check'], $this->jobsThatRan());
     }
@@ -304,7 +305,7 @@ final class RunCheckJobDependenciesTest extends TestCase
         $this->history->push('main');
         $this->history->checkout('task');
 
-        (void) $this->whenTheCheckRuns();
+        $this->whenTheCheckRuns();
 
         self::assertSame(['probe', 'install', 'check'], $this->jobsThatRan());
         self::assertSame(self::LOCK, $this->lockFilesTheInstallSaw['composer.lock']);
@@ -315,7 +316,7 @@ final class RunCheckJobDependenciesTest extends TestCase
         $this->givenMainLocks(self::LOCK);
         $this->history->commit('Build work');
 
-        (void) $this->whenTheCheckRuns();
+        $this->whenTheCheckRuns();
 
         self::assertTrue($this->pinHeldDuringTheCheck);
         self::assertTrue($this->pinIsFree());
@@ -328,7 +329,7 @@ final class RunCheckJobDependenciesTest extends TestCase
         $this->checkThrows = true;
 
         try {
-            (void) $this->whenTheCheckRuns();
+            $this->whenTheCheckRuns();
             self::fail('The engine failure did not reach the caller.');
         } catch (DockerEngineFailed) {
             self::assertTrue($this->pinHeldDuringTheCheck);
@@ -345,7 +346,7 @@ final class RunCheckJobDependenciesTest extends TestCase
         $this->history->startBranch('task', 'main');
     }
 
-    private function whenTheCheckRuns(?string $command = null): CheckJobOutcome|\Intakt\Core\HandBack\Contract\RefusedHandBack
+    private function whenTheCheckRuns(?string $command = null): CheckJobOutcome|RefusedHandBack
     {
         $job = new CheckJob(new HandBack($this->history->mirror, 'task', $this->history->bundle('main..task'), false, new JobCredentials()), 'job-image', $command, new Paths());
 

@@ -19,6 +19,7 @@ use Intakt\Core\HandBack\Contract\RefusedHandBack;
 use Intakt\Core\HandBack\Domain\AttributionLines;
 use Intakt\Core\HandBack\Domain\BundleHeader;
 use Intakt\Core\HandBack\Domain\LostContent;
+use Intakt\Core\HandBack\Infrastructure\DependencySnapshots;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\BundleFile;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\BundleSecretScan;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\CheckHandBack;
@@ -26,7 +27,6 @@ use Intakt\Core\HandBack\UseCase\CheckHandBack\GivenHistory;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\IncomingObjects;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\RepositoryGit;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\StrippedCommits;
-use Intakt\Core\HandBack\Infrastructure\DependencySnapshots;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\ChangedFile;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\CheckDependencies;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\CheckedLockFiles;
@@ -59,7 +59,6 @@ use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
-use Symfony\Component\Filesystem\Filesystem;
 
 #[CoversClass(RunCheckJobCommand::class)]
 #[CoversClass(RunCheckJobInput::class)]
@@ -107,8 +106,6 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(JobRefused::class)]
 final class RunCheckJobCommandTest extends TestCase
 {
-    private const string SCRIPT = __DIR__.'/../../../../../docker/job/check.sh';
-
     private BuildHistory $history;
 
     protected function setUp(): void
