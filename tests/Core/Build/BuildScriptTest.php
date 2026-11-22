@@ -225,7 +225,7 @@ final class BuildScriptTest extends TestCase
 
     public function testASessionKilledFromElsewhereWhoseChildOutlivesItIsNotCutWhenTheTermIsLate(): void
     {
-        // The test-only function delays the build's TERM until the watchdog's allowance has passed, which forces the order without repeated runs.
+        // Because the build's TERM is delayed by a test-only function until the watchdog's allowance has passed, the order is forced without repeated runs.
         $this->preamble = 'kill() { if [ "$2" = TERM ]; then sleep 3; fi; command kill "$@"; }';
         $this->givenTheCli(<<<'SH'
             sleep 30 &
@@ -1326,7 +1326,7 @@ final class BuildScriptTest extends TestCase
     private function whenTheBuildRuns(string $branch, string $model, int $allowance = 600): Process
     {
         $run = new Process(
-            ['/bin/sh', '-c', $this->preamble."\n".(string) file_get_contents(self::SCRIPT), 'intakt-build', $this->source ?? $this->history->work, $this->prompt, $branch, $model, '7', (string) $allowance, $this->gates, '1800'],
+            ['/bin/sh', '-c', $this->preamble."\n".file_get_contents(self::SCRIPT), 'intakt-build', $this->source ?? $this->history->work, $this->prompt, $branch, $model, '7', (string) $allowance, $this->gates, '1800'],
             $this->startFolder,
             $this->environment(),
             timeout: $this->timeout,
