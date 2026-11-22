@@ -82,6 +82,9 @@ final readonly class PushBranch implements BranchPush
             return $conflicts;
         }
 
+        // Before push_intended and git push, because a push moves the head of every open pull request of the branch, also of one another account opened.
+        $this->changes->refuseForeignChange($this->proposedChange($request, $main));
+
         return $this->pushOnce($request, $head, $remoteTip);
     }
 
@@ -162,9 +165,14 @@ final readonly class PushBranch implements BranchPush
         $this->records->intendChange($request, $head);
 
         // The forge looks for an open pull request of the branch first, so a crash after the pull request was opened and before it was recorded opens no second one, and a corrected text of the same commits updates the open one.
-        $opened = $this->changes->openOrUpdate(new ProposedChange($request->project, $request->branch, substr($main, strlen(self::BRANCHES)), $request->text));
+        $opened = $this->changes->openOrUpdate($this->proposedChange($request, $main));
         $this->records->open($request, $head, $opened);
 
         return $opened->id;
+    }
+
+    private function proposedChange(BranchPushRequest $request, string $main): ProposedChange
+    {
+        return new ProposedChange($request->project, $request->branch, substr($main, strlen(self::BRANCHES)), $request->text);
     }
 }
