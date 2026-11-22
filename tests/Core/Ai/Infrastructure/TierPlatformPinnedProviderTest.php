@@ -72,6 +72,8 @@ final class TierPlatformPinnedProviderTest extends TestCase
 
     private MockClock $clock;
 
+    private ?LoggerInterface $logger = null;
+
     private PinnedProviderCooldownWindows $pins;
 
     private AccountWindowsOnAClock $accounts;
@@ -191,7 +193,8 @@ final class TierPlatformPinnedProviderTest extends TestCase
             }
         };
 
-        $answering = $this->tiers($this->router(MockPlatformFactory::createPlatform('first')), [self::OTHER_MODEL], logger: $logger)->answering('demo', Tier::Strong);
+        $this->logger = $logger;
+        $answering = $this->tiers($this->router(MockPlatformFactory::createPlatform('first')), [self::OTHER_MODEL])->answering('demo', Tier::Strong);
 
         self::assertSame(['owner/other:free-router', ['Provider {own} is out, so the review goes to the substitute {substitute}.']], [$answering->model, $logger->messages]);
     }
@@ -237,7 +240,7 @@ final class TierPlatformPinnedProviderTest extends TestCase
      * @param list<array{provider: string, model: non-empty-string}> $substitutes
      * @param (Closure(): PlatformInterface)|null                    $built
      */
-    private function tiers(AccountFailoverPlatform $router, array $substitutes, ?Closure $built = null, ?LoggerInterface $logger = null): TierPlatform
+    private function tiers(AccountFailoverPlatform $router, array $substitutes, ?Closure $built = null): TierPlatform
     {
         $strong = ['provider' => self::ROUTER->value, 'model' => self::PINNED];
         if ([] !== $substitutes) {
@@ -250,7 +253,7 @@ final class TierPlatformPinnedProviderTest extends TestCase
             Provider::Anthropic->value => static fn (): PlatformInterface => $substitute,
         ]);
 
-        return new TierPlatform(new ConfiguredTierResolver(['demo' => ['tiers' => ['strong' => $strong]]], []), $platforms, $this->accounts, $logger ?? new NullLogger());
+        return new TierPlatform(new ConfiguredTierResolver(['demo' => ['tiers' => ['strong' => $strong]]], []), $platforms, $this->accounts, $this->logger ?? new NullLogger());
     }
 
     private function pin(): PinnedProvider

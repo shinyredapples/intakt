@@ -298,7 +298,9 @@ final class DemoReviewCommandTest extends TestCase
     {
         $models = [];
         $http = new MockHttpClient(static function (string $method, string $url, array $options) use (&$models): MockResponse {
+            self::assertIsString($options['body']);
             $request = json_decode($options['body'], true, flags: JSON_THROW_ON_ERROR);
+            self::assertIsArray($request);
             $models[] = $request['model'];
 
             if (self::KIMI === $request['model']) {
