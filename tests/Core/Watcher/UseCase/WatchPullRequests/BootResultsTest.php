@@ -765,7 +765,7 @@ final class BootResultsTest extends KernelTestCase
         $ledger = self::createStub(Ledger::class);
         $ledger->method('append')->willReturnCallback($this->ledger->append(...));
         $ledger->method('readOfKindsMentioning')->willReturnCallback(function (array $kinds, array $texts) use ($results): RecordedEvents {
-            $before = $this->ledger->readOfKindsMentioning($kinds, array_values(array_filter($texts, is_string(...))));
+            $before = $this->ledger->readOfKindsMentioning(array_values(array_filter($kinds, static fn (mixed $kind): bool => $kind instanceof LedgerEventKind)), array_values(array_filter($texts, is_string(...))));
             // Run here, because only a hit between this worker's read of the board and its append forces the order of the race.
             $results->ofMain($this->key('b', 'tools-1'), $this->source());
 
