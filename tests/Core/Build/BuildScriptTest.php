@@ -242,8 +242,7 @@ final class BuildScriptTest extends TestCase
 
     public function testASessionLeaderKilledFromElsewhereAndNotYetReapedIsNotTakenForACutWhenItsChildOutlivesIt(): void
     {
-        // The CLI stops the build script so it cannot reap the leader, kills the leader, and a helper in a session of its own resumes the script once the watchdog has decided,
-        // that is once the leader and the watchdog, the script's only children, are both zombies, which forces the zombie order however late the watchdog runs.
+        // The CLI stops the build script so it cannot reap the leader, kills the leader, and a helper resumes the script only once the leader and the watchdog, the script's only children, are both zombies, because then the watchdog has decided, which forces the zombie order however late it runs.
         $this->givenTheCli(<<<'SH'
             parent=$PPID
             sleep 30 &
