@@ -55,7 +55,7 @@ final class PushRemoteCheckTest extends TestCase
 
     public function testTheRefusalNamesTheRemoteItRefuses(): void
     {
-        self::assertSame('the remote "https://github.com/acme/beta.git" is not the configured GitHub repository "acme/alpha" of project "alpha"; pass its https://github.com/acme/alpha URL',$this->check('acme/alpha')->failureOf($this->request('https://github.com/acme/beta.git')));
+        self::assertSame('the remote "https://github.com/acme/beta.git" is not the configured GitHub repository "acme/alpha" of project "alpha"; pass its https://github.com/acme/alpha URL', $this->check('acme/alpha')->failureOf($this->request('https://github.com/acme/beta.git')));
     }
 
     public function testTheRefusalShowsTheRemoteWithoutItsCredentialsQueryOrFragment(): void
