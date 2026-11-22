@@ -1,6 +1,6 @@
 # Measured: the timed run and the review bench
 
-The figures the [README](../README.md#measured) sums up, with how each was measured. The dashboard's **Trends** page reads its bench headline from the review bench table below (see [the Trends page](user/README.md#the-trends-page)), so the table keeps its shape: the `Defects found` and `False alarms` columns, a `Panel` row, one `Date of the run:` line and one `Each change ran N times.` sentence.
+The figures the [README](../README.md#measured) sums up, with how each was measured. The dashboard's **Trends** page reads its bench headline from the review bench table below (see [the Trends page](user/dashboard.md#the-trends-page)), so the table keeps its shape: the `Defects found` and `False alarms` columns, a `Panel` row, one `Date of the run:` line and one `Each change ran N times.` sentence.
 
 ## Timed run
 
