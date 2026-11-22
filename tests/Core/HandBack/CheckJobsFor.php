@@ -75,7 +75,7 @@ final readonly class CheckJobsFor
         );
     }
 
-    // A new factory on the same folder each time, as two orchestrator processes share one lock folder.
+    // A new factory on the same folder each time, because two orchestrator processes share one lock folder and not one factory.
     public function locks(): LockFactory
     {
         return new LockFactory(new FlockStore($this->folder.'/locks'));

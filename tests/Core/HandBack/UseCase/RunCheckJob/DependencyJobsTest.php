@@ -177,7 +177,7 @@ final class DependencyJobsTest extends TestCase
         return new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput(['install-result' => "installed\n", 'platform' => self::PLATFORM]));
     }
 
-    // A separate service on the same folders and lock folder, as a second orchestrator process has.
+    // A separate service on the same folders and lock folder, because a second orchestrator process shares only those.
     private function jobsWith(JobRunner $runner): DependencyJobs
     {
         $gate = new PhpGate();

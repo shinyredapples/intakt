@@ -20,8 +20,9 @@ final readonly class CheckSnapshot
     ) {
     }
 
+    // In pairs, path then blob, because docker/job/check.sh reads them so up to its --.
     /**
-     * @return list<string> each lock file's path followed by its blob, as docker/job/check.sh reads them
+     * @return list<string>
      */
     public function lockFileArguments(): array
     {
