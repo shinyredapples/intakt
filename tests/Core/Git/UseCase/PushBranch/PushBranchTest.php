@@ -25,8 +25,10 @@ use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\ChangeText;
+use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
 use Intakt\Plugin\Forge\Contract\OpenedChange;
 use Intakt\Plugin\Forge\Contract\Opening;
+use Intakt\Plugin\Forge\Contract\ProposedChange;
 use Intakt\Tests\Core\Git\TemporaryRepository;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -49,6 +51,8 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(ChangeText::class)]
 #[UsesClass(ChangeId::class)]
 #[UsesClass(OpenedChange::class)]
+#[UsesClass(ProposedChange::class)]
+#[UsesClass(ForgeWriteFailed::class)]
 #[UsesClass(LedgerEvent::class)]
 #[UsesClass(AppendResult::class)]
 #[UsesClass(RecordedEvent::class)]
@@ -169,6 +173,47 @@ final class PushBranchTest extends TestCase
         $this->expectException(BranchNotPushed::class);
 
         (void) $this->scenario->push()->push($this->scenario->request($this->scenario->repository->objectAt('main')));
+    }
+
+    public function testTheForeignChangeCheckRunsBeforeAnythingIsRecordedOrPushed(): void
+    {
+        $atTheCheck = null;
+        $this->scenario->changes->checking = function () use (&$atTheCheck): void {
+            $atTheCheck = [$this->scenario->ledger->kinds(), $this->scenario->remoteTip()];
+        };
+
+        (void) $this->scenario->push()->push($this->scenario->request());
+
+        self::assertSame([[], null], $atTheCheck);
+    }
+
+    public function testABranchWithAForeignOpenPullRequestIsNeitherRecordedNorPushed(): void
+    {
+        $this->scenario->changes->checking = static function (): never {
+            throw new ForgeWriteFailed('The branch has an open pull request that another account opened.');
+        };
+
+        try {
+            (void) $this->scenario->push()->push($this->scenario->request());
+            self::fail('A branch with a foreign open pull request must not be pushed.');
+        } catch (ForgeWriteFailed) {
+        }
+
+        self::assertSame([], $this->scenario->ledger->kinds());
+        self::assertNull($this->scenario->remoteTip());
+        self::assertSame(0, $this->scenario->changes->calls);
+    }
+
+    public function testTheForeignChangeCheckNamesTheProjectBranchAndMain(): void
+    {
+        $checked = null;
+        $this->scenario->changes->checking = static function (ProposedChange $change) use (&$checked): void {
+            $checked = [$change->project, $change->branch, $change->base];
+        };
+
+        (void) $this->scenario->push()->push($this->scenario->request());
+
+        self::assertSame(['widgets', PushScenario::BRANCH, 'main'], $checked);
     }
 
     public function testTheIntendedIdIsRecordedBeforeThePushAndIsTheOneThePushProduces(): void

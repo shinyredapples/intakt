@@ -8,6 +8,7 @@ use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Review\Contract\ChangeDescription;
+use Intakt\Core\Review\Contract\Labels;
 use Intakt\Core\Review\Contract\PanelConfigurationFailure;
 use Intakt\Core\Review\Contract\QuorumPolicy;
 use InvalidArgumentException;
@@ -117,7 +118,7 @@ final readonly class PanelConfiguration implements ConfigurationInterface
         try {
             // Rules only add reviewers, so a quorum that holds for the core panel and for the panel with every rule holds for any change.
             $panels->panelFor($project);
-            $panels->panelForChange($project, new ChangeDescription(0, new Paths(), [ChangeDescription::FULL_REVIEW_LABEL]));
+            $panels->panelForChange($project, new ChangeDescription(0, new Paths(), new Labels(ChangeDescription::FULL_REVIEW_LABEL)));
         } catch (PanelConfigurationFailure $failure) {
             throw new InvalidArgumentException(sprintf('The panel of project "%s" is unusable: %s', $project, $failure->getMessage()), 0, $failure);
         }

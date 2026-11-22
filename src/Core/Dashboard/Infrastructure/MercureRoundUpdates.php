@@ -207,7 +207,10 @@ final readonly class MercureRoundUpdates implements RoundUpdates
 
     private function publishState(Uuid $round, RoundProgress $progress): void
     {
-        $this->publish($round, RoundStream::RoundChanged, ['round' => $round->toRfc4122(), 'progress' => $progress, 'outcomes' => $this->outcomesOf($round)]);
+        $review = $this->reviewForLive($round);
+        $reviewed = $this->roundIn($review, $round->toRfc4122());
+
+        $this->publish($round, RoundStream::RoundChanged, ['round' => $round->toRfc4122(), 'progress' => $progress, 'outcomes' => $reviewed->outcomes ?? [], 'review' => $review]);
     }
 
     private function publishJudgedState(Uuid $round, RoundProgress $progress): void
@@ -233,25 +236,25 @@ final readonly class MercureRoundUpdates implements RoundUpdates
         return true === $this->roundIn($review, $round->toRfc4122())?->isJudged() ? $review : null;
     }
 
-    // Read as the page reads it, because a reviewer placed by a finish must show the role, model, outcome and findings a reload shows.
+    // Read as the page reads it, because a reviewer placed by a finish must show the role, model, outcome and findings a reload shows, and a failed judging must hide the path.
+    private function reviewForLive(Uuid $round): ?Review
+    {
+        try {
+            return $this->pages->reviewOf($round->toRfc4122());
+            // Boundary: logs a failed read and returns null, because the progress must still go out when its reviewers cannot be named.
+        } catch (Throwable $failure) {
+            $this->logger->warning('The round was not read for its live reviewer rows.', ['round' => $round->toRfc4122(), 'exception' => $failure]);
+
+            return null;
+        }
+    }
+
     /**
      * @return list<ReviewerOutcome>
      */
     private function outcomesOf(Uuid $round): array
     {
-        try {
-            return $this->roundOf($round->toRfc4122())->outcomes ?? [];
-            // Boundary: logs a failed read and returns no rows, because the progress must still go out when its reviewers cannot be named.
-        } catch (Throwable $failure) {
-            $this->logger->warning('The round was not read for its live reviewer rows.', ['round' => $round->toRfc4122(), 'exception' => $failure]);
-
-            return [];
-        }
-    }
-
-    private function roundOf(string $id): ?ReviewedRound
-    {
-        return $this->roundIn($this->pages->reviewOf($id), $id);
+        return $this->roundIn($this->reviewForLive($round), $round->toRfc4122())->outcomes ?? [];
     }
 
     private function roundIn(?Review $review, string $id): ?ReviewedRound

@@ -157,7 +157,7 @@ final class SharedRateLimitTest extends KernelTestCase
      */
     private function rolesNamedIn(ChangeReview $review): array
     {
-        $roles = array_map(static fn (string $reason): string => explode(' ', $reason)[0], $review->reasons);
+        $roles = array_map(static fn (string $reason): string => explode(' ', $reason)[0], [...$review->reasons]);
         sort($roles);
 
         return $roles;

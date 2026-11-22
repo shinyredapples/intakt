@@ -52,19 +52,16 @@ final readonly class Verdict
     }
 
     // Only a reviewer's answer can claim one, because Intakt's failure verdicts carry these ids by right and a claimed one would make a counted vote whose findings the ledger drops.
-    /**
-     * @return list<string>
-     */
     #[Ignore]
-    public function claimedFailureIds(): array
+    public function claimedFailureIds(): FindingIds
     {
         if (VerdictOrigin::Intakt === $this->origin) {
-            return [];
+            return new FindingIds();
         }
 
         $ids = array_map(static fn (Finding $finding): string => $finding->id, $this->findings);
 
-        return array_values(array_unique(array_intersect($ids, self::FAILED_REVIEWS)));
+        return new FindingIds(...array_unique(array_intersect($ids, self::FAILED_REVIEWS)));
     }
 
     // A reviewer's own blocked that names findings asks for changes, because every view and the quorum read the stored decision; Intakt's failure verdicts stay blocked. Apply it only to a fresh verdict, never to a stored one, because a stored verdict reads back with origin Reviewer and a stored failure verdict would turn into changes.

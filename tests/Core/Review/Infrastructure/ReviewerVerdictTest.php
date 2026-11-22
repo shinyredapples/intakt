@@ -14,6 +14,7 @@ use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\FencedText;
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\FindingIds;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\PromptAssembly;
 use Intakt\Core\Review\Contract\PromptCut;
@@ -103,6 +104,7 @@ use Symfony\Component\Uid\UuidV7;
 #[UsesClass(ChangeUnderReview::class)]
 #[UsesClass(Checkout::class)]
 #[UsesClass(Verdict::class)]
+#[UsesClass(FindingIds::class)]
 #[UsesClass(Finding::class)]
 #[UsesClass(ReadAnswer::class)]
 #[UsesClass(ReadFinding::class)]
