@@ -86,7 +86,7 @@ final class DashboardSecondStartJourneyTest extends JourneyTestCase
         $round = substr($review, strlen('/reviews/'));
         $this->liveRoundDriver()->stepUntilEnded($round);
 
-        self::assertStringContainsString(self::ENDED_TEXT, $this->visit($review)->filter('#round-'.$round.'-state')->text());
+        self::assertStringContainsString(self::ENDED_TEXT, $this->visit($review.'/record')->filter('#round-'.$round.'-state')->text());
     }
 
     private function pressTheStartOfRoundTwo(KernelBrowser $dashboard, string $review): Form
@@ -131,10 +131,10 @@ final class DashboardSecondStartJourneyTest extends JourneyTestCase
         self::assertSame('Start round 3', $page->filter('form.start-review button')->text());
     }
 
-    // Counted on the instance's own server, so the rounds are the ones its database holds.
+    // Counted on the instance's own server, so the rounds are the ones its database holds; in the Full record, which lists every pass.
     private function roundsOn(string $review): int
     {
-        $ids = $this->visit($review)->filter('[id^="round-"]')->each(static fn (Crawler $part): string => (string) $part->attr('id'));
+        $ids = $this->visit($review.'/record')->filter('[id^="round-"]')->each(static fn (Crawler $part): string => (string) $part->attr('id'));
 
         return count(array_filter($ids, static fn (string $id): bool => 1 === preg_match(self::ROUND_BLOCK, $id)));
     }

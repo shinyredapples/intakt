@@ -25,6 +25,7 @@ Guides that explain Intakt without assuming you know how it is built. Each one d
 | [Writing a plugin](writing-a-plugin.md) | adding a forge, an AI company or a notifier |
 | [Testing a new check](testing-a-new-check.md) | how a rule of Intakt's own checks is tested, and switched on before the code is clean |
 | [Checking the whole product](checking-the-whole-product.md) | what the journey checks cover and how to run one |
+| [The journey page](the-journey-page.md) | how the page about Intakt's own build is kept up to date, its charts and its kept merge count |
 | [A demo walkthrough](demo-walkthrough.md) | a guided first run with the sample project, and recording a review to play it back |
 | [The review bench](review-bench.md) | how well the reviewers find mistakes, and what measuring it costs |
 | [Looking inside a development install](looking-inside-a-development-install.md) | reading what a request did from its profile, in a development install only |

@@ -12,6 +12,18 @@ The sample project that comes with Intakt holds eight small changes for the benc
 
 A reviewer that failed for a reason that has nothing to do with it (the AI company could not answer, or a tool broke) is shown with that reason, and its misses are not held against it.
 
+```mermaid
+flowchart LR
+  base[The base: the sample project as it was] --> change[A bench change on top,<br/>with its planted mistakes, or none]
+  change --> panel[The review panel:<br/>each reviewer reads the change on its own]
+  panel --> judge[When they found something, the judge<br/>merges it into one list of what to fix]
+  panel --> score[Intakt compares each reviewer's findings<br/>with the list of planted mistakes]
+  judge --> report[The figures: caught, missed,<br/>false alarms, tokens and time]
+  score --> report
+```
+
+Each bench change is a pair: the **base**, the sample project before the change, and the **change** itself, the edit a pull request would bring. The review panel reads the change exactly as it would read a real pull request. The judge only sorts what the reviewers found; the score comes from comparing each reviewer's own findings with the planted mistakes, so every reviewer is measured on its own.
+
 ## Both commands call your paid models
 
 Each review of a bench change is a real review by your project's review panel: every reviewer reads the change once, and the judge (the step that merges the reviewers' findings into one list and sorts the small ones, see the [glossary](glossary.md)) is asked when the reviewers found something. Those calls are billed to your keys or token, like any review. That is why the bench never runs by itself: nothing in Intakt's checks or in CI starts it, only you do. Start Intakt's workers first, as for any review.
@@ -39,7 +51,21 @@ flowchart TD
   p --> w[Write the result file]
 ```
 
-## What the report and the result file hold
+## Running one bench change
+
+1. Start Intakt's workers, as for any review: `php bin/console messenger:consume async` (the container already runs them).
+2. Pick a change: each folder under `fixtures/sample-repository/bench/` is one, for example `free-shipping`.
+3. Run `php bin/console intakt:bench:review free-shipping --project=<project>`, with the project whose review panel you want to measure.
+4. Read what it prints for each reviewer: the planted mistakes it caught and missed, its false alarms, its tokens and time, and then the judge's list of what to fix.
+
+## A miss or a harness failure?
+
+Two kinds of bad result look alike at first, and they mean very different things:
+
+- **A reviewer miss**: the reviewer finished its review, but did not report a planted mistake. That counts against the reviewer: it is what the bench is there to find. In the full report a miss has the cause `reviewer`, or `bench` when the bench's own expectation cannot hold, which points at the bench and not at the model.
+- **A harness failure**: the reviewer never finished, because something around it broke, for example the AI company did not answer or a tool failed. The run then says nothing about how well the reviewer reads code. It is shown with its reason and left out of the caught, missed, false alarm and agreement counts (in the full report's totals its tokens still count).
+
+So when a reviewer looks bad, read the causes first: many harness failures call for a look at your accounts or setup, not at the reviewer.
 
 The report starts with what went wrong and why: every missed mistake (the reviewer missed it, or the bench's own expectation cannot hold), every false alarm, and every run where a reviewer failed. Then come the figures for each run, whether the repeats of a change agreed, and the totals for each reviewer and model: mistakes found out of those planted, false alarms, and tokens.
 

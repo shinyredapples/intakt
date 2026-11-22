@@ -294,7 +294,7 @@ timeline
         11-10 : CI moves to Ubicloud runners
         11-11 : v0.1.0, release train twice a day, test instance follows each tag
         11-12 : M2 Panel and rounds done : v0.2.0 and v0.3.0 : 73 counted merges in one day : Second review worker, CI run becomes the build's check
-        11-13 : Build slots 4 and 5, third review worker, CPU weights : Older work gains priority with age : Backlog cut, 70 issues closed as not planned, 84 parked : First clean-machine run of the judged path finds four defects : Trials of the claude_code and Codex reviewers : Cooldown exception for Symfony 8.2.0-BETA2 (the upgrade followed in #1960)
+        11-13 : Build slots 4 and 5, third review worker, CPU weights : Older work gains priority with age : Backlog cut, 70 issues closed as not planned, 84 parked : First clean-machine run of the judged path finds four defects : Trials of the claude_code and Codex reviewers : Cooldown exception for Symfony 8.2.0-BETA2 (installed on 11-15 in #1960)
         11-14 : Three fixes sent upstream already in the beta : Review bench repository : Review figures labeled measured, counted or estimated
     section Deadline
         11-21 : Demo (planned)
@@ -372,8 +372,8 @@ The week before the deadline:
   the reviewer has read the change through the review server.
 - **11-13, Symfony 8.2.0-BETA2.** The beta came out that day, and the owner allowed a one-time exception to the
   3-day release cooldown for `symfony/*` at 8.2.0-BETA2 ([#1842](https://github.com/shinyredapples/intakt/issues/1842),
-  [#1900](https://github.com/shinyredapples/intakt/issues/1900)). The move itself followed in
-  [#1960](https://github.com/shinyredapples/intakt/issues/1960): the lock file now holds Symfony 8.2.0-BETA2.
+  [#1900](https://github.com/shinyredapples/intakt/issues/1900)). The move itself was installed on 11-15, in
+  [#1960](https://github.com/shinyredapples/intakt/issues/1960): since then the lock file holds Symfony 8.2.0-BETA2.
   Three fixes Intakt sent upstream are in the beta, so Intakt now runs them
   (Config: a NaN value skips validation, [symfony/symfony#67911](https://github.com/symfony/symfony/pull/67911);
   Messenger: an early SIGTERM is ignored, [symfony/symfony#67912](https://github.com/symfony/symfony/pull/67912);
