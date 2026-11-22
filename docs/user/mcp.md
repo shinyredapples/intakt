@@ -8,7 +8,7 @@ The server is served over HTTP at `/mcp/owner` by the same web application as th
 
 With Claude Code: `claude mcp add --transport http intakt http://localhost:8000/mcp/owner`.
 
-The repository root carries a `.mcp.json` for the docker compose demo at `http://localhost:7781/mcp/owner`: run `export INTAKT_MCP_TOKEN=<token from the first-run page>` (step 4, or the line `intakt:sample:show` prints), then start `claude` in the clone and approve the `intakt` server. The file reads the token from that variable and never holds it.
+The repository root carries a `.mcp.json` for the docker compose demo at `http://localhost:7781/mcp/owner`: run `export INTAKT_MCP_TOKEN=<token from the line intakt:sample:show prints>`, then start `claude` in the clone and approve the `intakt` server. The file reads the token from that variable and never holds it.
 
 ## The review server
 

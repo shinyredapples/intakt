@@ -27,7 +27,7 @@ final class FirstRunWithoutAKeyJourneyTest extends JourneyTestCase
         return 'first run without a key';
     }
 
-    public function testADemoInstallWithoutAKeyOpensOnTheFirstRunPageWithItsTwoChoices(): void
+    public function testADemoInstallWithoutAKeyOpensOnTheFirstRunPageWithTheRecordedReviewOffer(): void
     {
         $this->step('create the database', $this->createTheDatabase(...));
         $this->step('start the demo without a key', $this->startTheDemoWithoutAKey(...));
