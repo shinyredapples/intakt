@@ -43,7 +43,6 @@ namespace Intakt\Tests\Core\HandBack\Infrastructure {
     use Symfony\Component\Filesystem\Filesystem;
     use Symfony\Component\Lock\LockFactory;
     use Symfony\Component\Lock\Store\FlockStore;
-    use UnexpectedValueException;
 
     #[CoversClass(DependencySnapshots::class)]
     #[CoversClass(DependencySnapshotLease::class)]
@@ -107,7 +106,7 @@ namespace Intakt\Tests\Core\HandBack\Infrastructure {
             self::assertSame(0o444, fileperms($snapshot.'/vendor/autoload.php') & 0o777);
         }
 
-        public function testAWriteIntoASnapshotOrTheStoreFailsForItsOwnerAndOthers(): void
+        public function testItsOwnerCannotChangeOrAddAnEntryInsideASnapshot(): void
         {
             if (0 === posix_geteuid()) {
                 self::markTestSkipped('root can write through any mode');
@@ -155,6 +154,66 @@ namespace Intakt\Tests\Core\HandBack\Infrastructure {
 
                 new Filesystem()->remove($install);
             }
+        }
+
+        public function testALinkThatClimbsOutThroughAnotherLinkRefusesTheSave(): void
+        {
+            $install = $this->install('a');
+            new Filesystem()->mkdir($install.'/vendor/a/b');
+            new Filesystem()->symlink('../..', $install.'/vendor/a/b/up');
+            new Filesystem()->symlink('a/b/up/../..', $install.'/vendor/esc');
+
+            $this->expectException(IOException::class);
+
+            try {
+                $this->storeKeeping(10)->save($this->key('a'), $install);
+            } finally {
+                self::assertSame([], $this->snapshots());
+            }
+        }
+
+        public function testALinkThatStepsUpFromALinkToTheInstallRootRefusesTheSave(): void
+        {
+            $install = $this->install('a');
+            new Filesystem()->dumpFile(dirname($install).'/sentinel', 'outside');
+            new Filesystem()->symlink('.', $install.'/alias');
+            new Filesystem()->symlink('alias/../sentinel', $install.'/lookup');
+
+            $this->expectException(IOException::class);
+
+            try {
+                $this->storeKeeping(10)->save($this->key('a'), $install);
+            } finally {
+                self::assertSame([], $this->snapshots());
+            }
+        }
+
+        public function testADanglingLinkRefusesTheSave(): void
+        {
+            $install = $this->install('a');
+            new Filesystem()->symlink('missing.php', $install.'/vendor/dangling');
+
+            $this->expectException(IOException::class);
+
+            $this->storeKeeping(10)->save($this->key('a'), $install);
+        }
+
+        public function testALinkThroughAnotherLinkThatStaysInsideIsKeptAsItsResolvedPath(): void
+        {
+            $install = $this->install('a');
+            new Filesystem()->symlink('bin', $install.'/vendor/alias');
+            new Filesystem()->symlink('alias/../autoload.php', $install.'/vendor/through');
+            new Filesystem()->symlink('.', $install.'/root');
+            $store = $this->storeKeeping(10);
+            $store->save($this->key('a'), $install);
+            new Filesystem()->remove($install);
+
+            $lease = $store->lease($this->key('a'));
+
+            self::assertInstanceOf(DependencySnapshotLease::class, $lease);
+            self::assertSame('autoload.php', readlink($lease->folder.'/vendor/through'));
+            self::assertSame('a', file_get_contents($lease->folder.'/vendor/through'));
+            self::assertSame('.', readlink($lease->folder.'/root'));
         }
 
         public function testAFileExecutableByItsGroupOnlyStaysExecutableInTheSnapshot(): void
@@ -329,15 +388,17 @@ namespace Intakt\Tests\Core\HandBack\Infrastructure {
             self::assertSame([], $this->snapshots());
         }
 
-        public function testAUseOrderThatIsNoListOfNamesIsRefused(): void
+        public function testAUseOrderThatIsNoListOfNamesCountsAsNothingRecorded(): void
         {
             $store = $this->storeKeeping(10);
             $store->save($this->key('a'), $this->install('a'));
-            file_put_contents($this->store.'/'.DependencySnapshotUses::FILE, '{"a":1}');
 
-            $this->expectException(UnexpectedValueException::class);
+            foreach (['{"a":1}', '[1,2]', '"a"'] as $order) {
+                file_put_contents($this->store.'/'.DependencySnapshotUses::FILE, $order);
+                $store->save($this->key('b'), $this->install('b'));
+            }
 
-            $store->save($this->key('b'), $this->install('b'));
+            self::assertSame($this->names('a', 'b'), $this->snapshots());
         }
 
         // Called from the overrides, because only a call outside their namespace reaches the real function.

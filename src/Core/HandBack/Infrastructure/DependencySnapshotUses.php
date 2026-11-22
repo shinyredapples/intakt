@@ -7,7 +7,6 @@ namespace Intakt\Core\HandBack\Infrastructure;
 use JsonException;
 use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
-use UnexpectedValueException;
 
 // An order of use rather than times, because the least recently used bound needs only which snapshot was used last.
 final readonly class DependencySnapshotUses
@@ -29,28 +28,18 @@ final readonly class DependencySnapshotUses
             return [];
         }
 
+        // The order only steers which snapshot goes first, so a damaged file or one that is no list of names counts as nothing recorded.
         try {
             $order = json_decode($this->filesystem->readFile($file), flags: JSON_THROW_ON_ERROR);
         } catch (JsonException) {
-            // The order only steers which snapshot goes first, so a damaged file counts as nothing recorded.
             return [];
         }
 
-        if (!is_array($order) || !array_is_list($order)) {
-            throw new UnexpectedValueException(sprintf('the use order %s is not a list of snapshot names', self::FILE));
+        if (!is_array($order) || !array_is_list($order) || $order !== array_filter($order, is_string(...))) {
+            return [];
         }
 
-        $names = [];
-
-        foreach ($order as $name) {
-            if (!is_string($name)) {
-                throw new UnexpectedValueException(sprintf('the use order %s is not a list of snapshot names', self::FILE));
-            }
-
-            $names[] = $name;
-        }
-
-        return $names;
+        return $order;
     }
 
     /**

@@ -18,85 +18,53 @@ final readonly class DependencySnapshotLinks
     {
     }
 
-    // A link into the install is rebased to a relative one; a link out of it cannot be kept and refuses the save.
+    // Each link is resolved by the kernel in the install and rewritten to that resolved path, because a target read as text can climb out through another link.
     public function keepInside(string $copy, string $install): void
     {
-        $roots = array_values(array_unique(array_filter([rtrim($install, '/'), (string) realpath($install)], static fn (string $root): bool => '' !== $root)));
+        $root = realpath($install);
+
+        if (false === $root) {
+            throw new IOException(sprintf('the install %s cannot be resolved', $install), path: $install);
+        }
 
         foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($copy, FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::SELF_FIRST) as $entry) {
             assert($entry instanceof SplFileInfo);
 
             if ($entry->isLink()) {
-                $this->keepLinkInside($entry, $copy, $roots);
+                $this->keepLinkInside($entry, substr($entry->getPathname(), strlen($copy) + 1), $root);
             }
         }
     }
 
-    /**
-     * @param list<string> $roots
-     */
-    private function keepLinkInside(SplFileInfo $link, string $copy, array $roots): void
+    private function keepLinkInside(SplFileInfo $link, string $own, string $root): void
     {
-        $target = $link->getLinkTarget();
-        $own = substr($link->getPathname(), strlen($copy) + 1);
-        $inside = str_starts_with($target, '/') ? $this->withinRoots($target, $roots) : $this->normalized(dirname($own).'/'.$target);
+        $resolved = realpath($root.'/'.$own);
 
-        if (null === $inside) {
-            throw new IOException(sprintf('the link %s points outside the install and cannot be kept in a snapshot', $own), path: $link->getPathname());
+        if (false === $resolved || ($resolved !== $root && !str_starts_with($resolved, $root.'/'))) {
+            throw new IOException(sprintf('the link %s points outside the install or nowhere and cannot be kept in a snapshot', $own), path: $link->getPathname());
         }
 
-        if (str_starts_with($target, '/')) {
+        $target = $this->relative(dirname($own), $resolved === $root ? '' : substr($resolved, strlen($root) + 1));
+
+        if ($target !== $link->getLinkTarget()) {
             $this->filesystem->remove($link->getPathname());
-            $this->filesystem->symlink($this->relative(dirname($own), $inside), $link->getPathname());
+            $this->filesystem->symlink($target, $link->getPathname());
         }
     }
 
-    /**
-     * @param list<string> $roots
-     */
-    private function withinRoots(string $target, array $roots): ?string
-    {
-        foreach ($roots as $root) {
-            if (str_starts_with($target, $root.'/')) {
-                return $this->normalized(substr($target, strlen($root) + 1));
-            }
-        }
-
-        return null;
-    }
-
-    // Null because a path that climbs above where it starts leaves the install, which the caller must refuse.
-    private function normalized(string $path): ?string
-    {
-        $parts = [];
-
-        foreach (array_filter(explode('/', $path), static fn (string $part): bool => '' !== $part && '.' !== $part) as $part) {
-            if ('..' !== $part) {
-                $parts[] = $part;
-
-                continue;
-            }
-
-            if ([] === $parts) {
-                return null;
-            }
-
-            array_pop($parts);
-        }
-
-        return implode('/', $parts);
-    }
-
+    // Both paths hold only real folders, so climbing with .. from the link's folder means the same in the install and the snapshot.
     private function relative(string $folder, string $path): string
     {
         $from = '.' === $folder ? [] : explode('/', $folder);
-        $to = explode('/', $path);
+        $to = '' === $path ? [] : explode('/', $path);
 
-        while ([] !== $from && count($to) > 1 && $from[0] === $to[0]) {
+        while ([] !== $from && [] !== $to && $from[0] === $to[0]) {
             array_shift($from);
             array_shift($to);
         }
 
-        return implode('/', [...array_fill(0, count($from), '..'), ...$to]);
+        $parts = [...array_fill(0, count($from), '..'), ...$to];
+
+        return [] === $parts ? '.' : implode('/', $parts);
     }
 }
