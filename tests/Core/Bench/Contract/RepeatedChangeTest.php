@@ -89,6 +89,6 @@ final class RepeatedChangeTest extends TestCase
 
     private function benchRun(Decision $decision, RunVerdict $verdict): BenchReview
     {
-        return new BenchReview('free-shipping', $decision, [new BenchReviewerResult('role-1', Tier::Standard, $verdict, new RoundTokens(1, 100, 0, 0, 0, 10, 110), 1000, new ModelNames())], new ModelNames());
+        return new BenchReview('free-shipping', $decision, [new BenchReviewerResult('role-1', Tier::Standard, $verdict, new RoundTokens(1, 100, 0, 0, 0, 10, 110), 1000, new ModelNames())], []);
     }
 }
