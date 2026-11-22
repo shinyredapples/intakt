@@ -355,14 +355,34 @@ final class GitHubIssueReadsTest extends TestCase
         self::assertCount(100, $this->listedWithNextLink('<https://api.github.com/repositories/1/issues?page=%d>; title="a; rel=next"'));
     }
 
-    public function testANextRelationAnchoredToAnotherResourceEndsTheListing(): void
+    public function testANextRelationAnchoredToAnotherResourceFailsTheListing(): void
     {
-        self::assertCount(100, $this->listedWithNextLink('<https://api.github.com/repositories/1/issues?page=%d>; rel="next"; anchor="https://api.github.com/repositories/2/issues"'));
+        self::assertSame('GitHub answered a Link header this forge cannot read.', $this->failureWithNextLink('<https://api.github.com/repositories/1/issues?page=%d>; rel="next"; anchor="https://api.github.com/repositories/2/issues"')->getMessage());
     }
 
-    public function testANextRelationWithAnAnchorParameterInAnotherCaseEndsTheListing(): void
+    public function testANextRelationWithAnAbsoluteAnchorNamingTheRequestedPageFailsTheListing(): void
     {
-        self::assertCount(100, $this->listedWithNextLink('<https://api.github.com/repositories/1/issues?page=%d>; ANCHOR=#other; rel=next'));
+        self::assertSame('GitHub answered a Link header this forge cannot read.', $this->failureWithNextLink('<https://api.github.com/repositories/1/issues?page=%d>; rel=next; anchor="https://api.github.com/repos/acme/widgets/issues?state=open&per_page=100&page=1"')->getMessage());
+    }
+
+    public function testANextRelationAnchoredToAQueryThatRepeatsAParameterFailsTheListing(): void
+    {
+        self::assertSame('GitHub answered a Link header this forge cannot read.', $this->failureWithNextLink('<https://api.github.com/repositories/1/issues?page=%d>; rel=next; anchor="?state=closed&state=open&per_page=100&page=1"')->getMessage());
+    }
+
+    public function testANextRelationWithAnAnchorParameterInAnotherCaseFailsTheListing(): void
+    {
+        self::assertSame('GitHub answered a Link header this forge cannot read.', $this->failureWithNextLink('<https://api.github.com/repositories/1/issues?page=%d>; ANCHOR=#other; rel=next')->getMessage());
+    }
+
+    public function testANextRelationAnchoredToTheRequestedPathAndQueryReadsTheNextPage(): void
+    {
+        self::assertCount(101, $this->listedWithNextLink('<https://api.github.com/repositories/1/issues?page=%d>; rel=next; anchor="/repos/acme/widgets/issues?state=open&per_page=100&page=1"'));
+    }
+
+    public function testANextRelationAnchoredToTheRequestedQueryInAnotherOrderReadsTheNextPage(): void
+    {
+        self::assertCount(101, $this->listedWithNextLink('<https://api.github.com/repositories/1/issues?page=%d>; rel=next; anchor="?page=1&state=open&per_page=100"'));
     }
 
     public function testANextRelationWithAnEmptyAnchorBelongsToTheCurrentPageAndReadsTheNextPage(): void
@@ -377,7 +397,7 @@ final class GitHubIssueReadsTest extends TestCase
 
     public function testANextRelationNextToAnAnchoredLinkStillReadsTheNextPage(): void
     {
-        self::assertCount(101, $this->listedWithNextLink('<https://api.github.com/repositories/2/issues>; rel="next"; anchor="#other", <https://api.github.com/repositories/1/issues?page=%d>; rel="next"'));
+        self::assertCount(101, $this->listedWithNextLink('<https://api.github.com/repositories/2/issues>; rel="prev"; anchor="https://api.github.com/repositories/2/issues", <https://api.github.com/repositories/1/issues?page=%d>; rel="next"'));
     }
 
     public function testALinkHeaderThisForgeCannotReadFailsTheListing(): void
@@ -610,6 +630,17 @@ final class GitHubIssueReadsTest extends TestCase
         $api->stable = true;
 
         return $api->reads()->listOpen('alpha', null)->issues();
+    }
+
+    private function failureWithNextLink(string $nextLink): ForgeReadFailed
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->page(1, 100), 2 => $this->page(101, 1)];
+        $api->namingNext = [1];
+        $api->nextLink = $nextLink;
+        $api->stable = true;
+
+        return $this->failureOf($api);
     }
 
     private function failureOf(RecordedIssueApi $api): ForgeReadFailed

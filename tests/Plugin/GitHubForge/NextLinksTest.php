@@ -13,30 +13,66 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(NextLinks::class)]
 final class NextLinksTest extends TestCase
 {
+    private const string TARGET = '/repos/a/b/issues?state=open&per_page=100&page=1';
+
     /**
-     * @return iterable<string, array{string, bool}>
+     * @return iterable<string, array{string}>
      */
-    public static function anchors(): iterable
+    public static function anchorsOfThisPage(): iterable
     {
-        yield 'empty reference' => ['""', true];
-        yield 'query of this request' => ['"?page=1"', true];
-        yield 'path and query of this request' => ['"/repos/a/b/issues?page=1"', true];
-        yield 'another query' => ['"?page=3"', false];
-        yield 'another path' => ['"/repos/a/c/issues?page=1"', false];
-        yield 'a fragment' => ['"#other"', false];
-        yield 'an absolute reference' => ['"https://api.github.com/repos/a/b/issues?page=1"', false];
+        yield 'empty reference' => ['""'];
+        yield 'query of this request' => ['"?state=open&per_page=100&page=1"'];
+        yield 'query of this request in another order' => ['"?page=1&state=open&per_page=100"'];
+        yield 'path and query of this request' => ['"/repos/a/b/issues?state=open&per_page=100&page=1"'];
     }
 
-    #[DataProvider('anchors')]
-    public function testAnAnchorCountsOnlyWhenItNamesTheRequestedPage(string $anchor, bool $expected): void
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function anchorsNotProvablyThisPage(): iterable
     {
-        self::assertSame($expected, new NextLinks()->namesNext(['<?page=2>; rel=next; anchor='.$anchor], '/repos/a/b/issues?page=1'));
+        yield 'another query' => ['"?state=open&per_page=100&page=3"'];
+        yield 'a repeated parameter' => ['"?state=closed&state=open&per_page=100&page=1"'];
+        yield 'another path' => ['"/repos/a/c/issues?state=open&per_page=100&page=1"'];
+        yield 'the path without its query' => ['"/repos/a/b/issues"'];
+        yield 'a fragment' => ['"#other"'];
+        yield 'this query with a fragment' => ['"?state=open&per_page=100&page=1#top"'];
+        yield 'a network-path reference' => ['"//api.github.com/repos/a/b/issues?state=open&per_page=100&page=1"'];
+        yield 'an absolute reference to another resource' => ['"https://api.github.com/repositories/2/issues"'];
+        yield 'an absolute reference naming this page' => ['"https://api.github.com/repos/a/b/issues?state=open&per_page=100&page=1"'];
+        yield 'an encoded query' => ['"?state%3Dopen&per_page=100&page=1"'];
+    }
+
+    #[DataProvider('anchorsOfThisPage')]
+    public function testANextRelationAnchoredToTheRequestedPageNamesTheNextPage(string $anchor): void
+    {
+        self::assertTrue(new NextLinks()->namesNext(['<?page=2>; rel=next; anchor='.$anchor], self::TARGET));
+    }
+
+    #[DataProvider('anchorsNotProvablyThisPage')]
+    public function testANextRelationWithAnAnchorNotProvablyTheRequestedPageFailsAsAnUnreadableLink(string $anchor): void
+    {
+        $this->expectExceptionObject(new ForgeReadFailed('GitHub answered a Link header this forge cannot read.'));
+
+        new NextLinks()->namesNext(['<?page=2>; rel=next; anchor='.$anchor], self::TARGET);
+    }
+
+    public function testAnAnchoredLinkWithoutANextRelationIsReadWhateverItsAnchor(): void
+    {
+        self::assertFalse(new NextLinks()->namesNext(['<https://api.github.com/repositories/2/issues>; rel=prev; anchor="https://api.github.com/repositories/2/issues"'], self::TARGET));
+    }
+
+    public function testAnAnchoredNextToAnotherResourceAfterAPlainNextStillFailsTheRead(): void
+    {
+        $this->expectException(ForgeReadFailed::class);
+
+        new NextLinks()->namesNext(['<?page=2>; rel=next', '<?page=9>; rel=next; anchor="#other"'], self::TARGET);
     }
 
     public function testAnAnchorWithoutAValueFailsAsAnUnreadableLink(): void
     {
         $this->expectException(ForgeReadFailed::class);
 
-        new NextLinks()->namesNext(['<?page=2>; rel=next; anchor'], '/repos/a/b/issues?page=1');
+        new NextLinks()->namesNext(['<?page=2>; rel=next; anchor'], self::TARGET);
     }
 }

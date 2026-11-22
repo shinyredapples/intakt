@@ -21,7 +21,10 @@ final readonly class NextLinks
      */
     public function namesNext(array $links, string $target): bool
     {
-        return array_any($links, fn (string $link): bool => in_array('next', $this->relationsOf($link, $target), true));
+        // Every link is read before the answer, because an unreadable link after a plain `next` must still fail the listing.
+        $relations = array_merge([], ...array_map(fn (string $link): array => $this->relationsOf($link, $target), $links));
+
+        return in_array('next', $relations, true);
     }
 
     // A `Link` this forge cannot read fails the listing, because taking it as naming no next page would end the listing early.
@@ -37,7 +40,7 @@ final readonly class NextLinks
             throw $this->unreadable();
         }
 
-        return array_merge(...array_map(fn (string $parameters): array => $this->relationsIn($parameters, $target), $values[1]));
+        return array_merge([], ...array_map(fn (string $parameters): array => $this->relationsIn($parameters, $target), $values[1]));
     }
 
     // Only the first `rel` of a link counts, relation types compare without case and a quoted-pair stands for its character, because RFC 8288 and RFC 9110 say so.
@@ -52,53 +55,57 @@ final readonly class NextLinks
             throw $this->unreadable();
         }
 
-        // An `anchor` that is not this request is another resource, because its relations then describe that resource and not the page GitHub served (RFC 8288 section 3.2).
-        if (array_any($found, fn (array $parameter): bool => 'anchor' === strtolower($parameter[1]) && !$this->namesThisRequest($parameter, $target))) {
-            return [];
-        }
-
         $rel = array_find($found, static fn (array $parameter): bool => 'rel' === strtolower($parameter[1]));
-        $relations = null === $rel ? '' : ($rel[3] ?? (string) preg_replace('/\\\\(.)/s', '$1', substr((string) $rel[2], 1, -1)));
-        $types = preg_split('/\s+/', strtolower($relations));
-
-        return array_values(array_filter(false === $types ? [] : $types, static fn (string $relation): bool => '' !== $relation));
-    }
-
-    /**
-     * @param array<int, ?string> $anchor
-     *
-     * @throws ForgeReadFailed
-     */
-    private function namesThisRequest(array $anchor, string $target): bool
-    {
+        $types = preg_split('/\s+/', strtolower(null === $rel ? '' : $this->valueOf($rel)));
+        $relations = array_values(array_filter(false === $types ? [] : $types, static fn (string $relation): bool => '' !== $relation));
+        $anchors = array_filter($found, static fn (array $parameter): bool => 'anchor' === strtolower($parameter[1]));
         // A value-less `anchor` is no reference at all (RFC 8288 requires one), so the header is unreadable.
-        if (null === $anchor[2] && null === $anchor[3]) {
+        if (array_any($anchors, static fn (array $anchor): bool => null === $anchor[2] && null === $anchor[3])) {
             throw $this->unreadable();
         }
 
-        $reference = $anchor[3] ?? (string) preg_replace('/\\\\(.)/s', '$1', substr((string) $anchor[2], 1, -1));
-        $request = parse_url($target);
-        $given = parse_url($reference);
-        // Only a reference of the same path and query counts, because a host, a relative path or a fragment may name another resource and ending the listing is the safe reading.
+        // An anchored `next` that is not provably this page fails, because RFC 8288 section 3.2 gives it to another resource, and dropping it could end the listing early.
+        if (in_array('next', $relations, true) && array_any($anchors, fn (array $anchor): bool => !$this->namesThisRequest($this->valueOf($anchor), $target))) {
+            throw $this->unreadable();
+        }
+
+        return $relations;
+    }
+
+    /**
+     * @param array<int, ?string> $parameter
+     */
+    private function valueOf(array $parameter): string
+    {
+        return $parameter[3] ?? (string) preg_replace('/\\\\(.)/s', '$1', substr((string) $parameter[2], 1, -1));
+    }
+
+    // Only the empty reference, or a relative one of the same path (or none) and the same raw query pairs, counts, because anything looser may name another resource.
+    private function namesThisRequest(string $reference, string $target): bool
+    {
         if ('' === $reference) {
             return true;
         }
 
-        if (false === $request || false === $given || isset($given['scheme']) || isset($given['host']) || isset($given['fragment'])) {
+        $request = parse_url($target);
+        $given = parse_url($reference);
+        if (false === $request || false === $given || str_contains($reference, '#') || [] !== array_diff(array_keys($given), ['path', 'query'])) {
             return false;
         }
 
-        $path = $given['path'] ?? ($request['path'] ?? '');
-        if (!str_starts_with($path, '/') || $path !== ($request['path'] ?? '')) {
-            return false;
-        }
+        return ($given['path'] ?? ($request['path'] ?? '')) === ($request['path'] ?? '') && $this->pairsOf($given['query'] ?? null) === $this->pairsOf($request['query'] ?? null);
+    }
 
-        parse_str($request['query'] ?? '', $wanted);
-        parse_str($given['query'] ?? '', $named);
-        ksort($wanted);
-        ksort($named);
+    /**
+     * @return list<string>
+     */
+    private function pairsOf(?string $query): array
+    {
+        // Raw pairs and not `parse_str`, because it keeps only the last of a repeated parameter and `state=closed&state=open` would read as `state=open`.
+        $pairs = null === $query ? [] : explode('&', $query);
+        sort($pairs);
 
-        return $wanted === $named;
+        return $pairs;
     }
 
     private function unreadable(): ForgeReadFailed
