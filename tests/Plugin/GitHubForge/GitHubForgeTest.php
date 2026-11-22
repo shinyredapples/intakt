@@ -289,7 +289,19 @@ final class GitHubForgeTest extends TestCase
         $file = $forge->fileAtHead($change, 'src/My Dir/Widget.php');
 
         self::assertSame(self::fixture('contents_widget.txt'), $file->content);
+        self::assertNull($file->binaryBytes);
         self::assertContains('GET '.self::API.'/contents/src/My%20Dir/Widget.php?ref='.self::HEAD, $this->requested);
+    }
+
+    public function testAFileWhoseAnswerHoldsANulByteIsNamedBinaryByItsSize(): void
+    {
+        $forge = $this->forge(static fn (string $url): ?ResponseInterface => str_contains($url, '/contents/') ? new MockResponse("\x89PNG\r\n\0 logo") : null);
+        $change = $forge->change(new ChangeId(self::PULL));
+
+        $file = $forge->fileAtHead($change, 'assets/logo.png');
+
+        self::assertSame(12, $file->binaryBytes);
+        self::assertSame('Binary file, not shown: 12 bytes', $file->content);
     }
 
     public function testItRefusesAFileMissingAtHeadAsFileNotFoundAtHead(): void
