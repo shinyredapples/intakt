@@ -41,7 +41,7 @@ if ('page' === $mode) {
         [LedgerEventKind::ReviewStarted, ['round' => '0195f3a0-0000-7000-8000-000000000001', 'project' => 'alpha', 'reviewers' => 2, 'change' => '42', 'number' => 2]],
         [LedgerEventKind::ReviewStarted, ['round' => '0195f3a0-0000-7000-8000-000000000002', 'project' => 'beta', 'reviewers' => 2, 'change' => '7', 'number' => 1]],
     ] as [$kind, $payload]) {
-        $ledger->append(new LedgerEvent($kind, json_encode($payload, JSON_THROW_ON_ERROR)));
+        (void) $ledger->append(new LedgerEvent($kind, json_encode($payload, JSON_THROW_ON_ERROR)));
     }
     $mode = 'end';
 }
