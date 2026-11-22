@@ -17,7 +17,7 @@ Along the way, building Intakt led to [12 fixes (11 pull requests) merged upstre
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/dashboard-review-dark.png">
-  <img src="docs/assets/dashboard-review.png" alt="The dashboard's review page for the sample change: the verdict card first, Changes requested with three things to fix, each with its priority and file and line, then what the change does and the tokens it took" width="760" height="475">
+  <img src="docs/assets/dashboard-review.png" alt="An earlier version of the dashboard's review page for the sample change: the verdict card first, Changes requested with three things to fix, each with its priority and file and line, then what the change does and the tokens it took" width="760" height="475">
 </picture>
 
 PHP 8.5, Symfony AI · [Status](#status): what works today and what is planned · [Guides](docs/guide/README.md) · [Showcase](docs/showcase/README.md) · [For judges](docs/judges.md) · [Hackathon](docs/hackathon.md) · [Releases](https://github.com/shinyredapples/intakt/releases)
