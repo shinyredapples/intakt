@@ -242,7 +242,9 @@ final class BuildScriptTest extends TestCase
 
     public function testASessionLeaderKilledFromElsewhereAndNotYetReapedIsNotTakenForACutWhenItsChildOutlivesIt(): void
     {
-        // The CLI stops the build script so it cannot reap the leader, kills the leader, and a helper resumes the script only once the leader and the watchdog, the script's only children, are both zombies, because then the watchdog has decided, which forces the zombie order however late it runs.
+        // The CLI stops the build script so it cannot reap the leader, and then kills the leader.
+        // A helper resumes the script only once the leader and the watchdog are both zombies, because then the watchdog has decided, which forces the zombie order however late it runs.
+        // The helper finds the script's children in the kernel's proc children file (/proc/<pid>/task/<pid>/children), so the test relies on a kernel that provides it.
         $this->givenTheCli(<<<'SH'
             parent=$PPID
             sleep 30 &
@@ -257,6 +259,28 @@ final class BuildScriptTest extends TestCase
         self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
         self::assertStringContainsString("claude exited with 137\n", $this->outputFile('build.log'));
         self::assertStringNotContainsString('cut after', $this->outputFile('build.log'));
+    }
+
+    public function testASessionLeaderThreadThatEndedWhileAnotherThreadStillRunsIsStillCutAtItsAllowance(): void
+    {
+        $python = new ExecutableFinder()->find('python3');
+        if (null === $python) {
+            self::markTestSkipped('python3 is not on the PATH, and the thread fixture needs it.');
+        }
+        // The leader thread ends on its own, so the kernel shows the leader in state Z while the other thread keeps the session running.
+        $this->givenTheCli('exec '.escapeshellarg($python).' -I -c '.escapeshellarg(<<<'PY'
+            import ctypes, os, threading, time
+            def finish():
+                time.sleep(10)
+                os._exit(0)
+            threading.Thread(target=finish).start()
+            ctypes.CDLL(None).pthread_exit(None)
+            PY));
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5', 1);
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertStringContainsString("claude cut after 1 seconds, its commits are kept\n", $this->outputFile('build.log'));
     }
 
     public function testASessionLeaderWhoseNameHoldsALineBreakAndAZombieStateIsStillCutAtItsAllowance(): void

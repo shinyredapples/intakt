@@ -95,7 +95,8 @@ session=$!
 # so a watchdog that wakes in between does not take a surviving child of that session for a cut. Without /proc the state cannot be read and the leader counts as alive.
 # The state is read from the State line of /proc status and not from /proc stat, because the builder can give the leader a name with a line break and a state of its own after it,
 # which status writes escaped on its Name line and stat writes as it is, ahead of the real state.
-setsid sh -c 'zombie() { while read -r key value; do [ "$key" = State: ] && case "$value" in Z*) return 0;; *) return 1;; esac; done < "/proc/$1/status"; return 1; }; trap '\''kill -s KILL 0'\'' TERM; sleep "$1" & wait "$!" && trap "" TERM && kill -0 "$2" && ! zombie "$2" && kill -s KILL -- "-$2"' watchdog "$allowance" "$session" > /dev/null 2>&1 &
+# A leader thread that ended while another thread of its process still runs shows state Z too, so the leader counts as a zombie only when its Threads line, which follows State, also says 1.
+setsid sh -c 'zombie() { z=; while read -r key value; do case "$key" in State:) case "$value" in Z*) z=1;; *) return 1;; esac;; Threads:) [ -n "$z" ] && [ "$value" = 1 ]; return;; esac; done < "/proc/$1/status"; return 1; }; trap '\''kill -s KILL 0'\'' TERM; sleep "$1" & wait "$!" && trap "" TERM && kill -0 "$2" && ! zombie "$2" && kill -s KILL -- "-$2"' watchdog "$allowance" "$session" > /dev/null 2>&1 &
 watchdog=$!
 wait "$session"
 status=$?
