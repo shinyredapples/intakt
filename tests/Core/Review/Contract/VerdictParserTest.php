@@ -30,6 +30,7 @@ use Symfony\AI\Platform\Result\ToolCall;
 use Symfony\AI\Platform\Result\ToolCallResult;
 use Symfony\AI\Platform\ResultConverterInterface;
 use Symfony\Component\Serializer\Encoder\JsonDecode;
+use Symfony\Component\Serializer\Encoder\JsonEncoder;
 use Symfony\Component\Serializer\Exception\ExceptionInterface;
 use Symfony\Component\Serializer\Normalizer\AbstractNormalizer;
 
@@ -139,7 +140,7 @@ final class VerdictParserTest extends KernelTestCase
         $output = '{"verdict":"approve","findings":[],"resolved":false,"follow_ups":[]}';
         $before = '';
         try {
-            self::getContainer()->get('serializer')->deserialize($output, Verdict::class, 'json', [
+            self::getContainer()->get('serializer')->deserialize($output, Verdict::class, JsonEncoder::FORMAT, [
                 AbstractNormalizer::ALLOW_EXTRA_ATTRIBUTES => false,
                 AbstractNormalizer::REQUIRE_ALL_PROPERTIES => true,
                 JsonDecode::ASSOCIATIVE => false,
@@ -149,7 +150,7 @@ final class VerdictParserTest extends KernelTestCase
         }
 
         $this->expectException(VerdictUnreadable::class);
-        $this->expectExceptionMessage($before);
+        $this->expectExceptionMessageMatches('/'.preg_quote($before, '/').'$/');
 
         $this->reviewer()->verdictFor($output);
     }
