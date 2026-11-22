@@ -7,6 +7,7 @@ namespace Intakt\Core\Review\UseCase\EscalateRecurringP1;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
+use Intakt\Core\Ledger\Contract\Mentions;
 use Intakt\Core\Review\Contract\ChangeEscalations;
 use Intakt\Core\Review\Contract\EscalationOutcome;
 use Intakt\Core\Review\Contract\EscalationReviewFailed;
@@ -167,7 +168,7 @@ final readonly class EscalationsOfChange implements ChangeEscalations
         $events = [];
 
         // Only the events naming one of the rounds, because the ledger holds the events of every round.
-        foreach ($this->ledger->readMentioning(array_map(strval(...), array_keys($rounds))) as $recorded) {
+        foreach ($this->ledger->readMentioning(new Mentions(...array_map(strval(...), array_keys($rounds)))) as $recorded) {
             $class = self::KINDS[$recorded->event->kind->value] ?? null;
             $event = null === $class ? null : $this->payloads->of($recorded, $class);
 
