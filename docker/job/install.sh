@@ -29,7 +29,10 @@ if ! mkdir -p "$work" || ! cp -R "$lock/." "$work/"; then
     exit 1
 fi
 
-cd "$work" || exit 1
+if ! cd "$work"; then
+    result 'not-prepared'
+    exit 1
+fi
 
 printf '$ %s\n' "$install" >> "$log"
 sh -c "$install" >> "$log" 2>&1 < /dev/null
@@ -39,8 +42,12 @@ if [ "$status" -ne 0 ]; then
     exit "$status"
 fi
 
+# A lock file left behind would make the kept install claim lock inputs it was not keyed by.
 for file in "$@"; do
-    rm -f -- "$work/$file"
+    if ! rm -f -- "$work/$file" || [ -e "$work/$file" ] || [ -L "$work/$file" ]; then
+        result 'not-kept'
+        exit 1
+    fi
 done
 
 # Nothing left means the install went elsewhere, so an empty folder is never saved as the install of these lock files.

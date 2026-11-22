@@ -98,6 +98,15 @@ final class InstallScriptTest extends TestCase
         self::assertSame("not-kept\n", $this->outputFile('install-result'));
     }
 
+    public function testALockFileTheInstallCannotRemoveIsNotKept(): void
+    {
+        $run = $this->whenTheInstallRuns(self::PROBE, 'mkdir vendor && rm composer.json && mkdir composer.json');
+
+        self::assertSame(1, $run->getExitCode());
+        self::assertSame("not-kept\n", $this->outputFile('install-result'));
+        self::assertSame([], array_values(array_diff((array) scandir($this->folder.'/kept'), ['.', '..'])));
+    }
+
     public function testLockFilesThatCannotBeCopiedLeaveNotPreparedAndRunNoInstall(): void
     {
         new Filesystem()->remove($this->folder.'/lock');
