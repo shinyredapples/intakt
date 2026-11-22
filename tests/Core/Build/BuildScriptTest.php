@@ -266,18 +266,37 @@ final class BuildScriptTest extends TestCase
             self::markTestSkipped('python3 is not on the PATH, and the thread fixture needs it.');
         }
         // The leader thread ends on its own, so the kernel shows the leader in state Z while the other thread keeps the session running.
+        // The other thread marks when the leader shows state Z with two threads. A stand-in shell starts the watchdog only then, so its allowance cannot pass while the leader still runs, however slow the start.
         $this->givenTheCli('exec '.escapeshellarg($python).' -I -c '.escapeshellarg(<<<'PY'
             import ctypes, os, threading, time
             def finish():
+                status = '/proc/%d/status' % os.getpid()
+                while True:
+                    with open(status) as file:
+                        lines = file.read().splitlines()
+                    if any(line.startswith('State:\tZ') for line in lines) and 'Threads:\t2' in lines:
+                        break
+                    time.sleep(0.01)
+                open(os.environ['RECORD'] + '/ready', 'w').close()
                 time.sleep(10)
                 os._exit(0)
             threading.Thread(target=finish).start()
             ctypes.CDLL(None).pthread_exit(None)
             PY));
+        $sh = escapeshellarg((string) new ExecutableFinder()->find('sh'));
+        file_put_contents($this->bin.'/sh', <<<SH
+            #!/bin/sh
+            if [ "\$1" = -c ]; then
+                while [ ! -e "\$RECORD/ready" ]; do sleep 0.05; done
+            fi
+            exec {$sh} "\$@"
+            SH);
+        chmod($this->bin.'/sh', 0o755);
 
         $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5', 1);
 
         self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertFileExists($this->history->folder.'/ready');
         self::assertStringContainsString("claude cut after 1 seconds, its commits are kept\n", $this->outputFile('build.log'));
     }
 
@@ -286,12 +305,14 @@ final class BuildScriptTest extends TestCase
         // The first line of the leader's /proc stat would then end in what looks like state Z, which must not stop the cut.
         $this->givenTheCli(<<<'SH'
             printf 'a) Z\nb' > "/proc/$$/comm"
+            head -n 1 "/proc/$$/stat" > "$RECORD/stat"
             sleep 30
             SH);
 
         $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5', 1);
 
         self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertStringEndsWith(' (a) Z', rtrim((string) file_get_contents($this->history->folder.'/stat'), "\n"));
         self::assertStringContainsString("claude cut after 1 seconds, its commits are kept\n", $this->outputFile('build.log'));
     }
 
