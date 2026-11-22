@@ -81,8 +81,8 @@ final readonly class ProjectFiles
         }
 
         try {
-            $call = $this->git->call($arguments, $directory);
-            $process = new Process($call->command, $call->directory, $call->environment, timeout: self::TIMEOUT_SECONDS);
+            $call = $this->git->call($directory, ...$arguments);
+            $process = new Process([...$call->command], $call->directory, [...$call->environment], timeout: self::TIMEOUT_SECONDS);
             $process->run();
         } catch (RepositoryAttributesRefused|ExceptionInterface $failure) {
             throw JobImageNotBuilt::unreadable($directory, $failure->getMessage());

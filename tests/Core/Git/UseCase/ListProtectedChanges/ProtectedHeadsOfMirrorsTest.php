@@ -63,7 +63,7 @@ final class ProtectedHeadsOfMirrorsTest extends TestCase
 
         $changes = $this->heads(['alpha' => ['bin/check'], 'beta' => []])->of('alpha', $head);
 
-        self::assertSame(['bin/check'], $changes->paths);
+        self::assertSame(['bin/check'], [...$changes->paths]);
     }
 
     public function testAHeadOfAProjectWithoutAListTouchesNoProtectedPath(): void

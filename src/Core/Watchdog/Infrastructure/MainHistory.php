@@ -307,7 +307,7 @@ final readonly class MainHistory implements CommitHistory
         $directory = $this->directory();
 
         try {
-            $call = $this->git->call($arguments, $directory);
+            $call = $this->git->call($directory, ...$arguments);
         } catch (RepositoryAttributesRefused $refused) {
             throw MainNotRead::because($refused->getMessage());
         } catch (RuntimeException $failed) {
@@ -316,7 +316,8 @@ final readonly class MainHistory implements CommitHistory
         }
 
         // Options go right after the program, because git reads its global options only before the command.
-        $process = new Process([$call->command[0], ...$options, ...array_slice($call->command, 1)], $call->directory, [...$call->environment, ...$overrides], null, self::TIMEOUT_SECONDS);
+        $command = [...$call->command];
+        $process = new Process([$command[0], ...$options, ...array_slice($command, 1)], $call->directory, [...$call->environment, ...$overrides], null, self::TIMEOUT_SECONDS);
         $process->run();
 
         return $process;

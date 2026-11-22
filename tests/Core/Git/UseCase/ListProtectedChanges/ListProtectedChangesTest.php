@@ -50,7 +50,7 @@ final class ListProtectedChangesTest extends TestCase
 
         $changes = $this->whenTheHeadIsListed($head);
 
-        self::assertSame(['bin/check'], $changes->paths);
+        self::assertSame(['bin/check'], [...$changes->paths]);
         self::assertTrue($changes->touchesProtectedPaths());
     }
 
@@ -58,7 +58,7 @@ final class ListProtectedChangesTest extends TestCase
     {
         $head = $this->givenABranchCommitting('.github/workflows/ci.yml', 'on: push');
 
-        self::assertSame(['.github/workflows/ci.yml'], $this->whenTheHeadIsListed($head)->paths);
+        self::assertSame(['.github/workflows/ci.yml'], [...$this->whenTheHeadIsListed($head)->paths]);
     }
 
     public function testAChangeOutsideTheProtectedPathsListsNothing(): void
@@ -69,7 +69,7 @@ final class ListProtectedChangesTest extends TestCase
 
         $changes = $this->whenTheHeadIsListed($head);
 
-        self::assertSame([], $changes->paths);
+        self::assertSame([], [...$changes->paths]);
         self::assertFalse($changes->touchesProtectedPaths());
     }
 
@@ -78,7 +78,7 @@ final class ListProtectedChangesTest extends TestCase
         $this->givenABranchCommitting('bin/check', 'two');
         $head = $this->repository->commitFile('bin/check', 'one');
 
-        self::assertSame(['bin/check'], $this->whenTheHeadIsListed($head)->paths);
+        self::assertSame(['bin/check'], [...$this->whenTheHeadIsListed($head)->paths]);
     }
 
     public function testARevertOfAProtectedFileInACraftedMergeIsListed(): void
@@ -87,7 +87,7 @@ final class ListProtectedChangesTest extends TestCase
         $this->givenABranchCommitting('src/a.php', 'two');
         $head = $this->repository->craftMerge($this->base, 'config/gates/rule.php', 'one');
 
-        self::assertSame(['config/gates/rule.php'], $this->whenTheHeadIsListed($head)->paths);
+        self::assertSame(['config/gates/rule.php'], [...$this->whenTheHeadIsListed($head)->paths]);
     }
 
     public function testADeletionOfAProtectedFileInACraftedMergeIsListed(): void
@@ -95,7 +95,7 @@ final class ListProtectedChangesTest extends TestCase
         $this->givenABranchCommitting('src/a.php', 'two');
         $head = $this->repository->craftMerge($this->base, 'config/gates/rule.php', null);
 
-        self::assertSame(['config/gates/rule.php'], $this->whenTheHeadIsListed($head)->paths);
+        self::assertSame(['config/gates/rule.php'], [...$this->whenTheHeadIsListed($head)->paths]);
     }
 
     public function testARevertInACraftedMergeThatALaterCommitUndoesIsStillListed(): void
@@ -105,7 +105,7 @@ final class ListProtectedChangesTest extends TestCase
         $this->repository->craftMerge($this->base, 'config/gates/rule.php', 'one');
         $head = $this->repository->commitFile('config/gates/rule.php', 'two');
 
-        self::assertSame(['config/gates/rule.php'], $this->whenTheHeadIsListed($head)->paths);
+        self::assertSame(['config/gates/rule.php'], [...$this->whenTheHeadIsListed($head)->paths]);
     }
 
     public function testARevertToAnOldMainInACraftedMergeThatASecondCraftedMergeUndoesIsListed(): void
@@ -118,7 +118,7 @@ final class ListProtectedChangesTest extends TestCase
         $this->repository->checkout('feat/side');
         $head = $this->repository->craftMerge($main, 'config/gates/rule.php', 'two');
 
-        self::assertSame(['config/gates/rule.php'], $this->whenTheHeadIsListed($head)->paths);
+        self::assertSame(['config/gates/rule.php'], [...$this->whenTheHeadIsListed($head)->paths]);
     }
 
     public function testAProtectedChangeUndoneLaterIsStillListedWhenMainMovesDuringTheCheck(): void
@@ -133,7 +133,7 @@ final class ListProtectedChangesTest extends TestCase
         // Main moves to the undone commit's content while that commit is compared with its parent, because a main read again from its branch would then find nothing new in it.
         $changes = $this->whileMainAdvancesTo($next, $this->base.' '.$changed, fn (): ProtectedChanges => $this->whenTheHeadIsListed($head));
 
-        self::assertSame(['bin/check'], $changes->paths);
+        self::assertSame(['bin/check'], [...$changes->paths]);
         self::assertNull($changes->unreadable);
     }
 
@@ -166,7 +166,7 @@ final class ListProtectedChangesTest extends TestCase
         $this->givenABranchCommitting('src/a.php', 'two', 'feat/task');
         $head = $this->repository->merge('feat/side');
 
-        self::assertSame(['bin/check'], $this->whenTheHeadIsListed($head)->paths);
+        self::assertSame(['bin/check'], [...$this->whenTheHeadIsListed($head)->paths]);
     }
 
     public function testAProtectedChangeThatAMergeOfMainBringsInIsNotListed(): void
@@ -177,7 +177,7 @@ final class ListProtectedChangesTest extends TestCase
         $this->repository->checkout('feat/side');
         $head = $this->repository->merge('main');
 
-        self::assertSame([], $this->whenTheHeadIsListed($head)->paths);
+        self::assertSame([], [...$this->whenTheHeadIsListed($head)->paths]);
     }
 
     public function testAMergeOfMainThatLeavesAProtectedFileUnlikeMainIsListed(): void
@@ -188,14 +188,14 @@ final class ListProtectedChangesTest extends TestCase
         $this->repository->checkout('feat/side');
         $head = $this->repository->mergeChanging('main', 'bin/check', 'three');
 
-        self::assertSame(['bin/check'], $this->whenTheHeadIsListed($head)->paths);
+        self::assertSame(['bin/check'], [...$this->whenTheHeadIsListed($head)->paths]);
     }
 
     public function testTheSubmodulesFileIsProtectedWithoutBeingListed(): void
     {
         $head = $this->givenABranchCommitting('.gitmodules', '[submodule "lib"]');
 
-        self::assertSame(['.gitmodules'], $this->whenTheHeadIsListed($head)->paths);
+        self::assertSame(['.gitmodules'], [...$this->whenTheHeadIsListed($head)->paths]);
     }
 
     public function testASubmoduleEntryIsProtectedWithoutBeingListed(): void
@@ -203,7 +203,7 @@ final class ListProtectedChangesTest extends TestCase
         $this->repository->checkoutNewBranch('feat/side');
         $head = $this->repository->commitSubmodule('lib', $this->base);
 
-        self::assertSame(['lib'], $this->whenTheHeadIsListed($head)->paths);
+        self::assertSame(['lib'], [...$this->whenTheHeadIsListed($head)->paths]);
     }
 
     public function testARenameOutOfAProtectedFolderListsTheOldPath(): void
@@ -212,7 +212,7 @@ final class ListProtectedChangesTest extends TestCase
         rename($this->repository->path.'/config/gates/rule.php', $this->repository->path.'/src/rule.php');
         $head = $this->repository->commitFile('src/rule.php', 'one');
 
-        self::assertSame(['config/gates/rule.php'], $this->whenTheHeadIsListed($head)->paths);
+        self::assertSame(['config/gates/rule.php'], [...$this->whenTheHeadIsListed($head)->paths]);
     }
 
     public function testAHeadWithoutACommonAncestorListsEveryProtectedFileItHolds(): void
@@ -221,7 +221,7 @@ final class ListProtectedChangesTest extends TestCase
         $this->repository->commitFile('src/a.php', 'one');
         $head = $this->repository->commitFile('bin/check', 'one');
 
-        self::assertSame(['bin/check'], $this->whenTheHeadIsListed($head)->paths);
+        self::assertSame(['bin/check'], [...$this->whenTheHeadIsListed($head)->paths]);
     }
 
     public function testAMissingObjectCountsAsProtected(): void
@@ -301,7 +301,7 @@ final class ListProtectedChangesTest extends TestCase
             $head = $repository->commitFile('bin/check', 'two');
             $repository->checkout('main');
 
-            self::assertSame(['bin/check'], $this->listed($repository->path.'/.git', $head)->paths);
+            self::assertSame(['bin/check'], [...$this->listed($repository->path.'/.git', $head)->paths]);
         } finally {
             $repository->remove();
         }
