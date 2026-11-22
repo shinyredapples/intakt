@@ -59,6 +59,9 @@ final class ReviewRoundReviewerOrderTest extends KernelTestCase
         new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
     }
 
+    /**
+     * @param non-empty-string $role
+     */
     private function member(string $role): PanelReviewer
     {
         return new PanelReviewer(new ReviewerRole($role, 'Look.'), new ReviewerModel(Tier::Standard, Provider::Anthropic), 1);
