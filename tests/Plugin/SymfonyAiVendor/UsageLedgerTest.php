@@ -8,6 +8,7 @@ use Generator;
 use Intakt\Core\Review\Infrastructure\FinalStreamedUsage;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenUsageRow;
 use Intakt\Plugin\SymfonyAiVendor\Contract\UsageSettled;
+use Intakt\Plugin\SymfonyAiVendor\Contract\UsageUnsettled;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageLedger;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageReservation;
 use Intakt\Tests\Support\StoredSerializerFactory;
@@ -16,6 +17,7 @@ use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Symfony\AI\Platform\Exception\RuntimeException;
 use Symfony\AI\Platform\Result\DeferredResult;
@@ -27,6 +29,7 @@ use Symfony\AI\Platform\Result\TextResult;
 use Symfony\AI\Platform\ResultConverterInterface;
 use Symfony\AI\Platform\TokenUsage\StreamListener;
 use Symfony\AI\Platform\TokenUsage\TokenUsage;
+use Symfony\AI\Platform\TokenUsage\TokenUsageExtractorInterface;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\HttpClient\Exception\TransportException;
 use Throwable;
@@ -35,6 +38,7 @@ use Throwable;
 #[UsesClass(FinalStreamedUsage::class)]
 #[UsesClass(UsageReservation::class)]
 #[UsesClass(UsageSettled::class)]
+#[UsesClass(UsageUnsettled::class)]
 #[UsesClass(TokenUsageRow::class)]
 final class UsageLedgerTest extends TestCase
 {
@@ -98,10 +102,60 @@ final class UsageLedgerTest extends TestCase
         $ledger = new InMemoryLedger();
         $converter = self::createStub(ResultConverterInterface::class);
         $converter->method('convert')->willThrowException(new TransportException('connection lost'));
+        $converter->method('getTokenUsageExtractor')->willReturn($this->extractorReading(new TokenUsage(promptTokens: 7)));
 
         $this->settle($ledger, new DeferredResult($converter, new InMemoryRawResult()));
 
-        self::assertSame('settled', $ledger->payloads()[0]['phase']);
+        self::assertSame(['settled', [7]], [$ledger->payloads()[0]['phase'], $this->promptTokensOf($ledger)]);
+    }
+
+    public function testARoundWhoseUsageExtractionFailsLeavesTheCallUnsettledWithItsFailureClass(): void
+    {
+        $ledger = new InMemoryLedger();
+        $reads = 0;
+
+        $this->usageLedger($ledger)->settle(new UsageReservation('a call'), $this->roundWithUnreadableUsage($reads), $this->roundAnswering($this->textWithUsage(42)));
+
+        self::assertSame(['unsettled', JsonException::class], [$ledger->payloads()[0]['phase'], $ledger->payloads()[0]['failure']]);
+    }
+
+    public function testALaterRoundKeepsItsUsageWhenAnEarlierRoundIsUnreadable(): void
+    {
+        $ledger = new InMemoryLedger();
+        $reads = 0;
+
+        $this->usageLedger($ledger)->settle(new UsageReservation('a call'), $this->roundWithUnreadableUsage($reads), $this->roundAnswering($this->textWithUsage(42)));
+
+        self::assertSame([42], $this->promptTokensOf($ledger));
+    }
+
+    public function testARoundWhoseUsageExtractionFailsIsReadOnce(): void
+    {
+        $reads = 0;
+
+        $this->usageLedger(new InMemoryLedger())->settle(new UsageReservation('a call'), $this->roundWithUnreadableUsage($reads), $this->roundAnswering($this->textWithUsage(42)));
+
+        self::assertSame(1, $reads);
+    }
+
+    public function testAnUnreadableRoundLogsOneWarningWhenTheCallIsSettled(): void
+    {
+        $reads = 0;
+        $logger = $this->createMock(LoggerInterface::class);
+        $logger->expects(self::once())->method('warning');
+        $usage = new UsageLedger(new InMemoryLedger(), new MockClock('2026-01-01T00:00:00+00:00'), $logger, StoredSerializerFactory::create());
+
+        $usage->settle(new UsageReservation('a call'), $this->roundWithUnreadableUsage($reads), $this->roundAnswering($this->textWithUsage(42)));
+    }
+
+    public function testAFailedCallLeftUnsettledKeepsItsOwnFailureClassWhenARoundIsUnreadable(): void
+    {
+        $ledger = new InMemoryLedger();
+        $reads = 0;
+
+        $this->usageLedger($ledger)->leaveUnsettled(new UsageReservation('a call'), new LogicException('the call failed'), $this->roundWithUnreadableUsage($reads), $this->roundAnswering($this->textWithUsage(42)));
+
+        self::assertSame([LogicException::class, [42], 1], [$ledger->payloads()[0]['failure'], $this->promptTokensOf($ledger), $reads]);
     }
 
     public function testAnAnsweredRoundKeepsItsUsageWhenALaterRoundOfAFailedCallFailsWithANonLibraryException(): void
@@ -172,6 +226,30 @@ final class UsageLedgerTest extends TestCase
         $converter->method('convert')->willThrowException($failure);
 
         return new DeferredResult($converter, new InMemoryRawResult());
+    }
+
+    // Counts the reads, because a settlement that scanned the rounds twice ran a failing extractor twice (issue #2564).
+    private function roundWithUnreadableUsage(int &$reads): DeferredResult
+    {
+        $extractor = self::createStub(TokenUsageExtractorInterface::class);
+        $extractor->method('extract')->willReturnCallback(static function () use (&$reads): never {
+            ++$reads;
+
+            throw new JsonException('usage decode failed');
+        });
+        $converter = self::createStub(ResultConverterInterface::class);
+        $converter->method('convert')->willThrowException(new RuntimeException('cannot map answer'));
+        $converter->method('getTokenUsageExtractor')->willReturn($extractor);
+
+        return new DeferredResult($converter, new InMemoryRawResult());
+    }
+
+    private function extractorReading(TokenUsage $usage): TokenUsageExtractorInterface
+    {
+        $extractor = self::createStub(TokenUsageExtractorInterface::class);
+        $extractor->method('extract')->willReturn($usage);
+
+        return $extractor;
     }
 
     private function roundAnswering(ResultInterface $answer): DeferredResult

@@ -67,7 +67,7 @@ final readonly class LiveProgress
         $name = $call->getName();
         $tool = ReviewTool::tryFrom(str_starts_with($name, ReviewerMcpToolboxFactory::TOOL_PREFIX) ? substr($name, strlen(ReviewerMcpToolboxFactory::TOOL_PREFIX)) : $name);
 
-        return $tool?->callInWords($call->getArguments()) ?? 'used a tool';
+        return $tool?->callInWords($call) ?? 'used a tool';
     }
 
     // The ledger's reviewer id when there is one, because the dashboard places a reviewer by it and a retry runs under a new conversation id.

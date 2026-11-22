@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Contract;
 
+use Symfony\AI\Platform\Result\ToolCall;
+
 // The tools a reviewer reads the head with, named once here, because the live log shows each call in plain words and never by its tool name.
 enum ReviewTool: string
 {
@@ -14,11 +16,9 @@ enum ReviewTool: string
     private const string ROOT = '.';
 
     // The model writes the arguments, so a value that is not a usable string reads as the call without it instead of failing the update.
-    /**
-     * @param array<mixed> $arguments
-     */
-    public function callInWords(array $arguments): string
+    public function callInWords(ToolCall $call): string
     {
+        $arguments = $call->getArguments();
         $path = self::textOf($arguments['path'] ?? null);
 
         return match ($this) {
