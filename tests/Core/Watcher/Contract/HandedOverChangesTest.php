@@ -18,11 +18,6 @@ final class HandedOverChangesTest extends TestCase
 
     private RecordingLedger $ledger;
 
-    protected function setUp(): void
-    {
-        $this->ledger = new RecordingLedger();
-    }
-
     public function testAChangeWithAHandOverLineOfItsProjectIsHandedToIntakt(): void
     {
         $this->record(LedgerEventKind::ChangeHandedToIntakt, 'alpha', self::PULL);
@@ -64,6 +59,11 @@ final class HandedOverChangesTest extends TestCase
         $this->record(LedgerEventKind::ChangeHandedToIntakt, 'alpha', self::PULL);
 
         self::assertTrue($this->handed()->isHandedToIntakt('alpha', self::PULL));
+    }
+
+    protected function setUp(): void
+    {
+        $this->ledger = new RecordingLedger();
     }
 
     private function record(LedgerEventKind $kind, string $project, string $change): void

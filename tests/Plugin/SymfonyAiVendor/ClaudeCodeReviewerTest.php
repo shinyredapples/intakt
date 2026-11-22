@@ -37,6 +37,7 @@ use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\NoReviewServerAccess;
+use Intakt\Core\Review\Contract\ResolvedFinding;
 use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
@@ -173,7 +174,7 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
         $verdict = $this->vendor(RecordedClaudeCodeCli::replaying('complete'))->review('alpha', Tier::Strong, $this->request())->verdict;
 
         self::assertSame(Decision::Changes, $verdict->verdict);
-        self::assertSame(['F1', 'F2'], $verdict->resolved);
+        self::assertEquals([new ResolvedFinding('F1'), new ResolvedFinding('F2')], $verdict->resolved);
     }
 
     public function testACompleteRecordedStreamSettlesItsUsageOnce(): void
@@ -193,7 +194,7 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
         $verdict = $this->vendor(RecordedClaudeCodeCli::replaying('fenced'))->review('alpha', Tier::Strong, $this->request())->verdict;
 
         self::assertSame(Decision::Changes, $verdict->verdict);
-        self::assertSame(['F1', 'F2'], $verdict->resolved);
+        self::assertEquals([new ResolvedFinding('F1'), new ResolvedFinding('F2')], $verdict->resolved);
     }
 
     #[DataProvider('unreadableAnswers')]
@@ -222,7 +223,7 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
         $verdict = $this->vendor(RecordedClaudeCodeCli::replaying('structured'))->review('alpha', Tier::Strong, $this->request())->verdict;
 
         self::assertSame(Decision::Changes, $verdict->verdict);
-        self::assertSame(['F1', 'F2'], $verdict->resolved);
+        self::assertEquals([new ResolvedFinding('F1'), new ResolvedFinding('F2')], $verdict->resolved);
         self::assertSame('F3', $verdict->findings[0]->id);
     }
 
@@ -231,7 +232,7 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
         $verdict = $this->vendor(RecordedClaudeCodeCli::replaying('structured-null'))->review('alpha', Tier::Strong, $this->request())->verdict;
 
         self::assertSame(Decision::Changes, $verdict->verdict);
-        self::assertSame(['F1', 'F2'], $verdict->resolved);
+        self::assertEquals([new ResolvedFinding('F1'), new ResolvedFinding('F2')], $verdict->resolved);
     }
 
     public function testAResponseFormatWithoutASchemaIsRefusedBeforeTheCliStarts(): void
@@ -500,21 +501,11 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
         self::assertSame(IncompleteStreamException::class, $ledger->payloads()[1]['failure']);
     }
 
-    private function request(): ReviewRequest
-    {
-        return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$this->openFinding('F1'), $this->openFinding('F2')], 1), new ReviewerConversation('You review for correctness.', new UuidV7(), new UuidV7()));
-    }
-
     private function requestWithoutRound(): ReviewRequest
     {
         $request = $this->request();
 
         return new ReviewRequest($request->checkout, $request->brief, new ReviewerConversation('You review for correctness.', new UuidV7()));
-    }
-
-    private function openFinding(string $id): Finding
-    {
-        return new Finding($id, Severity::P2, null, null, null, 'Earlier.', FixableBy::Builder, false, null, null);
     }
 
     /**
@@ -579,6 +570,16 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
     private function vendor(ModelClientInterface $cli, InMemoryLedger $ledger = new InMemoryLedger(), ?ReviewServerAccesses $servers = null): SymfonyAiVendor
     {
         return $this->vendorOn($this->claudeCodePlatform($cli), $ledger, $servers);
+    }
+
+    private function request(): ReviewRequest
+    {
+        return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$this->openFinding('F1'), $this->openFinding('F2')], 1), new ReviewerConversation('You review for correctness.', new UuidV7(), new UuidV7()));
+    }
+
+    private function openFinding(string $id): Finding
+    {
+        return new Finding($id, Severity::P2, null, null, null, 'Earlier.', FixableBy::Builder, false, null, null);
     }
 
     private function vendorOn(PlatformInterface $platform, InMemoryLedger $ledger = new InMemoryLedger(), ?ReviewServerAccesses $servers = null): SymfonyAiVendor

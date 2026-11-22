@@ -19,11 +19,6 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[UsesClass(StaticAnalysisGate::class)]
 final class NoMagicMethodRuleTest extends PhpStanRuleTestCase
 {
-    protected function ruleFor(string $root): NoMagicMethodRule
-    {
-        return new NoMagicMethodRule($root);
-    }
-
     /**
      * @return iterable<string, non-empty-list<CheckRun|string>>
      */
@@ -135,5 +130,10 @@ final class NoMagicMethodRuleTest extends PhpStanRuleTestCase
     public function testATraitWithNamedMethodsAndPlainAliasesPassesStaticAnalysis(): void
     {
         $this->assertRuleAccepts('trait-with-named-methods');
+    }
+
+    protected function ruleFor(string $root): NoMagicMethodRule
+    {
+        return new NoMagicMethodRule($root);
     }
 }

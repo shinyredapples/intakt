@@ -203,14 +203,6 @@ final readonly class RoundLedgerReading implements RoundCosts
     }
 
     /**
-     * @param list<TokenUsageRow> $usages
-     */
-    private function figuresOf(array $usages): TokenFigures
-    {
-        return array_reduce($usages, static fn (TokenFigures $sum, TokenUsageRow $usage): TokenFigures => $sum->plus($usage->figures()), TokenFigures::none());
-    }
-
-    /**
      * @param list<string>        $calls
      * @param list<RecordedEvent> $recorded
      *
@@ -219,6 +211,14 @@ final readonly class RoundLedgerReading implements RoundCosts
     private function usagesOf(array $calls, array $recorded): array
     {
         return array_merge([], ...array_map(fn (RecordedEvent $row): array => $this->usagesEndingOneOf($calls, $row), $recorded));
+    }
+
+    /**
+     * @param list<TokenUsageRow> $usages
+     */
+    private function figuresOf(array $usages): TokenFigures
+    {
+        return array_reduce($usages, static fn (TokenFigures $sum, TokenUsageRow $usage): TokenFigures => $sum->plus($usage->figures()), TokenFigures::none());
     }
 
     /**

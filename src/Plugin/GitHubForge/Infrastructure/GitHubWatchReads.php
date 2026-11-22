@@ -73,20 +73,49 @@ final readonly class GitHubWatchReads implements OpenChanges, HeadChecks
     }
 
     /**
-     * @return list<array<mixed>>
+     * @return array<mixed>
      */
-    private function laterPulls(RepositoryAddress $repository): array
+    private function decode(string $body): array
     {
-        $pulls = [];
-        for ($page = 2; $page <= self::MAX_PAGES; ++$page) {
-            $more = $this->pullsOf($this->read($repository->path().'/pulls', ['state' => 'open', 'per_page' => self::PAGE_SIZE, 'page' => $page])['body']);
-            $pulls = [...$pulls, ...$more];
-            if (count($more) < self::PAGE_SIZE) {
-                return $pulls;
-            }
+        try {
+            $data = json_decode($body, true, flags: JSON_THROW_ON_ERROR);
+        } catch (JsonException $invalid) {
+            throw new ForgeReadFailed('GitHub answered something other than JSON.', $invalid->getCode(), previous: $invalid);
         }
 
-        throw new ForgeReadFailed('GitHub lists more open pull requests than this forge reads.');
+        return is_array($data) ? $data : throw new ForgeReadFailed('GitHub answered JSON that is not an object or a list.');
+    }
+
+    /**
+     * @param array<string, int|string> $query
+     *
+     * @return array{status: int, body: string, etag: ?string}
+     */
+    private function read(string $path, array $query, ?string $validator = null): array
+    {
+        $headers = ['Accept' => 'application/vnd.github+json'];
+        if (null !== $validator) {
+            $headers['If-None-Match'] = $validator;
+        }
+
+        try {
+            $response = $this->calls->asInstallation('GET', $path, ['auth_bearer' => $this->bearer(), 'query' => $query, 'headers' => $headers]);
+            $status = $response->getStatusCode();
+            $body = $response->getContent(false);
+            $etag = $response->getHeaders(false)['etag'][0] ?? null;
+        } catch (ExceptionInterface $failure) {
+            throw $this->unreachable($failure::class);
+        }
+
+        if (self::NOT_MODIFIED === $status && null !== $validator) {
+            return ['status' => $status, 'body' => '', 'etag' => $validator];
+        }
+
+        if ($status < 200 || $status >= 300) {
+            throw new ForgeReadFailed(sprintf('GitHub answered %d to a read.', $status), previous: self::UNAUTHORIZED === $status ? new ForgeCredentialsRefused() : null);
+        }
+
+        return ['status' => $status, 'body' => $body, 'etag' => $etag];
     }
 
     /**
@@ -101,6 +130,23 @@ final readonly class GitHubWatchReads implements OpenChanges, HeadChecks
         }
 
         return array_map(static fn (mixed $pull): array => is_array($pull) ? $pull : throw new ForgeReadFailed('GitHub listed a pull request that is not an object.'), $pulls);
+    }
+
+    /**
+     * @return list<array<mixed>>
+     */
+    private function laterPulls(RepositoryAddress $repository): array
+    {
+        $pulls = [];
+        for ($page = 2; $page <= self::MAX_PAGES; ++$page) {
+            $more = $this->pullsOf($this->read($repository->path().'/pulls', ['state' => 'open', 'per_page' => self::PAGE_SIZE, 'page' => $page])['body']);
+            $pulls = [...$pulls, ...$more];
+            if (count($more) < self::PAGE_SIZE) {
+                return $pulls;
+            }
+        }
+
+        throw new ForgeReadFailed('GitHub lists more open pull requests than this forge reads.');
     }
 
     /**
@@ -148,58 +194,6 @@ final readonly class GitHubWatchReads implements OpenChanges, HeadChecks
         return is_string($value) && '' !== $value ? $value : throw new ForgeReadFailed(sprintf('GitHub answered without "%s".', implode('.', $keys)));
     }
 
-    /**
-     * @return array<mixed>
-     */
-    private function decode(string $body): array
-    {
-        try {
-            $data = json_decode($body, true, flags: JSON_THROW_ON_ERROR);
-        } catch (JsonException $invalid) {
-            throw new ForgeReadFailed('GitHub answered something other than JSON.', $invalid->getCode(), previous: $invalid);
-        }
-
-        return is_array($data) ? $data : throw new ForgeReadFailed('GitHub answered JSON that is not an object or a list.');
-    }
-
-    /**
-     * @param array<string, int|string> $query
-     *
-     * @return array{status: int, body: string, etag: ?string}
-     */
-    private function read(string $path, array $query, ?string $validator = null): array
-    {
-        $headers = ['Accept' => 'application/vnd.github+json'];
-        if (null !== $validator) {
-            $headers['If-None-Match'] = $validator;
-        }
-
-        try {
-            $response = $this->calls->asInstallation('GET', $path, ['auth_bearer' => $this->bearer(), 'query' => $query, 'headers' => $headers]);
-            $status = $response->getStatusCode();
-            $body = $response->getContent(false);
-            $etag = $response->getHeaders(false)['etag'][0] ?? null;
-        } catch (ExceptionInterface $failure) {
-            throw $this->unreachable($failure::class);
-        }
-
-        if (self::NOT_MODIFIED === $status && null !== $validator) {
-            return ['status' => $status, 'body' => '', 'etag' => $validator];
-        }
-
-        if ($status < 200 || $status >= 300) {
-            throw new ForgeReadFailed(sprintf('GitHub answered %d to a read.', $status), previous: self::UNAUTHORIZED === $status ? new ForgeCredentialsRefused() : null);
-        }
-
-        return ['status' => $status, 'body' => $body, 'etag' => $etag];
-    }
-
-    // Not chained to the client's exception, because its trace holds the request options with the bearer token.
-    private function unreachable(string $failure): ForgeReadFailed
-    {
-        return new ForgeReadFailed(sprintf('GitHub could not be reached (%s).', $failure));
-    }
-
     private function bearer(): string
     {
         try {
@@ -209,5 +203,11 @@ final readonly class GitHubWatchReads implements OpenChanges, HeadChecks
         } catch (InstallationNotReadBack|InstallationDoesNotMatchConfiguration $refused) {
             throw new ForgeReadFailed('No GitHub read before the installation is confirmed: '.$refused->getMessage(), $refused->getCode(), previous: $refused);
         }
+    }
+
+    // Not chained to the client's exception, because its trace holds the request options with the bearer token.
+    private function unreachable(string $failure): ForgeReadFailed
+    {
+        return new ForgeReadFailed(sprintf('GitHub could not be reached (%s).', $failure));
     }
 }

@@ -80,11 +80,6 @@ final class AccountFailoverPlatformTest extends TestCase
 {
     private AccountCooldownWindows $cooldowns;
 
-    protected function setUp(): void
-    {
-        $this->cooldowns = new AccountCooldownWindows(new ReadingsInMemory(new NativeClock()), new ArrayAdapter(), new LockFactory(new InMemoryStore()), new NativeClock(), new InMemoryLedger(), new NullLogger(), StoredSerializerFactory::create(), [Provider::Anthropic->value => [Account::DEFAULT, 'team']]);
-    }
-
     public function testACallGoesToTheFirstAccountInTheOwnersOrder(): void
     {
         $result = $this->accounts($this->answering('first'), $this->answering('second'))->invoke('big', 'Review.');
@@ -714,6 +709,22 @@ final class AccountFailoverPlatformTest extends TestCase
         self::assertTrue($failures->record($this->account('team'), $failure));
     }
 
+    protected function setUp(): void
+    {
+        $this->cooldowns = new AccountCooldownWindows(new ReadingsInMemory(new NativeClock()), new ArrayAdapter(), new LockFactory(new InMemoryStore()), new NativeClock(), new InMemoryLedger(), new NullLogger(), StoredSerializerFactory::create(), [Provider::Anthropic->value => [Account::DEFAULT, 'team']]);
+    }
+
+    /**
+     * @param Closure(): Generator<TextDelta> $deltas
+     */
+    private function streamed(Closure $deltas, AccountCooldowns $cooldowns, SendFailures $failures): DeferredResult
+    {
+        $platform = $this->extracting(new TokenUsage(), static fn (): StreamResult => new StreamResult($deltas()));
+        $account = new AccountPlatform($this->account(Account::DEFAULT), $platform, $cooldowns, new NativeClock(), new NullLogger(), $failures, new NoPinnedProviderCooldowns(), null);
+
+        return $account->invoke('big', 'Review.');
+    }
+
     private function readStream(DeferredResult $result): void
     {
         $failure = null;
@@ -727,17 +738,6 @@ final class AccountFailoverPlatformTest extends TestCase
         }
 
         self::assertNotNull($failure, 'The stream was expected to fail when read.');
-    }
-
-    /**
-     * @param Closure(): Generator<TextDelta> $deltas
-     */
-    private function streamed(Closure $deltas, AccountCooldowns $cooldowns, SendFailures $failures): DeferredResult
-    {
-        $platform = $this->extracting(new TokenUsage(), static fn (): StreamResult => new StreamResult($deltas()));
-        $account = new AccountPlatform($this->account(Account::DEFAULT), $platform, $cooldowns, new NativeClock(), new NullLogger(), $failures, new NoPinnedProviderCooldowns(), null);
-
-        return $account->invoke('big', 'Review.');
     }
 
     // The cooldowns read the same mocked clock as the calls, so the order of a send and a report is the one the test forces.

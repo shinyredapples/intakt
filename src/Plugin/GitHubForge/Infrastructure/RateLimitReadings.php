@@ -98,6 +98,18 @@ final readonly class RateLimitReadings
         return in_array(null, [$remaining, $limit, $reset], true) ? null : new RateLimitReading($remaining, $limit, $this->at($reset));
     }
 
+    private function remember(string $installationId, RateLimitReading $reading): void
+    {
+        $resetsAt = $reading->resetsAt;
+        if ($resetsAt <= $this->clock->now()) {
+            return;
+        }
+
+        $value = ['remaining' => $reading->remaining, 'limit' => $reading->limit, 'reset' => $resetsAt->getTimestamp()];
+        $item = $this->pool->getItem($this->key('reading', $installationId, self::CORE))->set($value)->expiresAt($resetsAt);
+        $this->pool->save($item);
+    }
+
     /**
      * @param array<string, list<string>> $headers
      */
@@ -142,18 +154,6 @@ final readonly class RateLimitReadings
         return $moment instanceof DateTimeImmutable && $moment > $now ? $moment : $now->modify(sprintf('+%d seconds', self::SECONDS_WITHOUT_RESET));
     }
 
-    private function remember(string $installationId, RateLimitReading $reading): void
-    {
-        $resetsAt = $reading->resetsAt;
-        if ($resetsAt <= $this->clock->now()) {
-            return;
-        }
-
-        $value = ['remaining' => $reading->remaining, 'limit' => $reading->limit, 'reset' => $resetsAt->getTimestamp()];
-        $item = $this->pool->getItem($this->key('reading', $installationId, self::CORE))->set($value)->expiresAt($resetsAt);
-        $this->pool->save($item);
-    }
-
     private function pause(string $installationId, string $pool, DateTimeImmutable $until): DateTimeImmutable
     {
         // Under the lock every process takes, because two answers in flight could otherwise replace a longer pause with a shorter one.
@@ -178,6 +178,13 @@ final readonly class RateLimitReadings
         return $current instanceof DateTimeImmutable && $earlier instanceof DateTimeImmutable ? max($current, $earlier) : $current ?? $earlier;
     }
 
+    private function pausedUntil(CacheItemInterface $item): ?DateTimeImmutable
+    {
+        $value = $item->get();
+
+        return $item->isHit() && is_int($value) ? $this->at($value) : null;
+    }
+
     // Honored until it expires, because an install upgraded during a pause stored it under the key the earlier version used (the installation id alone, for REST calls only), and dropping it would resume calls before GitHub's reset.
     private function pauseStoredByAnEarlierVersion(string $installationId, string $pool): ?DateTimeImmutable
     {
@@ -186,18 +193,6 @@ final readonly class RateLimitReadings
         }
 
         return $this->pausedUntil($this->pool->getItem('github-rate-limit-limited-'.hash('sha256', $installationId)));
-    }
-
-    private function pausedUntil(CacheItemInterface $item): ?DateTimeImmutable
-    {
-        $value = $item->get();
-
-        return $item->isHit() && is_int($value) ? $this->at($value) : null;
-    }
-
-    private function at(int $epoch): DateTimeImmutable
-    {
-        return $this->clock->now()->setTimestamp($epoch);
     }
 
     /**
@@ -214,5 +209,10 @@ final readonly class RateLimitReadings
     private function key(string $kind, string $installationId, string $pool): string
     {
         return 'github-rate-limit-'.$kind.'-'.hash('sha256', strlen($pool).':'.$pool.$installationId);
+    }
+
+    private function at(int $epoch): DateTimeImmutable
+    {
+        return $this->clock->now()->setTimestamp($epoch);
     }
 }

@@ -169,13 +169,6 @@ final class AnthropicUnreachableRetryTest extends KernelTestCase
         return null;
     }
 
-    private function request(): ReviewRequest
-    {
-        $open = new Finding('F1', Severity::P2, null, null, null, 'Earlier.', FixableBy::Builder, false, null, null);
-
-        return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$open], 1), new ReviewerConversation('You review for correctness.', new UuidV7()));
-    }
-
     /**
      * @param Closure(): MockResponse $first
      * @param Closure(): MockResponse $second
@@ -196,5 +189,12 @@ final class AnthropicUnreachableRetryTest extends KernelTestCase
         $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
 
         return new SymfonyAiVendor($tiers, $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger(new InMemoryLedger(), new MockClock(self::NOW), new NullLogger(), StoredSerializerFactory::create()), $limit, new MockClock(self::NOW), self::createStub(ReviewServerAccesses::class));
+    }
+
+    private function request(): ReviewRequest
+    {
+        $open = new Finding('F1', Severity::P2, null, null, null, 'Earlier.', FixableBy::Builder, false, null, null);
+
+        return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$open], 1), new ReviewerConversation('You review for correctness.', new UuidV7()));
     }
 }

@@ -1,5 +1,4 @@
-> **Judging the Symfony AI & MCP Hackathon?** Release [v0.4.1](https://github.com/shinyredapples/intakt/releases/tag/v0.4.1) is the version we submitted and tested on both paths, the keyless demo and a run with a key:
-> `git clone --branch v0.4.1 https://github.com/shinyredapples/intakt.git && cd intakt`. Main is welcome too: it has what we built after the deadline, but it is not the tested submission.
+> **Judging the Symfony AI & MCP Hackathon?** Use the tested submission, release [v0.4.1](https://github.com/shinyredapples/intakt/releases/tag/v0.4.1): the first install under [Five-minute start](#five-minute-start).
 
 <h1 align="center">
   <picture>
@@ -14,7 +13,7 @@ Your coding agent says it is done. Intakt tells you whether to believe it.
 
 AI code review by a panel from different AI labs. A finding whose quoted code is not in the change is dropped, and a judge makes one list to fix. Start a review from the dashboard, or let your own agent run the loop over MCP until the verdict is clean.
 
-[![Watch the 90-second demo of Intakt on YouTube](docs/assets/video-cover.jpg)](https://youtu.be/HVDKah3Jauo)
+[![Watch the 90-second demo of Intakt on YouTube](docs/assets/video-cover.jpg)](https://youtu.be/-8v0nflAQBk)
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/dashboard-review-dark.png">
@@ -22,6 +21,15 @@ AI code review by a panel from different AI labs. A finding whose quoted code is
 </picture>
 
 ## Five-minute start
+
+The hackathon submission, tested on both paths (release v0.4.1):
+
+```
+git clone --branch v0.4.1 https://github.com/shinyredapples/intakt.git && cd intakt
+docker compose up -d --wait
+```
+
+The latest, with everything built after the deadline (main):
 
 ```
 git clone https://github.com/shinyredapples/intakt.git && cd intakt

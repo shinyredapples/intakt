@@ -103,6 +103,20 @@ final readonly class TestsGate implements RunsTheChangesCode
         return ['sqlite' => self::CONFIGURATION, 'gates' => self::GATES_CONFIGURATION];
     }
 
+    private function variable(string $name): ?string
+    {
+        $value = getenv($name);
+
+        return is_string($value) && '' !== $value ? $value : null;
+    }
+
+    private function scratchDirectory(): ?string
+    {
+        $directory = sys_get_temp_dir().'/intakt-tests-'.bin2hex(random_bytes(8));
+
+        return mkdir($directory, 0o700) ? $directory : null;
+    }
+
     /**
      * @param array<string, string> $passes
      */
@@ -152,6 +166,23 @@ final readonly class TestsGate implements RunsTheChangesCode
         }
 
         return $findings;
+    }
+
+    /**
+     * @param list<TestWorker>                  $workers
+     * @param Closure(TestWorker): list<string> $flags
+     *
+     * @return array<string, ProcessResult>
+     */
+    private function concurrently(Workspace $workspace, array $workers, Closure $flags): array
+    {
+        $commands = [];
+
+        foreach ($workers as $worker) {
+            $commands[$worker->run] = [$this->command($workspace, $worker, $flags($worker)), $worker->environment()];
+        }
+
+        return $workspace->commandsConcurrently($commands);
     }
 
     /**
@@ -215,23 +246,6 @@ final readonly class TestsGate implements RunsTheChangesCode
     }
 
     /**
-     * @param list<TestWorker>                  $workers
-     * @param Closure(TestWorker): list<string> $flags
-     *
-     * @return array<string, ProcessResult>
-     */
-    private function concurrently(Workspace $workspace, array $workers, Closure $flags): array
-    {
-        $commands = [];
-
-        foreach ($workers as $worker) {
-            $commands[$worker->run] = [$this->command($workspace, $worker, $flags($worker)), $worker->environment()];
-        }
-
-        return $workspace->commandsConcurrently($commands);
-    }
-
-    /**
      * @param list<string> $flags
      *
      * @return list<string>
@@ -257,13 +271,6 @@ final readonly class TestsGate implements RunsTheChangesCode
         return $findings;
     }
 
-    private function variable(string $name): ?string
-    {
-        $value = getenv($name);
-
-        return is_string($value) && '' !== $value ? $value : null;
-    }
-
     /**
      * @return array<string, float>
      */
@@ -274,13 +281,6 @@ final readonly class TestsGate implements RunsTheChangesCode
         $durations->write($seconds, GatesCache::directory());
 
         return $durations->slowest($seconds);
-    }
-
-    private function scratchDirectory(): ?string
-    {
-        $directory = sys_get_temp_dir().'/intakt-tests-'.bin2hex(random_bytes(8));
-
-        return mkdir($directory, 0o700) ? $directory : null;
     }
 
     private function remove(string $directory): void

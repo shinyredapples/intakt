@@ -59,17 +59,6 @@ final class StaticGatesListTest extends TestCase
     }
 
     /**
-     * @return array<mixed>
-     */
-    private function listIn(ProcessResult $run): array
-    {
-        $list = json_decode($run->output, true, flags: JSON_THROW_ON_ERROR);
-        self::assertIsArray($list);
-
-        return $list;
-    }
-
-    /**
      * @return list<string>
      */
     private function namesIn(ProcessResult $run, string $key): array
@@ -85,5 +74,16 @@ final class StaticGatesListTest extends TestCase
         $home = dirname(__DIR__, 2);
 
         return new ProcessRunner()->run(['php', $home.'/bin/check', ...array_values($arguments)], $home);
+    }
+
+    /**
+     * @return array<mixed>
+     */
+    private function listIn(ProcessResult $run): array
+    {
+        $list = json_decode($run->output, true, flags: JSON_THROW_ON_ERROR);
+        self::assertIsArray($list);
+
+        return $list;
     }
 }

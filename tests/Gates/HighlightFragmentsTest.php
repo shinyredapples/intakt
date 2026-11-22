@@ -25,13 +25,6 @@ final class HighlightFragmentsTest extends SandboxTestCase
 
     private Sandbox $sandbox;
 
-    #[Override]
-    protected function setUp(): void
-    {
-        parent::setUp();
-        $this->sandbox = $this->emptySandbox();
-    }
-
     public function testRowsGoUnderTheTableHeaderAndItemsUnderTheirHeading(): void
     {
         $this->sandbox->write('docs/highlights.d/1-gates.md', "## Tooling\n\n| Gates | done | T1 (#5) |\n\n## PHP 8.5 in use\n\n- The pipe operator: T6\n");
@@ -323,6 +316,13 @@ final class HighlightFragmentsTest extends SandboxTestCase
     public function testWithoutFragmentsOrAFileThereIsNoPage(): void
     {
         self::assertNull(new HighlightFragments()->pageOn($this->sandbox->root));
+    }
+
+    #[Override]
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->sandbox = $this->emptySandbox();
     }
 
     private function assembled(): HighlightAssembly

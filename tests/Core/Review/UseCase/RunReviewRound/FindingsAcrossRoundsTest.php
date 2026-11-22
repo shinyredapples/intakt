@@ -11,6 +11,7 @@ use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\PanelVerdict;
+use Intakt\Core\Review\Contract\ResolvedFinding;
 use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
@@ -71,11 +72,6 @@ final class FindingsAcrossRoundsTest extends KernelTestCase
     private const string SECOND = 'Look at part 2.';
 
     private RoundFixture $fixture;
-
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-    }
 
     public function testTheFirstRoundTellsNoReviewerOfOpenFindings(): void
     {
@@ -347,12 +343,9 @@ final class FindingsAcrossRoundsTest extends KernelTestCase
         self::assertSame([], $this->fixture->openFindingsOf($round));
     }
 
-    /**
-     * @param array<string, Verdict> $verdicts
-     */
-    private function round(string $change, array $verdicts): VerdictPerRole
+    protected function setUp(): void
     {
-        return $this->deliver($this->started($change), $verdicts);
+        $this->fixture = new RoundFixture(self::getContainer());
     }
 
     private function started(string $change): RecordingBus
@@ -385,18 +378,26 @@ final class FindingsAcrossRoundsTest extends KernelTestCase
         return array_map(static fn (Finding $finding): string => $finding->id, $brief->open);
     }
 
+    private function finding(string $id, bool $repeat = false, Severity $severity = Severity::P2): Finding
+    {
+        return new Finding($id, $severity, 'src/A.php', 3, null, 'Text '.$id, FixableBy::Builder, $repeat, null, null);
+    }
+
     /**
      * @param list<string>  $resolved
      * @param list<Finding> $findings
      */
     private function changes(array $resolved, array $findings): Verdict
     {
-        return new Verdict(Decision::Changes, $findings, $resolved, []);
+        return new Verdict(Decision::Changes, $findings, array_map(static fn (string $id): ResolvedFinding => new ResolvedFinding($id), $resolved), []);
     }
 
-    private function finding(string $id, bool $repeat = false, Severity $severity = Severity::P2): Finding
+    /**
+     * @param array<string, Verdict> $verdicts
+     */
+    private function round(string $change, array $verdicts): VerdictPerRole
     {
-        return new Finding($id, $severity, 'src/A.php', 3, null, 'Text '.$id, FixableBy::Builder, $repeat, null, null);
+        return $this->deliver($this->started($change), $verdicts);
     }
 
     // The message of SQLite's stale snapshot, because that is the failure a retry is for.

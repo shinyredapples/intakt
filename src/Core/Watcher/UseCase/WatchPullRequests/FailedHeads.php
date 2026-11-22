@@ -49,6 +49,25 @@ final readonly class FailedHeads
         $this->recordOnce($headFailure, $failures, $retryAt);
     }
 
+    // Scrubbed first, because a message may carry bytes of a path or a tool's output that are not UTF-8, and the ledger line must still be written; redacted as a log line is, because the cause is stored and shown on a card.
+    private function causeOf(Throwable $failure): string
+    {
+        return $failure::class.': '.$this->redactor->redact(mb_scrub($failure->getMessage(), 'UTF-8'));
+    }
+
+    private function retryAt(int $failures): DateTimeImmutable
+    {
+        $wait = min(self::FIRST_WAIT_SECONDS * 2 ** ($failures - 1), self::LONGEST_WAIT_SECONDS);
+
+        return $this->clock->now()->modify(sprintf('+%d seconds', $wait));
+    }
+
+    // Encoded as a list, because a project name may hold any character and a joined key could name two heads alike; the change alone, because a new commit of the same pull request is the same item.
+    private function itemOf(string $project, OpenChange $head): string
+    {
+        return json_encode(['watcher head', $project, $head->id->value], JSON_THROW_ON_ERROR);
+    }
+
     // Contained, because the head's own back-off and the next heads must not depend on Budget's write, which fails on its own when the Budget table is locked or the database connection is lost.
     private function reportToTheInstall(string $item, Throwable $failure): void
     {
@@ -58,16 +77,6 @@ final readonly class FailedHeads
         } catch (Throwable $notReported) {
             $this->logger->error('The install-wide failure record failed; the head still backs off alone.', ['exception' => $notReported]);
             $this->reopenEntityManager();
-        }
-    }
-
-    // Budget's failed flush closes the entity manager for every holder and Doctrine refuses to reopen it, so without a reset the next head's step would fail with a cause it never had.
-    private function reopenEntityManager(): void
-    {
-        $entities = $this->doctrine->getManager();
-
-        if ($entities instanceof EntityManagerInterface && !$entities->isOpen()) {
-            $this->doctrine->resetManager();
         }
     }
 
@@ -82,6 +91,16 @@ final readonly class FailedHeads
         $this->installWide->itemFailed($item, $failure);
     }
 
+    // Budget's failed flush closes the entity manager for every holder and Doctrine refuses to reopen it, so without a reset the next head's step would fail with a cause it never had.
+    private function reopenEntityManager(): void
+    {
+        $entities = $this->doctrine->getManager();
+
+        if ($entities instanceof EntityManagerInterface && !$entities->isOpen()) {
+            $this->doctrine->resetManager();
+        }
+    }
+
     // Along the whole chain, because the forge chains the refusal as the cause of its read or write failure, which a step may wrap again.
     private function forgeRefusedCredentials(Throwable $failure): bool
     {
@@ -92,12 +111,6 @@ final readonly class FailedHeads
         }
 
         return false;
-    }
-
-    // Encoded as a list, because a project name may hold any character and a joined key could name two heads alike; the change alone, because a new commit of the same pull request is the same item.
-    private function itemOf(string $project, OpenChange $head): string
-    {
-        return json_encode(['watcher head', $project, $head->id->value], JSON_THROW_ON_ERROR);
     }
 
     private function recordOnce(HeadFailure $headFailure, int $failures, DateTimeImmutable $retryAt): void
@@ -121,30 +134,6 @@ final readonly class FailedHeads
         }
     }
 
-    // Logged and not thrown, because the hand-over's own failure is what the tick must report, never hidden behind the back-off's.
-    private function reportHandOverFailed(Throwable $handOver): void
-    {
-        try {
-            $this->installWide->handOverFailed($handOver);
-            // Boundary: logs a back-off that cannot start, because the hand-over's own failure is the one the caller rethrows.
-        } catch (Throwable $notStarted) {
-            $this->logger->error('The failed hand-over could not start the install-wide failure back-off.', ['exception' => $notStarted]);
-        }
-    }
-
-    // Scrubbed first, because a message may carry bytes of a path or a tool's output that are not UTF-8, and the ledger line must still be written; redacted as a log line is, because the cause is stored and shown on a card.
-    private function causeOf(Throwable $failure): string
-    {
-        return $failure::class.': '.$this->redactor->redact(mb_scrub($failure->getMessage(), 'UTF-8'));
-    }
-
-    private function retryAt(int $failures): DateTimeImmutable
-    {
-        $wait = min(self::FIRST_WAIT_SECONDS * 2 ** ($failures - 1), self::LONGEST_WAIT_SECONDS);
-
-        return $this->clock->now()->modify(sprintf('+%d seconds', $wait));
-    }
-
     // Handed over once, at the failure that reaches the limit, so the maintainer agent gets one line per head while later tries are recorded as failures.
     private function record(HeadFailure $failure, int $failures, DateTimeImmutable $retryAt): void
     {
@@ -155,5 +144,16 @@ final readonly class FailedHeads
         }
 
         $this->ledger->headFailed($failure, $failures, $retryAt);
+    }
+
+    // Logged and not thrown, because the hand-over's own failure is what the tick must report, never hidden behind the back-off's.
+    private function reportHandOverFailed(Throwable $handOver): void
+    {
+        try {
+            $this->installWide->handOverFailed($handOver);
+            // Boundary: logs a back-off that cannot start, because the hand-over's own failure is the one the caller rethrows.
+        } catch (Throwable $notStarted) {
+            $this->logger->error('The failed hand-over could not start the install-wide failure back-off.', ['exception' => $notStarted]);
+        }
     }
 }

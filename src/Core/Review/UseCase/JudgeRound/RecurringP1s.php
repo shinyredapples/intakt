@@ -50,51 +50,6 @@ final readonly class RecurringP1s
         return array_values(array_filter($found, static fn (RecurringP1Found $recurrence): bool => !isset($recorded[$recurrence->round][$recurrence->key])));
     }
 
-    // Only the rounds up to the first one still waiting for its judging, because only for these the first round that flagged a place is final; any other round without a judge_done flags nothing and holds up no later round.
-    /**
-     * @param array<string, string>                $rounds
-     * @param array<string, array<string, string>> $flagged
-     * @param array<string, true>                  $waiting
-     *
-     * @return array<string, string>
-     */
-    private function settled(array $rounds, array $flagged, array $waiting): array
-    {
-        $settled = [];
-
-        foreach ($rounds as $id => $head) {
-            if (isset($flagged[$id])) {
-                $settled[$id] = $head;
-            } elseif (isset($waiting[$id])) {
-                break;
-            }
-        }
-
-        return $settled;
-    }
-
-    // Only a complete round with reported findings whose judging has not failed, because its judging or its recorded failure ends the wait; a round completed before migration Version20261101120000 kept no reported findings and was never queued, and a collecting round may never complete.
-    /**
-     * @param list<ReviewRound> $rounds
-     *
-     * @return array<string, true>
-     */
-    private function waiting(array $rounds): array
-    {
-        $failed = $this->failedJudgings->failedRounds();
-        $waiting = [];
-
-        foreach ($rounds as $round) {
-            $id = $round->id()->toRfc4122();
-
-            if (RoundState::Complete === $round->state() && null !== $round->reportedFindingsJson() && !isset($failed[$id])) {
-                $waiting[$id] = true;
-            }
-        }
-
-        return $waiting;
-    }
-
     // Each round's head by its id, in round-number order; a round stored before identities were recorded names no head, so it cannot tell another head from its own and is left out.
     /**
      * @param list<ReviewRound> $rounds
@@ -135,6 +90,51 @@ final readonly class RecurringP1s
         }
 
         return $flagged;
+    }
+
+    // Only a complete round with reported findings whose judging has not failed, because its judging or its recorded failure ends the wait; a round completed before migration Version20261101120000 kept no reported findings and was never queued, and a collecting round may never complete.
+    /**
+     * @param list<ReviewRound> $rounds
+     *
+     * @return array<string, true>
+     */
+    private function waiting(array $rounds): array
+    {
+        $failed = $this->failedJudgings->failedRounds();
+        $waiting = [];
+
+        foreach ($rounds as $round) {
+            $id = $round->id()->toRfc4122();
+
+            if (RoundState::Complete === $round->state() && null !== $round->reportedFindingsJson() && !isset($failed[$id])) {
+                $waiting[$id] = true;
+            }
+        }
+
+        return $waiting;
+    }
+
+    // Only the rounds up to the first one still waiting for its judging, because only for these the first round that flagged a place is final; any other round without a judge_done flags nothing and holds up no later round.
+    /**
+     * @param array<string, string>                $rounds
+     * @param array<string, array<string, string>> $flagged
+     * @param array<string, true>                  $waiting
+     *
+     * @return array<string, string>
+     */
+    private function settled(array $rounds, array $flagged, array $waiting): array
+    {
+        $settled = [];
+
+        foreach ($rounds as $id => $head) {
+            if (isset($flagged[$id])) {
+                $settled[$id] = $head;
+            } elseif (isset($waiting[$id])) {
+                break;
+            }
+        }
+
+        return $settled;
     }
 
     // Only act entries with a key, because a P1 that names no regular file gets none and is judged again; a row written before keys were recorded holds none.

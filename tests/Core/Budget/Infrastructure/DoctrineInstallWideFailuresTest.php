@@ -51,18 +51,6 @@ final class DoctrineInstallWideFailuresTest extends KernelTestCase
     private DoctrineHolds $holds;
     private DoctrineInstallWideFailures $failures;
 
-    protected function setUp(): void
-    {
-        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
-        self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        $this->entities = $entities;
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
-        $this->clock = new MockClock('2026-11-06 08:00:00 UTC');
-        $this->holds = new DoctrineHolds($entities, $this->clock);
-        $this->failures = $this->worker($entities);
-    }
-
     public function testAFailingDatabaseStartsTheFailureBackOff(): void
     {
         $this->failures->databaseFailed(new RuntimeException('connection refused'));
@@ -232,6 +220,38 @@ final class DoctrineInstallWideFailuresTest extends KernelTestCase
         self::assertLoggedError('error', 'The install-wide failure back-off started because two items failed with the same error within an hour.');
     }
 
+    protected function setUp(): void
+    {
+        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
+        self::assertInstanceOf(EntityManagerInterface::class, $entities);
+        $this->entities = $entities;
+        EmptyDatabase::in(self::getContainer());
+        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        $this->clock = new MockClock('2026-11-06 08:00:00 UTC');
+        $this->holds = new DoctrineHolds($entities, $this->clock);
+        $this->failures = $this->worker($entities);
+    }
+
+    private function keyOfNotFound(): string
+    {
+        $recorded = new DoctrineInstallWideFailures($this->entities, $this->doctrine(), $this->holds, $this->clock, new RecordingLogger(LogRecords::ofThisRun() ?? self::fail('No log records.')));
+        $recorded->itemFailed('probe', new RuntimeException('record not found'));
+        $key = $this->entities->getRepository(ItemFailureRecord::class)->findOneBy(['item' => 'probe'])?->errorKey;
+        self::assertNotNull($key);
+        $this->entities->clear();
+        $this->entities->getConnection()->executeStatement('DELETE FROM budget_item_failure');
+
+        return $key;
+    }
+
+    // Its own connection and entity manager, because another messenger:consume process shares neither with this one.
+    private function entityManagerOf(EventManager $events): EntityManager
+    {
+        $connection = DriverManager::getConnection($this->entities->getConnection()->getParams());
+
+        return new EntityManager($connection, $this->entities->getConfiguration(), $events);
+    }
+
     private function worker(EntityManagerInterface $entities): DoctrineInstallWideFailures
     {
         $records = LogRecords::ofThisRun();
@@ -246,25 +266,5 @@ final class DoctrineInstallWideFailuresTest extends KernelTestCase
         self::assertInstanceOf(ManagerRegistry::class, $doctrine);
 
         return $doctrine;
-    }
-
-    // Its own connection and entity manager, because another messenger:consume process shares neither with this one.
-    private function entityManagerOf(EventManager $events): EntityManager
-    {
-        $connection = DriverManager::getConnection($this->entities->getConnection()->getParams());
-
-        return new EntityManager($connection, $this->entities->getConfiguration(), $events);
-    }
-
-    private function keyOfNotFound(): string
-    {
-        $recorded = new DoctrineInstallWideFailures($this->entities, $this->doctrine(), $this->holds, $this->clock, new RecordingLogger(LogRecords::ofThisRun() ?? self::fail('No log records.')));
-        $recorded->itemFailed('probe', new RuntimeException('record not found'));
-        $key = $this->entities->getRepository(ItemFailureRecord::class)->findOneBy(['item' => 'probe'])?->errorKey;
-        self::assertNotNull($key);
-        $this->entities->clear();
-        $this->entities->getConnection()->executeStatement('DELETE FROM budget_item_failure');
-
-        return $key;
     }
 }

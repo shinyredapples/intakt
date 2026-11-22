@@ -41,26 +41,6 @@ final class StaticAnalysisChangedFilesSignalTest extends SandboxTestCase
 
     private string|false|null $path = null;
 
-    #[Override]
-    protected function setUp(): void
-    {
-        parent::setUp();
-        $this->changedFilesOnly = getenv(StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE);
-        putenv(StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE);
-    }
-
-    #[Override]
-    protected function tearDown(): void
-    {
-        putenv(false === $this->changedFilesOnly ? StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE : StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE.'='.$this->changedFilesOnly);
-
-        if (null !== $this->path) {
-            putenv(false === $this->path ? 'PATH' : 'PATH='.$this->path);
-        }
-
-        parent::tearDown();
-    }
-
     public function testAChangedFilesRunOverASubsetOfThePhpFilesSignalsIt(): void
     {
         $tree = $this->branchChanging('src/Report.php');
@@ -111,6 +91,26 @@ final class StaticAnalysisChangedFilesSignalTest extends SandboxTestCase
         $this->revertConfigurationOnSecondMergeBase();
 
         self::assertSame('unset', $this->signalSeenByPhpstan($tree, Mode::ChangedFilesOnly));
+    }
+
+    #[Override]
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->changedFilesOnly = getenv(StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE);
+        putenv(StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE);
+    }
+
+    #[Override]
+    protected function tearDown(): void
+    {
+        putenv(false === $this->changedFilesOnly ? StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE : StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE.'='.$this->changedFilesOnly);
+
+        if (null !== $this->path) {
+            putenv(false === $this->path ? 'PATH' : 'PATH='.$this->path);
+        }
+
+        parent::tearDown();
     }
 
     // a git on PATH that undoes the configuration change once the gate asks for the merge base a second time, so a gate that reads the tree twice sees two different trees

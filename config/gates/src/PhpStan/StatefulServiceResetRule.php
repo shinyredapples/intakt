@@ -67,6 +67,16 @@ final readonly class StatefulServiceResetRule implements Rule
             && !$this->registration->excludes($class);
     }
 
+    private function finding(ClassReflection $class, ReflectionProperty $property, int $classLine): IdentifierRuleError
+    {
+        $origin = $property->getBetterReflection()->getDeclaringClass();
+        $ownLine = $origin->getName() === $class->getName() ? $property->getBetterReflection()->getStartLine() : null;
+        $name = null === $ownLine ? sprintf('%s::$%s', $origin->getShortName(), $property->getName()) : '$'.$property->getName();
+        $message = sprintf('Service property %s is not readonly and the class does not implement ResetInterface: make the property readonly or implement reset() so Symfony clears it between requests and messages, or mark state meant to last the whole process with #[KeptForTheProcess].', $name);
+
+        return RuleErrorBuilder::message($message)->identifier('intakt.statefulService')->line($ownLine ?? $classLine)->build();
+    }
+
     /**
      * @return list<ReflectionProperty>
      */
@@ -76,6 +86,16 @@ final readonly class StatefulServiceResetRule implements Rule
 
         // a virtual property has no backing store, so it holds no state to carry into the next request
         return array_values(array_filter(array_merge(...$declared), fn (ReflectionProperty $property): bool => !$property->isReadOnly() && !$property->isVirtual() && !$this->isKeptForTheProcess($property) && $this->isDeclaredInTheRegisteredResource($property)));
+    }
+
+    /**
+     * @return list<ReflectionProperty>
+     */
+    private function declaredProperties(ClassReflection $class): array
+    {
+        $properties = $class->getNativeReflection()->getProperties();
+
+        return array_values(array_filter($properties, static fn (ReflectionProperty $property): bool => $property->getDeclaringClass()->getName() === $class->getName()));
     }
 
     private function isKeptForTheProcess(ReflectionProperty $property): bool
@@ -90,25 +110,5 @@ final readonly class StatefulServiceResetRule implements Rule
         $file = $property->getBetterReflection()->getDeclaringClass()->getFileName();
 
         return null !== $file && $this->registration->covers($file);
-    }
-
-    /**
-     * @return list<ReflectionProperty>
-     */
-    private function declaredProperties(ClassReflection $class): array
-    {
-        $properties = $class->getNativeReflection()->getProperties();
-
-        return array_values(array_filter($properties, static fn (ReflectionProperty $property): bool => $property->getDeclaringClass()->getName() === $class->getName()));
-    }
-
-    private function finding(ClassReflection $class, ReflectionProperty $property, int $classLine): IdentifierRuleError
-    {
-        $origin = $property->getBetterReflection()->getDeclaringClass();
-        $ownLine = $origin->getName() === $class->getName() ? $property->getBetterReflection()->getStartLine() : null;
-        $name = null === $ownLine ? sprintf('%s::$%s', $origin->getShortName(), $property->getName()) : '$'.$property->getName();
-        $message = sprintf('Service property %s is not readonly and the class does not implement ResetInterface: make the property readonly or implement reset() so Symfony clears it between requests and messages, or mark state meant to last the whole process with #[KeptForTheProcess].', $name);
-
-        return RuleErrorBuilder::message($message)->identifier('intakt.statefulService')->line($ownLine ?? $classLine)->build();
     }
 }
