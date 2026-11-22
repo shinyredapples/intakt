@@ -623,6 +623,18 @@ final class MercureRoundUpdatesTest extends TestCase
         );
     }
 
+    public function testARoundUpdateNamesAReviewerOfAnUnknownModelByItsIdAlone(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startRoundOf('feat/thing', self::ROUND, 1);
+        $ledger->startReviewerOn(self::ROUND, 'security', 'acme/robot-7');
+        $this->ledger = $ledger;
+
+        $this->updates()->toolCalled(Uuid::fromString(self::ROUND), self::ROUND.'-security', 'read_file');
+
+        self::assertStringContainsString('<h3 title="acme/robot-7">security (acme/robot-7) live</h3>', $this->published[0]->getData());
+    }
+
     public function testAToolCallNamesItsReviewerByTheRoleAndModelOfItsLatestStart(): void
     {
         $ledger = new DashboardLedger();
@@ -633,7 +645,7 @@ final class MercureRoundUpdatesTest extends TestCase
 
         $this->updates()->toolCalled(Uuid::fromString(self::ROUND), self::ROUND.'-security', 'read_file');
 
-        self::assertStringContainsString('<h3>security (Kimi K3) live</h3>', $this->published[0]->getData());
+        self::assertStringContainsString('<h3 title="Kimi K3">security (Kimi K3 (Moonshot AI)) live</h3>', $this->published[0]->getData());
         self::assertSame([], $this->log->cleanLogs());
     }
 
@@ -650,7 +662,7 @@ final class MercureRoundUpdatesTest extends TestCase
 
         self::assertCount(2, $this->published);
         foreach ($this->published as $update) {
-            self::assertStringContainsString('<h3>security (Kimi K3) live</h3>', $update->getData());
+            self::assertStringContainsString('<h3 title="Kimi K3">security (Kimi K3 (Moonshot AI)) live</h3>', $update->getData());
         }
     }
 
