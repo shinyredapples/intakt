@@ -83,7 +83,7 @@ Before pushing, Intakt runs the project's check itself (`bin/check --fast` for a
 - the journeys, which walk through a first install and the live review page;
 - the database tests on MySQL, MariaDB and PostgreSQL (the check before the push uses SQLite only), when a pull request touches the database layer, its migrations, the dependencies, the persistence tests or their setup, or the CI files;
 - building the app image, with a smoke test and a check that it starts on an empty volume, unless a pull request changes only files under `docs/`, `tests/` or `upstream/`;
-- an upgrade check, when a pull request touches migrations, mapped database classes, the `Dockerfile`, the `docker/` folder or the locked dependencies: the image starts on a copy of the data of the version the change starts from.
+- an upgrade check, when a pull request touches migrations, mapped database classes, the `Dockerfile`, the `docker/` folder or the locked dependencies: the image starts on a copy of the data of the version the change starts from, and then that older version starts again on its untouched original data.
 
 On main, the database tests, the image build with its smoke test and first-start check, and the upgrade check run on every push. So CI is a second, independent opinion that can also catch what the check before the push never looks at, and the reviewers only start once it is green.
 

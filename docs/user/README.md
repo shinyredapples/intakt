@@ -34,6 +34,20 @@ You will meet these characters on the dashboard. Each one stands where its job h
 8. [When something goes wrong](08-when-something-goes-wrong.md): the common surprises, why they happen, what to do.
 9. [Running it for a team](09-running-it-for-a-team.md): your own panel, your own CI, and where the details live.
 
+## Which tier a build runs on
+
+When Intakt builds a task, these inputs decide its tier, the first that applies wins:
+
+1. A path the build touches matches one of the project's sensitive paths: strong.
+2. An escalation review confirmed a recurring P1 on the change's latest head: strong. A rejected escalation changes nothing.
+3. An earlier round had a setback the project escalates on: strong.
+4. A `model:<tier>` label on the task.
+5. The project's default tier.
+
+`intakt:build:tier <project> --change=<change>` shows the choice and its reason; no build lane passes the change yet ([details](../reference/user-manual.md#which-tier-a-build-starts-on)).
+
+One thing to know about booting: Intakt can start a change in a scratch copy to see that it boots. A change that takes too long to install or to start counts as a failed boot, not as a fault of Intakt, so when main boots fine, the change can be sent back. Details are in the [complete reference](../reference/user-manual.md).
+
 Looking for a setting, a command option or an exact rule? The [complete reference](../reference/user-manual.md) keeps every detail. The [plain-words guides](../guide/README.md) explain how Intakt works inside.
 
 Next: [Meet Intakt](01-meet-intakt.md)
