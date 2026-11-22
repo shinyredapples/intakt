@@ -1,5 +1,18 @@
 ## Review verdicts
 
+### In short
+
+A verdict is what one reviewer returns: a decision (`approve`, `changes` or `blocked`) and its findings, each with a severity from P1 to P3, a place in the code and, when given, evidence. The classes in the Review module's `Contract` are the source of truth: Symfony AI derives the JSON schema the reviewer answers in from them, and a strict converter refuses unknown or left-out fields. An answer that cannot be read is no verdict: the reviewer is asked once more, and a second failure fails the reviewer.
+
+Worth knowing:
+
+- A verdict that withholds approval must name at least one finding.
+- A reviewer's `blocked` with findings is recorded as `changes`; `blocked` stays for a reviewer that gave no usable review, with its reason.
+- Verdicts and findings are stored as JSON through the named serializer `stored`, so stored keys keep their form.
+- A test fails when the derived schema differs from `tests/Core/Review/Contract/verdict.schema.json`.
+
+The rest of this page is the detailed reference.
+
 The `Core/Review` module's `Contract` holds the verdict a reviewer returns (plan task T1, design: [Reviews](../design/05-architecture/07-reviews.md)).
 
 - **Classes are the source of truth:** `Verdict` (`verdict`, a `Decision`: `approve`, `changes` or `blocked`; `findings`; `resolved`; `follow_ups`), `Finding` (`id`, `severity` a `Severity` P1 to P3, `file`, `line`, `symbol`, `text`, `fixable_by` a `FixableBy` builder or owner, `repeat`, `requirement`, `evidence`, `regression`, and `merged`, below) and `Evidence` (`probe`, `output`). They are final and readonly, the closed sets are backed enums, and the property names are the JSON field names, because Symfony AI's structured output ignores serializer name mapping. The reviewer's answer format is not the contract `Verdict` itself but the answer document `Infrastructure/ReviewerAnswer/Verdict` (#3419): the same four fields with the same types (`findings` a list of the contract's `Finding`, validated as nested objects; `resolved` and `follow_ups` lists of strings), and no origin. It keeps the short name `Verdict` because Symfony AI names the schema after the class, so the schema the reviewers get is the one the contract `Verdict` gave (`tests/Core/Review/Infrastructure/ReviewerAnswerTest.php` compares it with `fixtures/verdict-schema.json`, taken from main before the document existed). `toVerdict()` maps it to the contract `Verdict` with origin `Reviewer`; it is the only mapping, so the contract can later change its types without changing the schema or the stored rounds. Validator constraints: `id`, `text` and `probe` are not blank, `line` is at least 1, and findings and evidence are validated as nested objects.

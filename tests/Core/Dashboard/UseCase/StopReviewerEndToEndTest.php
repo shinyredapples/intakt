@@ -63,7 +63,7 @@ final class StopReviewerEndToEndTest extends WebTestCase
         $this->fixture->start(1);
         $message = $this->fixture->bus->messages[0];
         $round = $this->fixture->reviewer($message->reviewerId)->round()->id()->toRfc4122();
-        $page = '/reviews/'.$round;
+        $page = '/reviews/'.$round.'/record';
         $running = [];
 
         $script = function () use ($message, $round, $page, &$running): ToolCallResult {

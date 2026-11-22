@@ -107,7 +107,7 @@ final class BlockedWithFindingsPageTest extends WebTestCase
     {
         $console = $this->reviewedByTheCommand();
 
-        $page = $this->browser->request('GET', '/reviews/'.$this->roundId);
+        $page = $this->browser->request('GET', '/reviews/'.$this->roundId.'/record');
         $lines = explode("\n", rtrim($console->getDisplay(), "\n"));
 
         self::assertResponseIsSuccessful();
