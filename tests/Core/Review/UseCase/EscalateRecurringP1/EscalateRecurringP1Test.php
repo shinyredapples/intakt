@@ -438,7 +438,7 @@ final class EscalateRecurringP1Test extends KernelTestCase
         return $this->fixture->keptVerdicts()->ofKey($this->keyOf($finding));
     }
 
-    // The application's handler and command bus behind a worker that reads a Doctrine queue on the test's SQLite database, with only the strong tier scripted, as messenger:consume runs it.
+    // A real worker on a Doctrine queue in SQLite, because the evidence must come from the application's own handler as messenger:consume runs it; only the strong tier is scripted, since no test may reach a provider.
     /**
      * @param list<EscalateRecurringP1> $messages
      */
@@ -457,7 +457,7 @@ final class EscalateRecurringP1Test extends KernelTestCase
         self::assertSame(0, $queue->getMessageCount());
     }
 
-    // Through the application's failure listeners, as a worker hands the message on once its retries are used up.
+    // Through the application's failure listeners, because they decide what a parked message keeps once a worker has used up its retries.
     private function parkedAfterTheLastRetry(EscalateRecurringP1 $message, EscalationCallFailed $failure): Envelope
     {
         $failed = self::getContainer()->get('messenger.transport.failed');
