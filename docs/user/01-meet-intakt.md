@@ -20,7 +20,7 @@ One review, from start to verdict:
 4. **The owl judges.** It sorts the findings into fix now, follow up later, or reject.
 5. **You get one verdict.** Approve, changes, or blocked, with the list To fix.
 
-![The Now box of a judged review: two reviewers, correctness on Opus from Anthropic and security on GPT 6.2 Sol from OpenAI, both asking for changes; in the middle the list To fix with two P1, two P2 and one P3 findings, each with its id and text; on the right the owl and "The judge's call: Changes requested, 5 findings to fix"](../assets/guide/verdict-now-box.webp)
+![An earlier version of the review page, the Now box of a judged review: two reviewers, correctness on Opus from Anthropic and security on GPT 6.2 Sol from OpenAI, both asking for changes; in the middle the list To fix with two P1, two P2 and one P3 findings, each with its id and text; on the right the owl and "The judge's call: Changes requested, 5 findings to fix"](../assets/guide/verdict-now-box.webp)
 
 *The demo's review of that shipping change: two labs read it, the owl kept five findings.*
 
