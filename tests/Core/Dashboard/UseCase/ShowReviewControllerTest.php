@@ -880,8 +880,8 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame(['correctness (Kimi K3): running'], $crawler->filter('.state-block .sb-list li')->each(static fn (Crawler $item): string => $item->text()));
-        self::assertSame(['correctness (Kimi K3) live'], $crawler->filter('.log-pane .live h3')->each(static fn (Crawler $heading): string => $heading->text()));
+        self::assertSame(['correctness (Kimi K3 (Moonshot AI)): running'], $crawler->filter('.state-block .sb-list li')->each(static fn (Crawler $item): string => $item->text()));
+        self::assertSame([['correctness (Kimi K3 (Moonshot AI)) live', 'Kimi K3']], $crawler->filter('.log-pane .live h3')->each(static fn (Crawler $heading): array => [$heading->text(), $heading->attr('title')]));
     }
 
     public function testAnOpenFindingLinksToItsRowInTheTimeline(): void
