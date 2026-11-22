@@ -79,7 +79,7 @@ final readonly class NoServiceLocatorRule implements Rule
     }
 
     /**
-     * @return list<array{string, ?string, int}> the name, the locator type and the line of each parameter
+     * @return list<array{string, ?string, int}>
      */
     private function declaredParametersOf(ClassLike $class): array
     {
