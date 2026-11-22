@@ -64,6 +64,11 @@ final readonly class DoctrineLedger implements Ledger
         return $this->recordedEventsOf(['kind' => $kind->value]);
     }
 
+    public function readOfKindAbout(LedgerEventKind $kind, string $subject): RecordedEvents
+    {
+        return $this->recordedEventsOf(['kind' => $kind->value, 'subject' => $subject]);
+    }
+
     /**
      * @param list<string> $texts
      */
@@ -122,7 +127,7 @@ final readonly class DoctrineLedger implements Ledger
                 continue;
             }
 
-            $events[] = new RecordedEvent($record->id(), new LedgerEvent($kind, $record->payload()), $record->recordedAt());
+            $events[] = new RecordedEvent($record->id(), new LedgerEvent($kind, $record->payload(), $record->subject()), $record->recordedAt());
         }
 
         return new RecordedEvents($events);
@@ -133,6 +138,6 @@ final readonly class DoctrineLedger implements Ledger
     {
         $now = $this->clock->now()->setTimezone(new DateTimeZone('UTC'));
 
-        return new EventRecord(new UuidV7(UuidV7::generate($now)), $event->kind->value, $event->payload, $now);
+        return new EventRecord(new UuidV7(UuidV7::generate($now)), $event->kind->value, $event->payload, $now, $event->subject);
     }
 }
