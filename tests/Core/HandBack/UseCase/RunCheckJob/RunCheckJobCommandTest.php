@@ -26,7 +26,11 @@ use Intakt\Core\HandBack\UseCase\CheckHandBack\GivenHistory;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\IncomingObjects;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\RepositoryGit;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\StrippedCommits;
+use Intakt\Core\HandBack\Infrastructure\DependencySnapshots;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\ChangedFile;
+use Intakt\Core\HandBack\UseCase\RunCheckJob\CheckDependencies;
+use Intakt\Core\HandBack\UseCase\RunCheckJob\CheckedLockFiles;
+use Intakt\Core\HandBack\UseCase\RunCheckJob\DependencyJobs;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\LostContentCheck;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\RunCheckJob;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\RunCheckJobCommand;
@@ -44,8 +48,10 @@ use Intakt\Core\Job\Contract\JobResult;
 use Intakt\Core\Job\Contract\JobRunner;
 use Intakt\Core\Job\Contract\JobSpec;
 use Intakt\Plugin\Forge\Contract\JobCredentials;
+use Intakt\Plugin\Gate\Contract\DependencyStep;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
 use Intakt\Tests\Core\HandBack\BuildHistory;
+use Intakt\Tests\Core\HandBack\CheckJobsFor;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -59,6 +65,11 @@ use Symfony\Component\Filesystem\Filesystem;
 #[CoversClass(RunCheckJobInput::class)]
 #[UsesClass(RunCheckJob::class)]
 #[UsesClass(LostContentCheck::class)]
+#[UsesClass(CheckDependencies::class)]
+#[UsesClass(CheckedLockFiles::class)]
+#[UsesClass(DependencyJobs::class)]
+#[UsesClass(DependencySnapshots::class)]
+#[UsesClass(DependencyStep::class)]
 #[UsesClass(ChangedFile::class)]
 #[UsesClass(CheckJob::class)]
 #[UsesClass(Paths::class)]
@@ -253,15 +264,7 @@ final class RunCheckJobCommandTest extends TestCase
      */
     private function executed(JobRunner $runner, array $options): CommandTester
     {
-        $git = new RepositoryGit(new HardenedGit());
-        $checks = new RunCheckJob(
-            new CheckHandBack($git, new BundleFile(), new StrippedCommits(), new IncomingObjects(), new BundleSecretScan('gitleaks')),
-            new LostContentCheck($git),
-            $runner,
-            new PhpGate(),
-            new Filesystem(),
-            self::SCRIPT,
-        );
+        $checks = new CheckJobsFor($this->history->folder)->runCheckJob($runner);
         $application = new Application();
         $application->addCommand(new RunCheckJobCommand($checks));
         $tester = new CommandTester($application->find('intakt:check:run'));

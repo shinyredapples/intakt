@@ -79,8 +79,13 @@ use Intakt\Core\HandBack\UseCase\CheckHandBack\GivenHistory;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\IncomingObjects;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\RepositoryGit;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\StrippedCommits;
+use Intakt\Core\HandBack\Infrastructure\DependencySnapshots;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\ChangedFile;
+use Intakt\Core\HandBack\UseCase\RunCheckJob\CheckDependencies;
+use Intakt\Core\HandBack\UseCase\RunCheckJob\CheckedLockFiles;
+use Intakt\Core\HandBack\UseCase\RunCheckJob\DependencyJobs;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\LostContentCheck;
+use Intakt\Plugin\Gate\Contract\DependencyStep;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\RunCheckJob;
 use Intakt\Core\Job\Contract\JobCause;
 use Intakt\Core\Job\Contract\JobEgress;
@@ -109,6 +114,7 @@ use Intakt\Plugin\GitHubForge\Contract\IssueReads;
 use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
 use Intakt\Tests\Core\Build\ScriptedJobRunner;
+use Intakt\Tests\Core\HandBack\CheckJobsFor;
 use Intakt\Tests\Core\Git\RecordingClock;
 use Intakt\Tests\Core\Git\TemporaryRepository;
 use Intakt\Tests\Core\Git\UseCase\PushBranch\ProgramOnPath;
@@ -161,6 +167,11 @@ use Symfony\Component\Process\Process;
 #[UsesClass(ProposedChange::class)]
 #[UsesClass(RunCheckJob::class)]
 #[UsesClass(LostContentCheck::class)]
+#[UsesClass(CheckDependencies::class)]
+#[UsesClass(CheckedLockFiles::class)]
+#[UsesClass(DependencyJobs::class)]
+#[UsesClass(DependencySnapshots::class)]
+#[UsesClass(DependencyStep::class)]
 #[UsesClass(ChangedFile::class)]
 #[UsesClass(CheckJob::class)]
 #[UsesClass(CheckJobOutcome::class)]
@@ -280,7 +291,7 @@ final class BuildTaskTest extends TestCase
     protected function tearDown(): void
     {
         $this->programs?->remove();
-        new Filesystem()->remove([$this->mirrors, $this->clone, $this->clone.'-job', $this->output, $this->mirrors.'-prompts', $this->mirrors.'-hand-backs', $this->mirrors.'-key', $this->mirrors.'-key.pub']);
+        new Filesystem()->remove([$this->mirrors, $this->clone, $this->clone.'-job', $this->output, $this->mirrors.'-prompts', $this->mirrors.'-hand-backs', $this->mirrors.'-key', $this->mirrors.'-key.pub', $this->mirrors.'-checks']);
         $this->remote->remove();
     }
 
@@ -995,7 +1006,8 @@ final class BuildTaskTest extends TestCase
         $git = new RepositoryGit(new HardenedGit());
         $checks = new CheckHandBack($git, new BundleFile(), new StrippedCommits(), new IncomingObjects(), new BundleSecretScan($this->scanner));
         $files = new HandBackFile($checkout, $this->handBackFiles, $this->mirrors.'-hand-backs');
-        $checkJobs = new RunCheckJob($checks, new LostContentCheck($git), $this->checkRunner, new PhpGate(), new Filesystem(), self::CHECK_SCRIPT);
+        $dependencies = new CheckJobsFor($this->mirrors.'-checks')->dependencies($this->checkRunner, new PhpGate());
+        $checkJobs = new RunCheckJob($checks, new LostContentCheck($git), $dependencies, $this->checkRunner, new PhpGate(), new Filesystem(), self::CHECK_SCRIPT);
 
         // On a database that cannot be opened, because a parking that works is proven on the install's own database in BuildTaskParksOnSqliteTest.
         $parked = new ParkedTasks(DriverManager::getConnection(['driver' => 'pdo_sqlite', 'path' => $this->mirrors.'-missing/data.db']), $ledger, self::createStub(ManagerRegistry::class), new MockClock());

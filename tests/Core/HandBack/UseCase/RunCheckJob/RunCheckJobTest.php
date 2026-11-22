@@ -24,7 +24,11 @@ use Intakt\Core\HandBack\UseCase\CheckHandBack\GivenHistory;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\IncomingObjects;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\RepositoryGit;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\StrippedCommits;
+use Intakt\Core\HandBack\Infrastructure\DependencySnapshots;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\ChangedFile;
+use Intakt\Core\HandBack\UseCase\RunCheckJob\CheckDependencies;
+use Intakt\Core\HandBack\UseCase\RunCheckJob\CheckedLockFiles;
+use Intakt\Core\HandBack\UseCase\RunCheckJob\DependencyJobs;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\LostContentCheck;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\RunCheckJob;
 use Intakt\Core\Job\Contract\JobCause;
@@ -39,13 +43,14 @@ use Intakt\Core\Job\Contract\JobResult;
 use Intakt\Core\Job\Contract\JobRunner;
 use Intakt\Core\Job\Contract\JobSpec;
 use Intakt\Plugin\Forge\Contract\JobCredentials;
+use Intakt\Plugin\Gate\Contract\DependencyStep;
 use Intakt\Plugin\Gate\Contract\Gate;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
 use Intakt\Tests\Core\HandBack\BuildHistory;
+use Intakt\Tests\Core\HandBack\CheckJobsFor;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
-use Symfony\Component\Filesystem\Filesystem;
 
 #[CoversClass(RunCheckJob::class)]
 #[CoversClass(LostContentCheck::class)]
@@ -80,6 +85,11 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(JobResult::class)]
 #[UsesClass(JobEnd::class)]
 #[UsesClass(JobOutput::class)]
+#[UsesClass(CheckDependencies::class)]
+#[UsesClass(CheckedLockFiles::class)]
+#[UsesClass(DependencyJobs::class)]
+#[UsesClass(DependencySnapshots::class)]
+#[UsesClass(DependencyStep::class)]
 final class RunCheckJobTest extends TestCase
 {
     private const string SCRIPT = __DIR__.'/../../../../../docker/job/check.sh';
@@ -507,16 +517,7 @@ final class RunCheckJobTest extends TestCase
 
     private function checkJob(JobRunner $runner, ?Gate $gate = null): RunCheckJob
     {
-        $git = new RepositoryGit(new HardenedGit());
-
-        return new RunCheckJob(
-            new CheckHandBack($git, new BundleFile(), new StrippedCommits(), new IncomingObjects(), new BundleSecretScan('gitleaks')),
-            new LostContentCheck($git),
-            $runner,
-            $gate ?? new PhpGate(),
-            new Filesystem(),
-            self::SCRIPT,
-        );
+        return new CheckJobsFor($this->history->folder)->runCheckJob($runner, $gate);
     }
 
     private function ranSpec(): JobSpec
