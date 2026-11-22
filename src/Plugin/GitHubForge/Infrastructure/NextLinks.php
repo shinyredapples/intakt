@@ -15,7 +15,6 @@ final readonly class NextLinks
 
     /**
      * @param list<string> $links
-     * @param string       $target the requested path and query
      *
      * @throws ForgeReadFailed
      */
