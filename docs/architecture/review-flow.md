@@ -7,7 +7,7 @@ A review starts from one of three doors: the `intakt:review` command, the MCP `s
 Worth knowing:
 
 - A round is refused before it opens when a tier it needs is not mapped.
-- A finding that quotes code not in the change is dropped before judging (the quote check).
+- A finding is dropped before judging when none of its quoted code fragments is in the change (the quote check).
 - Every kept P1 and P2 reaches the act list, whatever the judge marked it.
 - A P1 that recurs on another head gets an escalation review, and its verdict is kept and reused.
 

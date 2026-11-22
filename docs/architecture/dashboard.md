@@ -7,7 +7,7 @@ The dashboard is the web interface of Intakt: server-rendered Twig pages under `
 Worth knowing:
 
 - There is no login, by design. Every dashboard route refuses a request unless its host is `localhost`, `127.0.0.1` or `[::1]` on the `DASHBOARD_PORT` (`RefuseForeignHost`).
-- Every button posts a CSRF token, which `FormPress` checks.
+- Every form that acts posts a CSRF token, which `FormPress` checks.
 - `/status` is not a page: it answers the status JSON ([Status read model](status.md)).
 - `/components` shows every shared component in the light and the dark theme.
 

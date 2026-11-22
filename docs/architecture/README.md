@@ -9,13 +9,13 @@ Intakt reviews code changes with a panel of AI models and can build changes from
 ### The parts
 
 - **Review panel:** the reviewers of a change, each a model on a capability tier. Each reviewer reads the change with read-only tools and returns a verdict: `approve`, `changes` or `blocked`, with findings rated P1 to P3.
-- **Judge:** one more model call that sorts the panel's findings into the act list (what to fix now) and follow-ups. Before it runs, plain code drops findings that quote code not in the change.
+- **Judge:** one more model call that sorts the panel's findings into the act list (what to fix now) and follow-ups. Before it runs, plain code drops a finding when none of its quoted code fragments is in the change.
 - **Rounds and passes:** a round is one review of one head of a change. A change can have several rounds, for example one for each new head. The dashboard calls a round a "Review pass".
 - **Quorum policy:** decides the outcome from the votes: `all`, `majority` or `one-strong-plus-one`.
 - **Dashboard:** server-rendered web pages that show the board, each review, what waits on you, and Trends. Running reviews update the open page live.
 - **MCP:** an MCP server, so your own agent can list projects, start a review and read its status, verdicts and act list.
 - **Forge and GitHub:** the forge is where changes live. A local git repository works as a forge, and so does GitHub through Intakt's GitHub App. Without a GitHub App, Intakt publishes nothing to GitHub.
-- **Quality gates:** `bin/check` runs every check of this repository (coding standards, static analysis, tests, secret scans and more). CI runs the same command.
+- **Quality gates:** `bin/check` runs the checks of this repository (coding standards, static analysis, tests, secret scans and more); the journeys run separately, with `bin/check --journeys`. CI runs the same command, with the pull request's arguments.
 - **Build side:** `intakt:build:task` turns a task into a branch. A builder runs in a fresh job container, Intakt checks what it hands back, runs the checks again itself, and pushes the branch signed.
 
 ### One review, start to verdict
@@ -25,7 +25,7 @@ Intakt reviews code changes with a panel of AI models and can build changes from
 3. It opens a round and queues one job per reviewer, so the reviewers work in parallel.
 4. Each reviewer reads the change and returns a verdict with its findings.
 5. When every reviewer is in, the round is complete and its findings join the change's finding list.
-6. The quote check drops findings about code that is not in the change. The judge marks the rest act, defer or reject.
+6. The quote check drops a finding when none of its quoted code fragments is in the change. The judge marks the rest act, defer or reject.
 7. The quorum policy decides the outcome, and the act list holds every kept P1 and P2 plus the P3s marked act.
 8. `intakt:review` prints the outcome and the act list. The dashboard shows the same review. A round in reviewer-for-loop mode, or of a pull request handed to Intakt, also publishes its status and a comment on GitHub, when a GitHub App is set.
 
@@ -115,7 +115,7 @@ The pages below are detailed reference for contributors. Each one describes its 
 - [The demo with docker compose](demo-with-docker-compose.md): the one-command demo.
 - [The demo recording](demo-recording.md): recording a real review and playing it back in the demo.
 - [Container image](container-image.md): the image and its smoke test.
-- [Instance and probes](instance-and-probes.md): running and probing an install without network access.
+- [Instance and probes](instance-and-probes.md): running an install, and probing it with network access cut.
 - [Connectivity check and outage state](outage.md): when Intakt counts itself as offline.
 - [Persistence](persistence.md): the supported databases.
 - [Job containers](job-containers.md): a fresh container per job, with a network allowlist.

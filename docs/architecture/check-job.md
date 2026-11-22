@@ -2,7 +2,7 @@
 
 ## In short
 
-The check job is the pre-push check. It runs the project's check command on what a build handed back, in a job container of its own, because the builder's own run of the checks is never trusted. It first repeats the hand-back checks. Then it stops without a job when a file lost most of its content and the plan does not name that file. The job clones the repository, applies the bundle, merges the branch into current main when it lacks main, and runs the gate's steps. The verdict comes only from the `check-result` file in the job's output directory, never from the exit code or the log.
+The check job is the pre-push check. It runs the project's check command on what a build handed back, in a job container of its own, because the builder's own run of the checks is never trusted. It first repeats the hand-back checks. Then it stops without a job when a file lost most of its content and the plan does not name that file. The job clones the repository, applies the bundle, merges current main into the branch when a main commit is supplied (`--merge-main`) and the branch lacks it, and runs the gate's steps. The verdict comes only from the `check-result` file in the job's output directory, never from the exit code or the log.
 
 Worth knowing:
 

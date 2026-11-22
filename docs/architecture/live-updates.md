@@ -2,14 +2,14 @@
 
 ### In short
 
-Live updates show a review while it runs. As reviewers work, the review module reports each start, tool call, streamed narration, read answer, stop and round state change through the `RoundUpdates` port. The dashboard renders each report as Turbo Stream markup and publishes it on the Mercure hub that FrankenPHP runs, on one topic per round (`review/rounds/<round id>`). Each dashboard page subscribes through one stream source in the shell, so the review page changes without a reload. A reviewer's answer is never published as raw text, only the verdict and findings read from it.
+Live updates show a review while it runs. As reviewers work, the review module reports each start, tool call, streamed narration, read answer, stop and round state change through the `RoundUpdates` port. The dashboard renders each report as Turbo Stream markup and publishes it on the Mercure hub that FrankenPHP runs, on one topic per round (`review/rounds/<round id>`). A page rendered with live updates subscribes through one stream source in the shell, so the review page changes without a reload. A reviewer's answer is never published as raw text, only the verdict and findings read from it.
 
 Worth knowing:
 
 - Implementations of `RoundUpdates` and `LiveUpdates` never throw; a failing hub is logged.
 - Streamed text that opens a JSON object is dropped, not published, and the rule fails closed.
 - A call streams only when the model's catalog entry has the output streaming capability.
-- The hub keeps recent events (`MERCURE_HISTORY_SIZE`, default 1000), so a page that reconnects gets what it missed.
+- The hub keeps recent events (`MERCURE_HISTORY_SIZE`, default 1000), so a page that reconnects gets the missed events the hub still keeps.
 
 The rest of this page is the detailed reference.
 
