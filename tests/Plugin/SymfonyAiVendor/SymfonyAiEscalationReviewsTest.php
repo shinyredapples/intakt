@@ -146,7 +146,7 @@ final class SymfonyAiEscalationReviewsTest extends KernelTestCase
         $tiers->method('answering')->willThrowException(new EveryAccountCoolingDown(Provider::Anthropic, 45));
 
         try {
-            $_ = $this->reviews(static fn (): string => '{}', $ledger, $tiers)->escalate('alpha', Uuid::fromString(self::ROUND), $this->messages());
+            $_ = $this->through($tiers, $ledger)->escalate('alpha', Uuid::fromString(self::ROUND), $this->messages());
             self::fail('No account may answer while every account cools down.');
         } catch (ProviderRateLimited $limited) {
             self::assertSame([45, 0], [$limited->retryAfterSeconds, $ledger->count()]);
@@ -170,7 +170,7 @@ final class SymfonyAiEscalationReviewsTest extends KernelTestCase
         return new MessageBag(Message::forSystem('Judge the finding.'), Message::ofUser('The finding.'));
     }
 
-    private function reviews(Closure $answer, InMemoryLedger $ledger = new InMemoryLedger(), ?TierInvoker $tiers = null, LoggerInterface $log = new NullLogger()): SymfonyAiEscalationReviews
+    private function reviews(Closure $answer, InMemoryLedger $ledger = new InMemoryLedger(), LoggerInterface $log = new NullLogger()): SymfonyAiEscalationReviews
     {
         $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => [
             'strong' => ['provider' => 'anthropic', 'model' => 'big'],
@@ -178,12 +178,17 @@ final class SymfonyAiEscalationReviewsTest extends KernelTestCase
         ]]], []);
         $platform = MockPlatformFactory::createPlatform($answer, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
         $platforms = new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => $platform]);
+
+        return $this->through(new TierPlatform($resolver, $platforms, new NoCooldowns(), new NullLogger()), $ledger, $log);
+    }
+
+    private function through(TierInvoker $tiers, InMemoryLedger $ledger, LoggerInterface $log = new NullLogger()): SymfonyAiEscalationReviews
+    {
         $usage = new UsageLedger($ledger, new MockClock('2026-11-21 12:00:00 UTC'), new NullLogger(), StoredSerializerFactory::create());
         $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
-
         $serializer = self::getContainer()->get(SerializerInterface::class);
         self::assertInstanceOf(SerializerInterface::class, $serializer);
 
-        return new SymfonyAiEscalationReviews($tiers ?? new TierPlatform($resolver, $platforms, new NoCooldowns(), new NullLogger()), $usage, $limit, $serializer, $log);
+        return new SymfonyAiEscalationReviews($tiers, $usage, $limit, $serializer, $log);
     }
 }

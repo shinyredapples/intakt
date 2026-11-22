@@ -14,8 +14,7 @@ final readonly class EscalationVerdict
 {
     public function __construct(
         public EscalationOutcome $outcome,
-        // Required, because a rejection goes back to the reviewer that holds the finding and a confirmation to the next build, and either must say why.
-        // Not blank and holding a visible character, because trim() leaves form feeds and Unicode spaces, which say nothing either.
+        // Required with a visible character, because a rejection goes back to the reviewer and a confirmation to the next build, both must say why, and trim() keeps form feeds and Unicode spaces.
         #[NotBlank]
         #[Regex(pattern: '/[^\s\p{Z}\p{C}]/u', message: 'The reasons must hold more than whitespace.')]
         public string $reasons,
