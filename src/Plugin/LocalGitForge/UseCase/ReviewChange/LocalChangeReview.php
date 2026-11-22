@@ -104,7 +104,7 @@ final readonly class LocalChangeReview
     {
         try {
             $forge->removeSnapshot($snapshot);
-            // Boundary: the review is settled already, and RemoveKeptSnapshot removes what is left.
+            // Boundary: logs the failed removal and goes on, because the review is settled already and RemoveKeptSnapshot removes what is left.
         } catch (ForgeReadFailed $failure) {
             $this->logger->warning('The kept snapshot of a review could not be removed; delete it and run "git worktree prune" in its repository.', ['snapshot' => $snapshot, 'failure' => $failure->getMessage()]);
         }
