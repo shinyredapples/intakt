@@ -132,7 +132,7 @@ Running builds on their own is planned ([what works today](../user/README.md)), 
 - If that doesn't work either, the **maintainer agent** decides: split the task, rewrite it, or ask you.
 - *(Planned:)* the third time a task is sent back (by reviewers asking for changes, or by failing checks; within one cycle the first two failing-check returns in a row do not count, the third counts as one, and bringing in the newest project is never a send-back), it gets no further rebuild: the maintainer agent splits it into smaller tasks, once. If its open problems give no way to split it, the maintainer agent rewrites what the task must do or gives it one more try with a stronger model. A task that was already split this way is never split by this rule again.
 
-A cycle that changes nothing (the builder couldn't fix the problem because it needs something outside the task) doesn't loop: the task goes **on hold** instead ([holds](how-intakt-works.md#when-something-gets-stuck)).
+A cycle that changes nothing (the builder couldn't fix the problem because it needs something outside the task) doesn't loop: the task goes **on hold** instead, unless what it needs is the newest project: then it is rebuilt once with it, or goes straight to the Maintainer if it has no try left or the rebuild leaves it stuck ([holds](how-intakt-works.md#when-something-gets-stuck)).
 
 ## Budgets, windows and pace
 

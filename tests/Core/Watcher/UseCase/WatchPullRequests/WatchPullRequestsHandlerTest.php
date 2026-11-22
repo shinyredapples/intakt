@@ -73,6 +73,7 @@ use Intakt\Core\Watcher\UseCase\WatchPullRequests\SettleHead;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\SettleHeads;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\StaleVerdicts;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\StartedRounds;
+use Intakt\Core\Watcher\UseCase\WatchPullRequests\VerdictsWithdrawalRefused;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchedProject;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchedProjects;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatcherEventNotRecorded;
@@ -92,6 +93,7 @@ use Intakt\Tests\Core\Watcher\UseCase\FindChangedPullRequests\RecordedForge;
 use Intakt\Tests\Core\Watcher\UseCase\FindChangedPullRequests\RecordingLogger;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use Intakt\Tests\Support\KernelTestCase;
+use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -103,6 +105,8 @@ use Symfony\Component\Lock\Exception\LockStorageException;
 use Symfony\Component\Lock\Key;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
+use Symfony\Component\Messenger\Envelope;
+use Symfony\Component\Messenger\Exception\HandlerFailedException;
 
 #[Group('persistence')]
 #[CoversClass(WatchPullRequestsHandler::class)]
@@ -122,6 +126,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[CoversClass(StartedRound::class)]
 #[CoversClass(RoundStarts::class)]
 #[CoversClass(StaleVerdicts::class)]
+#[CoversClass(VerdictsWithdrawalRefused::class)]
 #[CoversClass(WatcherLedger::class)]
 #[CoversClass(ChangesHandedToIntakt::class)]
 #[CoversClass(WatchedProjects::class)]
@@ -1254,6 +1259,37 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         self::assertSame(0, $this->entities->getRepository(PendingHead::class)->count([]));
     }
 
+    public function testAWithdrawalReviewRefusesIsTheHeadFailedCauseWithReviewsReason(): void
+    {
+        $this->failToWithdrawOnARefusedHead();
+
+        self::assertSame(VerdictsWithdrawalRefused::class.": Review refused to withdraw the verdicts of the head's round: RuntimeException: the review database is down", $this->causeOf(LedgerEventKind::HeadFailed));
+    }
+
+    public function testAWithdrawalRefusedThroughTheCommandBusNamesTheHandlersOwnException(): void
+    {
+        $this->startRoundOnGreenHead();
+        $this->queries->headBoot = BootOutcome::failed('The server did not start.');
+        $this->commands->markFailure = new HandlerFailedException(new Envelope(new MarkVerdictsStale('round-1')), [new LogicException('No round round-1 is known.')]);
+        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T10:05:00Z'));
+
+        $this->tick();
+
+        self::assertStringEndsWith(": Review refused to withdraw the verdicts of the head's round: LogicException: No round round-1 is known.", $this->causeOf(LedgerEventKind::HeadFailed));
+    }
+
+    public function testAHeadWhoseWithdrawalIsRefusedFourTimesIsHandedOverWithTheRefusalAsItsCause(): void
+    {
+        $this->startRoundOnGreenHead();
+        $this->queries->headBoot = BootOutcome::failed('The server did not start.');
+        $this->commands->markFailure = new RuntimeException('the review database is down');
+        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T10:05:00Z'));
+
+        $this->tickEvery('+20 minutes', 4);
+
+        self::assertStringStartsWith(VerdictsWithdrawalRefused::class.': ', $this->causeOf(LedgerEventKind::HeadHandedOver));
+    }
+
     public function testAWithdrawalReviewCannotTakeIsSentAgainWhenTheHeadBootsOnItsNextTry(): void
     {
         $this->failToWithdrawOnARefusedHead();
@@ -1511,6 +1547,17 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
     private function tick(): void
     {
         ($this->handler)(new WatchPullRequests('alpha'));
+    }
+
+    private function causeOf(LedgerEventKind $kind): string
+    {
+        $line = array_search($kind, $this->ledger->kinds(), true);
+        self::assertIsInt($line);
+
+        $cause = $this->ledger->payloads()[$line]['cause'];
+        self::assertIsString($cause);
+
+        return $cause;
     }
 
     private function tickEvery(string $interval, int $ticks): void
