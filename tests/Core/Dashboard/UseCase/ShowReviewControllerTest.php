@@ -747,7 +747,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews/round-2');
 
         self::assertSame(['Review pass 1', 'Checked', 'outcome not recorded, 3 findings', '12:00 to 12:00 UTC', ''], $this->partsOf($crawler->filter('#round-round-1 details.ev > summary')));
-        self::assertSame(['Review pass 2', 'Checked','outcome not recorded, 0 findings', '12:00 to 12:00 UTC', ''], $this->partsOf($crawler->filter('#round-round-2 details.ev > summary')));
+        self::assertSame(['Review pass 2', 'Checked', 'outcome not recorded, 0 findings', '12:00 to 12:00 UTC', ''], $this->partsOf($crawler->filter('#round-round-2 details.ev > summary')));
         self::assertSelectorNotExists('#round-round-1 details[open]');
     }
 
