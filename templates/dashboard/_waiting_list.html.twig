@@ -1,0 +1,33 @@
+{#- The items, or the empty state when none waits, in one box, because the split page sets the box beside the panels. -#}
+<div class="wait-main" id="waiting-list">
+{% if items is empty %}
+{{ include('dashboard/components/empty.html.twig', {title: 'Nothing needs you', text: 'Intakt keeps building and reviewing. When it needs a decision, it shows up here.', pose: enum('Intakt\\Core\\Dashboard\\Domain\\MascotPose').Waiting}, with_context = false) }}
+{% else %}
+<div class="wait-list">
+{% for item in items %}
+<article class="wait-item needs" aria-labelledby="wait-{{ loop.index }}">
+    <h2 class="wait-lead" id="wait-{{ loop.index }}"><span class="dot needs"></span>{{ item.lead }}</h2>
+    {{ include('dashboard/components/meta.html.twig', {facts: [
+        {text: 'All projects'},
+        {icon: 'clock', text: item.waitingFor(now)},
+    ]}, with_context = false) }}
+    <p class="conseq">{{ item.consequence }}</p>
+    {# Before the choices, so Tab reaches it before Copy and the link (D6). #}
+    <details class="why"><summary>Why</summary>
+        <p>{{ item.why }}</p>
+    </details>
+    <ul class="act" aria-label="Your choices">
+    {% for choice in item.choices %}
+        <li>
+            {% if choice.recommended %}<span class="recommended">Recommended</span>{% endif %}
+            {% if choice.command is not null %}{{ include('dashboard/components/copy.html.twig', {text: choice.command}, with_context = false) }}{% endif %}
+            <span class="outcome">{{ choice.outcome }}</span>
+        </li>
+    {% endfor %}
+        <li><a class="btn secondary sm" href="{{ item.link ?? path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_BOARD'), {board: 1}) }}">{{ item.linkLabel }}</a></li>
+    </ul>
+</article>
+{% endfor %}
+</div>
+{% endif %}
+</div>

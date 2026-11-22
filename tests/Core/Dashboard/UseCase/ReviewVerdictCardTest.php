@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
+use Intakt\Core\Dashboard\Domain\GlossaryTerm;
 use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\ReviewOutcome;
@@ -20,6 +21,7 @@ use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\DomCrawler\Crawler;
 
 #[CoversClass(ShowReviewController::class)]
+#[UsesClass(GlossaryTerm::class)]
 #[UsesClass(Review::class)]
 #[UsesClass(ReviewedRound::class)]
 #[UsesClass(ReviewOutcome::class)]
@@ -44,7 +46,29 @@ final class ReviewVerdictCardTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
         self::assertSame('Changes needed: 3 things to fix', $crawler->filter('.verdict-card .verdict-words')->text());
-        self::assertSame('To fix', $crawler->filter('.verdict-card .verdict-to-fix')->text());
+        self::assertSame('To fix?'.GlossaryTerm::ToFix->explanation(), $crawler->filter('.verdict-card .verdict-to-fix .term[data-term="fix"]')->text());
+    }
+
+    public function testAJudgedReviewNamesItsReviewPassAndThatItWasCheckedEachWithItsExplanation(): void
+    {
+        $this->givenAChangesRoundWith(['F1' => 'act']);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame(['pass', 'checked'], $crawler->filter('.verdict-card .verdict-pass .term')->each(static fn (Crawler $term): string => (string) $term->attr('data-term')));
+        self::assertSame([GlossaryTerm::ReviewPass->explanation(), GlossaryTerm::Checked->explanation()], $crawler->filter('.verdict-card .verdict-pass [role="tooltip"]')->each(static fn (Crawler $tip): string => $tip->text()));
+        self::assertStringStartsWith('Review pass 1?', $crawler->filter('.verdict-card .verdict-pass')->text());
+        self::assertStringContainsString(GlossaryTerm::ReviewPass->explanation().', Checked?', $crawler->filter('.verdict-card .verdict-pass')->text(null, false));
+    }
+
+    public function testAChangesRoundReadsChangesNeededWithTheOutcomesOwnWordsInTheTooltip(): void
+    {
+        $this->givenAChangesRoundWith(['F1' => 'act']);
+
+        $chip = $this->browser->request('GET', '/reviews/round-1')->filter('.verdict-card .top .chip');
+
+        self::assertSame('Changes needed', $chip->text());
+        self::assertSame('Changes requested', $chip->attr('title'));
     }
 
     public function testOneFindingToFixIsCountedInTheSingular(): void
@@ -245,7 +269,7 @@ final class ReviewVerdictCardTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame('Judged, but the outcome was not recorded', $crawler->filter('.verdict-card .verdict-words')->text());
+        self::assertSame('Checked, but the outcome was not recorded', $crawler->filter('.verdict-card .verdict-words')->text());
     }
 
     private function givenAnApprovedRound(): void

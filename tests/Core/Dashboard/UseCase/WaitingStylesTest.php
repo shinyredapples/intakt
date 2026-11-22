@@ -76,6 +76,36 @@ final class WaitingStylesTest extends TestCase
         self::assertStringNotContainsString('--amber', $rules['.wait-item'] ?? '');
     }
 
+    // Because DESIGN.md (Breakpoints) puts "Meanwhile" and "You handled today" beside the list only from 1500 px.
+    public function testBelow1500WideThePanelsStackUnderTheList(): void
+    {
+        self::assertMatchesRegularExpression('/^\s*display:\s*grid;\s*grid-template-columns:\s*minmax\(0, 1fr\);/', $this->rulesOf($this->sheetOutside('min-width: 1500px', 'min-width: 2200px'))['.split'] ?? '');
+    }
+
+    public function testFrom1500WideThePanelsSitBesideTheListInA380PxColumn(): void
+    {
+        self::assertMatchesRegularExpression('/grid-template-columns:\s*minmax\(0, 1fr\) 380px;/', $this->rulesOf($this->mediaBlocks('min-width: 1500px'))['.split'] ?? '');
+        self::assertMatchesRegularExpression('/position:\s*sticky;/', $this->rulesOf($this->mediaBlocks('min-width: 1500px'))['.split > .side'] ?? '');
+    }
+
+    // Because DESIGN.md (Phone) wants every touch target at least 44 px tall.
+    public function testOnlyAt760WideAndBelowIsAPanelRow48PxAndItsLink44PxTall(): void
+    {
+        $phone = $this->rulesOf($this->mediaBlocks(self::PHONE));
+
+        self::assertMatchesRegularExpression('/min-height:\s*48px;/', $phone['.split > .side li'] ?? '');
+        self::assertMatchesRegularExpression('/min-height:\s*44px;/', $phone['.split > .side li a'] ?? '');
+        self::assertArrayNotHasKey('.split > .side li a', $this->rulesOf($this->sheetOutside(self::PHONE)));
+    }
+
+    // The board's row keeps its own .side, so the panels' rules reach only the aside of the split.
+    public function testThePanelRulesReachOnlyTheAsideOfTheSplit(): void
+    {
+        $selectors = array_keys($this->rulesOf($this->sheet()));
+
+        self::assertSame([], array_values(array_filter($selectors, static fn (string $selector): bool => 1 === preg_match('/(^|,\s*)\.side\b/', $selector))));
+    }
+
     private function sheet(): string
     {
         $sheet = file_get_contents(__DIR__.'/../../../../assets/styles/components.css');
