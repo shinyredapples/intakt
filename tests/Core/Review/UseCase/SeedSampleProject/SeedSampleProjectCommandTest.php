@@ -17,6 +17,7 @@ use Intakt\Core\Review\Contract\PanelVerdict;
 use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\ReviewerModel;
 use Intakt\Core\Review\Contract\ReviewerRole;
+use Intakt\Core\Review\Contract\ModelPrice;
 use Intakt\Core\Review\Contract\SampleProjectData;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\UseCase\SeedSampleProject\SampleProject;
@@ -53,6 +54,7 @@ use Symfony\Component\Yaml\Yaml;
 #[UsesClass(Verdict::class)]
 #[UsesClass(Decision::class)]
 #[UsesClass(SampleProjectData::class)]
+#[UsesClass(ModelPrice::class)]
 final class SeedSampleProjectCommandTest extends TestCase
 {
     private const string FIXTURES = __DIR__.'/../../../../../fixtures/sample-repository';

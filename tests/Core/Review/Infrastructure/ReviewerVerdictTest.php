@@ -24,6 +24,7 @@ use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\UntrustedSource;
+use Intakt\Core\Review\Contract\FindingIds;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictParser;
 use Intakt\Core\Review\Contract\VerdictUnreadable;
@@ -103,6 +104,7 @@ use Symfony\Component\Uid\UuidV7;
 #[UsesClass(ChangeUnderReview::class)]
 #[UsesClass(Checkout::class)]
 #[UsesClass(Verdict::class)]
+#[UsesClass(FindingIds::class)]
 #[UsesClass(Finding::class)]
 #[UsesClass(ReadAnswer::class)]
 #[UsesClass(ReadFinding::class)]

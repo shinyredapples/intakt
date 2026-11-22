@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Review\Contract;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\FindingIds;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
@@ -22,6 +23,7 @@ use Symfony\Component\Serializer\Encoder\JsonEncoder;
 #[UsesClass(Finding::class)]
 #[UsesClass(Evidence::class)]
 #[UsesClass(VerdictOrigin::class)]
+#[UsesClass(FindingIds::class)]
 final class VerdictTest extends TestCase
 {
     public function testAnIncompleteStreamVerdictBlocksAndNamesTheReason(): void
@@ -142,18 +144,18 @@ final class VerdictTest extends TestCase
             ->withFinding('id', $failureId);
         $verdict = StoredSerializerFactory::create()->deserialize($answer->json(), Verdict::class, JsonEncoder::FORMAT);
 
-        self::assertSame([$failureId], $verdict->claimedFailureIds());
+        self::assertSame([$failureId], [...$verdict->claimedFailureIds()]);
     }
 
     public function testAReviewersAnswerWithOrdinaryIdsClaimsNoFailureId(): void
     {
-        self::assertSame([], new Verdict(Decision::Changes, [$this->finding()], [], [])->claimedFailureIds());
+        self::assertSame([], [...new Verdict(Decision::Changes, [$this->finding()], [], [])->claimedFailureIds()]);
     }
 
     #[DataProvider('failureVerdicts')]
     public function testAnIntaktFailureVerdictClaimsNoFailureId(Verdict $failure): void
     {
-        self::assertSame([], $failure->claimedFailureIds());
+        self::assertSame([], [...$failure->claimedFailureIds()]);
     }
 
     public function testAFailureVerdictWithItsFindingsReplacedStaysBlocked(): void

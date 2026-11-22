@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Contract;
 
-use ArrayIterator;
 use IteratorAggregate;
 use Traversable;
 
@@ -14,8 +13,9 @@ use Traversable;
  */
 final readonly class ModelPrice implements IteratorAggregate
 {
+    // Pairs instead of an array keyed by kind, because PHP turns a numeric string key into an integer and a spread renumbers it.
     /**
-     * @param array<string, int|float> $amounts
+     * @param list<array{string, int|float}> $amounts
      */
     private function __construct(
         private array $amounts,
@@ -29,7 +29,16 @@ final readonly class ModelPrice implements IteratorAggregate
 
     public function with(string $kind, int|float $amount): self
     {
-        return new self([...$this->amounts, $kind => $amount]);
+        $amounts = $this->amounts;
+        $known = array_find_key($amounts, static fn (array $pair): bool => $kind === $pair[0]);
+
+        if (null === $known) {
+            $amounts[] = [$kind, $amount];
+        } else {
+            $amounts[$known] = [$kind, $amount];
+        }
+
+        return new self($amounts);
     }
 
     /**
@@ -37,6 +46,8 @@ final readonly class ModelPrice implements IteratorAggregate
      */
     public function getIterator(): Traversable
     {
-        return new ArrayIterator($this->amounts);
+        foreach ($this->amounts as [$kind, $amount]) {
+            yield $kind => $amount;
+        }
     }
 }
