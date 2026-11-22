@@ -1,4 +1,4 @@
-<turbo-stream action="replace" target="round-{{ round }}-state"><template><p id="round-{{ round }}-state">{% if progress.judged %}Judged.{% else %}{{ progress.reviewersFinished }} of {{ progress.reviewers }} reviewers finished.{% endif %}</p></template></turbo-stream>
+<turbo-stream action="replace" target="round-{{ round }}-state"><template><p id="round-{{ round }}-state">{% if progress.judged %}Checked.{% else %}{{ progress.reviewersFinished }} of {{ progress.reviewers }} reviewers finished.{% endif %}</p></template></turbo-stream>
 <turbo-stream action="replace" target="round-{{ round }}-now-progress"><template><p class="muted" id="round-{{ round }}-now-progress">{{ progress.reviewersFinished }} of {{ progress.reviewers }} reviewers finished.</p></template></turbo-stream>
 <turbo-stream action="replace" target="round-{{ round }}-started"><template>{{ include('dashboard/_round_started.html.twig', {round: round, started: progress.reviewersStarted, reviewers: progress.reviewers}, with_context = false) }}</template></turbo-stream>
 {% for reviewer, state in progress.finished %}
