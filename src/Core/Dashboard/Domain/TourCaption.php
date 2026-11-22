@@ -7,9 +7,13 @@ namespace Intakt\Core\Dashboard\Domain;
 // Without a stage until a demo run has started, so the page still holds the element a live update replaces.
 final readonly class TourCaption
 {
+    /**
+     * @param list<ReviewerOutcome> $reviewers
+     */
     public function __construct(
         public ?TourStage $stage,
         public ?string $round,
+        public array $reviewers = [],
     ) {
     }
 
@@ -20,7 +24,10 @@ final readonly class TourCaption
 
     public static function of(Review $review): self
     {
-        return new self(TourStage::of($review), $review->latest()->round);
+        $stage = TourStage::of($review);
+        $latest = $review->latest();
+
+        return new self($stage, $latest->round, $stage->isAboutTheReviewers() ? $latest->outcomes : []);
     }
 
     public function isPlayed(): bool
