@@ -256,10 +256,10 @@ final class RoundLedgerReadingTest extends KernelTestCase
 
     public function testEachReviewerOfARoundGetsOnlyTheTokensOfItsOwnCalls(): void
     {
-        $this->recordReviewerCall('c1', 'r1', self::ROUND, 100);
-        $this->recordReviewerCall('c2', 'r1', self::ROUND, 50);
-        $this->recordReviewerCall('c3', 'r2', self::ROUND, 7);
-        $this->recordReviewerCall('c4', 'r1', self::OTHER_ROUND, 1000);
+        $this->recordReviewerCall('r1', 100);
+        $this->recordReviewerCall('r1', 50);
+        $this->recordReviewerCall('r2', 7);
+        $this->recordReviewerCall('r1', 1000, self::OTHER_ROUND);
 
         $figures = $this->reading()->figuresOfReviewers(self::ROUND, ['r1', 'r2']);
 
@@ -268,45 +268,45 @@ final class RoundLedgerReadingTest extends KernelTestCase
 
     public function testAReviewerThatAnsweredHasADurationFromItsStartToItsVerdict(): void
     {
-        $this->recordReviewerRow(LedgerEventKind::ReviewerStarted, 'r1', self::ROUND);
+        $this->recordReviewerRow(LedgerEventKind::ReviewerStarted, 'r1');
         $this->fixture->clock->sleep(2.5);
-        $this->recordReviewerRow(LedgerEventKind::VerdictReceived, 'r1', self::ROUND, ['decision' => 'approve', 'findings' => 0, 'mode' => 'live']);
+        $this->recordReviewerRow(LedgerEventKind::VerdictReceived, 'r1', ['decision' => 'approve', 'findings' => 0, 'mode' => 'live']);
 
         self::assertSame(2500, $this->millisecondsOf('r1'));
     }
 
     public function testAReviewerThatEndedBlockedHasADurationFromItsStartToItsBlockedRow(): void
     {
-        $this->recordReviewerRow(LedgerEventKind::ReviewerStarted, 'r1', self::ROUND);
+        $this->recordReviewerRow(LedgerEventKind::ReviewerStarted, 'r1');
         $this->fixture->clock->sleep(1.25);
-        $this->recordReviewerRow(LedgerEventKind::ReviewerBlocked, 'r1', self::ROUND, ['reason' => 'its message was moved to the failure transport']);
+        $this->recordReviewerRow(LedgerEventKind::ReviewerBlocked, 'r1', ['reason' => 'its message was moved to the failure transport']);
 
         self::assertSame(1250, $this->millisecondsOf('r1'));
     }
 
     public function testAReviewerThatFailedOrWasStoppedHasADurationToItsLastEnd(): void
     {
-        $this->recordReviewerRow(LedgerEventKind::ReviewerStarted, 'r1', self::ROUND);
+        $this->recordReviewerRow(LedgerEventKind::ReviewerStarted, 'r1');
         $this->fixture->clock->sleep(1);
-        $this->recordReviewerRow(LedgerEventKind::ReviewerFailed, 'r1', self::ROUND, ['failure' => 'quota']);
+        $this->recordReviewerRow(LedgerEventKind::ReviewerFailed, 'r1', ['failure' => 'quota']);
         $this->fixture->clock->sleep(1);
-        $this->recordReviewerRow(LedgerEventKind::ReviewerStopped, 'r1', self::ROUND);
+        $this->recordReviewerRow(LedgerEventKind::ReviewerStopped, 'r1');
 
         self::assertSame(2000, $this->millisecondsOf('r1'));
     }
 
     public function testAReviewerWithAStartAndNoEndRowHasNoDuration(): void
     {
-        $this->recordReviewerRow(LedgerEventKind::ReviewerStarted, 'r1', self::ROUND);
-        $this->recordReviewerRow(LedgerEventKind::ReviewerBlocked, 'r2', self::ROUND, ['reason' => 'blocked']);
+        $this->recordReviewerRow(LedgerEventKind::ReviewerStarted, 'r1');
+        $this->recordReviewerRow(LedgerEventKind::ReviewerBlocked, 'r2', ['reason' => 'blocked']);
 
         self::assertNull($this->millisecondsOf('r1'));
     }
 
     public function testAnEndRowOfAnotherRoundGivesTheReviewerNoDuration(): void
     {
-        $this->recordReviewerRow(LedgerEventKind::ReviewerStarted, 'r1', self::ROUND);
-        $this->recordReviewerRow(LedgerEventKind::ReviewerBlocked, 'r1', self::OTHER_ROUND, ['reason' => 'blocked']);
+        $this->recordReviewerRow(LedgerEventKind::ReviewerStarted, 'r1');
+        $this->recordReviewerRow(LedgerEventKind::ReviewerBlocked, 'r1', ['round' => self::OTHER_ROUND, 'reason' => 'blocked']);
 
         self::assertNull($this->millisecondsOf('r1'));
     }
@@ -321,9 +321,9 @@ final class RoundLedgerReadingTest extends KernelTestCase
     public function testReadingTheFiguresOfARoundsReviewersReadsTheLedgerTwiceHoweverManyReviewersItHas(): void
     {
         foreach (['r1', 'r2', 'r3'] as $reviewer) {
-            $this->recordReviewerRow(LedgerEventKind::ReviewerStarted, $reviewer, self::ROUND);
-            $this->recordReviewerCall('c-'.$reviewer, $reviewer, self::ROUND, 10);
-            $this->recordReviewerRow(LedgerEventKind::ReviewerStopped, $reviewer, self::ROUND);
+            $this->recordReviewerRow(LedgerEventKind::ReviewerStarted, $reviewer);
+            $this->recordReviewerCall($reviewer, 10);
+            $this->recordReviewerRow(LedgerEventKind::ReviewerStopped, $reviewer);
         }
         $counting = new ReadCountingLedger($this->ledger);
 
@@ -335,13 +335,14 @@ final class RoundLedgerReadingTest extends KernelTestCase
     /**
      * @param array<string, mixed> $more
      */
-    private function recordReviewerRow(LedgerEventKind $kind, string $reviewer, string $round, array $more = []): void
+    private function recordReviewerRow(LedgerEventKind $kind, string $reviewer, array $more = []): void
     {
-        $this->append($kind, ['round' => $round, 'reviewer' => $reviewer, 'role' => 'correctness', 'tier' => 'standard'] + $more);
+        $this->append($kind, $more + ['round' => self::ROUND, 'reviewer' => $reviewer, 'role' => 'correctness', 'tier' => 'standard']);
     }
 
-    private function recordReviewerCall(string $call, string $reviewer, string $round, int $prompt): void
+    private function recordReviewerCall(string $reviewer, int $prompt, string $round = self::ROUND): void
     {
+        $call = $round.'/'.$reviewer.'/'.$prompt;
         $this->append(LedgerEventKind::UsageRecorded, ['call' => $call, 'phase' => 'started', 'project' => 'alpha', 'tier' => 'standard', 'round' => $round, 'model' => 'big', 'reviewer' => $reviewer]);
         $this->append(LedgerEventKind::UsageRecorded, ['call' => $call, 'phase' => 'settled', 'usages' => [['prompt' => $prompt] + $this->usage()]]);
     }
