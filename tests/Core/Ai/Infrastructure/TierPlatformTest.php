@@ -49,8 +49,8 @@ final class TierPlatformTest extends TestCase
     {
         $platform = $this->tierPlatform();
 
-        $alpha = $platform->invoke($platform->answering('alpha', Tier::Strong), new TierRequest('review'))->asText();
-        $beta = $platform->invoke($platform->answering('beta', Tier::Strong), new TierRequest('review'))->asText();
+        $alpha = $platform->invoke($platform->answering('alpha', Tier::Strong), TierRequest::of('review'))->asText();
+        $beta = $platform->invoke($platform->answering('beta', Tier::Strong), TierRequest::of('review'))->asText();
 
         self::assertSame('anthropic answered as big', $alpha);
         self::assertSame('openai answered as other', $beta);
@@ -189,7 +189,7 @@ final class TierPlatformTest extends TestCase
 
     public function testACallGoesToTheProviderOfTheModelItIsGiven(): void
     {
-        $answer = $this->tierPlatform()->invoke(new ResolvedModel(Provider::OpenAi, 'sub-openai'), new TierRequest('review'))->asText();
+        $answer = $this->tierPlatform()->invoke(new ResolvedModel(Provider::OpenAi, 'sub-openai'), TierRequest::of('review'))->asText();
 
         self::assertSame('openai answered as sub-openai', $answer);
     }
@@ -200,9 +200,9 @@ final class TierPlatformTest extends TestCase
         $sent = new ArrayObject();
         $platform = $this->limitedPlatform($sent);
 
-        $platform->invoke($platform->answering('limited', Tier::Strong), new TierRequest('review'))->asText();
-        $platform->invoke($platform->answering('limited', Tier::Standard), new TierRequest('review'))->asText();
-        $platform->invoke($platform->answering('limited', Tier::Light), new TierRequest('review'))->asText();
+        $platform->invoke($platform->answering('limited', Tier::Strong), TierRequest::of('review'))->asText();
+        $platform->invoke($platform->answering('limited', Tier::Standard), TierRequest::of('review'))->asText();
+        $platform->invoke($platform->answering('limited', Tier::Light), TierRequest::of('review'))->asText();
 
         self::assertSame(16000, $sent['big'][PlatformOptions::MAX_OUTPUT_TOKENS] ?? null);
         self::assertSame(8000, $sent['middle'][PlatformOptions::MAX_OUTPUT_TOKENS] ?? null);
@@ -215,7 +215,7 @@ final class TierPlatformTest extends TestCase
         $sent = new ArrayObject();
         $platform = $this->limitedPlatform($sent);
 
-        $platform->invoke($platform->answering('limited', Tier::Strong), new TierRequest('review')->withDefaults(...[PlatformOptions::MAX_OUTPUT_TOKENS => 99]))->asText();
+        $platform->invoke($platform->answering('limited', Tier::Strong), TierRequest::of('review')->withDefaults(...[PlatformOptions::MAX_OUTPUT_TOKENS => 99]))->asText();
 
         self::assertSame(99, $sent['big'][PlatformOptions::MAX_OUTPUT_TOKENS] ?? null);
     }
@@ -226,7 +226,7 @@ final class TierPlatformTest extends TestCase
         $sent = new ArrayObject();
 
         $platform = $this->limitedPlatform($sent);
-        $platform->invoke($platform->answering('unlimited', Tier::Strong), new TierRequest('review'))->asText();
+        $platform->invoke($platform->answering('unlimited', Tier::Strong), TierRequest::of('review'))->asText();
 
         self::assertSame([], $sent['big'] ?? null);
     }
@@ -237,7 +237,7 @@ final class TierPlatformTest extends TestCase
         $sent = new ArrayObject();
         $platform = $this->limitedPlatform($sent);
 
-        $platform->invoke(new ResolvedModel(Provider::ClaudeCode, 'cli', 16000), new TierRequest('review'))->asText();
+        $platform->invoke(new ResolvedModel(Provider::ClaudeCode, 'cli', 16000), TierRequest::of('review'))->asText();
 
         self::assertSame([], $sent['cli'] ?? null);
     }

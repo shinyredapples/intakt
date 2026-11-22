@@ -18,7 +18,10 @@ final class TierRequestTest extends TestCase
 {
     public function testAnOptionTheCallerSetIsKeptOverADefaultAddedLater(): void
     {
-        $sent = $this->whenSent(new TierRequest('review')->withDefaults(temperature: 0.1)->withDefaults(temperature: 0.9, max_output_tokens: 10));
+        $sent = $this->whenSent(TierRequest::of('review')->withDefaults(temperature: 0.1)->withDefaults(
+            temperature: 0.9,
+            max_output_tokens: 10,
+        ));
 
         self::assertSame(['temperature' => 0.1, 'max_output_tokens' => 10], $sent['options']);
     }
@@ -32,7 +35,7 @@ final class TierRequestTest extends TestCase
 
     public function testATextInputReachesThePlatformWithoutOptions(): void
     {
-        $sent = $this->whenSent(new TierRequest('review'));
+        $sent = $this->whenSent(TierRequest::of('review'));
 
         self::assertSame(['input' => 'review', 'options' => []], [...$sent]);
     }

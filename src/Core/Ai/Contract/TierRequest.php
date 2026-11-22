@@ -11,28 +11,31 @@ use Symfony\AI\Platform\Result\DeferredResult;
 // Sends itself, because its input and options are Symfony AI's untyped forms and would otherwise cross the module as arrays.
 final readonly class TierRequest
 {
-    /** @var array<mixed>|string|object */
-    private array|string|object $input;
+    /**
+     * @param array<mixed>|string|object $input
+     * @param array<string, mixed>       $options
+     */
+    private function __construct(
+        private array|string|object $input,
+        private array $options,
+    ) {
+    }
 
-    /** @var array<string, mixed> */
-    private array $options;
-
-    public function __construct(string|object $input)
+    public static function of(string|object $input): self
     {
-        $this->input = $input;
-        $this->options = [];
+        return new self($input, []);
     }
 
     // Symfony AI's list form of an input, such as several texts in one call.
     public static function ofList(mixed ...$parts): self
     {
-        return clone(new self(''), ['input' => $parts]);
+        return new self($parts, []);
     }
 
     // An option already set wins, so a caller's own value is kept over a default added later.
     public function withDefaults(mixed ...$options): self
     {
-        return clone($this, ['options' => $this->options + $options]);
+        return clone ($this, ['options' => $this->options + $options]);
     }
 
     #[NoDiscard('the answer is only in the result')]
