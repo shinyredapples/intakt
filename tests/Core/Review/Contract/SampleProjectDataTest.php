@@ -61,7 +61,7 @@ final class SampleProjectDataTest extends TestCase
 
             self::assertSame($name, $fallbackName);
             self::assertNotSame($router, $fallbackRouter);
-            self::assertArrayHasKey('output', $data->price($fallback));
+            self::assertArrayHasKey('output', iterator_to_array($data->price($fallback)));
         }
     }
 
