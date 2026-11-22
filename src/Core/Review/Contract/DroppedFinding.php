@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Contract;
 
-// Recorded with the round, because plain code dropped it before the judge, and the reason is all that says why it is on no list.
+use Symfony\Component\DependencyInjection\Attribute\Exclude;
+
+// Recorded with the round, because plain code dropped it before the judge, and the reason is all that says why it is on no list; excluded, because the quote check and the stored serializer build it, not the container.
+#[Exclude]
 final readonly class DroppedFinding
 {
     /**
