@@ -11,6 +11,8 @@ final readonly class FencedText
 
     private const string CUT_NOTE = "\n\nIntakt cut this text: %d of %d bytes are shown and the rest is left out. Read what you need with your tools; an approval of a review with a cut text is refused.";
 
+    private const string OMITTED_NOTE = "\n\nIntakt cut this text: %d of %d bytes are shown and the rest is left out.";
+
     private string $fence;
 
     private string $note;
@@ -26,6 +28,12 @@ final readonly class FencedText
     public function cut(int $shownBytes, int $allBytes): self
     {
         return clone ($this, ['note' => sprintf(self::CUT_NOTE, $shownBytes, $allBytes)]);
+    }
+
+    // For a reader with no tools, which cannot be told to read the rest itself.
+    public function omitted(int $shownBytes, int $allBytes): self
+    {
+        return clone ($this, ['note' => sprintf(self::OMITTED_NOTE, $shownBytes, $allBytes)]);
     }
 
     public function rendered(): string
