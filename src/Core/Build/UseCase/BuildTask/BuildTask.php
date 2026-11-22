@@ -54,6 +54,7 @@ final readonly class BuildTask
 
     /**
      * @throws BuildStepNotRecorded
+     * @throws PushRemoteRefused
      */
     #[NoDiscard('the outcome says which step the run stopped at')]
     public function run(BuildTaskRequest $request): BuildTaskOutcome
@@ -62,7 +63,7 @@ final readonly class BuildTask
         $refusal = $this->remoteCheck->failureOf($request);
 
         if (null !== $refusal) {
-            return new BuildTaskOutcome(BuildStep::Push, $refusal, null);
+            throw PushRemoteRefused::because($refusal);
         }
 
         $task = $this->readTask($request);

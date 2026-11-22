@@ -34,6 +34,7 @@ use Intakt\Core\Build\UseCase\BuildTask\HandBackFile;
 use Intakt\Core\Build\UseCase\BuildTask\ParkedTasks;
 use Intakt\Core\Build\UseCase\BuildTask\PrePushCheck;
 use Intakt\Core\Build\UseCase\BuildTask\PushRemoteCheck;
+use Intakt\Core\Build\UseCase\BuildTask\PushRemoteRefused;
 use Intakt\Core\Build\UseCase\BuildTask\PushStep;
 use Intakt\Core\Build\UseCase\BuildTask\TaskNotParked;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
@@ -144,6 +145,7 @@ use Symfony\Component\Process\Process;
 #[CoversClass(PushStep::class)]
 #[UsesClass(ParkedTasks::class)]
 #[UsesClass(PushRemoteCheck::class)]
+#[UsesClass(PushRemoteRefused::class)]
 #[UsesClass(ParkedTaskRecord::class)]
 #[UsesClass(TaskNotParked::class)]
 #[UsesClass(BuildQuestion::class)]
@@ -296,11 +298,14 @@ final class BuildTaskTest extends TestCase
         $issues->expects(self::never())->method('listOpen');
         $this->changes->checking = static fn () => self::fail('the forge was asked about the change');
 
-        $outcome = $this->buildTask($issues, $this->checkout(), $ledger)->run($this->request(7, 'https://github.com/acme/beta.git'));
+        try {
+            (void) $this->buildTask($issues, $this->checkout(), $ledger)->run($this->request(7, 'https://github.com/acme/beta.git'));
+            self::fail('the remote was not refused');
+        } catch (PushRemoteRefused $refused) {
+            self::assertStringContainsString('"https://github.com/acme/beta.git"', $refused->getMessage());
+            self::assertStringContainsString('"acme/alpha"', $refused->getMessage());
+        }
 
-        self::assertTrue($outcome->failed());
-        self::assertStringContainsString('"https://github.com/acme/beta.git"', (string) $outcome->failure);
-        self::assertStringContainsString('"acme/alpha"', (string) $outcome->failure);
         self::assertSame([], $ledger->payloads());
         self::assertSame(0, $this->changes->calls);
         self::assertNull($this->remoteTip());

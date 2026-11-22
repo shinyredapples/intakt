@@ -29,7 +29,26 @@ final readonly class PushRemoteCheck
             return null;
         }
 
-        return sprintf('the remote "%s" is not the configured GitHub repository "%s" of project "%s"; pass its https://github.com/%s URL', $request->remote, $configured, $request->project, $configured);
+        return sprintf('the remote %s is not the configured GitHub repository "%s" of project "%s"; pass its https://github.com/%s URL without credentials', $this->shown($request->remote), $configured, $request->project, $configured);
+    }
+
+    // Without the user info, query and fragment, because a remote can carry a token there and the refusal reaches the terminal and the logs. A remote without a host is shown only when it holds no "@" or ":", because an ssh address such as "user:token@host:path" parses as a scheme and a path that would show the token.
+    private function shown(string $remote): string
+    {
+        try {
+            $uri = new Uri($remote);
+        } catch (UriException) {
+            return '(not shown: it may hold credentials)';
+        }
+
+        if (null === $uri->getHost() && 1 === preg_match('/[@:]/', $remote)) {
+            return '(not shown: it may hold credentials)';
+        }
+
+        $hidden = null !== $uri->getUserInfo() || null !== $uri->getQuery() || null !== $uri->getFragment();
+        $shown = $uri->withUserInfo(null)->withQuery(null)->withFragment(null)->toRawString();
+
+        return sprintf('"%s"%s', $shown, $hidden ? ' (credentials, query or fragment not shown)' : '');
     }
 
     // Only the https form is read, because that is the address the forge side names; any other form cannot be tied to it, so it reads as no repository.
