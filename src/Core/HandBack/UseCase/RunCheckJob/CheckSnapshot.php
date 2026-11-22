@@ -28,7 +28,8 @@ final readonly class CheckSnapshot
         $arguments = [];
 
         foreach ($this->lockFiles as $path => $file) {
-            array_push($arguments, $path, $file->blob);
+            $arguments[] = $path;
+            $arguments[] = $file->blob;
         }
 
         return $arguments;

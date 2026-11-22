@@ -606,7 +606,7 @@ final class CheckScriptTest extends TestCase
         $snapshot = $this->readOnlySnapshotHolding(['vendor/installed.json' => "{}\n"]);
 
         $run = $this->whenTheCheckRunsWith(
-            ['--dependencies', $snapshot, 'exit 9', 'touch generated', 'composer.lock', self::blobOf(self::LOCK)],
+            ['--dependencies', $snapshot, 'exit 9', 'touch generated', 'composer.lock', $this->blobOf(self::LOCK)],
             $this->history->bundle('main..task'),
             'exit 9',
             'test -f generated',
@@ -623,7 +623,7 @@ final class CheckScriptTest extends TestCase
         $snapshot = $this->readOnlySnapshotHolding(['vendor/installed.json' => "{}\n"]);
 
         $run = $this->whenTheCheckRunsWith(
-            ['--dependencies', $snapshot, 'touch installed', 'exit 9', 'composer.lock', self::blobOf(self::LOCK)],
+            ['--dependencies', $snapshot, 'touch installed', 'exit 9', 'composer.lock', $this->blobOf(self::LOCK)],
             $this->history->bundle('main..task'),
             'touch installed',
             'test -f installed',
@@ -638,10 +638,10 @@ final class CheckScriptTest extends TestCase
      */
     private function dependencyOptions(string $snapshot, string $lock): array
     {
-        return ['--dependencies', $snapshot, 'composer install', 'composer install', 'composer.lock', self::blobOf($lock)];
+        return ['--dependencies', $snapshot, 'composer install', 'composer install', 'composer.lock', $this->blobOf($lock)];
     }
 
-    private static function blobOf(string $content): string
+    private function blobOf(string $content): string
     {
         return sha1('blob '.strlen($content)."\0".$content);
     }
