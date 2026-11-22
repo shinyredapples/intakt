@@ -28,4 +28,4 @@ There is no toolbar and no `/_profiler` page; these two tools are the way to rea
 
 Mate and the profiler belong to the development install. The container image has neither: it is built without the development packages, and a production install saves no profiles at all.
 
-For the other tools of the same kind (the services, the environment and the read-only console commands), see [Looking inside the development install with Mate](../user/README.md#looking-inside-the-development-install-with-mate).
+For the other tools of the same kind (the services, the environment and the read-only console commands), see [Looking inside the development install with Mate](../reference/user-manual.md#looking-inside-the-development-install-with-mate).
