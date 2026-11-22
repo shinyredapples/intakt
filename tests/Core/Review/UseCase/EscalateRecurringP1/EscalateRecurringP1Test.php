@@ -625,7 +625,7 @@ final class EscalateRecurringP1Test extends KernelTestCase
         self::assertNull($this->fixture->escalationsOfChange()->outcomeAtLatestHead('alpha', self::PULL));
     }
 
-    // Moved to the address after the confirmation, as an older install stored it and migration Version20261122100000 left an old spelling apart.
+    // Moved after the confirmation, because only an older install stored a round under another spelling, and migration Version20261122100000 left such a spelling apart.
     private function confirmedUnder(string $address): void
     {
         if ($this->fixture->entities->getConnection()->getDatabasePlatform() instanceof AbstractMySQLPlatform) {

@@ -18,7 +18,7 @@ final class BeforeEachReadMentioning implements Ledger
     private int $reads = 0;
 
     /**
-     * @param Closure(int): void $other given the number of the read, from 1
+     * @param Closure(int): void $other
      */
     public function __construct(
         private readonly Ledger $inner,
