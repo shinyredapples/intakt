@@ -19,4 +19,7 @@ interface OwnerNotices
      * @return list<EndedOutageNotice>
      */
     public function endedOnTheDayOf(DateTimeImmutable $moment): array;
+
+    // Both lists above from one statement, because a recovery committed between two reads would list one outage as both waiting and ended.
+    public function waitingAndEndedOnTheDayOf(DateTimeImmutable $moment): OwnerNoticesOfTheDay;
 }
