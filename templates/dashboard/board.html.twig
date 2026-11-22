@@ -30,20 +30,7 @@
 {% endfor %}
 {% if waiting is not empty %}{{ include('dashboard/_board_needs_you.html.twig', {waiting: waiting}, with_context = false) }}{% endif %}
 {{ include('dashboard/_board_octopus.html.twig', {board: board}, with_context = false) }}
-{# No disclosure: each change in progress is its own card, and a card opens its review (UX2: no collapsibles on overview pages). #}
-{% set cards = board.workingNow %}
-{% if cards is empty %}
-<p class="working working-none" id="working">{{ board.nobodyWorkingLine }}</p>
-{% else %}
-<section class="working" id="working" aria-labelledby="working-h">
-    <h2 id="working-h">Working now <span class="w-count">{{ cards|length }}</span></h2>
-    <div class="w-cards">
-    {% for card in cards %}
-        {{ include('dashboard/_working_card.html.twig', {card: card}, with_context = false) }}
-    {% endfor %}
-    </div>
-</section>
-{% endif %}
+{{ include('dashboard/_board_working.html.twig', {board: board}, with_context = false) }}
 <section aria-labelledby="board-h">
     <h2 id="board-h" class="sr-only">Tasks by state</h2>
     {# The counts are totals over every project, so the project filter hides cards and never changes a count. A crowded column renders every card and marks those past the limit, which assets/column-more.js counts again over the cards the filter shows. The wrapper carries the edge classes assets/board-edge.js sets, because the fade they turn on masks the board inside it; the same script scrolls a board marked data-scroll-to-end to Done once. #}

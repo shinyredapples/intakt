@@ -162,6 +162,38 @@ final class BoardHeadlineLiveUpdatesTest extends DashboardPageTestCase
         self::assertCount(1, $done->filter('.col-head button.col-hide'));
     }
 
+    public function testAStartedRoundsPushReplacesWorkingNowWithItsCard(): void
+    {
+        $this->browser->request('GET', '/');
+
+        $working = new Crawler($this->pushedHeadlineAfterAReviewerStarted())->filter('turbo-stream[action="replace"][target="working"]');
+
+        self::assertCount(1, $working);
+        self::assertSame(['feat/a'], $working->filter('template .wcard-title')->each(static fn (Crawler $title): string => $title->text()));
+    }
+
+    public function testAJudgedRoundsPushTakesItsCardOutOfWorkingNow(): void
+    {
+        $this->pushedHeadlineAfterAReviewerStarted();
+        $this->ledger->judgeRound(self::ROUND);
+
+        $this->roundUpdates()->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(1, 1, true));
+
+        $working = new Crawler($this->lastShellUpdate())->filter('turbo-stream[action="replace"][target="working"] template');
+        self::assertCount(0, $working->filter('.wcard'));
+        self::assertCount(1, $working->filter('p#working.working-none'));
+    }
+
+    public function testThePushedWorkingNowIsTheSameMarkupAsTheSectionOfAPageLoadedAfterIt(): void
+    {
+        $streams = new Crawler($this->pushedHeadlineAfterAReviewerStarted());
+
+        $page = $this->browser->request('GET', '/');
+
+        $pushed = $streams->filter('turbo-stream[target="working"] template')->first();
+        self::assertSame($page->filter('#working')->outerHtml(), trim($pushed->html()));
+    }
+
     public function testThePushedColumnIsTheSameMarkupAsTheColumnOfAPageLoadedAfterIt(): void
     {
         $streams = new Crawler($this->pushedHeadlineAfterAReviewerStarted());

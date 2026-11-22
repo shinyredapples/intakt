@@ -120,7 +120,7 @@ final readonly class Board
         return [] === $this->cardsIn($column) ? $column->emptyLine() : null;
     }
 
-    // The build's tasks first, then the reviews in progress, then the judged changes with something left to fix, so the cards read in the path's order (UX2 home, #3326).
+    // The build's tasks first, then the reviews with a round still running, so the cards read in the path's order (UX2 home, #3326). A judged change is Done and a round that ended without a judge's call has nobody running, so neither is shown as in progress.
     /**
      * @return list<WorkingCard>
      */
@@ -128,8 +128,7 @@ final readonly class Board
     {
         return [
             ...array_map(WorkingCard::ofTask(...), $this->tasksInFlight()),
-            ...array_map(WorkingCard::ofReview(...), $this->cardsIn(BoardColumn::InReview)),
-            ...array_map(WorkingCard::ofReview(...), array_values(array_filter($this->cardsIn(BoardColumn::Done), static fn (Review $review): bool => [] !== $review->openFindings()))),
+            ...array_map(WorkingCard::ofReview(...), array_values(array_filter($this->cardsIn(BoardColumn::InReview), static fn (Review $review): bool => $review->activeRound() instanceof ReviewedRound))),
         ];
     }
 

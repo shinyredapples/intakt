@@ -22,19 +22,14 @@ final readonly class WorkingCard
         public WorkStep $step,
         public array $roles,
         public ?string $round,
-        public ?int $toFix = null,
     ) {
     }
 
-    // A round from before the ledger named its change has no change, so the round names it, as on the board card; a judged round is the judge's, the owl with what is left to fix.
+    // A round from before the ledger named its change has no change, so the round names it, as on the board card.
     public static function ofReview(Review $review): self
     {
         $latest = $review->latest();
         $title = '' === $review->change ? 'Round '.$latest->round : $review->change;
-
-        if ($latest->isJudged()) {
-            return new self($title, $review->project, WorkStep::Review, [Character::Judge], $latest->round, count($review->openFindings()));
-        }
 
         return new self($title, $review->project, WorkStep::Review, self::readersOf($latest), $latest->round);
     }
@@ -44,10 +39,9 @@ final readonly class WorkingCard
         return new self($task->task, $task->project, WorkStep::Build, [Character::Developer], null);
     }
 
-    // What is left to fix once the judge has called the round, because that count is what the owner acts on (UX2 prototype: "N to fix").
     public function state(): string
     {
-        return null === $this->toFix ? $this->step->doing() : $this->toFix.' to fix';
+        return $this->step->doing();
     }
 
     /**

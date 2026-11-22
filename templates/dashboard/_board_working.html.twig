@@ -1,0 +1,14 @@
+{#- Working now, its empty line or its cards, from one partial with the one id `working`, so the board's push replaces it with the same markup a page loaded after it shows. No disclosure: each change in progress is its own card, and a card opens its review (UX2: no collapsibles on overview pages). -#}
+{% set cards = board.workingNow %}
+{% if cards is empty %}
+<p class="working working-none" id="working">{{ board.nobodyWorkingLine }}</p>
+{% else %}
+<section class="working" id="working" aria-labelledby="working-h">
+    <h2 id="working-h">Working now <span class="w-count">{{ cards|length }}</span></h2>
+    <div class="w-cards">
+    {% for card in cards %}
+        {{ include('dashboard/_working_card.html.twig', {card: card}, with_context = false) }}
+    {% endfor %}
+    </div>
+</section>
+{% endif %}

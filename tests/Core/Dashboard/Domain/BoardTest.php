@@ -23,6 +23,8 @@ use Intakt\Core\Dashboard\Domain\RoundStart;
 use Intakt\Core\Dashboard\Domain\WhoIsWorking;
 use Intakt\Core\Dashboard\Domain\WorkingCard;
 use Intakt\Core\Review\Contract\Decision;
+use Intakt\Core\Review\Contract\RoundEnding;
+use Intakt\Core\Review\Contract\RoundEnds;
 use Intakt\Core\ReviewerForLoop\Contract\ProjectMode;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -43,6 +45,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(BuildTask::class)]
 #[UsesClass(RoundPlace::class)]
 #[UsesClass(RoundStart::class)]
+#[UsesClass(RoundEnding::class)]
 #[UsesClass(Cost::class)]
 #[UsesClass(TokenFigures::class)]
 final class BoardTest extends TestCase
@@ -278,15 +281,22 @@ final class BoardTest extends TestCase
         );
     }
 
-    public function testAJudgedChangeWithSomethingToFixIsTheOwlsWithWhatIsLeftToFix(): void
+    public function testAnOldJudgedChangeWithAFindingToFixIsNoWorkingCard(): void
     {
-        $toFix = [new RoundFinding('F1', null, null)->calledBy(JudgeCall::Act), new RoundFinding('F2', null, null)->calledBy(JudgeCall::Act), new RoundFinding('F3', null, null)];
-        $judged = new Review([$this->round('r1', 'feat/a', 1)->judgedWith($toFix, $this->morning())]);
-        $clean = new Review([$this->round('r2', 'feat/b', 1)->judgedWith([], $this->morning())]);
+        $toFix = [new RoundFinding('F1', null, null)->calledBy(JudgeCall::Act)];
+        $board = new Board([new Review([$this->round('r1', 'feat/old', 1)->judgedWith($toFix, $this->morning())])]);
 
-        $cards = new Board([$judged, $clean])->workingNow();
+        self::assertSame([], $board->workingNow());
+        self::assertNotNull($board->nobodyWorkingLine());
+    }
 
-        self::assertSame([['feat/a', 'Review', [Character::Judge], 'r1', '2 to fix']], array_map(static fn (WorkingCard $card): array => [$card->title, $card->step->value, $card->roles, $card->round, $card->state()], $cards));
+    public function testARoundThatEndedWithoutAJudgesCallIsNoWorkingCard(): void
+    {
+        $ended = $this->round('r1', 'feat/a', 1)->endedAs(new RoundEnding(RoundEnds::NoOutcomeInTime, 'No outcome in time.'));
+        $board = new Board([new Review([$ended])]);
+
+        self::assertSame([], $board->workingNow());
+        self::assertNotNull($board->nobodyWorkingLine());
     }
 
     public function testTheHedgehogStandsBesideTheMeerkatWhileTheSecurityReviewerReads(): void
