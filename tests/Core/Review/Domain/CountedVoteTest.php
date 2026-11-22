@@ -234,6 +234,17 @@ final class CountedVoteTest extends TestCase
         self::assertSame(Decision::Changes, $vote->of($second));
     }
 
+    public function testADeferredP3CountsAsApprovalThoughAnotherReviewersP3DifferingOnlyInTheGateGapMarkerIsOnTheActList(): void
+    {
+        $deferred = new Finding('a', Severity::P3, 'src/A.php', 5, null, 'The gate misses a case.', FixableBy::Owner, false, 'phpstan', null);
+        $acted = new Finding('b', Severity::P3, 'src/A.php', 5, null, 'The gate misses a case.', FixableBy::Owner, false, 'phpstan', null, gate_gap: true);
+
+        [$first, $second, $vote] = $this->countedFromLedger($deferred, $acted);
+
+        self::assertSame(Decision::Approve, $vote->of($first));
+        self::assertSame(Decision::Changes, $vote->of($second));
+    }
+
     public function testABlockedVerdictWithOnlyP3FindingsStaysBlocked(): void
     {
         $blocked = new Verdict(Decision::Blocked, [$this->finding('A', Severity::P3, 'One.')], [], []);
