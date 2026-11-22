@@ -70,17 +70,28 @@ final readonly class LedgerBuildSteps
 
         foreach ($events as $recorded) {
             $step = LedgerEventKind::BuildStepEnded === $recorded->event->kind ? $this->stepOf($recorded) : null;
-            $run = LedgerPayload::of($recorded)['run'] ?? null;
+            $run = $this->runOf($recorded);
 
-            // A run that is not a non-empty string is left out, because the build never writes one, so the row's run cannot be told.
-            if (null === $step || $project !== $step['project'] || $task !== $step['task'] || null !== $run && (!is_string($run) || '' === $run)) {
+            if (null === $step || false === $run || $project !== $step['project'] || $task !== $step['task']) {
                 continue;
             }
 
-            $rows[] = [null === $run ? null : self::NAMED.$run, $step];
+            $rows[] = [$run, $step];
         }
 
         return $rows;
+    }
+
+    // Null for a row written before runs were named, and false for a run that is not a non-empty string: the build never writes one, so the row's run cannot be told and the row is left out.
+    private function runOf(RecordedEvent $recorded): string|false|null
+    {
+        $run = LedgerPayload::of($recorded)['run'] ?? null;
+
+        if (null === $run) {
+            return null;
+        }
+
+        return is_string($run) && '' !== $run ? self::NAMED.$run : false;
     }
 
     // A row written before runs were named belongs to the unnamed run before it, unless it is a task row or repeats a step of that run, because both mean another run began.
@@ -101,7 +112,7 @@ final readonly class LedgerBuildSteps
     // A second row of a step in the same run is left out, because one run ends each step once, so it is not one the build writes.
     /**
      * @param array<string, list<array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string}>> $runs
-     * @param array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string}                       $step
+     * @param array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string}                      $step
      *
      * @return array<string, list<array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string}>>
      */
