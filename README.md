@@ -1,3 +1,5 @@
+> **Judging the Symfony AI & MCP Hackathon?** Use the tested submission, release [v0.4.1](https://github.com/shinyredapples/intakt/releases/tag/v0.4.1): the first install under [Five-minute start](#five-minute-start).
+
 <h1 align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/intakt-lockup-dark.svg">
@@ -11,15 +13,23 @@ Your coding agent says it is done. Intakt tells you whether to believe it.
 
 AI code review by a panel from different AI labs. A finding whose quoted code is not in the change is dropped, and a judge makes one list to fix. Start a review from the dashboard, or let your own agent run the loop over MCP until the verdict is clean.
 
-<!-- VIDEO THUMBNAIL: put the linked thumbnail of the demo video here once it is uploaded (#3142). -->
+[![Watch the 90-second demo of Intakt on YouTube](docs/assets/video-cover.jpg)](https://youtu.be/-8v0nflAQBk)
 
-<!-- HERO: replaced by a capture from the video tag after 11:00 -->
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/dashboard-review-dark.png">
-  <img src="docs/assets/dashboard-review.png" alt="An earlier version of the dashboard's review page for the sample change: the verdict card first, Changes requested with three things to fix, each with its priority and file and line, then what the change does and the tokens it took" width="760" height="475">
+  <img src="docs/assets/dashboard-review.png" alt="The review page of the sample change: the owl's verdict card says Changes needed, 5 to fix and 2 urgent, the path shows pass 1 done and the beaver on Fix, and the To fix cards list each finding with its urgency, its first sentence and its file and line." width="760" height="475">
 </picture>
 
 ## Five-minute start
+
+The hackathon submission, tested on both paths (release v0.4.1):
+
+```
+git clone --branch v0.4.1 https://github.com/shinyredapples/intakt.git && cd intakt
+docker compose up -d --wait
+```
+
+The latest, with everything built after the deadline (main):
 
 ```
 git clone https://github.com/shinyredapples/intakt.git && cd intakt

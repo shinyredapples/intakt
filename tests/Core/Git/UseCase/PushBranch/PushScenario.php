@@ -96,6 +96,18 @@ final readonly class PushScenario
         return $remote;
     }
 
+    // A url.<base>.<kind> rewrite in the repository's own config, because git applies it to the remote before every read and push.
+    public function rewriteInTheRepository(string $kind, string $prefix, string $replacement): void
+    {
+        $this->run(['config', '--file', $this->gitDirectory().'/config', 'url.'.$replacement.'.'.$kind, $prefix], $this->folder);
+    }
+
+    // A remote section named like a remote string, because git push takes the string as that remote's name and pushes to the section's address.
+    public function remoteSectionInTheRepository(string $name, string $key, string $value): void
+    {
+        $this->run(['config', '--file', $this->gitDirectory().'/config', 'remote.'.$name.'.'.$key, $value], $this->folder);
+    }
+
     public function push(?SigningKey $key = null): PushBranch
     {
         $git = new BranchGit(new HardenedGit(), new GuardedRun());

@@ -14,6 +14,7 @@ use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\Domain\ParkedTaskRecord;
 use Intakt\Core\Build\UseCase\BuildTask\ParkedTasks;
 use Intakt\Core\Build\UseCase\BuildTask\TaskNotParked;
+use Intakt\Core\Ledger\Contract\AppendResult;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
@@ -32,6 +33,7 @@ use Symfony\Component\Filesystem\Filesystem;
 #[CoversClass(ParkedTasks::class)]
 #[CoversClass(ParkedTaskRecord::class)]
 #[CoversClass(TaskNotParked::class)]
+#[UsesClass(AppendResult::class)]
 #[UsesClass(BuildQuestion::class)]
 #[UsesClass(DoctrineLedger::class)]
 #[UsesClass(EventRecord::class)]
@@ -172,6 +174,19 @@ final class ParkedTasksOnSqliteTest extends KernelTestCase
         $failure = $this->failureOfParking(new ParkedTasks($unopenable, $this->ledger(), $this->registry(), $this->clock()));
 
         self::assertSame(self::NOT_PARKED, $failure);
+        self::assertSame([], $this->ledgerRows());
+    }
+
+    public function testAParkingWhoseLedgerDidNotRecordTheAskedStepLeavesTheTaskUnparkedAndNoTransactionOpen(): void
+    {
+        $ledger = self::createStub(Ledger::class);
+        $ledger->method('append')->willReturn(AppendResult::failed('the ledger refused the event'));
+
+        $failure = $this->failureOfParking(new ParkedTasks($this->connection(), $ledger, $this->registry(), $this->clock()));
+
+        self::assertSame(self::NOT_PARKED, $failure);
+        self::assertFalse($this->connection()->isTransactionActive());
+        self::assertSame([], $this->parkedRows());
         self::assertSame([], $this->ledgerRows());
     }
 

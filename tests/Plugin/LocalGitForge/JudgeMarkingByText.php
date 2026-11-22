@@ -51,6 +51,6 @@ final readonly class JudgeMarkingByText implements Vendor
     {
         [$mark, $note] = $this->marks[$finding->text];
 
-        return new JudgedFinding($finding->id, $mark, note: $note);
+        return new JudgedFinding($finding->id, $mark, null, $note);
     }
 }

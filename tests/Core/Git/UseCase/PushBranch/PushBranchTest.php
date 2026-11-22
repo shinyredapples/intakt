@@ -180,6 +180,75 @@ final class PushBranchTest extends TestCase
         (void) $this->scenario->push()->push($this->scenario->request($this->scenario->repository->objectAt('main')));
     }
 
+    #[DataProvider('rewritesOfTheRemote')]
+    public function testARemoteTheRepositorysConfigRewritesToAnotherRepositoryIsNeitherReadNorRecordedNorPushed(string $kind, string $part): void
+    {
+        $other = $this->scenario->otherRemote();
+        $remote = $this->scenario->remote;
+        $prefix = match ($part) {
+            'whole' => $remote,
+            'prefix' => substr($remote, 0, -strlen('remote.git')),
+            default => '',
+        };
+        $this->scenario->rewriteInTheRepository($kind, $prefix, $other);
+
+        try {
+            (void) $this->scenario->push()->push($this->scenario->request());
+            self::fail('A rewritten remote must be refused.');
+        } catch (BranchNotPushed $refused) {
+            self::assertStringContainsString('rewrites the remote\'s address', $refused->getMessage());
+        }
+
+        self::assertNull($this->scenario->remoteTip($other));
+        self::assertNull($this->scenario->remoteTip());
+        self::assertSame([], $this->scenario->ledger->kinds());
+        self::assertSame(0, $this->scenario->changes->calls);
+    }
+
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function rewritesOfTheRemote(): iterable
+    {
+        yield 'insteadOf the whole remote' => ['insteadOf', 'whole'];
+        yield 'pushInsteadOf the whole remote' => ['pushInsteadOf', 'whole'];
+        yield 'insteadOf a prefix of the remote' => ['insteadOf', 'prefix'];
+        yield 'an empty insteadOf' => ['insteadOf', 'empty'];
+    }
+
+    public function testARewriteOfAnotherAddressDoesNotStopThePush(): void
+    {
+        $this->scenario->rewriteInTheRepository('insteadOf', 'https://example.com/elsewhere/', $this->scenario->otherRemote());
+
+        self::assertInstanceOf(PushedBranch::class, $this->scenario->push()->push($this->scenario->request()));
+    }
+
+    public function testARemoteNamedLikeARemoteSectionOfTheRepositorysConfigIsNeitherRecordedNorPushedToEitherRepository(): void
+    {
+        $other = $this->scenario->otherRemote();
+        $this->scenario->remoteSectionInTheRepository($this->scenario->remote, 'pushurl', $other);
+
+        try {
+            (void) $this->scenario->push()->push($this->scenario->request());
+            self::fail('A remote named like a remote section must be refused.');
+        } catch (BranchNotPushed $refused) {
+            self::assertStringContainsString('remote section', $refused->getMessage());
+            self::assertStringNotContainsString($this->scenario->remote, $refused->getMessage());
+        }
+
+        self::assertNull($this->scenario->remoteTip($other));
+        self::assertNull($this->scenario->remoteTip());
+        self::assertSame([], $this->scenario->ledger->kinds());
+        self::assertSame(0, $this->scenario->changes->calls);
+    }
+
+    public function testARemoteSectionWhoseNameOnlyStartsWithTheRemoteDoesNotStopThePush(): void
+    {
+        $this->scenario->remoteSectionInTheRepository($this->scenario->remote.'.mirror', 'pushurl', $this->scenario->otherRemote());
+
+        self::assertInstanceOf(PushedBranch::class, $this->scenario->push()->push($this->scenario->request()));
+    }
+
     public function testTheForeignChangeCheckRunsBeforeAnythingIsRecordedOrPushed(): void
     {
         $atTheCheck = null;

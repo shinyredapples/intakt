@@ -37,6 +37,7 @@ use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\NoReviewServerAccess;
+use Intakt\Core\Review\Contract\ResolvedFinding;
 use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
@@ -52,6 +53,7 @@ use Intakt\Core\Review\Infrastructure\JudgePrompt;
 use Intakt\Core\Review\Infrastructure\LiveProgress;
 use Intakt\Core\Review\Infrastructure\MalformedToolCalls;
 use Intakt\Core\Review\Infrastructure\ReviewerAgent;
+use Intakt\Core\Review\Infrastructure\ReviewerAnswer\Verdict as ReviewerAnswer;
 use Intakt\Core\Review\Infrastructure\ReviewerPrompt;
 use Intakt\Core\Review\Infrastructure\ReviewerRuns;
 use Intakt\Core\Review\Infrastructure\ReviewerStopping;
@@ -172,7 +174,7 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
         $verdict = $this->vendor(RecordedClaudeCodeCli::replaying('complete'))->review('alpha', Tier::Strong, $this->request())->verdict;
 
         self::assertSame(Decision::Changes, $verdict->verdict);
-        self::assertSame(['F1', 'F2'], $verdict->resolved);
+        self::assertEquals([new ResolvedFinding('F1'), new ResolvedFinding('F2')], $verdict->resolved);
     }
 
     public function testACompleteRecordedStreamSettlesItsUsageOnce(): void
@@ -192,7 +194,7 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
         $verdict = $this->vendor(RecordedClaudeCodeCli::replaying('fenced'))->review('alpha', Tier::Strong, $this->request())->verdict;
 
         self::assertSame(Decision::Changes, $verdict->verdict);
-        self::assertSame(['F1', 'F2'], $verdict->resolved);
+        self::assertEquals([new ResolvedFinding('F1'), new ResolvedFinding('F2')], $verdict->resolved);
     }
 
     #[DataProvider('unreadableAnswers')]
@@ -221,7 +223,7 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
         $verdict = $this->vendor(RecordedClaudeCodeCli::replaying('structured'))->review('alpha', Tier::Strong, $this->request())->verdict;
 
         self::assertSame(Decision::Changes, $verdict->verdict);
-        self::assertSame(['F1', 'F2'], $verdict->resolved);
+        self::assertEquals([new ResolvedFinding('F1'), new ResolvedFinding('F2')], $verdict->resolved);
         self::assertSame('F3', $verdict->findings[0]->id);
     }
 
@@ -230,7 +232,7 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
         $verdict = $this->vendor(RecordedClaudeCodeCli::replaying('structured-null'))->review('alpha', Tier::Strong, $this->request())->verdict;
 
         self::assertSame(Decision::Changes, $verdict->verdict);
-        self::assertSame(['F1', 'F2'], $verdict->resolved);
+        self::assertEquals([new ResolvedFinding('F1'), new ResolvedFinding('F2')], $verdict->resolved);
     }
 
     public function testAResponseFormatWithoutASchemaIsRefusedBeforeTheCliStarts(): void
@@ -558,7 +560,7 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
 
     private function verdictSchema(): string
     {
-        return json_encode(new ResponseFormatFactory()->create(Verdict::class)['json_schema']['schema'], JSON_THROW_ON_ERROR);
+        return json_encode(new ResponseFormatFactory()->create(ReviewerAnswer::class)['json_schema']['schema'], JSON_THROW_ON_ERROR);
     }
 
     private function servers(): ReviewServerAccesses

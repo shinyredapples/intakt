@@ -9,7 +9,7 @@ use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\StreamChunks;
 use Intakt\Core\Review\Contract\StreamCutBy;
 use Intakt\Core\Review\Contract\StreamEndedEarly;
-use Intakt\Core\Review\Contract\Verdict;
+use Intakt\Core\Review\Infrastructure\ReviewerAnswer\Verdict;
 use Intakt\Core\Review\Infrastructure\StreamTally;
 use Intakt\Core\Review\Infrastructure\StrictVerdictStreamListener;
 use PHPUnit\Framework\Attributes\CoversClass;

@@ -16,7 +16,7 @@ final readonly class Vouching
     /**
      * @param list<string> $labels
      */
-    public function __construct(
+    private function __construct(
         public bool $trusted,
         public array $labels,
     ) {
@@ -29,11 +29,25 @@ final readonly class Vouching
     public static function of(string $author, IssueHistory $history, Closure $steers): self
     {
         if (!$steers($author) || !$steers($history->lastEditor)) {
-            return new self(false, []);
+            return self::untrusted();
         }
 
         $vouched = array_filter($history->labels, static fn (LabelApplication $application): bool => $steers($application->appliedBy));
 
         return new self(true, array_values(array_map(static fn (LabelApplication $application): string => $application->label, $vouched)));
+    }
+
+    public static function untrusted(): self
+    {
+        return new self(false, []);
+    }
+
+    // Skips the write-access check, because only a stored row comes back this way and of() already checked it before the row was saved.
+    /**
+     * @param list<string> $labels
+     */
+    public static function restored(array $labels): self
+    {
+        return new self(true, $labels);
     }
 }

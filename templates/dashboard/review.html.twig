@@ -184,7 +184,8 @@
 {% endfor %}
 </section>
 {% if active is not null %}
-<aside class="log log-pane" id="live-log-pane" role="tabpanel" aria-labelledby="live-log-tab" tabindex="0" data-heading="live-log-title">
+{# A section, because axe refuses role="tabpanel" on an aside. #}
+<section class="log log-pane" id="live-log-pane" role="tabpanel" aria-labelledby="live-log-tab" tabindex="0" data-heading="live-log-title">
     <h2 id="live-log-title">Live log of review pass {{ active.number ?? '(number not recorded)' }}</h2>
     <div class="log-main">
     {# Outside the streams' container, so a reviewer's first update cannot remove it; the stylesheet hides it once a reviewer is placed. #}
@@ -196,7 +197,7 @@
     </div>
     </div>
     {{ include('dashboard/_session_summary.html.twig', {round: active.round, summary: summary, review_cost: review.cost}, with_context = false) }}
-</aside>
+</section>
 {% endif %}
 </div>
 {% endif %}
