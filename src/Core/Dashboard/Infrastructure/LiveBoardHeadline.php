@@ -81,16 +81,58 @@ final readonly class LiveBoardHeadline
     // Read and written under the lock, so no other worker pushes between the read of the last pushed board and the record of this one.
     private function publishedOnce(): string
     {
-        $lastPushed = $this->lastPushed->getItem(self::LAST_PUSHED);
+        $lastPushed = $this->recalled();
         $board = $this->pages->board();
         $signature = $this->signatureOf($board);
 
-        if ($signature !== $lastPushed->get()) {
-            $this->updates->publish(new LiveEvent(DashboardTopics::SHELL, $this->streamOf($board)));
-            $this->lastPushed->save($lastPushed->set($signature));
+        if ($signature === $lastPushed) {
+            return $signature;
+        }
+
+        // Forgotten before the push, because a push the hub refuses or a record the pool refuses would otherwise leave an older board as the last pushed one, and a return to that board would be skipped while pages show the newer one.
+        $this->forgotten();
+
+        if ($this->updates->publish(new LiveEvent(DashboardTopics::SHELL, $this->streamOf($board)))) {
+            $this->remembered($signature);
         }
 
         return $signature;
+    }
+
+    // A pool that cannot be read means the last push is unknown, and an unknown board is pushed: one repeat is cheaper than a page left stale.
+    private function recalled(): ?string
+    {
+        try {
+            $signature = $this->lastPushed->getItem(self::LAST_PUSHED)->get();
+
+            return is_string($signature) ? $signature : null;
+            // Boundary: logs a pool that cannot be read and goes on, because the memory of the last push only saves repeat traffic.
+        } catch (Throwable $failure) {
+            $this->logger->warning('The last pushed board could not be read.', ['exception' => $failure]);
+
+            return null;
+        }
+    }
+
+    private function forgotten(): void
+    {
+        try {
+            $this->lastPushed->deleteItem(self::LAST_PUSHED);
+            // Boundary: logs a pool that cannot be written and goes on, because the push itself matters more than its memory.
+        } catch (Throwable $failure) {
+            $this->logger->warning('The last pushed board could not be forgotten.', ['exception' => $failure]);
+        }
+    }
+
+    private function remembered(string $signature): void
+    {
+        try {
+            $item = $this->lastPushed->getItem(self::LAST_PUSHED);
+            $this->lastPushed->save($item->set($signature));
+            // Boundary: logs a pool that cannot be written and goes on, because the board is already pushed and a missing record costs one repeat push.
+        } catch (Throwable $failure) {
+            $this->logger->warning('The last pushed board could not be recorded.', ['exception' => $failure]);
+        }
     }
 
     // The boards are compared, not the rendered streams, because a rendered term carries a fresh random id each time and two renders of one board never match; hashed, so the cache keeps a short value however many cards the board has.

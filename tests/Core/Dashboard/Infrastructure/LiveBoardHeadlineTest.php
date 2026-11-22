@@ -27,7 +27,14 @@ use Intakt\Tests\Support\UnpricedRoundCosts;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Intakt\Core\Dashboard\Infrastructure\MercureLiveUpdates;
+use Intakt\Core\Dashboard\Contract\LiveUpdates;
+use Psr\Cache\CacheItemInterface;
 use Psr\Cache\CacheItemPoolInterface;
+use Symfony\Component\HttpClient\MockHttpClient;
+use Symfony\Component\HttpClient\Response\MockResponse;
+use Symfony\Component\Mercure\Hub;
+use Symfony\Component\Mercure\Jwt\StaticTokenProvider;
 use Symfony\Component\Cache\Adapter\ArrayAdapter;
 use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\ErrorHandler\BufferingLogger;
@@ -37,6 +44,7 @@ use Symfony\Component\Uid\Uuid;
 use Twig\Environment;
 
 #[CoversClass(LiveBoardHeadline::class)]
+#[UsesClass(MercureLiveUpdates::class)]
 #[UsesClass(LedgerReviewPages::class)]
 #[UsesClass(LedgerRounds::class)]
 #[UsesClass(RoundPayloads::class)]
@@ -187,7 +195,7 @@ final class LiveBoardHeadlineTest extends KernelTestCase
         self::assertCount(2, $live->events);
     }
 
-    public function testAPoolThatCannotBeReadPushesNothingAndIsLogged(): void
+    public function testAPoolThatCannotBeReadStillPushesTheBoardAndIsLogged(): void
     {
         $pool = self::createStub(CacheItemPoolInterface::class);
         $pool->method('getItem')->willThrowException(new InvalidArgumentException('disk full'));
@@ -195,8 +203,44 @@ final class LiveBoardHeadlineTest extends KernelTestCase
 
         $this->headlineOn(new DashboardLedger(), $live, $pool)->publishTheBoard();
 
-        self::assertSame([], $live->events);
-        self::assertSame([['warning', 'The board headline was not published.']], array_map(static fn (mixed $record): array => is_array($record) ? [$record[0] ?? null, $record[1] ?? null] : [], $this->log->cleanLogs()));
+        self::assertCount(1, $live->events);
+        self::assertContains(['warning', 'The last pushed board could not be read.'], array_map(static fn (mixed $record): array => is_array($record) ? [$record[0] ?? null, $record[1] ?? null] : [], $this->log->cleanLogs()));
+    }
+
+    public function testABoardTheHubRefusedIsPushedAgainOnTheNextTrigger(): void
+    {
+        $http = new MockHttpClient([new MockResponse('', ['http_code' => 503]), new MockResponse('event-1')]);
+        $hub = new Hub('http://localhost/.well-known/mercure', new StaticTokenProvider('publisher.token.unsigned'), httpClient: $http);
+        $headline = $this->headlineOn(new DashboardLedger(), new MercureLiveUpdates($hub, $this->log));
+
+        $headline->publishTheBoard();
+        $headline->publishTheBoard();
+
+        self::assertSame(2, $http->getRequestsCount());
+    }
+
+    public function testAReturnToAnEarlierBoardIsPushedWhenThePoolRefusedTheRecordOfTheNewerOne(): void
+    {
+        $stored = new ArrayAdapter();
+        $refusing = false;
+        $pool = self::createStub(CacheItemPoolInterface::class);
+        $pool->method('getItem')->willReturnCallback($stored->getItem(...));
+        $pool->method('deleteItem')->willReturnCallback($stored->deleteItem(...));
+        $pool->method('save')->willReturnCallback(static function (CacheItemInterface $item) use (&$refusing, $stored): bool {
+            return !$refusing && $stored->save($item);
+        });
+        $live = new PublishedLiveEvents();
+        $idle = new DashboardLedger();
+        $active = new DashboardLedger();
+        $active->startRoundOf('change-1', 'r1', 1);
+
+        $this->headlineOn($idle, $live, $pool)->publishTheBoard();
+        $refusing = true;
+        $this->headlineOn($active, $live, $pool)->publishTheBoard();
+        $refusing = false;
+        $this->headlineOn($idle, $live, $pool)->publishTheBoard();
+
+        self::assertCount(3, $live->events);
     }
 
     protected function setUp(): void
@@ -228,7 +272,7 @@ final class LiveBoardHeadlineTest extends KernelTestCase
         return new Crawler($live->events[0]->turboStream)->filter('turbo-stream[target="col-done"] section#col-done');
     }
 
-    private function headlineOn(DashboardLedger $ledger, PublishedLiveEvents $live, CacheItemPoolInterface $lastPushed = new ArrayAdapter()): LiveBoardHeadline
+    private function headlineOn(DashboardLedger $ledger, LiveUpdates $live, CacheItemPoolInterface $lastPushed = new ArrayAdapter()): LiveBoardHeadline
     {
         $twig = self::getContainer()->get(Environment::class);
         self::assertInstanceOf(Environment::class, $twig);

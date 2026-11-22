@@ -22,14 +22,16 @@ final class PublishingMeanwhile implements LiveUpdates
     }
 
     #[Override]
-    public function publish(LiveEvent $event): void
+    public function publish(LiveEvent $event): bool
     {
         $meanwhile = $this->meanwhile;
         $this->meanwhile = null;
-        $this->live->publish($event);
+        $delivered = $this->live->publish($event);
 
         if ($meanwhile instanceof Closure) {
             $meanwhile();
         }
+
+        return $delivered;
     }
 }
