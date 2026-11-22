@@ -84,20 +84,17 @@ final class LedgerSubjectMigrationTest extends KernelTestCase
         return $connection;
     }
 
-    private function pagesOn(Connection $connection): LedgerReviewPages
+    private function up(AbstractMigration $migration, Connection $connection): void
     {
-        $original = self::getContainer()->get('doctrine');
-        self::assertInstanceOf(ManagerRegistry::class, $original);
-        $defaultManager = $original->getManager();
-        self::assertInstanceOf(EntityManagerInterface::class, $defaultManager);
-        $registry = self::createStub(ManagerRegistry::class);
-        $registry->method('getManager')->willReturn(new EntityManager($connection, $defaultManager->getConfiguration()));
-        self::getContainer()->set(Ledger::class, new DoctrineLedger($registry, new MockClock('2026-11-22 12:00:00')));
+        $migration->up(new Schema());
+        $this->execute($migration, $connection);
+    }
 
-        $pages = self::getContainer()->get(LedgerReviewPages::class);
-        self::assertInstanceOf(LedgerReviewPages::class, $pages);
-
-        return $pages;
+    private function execute(AbstractMigration $migration, Connection $connection): void
+    {
+        foreach ($migration->getSql() as $query) {
+            $connection->executeStatement($query->getStatement());
+        }
     }
 
     /**
@@ -116,22 +113,25 @@ final class LedgerSubjectMigrationTest extends KernelTestCase
         return $connection->fetchFirstColumn("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'ledger_event'");
     }
 
-    private function up(AbstractMigration $migration, Connection $connection): void
+    private function pagesOn(Connection $connection): LedgerReviewPages
     {
-        $migration->up(new Schema());
-        $this->execute($migration, $connection);
+        $original = self::getContainer()->get('doctrine');
+        self::assertInstanceOf(ManagerRegistry::class, $original);
+        $defaultManager = $original->getManager();
+        self::assertInstanceOf(EntityManagerInterface::class, $defaultManager);
+        $registry = self::createStub(ManagerRegistry::class);
+        $registry->method('getManager')->willReturn(new EntityManager($connection, $defaultManager->getConfiguration()));
+        self::getContainer()->set(Ledger::class, new DoctrineLedger($registry, new MockClock('2026-11-22 12:00:00')));
+
+        $pages = self::getContainer()->get(LedgerReviewPages::class);
+        self::assertInstanceOf(LedgerReviewPages::class, $pages);
+
+        return $pages;
     }
 
     private function down(AbstractMigration $migration, Connection $connection): void
     {
         $migration->down(new Schema());
         $this->execute($migration, $connection);
-    }
-
-    private function execute(AbstractMigration $migration, Connection $connection): void
-    {
-        foreach ($migration->getSql() as $query) {
-            $connection->executeStatement($query->getStatement());
-        }
     }
 }
