@@ -8,6 +8,7 @@ use Closure;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Budget\Contract\Cost;
+use Intakt\Core\Review\Contract\BlockReasons;
 use Intakt\Core\Review\Contract\ChangeReview;
 use Intakt\Core\Review\Contract\ChangeReviewRequest;
 use Intakt\Core\Review\Contract\ChangeReviews;
@@ -59,6 +60,7 @@ use Symfony\Component\Console\Tester\CommandTester;
 #[CoversClass(ReviewChangeCommand::class)]
 #[CoversClass(ReviewExit::class)]
 #[UsesClass(ReviewReport::class)]
+#[UsesClass(BlockReasons::class)]
 #[UsesClass(LocalGitForge::class)]
 #[UsesClass(LocalRepository::class)]
 #[UsesClass(RepositoryNotFound::class)]
@@ -351,7 +353,7 @@ final class ReviewChangeCommandTest extends TestCase
             new PanelVerdict(Tier::Standard, new Verdict(Decision::Approve, [], [], [])),
         ];
 
-        return new ChangeReview('0192a000-0000-7000-8000-000000000000', 1, $decision, $verdicts, [$finding], RoundTokens::of(2, new TokenFigures(100, 0, 0, 0, 20)), Cost::inUsd(0.00014), Decision::Blocked === $decision ? ['correctness: provider refused the key'] : []);
+        return new ChangeReview('0192a000-0000-7000-8000-000000000000', 1, $decision, $verdicts, [$finding], RoundTokens::of(2, new TokenFigures(100, 0, 0, 0, 20)), Cost::inUsd(0.00014), Decision::Blocked === $decision ? new BlockReasons('correctness: provider refused the key') : new BlockReasons());
     }
 
     /**

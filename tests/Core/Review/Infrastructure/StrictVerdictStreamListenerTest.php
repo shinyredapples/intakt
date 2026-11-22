@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Review\Infrastructure;
 
 use Generator;
 use Intakt\Core\Review\Contract\Decision;
+use Intakt\Core\Review\Contract\StreamChunks;
 use Intakt\Core\Review\Contract\StreamCutBy;
 use Intakt\Core\Review\Contract\StreamEndedEarly;
 use Intakt\Core\Review\Contract\Verdict;
@@ -25,6 +26,7 @@ use Symfony\AI\Platform\TokenUsage\TokenUsage;
 #[CoversClass(StreamTally::class)]
 #[CoversClass(StreamEndedEarly::class)]
 #[UsesClass(Verdict::class)]
+#[UsesClass(StreamChunks::class)]
 final class StrictVerdictStreamListenerTest extends TestCase
 {
     private StreamTally $tally;
@@ -46,7 +48,7 @@ final class StrictVerdictStreamListenerTest extends TestCase
         self::assertInstanceOf(StreamEndedEarly::class, $cut);
         self::assertSame('The reviewer stream ended before its answer was complete.', $cut->getMessage());
         self::assertSame([StreamCutBy::UnfinishedAnswer, 2], [$cut->by, $cut->chunks]);
-        self::assertSame(['TokenUsage', 'ThinkingDelta "The diff adds a cart."'], $cut->lastChunks);
+        self::assertSame(['TokenUsage', 'ThinkingDelta "The diff adds a cart."'], [...$cut->lastChunks]);
     }
 
     public function testAStreamThatGaveAWholeAnswerIsNotCut(): void
