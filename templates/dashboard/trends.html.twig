@@ -5,14 +5,13 @@
 {#- Always loaded, not only with live updates, because the charts' tooltip controller starts from it. -#}
 {% block importmap %}{{ importmap('app') }}{% endblock %}
 
-{#- A tile only for a figure there is, because a "No data" tile reads as a failure at a glance (juror walk-through of issue 3141). The label carries its explanation as a tooltip and the caption under the figure says in a few visible words what it counts, so a keyboard or touch reader never depends on the tooltip; a role character sits in the corner of each tile, decorative because the label already names the figure; an estimated figure carries the same kind label as the review page's cost, so a guess never reads as a reading (decision D5 of #2206). -#}
+{#- A tile only for a figure there is, because a "No data" tile reads as a failure at a glance (juror walk-through of issue 3141). The label carries its explanation as a tooltip and the caption under the figure says in a few visible words what it counts, so a keyboard or touch reader never depends on the tooltip; a role character sits in the corner of each tile, inside the caption's description element because a dl group holds only dt and dd, decorative because the label already names the figure; an estimated figure carries the same kind label as the review page's cost, so a guess never reads as a reading (decision D5 of #2206). -#}
 {% macro tile(label, figure, tip, at, caption, character, kind = null) %}
 {% if figure is not null %}
 <div class="tile" data-tile="{{ at }}">
     <dt>{{ _self.hint(label, tip, at) }}{% if kind is not null %} {{ include('dashboard/components/figure_kind.html.twig', {kind: kind, at: at}, with_context = false) }}{% endif %}</dt>
     <dd>{{ figure }}</dd>
-    <dd class="tile-caption">{{ caption }}</dd>
-    {{ include('dashboard/components/character.html.twig', {character: character, size: 48}, with_context = false) }}
+    <dd class="tile-caption">{{ caption }}{{ include('dashboard/components/character.html.twig', {character: character, size: 48}, with_context = false) }}</dd>
 </div>
 {% endif %}
 {% endmacro %}
@@ -47,14 +46,14 @@
 {% set oneReviewerOnly = trends.caughtByOneReviewerOnlyPercent %}
 {% set reviewer = enum('Intakt\\Core\\Dashboard\\Domain\\Character').CodeReviewer %}
 {% set judge = enum('Intakt\\Core\\Dashboard\\Domain\\Character').Judge %}
-{% if bench is not null %}
+{% if bench is not null or trends.anyReview %}
 {#- The page's one primary message, below a hidden h1 so the heading stays the page's name; the octopus joins it only when reviews follow, because the empty state below draws its own and the page shows one. -#}
 <div class="bench-headline" data-bench-headline>
     {% if trends.anyReview %}{{ include('dashboard/components/character.html.twig', {character: enum('Intakt\\Core\\Dashboard\\Domain\\MascotPose').Conducting, size: 96}, with_context = false) }}{% endif %}
-    <div>
+    {% if bench is not null %}<div>
         <p class="bench-result">The review panel found {{ bench.found }} of {{ bench.planted }} planted defects</p>
         <p class="bench-meta">{{ bench.falseAlarms }} {{ bench.falseAlarms == 1 ? 'false alarm' : 'false alarms' }} in all{% if bench.runs is not null %} {{ bench.runs }} {{ bench.runs == 1 ? 'run' : 'runs' }}{% endif %} {{ include('dashboard/components/figure_kind.html.twig', {kind: kinds.Measured, at: 'bench'}, with_context = false) }} <time datetime="{{ bench.ranOn }}">Run of {{ bench.ranOn }}</time></p>
-    </div>
+    </div>{% endif %}
 </div>
 {% endif %}
 {% if trends.anyReview %}
@@ -104,15 +103,15 @@
             {% endfor %}
         </div>
         <table class="sr-only">
-                <thead><tr><th scope="col">Reviewer</th><th scope="col">Severity</th><th scope="col">Findings</th><th scope="col">One reviewer only</th></tr></thead>
-                <tbody>
-                {% for reviewer in drawnReviewers %}
-                {% for bar in reviewer.bars %}
-                <tr><td>{{ reviewer.role|capitalize }}</td><td>{{ bar.label }}</td><td>{{ bar.value }}</td><td>{{ bar.part }}</td></tr>
-                {% endfor %}
-                {% endfor %}
-                </tbody>
-            </table>
+            <thead><tr><th scope="col">Reviewer</th><th scope="col">Severity</th><th scope="col">Findings</th><th scope="col">One reviewer only</th></tr></thead>
+            <tbody>
+            {% for reviewer in drawnReviewers %}
+            {% for bar in reviewer.bars %}
+            <tr><td>{{ reviewer.role|capitalize }}</td><td>{{ bar.label }}</td><td>{{ bar.value }}</td><td>{{ bar.part }}</td></tr>
+            {% endfor %}
+            {% endfor %}
+            </tbody>
+        </table>
         {{ _self.tip() }}
     </section>
     {% endif %}
@@ -122,13 +121,13 @@
         <p class="takeaway sr-only">{{ outcomes.takeaway }}</p>
         {{ include('dashboard/components/bar_chart.html.twig', {name: 'Findings by what the judge did with them, over every checked pass', bars: outcomes.bars, top: outcomes.scaleTop}, with_context = false) }}
         <table class="sr-only">
-                <thead><tr><th scope="col">Outcome</th><th scope="col">Findings</th></tr></thead>
-                <tbody>
-                {% for bar in outcomes.bars %}
-                <tr><td>{{ bar.detail }}</td><td>{{ bar.value }}</td></tr>
-                {% endfor %}
-                </tbody>
-            </table>
+            <thead><tr><th scope="col">Outcome</th><th scope="col">Findings</th></tr></thead>
+            <tbody>
+            {% for bar in outcomes.bars %}
+            <tr><td>{{ bar.detail }}</td><td>{{ bar.value }}</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
         {{ _self.tip() }}
     </section>
     {% endif %}
@@ -150,14 +149,14 @@
             {% endif %}
         </div>
         <table class="sr-only">
-                <thead><tr><th scope="col">Day</th><th scope="col">Passes</th>{% if costDrawn %}<th scope="col">Estimated cost (USD)</th>{% endif %}</tr></thead>
-                <tbody>
-                {% set costBars = perDay.costBars %}
-                {% for bar in perDay.roundBars %}
-                <tr><td>{{ bar.label }}</td><td>{{ bar.directLabel }}</td>{% if costDrawn %}<td>{{ costBars[loop.index0].directLabel }}</td>{% endif %}</tr>
-                {% endfor %}
-                </tbody>
-            </table>
+            <thead><tr><th scope="col">Day</th><th scope="col">Passes</th>{% if costDrawn %}<th scope="col">Estimated cost (USD)</th>{% endif %}</tr></thead>
+            <tbody>
+            {% set costBars = perDay.costBars %}
+            {% for bar in perDay.roundBars %}
+            <tr><td>{{ bar.label }}</td><td>{{ bar.directLabel }}</td>{% if costDrawn %}<td>{{ costBars[loop.index0].directLabel }}</td>{% endif %}</tr>
+            {% endfor %}
+            </tbody>
+        </table>
         {{ _self.tip() }}
     </section>
     {% endif %}

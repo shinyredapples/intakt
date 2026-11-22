@@ -79,6 +79,9 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
 
         self::assertSame(sprintf('The review panel found %d of %d planted defects', $bench->found, $bench->planted), $headline->filter('.bench-result')->text());
         self::assertStringContainsString($bench->falseAlarms.(1 === $bench->falseAlarms ? ' false alarm' : ' false alarms').' in all', $headline->filter('.bench-meta')->text());
+        if (null !== $bench->runs) {
+            self::assertStringContainsString(' '.$bench->runs.(1 === $bench->runs ? ' run' : ' runs'), $headline->filter('.bench-meta')->text());
+        }
         self::assertSame('measured', $headline->filter('.figure-kind')->attr('data-kind'));
         self::assertSame([$bench->ranOn, 'Run of '.$bench->ranOn], [$headline->filter('time')->attr('datetime'), $headline->filter('time')->text()]);
     }
@@ -130,6 +133,16 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
         ], $shown);
     }
 
+    public function testATileKeepsItsDecorativeImagesInsideADescription(): void
+    {
+        $this->ledger->startRound('r-1', 'alpha');
+
+        $page = $this->browser->request('GET', '/trends');
+
+        self::assertCount(0, $page->filter('dl.tiles > div.tile > :not(dt):not(dd)'));
+        self::assertCount(2, $page->filter('dl.tiles dd.tile-caption img.character'));
+    }
+
     public function testThePassesTileExplainsAStandaloneReviewPassWithoutCallingItABuild(): void
     {
         $this->ledger->startRound('r-1', 'alpha');
@@ -140,7 +153,7 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
         self::assertSame('Review passes started, whether run on their own or for a build.', $tile->filter('.term-tip')->text());
     }
 
-    public function testWithoutAReadableBenchTableThereIsNoHeadlineAndNoDefectsFoundTile(): void
+    public function testWithoutAReadableBenchTableThereIsNoBenchSentenceAndNoDefectsFoundTileButTheOctopusStays(): void
     {
         self::getContainer()->set(PublishedBench::class, new PublishedBench($this->projectDir().'/no-such-readme.md'));
         $this->ledger->startRound('r-1', 'alpha');
@@ -148,7 +161,8 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
         $page = $this->browser->request('GET', '/trends');
 
         self::assertSame(['passes'], $page->filter('.tiles .tile')->each(static fn (Crawler $tile): string => (string) $tile->attr('data-tile')));
-        self::assertCount(0, $page->filter('.bench-headline'));
+        self::assertCount(0, $page->filter('.bench-result'));
+        self::assertSame(1, $this->octopuses($page));
         self::assertStringNotContainsString('Defects found', $page->text());
     }
 
