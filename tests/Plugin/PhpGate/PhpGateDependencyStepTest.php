@@ -369,6 +369,60 @@ final class PhpGateDependencyStepTest extends TestCase
         }
     }
 
+    public function testTheLockedInstallRefusesAPreInstallScriptBecauseACopiedSnapshotWouldRunItWithTheVendorFolderInPlace(): void
+    {
+        $this->projectRequiringAPackage(['scripts' => ['pre-install-cmd' => '@php -r "touch(\'pre-install\');"']]);
+        $this->mustRun('composer update --no-interaction --no-plugins --no-scripts --no-install');
+
+        $install = $this->runInProject($this->step->install);
+
+        self::assertSame(PhpGateSteps::REFUSED, $install->getExitCode());
+        self::assertStringContainsString('pre-install-cmd', $install->getErrorOutput());
+        self::assertDirectoryDoesNotExist($this->directory.'/vendor');
+    }
+
+    #[DataProvider('vendorFoldersOutsideTheProject')]
+    public function testTheLockGuardRefusesAVendorFolderThatDoesNotResolveInsideTheFolderComposerRunsIn(string $vendor, string $mention): void
+    {
+        $this->lockedProject([], ['config' => ['vendor-dir' => $vendor]]);
+
+        $this->assertRefused(PhpGateSteps::LOCK_GUARD, $mention);
+    }
+
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function vendorFoldersOutsideTheProject(): iterable
+    {
+        yield 'a sibling folder' => ['../shared-vendor', 'resolves outside'];
+        yield 'a folder that climbs out through a subfolder' => ['sub/../../vendor', 'resolves outside'];
+        yield 'an absolute path' => ['/shared-vendor', 'absolute path'];
+        yield 'the home folder Composer expands' => ['~/shared-vendor', 'absolute path'];
+        yield 'the project folder itself' => ['.', 'folder Composer runs in itself'];
+        yield 'a subfolder and back' => ['sub/..', 'folder Composer runs in itself'];
+    }
+
+    #[DataProvider('vendorFoldersInsideTheProject')]
+    public function testTheLockGuardAcceptsAVendorFolderThatResolvesInsideTheFolderComposerRunsIn(string $vendor): void
+    {
+        $this->lockedProject([], ['config' => ['vendor-dir' => $vendor]]);
+
+        $guard = $this->runInProject(PhpGateSteps::LOCK_GUARD);
+
+        self::assertSame(0, $guard->getExitCode(), $guard->getErrorOutput());
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function vendorFoldersInsideTheProject(): iterable
+    {
+        yield 'a subfolder and back into vendor' => ['sub/../vendor'];
+        yield 'a dot segment' => ['./vendor'];
+        yield 'a trailing slash' => ['vendor/'];
+        yield 'a nested folder' => ['lib/vendor'];
+    }
+
     #[DataProvider('lineBreakingNames')]
     public function testARefusalStaysOneLineWhateverCharactersThePackageNameHolds(string $name): void
     {

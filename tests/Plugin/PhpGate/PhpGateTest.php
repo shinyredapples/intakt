@@ -55,6 +55,11 @@ final class PhpGateTest extends TestCase
         self::assertSame('composer install --no-interaction --no-progress', $this->composerStep(null)->generate);
     }
 
+    public function testTheInstallACopiedSnapshotReplacesIsTheFirstOfTheGatesOwnCheckSteps(): void
+    {
+        self::assertSame(new PhpGate()->checkSteps(null)[0], $this->composerStep(null)->checkInstall);
+    }
+
     public function testAnEmptyConfiguredCommandStillNamesTheComposerLockInputs(): void
     {
         self::assertSame(['composer.json', 'composer.lock'], $this->composerStep(' ')->lockFiles);

@@ -11,6 +11,7 @@ use Intakt\Core\Job\Contract\JobEnd;
 use Intakt\Core\Job\Contract\JobEventNotRecorded;
 use Intakt\Core\Job\Contract\JobId;
 use Intakt\Core\Job\Contract\JobInput;
+use Intakt\Core\Job\Contract\JobKeptFolder;
 use Intakt\Core\Job\Contract\JobLimits;
 use Intakt\Core\Job\Contract\JobOutput;
 use Intakt\Core\Job\Contract\JobOutputRefused;
@@ -53,6 +54,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[CoversClass(ContainerJobRunner::class)]
 #[CoversClass(JobContainers::class)]
 #[CoversClass(JobContainerDefinition::class)]
+#[UsesClass(JobKeptFolder::class)]
 #[CoversClass(JobOutputDirectories::class)]
 #[CoversClass(JobLedger::class)]
 #[CoversClass(JobLocks::class)]
@@ -150,6 +152,28 @@ final class ContainerJobRunnerTest extends TestCase
             ['Type' => 'bind', 'Source' => '/srv/mirror/sample.git', 'Target' => '/input/repository', 'ReadOnly' => true],
             ['Type' => 'bind', 'Source' => $this->root.'/build-1', 'Target' => '/output', 'ReadOnly' => false],
         ], $mounts);
+    }
+
+    public function testAKeptFolderIsMountedWritableAfterTheOutputDirectoryAndNamedInTheEnvironment(): void
+    {
+        $this->whenJobRuns(new JobSpec(new JobId('install-1'), 'sample:latest', ['true'], [], new JobLimits(self::MEMORY, 1.0, 60), JobEgress::none(), new JobKeptFolder('/srv/installs/1')));
+
+        self::assertSame(
+            ['Type' => 'bind', 'Source' => '/srv/installs/1', 'Target' => '/kept', 'ReadOnly' => false],
+            array_last($this->mountsOf('install-1')),
+        );
+        $environment = $this->engine->definitionOf('install-1')['Env'];
+        self::assertIsArray($environment);
+        self::assertContains('INTAKT_JOB_KEPT=/kept', $environment);
+    }
+
+    public function testAJobWithoutAKeptFolderGetsNoKeptFolderVariable(): void
+    {
+        $this->whenJobRuns($this->spec('build-1'));
+
+        $environment = $this->engine->definitionOf('build-1')['Env'];
+        self::assertIsArray($environment);
+        self::assertNotContains('INTAKT_JOB_KEPT=/kept', $environment);
     }
 
     public function testAJobGetsAWipedHomeAndNoEnvironmentFromTheOrchestrator(): void
