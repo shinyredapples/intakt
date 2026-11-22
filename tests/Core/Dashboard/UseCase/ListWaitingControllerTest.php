@@ -9,6 +9,7 @@ use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Budget\Contract\OutageNotice;
 use Intakt\Core\Budget\Contract\OwnerNotices;
+use Intakt\Core\Dashboard\Domain\Character;
 use Intakt\Core\Dashboard\Domain\WaitingChoice;
 use Intakt\Core\Dashboard\Domain\WaitingItem;
 use Intakt\Core\Dashboard\Infrastructure\FilterProjects;
@@ -22,13 +23,14 @@ use Symfony\Component\DomCrawler\Crawler;
 #[CoversClass(ListWaitingController::class)]
 #[UsesClass(WaitingItem::class)]
 #[UsesClass(WaitingChoice::class)]
+#[UsesClass(Character::class)]
 #[UsesClass(OutageNotice::class)]
 #[UsesClass(Account::class)]
 #[UsesClass(FilterProjects::class)]
 #[UsesClass(LedgerReviews::class)]
 final class ListWaitingControllerTest extends DashboardPageTestCase
 {
-    public function testTheWaitingPageListsEachOwnerNoticeWithItsLeadMetaConsequenceActionAndWhy(): void
+    public function testTheWaitingPageListsEachOwnerNoticeWithItsRoleLeadMetaConsequenceAndOneTap(): void
     {
         $this->noticesAre($this->notice('main', new DateTimeImmutable('2026-11-02T08:00:00+00:00'), new DateTimeImmutable('2026-11-02T11:00:00+00:00')));
 
@@ -37,13 +39,41 @@ final class ListWaitingControllerTest extends DashboardPageTestCase
         self::assertResponseIsSuccessful();
         $item = $page->filter('.wait-item');
         self::assertCount(1, $item);
+        self::assertStringContainsString('images/roles/maintainer-light-96', (string) $item->filter('img.character-light')->attr('src'));
         self::assertSame('No usage of account claude_code.main has been read since 2026-11-02 08:00 UTC', $item->filter('h2.wait-lead')->text());
         self::assertSame('All projects', $item->filter('.meta span')->first()->text());
         self::assertStringContainsString('Waiting', $item->filter('.meta')->text());
         self::assertStringContainsString('at most one call at a time', $item->filter('.conseq')->text());
-        self::assertSame('php bin/console intakt:vendor:probe', $item->filter('.act .copy code')->text());
-        self::assertSame('Recommended', $item->filter('.act li')->first()->filter('.recommended')->text());
-        self::assertSame('Why', $item->filter('details.why summary')->text());
+        self::assertSame('Open the provider\'s status page', $item->filter('a.wait-act.primary b')->text());
+        self::assertSame('Shows whether the provider reports trouble. This card leaves when readings return.', $item->filter('a.wait-act.primary small')->text());
+    }
+
+    // No disclosure and no command to copy, because an overview page leads to one tap and details live on their own page (UX2).
+    public function testAnItemHasNoWhyDisclosureAndNoCommandToCopy(): void
+    {
+        $this->noticesAre($this->notice('main', new DateTimeImmutable('2026-11-02T08:00:00+00:00'), new DateTimeImmutable('2026-11-02T11:00:00+00:00')));
+
+        $page = $this->browser->request('GET', '/waiting');
+
+        self::assertCount(0, $page->filter('main details, main summary'));
+        self::assertCount(0, $page->filter('main [data-copy], main code'));
+        self::assertStringNotContainsString('bin/console', $page->filter('main')->text());
+    }
+
+    // Once per page, because the octopus is the conductor and the cards show the role that waits (UX2).
+    public function testTheWaitingOctopusAppearsOnceAboveTheCountOfThingsThatNeedYou(): void
+    {
+        $this->noticesAre(
+            $this->notice('first', new DateTimeImmutable('2026-11-01T08:00:00+00:00'), new DateTimeImmutable('2026-11-01T11:00:00+00:00')),
+            $this->notice('second', new DateTimeImmutable('2026-11-02T08:00:00+00:00'), new DateTimeImmutable('2026-11-02T11:00:00+00:00')),
+        );
+
+        $page = $this->browser->request('GET', '/waiting');
+
+        self::assertCount(1, $page->filter('main img.character-light[src*="octopus-"]'));
+        self::assertCount(1, $page->filter('.wait-hero img.character-light[src*="octopus-waiting"]'));
+        self::assertSame('2 things need you', $page->filter('.wait-hero h1')->text());
+        self::assertSame('Waiting on you', $page->filter('.wait-hero .wait-kicker')->text());
     }
 
     // The page has only its h1 above the items, so a lower level would skip one in the outline.
@@ -53,31 +83,9 @@ final class ListWaitingControllerTest extends DashboardPageTestCase
 
         $page = $this->browser->request('GET', '/waiting');
 
+        self::assertCount(1, $page->filter('main h1'));
         self::assertCount(1, $page->filter('.wait-item > h2'));
         self::assertCount(0, $page->filter('.wait-item h3'));
-    }
-
-    // A phone keeps the Why closed (D3), and only the copy script opens it on a wider window.
-    public function testEachItemIsANeedsCardWhoseWhyIsRenderedClosed(): void
-    {
-        $this->noticesAre($this->notice('main', new DateTimeImmutable('2026-11-02T08:00:00+00:00'), new DateTimeImmutable('2026-11-02T11:00:00+00:00')));
-
-        $page = $this->browser->request('GET', '/waiting');
-
-        self::assertCount(1, $page->filter('article.wait-item.needs'));
-        self::assertCount(1, $page->filter('.wait-item details.why'));
-        self::assertCount(0, $page->filter('.wait-item details.why[open]'));
-    }
-
-    // D6's walk opens Why, copies the command and follows the link, so Tab must reach them in that order.
-    public function testTheKeyboardReachesWhyBeforeCopyAndTheStatusLink(): void
-    {
-        $this->noticesAre($this->notice('main', new DateTimeImmutable('2026-11-02T08:00:00+00:00'), new DateTimeImmutable('2026-11-02T11:00:00+00:00')));
-
-        $page = $this->browser->request('GET', '/waiting');
-
-        $controls = $page->filter('.wait-item summary, .wait-item button[data-copy], .wait-item a[href]');
-        self::assertSame(['summary', 'button', 'a'], $controls->each(static fn (Crawler $control): string => $control->nodeName()));
     }
 
     // The link opens in the same tab, so it leaves no opener to guard.
@@ -89,18 +97,6 @@ final class ListWaitingControllerTest extends DashboardPageTestCase
 
         self::assertNull($page->filter('.wait-item a[href]')->attr('rel'));
         self::assertNull($page->filter('.wait-item a[href]')->attr('target'));
-    }
-
-    // Turbo runs a body script again on every visit, so a binding in the body would leave the document's listeners twice.
-    public function testTheCopyScriptIsBoundFromTheHeadAndNeverFromTheBodyAVisitReplaces(): void
-    {
-        $this->noticesAre($this->notice('main', new DateTimeImmutable('2026-11-02T08:00:00+00:00'), new DateTimeImmutable('2026-11-02T11:00:00+00:00')));
-
-        $page = $this->browser->request('GET', '/waiting');
-
-        self::assertStringContainsString('copyCommands(document, window);', $page->filter('head script[type="module"]')->text());
-        self::assertCount(0, $page->filter('body script[type="module"]'));
-        self::assertSame('php bin/console intakt:vendor:probe', $page->filter('.wait-item button[data-copy]')->attr('data-copy'));
     }
 
     public function testTheOldestNoticeComesFirst(): void

@@ -8,7 +8,7 @@ use DateTimeImmutable;
 use Intakt\Core\Budget\Contract\OutageNotice;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
-// At most four choices, because more would make the owner compare instead of act, and the recommended one first because it is the one to take.
+// The character is the role who keeps the item's part of the loop running, so the card shows who waits on the owner. At most four choices, because more would make the owner compare instead of act, and the recommended one first because it is the one to take.
 #[Exclude]
 final readonly class WaitingItem
 {
@@ -28,6 +28,8 @@ final readonly class WaitingItem
         public array $choices,
         public string $linkLabel,
         public ?string $link,
+        public string $linkOutcome,
+        public Character $character,
     ) {
         $count = count($choices);
         if ($count < 1 || $count > self::MOST_CHOICES || !$choices[0]->recommended) {
@@ -60,6 +62,8 @@ final readonly class WaitingItem
             ],
             null === $statusPage ? 'See the queue on the board' : 'Open the provider\'s status page',
             $statusPage,
+            (null === $statusPage ? 'Shows what waits on this account.' : 'Shows whether the provider reports trouble.').' This card leaves when readings return.',
+            Character::Maintainer,
         );
     }
 
