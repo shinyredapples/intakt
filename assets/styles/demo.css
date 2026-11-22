@@ -43,7 +43,9 @@
 .own-steps { display: grid; gap: var(--s8); margin: var(--s8) 0 0; padding: 0; list-style: none; }
 .own-steps > .step { padding: var(--s16); border-top: 0; }
 .own-steps > .step.current { box-shadow: inset 0 0 0 2px var(--primary); }
-.own-steps h3 { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s8); margin: 0 0 var(--s4); font-size: var(--t15); }
+.own-steps .step-role { flex-basis: 100%; }
+.own-steps .step-role .character { width: auto; height: 48px; }
+.own-steps h3 {display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s8); margin: 0 0 var(--s4); font-size: var(--t15); }
 .own-steps .lead { margin-bottom: var(--s8); }
 .own-steps label { display: block; margin: 0 0 var(--s4); font-weight: 600; }
 .own-steps input[type=password] { width: 100%; }

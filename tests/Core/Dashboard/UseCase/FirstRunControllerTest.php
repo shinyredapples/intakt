@@ -11,6 +11,7 @@ use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Ai\Infrastructure\ConfiguredAccounts;
 use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
 use Intakt\Core\Ai\Infrastructure\KeptProviderKeyFile;
+use Intakt\Core\Dashboard\Domain\Character;
 use Intakt\Core\Dashboard\Domain\FirstReviewStep;
 use Intakt\Core\Dashboard\Domain\FirstRun;
 use Intakt\Core\Dashboard\Domain\PanelOfProject;
@@ -72,6 +73,7 @@ use Symfony\Component\Messenger\Stamp\HandledStamp;
 #[CoversClass(StartAnswer::class)]
 #[CoversClass(SampleChangeSource::class)]
 #[UsesClass(DemoReadiness::class)]
+#[UsesClass(Character::class)]
 #[UsesClass(LedgerReviewPages::class)]
 #[UsesClass(ReplayMarks::class)]
 #[UsesClass(ConfiguredTierResolver::class)]
@@ -359,6 +361,34 @@ final class FirstRunControllerTest extends WebTestCase
         self::assertSame(['step-providers'], $page->filter('.own-steps > li[aria-current="step"]')->each(static fn (Crawler $card): string => (string) $card->attr('id')));
     }
 
+    public function testTheCurrentCardAloneShowsTheCharacterOfItsRoleInBothThemes(): void
+    {
+        $page = $this->firstRunPage(self::PROJECTS, []);
+
+        self::assertCount(2, $page->filter('.own-steps .step-role img.character'));
+        self::assertCount(1, $page->filter('#step-providers .step-role img.character-light[src*="roles/maintainer-light-96"]'));
+        self::assertCount(1, $page->filter('#step-providers .step-role img.character-dark[src*="roles/maintainer-dark-96"]'));
+    }
+
+    public function testTheFirstReviewCardWhenCurrentShowsTheCodeReviewer(): void
+    {
+        $_SERVER['INTAKT_SAMPLE_REPOSITORY'] = self::SAMPLE_REPOSITORY;
+
+        $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+
+        self::assertSame(Character::CodeReviewer, self::getContainer()->get(FirstRunSteps::class)->firstRun()->currentCharacter());
+        self::assertCount(2, $page->filter('#step-first-review .step-role img.character'));
+        self::assertCount(2, $page->filter('.own-steps .step-role img.character'));
+    }
+
+    public function testWithNoCurrentCardNoRoleCharacterIsShown(): void
+    {
+        $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+
+        self::assertNull(self::getContainer()->get(FirstRunSteps::class)->firstRun()->currentCharacter());
+        self::assertCount(0, $page->filter('.own-steps .step-role'));
+    }
+
     public function testTheCurrentStepIsChosenFromTheThreeShownStepsAndSkipsOneThatIsNotNeeded(): void
     {
         $page = $this->firstRunPage(self::PROJECTS, []);
@@ -545,7 +575,7 @@ final class FirstRunControllerTest extends WebTestCase
 
         self::assertSame('not-needed', $page->filter('#step-first-review')->attr('data-state'));
         self::assertSame(
-            'No review has run yet, and this install has no sample change to start one from: review a change of your own project with intakt:review or your agent.',
+            'No review has run yet, and this page has no sample change to start one from: your coding agent can ask for a review of a change of your own project.',
             $page->filter('#step-first-review .lead')->text(),
         );
         self::assertCount(0, $page->filter('main .btn.primary'));
@@ -679,7 +709,7 @@ final class FirstRunControllerTest extends WebTestCase
 
         $page = $this->firstRunPage(self::PROJECTS, []);
 
-        self::assertSame(DemoReadiness::NoRecording->firstRunLine(self::getContainer()->get(FirstRunSteps::class)->firstRun()->providers), $page->filter('#see-review .next')->text());
+        self::assertSame(DemoReadiness::NoRecording->firstRunLine(self::getContainer()->get(FirstRunSteps::class)->firstRun()), $page->filter('#see-review .next')->text());
         self::assertCount(0, $page->filter('form.play-demo'));
         self::assertCount(0, $page->filter('#see-review .fr-when'));
     }
@@ -704,7 +734,26 @@ final class FirstRunControllerTest extends WebTestCase
 
         self::assertCount(0, $page->filter('form.keep-provider-key'));
         self::assertStringNotContainsString('Add a key below', $page->filter('#see-review .next')->text());
-        self::assertSame('This install has no recorded review. A live review can be started from the cards below.', $page->filter('#see-review .next')->text());
+        self::assertSame('This install has no recorded review. A live review can be started or opened from the cards below.', $page->filter('#see-review .next')->text());
+        self::assertCount(1, $page->filter('#step-first-review form.start-first-review'));
+    }
+
+    public function testWithAKeyButNoSampleToStartTheHeroPromisesNoStartFromTheCards(): void
+    {
+        $_SERVER['INTAKT_COMPOSE_SERVICE'] = 'intakt';
+
+        $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+
+        self::assertCount(0, $page->filter('form.keep-provider-key, form.start-first-review, #step-first-review a.btn'));
+        self::assertSame('This install has no recorded review, and no card below can start a live one yet.', $page->filter('#see-review .next')->text());
+    }
+
+    public function testThePageNamesNoCommandWhenTheSampleCannotStart(): void
+    {
+        $page = $this->firstRunPage(self::PROJECTS, []);
+
+        self::assertSame('not-needed', $page->filter('#step-first-review')->attr('data-state'));
+        self::assertDoesNotMatchRegularExpression('/intakt:|bin\/console|docker /', $page->filter('main')->text());
     }
 
     public function testWithARecordingTheHeroHoldsThePlayTheDemoRunButtonAndSaysWhatHappens(): void

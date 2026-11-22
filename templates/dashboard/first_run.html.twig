@@ -21,7 +21,7 @@
             {{ include('dashboard/components/button.html.twig', {kind: 'primary', type: 'submit', label: 'Play the demo run'}, with_context = false) }}
         </form>
         {%- endif %}
-        <p class="next">{{ demo.firstRunLine(first_run.providers) }}</p>
+        <p class="next">{{ demo.firstRunLine(first_run) }}</p>
     </section>
 
     <ol class="fr-seq" aria-label="What you will see">
@@ -35,7 +35,7 @@
         <ol class="own-steps">
             {%- set step = first_run.providers %}
             <li class="card step{{ _self.current(first_run, 0) }}" id="step-providers" data-state="{{ step.state.value }}"{{ _self.aria_current(first_run, 0) }}>
-                {{ _self.head('1. Add a key here', step.state) }}
+                {{ _self.head('1. Add a key here', step.state, first_run, 0) }}
                 <p class="lead">{{ step.sentence }}</p>
                 {%- if step.offersKeyForm %}
                 <form method="post" action="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::KEEP_PROVIDER_KEY')) }}" class="keep-provider-key">
@@ -70,7 +70,7 @@
 
             {%- set step = first_run.project %}
             <li class="card step{{ _self.current(first_run, 1) }}" id="step-project" data-state="{{ step.state.value }}"{{ _self.aria_current(first_run, 1) }}>
-                {{ _self.head('2. Add a project', step.state) }}
+                {{ _self.head('2. Add a project', step.state, first_run, 1) }}
                 <p class="lead">{{ step.sentence }}</p>
                 {%- if step.panels is not empty %}
                 <div class="list">
@@ -83,7 +83,7 @@
 
             {%- set step = first_run.firstReview %}
             <li class="card step{{ _self.current(first_run, 2) }}" id="step-first-review" data-state="{{ step.state.value }}"{{ _self.aria_current(first_run, 2) }}>
-                {{ _self.head('3. First review', step.state) }}
+                {{ _self.head('3. First review', step.state, first_run, 2) }}
                 <p class="lead">{{ step.sentence }}</p>
                 {%- if step.round is not null %}
                 <div class="step-nav">
@@ -104,8 +104,9 @@
 </div>
 {% endblock %}
 
-{% macro head(title, state) -%}
-<h3>{{ title }} {{ include('dashboard/components/chip.html.twig', {label: state.words, dot: state.dot}, with_context = false) }}</h3>
+{#- The current card carries the character of the role who does it, so the reader sees whose step is next. -#}
+{% macro head(title, state, first_run, index) -%}
+<h3>{%- if first_run.current is same as(index) %}<span class="step-role">{{ include('dashboard/components/character.html.twig', {character: first_run.currentCharacter, size: 48}, with_context = false) }}</span>{% endif %}{{ title }} {{ include('dashboard/components/chip.html.twig', {label: state.words, dot: state.dot}, with_context = false) }}</h3>
 {%- endmacro %}
 
 {% macro current(first_run, index) -%}

@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase\PlayDemo;
 
+use Intakt\Core\Dashboard\Domain\FirstReviewStep;
+use Intakt\Core\Dashboard\Domain\FirstRun;
+use Intakt\Core\Dashboard\Domain\ProjectStep;
 use Intakt\Core\Dashboard\Domain\ProviderStep;
 use Intakt\Core\Dashboard\UseCase\PlayDemo\DemoReadiness;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -12,22 +15,26 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(DemoReadiness::class)]
+#[UsesClass(FirstRun::class)]
 #[UsesClass(ProviderStep::class)]
+#[UsesClass(ProjectStep::class)]
+#[UsesClass(FirstReviewStep::class)]
 final class DemoReadinessTest extends TestCase
 {
-    /** @return iterable<string, array{DemoReadiness, ProviderStep}> */
-    public static function readinessAndKeys(): iterable
+    /** @return iterable<string, array{DemoReadiness, FirstRun}> */
+    public static function readinessAndPages(): iterable
     {
         foreach (DemoReadiness::cases() as $case) {
             yield $case->value.' without a key' => [$case, self::withoutAKey()];
-            yield $case->value.' with a key' => [$case, self::withAKey()];
+            yield $case->value.' with a key and a sample to start' => [$case, self::withAKey(true)];
+            yield $case->value.' with a key and nothing to start' => [$case, self::withAKey(false)];
         }
     }
 
-    #[DataProvider('readinessAndKeys')]
-    public function testTheFirstRunLineNamesNoVariableFileOrCommand(DemoReadiness $readiness, ProviderStep $providers): void
+    #[DataProvider('readinessAndPages')]
+    public function testTheFirstRunLineNamesNoVariableFileOrCommand(DemoReadiness $readiness, FirstRun $firstRun): void
     {
-        self::assertDoesNotMatchRegularExpression('/[A-Z]{2,}_[A-Z_]+|intakt:|\.ya?ml|docker|`/', $readiness->firstRunLine($providers));
+        self::assertDoesNotMatchRegularExpression('/[A-Z]{2,}_[A-Z_]+|intakt:|\.ya?ml|docker|`/', $readiness->firstRunLine($firstRun));
     }
 
     public function testWithARecordingTheFirstRunLineSaysWhatThePlayButtonShows(): void
@@ -41,19 +48,24 @@ final class DemoReadinessTest extends TestCase
         self::assertStringContainsString('Add a key below', DemoReadiness::NoRecording->firstRunLine(self::withoutAKey()));
     }
 
-    public function testWithoutARecordingAndWithAKeyTheFirstRunLinePointsToTheCardsInstead(): void
+    public function testWithoutARecordingAndWithAKeyTheFirstRunLinePointsToTheCardThatStartsAReview(): void
     {
-        self::assertSame('This install has no recorded review. A live review can be started from the cards below.', DemoReadiness::NoRecording->firstRunLine(self::withAKey()));
-        self::assertSame(DemoReadiness::NoRecording->firstRunLine(self::withAKey()), DemoReadiness::NotComposeDemo->firstRunLine(self::withAKey()));
+        self::assertSame('This install has no recorded review. A live review can be started or opened from the cards below.', DemoReadiness::NoRecording->firstRunLine(self::withAKey(true)));
+        self::assertSame(DemoReadiness::NoRecording->firstRunLine(self::withAKey(true)), DemoReadiness::NotComposeDemo->firstRunLine(self::withAKey(true)));
     }
 
-    private static function withoutAKey(): ProviderStep
+    public function testWithAKeyButNoCardThatStartsAReviewTheFirstRunLinePromisesNoStart(): void
     {
-        return new ProviderStep([], [], null, []);
+        self::assertSame('This install has no recorded review, and no card below can start a live one yet.', DemoReadiness::NoRecording->firstRunLine(self::withAKey(false)));
     }
 
-    private static function withAKey(): ProviderStep
+    private static function withoutAKey(): FirstRun
     {
-        return new ProviderStep(['anthropic'], [], null, []);
+        return new FirstRun(new ProviderStep([], [], null, []), new ProjectStep([]), new FirstReviewStep(null, false));
+    }
+
+    private static function withAKey(bool $sampleCanStart): FirstRun
+    {
+        return new FirstRun(new ProviderStep(['anthropic'], [], null, []), new ProjectStep([]), new FirstReviewStep(null, $sampleCanStart));
     }
 }
