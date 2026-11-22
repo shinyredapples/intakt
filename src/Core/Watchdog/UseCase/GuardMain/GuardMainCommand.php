@@ -15,10 +15,11 @@ use Intakt\Core\Watchdog\UseCase\CheckMain\RecordedMergeNotARange;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\MapInput;
 use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use Symfony\Component\Process\Exception\ProcessFailedException;
 
-#[AsCommand(name: self::NAME, description: 'Check main like intakt:watchdog:check and halt the project with an owner card for each violation')]
+#[AsCommand(name: self::NAME, description: 'Check main like intakt:watchdog:check and halt the project with an owner card for each violation, and give a once-only notice for the owner\'s own push')]
 final readonly class GuardMainCommand
 {
     public const string NAME = 'intakt:watchdog:guard';
@@ -36,7 +37,12 @@ final readonly class GuardMainCommand
             $io->error(ConsoleReport::printable($refused->getMessage()));
 
             return Command::INVALID;
-        } catch (MainNotRead|HaltNotRecorded|NoticeNotRecorded $failed) {
+        } catch (NoticeNotRecorded $failed) {
+            $this->noticed($io, $input->project, $failed->givenBefore);
+            $io->error(ConsoleReport::printable($failed->getMessage()));
+
+            return Command::FAILURE;
+        } catch (MainNotRead|HaltNotRecorded $failed) {
             $io->error(ConsoleReport::printable($failed->getMessage()));
 
             return Command::FAILURE;
@@ -46,11 +52,19 @@ final readonly class GuardMainCommand
             return Command::FAILURE;
         }
 
-        foreach ($guarded->noticedOwnerPushes as $commit) {
-            $io->writeln(ConsoleReport::noticeLine($input->project, $commit));
-        }
+        $this->noticed($io, $input->project, $guarded->noticedOwnerPushes);
 
         return $this->reported($io, $input->project, $guarded->standingCards);
+    }
+
+    /**
+     * @param list<string> $commits
+     */
+    private function noticed(SymfonyStyle $io, string $project, array $commits): void
+    {
+        foreach ($commits as $commit) {
+            $io->writeln(OutputFormatter::escape(ConsoleReport::noticeLine($project, $commit)));
+        }
     }
 
     /**
@@ -59,12 +73,12 @@ final readonly class GuardMainCommand
     private function reported(SymfonyStyle $io, string $project, array $cards): int
     {
         if ([] === $cards) {
-            $io->writeln(ConsoleReport::printable($project).' is not halted: no owner card stands');
+            $io->writeln(OutputFormatter::escape(ConsoleReport::printable($project).' is not halted: no owner card stands'));
 
             return Command::SUCCESS;
         }
         foreach ($cards as $card) {
-            $io->writeln(ConsoleReport::cardLine($card));
+            $io->writeln(OutputFormatter::escape(ConsoleReport::cardLine($card)));
         }
 
         return Command::FAILURE;

@@ -93,10 +93,15 @@ final readonly class GuardMain
     {
         $given = [];
         foreach ($ownerPushes as $commit) {
-            if (!$this->notices->wasNoticed($project, $commit)) {
-                $this->notices->notice($project, $commit);
-                $given[] = $commit;
+            if ($this->notices->wasNoticed($project, $commit)) {
+                continue;
             }
+            try {
+                $this->notices->notice($project, $commit);
+            } catch (NoticeNotRecorded $refused) {
+                throw $refused->afterGiving($given);
+            }
+            $given[] = $commit;
         }
 
         return $given;

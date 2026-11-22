@@ -398,6 +398,16 @@ final class GuardMainCommandTest extends TestCase
         self::assertSame("acme/shop\\nforged is not halted: no owner card stands\n", $tester->getDisplay());
     }
 
+    public function testAProjectNameWithFormatterTagsIsPrintedAsTypedInTheNotice(): void
+    {
+        $seen = $this->repository->commitEmpty('Seen');
+        $owner = $this->repository->commitSignedWith($this->privateKey('owner'), 'Owner change');
+
+        $tester = $this->whenTheGuardRunsWith(['project' => '<info>demo</info>', 'repository' => $this->repository->path, 'last-seen-head' => $seen, '--owner-key' => [$this->publicKey('owner')]]);
+
+        self::assertStringContainsString(sprintf('notice <info>demo</info>: commit %s owner_signed', $owner), $tester->getDisplay());
+    }
+
     private function onlyStandingCard(): OwnerCard
     {
         $standing = $this->halts->standing();
