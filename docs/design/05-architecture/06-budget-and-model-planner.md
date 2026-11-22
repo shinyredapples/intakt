@@ -98,9 +98,10 @@ A broken environment or a broken update of Intakt fails every build the same way
 
 - **What counts.** A build that fails with an error, and also a stop without one: a no-progress stop (no new commit within the limit) and a stop because the same check failed 3 times. The 2026-11-05 incident began as about 25 such stops across 10 tasks before any build failed with an error.
 - **The same error.** Each counted stop gets a normalized error: the error text, or the stop cause for a stop without one, with paths, ids and numbers masked.
+- **Held for an hour first.** A counted stop is held before it is handled: its task is not parked, no question or notice about it reaches the owner, nothing is charged, and the task keeps its place in the queue without a new build. A held stop is released one hour after it happened if the canary has not tripped on its error by then, and is then handled like any stop (parked, asked about, charged), at most an hour late. A trip needs its 3 stops within one hour, so every stop it counts is still held when it trips.
 - **When it trips.** Builds of at least 3 different tasks of one project fail within an hour with the same normalized error.
-- **What it does.** It pauses builds for that project and alerts the owner once. The tasks whose stops counted are neither parked nor charged: each keeps its place in the queue, the attempt counts against no allowance, send-back or stall rule, and a question already asked for that stop is withdrawn. Reviews and merges go on.
-- **How it clears.** Only a passing [build-path self-check](11-setup.md#the-build-path-self-check) on that project (the next update runs one, and the owner can start one) or the owner's resume ends it, never a timer.
+- **What it does.** It pauses builds for that project and alerts the owner once. The held stops with that error are never handled: their tasks stay queued, unparked and uncharged, the attempt counts against no allowance, send-back or stall rule, and the owner gets no notice per task, only the one alert. Reviews and merges go on.
+- **How it clears.** Only a self-check that passes the [pause-recovery verdict](11-setup.md#the-build-path-self-check) on that project (the next update runs one, and the owner can start one) or the owner's resume ends it, never a timer.
 
 Unlike the install-wide failure back-off above, the canary is per project, watches the build lane, and stays until it is cleared. It decides nothing else ([Threat model](14-threat-model.md#updates)).
 
