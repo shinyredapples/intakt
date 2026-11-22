@@ -7,6 +7,9 @@ namespace Intakt\Tests\Core\Dashboard\UseCase;
 use DateTimeImmutable;
 use DOMNode;
 use Intakt\Core\Budget\Contract\Cost;
+use Intakt\Core\Ledger\Contract\Ledger;
+use Intakt\Core\Ledger\Contract\LedgerEvent;
+use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Domain\Character;
 use Intakt\Core\Dashboard\Domain\GlossaryTerm;
@@ -541,8 +544,25 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $updated = $this->replaced($page, $this->publishedStreams());
         self::assertSame(['Fix', 'Developer (beaver), now on Fix'], [$updated->filter('#review-path li.now')->text(), $updated->filter('#review-path li.now img.character-light')->attr('alt')]);
         self::assertCount(1, $updated->filter('#review-path li[aria-current="step"]'));
+        self::assertSame('Progress: Fix, step 2 of 4', $updated->filter('#review-path')->attr('aria-label'));
         self::assertSame('Fix', $updated->filter('#review-path li[aria-current="step"]')->text());
         self::assertSame($this->browser->request('GET', '/reviews/'.$id)->filter('#review-path')->outerHtml(), $updated->filter('#review-path')->outerHtml());
+    }
+
+    public function testARoundWhoseJudgingFailedWhileThePageIsOpenHidesThePath(): void
+    {
+        $round = $this->givenTheHubRecordsWhatIsPublishedForARoundWithoutSummary();
+        $id = $round->toRfc4122();
+        $this->ledger->startRoundOfQuorum('feat/thing', $id, 'all');
+        $page = $this->browser->request('GET', '/reviews/'.$id);
+        self::assertCount(1, $page->filter('ol#review-path'));
+
+        self::getContainer()->get(Ledger::class)->append(new LedgerEvent(LedgerEventKind::JudgingFailed, json_encode(['round' => $id], JSON_THROW_ON_ERROR)));
+        $this->publishedUpdates()->roundChanged($round, new RoundProgress(2, 2, false));
+
+        $updated = $this->replaced($page, $this->publishedStreams());
+        self::assertCount(0, $updated->filter('ol#review-path'));
+        self::assertCount(1, $updated->filter('#review-path[hidden]'));
     }
 
     public function testARoundApprovedWhileThePageIsOpenShowsTheSameBowingOctopusAsANewLoad(): void

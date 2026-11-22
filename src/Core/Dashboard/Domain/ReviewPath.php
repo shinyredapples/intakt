@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\Domain;
 
-// The steps of a review from its first pass to the merge: every earlier pass and fix as done, the current step with its role standing on it, then what follows, so the owner sees the whole history at a glance.
+// Kept whole, from the first pass to the merge, because the owner reads where the review stands from its full history, not only its current step.
 final readonly class ReviewPath
 {
     private const string FIX = 'Fix';
