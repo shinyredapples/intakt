@@ -76,7 +76,7 @@ final class SymfonyAiEscalationReviewsTest extends KernelTestCase
     {
         $ledger = new InMemoryLedger();
 
-        $_ = $this->reviews(static fn (): string => '{"outcome":"rejected","reasons":"Fine."}', $ledger)->escalate('alpha', Uuid::fromString(self::ROUND), $this->messages());
+        $this->reviews(static fn (): string => '{"outcome":"rejected","reasons":"Fine."}', $ledger)->escalate('alpha', Uuid::fromString(self::ROUND), $this->messages());
 
         self::assertSame([['started', 'settled'], Tier::Strong->value, self::ROUND], [array_column($ledger->payloads(), 'phase'), $ledger->payloads()[0]['tier'] ?? null, $ledger->payloads()[0]['round'] ?? null]);
     }
