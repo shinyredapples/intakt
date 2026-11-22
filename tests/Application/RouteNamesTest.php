@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Application;
 
+use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
+use Intakt\Core\Dashboard\UseCase\StartReview\StartReviewController;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use Symfony\Component\Routing\Route;
@@ -29,7 +31,7 @@ final class RouteNamesTest extends KernelTestCase
     public function testARouteNamedAfterADifferentUseCaseThanItsControllersFolderIsRejected(): void
     {
         $routes = new RouteCollection();
-        $routes->add('dashboard_start_first_review', new Route('/setup', ['_controller' => 'Intakt\Core\Dashboard\UseCase\StartReview\StartFirstReviewController']));
+        $routes->add('dashboard_start_first_review', new Route('/setup', ['_controller' => StartReviewController::class]));
 
         self::assertSame(
             ['dashboard_start_first_review: name it dashboard_start_review (<module>_<use_case>, or that name followed by _<action> for a second route of the use case), after the module Dashboard and the folder UseCase/StartReview/'],
@@ -40,7 +42,7 @@ final class RouteNamesTest extends KernelTestCase
     public function testARouteNamedAfterItsModuleAndUseCaseIsAllowed(): void
     {
         $routes = new RouteCollection();
-        $routes->add('dashboard_start_review', new Route('/a', ['_controller' => 'Intakt\Core\Dashboard\UseCase\StartReview\StartReviewController']));
+        $routes->add('dashboard_start_review', new Route('/a', ['_controller' => StartReviewController::class]));
 
         self::assertSame([], $this->misnamedRoutesIn($routes));
     }
@@ -56,7 +58,7 @@ final class RouteNamesTest extends KernelTestCase
     public function testANameThatOnlyStartsWithTheUseCaseWordsIsRejected(): void
     {
         $routes = new RouteCollection();
-        $routes->add('dashboard_show_reviewer', new Route('/a', ['_controller' => 'Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController']));
+        $routes->add('dashboard_show_reviewer', new Route('/a', ['_controller' => ShowReviewController::class]));
 
         self::assertCount(1, $this->misnamedRoutesIn($routes));
     }
