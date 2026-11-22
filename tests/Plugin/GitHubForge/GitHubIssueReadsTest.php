@@ -13,6 +13,7 @@ use Intakt\Plugin\GitHubForge\Infrastructure\EntityTags;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubCalls;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubIssueReads;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubMoments;
+use Intakt\Plugin\GitHubForge\Infrastructure\IssueFields;
 use Intakt\Plugin\GitHubForge\Infrastructure\NextLinks;
 use Intakt\Plugin\GitHubForge\Infrastructure\RepositoryAddress;
 use Intakt\Plugin\GitHubForge\Infrastructure\WatchedRepositories;
@@ -24,6 +25,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(ChangedWhileServed::class)]
 #[CoversClass(EntityTags::class)]
 #[CoversClass(NextLinks::class)]
+#[CoversClass(IssueFields::class)]
 #[CoversClass(IssueListing::class)]
 #[CoversClass(ListedIssue::class)]
 #[UsesClass(RepositoryAddress::class)]

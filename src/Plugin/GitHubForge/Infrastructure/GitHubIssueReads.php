@@ -31,7 +31,7 @@ final readonly class GitHubIssueReads implements IssueReads
         private GitHubCalls $calls,
         private CheckedInstallationTokens $tokens,
         private WatchedRepositories $repositories,
-        private GitHubMoments $moments,
+        private IssueFields $fields,
         private BudgetReserve $reserve,
         private ChangedWhileServed $changedWhileServed,
         private EntityTags $entityTags,
@@ -68,9 +68,9 @@ final readonly class GitHubIssueReads implements IssueReads
         }
 
         $data = $this->issueOf($answer['body']);
-        $issue = $this->listed($data);
+        $issue = $this->fields->listedIssueOf($data);
 
-        return $issue->isPullRequest || 'open' !== $this->at($data, 'state') ? null : $issue;
+        return $issue->isPullRequest || 'open' !== ($data['state'] ?? null) ? null : $issue;
     }
 
     /**
@@ -98,7 +98,7 @@ final readonly class GitHubIssueReads implements IssueReads
         $validators = [];
         $answer = $first;
         for ($page = 1;; ++$page) {
-            $listed = array_map($this->listed(...), $this->issuesOf($answer['body']));
+            $listed = array_map($this->fields->listedIssueOf(...), $this->issuesOf($answer['body']));
             // Only a missing next link ends the listing, so a short page that still names one means issues went unread.
             if ($answer['next'] && count($listed) < self::PAGE_SIZE) {
                 throw new ForgeReadFailed(sprintf('GitHub answered a short page %d of open issues but names a next page.', $page));
@@ -157,68 +157,6 @@ final readonly class GitHubIssueReads implements IssueReads
         }
 
         return array_map(static fn (mixed $issue): array => is_array($issue) ? $issue : throw new ForgeReadFailed('GitHub listed an issue that is not an object.'), $issues);
-    }
-
-    /**
-     * @param array<mixed> $issue
-     */
-    private function listed(array $issue): ListedIssue
-    {
-        $number = $issue['number'] ?? null;
-        $body = $issue['body'] ?? '';
-        $due = $this->at($issue, 'milestone', 'due_on');
-        if (!is_int($number) || $number < 1 || !is_string($body)) {
-            throw new ForgeReadFailed('GitHub listed an issue this forge cannot read.');
-        }
-
-        return new ListedIssue(
-            $number,
-            $this->text($issue, 'title'),
-            $body,
-            $this->labelsOf($issue),
-            $this->text($issue, 'user', 'login'),
-            $this->moments->parse($this->text($issue, 'updated_at')),
-            is_string($due) ? $this->moments->parse($due) : null,
-            array_key_exists('pull_request', $issue),
-        );
-    }
-
-    /**
-     * @param array<mixed> $issue
-     *
-     * @return list<string>
-     */
-    private function labelsOf(array $issue): array
-    {
-        $labels = $issue['labels'] ?? [];
-        if (!is_array($labels)) {
-            throw new ForgeReadFailed('GitHub listed an issue with labels this forge cannot read.');
-        }
-
-        return array_values(array_map(fn (mixed $label): string => is_array($label) ? $this->text($label, 'name') : throw new ForgeReadFailed('GitHub listed a label that is not an object.'), $labels));
-    }
-
-    /**
-     * @param array<mixed> $data
-     */
-    private function at(array $data, string ...$keys): mixed
-    {
-        $value = $data;
-        foreach ($keys as $key) {
-            $value = is_array($value) ? ($value[$key] ?? null) : null;
-        }
-
-        return $value;
-    }
-
-    /**
-     * @param array<mixed> $data
-     */
-    private function text(array $data, string ...$keys): string
-    {
-        $value = $this->at($data, ...$keys);
-
-        return is_string($value) && '' !== $value ? $value : throw new ForgeReadFailed(sprintf('GitHub answered without "%s".', implode('.', $keys)));
     }
 
     /**
