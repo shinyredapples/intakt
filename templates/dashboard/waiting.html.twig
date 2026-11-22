@@ -13,24 +13,7 @@
     {label: project_trail},
 ], project_trail: project_trail, current: false}, with_context = false) }}
 {% endif %}
-{% if page.items is empty %}
-<div class="page-head">
-    <div>
-        <h1>Waiting on you</h1>
-        <p class="lead" id="waiting-lead">{{ include('dashboard/_waiting_lead.html.twig', {items: page.items}, with_context = false) }}</p>
-    </div>
-</div>
-{% else %}
-{# The octopus conducts once, at the top; each card shows the role who waits on the owner. No Why and no command to copy: the card says what needs you and what one tap does. #}
-<div class="wait-hero needs">
-    {{ include('dashboard/components/character.html.twig', {character: enum('Intakt\\Core\\Dashboard\\Domain\\MascotPose').Waiting, size: 96}, with_context = false) }}
-    <div>
-        <p class="wait-kicker">Waiting on you</p>
-        <h1>{{ page.items|length == 1 ? '1 thing needs you' : page.items|length ~ ' things need you' }}</h1>
-        <p class="lead">Everything else keeps running. Oldest first.</p>
-    </div>
-</div>
-{% endif %}
+{{ include('dashboard/_waiting_head.html.twig', {items: page.items}, with_context = false) }}
 {# The list before the panels, so a phone shows it first and the keyboard reaches the items before the panels. #}
 <div class="split">
 {{ include('dashboard/_waiting_list.html.twig', {items: page.items, now: now}, with_context = false) }}

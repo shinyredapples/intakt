@@ -7,12 +7,14 @@ namespace Intakt\Core\Budget\Infrastructure;
 use DateTimeImmutable;
 use DateTimeInterface;
 use Doctrine\ORM\EntityManagerInterface;
+use Intakt\Core\Budget\Contract\OwnerNoticesChanged;
 use Intakt\Core\Budget\Domain\OutageNoticeRecord;
 use Intakt\Core\Budget\Domain\UsageReadingsStayedAway;
 use Intakt\Core\Budget\Domain\WindowReadingRecord;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\Lock\LockFactory;
+use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
 // A log line, because notices reach the owner through Plugin/Notifier only with plan T67; the row keeps it to once.
 final readonly class DoctrineOutageNotices
@@ -21,6 +23,7 @@ final readonly class DoctrineOutageNotices
         private EntityManagerInterface $entities,
         private LockFactory $locks,
         private LoggerInterface $logger,
+        private EventDispatcherInterface $events,
     ) {
     }
 
@@ -55,6 +58,17 @@ final readonly class DoctrineOutageNotices
         $this->entities->persist($notice);
         $this->entities->flush();
         $this->endIfReadSince($notice);
+        $this->announceUnlessACallerOwnsTheCommit();
+    }
+
+    // Inside a caller's transaction nothing is committed yet, and its rollback would erase a notice a listener already heard of, so the caller that owns the commit announces.
+    private function announceUnlessACallerOwnsTheCommit(): void
+    {
+        if ($this->entities->getConnection()->isTransactionActive()) {
+            return;
+        }
+
+        $this->events->dispatch(new OwnerNoticesChanged());
     }
 
     // A reading can land any time before this row is stored, and its own end of outages found no row yet, so the notice is ended by it here; looked up only once the row is stored, because a reading stored later finds the row itself. It looks again until the earliest reading stays the same across an update, because an earlier reading stored meanwhile skips a notice with no end yet (it cannot tell it from one that predates ends being kept), and a competing writer may have saved the same end first, which moves no row here; the loop stops once a pass changes nothing: it finds no reading after the outage, or the same earliest reading as the one it just ended with.
