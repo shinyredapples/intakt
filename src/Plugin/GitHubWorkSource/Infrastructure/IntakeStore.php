@@ -203,8 +203,7 @@ final readonly class IntakeStore
     // Apart from the issue rows, so a task that is closed after it failed for good still holds the tasks that wait on it. Under the lock the listing's write takes, so a failure and a listing write never interleave and a pick that reads the failures under that lock sees every failure recorded before it.
     public function failForGood(string $project, int $number, string $reason): void
     {
-        $this->ownManager()->wrapInTransaction(function (EntityManagerInterface $manager) use ($project, $number, $reason): void {
-            $this->lockTheSyncRow($manager, $project);
+        $this->underTheListingLock($project, function (EntityManagerInterface $manager) use ($project, $number, $reason): void {
             if (!$manager->find(StoredIssue::class, ['project' => $project, 'number' => $number]) instanceof StoredIssue) {
                 throw TaskNotQueued::named($project, $number);
             }
@@ -234,11 +233,30 @@ final readonly class IntakeStore
      */
     public function failuresUnderTheListingLock(string $project): array
     {
-        return $this->readOf($project, fn (): array => $this->ownManager()->wrapInTransaction(function (EntityManagerInterface $manager) use ($project): array {
-            $this->lockTheSyncRow($manager, $project);
+        return $this->readOf($project, fn (): array => $this->underTheListingLock($project, fn (EntityManagerInterface $manager): array => $this->reasonsOf($manager, $project)));
+    }
 
-            return $this->reasonsOf($manager, $project);
-        }));
+    // A reader on SQLite's default journal lets the lock's write through and refuses only the COMMIT, so the transaction SQLite then keeps open is rolled back before the refusal is thrown: left open, every later transaction on the connection would be refused as already active, and an uncommitted failure would be read back as recorded.
+    /**
+     * @template T
+     *
+     * @param callable(EntityManagerInterface): T $work
+     *
+     * @return T
+     */
+    private function underTheListingLock(string $project, callable $work): mixed
+    {
+        try {
+            return $this->ownManager()->wrapInTransaction(function (EntityManagerInterface $manager) use ($project, $work): mixed {
+                $this->lockTheSyncRow($manager, $project);
+
+                return $work($manager);
+            });
+        } catch (RetryableException $refusal) {
+            $this->rollBackARefusedCommit();
+
+            throw $refusal;
+        }
     }
 
     // SQLite has no row lock, and in WAL mode a transaction reads from the snapshot of its first read, so a failure could commit between the row read and the failure read and be missed. A write that changes no row, sent before any read, takes SQLite's write lock and reads the latest commit; a server database changes nothing for it and relies on the row lock.
