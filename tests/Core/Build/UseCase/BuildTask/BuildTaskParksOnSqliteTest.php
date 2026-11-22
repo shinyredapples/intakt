@@ -16,8 +16,11 @@ use Intakt\Core\Build\Contract\BuildBrief;
 use Intakt\Core\Build\Contract\BuildFacts;
 use Intakt\Core\Build\Contract\BuildRouting;
 use Intakt\Core\Build\Contract\BuildStep;
+use Intakt\Core\Build\Contract\TaskKind;
 use Intakt\Core\Build\Contract\TierChoice;
 use Intakt\Core\Build\Contract\TierReason;
+use Intakt\Core\Build\Domain\BugPart;
+use Intakt\Core\Build\Domain\BugReport;
 use Intakt\Core\Build\Domain\BuilderPrompt;
 use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\Domain\GatesAtOnce;
@@ -57,6 +60,7 @@ use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\PromptCut;
 use Intakt\Plugin\GitHubForge\Contract\ConfiguredRepositories;
 use Intakt\Plugin\GitHubForge\Contract\IssueReads;
+use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
 use Intakt\Tests\Core\Build\ScriptedJobRunner;
 use Intakt\Tests\Plugin\GitHubWorkSource\Issues;
@@ -80,6 +84,9 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(PushRemoteCheck::class)]
 #[UsesClass(ParkedTaskRecord::class)]
 #[UsesClass(BuildQuestion::class)]
+#[UsesClass(BugReport::class)]
+#[UsesClass(BugPart::class)]
+#[UsesClass(TaskKind::class)]
 #[UsesClass(HandBackCheck::class)]
 #[UsesClass(HandBackFile::class)]
 #[UsesClass(PrePushCheck::class)]
@@ -174,10 +181,40 @@ final class BuildTaskParksOnSqliteTest extends KernelTestCase
         self::assertStringNotContainsString('PLANT', $tester->getDisplay());
     }
 
-    private function buildTask(): BuildTask
+    public function testABugTaskWithAMissingPartIsParkedWithAQuestionNamingItAndRunsNoBuildJob(): void
+    {
+        $task = Issues::task(7, ['intakt', 'bug'], ['body' => "**When:** open the page\n**Today:** it fails\n**Expected:** it loads"]);
+
+        $outcome = $this->buildTask($task)->run(new BuildTaskRequest('alpha', 7, 'remote', 'feat/task', $this->folder.'/clone', 'intakt-job-alpha:1'));
+
+        self::assertSame([BuildStep::BuildJob, null, true], [$outcome->last, $outcome->failure, $outcome->parked()]);
+        // The scripted job would have asked another question, so this one proves the job never ran.
+        self::assertStringContainsString('missing: Must keep working.', (string) $this->connection()->fetchOne('SELECT question FROM build_parked_task'));
+        self::assertSame('{"project":"alpha","task":"7","step":"build_job","outcome":"asked","failure":null}', $this->connection()->fetchOne('SELECT payload FROM ledger_event ORDER BY position DESC LIMIT 1'));
+    }
+
+    public function testABugTaskWithAllFourPartsGoesOnToTheBuildJob(): void
+    {
+        $task = Issues::task(7, ['intakt', 'bug'], ['body' => "**When:** a\n**Today:** b\n**Expected:** c\n**Must keep working:** d"]);
+
+        $outcome = $this->buildTask($task)->run(new BuildTaskRequest('alpha', 7, 'remote', 'feat/task', $this->folder.'/clone', 'intakt-job-alpha:1'));
+
+        self::assertTrue($outcome->parked());
+        self::assertStringContainsString('PLANT-question', (string) $this->connection()->fetchOne('SELECT question FROM build_parked_task'));
+    }
+
+    public function testATaskWithoutTheBugLabelIsNotCheckedForTheFourParts(): void
+    {
+        $outcome = $this->buildTask(Issues::task(7, ['intakt'], ['body' => 'no parts at all']))->run(new BuildTaskRequest('alpha', 7, 'remote', 'feat/task', $this->folder.'/clone', 'intakt-job-alpha:1'));
+
+        self::assertTrue($outcome->parked());
+        self::assertStringContainsString('PLANT-question', (string) $this->connection()->fetchOne('SELECT question FROM build_parked_task'));
+    }
+
+    private function buildTask(?ListedIssue $task = null): BuildTask
     {
         $reads = self::createStub(IssueReads::class);
-        $reads->method('readOpen')->willReturn(Issues::task(7));
+        $reads->method('readOpen')->willReturn($task ?? Issues::task(7));
         $checkout = self::createStub(BuildCheckout::class);
         $routing = self::createStub(BuildRouting::class);
         $routing->method('tierFor')->willReturn(new TierChoice(Tier::Standard, TierReason::Default));

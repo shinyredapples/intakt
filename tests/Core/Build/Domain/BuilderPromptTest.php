@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Build\Domain;
 
 use Intakt\Core\Build\Contract\BuildBrief;
 use Intakt\Core\Build\Contract\Rework;
+use Intakt\Core\Build\Contract\TaskKind;
 use Intakt\Core\Build\Domain\BuilderPrompt;
 use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Review\Contract\Evidence;
@@ -26,6 +27,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(BuilderPrompt::class)]
 #[UsesClass(BuildBrief::class)]
 #[UsesClass(Rework::class)]
+#[UsesClass(TaskKind::class)]
 #[UsesClass(Fence::class)]
 #[UsesClass(FencedText::class)]
 #[UsesClass(PromptCut::class)]
@@ -74,6 +76,20 @@ final class BuilderPromptTest extends TestCase
         self::assertSame(UntrustedSource::ActList, FencedPlants::sourceAround($this->plant(26), $prompt));
         self::assertSame(UntrustedSource::CiLog, FencedPlants::sourceAround($this->plant(30), $prompt));
         self::assertSame(UntrustedSource::PullRequestText, FencedPlants::sourceAround($this->plant(31), $prompt));
+    }
+
+    public function testThePromptForABugTaskTellsTheBuilderToWriteAndCommitTheFailingRegressionTestBeforeTheFix(): void
+    {
+        $prompt = $this->promptFor(new BuildBrief($this->plant(1), [], null, TaskKind::Bug));
+
+        self::assertStringContainsString('Its first acceptance criterion is a regression test that fails today: write that test first, run it and watch it fail', $prompt);
+        self::assertStringContainsString('commit it on its own, and only then fix the bug', $prompt);
+        self::assertSame(1, substr_count($prompt, 'regression test'));
+    }
+
+    public function testThePromptForAnotherTaskHasNoTestFirstInstruction(): void
+    {
+        self::assertStringNotContainsString('regression test', $this->promptFor(new BuildBrief($this->plant(1), [], null)));
     }
 
     public function testAFirstBuildIsAskedToWriteThePullRequestTextAndNotToEditOne(): void

@@ -11,6 +11,8 @@ use Intakt\Core\Build\Contract\BuildRouting;
 use Intakt\Core\Build\Contract\BuildRoutingNotConfigured;
 use Intakt\Core\Build\Contract\BuildStep;
 use Intakt\Core\Build\Contract\BuildStepOutcome;
+use Intakt\Core\Build\Contract\TaskKind;
+use Intakt\Core\Build\Domain\BugReport;
 use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildCloneIsNoFolder;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuilderNotOnClaudeCode;
@@ -85,6 +87,12 @@ final readonly class BuildTask
         $results = [];
 
         foreach (BuildStep::cases() as $step) {
+            $incomplete = BuildStep::BuildJob === $step ? $this->incompleteBugQuestion($task) : null;
+
+            if ($incomplete instanceof BuildQuestion) {
+                return $this->park($request, $task, $incomplete);
+            }
+
             $result = match ($step) {
                 // Read before the other steps, because they need the task it returns.
                 BuildStep::Task => null,
@@ -114,6 +122,18 @@ final readonly class BuildTask
         }
 
         return new BuildTaskOutcome(array_last(BuildStep::cases()), null, $task);
+    }
+
+    // Asked before the build job runs, because a bug without its four parts has no failing test to write first and the builder would guess it.
+    private function incompleteBugQuestion(ListedIssue $task): ?BuildQuestion
+    {
+        if (TaskKind::Bug !== TaskKind::fromLabels($task->labels)) {
+            return null;
+        }
+
+        $missing = BugReport::fromBody($task->body)->missingParts();
+
+        return [] === $missing ? null : BuildQuestion::forMissingBugParts($missing);
     }
 
     // The run ends at the build job without recording its step, because park() records it as asked in the transaction that stores the question.
@@ -232,7 +252,7 @@ final readonly class BuildTask
     {
         // No paths and no setback, because a first build has no file forecast and no earlier round.
         $choice = $this->routing->tierFor($request->project, BuildFacts::fromLabels($task->labels, []));
-        $brief = new BuildBrief($task->title."\n\n".$task->body, [], null);
+        $brief = new BuildBrief($task->title."\n\n".$task->body, [], null, TaskKind::fromLabels($task->labels));
 
         return new BuildJob($request->project, $request->directory, $request->branch, $brief, $choice->tier, $request->image);
     }
