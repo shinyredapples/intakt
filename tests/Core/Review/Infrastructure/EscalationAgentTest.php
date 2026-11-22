@@ -104,7 +104,7 @@ final class EscalationAgentTest extends TestCase
     public function testAProviderErrorFromTheCallIsThrownUnchanged(): void
     {
         $limited = new ProviderRateLimited(30, new RuntimeException('limited'));
-        $escalations = $this->createStub(EscalationReviews::class);
+        $escalations = self::createStub(EscalationReviews::class);
         $escalations->method('escalate')->willThrowException($limited);
 
         try {
@@ -117,7 +117,7 @@ final class EscalationAgentTest extends TestCase
 
     private function answering(?EscalationVerdict $verdict): EscalationReviews
     {
-        $escalations = $this->createStub(EscalationReviews::class);
+        $escalations = self::createStub(EscalationReviews::class);
         $escalations->method('escalate')->willReturn($verdict);
 
         return $escalations;
@@ -133,7 +133,7 @@ final class EscalationAgentTest extends TestCase
 
     private function agent(EscalationReviews $escalations, bool $mapsTheStrongTier = true): EscalationAgent
     {
-        $vendor = $this->createStub(Vendor::class);
+        $vendor = self::createStub(Vendor::class);
         $vendor->method('mapsAModelTo')->willReturn($mapsTheStrongTier);
 
         return new EscalationAgent(new EscalationPrompt(new Fence()), $vendor, $escalations, $this->redactor());
@@ -141,7 +141,7 @@ final class EscalationAgentTest extends TestCase
 
     private function redactor(): Redactor
     {
-        $redactor = $this->createStub(Redactor::class);
+        $redactor = self::createStub(Redactor::class);
         $redactor->method('redact')->willReturnCallback(static fn (string $text): string => str_replace('sk-held', '[redacted]', $text));
 
         return $redactor;
