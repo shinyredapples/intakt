@@ -1,5 +1,18 @@
 ## Review verdicts
 
+### In short
+
+A verdict is what one reviewer returns: a decision (`approve`, `changes` or `blocked`) and its findings, each with a severity from P1 to P3, a place in the code and, when given, evidence. The classes in the Review module's `Contract` are the source of truth: Symfony AI derives the JSON schema the reviewer answers in from them, and a strict converter refuses unknown or left-out fields. An answer that cannot be read is no verdict: the reviewer is asked once more, and a second failure fails the reviewer.
+
+Worth knowing:
+
+- A verdict that withholds approval must name at least one finding.
+- A reviewer's `blocked` with findings is recorded as `changes`; `blocked` stays for a reviewer that gave no usable review, with its reason.
+- Verdicts and findings are stored as JSON through the named serializer `stored`, so stored keys keep their form.
+- A test fails when the derived schema differs from `tests/Core/Review/Contract/verdict.schema.json`.
+
+The rest of this page is the detailed reference.
+
 The `Core/Review` module's `Contract` holds the verdict a reviewer returns (plan task T1, design: [Reviews](../design/05-architecture/07-reviews.md)).
 
 - **Classes are the source of truth:** `Verdict` (`verdict`, a `Decision`: `approve`, `changes` or `blocked`; `findings`; `resolved`; `follow_ups`), `Finding` (`id`, `severity` a `Severity` P1 to P3, `file`, `line`, `symbol`, `text`, `fixable_by` a `FixableBy` builder or owner, `repeat`, `requirement`, `evidence`, `regression`, and `merged`, below) and `Evidence` (`probe`, `output`). They are final and readonly, the closed sets are backed enums, and the property names are the JSON field names, because Symfony AI's structured output ignores serializer name mapping. Validator constraints: `id`, `text` and `probe` are not blank, `line` is at least 1, and findings and evidence are validated as nested objects.

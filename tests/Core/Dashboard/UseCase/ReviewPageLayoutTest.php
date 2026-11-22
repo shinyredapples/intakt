@@ -19,7 +19,7 @@ final class ReviewPageLayoutTest extends DashboardPageTestCase
     {
         $this->givenARunningRound();
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         $tabs = $crawler->filter('.ttabs [role="tablist"] button[role="tab"]');
         self::assertSame(['Timeline', 'Live log'], $tabs->each(static fn (Crawler $tab): string => $tab->text()));
@@ -32,7 +32,7 @@ final class ReviewPageLayoutTest extends DashboardPageTestCase
     {
         $this->givenARunningRound();
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         $controlled = $crawler->filter('.ttabs button[role="tab"]')->each(static fn (Crawler $tab): ?string => $tab->attr('aria-controls'));
         self::assertSame([$crawler->filter('.task-grid > .tl-pane')->attr('id'), $crawler->filter('.task-grid > .log-pane')->attr('id')], $controlled);
@@ -43,7 +43,7 @@ final class ReviewPageLayoutTest extends DashboardPageTestCase
     {
         $this->givenARunningRound();
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         foreach ($crawler->filter('.ttabs button[role="tab"]')->each(static fn (Crawler $tab): Crawler => $tab) as $tab) {
             $pane = $crawler->filter('#'.$tab->attr('aria-controls'));
@@ -57,7 +57,7 @@ final class ReviewPageLayoutTest extends DashboardPageTestCase
     {
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         $log = $crawler->filter('#live-log-pane');
         self::assertSame('tabpanel', $log->attr('role'));
@@ -69,7 +69,7 @@ final class ReviewPageLayoutTest extends DashboardPageTestCase
     {
         $this->givenARunningRound();
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         $headings = $crawler->filter('.task-grid > [role="tabpanel"]')->each(static fn (Crawler $pane): ?string => $pane->attr('data-heading'));
         self::assertSame(['timeline-title', 'live-log-title'], $headings);
@@ -82,7 +82,7 @@ final class ReviewPageLayoutTest extends DashboardPageTestCase
     {
         $this->givenARunningRound();
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertSame(['0', '-1'], $crawler->filter('.ttabs button[role="tab"]')->each(static fn (Crawler $tab): ?string => $tab->attr('tabindex')));
     }
@@ -92,7 +92,7 @@ final class ReviewPageLayoutTest extends DashboardPageTestCase
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
         $this->ledger->judgeRound('round-1');
 
-        $this->browser->request('GET', '/reviews/round-1');
+        $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertSelectorNotExists('.ttabs');
         self::assertSelectorExists('.task-grid[data-pane="timeline"] > .tl-pane');
@@ -103,7 +103,7 @@ final class ReviewPageLayoutTest extends DashboardPageTestCase
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
         $this->ledger->judgeRound('round-1');
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         $pane = $crawler->filter('#timeline-pane');
         self::assertNull($pane->attr('role'));
@@ -191,7 +191,7 @@ final class ReviewPageLayoutTest extends DashboardPageTestCase
         $this->givenARunningRound();
         $this->ledger->startReviewerOn('round-1', 'security', 'Kimi K3');
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         $blocks = $crawler->filter('#round-round-1-live .live');
         self::assertCount(2, $blocks);
@@ -206,7 +206,7 @@ final class ReviewPageLayoutTest extends DashboardPageTestCase
     {
         $this->givenARunningRound();
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertSame(['correctness (standard tier, model not recorded) live'], $crawler->filter('#round-round-1-live .live .character-row')->each(static fn (Crawler $row): string => $row->text()));
     }
@@ -215,7 +215,7 @@ final class ReviewPageLayoutTest extends DashboardPageTestCase
     {
         $this->givenARunningRound();
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         $heading = $crawler->filter('#round-round-1 h3')->reduce(static fn (Crawler $h3): bool => "Findings and the judge's call" === $h3->text());
         self::assertCount(1, $heading);
@@ -231,7 +231,7 @@ final class ReviewPageLayoutTest extends DashboardPageTestCase
         $this->ledger->answer('round-1', 'correctness', 2);
         $this->ledger->judgeFindings('round-1', ['F1' => 'act', 'F2' => 'defer']);
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         $heading = $crawler->filter('#round-round-1 h3')->reduce(static fn (Crawler $h3): bool => "Findings and the judge's call" === $h3->text());
         self::assertCount(1, $heading);
