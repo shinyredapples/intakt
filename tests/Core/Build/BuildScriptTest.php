@@ -697,6 +697,67 @@ final class BuildScriptTest extends TestCase
         self::assertSame("built\n", $this->fileAtTheBundlesHead('task', 'built.txt'));
     }
 
+    #[TestWith([1])]
+    #[TestWith([2])]
+    public function testATimeoutThatRejectsTheKillOptionEndsTheJobBeforeTheSessionWithTheLoggedReason(int $status): void
+    {
+        // Found only at the bundle step, such a timeout would spend the session and then lose its commits behind exit 0.
+        $timeout = (string) new ExecutableFinder()->find('timeout');
+        $this->givenTheTimeout(<<<SH
+            case "\$1" in
+                -*) echo 'timeout: unrecognized option' >&2; exit {$status} ;;
+            esac
+            exec '{$timeout}' "\$@"
+            SH);
+        $this->givenTheCli(<<<'SH'
+            touch "$RECORD/ran"
+            git commit --quiet --allow-empty -m 'feat: build the task'
+            SH);
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        $this->thenTheJobEndedBeforeTheSessionBecauseOfItsTimeout($run);
+    }
+
+    public function testAnImageWithoutATimeoutEndsTheJobBeforeTheSessionWithTheLoggedReason(): void
+    {
+        $this->givenTheTimeout(<<<'SH'
+            echo 'sh: timeout: not found' >&2
+            exit 127
+            SH);
+        $this->givenTheCli(<<<'SH'
+            touch "$RECORD/ran"
+            git commit --quiet --allow-empty -m 'feat: build the task'
+            SH);
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        $this->thenTheJobEndedBeforeTheSessionBecauseOfItsTimeout($run);
+    }
+
+    public function testATimeoutThatReportsTheStatusOfTheGitItEndedStillLogsTheCut(): void
+    {
+        // Such a timeout ends with 143, the status of a git ended by TERM, and not with its own 124.
+        $timeout = (string) new ExecutableFinder()->find('timeout');
+        $this->givenTheTimeout("exec '{$timeout}' --preserve-status \"\$@\"");
+        $this->givenTheCli(<<<'SH'
+            echo 'built' > built.txt
+            git add built.txt
+            git commit --quiet -m 'feat: build the task'
+            rm -f .git/shallow
+            mkfifo .git/shallow
+            SH);
+        $this->timeout = self::BUNDLE_TIME_LIMIT + 15;
+
+        try {
+            $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+        } finally {
+            $this->releaseThePipe($this->work.'/clone/.git/shallow');
+        }
+
+        $this->thenTheBundleWasCut($run);
+    }
+
     public function testObjectsTheCliMovedOutOfTheCloneAndNamedInAlternatesHandNoBundleBack(): void
     {
         $this->givenTheCli(<<<'SH'
@@ -1007,6 +1068,20 @@ final class BuildScriptTest extends TestCase
     {
         file_put_contents($this->bin.'/claude', "#!/bin/sh\n".$script."\n");
         chmod($this->bin.'/claude', 0o755);
+    }
+
+    private function givenTheTimeout(string $script): void
+    {
+        file_put_contents($this->bin.'/timeout', "#!/bin/sh\n".$script."\n");
+        chmod($this->bin.'/timeout', 0o755);
+    }
+
+    private function thenTheJobEndedBeforeTheSessionBecauseOfItsTimeout(Process $run): void
+    {
+        self::assertSame(1, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertStringContainsString("the image's timeout cannot bound the bundle step\n", $this->outputFile('build.log'));
+        self::assertFileDoesNotExist($this->history->folder.'/ran');
+        self::assertFileDoesNotExist($this->output.'/handback.bundle');
     }
 
     // A git still waiting on the pipe would outlive the test, and an empty file takes the pipe's place because git reads its settings more than once.
