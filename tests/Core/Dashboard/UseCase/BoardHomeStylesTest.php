@@ -12,7 +12,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversNothing]
 final class BoardHomeStylesTest extends TestCase
 {
-    // DESIGN.md, Rules: no all-caps or tracked labels.
+    // Because DESIGN.md's Rules forbid all-caps and tracked labels (#3386, decision 9).
     public function testTheNeedsYouKickerIsNeitherUppercaseNorTracked(): void
     {
         $kicker = $this->rule('.needs-you .kicker', $this->sheet());

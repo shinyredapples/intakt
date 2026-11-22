@@ -304,7 +304,7 @@ final class BoardTest extends TestCase
         self::assertSame('Nobody is working yet: reviewers appear here while they review a change', new Board([])->nobodyWorkingNowLine());
     }
 
-    // An open round whose first reviewer has not started is a Working now card, while the Status page still has no reviewer to list (#3386, decision 7).
+    // Working now lists changes and the Status page lists reviewers, so a round with no reviewer started yet shows on one and not the other (#3386, decision 7).
     public function testAnOpenRoundWithNoReviewerRunningHasACardButKeepsTheStatusPagesLine(): void
     {
         $board = new Board([new Review([$this->round('r1', 'feat/a', 1)])]);
