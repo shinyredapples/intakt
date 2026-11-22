@@ -95,7 +95,7 @@ final class BoardStylesTest extends TestCase
 
         self::assertMatchesRegularExpression('/background:\s*var\(--primary\)/', $rules['.sm-seg.in::before'] ?? '');
         self::assertMatchesRegularExpression('/height:\s*8px/', $rules['.sm-seg.in::before'] ?? '');
-        // An out-of-view column's bar is a thinner --muted line: the mock's --tint-2 stood out from the page by under 3:1 (WCAG 1.4.11).
+        // An out-of-view column's bar is a thinner --muted line, because the mock's --tint-2 stood out from the page by under 3:1 (WCAG 1.4.11).
         self::assertMatchesRegularExpression('/width:\s*18px;\s*height:\s*4px/', $rules['.sm-seg::before'] ?? '');
         self::assertMatchesRegularExpression('/background:\s*var\(--muted\)/', $rules['.sm-seg::before'] ?? '');
         foreach (['.stagemap', '.sm-seg', '.sm-seg::before', '.sm-seg.in::before'] as $selector) {
