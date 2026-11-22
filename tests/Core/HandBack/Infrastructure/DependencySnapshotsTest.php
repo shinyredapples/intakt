@@ -5,10 +5,14 @@ declare(strict_types=1);
 namespace Intakt\Core\HandBack\Infrastructure {
     use Intakt\Tests\Core\HandBack\Infrastructure\DependencySnapshotsTest;
 
-    // Fails the publication only in a store that holds the marker file, because no real folder fails a rename on demand; any other rename passes through.
+    // Fails the publication or the eviction only in a store that holds its marker file, because no real folder fails a rename on demand; any other rename passes through.
     function rename(string $from, string $to): bool
     {
         if (DependencySnapshots::INCOMING === basename($from) && is_file(dirname($to).'/'.DependencySnapshotsTest::REFUSE_PUBLICATION)) {
+            return false;
+        }
+
+        if (str_starts_with(basename($to), DependencySnapshots::EVICTING) && is_file(dirname($to).'/'.DependencySnapshotsTest::REFUSE_EVICTION)) {
             return false;
         }
 
@@ -34,6 +38,7 @@ namespace Intakt\Tests\Core\HandBack\Infrastructure {
     use Intakt\Core\HandBack\Infrastructure\DependencySnapshots;
     use Intakt\Core\HandBack\Infrastructure\DependencySnapshotUses;
     use PHPUnit\Framework\Attributes\CoversClass;
+    use PHPUnit\Framework\Attributes\RunInSeparateProcess;
     use PHPUnit\Framework\Attributes\UsesClass;
     use PHPUnit\Framework\TestCase;
     use RecursiveDirectoryIterator;
@@ -55,6 +60,8 @@ namespace Intakt\Tests\Core\HandBack\Infrastructure {
         public const string REFUSE_PUBLICATION = 'refuse-publication';
 
         public const string REFUSES_CHMOD = 'refuses-chmod';
+
+        public const string REFUSE_EVICTION = 'refuse-eviction';
 
         private string $folder;
 
@@ -401,6 +408,155 @@ namespace Intakt\Tests\Core\HandBack\Infrastructure {
             self::assertSame($this->names('a', 'b'), $this->snapshots());
         }
 
+        public function testAnOrphanPinFolderIsRemovedByTheNextSave(): void
+        {
+            new Filesystem()->mkdir($this->pinFolderOf('evicted'));
+
+            $this->storeKeeping(10)->save($this->key('a'), $this->install('a'));
+
+            self::assertDirectoryDoesNotExist($this->pinFolderOf('evicted'));
+        }
+
+        public function testAnOrphanPinFolderIsRemovedByTheNextLease(): void
+        {
+            new Filesystem()->mkdir($this->pinFolderOf('evicted'));
+
+            self::assertNull($this->storeKeeping(10)->lease($this->key('a')));
+
+            self::assertDirectoryDoesNotExist($this->pinFolderOf('evicted'));
+        }
+
+        public function testAnOrphanPinHeldElsewhereIsSkipped(): void
+        {
+            new Filesystem()->mkdir($this->pinFolderOf('evicted'));
+            $pin = new LockFactory(new FlockStore($this->pinFolderOf('evicted')))->createLock('pin', ttl: null);
+            self::assertTrue($pin->acquireRead(false));
+
+            $this->storeKeeping(10)->save($this->key('a'), $this->install('a'));
+
+            self::assertDirectoryExists($this->pinFolderOf('evicted'));
+            $pin->release();
+        }
+
+        public function testAPinFolderOfAPresentSnapshotIsKept(): void
+        {
+            $store = $this->storeKeeping(10);
+            $store->save($this->key('a'), $this->install('a'));
+            $store->lease($this->key('a'))?->release();
+
+            $store->save($this->key('b'), $this->install('b'));
+
+            self::assertDirectoryExists($this->pinFolderOf('a'));
+        }
+
+        public function testACountOneStoreKeepsAtMostOnePinFolderPastItsCount(): void
+        {
+            foreach (['x', 'y', 'z'] as $evicted) {
+                new Filesystem()->mkdir($this->pinFolderOf($evicted));
+            }
+
+            $store = $this->storeKeeping(1);
+
+            foreach (['a', 'b', 'c'] as $lock) {
+                $store->save($this->key($lock), $this->install($lock));
+                $store->lease($this->key($lock))?->release();
+            }
+
+            self::assertLessThanOrEqual(2, count(glob($this->store.'/'.DependencySnapshots::PINS.'/*', GLOB_ONLYDIR) ?: []));
+        }
+
+        public function testAHalfRemovedSnapshotUnderTheEvictionNameIsNeverLeased(): void
+        {
+            $this->plantAHalfRemovedSnapshotOf('a');
+
+            self::assertNull($this->storeKeeping(10)->lease($this->key('a')));
+        }
+
+        public function testTheNextLeaseRemovesAHalfRemovedSnapshot(): void
+        {
+            $this->plantAHalfRemovedSnapshotOf('a');
+
+            self::assertNull($this->storeKeeping(10)->lease($this->key('b')));
+
+            self::assertFileDoesNotExist($this->evictingFolderOf('a'));
+        }
+
+        public function testTheNextSaveRemovesAHalfRemovedSnapshot(): void
+        {
+            $this->plantAHalfRemovedSnapshotOf('a');
+
+            $this->storeKeeping(10)->save($this->key('b'), $this->install('b'));
+
+            self::assertFileDoesNotExist($this->evictingFolderOf('a'));
+            self::assertSame($this->names('b'), $this->snapshots());
+        }
+
+        public function testAFailedEvictionRenameKeepsTheSnapshotWholeWithItsPinFolder(): void
+        {
+            $store = $this->storeKeeping(1);
+            $store->save($this->key('a'), $this->install('a'));
+            touch($this->store.'/'.self::REFUSE_EVICTION);
+
+            try {
+                $store->save($this->key('b'), $this->install('b'));
+                self::fail('the eviction was not refused');
+            } catch (IOException $failure) {
+                self::assertStringContainsString('could not be moved aside', $failure->getMessage());
+            }
+
+            self::assertSame($this->names('a', 'b'), $this->snapshots());
+            self::assertDirectoryExists($this->pinFolderOf('a'));
+            self::assertFileDoesNotExist($this->evictingFolderOf('a'));
+
+            foreach ($this->snapshots() as $snapshot) {
+                self::assertFileExists($this->store.'/'.$snapshot.'/vendor/autoload.php');
+                self::assertFileExists($this->store.'/'.$snapshot.'/vendor/bin/tool');
+                self::assertTrue(is_link($this->store.'/'.$snapshot.'/vendor/bin/autoload-link'));
+            }
+        }
+
+        #[RunInSeparateProcess]
+        public function testAnInterruptedEvictionLeavesNoPartialSnapshotUnderItsKey(): void
+        {
+            SnapshotRemovalThatStops::defineFor($this->folder.'/stop-removal', $this->folder.'/removal-stopped');
+            $store = $this->storeKeeping(1);
+            $store->save($this->key('a'), $this->install('a'));
+            touch($this->folder.'/stop-removal');
+
+            try {
+                $store->save($this->key('b'), $this->install('b'));
+                self::fail('the removal did not stop');
+            } catch (IOException $failure) {
+                self::assertStringContainsString('stopped half-way', $failure->getMessage());
+            }
+
+            self::assertFileExists($this->folder.'/removal-stopped');
+            self::assertSame($this->names('b'), $this->snapshots());
+            self::assertDirectoryExists($this->evictingFolderOf('a'));
+            self::assertFileDoesNotExist($this->evictingFolderOf('a').'/vendor/autoload.php');
+            unlink($this->folder.'/stop-removal');
+            self::assertNull($store->lease($this->key('a')));
+            self::assertFileDoesNotExist($this->evictingFolderOf('a'));
+        }
+
+        public function testALeftoverUseOrderFileIsGoneAfterTheNextSave(): void
+        {
+            $this->plantALeftoverUseOrderFile();
+
+            $this->storeKeeping(10)->save($this->key('a'), $this->install('a'));
+
+            self::assertSame([DependencySnapshotUses::FILE], $this->useOrderFiles());
+        }
+
+        public function testALeftoverUseOrderFileIsGoneAfterTheNextLease(): void
+        {
+            $this->plantALeftoverUseOrderFile();
+
+            self::assertNull($this->storeKeeping(10)->lease($this->key('a')));
+
+            self::assertSame([DependencySnapshotUses::FILE], $this->useOrderFiles());
+        }
+
         // Called from the overrides, because only a call outside their namespace reaches the real function.
         public static function renamedForReal(string $from, string $to): bool
         {
@@ -437,6 +593,40 @@ namespace Intakt\Tests\Core\HandBack\Infrastructure {
         private function pinFolderOf(string $lock): string
         {
             return $this->store.'/'.DependencySnapshots::PINS.'/'.$this->key($lock)->value;
+        }
+
+        private function evictingFolderOf(string $lock): string
+        {
+            return $this->store.'/'.DependencySnapshots::EVICTING.$this->key($lock)->value;
+        }
+
+        // As an eviction stopped half-way leaves it: read-only, under the eviction name, with one file already gone.
+        private function plantAHalfRemovedSnapshotOf(string $lock): void
+        {
+            $folder = $this->evictingFolderOf($lock);
+            new Filesystem()->dumpFile($folder.'/vendor/bin/tool', '#!/bin/sh');
+            self::changedForReal($folder.'/vendor/bin', 0o555);
+            self::changedForReal($folder.'/vendor', 0o555);
+            self::changedForReal($folder, 0o555);
+        }
+
+        // As a crash before the rename of Filesystem::dumpFile() leaves it beside the use order.
+        private function plantALeftoverUseOrderFile(): void
+        {
+            $filesystem = new Filesystem();
+            $filesystem->dumpFile($this->store.'/'.DependencySnapshotUses::FILE, '[]');
+            $filesystem->dumpFile($this->store.'/'.DependencySnapshotUses::FILE.'0123456789abcdefXyZ123', '["');
+        }
+
+        /**
+         * @return list<string>
+         */
+        private function useOrderFiles(): array
+        {
+            return array_values(array_filter(
+                scandir($this->store) ?: [],
+                static fn (string $name): bool => str_starts_with($name, DependencySnapshotUses::FILE),
+            ));
         }
 
         /**
