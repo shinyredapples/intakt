@@ -6,7 +6,7 @@ This page explains what happens when you install Intakt, and what changes when y
 
 Intakt is one container, and Docker or Podman is all you need: the image ships everything else ([requirements](../architecture/requirements.md)). Once the wizard is built, you start the container, open the dashboard, and the wizard does the rest.
 
-The wizard is planned, not built yet. For now you create the GitHub App yourself and give Intakt its identity through three environment variables: `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID` and `GITHUB_APP_PRIVATE_KEY` ([the user guide](../user/README.md) explains each). The planned flow:
+The wizard is planned, not built yet. For now you create the GitHub App yourself and give Intakt its identity through three environment variables: `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID` and `GITHUB_APP_PRIVATE_KEY` ([the user guide](../reference/user-manual.md) explains each). The planned flow:
 
 ```mermaid
 flowchart TD

@@ -9,7 +9,7 @@
 
 Your coding agent says it is done. Intakt tells you whether to believe it.
 
-AI code review by a panel from different AI labs. Every finding must quote the code it is about, and a judge makes one list to fix. Start a review from the dashboard, or let your own agent run the loop over MCP until the verdict is clean.
+AI code review by a panel from different AI labs. A finding whose quoted code is not in the change is dropped, and a judge makes one list to fix. Start a review from the dashboard, or let your own agent run the loop over MCP until the verdict is clean.
 
 <!-- VIDEO THUMBNAIL: put the linked thumbnail of the demo video here once it is uploaded (#3142). -->
 
@@ -26,11 +26,11 @@ git clone https://github.com/shinyredapples/intakt.git && cd intakt
 docker compose up -d --wait
 ```
 
-No key? Open http://localhost:7781/demo (or **See a real review** on http://localhost:7781/setup) and press **Play the demo run**: the recording of a real review of the sample change plays onto the dashboard without calling any model ([details](docs/user/README.md#playing-the-demo-run-in-the-dashboard)).
+No key? Open http://localhost:7781/demo (or **See a real review** on http://localhost:7781/setup) and press **Play the demo run**: the recording of a real review of the sample change plays onto the dashboard without calling any model ([details](docs/reference/user-manual.md#playing-the-demo-run-in-the-dashboard)).
 
-With your agent: the clone's `.mcp.json` connects Claude Code. The review is live, so it needs a key first (see *With a key* below). Run `export INTAKT_MCP_TOKEN=<token from the line intakt:sample:show prints>`, start `claude` in the clone, approve the `intakt` MCP server when Claude Code asks, install the [skill](skills/intakt-review/README.md) and say *intakt review the demo* ([details](docs/user/mcp.md)).
+With your agent: the clone's `.mcp.json` connects Claude Code. The review is live, so it needs a key first (see *With a key* below). Run `export INTAKT_MCP_TOKEN=<token from the line intakt:sample:show prints>`, start `claude` in the clone, approve the `intakt` MCP server when Claude Code asks, install the [skill](skills/intakt-review/README.md) and say *intakt review the demo* ([details](docs/reference/mcp.md)).
 
-With a key: on http://localhost:7781/setup, under **Use your own project**, paste one provider key or Hugging Face token in **Add a key here**, run `docker compose restart intakt`, then press **Start the first review** ([Hugging Face details](docs/user/README.md#running-the-demo-on-a-hugging-face-token)). Or from the terminal: `docker compose exec intakt php bin/console intakt:demo` prints the verdict ([read it](docs/user/README.md#reading-a-verdict)). Calls are billed to the key's owner. The [demo walkthrough](docs/guide/demo-walkthrough.md) retells the run in plain words; [the review flow](docs/architecture/review-flow.md) draws it inside.
+With a key: on http://localhost:7781/setup, under **Use your own project**, paste one provider key or Hugging Face token in **Add a key here**, run `docker compose restart intakt`, then press **Start the first review** ([Hugging Face details](docs/reference/user-manual.md#running-the-demo-on-a-hugging-face-token)). Or from the terminal: `docker compose exec intakt php bin/console intakt:demo` prints the verdict ([read it](docs/reference/user-manual.md#reading-a-verdict)). Calls are billed to the key's owner. The [demo walkthrough](docs/guide/demo-walkthrough.md) retells the run in plain words; [the review flow](docs/architecture/review-flow.md) draws it inside.
 
 Without Docker or a key: `composer install`, then `bin/check` runs the quality gates every change passes (one JSON line per gate), `bin/check --journeys` the user journeys ([what they cover](docs/guide/checking-the-whole-product.md)) and `bin/console about` boots the app on SQLite.
 
@@ -73,7 +73,7 @@ Building Intakt led to 12 fixes (11 pull requests) merged upstream in Symfony, S
 
 - [For judges](docs/judges.md): from clone to a played review in a few minutes, and the code behind each promise.
 - [Intakt in plain words](docs/guide/README.md): friendly guides with diagrams, from the big picture to troubleshooting.
-- [User guide](docs/user/README.md) for owners and [technical pages](docs/architecture/README.md) for how it works and how it is built; [design](docs/design/README.md): what Intakt does and why.
+- [User guide](docs/user/README.md): a developer's day with Intakt in nine short chapters; the [complete reference](docs/reference/user-manual.md) for owners and [technical pages](docs/architecture/README.md) for how it works and how it is built; [design](docs/design/README.md): what Intakt does and why.
 - [The hackathon](docs/hackathon.md): the first release, what was planned, achieved and comes next; [video](docs/video.md), [spec](docs/spec.md), [plan](docs/plan.md).
 - [Showcase](docs/showcase/README.md), [journey](docs/journey.md) and [highlights](https://shinyredapples.github.io/intakt/) (built from [`docs/highlights.d/`](docs/highlights.d/)): this repository built by an AI loop, in figures.
 - [Contributing](CONTRIBUTING.md) (and [how your issue or pull request is handled](CONTRIBUTING.md#how-your-issue-or-pull-request-is-handled)), [AGENTS.md](AGENTS.md), [why the AI can't wreck your project](docs/guide/why-the-ai-cant-wreck-your-project.md) and [releases](https://github.com/shinyredapples/intakt/releases) ([how a release is cut](docs/releasing.md)).

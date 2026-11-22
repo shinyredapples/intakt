@@ -45,6 +45,8 @@ The checks also scan the project's CI workflows for known security mistakes, suc
 
 Sometimes a warning is wrong for this project, for example an image that cannot be pinned yet. It may then be silenced on its own line only, and only with the reason written right after it: `# zizmor: ignore[unpinned-images] tag only until digests come`. The same comment without a reason fails the checks, so every exception explains itself to the next reader. There is no settings file that turns a whole kind of warning off.
 
+The same rule holds for unfinished work. A comment in the code that starts with `TODO`, `FIXME` or `XXX`, a test switched off without a reason, or code that only says "not implemented" fails the checks when the change adds it, so nothing half-done slips in unnoticed. If a piece really has to wait, open an issue for it and write the comment as `TODO(#123): drop once the forge sends the total`: the issue number in brackets, a colon, then the reason. A not-implemented line needs such a comment on the same line. The checks then let it through, because the reader learns where the rest of the work is tracked and why it waits. They check only this form, not whether the issue is still open.
+
 ## Layer 4: several independent reviewers
 
 - The review panel has **reviewers from different AI companies** when you have accounts with more than one, so one model's blind spot doesn't decide. With a single account it runs one reviewer, and adds a second model of the same company for protected, security-relevant and large changes (planned: not built yet).
@@ -81,7 +83,7 @@ If one was started without that server, or read nothing through it, it **cannot 
 - if it answers **approve**, Intakt turns that into **blocked** (held for a person, not passed);
 - if it answers **changes**, that stays **changes**.
 
-So such a reviewer can ask for more work, but it can never pass a change on its own. The exact rules are in the user docs ([Claude](../user/README.md#a-reviewer-on-a-claude-subscription), [Codex](../user/README.md#a-reviewer-on-a-codex-subscription)) and the [threat model](../design/05-architecture/14-threat-model.md).
+So such a reviewer can ask for more work, but it can never pass a change on its own. The exact rules are in the user docs ([Claude](../reference/user-manual.md#a-reviewer-on-a-claude-subscription), [Codex](../reference/user-manual.md#a-reviewer-on-a-codex-subscription)) and the [threat model](../design/05-architecture/14-threat-model.md).
 
 ## Layer 5: the rules protect themselves
 

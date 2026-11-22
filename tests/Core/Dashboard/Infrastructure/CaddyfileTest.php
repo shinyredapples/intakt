@@ -11,7 +11,7 @@ use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Process\ExecutableFinder;
 use Symfony\Component\Process\Process;
 
-// The Caddyfile as FrankenPHP reads it for the setup docs/user/README.md describes, because FrankenPHP takes its values from the process and the env files it is given, never from Symfony's .env loading.
+// The Caddyfile as FrankenPHP reads it for the setup docs/reference/user-manual.md describes, because FrankenPHP takes its values from the process and the env files it is given, never from Symfony's .env loading.
 #[Group('hub')]
 #[CoversNothing]
 final class CaddyfileTest extends TestCase
