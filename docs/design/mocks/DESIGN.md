@@ -4,7 +4,7 @@ Mocks live in this folder. Every page uses `assets/intakt.css` and `assets/intak
 
 ## Concept
 
-The octopus conducts and points its baton at the lit amber i-dot. In the interface amber means one thing: this needs you. Amber appears only on things waiting on the owner (the Waiting on you count, those cards and rows, the one action they need) and in the logo. No amber for warnings, hover, charts or focus.
+The octopus conducts and points its baton at the lit amber i-dot. In the interface amber means one thing: this needs you. Amber appears only on things waiting on the owner (the Waiting on you count, those cards and rows, the one action they need), in the logo, and on the one exception the Amber audit names (the ring on the current step of a Working now path, #3326). No amber for warnings, hover, charts or focus.
 
 Everything else stays calm: green for the product and for selection, ink and muted text for content, red only for something broken.
 
@@ -121,7 +121,7 @@ The Code reviewers, their verdict step, the maintainer, the developer and the se
 
 No Working now card reaches Plan, Check or Merge today, so the tech lead (Plan) and the AI engineer (Check) have no drawing in the code yet, and the tortoise stands on no Merge step.
 
-The octopus has four poses (`MascotPose`): `waiting`, `conducting`, `bowing`, `asleep`, for empty, idle and approved states. The enum value is the file stem: `assets/images/roles/<value>-{light,dark}-{48,96,192}.webp` for a role and `assets/images/mascot/octopus-<value>-{light,dark}-{96,144,192,288}.webp` for a pose, plus `-72` for `bowing`, which sits at 72 px beside an approved newest round (scaled from `octopus-<value>-{light,dark}.webp`). Every place uses the one partial `templates/dashboard/components/character.html.twig` (`character`, `size`); the components page shows each character and pose in both themes.
+The octopus has four poses (`MascotPose`): `waiting`, `conducting`, `bowing`, `asleep`, for empty, idle and approved states. The enum value is the file stem: `assets/images/roles/<value>-{light,dark}-{48,96,192}.webp` for a role and `assets/images/mascot/octopus-<value>-{light,dark}-{96,144,192,288}.webp` for a pose, plus `-72` for `bowing`, which sits at 72 px beside an approved newest round (scaled from `octopus-<value>-{light,dark}.webp`). Every place uses the one partial `templates/dashboard/components/character.html.twig` (`character`, `size`, and an optional `alt` that only a Working now card sets); the components page shows each character and pose in both themes.
 
 Places (UX2, #3327 replaces the old rule that kept characters off Waiting on you): the waiting octopus once at the top of the Waiting on you page, the role who waits on each Waiting card (with its name as visible text), a reviewer's row and the verdict step's row on the review page, the live log and the round heading (24 or 48 px), the Code reviewer beside the role of each lane of the Status page (24 px, one per lane; the board's Who is working strip is superseded by the status line, #3325), and an octopus pose on an empty, idle or approved state. The UX2 home (#3326) adds two: the role standing on the current step of each Working now card (48 px: the beaver on Build, the meerkat on Review, the hedgehog beside the meerkat while the security reviewer runs), and the waiting octopus on the board's Needs you card (96 px, 144 px from 1024 px wide).
 
