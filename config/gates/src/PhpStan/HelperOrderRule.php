@@ -13,7 +13,6 @@ use PhpParser\Node\Identifier;
 use PhpParser\Node\Name;
 use PhpParser\Node\Stmt\ClassLike;
 use PhpParser\Node\Stmt\ClassMethod;
-use PhpParser\Node\Stmt\Trait_;
 use PhpParser\NodeFinder;
 use PHPStan\Analyser\Scope;
 use PHPStan\Rules\IdentifierRuleError;
@@ -38,12 +37,12 @@ final readonly class HelperOrderRule implements Rule
      */
     public function processNode(Node $node, Scope $scope): array
     {
-        // because PHPStan visits a class nested in a trait's method once per class using the trait, the trait's own visit checks the nested classes instead
-        if ($scope->isInTrait()) {
+        // because PHPStan visits a class nested in a trait's method once per class using the trait, at any depth, the outermost declaration checks every class nested in it instead
+        if ($scope->isInClass()) {
             return [];
         }
 
-        $classes = $node instanceof Trait_ ? [$node, ...new NodeFinder()->findInstanceOf($node->stmts, ClassLike::class)] : [$node];
+        $classes = [$node, ...new NodeFinder()->findInstanceOf($node->stmts, ClassLike::class)];
 
         return array_merge(...array_map($this->findingsOf(...), $classes));
     }

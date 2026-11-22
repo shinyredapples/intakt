@@ -65,6 +65,14 @@ final class HelperOrderRuleTest extends PhpStanRuleTestCase
         );
     }
 
+    public function testAPrivateHelperAboveItsCallerTwoAnonymousClassesDeepInATraitUsedTwiceIsReportedOnce(): void
+    {
+        self::assertSame(
+            'src/Wraps.php:15 intakt.helperOrder Private helper hidden() sits above caller(), its first caller: move it below caller(). Helpers sit below the method that first calls them, in the order it first calls them.',
+            $this->ruleFindingsOf('helper-above-its-caller-two-anonymous-classes-deep-in-a-trait'),
+        );
+    }
+
     public function testTwoStaticHelpersInTheReverseOrderOfTheirFirstCallsFailStaticAnalysis(): void
     {
         self::assertSame(
