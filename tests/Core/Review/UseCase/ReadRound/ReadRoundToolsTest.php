@@ -27,6 +27,8 @@ use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundReviewer;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRound;
 use Intakt\Core\Review\UseCase\MarkReplay\FlagProjectAsReplayHandler;
+use Intakt\Core\Review\Infrastructure\ReviewerAnswer\Verdict as ReviewerAnswer;
+use Intakt\Core\Review\UseCase\ReadRound\GivenVerdict;
 use Intakt\Core\Review\UseCase\ReadRound\ReadableRounds;
 use Intakt\Core\Review\UseCase\ReadRound\ReviewerIdentity;
 use Intakt\Core\Review\UseCase\ReadRound\ReviewerStatus;
@@ -59,6 +61,8 @@ use Symfony\Component\Serializer\SerializerInterface;
 #[CoversClass(ReviewerIdentity::class)]
 #[CoversClass(RoundVerdictsTool::class)]
 #[CoversClass(RoundVerdicts::class)]
+#[CoversClass(GivenVerdict::class)]
+#[UsesClass(ReviewerAnswer::class)]
 #[CoversClass(RoundActListTool::class)]
 #[CoversClass(RoundActList::class)]
 #[CoversClass(RoundFindingsResource::class)]
@@ -153,7 +157,7 @@ final class ReadRoundToolsTest extends KernelTestCase
 
         $verdicts = (new RoundVerdictsTool($this->readable(), new StoredVerdicts($this->serializer())))($round->id()->toRfc4122());
 
-        self::assertSame([Decision::Changes, Decision::Approve], array_map(static fn (PanelVerdict $verdict): Decision => $verdict->verdict->verdict, $verdicts->verdicts));
+        self::assertSame([Decision::Changes, Decision::Approve], array_map(static fn (GivenVerdict $verdict): Decision => $verdict->verdict->verdict, $verdicts->verdicts));
     }
 
     public function testTheActListIsEmptyAndNotJudgedBeforeTheJudgeHasAnswered(): void
