@@ -72,7 +72,7 @@ final class ReviewPageLayoutTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
-        self::assertSame('section',$crawler->filter('#live-log-pane')->nodeName());
+        self::assertSame('section', $crawler->filter('#live-log-pane')->nodeName());
         self::assertCount(0, $crawler->filter('aside[role="tabpanel"]'));
     }
 
