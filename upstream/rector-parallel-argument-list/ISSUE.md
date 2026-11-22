@@ -1,4 +1,4 @@
-Draft, not posted: the report went upstream as pull request rectorphp/rector-src#9012 instead (2026-11-21), which was closed without merging. See `REPORT.md`.
+Draft, not posted: the report went upstream as pull request rectorphp/rector-src#9012 instead (2026-11-21), which was closed without merging. Its posted text is in `PR.md`; see `REPORT.md`.
 
 Repository: `rectorphp/rector`
 Template: Bug Report
