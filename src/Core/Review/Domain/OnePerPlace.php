@@ -141,6 +141,13 @@ final readonly class OnePerPlace
         return null === $entry->judgeNote() && null !== $note ? $merged->withJudgeNote($note) : $merged;
     }
 
+    private function higher(Severity $one, Severity $other): Severity
+    {
+        $order = Severity::cases();
+
+        return array_search($one, $order, true) <= array_search($other, $order, true) ? $one : $other;
+    }
+
     // The same id may be reported twice, so an id joins the list once and the entry never lists its own.
     private function idsMergedInto(Finding $entry, Finding $finding): FindingIds
     {
@@ -152,12 +159,5 @@ final readonly class OnePerPlace
         }
 
         return new FindingIds(...$ids);
-    }
-
-    private function higher(Severity $one, Severity $other): Severity
-    {
-        $order = Severity::cases();
-
-        return array_search($one, $order, true) <= array_search($other, $order, true) ? $one : $other;
     }
 }
