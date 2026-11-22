@@ -20,6 +20,16 @@ final readonly class ReplayedJudgedState
     ) {
     }
 
+    /**
+     * @param list<string> $rounds
+     */
+    public function publishEach(array $rounds): void
+    {
+        foreach ($rounds as $round) {
+            $this->publish($round);
+        }
+    }
+
     // Nothing for a round the rows do not show judged, because a page must not show a call the ledger does not hold.
     public function publish(string $round): void
     {
@@ -27,17 +37,17 @@ final readonly class ReplayedJudgedState
             return;
         }
 
-        $reviewed = array_find($this->pages->reviewOf($round)?->rounds ?? [], static fn (ReviewedRound $candidate): bool => $candidate->round === $round);
+        $reviewed = array_find($this->pages->reviewOf($round)->rounds ?? [], static fn (ReviewedRound $candidate): bool => $candidate->round === $round);
 
         if (!$reviewed instanceof ReviewedRound || !$reviewed->isJudged()) {
             return;
         }
 
-        $this->rounds->roundChanged(Uuid::fromString($round), self::progressOf($reviewed));
+        $this->rounds->roundChanged(Uuid::fromString($round), $this->progressOf($reviewed));
     }
 
     // From the reviewer rows a reload shows, because a replayed round has no stored round to read its progress from.
-    private static function progressOf(ReviewedRound $reviewed): RoundProgress
+    private function progressOf(ReviewedRound $reviewed): RoundProgress
     {
         $finished = [];
 
