@@ -11,6 +11,7 @@ use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Review\Contract\ChangeDescription;
 use Intakt\Core\Review\Contract\ChangeReviewRequest;
+use Intakt\Core\Review\Contract\Labels;
 use Intakt\Core\Review\Contract\Panels;
 use Intakt\Core\Review\Contract\RequestedRound;
 use Intakt\Core\Review\Contract\ReviewTerms;
@@ -115,7 +116,7 @@ final readonly class BenchChangeCheckout
         $added = array_filter($lines, static fn (string $line): bool => str_starts_with($line, '+') && !str_starts_with($line, '+++'));
         $paths = array_map(static fn (string $line): string => substr($line, strlen('+++ b/')), array_filter($lines, static fn (string $line): bool => str_starts_with($line, '+++ b/')));
 
-        return new ChangeDescription(count($added), new Paths(...array_values($paths)), []);
+        return new ChangeDescription(count($added), new Paths(...array_values($paths)), new Labels());
     }
 
     // The base and the change together, because an expectation names a line of the file as the change leaves it.

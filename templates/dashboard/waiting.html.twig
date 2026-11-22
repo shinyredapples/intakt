@@ -2,6 +2,9 @@
 
 {% block title %}Waiting on you - Intakt{% endblock %}
 
+{# Roomy, because DESIGN.md's split page grows to 1720 px from 1500 px with the panels beside the list. #}
+{% block content_width %} roomy{% endblock %}
+
 {# The same project trail as Reviews, but no rail section: this page has its own rail entry, so Projects is not marked current beside it. The notices on this page belong to no project, so no filter hides them. #}
 {% block body %}
 {% if project_trail is not empty %}
@@ -13,37 +16,12 @@
 <div class="page-head">
     <div>
         <h1>Waiting on you</h1>
-        <p class="lead">{% if items is empty %}Things only you can do show up here, oldest first.{% else %}{{ items|length == 1 ? 'One thing' : items|length ~ ' things' }} only you can do, oldest first. Everything else keeps running while {{ items|length == 1 ? 'it waits' : 'these wait' }}.{% endif %}</p>
+        <p class="lead" id="waiting-lead">{{ include('dashboard/_waiting_lead.html.twig', {items: page.items}, with_context = false) }}</p>
     </div>
 </div>
-{% if items is empty %}
-{{ include('dashboard/components/empty.html.twig', {title: 'Nothing needs you', text: 'Intakt keeps building and reviewing. When it needs a decision, it shows up here.', pose: enum('Intakt\\Core\\Dashboard\\Domain\\MascotPose').Waiting}, with_context = false) }}
-{% else %}
-<div class="wait-list">
-{% for item in items %}
-<article class="wait-item needs" aria-labelledby="wait-{{ loop.index }}">
-    <h2 class="wait-lead" id="wait-{{ loop.index }}"><span class="dot needs"></span>{{ item.lead }}</h2>
-    {{ include('dashboard/components/meta.html.twig', {facts: [
-        {text: 'All projects'},
-        {icon: 'clock', text: item.waitingFor(now)},
-    ]}, with_context = false) }}
-    <p class="conseq">{{ item.consequence }}</p>
-    {# Before the choices, so Tab reaches it before Copy and the link (D6). #}
-    <details class="why"><summary>Why</summary>
-        <p>{{ item.why }}</p>
-    </details>
-    <ul class="act" aria-label="Your choices">
-    {% for choice in item.choices %}
-        <li>
-            {% if choice.recommended %}<span class="recommended">Recommended</span>{% endif %}
-            {% if choice.command is not null %}{{ include('dashboard/components/copy.html.twig', {text: choice.command}, with_context = false) }}{% endif %}
-            <span class="outcome">{{ choice.outcome }}</span>
-        </li>
-    {% endfor %}
-        <li><a class="btn secondary sm" href="{{ item.link ?? path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_BOARD'), {board: 1}) }}">{{ item.linkLabel }}</a></li>
-    </ul>
-</article>
-{% endfor %}
+{# The list before the panels, so a phone shows it first and the keyboard reaches the items before the panels. #}
+<div class="split">
+{{ include('dashboard/_waiting_list.html.twig', {items: page.items, now: now}, with_context = false) }}
+{{ include('dashboard/_waiting_side.html.twig', {page: page, now: now}, with_context = false) }}
 </div>
-{% endif %}
 {% endblock %}

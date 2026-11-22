@@ -51,6 +51,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\NullLogger;
+use Symfony\AI\Platform\Result\ToolCall;
 use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
@@ -1247,8 +1248,8 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         [$round, $id, $page] = $this->givenAPageLoadedBeforeAnyReviewerStarted();
         $this->ledger->startReviewer($id, 'security');
 
-        $this->publishedUpdates()->toolCalled($round, $id.'-security', ReviewTool::ReadFile->callInWords(['path' => 'src/discount.js']));
-        $this->publishedUpdates()->toolCalled($round, $id.'-security', ReviewTool::SearchFiles->callInWords(['text' => 'discount', 'path' => 'src']));
+        $this->publishedUpdates()->toolCalled($round, $id.'-security', ReviewTool::ReadFile->callInWords(new ToolCall('call-1', 'read_file', ['path' => 'src/discount.js'])));
+        $this->publishedUpdates()->toolCalled($round, $id.'-security', ReviewTool::SearchFiles->callInWords(new ToolCall('call-2', 'search_files', ['text' => 'discount', 'path' => 'src'])));
 
         $updated = $this->replaced($page, $this->publishedStreams());
         self::assertSame(['read src/discount.js', 'searched for "discount" in src'], $updated->filter('#reviewer-'.$id.'-security-activity li')->each(static fn (Crawler $call): string => $call->text()));
