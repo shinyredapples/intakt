@@ -17,7 +17,6 @@ use Intakt\Core\Dashboard\Domain\ReviewSummary;
 use Intakt\Core\Dashboard\Domain\RoundFinding;
 use Intakt\Core\Dashboard\Domain\RoundPlace;
 use Intakt\Core\Dashboard\Domain\RoundStart;
-use Intakt\Core\Dashboard\Infrastructure\LedgerPayload;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviews;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
@@ -26,6 +25,7 @@ use Intakt\Core\Dashboard\Infrastructure\ReplayedStart;
 use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Dashboard\UseCase\ListReviews\ListReviewsController;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
+use Intakt\Core\Ledger\Contract\PayloadFields;
 use Intakt\Core\Review\Contract\ChangesWithoutFindings;
 use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Core\Review\Contract\RoundEnding;
@@ -60,7 +60,7 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 #[UsesClass(Cost::class)]
 #[UsesClass(RoundLedgerReading::class)]
 #[UsesClass(TokenUsageRow::class)]
-#[UsesClass(LedgerPayload::class)]
+#[UsesClass(PayloadFields::class)]
 #[UsesClass(ProjectMode::class)]
 #[UsesClass(LedgerReviews::class)]
 #[UsesClass(ListReviewsController::class)]
@@ -638,6 +638,28 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         self::assertSame('0.0080 USD, price date unknown', $this->rowsOf($crawler->filter('#round-round-1 table.tokens tbody tr'))[0][6]);
         self::assertSame('0.0024 USD, price date unknown', $this->rowsOf($crawler->filter('#round-round-2 table.tokens tbody tr'))[0][6]);
         self::assertStringContainsString('Cost: 0.0104 USD estimated, price date unknown', self::wordsOf($crawler->filter('.page-head p.meta')));
+    }
+
+    public function testTheFullRecordViewRendersTheCostLabelAsOneWholeFactLabelBesideTheFigure(): void
+    {
+        $this->givenACompletedTwoRoundReview();
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
+
+        self::assertSame(['Cost:'], $crawler->filter('.page-head p.meta .fact-label')->each(static fn (Crawler $label): string => $label->text(normalizeWhitespace: false)));
+        self::assertCount(1, $crawler->filter('.page-head p.meta .fact-label + span#review-summary-cost'));
+    }
+
+    public function testTheCostLabelStaysOneWholeFactLabelBesideAnUnknownCostOfALongUnpricedModelId(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->useRecordedTokens('round-1', ['prompt' => 10, 'completion' => 1, 'total' => 11], 'anthropic/claude-opus-5-5-20261101-extended-context-preview');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
+
+        self::assertCount(1, $crawler->filter('.page-head p.meta .fact-label'));
+        self::assertSame('Cost:', $crawler->filter('.page-head p.meta .fact-label')->text(normalizeWhitespace: false));
+        self::assertSelectorTextContains('.page-head p.meta .fact-label + span#review-summary-cost', 'unknown, no price for anthropic/claude-opus-5-5-20261101-extended-context-preview');
     }
 
     public function testAnUnknownCostNamesTheModelEscapedAndIsNeverZero(): void

@@ -5,15 +5,20 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Memory\Infrastructure;
 
 use Intakt\Core\Git\Contract\Paths;
+use Intakt\Core\Memory\Contract\CodeSnapshot;
 use Intakt\Core\Memory\Contract\MemoryEntry;
 use Intakt\Core\Memory\Contract\MemoryQuery;
+use Intakt\Core\Memory\Contract\SettledFinding;
+use Intakt\Core\Memory\Contract\SettledQuery;
 use Intakt\Core\Memory\Infrastructure\MemoryDocuments;
 use Intakt\Core\Memory\Infrastructure\StoreMemoryIndex;
 use Intakt\Core\Memory\Infrastructure\StoreProjectMemory;
 use PDO;
+use PDOException;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
+use RuntimeException;
 use Symfony\AI\Platform\Model;
 use Symfony\AI\Platform\Result\VectorResult;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
@@ -30,6 +35,8 @@ final class SqliteMemoryStoreTest extends TestCase
 {
     private StoreMemoryIndex $index;
     private StoreProjectMemory $memory;
+    private bool $embedderDown = false;
+    private PDO $pdo;
 
     public function testAnEntryIndexedInTheSqliteStoreIsRetrievedForItsFile(): void
     {
@@ -59,17 +66,72 @@ final class SqliteMemoryStoreTest extends TestCase
         self::assertEquals([new MemoryEntry('alpha', 'Same note.', new Paths('a b.php'))], $found->entries);
     }
 
+    public function testASettledFindingStoredOnSqliteTurnsStaleWhenItsHashChangesAndIsGoneOnceDeleted(): void
+    {
+        $finding = new SettledFinding('alpha', 'migrate() takes no lock.', 'Intentional.', new CodeSnapshot('src/Db.php', 'migrate', 'hash-1'));
+        $this->index->settle($finding);
+
+        $unchanged = $this->memory->settledOn(new SettledQuery('alpha', new CodeSnapshot('src/Db.php', 'migrate', 'hash-1')));
+        $changed = $this->memory->settledOn(new SettledQuery('alpha', new CodeSnapshot('src/Db.php', 'migrate', 'hash-2')));
+        $this->index->forget($finding);
+        $deleted = $this->memory->settledOn(new SettledQuery('alpha', new CodeSnapshot('src/Db.php', 'migrate', 'hash-1')));
+
+        self::assertSame([1, 0, 0, 1, 0, 0], [count($unchanged->settled), count($unchanged->stale), count($changed->settled), count($changed->stale), count($deleted->settled), count($deleted->stale)]);
+    }
+
+    public function testReSettlingOnSqliteWhileTheEmbedderFailsPropagatesTheFailureAndKeepsTheOriginalEntry(): void
+    {
+        $original = new SettledFinding('alpha', 'migrate() takes no lock.', 'Intentional.', new CodeSnapshot('src/Db.php', 'migrate', 'hash-1'));
+        $this->index->settle($original);
+
+        $failure = $this->reSettleWhileTheEmbedderFails(new SettledFinding('alpha', 'migrate() takes no lock.', 'Intentional.', new CodeSnapshot('src/Db.php', 'migrate', 'hash-2')));
+
+        self::assertSame('embedder down', $failure);
+        self::assertEquals([$original], $this->memory->settledOn(new SettledQuery('alpha', new CodeSnapshot('src/Db.php', 'migrate', 'hash-1')))->settled);
+        self::assertEquals([$original], $this->memory->settledOn(new SettledQuery('alpha', new CodeSnapshot('src/Db.php', 'migrate', 'hash-2')))->stale);
+    }
+
+    public function testReSettlingOnSqliteWhileTheInsertFailsKeepsTheOriginalEntry(): void
+    {
+        $original = new SettledFinding('alpha', 'migrate() takes no lock.', 'Intentional.', new CodeSnapshot('src/Db.php', 'migrate', 'hash-1'));
+        $this->index->settle($original);
+        $this->pdo->exec("CREATE TRIGGER reject_insert BEFORE INSERT ON project_memory BEGIN SELECT RAISE(ABORT, 'write failed'); END");
+
+        try {
+            $this->index->settle(new SettledFinding('alpha', 'migrate() takes no lock.', 'Intentional.', new CodeSnapshot('src/Db.php', 'migrate', 'hash-2')));
+            self::fail('The failing insert must propagate.');
+        } catch (PDOException) {
+        }
+
+        self::assertEquals([$original], $this->memory->settledOn(new SettledQuery('alpha', new CodeSnapshot('src/Db.php', 'migrate', 'hash-1')))->settled);
+    }
+
     protected function setUp(): void
     {
-        $store = Store::fromPdo(new PDO('sqlite::memory:'), 'project_memory');
+        $this->pdo = new PDO('sqlite::memory:');
+        $store = Store::fromPdo($this->pdo, 'project_memory');
         $store->setup();
-        $platform = MockPlatformFactory::createPlatform(static fn (Model $model, array|string|object $input): VectorResult => new VectorResult(
-            array_map(static fn (): Vector => new Vector([1.0, 0.0]), is_array($input) ? $input : [$input]),
-        ));
+        $platform = MockPlatformFactory::createPlatform(fn (Model $model, array|string|object $input): VectorResult => $this->embedderDown
+            ? throw new RuntimeException('embedder down') : new VectorResult(array_map(static fn (): Vector => new Vector([1.0, 0.0]), is_array($input) ? $input : [$input])));
         $vectorizer = new Vectorizer($platform, 'embedder');
         $documents = new MemoryDocuments();
 
-        $this->index = new StoreMemoryIndex(new DocumentIndexer(new DocumentProcessor($vectorizer, $store)), $documents);
+        $this->index = new StoreMemoryIndex(new DocumentIndexer(new DocumentProcessor($vectorizer, $store)), $vectorizer, $store, $documents);
         $this->memory = new StoreProjectMemory(new Retriever($store, $vectorizer), $documents);
+    }
+
+    private function reSettleWhileTheEmbedderFails(SettledFinding $changed): string
+    {
+        $this->embedderDown = true;
+
+        try {
+            $this->index->settle($changed);
+        } catch (RuntimeException $failure) {
+            return $failure->getMessage();
+        } finally {
+            $this->embedderDown = false;
+        }
+
+        self::fail('Settling while the embedder is down must fail.');
     }
 }

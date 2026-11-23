@@ -49,9 +49,24 @@ final class DashboardLedger implements Ledger
         return new RecordedEvents(array_values(array_filter($this->recorded, static fn (RecordedEvent $recorded): bool => $kind === $recorded->event->kind)));
     }
 
+    public function readOfKindAbout(LedgerEventKind $kind, string $subject): RecordedEvents
+    {
+        return new RecordedEvents(array_values(array_filter($this->recorded, static fn (RecordedEvent $recorded): bool => $kind === $recorded->event->kind && $subject === $recorded->event->subject)));
+    }
+
+    public function readOfKindWithoutSubject(LedgerEventKind $kind): RecordedEvents
+    {
+        return new RecordedEvents(array_values(array_filter($this->recorded, static fn (RecordedEvent $recorded): bool => $kind === $recorded->event->kind && null === $recorded->event->subject)));
+    }
+
     public function readMentioning(Mentions $texts): RecordedEvents
     {
         return new RecordedEvents(array_values(array_filter($this->recorded, static fn (RecordedEvent $recorded): bool => array_any([...$texts], static fn (string $text): bool => str_contains($recorded->event->payload, $text)))));
+    }
+
+    public function readOfKindsMentioning(Mentions $texts, LedgerEventKind ...$kinds): RecordedEvents
+    {
+        return new RecordedEvents(array_values(array_filter($this->recorded, static fn (RecordedEvent $recorded): bool => in_array($recorded->event->kind, $kinds, true) && array_any([...$texts], static fn (string $text): bool => str_contains($recorded->event->payload, $text)))));
     }
 
     public function startRound(string $round, string $project): void
@@ -101,12 +116,12 @@ final class DashboardLedger implements Ledger
 
     public function startReviewer(string $round, string $role): void
     {
-        $this->add(LedgerEventKind::ReviewerStarted, $this->reviewer($round, $role));
+        $this->recordReviewerStart($round, $this->reviewer($round, $role));
     }
 
     public function startReviewerOn(string $round, string $role, string $model): void
     {
-        $this->add(LedgerEventKind::ReviewerStarted, $this->reviewer($round, $role) + ['model' => $model]);
+        $this->recordReviewerStart($round, $this->reviewer($round, $role) + ['model' => $model]);
     }
 
     public function answer(string $round, string $role, int $findings): void
@@ -168,6 +183,22 @@ final class DashboardLedger implements Ledger
             'findings' => array_map(static fn (string $id): array => ['id' => $id, 'severity' => 'P2', 'text' => 'Text of '.$id.'.'], array_keys($marks)),
             'fallback' => false,
         ]);
+    }
+
+    // Every finding marked act, each at its own line so none folds into another; a null severity leaves the key out, as a row written without one.
+    /**
+     * @param array<string, ?string> $severities
+     */
+    public function judgeRatedFindings(string $round, array $severities): void
+    {
+        $line = 0;
+        $findings = [];
+
+        foreach ($severities as $id => $severity) {
+            $findings[] = ['id' => $id, 'text' => 'Text of '.$id.'.', 'merged' => [], 'file' => 'src/A.php', 'line' => ++$line, ...(null === $severity ? [] : ['severity' => $severity])];
+        }
+
+        $this->add(LedgerEventKind::JudgeDone, ['round' => $round, 'act' => array_keys($severities), 'follow_ups' => [], 'findings' => $findings, 'fallback' => false]);
     }
 
     // Written as RoundLedger records two act findings at one place, because the page must fold the second into the first.
@@ -350,6 +381,11 @@ final class DashboardLedger implements Ledger
         $this->add(LedgerEventKind::BootResultComputed, ['project' => $project, 'main' => $main, 'tool_fingerprint' => 'tools-1', 'state' => $state, 'reason' => '']);
     }
 
+    public function failHeadRetryingAt(string $project, string $change, string $retryAt): void
+    {
+        $this->add(LedgerEventKind::HeadFailed, ['failures' => 1, 'retry_at' => $retryAt] + $this->headFailure($project, $change, 'a'));
+    }
+
     public function failHeadWithoutCause(string $project, string $change): void
     {
         $this->add(LedgerEventKind::HeadFailed, ['project' => $project, 'change' => $change, 'head' => 'a', 'failures' => 1, 'retry_at' => '2026-10-28T12:01:00+00:00']);
@@ -403,5 +439,14 @@ final class DashboardLedger implements Ledger
     private function add(LedgerEventKind $kind, array $payload, ?DateTimeImmutable $at = null): void
     {
         $this->recorded[] = new RecordedEvent(Uuid::v7(), new LedgerEvent($kind, json_encode($payload, JSON_THROW_ON_ERROR)), $at ?? new DateTimeImmutable('2026-10-28T12:00:00+00:00'));
+    }
+
+    // Under the round as its subject, as RoundLedger appends it, so readOfKindAbout() finds it.
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function recordReviewerStart(string $round, array $payload): void
+    {
+        $this->recorded[] = new RecordedEvent(Uuid::v7(), new LedgerEvent(LedgerEventKind::ReviewerStarted, json_encode($payload, JSON_THROW_ON_ERROR), $round), new DateTimeImmutable('2026-10-28T12:00:00+00:00'));
     }
 }
