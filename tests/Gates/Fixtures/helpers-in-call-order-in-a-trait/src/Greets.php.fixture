@@ -1,0 +1,28 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+trait Greets
+{
+    public function greet(string $name): string
+    {
+        return $this->exclaimed($this->salutation().self::capitalized($name));
+    }
+
+    private function salutation(): string
+    {
+        return 'Hello ';
+    }
+
+    private static function capitalized(string $name): string
+    {
+        return ucfirst($name);
+    }
+
+    private function exclaimed(string $text): string
+    {
+        return $text.'!';
+    }
+}

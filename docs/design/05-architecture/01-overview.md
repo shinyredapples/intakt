@@ -2,7 +2,7 @@
 
 ## The team
 
-Intakt's model roles carry traditional team titles. There are seven of them, plus the Test engineer, an opt-in eighth that a new project starts without, and the person who owns the project. The id is the lowercase name the role goes by wherever it must be greppable.
+Intakt's model roles carry traditional team titles. There are eight of them, plus the Test engineer, an opt-in ninth that a new project starts without, and the person who owns the project. The id is the lowercase name the role goes by wherever it must be greppable.
 
 | Role | Id | Formerly | What it does |
 |---|---|---|---|
@@ -11,6 +11,7 @@ Intakt's model roles carry traditional team titles. There are seven of them, plu
 | **Designer** | `designer` | (new) | Shapes and reviews user-facing work. Active only for a project with a user interface, and there only for tasks whose paths or labels touch it, so it costs nothing elsewhere. Before the build it adds to *Ready* the flows, every state, the copy, the three widths and the accessibility needs; its tools are opt-in per project ([planned](07-reviews.md#the-designer-planned)). |
 | **Developer** | `developer` | the builder | Builds the task. Owns the [Definition of Done](../01-intent.md#definition-of-done) together with the checks. |
 | **Code reviewers** | `code_reviewer` | the review panel, with the judge as their verdict step | Review correctness, readability, tests, docs and the framework's use. Specialists are settings of the panel, not roles of their own. |
+| **Technical writer** | `technical_writer` | (new) | Owns the docs people read: reviews the docs part of a change that touches the user guide, the plain-words guides, the README or a page's summary, for its audience, and can send it back like a Code reviewer. Proposes the user guide's structure and the docs gate's limits, which the owner decides. It never judges whether docs are true to the code (the Code reviewers do) and never edits code ([planned](07-reviews.md#the-technical-writer-planned)). |
 | **Security engineer** | `security_engineer` | the gatekeeper's security reviewer and attacker (now the penetration tester) | Security across infrastructure, backend and frontend. Its two verdicts, the security review and the penetration test, feed the approval of protected changes. Checks first, the role for what checks cannot judge: reviews per layer, triggered by paths, and a monthly audit ([Reviews](07-reviews.md#the-security-engineer)). |
 | **AI engineer** | `ai_engineer` | (new) | Models, prompts, skills, context and tokens, and how agents work (check runs per merged task); owns model routing, as measured experiments ([planned](06-budget-and-model-planner.md#the-ai-engineer-planned)). |
 | **Test engineer** (opt-in) | `test_engineer` | (new) | Owns the test suite as a whole: its time, redundant tests, the balance of tests and the CI workflows' speed, through a scheduled audit that files ready tasks and never edits a test ([planned](07-reviews.md#the-test-engineer-planned)). A new project starts without it. |
