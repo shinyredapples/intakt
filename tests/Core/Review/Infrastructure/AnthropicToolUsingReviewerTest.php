@@ -35,6 +35,7 @@ use Intakt\Core\Review\Infrastructure\StreamingFallbacks;
 use Intakt\Core\Review\Infrastructure\StrictVerdictConverter;
 use Intakt\Core\Review\Infrastructure\StrictVerdictStreamListener;
 use Intakt\Core\Review\Infrastructure\StrictVerdictSubscriber;
+use Intakt\Core\Review\Infrastructure\VerdictInText;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\Contract\VerdictDocument;
 use Intakt\Tests\Core\Review\Infrastructure\Repository\ReviewCheckout;
@@ -56,6 +57,7 @@ use Symfony\Component\Uid\UuidV7;
 
 #[CoversClass(StrictVerdictSubscriber::class)]
 #[CoversClass(StrictVerdictConverter::class)]
+#[CoversClass(VerdictInText::class)]
 #[CoversClass(StreamedAnswer::class)]
 #[CoversClass(AnthropicTextBlocks::class)]
 #[CoversClass(ReviewerPrompt::class)]

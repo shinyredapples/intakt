@@ -28,6 +28,7 @@ use Intakt\Core\Review\Infrastructure\DiffPaths;
 use Intakt\Core\Review\Infrastructure\FencedToolbox;
 use Intakt\Core\Review\Infrastructure\LiveProgress;
 use Intakt\Core\Review\Infrastructure\MalformedToolCalls;
+use Intakt\Core\Review\Infrastructure\OpenFindingIds;
 use Intakt\Core\Review\Infrastructure\ReviewerAgent;
 use Intakt\Core\Review\Infrastructure\ReviewerMemory;
 use Intakt\Core\Review\Infrastructure\ReviewerPrompt;
@@ -61,6 +62,7 @@ use Symfony\Component\Uid\UuidV7;
 
 // Runs a whole review through the agent, so what reaches the model is what the platform is really sent, not what the prompt builder returns.
 #[CoversClass(ReviewerAgent::class)]
+#[CoversClass(OpenFindingIds::class)]
 #[UsesClass(ReviewerRuns::class)]
 #[UsesClass(PromptCut::class)]
 #[UsesClass(ReviewerPrompt::class)]
