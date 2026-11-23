@@ -42,13 +42,13 @@ final readonly class PullRequestsOfTasks
     public function reworksOf(string $project, IntakePlan $plan, array $tasks): array
     {
         $open = $this->allOpenOf($project, $plan);
-        $steers = $this->accessAskedOncePerAccount($project);
+        $historyOf = $this->trustedHistoryReadOncePerPullRequest($project);
         $reworks = [];
         foreach ($tasks as $task) {
-            $found = array_find($this->candidatesOf($task->number(), $plan, $open), function (BranchPullRequest $pull) use ($project, $steers, $task): bool {
-                $history = $this->trustedHistoryOf($project, $pull, $steers);
+            $found = array_find($this->candidatesOf($task->number(), $plan, $open), function (BranchPullRequest $pull) use ($historyOf, $plan, $task): bool {
+                $history = $historyOf($pull);
 
-                return $history instanceof IssueHistory && $this->stillBelongsTo($task->number(), $pull, $history);
+                return $history instanceof IssueHistory && $this->belongsTo($task->number(), $pull, $history, $plan);
             });
             if ($found instanceof BranchPullRequest) {
                 $reworks[$task->number()] = $found->number;
@@ -65,7 +65,7 @@ final readonly class PullRequestsOfTasks
     private function allOpenOf(string $project, IntakePlan $plan): array
     {
         $open = $this->branches->openOf($project);
-        $missing = array_diff($plan->openPullRequests, array_map(static fn (BranchPullRequest $pull): int => $pull->number, $open));
+        $missing = array_diff(array_keys($plan->openPullRequests), array_map(static fn (BranchPullRequest $pull): int => $pull->number, $open));
         if ([] !== $missing) {
             throw new ForgeReadFailed(sprintf('GitHub did not list the branch of open pull request #%d, which the listing of this tick shows open, so the pull requests by branch may be incomplete.', min($missing)));
         }
@@ -73,20 +73,28 @@ final readonly class PullRequestsOfTasks
         return $open;
     }
 
-    // Remembered for one call only, because the author of a pull request is often its last editor, and each ask is a forge call.
+    // Remembered for one call only, because a pull request is a candidate of every task it may close, the author of a pull request is often its last editor, and each read or ask is a forge call.
     /**
-     * @return Closure(string): bool
+     * @return Closure(BranchPullRequest): ?IssueHistory
      */
-    private function accessAskedOncePerAccount(string $project): Closure
+    private function trustedHistoryReadOncePerPullRequest(string $project): Closure
     {
         $answers = [];
-
-        return function (string $account) use ($project, &$answers): bool {
+        $steers = function (string $account) use ($project, &$answers): bool {
             return $answers[$account] ??= $this->accounts->steers($project, $account);
+        };
+        $histories = [];
+
+        return function (BranchPullRequest $pull) use ($project, $steers, &$histories): ?IssueHistory {
+            if (!array_key_exists($pull->number, $histories)) {
+                $histories[$pull->number] = $this->trustedHistoryOf($project, $pull, $steers);
+            }
+
+            return $histories[$pull->number];
         };
     }
 
-    // Every pull request the plan holds as closing the task and every one on its branch, lowest number first, so the first that counts is the task's pull request, and a higher one stands in when a lower one lost its trust. The closing ones are always among the open ones, because the listing's open pull requests were checked against them.
+    // Every pull request the plan holds as closing the task, every one on its branch and every one updated since the tick's listing, lowest number first, so the first that counts is the task's pull request, and a higher one stands in when a lower one lost its trust. An updated one may close the task by an edit the plan has not seen, so only its body read now can tell. The closing ones are always among the open ones, because the listing's open pull requests were checked against them.
     /**
      * @param list<BranchPullRequest> $open
      *
@@ -95,13 +103,20 @@ final readonly class PullRequestsOfTasks
     private function candidatesOf(int $task, IntakePlan $plan, array $open): array
     {
         $closing = $plan->closingPullRequests[$task] ?? [];
-        $candidates = array_values(array_filter($open, static fn (BranchPullRequest $pull): bool => in_array($pull->number, $closing, true) || TaskBranchName::names($pull->branch, $task)));
+        $candidates = array_values(array_filter($open, static fn (BranchPullRequest $pull): bool => in_array($pull->number, $closing, true) || TaskBranchName::names($pull->branch, $task) || self::updatedSinceListing($pull, $plan)));
         usort($candidates, static fn (BranchPullRequest $a, BranchPullRequest $b): int => $a->number <=> $b->number);
 
         return $candidates;
     }
 
-    // Null for a pull request that counts for nothing. The author is asked first, because the history of one whose author has no write access need not be read; its history is the one the branch listing showed, so an edit since fails the read instead of passing unchecked.
+    private static function updatedSinceListing(BranchPullRequest $pull, IntakePlan $plan): bool
+    {
+        $listedAt = $plan->openPullRequests[$pull->number] ?? null;
+
+        return null === $listedAt || $listedAt->getTimestamp() !== $pull->updatedAt->getTimestamp();
+    }
+
+    // The author is asked first, because the history of one whose author has no write access need not be read; its history is the one the branch listing showed, so an edit since fails the read instead of passing unchecked.
     /**
      * @param Closure(string): bool $steers
      */
@@ -116,13 +131,17 @@ final readonly class PullRequestsOfTasks
         return Vouching::of($pull->author, $history, $steers)->trusted ? $history : null;
     }
 
-    // A trusted pull request that is not on the task's branch must still close the task in the history just read, because a trusted edit between the tick's listing and the branch read can point it at another task, and the plan would still give it to this one.
-    private function stillBelongsTo(int $task, BranchPullRequest $pull, IssueHistory $history): bool
+    // A trusted pull request that is not on the task's branch must close the task in the history just read. One the plan gives to the task and that no longer closes it fails the read, because a trusted edit between the tick's listing and the branch read pointed it elsewhere and the next listing settles where; one the plan does not give to the task is simply another task's.
+    private function belongsTo(int $task, BranchPullRequest $pull, IssueHistory $history, IntakePlan $plan): bool
     {
-        if (!TaskBranchName::names($pull->branch, $task) && !in_array($task, new IssueReferences()->closedBy($history->body), true)) {
+        if (TaskBranchName::names($pull->branch, $task) || in_array($task, new IssueReferences()->closedBy($history->body), true)) {
+            return true;
+        }
+
+        if (in_array($pull->number, $plan->closingPullRequests[$task] ?? [], true)) {
             throw new ForgeReadFailed(sprintf('GitHub holds pull request #%d without the closing reference to #%d it was listed with, so the pull request of that task is not known until the next listing.', $pull->number, $task));
         }
 
-        return true;
+        return false;
     }
 }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Plugin\GitHubWorkSource;
 
 use Closure;
+use DateTimeImmutable;
 use Doctrine\Common\EventManager;
 use Doctrine\DBAL\DriverManager;
 use Doctrine\DBAL\Exception\RetryableException;
@@ -283,6 +284,53 @@ final class GitHubWorkSourceTest extends KernelTestCase
         };
 
         self::assertEquals(new Task(7, 'Task 7', null), $this->source()->nextWork('alpha', WorkerState::Free)->task);
+    }
+
+    public function testAPullRequestEditedToCloseTheTaskWhileTheBranchesAreReadMakesTheTaskARework(): void
+    {
+        $this->reads->lists([Issues::task(7), Issues::pullRequest(12, 'Closes #8', 'bea')]);
+        $this->branches->updatedAtOf = [12 => new DateTimeImmutable('2026-11-10T10:00:01Z')];
+        $this->branches->during = function (): void {
+            $this->editedBodies[12] = 'Closes #7';
+        };
+
+        self::assertEquals(new Task(7, 'Task 7', 12), $this->source()->nextWork('alpha', WorkerState::Free)->task);
+    }
+
+    public function testAPullRequestEditedWhileTheBranchesAreReadToCloseNoTaskDoesNotMakeTheTaskARework(): void
+    {
+        $this->reads->lists([Issues::task(7), Issues::pullRequest(12, 'Closes #8', 'bea')]);
+        $this->branches->updatedAtOf = [12 => new DateTimeImmutable('2026-11-10T10:00:01Z')];
+        $this->branches->during = function (): void {
+            $this->editedBodies[12] = 'Refers to #7 without closing it.';
+        };
+
+        self::assertEquals(new Task(7, 'Task 7', null), $this->source()->nextWork('alpha', WorkerState::Free)->task);
+    }
+
+    public function testAPullRequestEditedToCloseTheTaskByAnAccountWithoutWriteAccessWhileTheBranchesAreReadCountsForNothing(): void
+    {
+        $this->reads->lists([Issues::task(7), Issues::pullRequest(12, 'Closes #8', 'bea')]);
+        $this->branches->updatedAtOf = [12 => new DateTimeImmutable('2026-11-10T10:00:01Z')];
+        $this->branches->during = function (): void {
+            $this->editedBodies[12] = 'Closes #7';
+            $this->editorOf[12] = 'mallory';
+        };
+
+        self::assertEquals(new Task(7, 'Task 7', null), $this->source()->nextWork('alpha', WorkerState::Free)->task);
+    }
+
+    public function testAPullRequestEditedWhileTheBranchesAreReadHasItsHistoryReadOnceForAllTasks(): void
+    {
+        $this->reads->lists([Issues::task(7), Issues::task(8), Issues::pullRequest(12, 'Closes #9', 'bea')]);
+        $this->branches->updatedAtOf = [12 => new DateTimeImmutable('2026-11-10T10:00:01Z')];
+        $this->branches->during = function (): void {
+            $this->historiesRead = [];
+        };
+
+        $this->source()->queue('alpha');
+
+        self::assertSame([12], $this->historiesRead);
     }
 
     public function testATaskMarkedFailedWhileItsBranchesAreReadIsNeverPicked(): void

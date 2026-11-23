@@ -56,7 +56,10 @@ final readonly class IntakeRules
 
         usort($ready, fn (QueuedIssue $a, QueuedIssue $b): int => $this->key($a, $pullRequests) <=> $this->key($b, $pullRequests));
 
-        $openPullRequests = array_map(static fn (QueuedIssue $item): int => $item->number(), array_values(array_filter($items, static fn (QueuedIssue $item): bool => $item->isPullRequest())));
+        $openPullRequests = [];
+        foreach (array_filter($items, static fn (QueuedIssue $item): bool => $item->isPullRequest()) as $pull) {
+            $openPullRequests[$pull->number()] = $pull->updatedAt();
+        }
 
         return new IntakePlan($ready, $held, $pullRequests, $dependsOn, $openPullRequests, $closingPullRequests);
     }

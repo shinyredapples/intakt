@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Plugin\GitHubWorkSource;
 
 use Closure;
+use DateTimeImmutable;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\GitHubForge\Contract\BranchPullRequest;
 use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
@@ -18,6 +19,8 @@ final class RecordedPullRequestBranches implements PullRequestBranches
     public array $branchOf = [];
     /** @var list<int> */
     public array $leftOut = [];
+    /** @var array<int, DateTimeImmutable> */
+    public array $updatedAtOf = [];
     public ?ForgeReadFailed $failure = null;
     public ?Closure $during = null;
 
@@ -40,6 +43,6 @@ final class RecordedPullRequestBranches implements PullRequestBranches
         $pulls = array_filter($this->issues->lastListed, fn (ListedIssue $issue): bool => $issue->isPullRequest && !in_array($issue->number, $this->leftOut, true));
         ksort($pulls);
 
-        return array_values(array_map(fn (ListedIssue $pull): BranchPullRequest => new BranchPullRequest($pull->number, $this->branchOf[$pull->number] ?? 'chore/tidy-up', $pull->author, $pull->updatedAt), $pulls));
+        return array_values(array_map(fn (ListedIssue $pull): BranchPullRequest => new BranchPullRequest($pull->number, $this->branchOf[$pull->number] ?? 'chore/tidy-up', $pull->author, $this->updatedAtOf[$pull->number] ?? $pull->updatedAt), $pulls));
     }
 }
