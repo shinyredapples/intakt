@@ -161,7 +161,7 @@ final readonly class CompleteListing
      */
     private function planOver(string $project, array $rows, IntakeRules $rules): IntakePlan
     {
-        return self::planOverWith($rules, $rows, $this->store->failuresOf($project));
+        return $this->planOverWith($rules, $rows, $this->store->failuresOf($project));
     }
 
     // Another worker that stored a listing meanwhile holds the newer rows, but vouched them under its own eligibility label, so a row that is a candidate under this one has its history read first; the rows are not written again, because only a write that won may write.
@@ -178,14 +178,14 @@ final readonly class CompleteListing
         $failures = $this->store->failuresOf($project);
         $this->stillNewestSince($project, $readBefore);
 
-        return self::planOverWith($rules, $newer, $failures);
+        return $this->planOverWith($rules, $newer, $failures);
     }
 
     /**
      * @param list<StoredIssue>  $rows
      * @param array<int, string> $failures
      */
-    private static function planOverWith(IntakeRules $rules, array $rows, array $failures): IntakePlan
+    private function planOverWith(IntakeRules $rules, array $rows, array $failures): IntakePlan
     {
         return $rules->planOf(array_map(static fn (StoredIssue $row): QueuedIssue => $row->queued(), $rows), $failures);
     }
