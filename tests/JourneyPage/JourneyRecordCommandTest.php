@@ -77,6 +77,19 @@ final class JourneyRecordCommandTest extends TestCase
         self::assertSame(array_values(array_diff($this->expectedFiles(), [IssueStates::FILE])), $this->recordedFiles());
     }
 
+    public function testAStateFilePathThatCannotBeReplacedKeepsTheRecording(): void
+    {
+        $this->stubGh(self::ANSWERING_GH);
+        mkdir($this->root.'/recorded/'.IssueStates::FILE);
+
+        $run = $this->runRecord();
+
+        self::assertSame(0, $run->getExitCode(), $run->getErrorOutput());
+        self::assertStringContainsString('cannot replace issue-states.json', $run->getErrorOutput());
+        self::assertFileExists($this->root.'/recorded/issues.json');
+        self::assertDirectoryExists($this->root.'/recorded/'.IssueStates::FILE);
+    }
+
     public function testAGhThatFailsOnTheSecondResourceLeavesNoFileInTheFolder(): void
     {
         $this->stubGh("#!/bin/sh\ncase \"\$2\" in */issues\\?*) echo 'gh: HTTP 502' >&2; exit 1;; esac\nprintf '[[]]\\n'\n");

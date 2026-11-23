@@ -36,10 +36,12 @@ done
 
 # bin/pages settles the highlights statuses from this file alone, so its absence keeps them as written and never costs
 # the journey page; it is derived from the issues just recorded, which list pull requests too, merged ones as closed.
-rm -f "$folder/issue-states.json"
+# A path that cannot be replaced (a folder, say) only costs the statuses too, never the recording already in place.
+states="$folder/issue-states.json"
 
-if jq -c '[.[][] | objects | {number, state}]' "$folder/issues.json" > "$partial/issue-states.json"; then
-    mv "$partial/issue-states.json" "$folder/issue-states.json"
-else
+if ! rm -f "$states" 2>/dev/null || [ -e "$states" ]; then
+    echo 'cannot replace issue-states.json: the highlights statuses stay as written' >&2
+elif ! { jq -c '[.[][] | objects | {number, state}]' "$folder/issues.json" > "$partial/issue-states.json" \
+    && mv "$partial/issue-states.json" "$states"; }; then
     echo 'cannot derive issue-states.json: the highlights statuses stay as written' >&2
 fi
