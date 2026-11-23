@@ -91,7 +91,7 @@ final readonly class TestMethodCollector implements Collector
         $name = $method->getName();
         $isTest = str_starts_with($name, 'test') || [] !== $method->getAttributes(Test::class);
 
-        return $method->isPublic() && $isTest && !(str_starts_with($name, 'test') && $this->readsAsSentence(substr($name, 4))) && !$this->isNamedProvider($name, $class);
+        return $method->isPublic() && $isTest && (!str_starts_with($name, 'test') || !$this->readsAsSentence(substr($name, 4))) && !$this->isNamedProvider($name, $class);
     }
 
     /**
