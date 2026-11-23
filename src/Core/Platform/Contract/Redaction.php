@@ -14,13 +14,14 @@ final readonly class Redaction
 
     public const string MASK = "\0";
 
+    // A prefixed shape starts after any character but a letter or digit, since `\b` would miss a token right after `_` (`key_ghp_...`).
     private const string SECRET_SHAPES = '~'
         .'-----BEGIN [A-Z ]*PRIVATE KEY-----.*?(?:-----END [A-Z ]*PRIVATE KEY-----|\z)'
-        .'|\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})'
-        .'|\bsk-[A-Za-z0-9_-]{20,}'
-        .'|\bAKIA[0-9A-Z]{16}\b'
-        .'|\bxox[abprs]-[A-Za-z0-9-]{10,}'
-        .'|\beyJ[\w-]{8,}\.eyJ[\w-]{8,}\.[\w-]+'
+        .'|(?<![A-Za-z0-9])(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})'
+        .'|(?<![A-Za-z0-9])sk-[A-Za-z0-9_-]{20,}'
+        .'|(?<![A-Za-z0-9])AKIA[0-9A-Z]{16}\b'
+        .'|(?<![A-Za-z0-9])xox[abprs]-[A-Za-z0-9-]{10,}'
+        .'|(?<![A-Za-z0-9])eyJ[\w-]{8,}\.eyJ[\w-]{8,}\.[\w-]+'
         .'|\bBearer\s+[A-Za-z0-9._\\~+/=-]{8,}'
         .'~s';
 

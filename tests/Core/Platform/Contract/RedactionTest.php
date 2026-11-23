@@ -23,6 +23,27 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(ListedHeaders::class)]
 final class RedactionTest extends TestCase
 {
+    public function testItRedactsAFineGrainedTokenRightAfterAnUnderscore(): void
+    {
+        $redacted = new Redaction()->redact('fixtures/key_github_pat_'.str_repeat('A', 82).'.txt');
+
+        self::assertSame('fixtures/key_[redacted].txt', $redacted);
+    }
+
+    public function testItRedactsAClassicTokenRightAfterAnUnderscore(): void
+    {
+        $redacted = new Redaction()->redact('fixtures/key_ghp_'.str_repeat('B', 36).'.txt');
+
+        self::assertSame('fixtures/key_[redacted].txt', $redacted);
+    }
+
+    public function testItLeavesAWordThatContainsATokenPrefixAfterALetter(): void
+    {
+        $word = 'xghp_'.str_repeat('a', 30);
+
+        self::assertSame($word, new Redaction()->redact($word));
+    }
+
     public function testItRedactsAHeldCredentialWhereverItAppears(): void
     {
         $redacted = new Redaction()->redact('first key-one, then key-one again', 'key-one');
