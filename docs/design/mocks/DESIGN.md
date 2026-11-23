@@ -147,6 +147,7 @@ Rail: Board, Waiting on you, Projects, Team, History, Settings. New pages live u
 | `project.html` | Projects | Click a project name; breadcrumb back |
 | `add-project.html` | Projects | "Add a project"; search action |
 | `health.html` | Projects | Sub-tab "Health" (shows the broken count); board's CI banner |
+| `journey.html` | Projects | "Open the journey" on a project's page; breadcrumb back to the project. Tokens only: usage against limits is in `team.html#usage-by-project`, the admin area |
 | `add-account.html` | Team | "Add an account"; search action |
 | Notifications | Settings | Its own group: channels, quiet hours, the fixed rule |
 | `components.html` | none | Link at the bottom of Settings, for the people who build pages |

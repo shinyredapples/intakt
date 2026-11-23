@@ -19,6 +19,7 @@ final readonly class ReviewerStops
 {
     private const string FLASH_SUCCESS = 'success';
     private const string FLASH_ERROR = 'error';
+    private const string NO_REVIEWER_RUNS = 'No reviewer runs in this round right now, so nothing was stopped.';
 
     public function __construct(
         private LedgerReviewPages $reviews,
@@ -30,13 +31,23 @@ final readonly class ReviewerStops
     /**
      * @return array{string, string}|null
      */
-    // Null when the ledger shows no running reviewer with this id in a round still in review, so the caller answers that nothing could be stopped.
+    // Null when the round is not in review, or when another reviewer of it still runs but not this one, so the caller answers that there is no such reviewer to stop.
     #[NoDiscard('the flash line is the only report of the press')]
     public function requestStopOf(string $round, string $reviewer): ?array
     {
         $review = $this->reviews->reviewOf($round);
+        $running = $this->runningReviewersOf($review, $round);
 
-        if (!$review instanceof Review || !in_array($reviewer, $this->runningReviewersOf($review, $round) ?? [], true)) {
+        if (!$review instanceof Review || null === $running) {
+            return null;
+        }
+
+        // An error line rather than a 404, because a page opened while the reviewer ran still offers its Stop once every reviewer of the round has finished (D1 of #1784).
+        if ([] === $running) {
+            return [self::FLASH_ERROR, self::NO_REVIEWER_RUNS];
+        }
+
+        if (!in_array($reviewer, $running, true)) {
             return null;
         }
 
@@ -45,7 +56,7 @@ final readonly class ReviewerStops
             return [self::FLASH_ERROR, 'Another press for this review is still running, so nothing was stopped.'];
         }
 
-        return $this->recorded($round, $reviewer)
+        return $this->stopRequestRecorded($round, $reviewer)
             ? [self::FLASH_SUCCESS, 'Asked the reviewer to stop.']
             : [self::FLASH_ERROR, 'The stop request could not be recorded in the ledger.'];
     }
@@ -65,11 +76,11 @@ final readonly class ReviewerStops
 
         // An error line rather than a 404, because the page offers Stop for the whole round in review (also before the first reviewer starts and while the judge works) and a stop request can only reach a reviewer that started.
         if ([] === $running) {
-            return [self::FLASH_ERROR, 'No reviewer runs in this round right now, so nothing was stopped.'];
+            return [self::FLASH_ERROR, self::NO_REVIEWER_RUNS];
         }
 
         // Every request is tried, so one refused append does not leave the other reviewers running.
-        $refused = array_filter($running, fn (string $reviewer): bool => !$this->recorded($round, $reviewer));
+        $refused = array_filter($running, fn (string $reviewer): bool => !$this->stopRequestRecorded($round, $reviewer));
 
         return [] === $refused
             ? [self::FLASH_SUCCESS, sprintf('Asked %d running %s to stop.', count($running), 1 === count($running) ? 'reviewer' : 'reviewers')]
@@ -93,7 +104,7 @@ final readonly class ReviewerStops
         return array_values(array_map(static fn (ReviewerOutcome $outcome): string => $outcome->id, $running));
     }
 
-    private function recorded(string $round, string $reviewer): bool
+    private function stopRequestRecorded(string $round, string $reviewer): bool
     {
         $payload = json_encode(['round' => $round, 'reviewer' => $reviewer], JSON_THROW_ON_ERROR);
 

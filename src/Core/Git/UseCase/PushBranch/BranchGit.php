@@ -120,7 +120,7 @@ final readonly class BranchGit
     private function process(string $repository, array $arguments, array $environment): Process
     {
         try {
-            $call = $this->hardened->callInBareRepository($arguments, $repository);
+            $call = $this->hardened->callInBareRepository($repository, ...$arguments);
         } catch (RepositoryAttributesRefused $refused) {
             throw BranchNotPushed::because($refused->getMessage());
         } catch (RuntimeException) {
@@ -128,7 +128,7 @@ final readonly class BranchGit
             throw BranchNotPushed::because(sprintf('git %s could not be prepared, because the look at its repository was stopped or found no bare repository', $arguments[0] ?? ''));
         }
 
-        return new Process($call->command, $call->directory, [...$call->environment, ...$environment], null, $this->timeoutSeconds);
+        return new Process([...$call->command], $call->directory, [...$call->environment, ...$environment], null, $this->timeoutSeconds);
     }
 
     // Every call goes through this one step, so none leaves the push as a Process exception.
