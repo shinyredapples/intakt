@@ -435,35 +435,6 @@ final class IntakeStoreTest extends KernelTestCase
         });
     }
 
-    // The journal mode is left at SQLite's default, because only there a reader's shared lock lets a write through and refuses its COMMIT.
-    /**
-     * @param callable(IntakeStore, Connection, Connection): void $scenario
-     */
-    private function withAStoreAndAReaderOnOneFile(string $driver, callable $scenario): void
-    {
-        if ('sqlite3' === $driver && !extension_loaded('sqlite3')) {
-            self::markTestSkipped('The sqlite3 extension is not loaded.');
-        }
-
-        $file = (string) tempnam(sys_get_temp_dir(), 'intake');
-        $options = ['driver' => 'sqlite3' === $driver ? 'sqlite3' : 'pdo_sqlite', 'path' => $file];
-        $own = DriverManager::getConnection($options);
-        $reader = DriverManager::getConnection($options);
-        try {
-            $own->executeStatement('PRAGMA busy_timeout=0');
-            $manager = new EntityManager($own, $this->entities->getConfiguration(), new EventManager());
-            new SchemaTool($manager)->createSchema([$manager->getClassMetadata(IntakeValidator::class), $manager->getClassMetadata(StoredIssue::class), $manager->getClassMetadata(TaskFailure::class)]);
-            $store = new IntakeStore($manager);
-            self::assertTrue($store->recordIfStill('alpha', $store->syncStateOf('alpha'), new ListingRows([$this->stored(Issues::task(7))], null)));
-
-            $scenario($store, $own, $reader);
-        } finally {
-            $reader->close();
-            $own->close();
-            unlink($file);
-        }
-    }
-
     public function testAWriteRefusedWhileAnotherWorkersCommitWaitsForThisOneIsNamedAsHeld(): void
     {
         $file = (string) tempnam(sys_get_temp_dir(), 'intake');
@@ -837,6 +808,35 @@ final class IntakeStoreTest extends KernelTestCase
         EmptyDatabase::in(self::getContainer());
         new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
         $this->store = new IntakeStore($entities);
+    }
+
+    // The journal mode is left at SQLite's default, because only there a reader's shared lock lets a write through and refuses its COMMIT.
+    /**
+     * @param callable(IntakeStore, Connection, Connection): void $scenario
+     */
+    private function withAStoreAndAReaderOnOneFile(string $driver, callable $scenario): void
+    {
+        if ('sqlite3' === $driver && !extension_loaded('sqlite3')) {
+            self::markTestSkipped('The sqlite3 extension is not loaded.');
+        }
+
+        $file = (string) tempnam(sys_get_temp_dir(), 'intake');
+        $options = ['driver' => 'sqlite3' === $driver ? 'sqlite3' : 'pdo_sqlite', 'path' => $file];
+        $own = DriverManager::getConnection($options);
+        $reader = DriverManager::getConnection($options);
+        try {
+            $own->executeStatement('PRAGMA busy_timeout=0');
+            $manager = new EntityManager($own, $this->entities->getConfiguration(), new EventManager());
+            new SchemaTool($manager)->createSchema([$manager->getClassMetadata(IntakeValidator::class), $manager->getClassMetadata(StoredIssue::class), $manager->getClassMetadata(TaskFailure::class)]);
+            $store = new IntakeStore($manager);
+            self::assertTrue($store->recordIfStill('alpha', $store->syncStateOf('alpha'), new ListingRows([$this->stored(Issues::task(7))], null)));
+
+            $scenario($store, $own, $reader);
+        } finally {
+            $reader->close();
+            $own->close();
+            unlink($file);
+        }
     }
 
     // The statements are counted from the call under test on, because recording the listing reads the same row with the same lock.

@@ -92,23 +92,6 @@ final class GitHubWorkSourceTest extends KernelTestCase
     private ?Closure $duringHistory = null;
     private ?TrustNotChecked $accessFailure = null;
 
-    protected function setUp(): void
-    {
-        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
-        self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
-        $this->store = new IntakeStore($entities);
-        $this->reads = new RecordedIssueReads();
-        $this->logger = new BufferingLogger();
-    }
-
-    protected function tearDown(): void
-    {
-        $this->logger->cleanLogs();
-        parent::tearDown();
-    }
-
     public function testAWorkerThatWillNotTakeWorkMakesNoForgeCall(): void
     {
         $this->reads->lists([Issues::task(1)]);
@@ -395,6 +378,23 @@ final class GitHubWorkSourceTest extends KernelTestCase
 
         self::assertInstanceOf(TaskNotQueued::class, $refused);
         self::assertSame([], $this->store->failuresOf('alpha'));
+    }
+
+    protected function setUp(): void
+    {
+        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
+        self::assertInstanceOf(EntityManagerInterface::class, $entities);
+        EmptyDatabase::in(self::getContainer());
+        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        $this->store = new IntakeStore($entities);
+        $this->reads = new RecordedIssueReads();
+        $this->logger = new BufferingLogger();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->logger->cleanLogs();
+        parent::tearDown();
     }
 
     private function source(): GitHubWorkSource
