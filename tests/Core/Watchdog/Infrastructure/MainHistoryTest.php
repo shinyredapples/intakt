@@ -147,6 +147,34 @@ final class MainHistoryTest extends TestCase
         self::assertSame(SignatureStatus::OwnerSigned, $this->historyWithPeers([$this->publicKey('owner')], [$this->publicKey('owner')])->signatureOf($signed));
     }
 
+    public function testAKeyGivenAsOwnerAndAsPeerIsAnUnknownKeyWhenTheOwnerCheckIsInterrupted(): void
+    {
+        $this->repository->commitEmpty('Seen');
+        $signed = $this->repository->commitSignedWith($this->privateKey('owner'), 'Owner change');
+        $history = $this->historyWithPeers([$this->publicKey('owner')], [$this->publicKey('owner')]);
+        $path = $this->interruptOwnerChecks();
+
+        try {
+            self::assertSame(SignatureStatus::UnknownKey, $history->signatureOf($signed));
+        } finally {
+            putenv('PATH='.$path);
+        }
+    }
+
+    public function testAPeerKeyStaysPeerSignedBehindTheInterruptingProgramWhenNoOwnerKeyIsAskedFor(): void
+    {
+        $this->repository->commitEmpty('Seen');
+        $signed = $this->repository->commitSignedWith($this->privateKey('peer'), 'Peer merge');
+        $history = $this->historyWithPeers([], [$this->publicKey('peer')]);
+        $path = $this->interruptOwnerChecks();
+
+        try {
+            self::assertSame(SignatureStatus::PeerSigned, $history->signatureOf($signed));
+        } finally {
+            putenv('PATH='.$path);
+        }
+    }
+
     public function testAMalformedPeerKeyIsRefusedNamingItAsAPeerKeyAndItsPosition(): void
     {
         try {
@@ -821,6 +849,21 @@ final class MainHistoryTest extends TestCase
         $script = "#!/bin/sh\ncase \" \$* \" in\n    *\" ".$command." \"*)\n        printf '%s\\n' ".escapeshellarg($entry).' > '.$shallow."\n        ".$git." \"\$@\"\n        status=\$?\n        rm -f ".$shallow."\n        exit \$status\n        ;;\n    *) exec ".$git." \"\$@\" ;;\nesac\n";
         file_put_contents($bin.'/git', $script);
         chmod($bin.'/git', 0o700);
+        $path = (string) getenv('PATH');
+        putenv('PATH='.$bin.':'.$path);
+
+        return $path;
+    }
+
+    // An ssh-keygen in front of the real one kills itself when asked for the owner principal, because only a signal forces an owner check that ends without an answer; the search path to restore is returned.
+    private function interruptOwnerChecks(): string
+    {
+        $bin = $this->keys.'/interrupting-bin';
+        mkdir($bin);
+        $sshKeygen = escapeshellarg((string) new ExecutableFinder()->find('ssh-keygen'));
+        $script = "#!/bin/sh\ncase \" \$* \" in\n    *\" -I owner \"*) kill -TERM \$\$ ;;\nesac\nexec ".$sshKeygen." \"\$@\"\n";
+        file_put_contents($bin.'/ssh-keygen', $script);
+        chmod($bin.'/ssh-keygen', 0o700);
         $path = (string) getenv('PATH');
         putenv('PATH='.$bin.':'.$path);
 

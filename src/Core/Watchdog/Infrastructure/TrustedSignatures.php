@@ -22,6 +22,7 @@ final readonly class TrustedSignatures
     private const array SIGNED_AS = [self::OWNER => SignatureStatus::OwnerSigned, self::PEER => SignatureStatus::PeerSigned];
 
     private const string PROGRAM = 'ssh-keygen';
+    private const float TIMEOUT_SECONDS = 60;
 
     /** @var array<string, list<string>> */
     private array $keys;
@@ -84,11 +85,16 @@ final readonly class TrustedSignatures
 
     private function verifiedSigner(string $signers, string $signatureFile, string $payload): SignatureStatus
     {
-        foreach (self::SIGNED_AS as $principal => $status) {
-            $command = [self::PROGRAM, '-Y', 'verify', '-f', $signers, '-I', $principal, '-n', self::NAMESPACE, '-s', $signatureFile];
-            if ([] !== $this->keys[$principal] && $this->verifies($command, $payload)) {
-                return $status;
+        try {
+            foreach (self::SIGNED_AS as $principal => $status) {
+                $command = [self::PROGRAM, '-Y', 'verify', '-f', $signers, '-I', $principal, '-n', self::NAMESPACE, '-s', $signatureFile];
+                if ([] !== $this->keys[$principal] && $this->verifies($command, $payload)) {
+                    return $status;
+                }
             }
+        } catch (RuntimeException) {
+            // Fail closed for every class: an owner check that timed out, was killed or did not start says nothing about the owner's key, so a later peer match must not hide the owner's notice.
+            return SignatureStatus::UnknownKey;
         }
 
         return SignatureStatus::UnknownKey;
@@ -96,16 +102,11 @@ final readonly class TrustedSignatures
 
     /**
      * @param list<string> $command
+     *
+     * @throws RuntimeException
      */
     private function verifies(array $command, string $payload): bool
     {
-        $check = new Process($command, null, ['SSH_ASKPASS' => false, 'SSH_ASKPASS_REQUIRE' => 'never'], $payload, MainHistory::TIMEOUT_SECONDS);
-
-        try {
-            return 0 === $check->run();
-        } catch (RuntimeException) {
-            // Fail closed: a check that timed out or did not start proves no trusted key signed, so the commit is a violation.
-            return false;
-        }
+        return 0 === new Process($command, null, ['SSH_ASKPASS' => false, 'SSH_ASKPASS_REQUIRE' => 'never'], $payload, self::TIMEOUT_SECONDS)->run();
     }
 }

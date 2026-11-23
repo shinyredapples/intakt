@@ -19,8 +19,8 @@ use Symfony\Component\Process\Process;
 
 final readonly class MainHistory implements CommitHistory
 {
-    // One limit for every git and ssh-keygen call, because a hung call must not hold the watchdog forever.
-    public const float TIMEOUT_SECONDS = 60;
+    // One limit for every git call, because a hung call must not hold the watchdog forever.
+    private const float TIMEOUT_SECONDS = 60;
 
     // The full ref, because a tag or a remote branch named main must not stand in for the branch.
     private const string MAIN = 'refs/heads/main';
