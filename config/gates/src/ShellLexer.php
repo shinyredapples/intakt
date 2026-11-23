@@ -163,10 +163,12 @@ final class ShellLexer
 
         $scope = $this->substitutions--;
 
-        if (isset($this->pendingDocuments[$scope])) {
-            $this->pendingDocuments[$scope - 1] = [...$this->pendingDocuments[$scope - 1] ?? [], ...$this->pendingDocuments[$scope]];
-            unset($this->pendingDocuments[$scope]);
+        // Because copying the outer queue on every close would make many substitutions on one line quadratic, the inner documents are appended to it in place.
+        foreach ($this->pendingDocuments[$scope] ?? [] as $document) {
+            $this->pendingDocuments[$scope - 1][] = $document;
         }
+
+        unset($this->pendingDocuments[$scope]);
 
         return $frame;
     }
@@ -217,11 +219,23 @@ final class ShellLexer
 
         return match ($char) {
             '\\' => min($offset + 2, $this->literals->length),
-            "'" => $this->literals->afterSingleQuoted($offset + 1),
+            "'" => $this->insideDoubleQuotes() ? $offset + 1 : $this->literals->afterSingleQuoted($offset + 1),
             '`' => $this->literals->afterEscapedText($offset + 1, '`'),
             '"' => $this->afterOpenedFrame($offset + 1, self::STRING),
             default => '{' === ($this->literals->source[$offset + 1] ?? '') ? $this->afterOpenedFrame($offset + 2, self::PARAMETER) : $this->literals->afterExpansion($offset),
         };
+    }
+
+    // Because bash reads a `'` in a `${ }` inside a `"..."` string as a plain character, as in `"${message:-don't stop}"`, while a `$( )` starts its quoting afresh.
+    private function insideDoubleQuotes(): bool
+    {
+        $index = count($this->frames) - 1;
+
+        while ($index >= 0 && self::PARAMETER === $this->frames[$index]) {
+            --$index;
+        }
+
+        return self::STRING === ($this->frames[$index] ?? null);
     }
 
     private function afterOpenedFrame(int $offset, int $frame): int

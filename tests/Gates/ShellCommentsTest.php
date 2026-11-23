@@ -81,7 +81,10 @@ final class ShellCommentsTest extends TestCase
         yield 'a comment in a substitution in a string in a parameter default' => ["value=\"\${a:-\"\$(date # TODO later\n)\"}\" # FIXME later\n", [1 => 'TODO', 2 => 'FIXME']];
         yield 'a comment after a case whose pattern is the word case' => ["x=\"\$(case x in\n  case) :;;\nesac)\"\n# TODO later\n", [4 => 'TODO']];
         yield 'a comment after a case whose pattern list starts with the word case' => ["case x in\n  case | y) (true) ;;\nesac\n# TODO later\n", [4 => 'TODO']];
-        yield 'a comment in a case nested in a case arm' => ["case x in\n  x) case y in\n       y) # TODO later\n          ;;\n     esac ;;\nesac\n", [3 => 'TODO']];
+        yield 'a comment after an apostrophe in a parameter default in a string' => ["printf '%s\\n' \"\${message:-don't stop}\"\n# TODO later\n", [2 => 'TODO']];
+        yield 'a comment after an apostrophe in a nested parameter default in a string' => ["echo \"\${a:-\${b:-it's}}\"\n# TODO later\n", [2 => 'TODO']];
+        yield 'a comment after a quoted default in a substitution in a string' => ["echo \"\$(echo \${a:-'}'})\"\n# TODO later\n", [2 => 'TODO']];
+        yield 'a comment in a case nested in a case arm' =>["case x in\n  x) case y in\n       y) # TODO later\n          ;;\n     esac ;;\nesac\n", [3 => 'TODO']];
     }
 
     /**
@@ -180,6 +183,14 @@ final class ShellCommentsTest extends TestCase
 
         self::assertLessThan(self::LINEAR_GROWTH_BOUND, $this->growthOf($script));
         self::assertSame([1 => 'TODO'], $this->markersOn($script(1000)));
+    }
+
+    public function testManyHereDocumentsInSubstitutionsOnOneLineAreScannedInLinearTime(): void
+    {
+        $script = static fn (int $size): string => 'x='.str_repeat('"$(cat <<EOF)"', $size)."\n".str_repeat("EOF\n", $size)."# TODO later\n";
+
+        self::assertLessThan(self::LINEAR_GROWTH_BOUND, $this->growthOf($script));
+        self::assertSame([1002 => 'TODO'], $this->markersOn($script(1000)));
     }
 
     /**
