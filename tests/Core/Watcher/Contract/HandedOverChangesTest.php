@@ -6,12 +6,15 @@ namespace Intakt\Tests\Core\Watcher\Contract;
 
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\PayloadFields;
 use Intakt\Core\Watcher\Contract\HandedOverChanges;
 use Intakt\Tests\Core\Git\UseCase\PushBranch\RecordingLedger;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(HandedOverChanges::class)]
+#[UsesClass(PayloadFields::class)]
 final class HandedOverChangesTest extends TestCase
 {
     private const string PULL = 'https://github.com/acme/widgets/pull/7';

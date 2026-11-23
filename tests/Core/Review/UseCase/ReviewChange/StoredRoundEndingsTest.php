@@ -13,10 +13,12 @@ use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Intakt\Core\Review\Contract\JudgingFailed;
 use Intakt\Core\Review\Contract\RoundEnding;
+use Intakt\Core\Review\Contract\RoundEndingLookup;
 use Intakt\Core\Review\Contract\RoundEnds;
 use Intakt\Core\Review\UseCase\JudgeRound\FailedJudgings;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRound;
 use Intakt\Core\Review\UseCase\ReviewChange\RoundEndReasons;
+use Intakt\Core\Review\UseCase\ReviewChange\StoredRoundEndingLookup;
 use Intakt\Core\Review\UseCase\ReviewChange\StoredRoundEndings;
 use Intakt\Core\Review\UseCase\ReviewChange\UpperWait;
 use Intakt\Tests\Support\StoredSerializerFactory;
@@ -29,6 +31,7 @@ use Symfony\Component\Messenger\Transport\Receiver\ListableReceiverInterface;
 use Symfony\Component\Uid\Uuid;
 
 #[CoversClass(StoredRoundEndings::class)]
+#[CoversClass(StoredRoundEndingLookup::class)]
 #[UsesClass(RoundEnding::class)]
 #[UsesClass(RoundEndReasons::class)]
 #[UsesClass(UpperWait::class)]
@@ -121,11 +124,38 @@ final class StoredRoundEndingsTest extends TestCase
         self::assertNull($ending->endedAt);
     }
 
+    public function testTheEndingsOfManyUnjudgedRoundsListTheFailureTransportAndTheLedgerOnce(): void
+    {
+        $transport = $this->createMock(ListableReceiverInterface::class);
+        $transport->expects(self::once())->method('all')->willReturn([new Envelope(new JudgeRound('round-3'))]);
+        $ledger = $this->createMock(Ledger::class);
+        $ledger->expects(self::once())->method('readOfKind')->with(LedgerEventKind::JudgingFailed)->willReturn($this->judgingFailuresOf(['round-2']));
+        $lookup = $this->lookupOn($transport, $ledger, '2026-10-28T12:00:00+00:00');
+        $startedAt = new DateTimeImmutable('2026-10-28T12:00:00+00:00');
+
+        self::assertNull($lookup->ofUnjudged('round-1', 2, $startedAt));
+        self::assertSame(RoundEnds::JudgingFailed, $lookup->ofUnjudged('round-2', 2, $startedAt)?->end);
+        self::assertSame(RoundEnds::JudgingFailed, $lookup->ofUnjudged('round-3', 2, $startedAt)?->end);
+    }
+
+    public function testRoundsTheLedgerRecordsAsFailedEndWithoutListingTheFailureTransport(): void
+    {
+        $transport = $this->createMock(ListableReceiverInterface::class);
+        $transport->expects(self::never())->method('all');
+        $ledger = self::createStub(Ledger::class);
+        $ledger->method('readOfKind')->willReturn($this->judgingFailuresOf(['round-1', 'round-2']));
+        $lookup = $this->lookupOn($transport, $ledger, '2026-10-28T12:00:00+00:00');
+        $startedAt = new DateTimeImmutable('2026-10-28T12:00:00+00:00');
+
+        self::assertSame(RoundEnds::JudgingFailed, $lookup->ofUnjudged('round-1', 2, $startedAt)?->end);
+        self::assertSame(RoundEnds::JudgingFailed, $lookup->ofUnjudged('round-2', 2, $startedAt)?->end);
+    }
+
     /**
      * @param list<string>   $recorded
      * @param list<Envelope> $parked
      */
-    private function endingsAt(string $now, array $recorded = [], array $parked = []): StoredRoundEndings
+    private function endingsAt(string $now, array $recorded = [], array $parked = []): RoundEndingLookup
     {
         $ledger = self::createStub(Ledger::class);
         $ledger->method('readOfKind')->willReturn($this->judgingFailuresOf($recorded));
@@ -147,11 +177,16 @@ final class StoredRoundEndingsTest extends TestCase
     /**
      * @param list<Envelope> $parked
      */
-    private function endingsReading(Ledger $ledger, string $now, array $parked = []): StoredRoundEndings
+    private function endingsReading(Ledger $ledger, string $now, array $parked = []): RoundEndingLookup
     {
         $transport = self::createStub(ListableReceiverInterface::class);
         $transport->method('all')->willReturn($parked);
 
-        return new StoredRoundEndings(new FailedJudgings($transport, $ledger, new LedgerPayloads(StoredSerializerFactory::create())), new MockClock($now), new UpperWait(4, 2));
+        return $this->lookupOn($transport, $ledger, $now);
+    }
+
+    private function lookupOn(ListableReceiverInterface $transport, Ledger $ledger, string $now): RoundEndingLookup
+    {
+        return new StoredRoundEndings(new FailedJudgings($transport, $ledger, new LedgerPayloads(StoredSerializerFactory::create())), new MockClock($now), new UpperWait(4, 2))->lookup();
     }
 }
