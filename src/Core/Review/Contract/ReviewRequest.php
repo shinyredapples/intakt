@@ -10,6 +10,8 @@ final readonly class ReviewRequest
         public Checkout $checkout,
         public ReviewBrief $brief,
         public ReviewerConversation $conversation,
+        // Null on an install without a container engine, because such an install reviews in the app's own process.
+        public ?JobReview $job = null,
     ) {
     }
 }

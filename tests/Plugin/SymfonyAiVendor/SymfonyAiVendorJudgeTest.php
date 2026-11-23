@@ -18,6 +18,7 @@ use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
+use Intakt\Core\Review\Contract\JobReviewer;
 use Intakt\Core\Review\Contract\JudgedFinding;
 use Intakt\Core\Review\Contract\Judgement;
 use Intakt\Core\Review\Contract\JudgeRequest;
@@ -172,7 +173,7 @@ final class SymfonyAiVendorJudgeTest extends KernelTestCase
 
         $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
 
-        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms, new NoCooldowns(), new NullLogger()), $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), $usage, $limit, new MockClock('2026-10-27 12:00:00 UTC'), self::createStub(ReviewServerAccesses::class));
+        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms, new NoCooldowns(), new NullLogger()), $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), $usage, $limit, new MockClock('2026-10-27 12:00:00 UTC'), self::createStub(ReviewServerAccesses::class), self::createStub(JobReviewer::class));
     }
 
     private function request(): JudgeRequest

@@ -80,6 +80,17 @@ final readonly class UsageLedger
         $this->record(new UsageSettled($reservation->call, 'settled', $usages));
     }
 
+    // A review job's usage, read from what its CLI reported, because no platform call of the app's own carries it; with no account, because the job holds no account credential.
+    /**
+     * @param non-empty-list<TokenUsageInterface> $usage
+     *
+     * @throws UsageNotRecorded
+     */
+    public function settleReported(UsageReservation $reservation, array $usage): void
+    {
+        $this->record(new UsageSettled($reservation->call, 'settled', array_map(fn (TokenUsageInterface $part): TokenUsageRow => $this->asRow($part, null), $usage)));
+    }
+
     /**
      * @throws UsageNotRecorded
      */

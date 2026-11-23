@@ -13,6 +13,7 @@ use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
+use Intakt\Core\Job\Contract\ContainerEngine;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
@@ -129,6 +130,8 @@ final readonly class RoundFixture
         private TestContainer $container,
         private ProjectModes $modes = new ConfiguredProjectModes([]),
         private string $checkoutRoot = __DIR__,
+        // None by default, as on the docker compose demo, so a review runs in the app's own process.
+        private ContainerEngine $engine = new ContainerEngine(null),
     ) {
         $entities = $container->get('doctrine.orm.entity_manager');
         $this->entities = $entities;
@@ -255,7 +258,7 @@ final readonly class RoundFixture
 
     public function worker(EntityManagerInterface $entities, Vendor $vendor, Ledger $ledger): ReviewWithReviewerHandler
     {
-        return new ReviewWithReviewerHandler($this->leases($entities, $ledger), $vendor, $this->rounds($entities, $ledger), new GoalpostRule(), $this->liveProgress($entities));
+        return new ReviewWithReviewerHandler($this->leases($entities, $ledger), $vendor, $this->rounds($entities, $ledger), new GoalpostRule(), $this->liveProgress($entities), $this->engine);
     }
 
     // The fixture's one lock store, because the workers of one install share theirs and a worker on its own store would never find the publication taken.
