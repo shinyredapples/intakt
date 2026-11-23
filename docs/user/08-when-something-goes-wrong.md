@@ -83,11 +83,19 @@ You set Intakt up on a small server in the hall and type its address into the la
 
 ## The demo run did not play
 
-You press **Play the demo run** and the line under the button changes to "The demo run did not play." with a reason.
+Before you press anything, `/demo` already says when the run cannot play: instead of **Play the demo run** it shows one sentence with the reason, such as "No demo recording is installed" or "The demo run is in the ledger", and what to do about it.
 
-- **What you see:** that line, with a short reason such as "The demo recording could not be read."
+You press **Play the demo run**, the page comes back with "The demo run is starting" above the title, and then that line changes to "The demo run did not play." with a reason.
+
+- **What you see:** that line, with a short reason such as "The demo recording could not be read." or "An earlier Play is playing the run or has already played it."
 - **Why:** the reason says it. The details, with file names, are only in the install's log.
-- **What to do:** fix what the reason names. If you removed the demo project with `intakt:demo:remove`, press Play again: it creates the project again. If the page still shows the completed run after a removal, reload it. A page that opened after the refusal does not show it.
+- **What to do:** fix what the reason names. If an earlier Play came first, follow its run in the review list. If you removed the demo project with `intakt:demo:remove`, press Play again: it creates the project again. If the page still shows the completed run after a removal, reload it. A page that opened after the refusal does not show it.
+
+## A page says "The form token is missing or wrong"
+
+- **What you see:** after pressing a button, a page with that sentence and "Go back, reload the page and press the button again."
+- **Why:** the dashboard could not match the press to the page that showed the button, for example a page opened in another browser session. Nothing happened.
+- **What to do:** do what it says: go back, reload, press again.
 
 More cases, and the exact wording of every reason, are in the [complete reference](../reference/user-manual.md).
 
