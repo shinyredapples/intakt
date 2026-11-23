@@ -16,7 +16,7 @@ When a check reuses a dependency snapshot:
 
 - Only for a gate with a dependency step: the PHP gate without a configured command. A configured command, or a language without plugin support, gets no snapshot and installs itself.
 - The key comes from the lock files of the tree the job installs in: the head's, or, for a branch behind main, the head's only where main's blob is the same; otherwise the check does not reuse one. The platform the probe job reports is part of the key, and a failed probe means no reuse.
-- A hit mounts the leased snapshot read-only and the job copies it into the check's own clone. A miss runs the install job, saves its install under the key and leases it; an install that is refused, busy or fails leaves the check to install itself. A changed lock file gives another key, so it misses.
+- A hit mounts the leased snapshot read-only and the job copies it into the check's own clone. A miss runs the install job, saves its install under the key and leases it; an install that is refused, busy or fails leaves the check to install itself. A changed lock file gives another key, so it misses the snapshot saved for the earlier lock files, but reuses a snapshot already saved under its own key.
 - Before copying, the job checks the lock files' blobs and runs the platform probe again; a mismatch, or a tree that already holds an entry of the snapshot, copies nothing.
 - The generated files (for Composer the autoloader) are still made per check, from the check's own tree.
 - `RunCheckJob` holds the lease until the check job returns or throws, so no eviction removes a mounted snapshot.
