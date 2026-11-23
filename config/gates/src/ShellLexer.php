@@ -147,20 +147,6 @@ final class ShellLexer
         return '$' === $this->source[$offset] && '{' === ($this->source[$offset + 1] ?? '');
     }
 
-    private function afterOpening(int $frame, int $offset): int
-    {
-        $this->frames[] = $frame;
-
-        return $offset;
-    }
-
-    private function afterSingleQuoted(int $offset): int
-    {
-        $end = strpos($this->source, "'", $offset);
-
-        return false === $end ? $this->length : $end + 1;
-    }
-
     private function expansionKindAt(int $offset): int
     {
         $quoted = in_array(array_last($this->frames), self::QUOTED_FRAMES, true);
@@ -180,6 +166,20 @@ final class ShellLexer
         }
 
         return str_contains(self::PATTERN_OPERATORS, $this->source[$offset] ?? '}');
+    }
+
+    private function afterOpening(int $frame, int $offset): int
+    {
+        $this->frames[] = $frame;
+
+        return $offset;
+    }
+
+    private function afterSingleQuoted(int $offset): int
+    {
+        $end = strpos($this->source, "'", $offset);
+
+        return false === $end ? $this->length : $end + 1;
     }
 
     private function afterAnsiCQuoted(int $offset): int
