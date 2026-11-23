@@ -33,7 +33,6 @@ final class RecordedPullRequestBranches implements PullRequestBranches
             ($this->during)();
         }
 
-
         if ($this->failure instanceof ForgeReadFailed) {
             throw $this->failure;
         }
