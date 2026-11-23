@@ -22,7 +22,6 @@ final readonly class TrustedSignatures
     private const array SIGNED_AS = [self::OWNER => SignatureStatus::OwnerSigned, self::PEER => SignatureStatus::PeerSigned];
 
     private const string PROGRAM = 'ssh-keygen';
-    private const float TIMEOUT_SECONDS = 60;
     private const int EXIT_VERIFIED = 0;
     private const int EXIT_REFUSED = 255;
 
@@ -40,10 +39,11 @@ final readonly class TrustedSignatures
         array $peerKeys,
         private Filesystem $filesystem,
     ) {
-        $this->keys = [
-            self::OWNER => array_map(static fn (string $line, int $index): string => OwnerKey::fromLine($line, self::OWNER, $index + 1)->typeAndKey, $ownerKeys, array_keys($ownerKeys)),
-            self::PEER => array_map(static fn (string $line, int $index): string => OwnerKey::fromLine($line, self::PEER, $index + 1)->typeAndKey, $peerKeys, array_keys($peerKeys)),
-        ];
+        $owner = array_map(static fn (string $line, int $index): string => OwnerKey::fromLine($line, self::OWNER, $index + 1)->typeAndKey, $ownerKeys, array_keys($ownerKeys));
+        $peer = array_map(static fn (string $line, int $index): string => OwnerKey::fromLine($line, self::PEER, $index + 1)->typeAndKey, $peerKeys, array_keys($peerKeys));
+
+        // A key the owner gave is never a peer key, because ssh-keygen ends with 255 for a refused signature and for a fatal error alike, so only a peer key that cannot be the owner's makes a peer match that hides no owner notice.
+        $this->keys = [self::OWNER => $owner, self::PEER => array_values(array_diff($peer, $owner))];
     }
 
     /**
@@ -109,9 +109,9 @@ final readonly class TrustedSignatures
      */
     private function verifies(array $command, string $payload): bool
     {
-        $exitCode = new Process($command, null, ['SSH_ASKPASS' => false, 'SSH_ASKPASS_REQUIRE' => 'never'], $payload, self::TIMEOUT_SECONDS)->run();
+        $exitCode = new Process($command, null, ['SSH_ASKPASS' => false, 'SSH_ASKPASS_REQUIRE' => 'never'], $payload, MainHistory::TIMEOUT_SECONDS)->run();
 
-        // Only the program's own two exits are answers, because a program that could not be launched ends with a code as well (126 or 127) and that must not read as a refused signature.
+        // Only the program's own two exits count, because a program that could not be launched ends with a code as well (126 or 127); 255 also ends a fatal error, which is why the peer keys hold no owner key.
         return match ($exitCode) {
             self::EXIT_VERIFIED => true,
             self::EXIT_REFUSED => false,

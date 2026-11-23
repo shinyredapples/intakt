@@ -44,12 +44,13 @@ final readonly class OwnerKey
      */
     public static function fromLine(string $line, string $signer, int $position): self
     {
-        if (1 !== preg_match(self::PUBLIC_KEY, $line, $parts) || !self::isAWholeKey((string) base64_decode($parts['key'], true), $parts['type'])) {
+        $blob = 1 === preg_match(self::PUBLIC_KEY, $line, $parts) ? (string) base64_decode($parts['key'], true) : '';
+        if ('' === $blob || !self::isAWholeKey($blob, $parts['type'])) {
             throw OwnerKeyRefused::notAPublicKey($signer, $position);
         }
 
-        // Without the comment, because only the type and the key bytes decide who signed.
-        return new self($parts['type'].' '.$parts['key']);
+        // Without the comment and encoded anew, because only the type and the key bytes decide who signed, and the unused bits of a last base64 digit would let one key read as two.
+        return new self($parts['type'].' '.base64_encode($blob));
     }
 
     // The whole key, because a key cut short or with bytes left over would be accepted here and then fail every check later.

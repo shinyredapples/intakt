@@ -245,6 +245,59 @@ final class MainHistoryTest extends TestCase
         }
     }
 
+    public function testAKeyGivenAsOwnerAndAsPeerIsAnUnknownKeyWhenTheOwnerCheckEndsInAFatalErrorAndThePeerCheckAnswersYes(): void
+    {
+        $this->repository->commitEmpty('Seen');
+        $signed = $this->repository->commitSignedWith($this->privateKey('owner'), 'Owner change');
+        $history = $this->historyWithPeers([$this->publicKey('owner')], [$this->publicKey('owner')]);
+        $exits = $this->keys.'/owner-exits';
+        $path = $this->endOwnerChecksWith($this->failOwnerChecksFatally($exits), 'exit 0');
+
+        try {
+            self::assertSame(SignatureStatus::UnknownKey, $history->signatureOf($signed));
+            self::assertSame("255\n", file_get_contents($exits));
+        } finally {
+            putenv('PATH='.$path);
+        }
+    }
+
+    public function testAKeyGivenAsOwnerAndAsPeerInAnotherBase64SpellingIsAnUnknownKeyWhenTheOwnerCheckEndsInAFatalError(): void
+    {
+        $this->repository->commitEmpty('Seen');
+        $privateKey = $this->privateKey('owner', ['-t', 'ecdsa', '-b', '256']);
+        $signed = $this->repository->commitSignedWith($privateKey, 'Owner change');
+        [$type, $key] = explode(' ', $this->publicKey('owner'));
+        $digits = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+        $last = strpos($key, '=') - 1;
+        $respelled = substr_replace($key, $digits[strpos($digits, $key[$last]) ^ 1], $last, 1);
+        self::assertSame(base64_decode($key, true), base64_decode($respelled, true));
+        $history = $this->historyWithPeers([$type.' '.$key], [$type.' '.$respelled]);
+        $exits = $this->keys.'/owner-exits';
+        $path = $this->endOwnerChecksWith($this->failOwnerChecksFatally($exits), 'exit 0');
+
+        try {
+            self::assertSame(SignatureStatus::UnknownKey, $history->signatureOf($signed));
+        } finally {
+            putenv('PATH='.$path);
+        }
+    }
+
+    public function testAPeerKeyStaysPeerSignedWhenTheOwnerCheckForAnotherKeyEndsInAFatalError(): void
+    {
+        $this->repository->commitEmpty('Seen');
+        $signed = $this->repository->commitSignedWith($this->privateKey('peer'), 'Peer merge');
+        $history = $this->historyWithPeers([$this->publicKey('owner')], [$this->publicKey('peer')]);
+        $exits = $this->keys.'/owner-exits';
+        $path = $this->endOwnerChecksWith($this->failOwnerChecksFatally($exits));
+
+        try {
+            self::assertSame(SignatureStatus::PeerSigned, $history->signatureOf($signed));
+            self::assertSame("255\n", file_get_contents($exits));
+        } finally {
+            putenv('PATH='.$path);
+        }
+    }
+
     public function testAMalformedPeerKeyIsRefusedNamingItAsAPeerKeyAndItsPosition(): void
     {
         try {
@@ -925,19 +978,25 @@ final class MainHistoryTest extends TestCase
         return $path;
     }
 
-    // An ssh-keygen in front of the real one kills itself when asked for the owner principal, because only a signal forces an owner check that ends without an answer; the search path to restore is returned.
+    // An ssh-keygen in front of the real one kills itself when asked for the owner principal, because a real program is hard to interrupt on cue; the search path to restore is returned.
     private function interruptOwnerChecks(): string
     {
         return $this->endOwnerChecksWith('kill -TERM $$');
     }
 
-    // An ssh-keygen in front of the real one runs the given shell line when asked for the owner principal and the real program ($program) otherwise, because a launch failure is an exit code and only a program in front forces it on the owner check alone; the search path to restore is returned.
-    private function endOwnerChecksWith(string $shellLine): string
+    // The real program's fatal error for a signature file it cannot read, recorded with its exit code, because that error ends with 255 as a refused signature does.
+    private function failOwnerChecksFatally(string $exits): string
+    {
+        return '"$program" -Y verify -f '.escapeshellarg($this->keys.'/missing-signers').' -I owner -n git -s '.escapeshellarg($this->keys.'/missing-signature').' </dev/null; status=$?; echo $status >> '.escapeshellarg($exits).'; exit $status';
+    }
+
+    // An ssh-keygen in front of the real one runs the given shell line when asked for the owner principal and the other line (the real program, $program, by default) otherwise, because only a program in front forces an end on the owner check alone; the search path to restore is returned.
+    private function endOwnerChecksWith(string $shellLine, string $otherwise = 'exec "$program" "$@"'): string
     {
         $bin = $this->keys.'/owner-check-bin';
         mkdir($bin);
         $sshKeygen = escapeshellarg((string) new ExecutableFinder()->find('ssh-keygen'));
-        $script = "#!/bin/sh\nprogram=".$sshKeygen."\ncase \" \$* \" in\n    *\" -I owner \"*) ".$shellLine." ;;\nesac\nexec \"\$program\" \"\$@\"\n";
+        $script = "#!/bin/sh\nprogram=".$sshKeygen."\ncase \" \$* \" in\n    *\" -I owner \"*) ".$shellLine." ;;\nesac\n".$otherwise."\n";
         file_put_contents($bin.'/ssh-keygen', $script);
         chmod($bin.'/ssh-keygen', 0o700);
         $path = (string) getenv('PATH');
