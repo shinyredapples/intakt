@@ -67,11 +67,6 @@ final class JobReviewVendorTest extends TestCase
 {
     private InMemoryLedger $ledger;
 
-    protected function setUp(): void
-    {
-        $this->ledger = new InMemoryLedger();
-    }
-
     public function testAJobApproveWithoutAReadOfTheCheckoutIsBlockedAsAnUnreadApproval(): void
     {
         $verdict = $this->reviewed(new JobVerdict($this->approve(), false, [$this->spent()]));
@@ -112,6 +107,11 @@ final class JobReviewVendorTest extends TestCase
 
         $unsettled = $this->ledger->payloads()[1];
         self::assertSame(['unsettled', JobReportedNoUsage::class, []], [$unsettled['phase'], $unsettled['failure'], $unsettled['usages']]);
+    }
+
+    protected function setUp(): void
+    {
+        $this->ledger = new InMemoryLedger();
     }
 
     private function approve(): Verdict

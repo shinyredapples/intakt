@@ -94,32 +94,6 @@ final class ReviewerInJobTest extends TestCase
     /** @var array<string, string> */
     private array $seen = [];
 
-    protected function setUp(): void
-    {
-        if (0 === posix_geteuid()) {
-            self::markTestSkipped('This user ignores file permissions (superuser), so no checkout is read-only.');
-        }
-        $this->folder = sys_get_temp_dir().'/intakt-reviewer-in-job-'.bin2hex(random_bytes(6));
-        new Filesystem()->mkdir([$this->folder.'/source', $this->folder.'/bin', $this->folder.'/output', $this->folder.'/job']);
-        $this->git($this->folder.'/source', 'init', '--quiet', '--initial-branch=main');
-        $this->older = $this->commit('src/Cart.php', "<?php\n");
-        $this->head = $this->commit('src/Cart.php', "<?php\n// changed\n");
-        // A git worktree, because the round's checkout is one and the job's script refuses its .git file.
-        $this->worktree = $this->folder.'/worktree';
-        $this->git($this->folder.'/source', 'worktree', 'add', '--quiet', '--detach', $this->worktree, $this->head);
-    }
-
-    protected function tearDown(): void
-    {
-        if ('' === $this->folder) {
-            return;
-        }
-        foreach ($this->mounted as $clone) {
-            $this->changeModes($clone, static fn (int $mode): int => $mode | 0o200);
-        }
-        new Filesystem()->remove($this->folder);
-    }
-
     public function testTheReviewersVerdictFromTheJobIsTheReviewsVerdict(): void
     {
         $verdict = $this->reviewInJob($this->answering("Looks right.\n\n```json\n".self::APPROVE."\n```"));
@@ -243,6 +217,32 @@ final class ReviewerInJobTest extends TestCase
 
         self::assertSame([], $this->mounted);
         self::assertSame([], array_values(array_diff((array) scandir($this->folder.'/clones'), ['.', '..'])));
+    }
+
+    protected function setUp(): void
+    {
+        if (0 === posix_geteuid()) {
+            self::markTestSkipped('This user ignores file permissions (superuser), so no checkout is read-only.');
+        }
+        $this->folder = sys_get_temp_dir().'/intakt-reviewer-in-job-'.bin2hex(random_bytes(6));
+        new Filesystem()->mkdir([$this->folder.'/source', $this->folder.'/bin', $this->folder.'/output', $this->folder.'/job']);
+        $this->git($this->folder.'/source', 'init', '--quiet', '--initial-branch=main');
+        $this->older = $this->commit('src/Cart.php', "<?php\n");
+        $this->head = $this->commit('src/Cart.php', "<?php\n// changed\n");
+        // A git worktree, because the round's checkout is one and the job's script refuses its .git file.
+        $this->worktree = $this->folder.'/worktree';
+        $this->git($this->folder.'/source', 'worktree', 'add', '--quiet', '--detach', $this->worktree, $this->head);
+    }
+
+    protected function tearDown(): void
+    {
+        if ('' === $this->folder) {
+            return;
+        }
+        foreach ($this->mounted as $clone) {
+            $this->changeModes($clone, static fn (int $mode): int => $mode | 0o200);
+        }
+        new Filesystem()->remove($this->folder);
     }
 
     private function git(string $directory, string ...$arguments): string
