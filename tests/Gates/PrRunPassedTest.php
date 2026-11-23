@@ -22,7 +22,7 @@ final class PrRunPassedTest extends SandboxTestCase
         if [ "$2" = --paginate ]; then paginate=yes; shift; fi
         case "$2" in
           'repos/example/intakt/actions/workflows/ci.yml/runs?head_sha=abc&event=pull_request&status=success&per_page=100') page=runs ;;
-          'repos/example/intakt/actions/runs/'*'/artifacts?per_page=100') run=${2%/artifacts*}; page=artifacts-${run##*/} ;;
+          'repos/example/intakt/actions/runs/'*'/artifacts?name=tested-tree-pushed&per_page=100') run=${2%/artifacts*}; page=artifacts-${run##*/} ;;
           *) exit 3 ;;
         esac
         jq -r "$4" "$page.json"

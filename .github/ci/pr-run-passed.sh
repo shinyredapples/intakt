@@ -16,7 +16,7 @@ fi
 runs=$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$1&event=pull_request&status=success&per_page=100" \
     --jq ".workflow_runs[] | select(.head_repository.full_name == \"$GITHUB_REPOSITORY\") | .id")
 for run in $runs; do
-    names=$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$run/artifacts?per_page=100" --jq '.artifacts[] | select(.expired | not) | .name')
+    names=$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$run/artifacts?name=tested-tree-$2&per_page=100" --jq '.artifacts[] | select(.expired | not) | .name')
     # One name per line, read whole: a name with a space must not match on one of its words.
     while IFS= read -r name; do
         if [ "$name" = "tested-tree-$2" ]; then
