@@ -229,11 +229,6 @@ final readonly class BuildTask
         return $built instanceof BuildJobOutcome ? $built : throw new LogicException('the checks and the push run only after a build job that built');
     }
 
-    private function bodyOf(string $text): string
-    {
-        return trim(explode("\n", $text, 2)[1] ?? '');
-    }
-
     /**
      * @param array<string, BuildJobOutcome|AcceptedHandBack|string|null> $results
      */
@@ -241,6 +236,11 @@ final readonly class BuildTask
     {
         // Never null, because the checks and the push run only after a build job that built, and such a job always hands back its text.
         return $this->builtIn($results)->pullRequestText ?? throw new LogicException('the checks and the push run only after a build job that handed back its text');
+    }
+
+    private function bodyOf(string $text): string
+    {
+        return trim(explode("\n", $text, 2)[1] ?? '');
     }
 
     /**
