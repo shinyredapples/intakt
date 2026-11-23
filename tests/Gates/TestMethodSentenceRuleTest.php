@@ -141,6 +141,18 @@ final class TestMethodSentenceRuleTest extends PhpStanRuleTestCase
         $this->assertRuleRejects('test-method-static-test', 'Intakt\Sample\StaticTest::testRun()');
     }
 
+    public function testAChangedFilesRunReportsAStaticMethodMarkedAsTestThatReturnsAnArray(): void
+    {
+        putenv(StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE.'=1');
+
+        self::assertSame('tests/StaticSentenceTest.php:14 intakt.testMethodSentence Test method Intakt\Sample\StaticSentenceTest::works() is not named as a sentence: name it test followed by at least three camel-case words that state the behavior, such as testTheFormIsSent().', $this->ruleFindingsOf('test-method-static-attribute-test'));
+    }
+
+    public function testAFullRunReportsAStaticMethodMarkedAsTestThatReturnsAnArray(): void
+    {
+        self::assertSame('tests/StaticSentenceTest.php:14 intakt.testMethodSentence Test method Intakt\Sample\StaticSentenceTest::works() is not named as a sentence: name it test followed by at least three camel-case words that state the behavior, such as testTheFormIsSent().', $this->ruleFindingsOf('test-method-static-attribute-test'));
+    }
+
     public function testAShortTestMethodOfAnAnonymousTestCasePassesStaticAnalysis(): void
     {
         $this->assertRuleAccepts('test-method-anonymous-class');
