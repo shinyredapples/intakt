@@ -14,6 +14,7 @@ use Intakt\Core\Memory\Infrastructure\MemoryDocuments;
 use Intakt\Core\Memory\Infrastructure\StoreMemoryIndex;
 use Intakt\Core\Memory\Infrastructure\StoreProjectMemory;
 use PDO;
+use PDOException;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
@@ -35,6 +36,7 @@ final class SqliteMemoryStoreTest extends TestCase
     private StoreMemoryIndex $index;
     private StoreProjectMemory $memory;
     private bool $embedderDown = false;
+    private PDO $pdo;
 
     public function testAnEntryIndexedInTheSqliteStoreIsRetrievedForItsFile(): void
     {
@@ -89,9 +91,25 @@ final class SqliteMemoryStoreTest extends TestCase
         self::assertEquals([$original], $this->memory->settledOn(new SettledQuery('alpha', new CodeSnapshot('src/Db.php', 'migrate', 'hash-2')))->stale);
     }
 
+    public function testReSettlingOnSqliteWhileTheInsertFailsKeepsTheOriginalEntry(): void
+    {
+        $original = new SettledFinding('alpha', 'migrate() takes no lock.', 'Intentional.', new CodeSnapshot('src/Db.php', 'migrate', 'hash-1'));
+        $this->index->settle($original);
+        $this->pdo->exec("CREATE TRIGGER reject_insert BEFORE INSERT ON project_memory BEGIN SELECT RAISE(ABORT, 'write failed'); END");
+
+        try {
+            $this->index->settle(new SettledFinding('alpha', 'migrate() takes no lock.', 'Intentional.', new CodeSnapshot('src/Db.php', 'migrate', 'hash-2')));
+            self::fail('The failing insert must propagate.');
+        } catch (PDOException) {
+        }
+
+        self::assertEquals([$original], $this->memory->settledOn(new SettledQuery('alpha', new CodeSnapshot('src/Db.php', 'migrate', 'hash-1')))->settled);
+    }
+
     protected function setUp(): void
     {
-        $store = Store::fromPdo(new PDO('sqlite::memory:'), 'project_memory');
+        $this->pdo = new PDO('sqlite::memory:');
+        $store = Store::fromPdo($this->pdo, 'project_memory');
         $store->setup();
         $platform = MockPlatformFactory::createPlatform(fn (Model $model, array|string|object $input): VectorResult => $this->embedderDown
             ? throw new RuntimeException('embedder down') : new VectorResult(array_map(static fn (): Vector => new Vector([1.0, 0.0]), is_array($input) ? $input : [$input])));

@@ -23,7 +23,9 @@ final readonly class SettledQuery
 
     public function files(): Paths
     {
-        return new Paths(...array_values(array_unique(array_map(static fn (CodeSnapshot $snapshot): string => $snapshot->file, $this->current))));
+        $files = array_map(static fn (CodeSnapshot $snapshot): string => $snapshot->file, $this->current);
+
+        return new Paths(...array_values(array_unique($files)));
     }
 
     public function currentCodeOf(SettledFinding $finding): ?CodeSnapshot
