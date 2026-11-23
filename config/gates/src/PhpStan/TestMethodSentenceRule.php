@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Gates\PhpStan;
 
+use Intakt\Gates\StaticAnalysisGate;
 use PhpParser\Node;
 use PHPStan\Analyser\Scope;
 use PHPStan\Node\CollectedDataNode;
@@ -31,12 +32,12 @@ final readonly class TestMethodSentenceRule implements Rule
     public function processNode(Node $node, Scope $scope): array
     {
         $collected = array_merge(...array_values($node->get(TestMethodCollector::class)));
-        $external = array_merge(...array_column($collected, 'external'));
+        $providers = array_merge(...array_column($collected, 'providers'));
         $findings = [];
 
-        foreach (array_filter(array_column($collected, 'misnamed')) as [$file, $line, $owner, $class, $method]) {
+        foreach (array_filter(array_column($collected, 'misnamed')) as [$file, $line, $owner, $class, $method, $static]) {
             // keyed by place because a trait's method is collected once for every test case that uses it, but is one name to fix
-            if (str_starts_with($file, $this->root.'/tests/') && !$this->isExternalProvider($class, $method, $external)) {
+            if (str_starts_with($file, $this->root.'/tests/') && !$this->isNamedProvider($class, $method, $providers) && !$this->mayBeProviderOfUnanalyzedTest($static)) {
                 $findings[$file.':'.$line] = $this->finding($owner, $method)->file($file)->line($line)->build();
             }
         }
@@ -45,11 +46,17 @@ final readonly class TestMethodSentenceRule implements Rule
     }
 
     /**
-     * @param list<array{string, string}> $external
+     * @param list<array{string, string}> $providers
      */
-    private function isExternalProvider(string $class, string $method, array $external): bool
+    private function isNamedProvider(string $class, string $method, array $providers): bool
     {
-        return array_any($external, static fn (array $provider): bool => 0 === strcasecmp($provider[0], $class) && 0 === strcasecmp($provider[1], $method));
+        return array_any($providers, static fn (array $provider): bool => 0 === strcasecmp($provider[0], $class) && 0 === strcasecmp($provider[1], $method));
+    }
+
+    // PHPUnit wants a provider static, and a changed-files run may leave out the test that names it, so only a run with every test judges a static method; only the gate's explicit signal turns this on, as for trait setters
+    private function mayBeProviderOfUnanalyzedTest(bool $static): bool
+    {
+        return $static && '1' === getenv(StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE);
     }
 
     /**

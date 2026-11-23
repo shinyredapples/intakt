@@ -6,18 +6,23 @@ namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\PhpStan\TestMethodCollector;
 use Intakt\Gates\PhpStan\TestMethodSentenceRule;
+use Intakt\Gates\StaticAnalysisGate;
 use Override;
 use PhpParser\Node;
 use PHPStan\Collectors\Collector;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 
 /**
  * @extends PhpStanRuleTestCase<TestMethodSentenceRule>
  */
 #[CoversClass(TestMethodSentenceRule::class)]
 #[CoversClass(TestMethodCollector::class)]
+#[UsesClass(StaticAnalysisGate::class)]
 final class TestMethodSentenceRuleTest extends PhpStanRuleTestCase
 {
+    private string|false $changedFilesOnly = false;
+
     public function testATestMethodOfTwoWordsFailsStaticAnalysis(): void
     {
         $this->assertRuleRejects('test-method-two-words', 'tests/SendingTest.php:11 intakt.testMethodSentence Test method Intakt\Sample\SendingTest::testFormSent() is not named as a sentence');
@@ -89,6 +94,60 @@ final class TestMethodSentenceRuleTest extends PhpStanRuleTestCase
         $this->assertRuleAccepts('test-method-outside-tests');
     }
 
+    public function testAProviderAParentDeclaresAndASubclassTestNamesPassesStaticAnalysis(): void
+    {
+        $this->assertRuleAccepts('test-method-inherited-provider');
+    }
+
+    public function testAChangedFilesRunWithoutTheTestNamingAStaticProviderReportsNoFinding(): void
+    {
+        putenv(StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE.'=1');
+
+        self::assertSame('', $this->ruleFindingsIn($this->providerWithoutItsTest()));
+    }
+
+    public function testARunWithoutTheSignalReportsAStaticProviderNoAnalyzedTestNames(): void
+    {
+        self::assertStringStartsWith('tests/SharedRows.php:14 intakt.testMethodSentence Test method Intakt\Sample\SharedRows::testRows()', $this->ruleFindingsIn($this->providerWithoutItsTest()));
+    }
+
+    public function testAChangedFilesRunStillReportsAShortTestMethodThatIsNotStatic(): void
+    {
+        putenv(StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE.'=1');
+
+        $this->assertRuleRejects('test-method-two-words', 'Intakt\Sample\SendingTest::testFormSent()');
+    }
+
+    public function testAMethodMarkedAsTestWithoutTheTestPrefixFailsStaticAnalysis(): void
+    {
+        self::assertSame('tests/AttributeTest.php:13 intakt.testMethodSentence Test method Intakt\Sample\AttributeTest::works() is not named as a sentence: name it test followed by at least three camel-case words that state the behavior, such as testTheFormIsSent().', $this->ruleFindingsOf('test-method-test-attribute'));
+    }
+
+    public function testAnArticleBeforeAnAcronymCountsAsAWordOfItsOwn(): void
+    {
+        self::assertSame('tests/ArticleTest.php:21 intakt.testMethodSentence Test method Intakt\Sample\ArticleTest::testURLWorks() is not named as a sentence: name it test followed by at least three camel-case words that state the behavior, such as testTheFormIsSent().', $this->ruleFindingsOf('test-method-article-before-acronym'));
+    }
+
+    public function testAShortTestMethodOfAnAnonymousTestCasePassesStaticAnalysis(): void
+    {
+        $this->assertRuleAccepts('test-method-anonymous-class');
+    }
+
+    #[Override]
+    protected function setUp(): void
+    {
+        $this->changedFilesOnly = getenv(StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE);
+        putenv(StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE);
+        parent::setUp();
+    }
+
+    #[Override]
+    protected function tearDown(): void
+    {
+        putenv(false === $this->changedFilesOnly ? StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE : StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE.'='.$this->changedFilesOnly);
+        parent::tearDown();
+    }
+
     protected function ruleFor(string $root): TestMethodSentenceRule
     {
         return new TestMethodSentenceRule($root);
@@ -100,6 +159,15 @@ final class TestMethodSentenceRuleTest extends PhpStanRuleTestCase
     #[Override]
     protected function getCollectors(): array
     {
-        return [new TestMethodCollector()];
+        return [new TestMethodCollector(self::createReflectionProvider())];
+    }
+
+    // because a changed-files run where only the provider changed does not analyze the test that names it
+    private function providerWithoutItsTest(): Sandbox
+    {
+        $sandbox = $this->sandboxWith('test-method-providers');
+        unlink($sandbox->root.'/tests/CasesTest.php');
+
+        return $sandbox;
     }
 }

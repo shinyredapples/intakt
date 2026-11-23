@@ -1,0 +1,25 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use PHPUnit\Framework\TestCase;
+
+final class ArticleTest extends TestCase
+{
+    public function testAURLWorks(): void
+    {
+        self::assertTrue(true);
+    }
+
+    public function testIDIsSet(): void
+    {
+        self::assertTrue(true);
+    }
+
+    public function testURLWorks(): void
+    {
+        self::assertTrue(true);
+    }
+}

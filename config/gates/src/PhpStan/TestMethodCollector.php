@@ -7,23 +7,31 @@ namespace Intakt\Gates\PhpStan;
 use PhpParser\Node;
 use PHPStan\Analyser\Scope;
 use PHPStan\BetterReflection\Reflection\Adapter\ReflectionAttribute;
+use PHPStan\BetterReflection\Reflection\Adapter\ReflectionClass;
+use PHPStan\BetterReflection\Reflection\Adapter\ReflectionEnum;
 use PHPStan\BetterReflection\Reflection\Adapter\ReflectionMethod;
 use PHPStan\Collectors\Collector;
 use PHPStan\Node\InClassMethodNode;
 use PHPStan\Reflection\ClassReflection;
+use PHPStan\Reflection\ReflectionProvider;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\DataProviderExternal;
+use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
 /**
- * @implements Collector<InClassMethodNode, array{misnamed: array{string, int, string, string, string}|null, external: list<array{string, string}>}>
+ * @implements Collector<InClassMethodNode, array{misnamed: array{string, int, string, string, string, bool}|null, providers: list<array{string, string}>}>
  */
 final readonly class TestMethodCollector implements Collector
 {
-    // an acronym or a capital with the lowercase letters and digits after it is one word, so HTTPRequest and Its192Px are two words each
-    private const string WORD = '[A-Z]{2,}(?![a-z])[0-9]*|[A-Z][a-z0-9]*';
+    // an acronym or a capital with the lowercase letters and digits after it is one word, so HTTPRequest and Its192Px are two words each; A and I, the one-letter English words, are a word of their own in front of an acronym, so AURL is two
+    private const string WORD = '[AI](?=[A-Z]{2,}(?![a-z]))|[A-Z]{2,}(?![a-z])[0-9]*|[A-Z][a-z0-9]*';
 
     private const int SENTENCE_WORDS = 3;
+
+    public function __construct(private ReflectionProvider $reflections)
+    {
+    }
 
     public function getNodeType(): string
     {
@@ -31,30 +39,39 @@ final readonly class TestMethodCollector implements Collector
     }
 
     /**
-     * @return array{misnamed: array{string, int, string, string, string}|null, external: list<array{string, string}>}|null
+     * @return array{misnamed: array{string, int, string, string, string, bool}|null, providers: list<array{string, string}>}|null
      */
     public function processNode(Node $node, Scope $scope): ?array
     {
         $class = $node->getClassReflection();
 
-        // PHPUnit runs only the methods of a TestCase subclass, so an interface or a double may name a method test*() freely
-        if ($class->isInterface() || !in_array(TestCase::class, $class->getParentClassesNames(), true)) {
+        // PHPUnit runs only the methods of a named TestCase subclass, so an interface, a double or an anonymous class may name a method test*() freely
+        if ($class->isInterface() || $class->isAnonymous() || !in_array(TestCase::class, $class->getParentClassesNames(), true)) {
             return null;
         }
 
         $method = $class->getNativeReflection()->getMethod($node->getOriginalNode()->name->toString());
-        $external = $this->externalProviders($method);
-        $misnamed = $this->isMisnamedTest($method, $class) ? $this->location($node, $scope) : null;
+        $providers = $this->providersNamedBy($method, $class->getNativeReflection());
+        $misnamed = $this->isMisnamedTest($method, $class) ? $this->location($node, $scope, $method) : null;
 
-        return null === $misnamed && [] === $external ? null : ['misnamed' => $misnamed, 'external' => $external];
+        return null === $misnamed && [] === $providers ? null : ['misnamed' => $misnamed, 'providers' => $providers];
     }
 
     /**
      * @return list<array{string, string}>
      */
-    private function externalProviders(ReflectionMethod $method): array
+    private function providersNamedBy(ReflectionMethod $method, ReflectionClass|ReflectionEnum $class): array
     {
         $providers = [];
+
+        foreach ($method->getAttributes(DataProvider::class) as $attribute) {
+            $arguments = $attribute->getArguments();
+            $methodName = $arguments['methodName'] ?? $arguments[0] ?? null;
+
+            if (is_string($methodName)) {
+                $providers[] = $this->declaration($class, $methodName);
+            }
+        }
 
         foreach ($method->getAttributes(DataProviderExternal::class) as $attribute) {
             $arguments = $attribute->getArguments();
@@ -62,7 +79,7 @@ final readonly class TestMethodCollector implements Collector
             $methodName = $arguments['methodName'] ?? $arguments[1] ?? null;
 
             if (is_string($className) && is_string($methodName)) {
-                $providers[] = [ltrim($className, '\\'), $methodName];
+                $providers[] = $this->reflections->hasClass($className) ? $this->declaration($this->reflections->getClass($className)->getNativeReflection(), $methodName) : [ltrim($className, '\\'), $methodName];
             }
         }
 
@@ -72,20 +89,29 @@ final readonly class TestMethodCollector implements Collector
     private function isMisnamedTest(ReflectionMethod $method, ClassReflection $class): bool
     {
         $name = $method->getName();
+        $isTest = str_starts_with($name, 'test') || [] !== $method->getAttributes(Test::class);
 
-        return $method->isPublic() && str_starts_with($name, 'test') && !$this->readsAsSentence(substr($name, 4)) && !$this->isNamedProvider($name, $class);
+        return $method->isPublic() && $isTest && !(str_starts_with($name, 'test') && $this->readsAsSentence(substr($name, 4))) && !$this->isNamedProvider($name, $class);
     }
 
     /**
-     * @return array{string, int, string, string, string}
+     * @return array{string, int, string, string, string, bool}
      */
-    private function location(InClassMethodNode $node, Scope $scope): array
+    private function location(InClassMethodNode $node, Scope $scope, ReflectionMethod $method): array
     {
-        $method = $node->getOriginalNode();
         $trait = $scope->getTraitReflection();
         $file = $trait?->getFileName() ?? $scope->getFile();
 
-        return [$file, $method->name->getStartLine(), $trait?->getName() ?? $node->getClassReflection()->getName(), $node->getClassReflection()->getName(), $method->name->toString()];
+        return [$file, $node->getOriginalNode()->name->getStartLine(), $trait?->getName() ?? $node->getClassReflection()->getName(), $method->getDeclaringClass()->getName(), $method->getName(), $method->isStatic()];
+    }
+
+    // the class that declares the named method, because a provider a parent class or a trait declares is one declaration however many subclasses name it
+    /**
+     * @return array{string, string}
+     */
+    private function declaration(ReflectionClass|ReflectionEnum $class, string $methodName): array
+    {
+        return $class->hasMethod($methodName) ? [$class->getMethod($methodName)->getDeclaringClass()->getName(), $methodName] : [$class->getName(), $methodName];
     }
 
     private function readsAsSentence(string $words): bool
