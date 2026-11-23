@@ -174,30 +174,32 @@ flowchart LR
 
 ## Draining and updates
 
-**Draining** means a part of Intakt starts no new jobs and lets the running ones finish. Intakt uses it to update itself without stopping your work (planned; this is the decided design):
+Intakt updates itself without stopping your work (planned; this is the decided design). A normal update has no draining at all: no slot waits for its job to finish, and new work stops only for the one short restart of Intakt's control process. **Draining** (a part of Intakt starts no new jobs and lets the running ones finish) happens only when a new version says it needs it.
 
 ```mermaid
 flowchart LR
   a[New version ready] --> b[Installed beside the old one<br/>the old one keeps working]
   b --> c{Its own check passes?<br/>a failure the old one<br/>has too doesn't count}
   c -- no --> g[Drop the new version,<br/>alert you]
-  c -- yes --> d[One builder slot<br/>tries the new version]
+  c -- yes --> d[One builder slot<br/>switches at once,<br/>its next job is new]
   d --> e{First build fine,<br/>or quiet for a while?}
-  e -- yes --> f[The other slots follow,<br/>each when its job is done]
   e -- no --> h[Roll back,<br/>alert you]
-  f --> k{A job still running<br/>at its slot's deadline?}
-  k -- yes --> i[That job is saved<br/>and picked up<br/>on the new version]
-  k -- no --> j[Intakt's control process<br/>switches in seconds,<br/>running reviews keep going]
-  i --> j
+  e -- yes --> f[The other slots<br/>switch at once]
+  f --> j[Intakt's control process<br/>restarts once, in seconds,<br/>running jobs keep going]
+  j --> l{Live and on trial:<br/>its check and the first<br/>job of each kind fine?}
+  l -- no --> h
+  l -- yes --> m[Done, the old version<br/>goes once none of<br/>its jobs is running]
 ```
 
 - **Beside the old one:** the new version is checked while the old one keeps building and reviewing. Intakt compares the two checks test by test: if a test fails the same way on the old version too (the same test, stopping at the same line with the same failure message), that is a problem of your project, not of the update, so you hear about it and the update goes on. A test that fails only on the new version, or fails there at a different line or with a different message, stops the update.
-- **The old one stays in charge:** until the end of the update, the old version alone hands out work and keeps the records, so nothing is picked up twice. At the end, Intakt's own control process switches in seconds (an old one that hangs is stopped after a short deadline, so new work never waits on it; if it hung before handing over, the old version starts again and carries on); reviews that are running keep running and their results arrive as usual.
-- **One slot first:** one builder slot tries the new version. The others follow once a build on it ended without trouble from Intakt itself, or after a set time with no failure. One failed build there only leads to another try, because it may be that task's own problem. Only failures of 2 tasks with the same error within an hour, when no build on the old version showed that error in that hour, or reaching the deadline before the others could follow, take Intakt back to the old version, and it tells you. Once the others are set to follow, the deadline no longer applies, even while they finish their jobs. A job always finishes on the version it started on.
-- **Only switching slots wait:** while a slot switches, it starts nothing new. First that is the one slot trying the new version; after it, the remaining builder slots switch together, so the dashboard can show several slots draining at once while the reviews go on. A slot waits only up to a deadline: a job still running then is stopped with its work kept, and continues on the new version.
-- **Everything pauses only rarely:** an update that changes stored data so the old version could not read it says so, and only such an update pauses all work, as one short drain of everything.
+- **A job keeps its version:** a job always finishes on the version it started on; an update never stops or restarts it. So a slot switches at once, without waiting: the job it is running carries on, and its next job takes the new version. The dashboard shows which running jobs are still on an older version until none are left.
+- **One slot first:** one builder slot tries the new version. The others switch together once a build on it ended without trouble from Intakt itself, or after a set time with no failure. One failed build there only leads to another try, because it may be that task's own problem. Only failures of 2 tasks with the same error within an hour, when no build on the old version showed that error in that hour, or reaching the deadline before the others could follow, take Intakt back to the old version, and it tells you. Once the others are set to follow, the deadline no longer applies.
+- **The old one stays in charge:** the old version alone hands out work and keeps the records until the one short restart; from then on the new version does, while it is still on trial, so nothing is ever picked up twice. The restart takes seconds (an old one that hangs is stopped after a short deadline, so new work never waits on it; a new one that does not take over in time gives way to the old version again). Jobs and reviews keep running through it, and the new version picks up their results, each exactly once.
+- **Live, then on trial:** the new version is *live* once it holds the one right to write the records (the owner generation) and its start checks passed (GitHub and the AI companies answer). From then on it hands out all new work. It stays on trial until its own check after the update and the first job of each kind it started look right; only then is the old version removed, once none of its jobs is still running.
+- **Results across versions:** the new version accepts a job's result only from its own version or the one it was updated from. A job started two or more updates back has its work done again on the new version, with the reason in the record.
+- **Draining only when a version says so:** a version that changes how jobs talk to Intakt by more than one step, or how jobs are kept apart, says so, and then each slot drains as it switches: it starts nothing new while its job finishes, up to a deadline, after which the job is saved and continues on the new version. A version that changes stored data so the old version could not read it pauses all work, as one short drain of everything.
 - **Update windows:** updates that are not urgent wait for the times of day you set in the settings, at most a few a day; at the next window Intakt installs the newest version published by then. An urgent release (a security fix, or a fix for something that stops work) and a version you pick yourself install right away.
-- **If anything fails,** Intakt goes back to the old version, which stays installed until the update has proved itself, and tells you at once. One case cannot go back: when an update that changes stored data fails after work has resumed, the old version can no longer read the data, so Intakt pauses all work, tells you, and a newer version fixes it.
+- **If anything fails,** Intakt goes back to the old version, which stays installed until the update has proved itself, and tells you at once. Both versions can read the stored data, so going back loses nothing recorded since. Jobs on the old version are left alone; jobs on the failed version are stopped and done again. One case cannot go back: when an update that changes stored data fails after work has resumed, the old version can no longer read the data, so Intakt pauses all work, tells you, and a newer version fixes it.
 
 While a slot drains, the dashboard says "draining" on that slot; it usually takes minutes. Work that is only waiting (for CI, for you, on hold) doesn't hold a drain up.
 
