@@ -32,6 +32,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\NullLogger;
+use Symfony\Component\Cache\Adapter\ArrayAdapter;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
@@ -237,7 +238,7 @@ final class RemoveDemoProjectCommandTest extends KernelTestCase
         self::assertInstanceOf(LedgerReviewPages::class, $pages);
         self::assertInstanceOf(Environment::class, $twig);
 
-        return new LiveBoardHeadline($pages, $twig, $this->live, new LockFactory(new InMemoryStore()), new NullLogger());
+        return new LiveBoardHeadline($pages, $twig, $this->live, new LockFactory(new InMemoryStore()), new ArrayAdapter(), new NullLogger());
     }
 
     /**

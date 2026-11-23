@@ -41,7 +41,7 @@
                 <form method="post" action="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::KEEP_PROVIDER_KEY')) }}" class="keep-provider-key">
                     <input type="hidden" name="_token" value="{{ csrf_token(constant('Intakt\\Core\\Dashboard\\UseCase\\KeepProviderKey\\KeepProviderKeyController::TOKEN_ID')) }}">
                     <label for="provider-key">A key or token for {{ step.keyLabels|join(', ', ' or ') }}</label>
-                    <input type="password" id="provider-key" name="{{ constant('Intakt\\Core\\Dashboard\\UseCase\\KeepProviderKey\\KeepProviderKeyController::FIELD') }}" autocomplete="off" required>
+                    <input type="password" class="input" id="provider-key" name="{{ constant('Intakt\\Core\\Dashboard\\UseCase\\KeepProviderKey\\KeepProviderKeyController::FIELD') }}" autocomplete="off" required>
                     <div class="step-nav">
                         {{ include('dashboard/components/button.html.twig', {kind: step_button, type: 'submit', label: 'Keep the key'}, with_context = false) }}
                     </div>

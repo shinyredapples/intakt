@@ -42,6 +42,16 @@ final class CountingLedger implements Ledger
         return $this->ledger->readOfKind($kind);
     }
 
+    public function readOfKindAbout(LedgerEventKind $kind, string $subject): RecordedEvents
+    {
+        return $this->ledger->readOfKindAbout($kind, $subject);
+    }
+
+    public function readOfKindWithoutSubject(LedgerEventKind $kind): RecordedEvents
+    {
+        return $this->ledger->readOfKindWithoutSubject($kind);
+    }
+
     #[Override]
     public function readMentioning(Mentions $texts): RecordedEvents
     {

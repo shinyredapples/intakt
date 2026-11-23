@@ -1,0 +1,2 @@
+{#- An update of the play line of one Play on the demo page, so the reason a worker refused the run replaces "The demo run is starting"; a page without the line ignores it. -#}
+<turbo-stream action="update" target="demo-play-{{ play }}"><template><p class="flash flash-error" role="alert">The demo run did not play. {{ reason }}</p></template></turbo-stream>

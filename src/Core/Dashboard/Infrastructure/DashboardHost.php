@@ -18,6 +18,11 @@ final readonly class DashboardHost
     ) {
     }
 
+    public function port(): int
+    {
+        return $this->port;
+    }
+
     public function isNamedBy(Request $request): bool
     {
         return in_array($request->getHost(), self::LOOPBACK_NAMES, true) && $this->port === (int) $request->getPort();
