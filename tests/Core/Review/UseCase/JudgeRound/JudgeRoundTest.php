@@ -193,8 +193,34 @@ final class JudgeRoundTest extends KernelTestCase
     public function testJudgeDoneStoresTheMergedSurvivorWithItsReviewersTitleAndKind(): void
     {
         $round = $this->fixture->start(1);
-        $first = new Finding('A', Severity::P2, 'src/Thing.php', 3, null, 'First.', FixableBy::Builder, false, 'Task', null, title: 'First discount calculation fails', kind: FindingKind::Logic);
-        $second = new Finding('B', Severity::P1, 'src/Thing.php', 3, null, 'Second.', FixableBy::Builder, false, 'Task', null, title: 'Second discount calculation fails', kind: FindingKind::Security);
+        $first = new Finding(
+            'A',
+            Severity::P2,
+            'src/Thing.php',
+            3,
+            null,
+            'First.',
+            FixableBy::Builder,
+            false,
+            'Task',
+            null,
+            title: 'First discount calculation fails',
+            kind: FindingKind::Logic,
+        );
+        $second = new Finding(
+            'B',
+            Severity::P1,
+            'src/Thing.php',
+            3,
+            null,
+            'Second.',
+            FixableBy::Builder,
+            false,
+            'Task',
+            null,
+            title: 'Second discount calculation fails',
+            kind: FindingKind::Security,
+        );
         $this->fixture->deliver($this->fixture->bus->messages[0], new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, [$first, $second], [], [])]));
 
         $this->fixture->judge(new ScriptedJudgement(new Judgement([])))($this->judgingOf($round));

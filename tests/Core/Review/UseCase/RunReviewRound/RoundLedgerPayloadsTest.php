@@ -375,8 +375,34 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
     {
         $round = new RoundFixture(self::getContainer())->start(1);
         $ledger = new InMemoryLedger();
-        $first = new Finding('F1', Severity::P2, 'src/A.php', 7, null, 'First.', FixableBy::Builder, false, null, null, title: 'A full cart loses discount', kind: FindingKind::Logic);
-        $second = new Finding('F2', Severity::P1, 'src/A.php', 7, null, 'Second.', FixableBy::Builder, false, null, null, title: 'The discount leaks a secret', kind: FindingKind::Security);
+        $first = new Finding(
+            'F1',
+            Severity::P2,
+            'src/A.php',
+            7,
+            null,
+            'First.',
+            FixableBy::Builder,
+            false,
+            null,
+            null,
+            title: 'A full cart loses discount',
+            kind: FindingKind::Logic,
+        );
+        $second = new Finding(
+            'F2',
+            Severity::P1,
+            'src/A.php',
+            7,
+            null,
+            'Second.',
+            FixableBy::Builder,
+            false,
+            null,
+            null,
+            title: 'The discount leaks a secret',
+            kind: FindingKind::Security,
+        );
 
         $this->roundLedger($ledger)->judgeDone($round, JudgedFindings::of(new Judgement([]), [$first, $second]), []);
 
