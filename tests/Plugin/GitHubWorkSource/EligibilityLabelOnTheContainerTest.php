@@ -26,6 +26,8 @@ final class EligibilityLabelOnTheContainerTest extends KernelTestCase
 
     private mixed $savedConfig = null;
 
+    private ?CompiledContainers $containers = null;
+
     public static function tearDownAfterClass(): void
     {
         self::compiledContainers()->remove();
@@ -60,8 +62,20 @@ final class EligibilityLabelOnTheContainerTest extends KernelTestCase
         self::assertSame([2], $this->readyOf(Issues::task(1, ['intakt']), Issues::task(2, ['build'])));
     }
 
+    public function testTearingDownHandsTheFollowingKernelTestsTheSharedCacheBack(): void
+    {
+        $sharedCache = $_SERVER['APP_CACHE_DIR'] ?? null;
+        $this->bootWith(', eligibility_label: build');
+
+        $this->tearDown();
+
+        self::assertSame($sharedCache, $_SERVER['APP_CACHE_DIR'] ?? null);
+    }
+
     protected function setUp(): void
     {
+        // Taken before any boot points the cache elsewhere, so tearing down restores the folder the other kernel tests use.
+        $this->containers = self::compiledContainers();
         $this->savedConfig = $_SERVER['INTAKT_CONFIG'] ?? null;
         $this->file = sys_get_temp_dir().'/intakt-eligibility-label-'.bin2hex(random_bytes(4)).'.yaml';
     }
@@ -74,7 +88,7 @@ final class EligibilityLabelOnTheContainerTest extends KernelTestCase
         }
 
         parent::tearDown();
-        self::compiledContainers()->restoreTheSharedCache();
+        $this->containers?->restoreTheSharedCache();
         new Filesystem()->remove($this->file);
     }
 
@@ -84,7 +98,7 @@ final class EligibilityLabelOnTheContainerTest extends KernelTestCase
         new Filesystem()->dumpFile($this->file, $contents);
         $_SERVER['INTAKT_CONFIG'] = $this->file;
         // Keyed by the content, because the path changes per test while the content is the only build input this class sets.
-        self::compiledContainers()->useFor([$contents]);
+        $this->containers?->useFor([$contents]);
         self::bootKernel();
     }
 
