@@ -93,6 +93,7 @@ final class HealthcheckScriptTest extends TestCase
         $process = new Process([dirname(__DIR__, 4).'/docker/healthcheck.sh'], $this->directory, [
             'PATH' => $this->directory.'/stubs:'.getenv('PATH'),
             'CALLS' => $this->directory.'/calls',
+            'SERVER_PORT' => '7781',
             'DASHBOARD_PORT' => '7781',
             'CADDY_ADMIN' => false,
             'INTAKT_SAMPLE_REPOSITORY' => false,
