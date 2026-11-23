@@ -87,6 +87,19 @@ final class FirstReviewOfTwoReviewersTest extends KernelTestCase
         self::assertSame([['approve', 0]], $this->verdicts());
     }
 
+    public function testAReviewersFindingIsStoredInTheDatabaseWithTheTitleAndKindTheReviewerGave(): void
+    {
+        $this->fixture->start(2);
+
+        $this->deliverAll([RecordedAnswer::RETRY_WITH_A_FINDING, RecordedAnswer::APPROVE]);
+
+        $stored = $this->fixture->entities->getConnection()->fetchOne("SELECT verdict FROM round_reviewer WHERE verdict LIKE '%\"changes\"%'");
+        self::assertIsString($stored);
+        /** @var array{findings: list<array<string, mixed>>} $verdict */
+        $verdict = json_decode($stored, true, flags: JSON_THROW_ON_ERROR);
+        self::assertSame(['The discount raises the total', 'logic'], [$verdict['findings'][0]['title'] ?? null, $verdict['findings'][0]['kind'] ?? null]);
+    }
+
     protected function setUp(): void
     {
         $this->fixture = new RoundFixture(self::getContainer());
