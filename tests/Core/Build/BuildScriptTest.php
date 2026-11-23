@@ -41,7 +41,7 @@ final class BuildScriptTest extends TestCase
     private int $timeout = 20;
     private ?string $startFolder = null;
     private ?string $pathHead = null;
-    // The name TMPDIR and HOME give the work area, when a test names it through a link; null names it by its own path.
+    // Set by a test that names the work area through a link in TMPDIR and HOME, because the script must then know the work area by its real path; null names it by its own path.
     private ?string $workName = null;
     // Put ahead of the script's system folders, because the fixtures' scripted commands must still be found once the script fixes its path; null puts the fixture folder there.
     private ?string $systemHead = null;
@@ -975,7 +975,7 @@ final class BuildScriptTest extends TestCase
 
     public function testATimeoutWhoseChainOfLinksPassesThroughALinkInTheJobsWorkAreaEndsTheJobBeforeTheSession(): void
     {
-        // Both ends are outside the work area: the builder could still point the link in the middle at its own program.
+        // Both ends are outside the work area, because the builder needs only the link in the middle to point the chain at its own program.
         mkdir($this->history->folder.'/image');
         $this->givenAWorkingTimeoutAt($this->history->folder.'/image/timeout');
         symlink($this->history->folder.'/image/timeout', $this->work.'/redirect');
@@ -989,7 +989,7 @@ final class BuildScriptTest extends TestCase
 
     public function testATimeoutReachedThroughAFolderLinkInTheJobsWorkAreaEndsTheJobBeforeTheSession(): void
     {
-        // No link on the chain itself is in the work area: a folder of the target's path is a link there, which the builder could point at another folder.
+        // No link of the chain itself is in the work area, only a folder of the target's path is a link there, because the builder could point that folder link at another folder just as well.
         mkdir($this->history->folder.'/image');
         $this->givenAWorkingTimeoutAt($this->history->folder.'/image/timeout');
         symlink($this->history->folder.'/image', $this->work.'/tools');
@@ -1029,7 +1029,7 @@ final class BuildScriptTest extends TestCase
 
     public function testATimeoutWhoseLinksAllStayOutsideTheFoldersTheBuilderCanWriteIsStillUsed(): void
     {
-        // The allowed side: a relative link, a folder link and a step back up, none of them in a folder the builder can write.
+        // A relative link, a folder link and a step back up, none in a folder the builder can write, because an image may link its commands this way and the walk must not refuse them.
         mkdir($this->history->folder.'/image/tools', recursive: true);
         $this->givenAWorkingTimeoutAt($this->history->folder.'/image/tools/timeout');
         symlink('tools', $this->history->folder.'/image/current');
