@@ -14,8 +14,10 @@ final class PublishedLiveEvents implements LiveUpdates
     public private(set) array $events = [];
 
     #[Override]
-    public function publish(LiveEvent $event): void
+    public function publish(LiveEvent $event): bool
     {
         $this->events[] = $event;
+
+        return true;
     }
 }
