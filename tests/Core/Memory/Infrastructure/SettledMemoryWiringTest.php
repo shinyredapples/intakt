@@ -64,6 +64,7 @@ final class SettledMemoryWiringTest extends KernelTestCase
         $finding = $this->aSettledFinding('hash-1');
         $this->index()->settle($finding);
         self::assertEquals([[$finding], []], $this->settledAndStaleAt('hash-1'));
+        self::assertEquals([[], [$finding]], $this->settledAndStaleAt('hash-2'));
 
         $this->index()->forget($finding);
 

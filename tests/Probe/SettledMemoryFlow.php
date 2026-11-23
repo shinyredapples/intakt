@@ -24,6 +24,12 @@ require dirname(__DIR__, 2).'/vendor/autoload.php';
 new Dotenv()->bootEnv(dirname(__DIR__, 2).'/.env');
 $environment = $_SERVER['APP_ENV'] ?? 'test';
 assert(is_string($environment));
+if ('test' !== $environment) {
+    // config/packages/ai.php puts the memory file in the cache directory only in the test environment.
+    fwrite(STDERR, 'This probe reads <cache dir>/memory.db, which only the test environment uses; run it with APP_ENV=test.'.PHP_EOL);
+    exit(1);
+}
+
 $kernel = new Kernel($environment, false);
 $kernel->boot();
 $container = $kernel->getContainer()->get('test.service_container');
