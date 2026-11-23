@@ -66,7 +66,7 @@ final readonly class PullRequestsOfTasks
     private function allOpenOf(string $project, IntakePlan $plan): array
     {
         $open = $this->branches->openOf($project);
-        $missing = array_diff($plan->openPullRequests,array_map(static fn (BranchPullRequest $pull): int => $pull->number, $open));
+        $missing = array_diff($plan->openPullRequests, array_map(static fn (BranchPullRequest $pull): int => $pull->number, $open));
         if ([] !== $missing) {
             throw new ForgeReadFailed(sprintf('GitHub did not list the branch of open pull request #%d, which the listing of this tick shows open, so the pull requests by branch may be incomplete.', min($missing)));
         }
