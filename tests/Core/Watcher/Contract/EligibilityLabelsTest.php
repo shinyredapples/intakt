@@ -22,8 +22,7 @@ final class EligibilityLabelsTest extends TestCase
 
     public function testAProjectWithoutAWatchSectionNamesNoEligibilityLabel(): void
     {
-        $this->expectException(ProjectNamesNoEligibilityLabel::class);
-        $this->expectExceptionMessage('Project "alpha" has no watch section, so it names no eligibility label.');
+        $this->expectExceptionObject(ProjectNamesNoEligibilityLabel::named('alpha'));
 
         new EligibilityLabels(['beta' => ['eligibility_label' => 'intakt']])->of('alpha');
     }
