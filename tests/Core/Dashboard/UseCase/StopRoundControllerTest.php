@@ -198,7 +198,20 @@ final class StopRoundControllerTest extends DashboardPageTestCase
         $this->browser->request('POST', '/reviews/round-1/stop', ['_token' => $this->token()]);
 
         self::assertResponseStatusCodeSame(404);
-        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The ledger shows no unjudged round with this id."', NotFoundHttpException::class));
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The ledger shows no round still in review with this id."', NotFoundHttpException::class));
+        self::assertSame([], $this->requested());
+    }
+
+    public function testARoundThatEndedWithoutAJudgesCallRecordsNothing(): void
+    {
+        $this->runningRound();
+        $token = $this->token();
+        self::clockAt('2026-10-30T12:00:00+00:00');
+
+        $this->browser->request('POST', '/reviews/round-1/stop', ['_token' => $token]);
+
+        self::assertResponseStatusCodeSame(404);
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The ledger shows no round still in review with this id."', NotFoundHttpException::class));
         self::assertSame([], $this->requested());
     }
 
@@ -209,7 +222,7 @@ final class StopRoundControllerTest extends DashboardPageTestCase
         $this->browser->request('POST', '/reviews/round-9/stop', ['_token' => $this->token()]);
 
         self::assertResponseStatusCodeSame(404);
-        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The ledger shows no unjudged round with this id."', NotFoundHttpException::class));
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The ledger shows no round still in review with this id."', NotFoundHttpException::class));
         self::assertSame([], $this->requested());
     }
 

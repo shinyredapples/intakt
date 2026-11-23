@@ -15,21 +15,21 @@ use PhpParser\Node\Stmt\ClassLike;
 use PhpParser\Node\Stmt\ClassMethod;
 use PhpParser\NodeFinder;
 use PHPStan\Analyser\Scope;
-use PHPStan\Node\InClassNode;
 use PHPStan\Rules\IdentifierRuleError;
 use PHPStan\Rules\Rule;
 use PHPStan\Rules\RuleErrorBuilder;
 
 /**
- * @implements Rule<InClassNode>
+ * @implements Rule<ClassLike>
  */
 final readonly class HelperOrderRule implements Rule
 {
     private const array SELF_NAMES = ['self', 'static'];
 
+    // because PHPStan emits no InClassNode for a trait declaration, and analyses a trait's methods only in each class that uses it
     public function getNodeType(): string
     {
-        return InClassNode::class;
+        return ClassLike::class;
     }
 
     /**
@@ -37,9 +37,25 @@ final readonly class HelperOrderRule implements Rule
      */
     public function processNode(Node $node, Scope $scope): array
     {
-        $methods = $node->getOriginalNode()->getMethods();
+        // because PHPStan visits a class nested in a trait's method once per class using the trait, at any depth, the outermost declaration checks every class nested in it instead
+        if ($scope->isInClass()) {
+            return [];
+        }
+
+        $classes = [$node, ...new NodeFinder()->findInstanceOf($node->stmts, ClassLike::class)];
+
+        return array_merge(...array_map($this->findingsOf(...), $classes));
+    }
+
+    /**
+     * @return list<IdentifierRuleError>
+     */
+    private function findingsOf(ClassLike $node): array
+    {
+        $methods = $node->getMethods();
         $named = array_combine(array_map(static fn (ClassMethod $method): string => $method->name->toLowerString(), $methods), $methods);
-        $calls = $this->callsOf($methods, $this->helpersOf($methods), $node->getClassReflection()->getName());
+        // because the name resolver leaves namespacedName unset on an anonymous class
+        $calls = $this->callsOf($methods, $this->helpersOf($methods), isset($node->namespacedName) ? $node->namespacedName->toString() : '');
 
         return [
             ...$this->helpersAboveTheirFirstCaller($calls, $named),
@@ -107,7 +123,7 @@ final readonly class HelperOrderRule implements Rule
         $isCall = fn (Node $found): bool => isset($helpers[$this->calledName($found, $class) ?? '']);
         $nested = array_map(spl_object_id(...), $finder->find($finder->findInstanceOf($statements, ClassLike::class), $isCall));
         $calls = array_filter($finder->find($statements, $isCall), static fn (Node $call): bool => !in_array(spl_object_id($call), $nested, true));
-        // a call ends after the calls in its arguments, so the end position gives the order PHP calls them in
+        // an expression ends after the expressions nested in it, so ordering by end position puts a call in an argument (or in a closure argument) before the call that encloses it
         usort($calls, static fn (Node $one, Node $other): int => $one->getEndFilePos() <=> $other->getEndFilePos());
 
         return array_values(array_unique(array_map(fn (Node $call): string => $this->calledName($call, $class) ?? '', $calls)));

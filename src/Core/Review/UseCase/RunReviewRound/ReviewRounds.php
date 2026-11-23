@@ -11,6 +11,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Intakt\Core\Review\Contract\ChangeAddress;
 use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Core\Review\Contract\RoundNotNext;
 use Intakt\Core\Review\Domain\ChangeRound;
@@ -65,10 +66,7 @@ final readonly class ReviewRounds
         $this->refuseAnotherNumber($command, $opened);
         $round = new ReviewRound($this->newId(), $command->target, $opened);
         $this->markAsReplayWhenItsProjectIs($round);
-
-        foreach ($command->panel->reviewers as $member) {
-            $round->addReviewer($this->newId(), $member);
-        }
+        $this->addThePanelInIdOrder($round, $command->panel);
 
         $this->entities->persist($round);
         $this->entities->flush();
@@ -318,6 +316,17 @@ final readonly class ReviewRounds
     {
         if ($this->entities->find(ReplayProject::class, $round->project()) instanceof ReplayProject) {
             $round->markAsReplay();
+        }
+    }
+
+    // The ids are sorted before they are handed out in panel order, because a stored round lists its reviewers by id and an id taken at a clock time that went back would sort before the one taken just before it.
+    private function addThePanelInIdOrder(ReviewRound $round, Panel $panel): void
+    {
+        $ids = array_map($this->newId(...), $panel->reviewers);
+        usort($ids, static fn (UuidV7 $one, UuidV7 $other): int => $one->compare($other));
+
+        foreach ($panel->reviewers as $position => $member) {
+            $round->addReviewer($ids[$position], $member);
         }
     }
 }

@@ -94,6 +94,9 @@
                             },
                             "regression": {
                                 "type": "boolean"
+                            },
+                            "gate_gap": {
+                                "type": "boolean"
                             }
                         },
                         "required": [
@@ -107,7 +110,8 @@
                             "repeat",
                             "requirement",
                             "evidence",
-                            "regression"
+                            "regression",
+                            "gate_gap"
                         ],
                         "additionalProperties": false
                     }

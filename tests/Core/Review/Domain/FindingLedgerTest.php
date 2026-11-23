@@ -325,6 +325,17 @@ final class FindingLedgerTest extends TestCase
         self::assertSame('Text y', $open[0]->text);
     }
 
+    public function testAnOpenFindingKeepsItsGateGapMarkerUnderItsLedgerId(): void
+    {
+        $ledger = new FindingLedger();
+        $gap = new Finding('x', Severity::P3, 'src/A.php', 3, null, 'The gate misses a case.', FixableBy::Owner, false, 'phpstan', null, gate_gap: true);
+        $ledger->recordRound(1, [$gap, $this->finding('y')]);
+
+        $open = $ledger->openForReviewers();
+
+        self::assertSame([['F1', true], ['F2', false]], array_map(static fn (Finding $finding): array => [$finding->id, $finding->gate_gap], $open));
+    }
+
     public function testARepeatKeepsTheSeverityItWasReportedWith(): void
     {
         $ledger = new FindingLedger();
