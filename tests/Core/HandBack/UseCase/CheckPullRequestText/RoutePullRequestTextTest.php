@@ -140,7 +140,7 @@ final class RoutePullRequestTextTest extends TestCase
         $this->ledger = new RecordingLedger(down: true);
 
         $this->expectException(PullRequestTextRoundNotRecorded::class);
-        $this->expectExceptionMessage('the pull request text\'s pull_request_text_sent_back line was not recorded: the ledger is down');
+        $this->expectExceptionMessageIs('the pull request text\'s pull_request_text_sent_back line was not recorded: the ledger is down');
 
         $this->route(self::MISSING_E2);
     }
@@ -183,7 +183,7 @@ final class RoutePullRequestTextTest extends TestCase
     public function testARepositoryThatCannotBeFoundIsRefused(): void
     {
         $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('the repository "'.__DIR__.'/missing" cannot be found');
+        $this->expectExceptionMessageIs('the repository "'.__DIR__.'/missing" cannot be found');
 
         PullRequestTextTask::resolved(__DIR__.'/missing', 'task');
     }
@@ -191,7 +191,7 @@ final class RoutePullRequestTextTest extends TestCase
     public function testAnEmptyBranchIsRefused(): void
     {
         $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('the branch is empty');
+        $this->expectExceptionMessageIs('the branch is empty');
 
         PullRequestTextTask::resolved(__DIR__, ' ');
     }

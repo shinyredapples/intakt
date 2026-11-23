@@ -46,26 +46,6 @@ final readonly class PullRequestTextRoutes
     }
 
     /**
-     * @template T
-     *
-     * @param Closure(): T $step
-     *
-     * @return T
-     */
-    private function locked(PullRequestTextTask $task, Closure $step): mixed
-    {
-        // Held from the read to the append, because two rounds of one task read alike would both be sent back; a key of its own, so this round never waits on the hand-back round's lock; a list, because a branch or path may hold any separator.
-        $lock = $this->locks->createLock('intakt-pull-request-text-'.hash('sha256', json_encode([$task->repository, $task->branch], JSON_THROW_ON_ERROR)));
-        $lock->acquire(true);
-
-        try {
-            return $step();
-        } finally {
-            $lock->release();
-        }
-    }
-
-    /**
      * @return array{repository: string, branch: string, verdict: string, reason: string, missing: list<positive-int>, body_characters: int}
      */
     private function payloadOf(PullRequestTextTask $task, PullRequestTextOutcome $outcome): array
@@ -91,6 +71,26 @@ final readonly class PullRequestTextRoutes
 
         if (!$result->succeeded()) {
             throw PullRequestTextRoundNotRecorded::for($kind->value, (string) $result->failure);
+        }
+    }
+
+    /**
+     * @template T
+     *
+     * @param Closure(): T $step
+     *
+     * @return T
+     */
+    private function locked(PullRequestTextTask $task, Closure $step): mixed
+    {
+        // Held from the read to the append, because two rounds of one task read alike would both be sent back; a key of its own, so this round never waits on the hand-back round's lock; a list, because a branch or path may hold any separator.
+        $lock = $this->locks->createLock('intakt-pull-request-text-'.hash('sha256', json_encode([$task->repository, $task->branch], JSON_THROW_ON_ERROR)));
+        $lock->acquire(true);
+
+        try {
+            return $step();
+        } finally {
+            $lock->release();
         }
     }
 

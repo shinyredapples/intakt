@@ -59,8 +59,6 @@ final class ParityRecordTest extends TestCase
             'Build and hand-back, line 20: Builder and reviewer egress is limited to an allowlist; the vendor login is unreadable to the model\'s commands.',
             'Build and hand-back, line 22: Builds run the project\'s own PHP, never a fallback.',
             'Build and hand-back, line 28: Only a green check pushes; the pre-check in the session catches refusals first.',
-            'Build and hand-back, line 29: Every Evidence item is referenced; a miss goes back once, a second miss goes to the reviewers.',
-            'Build and hand-back, line 30: A body over the cap goes back once with its commits kept.',
             'Build and hand-back, line 31: Composer changes beyond routine go to the owner, naming the packages.',
             'Build and hand-back, line 35: Transient forge API network failures are retried; one that outlasts the retries makes that project wait, not halt; only a long outage halts and notifies.',
             'CI, line 39: A head with pending CI holds nothing; heads with finished CI go first.',
