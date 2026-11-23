@@ -44,7 +44,7 @@ A project never names a model per reviewer. It maps three tiers to a provider an
 - **standard,** a mid-range model,
 - **light,** a small model; the owl runs on it.
 
-Each reviewer names a tier. So one changed line moves every reviewer on that tier to a newer model. The tiers live in the project file ([chapter 9](09-running-it-for-a-team.md#your-project-and-its-panel) says which file that is).
+Each reviewer names a tier. So one changed line moves every reviewer on that tier to a newer model. Use the newest model of each maker for reviews; the example configuration names the ones the project recommends today. The tiers live in the project file ([chapter 9](09-running-it-for-a-team.md#your-project-and-its-panel) says which file that is).
 
 ## When a provider says "slow down"
 
