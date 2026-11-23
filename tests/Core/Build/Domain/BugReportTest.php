@@ -30,6 +30,7 @@ final class BugReportTest extends TestCase
         yield 'headings with a colon and closing hashes' => ["### When: ###\na\n## today\nb\n# Expected:\nc\n## Must keep working ##\nd"];
         yield 'bold labels in a numbered list' => ["1. **When:** open\n2. **Today:** fails\n3) **Expected:** loads\n4. **Must keep working:** the list"];
         yield 'underlined headings' => ["When\n====\nopen\n\nToday\n-----\nfails\n\nExpected\n---\nloads\n\nMust keep working\n===\nthe list"];
+        yield 'headings in list items' => ["- ## When\n  open\n- ## Today\n  fails\n- ## Expected\n  loads\n- ## Must keep working\n  the list"];
         yield 'an inline code span of three backticks' => ["**When:** open\n```php echo 1; ```\n**Today:** fails\n**Expected:** loads\n**Must keep working:** the list"];
     }
 
@@ -73,6 +74,44 @@ final class BugReportTest extends TestCase
         $report = BugReport::fromBody("**When:** open\n**Today:** fails\n**Expected:** loads\n- an example:\n\n    ```\n    **Must keep working:** the list\n    ```");
 
         self::assertSame([BugPart::MustKeepWorking], $report->missingParts());
+    }
+
+    public function testAFenceInAListItemEndsWithTheItemSoThePartsAfterTheListCount(): void
+    {
+        $report = BugReport::fromBody("- Example:\n\n  ```text\n  sample\n\n**When:** open\n**Today:** fails\n**Expected:** loads\n**Must keep working:** the list");
+
+        self::assertSame([], $report->missingParts());
+    }
+
+    public function testBackticksInIndentedCodeOpenNoFenceSoThePartsAfterThemCount(): void
+    {
+        $report = BugReport::fromBody("    ```\n\n**When:** open\n**Today:** fails\n**Expected:** loads\n**Must keep working:** the list");
+
+        self::assertSame([], $report->missingParts());
+    }
+
+    public function testAFenceIndentedThreeColumnsStillHidesTheLinesUpToItsEnd(): void
+    {
+        $report = BugReport::fromBody("**When:** open\n**Today:** fails\n**Expected:** loads\n   ```\n**Must keep working:** the list\n   ```");
+
+        self::assertSame([BugPart::MustKeepWorking], $report->missingParts());
+    }
+
+    public function testAHeadingInAListItemEndsAPartSoAnEmptyPartBeforeItIsMissing(): void
+    {
+        $report = BugReport::fromBody("**When:** open\n**Today:** fails\n**Expected:** loads\n**Must keep working:**\n- ## Acceptance\n\n  A test passes");
+
+        self::assertSame([BugPart::MustKeepWorking], $report->missingParts());
+    }
+
+    public function testALongParagraphIsReadWithoutRescanningItForEveryLine(): void
+    {
+        $body = "**When:** open\n**Today:** fails\n**Expected:** loads\n**Must keep working:**\n".str_repeat("x\n", 16000);
+        $start = hrtime(true);
+
+        BugReport::fromBody($body);
+
+        self::assertLessThan(2.0, (hrtime(true) - $start) / 1e9);
     }
 
     public function testAnEmptyLastPartFollowedByAnotherBoldLabelIsMissing(): void
