@@ -53,6 +53,24 @@ final class HealthcheckScriptTest extends TestCase
         self::assertSame(0, $process->getExitCode(), $process->getErrorOutput());
     }
 
+    public function testTheHealthCheckCallsTheServerPortWithThePublishedPortAsHost(): void
+    {
+        $process = $this->check(['SERVER_PORT' => '7781', 'DASHBOARD_PORT' => '8080']);
+
+        self::assertSame(0, $process->getExitCode(), $process->getErrorOutput());
+        $calls = (string) file_get_contents($this->directory.'/calls');
+        self::assertStringContainsString('-H Host: localhost:8080 http://localhost:7781/', $calls);
+        self::assertStringNotContainsString('8080/', $calls);
+    }
+
+    public function testWithBothPortsAtTheirDefaultTheHealthCheckCallsLocalhost7781AsBefore(): void
+    {
+        $process = $this->check(['SERVER_PORT' => false, 'DASHBOARD_PORT' => false]);
+
+        self::assertSame(0, $process->getExitCode(), $process->getErrorOutput());
+        self::assertStringContainsString('-H Host: localhost:7781 http://localhost:7781/', (string) file_get_contents($this->directory.'/calls'));
+    }
+
     protected function setUp(): void
     {
         $this->directory = sys_get_temp_dir().'/intakt-healthcheck-'.bin2hex(random_bytes(6));
