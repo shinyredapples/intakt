@@ -67,4 +67,22 @@ final class GitEnvironmentTest extends TestCase
 
         $environment->with('value');
     }
+
+    public function testUnsettingANameThatWouldBecomeAnIntegerKeyIsRefused(): void
+    {
+        $environment = GitEnvironment::of(HOME: '/nonexistent');
+
+        $this->expectException(InvalidArgumentException::class);
+
+        $environment->unsetting('123');
+    }
+
+    public function testUnsettingTheSameNumericNameTwiceIsRefused(): void
+    {
+        $environment = GitEnvironment::of(HOME: '/nonexistent');
+
+        $this->expectException(InvalidArgumentException::class);
+
+        $environment->unsetting('123', '123');
+    }
 }
