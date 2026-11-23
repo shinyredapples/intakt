@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\SymfonyAiVendor;
 
+use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Review\Contract\Reviewer;
 use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Contract\Verdict;
@@ -21,7 +22,7 @@ final class ConversationsSeen implements Reviewer
     }
 
     #[Override]
-    public function review(ReviewRequest $request, PlatformInterface $platform, string $model): Verdict
+    public function review(ReviewRequest $request, PlatformInterface $platform, ResolvedModel $model): Verdict
     {
         $this->ids[] = $request->conversation->id->toRfc4122();
 

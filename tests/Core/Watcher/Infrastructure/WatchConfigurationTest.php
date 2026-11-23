@@ -18,17 +18,17 @@ final class WatchConfigurationTest extends TestCase
     {
         $projects = $this->processed(['repository' => '/r', 'base' => 'main', 'task' => 'Review.']);
 
-        self::assertSame(['alpha' => ['repository' => '/r', 'base' => 'main', 'task' => 'Review.']], $projects);
+        self::assertSame(['alpha' => ['repository' => '/r', 'base' => 'main', 'task' => 'Review.', 'eligibility_label' => 'intakt']], $projects);
     }
 
     public function testAGitHubRepositoryNamedOwnerSlashNameIsAccepted(): void
     {
         $projects = $this->processed(['repository' => '/r', 'base' => 'main', 'task' => 'Review.', 'github' => 'acme/widgets']);
 
-        self::assertSame(['alpha' => ['repository' => '/r', 'base' => 'main', 'task' => 'Review.', 'github' => 'acme/widgets']], $projects);
+        self::assertSame(['alpha' => ['repository' => '/r', 'base' => 'main', 'task' => 'Review.', 'github' => 'acme/widgets', 'eligibility_label' => 'intakt']], $projects);
     }
 
-    public function testAnEligibilityLabelIsAccepted(): void
+    public function testANamedEligibilityLabelReplacesTheDefault(): void
     {
         $projects = $this->processed(['repository' => '/r', 'base' => 'main', 'task' => 'Review.', 'eligibility_label' => 'build']);
 

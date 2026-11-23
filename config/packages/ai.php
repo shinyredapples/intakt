@@ -190,7 +190,7 @@ return static function (ContainerConfigurator $container): void {
     $projectReviewJobs = new Processor()->processConfiguration(new ReviewJobConfiguration(), [['projects' => $reviewJobs]])['projects'];
     /** @var array<string, array{mode: string}> $projectModes */
     $projectModes = new Processor()->processConfiguration(new ProjectModeConfiguration(), [['projects' => $modes]])['projects'];
-    /** @var array<string, array{repository: string, base: string, task: string, github?: string}> $projectWatches */
+    /** @var array<string, array{repository: string, base: string, task: string, github?: string, eligibility_label: string}> $projectWatches */
     $projectWatches = new Processor()->processConfiguration(new WatchConfiguration(), [['projects' => $watches]])['projects'];
     /** @var array<string, array{protected_paths: list<string>}> $projectProtectedPaths */
     $projectProtectedPaths = new Processor()->processConfiguration(new ProtectedPathsConfiguration(), [['projects' => $protectedPaths]])['projects'];

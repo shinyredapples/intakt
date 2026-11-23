@@ -17,6 +17,7 @@ use Intakt\Core\Review\Contract\VerdictUnreadable;
 use Intakt\Core\Review\Infrastructure\ReviewerAnswer\Verdict as ReviewerAnswer;
 use Intakt\Core\Review\Infrastructure\StrictVerdictConverter;
 use Intakt\Core\Review\Infrastructure\StrictVerdictSubscriber;
+use Intakt\Core\Review\Infrastructure\VerdictInText;
 use Intakt\Kernel;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -41,6 +42,7 @@ use Symfony\Component\Serializer\Normalizer\AbstractNormalizer;
 #[CoversClass(Verdict::class)]
 #[CoversClass(StrictVerdictSubscriber::class)]
 #[CoversClass(StrictVerdictConverter::class)]
+#[CoversClass(VerdictInText::class)]
 #[CoversClass(ReviewerAnswer::class)]
 #[UsesClass(Kernel::class)]
 #[UsesClass(Finding::class)]
