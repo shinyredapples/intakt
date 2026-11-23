@@ -37,6 +37,16 @@ final class RedactionTest extends TestCase
         self::assertSame('fixtures/key_[redacted].txt', $redacted);
     }
 
+    public function testItRedactsAWebTokenThatStartsInsideAnApiKeyWhole(): void
+    {
+        $key = 'sk-'.str_repeat('K', 24);
+        $webToken = 'eyJ'.str_repeat('H', 12).'.eyJ'.str_repeat('P', 12).'.'.str_repeat('S', 16);
+
+        $redacted = new Redaction()->redact('fixtures/key_'.$key.'-'.$webToken.'.txt');
+
+        self::assertSame('fixtures/key_[redacted].txt', $redacted);
+    }
+
     public function testItLeavesAWordThatContainsATokenPrefixAfterALetter(): void
     {
         $word = 'xghp_'.str_repeat('a', 30);
