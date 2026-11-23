@@ -83,7 +83,7 @@ final readonly class DependencyJobs
         try {
             return $this->platformOf($this->jobs->run($spec));
         } catch (JobOutputRefused|JobRefused) {
-            // A probe of the same head still running (a second check) or unreadable output only costs the reuse, so the check installs itself.
+            // Any refusal of the probe only costs the reuse, so the check installs itself.
             return null;
         }
     }
