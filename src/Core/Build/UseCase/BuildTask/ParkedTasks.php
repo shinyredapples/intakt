@@ -33,16 +33,16 @@ final readonly class ParkedTasks
     /**
      * @throws TaskNotParked
      */
-    public function park(string $project, int $task, BuildQuestion $question): void
+    public function park(BuildRun $run, BuildQuestion $question): void
     {
         // Refused before any write, because inside a caller's transaction the commit only releases a savepoint and the caller could still take the question back.
         if ($this->connection->isTransactionActive()) {
-            throw TaskNotParked::for($project, $task);
+            throw TaskNotParked::for($run->project, $run->task);
         }
 
-        $record = new ParkedTaskRecord($project, $task, $question, $this->clock->now()->setTimezone(new DateTimeZone('UTC')));
+        $record = new ParkedTaskRecord($run->project, $run->task, $question, $this->clock->now()->setTimezone(new DateTimeZone('UTC')));
 
-        if ($this->storedWithItsAskedStep($record, $project, $task)) {
+        if ($this->storedWithItsAskedStep($record, $run)) {
             return;
         }
 
@@ -50,10 +50,10 @@ final readonly class ParkedTasks
         // Reset after every failed parking, because the manager still holds the asked record the rollback took back, and a worker keeps the manager.
         $this->doctrine->resetManager();
 
-        throw TaskNotParked::for($project, $task);
+        throw TaskNotParked::for($run->project, $run->task);
     }
 
-    private function storedWithItsAskedStep(ParkedTaskRecord $record, string $project, int $task): bool
+    private function storedWithItsAskedStep(ParkedTaskRecord $record, BuildRun $run): bool
     {
         try {
             $this->connection->beginTransaction();
@@ -61,7 +61,7 @@ final readonly class ParkedTasks
             $this->connection->delete(ParkedTaskRecord::TABLE, $record->keyRow());
             $this->connection->insert(ParkedTaskRecord::TABLE, $record->row(), ParkedTaskRecord::rowTypes());
 
-            if (!$this->ledger->append(new LedgerEvent(LedgerEventKind::BuildStepEnded, $this->askedPayload($project, $task)))->succeeded()) {
+            if (!$this->ledger->append(new LedgerEvent(LedgerEventKind::BuildStepEnded, $run->stepPayload(BuildStep::BuildJob, BuildStepOutcome::Asked, null)))->succeeded()) {
                 return false;
             }
 
@@ -92,17 +92,5 @@ final readonly class ParkedTasks
 
         // Closed, because DBAL's count of open transactions can also outlive one the database rolled back itself, and only closing resets it; the connection opens again on its next use.
         $this->connection->close();
-    }
-
-    // Because the question is untrusted text, the payload names the task by its number only, as every other step's does.
-    private function askedPayload(string $project, int $task): string
-    {
-        return json_encode([
-            'project' => $project,
-            'task' => (string) $task,
-            'step' => BuildStep::BuildJob->value,
-            'outcome' => BuildStepOutcome::Asked->value,
-            'failure' => null,
-        ], JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE);
     }
 }

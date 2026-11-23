@@ -337,7 +337,7 @@ final class ReplaysRecordingTest extends TestCase
             $this->replays()->replay($this->recordedRun(), 1.0);
             self::fail('The replay went on after a failed append.');
         } catch (ReplayStopped $stopped) {
-            self::assertStringEndsWith('The events it wrote stay in the ledger: remove them with intakt:demo:remove, then run intakt:demo:create, before replaying this recording.', $stopped->getMessage());
+            self::assertStringEndsWith('The events it wrote stay in the ledger: remove them with intakt:demo:remove, then press Play, which creates the demo project again (a console replay needs intakt:demo:create first).', $stopped->getMessage());
         }
     }
 

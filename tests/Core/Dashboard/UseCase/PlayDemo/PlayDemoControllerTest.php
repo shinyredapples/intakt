@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Dashboard\UseCase\PlayDemo;
 use Intakt\Core\Dashboard\Domain\TourCaption;
 use Intakt\Core\Dashboard\Domain\TourStage;
 use Intakt\Core\Dashboard\Infrastructure\DemoTour;
+use Intakt\Core\Dashboard\Infrastructure\FormIsRefused;
 use Intakt\Core\Dashboard\UseCase\CreateDemoProject\CreateDemoProjectCommand;
 use Intakt\Core\Dashboard\UseCase\PlayDemo\DemoReadiness;
 use Intakt\Core\Dashboard\UseCase\PlayDemo\DemoRuns;
@@ -23,7 +24,6 @@ use Psr\Log\LogLevel;
 use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\HttpFoundation\Session\FlashBagAwareSessionInterface;
-use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Messenger\Envelope;
 
@@ -137,8 +137,10 @@ final class PlayDemoControllerTest extends DashboardPageTestCase
 
         self::assertResponseStatusCodeSame(303);
         self::assertMatchesRegularExpression('~^/demo\?play=[0-9a-f]{32}$~', (string) $this->browser->getResponse()->headers->get('Location'));
-        self::assertEquals([new PlayDemoRun()], array_map(static fn (Envelope $sent): object => $sent->getMessage(), $this->queued()));
-        $this->browser->followRedirect();
+        $play = substr((string) $this->browser->getResponse()->headers->get('Location'), -32);
+        self::assertEquals([new PlayDemoRun($play)], array_map(static fn (Envelope $sent): object => $sent->getMessage(), $this->queued()));
+        $page = $this->browser->followRedirect();
+        self::assertCount(1, $page->filter('#demo-play-'.$play.' .flash-success'));
         self::assertSelectorTextContains('.flash-success', 'The demo run is starting');
     }
 
@@ -211,11 +213,24 @@ final class PlayDemoControllerTest extends DashboardPageTestCase
     {
         $this->demoPage();
 
-        $this->browser->request('POST', '/demo', ['_token' => 'wrong']);
+        $page = $this->browser->request('POST', '/demo', ['_token' => 'wrong']);
 
         self::assertResponseStatusCodeSame(400);
         self::assertSame([], $this->queued());
-        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so the demo run was not started."', BadRequestHttpException::class));
+        self::assertSame('The form token is missing or wrong, so the demo run was not started. Go back, reload the page and press the button again.', $page->filter('.page-head .lead')->text());
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so the demo run was not started."', FormIsRefused::class));
+    }
+
+    public function testPressingPlayWithATokenThatIsNoTextStartsNothingAndShowsTheSameRefusal(): void
+    {
+        $this->demoPage();
+
+        $page = $this->browser->request('POST', '/demo', ['_token' => ['wrong']]);
+
+        self::assertResponseStatusCodeSame(400);
+        self::assertSame([], $this->queued());
+        self::assertSame('The form token is missing or wrong, so the demo run was not started. Go back, reload the page and press the button again.', $page->filter('.page-head .lead')->text());
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so the demo run was not started."', FormIsRefused::class));
     }
 
     public function testPressingPlayOutsideTheComposeDemoStartsNothingAndSaysWhy(): void
