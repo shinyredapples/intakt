@@ -44,10 +44,14 @@ final readonly class GitEnvironment implements IteratorAggregate
 
     public function unsetting(string ...$names): self
     {
-        $unset = array_fill_keys($names, false);
-        // PHP turns a numeric name into an integer key, which would lose the name.
-        if (!array_all($unset, static fn (bool $value, int|string $name): bool => is_string($name))) {
-            throw new InvalidArgumentException('A git environment variable name is numeric.');
+        $unset = [];
+        foreach ($names as $name) {
+            // PHP turns a numeric name into an integer key, which would lose the name.
+            if (array_key_first([$name => false]) !== $name) {
+                throw new InvalidArgumentException('A git environment variable name is numeric.');
+            }
+
+            $unset[$name] = false;
         }
 
         return new self([...$this->variables, ...$unset]);

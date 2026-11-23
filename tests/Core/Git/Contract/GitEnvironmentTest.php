@@ -77,6 +77,13 @@ final class GitEnvironmentTest extends TestCase
         $environment->unsetting('123');
     }
 
+    public function testUnsettingTheSameNameTwiceUnsetsItOnce(): void
+    {
+        $environment = GitEnvironment::of(HOME: '/nonexistent')->unsetting('GIT_DIR', 'GIT_WORK_TREE', 'GIT_DIR');
+
+        self::assertSame(['HOME' => '/nonexistent', 'GIT_DIR' => false, 'GIT_WORK_TREE' => false], [...$environment]);
+    }
+
     public function testUnsettingTheSameNumericNameTwiceIsRefused(): void
     {
         $environment = GitEnvironment::of(HOME: '/nonexistent');
