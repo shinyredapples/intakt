@@ -90,6 +90,7 @@ use Intakt\Core\HandBack\Domain\MarkdownText;
 use Intakt\Core\HandBack\Domain\OpenListItems;
 use Intakt\Core\HandBack\Domain\ParagraphEnd;
 use Intakt\Core\HandBack\Domain\PullRequestTextRule;
+use Intakt\Core\HandBack\Infrastructure\DependencySnapshots;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\BundleFile;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\BundleSecretScan;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\CheckHandBack;
@@ -100,6 +101,9 @@ use Intakt\Core\HandBack\UseCase\CheckHandBack\StrippedCommits;
 use Intakt\Core\HandBack\UseCase\CheckPullRequestText\PullRequestTextRoutes;
 use Intakt\Core\HandBack\UseCase\CheckPullRequestText\RoutePullRequestText;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\ChangedFile;
+use Intakt\Core\HandBack\UseCase\RunCheckJob\CheckDependencies;
+use Intakt\Core\HandBack\UseCase\RunCheckJob\CheckedLockFiles;
+use Intakt\Core\HandBack\UseCase\RunCheckJob\DependencyJobs;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\LostContentCheck;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\RunCheckJob;
 use Intakt\Core\Job\Contract\JobCause;
@@ -126,6 +130,7 @@ use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\JobCredentials;
 use Intakt\Plugin\Forge\Contract\OpenedChange;
 use Intakt\Plugin\Forge\Contract\ProposedChange;
+use Intakt\Plugin\Gate\Contract\DependencyStep;
 use Intakt\Plugin\GitHubForge\Contract\ConfiguredRepositories;
 use Intakt\Plugin\GitHubForge\Contract\IssueReads;
 use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
@@ -136,6 +141,7 @@ use Intakt\Tests\Core\Git\TemporaryRepository;
 use Intakt\Tests\Core\Git\UseCase\PushBranch\ProgramOnPath;
 use Intakt\Tests\Core\Git\UseCase\PushBranch\PushScenario;
 use Intakt\Tests\Core\Git\UseCase\PushBranch\RecordingChangeOpening;
+use Intakt\Tests\Core\HandBack\CheckJobsFor;
 use Intakt\Tests\Core\HandBack\FailingLockStore;
 use Intakt\Tests\Core\HandBack\RecordingLedger;
 use Intakt\Tests\Core\HandBack\UnreadableLedger;
@@ -210,6 +216,11 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(ProposedChange::class)]
 #[UsesClass(RunCheckJob::class)]
 #[UsesClass(LostContentCheck::class)]
+#[UsesClass(CheckDependencies::class)]
+#[UsesClass(CheckedLockFiles::class)]
+#[UsesClass(DependencyJobs::class)]
+#[UsesClass(DependencySnapshots::class)]
+#[UsesClass(DependencyStep::class)]
 #[UsesClass(ChangedFile::class)]
 #[UsesClass(CheckJob::class)]
 #[UsesClass(CheckJobOutcome::class)]
@@ -1256,7 +1267,7 @@ final class BuildTaskTest extends TestCase
     protected function tearDown(): void
     {
         $this->programs?->remove();
-        new Filesystem()->remove([$this->mirrors, $this->clone, $this->clone.'-job', $this->output, $this->mirrors.'-prompts', $this->mirrors.'-hand-backs', $this->mirrors.'-key', $this->mirrors.'-key.pub']);
+        new Filesystem()->remove([$this->mirrors, $this->clone, $this->clone.'-job', $this->output, $this->mirrors.'-prompts', $this->mirrors.'-hand-backs', $this->mirrors.'-key', $this->mirrors.'-key.pub', $this->mirrors.'-checks']);
         $this->remote->remove();
     }
 
@@ -1421,7 +1432,8 @@ final class BuildTaskTest extends TestCase
         $git = new RepositoryGit(new HardenedGit());
         $checks = new CheckHandBack($git, new BundleFile(), new StrippedCommits(), new IncomingObjects(), new BundleSecretScan($this->scanner));
         $files = new HandBackFile($checkout, $this->handBackFiles, $this->mirrors.'-hand-backs');
-        $checkJobs = new RunCheckJob($checks, new LostContentCheck($git), $this->checkRunner, new PhpGate(), new Filesystem(), self::CHECK_SCRIPT);
+        $dependencies = new CheckJobsFor($this->mirrors.'-checks')->dependencies($this->checkRunner, new PhpGate());
+        $checkJobs = new RunCheckJob($checks, new LostContentCheck($git), $dependencies, $this->checkRunner, new PhpGate(), new Filesystem(), self::CHECK_SCRIPT);
 
         // On a database that cannot be opened, because a parking that works is proven on the install's own database in BuildTaskParksOnSqliteTest.
         $parked = new ParkedTasks(DriverManager::getConnection(['driver' => 'pdo_sqlite', 'path' => $this->mirrors.'-missing/data.db']), $ledger, self::createStub(ManagerRegistry::class), new MockClock());
