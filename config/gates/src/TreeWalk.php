@@ -82,48 +82,87 @@ final readonly class TreeWalk
     // Because realpath() hides the links part way along a route (a link to a folder behind another link), the route is followed one name at a time, and every folder and link it passes within $root counts, since moving one of them away also takes the gates' input away.
     private function route(string $link, string $key, string $root): Generator
     {
-        $folder = realpath(dirname($link));
+        [$folder, $names] = $this->followed($link, $this->realFolderOf(dirname($link)), []);
 
-        if (false === $folder) {
-            throw new UnexpectedValueException('cannot read '.dirname($link));
-        }
+        for ($links = 1; [] !== $names;) {
+            $next = $this->stepped($folder, array_shift($names));
 
-        $target = $this->targetOf($link);
-        $folder = str_starts_with($target, '/') ? '' : $folder;
-        $names = $this->namesOf($target);
-        $links = 1;
+            yield from $this->statusWithin($next, $key, $root);
 
-        while ([] !== $names) {
-            $name = array_shift($names);
-
-            if ('..' === $name) {
-                $folder = rtrim(dirname('' === $folder ? '/' : $folder), '/');
-
-                continue;
-            }
-
-            $next = $folder.'/'.$name;
-
-            if (str_starts_with($next, $root.'/')) {
-                // Because the key of the folder a link leads to ends in one zero byte, a key with two before its path never passes for that key, for a folder above it, nor for a path in the tree.
-                yield $key."\0\0".substr($next, strlen($root) + 1) => $this->settledStatusOf($next);
-            }
-
-            if (!is_link($next)) {
+            if (is_link($next)) {
+                $this->refusePast(++$links, $link);
+                [$folder, $names] = $this->followed($next, $folder, $names);
+            } else {
                 $folder = $next;
-
-                continue;
             }
-
-            if (++$links > self::MOST_LINKS_ON_A_ROUTE) {
-                throw new UnexpectedValueException('a link leads back into itself: '.$link);
-            }
-
-            $target = $this->targetOf($next);
-            $folder = str_starts_with($target, '/') ? '' : $folder;
-            $names = [...$this->namesOf($target), ...$names];
         }
 
+        return $this->existing($folder, $link);
+    }
+
+    /**
+     * @throws UnexpectedValueException
+     */
+    private function realFolderOf(string $path): string
+    {
+        $real = realpath($path);
+
+        if (false === $real) {
+            throw new UnexpectedValueException('cannot read '.$path);
+        }
+
+        return $real;
+    }
+
+    /**
+     * @param list<string> $names
+     *
+     * @return array{string, list<string>}
+     *
+     * @throws UnexpectedValueException
+     */
+    // Because a folder is held without its trailing slash, the root of the file system is the empty string.
+    private function followed(string $link, string $folder, array $names): array
+    {
+        $target = $this->targetOf($link);
+        $parts = array_values(array_filter(explode('/', $target), static fn (string $name): bool => '' !== $name && '.' !== $name));
+
+        return [str_starts_with($target, '/') ? '' : $folder, [...$parts, ...$names]];
+    }
+
+    private function stepped(string $folder, string $name): string
+    {
+        return '..' === $name ? rtrim(dirname('' === $folder ? '/' : $folder), '/') : $folder.'/'.$name;
+    }
+
+    /**
+     * @return iterable<string, string>
+     *
+     * @throws UnexpectedValueException
+     */
+    private function statusWithin(string $path, string $key, string $root): iterable
+    {
+        if (str_starts_with($path, $root.'/')) {
+            // Because the key of the folder a link leads to ends in one zero byte, a key with two before its path never passes for that key, for a folder above it, nor for a path in the tree.
+            yield $key."\0\0".substr($path, strlen($root) + 1) => $this->settledStatusOf($path);
+        }
+    }
+
+    /**
+     * @throws UnexpectedValueException
+     */
+    private function refusePast(int $links, string $link): void
+    {
+        if ($links > self::MOST_LINKS_ON_A_ROUTE) {
+            throw new UnexpectedValueException('a link leads back into itself: '.$link);
+        }
+    }
+
+    /**
+     * @throws UnexpectedValueException
+     */
+    private function existing(string $folder, string $link): string
+    {
         $end = '' === $folder ? '/' : $folder;
 
         if (!file_exists($end)) {
@@ -150,14 +189,6 @@ final readonly class TreeWalk
         }
 
         return implode(' ', [$status['mode'], $status['size'], $status['mtime'], $status['ctime'], $status['ino']]);
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function namesOf(string $target): array
-    {
-        return array_values(array_filter(explode('/', $target), static fn (string $name): bool => '' !== $name && '.' !== $name));
     }
 
     /**

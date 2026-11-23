@@ -381,10 +381,12 @@ final class PassedTreeTest extends SandboxTestCase
         $root->symlink('var/loop', 'notes');
         $real = (string) realpath($root->root);
 
-        $this->expectException(UnexpectedValueException::class);
-        $this->expectExceptionMessage('leads back into itself');
-
-        iterator_to_array(new TreeWalk([], null)->folderAlone($real.'/var/notes', 'var/notes', $real));
+        try {
+            iterator_to_array(new TreeWalk([], null)->folderAlone($real.'/var/notes', 'var/notes', $real));
+            self::fail('a loop of links was followed');
+        } catch (UnexpectedValueException $refused) {
+            self::assertStringContainsString('leads back into itself', $refused->getMessage());
+        }
     }
 
     public function testAFolderWhoseLinkLeadsNowhereIsRefused(): void
