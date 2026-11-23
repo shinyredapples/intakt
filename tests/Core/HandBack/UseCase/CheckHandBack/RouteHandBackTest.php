@@ -224,7 +224,7 @@ final class RouteHandBackTest extends TestCase
     {
         $this->history->commit('First');
 
-        (void) $this->route('Uses the key '.$this->fakeKey());
+        $this->route('Uses the key '.$this->fakeKey());
 
         self::assertSame(0, $this->ledger->fullReads);
         self::assertEqualsCanonicalizing([LedgerEventKind::HandBackAccepted, LedgerEventKind::HandBackSentBack, LedgerEventKind::HandBackHandedOver], $this->ledger->kindsRequested);

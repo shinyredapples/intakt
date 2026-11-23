@@ -91,7 +91,7 @@ final class RecordingLedger implements Ledger
     #[Override]
     public function readOfKindsMentioning(Mentions $texts, LedgerEventKind ...$kinds): RecordedEvents
     {
-        $this->kindsRequested = $kinds;
+        $this->kindsRequested = array_values($kinds);
         if ($this->onRead instanceof Closure) {
             ($this->onRead)();
         }
