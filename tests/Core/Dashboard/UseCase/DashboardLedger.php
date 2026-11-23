@@ -415,7 +415,7 @@ final class DashboardLedger implements Ledger
         $this->recorded[] = new RecordedEvent(Uuid::v7(), new LedgerEvent($kind, json_encode($payload, JSON_THROW_ON_ERROR)), $at ?? new DateTimeImmutable('2026-10-28T12:00:00+00:00'));
     }
 
-    // Under the round as its subject, as RoundLedger appends it, so the live lookup finds it.
+    // Under the round as its subject, as RoundLedger appends it, so readOfKindAbout() finds it.
     /**
      * @param array<string, mixed> $payload
      */
