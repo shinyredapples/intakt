@@ -24,6 +24,19 @@ final readonly class MarkdownListIndents
         return strlen($parts[1] ?? '') + strlen($parts[2] ?? '') + (0 === $gap || $gap > 4 ? 1 : $gap);
     }
 
+    public function afterMarker(string $listItem): string
+    {
+        return substr($this->expanded($listItem), $this->contentIndent($listItem));
+    }
+
+    public function opensWithCode(string $listItem): bool
+    {
+        preg_match(self::LIST_MARKER, $this->expanded($listItem), $parts);
+
+        // A gap of five or more columns after the marker makes the item's first line indented code (CommonMark 5.2).
+        return strlen($parts[3] ?? '') > 4 && '' !== trim($this->afterMarker($listItem));
+    }
+
     /**
      * @param list<int> $lists
      *

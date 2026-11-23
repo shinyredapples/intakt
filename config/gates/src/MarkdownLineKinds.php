@@ -38,11 +38,12 @@ final readonly class MarkdownLineKinds
                 $this->startsIndentedCode($content, $previous, $lists) => MarkdownLineKind::Code,
                 1 === preg_match(self::HEADING, $content) => MarkdownLineKind::Heading,
                 1 === preg_match(self::THEMATIC_BREAK, $content) => MarkdownLineKind::Break,
-                1 === preg_match(self::LIST_ITEM, $content) => MarkdownLineKind::ListItem,
+                1 === preg_match(self::LIST_ITEM, $content) => $this->indents->opensWithCode($content) ? MarkdownLineKind::CodeItem : MarkdownLineKind::ListItem,
                 default => MarkdownLineKind::Prose,
             };
             // A line that continues a paragraph is lazy in CommonMark, so its indentation closes no list item.
             $lists = MarkdownLineKind::Prose === $kind && MarkdownLineKind::Blank !== $previous ? $lists : $this->openLists($kind, $content, $lists);
+            $kind = MarkdownLineKind::CodeItem === $kind ? MarkdownLineKind::Code : $kind;
             $kinds[] = $kind;
         }
 
@@ -83,9 +84,9 @@ final readonly class MarkdownLineKinds
     private function openLists(MarkdownLineKind $kind, string $content, array $lists): array
     {
         return match ($kind) {
-            MarkdownLineKind::ListItem => [...$this->indents->within($lists, $this->indents->indent($content)), $this->indents->contentIndent($content)],
-            MarkdownLineKind::Heading, MarkdownLineKind::Break, MarkdownLineKind::Table => [],
-            MarkdownLineKind::Prose => $this->indents->within($lists, $this->indents->indent($content)),
+            MarkdownLineKind::ListItem, MarkdownLineKind::CodeItem => [...$this->indents->within($lists, $this->indents->indent($content)), $this->indents->contentIndent($content)],
+            // A heading, break or table indented to an item's content sits inside that item, so it keeps the item open.
+            MarkdownLineKind::Heading, MarkdownLineKind::Break, MarkdownLineKind::Table, MarkdownLineKind::Prose => $this->indents->within($lists, $this->indents->indent($content)),
             default => $lists,
         };
     }

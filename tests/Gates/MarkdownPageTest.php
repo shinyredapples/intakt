@@ -247,6 +247,49 @@ final class MarkdownPageTest extends TestCase
         self::assertSame(['Item.', 'More of the item.'], $this->texts($page->paragraphs()));
     }
 
+    public function testADelimiterRowIndentedFourSpacesContinuesTheParagraph(): void
+    {
+        $page = $this->page('Name | Value', '    --- | ---', 'This prose should be measured.');
+
+        self::assertSame(['Name | Value --- | --- This prose should be measured.'], $this->texts($page->paragraphs()));
+    }
+
+    public function testADelimiterRowIndentedThreeSpacesStillStartsATable(): void
+    {
+        $page = $this->page('Name | Value', '   --- | ---', 'Row | cell', '', 'Prose.');
+
+        self::assertSame(['Prose.'], $this->texts($page->paragraphs()));
+    }
+
+    public function testAListItemWhoseFirstLineIsIndentedCodeIsNotCounted(): void
+    {
+        $page = $this->page('-     code words', '', 'After.');
+
+        self::assertSame(['After.'], $this->texts($page->paragraphs()));
+        self::assertSame(1, $page->words());
+    }
+
+    public function testAListItemWithAShortGapIsProse(): void
+    {
+        $page = $this->page('-    item words', '', 'After.');
+
+        self::assertSame(['item words', 'After.'], $this->texts($page->paragraphs()));
+    }
+
+    public function testAHeadingInsideAListItemKeepsTheItemOpenForTheProseAfterIt(): void
+    {
+        $page = $this->page('- Item.', '', '  ## Heading', '', '    Item prose.');
+
+        self::assertSame(['Item.', 'Item prose.'], $this->texts($page->paragraphs()));
+    }
+
+    public function testAHeadingAtTheMarginEndsTheListSoIndentedLinesAfterItAreCode(): void
+    {
+        $page = $this->page('- Item.', '', '## Heading', '', '    code words');
+
+        self::assertSame(['Item.'], $this->texts($page->paragraphs()));
+    }
+
     private function page(string ...$lines): MarkdownPage
     {
         return new MarkdownPage('docs/page.md', array_values($lines));

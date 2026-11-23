@@ -19,43 +19,37 @@ final readonly class MarkdownCodeBlocks
      */
     public function blanked(array $lines): array
     {
-        $atMargin = $this->fences->blanked($lines);
-        // A fence inside a list item may sit four or more columns in, so it is read again with each item's indentation removed.
-        $inLists = $this->fences->blanked($this->outdented($lines, $atMargin));
-
-        foreach (array_keys($lines) as $index) {
-            if ('' === $atMargin[$index] || '' === $inLists[$index]) {
-                $lines[$index] = '';
-            }
-        }
-
-        return $lines;
-    }
-
-    /**
-     * @param list<string> $lines
-     * @param list<string> $atMargin
-     *
-     * @return list<string>
-     */
-    private function outdented(array $lines, array $atMargin): array
-    {
         $lists = [];
-        $outdented = [];
+        $fence = null;
 
         foreach ($lines as $index => $line) {
             if ('' !== trim($line)) {
-                $lists = $this->indents->within($lists, $this->indents->indent($line));
+                $open = $this->indents->within($lists, $this->indents->indent($line));
+                // CommonMark: a line indented less than the item's content ends the item, and with it any fence the item holds.
+                $fence = count($open) < count($lists) ? null : $fence;
+                $lists = $open;
             }
 
-            $outdented[] = '' === $atMargin[$index] ? '' : $this->indents->outdented($line, $this->indents->innermost($lists));
+            if (null !== $fence) {
+                $fence = $this->fences->fenceAfter($this->indents->outdented($line, $this->indents->innermost($lists)), $fence);
+                $lines[$index] = '';
 
-            if ('' !== $atMargin[$index] && $this->startsAListItem($line)) {
+                continue;
+            }
+
+            $content = $this->indents->outdented($line, $this->indents->innermost($lists));
+
+            if ($this->startsAListItem($line)) {
+                // A fence may open on the marker line itself, so the item's content is read without its marker.
+                $content = $this->indents->afterMarker($line);
                 $lists[] = $this->indents->contentIndent($line);
             }
+
+            $fence = $this->fences->fenceAfter($content, null);
+            $lines[$index] = null === $fence ? $line : '';
         }
 
-        return $outdented;
+        return $lines;
     }
 
     private function startsAListItem(string $line): bool

@@ -16,8 +16,9 @@ final readonly class MarkdownDelimiterRow
     {
         $cells = $this->cells($delimiter);
 
-        // A row with a missing column or a cell without a hyphen is no delimiter in GFM, so the prose below it must stay measured.
-        return count($cells) === count($this->cells($header))
+        // A row with a missing column, a cell without a hyphen or four columns of indentation is no delimiter in GFM, so the prose around it must stay measured.
+        return 0 === preg_match(MarkdownLineKinds::INDENTED_CODE, $delimiter)
+            && count($cells) === count($this->cells($header))
             && [] === array_filter($cells, static fn (string $cell): bool => 0 === preg_match(self::DELIMITER_CELL, $cell));
     }
 

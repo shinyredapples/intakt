@@ -12,5 +12,7 @@ enum MarkdownLineKind: string
     case Table = 'table';
     case Code = 'code';
     case ListItem = 'list item';
+    // Only while the line kinds are read: an item whose first line is indented code opens a list but is measured as code.
+    case CodeItem = 'code item';
     case Prose = 'prose';
 }

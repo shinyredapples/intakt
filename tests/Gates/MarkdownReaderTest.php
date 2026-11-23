@@ -69,6 +69,43 @@ final class MarkdownReaderTest extends TestCase
         self::assertSame(['Before.', 'After.'], array_map(static fn (MarkdownParagraph $paragraph): string => $paragraph->text, $page->paragraphs()));
     }
 
+    public function testAnUnclosedFenceInANestedListItemEndsWithTheList(): void
+    {
+        new Filesystem()->dumpFile($this->root.'/docs/unclosed.md', "- Item.\n  - Nested.\n    ```\n    code words\n\nAfter.\n");
+
+        $page = $this->reader()->pages($this->root, ['docs/unclosed.md'])[0];
+
+        self::assertSame(['Item.', 'Nested.', 'After.'], array_map(static fn (MarkdownParagraph $paragraph): string => $paragraph->text, $page->paragraphs()));
+    }
+
+    public function testAnUnclosedFenceIndentedPastTheItemsContentEndsWithTheList(): void
+    {
+        new Filesystem()->dumpFile($this->root.'/docs/deeper.md', "- Item.\n    ```\n    code\n\nAfter words here.\n");
+
+        $page = $this->reader()->pages($this->root, ['docs/deeper.md'])[0];
+
+        self::assertSame(['Item.', 'After words here.'], array_map(static fn (MarkdownParagraph $paragraph): string => $paragraph->text, $page->paragraphs()));
+    }
+
+    public function testAFenceOpenedOnTheListMarkerLineIsNotCounted(): void
+    {
+        new Filesystem()->dumpFile($this->root.'/docs/marker.md', "- ```\n  code words\n  ```\n\nAfter.\n");
+
+        $page = $this->reader()->pages($this->root, ['docs/marker.md'])[0];
+
+        self::assertSame(['After.'], array_map(static fn (MarkdownParagraph $paragraph): string => $paragraph->text, $page->paragraphs()));
+        self::assertSame(1, $page->words());
+    }
+
+    public function testAListItemLineInsideAFenceStartsNoItem(): void
+    {
+        new Filesystem()->dumpFile($this->root.'/docs/inside.md', "- Item.\n  ```\n  - not an item\n  more code\n  ```\n\nAfter.\n");
+
+        $page = $this->reader()->pages($this->root, ['docs/inside.md'])[0];
+
+        self::assertSame(['Item.', 'After.'], array_map(static fn (MarkdownParagraph $paragraph): string => $paragraph->text, $page->paragraphs()));
+    }
+
     public function testAMissingPageFailsTheReader(): void
     {
         $this->expectExceptionObject(new MarkdownReadFailure('cannot read docs/gone.md'));
