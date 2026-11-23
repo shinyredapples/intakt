@@ -6,7 +6,7 @@ namespace Intakt\Core\Review\Contract;
 
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
-// Matched by id because the judge's answer is data, and prose of a finding is never read; a gate gap is never on the act list, because a gate that misses a case gets a gate issue and not a send-back (decision D4 of #845): marked act or defer it is a follow-up, marked reject it is rejected, and without a mark it is on neither list, because only a judge's own mark may set a finding aside. Any other P1 or P2 is always on the act list whatever its mark (a defer or reject keeps only the judge's note, as given, because the ledger redacts it when it stores it), and a P3 with no mark or marked reject is on neither list.
+// Matched by id because the judge's answer is data, and prose of a finding is never read; a gate-gap P3 is never on the act list, because a gate that misses a case gets a gate issue and not a send-back (decision D4 of #845): marked act or defer it is a follow-up, marked reject it is rejected, and without a mark it is on neither list, because only a judge's own mark may set a finding aside. Every P1 or P2 is always on the act list whatever its mark, a gate gap too, because the gate-gap flag is the reviewer's own unverified claim and must never take away the veto of a blocking finding nor let the fallback's act make a follow-up (a defer or reject keeps only the judge's note, as given, because the ledger redacts it when it stores it), and any other P3 with no mark or marked reject is on neither list.
 #[Exclude]
 final readonly class JudgedFindings
 {
@@ -57,27 +57,27 @@ final readonly class JudgedFindings
 
     private static function actedOn(Finding $finding, ?Mark $mark): bool
     {
-        return !$finding->gate_gap && (self::blocking($finding) || Mark::Act === $mark);
+        return self::blocking($finding) || (!$finding->gate_gap && Mark::Act === $mark);
     }
 
-    // A gate gap the judge marked act is deferred as well, because a gate that misses a case gets a gate issue and not a send-back.
+    // A gate-gap P3 the judge marked act is deferred as well, because a gate that misses a case gets a gate issue and not a send-back.
     private static function deferred(Finding $finding, ?Mark $mark): bool
     {
-        return $finding->gate_gap ? in_array($mark, [Mark::Act, Mark::Defer], true) : !self::blocking($finding) && Mark::Defer === $mark;
+        return !self::blocking($finding) && ($finding->gate_gap ? in_array($mark, [Mark::Act, Mark::Defer], true) : Mark::Defer === $mark);
     }
 
     private static function rejected(Finding $finding, ?Mark $mark): bool
     {
-        return Mark::Reject === $mark && ($finding->gate_gap || !self::blocking($finding));
+        return Mark::Reject === $mark && !self::blocking($finding);
     }
 
-    // Only a P1 or P2 that is no gate gap and is marked defer or reject keeps a note, because plain code does not apply that mark (the finding stays on the act list), so the note takes the place of the mark.
+    // Only a P1 or P2 marked defer or reject keeps a note, because plain code does not apply that mark (the finding stays on the act list), so the note takes the place of the mark.
     /**
      * @param list<Finding> $findings
      */
     private static function notesOf(Judgement $judgement, array $findings): JudgeNotes
     {
-        $blocking = array_map(static fn (Finding $finding): string => $finding->id, array_filter($findings, static fn (Finding $finding): bool => !$finding->gate_gap && self::blocking($finding)));
+        $blocking = array_map(static fn (Finding $finding): string => $finding->id, array_filter($findings, self::blocking(...)));
         $notes = new JudgeNotes();
 
         foreach ($judgement->marks as $judged) {

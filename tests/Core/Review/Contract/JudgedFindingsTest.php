@@ -187,37 +187,49 @@ final class JudgedFindingsTest extends TestCase
         self::assertEquals([new FollowUp($this->gateGap('a', Severity::P3))], $judged->followUps);
     }
 
-    public function testAGateGapMarkedRejectIsRejectedAndNeitherOnTheActListNorAFollowUp(): void
+    public function testAGateGapP3MarkedRejectIsRejectedAndNeitherOnTheActListNorAFollowUp(): void
     {
-        $judged = JudgedFindings::of($this->marks(['a' => Mark::Reject]), [$this->gateGap('a', Severity::P2)]);
+        $judged = JudgedFindings::of($this->marks(['a' => Mark::Reject]), [$this->gateGap('a', Severity::P3)]);
 
         self::assertSame([], $judged->actList);
         self::assertSame([], $judged->followUps);
-        self::assertEquals([$this->gateGap('a', Severity::P2)], $judged->rejected);
+        self::assertEquals([$this->gateGap('a', Severity::P3)], $judged->rejected);
     }
 
-    public function testAGateGapP1MarkedActIsAFollowUpAndNotOnTheActList(): void
+    public function testAGateGapP3WithoutAMarkIsNeitherOnTheActListNorAFollowUpNorRejected(): void
     {
-        $judged = JudgedFindings::of($this->marks(['a' => Mark::Act]), [$this->gateGap('a', Severity::P1)]);
-
-        self::assertSame([], $judged->actList);
-        self::assertEquals([new FollowUp($this->gateGap('a', Severity::P1))], $judged->followUps);
-    }
-
-    public function testAGateGapP2WithoutAMarkIsNeitherOnTheActListNorAFollowUpNorRejected(): void
-    {
-        $judged = JudgedFindings::of($this->marks([]), [$this->gateGap('a', Severity::P2)]);
+        $judged = JudgedFindings::of($this->marks([]), [$this->gateGap('a', Severity::P3)]);
 
         self::assertSame([], $judged->actList);
         self::assertSame([], $judged->followUps);
         self::assertSame([], $judged->rejected);
     }
 
-    public function testTheJudgesNoteOnADeferredGateGapP2IsNotKept(): void
+    public function testAGateGapP1MarkedActStaysOnTheActListBecauseTheFlagNeverLiftsItsVeto(): void
     {
-        $judged = JudgedFindings::of(new Judgement([new JudgedFinding('a', Mark::Defer, null, 'A gate issue.')]), [$this->gateGap('a', Severity::P2)]);
+        $judged = JudgedFindings::of($this->marks(['a' => Mark::Act]), [$this->gateGap('a', Severity::P1)]);
 
-        self::assertSame([], iterator_to_array($judged->notes));
+        self::assertEquals([$this->gateGap('a', Severity::P1)], $judged->actList);
+        self::assertSame([], $judged->followUps);
+    }
+
+    public function testAGateGapP2MarkedRejectStaysOnTheActListAndKeepsTheJudgesNote(): void
+    {
+        $judged = JudgedFindings::of(new Judgement([new JudgedFinding('a', Mark::Reject, null, 'A gate issue.')]), [$this->gateGap('a', Severity::P2)]);
+
+        self::assertEquals([$this->gateGap('a', Severity::P2)], $judged->actList);
+        self::assertSame([], $judged->rejected);
+        self::assertSame('A gate issue.', $judged->notes->noteOf('a'));
+    }
+
+    public function testAfterAnInvalidJudgeAnswerAGateGapP2StaysOnTheActListAndMakesNoFollowUp(): void
+    {
+        $gap = $this->gateGap('a', Severity::P2);
+
+        $judged = JudgedFindings::of(Judgement::everyBlockingFindingActs([$gap]), [$gap]);
+
+        self::assertEquals([$gap], $judged->actList);
+        self::assertSame([], $judged->followUps);
     }
 
     public function testAP3MarkedActWithoutTheGateGapMarkStaysOnTheActList(): void
