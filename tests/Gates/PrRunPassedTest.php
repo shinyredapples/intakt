@@ -13,8 +13,7 @@ final class PrRunPassedTest extends SandboxTestCase
 {
     private const string SCRIPT = __DIR__.'/../../.github/ci/pr-run-passed.sh';
 
-    // A fake gh, so the test needs no network: it answers the script's two API calls from files and applies its --jq filter.
-    // Like gh, only --paginate reads the later pages (<page>-2.json and so on), so a call without it misses them.
+    // A fake gh, so the test needs no network: it answers both API calls from files through --jq, later pages only with --paginate.
     private const string FAKE_GH = <<<'SH'
         #!/bin/sh
         set -eu
