@@ -7,6 +7,8 @@ namespace Intakt\Gates;
 // Because a `#` starts a comment only at the start of a word in code, the lexer keeps the open quotes, substitutions, `case` commands and pending here-documents of one source.
 final class ShellLexer
 {
+    // Because these are the shell's metacharacters, a word starts right after any of them.
+    public const string WORD_BREAKS = " \t\n;&|()<>";
     private const int SUBSHELL = 0;
     private const int DOUBLE_QUOTED = 1;
     private const int PARAMETER = 2;
@@ -16,8 +18,6 @@ final class ShellLexer
     private const int ARITHMETIC_GROUP = 6;
     private const int CASE = 7;
     private const array HOLDS_CODE = [self::SUBSHELL, self::BACKTICKS, self::SUBSTITUTION, self::CASE];
-    // Because these are the shell's metacharacters, a word starts right after any of them.
-    private const string WORD_BREAKS = " \t\n;&|()<>";
     private const string STARTS_A_COMMAND = ';&|';
     // Because a command follows these reserved words, a `case` or `((` right after them opens one.
     private const array LEADS_A_COMMAND = ['!', '{', 'do', 'elif', 'else', 'if', 'then', 'time', 'until', 'while'];
@@ -27,6 +27,8 @@ final class ShellLexer
     private const string SPECIAL_IN_ARITHMETIC = '()"`\$';
 
     private readonly int $length;
+    private readonly ShellQuotes $quotes;
+    private readonly ShellHereDocuments $hereDocuments;
     private bool $wordStarts = true;
     private bool $commandStarts = true;
 
@@ -36,11 +38,6 @@ final class ShellLexer
     private array $frames = [];
 
     /**
-     * @var list<array{delimiter: string, tabsStripped: bool, nesting: int}>
-     */
-    private array $hereDocuments = [];
-
-    /**
      * @var list<array{int, string}>
      */
     private array $comments = [];
@@ -48,6 +45,8 @@ final class ShellLexer
     public function __construct(private readonly string $source)
     {
         $this->length = strlen($source);
+        $this->quotes = new ShellQuotes($source);
+        $this->hereDocuments = new ShellHereDocuments($source, $this->quotes);
     }
 
     /**
@@ -133,7 +132,7 @@ final class ShellLexer
         return match ($this->source[$offset] ?? '') {
             '' => $this->length,
             '}' => $this->closed($offset + 1),
-            "'" => self::DOUBLE_QUOTED === ($this->frames[count($this->frames) - 2] ?? null) ? $offset + 1 : $this->afterQuote("'", $offset + 1),
+            "'" => self::DOUBLE_QUOTED === ($this->frames[count($this->frames) - 2] ?? null) ? $offset + 1 : $this->quotes->endOfSingleQuoted($offset + 1),
             '"' => $this->open(self::DOUBLE_QUOTED, $offset + 1),
             '\\' => min($offset + 2, $this->length),
             '$' => $this->afterDollarInText($offset),
@@ -148,7 +147,7 @@ final class ShellLexer
         return match ($this->source[$offset] ?? '') {
             '' => $this->length,
             '(' => $this->open(self::ARITHMETIC_GROUP, $offset + 1),
-            ')' => $this->afterArithmeticParenthesis($offset),
+            ')' => $this->closed($offset + $this->closingArithmeticLength($offset)),
             '"' => $this->open(self::DOUBLE_QUOTED, $offset + 1),
             '\\' => min($offset + 2, $this->length),
             '$' => $this->afterDollarInText($offset),
@@ -156,13 +155,9 @@ final class ShellLexer
         };
     }
 
-    private function afterArithmeticParenthesis(int $offset): int
+    private function closingArithmeticLength(int $offset): int
     {
-        if (self::ARITHMETIC_GROUP === array_last($this->frames) || ')' !== ($this->source[$offset + 1] ?? '')) {
-            return $this->closed($offset + 1);
-        }
-
-        return $this->closed($offset + 2);
+        return self::ARITHMETIC === array_last($this->frames) && ')' === ($this->source[$offset + 1] ?? '') ? 2 : 1;
     }
 
     private function afterCode(int $offset): int
@@ -183,7 +178,7 @@ final class ShellLexer
             ')' === $char => $this->afterClosingParenthesis($offset + 1),
             str_contains(self::STARTS_A_COMMAND, $char) => $this->startingACommand($offset + 1),
             str_contains(self::WORD_BREAKS, $char) => $this->startingAWord($offset + 1),
-            "'" === $char => $this->afterWordPart($this->afterQuote("'", $offset + 1)),
+            "'" === $char => $this->afterWordPart($this->quotes->endOfSingleQuoted($offset + 1)),
             '"' === $char => $this->open(self::DOUBLE_QUOTED, $offset + 1),
             '`' === $char => $this->afterBacktick($offset + 1),
             '\\' === $char => $this->afterEscape($offset),
@@ -195,11 +190,7 @@ final class ShellLexer
     // Because a `case` pattern ends at a `)` that closes nothing, the lexer follows the `case` and `esac` words that stand as a command.
     private function afterPlainWordPart(int $offset, int $end): int
     {
-        if (!$this->wordStarts || !$this->commandStarts || !$this->endsAWord($end)) {
-            return $this->afterWordPart($end);
-        }
-
-        $word = substr($this->source, $offset, $end - $offset);
+        $word = $this->wordStarts && $this->commandStarts && $this->endsAWord($end) ? substr($this->source, $offset, $end - $offset) : '';
 
         if ('case' === $word) {
             $this->frames[] = self::CASE;
@@ -219,14 +210,6 @@ final class ShellLexer
         return $end >= $this->length || str_contains(self::WORD_BREAKS, $this->source[$end]);
     }
 
-    private function afterWordPart(int $end): int
-    {
-        $this->wordStarts = false;
-        $this->commandStarts = false;
-
-        return $end;
-    }
-
     // Because the shell reads the text between backticks before it parses it, a comment there ends at the closing backtick.
     private function afterComment(int $offset): int
     {
@@ -237,27 +220,12 @@ final class ShellLexer
         return $end;
     }
 
-    // Because a here-document's body starts on the line after the command that holds its operator, a line feed inside a substitution of that command leaves it pending.
     private function afterLineEnd(int $offset): int
     {
         $this->wordStarts = true;
         $this->commandStarts = true;
-        $nesting = $this->nesting();
-        $pending = [];
 
-        foreach ($this->hereDocuments as $hereDocument) {
-            if ($hereDocument['nesting'] < $nesting) {
-                $pending[] = $hereDocument;
-
-                continue;
-            }
-
-            $offset = $this->afterHereDocumentBody($offset, $hereDocument);
-        }
-
-        $this->hereDocuments = $pending;
-
-        return $offset;
+        return $this->hereDocuments->afterBodies($offset, $this->nesting());
     }
 
     // Because a `case` command is no substitution, its frame does not hold back a here-document body.
@@ -266,94 +234,13 @@ final class ShellLexer
         return count(array_filter($this->frames, static fn (int $frame): bool => self::CASE !== $frame));
     }
 
-    /**
-     * @param array{delimiter: string, tabsStripped: bool, nesting: int} $hereDocument
-     */
-    private function afterHereDocumentBody(int $offset, array $hereDocument): int
-    {
-        while ($offset < $this->length) {
-            $end = $offset + strcspn($this->source, "\n", $offset);
-            $line = substr($this->source, $offset, $end - $offset);
-            $offset = $end + 1;
-
-            if ($hereDocument['delimiter'] === ($hereDocument['tabsStripped'] ? ltrim($line, "\t") : $line)) {
-                return min($offset, $this->length);
-            }
-        }
-
-        return $this->length;
-    }
-
     private function afterDoubleLessThan(int $offset): int
     {
         if ('<' === ($this->source[$offset] ?? '')) {
             return $this->startingAWord($offset + 1);
         }
 
-        $tabsStripped = '-' === ($this->source[$offset] ?? '');
-        $offset += (int) $tabsStripped;
-        $start = $offset + strspn($this->source, " \t", $offset);
-        [$delimiter, $offset] = $this->delimiterAt($start);
-
-        if ($start < $offset) {
-            $this->hereDocuments[] = ['delimiter' => $delimiter, 'tabsStripped' => $tabsStripped, 'nesting' => $this->nesting()];
-        }
-
-        return $this->afterWordPart($offset);
-    }
-
-    // Because quoting any part of the delimiter only keeps the body from being expanded, the delimiter line is matched after quote removal.
-    /**
-     * @return array{string, int}
-     */
-    private function delimiterAt(int $offset): array
-    {
-        $delimiter = '';
-
-        while ($offset < $this->length && !str_contains(self::WORD_BREAKS, $this->source[$offset])) {
-            $char = $this->source[$offset];
-            $end = match ($char) {
-                "'" => $this->afterQuote("'", $offset + 1),
-                '"' => $this->afterEscapedQuote('"', $offset + 1),
-                '\\' => min($offset + 2, $this->length),
-                default => $offset + 1,
-            };
-            $delimiter .= $this->withoutQuotes(substr($this->source, $offset, $end - $offset));
-            $offset = $end;
-        }
-
-        return [$delimiter, $offset];
-    }
-
-    private function afterQuote(string $quote, int $offset): int
-    {
-        $close = strpos($this->source, $quote, $offset);
-
-        return false === $close ? $this->length : $close + 1;
-    }
-
-    private function afterEscapedQuote(string $quote, int $offset): int
-    {
-        while (($offset += strcspn($this->source, $quote.'\\', $offset)) < $this->length) {
-            if ($quote === $this->source[$offset]) {
-                return $offset + 1;
-            }
-
-            $offset += 2;
-        }
-
-        return $this->length;
-    }
-
-    // Because inside double quotes a backslash escapes only `$`, a backtick, `"` and itself, any other backslash stays in the delimiter.
-    private function withoutQuotes(string $part): string
-    {
-        return match ($part[0]) {
-            "'" => substr($part, 1, -1),
-            '"' => (string) preg_replace('~\\\\([$`"\\\\])~', '$1', substr($part, 1, -1)),
-            '\\' => substr($part, 1),
-            default => $part,
-        };
+        return $this->afterWordPart($this->hereDocuments->afterOperator($offset, $this->nesting()));
     }
 
     // Because `((` where a command starts opens arithmetic, a `<<` in it is a shift and no here-document.
@@ -390,6 +277,14 @@ final class ShellLexer
         return $end;
     }
 
+    private function afterWordPart(int $end): int
+    {
+        $this->wordStarts = false;
+        $this->commandStarts = false;
+
+        return $end;
+    }
+
     private function afterBacktick(int $end): int
     {
         return self::BACKTICKS === array_last($this->frames) ? $this->closed($end) : $this->open(self::BACKTICKS, $end);
@@ -410,7 +305,7 @@ final class ShellLexer
         return match ($this->source[$offset + 1] ?? '') {
             '(' => $this->afterDollarParenthesis($offset),
             '{' => $this->open(self::PARAMETER, $offset + 2),
-            "'" => $this->afterWordPart($this->afterEscapedQuote("'", $offset + 2)),
+            "'" => $this->afterWordPart($this->quotes->endOfEscaped("'", $offset + 2)),
             default => $this->afterWordPart($offset + 1),
         };
     }

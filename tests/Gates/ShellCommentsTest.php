@@ -6,13 +6,17 @@ namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\LeftUndoneComments;
 use Intakt\Gates\ShellComments;
+use Intakt\Gates\ShellHereDocuments;
 use Intakt\Gates\ShellLexer;
+use Intakt\Gates\ShellQuotes;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(ShellComments::class)]
 #[CoversClass(ShellLexer::class)]
+#[CoversClass(ShellHereDocuments::class)]
+#[CoversClass(ShellQuotes::class)]
 #[CoversClass(LeftUndoneComments::class)]
 final class ShellCommentsTest extends TestCase
 {
