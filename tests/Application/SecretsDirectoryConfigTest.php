@@ -13,6 +13,7 @@ use Symfony\AI\McpBundle\McpBundle;
 use Symfony\Component\Config\FileLocator;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Loader\PhpFileLoader;
+use Symfony\Component\Filesystem\Path;
 
 // Covers nothing because the behavior is in config/packages/ai.php, which is not a class.
 #[CoversNothing]
@@ -63,13 +64,17 @@ final class SecretsDirectoryConfigTest extends TestCase
         }
     }
 
-    private function secretsDirectoryIn(string $environment): mixed
+    // Canonical, because the config names the folder relative to its own.
+    private function secretsDirectoryIn(string $environment): string
     {
         $container = new ContainerBuilder();
         $container->registerExtension(new AiBundle()->getContainerExtension() ?? throw new LogicException('The AI bundle has no extension.'));
         $container->registerExtension(new McpBundle()->getContainerExtension() ?? throw new LogicException('The MCP bundle has no extension.'));
         new PhpFileLoader($container, new FileLocator(dirname(__DIR__, 2).'/config/packages'), $environment)->load('ai.php');
 
-        return $container->getParameter(AiServices::SECRETS_DIRECTORY);
+        $directory = $container->getParameter(AiServices::SECRETS_DIRECTORY);
+        self::assertIsString($directory);
+
+        return Path::canonicalize($directory);
     }
 }
