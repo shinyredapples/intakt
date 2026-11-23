@@ -227,9 +227,7 @@ final class LiveBoardHeadlineTest extends KernelTestCase
         $pool = self::createStub(CacheItemPoolInterface::class);
         $pool->method('getItem')->willReturnCallback($stored->getItem(...));
         $pool->method('deleteItem')->willReturnCallback($stored->deleteItem(...));
-        $pool->method('save')->willReturnCallback(static function (CacheItemInterface $item) use ($refusing, $stored): bool {
-            return !$refusing['on'] && $stored->save($item);
-        });
+        $pool->method('save')->willReturnCallback(static fn (CacheItemInterface $item): bool => true !== $refusing['on'] && $stored->save($item));
         $live = new PublishedLiveEvents();
         $idle = new DashboardLedger();
         $active = new DashboardLedger();
