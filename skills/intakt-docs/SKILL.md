@@ -23,13 +23,13 @@ Documentation is for a person who is not in a hurry to learn it. A page that onl
 
 ## Good examples
 
-A short scene, then steps (`docs/user/08-when-something-goes-wrong.md` opens its sections this way): one situation, then what to do, in sentences of one idea.
+A scene, then what to do (`docs/user/08-when-something-goes-wrong.md`, "A review that will not finish"): a Friday afternoon and a page that does not move, then the first place to look.
 
-A summary that stands alone (the "In short" of `docs/architecture/quality-gates.md` says in two sentences what `bin/check` is, and the detail lives below it).
+A section that is a short list of one idea each (`docs/user/04-reading-the-verdict.md`, "The judge's call"): one sentence introduces the three outcomes, then one item per outcome, each a single sentence.
 
 ## Bad examples
 
-`docs/architecture/dashboard.md` is one "In short" section of tens of thousands of words: a summary that is the whole page. Each change appended its rules to it.
+`docs/architecture/dashboard.md` is one "In short" section of tens of thousands of words: a summary that is the whole page, because each change appended its rules to it.
 
 `docs/architecture/quality-gates.md` has a single paragraph of more than 3,000 words (line 18): a reader cannot find anything in it. Split a run of rules into one list item per rule.
 
