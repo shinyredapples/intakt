@@ -36,7 +36,7 @@ git clone https://github.com/shinyredapples/intakt.git && cd intakt
 docker compose up -d --wait
 ```
 
-No key? Open http://localhost:7781/demo (or **See a real review** on http://localhost:7781/setup) and press **Play the demo run**: the recording of a real review of the sample change plays onto the dashboard without calling any model ([details](docs/reference/user-manual.md#playing-the-demo-run-in-the-dashboard)).
+No key? Open http://localhost:7781/demo (or **See a real review** on http://localhost:7781/setup) and press **Play the demo run**: the recording of a real review of the sample change plays onto the dashboard without calling any model ([details](docs/reference/user-manual.md#playing-the-demo-run-in-the-dashboard)). The dashboard has no login, so it answers only `http://localhost:7781` on the machine that runs it; from another device, open an SSH tunnel first ([how](docs/user/08-when-something-goes-wrong.md#the-dashboard-says-open-the-dashboard-on-localhost)).
 
 With your agent: the clone's `.mcp.json` connects Claude Code. The review is live, so it needs a key first (see *With a key* below). Run `docker compose exec intakt php bin/console intakt:sample:show /app/var/data/sample-repository`. It prints, among other lines, `Connect an MCP client: claude mcp add --transport http intakt http://localhost:7781/mcp/owner --header "Authorization: Bearer <token>"`. Run `export INTAKT_MCP_TOKEN=<token>` with the token after `Bearer` in that line (or run the printed `claude mcp add` line instead), then start `claude` in the clone, approve the `intakt` MCP server when Claude Code asks, install the [skill](skills/intakt-review/README.md) and say *intakt review the demo* ([details](docs/reference/mcp.md)).
 

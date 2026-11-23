@@ -25,6 +25,7 @@ use Intakt\Core\Build\Domain\ParkedTaskRecord;
 use Intakt\Core\Build\Domain\QuestionRefused;
 use Intakt\Core\Build\Domain\RoutingRules;
 use Intakt\Core\Build\Infrastructure\ConfiguredBuildRouting;
+use Intakt\Core\Build\UseCase\BuildTask\BuildRun;
 use Intakt\Core\Build\UseCase\BuildTask\BuildStepNotRecorded;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTask;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTaskOutcome;
@@ -95,6 +96,8 @@ use Intakt\Core\Job\Contract\JobRefused;
 use Intakt\Core\Job\Contract\JobResult;
 use Intakt\Core\Job\Contract\JobRunner;
 use Intakt\Core\Job\Contract\JobSpec;
+use Intakt\Core\Ledger\Contract\AppendResult;
+use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\PathGlob;
@@ -122,19 +125,23 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
+use RuntimeException;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Lock\Exception\LockStorageException;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\PersistingStoreInterface;
+use Symfony\Component\Lock\SharedLockInterface;
 use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Process\Exception\ProcessTimedOutException;
 use Symfony\Component\Process\Process;
+use Symfony\Component\Uid\Uuid;
 
 #[CoversClass(BuildTask::class)]
 #[CoversClass(BuildTaskOutcome::class)]
 #[CoversClass(BuildTaskRequest::class)]
+#[CoversClass(BuildRun::class)]
 #[CoversClass(BuildStepNotRecorded::class)]
 #[CoversClass(GitBuildCheckout::class)]
 #[CoversClass(BuildCheckoutFailed::class)]
@@ -253,6 +260,8 @@ final class BuildTaskTest extends TestCase
     private TierResolver $tiers;
 
     private JobRunner $runner;
+
+    private LockFactory $locks;
 
     private JobRunner $checkRunner;
 
@@ -823,6 +832,94 @@ final class BuildTaskTest extends TestCase
         self::assertDirectoryDoesNotExist($this->mirrors);
     }
 
+    public function testEveryStepRowOfARunCarriesOneRunIdAndAnotherRunOfTheTaskAnother(): void
+    {
+        $this->runner = $this->committingRunner();
+        $this->checkRunner = $this->checkLeaving([RunCheckJob::RESULT => "failed 2\n", RunCheckJob::LOG => "tests failed\n"]);
+        $ledger = new InMemoryLedger();
+        (void) $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        (void) $this->taskOf($ledger, [Issues::task(8)])->run($this->request(7, $this->remote->path));
+
+        $runs = array_values(array_filter(array_column($ledger->payloads(), 'run'), is_string(...)));
+        self::assertCount(7, $runs);
+        self::assertCount(1, array_unique(array_slice($runs, 0, 6)));
+        self::assertNotSame($runs[0], $runs[6]);
+    }
+
+    public function testTheIssueReadAndTheTaskRowHappenWhileTheTasksStartLockIsHeld(): void
+    {
+        $held = [];
+        $reads = self::createStub(IssueReads::class);
+        $reads->method('readOpen')->willReturnCallback(function () use (&$held): null {
+            $held['read'] = !$this->startLockOf(7)->acquire(false);
+
+            return null;
+        });
+        $ledger = self::createStub(Ledger::class);
+        $ledger->method('append')->willReturnCallback(function () use (&$held): AppendResult {
+            $held['row'] = !$this->startLockOf(7)->acquire(false);
+
+            return AppendResult::appended(Uuid::v4());
+        });
+
+        (void) $this->buildTask($reads, $this->checkout(), $ledger)->run($this->request(7, $this->remote->path));
+
+        self::assertSame(['read' => true, 'row' => true], $held);
+        self::assertTrue($this->startLockOf(7)->acquire(false));
+    }
+
+    public function testTheStartLockOfAnotherTaskDoesNotHoldTheRunBack(): void
+    {
+        $other = $this->startLockOf(8);
+        self::assertTrue($other->acquire(false));
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [])->run($this->request(7, $this->remote->path));
+
+        self::assertSame('project "alpha" has no open issue 7', $outcome->failure);
+        self::assertSame(['task'], array_column($ledger->payloads(), 'step'));
+    }
+
+    public function testAStartLockThatCannotBeTakenFailsTheTaskStepWithFixedWordsAndReadsNoIssue(): void
+    {
+        $store = self::createStub(PersistingStoreInterface::class);
+        $store->method('save')->willThrowException(new RuntimeException('lock folder var/PLANT-locks is not writable'));
+        $this->locks = new LockFactory($store);
+        $reads = $this->createMock(IssueReads::class);
+        $reads->expects(self::never())->method('readOpen');
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->buildTask($reads, $this->checkout(), $ledger)->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildTask::START_NOT_LOCKED, $outcome->failure);
+        self::assertSame(BuildStep::Task, $outcome->last);
+        self::assertSame([['task', 'failed', BuildTask::START_NOT_LOCKED]], array_map(static fn (array $row): array => [$row['step'], $row['outcome'], $row['failure']], $ledger->payloads()));
+    }
+
+    public function testAStartLockHeldByAnotherRunOfTheTaskFailsTheTaskStepAtOnceAndRunsNoOtherStep(): void
+    {
+        $other = $this->startLockOf(7);
+        self::assertTrue($other->acquire(false));
+        $reads = $this->createMock(IssueReads::class);
+        $reads->expects(self::never())->method('readOpen');
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->buildTask($reads, $this->checkout(), $ledger)->run($this->request(7, $this->remote->path));
+
+        self::assertTrue($other->isAcquired());
+        self::assertSame(BuildTask::START_BUSY, $outcome->failure);
+        self::assertSame(BuildStep::Task, $outcome->last);
+        self::assertSame([['task', 'failed', BuildTask::START_BUSY]], array_map(static fn (array $row): array => [$row['step'], $row['outcome'], $row['failure']], $ledger->payloads()));
+        self::assertDirectoryDoesNotExist($this->mirrors);
+    }
+
+    public function testTheStartLockKeyOfOneProjectsTaskIsNotThatOfAnotherProjectWhoseNameRunsOn(): void
+    {
+        self::assertNotSame(new BuildRun('alpha:1', 2, 'a')->startLockKey(), new BuildRun('alpha', 12, 'a')->startLockKey());
+        self::assertNotSame(new BuildRun('alpha', 7, 'a')->startLockKey(), new BuildRun('alpha', 8, 'a')->startLockKey());
+    }
+
     public function testTheTaskIsReadThroughTheSingleIssueReadNeverTheListing(): void
     {
         $reads = $this->createMock(IssueReads::class);
@@ -997,6 +1094,7 @@ final class BuildTaskTest extends TestCase
 
     protected function setUp(): void
     {
+        $this->locks = new LockFactory(new InMemoryStore());
         $this->handBackFiles = new Filesystem();
         $this->changes = new RecordingChangeOpening();
         $this->mirrors = sys_get_temp_dir().'/intakt-build-task-'.bin2hex(random_bytes(6));
@@ -1164,7 +1262,12 @@ final class BuildTaskTest extends TestCase
         return $this->checkoutIn($this->mirrors);
     }
 
-    private function buildTask(IssueReads $issues, GitBuildCheckout $checkout, InMemoryLedger $ledger): BuildTask
+    private function startLockOf(int $task): SharedLockInterface
+    {
+        return $this->locks->createLock(new BuildRun('alpha', $task, 'any run')->startLockKey());
+    }
+
+    private function buildTask(IssueReads $issues, GitBuildCheckout $checkout, Ledger $ledger): BuildTask
     {
         $configured = self::createStub(ConfiguredRepositories::class);
         $configured->method('nameOf')->willReturn($this->configuredRepository);
@@ -1177,11 +1280,11 @@ final class BuildTaskTest extends TestCase
         // On a database that cannot be opened, because a parking that works is proven on the install's own database in BuildTaskParksOnSqliteTest.
         $parked = new ParkedTasks(DriverManager::getConnection(['driver' => 'pdo_sqlite', 'path' => $this->mirrors.'-missing/data.db']), $ledger, self::createStub(ManagerRegistry::class), new MockClock());
 
-        return new BuildTask($issues, $checkout, $this->routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files), new PushStep($this->branchPush($ledger), $checkout), $parked, $ledger, new PushRemoteCheck($configured));
+        return new BuildTask($issues, $checkout, $this->routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files), new PushStep($this->branchPush($ledger), $checkout), $parked, $ledger, new PushRemoteCheck($configured), $this->locks);
     }
 
     // Records in the run's own ledger, as the container wires it, so the push's events sit between the steps' events.
-    private function branchPush(InMemoryLedger $ledger): PushBranch
+    private function branchPush(Ledger $ledger): PushBranch
     {
         $branches = new BranchGit(new HardenedGit(), new GuardedRun());
         $file = $this->mirrors.'-key';

@@ -61,11 +61,43 @@ Open **You** in the menu. Anything only you can decide shows up there, oldest fi
 - **Why:** the token is missing or wrong, or writes are off.
 - **What to do:** on the demo, export `INTAKT_MCP_TOKEN` again ([chapter 5](05-let-your-agent-drive.md)). On your own install, set `MCP_OWNER_ACCESS=mcp_tool_write` and `MCP_OWNER_TOKEN` in `.env.local`.
 
-## The dashboard is slow or answers 400
+## The dashboard is slow
 
-- **What you see:** pages load slowly, or show `400 Bad Request`.
-- **Why:** the server is busy, or you opened it under a name other than `localhost`, `127.0.0.1` or `[::1]`. The dashboard answers only those.
-- **What to do:** inside the container, `php bin/console intakt:server:status` shows how busy the server is. Open the dashboard on `localhost`.
+- **What you see:** pages take seconds to load.
+- **Why:** the server is busy.
+- **What to do:** inside the container, `php bin/console intakt:server:status` shows how busy it is.
+
+## The dashboard says "Open the dashboard on localhost"
+
+You set Intakt up on a small server in the hall and type its address into the laptop on your sofa. Instead of the board, a page tells you to open the dashboard on localhost. Nothing is broken: the dashboard has no login, so it answers only `http://localhost:7781` (7781 is the default; if you publish another port, use that port, the value of `DASHBOARD_PORT`) on the machine it runs on. Any other address could let a web page you visit act for you.
+
+1. On the machine that runs Intakt, open `http://localhost:7781`.
+2. From another device, open a tunnel first: `ssh -L 7781:localhost:7781 you@your-server`.
+3. Keep that terminal open and open `http://localhost:7781` on the device.
+
+With another published port, say 8080, use it in all three places: `http://localhost:8080` and `ssh -L 8080:localhost:8080 you@your-server`.
+
+## A button says "Connecting to live updates…"
+
+- **What you see:** a button stays disabled with that line below it, and after a few seconds "No live connection, so this waits."
+- **Why:** the page has no live connection to Intakt, and actions wait for it.
+- **What to do:** open the dashboard on `http://localhost:7781` (or your published port) as above, then reload the page.
+
+## The demo run did not play
+
+Before you press anything, `/demo` already says when the run cannot play: instead of **Play the demo run** it shows one sentence with the reason, such as "No demo recording is installed" or "The demo run is in the ledger", and what to do about it.
+
+You press **Play the demo run**, the page comes back with "The demo run is starting" above the title, and then that line changes to "The demo run did not play." with a reason.
+
+- **What you see:** that line, with a short reason such as "The demo recording could not be read.", "Another Play or a demo removal is running." or "An earlier Play has already played the run."
+- **Why:** the reason says it. The details, with file names, are only in the install's log.
+- **What to do:** fix what the reason names. If another Play or a removal is running, wait until it has ended, reload the page and press Play again. If an earlier Play has already played the run, follow it in the review list. If you removed the demo project with `intakt:demo:remove`, press Play again: it creates the project again. If the page still shows the completed run after a removal, reload it. A page that opened after the refusal does not show it.
+
+## A page says "The form token is missing or wrong"
+
+- **What you see:** after pressing a button, a page with that sentence and "Go back, reload the page and press the button again."
+- **Why:** the dashboard could not match the press to the page that showed the button, for example a page opened in another browser session. Nothing happened.
+- **What to do:** do what it says: go back, reload, press again.
 
 More cases, and the exact wording of every reason, are in the [complete reference](../reference/user-manual.md).
 

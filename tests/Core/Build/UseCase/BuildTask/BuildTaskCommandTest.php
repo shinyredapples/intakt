@@ -18,6 +18,7 @@ use Intakt\Core\Build\Contract\TierReason;
 use Intakt\Core\Build\Domain\BuilderPrompt;
 use Intakt\Core\Build\Domain\GatesAtOnce;
 use Intakt\Core\Build\Domain\GatesByDefault;
+use Intakt\Core\Build\UseCase\BuildTask\BuildRun;
 use Intakt\Core\Build\UseCase\BuildTask\BuildStepNotRecorded;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTask;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTaskCommand;
@@ -80,12 +81,15 @@ use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
 
 #[CoversClass(BuildTaskCommand::class)]
 #[UsesClass(BuildTaskInput::class)]
 #[UsesClass(BuildTask::class)]
 #[UsesClass(BuildTaskOutcome::class)]
 #[UsesClass(BuildTaskRequest::class)]
+#[UsesClass(BuildRun::class)]
 #[UsesClass(BuildStepNotRecorded::class)]
 #[UsesClass(BuildCheckoutFailed::class)]
 #[UsesClass(HandBackCheck::class)]
@@ -371,7 +375,7 @@ final class BuildTaskCommandTest extends TestCase
         $repositories = self::createStub(ConfiguredRepositories::class);
         $repositories->method('nameOf')->willReturn($this->configuredRepository);
 
-        return new BuildTask($issues, $checkout, $routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files), new PushStep($branches, $checkout), $parked, $ledger, new PushRemoteCheck($repositories));
+        return new BuildTask($issues, $checkout, $routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files), new PushStep($branches, $checkout), $parked, $ledger, new PushRemoteCheck($repositories), new LockFactory(new InMemoryStore()));
     }
 
     /**
