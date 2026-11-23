@@ -33,7 +33,12 @@ final readonly class PassedTree
         $expected = $this->contents($this->taken);
 
         // Because a record of any size would otherwise be read whole into memory, one byte past the expected length is enough to tell a longer one apart.
-        return @file_get_contents($this->file(), length: strlen($expected) + 1) === $expected;
+        if (@file_get_contents($this->file(), length: strlen($expected) + 1) !== $expected) {
+            return false;
+        }
+
+        // Because the tree may change between taking the fingerprint and finding its record, the pass stands only for a tree that still gives the same fingerprint once the record is found.
+        return $this->fingerprint->taken() === $this->taken;
     }
 
     // Because only the latest pass is kept, one small file replaced whole never grows, and a temporary name renamed over it never leaves half a record.

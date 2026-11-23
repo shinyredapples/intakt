@@ -72,6 +72,17 @@ final class PassedTreeTest extends SandboxTestCase
         self::assertFalse($this->tree($root, $home)->hasPassed());
     }
 
+    public function testATrackedFileEditedAfterTheFingerprintAndBeforeTheLookupRunsTheCheckAgain(): void
+    {
+        [$root, $home] = $this->checkedTreeAndHome();
+        $this->pass($root, $home);
+        $tree = $this->tree($root, $home);
+
+        $root->write('README.md', "edited\n");
+
+        self::assertFalse($tree->hasPassed());
+    }
+
     public function testANewUntrackedFileRunsTheCheckAgain(): void
     {
         [$root, $home] = $this->checkedTreeAndHome();
