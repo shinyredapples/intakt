@@ -9,9 +9,10 @@ const path = require('path');
 const MOCKS = path.resolve(__dirname, '..');
 const OUT = path.join(MOCKS, 'screens');
 
-// The Waiting on you, task, settings and components pages land with the next part of the mocks.
+// The Waiting on you, settings and components pages land with the next part of the mocks.
 // Their jobs below stay; allJobs() drops them until their page is listed here.
 const PAGES = {
+  task: 'Task',
   index: 'Board',
   projects: 'Projects',
   project: 'Project acme-shop',
