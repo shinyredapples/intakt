@@ -34,6 +34,7 @@ use Intakt\Core\Review\Contract\ReviewerStarted;
 use Intakt\Core\Review\Contract\ReviewerStopped;
 use Intakt\Core\Review\Contract\RoundCosts;
 use Intakt\Core\Review\Contract\RoundEnding;
+use Intakt\Core\Review\Contract\RoundEndingLookup;
 use Intakt\Core\Review\Contract\RoundEndings;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictReceived;
@@ -63,6 +64,9 @@ final class LedgerRounds
     // Null for a reviewer whose row was written before reporters' severities were recorded, because such a round must be left out of the reviewer chart, never guessed.
     /** @var array<string, array<string, array<string, string>|null>> */
     private array $severitiesByReviewer = [];
+
+    // Taken on the first unjudged round of this read, because a read's rounds all share one look at the failure transport.
+    private ?RoundEndingLookup $lookup = null;
 
     private readonly LedgerTokens $tokens;
 
@@ -407,7 +411,8 @@ final class LedgerRounds
 
     private function endedOrRunning(ReviewedRound $round): ReviewedRound
     {
-        $ending = $this->endings->ofUnjudged($round->round, $round->reviewers, $round->startedAt);
+        $this->lookup ??= $this->endings->lookup();
+        $ending = $this->lookup->ofUnjudged($round->round, $round->reviewers, $round->startedAt);
 
         return $ending instanceof RoundEnding ? $round->endedAs($ending) : $round;
     }
