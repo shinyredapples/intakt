@@ -69,9 +69,7 @@ final readonly class Finding
             return;
         }
 
-        $words = preg_split('/\s+/u', $title, flags: PREG_SPLIT_NO_EMPTY) ?: [];
-        $real = array_filter($words, static fn (string $word): bool => 1 === preg_match('/[\p{L}\p{N}]/u', $word));
-        if (count($real) >= 3) {
+        if (preg_match_all('/[^\s\p{L}\p{N}]*[\p{L}\p{N}]\S*/u', $title) >= 3) {
             return;
         }
 
