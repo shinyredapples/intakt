@@ -26,11 +26,7 @@ final readonly class LatestBuildRun
             if (null !== $run) {
                 // Also for a row left out as malformed, because the run's first row in the ledger is where it started, valid or not.
                 $named[$run] ??= self::started($runs);
-
-                // A second row of a step in the same run is left out, because one run ends each step once, so it is not one the build writes.
-                if (null !== $step) {
-                    $runs[$named[$run]][$step['step']] ??= $step;
-                }
+                self::addFirst($runs[$named[$run]], $step);
             } elseif (null === $step) {
                 $unnamed = null;
             } elseif (null !== $unnamed && self::continues($runs[$unnamed], $step)) {
@@ -54,6 +50,20 @@ final readonly class LatestBuildRun
         $runs[] = [];
 
         return array_key_last($runs);
+    }
+
+    // A second row of a step in the same run is left out, because one run ends each step once, so it is not one the build writes.
+    /**
+     * @param array<string, array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string}> $run
+     * @param ?array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string}               $step
+     *
+     * @param-out array<string, array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string}> $run
+     */
+    private static function addFirst(array &$run, ?array $step): void
+    {
+        if (null !== $step) {
+            $run[$step['step']] ??= $step;
+        }
     }
 
     // A row written before runs were named continues the run before it only when that run's last step passed and the row's step comes later, because a run stops at its first failed step and runs its steps in order.

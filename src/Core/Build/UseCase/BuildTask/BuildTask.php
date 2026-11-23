@@ -84,8 +84,7 @@ final readonly class BuildTask
         return $this->runSteps($request, $run, $task);
     }
 
-    // Under a lock of the task from the issue read until its row is recorded, because the task page takes the run whose task row comes last in the ledger as the run started last, so a run that started earlier must not record its task row after a later one.
-    // Taken without waiting, so a stalled holder never blocks the next run. A run that cannot take it records its failed task row outside the lock and runs no other step; if the holder records its task row afterwards, the page shows the holder, which is right, because it is the run that goes on.
+    // Under a lock of the task from the issue read until its row is recorded, because the task page takes the run whose task row comes last in the ledger as the run started last, so a run that started earlier must not record its task row after a later one; taken without waiting, so a stalled holder never blocks the next run, and a run that cannot take it records its failed task row outside the lock and runs no other step, which is right even when the holder records its task row afterwards, because the page then shows the holder, the run that goes on.
     /**
      * @throws BuildStepNotRecorded
      */
