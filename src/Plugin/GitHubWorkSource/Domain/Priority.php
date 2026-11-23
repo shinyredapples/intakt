@@ -35,14 +35,14 @@ enum Priority: string
         return array_values(array_filter($labels, static fn (string $label): bool => self::named($label) instanceof self));
     }
 
-    private static function named(string $label): ?self
-    {
-        return str_starts_with($label, WorkLabels::PRIORITY_PREFIX) ? self::tryFrom(substr($label, strlen(WorkLabels::PRIORITY_PREFIX))) : null;
-    }
-
     // Cases are declared from most to least urgent, so the order of the declaration is the rank.
     public function rank(): int
     {
         return (int) array_search($this, self::cases(), true);
+    }
+
+    private static function named(string $label): ?self
+    {
+        return str_starts_with($label, WorkLabels::PRIORITY_PREFIX) ? self::tryFrom(substr($label, strlen(WorkLabels::PRIORITY_PREFIX))) : null;
     }
 }
