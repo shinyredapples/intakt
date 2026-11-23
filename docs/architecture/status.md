@@ -1,5 +1,11 @@
 # Status read model
 
+## In short
+
+`StatusReadModel::json()` builds one JSON document per install, valid against `docs/user/status.schema.json`: the install-wide holds, the message queues and, per project, its replay mark, the review and build lanes, the watcher's guard decisions, the changes waiting for the owner, the Needs-you items and the last outcomes. It reads the ledger once and hands that snapshot to every section, and it queues no message, so a stopped consumer still yields a status. Failure causes are redacted. `intakt:status --format=json` prints it as one line, and `GET /status` answers the same bytes on the loopback-only dashboard port.
+
+## Details
+
 The status is one JSON document per install that reports, per project, the review lane, the build lane, the watcher's guard decisions, the changes waiting for the owner, the Needs-you items and the last outcomes, plus the install-wide holds and the message queues. The owner's dashboard reads it until Intakt's own dashboard replaces it (plan T68). The read model, its schema, the `intakt:status --format=json` command and the local endpoint are built.
 
 - **Schema:** `docs/user/status.schema.json` (JSON Schema draft-07). `StatusReadModelTest` validates every document it builds against it with `justinrainbow/json-schema`, and checks that the schema's enums for `holds`, a step's `progress` and an outcome's `decision` list exactly the cases of `Budget/Contract/SharedHold`, `Dashboard/Domain/ReviewerProgress` and `Review/Contract/Decision` (plus `null`), and that the enum for a build task's `step` lists exactly the cases of `Build/Contract/BuildStep` and the one for its `outcome` the cases of `Build/Contract/BuildStepOutcome` but `asked`. That is a temporary exception the test asserts: `BuildStepOutcome::Asked` exists since #2672, and `Build/UseCase/BuildTask/ParkedTasks::park()` writes a step with it since #2961 (nothing calls it yet), while `docs/user/status.schema.json` gains `asked` only in part 3 of #1696, the change that reads the parked task; the `mark` enum (`definitions.mark`) exactly the cases of `Review/Contract/ReplayMark`; and an outcome's `end` enum exactly the cases of `Review/Contract/RoundEnds`.
