@@ -23,6 +23,7 @@ final readonly class ShowDemoController
     {
         return new Response($this->pages->render($request, 'dashboard/demo.html.twig', [
             'readiness' => $this->runs->readiness(),
+            'play' => DemoRuns::playOf($request->query->getString(DemoRuns::PLAY)),
             'started_flash' => DemoRuns::startedFlash($request->query->getString(DemoRuns::PLAY)),
         ]));
     }

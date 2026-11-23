@@ -57,6 +57,41 @@ final class DoctrineLedgerTest extends KernelTestCase
         self::assertSame('{"kind":"review_started"}', $events[0]->event->payload);
     }
 
+    public function testAReadAboutASubjectReturnsOnlyTheEventsOfThatKindAndExactSubjectInTheOrderTheyWereAppended(): void
+    {
+        $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');
+
+        foreach ([[LedgerEventKind::ReviewerStarted, 'first', 'r1'], [LedgerEventKind::ReviewerStarted, 'other round', 'r10'], [LedgerEventKind::VerdictReceived, 'other kind', 'r1'], [LedgerEventKind::ReviewerStarted, 'no subject', null], [LedgerEventKind::ReviewerStarted, 'retry', 'r1']] as [$kind, $payload, $subject]) {
+            self::assertTrue($ledger->append(new LedgerEvent($kind, $payload, $subject))->succeeded());
+        }
+
+        $events = iterator_to_array($ledger->readOfKindAbout(LedgerEventKind::ReviewerStarted, 'r1'));
+
+        self::assertSame(['first', 'retry'], array_map(static fn (RecordedEvent $event): string => $event->event->payload, $events));
+        self::assertSame(['r1', 'r1'], array_map(static fn (RecordedEvent $event): ?string => $event->event->subject, $events));
+    }
+
+    public function testAReadAboutAPrefixOfAStoredSubjectReadsNothing(): void
+    {
+        $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');
+        self::assertTrue($ledger->append(new LedgerEvent(LedgerEventKind::ReviewerStarted, 'first', 'r1'))->succeeded());
+
+        self::assertSame([], iterator_to_array($ledger->readOfKindAbout(LedgerEventKind::ReviewerStarted, 'r')));
+    }
+
+    public function testAReadWithoutSubjectReturnsOnlyTheEventsOfThatKindAppendedWithoutOneInTheOrderTheyWereAppended(): void
+    {
+        $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');
+
+        foreach ([[LedgerEventKind::ReviewerStarted, 'first', null], [LedgerEventKind::ReviewerStarted, 'with subject', 'r1'], [LedgerEventKind::VerdictReceived, 'other kind', null], [LedgerEventKind::ReviewerStarted, 'second', null]] as [$kind, $payload, $subject]) {
+            self::assertTrue($ledger->append(new LedgerEvent($kind, $payload, $subject))->succeeded());
+        }
+
+        $payloads = array_map(static fn (RecordedEvent $event): string => $event->event->payload, iterator_to_array($ledger->readOfKindWithoutSubject(LedgerEventKind::ReviewerStarted)));
+
+        self::assertSame(['first', 'second'], $payloads);
+    }
+
     public function testAReadOfOneKindReturnsOnlyTheEventsOfThatKindInTheOrderTheyWereAppended(): void
     {
         $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');

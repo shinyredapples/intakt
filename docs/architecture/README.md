@@ -26,7 +26,7 @@ Intakt reviews code changes with a panel of AI models and can build changes from
 4. Each reviewer reads the change and returns a verdict with its findings.
 5. When every reviewer is in, the round is complete and its findings join the change's finding list.
 6. The quote check drops a finding that quotes code when none of its quoted code fragments is in the change. A finding without a checkable quote is kept. The judge marks the rest act, defer or reject.
-7. The quorum policy decides the outcome, and the act list holds every kept P1 and P2 plus the P3s marked act.
+7. The quorum policy decides the outcome, and the act list holds every kept P1 and P2 plus the P3s marked act. A P3 the reviewer flags as a gate gap never reaches the act list: marked act or defer, it becomes a follow-up.
 8. `intakt:review` prints the outcome and the act list. The dashboard shows the same review. A round in reviewer-for-loop mode, or of a pull request handed to Intakt, also publishes its status and a comment on GitHub, when a GitHub App is set.
 
 [Review flow](review-flow.md) draws the whole flow as a diagram.
@@ -83,7 +83,7 @@ The pages below are detailed reference for contributors. Each one describes its 
 - [Forge contract and the local git forge](forge-contract.md): how Intakt reads and writes changes on a forge.
 - [GitHub App identity](github-app-identity.md): how Intakt acts on GitHub as its App.
 - [Pull requests handed to Intakt](handed-to-intakt.md): how Intakt decides which pull requests are its own to review and publish on.
-- [Work intake from GitHub issues](work-intake.md): how labeled issues become tasks.
+- [Work intake from GitHub issues](work-intake.md): how labeled issues become tasks, and how `GitHubWorkSource` picks the next one.
 - [Workflow risk scan](workflow-risk-scan.md): how a change to the CI workflows is checked, and held for the owner when risky.
 
 ### Builds
