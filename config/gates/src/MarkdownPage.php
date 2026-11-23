@@ -58,6 +58,7 @@ final readonly class MarkdownPage
         $paragraphs = [];
         $lines = [];
         $openDepth = 0;
+        $start = 0;
 
         foreach ($this->kinds as $index => $kind) {
             // CommonMark keeps a prose line right after a paragraph in it, also as the lazy continuation of a quoted paragraph.
@@ -67,12 +68,13 @@ final readonly class MarkdownPage
                 continue;
             }
 
-            $paragraphs = $this->withParagraph($paragraphs, $lines);
+            $paragraphs = $this->withParagraph($paragraphs, $lines, $start);
             $lines = in_array($kind, [MarkdownLineKind::Prose, MarkdownLineKind::ListItem], true) ? [$this->textOf($index)] : [];
             $openDepth = $this->depths[$index];
+            $start = $index;
         }
 
-        return $this->withParagraph($paragraphs, $lines);
+        return $this->withParagraph($paragraphs, $lines, $start);
     }
 
     public function words(): int
@@ -145,7 +147,7 @@ final readonly class MarkdownPage
      *
      * @return list<MarkdownParagraph>
      */
-    private function withParagraph(array $paragraphs, array $lines): array
+    private function withParagraph(array $paragraphs, array $lines, int $start): array
     {
         if ([] === $lines) {
             return $paragraphs;
@@ -153,7 +155,7 @@ final readonly class MarkdownPage
 
         $text = trim(preg_replace('/\s+/u', ' ', implode(' ', $lines)) ?? '');
 
-        return [...$paragraphs, new MarkdownParagraph($text, $this->wordsIn($text))];
+        return [...$paragraphs, new MarkdownParagraph($text, $this->wordsIn($text), $start + 1)];
     }
 
     private function textOf(int $index): string

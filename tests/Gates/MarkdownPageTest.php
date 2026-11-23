@@ -33,6 +33,13 @@ final class MarkdownPageTest extends TestCase
         self::assertSame('f99aa4efdc8bdf01', $paragraphs[0]->key());
     }
 
+    public function testEachParagraphNamesTheLineItStartsOn(): void
+    {
+        $paragraphs = $this->page('# Title', '', 'A paragraph', 'of prose.', '', '- an item', '  continued')->paragraphs();
+
+        self::assertSame([3, 6], array_map(static fn (MarkdownParagraph $paragraph): int => $paragraph->line, $paragraphs));
+    }
+
     public function testARewrappedParagraphKeepsItsKey(): void
     {
         $wrapped = $this->page('A paragraph', '  of prose.')->paragraphs();

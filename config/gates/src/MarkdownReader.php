@@ -25,6 +25,15 @@ final readonly class MarkdownReader
         return array_map(fn (string $path): MarkdownPage => $this->page($root, $path), $measured);
     }
 
+    public function pageFrom(string $path, string $contents): MarkdownPage
+    {
+        $lines = explode("\n", $contents);
+        $blanked = $this->codeBlocks->blanked($lines);
+
+        // The lines the blanking changed are the fenced code lines, so fences are found only once.
+        return new MarkdownPage($path, $blanked, array_keys(array_diff_assoc($lines, $blanked)));
+    }
+
     private function page(string $root, string $path): MarkdownPage
     {
         $file = $root.'/'.$path;
@@ -35,10 +44,6 @@ final readonly class MarkdownReader
             throw new MarkdownReadFailure('cannot read '.$path);
         }
 
-        $lines = explode("\n", $contents);
-        $blanked = $this->codeBlocks->blanked($lines);
-
-        // The lines the blanking changed are the fenced code lines, so fences are found only once.
-        return new MarkdownPage($path, $blanked, array_keys(array_diff_assoc($lines, $blanked)));
+        return $this->pageFrom($path, $contents);
     }
 }
