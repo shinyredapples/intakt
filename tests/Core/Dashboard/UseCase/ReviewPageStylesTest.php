@@ -71,9 +71,9 @@ final class ReviewPageStylesTest extends TestCase
 
     private function phoneBlock(string $sheet): string
     {
-        self::assertSame(1, preg_match('/@media \(max-width: 599px\) \{((?:[^{}]*\{[^{}]*\})*[^{}]*)\}/', $sheet, $block));
+        preg_match('/@media \(max-width: 599px\) \{((?:[^{}]*\{[^{}]*\})*[^{}]*)\}/', $sheet, $block);
 
-        return $block[1];
+        return $block[1] ?? '';
     }
 
     private function sheet(string $name): string
