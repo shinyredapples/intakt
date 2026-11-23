@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\Infrastructure;
 
+use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Review\Contract\ChangeUnderReview;
 use Intakt\Core\Review\Contract\Checkout;
@@ -222,6 +224,6 @@ final class AnthropicToolUsingReviewerTest extends WebTestCase
         $reviewer = new ReviewerAgent(RemembersNothing::prompt(), static fn () => $toolbox, $runs);
         $brief = new ReviewBrief(new ChangeUnderReview('alpha', 'Add a cart.', 'diff --git a/a b/a'), [], 1);
 
-        return $reviewer->review(new ReviewRequest($this->fixture->checkout, $brief, new ReviewerConversation('You review for correctness.', new UuidV7(), new UuidV7())), $platform, 'claude-sonnet-5-5');
+        return $reviewer->review(new ReviewRequest($this->fixture->checkout, $brief, new ReviewerConversation('You review for correctness.', new UuidV7(), new UuidV7())), $platform, new ResolvedModel(Provider::Anthropic, 'claude-sonnet-5-5'));
     }
 }

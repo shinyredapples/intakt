@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\Infrastructure;
 
+use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Review\Contract\ChangeUnderReview;
 use Intakt\Core\Review\Contract\Checkout;
@@ -129,7 +131,7 @@ final class ReviewerPromptCachingTest extends KernelTestCase
         $platform = new TraceablePlatform(Factory::createPlatform('placeholder', $http, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher));
         $reviewer = new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates()), new ReviewerStopping(new StopRequests(new InMemoryLedger(), new LedgerPayloads(StoredSerializerFactory::create())))));
 
-        $reviewer->review(new ReviewRequest($this->fixture->checkout, new ReviewBrief(new ChangeUnderReview('alpha', 'Add a cart.', 'diff --git a/a b/a'), [], 1), new ReviewerConversation('You review for correctness.', new UuidV7())), $platform, 'claude-sonnet-5-5');
+        $reviewer->review(new ReviewRequest($this->fixture->checkout, new ReviewBrief(new ChangeUnderReview('alpha', 'Add a cart.', 'diff --git a/a b/a'), [], 1), new ReviewerConversation('You review for correctness.', new UuidV7())), $platform, new ResolvedModel(Provider::Anthropic, 'claude-sonnet-5-5'));
 
         return $platform;
     }

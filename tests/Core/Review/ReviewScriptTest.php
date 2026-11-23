@@ -46,7 +46,7 @@ final class ReviewScriptTest extends TestCase
 
         self::assertSame(0, $run->getExitCode(), $this->outputFile('review.log'));
         self::assertSame(
-            ['-p', '--model', 'claude-opus-5-5', '--output-format', 'json', '--tools', 'Read,Grep,Glob', '--allowedTools', 'Read,Grep,Glob', '--setting-sources', '', '--strict-mcp-config', '--no-session-persistence'],
+            ['-p', '--model', 'claude-opus-5-5', '--output-format', 'stream-json', '--verbose', '--tools', 'Read,Grep,Glob', '--allowedTools', 'Read,Grep,Glob', '--setting-sources', '', '--strict-mcp-config', '--no-session-persistence'],
             $this->recordedLines('arguments'),
         );
         self::assertSame([$this->checkout], $this->recordedLines('directory'));

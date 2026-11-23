@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Review\Infrastructure;
 
 use Generator;
+use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Review\Contract\ChangeUnderReview;
@@ -1049,7 +1051,7 @@ final class ReviewerVerdictTest extends WebTestCase
 
         // Collected in finally, so a case whose answer is refused can still count the calls and tool calls it made.
         try {
-            return $reviewer->review(new ReviewRequest($this->fixture->checkout, new ReviewBrief(new ChangeUnderReview('alpha', $task, $this->diff), $this->open, $this->roundNumber), new ReviewerConversation('You review for correctness.', $this->conversation, $this->inARound ? $this->round : null)), $platform, 'reviewer-model');
+            return $reviewer->review(new ReviewRequest($this->fixture->checkout, new ReviewBrief(new ChangeUnderReview('alpha', $task, $this->diff), $this->open, $this->roundNumber), new ReviewerConversation('You review for correctness.', $this->conversation, $this->inARound ? $this->round : null)), $platform, new ResolvedModel(Provider::Anthropic, 'reviewer-model'));
         } finally {
             $collector = new DataCollector($platform instanceof TraceablePlatform ? [$platform] : [], [$toolbox], [$toolbox], [], [], []);
             $collector->lateCollect();

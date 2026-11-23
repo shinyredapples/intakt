@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\Infrastructure;
 
+use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Memory\Contract\MemoryEntry;
@@ -162,7 +164,7 @@ final class ReviewerAgentMemoryTest extends KernelTestCase
         $prompt = new ReviewerPrompt(new Fence(), new PromptCut(new Fence()), new VerdictParser(), new ReviewerMemory($memory, new Fence(), new DiffPaths()));
         $reviewer = new ReviewerAgent($prompt, new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates()), new ReviewerStopping(new StopRequests(new InMemoryLedger(), new LedgerPayloads(StoredSerializerFactory::create())))));
 
-        $reviewer->review(new ReviewRequest($this->fixture->checkout, new ReviewBrief(new ChangeUnderReview('alpha', 'Fix the cart.', self::DIFF), [], 1), new ReviewerConversation('You review for correctness.', new UuidV7())), $platform, 'reviewer-model');
+        $reviewer->review(new ReviewRequest($this->fixture->checkout, new ReviewBrief(new ChangeUnderReview('alpha', 'Fix the cart.', self::DIFF), [], 1), new ReviewerConversation('You review for correctness.', new UuidV7())), $platform, new ResolvedModel(Provider::Anthropic, 'reviewer-model'));
     }
 
     private function systemSent(): string
