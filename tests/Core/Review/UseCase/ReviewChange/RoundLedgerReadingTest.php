@@ -342,18 +342,18 @@ final class RoundLedgerReadingTest extends KernelTestCase
 
     public function testAReviewerWithAStartAndALaterBlockedRowLastsFromItsStartToTheBlockedRow(): void
     {
-        $this->record(new ReviewerStarted(self::ROUND, 'r1', 'security', Tier::Standard));
+        $this->record(LedgerEventKind::ReviewerStarted, new ReviewerStarted(self::ROUND, 'r1', 'security', Tier::Standard));
         $this->fixture->clock->modify('+2 seconds');
-        $this->record(new ReviewerBlocked(self::ROUND, 'r1', 'security', Tier::Standard, 'the budget is spent'));
+        $this->record(LedgerEventKind::ReviewerBlocked, new ReviewerBlocked(self::ROUND, 'r1', 'security', Tier::Standard, 'the budget is spent'));
 
         self::assertSame(2000, $this->reading()->millisecondsOfReviewer('r1'));
     }
 
     public function testAReviewerWithAStartAndNoEndRowHasNoDuration(): void
     {
-        $this->record(new ReviewerStarted(self::ROUND, 'r1', 'security', Tier::Standard));
+        $this->record(LedgerEventKind::ReviewerStarted, new ReviewerStarted(self::ROUND, 'r1', 'security', Tier::Standard));
         $this->fixture->clock->modify('+2 seconds');
-        $this->record(new ReviewerBlocked(self::ROUND, 'r2', 'security', Tier::Standard, 'the budget is spent'));
+        $this->record(LedgerEventKind::ReviewerBlocked, new ReviewerBlocked(self::ROUND, 'r2', 'security', Tier::Standard, 'the budget is spent'));
 
         self::assertNull($this->reading()->millisecondsOfReviewer('r1'));
     }
@@ -376,10 +376,8 @@ final class RoundLedgerReadingTest extends KernelTestCase
         $this->ledger = $this->fixture->ledger();
     }
 
-    private function record(ReviewerStarted|ReviewerBlocked $payload): void
+    private function record(LedgerEventKind $kind, ReviewerStarted|ReviewerBlocked $payload): void
     {
-        $kind = $payload instanceof ReviewerStarted ? LedgerEventKind::ReviewerStarted : LedgerEventKind::ReviewerBlocked;
-
         self::assertTrue($this->ledger->append(new LedgerEvent($kind, StoredSerializerFactory::create()->serialize($payload, JsonEncoder::FORMAT)))->succeeded());
     }
 
