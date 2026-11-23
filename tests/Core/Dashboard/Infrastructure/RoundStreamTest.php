@@ -23,7 +23,7 @@ final class RoundStreamTest extends TestCase
 
     public function testEveryTemplateFileBelongsToARoundStreamOrAShellPublisher(): void
     {
-        $streams = [...array_map(static fn (RoundStream $stream): string => $stream->template(), RoundStream::cases()), PublishProjectFilter::TEMPLATE, LiveBoardHeadline::TEMPLATE, TourCaptionUpdates::TEMPLATE];
+        $streams = [...array_map(static fn (RoundStream $stream): string => $stream->template(), RoundStream::cases()), PublishProjectFilter::TEMPLATE, LiveBoardHeadline::TEMPLATE, TourCaptionUpdates::TEMPLATE, TourCaptionUpdates::REFUSAL_TEMPLATE];
         $files = glob(dirname(__DIR__, 4).'/templates/dashboard/stream/[!_]*.stream.html.twig');
         self::assertIsArray($files);
 

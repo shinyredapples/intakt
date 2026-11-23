@@ -19,8 +19,21 @@ final class DashboardLedger implements Ledger
     /** @var list<RecordedEvent> */
     private array $recorded = [];
 
+    private bool $failNextAppend = false;
+
+    public function failNextAppend(): void
+    {
+        $this->failNextAppend = true;
+    }
+
     public function append(LedgerEvent $event): AppendResult
     {
+        if ($this->failNextAppend) {
+            $this->failNextAppend = false;
+
+            return AppendResult::failed('disk full');
+        }
+
         $this->recorded[] = new RecordedEvent(Uuid::v7(), $event, new DateTimeImmutable('2026-10-28T12:00:00+00:00'));
 
         return AppendResult::appended(Uuid::v7());
@@ -346,6 +359,11 @@ final class DashboardLedger implements Ledger
     public function computeFailedMain(string $project, string $main, string $reason): void
     {
         $this->add(LedgerEventKind::BootResultComputed, ['project' => $project, 'main' => $main, 'tool_fingerprint' => 'tools-1', 'state' => 'failed', 'reason' => $reason]);
+    }
+
+    public function computeMain(string $project, string $main, string $state): void
+    {
+        $this->add(LedgerEventKind::BootResultComputed, ['project' => $project, 'main' => $main, 'tool_fingerprint' => 'tools-1', 'state' => $state, 'reason' => '']);
     }
 
     public function failHeadWithoutCause(string $project, string $change): void

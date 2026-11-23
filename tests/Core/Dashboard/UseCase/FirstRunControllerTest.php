@@ -19,6 +19,7 @@ use Intakt\Core\Dashboard\Domain\ProjectStep;
 use Intakt\Core\Dashboard\Domain\ProviderStep;
 use Intakt\Core\Dashboard\Domain\StepState;
 use Intakt\Core\Dashboard\Domain\TierLine;
+use Intakt\Core\Dashboard\Infrastructure\FormIsRefused;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Dashboard\Infrastructure\RoundLock;
@@ -52,7 +53,6 @@ use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\HttpFoundation\Session\FlashBagAwareSessionInterface;
-use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\MessageBusInterface;
@@ -626,7 +626,7 @@ final class FirstRunControllerTest extends WebTestCase
         $this->browser()->request('POST', '/setup/first-review', ['_token' => 'wrong']);
 
         self::assertResponseStatusCodeSame(400);
-        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so nothing was started."', BadRequestHttpException::class));
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so nothing was started."', FormIsRefused::class));
     }
 
     public function testAStartOnAnInstallWithoutTheSampleRepositoryIsRefused(): void
