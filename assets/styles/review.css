@@ -24,7 +24,22 @@
 .verdict-card .kicker { margin: 0; font-size: var(--t13); color: var(--muted); text-transform: uppercase; letter-spacing: .06em; font-weight: 700; }
 .verdict-card .verdict-words { margin: 2px 0 4px; font-size: var(--t28); overflow-wrap: anywhere; }
 .verdict-card .verdict-count { margin: 0; font-size: var(--t17); }
-.verdict-card .verdict-count .figure { font-weight: 700; }
+.verdict-card .verdict-count .figure { font-weight: 700; font-size: var(--t28); }
+.verdict-card .verdict-text { flex: 1 1 0; }
+.urgency-bar { display: flex; gap: 3px; height: 10px; margin: var(--s8) 0; }
+.urgency-bar .seg { flex: 1 1 0; border-radius: var(--r-chip); background: var(--hairline); }
+.urgency-bar .seg.urgent { background: var(--red); }
+.urgency-bar .seg.should-fix { background: var(--amber); }
+.urgency-bar .seg.nice-to-have { background: var(--primary); }
+.urgency-counts { display: flex; flex-wrap: wrap; gap: var(--s4) var(--s12); margin: 0; padding: 0; list-style: none; font-size: var(--t15); color: var(--muted); }
+.verdict-reviewers { flex: none; display: grid; gap: var(--s8); justify-items: center; }
+.reviewer-faces { display: flex; gap: var(--s16); margin: 0; padding: 0; list-style: none; }
+.reviewer-faces .face { display: grid; justify-items: center; gap: 2px; font-size: var(--t13); text-align: center; }
+.reviewer-faces .character { width: 48px; height: 48px; }
+.reviewer-faces .face-lab { font-weight: 700; }
+.reviewer-faces .ok .face-mark { color: var(--deep); }
+.reviewer-faces .no .face-mark { color: color-mix(in srgb, var(--red) 80%, var(--ink)); }
+.verdict-reviewers .agreement { margin: 0; font-size: var(--t15); color: var(--muted); }
 
 /* Each button's line under it says what happens next. */
 .task-actions .next-step { margin: var(--s4) 0 0; font-size: var(--t15); color: var(--muted); }
@@ -57,6 +72,9 @@
   .fix-card { display: grid; grid-template-columns: 1fr auto; }
   .fix-card .urgency { justify-self: start; }
   .fix-card .fix-chev { grid-column: 2; grid-row: 1 / 3; }
+  .verdict-card { flex-wrap: wrap; }
   .verdict-card .character { width: 72px; height: 72px; }
+  .verdict-card .reviewer-faces .character { width: 48px; height: 48px; }
+  .verdict-reviewers { width: 100%; justify-items: start; }
   .verdict-card .verdict-words { font-size: var(--t21); }
 }

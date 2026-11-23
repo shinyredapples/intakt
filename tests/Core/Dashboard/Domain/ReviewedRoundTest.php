@@ -16,6 +16,7 @@ use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Core\Review\Contract\RoundEnding;
 use Intakt\Core\Review\Contract\RoundEnds;
+use Intakt\Core\ReviewerForLoop\Contract\ProjectMode;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -111,6 +112,42 @@ final class ReviewedRoundTest extends TestCase
     public function testRoundsOfTwoBranchesWhoseNamesDifferOnlyInLetterCaseAreOfTwoReviews(): void
     {
         self::assertFalse($this->roundOf('r-1', 'feat/Widget')->isOfTheSameReviewAs($this->roundOf('r-2', 'feat/widget')));
+    }
+
+    public function testTwoReviewersWhoBothAskForChangesAreSaidToAgree(): void
+    {
+        $round = $this->round()->withOutcomes([$this->answered('a', Decision::Changes), $this->answered('b', Decision::Changes)]);
+
+        self::assertSame('Both say changes needed', $round->agreement());
+    }
+
+    public function testThreeReviewersWhoAllApproveAreSaidToAgreeWithoutSayingBoth(): void
+    {
+        $round = $this->round()->withOutcomes([$this->answered('a', Decision::Approve), $this->answered('b', Decision::Approve), $this->answered('c', Decision::Approve)]);
+
+        self::assertSame('All 3 say approved', $round->agreement());
+    }
+
+    public function testReviewersWhoAnswerDifferentlyAreSaidToDisagree(): void
+    {
+        $round = $this->round()->withOutcomes([$this->answered('a', Decision::Changes), $this->answered('b', Decision::Approve)]);
+
+        self::assertSame('The reviewers disagree', $round->agreement());
+    }
+
+    public function testASoleReviewerIsNamedAsOne(): void
+    {
+        self::assertSame('One reviewer says approved', $this->round()->withOutcomes([$this->answered('a', Decision::Approve)])->agreement());
+    }
+
+    public function testNoReviewerOutcomeGivesNoAgreementLine(): void
+    {
+        self::assertSame('', $this->round()->withOutcomes([new ReviewerOutcome('a', 'correctness', 'standard', new DateTimeImmutable('2026-10-28T11:00:00+00:00'))])->agreement());
+    }
+
+    private function answered(string $id, Decision $decision): ReviewerOutcome
+    {
+        return new ReviewerOutcome($id, 'correctness', 'standard', new DateTimeImmutable('2026-10-28T11:00:00+00:00'))->answered($decision, 0, ProjectMode::Live);
     }
 
     private function round(): ReviewedRound

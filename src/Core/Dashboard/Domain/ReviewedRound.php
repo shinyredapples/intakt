@@ -133,6 +133,27 @@ final readonly class ReviewedRound
         return ReviewOutcome::ofQuorum($this);
     }
 
+    // One line on whether the reviewers agree, from their own outcomes and not the round's, so a split reads as a split; empty while none has given one.
+    public function agreement(): string
+    {
+        $given = array_values(array_filter(array_map(static fn (ReviewerOutcome $reviewer): ?ReviewOutcome => $reviewer->outcome(), $this->outcomes)));
+        $kinds = array_unique(array_map(static fn (ReviewOutcome $outcome): string => $outcome->plainWords(), $given));
+
+        if ([] === $given) {
+            return '';
+        }
+
+        if (1 === count($given)) {
+            return 'One reviewer says '.lcfirst($given[0]->plainWords());
+        }
+
+        if (1 === count($kinds)) {
+            return (2 === count($given) ? 'Both' : 'All '.count($given)).' say '.lcfirst($kinds[0]);
+        }
+
+        return 'The reviewers disagree';
+    }
+
     public function failedReviewers(): int
     {
         return count(array_filter($this->outcomes, static fn (ReviewerOutcome $outcome): bool => ReviewerProgress::Failed === $outcome->progress));

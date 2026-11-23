@@ -45,7 +45,7 @@ final class ReviewVerdictCardTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame(['Changes needed', '3 to fix · 0 urgent'], [$crawler->filter('.verdict-card .verdict-words')->text(), $crawler->filter('.verdict-card .verdict-count')->text()]);
+        self::assertSame(['Changes needed', '3 to fix'], [$crawler->filter('.verdict-card .verdict-words')->text(), $crawler->filter('.verdict-card .verdict-count')->text()]);
         self::assertSame('To fix', $crawler->filter('.to-fix h2')->text());
     }
 
@@ -55,7 +55,7 @@ final class ReviewVerdictCardTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame('1 to fix · 0 urgent', $crawler->filter('.verdict-card .verdict-count')->text());
+        self::assertSame('1 to fix', $crawler->filter('.verdict-card .verdict-count')->text());
     }
 
     public function testChangesWithNothingToFixNowCountsZeroAndListsNothing(): void
@@ -64,7 +64,7 @@ final class ReviewVerdictCardTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame(['Changes needed', '0 to fix · 0 urgent'], [$crawler->filter('.verdict-card .verdict-words')->text(), $crawler->filter('.verdict-card .verdict-count')->text()]);
+        self::assertSame(['Changes needed', '0 to fix'], [$crawler->filter('.verdict-card .verdict-words')->text(), $crawler->filter('.verdict-card .verdict-count')->text()]);
         self::assertCount(0, $crawler->filter('.to-fix'));
     }
 
@@ -74,7 +74,7 @@ final class ReviewVerdictCardTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame('0 to fix · 0 urgent', $crawler->filter('.verdict-card .verdict-count')->text());
+        self::assertSame('0 to fix', $crawler->filter('.verdict-card .verdict-count')->text());
     }
 
     public function testAPassThatEndedWithoutAVerdictShowsNoCountLine(): void
@@ -139,7 +139,7 @@ final class ReviewVerdictCardTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame('1 to fix · 1 urgent', $crawler->filter('.verdict-card .verdict-count')->text());
+        self::assertSame('1 to fix', $crawler->filter('.verdict-card .verdict-count')->text());
     }
 
     public function testACardShowsTheHeadlineAsItsTitleAndTheRestOfTheTextAsItsExplanation(): void
@@ -160,6 +160,57 @@ final class ReviewVerdictCardTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
         self::assertCount(0, $crawler->filter('.fix-card .fix-more'));
+    }
+
+    public function testTheBarHasOneSegmentPerFindingToFixAndTheCountsAreInWords(): void
+    {
+        $this->givenAChangesRound();
+        $this->ledger->judgeToFixAtLine7OfA('round-1', 'The total is off by one.');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame([1, 1, '1 urgent, 0 should fix, 0 nice to have'], [$crawler->filter('.urgency-bar .seg')->count(), $crawler->filter('.urgency-bar .seg.urgent')->count(), implode(', ', $crawler->filter('.urgency-counts li')->each(static fn (Crawler $li): string => $li->text()))]);
+    }
+
+    public function testAnApprovedPassHasAnEmptyBar(): void
+    {
+        $this->givenAnApprovedRound();
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertCount(0, $crawler->filter('.urgency-bar .seg'));
+    }
+
+    public function testEachReviewerIsAMeerkatMarkedWithItsOwnVerdictAndTheyAreSaidToAgreeOrNot(): void
+    {
+        $this->givenAChangesRoundWith(['F1' => 'act']);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame(['✗ Changes needed', '✓ Approved'], $crawler->filter('.reviewer-faces .face-mark')->each(static fn (Crawler $mark): string => $mark->text()));
+        self::assertSame('The reviewers disagree', $crawler->filter('.verdict-reviewers .agreement')->text());
+        self::assertCount(2, $crawler->filter('.reviewer-faces .face img[src*="code_reviewer-light"]'));
+    }
+
+    public function testTwoReviewersAskingForChangesReadBothSayChangesNeeded(): void
+    {
+        $this->ledger->startRoundOfQuorum('feat/thing', 'round-1', 'all');
+        $this->ledger->answer('round-1', 'correctness', 1);
+        $this->ledger->answer('round-1', 'security', 1);
+        $this->ledger->judgeFindings('round-1', ['F1' => 'act']);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame('Both say changes needed', $crawler->filter('.verdict-reviewers .agreement')->text());
+    }
+
+    public function testAReviewerWhoseModelWasNotRecordedIsShownWithoutALab(): void
+    {
+        $this->givenAnApprovedRound();
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame(['Model not recorded', 'Model not recorded'], $crawler->filter('.reviewer-faces .face-lab')->each(static fn (Crawler $lab): string => $lab->text()));
     }
 
     public function testAJudgedPassIsNamedCheckedAboveTheVerdict(): void

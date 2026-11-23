@@ -59,6 +59,12 @@ final readonly class ReviewerOutcome
         return $lab instanceof AiLab && '' !== $name ? $name.' ('.$lab->value.')' : $this->model;
     }
 
+    // Null for a model that was not recorded or belongs to no known lab, so the face is shown without a lab.
+    public function lab(): ?AiLab
+    {
+        return null === $this->model || '' === $this->model ? null : AiLab::of($this->model);
+    }
+
     public function outcome(): ?ReviewOutcome
     {
         return ReviewOutcome::ofReviewer($this);
