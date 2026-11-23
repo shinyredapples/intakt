@@ -3,19 +3,22 @@
 declare(strict_types=1);
 
 // Seeds an install for the mock comparison of #1796, because a fresh install has no review with a judged round and a running one.
+// Usage: APP_ENV=dev php .evidence/1796/seed.php (after bin/console doctrine:migrations:migrate).
 
-use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Infrastructure\DoctrineLedger;
 use Intakt\Kernel;
+use Symfony\Component\Clock\NativeClock;
 use Symfony\Component\Dotenv\Dotenv;
 
 require dirname(__DIR__, 2).'/vendor/autoload.php';
 new Dotenv()->bootEnv(dirname(__DIR__, 2).'/.env');
 
-$kernel = new Kernel((string) getenv('APP_ENV'), false);
+$kernel = new Kernel((string) $_SERVER['APP_ENV'], false);
 $kernel->boot();
-$ledger = $kernel->getContainer()->get('test.service_container')->get(Ledger::class);
+// Built from the public Doctrine registry, because the Ledger service is private and only the test environment has a container that hands it out.
+$ledger = new DoctrineLedger($kernel->getContainer()->get('doctrine'), new NativeClock());
 
 $first = '0195f3a0-0000-7000-8000-000000000598';
 $second = '0195f3a0-0000-7000-8000-000000000599';
@@ -40,9 +43,11 @@ $events = [
     [LedgerEventKind::VerdictReceived, $reviewer($second, 'security') + ['decision' => 'approve', 'findings' => 0], null],
 ];
 
-$appended = [];
 foreach ($events as [$kind, $payload, $subject]) {
-    $appended[] = $ledger->append(new LedgerEvent($kind, json_encode($payload, JSON_THROW_ON_ERROR), $subject));
+    if (!$ledger->append(new LedgerEvent($kind, json_encode($payload, JSON_THROW_ON_ERROR), $subject))->succeeded()) {
+        fwrite(STDERR, "could not append {$kind->value}\n");
+        exit(1);
+    }
 }
 
-echo 'seeded '.count($appended)." ledger events, open /reviews/{$second}\n";
+echo 'seeded '.count($events).' ledger events in '.$kernel->getEnvironment().", open /reviews/{$second}\n";
