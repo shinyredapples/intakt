@@ -35,7 +35,7 @@ final readonly class DocsGate implements Gate
 
         $findings = [
             ...$this->documentFindings($pages, $allowances),
-            ...(null === $base ? [] : $this->changes->since($base, $list, $pages)),
+            ...($base instanceof DocsRatchetList ? $this->changes->since($base, $list, $pages) : []),
             ...$this->unneeded->in($list, $pages),
         ];
 
@@ -137,7 +137,7 @@ final readonly class DocsGate implements Gate
         try {
             return DocsRatchetList::parsed($json);
         } catch (DocsListInvalid $invalid) {
-            throw new DocsListInvalid($name.' '.$invalid->getMessage().'; restore it from the target branch', previous: $invalid);
+            throw new DocsListInvalid($name.' '.$invalid->getMessage().'; restore it from the target branch', $invalid->getCode(), previous: $invalid);
         }
     }
 

@@ -29,10 +29,10 @@ final readonly class DocsRatchetList
         try {
             $decoded = json_decode($json, true, 4, JSON_THROW_ON_ERROR);
         } catch (JsonException $exception) {
-            throw new DocsListInvalid('is not valid JSON: '.$exception->getMessage(), previous: $exception);
+            throw new DocsListInvalid('is not valid JSON: '.$exception->getMessage(), $exception->getCode(), previous: $exception);
         }
 
-        if (!is_array($decoded) || array_keys($decoded) !== self::SECTIONS) {
+        if (!is_array($decoded) || self::SECTIONS !== array_keys($decoded)) {
             throw new DocsListInvalid('must be an object of exactly "paragraphs", "pages" and "summaries", in that order');
         }
 
