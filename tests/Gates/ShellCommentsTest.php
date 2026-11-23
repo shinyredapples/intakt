@@ -8,6 +8,7 @@ use Closure;
 use Intakt\Gates\LeftUndoneComments;
 use Intakt\Gates\ShellComments;
 use Intakt\Gates\ShellHereDocuments;
+use Intakt\Gates\ShellPendingDocuments;
 use Intakt\Gates\ShellLexer;
 use Intakt\Gates\ShellLiterals;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -18,6 +19,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(ShellLexer::class)]
 #[CoversClass(ShellLiterals::class)]
 #[CoversClass(ShellHereDocuments::class)]
+#[CoversClass(ShellPendingDocuments::class)]
 #[CoversClass(LeftUndoneComments::class)]
 final class ShellCommentsTest extends TestCase
 {

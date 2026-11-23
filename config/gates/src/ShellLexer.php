@@ -28,7 +28,7 @@ final class ShellLexer
     private const string CASE_END = 'esac';
 
     private readonly ShellLiterals $literals;
-    private readonly ShellHereDocuments $documents;
+    private readonly ShellPendingDocuments $documents;
     private bool $wordStart = true;
     private bool $commandStart = true;
     private bool $functionName = false;
@@ -40,12 +40,6 @@ final class ShellLexer
 
     private int $substitutions = 0;
 
-    // Because only a `$( )` is read as a source of its own, here-documents wait by the number of open substitutions: a line end in a subshell or a `case` reads every body queued on that line.
-    /**
-     * @var array<int, list<array{delimiter: string, joinsLines: bool, stripsTabs: bool}>>
-     */
-    private array $pendingDocuments = [];
-
     /**
      * @var list<array{int, string}>
      */
@@ -54,7 +48,7 @@ final class ShellLexer
     public function __construct(string $source)
     {
         $this->literals = new ShellLiterals($source);
-        $this->documents = new ShellHereDocuments($source);
+        $this->documents = new ShellPendingDocuments(new ShellHereDocuments($source));
     }
 
     /**
@@ -108,18 +102,9 @@ final class ShellLexer
         return $offset + strspn($this->literals->source, ShellLiterals::BLANKS, $offset);
     }
 
-    // Because bash reads the bodies of the here-documents of a line right after that line ends, they are skipped there in their order.
     private function afterLineEnd(int $offset): int
     {
-        ++$offset;
-
-        foreach ($this->pendingDocuments[$this->substitutions] ?? [] as $document) {
-            $offset = $this->documents->afterBody($offset, $document);
-        }
-
-        unset($this->pendingDocuments[$this->substitutions]);
-
-        return $this->atCommandStart($offset);
+        return $this->atCommandStart($this->documents->afterBodies($offset + 1, $this->substitutions));
     }
 
     private function atCommandStart(int $end): int
@@ -152,23 +137,13 @@ final class ShellLexer
         return self::SUBSTITUTION === $this->closedFrame() ? $this->afterText($offset + 1) : $this->atCommandStart($offset + 1);
     }
 
-    // Because a here-document opened in a substitution that closes on its own line, as in `$(cat <<EOF)`, is read at the enclosing line end.
     private function closedFrame(): ?int
     {
         $frame = array_pop($this->frames);
 
-        if (self::SUBSTITUTION !== $frame) {
-            return $frame;
+        if (self::SUBSTITUTION === $frame) {
+            $this->documents->closeScope($this->substitutions--);
         }
-
-        $scope = $this->substitutions--;
-
-        // Because copying the outer queue on every close would make many substitutions on one line quadratic, the inner documents are appended to it in place.
-        foreach ($this->pendingDocuments[$scope] ?? [] as $document) {
-            $this->pendingDocuments[$scope - 1][] = $document;
-        }
-
-        unset($this->pendingDocuments[$scope]);
 
         return $frame;
     }
@@ -359,9 +334,7 @@ final class ShellLexer
     {
         [$delimiter, $end, $quoted] = $this->literals->documentDelimiterAt($offset);
 
-        if ('' !== $delimiter || $quoted) {
-            $this->pendingDocuments[$this->substitutions][] = ['delimiter' => $delimiter, 'joinsLines' => !$quoted, 'stripsTabs' => self::STRIPPING_DOCUMENT === $operator];
-        }
+        $this->documents->add($this->substitutions, ['delimiter' => $delimiter, 'joinsLines' => !$quoted, 'stripsTabs' => self::STRIPPING_DOCUMENT === $operator]);
 
         return $this->inWord($end);
     }
