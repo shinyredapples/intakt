@@ -65,11 +65,6 @@ final class RecurringP1sTest extends KernelTestCase
 
     private RoundFixture $fixture;
 
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-    }
-
     public function testAP1WithTheSameKeyFlaggedOnASecondHeadRecordsOneRecurringP1Found(): void
     {
         $first = $this->judged($this->completedAt(self::CHANGE, self::HEAD_A, $this->keyedP1()));
@@ -425,6 +420,11 @@ final class RecurringP1sTest extends KernelTestCase
         self::assertSame([$second], array_column($this->payloadsOf(LedgerEventKind::EscalationVerdictReused), 'round'));
     }
 
+    protected function setUp(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer());
+    }
+
     private function keepVerdictOfFirstRound(EscalationOutcome $outcome, string $round): void
     {
         $this->fixture->keptVerdicts()->keep($this->keyOfFirstRound(), new EscalationVerdict($outcome, 'Seeded.'), $round);
@@ -438,6 +438,12 @@ final class RecurringP1sTest extends KernelTestCase
         self::assertIsString($key);
 
         return $key;
+    }
+
+    // Names a file of the fixture's checkout, so it gets a key.
+    private function keyedP1(): Finding
+    {
+        return new Finding('A', Severity::P1, 'RecordingBus.php', 3, null, 'The bus loses a message.', FixableBy::Builder, false, null, null);
     }
 
     // Only this round's reviewer messages, so the rounds started before are not delivered again.
@@ -460,12 +466,6 @@ final class RecurringP1sTest extends KernelTestCase
         $this->fixture->judge(new ScriptedJudgement(new Judgement([])))(new JudgeRound($round));
 
         return $round;
-    }
-
-    // Names a file of the fixture's checkout, so it gets a key.
-    private function keyedP1(): Finding
-    {
-        return new Finding('A', Severity::P1, 'RecordingBus.php', 3, null, 'The bus loses a message.', FixableBy::Builder, false, null, null);
     }
 
     // Tied to a requirement, so the goalpost rule lets a new P1 of a later round block.

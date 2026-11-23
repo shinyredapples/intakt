@@ -26,16 +26,6 @@ final class ContainerRebuildTest extends TestCase
 
     private string $directory = '';
 
-    protected function setUp(): void
-    {
-        $this->directory = sys_get_temp_dir().'/intakt-container-rebuild-'.bin2hex(random_bytes(6));
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->directory);
-    }
-
     public function testTheSeedSeesTheKeyAfterARebuildInTheSecondAKeylessContainerWasCompiled(): void
     {
         $this->console(['cache:warmup'], $this->withoutKeys());
@@ -78,24 +68,14 @@ final class ContainerRebuildTest extends TestCase
         self::assertFileExists(ContainerRebuild::loaderOf(new Kernel('test', false), $this->cacheDirectory()));
     }
 
-    // Stamped inside each console process with its own start, because the framework's cache:clear takes a container compiled in the second it starts for one it built itself, as when the instance compiled one just before the rebuild.
-    private function rebuildStampingTheCacheWithEachConsolesStart(): ContainerRebuild
+    protected function setUp(): void
     {
-        $stamp = $this->directory.'/stamp.php';
-        new Filesystem()->dumpFile($stamp, sprintf(
-            '<?php foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator(%s, FilesystemIterator::SKIP_DOTS)) as $file) { touch($file->getPathname(), $_SERVER["REQUEST_TIME"]); }',
-            var_export($this->cacheDirectory(), true),
-        ));
-
-        return new ContainerRebuild(
-            ContainerRebuild::loaderOf(new Kernel('test', false), $this->cacheDirectory()),
-            fn (array $arguments, array $environment, int $seconds): string => $this->outputOf([PHP_BINARY, '-d', 'auto_prepend_file='.$stamp, ...$this->consoleCommand($arguments)], $environment, $seconds),
-        );
+        $this->directory = sys_get_temp_dir().'/intakt-container-rebuild-'.bin2hex(random_bytes(6));
     }
 
-    private function rebuild(): ContainerRebuild
+    protected function tearDown(): void
     {
-        return new ContainerRebuild(ContainerRebuild::loaderOf(new Kernel('test', false), $this->cacheDirectory()), $this->console(...));
+        new Filesystem()->remove($this->directory);
     }
 
     /**
@@ -112,6 +92,21 @@ final class ContainerRebuildTest extends TestCase
         return $files;
     }
 
+    private function rebuild(): ContainerRebuild
+    {
+        return new ContainerRebuild(ContainerRebuild::loaderOf(new Kernel('test', false), $this->cacheDirectory()), $this->console(...));
+    }
+
+    /**
+     * @return array<string,string|false>
+     */
+    private function withoutKeys(): array
+    {
+        $variables = [SampleProject::HUGGING_FACE_TOKEN, ...array_merge(...array_map(static fn (Provider $provider): array => $provider->variables(), Provider::cases()))];
+
+        return array_fill_keys($variables, false);
+    }
+
     /**
      * @param list<string>               $arguments
      * @param array<string,string|false> $environment
@@ -119,6 +114,21 @@ final class ContainerRebuildTest extends TestCase
     private function console(array $arguments, array $environment, int $seconds = self::CONSOLE_SECONDS): string
     {
         return $this->outputOf([PHP_BINARY, ...$this->consoleCommand($arguments)], $environment, $seconds);
+    }
+
+    // Stamped inside each console process with its own start, because the framework's cache:clear takes a container compiled in the second it starts for one it built itself, as when the instance compiled one just before the rebuild.
+    private function rebuildStampingTheCacheWithEachConsolesStart(): ContainerRebuild
+    {
+        $stamp = $this->directory.'/stamp.php';
+        new Filesystem()->dumpFile($stamp, sprintf(
+            '<?php foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator(%s, FilesystemIterator::SKIP_DOTS)) as $file) { touch($file->getPathname(), $_SERVER["REQUEST_TIME"]); }',
+            var_export($this->cacheDirectory(), true),
+        ));
+
+        return new ContainerRebuild(
+            ContainerRebuild::loaderOf(new Kernel('test', false), $this->cacheDirectory()),
+            fn (array $arguments, array $environment, int $seconds): string => $this->outputOf([PHP_BINARY, '-d', 'auto_prepend_file='.$stamp, ...$this->consoleCommand($arguments)], $environment, $seconds),
+        );
     }
 
     /**
@@ -162,16 +172,6 @@ final class ContainerRebuildTest extends TestCase
             'DATABASE_URL' => 'sqlite:///'.$this->directory.'/data.db',
             'INTAKT_CONFIG' => $this->configuration(),
         ];
-    }
-
-    /**
-     * @return array<string,string|false>
-     */
-    private function withoutKeys(): array
-    {
-        $variables = [SampleProject::HUGGING_FACE_TOKEN, ...array_merge(...array_map(static fn (Provider $provider): array => $provider->variables(), Provider::cases()))];
-
-        return array_fill_keys($variables, false);
     }
 
     /**

@@ -27,18 +27,6 @@ final class DashboardSecondStartJourneyTest extends JourneyTestCase
 
     private string $directory = '';
 
-    protected function tearDown(): void
-    {
-        if ('' !== $this->directory) {
-            new Filesystem()->remove($this->directory);
-        }
-    }
-
-    protected function journey(): string
-    {
-        return 'second start from the dashboard';
-    }
-
     public function testASecondPressOfTheStartOnAJudgedReviewPageIsRefusedAndStartsNoRound(): void
     {
         $this->step('create the database', $this->createTheDatabase(...));
@@ -49,6 +37,18 @@ final class DashboardSecondStartJourneyTest extends JourneyTestCase
         $form = $this->step('press the start of round 2 on the judged review page', fn (): Form => $this->pressTheStartOfRoundTwo($dashboard, $review));
         $this->step('press the same start again and read the refusal', fn () => $this->pressTheSameStartAgain($dashboard, $form, $review));
         $this->step('read that the instance holds two rounds and offers round 3', fn () => $this->readTheRoundsOfTheInstance($review));
+    }
+
+    protected function tearDown(): void
+    {
+        if ('' !== $this->directory) {
+            new Filesystem()->remove($this->directory);
+        }
+    }
+
+    protected function journey(): string
+    {
+        return 'second start from the dashboard';
     }
 
     private function createTheDatabase(): void
@@ -86,7 +86,19 @@ final class DashboardSecondStartJourneyTest extends JourneyTestCase
         $round = substr($review, strlen('/reviews/'));
         $this->liveRoundDriver()->stepUntilEnded($round);
 
-        self::assertStringContainsString(self::ENDED_TEXT, $this->visit($review)->filter('#round-'.$round.'-state')->text());
+        self::assertStringContainsString(self::ENDED_TEXT, $this->visit($review.'/record')->filter('#round-'.$round.'-state')->text());
+    }
+
+    /**
+     * @return array{ANTHROPIC_API_KEY: string, INTAKT_CONFIG: string, INTAKT_SAMPLE_REPOSITORY: string}
+     */
+    private function environment(): array
+    {
+        return [
+            'ANTHROPIC_API_KEY' => self::PLACEHOLDER_KEY,
+            'INTAKT_CONFIG' => $this->directory.'/intakt.yaml',
+            'INTAKT_SAMPLE_REPOSITORY' => $this->directory.'/sample',
+        ];
     }
 
     private function pressTheStartOfRoundTwo(KernelBrowser $dashboard, string $review): Form
@@ -110,6 +122,23 @@ final class DashboardSecondStartJourneyTest extends JourneyTestCase
         self::assertSame(2, $this->roundsOn($review));
     }
 
+    // Read on the instance's own server, so the rounds are the ones its database holds and not this journey's kernel's.
+    private function readTheRoundsOfTheInstance(string $review): void
+    {
+        $page = $this->visit($review);
+
+        self::assertSame('3', $page->filter('form.start-review input[name="number"]')->attr('value'));
+        self::assertSame('Start round 3', $page->filter('form.start-review button')->text());
+    }
+
+    // Counted on the instance's own server, so the rounds are the ones its database holds; in the Full record, which lists every pass.
+    private function roundsOn(string $review): int
+    {
+        $ids = $this->visit($review.'/record')->filter('[id^="round-"]')->each(static fn (Crawler $part): string => (string) $part->attr('id'));
+
+        return count(array_filter($ids, static fn (string $id): bool => 1 === preg_match(self::ROUND_BLOCK, $id)));
+    }
+
     // Not followed here, because both presses answer with the same redirect and only the line on the page the caller then follows to tells them apart.
     private function redirectOfPressing(KernelBrowser $dashboard, Form $form): string
     {
@@ -120,34 +149,5 @@ final class DashboardSecondStartJourneyTest extends JourneyTestCase
         self::assertSame(303, $response->getStatusCode());
 
         return (string) parse_url((string) $response->headers->get('Location'), PHP_URL_PATH);
-    }
-
-    // Read on the instance's own server, so the rounds are the ones its database holds and not this journey's kernel's.
-    private function readTheRoundsOfTheInstance(string $review): void
-    {
-        $page = $this->visit($review);
-
-        self::assertSame('3', $page->filter('form.start-review input[name="number"]')->attr('value'));
-        self::assertSame('Start round 3', $page->filter('form.start-review button')->text());
-    }
-
-    // Counted on the instance's own server, so the rounds are the ones its database holds.
-    private function roundsOn(string $review): int
-    {
-        $ids = $this->visit($review)->filter('[id^="round-"]')->each(static fn (Crawler $part): string => (string) $part->attr('id'));
-
-        return count(array_filter($ids, static fn (string $id): bool => 1 === preg_match(self::ROUND_BLOCK, $id)));
-    }
-
-    /**
-     * @return array{ANTHROPIC_API_KEY: string, INTAKT_CONFIG: string, INTAKT_SAMPLE_REPOSITORY: string}
-     */
-    private function environment(): array
-    {
-        return [
-            'ANTHROPIC_API_KEY' => self::PLACEHOLDER_KEY,
-            'INTAKT_CONFIG' => $this->directory.'/intakt.yaml',
-            'INTAKT_SAMPLE_REPOSITORY' => $this->directory.'/sample',
-        ];
     }
 }

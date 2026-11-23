@@ -19,11 +19,6 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[UsesClass(StaticAnalysisGate::class)]
 final class NarrowCatchRuleTest extends PhpStanRuleTestCase
 {
-    protected function ruleFor(string $root): NarrowCatchRule
-    {
-        return new NarrowCatchRule($root);
-    }
-
     /**
      * @return iterable<string, array{string}>
      */
@@ -306,5 +301,10 @@ final class NarrowCatchRuleTest extends PhpStanRuleTestCase
     public function testGenericCatchesOutsideTheSourceFolderPassStaticAnalysis(): void
     {
         $this->assertRuleAccepts('narrow-catch-outside-src');
+    }
+
+    protected function ruleFor(string $root): NarrowCatchRule
+    {
+        return new NarrowCatchRule($root);
     }
 }

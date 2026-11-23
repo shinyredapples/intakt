@@ -107,11 +107,6 @@ final class ReviewerRetryVendorTest extends KernelTestCase
      */
     private array $askedToNameFindings = [];
 
-    protected function setUp(): void
-    {
-        $this->ledger = new InMemoryLedger();
-    }
-
     public function testAReviewerWhoseEndpointCouldNotBeReachedIsAskedOnceMoreAndThatVerdictCounts(): void
     {
         $verdict = $this->vendor($this->answering($this->unreachable(...), $this->namedFinding(...)))->review('alpha', Tier::Strong, $this->request())->verdict;
@@ -262,26 +257,9 @@ final class ReviewerRetryVendorTest extends KernelTestCase
         self::assertSame([false], $this->askedToNameFindings);
     }
 
-    /**
-     * @param Closure(): ResultInterface $first
-     * @param Closure(): ResultInterface $second
-     */
-    private function answering(Closure $first, Closure $second): Closure
+    protected function setUp(): void
     {
-        return function (Model $model, array|string|object $input) use ($first, $second): ResultInterface {
-            $this->askedToNameFindings[] = $this->asksToNameFindings($input);
-
-            return 1 === count($this->askedToNameFindings) ? $first() : $second();
-        };
-    }
-
-    // Read from the encoded input, because the platform hands its model client the normalized messages, never the message bag.
-    /**
-     * @param array<mixed>|string|object $input
-     */
-    private function asksToNameFindings(array|string|object $input): bool
-    {
-        return str_contains(json_encode($input, JSON_THROW_ON_ERROR), substr(json_encode(ReviewerPrompt::NAME_FINDINGS_OR_APPROVE, JSON_THROW_ON_ERROR), 1, -1));
+        $this->ledger = new InMemoryLedger();
     }
 
     private function unreachable(): never
@@ -325,6 +303,28 @@ final class ReviewerRetryVendorTest extends KernelTestCase
         return new TextResult(VerdictDocument::fromTheDesign()->with('resolved', [])->json());
     }
 
+    /**
+     * @param Closure(): ResultInterface $first
+     * @param Closure(): ResultInterface $second
+     */
+    private function answering(Closure $first, Closure $second): Closure
+    {
+        return function (Model $model, array|string|object $input) use ($first, $second): ResultInterface {
+            $this->askedToNameFindings[] = $this->asksToNameFindings($input);
+
+            return 1 === count($this->askedToNameFindings) ? $first() : $second();
+        };
+    }
+
+    // Read from the encoded input, because the platform hands its model client the normalized messages, never the message bag.
+    /**
+     * @param array<mixed>|string|object $input
+     */
+    private function asksToNameFindings(array|string|object $input): bool
+    {
+        return str_contains(json_encode($input, JSON_THROW_ON_ERROR), substr(json_encode(ReviewerPrompt::NAME_FINDINGS_OR_APPROVE, JSON_THROW_ON_ERROR), 1, -1));
+    }
+
     private function thrownBy(Closure $call): ?Throwable
     {
         try {
@@ -334,13 +334,6 @@ final class ReviewerRetryVendorTest extends KernelTestCase
         }
 
         return null;
-    }
-
-    private function request(): ReviewRequest
-    {
-        $open = new Finding('F1', Severity::P2, null, null, null, 'Earlier.', FixableBy::Builder, false, null, null);
-
-        return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$open], 1), new ReviewerConversation('You review for correctness.', new UuidV7()));
     }
 
     // Optionally on accounts, because config/packages/ai.php puts an AccountFailoverPlatform in front of every configured provider and its failover can hide a transport error thrown while sending, which the retry depends on.
@@ -356,5 +349,12 @@ final class ReviewerRetryVendorTest extends KernelTestCase
         $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
 
         return new SymfonyAiVendor($tiers, $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($this->ledger, new MockClock(self::NOW), new NullLogger(), StoredSerializerFactory::create()), $limit, new MockClock(self::NOW), self::createStub(ReviewServerAccesses::class));
+    }
+
+    private function request(): ReviewRequest
+    {
+        $open = new Finding('F1', Severity::P2, null, null, null, 'Earlier.', FixableBy::Builder, false, null, null);
+
+        return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$open], 1), new ReviewerConversation('You review for correctness.', new UuidV7()));
     }
 }

@@ -24,13 +24,6 @@ final class BuildContextTest extends TestCase
 {
     private string $file = '';
 
-    protected function tearDown(): void
-    {
-        if ('' !== $this->file) {
-            new BuildContext(new ProjectFiles())->remove($this->file);
-        }
-    }
-
     public function testTheContextIsWrittenIntoAFolderOnlyItsOwnerCanEnter(): void
     {
         $this->file = $this->contextOfAGeneratedDockerfile();
@@ -144,6 +137,13 @@ final class BuildContextTest extends TestCase
         $this->expectException(LogicException::class);
 
         new BuildContext(new ProjectFiles())->remove(dirname($this->file).'/other.tar');
+    }
+
+    protected function tearDown(): void
+    {
+        if ('' !== $this->file) {
+            new BuildContext(new ProjectFiles())->remove($this->file);
+        }
     }
 
     private function contextOfAGeneratedDockerfile(): string

@@ -79,6 +79,23 @@ final readonly class RoundFinding
         return null !== $headline && $headline !== $this->trimmedText();
     }
 
+    // What the text says after its headline, for the card's explanation line, so the card never shows the headline twice; null when nothing follows it.
+    public function afterHeadline(): ?string
+    {
+        if (!$this->goesOnAfterItsHeadline()) {
+            return null;
+        }
+
+        $rest = preg_replace('/^[\s\p{Z}]+/u', '', substr((string) $this->trimmedText(), strlen((string) $this->headline())));
+
+        return '' === $rest ? null : $rest;
+    }
+
+    public function urgency(): ?FindingUrgency
+    {
+        return FindingUrgency::of($this->severity);
+    }
+
     public function place(): ?string
     {
         if (null === $this->file) {

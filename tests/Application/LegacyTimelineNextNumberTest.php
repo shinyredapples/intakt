@@ -60,6 +60,13 @@ final class LegacyTimelineNextNumberTest extends KernelTestCase
         self::assertSame([1, self::OLD_SPELLING, null], [$canonical->number(), $review?->change, $review?->nextNumber()]);
     }
 
+    private function refuseOnMySql(): void
+    {
+        if ($this->connection()->getDatabasePlatform() instanceof AbstractMySQLPlatform) {
+            self::markTestSkipped('MySQL and MariaDB compare the address without letter case, so two spellings of one change cannot be stored apart.');
+        }
+    }
+
     // Written as a change stored before rounds were stored canonically would have been, its start rows too, because the ledger is append-only.
     private function respell(string $from, string $to): void
     {
@@ -89,13 +96,6 @@ final class LegacyTimelineNextNumberTest extends KernelTestCase
         $console->run(['command' => 'doctrine:migrations:execute', 'versions' => [Version20261122100000::class], '--up' => true, '--no-interaction' => true]);
         $console->assertCommandIsSuccessful($console->getDisplay());
         self::getContainer()->get('doctrine.orm.entity_manager')->clear();
-    }
-
-    private function refuseOnMySql(): void
-    {
-        if ($this->connection()->getDatabasePlatform() instanceof AbstractMySQLPlatform) {
-            self::markTestSkipped('MySQL and MariaDB compare the address without letter case, so two spellings of one change cannot be stored apart.');
-        }
     }
 
     private function connection(): Connection

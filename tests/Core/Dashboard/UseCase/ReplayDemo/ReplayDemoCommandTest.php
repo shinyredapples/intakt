@@ -60,21 +60,6 @@ final class ReplayDemoCommandTest extends TestCase
 
     private RecordingFormat $format;
 
-    protected function setUp(): void
-    {
-        $this->directory = sys_get_temp_dir().'/intakt-demo-replay-'.bin2hex(random_bytes(6));
-        new Filesystem()->mkdir($this->directory);
-        $this->clock = new MockClock('2026-11-16T09:00:00+00:00');
-        $this->ledger = new ClockedLedger($this->clock);
-        $this->updates = new ClockedLiveUpdates($this->clock, $this->ledger);
-        $this->format = new RecordingFormat(StoredSerializerFactory::create());
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->directory);
-    }
-
     public function testTheReplayIsRefusedOnAnInstallThatIsNotTheComposeDemo(): void
     {
         $tester = $this->tester('');
@@ -216,10 +201,25 @@ final class ReplayDemoCommandTest extends TestCase
         self::assertSame(0, $this->appendedRows());
     }
 
+    protected function setUp(): void
+    {
+        $this->directory = sys_get_temp_dir().'/intakt-demo-replay-'.bin2hex(random_bytes(6));
+        new Filesystem()->mkdir($this->directory);
+        $this->clock = new MockClock('2026-11-16T09:00:00+00:00');
+        $this->ledger = new ClockedLedger($this->clock);
+        $this->updates = new ClockedLiveUpdates($this->clock, $this->ledger);
+        $this->format = new RecordingFormat(StoredSerializerFactory::create());
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->directory);
+    }
+
     private function tester(string $composeService, ReplayMark $demoProject = ReplayMark::Replay): CommandTester
     {
         $marks = new ReplayMarks(new MarkAnsweringQueries($demoProject));
-        $replays = new ReplaysRecording($this->ledger, $this->updates, $this->clock, new LockFactory(new InMemoryStore()), $marks, TourCaptionsOn::captions($this->updates, TourCaptionsOn::tour($this->ledger, $marks, '')));
+        $replays = new ReplaysRecording($this->ledger, $this->updates, $this->clock, new LockFactory(new InMemoryStore()), $marks, TourCaptionsOn::captions($this->updates, TourCaptionsOn::tour($this->ledger, $marks, '')), TourCaptionsOn::judged($this->ledger, $marks));
         $application = new Application();
         $application->addCommand(new ReplayDemoCommand($replays, $this->format, new Filesystem(), $composeService));
 

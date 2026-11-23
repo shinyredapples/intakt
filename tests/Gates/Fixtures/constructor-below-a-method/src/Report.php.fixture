@@ -1,0 +1,17 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+final readonly class Report
+{
+    public function render(): string
+    {
+        return $this->name;
+    }
+
+    public function __construct(private string $name)
+    {
+    }
+}

@@ -13,16 +13,6 @@ final class GatesCacheTest extends TestCase
 {
     private string|false $inherited;
 
-    protected function setUp(): void
-    {
-        $this->inherited = getenv(GatesCache::VARIABLE);
-    }
-
-    protected function tearDown(): void
-    {
-        putenv(false === $this->inherited ? GatesCache::VARIABLE : GatesCache::VARIABLE.'='.$this->inherited);
-    }
-
     public function testTheFolderTheVariableNamesIsTheGatesCache(): void
     {
         putenv(GatesCache::VARIABLE.'=/work/cache');
@@ -42,5 +32,15 @@ final class GatesCacheTest extends TestCase
         putenv(GatesCache::VARIABLE.'=');
 
         self::assertSame(sys_get_temp_dir().'/intakt-gates', GatesCache::directory());
+    }
+
+    protected function setUp(): void
+    {
+        $this->inherited = getenv(GatesCache::VARIABLE);
+    }
+
+    protected function tearDown(): void
+    {
+        putenv(false === $this->inherited ? GatesCache::VARIABLE : GatesCache::VARIABLE.'='.$this->inherited);
     }
 }

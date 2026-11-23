@@ -172,13 +172,6 @@ final class DashboardLayoutTest extends DashboardPageTestCase
         return $this->browser->getInternalResponse()->getContent();
     }
 
-    private function themeBlockOf(string $sheet, string $theme): string
-    {
-        self::assertSame(1, preg_match('/\[data-theme="'.$theme.'"\]\s*\{([^}]*)\}/', $sheet, $block));
-
-        return $block[1];
-    }
-
     /**
      * @return list<array{string, string, string}>
      */
@@ -188,5 +181,12 @@ final class DashboardLayoutTest extends DashboardPageTestCase
         self::assertCount(13, $rows);
 
         return array_map(static fn (array $row): array => [$row[1], $row[2], $row[3]], $rows);
+    }
+
+    private function themeBlockOf(string $sheet, string $theme): string
+    {
+        self::assertSame(1, preg_match('/\[data-theme="'.$theme.'"\]\s*\{([^}]*)\}/', $sheet, $block));
+
+        return $block[1];
     }
 }

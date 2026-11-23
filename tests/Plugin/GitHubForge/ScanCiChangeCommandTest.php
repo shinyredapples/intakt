@@ -72,18 +72,6 @@ final class ScanCiChangeCommandTest extends TestCase
 {
     private TemporaryRepository $repository;
 
-    protected function setUp(): void
-    {
-        $this->repository = new TemporaryRepository();
-        $this->repository->commitFile('.github/workflows/checks.yml', $this->fixture('contained.yml'));
-        $this->repository->checkoutNewBranch('head');
-    }
-
-    protected function tearDown(): void
-    {
-        $this->repository->remove();
-    }
-
     public function testAScriptChangeUnderContainedWorkflowsIsPushedWithoutTheOwner(): void
     {
         $this->repository->commitFile('bin/check', "#!/bin/sh\n");
@@ -159,6 +147,18 @@ final class ScanCiChangeCommandTest extends TestCase
 
         self::assertSame(Command::INVALID, $tester->getStatusCode());
         self::assertStringContainsString('missing names no commit of the repository', $tester->getDisplay());
+    }
+
+    protected function setUp(): void
+    {
+        $this->repository = new TemporaryRepository();
+        $this->repository->commitFile('.github/workflows/checks.yml', $this->fixture('contained.yml'));
+        $this->repository->checkoutNewBranch('head');
+    }
+
+    protected function tearDown(): void
+    {
+        $this->repository->remove();
     }
 
     private function fixture(string $name): string

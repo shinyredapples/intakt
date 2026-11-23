@@ -23,26 +23,6 @@ final class SecretScanTest extends KernelTestCase
 
     private string|false $callerScanner = false;
 
-    // The caller may point INTAKT_GITLEAKS at its scanner, so each test starts without it and gives it back.
-    #[Override]
-    protected function setUp(): void
-    {
-        $this->callerScanner = getenv(self::SCANNER_ENVIRONMENT);
-        $this->unsetEnvironment(self::SCANNER_ENVIRONMENT);
-    }
-
-    #[Override]
-    protected function tearDown(): void
-    {
-        $this->unsetEnvironment(self::SCANNER_ENVIRONMENT);
-
-        if (false !== $this->callerScanner) {
-            $this->setEnvironment(self::SCANNER_ENVIRONMENT, $this->callerScanner);
-        }
-
-        parent::tearDown();
-    }
-
     public function testItFindsAPrivateKeyInTheText(): void
     {
         self::assertTrue($this->scan()->findsSecretIn("The fixture holds\n".AppKey::generate()->private));
@@ -93,6 +73,26 @@ final class SecretScanTest extends KernelTestCase
 
         $found = $this->configuredScan()->findsSecretIn('Two reviewers approve.');
         self::fail('A missing scanner must fail the write, not answer '.var_export($found, true).'.');
+    }
+
+    // The caller may point INTAKT_GITLEAKS at its scanner, so each test starts without it and gives it back.
+    #[Override]
+    protected function setUp(): void
+    {
+        $this->callerScanner = getenv(self::SCANNER_ENVIRONMENT);
+        $this->unsetEnvironment(self::SCANNER_ENVIRONMENT);
+    }
+
+    #[Override]
+    protected function tearDown(): void
+    {
+        $this->unsetEnvironment(self::SCANNER_ENVIRONMENT);
+
+        if (false !== $this->callerScanner) {
+            $this->setEnvironment(self::SCANNER_ENVIRONMENT, $this->callerScanner);
+        }
+
+        parent::tearDown();
     }
 
     private function scan(): SecretScan

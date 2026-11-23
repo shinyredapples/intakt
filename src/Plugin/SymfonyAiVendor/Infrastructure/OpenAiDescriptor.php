@@ -15,6 +15,11 @@ use Uri\Rfc3986\Uri;
 
 final readonly class OpenAiDescriptor implements SymfonyAiProvider
 {
+    public function __construct(
+        private Uri $baseUrl = new Uri('https://api.openai.com'),
+    ) {
+    }
+
     public function id(): string
     {
         return Provider::OpenAi->value;
@@ -35,11 +40,6 @@ final readonly class OpenAiDescriptor implements SymfonyAiProvider
     public function keyPattern(): string
     {
         return '/^sk-(?!ant-)[A-Za-z0-9_-]{8,}$/D';
-    }
-
-    public function __construct(
-        private Uri $baseUrl = new Uri('https://api.openai.com'),
-    ) {
     }
 
     public function baseUrl(): Uri

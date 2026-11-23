@@ -91,6 +91,26 @@ final readonly class DoctrineMeasuredUse implements MeasuredUse
         return $reading->window->refusalOfReset($resetsAt, $now);
     }
 
+    private function latestReadingBefore(Account $account, DateTimeImmutable $moment): ?DateTimeImmutable
+    {
+        /** @var string|null $latest */
+        $latest = $this->entities->createQueryBuilder()
+            ->select('MAX(reading.takenAt)')
+            ->from(WindowReadingRecord::class, 'reading')
+            ->where('reading.provider = :provider')
+            ->andWhere('reading.account = :account')
+            ->andWhere('reading.takenAt < :moment')
+            ->setParameter('provider', $account->provider)
+            ->setParameter('account', $account->name)
+            ->setParameter('moment', $moment, 'utc_datetime_immutable')
+            ->getQuery()
+            ->getSingleScalarResult();
+
+        $converted = $this->entities->getConnection()->convertToPHPValue($latest, 'utc_datetime_immutable');
+
+        return $converted instanceof DateTimeImmutable ? $converted : null;
+    }
+
     // One transaction, so an end that fails to save rolls back the reading and the dropped readings too, and the next reading ends the outage instead; the connection's transaction rather than wrapInTransaction, because that closes the entity manager a worker goes on with.
     private function storeEndingOutages(WindowReadingRecord $record, ?DateTimeImmutable $previous): int
     {
@@ -126,26 +146,6 @@ final readonly class DoctrineMeasuredUse implements MeasuredUse
             ->setParameter('position', $record->position)
             ->getQuery()
             ->execute();
-    }
-
-    private function latestReadingBefore(Account $account, DateTimeImmutable $moment): ?DateTimeImmutable
-    {
-        /** @var string|null $latest */
-        $latest = $this->entities->createQueryBuilder()
-            ->select('MAX(reading.takenAt)')
-            ->from(WindowReadingRecord::class, 'reading')
-            ->where('reading.provider = :provider')
-            ->andWhere('reading.account = :account')
-            ->andWhere('reading.takenAt < :moment')
-            ->setParameter('provider', $account->provider)
-            ->setParameter('account', $account->name)
-            ->setParameter('moment', $moment, 'utc_datetime_immutable')
-            ->getQuery()
-            ->getSingleScalarResult();
-
-        $converted = $this->entities->getConnection()->convertToPHPValue($latest, 'utc_datetime_immutable');
-
-        return $converted instanceof DateTimeImmutable ? $converted : null;
     }
 
     // One statement, so two workers ending one outage at once need no lock; the earlier reading wins, because a slow writer can store its reading after a later one; a reading between the outage and this one already ended it, so a notice left with no end from before ends were kept is not ended now.

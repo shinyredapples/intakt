@@ -24,18 +24,6 @@ final class RateLimitReadingsTest extends TestCase
     private string $directory;
     private MockClock $clock;
 
-    protected function setUp(): void
-    {
-        $this->directory = sys_get_temp_dir().'/intakt-rate-limits-'.bin2hex(random_bytes(4));
-        mkdir($this->directory);
-        $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
-    }
-
-    protected function tearDown(): void
-    {
-        new FilesystemAdapter('', 0, $this->directory)->clear();
-    }
-
     public function testAReadingRecordedByOneProcessIsReadByAnother(): void
     {
         $reset = $this->clock->now()->getTimestamp() + 600;
@@ -229,6 +217,18 @@ final class RateLimitReadingsTest extends TestCase
         $this->process()->refuseWhileLimited('678', 'graphql');
 
         self::assertNull($this->process()->latest('678'));
+    }
+
+    protected function setUp(): void
+    {
+        $this->directory = sys_get_temp_dir().'/intakt-rate-limits-'.bin2hex(random_bytes(4));
+        mkdir($this->directory);
+        $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
+    }
+
+    protected function tearDown(): void
+    {
+        new FilesystemAdapter('', 0, $this->directory)->clear();
     }
 
     // Written under the kind and the hashed installation id alone, because that is the key the version before the per-pool keys used.

@@ -67,11 +67,6 @@ final class QuotaExhaustedMidRoundTest extends KernelTestCase
 {
     private ScriptedRound $run;
 
-    protected function setUp(): void
-    {
-        $this->run = new ScriptedRound(new RoundFixture(self::getContainer()), self::getContainer());
-    }
-
     public function testAQuotaExhaustedAfterTheFirstReviewerAnsweredEndsTheRoundAsChangesWithTheReasonsOfTheOthers(): void
     {
         $review = $this->quotaRunsOutAfterAnAnswer();
@@ -140,6 +135,11 @@ final class QuotaExhaustedMidRoundTest extends KernelTestCase
         $this->quotaRunsOutAfterAnAnswer();
 
         self::assertSame(['anthropic.default', 'openai.default'], $this->run->payloadValues(LedgerEventKind::AccountCooledDown, 'account'));
+    }
+
+    protected function setUp(): void
+    {
+        $this->run = new ScriptedRound(new RoundFixture(self::getContainer()), self::getContainer());
     }
 
     private function quotaRunsOutAfterAnAnswer(): ChangeReview

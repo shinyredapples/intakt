@@ -80,6 +80,17 @@ final readonly class NearestChangedLines
     }
 
     /**
+     * @return list<string>
+     */
+    private function partsOf(string $text): array
+    {
+        preg_match_all(self::WORD_PART, $text, $found);
+        $parts = array_map(strtolower(...), $found[0]);
+
+        return array_values(array_unique(array_filter($parts, static fn (string $part): bool => strlen($part) >= self::MIN_PART_LENGTH)));
+    }
+
+    /**
      * @param list<string>       $parts
      * @param list<list<string>> $partsOfLines
      *
@@ -102,17 +113,6 @@ final readonly class NearestChangedLines
         usort($scored, static fn (array $a, array $b): int => $b[0] <=> $a[0]);
 
         return array_column($scored, 1);
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function partsOf(string $text): array
-    {
-        preg_match_all(self::WORD_PART, $text, $found);
-        $parts = array_map(strtolower(...), $found[0]);
-
-        return array_values(array_unique(array_filter($parts, static fn (string $part): bool => strlen($part) >= self::MIN_PART_LENGTH)));
     }
 
     // Takes redacted text: a credential cut in two no longer has the shape the redaction knows, and neither does one whose bytes were scrubbed. Scrubbed, because a diff line may hold bytes that are not UTF-8 and the ledger row is JSON.

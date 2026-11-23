@@ -33,7 +33,7 @@ final class JudgedRoundFindingsPageTest extends DashboardPageTestCase
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
         $this->ledger->judgeToFixAtLine7OfA('round-1', 'Take the lock first.');
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertSame([['P1', 'F1', 'Take the lock first.', 'src/A.php:7', 'Fix now']], $this->cardsOf($crawler->filter('#round-round-1 ul.finding-cards > li.finding-card')));
     }
@@ -43,7 +43,7 @@ final class JudgedRoundFindingsPageTest extends DashboardPageTestCase
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
         $this->ledger->judgeToFixAtLine7OfA('round-1', 'Call `Lock::acquire()` before <b>`write()`</b>.');
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         $title = $crawler->filter('#round-round-1 .finding-card .fc-title');
         self::assertSame(['Lock::acquire()', 'write()'], $title->filter('code')->each(static fn (Crawler $code): string => $code->text()));
@@ -56,7 +56,7 @@ final class JudgedRoundFindingsPageTest extends DashboardPageTestCase
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
         $this->ledger->judgeToFixAtLine7OfA('round-1', 'Keep `Ready? yes` as the prompt. More.');
 
-        $card = $this->browser->request('GET', '/reviews/round-1')->filter('#round-round-1 .finding-card');
+        $card = $this->browser->request('GET', '/reviews/round-1/record')->filter('#round-round-1 .finding-card');
 
         self::assertSame(['F1 Keep Ready? yes as the prompt.', 'Keep Ready? yes as the prompt. More.'], [$card->filter('.fc-title')->text(), $card->filter('.fc-detail')->text()]);
     }
@@ -66,7 +66,7 @@ final class JudgedRoundFindingsPageTest extends DashboardPageTestCase
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
         $this->ledger->judgeToFixAtLine7OfA('round-1', 'Take the lock first.');
 
-        self::assertCount(0, $this->browser->request('GET', '/reviews/round-1')->filter('#round-round-1 .finding-card .fc-detail'));
+        self::assertCount(0, $this->browser->request('GET', '/reviews/round-1/record')->filter('#round-round-1 .finding-card .fc-detail'));
     }
 
     public function testACardWhoseTextIsOnlyUnicodeWhiteSpaceSaysTheTextIsNotRecorded(): void
@@ -74,7 +74,7 @@ final class JudgedRoundFindingsPageTest extends DashboardPageTestCase
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
         $this->ledger->judgeToFixAtLine7OfA('round-1', "\u{00A0}\u{2003}");
 
-        self::assertSame('F1 Text not recorded.', $this->browser->request('GET', '/reviews/round-1')->filter('#round-round-1 .finding-card .fc-title')->text());
+        self::assertSame('F1 Text not recorded.', $this->browser->request('GET', '/reviews/round-1/record')->filter('#round-round-1 .finding-card .fc-title')->text());
     }
 
     public function testAFindingsCardAndTheNowBlockShowItsEmphasisWithoutTheMarks(): void
@@ -82,11 +82,12 @@ final class JudgedRoundFindingsPageTest extends DashboardPageTestCase
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
         $this->ledger->judgeToFixAtLine7OfA('round-1', 'the amount is **greater than** 100, not *why*');
         $this->ledger->startRoundOf('feat/thing', 'round-2', 2);
+        $this->browser->disableReboot();
 
-        $crawler = $this->browser->request('GET', '/reviews/round-2');
+        $crawler = $this->browser->request('GET', '/reviews/round-2/record');
 
         self::assertSame('F1 the amount is greater than 100, not why', $crawler->filter('#round-round-1 .finding-card .fc-title')->text());
-        self::assertSame('P1F1 the amount is greater than 100, not why', $crawler->filter('.state-block a.sb-finding')->text());
+        self::assertSame('P1F1 the amount is greater than 100, not why', $this->browser->request('GET', '/reviews/round-2')->filter('.state-block a.sb-finding')->text());
     }
 
     #[TestWith(['Copy *.php…'])]
@@ -98,7 +99,7 @@ final class JudgedRoundFindingsPageTest extends DashboardPageTestCase
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
         $this->ledger->judgeToFixAtLine7OfA('round-1', $written);
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertSame($written, $crawler->filter('#round-round-1 .finding-card .fc-text')->text());
     }
@@ -108,7 +109,7 @@ final class JudgedRoundFindingsPageTest extends DashboardPageTestCase
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
         $this->ledger->judgeToFixAtLine7OfA('round-1', 'Call `write() before returning.');
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertStringNotContainsString('`', $crawler->filter('#round-round-1 .finding-card')->text());
         self::assertSame('write()', $crawler->filter('#round-round-1 .finding-card code')->text());
@@ -119,7 +120,7 @@ final class JudgedRoundFindingsPageTest extends DashboardPageTestCase
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
         $this->ledger->judgeToFixAtLine7OfA('round-1', '<img src=x onerror=alert(1)> `<script>alert(1)</script>`');
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertCount(0, $crawler->filter('.finding-card img, .finding-card script'));
         self::assertSame('<script>alert(1)</script>', $crawler->filter('#round-round-1 .finding-card code')->text());
@@ -130,7 +131,7 @@ final class JudgedRoundFindingsPageTest extends DashboardPageTestCase
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
         $this->ledger->judgeFindings('round-1', ['F1' => 'defer', 'F2' => 'reject']);
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertSame([JudgeCall::FollowUp->inWords(), JudgeCall::NotActedOn->inWords()], $crawler->filter('#round-round-1 .finding-card .fc-call')->each(static fn (Crawler $call): string => $call->text()));
     }
@@ -140,7 +141,7 @@ final class JudgedRoundFindingsPageTest extends DashboardPageTestCase
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
         $this->ledger->judgeFindings('round-1', ['F1' => 'act']);
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertSame('File and line not recorded', $crawler->filter('#round-round-1 .finding-card .fc-place')->text());
     }
@@ -150,7 +151,7 @@ final class JudgedRoundFindingsPageTest extends DashboardPageTestCase
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
         $this->ledger->judgeOneEntryOf('round-1', 'F1', 'F2');
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertSame('F1 F2', $crawler->filter('li.finding-card#round-round-1-finding-F1')->attr('data-finding'));
     }
@@ -182,7 +183,7 @@ final class JudgedRoundFindingsPageTest extends DashboardPageTestCase
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
         $this->ledger->judgeWithOnlyADroppedFinding('round-1', 'Call `ghostName` first <b>now</b>.', 'none of its 1 quoted code fragments is in the change');
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertSame([['P2', 'F1', 'Call ghostName first <b>now</b>.', 'src/A.php:3', 'Quote not found in the code']], $this->cardsOf($crawler->filter('#round-round-1 [data-dropped]')));
         self::assertSame('Dropped before the judge: none of its 1 quoted code fragments is in the change', $crawler->filter('#round-round-1 [data-dropped] .fc-reason')->text());
@@ -193,7 +194,7 @@ final class JudgedRoundFindingsPageTest extends DashboardPageTestCase
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
         $this->ledger->judgeWithOnlyADroppedFinding('round-1', 'Call `ghostName`.', 'none of its 1 quoted code fragments is in the change');
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         $disclosure = $crawler->filter('#round-round-1 [data-dropped] details.fc-quotes');
         self::assertSame('Quoted code', $disclosure->filter('summary')->text());
@@ -205,7 +206,7 @@ final class JudgedRoundFindingsPageTest extends DashboardPageTestCase
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
         $this->ledger->judgeWithOnlyADroppedFinding('round-1', 'Call `<img src=x onerror=ghost(1)>`.', '<b onclick=alert(1)>none</b>');
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         $disclosure = $crawler->filter('#round-round-1 [data-dropped] details.fc-quotes');
         self::assertCount(0, $disclosure->filter('img, b'));
@@ -218,7 +219,7 @@ final class JudgedRoundFindingsPageTest extends DashboardPageTestCase
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
         $this->ledger->judgeWithOnlyADroppedFinding('round-1', 'Read `orders.log` at line `42`.', 'none of its 1 quoted code fragments is in the change');
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         $disclosure = $crawler->filter('#round-round-1 [data-dropped] details.fc-quotes');
         self::assertSame('Quoted code Dropped before the judge: none of its 1 quoted code fragments is in the change', $disclosure->text());
@@ -229,7 +230,7 @@ final class JudgedRoundFindingsPageTest extends DashboardPageTestCase
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
         $this->ledger->judgeWithOnlyADroppedFinding('round-1', 'A stray ` appears before `ghostName`.', 'none of its 1 quoted code fragments is in the change');
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertSame(['ghostName'], $this->quotesIn($crawler->filter('#round-round-1 [data-dropped] details.fc-quotes')));
     }
@@ -239,7 +240,7 @@ final class JudgedRoundFindingsPageTest extends DashboardPageTestCase
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
         $this->ledger->judgeWithOnlyADroppedFinding('round-1', "`ghostName` is not defined. Suggested fix:\n```js\nrun(`otherName`);\n```", 'none of its 1 quoted code fragments is in the change');
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertSame(['ghostName'], $this->quotesIn($crawler->filter('#round-round-1 [data-dropped] details.fc-quotes')));
     }
@@ -249,7 +250,7 @@ final class JudgedRoundFindingsPageTest extends DashboardPageTestCase
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
         $this->ledger->judgeWithOnlyADroppedFinding('round-1', 'Substring matches can include other customers (for example, `ann` matching `joanne`), and the relative `orders.log` depends on where it runs.', 'none of its 2 quoted code fragments is in the change');
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         $disclosure = $crawler->filter('#round-round-1 [data-dropped] details.fc-quotes');
         self::assertSame(['ann', 'joanne'], $this->quotesIn($disclosure));
@@ -261,7 +262,7 @@ final class JudgedRoundFindingsPageTest extends DashboardPageTestCase
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
         $this->ledger->judgeWithOnlyADroppedFinding('round-1', 'Call `ghostName` once, not `ghostName` twice.', 'none of its 2 quoted code fragments is in the change');
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertSame(['ghostName', 'ghostName'], $this->quotesIn($crawler->filter('#round-round-1 [data-dropped] details.fc-quotes')));
     }
@@ -271,7 +272,7 @@ final class JudgedRoundFindingsPageTest extends DashboardPageTestCase
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
         $this->ledger->judgeWithOnlyADroppedFinding('round-1', "Call `ghostName(\n    other)` here.", 'none of its 1 quoted code fragments is in the change');
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertSame("ghostName(\n    other)", $crawler->filter('#round-round-1 [data-dropped] details.fc-quotes .fc-quote-list code')->text(normalizeWhitespace: false));
     }
@@ -283,7 +284,7 @@ final class JudgedRoundFindingsPageTest extends DashboardPageTestCase
             ['quote' => 'reasonForDrop()', 'lines' => [['file' => 'src/Q.php', 'line' => 12, 'text' => 'public function reasonToDrop(): ?string'], ['file' => 'src/R.php', 'line' => 4, 'text' => '$reason = $quotes->reasonToDrop($finding);']]],
         ]);
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         $disclosure = $crawler->filter('#round-round-1 [data-dropped] details.fc-quotes');
         self::assertSame(['reasonForDrop()'], $this->quotesIn($disclosure));
@@ -295,7 +296,7 @@ final class JudgedRoundFindingsPageTest extends DashboardPageTestCase
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
         $this->ledger->judgeWithOnlyADroppedFinding('round-1', 'Call `ghostName`.', 'none of its 1 quoted code fragments is in the change');
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         $disclosure = $crawler->filter('#round-round-1 [data-dropped] details.fc-quotes');
         self::assertSame(['ghostName'], $this->quotesIn($disclosure));
@@ -310,7 +311,7 @@ final class JudgedRoundFindingsPageTest extends DashboardPageTestCase
             ['quote' => 'ghostName', 'lines' => [['file' => 'src/A.php', 'line' => 2, 'text' => 'hostName();']]],
         ]);
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         $quotes = $crawler->filter('#round-round-1 [data-dropped] details.fc-quotes .fc-quote-list > li');
         self::assertSame([['src/A.php:2', 'hostName();']], $this->nearLinesIn($quotes->eq(0)));
@@ -324,7 +325,7 @@ final class JudgedRoundFindingsPageTest extends DashboardPageTestCase
             ['quote' => 'otherGhost', 'lines' => [['file' => 'src/B.php', 'line' => 9, 'text' => 'otherHost();']]],
         ]);
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         $quotes = $crawler->filter('#round-round-1 [data-dropped] details.fc-quotes .fc-quote-list > li');
         self::assertSame('ghostName', $quotes->eq(0)->text());
@@ -338,7 +339,7 @@ final class JudgedRoundFindingsPageTest extends DashboardPageTestCase
             ['quote' => 'ghostName', 'lines' => [['file' => 'src/A.php', 'line' => 2, 'text' => 'hostName();']]],
         ]);
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         $quotes = $crawler->filter('#round-round-1 [data-dropped] details.fc-quotes .fc-quote-list > li');
         self::assertSame([[['src/A.php:2', 'hostName();']], [['src/A.php:2', 'hostName();']]], $quotes->each(fn (Crawler $quote): array => $this->nearLinesIn($quote)));
@@ -351,7 +352,7 @@ final class JudgedRoundFindingsPageTest extends DashboardPageTestCase
             ['quote' => 'ghostName', 'lines' => [['file' => 'src/<i>A</i>.php', 'line' => 2, 'text' => '<img src=x onerror=ghost(1)>']]],
         ]);
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         $disclosure = $crawler->filter('#round-round-1 [data-dropped] details.fc-quotes');
         self::assertCount(0, $disclosure->filter('img, i'));
@@ -365,7 +366,7 @@ final class JudgedRoundFindingsPageTest extends DashboardPageTestCase
             ['quote' => 'ghostName', 'lines' => [['file' => 'src/A.php', 'line' => 2, 'text' => 'hostName();']]],
         ]);
 
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
 
         self::assertNull($crawler->filter('#round-round-1 [data-dropped] details.fc-quotes')->attr('open'));
     }
@@ -379,6 +380,36 @@ final class JudgedRoundFindingsPageTest extends DashboardPageTestCase
 
         self::assertResponseIsSuccessful();
         self::assertCount(0, $this->browser->getCrawler()->filter('#round-round-1 [data-dropped]'));
+    }
+
+    public function testADroppedFindingCanBeReachedByFindingNavigation(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeWithOnlyADroppedFinding('round-1', 'Call `ghostName`.', 'none of its 1 quoted code fragments is in the change');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
+
+        self::assertSame(['F1'], $crawler->filter('#round-round-1 li[data-finding~="F1"]')->each(static fn (Crawler $card): string => (string) $card->attr('data-dropped')));
+    }
+
+    public function testARoundWhoseOnlyFindingWasDroppedDoesNotSayTheReviewersReportedNone(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeWithOnlyADroppedFinding('round-1', 'Call `ghostName`.', 'none of its 1 quoted code fragments is in the change');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1/record');
+
+        self::assertStringNotContainsString('reported no findings', $crawler->filter('#round-round-1-judged')->text());
+    }
+
+    public function testARoundWithNoDroppedFindingShowsNoDroppedCard(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeToFixAtLine7OfA('round-1', 'Take the lock first.');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertCount(0, $crawler->filter('[data-dropped]'));
     }
 
     /**
@@ -395,36 +426,6 @@ final class JudgedRoundFindingsPageTest extends DashboardPageTestCase
     private function nearLinesIn(Crawler $quote): array
     {
         return $quote->filter('.fc-near-lines > li')->each(static fn (Crawler $line): array => [$line->filter('.fc-near-place')->text(), $line->filter('code')->text()]);
-    }
-
-    public function testADroppedFindingCanBeReachedByFindingNavigation(): void
-    {
-        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
-        $this->ledger->judgeWithOnlyADroppedFinding('round-1', 'Call `ghostName`.', 'none of its 1 quoted code fragments is in the change');
-
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
-
-        self::assertSame(['F1'], $crawler->filter('#round-round-1 li[data-finding~="F1"]')->each(static fn (Crawler $card): string => (string) $card->attr('data-dropped')));
-    }
-
-    public function testARoundWhoseOnlyFindingWasDroppedDoesNotSayTheReviewersReportedNone(): void
-    {
-        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
-        $this->ledger->judgeWithOnlyADroppedFinding('round-1', 'Call `ghostName`.', 'none of its 1 quoted code fragments is in the change');
-
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
-
-        self::assertStringNotContainsString('reported no findings', $crawler->filter('#round-round-1-judged')->text());
-    }
-
-    public function testARoundWithNoDroppedFindingShowsNoDroppedCard(): void
-    {
-        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
-        $this->ledger->judgeToFixAtLine7OfA('round-1', 'Take the lock first.');
-
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
-
-        self::assertCount(0, $crawler->filter('[data-dropped]'));
     }
 
     /**
