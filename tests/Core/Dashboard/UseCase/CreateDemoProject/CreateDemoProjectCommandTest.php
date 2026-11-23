@@ -29,15 +29,6 @@ use Symfony\Component\Messenger\Stamp\HandledStamp;
 #[UsesClass(ReplayMark::class)]
 final class CreateDemoProjectCommandTest extends KernelTestCase
 {
-    protected function setUp(): void
-    {
-        $container = self::getContainer();
-        EmptyDatabase::in($container);
-        $entities = $container->get('doctrine')->getManager();
-        self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
-    }
-
     public function testTheDemoProjectIsRefusedOutsideTheComposeDemo(): void
     {
         $tester = $this->tester('');
@@ -86,6 +77,15 @@ final class CreateDemoProjectCommandTest extends KernelTestCase
 
         self::assertNotSame(SampleChange::PROJECT, CreateDemoProjectCommand::NAME);
         self::assertSame(ReplayMark::Live, $this->markOf(SampleChange::PROJECT));
+    }
+
+    protected function setUp(): void
+    {
+        $container = self::getContainer();
+        EmptyDatabase::in($container);
+        $entities = $container->get('doctrine')->getManager();
+        self::assertInstanceOf(EntityManagerInterface::class, $entities);
+        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
     }
 
     private function tester(string $composeService): CommandTester

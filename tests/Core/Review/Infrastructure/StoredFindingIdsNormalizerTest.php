@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Review\Infrastructure;
 
 use Intakt\Core\Review\Contract\FindingIds;
+use Intakt\Core\Review\Contract\SameCause;
 use Intakt\Core\Review\Infrastructure\StoredFindingIdsNormalizer;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -15,6 +16,7 @@ use Symfony\Component\Serializer\Exception\UnexpectedValueException;
 
 #[CoversClass(StoredFindingIdsNormalizer::class)]
 #[UsesClass(FindingIds::class)]
+#[UsesClass(SameCause::class)]
 final class StoredFindingIdsNormalizerTest extends TestCase
 {
     public function testFindingIdsAreWrittenAsAList(): void
@@ -27,6 +29,16 @@ final class StoredFindingIdsNormalizerTest extends TestCase
         self::assertSame([], new StoredFindingIdsNormalizer()->normalize(new FindingIds()));
     }
 
+    public function testLinksAreWrittenAsAMapFromFindingToCause(): void
+    {
+        self::assertSame(['F3' => 'F1'], new StoredFindingIdsNormalizer()->normalize(new SameCause()->with('F3', 'F1')));
+    }
+
+    public function testNoLinksAreWrittenAsAnEmptyArray(): void
+    {
+        self::assertSame([], new StoredFindingIdsNormalizer()->normalize(new SameCause()));
+    }
+
     public function testAnyOtherValueIsNotNormalized(): void
     {
         $this->expectException(LogicException::class);
@@ -34,9 +46,11 @@ final class StoredFindingIdsNormalizerTest extends TestCase
         new StoredFindingIdsNormalizer()->normalize(new stdClass());
     }
 
-    public function testFindingIdsAreSupportedForWriting(): void
+    public function testFindingIdsAndLinksAreSupportedForWriting(): void
     {
-        self::assertTrue(new StoredFindingIdsNormalizer()->supportsNormalization(new FindingIds()));
+        $normalizer = new StoredFindingIdsNormalizer();
+
+        self::assertSame([true, true], [$normalizer->supportsNormalization(new FindingIds()), $normalizer->supportsNormalization(new SameCause())]);
     }
 
     public function testAPlainListIsNotSupportedForWriting(): void
@@ -61,6 +75,30 @@ final class StoredFindingIdsNormalizerTest extends TestCase
         self::assertSame(['F3', 'F1'], $normalizer->normalize($ids));
     }
 
+    public function testAMapOfStringsIsReadAsLinks(): void
+    {
+        $links = new StoredFindingIdsNormalizer()->denormalize(['F3' => 'F1', 'F4' => 'F1'], SameCause::class);
+
+        self::assertInstanceOf(SameCause::class, $links);
+        self::assertSame(['F3' => 'F1', 'F4' => 'F1'], iterator_to_array($links));
+    }
+
+    public function testAnEmptyArrayIsReadAsNoLinks(): void
+    {
+        $links = new StoredFindingIdsNormalizer()->denormalize([], SameCause::class);
+
+        self::assertInstanceOf(SameCause::class, $links);
+        self::assertSame([], iterator_to_array($links));
+    }
+
+    public function testANumericKeyIsReadAsTheFindingIdItSpells(): void
+    {
+        $links = new StoredFindingIdsNormalizer()->denormalize([7 => 'F1'], SameCause::class);
+
+        self::assertInstanceOf(SameCause::class, $links);
+        self::assertSame('F1', $links->causeOf('7'));
+    }
+
     public function testAValueThatIsNoArrayFailsToRead(): void
     {
         $this->expectException(UnexpectedValueException::class);
@@ -75,9 +113,40 @@ final class StoredFindingIdsNormalizerTest extends TestCase
         new StoredFindingIdsNormalizer()->denormalize(['F1', 3], FindingIds::class);
     }
 
-    public function testFindingIdsAreSupportedForReading(): void
+    public function testLinksThatAreNoArrayFailToRead(): void
     {
-        self::assertTrue(new StoredFindingIdsNormalizer()->supportsDenormalization([], FindingIds::class));
+        $this->expectException(UnexpectedValueException::class);
+
+        new StoredFindingIdsNormalizer()->denormalize('F1', SameCause::class);
+    }
+
+    public function testALinkWhoseCauseIsNoStringFailsToRead(): void
+    {
+        $this->expectException(UnexpectedValueException::class);
+
+        new StoredFindingIdsNormalizer()->denormalize(['F2' => 3], SameCause::class);
+    }
+
+    public function testAStoredLinkOfAFindingToItselfStillReadsBack(): void
+    {
+        $read = new StoredFindingIdsNormalizer()->denormalize(['F2' => 'F2'], SameCause::class);
+
+        self::assertInstanceOf(SameCause::class, $read);
+        self::assertSame('F2', $read->causeOf('F2'));
+    }
+
+    public function testAStoredLinkWithAnEmptyCauseFailsToRead(): void
+    {
+        $this->expectException(UnexpectedValueException::class);
+
+        new StoredFindingIdsNormalizer()->denormalize(['F2' => ''], SameCause::class);
+    }
+
+    public function testFindingIdsAndLinksAreSupportedForReading(): void
+    {
+        $normalizer = new StoredFindingIdsNormalizer();
+
+        self::assertSame([true, true], [$normalizer->supportsDenormalization([], FindingIds::class), $normalizer->supportsDenormalization([], SameCause::class)]);
     }
 
     public function testAnyOtherTypeIsNotSupportedForReading(): void
@@ -85,8 +154,8 @@ final class StoredFindingIdsNormalizerTest extends TestCase
         self::assertFalse(new StoredFindingIdsNormalizer()->supportsDenormalization([], stdClass::class));
     }
 
-    public function testFindingIdsAreNamedAsCacheable(): void
+    public function testBothTypesAreNamedAsCacheable(): void
     {
-        self::assertSame([FindingIds::class => true], new StoredFindingIdsNormalizer()->getSupportedTypes(null));
+        self::assertSame([FindingIds::class => true, SameCause::class => true], new StoredFindingIdsNormalizer()->getSupportedTypes(null));
     }
 }

@@ -28,27 +28,17 @@
         {% block action %}<a class="btn quiet sm" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::LIST_REVIEWS')) }}#failing-heads">See the failed pull requests</a>{% endblock %}
     {% endembed %}
 {% endfor %}
+{% if waiting is not empty %}{{ include('dashboard/_board_needs_you.html.twig', {waiting: waiting, now: now}, with_context = false) }}{% endif %}
 {{ include('dashboard/_board_octopus.html.twig', {board: board}, with_context = false) }}
-{# A disclosure with no lane would open to nothing, so it is a plain line until a lane runs. #}
-{% if working.lanes is empty %}
-<p class="working working-none" id="working">{{ board.nobodyWorkingLine }}</p>
-{% else %}
-<details class="working" id="working">
-    <summary><span class="w-title">Who is working</span><span class="w-dots" aria-hidden="true">{% for lane in working.lanes %}<span class="dot ok"></span>{% endfor %}</span><span class="w-sum">{{ working.working }} working</span>{{ include('dashboard/components/icon.html.twig', {name: 'chevron', small: true, extra: 'chev'}, with_context = false) }}</summary>
-    <div class="lanes">
-    {% for lane in working.lanes %}
-        <div class="lane" data-project="{{ lane.project }}">
-            <div class="who"><span class="dot ok"></span>{{ include('dashboard/components/character.html.twig', {character: constant('Intakt\\Core\\Dashboard\\Domain\\Character::CodeReviewer'), size: 24}, with_context = false) }}{{ lane.role }}, {{ lane.tier }}<span class="elapsed">since <time datetime="{{ lane.since|date('c', 'UTC') }}">{{ lane.since|date('H:i', 'UTC') }} UTC</time></span></div>
-            <div class="what">{{ lane.change }}</div>
-            <p class="meta"><span>{{ lane.project }}</span>{% if lane.round is not null %}<span>Round {{ lane.round }}</span>{% endif %}</p>
-        </div>
-    {% endfor %}
-    </div>
-</details>
-{% endif %}
+{{ include('dashboard/_status_line.html.twig', {working: working}, with_context = false) }}
+{{ include('dashboard/_board_working.html.twig', {board: board}, with_context = false) }}
 <section aria-labelledby="board-h">
     <h2 id="board-h" class="sr-only">Tasks by state</h2>
     {# The counts are totals over every project, so the project filter hides cards and never changes a count. A crowded column renders every card and marks those past the limit, which assets/column-more.js counts again over the cards the filter shows. The wrapper carries the edge classes assets/board-edge.js sets, because the fade they turn on masks the board inside it; the same script scrolls a board marked data-scroll-to-end to Done once. #}
+    {# A line of text and no control, because the columns it names hold nothing to open; it goes once every one of them holds a task (#3154). #}
+    {% if coming_next is not empty %}
+    <p class="coming-next">{{ include('dashboard/components/chip.html.twig', {label: 'Coming next', on_page: true}, with_context = false) }} <span>{{ coming_next|map(column => column.value)|join(', ', ' and ') }}{% if coming_next|length == 1 %} shows here once it holds a task{% else %} show here once a task is in one of them{% endif %}</span></p>
+    {% endif %}
     {% set limit = constant('Intakt\\Core\\Dashboard\\Domain\\Board::PAGE_LIMIT') %}
     <div class="board-wrap"{% if board.startsScrolledToDone %} data-scroll-to-end{% endif %}>
     {# Focusable, because a board with no card (a fresh install, or a phone that hides the column buttons) scrolls sideways with nothing in it the keyboard could reach. #}

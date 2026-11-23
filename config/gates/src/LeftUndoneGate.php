@@ -61,37 +61,6 @@ final readonly class LeftUndoneGate implements Gate
     }
 
     /**
-     * @param array{string, ?list<int>, CommentLanguage} $file
-     *
-     * @return list<string>
-     */
-    private function findingsIn(Workspace $workspace, array $file): array
-    {
-        [$path, $addedLines, $language] = $file;
-        $source = $this->sourceOf($workspace, $path);
-
-        if (null === $source) {
-            return [$path.' cannot be read'];
-        }
-
-        $lines = $addedLines ?? $this->everyLineOf($source);
-        $findings = [];
-
-        foreach ($this->comments->markersOn($source, $lines, $language) as $line => $marker) {
-            $findings[] = $path.':'.$line.': '.$marker.self::HOW_TO_COMPLY;
-        }
-
-        // Because skips and not-implemented throws are PHP code, a template holds none.
-        $code = $language instanceof PhpComments ? $this->code->findingsOn($path, $source, $lines) : [];
-
-        foreach ($code as $line => $finding) {
-            $findings[] = $path.':'.$line.': '.$finding;
-        }
-
-        return $findings;
-    }
-
-    /**
      * @return list<array{string, ?list<int>, CommentLanguage}>
      */
     private function scannedLinesSince(Workspace $workspace, string $mergeBase): array
@@ -113,9 +82,34 @@ final readonly class LeftUndoneGate implements Gate
         return $scanned;
     }
 
-    private function isFixture(string $path): bool
+    /**
+     * @param array{string, ?list<int>, CommentLanguage} $file
+     *
+     * @return list<string>
+     */
+    private function findingsIn(Workspace $workspace, array $file): array
     {
-        return array_any(self::FIXTURE_PREFIXES, static fn (string $prefix): bool => str_starts_with($path, $prefix));
+        [$path, $addedLines, $language] = $file;
+        $source = $this->sourceOf($workspace, $path);
+
+        if (null === $source) {
+            return [$path.' cannot be read'];
+        }
+
+        $lines = $addedLines ?? $this->everyLineOf($source);
+        $findings = [];
+
+        foreach ($this->comments->markersOn($source, $lines, $language) as $line => $marker) {
+            $findings[] = $path.':'.$line.': '.$marker.self::HOW_TO_COMPLY;
+        }
+
+        $code = $language->holdsPhpCode() ? $this->code->findingsOn($path, $source, $lines) : [];
+
+        foreach ($code as $line => $finding) {
+            $findings[] = $path.':'.$line.': '.$finding;
+        }
+
+        return $findings;
     }
 
     private function sourceOf(Workspace $workspace, string $path): ?string
@@ -159,5 +153,10 @@ final readonly class LeftUndoneGate implements Gate
     private function nulSeparated(string $output): array
     {
         return array_values(array_filter(explode("\0", $output), static fn (string $path): bool => '' !== $path));
+    }
+
+    private function isFixture(string $path): bool
+    {
+        return array_any(self::FIXTURE_PREFIXES, static fn (string $prefix): bool => str_starts_with($path, $prefix));
     }
 }

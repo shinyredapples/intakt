@@ -1,0 +1,82 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use Exception;
+use InvalidArgumentException;
+use LogicException;
+
+final class RootCatches
+{
+    public function exception(callable $work): void
+    {
+        try {
+            $work();
+        } catch (Exception) {
+        }
+    }
+
+    public function error(callable $work): void
+    {
+        try {
+            $work();
+        } catch (\Error) {
+        }
+    }
+
+    public function runtime(callable $work): void
+    {
+        try {
+            $work();
+        } catch (\RuntimeException) {
+        }
+    }
+
+    public function logic(callable $work): void
+    {
+        try {
+            $work();
+        } catch (LogicException) {
+        }
+    }
+
+    public function invalidArgument(callable $work): void
+    {
+        try {
+            $work();
+        } catch (InvalidArgumentException) {
+        }
+    }
+
+    public function inAUnion(callable $work): void
+    {
+        try {
+            $work();
+        } catch (RootCatchFailure|\RuntimeException) {
+        }
+    }
+
+    public function inLowerCase(callable $work): void
+    {
+        try {
+            $work();
+        } catch (\runtimeexception) {
+        }
+    }
+
+    public function withABoundaryComment(callable $work): void
+    {
+        try {
+            $work();
+            // Boundary: keeps the worker alive
+        } catch (\Exception $failure) {
+            throw $failure;
+        }
+    }
+}
+
+final class RootCatchFailure extends \DomainException
+{
+}

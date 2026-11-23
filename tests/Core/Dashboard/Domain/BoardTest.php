@@ -9,15 +9,23 @@ use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Dashboard\Domain\Board;
 use Intakt\Core\Dashboard\Domain\BoardColumn;
 use Intakt\Core\Dashboard\Domain\BuildTask;
+use Intakt\Core\Dashboard\Domain\Character;
 use Intakt\Core\Dashboard\Domain\Headline;
+use Intakt\Core\Dashboard\Domain\JudgeCall;
 use Intakt\Core\Dashboard\Domain\Lane;
 use Intakt\Core\Dashboard\Domain\MascotPose;
 use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\ReviewerOutcome;
+use Intakt\Core\Dashboard\Domain\RoundFinding;
 use Intakt\Core\Dashboard\Domain\RoundPlace;
 use Intakt\Core\Dashboard\Domain\RoundStart;
 use Intakt\Core\Dashboard\Domain\WhoIsWorking;
+use Intakt\Core\Dashboard\Domain\WorkingCard;
+use Intakt\Core\Review\Contract\Decision;
+use Intakt\Core\Review\Contract\RoundEnding;
+use Intakt\Core\Review\Contract\RoundEnds;
+use Intakt\Core\ReviewerForLoop\Contract\ProjectMode;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -26,14 +34,18 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(Board::class)]
 #[CoversClass(BoardColumn::class)]
 #[CoversClass(Review::class)]
+#[CoversClass(WorkingCard::class)]
 #[UsesClass(ReviewedRound::class)]
 #[UsesClass(ReviewerOutcome::class)]
 #[UsesClass(Lane::class)]
+#[UsesClass(RoundFinding::class)]
+#[UsesClass(Character::class)]
 #[UsesClass(WhoIsWorking::class)]
 #[UsesClass(Headline::class)]
 #[UsesClass(BuildTask::class)]
 #[UsesClass(RoundPlace::class)]
 #[UsesClass(RoundStart::class)]
+#[UsesClass(RoundEnding::class)]
 #[UsesClass(Cost::class)]
 #[UsesClass(TokenFigures::class)]
 final class BoardTest extends TestCase
@@ -43,6 +55,23 @@ final class BoardTest extends TestCase
         $names = array_map(static fn (BoardColumn $column): string => $column->value, BoardColumn::cases());
 
         self::assertSame(['Waiting on you', 'Backlog', 'Ready', 'Planned', 'Building', 'Checking', 'In review', 'Merging', 'Done'], $names);
+    }
+
+    public function testABoardWithoutCardsShowsWaitingOnYouInReviewAndDoneInTheirOrder(): void
+    {
+        self::assertSame([BoardColumn::WaitingOnYou, BoardColumn::InReview, BoardColumn::Done], new Board([])->shownColumns());
+    }
+
+    public function testABoardWithoutCardsFoldsTheColumnsOfFeaturesNotRunningYetIntoComingNextInTheirOrder(): void
+    {
+        self::assertSame([BoardColumn::Backlog, BoardColumn::Ready, BoardColumn::Planned, BoardColumn::Building, BoardColumn::Checking, BoardColumn::Merging], new Board([])->comingNext());
+    }
+
+    public function testABoardWithCardsInReviewAndDoneStillFoldsTheSameColumns(): void
+    {
+        $board = new Board([new Review([$this->round('r1', 'feat/a', 1)]), new Review([$this->round('r2', 'feat/b', 1)->judgedWith([], $this->morning())])]);
+
+        self::assertSame([[BoardColumn::WaitingOnYou, BoardColumn::InReview, BoardColumn::Done], 6], [$board->shownColumns(), count($board->comingNext())]);
     }
 
     public function testAReviewWhoseLatestRoundRunsIsACardInInReview(): void
@@ -186,14 +215,14 @@ final class BoardTest extends TestCase
         self::assertSame('Nothing is running yet. Start the first review.', new Board([])->headline()->opening());
     }
 
-    public function testTheBoardsHeadlineTellsOfItsRunningReviewsAndItsEmptyWaitingOnYou(): void
+    public function testTheBoardsHeadlineTellsOfItsRunningReviews(): void
     {
         $running = $this->round('r1', 'feat/a', 1)->withOutcomes([new ReviewerOutcome('r1-a', 'correctness', 'standard', $this->morning())]);
         $board = new Board([new Review([$running]), new Review([$this->round('r2', 'feat/b', 1)->judgedWith([], $this->morning())])]);
 
         $headline = $board->headline();
 
-        self::assertSame(['The Code reviewers are reviewing change feat/a of alpha.', 'Nothing needs you.'], [$headline->opening(), $headline->waitingWords()]);
+        self::assertSame('The Code reviewers are reviewing change feat/a of alpha.', $headline->opening());
     }
 
     public function testOnTheFirstDayEveryColumnGivesTheLineOfWhatLandsInIt(): void
@@ -222,14 +251,14 @@ final class BoardTest extends TestCase
 
     public function testOnTheFirstDayWhoIsWorkingSaysThatReviewersAppearWhileTheyReview(): void
     {
-        self::assertSame('Nobody is working yet: reviewers appear here while they review a change', new Board([])->nobodyWorkingLine());
+        self::assertSame('No reviewer is working right now: reviewers appear here while they review a change', new Board([])->nobodyWorkingLine());
     }
 
     public function testWhoIsWorkingKeepsItsLineWhenNobodyRunsOnceAReviewHasRun(): void
     {
         $board = new Board([new Review([$this->round('r1', 'feat/a', 1)->judgedWith([], $this->morning())])]);
 
-        self::assertSame('Nobody is working yet: reviewers appear here while they review a change', $board->nobodyWorkingLine());
+        self::assertSame('No reviewer is working right now: reviewers appear here while they review a change', $board->nobodyWorkingLine());
     }
 
     public function testWhoIsWorkingHasNoEmptyLineWhileAReviewerRuns(): void
@@ -237,6 +266,75 @@ final class BoardTest extends TestCase
         $running = $this->round('r1', 'feat/a', 1)->withOutcomes([new ReviewerOutcome('r1-a', 'correctness', 'standard', $this->morning())]);
 
         self::assertNull(new Board([new Review([$running])])->nobodyWorkingLine());
+    }
+
+    public function testWorkingNowShowsTheBuildsTasksInFlightBeforeTheReviewsInProgress(): void
+    {
+        $inReview = new Review([$this->round('r1', 'feat/a', 1)]);
+        $done = new Review([$this->round('r2', 'feat/b', 1)->judgedWith([], $this->morning())]);
+
+        $cards = new Board([$inReview, $done], [$this->inFlight('alpha'), $this->failed('beta')])->workingNow();
+
+        self::assertSame(
+            [['task-1', 'Build', 'developer', null], ['feat/a', 'Review', 'code_reviewer', 'r1']],
+            array_map(static fn (WorkingCard $card): array => [$card->title, $card->step->value, $card->roles[0]->value, $card->round], $cards),
+        );
+    }
+
+    public function testAnOldJudgedChangeWithAFindingToFixIsNoWorkingCard(): void
+    {
+        $toFix = [new RoundFinding('F1', null, null)->calledBy(JudgeCall::Act)];
+        $board = new Board([new Review([$this->round('r1', 'feat/old', 1)->judgedWith($toFix, $this->morning())])]);
+
+        self::assertSame([], $board->workingNow());
+        self::assertNotNull($board->nobodyWorkingNowLine());
+    }
+
+    public function testARoundThatEndedWithoutAJudgesCallIsNoWorkingCard(): void
+    {
+        $ended = $this->round('r1', 'feat/a', 1)->endedAs(new RoundEnding(RoundEnds::NoOutcomeInTime, 'No outcome in time.'));
+        $board = new Board([new Review([$ended])]);
+
+        self::assertSame([], $board->workingNow());
+        self::assertNotNull($board->nobodyWorkingNowLine());
+    }
+
+    public function testWorkingNowKeepsItsOwnLineWhileNoChangeIsInProgress(): void
+    {
+        self::assertSame('Nobody is working yet: reviewers appear here while they review a change', new Board([])->nobodyWorkingNowLine());
+    }
+
+    // Working now lists changes and the Status page lists reviewers, so a round with no reviewer started yet shows on one and not the other (#3386, decision 7).
+    public function testAnOpenRoundWithNoReviewerRunningHasACardButKeepsTheStatusPagesLine(): void
+    {
+        $board = new Board([new Review([$this->round('r1', 'feat/a', 1)])]);
+
+        self::assertNull($board->nobodyWorkingNowLine());
+        self::assertSame('No reviewer is working right now: reviewers appear here while they review a change', $board->nobodyWorkingLine());
+    }
+
+    public function testTheHedgehogStandsBesideTheMeerkatWhileTheSecurityReviewerReads(): void
+    {
+        $answered = new ReviewerOutcome('r1-c', 'correctness', 'standard', $this->morning())->answered(Decision::Approve, 0, ProjectMode::Live);
+        $reading = $this->round('r1', 'feat/a', 1)->withOutcomes([$answered, new ReviewerOutcome('r1-s', 'security', 'standard', $this->morning())]);
+        $done = $this->round('r2', 'feat/b', 1)->withOutcomes([$answered, new ReviewerOutcome('r2-s', 'security', 'standard', $this->morning())->answered(Decision::Approve, 0, ProjectMode::Live)]);
+
+        $cards = new Board([new Review([$reading]), new Review([$done])])->workingNow();
+
+        self::assertSame([[Character::CodeReviewer, Character::SecurityEngineer], [Character::CodeReviewer]], array_map(static fn (WorkingCard $card): array => $card->roles, $cards));
+        self::assertSame('Reviewing', $cards[0]->state());
+    }
+
+    public function testAWorkingCardOfAReviewWithoutAChangeIsNamedAfterItsRound(): void
+    {
+        $cards = new Board([new Review([$this->round('r1', '', 1)])])->workingNow();
+
+        self::assertSame('Round r1', $cards[0]->title);
+    }
+
+    public function testWorkingNowHasNoEmptyLineWhileATaskIsBuilt(): void
+    {
+        self::assertNull(new Board([], [$this->inFlight('alpha')])->nobodyWorkingNowLine());
     }
 
     public function testATaskTheBuildRecordedEndsTheFirstDayBeforeAnyReview(): void

@@ -24,6 +24,11 @@ final readonly class TwigComments implements CommentLanguage
         return self::LINE_SYNTAX;
     }
 
+    public function holdsPhpCode(): bool
+    {
+        return false;
+    }
+
     public function commentsIn(string $source): array
     {
         return iterator_to_array($this->commentsFrom($source), false);
@@ -48,6 +53,20 @@ final readonly class TwigComments implements CommentLanguage
 
             $offset = $this->afterVerbatim($source, $inside, $kind) ?? yield from $this->expression($source, $inside, self::TAG_ENDS[$kind]);
         }
+    }
+
+    /**
+     * @return array<array{string, int}>|null
+     */
+    private function matchIn(string $pattern, string $source, int $offset): ?array
+    {
+        $result = preg_match($pattern, $source, $match, PREG_OFFSET_CAPTURE, $offset);
+
+        if (false === $result) {
+            throw new ScopeFailure('cannot read a template: '.preg_last_error_msg());
+        }
+
+        return 1 === $result ? $match : null;
     }
 
     /**
@@ -153,19 +172,5 @@ final readonly class TwigComments implements CommentLanguage
         }
 
         return str_contains(self::CLOSING_BRACKETS, $char) ? max(0, $depth - 1) : $depth;
-    }
-
-    /**
-     * @return array<array{string, int}>|null
-     */
-    private function matchIn(string $pattern, string $source, int $offset): ?array
-    {
-        $result = preg_match($pattern, $source, $match, PREG_OFFSET_CAPTURE, $offset);
-
-        if (false === $result) {
-            throw new ScopeFailure('cannot read a template: '.preg_last_error_msg());
-        }
-
-        return 1 === $result ? $match : null;
     }
 }

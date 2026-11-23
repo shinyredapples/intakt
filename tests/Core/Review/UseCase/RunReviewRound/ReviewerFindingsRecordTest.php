@@ -38,11 +38,6 @@ final class ReviewerFindingsRecordTest extends KernelTestCase
 
     private RoundFixture $fixture;
 
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-    }
-
     public function testACompletedRoundRecordsEachReviewersFindingsUnderTheIdsItsJudgeSees(): void
     {
         $round = $this->round([self::FIRST => $this->changes($this->finding('a'), $this->finding('b')), self::SECOND => $this->changes($this->finding('c'))]);
@@ -116,6 +111,29 @@ final class ReviewerFindingsRecordTest extends KernelTestCase
         self::assertSame(['role-1' => ['F1'], 'role-2' => []], $this->recordedOf($round));
     }
 
+    protected function setUp(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer());
+    }
+
+    /**
+     * @return array<string, ?array<string, string>>
+     */
+    private function severitiesOf(string $round): array
+    {
+        return array_map(static fn (ReviewerFindingsRecorded $payload): ?array => $payload->severities, $this->payloadsByRole($round));
+    }
+
+    private function finding(string $id, bool $repeat = false, Severity $severity = Severity::P2): Finding
+    {
+        return new Finding($id, $severity, 'src/A.php', 3, null, 'Text '.$id, FixableBy::Builder, $repeat, null, null);
+    }
+
+    private function changes(Finding ...$findings): Verdict
+    {
+        return new Verdict(Decision::Changes, array_values($findings), [], []);
+    }
+
     /**
      * @param array<string, Verdict> $verdicts
      */
@@ -138,14 +156,6 @@ final class ReviewerFindingsRecordTest extends KernelTestCase
     private function recordedOf(string $round): array
     {
         return array_map(static fn (ReviewerFindingsRecorded $payload): array => $payload->findings, $this->payloadsByRole($round));
-    }
-
-    /**
-     * @return array<string, ?array<string, string>>
-     */
-    private function severitiesOf(string $round): array
-    {
-        return array_map(static fn (ReviewerFindingsRecorded $payload): ?array => $payload->severities, $this->payloadsByRole($round));
     }
 
     /**
@@ -175,15 +185,5 @@ final class ReviewerFindingsRecordTest extends KernelTestCase
         self::assertInstanceOf(ReviewerFindingsRecorded::class, $payload);
 
         return $payload;
-    }
-
-    private function changes(Finding ...$findings): Verdict
-    {
-        return new Verdict(Decision::Changes, array_values($findings), [], []);
-    }
-
-    private function finding(string $id, bool $repeat = false, Severity $severity = Severity::P2): Finding
-    {
-        return new Finding($id, $severity, 'src/A.php', 3, null, 'Text '.$id, FixableBy::Builder, $repeat, null, null);
     }
 }

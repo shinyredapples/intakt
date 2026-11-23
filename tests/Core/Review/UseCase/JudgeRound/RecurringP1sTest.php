@@ -8,18 +8,24 @@ use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\Decision;
+use Intakt\Core\Review\Contract\EscalationOutcome;
+use Intakt\Core\Review\Contract\EscalationVerdict;
+use Intakt\Core\Review\Contract\EscalationVerdictReused;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\Judgement;
 use Intakt\Core\Review\Contract\RecurringP1Found;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
+use Intakt\Core\Review\Domain\KeptVerdict;
 use Intakt\Core\Review\Domain\RoundState;
+use Intakt\Core\Review\Infrastructure\KeptVerdicts;
 use Intakt\Core\Review\UseCase\JudgeRound\FailedJudgings;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgedRounds;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRound;
 use Intakt\Core\Review\UseCase\JudgeRound\RecordFailedJudging;
 use Intakt\Core\Review\UseCase\JudgeRound\RecordFailedJudgingHandler;
+use Intakt\Core\Review\UseCase\JudgeRound\RecordRecurringP1s;
 use Intakt\Core\Review\UseCase\JudgeRound\RecurringP1s;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
 use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
@@ -39,6 +45,7 @@ use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
 
 #[Group('persistence')]
 #[CoversClass(RecurringP1s::class)]
+#[CoversClass(RecordRecurringP1s::class)]
 #[CoversClass(FailedJudgings::class)]
 #[CoversClass(RecordFailedJudgingHandler::class)]
 #[CoversClass(JudgedRounds::class)]
@@ -46,6 +53,10 @@ use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
 #[CoversClass(ReviewRounds::class)]
 #[CoversClass(StoredFindings::class)]
 #[UsesClass(RecurringP1Found::class)]
+#[UsesClass(EscalationVerdictReused::class)]
+#[UsesClass(KeptVerdicts::class)]
+#[UsesClass(KeptVerdict::class)]
+#[UsesClass(EscalationVerdict::class)]
 final class RecurringP1sTest extends KernelTestCase
 {
     private const string CHANGE = 'recurring-change';
@@ -53,11 +64,6 @@ final class RecurringP1sTest extends KernelTestCase
     private const string HEAD_B = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
 
     private RoundFixture $fixture;
-
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-    }
 
     public function testAP1WithTheSameKeyFlaggedOnASecondHeadRecordsOneRecurringP1Found(): void
     {
@@ -335,6 +341,111 @@ final class RecurringP1sTest extends KernelTestCase
         self::assertSame(1, substr_count($printed, ' recurring_p1_found '));
     }
 
+    public function testARecurringP1WhoseKeyHasAKeptVerdictRecordsTheVerdictReusedWithItsOutcome(): void
+    {
+        $first = $this->judged($this->completedAt(self::CHANGE, self::HEAD_A, $this->keyedP1()));
+        $this->keepVerdictOfFirstRound(EscalationOutcome::Rejected, $first);
+        $second = $this->judged($this->completedAt(self::CHANGE, self::HEAD_B, $this->repeatedP1($this->keyedP1())));
+
+        $reused = $this->payloadsOf(LedgerEventKind::EscalationVerdictReused);
+
+        self::assertSame([['round' => $second, 'finding' => 'F1', 'key' => $this->keyOfFirstRound(), 'outcome' => 'rejected', 'verdict_round' => $first]], $reused);
+    }
+
+    public function testTheVerdictReusedFollowsTheRecurringP1FoundInTheLedger(): void
+    {
+        $first = $this->judged($this->completedAt(self::CHANGE, self::HEAD_A, $this->keyedP1()));
+        $this->keepVerdictOfFirstRound(EscalationOutcome::Confirmed, $first);
+        $this->judged($this->completedAt(self::CHANGE, self::HEAD_B, $this->repeatedP1($this->keyedP1())));
+
+        $printed = $this->ledgerEvents();
+
+        self::assertGreaterThan(strpos($printed, ' recurring_p1_found '), strpos($printed, ' escalation_verdict_reused '));
+        self::assertStringContainsString('"outcome":"confirmed"', $printed);
+    }
+
+    public function testARecurringP1WhoseKeyHasNoKeptVerdictRecordsNoReuse(): void
+    {
+        $this->judged($this->completedAt(self::CHANGE, self::HEAD_A, $this->keyedP1()));
+        $this->judged($this->completedAt(self::CHANGE, self::HEAD_B, $this->repeatedP1($this->keyedP1())));
+
+        self::assertSame([], $this->payloadsOf(LedgerEventKind::EscalationVerdictReused));
+    }
+
+    public function testAKeptVerdictIsNotReusedOnAFindingWhoseTextOrFilesChangedAndSoHasAnotherKey(): void
+    {
+        $first = $this->judged($this->completedAt(self::CHANGE, self::HEAD_A, $this->keyedP1()));
+        $this->keepVerdictOfFirstRound(EscalationOutcome::Confirmed, $first);
+        $edited = new Finding('A', Severity::P1, 'RecordingBus.php', 3, null, 'The bus drops a message.', FixableBy::Builder, false, null, null);
+
+        $this->judged($this->completedAt(self::CHANGE, self::HEAD_B, $this->repeatedP1($edited)));
+
+        self::assertSame([], $this->payloadsOf(LedgerEventKind::EscalationVerdictReused));
+    }
+
+    public function testAP1WhoseTextChangedRecursUnderItsNewKeyWithoutReusingTheVerdictKeptUnderTheOldKey(): void
+    {
+        $first = $this->judged($this->completedAt(self::CHANGE, self::HEAD_A, $this->keyedP1()));
+        $this->keepVerdictOfFirstRound(EscalationOutcome::Confirmed, $first);
+        $edited = new Finding('A', Severity::P1, 'RecordingBus.php', 3, null, 'The bus drops a message.', FixableBy::Builder, false, null, null);
+        $this->judged($this->completedAt(self::CHANGE, self::HEAD_A, $this->repeatedP1($edited)));
+        $this->judged($this->completedAt(self::CHANGE, self::HEAD_B, $this->repeatedP1($edited)));
+
+        $found = $this->payloadsOf(LedgerEventKind::RecurringP1Found);
+
+        self::assertSame([1, false, []], [count($found), $this->keyOfFirstRound() === ($found[0]['key'] ?? null), $this->payloadsOf(LedgerEventKind::EscalationVerdictReused)]);
+    }
+
+    public function testAP1NamingNoRegularFileGetsNoKeyAndReusesNoKeptVerdict(): void
+    {
+        $this->fixture->keptVerdicts()->keep('', new EscalationVerdict(EscalationOutcome::Confirmed, 'Seeded.'), 'r1');
+        $this->judged($this->completedAt(self::CHANGE, self::HEAD_A, $this->unkeyedP1()));
+        $this->judged($this->completedAt(self::CHANGE, self::HEAD_B, $this->repeatedP1($this->unkeyedP1())));
+
+        self::assertSame([], $this->payloadsOf(LedgerEventKind::EscalationVerdictReused));
+    }
+
+    public function testRecordingAFailedJudgingReusesTheKeptVerdictOfTheRecurrenceItReleases(): void
+    {
+        $waiting = $this->completedAt(self::CHANGE, self::HEAD_A, $this->keyedP1());
+        $first = $this->judged($this->completedAt(self::CHANGE, self::HEAD_A, $this->requiredP1()));
+        $this->keepVerdictOfFirstRound(EscalationOutcome::Rejected, $first);
+        $second = $this->judged($this->completedAt(self::CHANGE, self::HEAD_B, $this->requiredP1()));
+        self::assertSame([], $this->payloadsOf(LedgerEventKind::EscalationVerdictReused));
+
+        $commands = self::createStub(MessageBusInterface::class);
+        $commands->method('dispatch')->willReturnCallback(static fn (object $command): Envelope => new Envelope($command));
+        $this->fixture->failedJudgingRecorder($commands, self::createStub(LoggerInterface::class))(new RecordFailedJudging($waiting));
+
+        self::assertSame([$second], array_column($this->payloadsOf(LedgerEventKind::EscalationVerdictReused), 'round'));
+    }
+
+    protected function setUp(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer());
+    }
+
+    private function keepVerdictOfFirstRound(EscalationOutcome $outcome, string $round): void
+    {
+        $this->fixture->keptVerdicts()->keep($this->keyOfFirstRound(), new EscalationVerdict($outcome, 'Seeded.'), $round);
+    }
+
+    private function keyOfFirstRound(): string
+    {
+        $keys = $this->payloadsOf(LedgerEventKind::JudgeDone)[0]['p1_keys'];
+        self::assertIsArray($keys);
+        $key = array_first($keys);
+        self::assertIsString($key);
+
+        return $key;
+    }
+
+    // Names a file of the fixture's checkout, so it gets a key.
+    private function keyedP1(): Finding
+    {
+        return new Finding('A', Severity::P1, 'RecordingBus.php', 3, null, 'The bus loses a message.', FixableBy::Builder, false, null, null);
+    }
+
     // Only this round's reviewer messages, so the rounds started before are not delivered again.
     private function completedAt(string $change, string $head, Finding $finding): string
     {
@@ -355,12 +466,6 @@ final class RecurringP1sTest extends KernelTestCase
         $this->fixture->judge(new ScriptedJudgement(new Judgement([])))(new JudgeRound($round));
 
         return $round;
-    }
-
-    // Names a file of the fixture's checkout, so it gets a key.
-    private function keyedP1(): Finding
-    {
-        return new Finding('A', Severity::P1, 'RecordingBus.php', 3, null, 'The bus loses a message.', FixableBy::Builder, false, null, null);
     }
 
     // Tied to a requirement, so the goalpost rule lets a new P1 of a later round block.

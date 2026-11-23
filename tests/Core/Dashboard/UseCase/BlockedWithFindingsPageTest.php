@@ -94,25 +94,16 @@ final class BlockedWithFindingsPageTest extends WebTestCase
 
     private string $roundId = '';
 
-    protected function setUp(): void
-    {
-        $this->browser = self::createClient(server: ['HTTP_HOST' => 'localhost:7780']);
-        $this->browser->disableReboot();
-        // The page reads the round's end from the clock, so it must share the fixture's time or the round is long overdue and leaves the Now box.
-        self::clockAt('2026-10-30 12:00:00 UTC');
-        $this->fixture = new RoundFixture(self::getContainer());
-    }
-
     public function testAReviewerAnsweringBlockedWithFindingsShowsChangesRequestedOnThePageAndInTheConsole(): void
     {
         $console = $this->reviewedByTheCommand();
 
-        $page = $this->browser->request('GET', '/reviews/'.$this->roundId);
+        $page = $this->browser->request('GET', '/reviews/'.$this->roundId.'/record');
         $lines = explode("\n", rtrim($console->getDisplay(), "\n"));
 
         self::assertResponseIsSuccessful();
-        self::assertSame([['role-1', 'Changes requested'], ['role-2', 'Approved']], $this->rows($page, 'table.reviewers tbody tr', 'td'));
-        self::assertEqualsCanonicalizing(['Changes requested', 'Approved'], $this->nowStates);
+        self::assertSame([['role-1', 'Changes needed'], ['role-2', 'Approved']], $this->rows($page, 'table.reviewers tbody tr', 'td'));
+        self::assertEqualsCanonicalizing(['Changes needed', 'Approved'], $this->nowStates);
         self::assertSame('Outcome: Changes requested, decided by the quorum policy all over all 2 reviewers.', $page->filter('#round-'.$this->roundId.'-outcome')->text());
         self::assertSame(ReviewExit::Changes->value, $console->getStatusCode());
         self::assertSame('changes (round 1 counted)', $lines[0]);
@@ -125,6 +116,15 @@ final class BlockedWithFindingsPageTest extends WebTestCase
         $this->reviewChange()->review($this->request(), new IgnoredProgress());
 
         self::assertCount(1, array_filter($this->fixture->updates->seen, static fn (string $line): bool => str_starts_with($line, 'answer ') && str_contains($line, ' blocked')));
+    }
+
+    protected function setUp(): void
+    {
+        $this->browser = self::createClient(server: ['HTTP_HOST' => 'localhost:7780']);
+        $this->browser->disableReboot();
+        // The page reads the round's end from the clock, so it must share the fixture's time or the round is long overdue and leaves the Now box.
+        self::clockAt('2026-10-30 12:00:00 UTC');
+        $this->fixture = new RoundFixture(self::getContainer());
     }
 
     // Runs intakt:review on a branch of a temporary repository, so the console lines are the command's own output.
@@ -163,7 +163,7 @@ final class BlockedWithFindingsPageTest extends WebTestCase
             foreach ($fixture->judgings() as $judging) {
                 // Read before the judge's call, because the Now box shows a round only until it is judged.
                 $this->roundId = $judging->roundId;
-                $this->nowStates = $this->browser->request('GET', '/reviews/'.$judging->roundId)->filter('[id$="-now-reviewers"] [id*="-now-reviewer-"]')->each(static fn (Crawler $state): string => $state->text());
+                $this->nowStates = $this->browser->request('GET', '/reviews/'.$judging->roundId)->filter('[id$="-now-reviewers"] [id*="-now-reviewer-"][id$="-state"]')->each(static fn (Crawler $state): string => $state->text());
                 $fixture->judge($vendor)($judging);
             }
         };

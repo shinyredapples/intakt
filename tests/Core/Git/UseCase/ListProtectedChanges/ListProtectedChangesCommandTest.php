@@ -6,17 +6,18 @@ namespace Intakt\Tests\Core\Git\UseCase\ListProtectedChanges;
 
 use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
+use Intakt\Core\Git\Contract\ProtectedChanges;
 use Intakt\Core\Git\Domain\ChangedPath;
 use Intakt\Core\Git\Domain\ChangeNotRead;
 use Intakt\Core\Git\Domain\Mirrors;
 use Intakt\Core\Git\Domain\ProjectNameRefused;
-use Intakt\Core\Git\Domain\ProtectedChanges;
 use Intakt\Core\Git\Domain\ProtectedPathRefused;
 use Intakt\Core\Git\Domain\ProtectedPaths;
 use Intakt\Core\Git\UseCase\ListProtectedChanges\ChangedPaths;
 use Intakt\Core\Git\UseCase\ListProtectedChanges\CommitNameRefused;
 use Intakt\Core\Git\UseCase\ListProtectedChanges\ListProtectedChanges;
 use Intakt\Core\Git\UseCase\ListProtectedChanges\ListProtectedChangesCommand;
+use Intakt\Core\Git\UseCase\ListProtectedChanges\ProtectedHeadsOfMirrors;
 use Intakt\Tests\Core\Git\PregMatchThatThrows;
 use Intakt\Tests\Core\Git\TemporaryRepository;
 use InvalidArgumentException;
@@ -31,6 +32,7 @@ use Symfony\Component\Filesystem\Filesystem;
 
 #[CoversClass(ListProtectedChangesCommand::class)]
 #[UsesClass(ListProtectedChanges::class)]
+#[UsesClass(ProtectedHeadsOfMirrors::class)]
 #[UsesClass(ChangedPaths::class)]
 #[UsesClass(ChangedPath::class)]
 #[UsesClass(ChangeNotRead::class)]
@@ -47,21 +49,6 @@ final class ListProtectedChangesCommandTest extends TestCase
     private string $mirrors;
 
     private TemporaryRepository $repository;
-
-    protected function setUp(): void
-    {
-        $this->mirrors = sys_get_temp_dir().'/intakt-mirrors-'.bin2hex(random_bytes(6));
-        mkdir($this->mirrors);
-        $this->repository = new TemporaryRepository();
-        $this->repository->commitFile('bin/check', 'one');
-        $this->repository->checkoutNewBranch('feat/side');
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->mirrors);
-        $this->repository->remove();
-    }
 
     public function testTheCommandListsTheProtectedPathsOfTheProjectAndExitsWithZero(): void
     {
@@ -126,6 +113,21 @@ final class ListProtectedChangesCommandTest extends TestCase
         self::assertStringContainsString('"../outside" is not a protected path', $tester->getDisplay());
     }
 
+    protected function setUp(): void
+    {
+        $this->mirrors = sys_get_temp_dir().'/intakt-mirrors-'.bin2hex(random_bytes(6));
+        mkdir($this->mirrors);
+        $this->repository = new TemporaryRepository();
+        $this->repository->commitFile('bin/check', 'one');
+        $this->repository->checkoutNewBranch('feat/side');
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->mirrors);
+        $this->repository->remove();
+    }
+
     /**
      * @param array<string, list<string>> $protectedPaths
      */
@@ -133,7 +135,7 @@ final class ListProtectedChangesCommandTest extends TestCase
     {
         $this->repository->checkout('main');
         symlink($this->repository->path.'/.git', $this->mirrors.'/alpha.git');
-        $command = new ListProtectedChangesCommand(new ListProtectedChanges(new ChangedPaths(new HardenedGit())), new Mirrors($this->mirrors), $protectedPaths);
+        $command = new ListProtectedChangesCommand(new ProtectedHeadsOfMirrors(new ListProtectedChanges(new ChangedPaths(new HardenedGit())), new Mirrors($this->mirrors), $protectedPaths));
         $application = new Application();
         $application->addCommand($command);
         $tester = new CommandTester($application->find('intakt:protected:list'));

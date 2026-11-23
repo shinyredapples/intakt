@@ -18,6 +18,23 @@ final class BoardColumnTest extends TestCase
         self::assertSame([BoardColumn::Backlog, BoardColumn::Done], array_values($collapsed));
     }
 
+    public function testOnlyEmptyColumnsOfFeaturesNotRunningYetFoldIntoComingNext(): void
+    {
+        $folded = array_filter(BoardColumn::cases(), static fn (BoardColumn $column): bool => $column->foldsIntoComingNext(0));
+
+        self::assertSame([BoardColumn::Backlog, BoardColumn::Ready, BoardColumn::Planned, BoardColumn::Building, BoardColumn::Checking, BoardColumn::Merging], array_values($folded));
+    }
+
+    public function testAColumnOfAFeatureNotRunningYetShowsAgainOnceItHoldsAnItem(): void
+    {
+        self::assertFalse(BoardColumn::Building->foldsIntoComingNext(1));
+    }
+
+    public function testInReviewDoneAndWaitingOnYouNeverFoldIntoComingNextEvenWhenEmpty(): void
+    {
+        self::assertSame([false, false, false], array_map(static fn (BoardColumn $column): bool => $column->foldsIntoComingNext(0), [BoardColumn::WaitingOnYou, BoardColumn::InReview, BoardColumn::Done]));
+    }
+
     public function testAnEmptyInReviewSaysThatReviewsAppearWhileAPanelReviews(): void
     {
         self::assertSame('Reviews appear here while a panel reviews a change', BoardColumn::InReview->emptyLine());

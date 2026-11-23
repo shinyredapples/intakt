@@ -32,27 +32,6 @@ final readonly class Network
         return $this->loopbackWorks() ? null : 'the loopback interface lo is down';
     }
 
-    // A down lo still owns 127.0.0.1, so binding alone passes; only a connection through it shows the state.
-    private function loopbackWorks(): bool
-    {
-        $server = @stream_socket_server('tcp://'.$this->loopbackAddress);
-
-        if (false === $server) {
-            return false;
-        }
-
-        $client = @stream_socket_client('tcp://'.stream_socket_get_name($server, false), $code, $message, 1);
-        fclose($server);
-
-        if (false === $client) {
-            return false;
-        }
-
-        fclose($client);
-
-        return true;
-    }
-
     /**
      * @return ?list<string>
      */
@@ -75,6 +54,27 @@ final readonly class Network
         }
 
         return $names;
+    }
+
+    // A down lo still owns 127.0.0.1, so binding alone passes; only a connection through it shows the state.
+    private function loopbackWorks(): bool
+    {
+        $server = @stream_socket_server('tcp://'.$this->loopbackAddress);
+
+        if (false === $server) {
+            return false;
+        }
+
+        $client = @stream_socket_client('tcp://'.stream_socket_get_name($server, false), $code, $message, 1);
+        fclose($server);
+
+        if (false === $client) {
+            return false;
+        }
+
+        fclose($client);
+
+        return true;
     }
 }
 
@@ -133,6 +133,25 @@ final readonly class Probe
         return null === $problem ? null : 'PROBE_ISOLATED is set but the run is not offline: '.$problem;
     }
 
+    /**
+     * @return list<string>
+     */
+    public function command(string $file): array
+    {
+        $instance = [PHP_BINARY, $this->root.'/bin/instance', '--', ...$this->probeCommand($file)];
+
+        if (Isolation::ByCaller === $this->isolation) {
+            return $instance;
+        }
+
+        // A new network namespace starts with loopback down, which the instance needs; as PID 1 of a new PID namespace, bin/instance takes everything the probe leaves running down with it.
+        return [
+            'unshare', '--net', '--map-root-user', '--pid', '--fork', '--kill-child',
+            'sh', '-c', 'ip link set lo up && exec "$@"', 'sh',
+            ...$instance,
+        ];
+    }
+
     // Because a missing tool otherwise shows up only as an instance that never became ready.
     private function missingTools(): ?string
     {
@@ -165,25 +184,6 @@ final readonly class Probe
         }
 
         return str_starts_with($entry, '/') ? $entry : $this->root.'/'.$entry;
-    }
-
-    /**
-     * @return list<string>
-     */
-    public function command(string $file): array
-    {
-        $instance = [PHP_BINARY, $this->root.'/bin/instance', '--', ...$this->probeCommand($file)];
-
-        if (Isolation::ByCaller === $this->isolation) {
-            return $instance;
-        }
-
-        // A new network namespace starts with loopback down, which the instance needs; as PID 1 of a new PID namespace, bin/instance takes everything the probe leaves running down with it.
-        return [
-            'unshare', '--net', '--map-root-user', '--pid', '--fork', '--kill-child',
-            'sh', '-c', 'ip link set lo up && exec "$@"', 'sh',
-            ...$instance,
-        ];
     }
 
     private function runOffline(string $file): int

@@ -1,4 +1,4 @@
-<turbo-stream action="replace" target="round-{{ round }}-state"><template><p id="round-{{ round }}-state">{% if progress.judged %}Judged.{% else %}{{ progress.reviewersFinished }} of {{ progress.reviewers }} reviewers finished.{% endif %}</p></template></turbo-stream>
+<turbo-stream action="replace" target="round-{{ round }}-state"><template><p id="round-{{ round }}-state">{% if progress.judged %}Checked.{% else %}{{ progress.reviewersFinished }} of {{ progress.reviewers }} reviewers finished.{% endif %}</p></template></turbo-stream>
 <turbo-stream action="replace" target="round-{{ round }}-now-progress"><template><p class="muted" id="round-{{ round }}-now-progress">{{ progress.reviewersFinished }} of {{ progress.reviewers }} reviewers finished.</p></template></turbo-stream>
 <turbo-stream action="replace" target="round-{{ round }}-started"><template>{{ include('dashboard/_round_started.html.twig', {round: round, started: progress.reviewersStarted, reviewers: progress.reviewers}, with_context = false) }}</template></turbo-stream>
 {% for reviewer, state in progress.finished %}
@@ -10,8 +10,15 @@
 <turbo-stream action="replace" targets="#round-{{ round }}-reviewer-{{ reviewer }}-stop"><template><td id="round-{{ round }}-reviewer-{{ reviewer }}-stop"></td></template></turbo-stream>
 {{ include('dashboard/stream/_now_reviewer_placed.stream.html.twig', {round: round, reviewer: reviewer, outcome: outcome, state: state.value}, with_context = false) }}
 <turbo-stream action="replace" target="round-{{ round }}-now-reviewer-{{ reviewer }}-state"><template><span id="round-{{ round }}-now-reviewer-{{ reviewer }}-state">{{ include('dashboard/stream/_reviewer_outcome.html.twig', {state: state.value, outcome: outcome}, with_context = false) }}</span></template></turbo-stream>
+{% if outcome is not null %}
+{# Replaced on a row the page already lists, because a substitute that answered brings its own model; a selector, because a row placed before its start was read has no model element. #}
+<turbo-stream action="replace" targets="#round-{{ round }}-reviewer-{{ reviewer }}-model"><template>{{ include('dashboard/_reviewer_model_cell.html.twig', {round: round, outcome: outcome}, with_context = false) }}</template></turbo-stream>
+<turbo-stream action="replace" targets="#round-{{ round }}-now-reviewer-{{ reviewer }}-model"><template>{{ include('dashboard/_now_reviewer_model.html.twig', {round: round, reviewer: reviewer, outcome: outcome}, with_context = false) }}</template></turbo-stream>
+{% endif %}
 {% endfor %}
 {% if progress.judged %}
 <turbo-stream action="remove" target="round-{{ round }}-now-runs"></turbo-stream>
 <turbo-stream action="replace" target="round-{{ round }}-now-stop"><template><div id="round-{{ round }}-now-stop"></div></template></turbo-stream>
 {% endif %}
+{# A round that ended without a call (blocked or judging failed) leaves no path, so the open page hides the pass it still shows as current. #}
+{% if (review ?? null) is not null and review.path is empty %}<turbo-stream action="replace" target="review-path"><template>{{ include('dashboard/_review_path.html.twig', {steps: []}, with_context = false) }}</template></turbo-stream>{% endif %}

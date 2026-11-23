@@ -10,8 +10,6 @@ final readonly class FirstRun
         public ProviderStep $providers,
         public ProjectStep $project,
         public FirstReviewStep $firstReview,
-        public AgentStep $agent,
-        public ?DemoChoices $choices,
     ) {
     }
 
@@ -20,7 +18,7 @@ final readonly class FirstRun
      */
     public function states(): array
     {
-        return [$this->providers->state(), $this->project->state(), $this->firstReview->state(), $this->agent->state()];
+        return [$this->providers->state(), $this->project->state(), $this->firstReview->state()];
     }
 
     // A step that is not needed is never current, because there is nothing for the reader to do in it.
@@ -35,14 +33,20 @@ final readonly class FirstRun
         return null;
     }
 
-    public function done(): int
+    // The role who does the current step: the maintainer keeps the key, the developer brings the project, the reviewer reads the first change.
+    public function currentCharacter(): ?Character
     {
-        return count(array_filter($this->states(), static fn (StepState $state): bool => StepState::Done === $state));
+        return match ($this->current()) {
+            0 => Character::Maintainer,
+            1 => Character::Developer,
+            2 => Character::CodeReviewer,
+            default => null,
+        };
     }
 
-    // A step that is not needed is left out, so the progress can reach every step.
-    public function needed(): int
+    // Whether a card below can start or open a live review now, so the hero line never promises an action no card offers.
+    public function offersALiveReview(): bool
     {
-        return count(array_filter($this->states(), static fn (StepState $state): bool => StepState::NotNeeded !== $state));
+        return null !== $this->firstReview->round() || $this->firstReview->sampleCanStart;
     }
 }

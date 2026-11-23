@@ -206,17 +206,27 @@ final class ReviewerCatchesTest extends TestCase
     /**
      * @return array<string, list<int>>
      */
-    private function found(?ReviewerCatches $catches): array
-    {
-        return array_column(array_map(static fn (ReviewerCatch $reviewer): array => [$reviewer->role, array_map($reviewer->found(...), Severity::cases())], $catches->reviewers ?? []), 1, 0);
-    }
-
-    /**
-     * @return array<string, list<int>>
-     */
     private function alone(?ReviewerCatches $catches): array
     {
         return array_column(array_map(static fn (ReviewerCatch $reviewer): array => [$reviewer->role, array_map($reviewer->alone(...), Severity::cases())], $catches->reviewers ?? []), 1, 0);
+    }
+
+    private function round(): ReviewedRound
+    {
+        return new ReviewedRound(new RoundStart('r-1', 'alpha', 2), new RoundPlace('feat/thing', 7), new DateTimeImmutable('2026-10-28T11:00:00+00:00'), null);
+    }
+
+    private function reviewer(string $role): ReviewerOutcome
+    {
+        return new ReviewerOutcome('r-1-'.$role, $role, 'standard', new DateTimeImmutable('2026-10-28T11:00:00+00:00'));
+    }
+
+    /**
+     * @param list<string> $merged
+     */
+    private function act(string $id, string $severity, array $merged = []): RoundFinding
+    {
+        return new RoundFinding($id, $severity, 'Text of '.$id.'.', $merged)->calledBy(JudgeCall::Act);
     }
 
     /**
@@ -242,21 +252,11 @@ final class ReviewerCatchesTest extends TestCase
             ->withFindingsByReviewer(array_combine(array_map(static fn (string $role): string => 'r-1-'.$role, array_keys($reportedByRole)), array_values($reportedByRole)));
     }
 
-    private function round(): ReviewedRound
-    {
-        return new ReviewedRound(new RoundStart('r-1', 'alpha', 2), new RoundPlace('feat/thing', 7), new DateTimeImmutable('2026-10-28T11:00:00+00:00'), null);
-    }
-
-    private function reviewer(string $role): ReviewerOutcome
-    {
-        return new ReviewerOutcome('r-1-'.$role, $role, 'standard', new DateTimeImmutable('2026-10-28T11:00:00+00:00'));
-    }
-
     /**
-     * @param list<string> $merged
+     * @return array<string, list<int>>
      */
-    private function act(string $id, string $severity, array $merged = []): RoundFinding
+    private function found(?ReviewerCatches $catches): array
     {
-        return new RoundFinding($id, $severity, 'Text of '.$id.'.', $merged)->calledBy(JudgeCall::Act);
+        return array_column(array_map(static fn (ReviewerCatch $reviewer): array => [$reviewer->role, array_map($reviewer->found(...), Severity::cases())], $catches->reviewers ?? []), 1, 0);
     }
 }

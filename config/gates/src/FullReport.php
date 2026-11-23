@@ -9,6 +9,11 @@ final readonly class FullReport
     // Because Intakt's own .gitignore leaves out var/, and the ASCII-only report keeps a tree whose gates do scan var/ passing.
     public const string FOLDER = 'var/check';
 
+    // Because $ also matches before a final newline, \z ends the name, so a hand-made name ending in a newline never counts as generated.
+    public const string GENERATED = '~\Areport-[0-9a-f]{16}\.json\z~';
+
+    private const int KEPT = 20;
+
     /**
      * @param list<GateReport> $reports
      */
@@ -30,14 +35,56 @@ final readonly class FullReport
             return null;
         }
 
-        $file = self::FOLDER.'/report-'.bin2hex(random_bytes(8)).'.json';
-        $handle = @fopen($this->root.'/'.$file, 'x');
+        $name = 'report-'.bin2hex(random_bytes(8)).'.json';
+        $handle = @fopen($folder.'/'.$name, 'x');
 
         if (false === $handle) {
             return null;
         }
 
-        return $this->writtenAs($file, $handle, $contents."\n");
+        $file = $this->writtenAs(self::FOLDER.'/'.$name, $handle, $contents."\n");
+
+        if (null !== $file) {
+            $this->pruneOlderReportsIn($folder, $name);
+        }
+
+        return $file;
+    }
+
+    private function contents(): ?string
+    {
+        $gates = [];
+        $whole = true;
+
+        foreach ($this->reports as $report) {
+            $gate = $this->ascii($report->kept ?? $report->line);
+
+            if (null === $gate) {
+                return null;
+            }
+
+            $gates[] = $gate;
+            $whole = $whole && (null !== $report->kept || !$report->lineIsCut());
+        }
+
+        return '{"whole":'.($whole ? 'true' : 'false').',"gates":['.implode(',', $gates).']}';
+    }
+
+    /**
+     * @phpstan-impure
+     */
+    // Because a var/ or var/check that is a link would put the report outside the checked tree, it is refused before and after mkdir().
+    private function isLinked(): bool
+    {
+        return is_link($this->root.'/var') || is_link($this->root.'/'.self::FOLDER);
+    }
+
+    private function staysInside(string $folder): bool
+    {
+        $root = realpath($this->root);
+        $real = realpath($folder);
+
+        return false !== $root && false !== $real && str_starts_with($real, rtrim($root, '/').'/');
     }
 
     // Because a report the summary names must hold everything, a failed or short write leaves no file, and its warning never reaches stdout between the JSON lines.
@@ -58,40 +105,49 @@ final readonly class FullReport
         return null;
     }
 
+    // Because a glob() pattern built from the checked path would read a tree named like tree[a] as a pattern, the literal folder is listed, and only generated names count, so a hand-made report and this run's own report always stay.
+    private function pruneOlderReportsIn(string $folder, string $written): void
+    {
+        $older = $this->otherGeneratedReportsIn($folder, $written);
+        arsort($older);
+
+        foreach (array_slice(array_keys($older), self::KEPT - 1) as $path) {
+            @unlink($path);
+        }
+    }
+
     /**
-     * @phpstan-impure
+     * @return array<string, int>
      */
-    // Because a var/ or var/check that is a link would put the report outside the checked tree, it is refused before and after mkdir().
-    private function isLinked(): bool
+    private function otherGeneratedReportsIn(string $folder, string $written): array
     {
-        return is_link($this->root.'/var') || is_link($this->root.'/'.self::FOLDER);
-    }
+        $times = [];
 
-    private function staysInside(string $folder): bool
-    {
-        $root = realpath($this->root);
-        $real = realpath($folder);
+        foreach ($this->generatedNamesIn($folder) as $name) {
+            $path = $folder.'/'.$name;
 
-        return false !== $root && false !== $real && str_starts_with($real, rtrim($root, '/').'/');
-    }
-
-    private function contents(): ?string
-    {
-        $gates = [];
-        $whole = true;
-
-        foreach ($this->reports as $report) {
-            $gate = $this->ascii($report->kept ?? $report->line);
-
-            if (null === $gate) {
-                return null;
+            if ($name !== $written && !is_link($path) && is_file($path)) {
+                $times[$path] = (int) @filemtime($path);
             }
-
-            $gates[] = $gate;
-            $whole = $whole && (null !== $report->kept || !$report->lineIsCut());
         }
 
-        return '{"whole":'.($whole ? 'true' : 'false').',"gates":['.implode(',', $gates).']}';
+        return $times;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function generatedNamesIn(string $folder): array
+    {
+        $names = @scandir($folder);
+
+        if (false === $names) {
+            return [];
+        }
+
+        $generated = array_filter($names, static fn (string $name): bool => 1 === preg_match(self::GENERATED, $name));
+
+        return array_values($generated);
     }
 
     // Because decoding and encoding again changes a result's shape (an empty object, numbered keys, a number too large for a float), the bytes are copied and only each character past ASCII becomes its \u escape, so no gate that reads the tree finds a long dash or broken byte in it.

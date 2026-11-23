@@ -1,0 +1,106 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use Throwable;
+
+final class UnmarkedCatches
+{
+    public function noComment(callable $work): void
+    {
+        try {
+            $work();
+        } catch (Throwable) {
+        }
+    }
+
+    public function blankLineBetween(callable $work): void
+    {
+        try {
+            $work();
+            // Boundary: keeps the worker alive
+
+        } catch (Throwable) {
+        }
+    }
+
+    public function otherComment(callable $work): void
+    {
+        try {
+            $work();
+            // keeps the worker alive
+        } catch (Throwable) {
+        }
+    }
+
+    public function bareBoundary(callable $work): void
+    {
+        try {
+            $work();
+            // Boundary:
+        } catch (Throwable) {
+        }
+    }
+
+    public function aboveTheLastStatement(callable $work): void
+    {
+        try {
+            // Boundary: keeps the worker alive
+            $work();
+        } catch (Throwable) {
+        }
+    }
+
+    public function onlyAboveTheFirstCatch(callable $work): void
+    {
+        try {
+            $work();
+            // Boundary: keeps the worker alive
+        } catch (Throwable $failure) {
+            throw $failure;
+        } catch (\Throwable) {
+        }
+    }
+
+    public function blockComment(callable $work): void
+    {
+        try {
+            $work();
+            /* Boundary: keeps the worker alive */
+        } catch (Throwable) {
+        }
+    }
+
+    public function swallowsAtABoundary(callable $work): void
+    {
+        try {
+            $work();
+        }
+        // Boundary: keeps the worker alive
+        catch (Throwable) {
+        }
+    }
+
+    public function dropsTheFailureAtABoundary(callable $work): ?string
+    {
+        try {
+            $work();
+            // Boundary: keeps the worker alive
+        } catch (Throwable $failure) {
+            return null;
+        }
+
+        return 'done';
+    }
+
+    public function trailingTheLastStatement(callable $work): void
+    {
+        try {
+            $work(); // Boundary: leaves failure handling to the caller
+        } catch (Throwable $failure) {
+            throw $failure;
+        }
+    }
+}

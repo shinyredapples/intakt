@@ -1,11 +1,12 @@
 name: highlights
-# Publishes the site bin/pages assembles, the highlights page and the journey page, to GitHub Pages; it is never committed.
+# Publishes the site bin/pages assembles, the front page, the highlights page and the journey page, to GitHub Pages; it is never committed.
 on:
   push:
     branches: [main]
     # Daily runs cover .github/ci/run-on-copy.sh and .github/actions/ci-image.
     paths:
       - docs/highlights.d/**
+      - docs/pages/**
       - bin/highlights
       - config/gates/src/Highlight*.php
       - .github/workflows/highlights.yml
@@ -53,6 +54,7 @@ jobs:
       - name: Assemble the page
         # jekyll-build-pages runs Jekyll 3.10, which ignores render_with_liquid and runs Liquid on any {{ or {%. sed writes
         # each of them as a Liquid string that prints it back, so Liquid hands both pages to Markdown unchanged.
+        # The front page, docs/pages/index.html, has no front matter, so Jekyll copies it as it is.
         run: |
           set -eu
           mkdir _highlights
@@ -61,7 +63,7 @@ jobs:
             --tmpfs /home/ci:rw,exec,uid=1000,gid=1000,mode=0755,size=3g \
             --volume "$GITHUB_WORKSPACE:/workspace:ro" \
             --volume "$GITHUB_WORKSPACE/_highlights:/page" \
-            "$CI_IMAGE" sh /workspace/.github/ci/run-on-copy.sh sh -c 'bin/pages /page --recorded=/workspace/_journey-api && sed -i "s/{[{%]/{{ \"&\" }}/g" /page/index.md /page/journey/index.md'
+            "$CI_IMAGE" sh /workspace/.github/ci/run-on-copy.sh sh -c 'bin/pages /page --recorded=/workspace/_journey-api && sed -i "s/{[{%]/{{ \"&\" }}/g" /page/highlights/index.md /page/journey/index.md'
       - uses: actions/jekyll-build-pages@44a6e6beabd48582f863aeeb6cb2151cc1716697 # v1.0.13
         with:
           source: ./_highlights

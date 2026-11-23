@@ -36,35 +36,6 @@ final class NoPublicTraitSetterRuleTest extends PhpStanRuleTestCase
 {
     private string|false $changedFilesOnly = false;
 
-    #[Override]
-    protected function setUp(): void
-    {
-        $this->changedFilesOnly = getenv(StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE);
-        putenv(StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE);
-        parent::setUp();
-    }
-
-    #[Override]
-    protected function tearDown(): void
-    {
-        putenv(false === $this->changedFilesOnly ? StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE : StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE.'='.$this->changedFilesOnly);
-        parent::tearDown();
-    }
-
-    protected function ruleFor(string $root): NoPublicTraitSetterRule
-    {
-        return new NoPublicTraitSetterRule($root);
-    }
-
-    /**
-     * @return array<Collector<Node, mixed>>
-     */
-    #[Override]
-    protected function getCollectors(): array
-    {
-        return [new TraitSetterDeclarationCollector(), new TraitSetterUseCollector(), new AbstractTraitSetterUseCollector()];
-    }
-
     /**
      * @return iterable<string, non-empty-list<CheckRun|string>>
      */
@@ -169,6 +140,35 @@ final class NoPublicTraitSetterRuleTest extends PhpStanRuleTestCase
     public function testATraitSetterOutsideTheRepositoryCodeFoldersPassesStaticAnalysis(): void
     {
         $this->assertRuleAccepts('trait-setter-migration');
+    }
+
+    #[Override]
+    protected function setUp(): void
+    {
+        $this->changedFilesOnly = getenv(StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE);
+        putenv(StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE);
+        parent::setUp();
+    }
+
+    #[Override]
+    protected function tearDown(): void
+    {
+        putenv(false === $this->changedFilesOnly ? StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE : StaticAnalysisGate::CHANGED_FILES_ONLY_VARIABLE.'='.$this->changedFilesOnly);
+        parent::tearDown();
+    }
+
+    protected function ruleFor(string $root): NoPublicTraitSetterRule
+    {
+        return new NoPublicTraitSetterRule($root);
+    }
+
+    /**
+     * @return array<Collector<Node, mixed>>
+     */
+    #[Override]
+    protected function getCollectors(): array
+    {
+        return [new TraitSetterDeclarationCollector(), new TraitSetterUseCollector(), new AbstractTraitSetterUseCollector()];
     }
 
     // because a changed-files run where only the trait changed does not analyze the class that uses it

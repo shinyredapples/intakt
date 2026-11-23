@@ -41,19 +41,6 @@ final class WatcherStartTest extends TestCase
     /** @var list<array{arguments: list<string>, environment: array<string,string>, seconds: int}> */
     private array $calls = [];
 
-    protected function setUp(): void
-    {
-        $this->directory = sys_get_temp_dir().'/intakt-watcher-start-'.bin2hex(random_bytes(6));
-        new SampleRepository(self::FIXTURES)->buildOnce($this->directory.'/sample');
-        $this->head = trim(new Process(['git', 'rev-parse', SampleRepository::BRANCH], $this->directory.'/sample')->mustRun()->getOutput());
-        new Filesystem()->dumpFile($this->configuration(), Yaml::dump(['projects' => [SampleProject::NAME => ['tiers' => ['strong' => ['provider' => 'anthropic', 'model' => 'claude-opus-5-5']]]]], 6, 4));
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->directory);
-    }
-
     public function testTheRecordingHoldsTheSamplePullRequestAndASuccessfulCiRunForItsHead(): void
     {
         $this->start($this->ledgerWith($this->queued(self::ROUND, $this->head)));
@@ -174,6 +161,29 @@ final class WatcherStartTest extends TestCase
         $this->start($this->ledgerWith('2026-11-08T10:00:00Z 01a19b8a-30e4-7aa3-8780-141b1014c71a round_queued {"project":"sample",'));
     }
 
+    protected function setUp(): void
+    {
+        $this->directory = sys_get_temp_dir().'/intakt-watcher-start-'.bin2hex(random_bytes(6));
+        new SampleRepository(self::FIXTURES)->buildOnce($this->directory.'/sample');
+        $this->head = trim(new Process(['git', 'rev-parse', SampleRepository::BRANCH], $this->directory.'/sample')->mustRun()->getOutput());
+        new Filesystem()->dumpFile($this->configuration(), Yaml::dump(['projects' => [SampleProject::NAME => ['tiers' => ['strong' => ['provider' => 'anthropic', 'model' => 'claude-opus-5-5']]]]], 6, 4));
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->directory);
+    }
+
+    private function queued(string $round, string $head, string $event = '01a19b8a-30e4-7aa3-8780-141b1014c71a'): string
+    {
+        return '2026-11-08T10:00:00Z '.$event.' round_queued {"project":"sample","change":"1","head":"'.$head.'","round":"'.$round.'"}';
+    }
+
+    private function ledgerWith(string ...$lines): string
+    {
+        return implode(PHP_EOL, [...$lines, count($lines).' events']).PHP_EOL;
+    }
+
     private function start(string $ledger, string $before = "0 events\n"): string
     {
         $this->ledgers = [$before, $ledger];
@@ -192,16 +202,6 @@ final class WatcherStartTest extends TestCase
         $this->calls[] = ['arguments' => $arguments, 'environment' => $environment, 'seconds' => $seconds];
 
         return 'intakt:ledger:events' === $arguments[0] ? array_shift($this->ledgers) ?? '' : '';
-    }
-
-    private function ledgerWith(string ...$lines): string
-    {
-        return implode(PHP_EOL, [...$lines, count($lines).' events']).PHP_EOL;
-    }
-
-    private function queued(string $round, string $head, string $event = '01a19b8a-30e4-7aa3-8780-141b1014c71a'): string
-    {
-        return '2026-11-08T10:00:00Z '.$event.' round_queued {"project":"sample","change":"1","head":"'.$head.'","round":"'.$round.'"}';
     }
 
     /**

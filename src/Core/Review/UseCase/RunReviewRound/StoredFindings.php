@@ -8,9 +8,11 @@ use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
+use Intakt\Core\Review\Contract\ChangeAddress;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\JudgeDoneFinding;
+use Intakt\Core\Review\Contract\ResolvedFinding;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\ChangeFindings;
 use Intakt\Core\Review\Domain\ChangeRound;
@@ -20,6 +22,7 @@ use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundReviewer;
 use Intakt\Core\Review\Domain\RoundTransition;
 use Intakt\Core\Review\Domain\TrackedFinding;
+use Intakt\Core\Review\Infrastructure\ReviewerAnswer\Verdict as ReviewerAnswer;
 use Symfony\Component\DependencyInjection\Attribute\Target;
 use Symfony\Component\Serializer\Encoder\JsonEncoder;
 use Symfony\Component\Serializer\SerializerInterface;
@@ -37,10 +40,10 @@ final readonly class StoredFindings
     ) {
     }
 
-    // The open findings are taken once here, under the change's lock, and stored with the round, because a reviewer that read the ledger at its own start could be told what another round of the change recorded meanwhile.
+    // The open findings are taken once here, under the change's lock, and stored with the round, because a reviewer that read the ledger at its own start could be told what another round of the change recorded meanwhile; under the canonical address, before the row is created, so two spellings of one pull request lock one row and number one sequence.
     public function openRound(string $project, string $change): ChangeRound
     {
-        $stored = $this->locked($project, $change);
+        $stored = $this->locked($project, ChangeAddress::canonical($change));
 
         return $stored->openRound($this->written($this->ledgerOf($stored)->openForReviewers()));
     }
@@ -91,7 +94,7 @@ final readonly class StoredFindings
         $notes = array_filter(array_column(array_map(static fn (JudgeDoneFinding $finding): array => [$finding->id, $finding->judgeNote], $judged->findings), 1, 0), static fn (?string $note): bool => null !== $note);
         $reported = array_map(static fn (Finding $finding): Finding => isset($notes[$finding->id]) ? $finding->withJudgeNote($notes[$finding->id]) : $finding, $this->reportedIn($round));
 
-        return new OnePerPlace()->actList($reported, [...$judged->act], $judged->sameCause);
+        return new OnePerPlace()->actList($reported, [...$judged->act], iterator_to_array($judged->sameCause));
     }
 
     /**
@@ -133,7 +136,7 @@ final readonly class StoredFindings
         return true;
     }
 
-    // The lock a completing round takes after its own, so two judgings of one change read each other's judge_done in turn; without the plain existence read, because under MySQL's REPEATABLE READ that read would fix the snapshot before the wait and hide the other judging's judge_done (a judged round completed through this row, so it exists).
+    // The lock a completing round takes after its own, so two judgings of one change read each other's judge_done in turn; under the address the round stored, which is canonical unless an old spelling collided with another (Version20261122100000) and then names its own row; without the plain existence read, because under MySQL's REPEATABLE READ that read would fix the snapshot before the wait and hide the other judging's judge_done (a judged round completed through this row, so it exists).
     public function lockChangeOf(ReviewRound $round): void
     {
         $this->lockedRow($round->project(), $round->change()) ?? throw ChangeFindingsNotFound::for($round->project(), $round->change());
@@ -167,32 +170,6 @@ final readonly class StoredFindings
         $stored->recordFindings($round->number(), $this->written($ledger->all()));
 
         return $reported;
-    }
-
-    // Each id keeps the severity this reviewer gave it, because another reviewer may repeat the same tracked finding at another one; the ledger returns one id per reported finding, in order, and the higher severity stands where a reviewer reports one id twice.
-    private function reportedBy(RoundReviewer $reviewer, FindingLedger $ledger, int $number): ReportedFindings
-    {
-        $verdict = $this->verdictOf($reviewer);
-        $ids = $ledger->recordVerdict($number, $verdict);
-        $severities = [];
-
-        foreach ($ids as $index => $id) {
-            $severity = $verdict->findings[$index]->severity->value;
-            $severities[$id] = min($severities[$id] ?? $severity, $severity);
-        }
-
-        return new ReportedFindings($reviewer, $ids, $severities);
-    }
-
-    /**
-     * @return list<TrackedFinding>
-     */
-    private function resolvedIn(ReviewRound $round, FindingLedger $ledger): array
-    {
-        $claimed = array_merge([], ...array_map(static fn (Verdict $verdict): array => $verdict->isFailedReview() ? [] : $verdict->resolved, $this->verdictsOf($round)));
-
-        // The ledger decides, because a claim the ledger refused (a finding reported again in the same round) leaves the finding open.
-        return array_values(array_filter($ledger->all(), static fn (TrackedFinding $tracked): bool => !$tracked->isOpen() && in_array($tracked->id, $claimed, true)));
     }
 
     private function locked(string $project, string $change): ChangeFindings
@@ -229,14 +206,6 @@ final readonly class StoredFindings
     }
 
     /**
-     * @param list<Finding>|list<TrackedFinding> $findings
-     */
-    private function written(array $findings): string
-    {
-        return $this->serializer->serialize($findings, JsonEncoder::FORMAT);
-    }
-
-    /**
      * @return list<Finding>
      */
     private function findingsIn(?string $json): array
@@ -258,9 +227,32 @@ final readonly class StoredFindings
         return $this->ledgerOf($stored);
     }
 
+    // Each id keeps the severity this reviewer gave it, because another reviewer may repeat the same tracked finding at another one; the ledger returns one id per reported finding, in order, and the higher severity stands where a reviewer reports one id twice.
+    private function reportedBy(RoundReviewer $reviewer, FindingLedger $ledger, int $number): ReportedFindings
+    {
+        $verdict = $this->verdictOf($reviewer);
+        $ids = $ledger->recordVerdict($number, $verdict);
+        $severities = [];
+
+        foreach ($ids as $index => $id) {
+            $severity = $verdict->findings[$index]->severity->value;
+            $severities[$id] = min($severities[$id] ?? $severity, $severity);
+        }
+
+        return new ReportedFindings($reviewer, $ids, $severities);
+    }
+
     private function ledgerOf(ChangeFindings $stored): FindingLedger
     {
         return new FindingLedger($this->trackedIn($stored));
+    }
+
+    /**
+     * @param list<Finding>|list<TrackedFinding> $findings
+     */
+    private function written(array $findings): string
+    {
+        return $this->serializer->serialize($findings, JsonEncoder::FORMAT);
     }
 
     /**
@@ -272,14 +264,6 @@ final readonly class StoredFindings
     }
 
     /**
-     * @return list<Verdict>
-     */
-    private function verdictsOf(ReviewRound $round): array
-    {
-        return array_map($this->verdictOf(...), $this->answeredIn($round));
-    }
-
-    /**
      * @return list<RoundReviewer>
      */
     private function answeredIn(ReviewRound $round): array
@@ -287,8 +271,28 @@ final readonly class StoredFindings
         return array_values(array_filter($round->reviewers(), static fn (RoundReviewer $reviewer): bool => null !== $reviewer->verdictJson()));
     }
 
+    /**
+     * @return list<TrackedFinding>
+     */
+    private function resolvedIn(ReviewRound $round, FindingLedger $ledger): array
+    {
+        $claimed = array_merge([], ...array_map(static fn (Verdict $verdict): array => $verdict->isFailedReview() ? [] : array_map(static fn (ResolvedFinding $resolved): string => $resolved->id, $verdict->resolved), $this->verdictsOf($round)));
+
+        // The ledger decides, because a claim the ledger refused (a finding reported again in the same round) leaves the finding open.
+        return array_values(array_filter($ledger->all(), static fn (TrackedFinding $tracked): bool => !$tracked->isOpen() && in_array($tracked->id, $claimed, true)));
+    }
+
+    /**
+     * @return list<Verdict>
+     */
+    private function verdictsOf(ReviewRound $round): array
+    {
+        return array_map($this->verdictOf(...), $this->answeredIn($round));
+    }
+
     private function verdictOf(RoundReviewer $reviewer): Verdict
     {
-        return $this->serializer->deserialize((string) $reviewer->verdictJson(), Verdict::class, JsonEncoder::FORMAT);
+        // Read as the reviewer's answer format, because a stored round holds the JSON that format defines.
+        return $this->serializer->deserialize((string) $reviewer->verdictJson(), ReviewerAnswer::class, JsonEncoder::FORMAT)->toVerdict();
     }
 }

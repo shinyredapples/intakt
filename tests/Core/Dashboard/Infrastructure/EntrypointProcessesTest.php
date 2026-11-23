@@ -36,35 +36,6 @@ final class EntrypointProcessesTest extends TestCase
     /** @var array<string, false|string> */
     private array $environment;
 
-    protected function setUp(): void
-    {
-        // The entrypoint is started per test, not per class, because each test kills, stops or restarts its processes and so cannot share them.
-        $this->directory = sys_get_temp_dir().'/intakt-entrypoint-'.bin2hex(random_bytes(6));
-        new Filesystem()->mkdir($this->directory);
-        $this->environment = [
-            'PATH' => $this->standInPrograms().':'.getenv('PATH'),
-            // In the test's folder, because every start removes the cache it builds again, and this one runs in the checkout.
-            'APP_CACHE_DIR' => $this->directory.'/cache',
-            'APP_BUILD_DIR' => false,
-            'MESSENGER_CONSUMERS' => '2',
-            'WORKER_MEMORY_CEILING_MB' => '256',
-            'APP_SECRET' => self::SECRET,
-            'MERCURE_JWT_SECRET' => self::SECRET,
-            'MERCURE_JWT_ISSUER' => 'http://localhost',
-        ];
-    }
-
-    protected function tearDown(): void
-    {
-        // Longer than the entrypoint's grace period, so it ends its children itself and none outlives the test.
-        $this->entrypoint->stop(15);
-        // Killed here because an entrypoint with the defect the forced-order test proves absent ends without stopping this child, which would otherwise outlive the test.
-        foreach ($this->childrenStartedBeforeTheStop() as $pid) {
-            posix_kill($pid, self::KILL);
-        }
-        new Filesystem()->remove($this->directory);
-    }
-
     public function testTheConsumersAndTheSchedulerRunBesideTheWebServerAlsoWithPlainPhp(): void
     {
         $this->startEntrypoint();
@@ -211,6 +182,35 @@ final class EntrypointProcessesTest extends TestCase
         self::assertStringNotContainsString('started:', $this->entrypoint->getErrorOutput());
     }
 
+    protected function setUp(): void
+    {
+        // The entrypoint is started per test, not per class, because each test kills, stops or restarts its processes and so cannot share them.
+        $this->directory = sys_get_temp_dir().'/intakt-entrypoint-'.bin2hex(random_bytes(6));
+        new Filesystem()->mkdir($this->directory);
+        $this->environment = [
+            'PATH' => $this->standInPrograms().':'.getenv('PATH'),
+            // In the test's folder, because every start removes the cache it builds again, and this one runs in the checkout.
+            'APP_CACHE_DIR' => $this->directory.'/cache',
+            'APP_BUILD_DIR' => false,
+            'MESSENGER_CONSUMERS' => '2',
+            'WORKER_MEMORY_CEILING_MB' => '256',
+            'APP_SECRET' => self::SECRET,
+            'MERCURE_JWT_SECRET' => self::SECRET,
+            'MERCURE_JWT_ISSUER' => 'http://localhost',
+        ];
+    }
+
+    protected function tearDown(): void
+    {
+        // Longer than the entrypoint's grace period, so it ends its children itself and none outlives the test.
+        $this->entrypoint->stop(15);
+        // Killed here because an entrypoint with the defect the forced-order test proves absent ends without stopping this child, which would otherwise outlive the test.
+        foreach ($this->childrenStartedBeforeTheStop() as $pid) {
+            posix_kill($pid, self::KILL);
+        }
+        new Filesystem()->remove($this->directory);
+    }
+
     /**
      * @param list<string>          $command
      * @param array<string, string> $environment
@@ -250,16 +250,6 @@ final class EntrypointProcessesTest extends TestCase
         return $programs;
     }
 
-    /**
-     * @return list<int>
-     */
-    private function childrenStartedBeforeTheStop(): array
-    {
-        $noted = @file_get_contents($this->childrenStartedBeforeTheStopFile());
-
-        return is_string($noted) ? array_values(array_map(intval(...), array_filter(explode("\n", $noted), static fn (string $line): bool => '' !== $line))) : [];
-    }
-
     private function childrenStartedBeforeTheStopFile(): string
     {
         return $this->directory.'/children-started-before-the-stop';
@@ -274,6 +264,16 @@ final class EntrypointProcessesTest extends TestCase
         }
 
         self::assertFalse($this->entrypoint->isRunning(), sprintf('The entrypoint still runs %d seconds after SIGTERM, with %d children left.', $seconds, count(array_filter($this->childrenStartedBeforeTheStop(), static fn (int $pid): bool => file_exists('/proc/'.$pid)))));
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function childrenStartedBeforeTheStop(): array
+    {
+        $noted = @file_get_contents($this->childrenStartedBeforeTheStopFile());
+
+        return is_string($noted) ? array_values(array_map(intval(...), array_filter(explode("\n", $noted), static fn (string $line): bool => '' !== $line))) : [];
     }
 
     /**
@@ -302,17 +302,6 @@ final class EntrypointProcessesTest extends TestCase
         self::fail('The entrypoint did not start every process: '.$this->entrypoint->getOutput().$this->entrypoint->getErrorOutput());
     }
 
-    private function waitForErrorOutput(string $line, int $times): void
-    {
-        $deadline = hrtime(true) + self::SECONDS_TO_WAIT * 1_000_000_000;
-
-        while (hrtime(true) < $deadline && substr_count($this->entrypoint->getErrorOutput(), $line) < $times) {
-            usleep(10_000);
-        }
-
-        self::assertGreaterThanOrEqual($times, substr_count($this->entrypoint->getErrorOutput(), $line), $this->entrypoint->getErrorOutput());
-    }
-
     /**
      * @param list<int> $pids
      *
@@ -326,6 +315,17 @@ final class EntrypointProcessesTest extends TestCase
         $order->mustRun();
 
         return array_values(array_diff(array_map(intval(...), explode("\n", trim($order->getOutput()))), [$web]));
+    }
+
+    private function waitForErrorOutput(string $line, int $times): void
+    {
+        $deadline = hrtime(true) + self::SECONDS_TO_WAIT * 1_000_000_000;
+
+        while (hrtime(true) < $deadline && substr_count($this->entrypoint->getErrorOutput(), $line) < $times) {
+            usleep(10_000);
+        }
+
+        self::assertGreaterThanOrEqual($times, substr_count($this->entrypoint->getErrorOutput(), $line), $this->entrypoint->getErrorOutput());
     }
 
     /**

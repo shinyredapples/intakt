@@ -15,6 +15,11 @@ final readonly class PhpComments implements CommentLanguage
         return self::LINE_SYNTAX;
     }
 
+    public function holdsPhpCode(): bool
+    {
+        return true;
+    }
+
     public function commentsIn(string $source): array
     {
         $comments = [];

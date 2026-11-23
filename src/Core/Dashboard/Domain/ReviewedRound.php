@@ -6,6 +6,7 @@ namespace Intakt\Core\Dashboard\Domain;
 
 use DateTimeImmutable;
 use Intakt\Core\Budget\Contract\Cost;
+use Intakt\Core\Review\Contract\ChangeAddress;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\ReplayMark;
@@ -137,14 +138,14 @@ final readonly class ReviewedRound
         return count(array_filter($this->outcomes, static fn (ReviewerOutcome $outcome): bool => ReviewerProgress::Failed === $outcome->progress));
     }
 
-    // A round without a change name has no siblings it could be told apart from, so it stands alone.
+    // A round without a change name has no siblings it could be told apart from, so it stands alone. Compared in the canonical form, because the append-only start rows of a pull request's older rounds may keep another spelling than its newer ones.
     public function isOfTheSameReviewAs(self $other): bool
     {
         if ('' === $this->change || '' === $other->change) {
             return $this->round === $other->round;
         }
 
-        return $this->project === $other->project && $this->change === $other->change;
+        return $this->project === $other->project && ChangeAddress::sameChange($this->change, $other->change);
     }
 
     /**

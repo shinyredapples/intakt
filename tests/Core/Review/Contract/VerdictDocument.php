@@ -25,6 +25,7 @@ final readonly class VerdictDocument
                 'text' => '...', 'fixable_by' => 'builder', 'repeat' => false, 'requirement' => '...',
                 'evidence' => ['probe' => '...', 'output' => '...'],
                 'regression' => false,
+                'gate_gap' => false,
             ],
         );
     }

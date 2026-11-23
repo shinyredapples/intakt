@@ -22,6 +22,7 @@ final readonly class SigningKey
         #[Autowire(param: GitServices::SIGNING_KEY)]
         private string $file,
         private Filesystem $filesystem,
+        private GuardedRun $guardedRun,
         private float $timeoutSeconds = 60,
     ) {
     }
@@ -55,7 +56,7 @@ final readonly class SigningKey
             $check = new Process([self::PROGRAM, '-Y', 'verify', '-f', $allowed, '-I', self::PRINCIPAL, '-n', self::NAMESPACE, '-s', $signatureFile], null, null, $payload, $this->timeoutSeconds);
 
             // A check that was stopped proves nothing about the signature, so it stops the push instead of answering false.
-            return GuardedRun::of($check, self::PROGRAM)->isSuccessful();
+            return $this->guardedRun->run($check, self::PROGRAM)->isSuccessful();
         } finally {
             $this->filesystem->remove([$allowed, $signatureFile]);
         }
@@ -78,7 +79,7 @@ final readonly class SigningKey
      */
     private function run(array $arguments, ?string $input, string $failure): string
     {
-        $process = GuardedRun::of(new Process([self::PROGRAM, ...$arguments], null, ['SSH_ASKPASS' => false, 'SSH_ASKPASS_REQUIRE' => 'never'], $input, $this->timeoutSeconds), self::PROGRAM);
+        $process = $this->guardedRun->run(new Process([self::PROGRAM, ...$arguments], null, ['SSH_ASKPASS' => false, 'SSH_ASKPASS_REQUIRE' => 'never'], $input, $this->timeoutSeconds), self::PROGRAM);
 
         // Not the error output, because it can name the key's path.
         return $process->isSuccessful() ? $process->getOutput() : throw BranchNotPushed::because($failure);

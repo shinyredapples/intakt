@@ -14,21 +14,6 @@ final class CompiledContainersTest extends TestCase
 
     private bool $cacheWasSet = false;
 
-    protected function setUp(): void
-    {
-        $this->cacheWasSet = array_key_exists('APP_CACHE_DIR', $_SERVER);
-        $this->cacheBefore = $_SERVER['APP_CACHE_DIR'] ?? null;
-    }
-
-    protected function tearDown(): void
-    {
-        unset($_SERVER['APP_CACHE_DIR']);
-
-        if ($this->cacheWasSet) {
-            $_SERVER['APP_CACHE_DIR'] = $this->cacheBefore;
-        }
-    }
-
     public function testTheSharedCacheSetBeforeComesBack(): void
     {
         $_SERVER['APP_CACHE_DIR'] = 'var/cache/shared';
@@ -49,5 +34,20 @@ final class CompiledContainersTest extends TestCase
         $containers->restoreTheSharedCache();
 
         self::assertArrayNotHasKey('APP_CACHE_DIR', $_SERVER);
+    }
+
+    protected function setUp(): void
+    {
+        $this->cacheWasSet = array_key_exists('APP_CACHE_DIR', $_SERVER);
+        $this->cacheBefore = $_SERVER['APP_CACHE_DIR'] ?? null;
+    }
+
+    protected function tearDown(): void
+    {
+        unset($_SERVER['APP_CACHE_DIR']);
+
+        if ($this->cacheWasSet) {
+            $_SERVER['APP_CACHE_DIR'] = $this->cacheBefore;
+        }
     }
 }

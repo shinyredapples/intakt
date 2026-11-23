@@ -42,7 +42,7 @@ Building changes, merging, the budget planner beyond recording cost, subscriptio
 
 ## Acceptance at the deadline
 
-1. On a clean machine with Docker, `git clone`, adding one API key to `.env.local` and `docker compose up` gives a running dashboard with the sample pull request in under five minutes, measured and recorded in the README.
+1. On a clean machine with Docker, `git clone`, adding one API key to `.env.local` and `docker compose up` gives a running dashboard with the sample pull request in under five minutes, measured and recorded on [the bench page](bench.md#timed-run) (the measured runs start from a fresh `git archive` of main; the step-for-step fresh-clone run is D3 of #2164).
 2. A review of the sample pull request with a two-reviewer panel on models of two different AI labs produces schema-valid verdicts, a judge result and a cost line, visible live on the dashboard.
 3. A second round on a fixed head keeps the finding ids, marks fixed findings resolved and refuses unanchored new blocking findings.
 4. An MCP client (for example an agent CLI) connected to Intakt's MCP server can start that review and read the findings to act on.

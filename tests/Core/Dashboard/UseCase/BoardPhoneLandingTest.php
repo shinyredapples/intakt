@@ -160,6 +160,20 @@ final class BoardPhoneLandingTest extends DashboardPageTestCase
         self::assertResponseRedirects('/waiting', Response::HTTP_SEE_OTHER);
     }
 
+    public function testADoneReviewWithABuildInFlightKeepsThePhoneOnWaitingOnYouWithoutReadingTheNotices(): void
+    {
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+        $this->ledger->judgeRound('round-1');
+        $this->ledger->passBuildStep('alpha', 'task-7', 'build_job');
+        $notices = $this->createMock(OwnerNotices::class);
+        $notices->expects(self::never())->method('stillRunningOldestFirst');
+        self::getContainer()->set(OwnerNotices::class, $notices);
+
+        $this->browser->request('GET', '/', server: ['HTTP_USER_AGENT' => self::IPHONE_SAFARI]);
+
+        self::assertResponseRedirects('/waiting', Response::HTTP_SEE_OTHER);
+    }
+
     public function testAQuietInstallStillShowsTheBoardOnADesktop(): void
     {
         $this->ledger->startRoundOf('42', 'round-1', 1);

@@ -68,8 +68,9 @@ a.card:hover { background: var(--tint-2); }
 a.card.needs:hover, .card.needs.is-hover { filter: brightness(.98); }
 .card.is-hover { background: var(--tint-2); }
 .card.needs.is-hover { background: var(--amber-tint); }
-.card .top { display: flex; align-items: center; gap: var(--s8); margin-bottom: var(--s4); color: var(--muted); font-size: var(--t13); }
-/* A change named like a branch is as long as a title; it gives way to the project name, which keeps up to 60%. */
+/* The Replay chip wraps to its own line in a narrow column, because beside the change and project it squeezed the change to nothing. */
+.card .top { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s4) var(--s8); margin-bottom: var(--s4); color: var(--muted); font-size: var(--t13); }
+/* A change named like a branch is as long as a title; it is cut with an ellipsis, and the project name wraps below it when both do not fit one line. */
 .card .top .num { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .card .top .pname { flex: none; margin-left: auto; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .card .title {
@@ -184,7 +185,7 @@ a.card.needs:hover, .card.needs.is-hover { filter: brightness(.98); }
 .subtabs a[aria-current="page"] { border-bottom-color: var(--primary); color: var(--ink); }
 
 /* Segmented tabs and filter chips. The mock spaces the tabs 20 px below and pads a tab 14 px, which have no step, so tokens only (D2) wins with --s16 and --s12. */
-.seg { display: inline-flex; margin-bottom: var(--s16); padding: 3px; border-radius: var(--r-btn); background: var(--tint); }
+.seg { display: inline-flex; margin-bottom: var(--s16); padding: var(--seg-pad); border-radius: var(--r-btn); background: var(--tint); }
 .seg button {
   height: 34px; padding: 0 var(--s12); border: 0; border-radius: var(--r-chip); background: none;
   color: var(--muted); font: 500 var(--t13)/1 var(--f-head); cursor: pointer;
@@ -219,6 +220,9 @@ a.card.needs:hover, .card.needs.is-hover { filter: brightness(.98); }
   font: 400 var(--t13)/1.4 var(--f-body); pointer-events: none;
 }
 .term:hover .term-tip, .term:focus .term-tip { display: block; }
+/* No dotted underline and the text's own size, because the "?" already marks the word as explained and the UI check counts text under 15 px at 390 wide. */
+.term-ask { text-decoration: none; }
+.term-ask .term-q { margin-left: var(--s4); padding: 0 .35em; border: 1px solid var(--hairline); border-radius: 999px; color: var(--muted); font-weight: 600; }
 
 /* Figure kinds */
 .figure-kind {
@@ -250,7 +254,9 @@ a.card.needs:hover, .card.needs.is-hover { filter: brightness(.98); }
 .empty > .character { margin-bottom: var(--s16); }
 .col-empty { margin: 0; padding: var(--s8) 2px; color: var(--muted); font-size: var(--t13); }
 
-/* Board: the nine columns side by side, scrolled sideways where they do not fit (docs/design/mocks/index.html). */
+/* Board: its columns side by side, scrolled sideways where they do not fit (docs/design/mocks/index.html). */
+/* Wraps, because the names of six columns are wider than a phone. */
+.coming-next { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s8); margin: 0 0 var(--s16); color: var(--muted); font-size: var(--t15); }
 .content.wide { max-width: none; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 /* Positioned, because an absolute .sr-only label in a folded strip past the edge otherwise escapes the scroller and widens the page. */
@@ -298,7 +304,7 @@ a.card.needs:hover, .card.needs.is-hover { filter: brightness(.98); }
   .icon-btn { width: 44px; height: 44px; }
   .fchip { flex: none; height: 44px; }
   .seg { display: flex; }
-  .seg button { flex: 1; height: 44px; }
+  .seg button { flex: 1; height: var(--tab-h); }
   .input, .select { height: 48px; }
   .stepper button { width: 48px; height: 46px; }
   .copy { flex-wrap: wrap; padding: calc(var(--s8) + 2px); }
@@ -322,6 +328,8 @@ a.card.needs:hover, .card.needs.is-hover { filter: brightness(.98); }
   .conn { flex-wrap: wrap; }
   .topbar .offline-marker { display: none; }
   .subtabs a, .row .t a, .ledger td a { display: inline-flex; align-items: center; min-height: 44px; }
+  /* A term with its "?" is a control a reader taps for the explanation, so it takes the 44 px floor too. */
+  .term-ask { display: inline-flex; align-items: center; min-height: 44px; }
   /* A term on a meta line is focusable and stands alone, not in a sentence, so it is a control and takes the 44 px floor. */
   .meta .term { min-height: 44px; }
   .toast { right: var(--s16); bottom: calc(var(--bar) + var(--s16) + env(safe-area-inset-bottom)); left: var(--s16); justify-content: space-between; transform: none; animation-name: toast-in-phone; }
@@ -350,6 +358,7 @@ details[open] > summary .chev { transform: rotate(180deg); }
 .rail .nav { display: flex; align-items: center; gap: var(--s12); width: 100%; height: 40px; padding: 0 var(--s12); border: 0; border-radius: var(--r-btn); background: none; color: var(--ink); font: 500 var(--t15)/1 var(--f-head); text-align: left; text-decoration: none; cursor: pointer; }
 .rail .nav:hover { background: var(--tint); }
 .rail .nav[aria-current="page"] { background: var(--selected); }
+.rail .nav .count { margin-left: auto; }
 .rail .spacer { flex: 1; }
 .logo-dark { display: none; }
 [data-theme="dark"] .logo-light { display: none; }
@@ -367,6 +376,8 @@ details[open] > summary .chev { transform: rotate(180deg); }
 [data-rail="collapsed"] .rail .brand .mark { display: block; }
 [data-rail="collapsed"] .rail .nav { justify-content: center; padding: 0; }
 [data-rail="collapsed"] .rail .collapse svg { transform: scaleX(-1); }
+[data-rail="collapsed"] .rail .nav { position: relative; }
+[data-rail="collapsed"] .rail .nav .count { position: absolute; top: 0; right: 0; min-width: 18px; height: 18px; padding: 0 var(--s4); }
 .main { display: flex; flex-direction: column; min-width: 0; }
 .topbar { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: var(--s12); height: var(--top); padding: 0 var(--s32); border-bottom: 1px solid var(--hairline); background: var(--page); }
 .topbar .grow { flex: 1; }
@@ -400,6 +411,9 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
   .rail .nav, [data-rail="collapsed"] .rail .nav { flex: 1; flex-direction: column; justify-content: center; gap: var(--s4); min-width: 0; height: 56px; padding: var(--s4) 2px; }
   .rail .nav.more { display: flex; }
   .rail .nav .label, [data-rail="collapsed"] .rail .nav .label { display: block; white-space: nowrap; }
+  /* Over the icon's corner, as a phone's tab badge sits, so the label keeps its line. */
+  .rail .nav { position: relative; }
+  .rail .nav .count, [data-rail="collapsed"] .rail .nav .count { position: absolute; top: var(--s4); left: calc(50% + var(--s4)); right: auto; margin: 0; }
   .topbar { gap: var(--s8); padding: 0 var(--s12); }
   .topbar .brand-m { display: flex; align-items: center; min-height: 44px; }
   .topbar .brand-m img { width: auto; height: 26px; }
@@ -512,6 +526,8 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
   .headline-short { display: inline; }
   /* The first-day headline is a link alone in its line, so no sentence exempts it from the phone's 44 px touch target (DESIGN.md). */
   .page-head .lead .headline-setup { display: inline-block; min-height: 44px; }
+  /* The running headline is a link alone in its line too, since the line no longer goes on to what waits (UX2 home, issue 3326). */
+  .page-head .lead .headline-run { display: inline-block; min-height: 44px; }
 }
 
 /* The pages' sections, data tables (the mocks' .ledger), the failing-head cards and the live log of a running review. */
@@ -622,11 +638,24 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
 .fc-body p { margin: 0; }
 .fc-place, .fc-call, .fc-merged { color: var(--muted); font-size: var(--t13); }
 .fc-call { font-weight: 600; }
+/* A dropped card's quotes stay behind a closed disclosure, because most readers only need the one line that says why the judge never saw it. */
+.fc-quotes { font-size: var(--t13); }
+.fc-quotes > summary { display: inline-flex; align-items: center; gap: var(--s4); cursor: pointer; color: var(--link); font: 500 var(--t13)/1 var(--f-head); padding: var(--s4) 0; }
+.fc-quote-list { list-style: none; margin: var(--s4) 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--s4) var(--s8); }
+/* A counted quote may wrap onto the next line, so its line breaks and indentation stay as the check read them, while a long one still wraps on a phone. */
+.fc-quote-list code { white-space: pre-wrap; overflow-wrap: anywhere; }
+/* A quote with nearest lines takes the whole row, because its lines sit under it and beside another quote they would be too narrow to read. */
+.fc-quote-list > li:has(.fc-near-lines) { flex-basis: 100%; }
+.fc-near-lines { list-style: none; margin: var(--s4) 0 0; padding: 0 0 0 var(--s8); border-left: 2px solid var(--hairline); display: grid; gap: var(--s4); }
+.fc-near-place { color: var(--muted); margin-right: var(--s4); }
+.fc-unchecked, .fc-reason { color: var(--muted); }
+.fc-quotes > p + p { margin-top: var(--s4); }
 @media (max-width: 760px) {
   .sb-finding { min-height: 44px; }
+  .fc-quotes > summary { min-height: 44px; }
   .finding-card { flex-wrap: wrap; }
-  /* The Timeline and Live log switch sticks under the top bar too, measured 66 px tall at 390 wide, because a card hidden under it reads as a link that went nowhere. */
-  .ttabs ~ .task-grid .finding-card { scroll-margin-top: calc(var(--top) + 66px + var(--s16)); }
+  /* The Timeline and Live log switch sticks under the top bar too, because a card hidden under it reads as a link that went nowhere; its height is added up from the same values the switch is drawn with, so the offset follows when one of them changes. */
+  .ttabs ~ .task-grid .finding-card { scroll-margin-top: calc(var(--top) + var(--tab-h) + 2 * var(--seg-pad) + 2 * var(--ttabs-pad) + var(--s16)); }
   .fc-body { flex-basis: 100%; }
 }
 .timeline-title { margin: var(--s32) 0 var(--s8); }
@@ -689,7 +718,7 @@ details.ev > summary time { margin-left: auto; color: var(--muted); font-size: v
   .page-head .task-actions { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s8); width: 100%; margin-left: 0; }
   .task-actions > .start-review { grid-column: 1 / -1; }
   .task-actions .btn { width: 100%; }
-  .ttabs { display: flex; position: sticky; top: var(--top); z-index: 10; margin: 0 calc(-1 * var(--s16)) var(--s16); padding: var(--s8) var(--s16); background: var(--page); }
+  .ttabs { display: flex; position: sticky; top: var(--top); z-index: 10; margin: 0 calc(-1 * var(--s16)) var(--s16); padding: var(--ttabs-pad) var(--s16); background: var(--page); }
   .ttabs .seg { width: 100%; margin: 0; }
   .task-grid { gap: 0; }
   .task-grid[data-pane="timeline"] .log-pane, .task-grid[data-pane="log"] .tl-pane { display: none; }
@@ -697,19 +726,23 @@ details.ev > summary time { margin-left: auto; color: var(--muted); font-size: v
   .log { margin-top: 0; }
 }
 
-/* Who is working */
+/* Status line and the Status page's lanes */
 .working { margin: var(--s24) 0 var(--s32); }
-.working summary { display: flex; align-items: center; gap: var(--s12); min-height: 44px; padding: 0 var(--s16); border-radius: var(--r-card); background: var(--tint); cursor: pointer; }
-.working summary:hover { background: var(--tint-2); }
-.w-title { font: 600 var(--t15)/1.3 var(--f-head); }
-.w-dots { display: inline-flex; gap: var(--s4); }
-.w-sum { color: var(--muted); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.working[open] summary { margin-bottom: var(--s8); }
+/* Quiet on purpose: one muted line that links to the Status page, never a strip that opens. */
+.status-line { display: flex; align-items: center; gap: var(--s12); min-height: 44px; margin: var(--s16) 0 var(--s24); padding: 0 var(--s16); border-radius: var(--r-card); background: var(--tint); color: var(--muted); text-decoration: none; }
+.status-line:hover { background: var(--tint-2); }
+.status-line .grow { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.status-line > .i:first-child { color: var(--primary); }
+.status-line .go { transform: rotate(-90deg); }
 /* No tint and no hover, so a line with nothing to open does not look like a strip that opens. */
 .working-none { display: flex; align-items: center; min-height: 44px; padding: 0 var(--s16); color: var(--muted); }
 .lanes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s8); }
-.lane { padding: var(--s12) var(--s16); border-radius: var(--r-card); background: var(--tint); display: grid; gap: var(--s4); min-width: 0; align-content: start; }
-.lane .who { display: flex; align-items: center; gap: var(--s8); font: 500 var(--t13)/1.3 var(--f-head); color: var(--muted); }
+/* A lane links to its round's review page, so it reads and answers the pointer like a card, not like link text; one column no wider than the lane, because an auto column grows to its longest unbreakable word and pushes the lane's text into the next lane. */
+.lane { padding: var(--s12) var(--s16); border-radius: var(--r-card); background: var(--tint); display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s4); min-width: 0; align-content: start; color: var(--ink); text-decoration: none; }
+a.lane:hover { background: var(--tint-2); }
+.lane .meta span { white-space: normal; overflow-wrap: anywhere; }
+/* Wraps, because in a narrow lane the fixed-size character leaves too little room for the role and the start time on one line. */
+.lane .who { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s4) var(--s8); min-width: 0; overflow-wrap: anywhere; font: 500 var(--t13)/1.3 var(--f-head); color: var(--muted); }
 .lane .who .elapsed { margin-left: auto; font-family: var(--f-body); }
 .lane .what { font-size: var(--t15); overflow-wrap: anywhere; }
 @media (min-width: 1700px) {
@@ -717,37 +750,120 @@ details.ev > summary time { margin-left: auto; color: var(--muted); font-size: v
 }
 @media (max-width: 760px) {
   .working { margin: var(--s16) 0 var(--s24); }
-  .working summary { min-height: 48px; }
+  .status-line { min-height: 48px; margin: var(--s12) 0 var(--s16); }
   .working-none { min-height: 48px; }
-  .w-dots { display: none; }
   .lanes { grid-template-columns: minmax(0, 1fr); }
 }
 
-/* The demo caption sits in the main column after the content, sticky at the bottom, so it stays in view without covering the end of a page. */
+/* Board: Needs you and Working now (UX2 home) */
+/* The one amber card of the page, because it is the only thing on it that asks something of the owner. Sentence case like every label, no tracked capitals (DESIGN.md). */
+.needs-you { display: flex; align-items: center; gap: var(--s16); margin: var(--s24) 0 0; padding: var(--s16); border: 1px solid color-mix(in srgb, var(--amber) 45%, transparent); border-radius: var(--r-overlay); background: var(--amber-tint); color: var(--ink); text-decoration: none; }
+.needs-you:hover { filter: brightness(.98); }
+.needs-you .character { width: 96px; height: 96px; }
+.needs-you .grow { display: grid; flex: 1; min-width: 0; gap: var(--s4); }
+.needs-you .kicker { color: var(--muted); font: 700 var(--t13)/1.3 var(--f-body); }
+.needs-you .decisions { font: 600 var(--t28)/1.15 var(--f-head); }
+.needs-you .go { flex: none; transform: rotate(-90deg); }
+/* The octopus appears once per page, so the board's own octopus steps aside while Needs you conducts; a sibling rule, because a pushed board replaces that octopus without knowing about the card. */
+.needs-you ~ #board-octopus .character, .needs-you ~ #board-octopus.asleep { display: none; }
+.working > h2 { margin: 0 0 var(--s12); font: 600 var(--t21)/1.3 var(--f-head); }
+.w-count { color: var(--muted); font-weight: 400; }
+.w-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: var(--s12); }
+.wcard { display: grid; gap: var(--s4); min-width: 0; }
+.wcard-head { display: flex; align-items: flex-start; gap: var(--s8); }
+.wcard-head .grow { display: grid; flex: 1; min-width: 0; }
+.wcard-title { font: 600 var(--t17)/1.3 var(--f-head); overflow-wrap: anywhere; }
+.wcard .meta span { overflow-wrap: anywhere; }
+/* The path: the role stands on the current step (orange ring, bold label), done steps are filled, later ones outlined. The ring is the one amber outside Needs you, by the owner's UX2 decision, so the amber audit names it. */
+.path { position: relative; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); margin: 0; padding: calc(var(--s48) + var(--s12)) 0 0; list-style: none; }
+.path li { position: relative; padding-top: calc(var(--s24) - 2px); color: var(--muted); font-size: var(--t13); text-align: center; }
+.path li::before { content: ""; position: absolute; top: 5px; left: -50%; right: 50%; height: 3px; background: var(--hairline); }
+.path li:first-child::before { display: none; }
+.path li::after { content: ""; position: absolute; top: 0; left: calc(50% - 7px); width: 14px; height: 14px; box-sizing: border-box; border: 3px solid var(--hairline); border-radius: 50%; background: var(--raised); }
+.path li.done, .path li.now { color: var(--ink); }
+.path li.done::before, .path li.now::before { background: var(--primary); }
+.path li.done::after { border-color: var(--primary); background: var(--primary); }
+.path li.now { font-weight: 700; }
+.path li.now::after { top: -2px; left: calc(50% - 9px); width: 18px; height: 18px; border-color: var(--amber); box-shadow: 0 0 0 2px color-mix(in srgb, var(--amber) 30%, transparent); }
+.path .who { position: absolute; bottom: calc(100% - 4px); left: 50%; display: flex; transform: translateX(-50%); }
+.path .who .character { width: 56px; height: 56px; }
+.path .who.duo .character { width: 44px; height: 44px; }
+/* The only motion of the page: the role fades in on its step. */
+@media (prefers-reduced-motion: no-preference) {
+  .path .who { animation: who-arrives .4s ease-out 1; }
+  @keyframes who-arrives { from { opacity: 0; } to { opacity: 1; } }
+}
+@media (min-width: 1024px) {
+  .needs-you { padding: var(--s24); }
+  .needs-you .character { width: 144px; height: 144px; }
+}
+@media (max-width: 760px) {
+  .needs-you { margin-top: var(--s16); }
+  .w-cards { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* The demo caption sits in the main column after the content, sticky at the bottom, so it stays in view without covering the end of a page. Progress is dots. */
 .tour-caption {
   position: sticky; bottom: 0; z-index: 15; display: flex; align-items: center; gap: var(--s12); margin-top: auto;
   padding: var(--s12) var(--s32); border-top: 1px solid var(--hairline); background: var(--raised);
 }
-.tour-caption .tour-count { flex: none; font: 500 var(--t13)/1.3 var(--f-head); color: var(--muted); white-space: nowrap; }
-.tour-caption .tour-line { flex: 1; margin: 0; min-width: 0; }
+.tour-caption .tour-dots { flex: none; display: flex; gap: var(--s4); }
+.tour-caption .tour-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--hairline); }
+.tour-caption .tour-dot.done { background: var(--muted); }
+.tour-caption .tour-dot.now { width: 20px; border-radius: 4px; background: var(--primary); }
+.tour-caption .tour-line { flex: 1; margin: 0; min-width: 0; font-weight: 600; }
 .tour-caption .tour-review { flex: none; white-space: nowrap; }
 [data-tour="closed"] .tour-caption { display: none; }
+/* One row of 44 px on a phone: the dots become a bar along its top edge, the line links to the review and Close stays; Pause is for a desk. While it shows, the tab bar is 56 px with 48 px tabs, so the two together stay at 100 px above the safe area. */
 @media (max-width: 760px) {
-  .tour-caption { bottom: calc(var(--bar) + env(safe-area-inset-bottom)); flex-wrap: wrap; padding: var(--s8) var(--s16); }
-  .tour-caption .tour-line { flex-basis: 100%; order: -1; }
+  :root:has(.tour-caption):not([data-tour="closed"]) { --bar: 56px; }
+  :root:has(.tour-caption):not([data-tour="closed"]) .rail .nav { height: 48px; }
+  .tour-caption { bottom: calc(var(--bar) + env(safe-area-inset-bottom)); gap: var(--s8); min-height: 44px; padding: 0 0 0 var(--s16); border-top: 0; }
+  .tour-caption .tour-dots { position: absolute; top: -1px; left: 0; right: 0; gap: 2px; }
+  .tour-caption .tour-dot, .tour-caption .tour-dot.now { flex: 1; width: auto; height: 3px; border-radius: 0; }
+  .tour-caption .tour-line { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: var(--t15); line-height: 1.3; }
+  /* Unclamped while it names reviewers, because a clamp would cut a model or its AI lab off the end. */
+  .tour-caption .tour-line:has(.tour-reviewers) { display: block; overflow: visible; padding: var(--s8) 0; }
+  .tour-caption .tour-review { position: absolute; inset: 0; }
+  /* Clipped like .sr-only rather than drawn at 0 px, so the link keeps its name without a text too small to read. */
+  .tour-caption .tour-review span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .tour-caption [data-tour-pause] { display: none; }
+  .tour-caption [data-tour-close] { position: relative; z-index: 1; flex: none; min-width: 44px; }
 }
 
-/* Trends: stat tiles, the figure big above its label; two per row on a phone (decisions D2 and D7 of issue 2858). */
-.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(208px, 1fr)); gap: var(--s12); margin: 0; }
-.tile { display: flex; flex-direction: column-reverse; justify-content: flex-end; gap: var(--s4); padding: var(--s12) var(--s16); border-radius: var(--r-card); background: var(--tint); }
-.tile dt { color: var(--muted); font-size: var(--t13); }
+/* Trends: stat tiles first, the figure big above its short label; three per row on a phone so the headline figures fill the first screen (issue 3141). */
+.trends-head { align-items: center; }
+.demo-toggle { display: inline-flex; align-items: center; gap: var(--s4); }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: var(--s12); margin: 0; }
+/* A tile's tip hangs from its own tile, not from its label or the grid: from the label it ran past a phone's right edge, from the grid it opened below the last row, off screen (review of issue 3198). */
+.tile .term { position: static; }
+.tile { position: relative; display: flex; flex-direction: column; justify-content: flex-end; gap: var(--s4); padding: var(--s12) var(--s16); border-radius: var(--r-card); background: var(--tint); }
+.tile dt { order: 2; color: var(--muted); font-size: var(--t13); padding-right: var(--s48); }
+.tile dd { order: 1; }
+.tile .tile-caption { order: 3; margin: 0; color: var(--muted); font: 400 var(--t13)/1.3 var(--f-body); }
+/* The role character sits in the corner at 40 px, 24 px on a phone, where a third of the width leaves no room for more; the label's right padding keeps the text clear of it. */
+.tile .character { position: absolute; top: var(--s8); right: var(--s8); width: 40px; height: 40px; }
+.bench-headline { display: flex; align-items: center; gap: var(--s16); margin: 0 0 var(--s24); }
+.bench-headline > .character { max-height: 96px; width: auto; }
+.bench-result { margin: 0; font: 700 var(--t28)/1.2 var(--f-head); color: var(--ink); }
+.bench-meta { margin: var(--s4) 0 0; color: var(--muted); font-size: var(--t13); }
 .tile dd { margin: 0; color: var(--ink); font: 700 var(--t28)/1.2 var(--f-body); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-.tile[data-no-data] dd { color: var(--muted); font-size: var(--t17); font-weight: 500; }
-.tiles-note { margin: var(--s12) 0 0; font-size: var(--t13); }
-a.fchip { display: inline-flex; align-items: center; text-decoration: none; }
+.tile .term-tip { left: 0; right: 0; width: auto; max-width: none; }
 @media (max-width: 760px) {
-  .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s8); }
+  .tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s8); }
+  .tile { padding: var(--s8) var(--s12); }
   .tile dd { font-size: var(--t21); }
+  .tile dt { padding-right: var(--s16); }
+  .tile .character { width: 24px; height: 24px; top: var(--s4); right: var(--s4); }
+  .bench-headline { gap: var(--s8); }
+  .bench-headline > .character { max-height: 64px; }
+  .bench-result { font-size: var(--t21); }
+  .tile .term { display: inline-flex; align-items: center; min-height: 44px; }
+  /* A third of a phone is too narrow to read a tip, so it spans two columns, opening away from the grid's nearer edge. */
+  .tile .term-tip { right: auto; width: calc(200% + var(--s8)); }
+  .tile:nth-child(3n+2) .term-tip { left: calc(-50% - var(--s8) / 2); }
+  .tile:nth-child(3n) .term-tip { left: auto; right: 0; }
+  .demo-toggle { height: 44px; }
 }
 
 /* Trends charts (issue 2935 adds the per-day pair) as DESIGN.md's Charts (trends) and the mocks' trends page: one hue, hairline grid, small multiples in rows of three; they stack on a phone (issue 2934). */
@@ -757,8 +873,13 @@ a.fchip { display: inline-flex; align-items: center; text-decoration: none; }
 .chart h2 { margin: 0; font-size: var(--t17); }
 .takeaway { margin: var(--s4) 0 var(--s4); color: var(--ink); max-width: 72ch; }
 .takeaway[data-no-data] { color: var(--muted); }
+.chart h2 .figure-kind, .sub-h .figure-kind { vertical-align: 2px; font-weight: 500; }
 .chart-key { margin: 0 0 var(--s12); font-size: var(--t13); max-width: 72ch; }
+.chart-legend { margin: var(--s4) 0 var(--s12); }
+.c-swatch { width: 12px; height: 12px; border-radius: 3px; background: var(--primary); }
+.c-swatch.c-whole { opacity: .35; }
 .multiples { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s16) var(--s32); }
+.multiples.one { grid-template-columns: minmax(0, 1fr); }
 .multiples.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .multiple { margin: 0; min-width: 0; }
 .multiple .sub-h { margin: 0 0 var(--s4); font: 600 var(--t15)/1.3 var(--f-head); }
@@ -787,41 +908,54 @@ a.fchip { display: inline-flex; align-items: center; text-decoration: none; }
   .c-table summary { min-height: 44px; }
 }
 
-/* Waiting on you (DESIGN.md, Waiting item): the choices sit in a 340 px column beside the words only from 1100 px, because the bridge below it is single column and beside an open rail the words would keep about 45 px. */
+/* Waiting on you (UX2): the waiting octopus once at the top, then one card per item with the role who waits, what needs the owner and one tap with a line saying what happens next. Only this page's rules; the frame owns the header and nav. */
+.wait-hero.needs { display: flex; align-items: center; gap: var(--s16); margin-bottom: var(--s16); padding: var(--s16); border: 1px solid var(--hairline); border-radius: var(--r-overlay); background: var(--raised); }
+.wait-hero .character { flex: none; }
+.wait-hero h1 { margin: 2px 0 var(--s4); }
+.wait-hero .lead { margin: 0; color: var(--muted); }
+.wait-kicker { margin: 0; color: var(--muted); font: 700 var(--t13)/1.3 var(--f-head); letter-spacing: .06em; text-transform: uppercase; }
 .wait-list { display: grid; gap: var(--s12); }
 .wait-item {
-  display: grid; grid-template-columns: minmax(0, 1fr) 340px; grid-template-areas: "title act" "meta act" "conseq act" "why act"; grid-template-rows: auto auto auto 1fr;
-  gap: var(--s8) var(--s32); align-items: start; padding: calc(var(--s16) + var(--s4)); border-radius: var(--r-card);
+  display: grid; grid-template-columns: 48px minmax(0, 1fr); grid-template-areas: "char title" "char meta" "conseq conseq" "act act";
+  gap: var(--s4) var(--s12); align-items: center; padding: var(--s16); border: 1px solid var(--hairline); border-radius: var(--r-card); background: var(--raised);
 }
-.wait-item.needs { background: var(--amber-tint); }
-.wait-lead { grid-area: title; display: flex; align-items: baseline; gap: var(--s8); min-width: 0; margin: 0; font: 600 var(--t17)/1.3 var(--f-head); overflow-wrap: anywhere; }
-.wait-lead .dot { position: relative; top: -2px; }
-.wait-item > .meta { grid-area: meta; }
-.wait-item .conseq { grid-area: conseq; margin: var(--s4) 0 0; font-weight: 500; overflow-wrap: anywhere; }
-/* Indented by the dot and its gap, so the lines under the lead start where its words do. */
-.wait-item > .meta, .wait-item .conseq, .wait-item .why { padding-left: calc(8px + var(--s8)); }
-.wait-item .why { grid-area: why; max-width: 72ch; }
-.wait-item .why summary { display: inline-flex; align-items: center; gap: var(--s8); color: var(--link); font: 500 var(--t15)/1.3 var(--f-head); cursor: pointer; }
-.wait-item .why summary::after { content: ""; width: 7px; height: 7px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg) translateY(-2px); }
-.wait-item .why[open] summary::after { transform: rotate(-135deg); }
-.wait-item .why p { margin: var(--s4) 0 0; color: var(--ink); overflow-wrap: anywhere; }
-.wait-item .act { grid-area: act; display: flex; flex-direction: column; gap: var(--s12); align-self: center; min-width: 0; margin: 0; padding: 0; list-style: none; }
-.wait-item .act li { display: grid; justify-items: start; gap: var(--s4); min-width: 0; }
-.wait-item .act .copy { width: 100%; }
-.wait-item .recommended { font: 500 var(--t13)/1.3 var(--f-head); color: var(--ink); }
-.wait-item .outcome { color: var(--muted); font-size: var(--t13); }
-.wait-item .copy { background: var(--raised); }
-.wait-item .copy .btn { background: var(--tint); }
-/* DESIGN.md, Breakpoints: 761 to 1099 px is the bridge, one column in the tab order of D6, so act stays after why. */
-/* Strict, because a zoomed window can be 1099.5 px wide and max-width: 1099px would then give it two columns. */
-@media (width < 1100px) {
-  .wait-item { grid-template-columns: minmax(0, 1fr); grid-template-areas: "title" "meta" "conseq" "why" "act"; grid-template-rows: none; }
-  .wait-item .act { align-self: stretch; margin-top: var(--s4); }
+.wait-item.needs { border-color: color-mix(in srgb, var(--amber) 60%, transparent); }
+.wait-item > .character { grid-area: char; align-self: center; }
+.wait-lead { grid-area: title; min-width: 0; margin: 0; font: 600 var(--t17)/1.3 var(--f-head); overflow-wrap: anywhere; }
+.wait-item > .meta { grid-area: meta; margin: 0; }
+.wait-item .conseq { grid-area: conseq; max-width: 72ch; margin: var(--s8) 0 0; overflow-wrap: anywhere; }
+.wait-acts { grid-area: act; display: grid; gap: var(--s8); margin-top: var(--s8); }
+.wait-act { display: flex; align-items: center; gap: var(--s12); min-height: 56px; padding: var(--s8) var(--s16); border: 2px solid var(--btn); border-radius: var(--r-btn); background: var(--raised); color: var(--ink); text-decoration: none; }
+.wait-act b { display: block; color: var(--deep); font: 700 var(--t17)/1.2 var(--f-head); }
+.wait-act small { display: block; color: var(--muted); font-size: var(--t13); line-height: 1.3; }
+.wait-act .i { flex: none; width: 22px; height: 22px; color: var(--deep); }
+.wait-act.primary { background: var(--btn); }
+.wait-act.primary b, .wait-act.primary small, .wait-act.primary .i { color: var(--on-btn); }
+/* From 1100 px the reactions sit in a 340 px column beside the words; below, one column with the reactions last, so Tab reaches them after the words. Strict, because a zoomed window can be 1099.5 px wide. */
+@media (width >= 1100px) {
+  .wait-item { grid-template-columns: 48px minmax(0, 1fr) 340px; grid-template-areas: "char title act" "char meta act" "conseq conseq act"; column-gap: var(--s16); }
+  .wait-acts { align-self: center; margin-top: 0; }
 }
+
+/* DESIGN.md, Breakpoints: Waiting on you is a split page, the list with "Meanwhile" and "You handled today" beside it from 1500 px and under it below. */
+.split { display: grid; grid-template-columns: minmax(0, 1fr); gap: calc(var(--s32) + var(--s8)); }
+.split > .side h2 { margin: 0 0 calc(var(--s8) + 2px); font: 600 var(--t17)/1.3 var(--f-head); }
+.split > .side .block { margin-bottom: var(--s32); }
+.split > .side ul { margin: 0; padding: 0; list-style: none; }
+.split > .side li { display: flex; align-items: baseline; gap: calc(var(--s8) + 2px); padding: calc(var(--s8) + 1px) 0; border-bottom: 1px solid var(--hairline); }
+.split > .side li:first-child { border-top: 1px solid var(--hairline); }
+.split > .side li > :not(.dot, .when) { min-width: 0; overflow-wrap: anywhere; }
+.split > .side li .when { margin-left: auto; color: var(--muted); font-size: var(--t13); white-space: nowrap; }
+.split > .side .none { margin: 0; color: var(--muted); }
+@media (min-width: 1500px) {
+  .split { grid-template-columns: minmax(0, 1fr) 380px; gap: calc(var(--s48) + var(--s8)); align-items: start; }
+  .split > .side { position: sticky; top: calc(var(--top) + var(--s32)); }
+}
+@media (min-width: 2200px) {
+  .split { grid-template-columns: minmax(0, 1fr) 440px; }
+}
+/* A phone's row is a 48 px touch line and its link a 44 px target (DESIGN.md, Phone). */
 @media (max-width: 760px) {
-  .wait-item { gap: var(--s8); padding: var(--s16); }
-  .wait-item > .meta, .wait-item .conseq, .wait-item .why { padding-left: 0; }
-  .wait-item .why summary { min-height: 44px; }
-  .wait-item .act li { justify-items: stretch; }
-  .wait-item .act .btn { width: 100%; }
+  .split > .side li { align-items: center; min-height: 48px; padding: 0; }
+  .split > .side li a { display: inline-flex; align-items: center; min-height: 44px; }
 }

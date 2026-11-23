@@ -1,0 +1,44 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use Doctrine\DBAL\Exception;
+use Symfony\AI\Platform\Exception\RuntimeException;
+use Symfony\Component\Serializer\Exception\ExceptionInterface;
+
+final class LibraryCatches
+{
+    public function platform(callable $work): void
+    {
+        try {
+            $work();
+        } catch (RuntimeException) {
+        }
+    }
+
+    public function database(callable $work): void
+    {
+        try {
+            $work();
+        } catch (Exception) {
+        }
+    }
+
+    public function serializer(callable $work): void
+    {
+        try {
+            $work();
+        } catch (ExceptionInterface) {
+        }
+    }
+
+    public function sameNamespace(callable $work): void
+    {
+        try {
+            $work();
+        } catch (Failures\InvalidArgumentException|\Symfony\AI\Platform\Exception\RuntimeException) {
+        }
+    }
+}

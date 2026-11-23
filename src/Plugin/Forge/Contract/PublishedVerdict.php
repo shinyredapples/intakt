@@ -6,15 +6,19 @@ namespace Intakt\Plugin\Forge\Contract;
 
 use InvalidArgumentException;
 
-// Null comment for a head Intakt could not review, because the comment's verdict is only ever approve or changes.
+// Null comment for a head Intakt could not review, because the comment's verdict is only ever approve or changes. The owner asks are comments of their own, so a retry whose review comment is already on the forge still posts an ask the earlier try did not carry.
 final readonly class PublishedVerdict
 {
+    /**
+     * @param list<string> $ownerAsks
+     */
     public function __construct(
         public CommitId $head,
         public HeadStatus $status,
         public string $description,
         public ?string $comment,
         public ReviewToken $token,
+        public array $ownerAsks = [],
     ) {
         if ('' === trim($description)) {
             throw new InvalidArgumentException('A published verdict has a description.');

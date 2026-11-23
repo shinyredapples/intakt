@@ -36,16 +36,25 @@ final readonly class Board
         return array_values(array_filter($this->cards, static fn (Review $card): bool => $card->column() === $column));
     }
 
-    // From the cards in their order, so the newest review's reviewers come first.
-    public function whoIsWorking(): WhoIsWorking
+    // Longest running first, because that is the order of "Meanwhile" in docs/design/mocks/waiting.html.
+    /**
+     * @return list<Review>
+     */
+    public function runningReviews(): array
     {
-        return new WhoIsWorking($this->cards);
+        return array_reverse(array_values(array_filter($this->cards, static fn (Review $card): bool => $card->activeRound() instanceof ReviewedRound)));
     }
 
-    // From the same lanes and Waiting on you cards the page shows, so the line never tells a different story than the board below it.
+    // From the cards in their order, so the newest review's reviewers come first, with the builds in flight the headline counts.
+    public function whoIsWorking(): WhoIsWorking
+    {
+        return new WhoIsWorking($this->cards, count($this->tasksInFlight()));
+    }
+
+    // From the same open rounds Working now shows, so the line never tells a different story than the cards below it.
     public function headline(): Headline
     {
-        return new Headline($this->whoIsWorking(), $this->cardsIn(BoardColumn::WaitingOnYou), count($this->cards) + count($this->tasks), count($this->tasksInFlight()));
+        return new Headline($this->whoIsWorking(), count($this->cards) + count($this->tasks), count($this->tasksInFlight()));
     }
 
     // The first day is an install with no tasks and no reviews (#1792, D5), so a task the build has recorded ends it, in flight or at rest, before any review has run.
@@ -82,6 +91,23 @@ final readonly class Board
         return array_values(array_diff(array_unique($projects), $busy));
     }
 
+    // From the counts over every project, so the project filter never hides or shows a column.
+    /**
+     * @return list<BoardColumn>
+     */
+    public function shownColumns(): array
+    {
+        return $this->splitColumns()['shown'];
+    }
+
+    /**
+     * @return list<BoardColumn>
+     */
+    public function comingNext(): array
+    {
+        return $this->splitColumns()['folded'];
+    }
+
     // The newest card while the board is at rest (every card Done, no task in flight), so a quiet phone home can open it instead of an empty Waiting on you (#3142).
     public function newestReviewAtRest(): ?Review
     {
@@ -94,10 +120,28 @@ final readonly class Board
         return [] === $this->cardsIn($column) ? $column->emptyLine() : null;
     }
 
-    // Null while a reviewer runs, because the strip then lists the lanes instead; the words are the first day's, so the board keeps one wording for this line (#2731).
+    // The build's tasks first, then the reviews with a round still running, so the cards read in the path's order (UX2 home, #3326). A judged change is Done and a round that ended without a judge's call has nobody running, so neither is shown as in progress.
+    /**
+     * @return list<WorkingCard>
+     */
+    public function workingNow(): array
+    {
+        return [
+            ...array_map(WorkingCard::ofTask(...), $this->tasksInFlight()),
+            ...array_map(WorkingCard::ofReview(...), array_values(array_filter($this->cardsIn(BoardColumn::InReview), static fn (Review $review): bool => $review->activeRound() instanceof ReviewedRound))),
+        ];
+    }
+
+    // Null while a card works, because Working now then shows the cards instead; the words are the first day's, so the board keeps one wording for this line (#2731). Its own line, not the Status page's, because Working now lists changes and the Status page lists reviewers (#3386).
+    public function nobodyWorkingNowLine(): ?string
+    {
+        return [] === $this->workingNow() ? 'Nobody is working yet: reviewers appear here while they review a change' : null;
+    }
+
+    // Null while a reviewer runs, because the Status page then lists the reviewers instead.
     public function nobodyWorkingLine(): ?string
     {
-        return [] === $this->whoIsWorking()->lanes() ? 'Nobody is working yet: reviewers appear here while they review a change' : null;
+        return [] === $this->whoIsWorking()->lanes() ? 'No reviewer is working right now: reviewers appear here while they review a change' : null;
     }
 
     // Done opens while every other column is empty, so a finished review is seen on arrival instead of behind its strip.
@@ -110,7 +154,7 @@ final readonly class Board
         return $column->startsCollapsed();
     }
 
-    // Done is the last of nine columns and lies past the edge of a laptop's board, so opening it alone is not enough to show the finished review on arrival.
+    // Done is the last column and can lie past the edge of a narrow board, so opening it alone is not enough to show the finished review on arrival.
     public function startsScrolledToDone(): bool
     {
         return $this->everyColumnButDoneIsEmpty() && 0 < $this->countOf(BoardColumn::Done);
@@ -128,6 +172,20 @@ final readonly class Board
     private function tasksInFlight(): array
     {
         return array_values(array_filter($this->tasks, static fn (BuildTask $task): bool => $task->inFlight));
+    }
+
+    // One pass for both lists, because a column the board shows must never also be named in the Coming next line.
+    /**
+     * @return array{shown: list<BoardColumn>, folded: list<BoardColumn>}
+     */
+    private function splitColumns(): array
+    {
+        $split = ['shown' => [], 'folded' => []];
+        foreach (BoardColumn::cases() as $column) {
+            $split[$column->foldsIntoComingNext($this->countOf($column)) ? 'folded' : 'shown'][] = $column;
+        }
+
+        return $split;
     }
 
     private function everyColumnButDoneIsEmpty(): bool

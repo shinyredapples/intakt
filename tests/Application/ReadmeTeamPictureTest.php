@@ -16,22 +16,20 @@ final class ReadmeTeamPictureTest extends TestCase
     {
         $picture = $this->picture();
 
-        self::assertSame(1, preg_match('/<source media="\(prefers-color-scheme: dark\)" srcset="docs\/assets\/team-dark-1x\.webp 1x, docs\/assets\/team-dark\.webp 2x" width="760" height="116">/', $picture));
+        self::assertSame(1, preg_match('/<source media="\(prefers-color-scheme: dark\)" srcset="docs\/assets\/team-dark\.webp" width="760" height="116">/', $picture));
         self::assertFileExists($this->root().'/docs/assets/team-dark.webp');
-        self::assertFileExists($this->root().'/docs/assets/team-dark-1x.webp');
     }
 
+    // One sharp file per theme, shown at 760 px: phones that skip a srcset would otherwise stretch a 760 px file and blur it.
     public function testTheTeamPictureDimensionsMatchTheImageFilesTheyDescribe(): void
     {
         foreach (['light' => 113, 'dark' => 116] as $theme => $height) {
-            $oneX = getimagesize($this->root().'/docs/assets/team-'.$theme.'-1x.webp');
-            $twoX = getimagesize($this->root().'/docs/assets/team-'.$theme.'.webp');
+            $image = getimagesize($this->root().'/docs/assets/team-'.$theme.'.webp');
 
-            self::assertIsArray($oneX);
-            self::assertIsArray($twoX);
-            self::assertSame([760, $height], [$oneX[0], $oneX[1]]);
-            self::assertSame($height, (int) round($twoX[1] * 760 / $twoX[0]));
-            self::assertGreaterThanOrEqual(1520, $twoX[0]);
+            self::assertIsArray($image);
+            self::assertSame($height, (int) round($image[1] * 760 / $image[0]));
+            self::assertGreaterThanOrEqual(2280, $image[0]);
+            self::assertFileDoesNotExist($this->root().'/docs/assets/team-'.$theme.'-1x.webp');
         }
     }
 
@@ -39,9 +37,8 @@ final class ReadmeTeamPictureTest extends TestCase
     {
         $picture = $this->picture();
 
-        self::assertSame(1, preg_match('/<img src="docs\/assets\/team-light-1x\.webp" srcset="docs\/assets\/team-light-1x\.webp 1x, docs\/assets\/team-light\.webp 2x"/', $picture));
+        self::assertSame(1, preg_match('/<img src="docs\/assets\/team-light\.webp" alt=/', $picture));
         self::assertFileExists($this->root().'/docs/assets/team-light.webp');
-        self::assertFileExists($this->root().'/docs/assets/team-light-1x.webp');
     }
 
     public function testTheTeamPictureAltNamesTheOctopusAndAllEightRoles(): void
@@ -74,10 +71,10 @@ final class ReadmeTeamPictureTest extends TestCase
     {
         $readme = $this->readme();
 
-        $screenshot = strpos($readme, '](docs/assets/dashboard-review.png)');
+        $screenshot = strpos($readme, 'src="docs/assets/dashboard-review.png"');
         self::assertIsInt($screenshot, 'The README shows the review page on its first screen.');
         $picture = (int) strpos($readme, '<picture>', $screenshot);
-        $release = (int) strpos($readme, '## The first release');
+        $release = (int) strpos($readme, '## Status');
         $line = 'Tech lead, Developer, Code reviewer, Judge, Security engineer, Designer, AI engineer and Maintainer';
 
         self::assertGreaterThan($screenshot, $picture);

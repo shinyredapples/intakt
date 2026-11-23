@@ -1,0 +1,27 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+trait Wraps
+{
+    public function wrap(): object
+    {
+        return new class {
+            public function wrap(): object
+            {
+                return new class {
+                    private function hidden(): void
+                    {
+                    }
+
+                    public function caller(): void
+                    {
+                        $this->hidden();
+                    }
+                };
+            }
+        };
+    }
+}

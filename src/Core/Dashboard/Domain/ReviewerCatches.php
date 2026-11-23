@@ -8,7 +8,7 @@ use DateTimeImmutable;
 use Intakt\Core\Review\Contract\Severity;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
-// Read from the recorded reporters alone, as the "Caught by one reviewer only" tile is, each under the severity its own reporter gave, so a round without a full record, or with a reported finding whose severity or reporter's role is unknown, is left out instead of guessed (D1 of #2858).
+// Read from the recorded reporters alone, as the "One reviewer only" tile is, each under the severity its own reporter gave, so a round without a full record, or with a reported finding whose severity or reporter's role is unknown, is left out instead of guessed (D1 of #2858).
 #[Exclude]
 final readonly class ReviewerCatches
 {
@@ -63,12 +63,6 @@ final readonly class ReviewerCatches
         return sprintf('The %s reviewer found the most P1 findings, %d, and %d of them no other reviewer found.', $top[0]->role, $most, $top[0]->alone(Severity::P1));
     }
 
-    // Each tied reviewer keeps its own count of the P1s no other reviewer found, because equal totals can hide different exclusive catches (D3 of #2934).
-    private function aloneInWords(ReviewerCatch $reviewer): string
-    {
-        return sprintf('the %s reviewer alone found %d', $reviewer->role, $reviewer->alone(Severity::P1));
-    }
-
     /**
      * @param list<string> $parts
      */
@@ -77,6 +71,12 @@ final readonly class ReviewerCatches
         $last = array_pop($parts);
 
         return [] === $parts ? (string) $last : implode(', ', $parts).' and '.$last;
+    }
+
+    // Each tied reviewer keeps its own count of the P1s no other reviewer found, because equal totals can hide different exclusive catches (D3 of #2934).
+    private function aloneInWords(ReviewerCatch $reviewer): string
+    {
+        return sprintf('the %s reviewer alone found %d', $reviewer->role, $reviewer->alone(Severity::P1));
     }
 
     // A reported severity that is not a `Severity` leaves the round out like a missing one, because the bars count only P1, P2 and P3 and would show that finding as none.

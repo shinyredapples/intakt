@@ -84,6 +84,33 @@ final readonly class TemporaryRepository
         return $hash;
     }
 
+    public function commitSignedWith(string $keyFile, string $subject): string
+    {
+        $this->git(...self::IDENTITY, ...['-c', 'gpg.format=ssh', '-c', 'user.signingkey='.$keyFile, 'commit', '--quiet', '--allow-empty', '-S', '-m', $subject]);
+
+        return $this->git('rev-parse', 'HEAD');
+    }
+
+    // Untrimmed, because a signature covers every byte of the object, its final newline too.
+    public function rawCommit(string $revision): string
+    {
+        return $this->bytes(['cat-file', 'commit', $revision], null);
+    }
+
+    // Written as given, because a crafted header (a second signature, for example) is what git itself never writes.
+    public function commitObject(string $object): string
+    {
+        $hash = $this->run(['hash-object', '-t', 'commit', '-w', '--stdin', '--literally'], $object);
+        $this->git('update-ref', 'HEAD', $hash);
+
+        return $hash;
+    }
+
+    public function resetTo(string $revision): void
+    {
+        $this->git('reset', '--quiet', '--hard', $revision);
+    }
+
     public function diff(string $base, string $head): string
     {
         return $this->git('diff', $base, $head);
@@ -132,6 +159,11 @@ final readonly class TemporaryRepository
     public function checkoutNewBranch(string $name): void
     {
         $this->git('checkout', '--quiet', '-b', $name);
+    }
+
+    public function deleteBranch(string $name): void
+    {
+        $this->git('branch', '--quiet', '-D', $name);
     }
 
     public function checkout(string $name): void
@@ -234,6 +266,14 @@ final readonly class TemporaryRepository
      */
     private function run(array $arguments, ?string $input): string
     {
+        return trim($this->bytes($arguments, $input));
+    }
+
+    /**
+     * @param list<string> $arguments
+     */
+    private function bytes(array $arguments, ?string $input): string
+    {
         // Inherited GIT_DIR and the like (as inside a git hook) would make the test change another repository.
         $unset = [];
         foreach (array_keys([...getenv(), ...$_ENV]) as $name) {
@@ -249,6 +289,6 @@ final readonly class TemporaryRepository
             throw new RuntimeException($process->getErrorOutput());
         }
 
-        return trim($process->getOutput());
+        return $process->getOutput();
     }
 }
