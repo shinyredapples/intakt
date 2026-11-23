@@ -7,6 +7,7 @@ namespace Intakt\Core\HandBack\UseCase\CheckPullRequestText;
 use Intakt\Core\HandBack\Contract\FailedPullRequestText;
 use Intakt\Core\HandBack\Contract\PullRequestTextOutcome;
 use Intakt\Core\HandBack\Contract\PullRequestTextRound;
+use Intakt\Core\HandBack\Contract\PullRequestTextTask;
 use Intakt\Core\HandBack\Domain\PullRequestTextRule;
 use NoDiscard;
 use Override;
@@ -21,9 +22,8 @@ final readonly class RoutePullRequestText implements PullRequestTextRound
 
     #[Override]
     #[NoDiscard]
-    public function route(string $repository, string $branch, string $taskText, string $body): PullRequestTextOutcome|FailedPullRequestText
+    public function route(PullRequestTextTask $task, string $taskText, string $body): PullRequestTextOutcome|FailedPullRequestText
     {
-        $task = PullRequestTextTask::resolved($repository, $branch);
         $outcome = PullRequestTextRule::judge($taskText, $body);
 
         if (!$outcome->passed()) {

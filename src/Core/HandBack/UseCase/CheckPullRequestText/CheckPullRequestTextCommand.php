@@ -8,6 +8,7 @@ use Intakt\Core\HandBack\Contract\FailedPullRequestText;
 use Intakt\Core\HandBack\Contract\PullRequestTextOutcome;
 use Intakt\Core\HandBack\Contract\PullRequestTextRound;
 use Intakt\Core\HandBack\Contract\PullRequestTextRoute;
+use Intakt\Core\HandBack\Contract\PullRequestTextTask;
 use Intakt\Core\HandBack\Domain\PullRequestTextRule;
 use Intakt\Core\Platform\Contract\ReportableFailure;
 use InvalidArgumentException;
@@ -44,16 +45,6 @@ final readonly class CheckPullRequestTextCommand
         };
     }
 
-    // Recorded only when a repository names the task, because a person's own check must not use up the go-back of the build's next miss.
-    private function resultOf(CheckPullRequestTextInput $input, string $task, string $body): PullRequestTextOutcome|FailedPullRequestText
-    {
-        if (null === $input->repository) {
-            return PullRequestTextRule::judge($task, $body);
-        }
-
-        return $this->round->route($input->repository, $input->branch ?? '', $task, $body);
-    }
-
     private function read(string $path): string
     {
         try {
@@ -67,6 +58,16 @@ final readonly class CheckPullRequestTextCommand
     private function bodyOf(string $pullRequestText): string
     {
         return trim(explode("\n", $pullRequestText, 2)[1] ?? '');
+    }
+
+    // Recorded only when a repository names the task, because a person's own check must not use up the go-back of the build's next miss.
+    private function resultOf(CheckPullRequestTextInput $input, string $task, string $body): PullRequestTextOutcome|FailedPullRequestText
+    {
+        if (null === $input->repository) {
+            return PullRequestTextRule::judge($task, $body);
+        }
+
+        return $this->round->route(PullRequestTextTask::resolved($input->repository, $input->branch ?? ''), $task, $body);
     }
 
     private function wordsOf(PullRequestTextRoute $route): string

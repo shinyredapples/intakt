@@ -229,6 +229,11 @@ final readonly class BuildTask
         return $built instanceof BuildJobOutcome ? $built : throw new LogicException('the checks and the push run only after a build job that built');
     }
 
+    private function bodyOf(string $text): string
+    {
+        return trim(explode("\n", $text, 2)[1] ?? '');
+    }
+
     /**
      * @param array<string, BuildJobOutcome|AcceptedHandBack|string|null> $results
      */
@@ -282,11 +287,6 @@ final readonly class BuildTask
         $title = explode("\n", $text, 2)[0];
 
         return '' === trim($title) ? 'the pull request text has no title on its first line' : new ChangeText(trim($title), $this->bodyOf($text));
-    }
-
-    private function bodyOf(string $text): string
-    {
-        return trim(explode("\n", $text, 2)[1] ?? '');
     }
 
     private function jobOf(BuildTaskRequest $request, ListedIssue $task): BuildJob

@@ -97,7 +97,7 @@ use Intakt\Core\HandBack\UseCase\CheckHandBack\IncomingObjects;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\RepositoryGit;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\StrippedCommits;
 use Intakt\Core\HandBack\UseCase\CheckPullRequestText\PullRequestTextRoutes;
-use Intakt\Core\HandBack\UseCase\CheckPullRequestText\PullRequestTextTask;
+use Intakt\Core\HandBack\Contract\PullRequestTextTask;
 use Intakt\Core\HandBack\UseCase\CheckPullRequestText\RoutePullRequestText;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\ChangedFile;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\LostContentCheck;

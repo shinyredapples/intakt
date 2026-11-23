@@ -9,6 +9,7 @@ use Intakt\Core\HandBack\Contract\FailedPullRequestText;
 use Intakt\Core\HandBack\Contract\PullRequestTextOutcome;
 use Intakt\Core\HandBack\Contract\PullRequestTextRoundNotRecorded;
 use Intakt\Core\HandBack\Contract\PullRequestTextRoute;
+use Intakt\Core\HandBack\Contract\PullRequestTextTask;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
