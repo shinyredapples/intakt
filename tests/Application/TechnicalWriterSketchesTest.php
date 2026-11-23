@@ -34,9 +34,10 @@ final class TechnicalWriterSketchesTest extends TestCase
 
     public function testTheSketchFiguresShrinkWithTheirCard(): void
     {
-        preg_match('~\.pair img, \.pair svg \{([^}]*)\}~', $this->style(), $rule);
+        if (1 !== preg_match('~\.pair img, \.pair svg \{([^}]*)\}~', $this->style(), $rule)) {
+            self::fail('The page has no rule for the sketch figures.');
+        }
 
-        self::assertArrayHasKey(1, $rule);
         self::assertDoesNotMatchRegularExpression('~(?<![-\w])(?:min-)?width:\s*\d+px~', $rule[1]);
         self::assertMatchesRegularExpression('~max-width:\s*186px~', $rule[1]);
     }
