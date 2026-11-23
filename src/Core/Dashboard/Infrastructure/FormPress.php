@@ -6,7 +6,6 @@ namespace Intakt\Core\Dashboard\Infrastructure;
 
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Session\FlashBagAwareSessionInterface;
-use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\Security\Csrf\CsrfToken;
 use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
 
@@ -22,7 +21,7 @@ final readonly class FormPress
         $token = $request->request->get('_token');
 
         if (!is_string($token) || !$this->tokens->isTokenValid(new CsrfToken($tokenId, $token))) {
-            throw new BadRequestHttpException($refusal);
+            throw new FormIsRefused($refusal);
         }
     }
 

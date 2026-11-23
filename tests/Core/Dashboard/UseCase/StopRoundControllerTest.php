@@ -21,7 +21,7 @@ use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\LogLevel;
-use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
+use Intakt\Core\Dashboard\Infrastructure\FormIsRefused;
 use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
@@ -139,7 +139,7 @@ final class StopRoundControllerTest extends DashboardPageTestCase
         $this->browser->request('POST', '/reviews/round-1/stop');
 
         self::assertResponseStatusCodeSame(400);
-        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so nothing was stopped."', BadRequestHttpException::class));
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so nothing was stopped."', FormIsRefused::class));
         self::assertSame([], $this->requested());
     }
 
@@ -152,7 +152,7 @@ final class StopRoundControllerTest extends DashboardPageTestCase
         $this->browser->request('POST', '/reviews/round-1/stop', ['_token' => $token]);
 
         self::assertResponseStatusCodeSame(400);
-        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so nothing was stopped."', BadRequestHttpException::class));
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so nothing was stopped."', FormIsRefused::class));
         self::assertSame([], $this->requested());
     }
 

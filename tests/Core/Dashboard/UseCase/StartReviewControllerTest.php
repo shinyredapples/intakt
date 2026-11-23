@@ -33,7 +33,7 @@ use stdClass;
 use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Session\FlashBagAwareSessionInterface;
-use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
+use Intakt\Core\Dashboard\Infrastructure\FormIsRefused;
 use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Messenger\Envelope;
@@ -183,7 +183,7 @@ final class StartReviewControllerTest extends DashboardPageTestCase
         $this->browser->request('POST', '/reviews/round-1/start', ['_token' => $this->token(), 'number' => 'two']);
 
         self::assertResponseStatusCodeSame(400);
-        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form names no round number, so nothing was started."', BadRequestHttpException::class));
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form names no round number, so nothing was started."', FormIsRefused::class));
     }
 
     public function testAMissingTokenDispatchesNothing(): void
@@ -194,7 +194,7 @@ final class StartReviewControllerTest extends DashboardPageTestCase
         $this->browser->request('POST', '/reviews/round-1/start');
 
         self::assertResponseStatusCodeSame(400);
-        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so nothing was started."', BadRequestHttpException::class));
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so nothing was started."', FormIsRefused::class));
     }
 
     public function testAWrongTokenDispatchesNothing(): void
@@ -205,7 +205,7 @@ final class StartReviewControllerTest extends DashboardPageTestCase
         $this->browser->request('POST', '/reviews/round-1/start', ['_token' => 'wrong']);
 
         self::assertResponseStatusCodeSame(400);
-        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so nothing was started."', BadRequestHttpException::class));
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so nothing was started."', FormIsRefused::class));
     }
 
     public function testARoundThatIsNotNextRedirectsBackWithAnErrorLineAndNoTrace(): void
@@ -328,7 +328,7 @@ final class StartReviewControllerTest extends DashboardPageTestCase
         $this->browser->request('POST', '/reviews/'.$round.'/start', ['number' => '2']);
 
         self::assertResponseStatusCodeSame(400);
-        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so nothing was started."', BadRequestHttpException::class));
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so nothing was started."', FormIsRefused::class));
         self::assertSame([], array_values(array_diff(self::reviewLockFiles(), $before)));
     }
 
@@ -397,7 +397,7 @@ final class StartReviewControllerTest extends DashboardPageTestCase
         $held->release();
 
         self::assertResponseStatusCodeSame(400);
-        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so nothing was started."', BadRequestHttpException::class));
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so nothing was started."', FormIsRefused::class));
     }
 
     public function testARefusedStartShowsNoToast(): void

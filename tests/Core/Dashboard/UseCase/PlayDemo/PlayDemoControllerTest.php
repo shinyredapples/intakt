@@ -23,7 +23,7 @@ use Psr\Log\LogLevel;
 use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\HttpFoundation\Session\FlashBagAwareSessionInterface;
-use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
+use Intakt\Core\Dashboard\Infrastructure\FormIsRefused;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Messenger\Envelope;
 
@@ -213,11 +213,12 @@ final class PlayDemoControllerTest extends DashboardPageTestCase
     {
         $this->demoPage();
 
-        $this->browser->request('POST', '/demo', ['_token' => 'wrong']);
+        $page = $this->browser->request('POST', '/demo', ['_token' => 'wrong']);
 
         self::assertResponseStatusCodeSame(400);
         self::assertSame([], $this->queued());
-        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so the demo run was not started."', BadRequestHttpException::class));
+        self::assertSame('The form token is missing or wrong, so the demo run was not started. Go back, reload the page and press the button again.', $page->filter('.page-head .lead')->text());
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so the demo run was not started."', FormIsRefused::class));
     }
 
     public function testPressingPlayOutsideTheComposeDemoStartsNothingAndSaysWhy(): void
