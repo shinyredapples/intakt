@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>acme-shop journey | Intakt</title>
+<link rel="icon" type="image/png" href="assets/favicon-32.png">
+<script>(function(){var d=document.documentElement,t=localStorage.getItem("intakt-theme");if(t!=="light"&&t!=="dark")t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";d.dataset.theme=t;if(localStorage.getItem("intakt-rail")==="collapsed")d.dataset.rail="collapsed";})();</script>
+<link rel="stylesheet" href="assets/intakt.css">
+</head>
+<body data-page="projects">
+<div class="shell">
+<aside class="rail" id="rail"></aside>
+<div class="main">
+<header class="topbar" id="topbar"></header>
+<main class="content roomy" id="main">
+<p class="small" style="margin-bottom:12px"><a href="projects.html">Projects</a> <span class="muted">/</span> <a href="project.html">acme-shop</a> <span class="muted">/</span> <span class="muted">Journey</span></p>
+<div class="page-head" style="align-items:flex-start">
+  <div style="flex:1;min-width:260px">
+    <h1>How acme-shop got here</h1>
+    <p class="lead">Worked out from what Intakt recorded and what GitHub lists. The story under each milestone is drafted by the Maintainer and published only after you approve it.</p>
+  </div>
+  <div class="actions">
+    <a class="btn secondary" href="#">Open docs/journey.md</a>
+    <button class="btn secondary" type="button" data-toast="Journey page off for acme-shop: no drafts, no pull requests" data-undo="Journey page on again">Turn the page off</button>
+  </div>
+</div>
+
+<section class="psum" aria-label="At a glance">
+  <div>
+    <h2 class="label-sm">Merged pull requests</h2>
+    <p><span class="stat">212</span> <span class="muted small">counted, since 2 Sep</span></p>
+    <p class="small">Busiest day 28 Oct, 14 merges.</p>
+  </div>
+  <div>
+    <h2 class="label-sm">Approved on the first review</h2>
+    <p><span class="stat">61%</span> <span class="muted small">counted, 129 of 212</span></p>
+    <p class="small">From the review verdicts in the ledger.</p>
+  </div>
+  <div>
+    <h2 class="label-sm">Tokens per merged pull request</h2>
+    <p><span class="stat">410k</span> <span class="muted small">measured</span></p>
+    <p class="small">86.9M measured tokens over 212 counted merges. Not included: 1.2M estimated tokens reserved for stopped steps.</p>
+  </div>
+</section>
+
+<section class="section" aria-labelledby="ms-h">
+  <h2 id="ms-h">Milestones, planned against done</h2>
+  <p class="takeaway">Three of four milestones closed; M3 closed 4 days after its due date.</p>
+  <table class="ledger">
+    <thead><tr><th>Milestone</th><th>Due</th><th>Done</th><th>Done / open (counted)</th></tr></thead>
+    <tbody>
+      <tr><td>M1 Shop runs</td><td>20 Sep</td><td>18 Sep</td><td>31 / 0</td></tr>
+      <tr><td>M2 Payments</td><td>15 Oct</td><td>14 Oct</td><td>48 / 0</td></tr>
+      <tr><td>M3 Gift cards</td><td>10 Nov</td><td>14 Nov</td><td>39 / 0</td></tr>
+      <tr><td>M4 Accounts</td><td>12 Dec</td><td class="muted">open</td><td>11 / 23</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<div class="charts section">
+  <section class="chart" aria-labelledby="j1h">
+    <h2 id="j1h">Merges per day</h2>
+    <p class="takeaway">6.4 a day on average over the last 14 days (counted).</p>
+    <div id="j-merges"></div>
+  </section>
+  <section class="chart" aria-labelledby="j2h">
+    <h2 id="j2h">Is the backlog growing?</h2>
+    <p class="takeaway">Slowly: 34 open issues, up from 27 two weeks ago (counted).</p>
+    <div id="j-open"></div>
+  </section>
+  <section class="chart" aria-labelledby="j3h">
+    <h2 id="j3h">Issues created and closed per day</h2>
+    <p class="takeaway">88 created and 81 closed in 14 days (counted).</p>
+    <div class="pair">
+      <div><h3 class="label-sm">Created</h3><div id="j-created"></div></div>
+      <div><h3 class="label-sm">Closed</h3><div id="j-closed"></div></div>
+    </div>
+  </section>
+  <section class="chart" aria-labelledby="j4h">
+    <h2 id="j4h">Tokens per merged pull request</h2>
+    <p class="takeaway">Down from 520k to 380k a merge over 14 days (measured over counted merges).</p>
+    <div id="j-permerge"></div>
+  </section>
+</div>
+
+<section class="section" aria-labelledby="tk-h">
+  <h2 id="tk-h">Tokens by vendor and lane</h2>
+  <p class="takeaway">Building takes about three quarters of the tokens on both vendors (measured, thousands a day).</p>
+  <div class="multiples four">
+    <div><h3 class="label-sm">Claude, building</h3><div id="t-cb"></div></div>
+    <div><h3 class="label-sm">Claude, reviewing</h3><div id="t-cr"></div></div>
+    <div><h3 class="label-sm">GPT, building</h3><div id="t-gb"></div></div>
+    <div><h3 class="label-sm">GPT, reviewing</h3><div id="t-gr"></div></div>
+  </div>
+  <h3 class="sub-h">By account, last 14 days</h3>
+  <table class="ledger">
+    <thead><tr><th>Account</th><th>Tokens (measured)</th></tr></thead>
+    <tbody>
+      <tr><td>Work subscription</td><td>9.8M</td></tr>
+      <tr><td>Second subscription</td><td>4.1M</td></tr>
+      <tr><td>API key</td><td>1.3M</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="section" aria-labelledby="cap-h">
+  <h2 id="cap-h">Capacity changes</h2>
+  <p class="takeaway">From the configuration history, so a jump in merges can be read against the capacity behind it.</p>
+  <table class="ledger">
+    <thead><tr><th>When</th><th>Change</th></tr></thead>
+    <tbody>
+      <tr><td>3 Nov</td><td>Build slots: 1 → 2</td></tr>
+      <tr><td>27 Oct</td><td>Account added: Second subscription</td></tr>
+      <tr><td>12 Oct</td><td>Review workers: 2 → 3</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="section" aria-labelledby="en-h">
+  <h2 id="en-h">Milestone entries</h2>
+  <p class="takeaway">One dated entry per closed milestone, drafted from the issues' Decisions sections, your decisions, stalls with their causes and send-back patterns. Every claim links its issue or pull request.</p>
+  <ol class="timeline">
+    <li>
+      <span class="node live" aria-hidden="true"></span>
+      <div class="ev-head"><h3>M3 Gift cards closed</h3><span class="chip on-page strong"><span class="dot needs"></span>Waiting for your approval</span><time datetime="2026-11-14">14 Nov</time></div>
+      <div class="ev-body">
+        <p>Gift cards store their currency, as you decided on <a href="task.html">#199</a>. The milestone closed 4 days late: <a href="task.html">#205</a> stalled 2 days because CI lacked a package the build had, fixed by an image change in <a href="#">pull request #231</a>. Most send-backs were docs that disagreed with the code (9 of 15, <a href="task.html">#208</a>, <a href="task.html">#214</a>).</p>
+        <p class="small muted">Drafted by the Maintainer. Every link checked: each names an issue or pull request of acme-shop.</p>
+        <div class="actions" style="margin-top:8px">
+          <button class="btn primary sm" type="button" data-toast="Entry approved: pull request opened for review">Approve and open the pull request</button>
+          <button class="btn secondary sm" type="button" data-toast="Editing the draft">Edit</button>
+        </div>
+      </div>
+    </li>
+    <li>
+      <span class="node done" aria-hidden="true"></span>
+      <div class="ev-head"><h3>M2 Payments closed</h3><span class="chip on-page">Published in <a href="#">pull request #162</a></span><time datetime="2026-10-14">14 Oct</time></div>
+      <div class="ev-body"><p>Refunds go through the payment provider's own API (<a href="task.html">#121</a>). Review rounds fell from 2.4 to 1.6 a change once the docs check ran before each push (<a href="#">pull request #140</a>).</p></div>
+    </li>
+  </ol>
+</section>
+
+<section class="section" aria-labelledby="lim-h" style="background:var(--tint);border-radius:var(--r-btn);padding:20px 24px">
+  <h2 id="lim-h">Usage against your limits</h2>
+  <p class="takeaway">Admin area only. These figures never go into docs/journey.md, its pull request or any shared report.</p>
+  <div class="window">
+    <div class="wl"><strong>Work subscription, weekly window</strong><span class="muted">acme-shop used 22% of the plan limit this week</span></div>
+    <div class="bar" role="img" aria-label="acme-shop used 22 percent of the weekly plan limit"><i class="used" style="width:22%"></i></div>
+  </div>
+  <div class="window">
+    <div class="wl"><strong>Second subscription, weekly window</strong><span class="muted">acme-shop used 9% of the plan limit this week</span></div>
+    <div class="bar" role="img" aria-label="acme-shop used 9 percent of the weekly plan limit"><i class="used" style="width:9%"></i></div>
+  </div>
+</section>
+
+<script src="assets/charts.js"></script>
+<script>
+(function () {
+  var C = IntaktCharts.chart, $ = function (id) { return document.getElementById(id); };
+  var days = ["10 Nov","11 Nov","12 Nov","13 Nov","14 Nov","15 Nov","16 Nov","17 Nov","18 Nov","19 Nov","20 Nov","21 Nov","22 Nov","23 Nov"];
+  C($("j-merges"), { type: "bar", labels: days, values: [6,7,5,8,9,3,2,7,8,6,7,6,5,11], colName: "Merges (counted)" });
+  C($("j-open"), { type: "line", labels: days, values: [27,28,28,29,27,28,29,30,31,31,32,33,33,34], max: 40, colName: "Open issues (counted)" });
+  C($("j-created"), { type: "bar", labels: days, values: [6,7,5,8,7,4,3,6,8,6,7,7,6,8], max: 10, height: 150, colName: "Created (counted)" });
+  C($("j-closed"), { type: "bar", labels: days, values: [6,6,5,7,9,3,2,6,7,6,6,6,5,7], max: 10, height: 150, colName: "Closed (counted)" });
+  C($("j-permerge"), { type: "line", labels: days, values: [520,500,510,470,440,null,null,450,420,410,400,395,390,380], max: 600, unit: "k", colName: "Tokens per merge (measured)" });
+  var t = { type: "bar", labels: days, max: 1000, unit: "k", height: 120, colName: "Tokens (measured)" };
+  C($("t-cb"), Object.assign({}, t, { values: [620,700,540,760,800,300,210,680,720,610,650,640,560,900] }));
+  C($("t-cr"), Object.assign({}, t, { values: [180,210,160,220,240,90,60,200,210,180,190,190,170,260] }));
+  C($("t-gb"), Object.assign({}, t, { values: [210,240,190,260,270,100,80,230,250,210,220,220,190,300] }));
+  C($("t-gr"), Object.assign({}, t, { values: [70,80,60,90,90,30,20,80,80,70,70,70,60,100] }));
+})();
+</script>
+</main>
+</div>
+</div>
+<script src="assets/intakt.js"></script>
+</body>
+</html>

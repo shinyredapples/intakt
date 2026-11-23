@@ -94,6 +94,7 @@
     ["Remove a project", "Danger zone", "settings.html#danger"],
     ["Accounts and usage", "Team", "team.html"],
     ["Infrastructure health", "Projects", "health.html"],
+    ["Journey of acme-shop", "Projects", "journey.html"],
     ["Trends", "History", "trends.html"],
   ];
   const ACTIONS = [
