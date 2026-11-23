@@ -134,7 +134,7 @@ final class TaskDetailStylesTest extends TestCase
         self::assertMatchesRegularExpression('/^\s*flex:\s*1 1 280px;\s*$/', $rules['.page-head:has(> .task-actions) > div:first-child'] ?? '');
     }
 
-    // At 390 wide a long change name moved to a line of its own and left its "/" alone at the end of the line before.
+    // It must shrink, because at 390 wide a long change name moved to a line of its own and left its "/" alone at the end of the line before.
     public function testThePagesOwnCrumbShrinksOnTheTrailsLineSoALongChangeNameWrapsThere(): void
     {
         $rules = $this->rulesOf($this->sheet());
@@ -143,7 +143,7 @@ final class TaskDetailStylesTest extends TestCase
         self::assertMatchesRegularExpression('/min-width:\s*0;.*overflow-wrap:\s*anywhere;/s', $rules['.crumbs li'] ?? '');
     }
 
-    // At 390 wide the Full record's "estimated" label broke into "estimate" and "d" beside the cost.
+    // It must stay whole, because at 390 wide the Full record's "estimated" label broke into "estimate" and "d" beside the cost.
     public function testAFiguresKindLabelInTheHeadsFactsNeverBreaksInsideItsWord(): void
     {
         $rules = $this->rulesOf($this->sheet());
