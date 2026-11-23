@@ -8,9 +8,9 @@ use DateTimeImmutable;
 use Intakt\Core\Build\Contract\BuildStep;
 use Intakt\Core\Dashboard\Infrastructure\LatestBuildRun;
 use Intakt\Core\Dashboard\Infrastructure\LedgerBuildSteps;
-use Intakt\Core\Dashboard\Infrastructure\LedgerPayload;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\PayloadFields;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -20,7 +20,7 @@ use Symfony\Component\Uid\Uuid;
 
 #[CoversClass(LedgerBuildSteps::class)]
 #[CoversClass(LatestBuildRun::class)]
-#[UsesClass(LedgerPayload::class)]
+#[UsesClass(PayloadFields::class)]
 final class LedgerBuildStepsTest extends TestCase
 {
     // The newer run's id sorts first, as it can with a random id or a clock set back, so only the order of the rows tells the runs apart.
