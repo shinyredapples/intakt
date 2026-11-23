@@ -70,7 +70,7 @@ async function main(argv) {
   const address = (argv[0] ?? DEFAULT_ADDRESS).replace(/\/+$/, '');
 
   await expectAnswer(address);
-  const out = runFolder(new Date(), process.pid);
+  const out = runFolder(new Date(), process.pid, OUT);
   const browser = await chromium.launch(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {});
   try {
     const results = [];
@@ -94,7 +94,7 @@ async function expectAnswer(address) {
 
 // Each run gets its own folder, named by its start time and process id, so two runs at once never remove or overwrite a screenshot the other one reports.
 // It is created only when a step fails, and no run removes another run's folder.
-function runFolder(startedAt, pid, root = OUT) {
+function runFolder(startedAt, pid, root) {
   return path.join(root, `${startedAt.toISOString().replace(/[-:]|\.\d+/g, '')}-${pid}`);
 }
 
@@ -131,10 +131,14 @@ function reasonOf(error) {
   return waited === undefined ? lines[0] : `${lines[0]} (${waited})`;
 }
 
-// A page that crashed cannot be photographed, and that must not hide the step that broke.
+// A page that crashed cannot be photographed and a folder that cannot be created holds no picture, and neither must hide the step that broke.
 async function screenshot(page, journey, number, out) {
   const file = `${slugOf(journey.name)}-step-${number}.png`;
-  fs.mkdirSync(out, { recursive: true });
+  try {
+    fs.mkdirSync(out, { recursive: true });
+  } catch {
+    return null;
+  }
 
   return page.screenshot({ path: path.join(out, file), fullPage: true }).then(
     () => path.relative(path.resolve(__dirname, '..'), path.join(out, file)),

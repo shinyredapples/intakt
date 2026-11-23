@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createRequire } from 'node:module';
@@ -105,6 +105,21 @@ test('a screenshot the page cannot take still reports the step that broke', asyn
         const result = await runJourney(browser, ADDRESS, journeyOf('crash', [['open', async () => { throw new Error('Target crashed'); }]]), folder);
 
         assert.equal(result.failure.screenshot, null);
+        assert.match(report([result]), /crash: failed at step 1, open\n {2}Target crashed\n {2}screenshot: none, the page could not be captured/);
+    });
+});
+
+test('a run folder that cannot be created still reports the step that broke and fails the journey', async () => {
+    const browser = new FakeBrowser();
+
+    await withFolder(async (folder) => {
+        const blocked = join(folder, 'taken');
+        writeFileSync(blocked, '');
+        const result = await runJourney(browser, ADDRESS, journeyOf('crash', [['open', async () => { throw new Error('Target crashed'); }]]), join(blocked, 'run'));
+
+        assert.deepEqual(browser.contexts[0].page.shots, []);
+        assert.equal(result.failure.screenshot, null);
+        assert.equal(exitCode([result]), 1);
         assert.match(report([result]), /crash: failed at step 1, open\n {2}Target crashed\n {2}screenshot: none, the page could not be captured/);
     });
 });
