@@ -212,6 +212,27 @@ final class ReplaysRecordingTest extends TestCase
         );
     }
 
+    public function testAReplayedReviewerStartIsFoundUnderItsRound(): void
+    {
+        $this->replays()->replay($this->recordedRun(), 1.0);
+
+        self::assertCount(1, iterator_to_array($this->ledger->readOfKindAbout(LedgerEventKind::ReviewerStarted, self::ROUND), false));
+    }
+
+    public function testAReplayedReviewerStartIsNotAmongTheStartsWithoutASubject(): void
+    {
+        $this->replays()->replay($this->recordedRun(), 1.0);
+
+        self::assertSame([], iterator_to_array($this->ledger->readOfKindWithoutSubject(LedgerEventKind::ReviewerStarted), false));
+    }
+
+    public function testAReplayedRowOfAnotherKindKeepsNoSubject(): void
+    {
+        $this->replays()->replay($this->recordedRun(), 1.0);
+
+        self::assertSame([null, null, null, null], array_map(static fn (RecordedEvent $row): ?string => $row->event->subject, array_values(array_filter($this->appended(), static fn (RecordedEvent $row): bool => LedgerEventKind::ReviewerStarted !== $row->event->kind))));
+    }
+
     public function testARowThatNamesNoProjectIsAppendedAsItsStoredText(): void
     {
         $recording = $this->recordedRun();
@@ -316,7 +337,7 @@ final class ReplaysRecordingTest extends TestCase
             $this->replays()->replay($this->recordedRun(), 1.0);
             self::fail('The replay went on after a failed append.');
         } catch (ReplayStopped $stopped) {
-            self::assertStringEndsWith('The events it wrote stay in the ledger: remove them with intakt:demo:remove, then run intakt:demo:create, before replaying this recording.', $stopped->getMessage());
+            self::assertStringEndsWith('The events it wrote stay in the ledger: remove them with intakt:demo:remove, then press Play, which creates the demo project again (a console replay needs intakt:demo:create first).', $stopped->getMessage());
         }
     }
 

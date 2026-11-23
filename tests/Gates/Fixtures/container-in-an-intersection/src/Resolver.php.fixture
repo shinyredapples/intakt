@@ -1,0 +1,21 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use Countable;
+use Symfony\Component\DependencyInjection\ServiceLocator;
+
+final readonly class Resolver
+{
+    public function __construct(
+        private Countable&ServiceLocator $handlers,
+    ) {
+    }
+
+    public function size(): int
+    {
+        return count($this->handlers);
+    }
+}

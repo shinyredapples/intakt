@@ -81,6 +81,47 @@ final class ReviewerOutcomeTest extends TestCase
         self::assertSame('standard tier, model not recorded', $this->reviewer()->modelAndLab());
     }
 
+    public function testAFaceOnAModelOfAKnownLabIsLabelledWithTheLab(): void
+    {
+        $reviewer = new ReviewerOutcome('r1', 'correctness', 'standard', new DateTimeImmutable('2026-11-13 10:00:00'), 'moonshotai/Kimi-K3.1:deepinfra');
+
+        self::assertSame('Moonshot AI', $reviewer->faceLabel());
+    }
+
+    public function testAFaceOnARecordedModelOfAnUnknownLabIsLabelledWithTheModelId(): void
+    {
+        $reviewer = new ReviewerOutcome('r1', 'correctness', 'standard', new DateTimeImmutable('2026-11-13 10:00:00'), 'acme/robot-7');
+
+        self::assertSame('acme/robot-7', $reviewer->faceLabel());
+    }
+
+    public function testAFaceWhoseModelWasNotRecordedSaysSo(): void
+    {
+        self::assertSame('Model not recorded', $this->reviewer()->faceLabel());
+    }
+
+    public function testAFaceWithAnEmptyModelSaysItWasNotRecorded(): void
+    {
+        $reviewer = new ReviewerOutcome('r1', 'correctness', 'standard', new DateTimeImmutable('2026-11-13 10:00:00'), '');
+
+        self::assertSame('Model not recorded', $reviewer->faceLabel());
+    }
+
+    public function testARunningReviewerHasNoVerdictYetInWords(): void
+    {
+        self::assertSame('No verdict yet', $this->reviewer()->verdictInWords());
+    }
+
+    public function testAStoppedReviewerIsSaidToBeStopped(): void
+    {
+        self::assertSame('Stopped', $this->reviewer()->stopped()->verdictInWords());
+    }
+
+    public function testAFailedReviewerIsSaidToHaveFailedInWords(): void
+    {
+        self::assertSame('Failed', $this->reviewer()->failed('timeout')->verdictInWords());
+    }
+
     public function testAFailedReviewerGivesFailed(): void
     {
         self::assertSame(ReviewOutcome::Failed, $this->reviewer()->failed('timeout')->outcome());

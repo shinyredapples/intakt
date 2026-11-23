@@ -1,6 +1,6 @@
 # How Intakt uses Symfony, in plain words
 
-This page explains which parts of Symfony and Symfony AI Intakt is built from, and what each part does for it, without assuming you know Symfony. The exact list, with the status of every feature and where it lives in the code, is in the [highlights page](https://shinyredapples.github.io/intakt/highlights/), built by `bin/highlights` from [`docs/highlights.d/`](../highlights.d/) when its inputs change, daily and by hand, not committed. Intakt is still being built: each section says what is **in use** already and what is **planned**.
+This page explains which parts of Symfony and Symfony AI Intakt is built from, and what each part does for it, without assuming you know Symfony. The exact list, with the status of every feature and where it lives in the code, is in the [highlights page](https://shinyredapples.github.io/intakt/highlights/), built by `bin/highlights` from [`docs/highlights.d/`](../highlights.d/) when its inputs change, daily and by hand, not committed. When it is published, a feature's status becomes done once every issue and pull request it names is closed, and stays in progress while one is open. Intakt is still being built: each section says what is **in use** already and what is **planned**.
 
 ## First, what are these?
 

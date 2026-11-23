@@ -153,6 +153,14 @@ final readonly class RoundFixture
         return $this->round($this->startOn($this->bus, $reviewers));
     }
 
+    // On a panel the test hands in, so a round can run the reviewers a real configuration names.
+    public function startOnPanel(Panel $panel): ReviewRound
+    {
+        $command = new RunReviewRound(new ReviewTarget($this->subject(), SampleIdentity::of(self::TASK, $panel)), $panel, new RequestedRound(self::CHANGE));
+
+        return $this->round($this->startWith($command, $this->bus));
+    }
+
     public function startOn(MessageBusInterface $queue, int $reviewers): string
     {
         return $this->startFor(self::CHANGE, $queue, $reviewers);
@@ -440,6 +448,11 @@ final readonly class RoundFixture
         return new ReviewerLeases($entities, $moves, $this->clock);
     }
 
+    private function subject(): ReviewSubject
+    {
+        return new ReviewSubject('alpha', $this->checkoutRoot, self::TASK, self::DIFF);
+    }
+
     private function startWith(RunReviewRound $command, MessageBusInterface $queue): string
     {
         return $this->startHandlerOn($queue)($command);
@@ -448,11 +461,6 @@ final readonly class RoundFixture
     private function commandAt(string $change, string $head, int $reviewers): RunReviewRound
     {
         return new RunReviewRound(new ReviewTarget($this->subject(), $this->identityAt($head, $reviewers)), $this->panelOf($reviewers), new RequestedRound($change));
-    }
-
-    private function subject(): ReviewSubject
-    {
-        return new ReviewSubject('alpha', $this->checkoutRoot, self::TASK, self::DIFF);
     }
 
     private function rounds(EntityManagerInterface $entities, ?Ledger $ledger = null): ReviewRounds

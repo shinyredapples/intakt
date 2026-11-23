@@ -1,0 +1,14 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Tests\Sample;
+
+use Psr\Log\LoggerInterface;
+use Symfony\Contracts\Service\Attribute\Required as Inject;
+
+final class LoggedCase
+{
+    #[Inject]
+    public ?LoggerInterface $logger = null;
+}

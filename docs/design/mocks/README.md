@@ -26,6 +26,10 @@ python3 -m http.server 8000
 
 Then open `http://localhost:8000/design/mocks/review-scoreboard/index.html`. Its fonts come from the repository, so it needs no network.
 
+## Technical writer sketches
+
+[technical-writer-sketches.html](technical-writer-sketches.html) offers the owner three candidate animals for the Technical writer's character (#3563): an otter, a heron and a red panda, drawn as inline SVG. Each stands beside the Maintainer (`assets/maintainer-light.webp` and `assets/maintainer-dark.webp`, copied from `assets/images/characters/` so that a server rooted in this folder can serve them), in the light and the dark variant at once, whatever the page theme. None of them is in the team strip yet: the owner's choice decides which one joins it after the Maintainer (#3588). Serve it from this folder (`docs/design/mocks`), as in "Opening the mocks", and open `http://localhost:8000/technical-writer-sketches.html`; the rail does not link to it.
+
 ## Fonts
 
 The other mocks load their fonts from Google Fonts, so opening them or running `tools/screenshots.js` needs the network; without it the browser falls back to other fonts and the screenshots differ from the approved set. The mocks are design documents, not shipped code: the dashboard serves its fonts itself.
