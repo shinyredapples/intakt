@@ -19,7 +19,7 @@ final readonly class HeadClones
 {
     private const int GIT_SECONDS = 300;
 
-    // HardenedGit allows no protocol at all, and the fetch reads the round's checkout by its path.
+    // Only for the fetch, because HardenedGit allows no protocol at all and the fetch reads the round's checkout by its path.
     private const array LOCAL_FETCH = ['GIT_ALLOW_PROTOCOL' => 'file'];
 
     public function __construct(
