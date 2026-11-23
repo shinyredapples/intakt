@@ -84,7 +84,7 @@ final class ShellCommentsTest extends TestCase
         yield 'a comment after an apostrophe in a parameter default in a string' => ["printf '%s\\n' \"\${message:-don't stop}\"\n# TODO later\n", [2 => 'TODO']];
         yield 'a comment after an apostrophe in a nested parameter default in a string' => ["echo \"\${a:-\${b:-it's}}\"\n# TODO later\n", [2 => 'TODO']];
         yield 'a comment after a quoted default in a substitution in a string' => ["echo \"\$(echo \${a:-'}'})\"\n# TODO later\n", [2 => 'TODO']];
-        yield 'a comment in a case nested in a case arm' =>["case x in\n  x) case y in\n       y) # TODO later\n          ;;\n     esac ;;\nesac\n", [3 => 'TODO']];
+        yield 'a comment in a case nested in a case arm' => ["case x in\n  x) case y in\n       y) # TODO later\n          ;;\n     esac ;;\nesac\n", [3 => 'TODO']];
     }
 
     /**
