@@ -140,6 +140,7 @@ final class ReviewJobAnswerTest extends TestCase
         yield 'a read outside the checkout' => [[self::read('toolu_1', '/etc/hostname'), self::readResult('toolu_1', false)]];
         yield 'a read that steps out of the checkout' => [[self::read('toolu_1', ReviewJob::CHECKOUT.'/../etc/hostname'), self::readResult('toolu_1', false)]];
         yield 'a read whose error flag is no boolean' => [[self::read('toolu_1', ReviewJob::CHECKOUT.'/src/Cart.php'), ['type' => 'user', 'message' => ['content' => [['type' => 'tool_result', 'tool_use_id' => 'toolu_1', 'is_error' => 'true']]]]]];
+        yield 'a read whose error flag is null' => [[self::read('toolu_1', ReviewJob::CHECKOUT.'/src/Cart.php'), ['type' => 'user', 'message' => ['content' => [['type' => 'tool_result', 'tool_use_id' => 'toolu_1', 'is_error' => null]]]]]];
         yield 'a read of git\'s metadata' => [[self::read('toolu_1', ReviewJob::CHECKOUT.'/.git/config'), self::readResult('toolu_1', false)]];
         yield 'a read of git\'s metadata in a dotted path' => [[self::read('toolu_1', ReviewJob::CHECKOUT.'/./.git/HEAD'), self::readResult('toolu_1', false)]];
         yield 'a result for another call' => [[self::read('toolu_1', ReviewJob::CHECKOUT.'/src/Cart.php'), self::readResult('toolu_2', false)]];
@@ -191,7 +192,9 @@ final class ReviewJobAnswerTest extends TestCase
         yield 'a negative count of Claude Code' => [Provider::ClaudeCode, $claudeCode('{"input_tokens":-1,"output_tokens":2}')];
         yield 'a count of Claude Code that is no number' => [Provider::ClaudeCode, $claudeCode('{"input_tokens":[]}')];
         yield 'a cache count of Claude Code that is a fraction' => [Provider::ClaudeCode, $claudeCode('{"input_tokens":1,"cache_read_input_tokens":1.5}')];
+        yield 'a count of Claude Code that is null' => [Provider::ClaudeCode, $claudeCode('{"input_tokens":null,"output_tokens":2}')];
         yield 'a negative cached count of Codex' => [Provider::Codex, $codex('{"input_tokens":1,"cached_input_tokens":-5,"output_tokens":2}')];
+        yield 'a count of Codex that is null' => [Provider::Codex, $codex('{"input_tokens":null,"output_tokens":2}')];
         yield 'a count of Codex that is text' => [Provider::Codex, $codex('{"input_tokens":"12"}')];
     }
 

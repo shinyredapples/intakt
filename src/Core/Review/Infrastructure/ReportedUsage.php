@@ -40,9 +40,8 @@ final readonly class ReportedUsage
      */
     private static function countsAreWhole(array $reported): bool
     {
-        foreach (self::COUNTS as $count) {
-            $value = $reported[$count] ?? null;
-            if (null !== $value && (!is_int($value) || $value < 0)) {
+        foreach (array_intersect_key($reported, array_flip(self::COUNTS)) as $value) {
+            if (!is_int($value) || $value < 0) {
                 return false;
             }
         }
