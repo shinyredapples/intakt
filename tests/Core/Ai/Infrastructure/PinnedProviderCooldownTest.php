@@ -307,8 +307,8 @@ final class PinnedProviderCooldownTest extends TestCase
         self::assertSame([120, 120, 0], [$out->secondsUntilAnAccountIsFree, $accounts->secondsUntilFree(new Account(Provider::OpenAiCompatible, Account::DEFAULT)), $pins->secondsUntilFree($this->deepinfra(Account::DEFAULT))]);
     }
 
-    // Forced order: the account store throws on any write; a pinned 429 never writes it (issue #2861), so the pin cools for the 429's wait and the caller gets the provider's own 429.
-    public function testAPinned429LeavesTheAccountStoreAloneAndTheCallerGetsThe429(): void
+    // Forced order: the account store throws on any write; a pinned 429 never writes it (issue #2861), so the pin cools for the 429's wait and the caller gets that wait.
+    public function testAPinned429LeavesTheAccountStoreAloneAndTheCallerGetsThePinsWait(): void
     {
         $accounts = self::createStub(AccountCooldowns::class);
         $accounts->method('coolDown')->willThrowException(new RuntimeException('The disk is full.'));
@@ -319,8 +319,8 @@ final class PinnedProviderCooldownTest extends TestCase
 
         $out = $this->failureOf(static fn (): string => $answer->asText());
 
-        self::assertSame($limited, $out);
-        self::assertSame(120, $this->pins->secondsUntilFree($this->deepinfra(Account::DEFAULT)));
+        self::assertInstanceOf(EveryAccountCoolingDown::class, $out);
+        self::assertSame([120, 120], [$out->secondsUntilAnAccountIsFree, $this->pins->secondsUntilFree($this->deepinfra(Account::DEFAULT))]);
         self::assertNotContains('The cooldown of account {account} could not be saved.', array_column($logger->cleanLogs(), 1));
     }
 

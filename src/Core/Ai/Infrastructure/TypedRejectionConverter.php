@@ -7,6 +7,7 @@ namespace Intakt\Core\Ai\Infrastructure;
 use Closure;
 use Override;
 use Symfony\AI\Platform\Exception\AuthenticationException;
+use Symfony\AI\Platform\Exception\RateLimitExceededException;
 use Symfony\AI\Platform\Model;
 use Symfony\AI\Platform\Result\DeferredResult;
 use Symfony\AI\Platform\Result\RawResultInterface;
@@ -23,7 +24,7 @@ final readonly class TypedRejectionConverter implements ResultConverterInterface
     private const string TOKEN_USAGE = 'token_usage';
 
     /**
-     * @param Closure(): Throwable $typed
+     * @param Closure(AuthenticationException|RateLimitExceededException): Throwable $typed
      */
     public function __construct(
         private DeferredResult $answer,
@@ -42,8 +43,8 @@ final readonly class TypedRejectionConverter implements ResultConverterInterface
     {
         try {
             return $this->answer->getResult();
-        } catch (AuthenticationException) {
-            throw ($this->typed)();
+        } catch (AuthenticationException|RateLimitExceededException $failure) {
+            throw ($this->typed)($failure);
         }
     }
 

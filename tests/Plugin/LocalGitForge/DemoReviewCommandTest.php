@@ -313,7 +313,7 @@ final class DemoReviewCommandTest extends TestCase
 
                 try {
                     $answer = $tiers->invoke($tiers->answering(SampleChange::PROJECT, Tier::Strong), new TierRequest(new MessageBag(Message::ofUser('Review.'))))->asText();
-                } catch (RateLimitExceededException) {
+                } catch (EveryAccountCoolingDown) {
                 }
             }
 

@@ -19,6 +19,7 @@ use Override;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Symfony\AI\Platform\Bridge\Failover\FailoverPlatform;
+use Symfony\AI\Platform\Exception\RateLimitExceededException;
 use Symfony\AI\Platform\Exception\RuntimeException;
 use Symfony\AI\Platform\Model;
 use Symfony\AI\Platform\ModelCatalog\ModelCatalogInterface;
@@ -69,7 +70,7 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
             throw $this->typed($everyAccountFailed, $failures, $routerProvider);
         }
 
-        return $this->typedWhenRead($answer, fn (): Throwable => $this->rejectedWhenRead($answer, $failures, $routerProvider), $options);
+        return $this->typedWhenRead($answer, fn (Throwable $failure): Throwable => $failure instanceof RateLimitExceededException ? $this->limitedWhenRead($failure, $failures, $routerProvider) : $this->rejectedWhenRead($answer, $failures, $routerProvider), $options);
     }
 
     // The same read invoke() decides by, so tier selection never picks a model whose every account waits for its pin (issue #2860).
@@ -205,9 +206,17 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         return $this->outOfAccounts($waits, $failures);
     }
 
+    // A 429 read from the answer has already cooled its pin (AccountPlatform), so with no account left the call ends with that wait at once and the first redelivery already waits for it, instead of the provider's 429, which Symfony AI's bridge reads without its Retry-After (issue #2861). With an account still free the 429 stays as it is.
+    private function limitedWhenRead(RateLimitExceededException $limited, SendFailures $failures, ?string $routerProvider): Throwable
+    {
+        $waits = $this->waits($routerProvider);
+
+        return in_array(0, $waits, true) ? $limited : $this->outOfAccounts($waits, $failures);
+    }
+
     // A key rejected when the answer is read follows the same rule as one rejected as the call is sent, because an account cooling down from a limit beside it is free again after its wait.
     /**
-     * @param Closure(): Throwable $rejected
+     * @param Closure(Throwable): Throwable $rejected
      * @param array<string, mixed> $options
      */
     private function typedWhenRead(DeferredResult $answer, Closure $rejected, array $options): DeferredResult
