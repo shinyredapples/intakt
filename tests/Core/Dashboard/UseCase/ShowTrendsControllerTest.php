@@ -9,13 +9,18 @@ use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Budget\Contract\Prices;
 use Intakt\Core\Budget\Infrastructure\ConfiguredPrices;
 use Intakt\Core\Dashboard\Domain\BenchHeadline;
+use Intakt\Core\Dashboard\Domain\Board;
 use Intakt\Core\Dashboard\Domain\ChartBar;
 use Intakt\Core\Dashboard\Domain\ChartScale;
 use Intakt\Core\Dashboard\Domain\JudgeOutcomes;
+use Intakt\Core\Dashboard\Domain\QueuedRound;
 use Intakt\Core\Dashboard\Domain\ReviewerCatch;
 use Intakt\Core\Dashboard\Domain\ReviewerCatches;
 use Intakt\Core\Dashboard\Domain\ReviewsPerDay;
+use Intakt\Core\Dashboard\Domain\ReviewSummary;
 use Intakt\Core\Dashboard\Domain\ReviewTrends;
+use Intakt\Core\Dashboard\Domain\UpNext;
+use Intakt\Core\Dashboard\Infrastructure\LedgerQueuedRounds;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\PublishedBench;
 use Intakt\Core\Dashboard\Infrastructure\SampleChangeSource;
@@ -23,7 +28,11 @@ use Intakt\Core\Dashboard\UseCase\ShowTrends\ShowTrendsController;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Review\Contract\ReplayMark;
+use Intakt\Core\Review\Contract\RoundEnding;
+use Intakt\Core\Review\Contract\RoundEndings;
+use Intakt\Core\Review\Contract\RoundEnds;
 use Intakt\Core\Review\Contract\SampleChange;
+use Intakt\Tests\Support\FixedRoundEndings;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -32,6 +41,11 @@ use Symfony\Component\DomCrawler\Crawler;
 #[CoversClass(ShowTrendsController::class)]
 #[CoversClass(LedgerReviewPages::class)]
 #[UsesClass(ReviewTrends::class)]
+#[UsesClass(Board::class)]
+#[UsesClass(UpNext::class)]
+#[UsesClass(QueuedRound::class)]
+#[UsesClass(LedgerQueuedRounds::class)]
+#[UsesClass(ReviewSummary::class)]
 #[UsesClass(PublishedBench::class)]
 #[UsesClass(BenchHeadline::class)]
 #[UsesClass(ReviewerCatches::class)]
@@ -670,6 +684,147 @@ final class ShowTrendsControllerTest extends DashboardPageTestCase
         $this->browser->request('GET', '/trends');
 
         self::assertSelectorNotExists('#chart-judge');
+    }
+
+    public function testUpNextListsARoundWithItsReviewersAsInProgressAndLinksItsReviewPage(): void
+    {
+        $this->ledger->startRoundOf('feat/a', 'r-1', 2);
+        $this->ledger->startReviewer('r-1', 'correctness');
+        $this->ledger->startReviewer('r-1', 'security');
+
+        $page = $this->browser->request('GET', '/trends');
+
+        self::assertSame(['In progress'], $page->filter('#up-next h3')->each(static fn (Crawler $title): string => $title->text()));
+        $link = $page->filter('#up-next a.review-link');
+        self::assertSame('/reviews/r-1', $link->attr('href'));
+        self::assertSame(['feat/a', 'alpha', 'Round 2', 'Correctness, Security'], $link->filter('.review-title, .review-facts > span')->each(static fn (Crawler $part): string => $part->text()));
+    }
+
+    public function testUpNextListsARoundNoReviewerStartedAsWaitingToStart(): void
+    {
+        $this->ledger->startRoundOf('feat/a', 'r-1', 1);
+        $this->ledger->startRoundOf('feat/b', 'r-2', 1);
+        $this->ledger->startReviewer('r-2', 'correctness');
+
+        $page = $this->browser->request('GET', '/trends');
+
+        self::assertSame(['In progress', 'Waiting to start'], $page->filter('#up-next h3')->each(static fn (Crawler $title): string => $title->text()));
+        self::assertSame(['/reviews/r-2', '/reviews/r-1'], $page->filter('#up-next a.review-link')->each(static fn (Crawler $link): string => (string) $link->attr('href')));
+        self::assertSame('No reviewer has started yet', $page->filter('#up-next ul')->last()->filter('.review-facts > span')->last()->text());
+    }
+
+    public function testUpNextReadsNothingRunningOrQueuedOnceEveryRoundIsJudged(): void
+    {
+        $this->ledger->startRound('r-1', 'alpha');
+        $this->ledger->judgeRound('r-1');
+
+        $page = $this->browser->request('GET', '/trends');
+
+        self::assertSame('Up next', $page->filter('#up-next h2')->text());
+        self::assertSame('Nothing running or queued.', $page->filter('#up-next p')->text());
+        self::assertCount(0, $page->filter('#up-next a'));
+    }
+
+    public function testAFreshInstallsUpNextReadsNothingRunningOrQueued(): void
+    {
+        self::assertSame('Nothing running or queued.', $this->browser->request('GET', '/trends')->filter('#up-next p')->text());
+    }
+
+    public function testUpNextKeepsTheDemoRoundWhenTheFiguresLeaveItOutBecauseTheBoardShowsIt(): void
+    {
+        $this->givenALiveAndAReplayedRound();
+
+        self::assertCount(2, $this->browser->request('GET', '/trends?demo=0')->filter('#up-next a.review-link'));
+    }
+
+    public function testUpNextListsTheBoardsInReviewRoundsAndLeavesOutTheJudgedOne(): void
+    {
+        $this->ledger->startRoundOf('feat/a', 'r-1', 1);
+        $this->ledger->startReviewer('r-1', 'correctness');
+        $this->ledger->startRoundOf('feat/b', 'r-2', 1);
+        $this->ledger->startRoundOf('feat/c', 'r-3', 1);
+        $this->ledger->judgeRound('r-3');
+
+        $board = $this->browser->request('GET', '/?board')->filter('#col-in-review a[href^="/reviews/"]')->each(static fn (Crawler $link): string => (string) $link->attr('href'));
+        $upNext = $this->browser->request('GET', '/trends')->filter('#up-next a.review-link')->each(static fn (Crawler $link): string => (string) $link->attr('href'));
+
+        self::assertSame(['/reviews/r-1', '/reviews/r-2'], $upNext);
+        self::assertEqualsCanonicalizing(array_unique($board), $upNext);
+    }
+
+    public function testUpNextLeavesOutARoundThatEndedWithoutTheJudgesCallWhileTheBoardKeepsItInReview(): void
+    {
+        self::getContainer()->set(RoundEndings::class, new FixedRoundEndings(new RoundEnding(RoundEnds::JudgingFailed, 'The judge failed.')));
+        $this->ledger->startRoundOf('feat/a', 'r-1', 1);
+        $this->ledger->startReviewer('r-1', 'correctness');
+
+        $board = $this->browser->request('GET', '/?board')->filter('#col-in-review a[href="/reviews/r-1"]');
+        $upNext = $this->browser->request('GET', '/trends')->filter('#up-next');
+
+        self::assertNotCount(0, $board);
+        self::assertSame(['Nothing running or queued.'], $upNext->filter('p')->each(static fn (Crawler $line): string => $line->text()));
+    }
+
+    public function testUpNextListsARoundTheWatcherQueuedAsWaitingToStartWithoutALink(): void
+    {
+        $this->ledger->queueRoundOf('alpha', '7', 'abc123');
+
+        $upNext = $this->browser->request('GET', '/trends')->filter('#up-next');
+
+        self::assertSame(['Waiting to start'], $upNext->filter('h3')->each(static fn (Crawler $title): string => $title->text()));
+        self::assertCount(0, $upNext->filter('a.review-link'));
+        self::assertCount(0, $upNext->filter('p'));
+        self::assertSame(['Pull request 7', 'alpha', 'Queued, not started yet'], $upNext->filter('.review-line .review-title, .review-line .review-facts > span')->each(static fn (Crawler $part): string => $part->text()));
+    }
+
+    public function testUpNextLinksAQueuedRoundOnceItsReviewStarted(): void
+    {
+        $round = $this->ledger->queueRoundOf('alpha', '7', 'abc123');
+        $this->ledger->startRound($round, 'alpha');
+
+        $upNext = $this->browser->request('GET', '/trends')->filter('#up-next');
+
+        self::assertSame(['/reviews/'.$round], $upNext->filter('a.review-link')->each(static fn (Crawler $link): string => (string) $link->attr('href')));
+        self::assertCount(0, $upNext->filter('.review-line'));
+    }
+
+    // The review opens first, because the watcher's RoundStarts writes the queue line only after it.
+    public function testUpNextLinksARoundWhoseReviewOpenedBeforeItsQueueLineOnceUnderWaitingToStart(): void
+    {
+        $this->ledger->startRoundOf('feat/a', 'r-1', 1);
+        $this->ledger->append(new LedgerEvent(LedgerEventKind::RoundQueued, '{"project":"alpha","change":"7","head":"abc123","round":"r-1"}'));
+
+        $upNext = $this->browser->request('GET', '/trends')->filter('#up-next');
+
+        self::assertSame(['Waiting to start'], $upNext->filter('h3')->each(static fn (Crawler $title): string => $title->text()));
+        self::assertSame(['/reviews/r-1'], $upNext->filter('a.review-link')->each(static fn (Crawler $link): string => (string) $link->attr('href')));
+        self::assertCount(0, $upNext->filter('div.review-line'));
+        self::assertCount(0, $upNext->filter('p'));
+    }
+
+    public function testUpNextLeavesOutAQueuedRoundOnceANewerWatcherLineReplacedIt(): void
+    {
+        $this->ledger->queueRoundOf('alpha', '7', 'abc123');
+        $this->ledger->forgetHead('alpha', '7', 'abc123');
+
+        self::assertSame('Nothing running or queued.', $this->browser->request('GET', '/trends')->filter('#up-next p')->text());
+    }
+
+    public function testUpNextNamesARoundWithoutARecordedChangeAsUnnamed(): void
+    {
+        $this->ledger->startRound('r-1', 'alpha');
+
+        self::assertSame('Unnamed change', $this->browser->request('GET', '/trends')->filter('#up-next .review-title')->text());
+    }
+
+    public function testUpNextKeepsARoundWhoseReviewersAllAnsweredInProgressUntilItIsJudged(): void
+    {
+        $this->givenTwoAnsweringReviewers();
+
+        $upNext = $this->browser->request('GET', '/trends')->filter('#up-next');
+
+        self::assertSame(['In progress'], $upNext->filter('h3')->each(static fn (Crawler $title): string => $title->text()));
+        self::assertCount(1, $upNext->filter('a.review-link'));
     }
 
     private function givenReviewsOnThreeDaysWithOnePricedRound(): void
