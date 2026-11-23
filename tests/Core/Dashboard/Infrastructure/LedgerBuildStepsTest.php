@@ -106,7 +106,7 @@ final class LedgerBuildStepsTest extends TestCase
 
         foreach (range(1, 3) as $ignored) {
             $start = hrtime(true);
-            (void) new LedgerBuildSteps()->latestRunOf($events, 'sample', '42');
+            new LedgerBuildSteps()->latestRunOf($events, 'sample', '42');
             $fastest = min($fastest, (hrtime(true) - $start) / 1e9);
         }
 
