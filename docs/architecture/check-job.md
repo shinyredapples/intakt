@@ -7,7 +7,7 @@ The check job is the pre-push check: it runs the project's check command on what
 Worth knowing:
 
 - `intakt:build:task` calls it through `CheckJobs`; the push does not call it yet.
-- The pull request text check sends a miss back to the builder once and a second miss in a row to the reviewers, counted apart from the hand-back round; `intakt:build:task` runs it after a passed check job, and the command runs it only when given a repository and a branch.
+- The pull request text check records a first miss as sent back and stops the build before its push, and sends a second miss in a row on to the reviewers, counted apart from the hand-back round; `intakt:build:task` runs it after a passed check job, and the command runs it only when given a repository and a branch.
 - The job gets 4 GiB of memory, 2 CPUs and 1800 seconds, and no network beyond the gate's registry hosts.
 - A second check of the same head while one runs is refused as already running.
 - The code under test runs in the same job and can rewrite its result file, and such a result is believed. A result it cannot rewrite is plan task T78.
